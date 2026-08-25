@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Môi trường và bí mật — KHÔNG BAO GIỜ commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Lưu ý: file cấu hình thật của agent nằm ở ~/.agentbox/config.toml, NGOÀI repo và ngoài
+# workspace của agent (mục 11.4) — nên không cần ignore config.toml trong repo.
+
+# Dữ liệu chạy: DB nhãn, giấy phép, sổ audit
+*.db
+*.sqlite
+*.sqlite3
+data/
+workspace/
+
+# Kết quả chạy thí nghiệm còn dở
+benchmark/results/tmp/
+benchmark/results/*.raw.jsonl
+
+# Hệ điều hành và editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
