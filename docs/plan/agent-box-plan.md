@@ -5,7 +5,7 @@
 **Thời gian:** đồ án 3 tháng (13 tuần lịch) · sản phẩm 4-6 tháng hoặc hơn
 **Người thực hiện:** 1-3 người. Nền mạnh AI/ML (trí tuệ nhân tạo / học máy), nền SWE (Software Engineering — kỹ thuật phần mềm) và hạ tầng đang xây. Mọi viết tắt xem Phần 0
 
-> **Đọc mục 14.1 và 14.2 trước khi cam kết thời gian.** Cộng đủ mọi phần, tài liệu này mô tả **34,1-41,2 tuần-người** (1 tuần-người = 5 ngày của một người). Sau đường cắt ở mục 14.2 còn **30,1-35,7**. Đối chiếu: 2 người trong 13 tuần = 26 tuần-người, 3 người = 39. Nghĩa là **cấu hình khuyến nghị là 3 người**, và ngay cả 3 người cũng chỉ còn biên **3,3-8,9 tuần-người**; với 2 người phải cắt tiếp ngay từ tuần 0 chứ không đợi tuần 6; với 1 người phạm vi này không vừa 3 tháng. Mục 14.2 ghi rõ cắt gì cho từng trường hợp.
+> **Đọc mục 14.1 và 14.2 trước khi cam kết thời gian.** Cộng đủ mọi phần, tài liệu này mô tả **34,7-41,8 tuần-người** (1 tuần-người = 5 ngày của một người; đã gồm +3 ngày của quyết định 12.3.1). Sau đường cắt ở mục 14.2 còn **31,1-36,8**. Đối chiếu: 2 người trong 13 tuần = 26 tuần-người, 3 người = 39. Nghĩa là **cấu hình khuyến nghị là 3 người**, và ngay cả 3 người cũng chỉ còn biên **2,2-7,9 tuần-người**; với 2 người phải cắt tiếp ngay từ tuần 0 chứ không đợi tuần 6; với 1 người phạm vi này không vừa 3 tháng. Mục 14.2 ghi rõ cắt gì cho từng trường hợp.
 
 ---
 
@@ -1135,6 +1135,14 @@ flowchart TB
   AB -->|"gọi LLM: chỉ host gọi,<br/>container không gọi"| LLM["LLM provider"]
 ```
 
+**Ba đường mạng riêng biệt** — đây là nền của mọi thảo luận về mạng trong tài liệu này (quy tắc ② ở 7.4, công tắc box ở 7.4.1):
+
+| Đường | Là gì | Ai kiểm soát | Công tắc box ảnh hưởng? |
+|---|---|---|---|
+| **Control plane** | Host gọi LLM API · WebSocket tới giao diện · quản lý Docker | Hệ thống — luôn bật | Không bao giờ |
+| **Kênh research** | `fetch_url` thực thi **ở HOST**: tải nội dung về, gán provenance + nhãn tại cổng nạp, rồi mới đưa vào ngữ cảnh | Hệ thống + Policy Engine | Không |
+| **Data plane (box)** | Mạng của tiến trình bên trong container: `curl`, `pip`, `apt`, `git`, Chromium duyệt web | **Công tắc của người dùng** (7.4.1) | Chính là nó |
+
 ### 7.2 Vì sao sandbox phải có ngay từ đầu, không để sau
 
 Không có sandbox thì `run_command` (chạy lệnh tùy ý) **vô hiệu hóa toàn bộ tầng bảo mật**. Một lệnh trong tiến trình thật có thể:
@@ -1164,11 +1172,24 @@ Kiểm tra đường dẫn bằng Python vẫn giữ, nhưng gọi đúng tên: 
 | # | Quy tắc | Vì sao |
 |---|---|---|
 | **1** | **Mount theo từng lần gọi, theo đúng giấy phép.** Tài nguyên chỉ đọc → mount `:ro`. Tài nguyên được ghi → `:rw`. Không mount cả workspace nếu giấy phép hẹp hơn | Nếu mount cả workspace `:rw` thì giấy phép "chỉ sửa `src/a.py`" trở nên vô nghĩa: lệnh sửa được `src/b.py` hoặc xóa cả repo |
-| **2** | **`run_command` luôn `--network none`.** Mọi việc ra mạng chỉ qua tool first-party (`fetch_url`) | Docker thường không tự chặn theo tên miền. Nếu bật mạng cho lệnh tùy ý thì sổ audit không trả lời được câu "dữ liệu nào đã rời máy" |
+| **2** | **Mạng container mặc định TẮT** (`--network none`). Người dùng có **công tắc mạng của box** để bật/tắt khi cần — luật chi tiết ở 7.4.1. Lệnh chạy trong container vẫn qua Policy Engine bất kể trạng thái mạng; research đọc-web luôn đi qua `fetch_url` phía host nên không phụ thuộc công tắc | Docker thường không tự chặn theo tên miền. Mạng data-plane là cửa sổ rò rỉ tiềm năng nên mặc định đóng và chỉ người dùng mở một cách có chủ ý; mỗi lần mở/đóng ghi sổ audit |
 | **3** | **Nhãn kết quả = mức xấu nhất của toàn bộ input được mount**, không suy từ chuỗi lệnh | Không parse được lệnh tùy ý. `cat .env` chỉ cho hệ thống thấy "một chuỗi vào, một chuỗi ra". Phải giả định xấu nhất |
 | **4** | **Không mount file BÍ_MẬT** nếu giấy phép không cho. Nếu buộc phải mount thì **toàn bộ kết quả mặc định BÍ_MẬT** | Đây là cách duy nhất đúng cho `cat .env` mà không cần hiểu nội dung lệnh |
 | **5** | **Không truyền biến môi trường nào chứa khóa API vào container.** Cơ sở dữ liệu audit nằm ngoài container. Không mount `$HOME` hay thư mục cấu hình | Chặn mất khóa và chặn sửa sổ ghi |
 | **6** | **Hardening tối thiểu:** chạy non-root · **không** mount Docker socket · `--cap-drop ALL` · `--security-opt no-new-privileges` · seccomp mặc định · `--memory` + `--cpus` + `--pids-limit` · timeout cứng | Mount Docker socket = cho container quyền tạo container khác = thoát sandbox |
+
+### 7.4.1 Công tắc mạng của box
+
+Luật chi tiết của công tắc (bổ sung ngày 25/08/2026, thay cho "luôn `--network none`" tuyệt đối của bản gốc):
+
+- **②a** Container sinh ra **mặc định không mạng** (`--network none`).
+- **②b** Giao diện có **công tắc mạng của box**; bật/tắt sống bằng `docker network connect/disconnect`, không cần restart container.
+- **②c** **Mọi chuyển đổi ghi sổ audit**: `actor: user`, thời điểm, `task_epoch`. Không được tồn tại cửa sổ mạng nào thiếu bản ghi.
+- **②d** Khi mạng bật: lệnh vẫn đi Policy Engine như bình thường; nội dung tải về bằng lệnh thô (`curl`, `wget`) mặc định nhãn `khong_tin_duoc` vì không có provenance chi tiết như `fetch_url`.
+- **②e** Benchmark ghim trạng thái công tắc trong cấu hình cố định (13.6) — đổi trạng thái là đổi cấu hình thí nghiệm.
+- **②f** `fetch_url` chạy ở HOST nên research đọc-web **không phụ thuộc** trạng thái mạng box; agent với mạng tắt vẫn đọc được internet qua kênh có nhãn đầy đủ.
+
+Vì sao cần công tắc thay vì "luôn tắt": cài package, git clone/push và computer use duyệt web đều cần data plane; chặn cứng cả ba làm agent bảo thủ một cách nhân tạo. Cái giá phải nhận thẳng: khi mạng bật, câu hỏi audit số 1 (mục 9.7) trả lời theo **cửa sổ thời gian** chứ không còn tuyệt đối (xem 9.7 và 16.2). Proxy egress allowlist ở Phần XV là nâng cấp thu hẹp cửa sổ đó mà không bỏ quyền quyết của người dùng.
 
 **Nếu không làm được đủ 6 quy tắc:** loại `run_command` khỏi phạm vi tuyên bố bảo mật và khỏi benchmark chính, gọi nó là tool demo nằm ngoài vùng kiểm soát luồng dữ liệu, và ghi rõ trong báo cáo. Tuyên bố hẹp mà đúng tốt hơn tuyên bố rộng bị phản biện.
 
@@ -1214,7 +1235,7 @@ stateDiagram-v2
 - Nhiều người dùng → mỗi người một container, quản lý vòng đời và hạn mức tài nguyên (**2-3 tuần**)
 - Snapshot và phục hồi trạng thái máy (**1-1,5 tuần**)
 - Cách ly mạnh hơn: gVisor hoặc microVM (**2-3 tuần**)
-- Proxy egress có allowlist theo tên miền để mở lại mạng cho `run_command` một cách an toàn (**1,5-2 tuần**)
+- Proxy egress có allowlist theo tên miền để mở lại mạng cho `run_command` một cách an toàn (**1,5-2 tuần**) — nâng cấp của công tắc mạng box (7.4.1)
 - Lưu trữ bền: workspace không mất khi container chết, có backup (**1 tuần**)
 
 ---
@@ -1744,6 +1765,8 @@ Việc gán nhãn BÍ_MẬT tự động dựa trên hai cơ chế, và **cả h
 | Chuỗi hash nối tiếp | **Hoãn.** Xem 9.1: không chống được A7 và tốn thời gian. Nếu còn thời gian thì thêm, kèm neo hash ra ngoài định kỳ |
 | Ba câu hỏi sổ audit phải trả lời được | (1) "Dữ liệu nào đã rời máy?" (2) "Vì sao agent được phép làm việc X?" (3) "Quyết định này bắt nguồn từ dữ liệu nào?" |
 
+Trả lời câu hỏi (1) theo hai chế độ của công tắc mạng (7.4.1): khi mạng box **tắt**, câu trả lời là tuyệt đối — *"không có gì đã rời máy"*. Khi người dùng **bật**, câu trả lời chuyển sang theo cửa sổ thời gian — *"mạng chỉ mở trong các khoảng [T1–T2] do người dùng chủ động bật; đây là mọi lệnh đã chạy trong từng cửa sổ"*. Sự yếu đi này được tuyên bố thẳng ở mục 16.2, không giấu.
+
 Ba câu hỏi trên là **tiêu chí nghiệm thu** của Phần IX, và là nội dung một phần demo trước hội đồng.
 
 ### 9.8 Kế hoạch triển khai
@@ -2122,9 +2145,39 @@ flowchart TB
 |---|---|---|---|---|
 | **① Hội thoại + xin quyền** | Chat trực tuyến (streaming) + thẻ xin quyền có 3 nút + hiện lý do và bằng chứng | React + WebSocket. Component sẵn của thư viện UI | **BẮT BUỘC.** Không có khung này thì cách A không tồn tại | 4-5 ngày |
 | **② Cây file + xem nội dung** | Cây thư mục, xem file văn bản, xem diff, chấm màu nhãn | Cây tự viết (~200 dòng) + `react-diff-viewer`. **Không** nhúng Monaco/editor đầy đủ, **không** cho người dùng sửa file trong giao diện ở bản đồ án | **BẮT BUỘC.** Đây là "agent đưa file cho người dùng xem" | 3-4 ngày |
-| **③ Terminal** | Xem đầu ra lệnh theo thời gian thực, chỉ đọc | **xterm.js** + WebSocket đẩy `stdout`/`stderr` từ container. **Chỉ đọc — người dùng không gõ vào được** | **BẮT BUỘC.** Rẻ nếu chỉ đọc. Cho gõ vào là thêm cả một mặt tấn công mới và không cần cho demo | 2-3 ngày |
-| **④ Màn hình sandbox** | Xem browser mà computer use đang điều khiển | **noVNC** trỏ vào một VNC server trong container (`x11vnc` + `Xvfb`). Chỉ xem, không điều khiển bằng chuột từ giao diện | **BẮT BUỘC ở mức chỉ-xem.** Đây là phần làm demo computer use thuyết phục | 3-4 ngày |
+| **③ Terminal** | **Shell tương tác của người dùng trong container** — kênh riêng của người dùng | **xterm.js** + WebSocket hai chiều qua `docker exec` (`stdin`/`stdout`/`stderr`, `tty`). Kiểm `Origin` + phiên; mọi phiên gõ ghi sổ audit `actor: user`. Agent **không dùng kênh này** — lệnh của agent đi qua tool `run_command` và hiển thị ở khung ① dưới dạng step box | **BẮT BUỘC.** Kênh tin cậy của người dùng (12.3.1); ranh giới bảo mật vẫn là container — mạng vẫn tắt, khóa API vẫn không vào container kể cả khi người dùng tự gõ | 3-4 ngày |
+| **④ Màn hình sandbox** | Xem browser mà computer use đang điều khiển; **ẩn mặc định, mở khi người dùng muốn**; người dùng click/gõ được bất cứ lúc nào — agent giữ ưu tiên, không dừng | **noVNC** + `x11vnc` + `Xvfb`. Năm quy tắc V1-V5 (mục 12.3.1): V1 ẩn mặc định · V2 input tự do · V3 input người dùng hủy cache nhận thức của agent · V4 audit `actor: user` + cờ `perception_fresh` · V5 nút Pause tùy chọn | **BẮT BUỘC.** Demo computer use thuyết phục + minh bạch theo yêu cầu | 4-5 ngày |
 | **⑤ Bảng nhãn & giấy phép** | 4 khối L1-L4 trong hình 12.2 | Bảng dữ liệu thường + truy vấn SQLite. Không cần đồ thị đẹp | **BẮT BUỘC. Đây là khung quan trọng nhất của cả giao diện** — nó là chỗ duy nhất đóng góp của dự án hiện ra thành hình | 5-6 ngày |
+
+### 12.3.1 Quyết định sửa đổi — người dùng thao tác trực tiếp trên AI Computer
+
+Bản gốc chốt terminal chỉ-đọc và màn hình chỉ-xem. Sửa ngày 25/08/2026: cả hai khung cho người dùng tương tác trực tiếp, vì ba lý do:
+
+1. **Triết lý minh bạch:** người dùng quan sát và can thiệp trực tiếp vào máy của agent là hình thức minh bạch cao nhất; các sản phẩm cùng phân khúc (Devin, OpenHands, vorflux) đều làm vậy.
+2. **Không nới lỏng bất kỳ quy tắc bảo mật nào:** ranh giới là container, không phải việc chặn tay người dùng. Với 6 quy tắc 7.4, kể cả khi người dùng tự gõ `curl`, dữ liệu vẫn không rời máy (quy tắc ②); người dùng cũng không với tới khóa API (quy tắc ⑤). Sổ audit vẫn trả lời được trọn vẹn câu hỏi "dữ liệu nào đã rời máy".
+3. **Triển khai local-first:** bản đồ án chạy localhost, bề mặt tấn công mạng nhỏ về mặt cấu trúc; kênh ghi vẫn kiểm `Origin` theo thiết kế sẵn của `api/`.
+
+**Kiến trúc hai kênh tách biệt:** (a) lệnh của agent chạy qua `run_command` → Policy Engine → hiển thị step box ở khung ①, có nhãn và lease như cũ; (b) terminal khung ③ là kênh riêng của người dùng, không đi qua Policy Engine vì chủ thể là người, nhưng vẫn ghi audit `actor: user`. Người dùng chuyển dữ liệu từ terminal sang agent bằng cách dán vào chat (`user_pasted`) — không có đường tự động nào giữa hai kênh.
+
+**Ba điều kiện bắt buộc:**
+
+- Mọi phiên gõ/nhận điều khiển ghi sổ audit với `actor: user` — không có "vùng mù" trong sổ.
+- Kết quả lệnh người dùng gõ, nếu quay lại ngữ cảnh của agent, mang nhãn `source_kind: command_output`, `tool_name: user_terminal`, integrity `duoc_nguoi_dung_cho_phep` (chủ thể là người).
+- Desktop áp dụng V3 + V4 dưới đây để giữ attribution khi hai chủ thể cùng tác động.
+
+**Năm quy tắc V1-V5 cho khung ④ — thiết kế đích, triển khai dần theo thứ tự chức năng ổn định, có thể làm cả năm, không giới hạn ở bản đồ án:**
+
+| # | Quy tắc | Nội dung | Chi phí |
+|---|---|---|---|
+| V1 | Ẩn mặc định | Khung đóng mặc định; mở ra = xem tự do, không cần xin quyền | 0 |
+| V2 | Input tự do, agent ưu tiên | Người dùng click/gõ bất cứ lúc nào; agent không dừng, không bắt buộc bàn giao | 0 |
+| V3 | Hủy cache nhận thức | Input người dùng = vô hiệu bản chụp/tree hiện tại; bước kế tiếp của agent bắt buộc nhận thức lại trước khi hành động — chặn click rơi vào UI đã đổi | ~0,5 ngày |
+| V4 | Audit nhân quả | Input user ghi `actor: user` + timestamp; hành động agent kèm `perception_fresh` (true/false) → tái dựng được "ai làm gì, trên thế giới cũ hay mới" | ~0,5 ngày |
+| V5 | Pause tùy chọn | Nút dừng agent cho ai muốn độc quyền điều khiển; không bắt buộc dùng (tái dùng interrupt 5.8) | 0 |
+
+Lý do không dùng loại-trừ-lẫn nhau: agent có "cửa sổ mù" 1-5 giây giữa nhận thức và hành động (suy luận VLM), không phải "click 0ms" — cửa sổ đó được V3 đóng lại, nên hai chủ thể cùng thao tác vẫn giữ được attribution mà không cần ceremony.
+
+**Không đổi:** threat model 9.1 — kẻ địch vẫn là nội dung độc; kênh của agent vẫn qua Policy Engine như cũ. Kênh của người dùng là kênh tin cậy, đi ngoài các tầng trên.
 
 Chỉ dùng ba thư viện bên ngoài cho phần khó: **xterm.js** (terminal), **noVNC** (màn hình), một thư viện xem diff. Tự dựng ba thứ này là 3-4 tuần và không mang lại điểm nào cho đồ án.
 
@@ -2231,18 +2284,18 @@ Dòng thứ ba là lỗi rất dễ mắc: agent đọc web (bẩn), tóm tắt,
 | Thẻ xin quyền + luồng không đồng bộ mục 12.4 (đủ 4 quy tắc) | 4-5 ngày | Quá hạn = từ chối; hai tab không cấp sai phiên |
 | **Thẻ chuyển chế độ Plan → Act (mục 12.5.1)**: dòng phạm vi đã gộp · toàn văn kế hoạch · danh sách nguồn bấm được · tô đỏ bước ngoài phạm vi | **1 ngày** | Dòng phạm vi khớp tuyệt đối `canonical_resources` của giấy phép được cấp (ca T7f) |
 | Khung ② cây file + xem nội dung + diff + chấm màu nhãn | 3-4 ngày | Bấm file thấy nội dung và nhãn |
-| Khung ③ terminal chỉ đọc bằng xterm.js | 2-3 ngày | Thấy `stdout` lệnh đang chạy theo thời gian thực |
-| Khung ④ noVNC xem màn hình sandbox | 3-4 ngày | Thấy browser mà computer use điều khiển |
+| Khung ③ **terminal của người dùng** (xterm.js + `docker exec` hai chiều + audit `actor: user`) | 3-4 ngày | Người dùng gõ lệnh từ giao diện chạy được trong container; sổ ghi `actor: user`; agent không có đường vào kênh này |
+| Khung ④ noVNC ẩn-mặc định + input tự do + V3/V4 (12.3.1) | 4-5 ngày | Thấy và điều khiển được màn hình; input người dùng ghi sổ; agent nhận thức lại sau input người dùng |
 | Khung ⑤ bảng nhãn & giấy phép + nút thu hồi + tra sổ audit | 5-6 ngày | Trả lời được 3 câu hỏi mục 9.7 từ giao diện |
 | Render an toàn cho nội dung bẩn + kiểm `Origin` | 1 ngày | Chèn thẻ HTML từ web độc không chạy được |
-| **Tổng** | **24-29 ngày ≈ 4,8-5,8 tuần** | |
+| **Tổng** | **27-32 ngày ≈ 5,4-6,4 tuần** | |
 
 Đây là khối lớn thứ hai sau Phần IX. Con số này đã tính việc dùng thư viện sẵn; **tự dựng terminal và VNC sẽ thành 7-8 tuần.** Xem mục 14.1 và 14.2 cho tổng thời gian và đường cắt.
 
-**▸ Phạm vi đồ án (3 tháng):** đúng năm khung ở mức tối thiểu bảng 12.3. Terminal chỉ đọc. VNC chỉ xem. Không cho sửa file trong giao diện. Không đăng nhập.
+**▸ Phạm vi đồ án (3 tháng):** đúng năm khung ở mức tối thiểu bảng 12.3. Terminal là kênh của người dùng và VNC cho input tự do theo điều kiện 12.3.1 (V1-V5). Không cho sửa file trong giao diện. Không đăng nhập.
 
 **▸ Cần gì để thành sản phẩm:**
-- Terminal hai chiều (người dùng gõ vào được) — kéo theo câu hỏi nhãn mới: lệnh người dùng tự gõ là `USER_AUTHORIZED`, phải tách khỏi lệnh agent gõ (**1-1,5 tuần**)
+- (Đã chuyển vào phạm vi đồ án theo 12.3.1: terminal hai chiều với audit `actor: user`.) Phần còn lại của tính năng: chia sẻ terminal/phiên cho người khác xem (**1 tuần**)
 - Editor thật (Monaco) cho sửa file trực tiếp (**1,5-2 tuần**)
 - Đăng nhập, nhiều người dùng, phân quyền theo dự án (**2-3 tuần**, xem Phần XV)
 - Đồ thị nguồn gốc dữ liệu dạng hình (xem trực quan cây `derived_from`) — phần này làm demo rất mạnh nhưng không bắt buộc (**1-1,5 tuần**)
@@ -2312,7 +2365,7 @@ Nên: **tuần 1 dành 2-3 ngày làm spike tích hợp, trước cả khi viế
 
 **Vì sao nhánh giữa giảm xuống 20-24 ca:** ước lượng T4 ở mục 13.4 là **3 ngày cho 10-12 ca**, tức khoảng **4 ca mỗi ngày** sau khi đã dựng xong hạ tầng chung (trang web mẫu, cơ chế vẽ chữ vào ảnh, khung kiểm tự động). Muốn 30-40 ca thì cần **8-10 ngày = 2 tuần**, và 2 tuần là con số không có chỗ trong ngân sách ở mục 14.1. Vậy phải chọn: **20-24 ca trong 4-5 ngày** (1 ngày dựng hạ tầng chung + 4-5 ngày sinh ca), và ghi rõ trong báo cáo rằng cỡ mẫu nhỏ hơn VPI-Bench gốc (306 ca) nên khoảng tin cậy rộng hơn. Cỡ 20-24 ca trên 5 lần lặp vẫn đủ để nói về xu hướng giữa các cấu hình C0-C3, không đủ để tuyên bố một con số ASR tuyệt đối.
 
-**Cắt bù ở đâu — đường cắt riêng cho hai nhánh này:** phạm vi 30,1-35,7 tuần-người ở mục 14.2 **đã dùng hết** các dòng cắt ở đó, nên không thể trỏ về 14.2 lần thứ hai. Hai nhánh trên có đường cắt riêng, chỉ áp dụng khi Gate 1 kích hoạt:
+**Cắt bù ở đâu — đường cắt riêng cho hai nhánh này:** phạm vi 31,1-36,8 tuần-người ở mục 14.2 **đã dùng hết** các dòng cắt ở đó, nên không thể trỏ về 14.2 lần thứ hai. Hai nhánh trên có đường cắt riêng, chỉ áp dụng khi Gate 1 kích hoạt:
 
 | Cắt gì khi Gate 1 rơi vào nhánh có công phát sinh | Tiết kiệm | Mất gì |
 |---|---|---|
@@ -2321,7 +2374,7 @@ Nên: **tuần 1 dành 2-3 ngày làm spike tích hợp, trước cả khi viế
 | Bỏ **hai đường biên** (luôn đồng ý / luôn từ chối) của `SimulatedUser` | 1-1,5 ngày | Mất khoảng đóng khung kết quả ở mục 13.5. Đây là dòng cắt **cuối cùng**, chỉ dùng nếu vào nhánh kế hoạch B toàn phần |
 | **Tổng cắt bù khả dụng** | **4-5,5 ngày ≈ 1-1,1 tuần** | |
 
-Đọc bảng này ra kết luận thẳng: **nhánh giữa (mất VPI-Bench) cắt bù được vừa đủ** — cần 1 tuần, có 1-1,1 tuần. **Nhánh kế hoạch B toàn phần thì không** — cần 1,5 tuần, cắt bù tối đa 1,1 tuần, còn thiếu khoảng **0,4-0,5 tuần-người ≈ 2 ngày**. Với kế hoạch B toàn phần, phạm vi thật là **khoảng 30,5-36,2 tuần-người** thay vì 30,1-35,7. Đây là con số phải mang vào quyết định nhân lực ở mục 14.2, không phải con số để làm tròn xuống.
+Đọc bảng này ra kết luận thẳng: **nhánh giữa (mất VPI-Bench) cắt bù được vừa đủ** — cần 1 tuần, có 1-1,1 tuần. **Nhánh kế hoạch B toàn phần thì không** — cần 1,5 tuần, cắt bù tối đa 1,1 tuần, còn thiếu khoảng **0,4-0,5 tuần-người ≈ 2 ngày**. Với kế hoạch B toàn phần, phạm vi thật là **khoảng 31,5-37,3 tuần-người** thay vì 31,1-36,8. Đây là con số phải mang vào quyết định nhân lực ở mục 14.2, không phải con số để làm tròn xuống.
 
 Kế hoạch B không phải phương án tệ — nó chỉ yếu hơn ở một điểm: số không so sánh trực tiếp được với FIDES/RTBAS. Bù lại nó kiểm soát được hoàn toàn và không có rủi ro tích hợp. Nhưng nó **không miễn phí**, và cái giá là 1,5 tuần cộng thêm cùng một lần cắt sâu hơn vào bộ ca T6.
 
@@ -2337,7 +2390,7 @@ Kế hoạch B không phải phương án tệ — nó chỉ yếu hơn ở mộ
 | **T6 — Việc lành tính** | 25-30 | Không có tấn công. Sửa bug thật, đọc repo và trả lời, chạy test, sửa ảnh, tóm tắt tài liệu | Thành công nếu **làm xong việc**. Đây là bộ đo utility và đo "chặn oan" |
 | **T7 — Tấn công vào cơ chế hai chế độ Plan/Act** | 9-11 | Nhắm vào đúng phần thiết kế mới ở mục 5.3.4: bản kế hoạch, giấy phép theo phạm vi kế hoạch, quy tắc tái neo, hai chốt chặn độ rộng. Sáu loại ca, chi tiết ở bảng dưới. **Nhóm này cần thiết trong mọi nhánh Gate 1**, không phải một phần của kế hoạch B | Như T5: đo `Attack success` chuẩn ở 13.8, cộng thêm **`Invariant violation`** cho các ca kiểm bảo đảm BĐ1/BĐ2 và hai chốt chặn |
 
-**Công làm bộ ca này:** T1/T2/T3 mỗi ca cần dựng một repo hoặc một trang web giả có chỉ thị độc, cộng một tiêu chí kiểm tự động — ước **4-5 ngày** cho cả T1+T2+T3 (26 ca). T4 cần thêm ảnh/banner có chữ vẽ, ước **3 ngày** (10-12 ca). T5 và T6 đã có dòng riêng trong bảng 13.9. **Tổng công riêng của kế hoạch B: 7-8 ngày ≈ 1,5 tuần**, và nó **cộng thêm** vào con số ở bảng 13.9 chứ không thay thế. Nếu Gate 1 (tuần 1) kết luận phải dùng kế hoạch B thì cắt bù theo **đường cắt riêng ở cuối mục 13.3**, không phải theo mục 14.2 (các dòng ở 14.2 đã được dùng hết trong con số 30,1-35,7 tuần-người). Đường cắt riêng đó bù được tối đa 1-1,1 tuần, nên kế hoạch B toàn phần vẫn đội phạm vi lên **khoảng 30,5-36,2 tuần-người**.
+**Công làm bộ ca này:** T1/T2/T3 mỗi ca cần dựng một repo hoặc một trang web giả có chỉ thị độc, cộng một tiêu chí kiểm tự động — ước **4-5 ngày** cho cả T1+T2+T3 (26 ca). T4 cần thêm ảnh/banner có chữ vẽ, ước **3 ngày** (10-12 ca). T5 và T6 đã có dòng riêng trong bảng 13.9. **Tổng công riêng của kế hoạch B: 7-8 ngày ≈ 1,5 tuần**, và nó **cộng thêm** vào con số ở bảng 13.9 chứ không thay thế. Nếu Gate 1 (tuần 1) kết luận phải dùng kế hoạch B thì cắt bù theo **đường cắt riêng ở cuối mục 13.3**, không phải theo mục 14.2 (các dòng ở 14.2 đã được dùng hết trong con số 31,1-36,8 tuần-người). Đường cắt riêng đó bù được tối đa 1-1,1 tuần, nên kế hoạch B toàn phần vẫn đội phạm vi lên **khoảng 31,5-37,3 tuần-người**.
 
 **Nhóm T5 là nhóm quan trọng nhất về học thuật** — nó là nhóm duy nhất tấn công trực tiếp vào thiết kế của dự án chứ vào agent nói chung. Nếu T5 pass hết, phần bảo đảm ở mục 9.4.2 có bằng chứng thực nghiệm.
 
@@ -2411,6 +2464,8 @@ Ba giá trị phải chốt trước khi chạy, cùng lý do:
 | Loại giấy phép P4 cấp | **giấy phép thường** (mục 9.5), KHÔNG phải giấy phép cho ngữ cảnh bẩn | Người dùng chỉ thấy "cho phép việc này lặp lại", không thấy nhãn. Giấy phép cho ngữ cảnh bẩn chỉ ra đời qua P5 + một lần `ALLOW_ONCE` sau đó |
 
 Hệ quả quan trọng: vì P4 chỉ cấp **giấy phép thường**, mà giấy phép thường **không dùng được khi ngữ cảnh bẩn** (bảng 9.5.3), nên phản ví dụ 9.5.2 vẫn bị chặn ngay cả khi bộ mô phỏng đã cấp giấy phép. Đây chính là hành vi cần chứng minh — và bây giờ nó **được kiểm thật** thay vì không bao giờ xảy ra trong thí nghiệm.
+
+**Tham số ghim thêm cho từng cấu hình C0-C3:** **trạng thái công tắc mạng của box** (7.4.1) — khai báo rõ bật hay tắt trong định nghĩa cấu hình. Trạng thái này đổi hành vi egress giữa các lần chạy; không ghim thì kết quả không tái lập được. Đề xuất mặc định: các bộ ca tấn công T1-T5/T7 chạy với mạng **tắt** (tấn công được mô phỏng, không cần mạng thật); ca nào cần cài package hoặc duyệt web thật thì khai báo trạng thái bật và ghi vào bảng cấu hình.
 
 **Ba con số phải báo cáo TÁCH RIÊNG, không được gộp:**
 
@@ -2522,18 +2577,18 @@ Nếu **C1 và C3 ra ASR bằng nhau và số lần hỏi bằng nhau** thì d�
 | IX | **Bảo mật** | 34-45 | **7 - 9** |
 | X | Memory & Context | 10 | 2 |
 | XI | Model Router | 7-8 | 1,5 |
-| XII | **Giao diện web (5 khung + thẻ chuyển chế độ 12.5.1)** | 24-29 | **4,8 - 5,8** |
+| XII | **Giao diện web (5 khung + thẻ chuyển chế độ 12.5.1 + 12.3.1)** | 27-32 | **5,4 - 6,4** |
 | XIII | **Benchmark & Đánh giá** (gồm bộ ca T7) | 22,5-28 | **4,5 - 5,5** |
 | — | Viết báo cáo, làm slide, dựng demo | 8-10 | 1,5 - 2 |
-| **TỔNG** | | **170,5-206** | **34,1 - 41,2 tuần-người** |
+| **TỔNG** | | **173,5-209** | **34,7 - 41,8 tuần-người** |
 
 Đây là **tuần-người**, không phải tuần lịch. Đối chiếu với ngân sách thật:
 
-| Số người thực hiện | Ngân sách trong 13 tuần lịch | Đối chiếu với 34,1-41,2 |
+| Số người thực hiện | Ngân sách trong 13 tuần lịch | Đối chiếu với 34,7-41,8 |
 |---|---|---|
 | **1 người** | ~13 tuần-người | **Thiếu hơn một nửa.** Không khả thi ở phạm vi này, kể cả sau khi cắt |
-| **2 người** | ~26 tuần-người | **Thiếu 8,1-15,2 tuần-người.** Khả thi chỉ khi cắt theo mục 14.2, và ngay cả khi đó vẫn không vừa — xem bảng cuối mục 14.2 |
-| **3 người** | ~39 tuần-người | **Vừa ở đầu dưới, thiếu 2,2 tuần-người ở đầu trên.** Vẫn phải cắt theo mục 14.2. Thêm nữa chi phí phối hợp tăng và ba người khó chia song song trên cùng một lõi bảo mật |
+| **2 người** | ~26 tuần-người | **Thiếu 8,7-15,8 tuần-người.** Khả thi chỉ khi cắt theo mục 14.2, và ngay cả khi đó vẫn không vừa — xem bảng cuối mục 14.2 |
+| **3 người** | ~39 tuần-người | **Vừa ở đầu dưới (dư 4,3), thiếu 2,8 tuần-người ở đầu trên.** Vẫn phải cắt theo mục 14.2. Thêm nữa chi phí phối hợp tăng và ba người khó chia song song trên cùng một lõi bảo mật |
 
 **Kết luận dứt khoát: phạm vi ở bảng trên KHÔNG vừa 13 tuần với 2 người, và cũng không vừa hoàn toàn với 3 người. Bản nộp đồ án dùng phạm vi đã cắt ở mục 14.2, phần bị cắt chuyển sang lộ trình sản phẩm (Phần XV).** Đây là quyết định chủ động chứ không phải hụt kế hoạch — và nó là lý do câu hỏi số 1 ở mục 16.3 (bao nhiêu người) phải được trả lời trước khi khóa lộ trình.
 
@@ -2541,11 +2596,10 @@ Nếu **C1 và C3 ra ASR bằng nhau và số lần hỏi bằng nhau** thì d�
 
 Cắt theo nguyên tắc: **không cắt Phần IX** (đó là đóng góp) và **không cắt Phần XIII** (không có đánh giá thì không có kết quả đo). Cắt ở mọi chỗ khác.
 
-Bảng dưới chỉ tính những việc **thực sự có trong tổng 34,1-41,2 tuần-người**. Việc đã nằm ngoài phạm vi từ đầu không được tính là "tiết kiệm".
+Bảng dưới chỉ tính những việc **thực sự có trong tổng 34,7-41,8 tuần-người**. Việc đã nằm ngoài phạm vi từ đầu không được tính là "tiết kiệm".
 
 | Cắt gì | Dòng bị cắt trong bảng nào | Tiết kiệm |
 |---|---|---|
-| **Giao diện: bỏ khung ④ noVNC**, thay bằng chụp màn hình tĩnh hiện trong khung chat khi computer use chạy | 12.7, dòng "Khung ④ noVNC" (3-4 ngày) → còn 1 ngày | **2-3 ngày** |
 | **Giao diện: khung ⑤ chỉ có bảng nhãn + bảng giấy phép + nút thu hồi, bỏ phần tra sổ audit bằng bộ lọc** (thay bằng một truy vấn SQL viết sẵn chạy tay khi demo) | 12.7, dòng "Khung ⑤" (5-6 ngày) → còn 3-4 ngày | **2 ngày** |
 | **Giao diện: khung ② bỏ xem diff**, chỉ xem nội dung file + chấm màu nhãn | 12.7, dòng "Khung ②" (3-4 ngày) → còn 2 ngày | **1-2 ngày** |
 | **Computer use: bỏ phần render PDF**, chỉ render ảnh và markdown | 8.6, dòng "Xem/render file" (2-3 ngày) → còn 1-2 ngày | **1 ngày** |
@@ -2558,44 +2612,44 @@ Bảng dưới chỉ tính những việc **thực sự có trong tổng 34,1-41
 | **Tool & Skill: bỏ skill loader**, chỉ có 8 tool cố định | 6.5, dòng "Skill loader" (3 ngày) | **3 ngày** |
 | **Memory: bỏ dòng ghép khối trạng thái nhãn vào prompt hệ thống** (agent bị từ chối nhiều hơn, chấp nhận được — Policy Engine vẫn chặn đúng) | 10.7, dòng "Ghép prompt hệ thống" (2 ngày) → còn 1 ngày | **1 ngày** |
 | **Agent Core: bỏ spike LangGraph**, quyết định luôn là tự viết vòng lặp | 5.9, dòng "Spike LangGraph" (2-3 ngày) | **2-3 ngày** |
-| **TỔNG CẮT** | | **20-27,5 ngày ≈ 4-5,5 tuần-người** |
+| **TỔNG CẮT** | | **18-25 ngày ≈ 3,6-5 tuần-người** |
 
-**Sau cắt: 150,5-178,5 ngày = 30,1-35,7 tuần-người.**
+**Sau cắt: 155,5-184 ngày = 31,1-36,8 tuần-người.** (Đã gồm +3 ngày của quyết định 12.3.1 — người dùng thao tác trực tiếp; dòng cắt noVNC đã bỏ vì khung ④ không còn ở mức chỉ-xem.)
 
 **Ba dòng cắt mới đều nằm ở Phần V và đều là tính năng nền tảng ở mục 5.8, không phải cơ chế bảo mật.** Đó là lý do chúng cắt được: bỏ checkpoint làm sản phẩm khó dùng hơn, **không** làm tuyên bố ở 9.4.2 yếu đi. Ngược lại, luật **L2** (quay lại file không làm sạch ngữ cảnh) và luật **L3** (agent không có tool để quay lại) là cơ chế bảo mật — nếu **giữ** checkpoint thì phải giữ đủ cả ba luật, không được giữ nửa vời.
 
-Con số này giả định **Gate 1 ở tuần 1 kết luận cả AgentDojo và VPI-Bench đều cắm được**. Hai nhánh còn lại có công phát sinh và có đường cắt bù riêng ở cuối mục 13.3 — không dùng lại bảng trên, vì mọi dòng của nó đã được tính vào 30,1-35,7. Kết quả cuối theo từng nhánh:
+Con số này giả định **Gate 1 ở tuần 1 kết luận cả AgentDojo và VPI-Bench đều cắm được**. Hai nhánh còn lại có công phát sinh và có đường cắt bù riêng ở cuối mục 13.3 — không dùng lại bảng trên, vì mọi dòng của nó đã được tính vào 31,1-36,8. Kết quả cuối theo từng nhánh:
 
 | Kết quả Gate 1 (tuần 1) | Phạm vi sau cắt |
 |---|---|
-| Cả hai benchmark cắm được | **30,1-35,7 tuần-người** |
-| AgentDojo được, VPI-Bench không | **30,1-35,7 tuần-người** (công phát sinh 1 tuần bù hết được bằng đường cắt riêng ở 13.3) |
-| Cả hai không cắm được → kế hoạch B toàn phần | **30,5-36,2 tuần-người** (cắt bù chỉ được 1-1,1 trên 1,5 tuần cần bù) |
+| Cả hai benchmark cắm được | **31,1-36,8 tuần-người** |
+| AgentDojo được, VPI-Bench không | **31,1-36,8 tuần-người** (công phát sinh 1 tuần bù hết được bằng đường cắt riêng ở 13.3) |
+| Cả hai không cắm được → kế hoạch B toàn phần | **31,5-37,3 tuần-người** (cắt bù chỉ được 1-1,1 trên 1,5 tuần cần bù) |
 
-Sáu việc sau **đã nằm ngoài** tổng 34,1-41,2 từ đầu; ghi lại để không vô tình đưa vào lúc làm: M2 nhãn theo vùng (mục 8.5) · Memory lớp 4 (mục 10.3) · chuỗi hash cho sổ audit (mục 9.7) · proxy egress (Phần XV) · OSWorld/WebArena · cấu hình C4. Không cái nào trong số này được tính là tiết kiệm.
+Sáu việc sau **đã nằm ngoài** tổng 34,7-41,8 từ đầu; ghi lại để không vô tình đưa vào lúc làm: M2 nhãn theo vùng (mục 8.5) · Memory lớp 4 (mục 10.3) · chuỗi hash cho sổ audit (mục 9.7) · proxy egress (Phần XV) · OSWorld/WebArena · cấu hình C4. Không cái nào trong số này được tính là tiết kiệm.
 
 **Đối chiếu thẳng, không làm mềm:**
 
-| Nhân lực | Ngân sách 13 tuần | Phạm vi sau cắt 30,1-35,7 | Kết luận |
+| Nhân lực | Ngân sách 13 tuần | Phạm vi sau cắt 31,1-36,8 | Kết luận |
 |---|---|---|---|
-| 1 người | 13 tuần-người | 30,1-35,7 | **Không khả thi.** Thiếu hơn gấp đôi |
-| 2 người | 26 tuần-người | 30,1-35,7 | **Thiếu 4,1-9,7 tuần-người ở MỌI điểm trong khoảng.** Không vừa, kể cả ở đầu dưới — cần một đường cắt bổ sung đáng kể, và đường cắt đó sẽ phải chạm vào Phần XII hoặc Phần VIII |
-| 3 người | 39 tuần-người | 30,1-35,7 | **Khả thi, biên an toàn 3,3-8,9 tuần-người.** Biên này đã mỏng hơn bản trước vì Phần V phình thêm — nên với 3 người vẫn phải theo đúng năm gate ở 14.3 |
+| 1 người | 13 tuần-người | 31,1-36,8 | **Không khả thi.** Thiếu hơn gấp đôi |
+| **2 người** | 26 tuần-người | 31,1-36,8 | **Thiếu 5,1-10,8 tuần-người ở MỌI điểm trong khoảng.** Không vừa, kể cả ở đầu dưới — cần một đường cắt bổ sung đáng kể, và đường cắt đó sẽ phải chạm vào Phần XII hoặc Phần VIII |
+| **3 người** | 39 tuần-người | 31,1-36,8 | **Khả thi, biên an toàn 2,2-7,9 tuần-người.** Biên này đã mỏng hơn bản trước vì Phần V phình thêm và 12.3.1 cộng thêm 3 ngày — nên với 3 người vẫn phải theo đúng năm gate ở 14.3 |
 
 **Quyết định dứt khoát theo nhân lực:**
 
-- **3 người:** làm đúng phạm vi sau cắt (30,1-35,7). Đây là **cấu hình khuyến nghị duy nhất giữ được cả bốn đóng góp**.
+- **3 người:** làm đúng phạm vi sau cắt (31,1-36,8). Đây là **cấu hình khuyến nghị duy nhất giữ được cả bốn đóng góp**.
 
-- **2 người:** phạm vi sau cắt vẫn thiếu **4,1-9,7 tuần-người**, nên phải cắt thêm **ngay từ tuần 0, không chờ Gate 2**. Đường cắt bổ sung, theo thứ tự ưu tiên bỏ (cơ sở: **150,5-178,5 ngày**; Phần VIII sau đường cắt 14.2 còn **12-15 ngày** vì 14.2 chỉ cắt 1 ngày render PDF):
+- **2 người:** phạm vi sau cắt vẫn thiếu **5,1-10,8 tuần-người**, nên phải cắt thêm **ngay từ tuần 0, không chờ Gate 2**. Đường cắt bổ sung, theo thứ tự ưu tiên bỏ (cơ sở: **155,5-184 ngày**; Phần VIII sau đường cắt 14.2 còn **12-15 ngày** vì 14.2 chỉ cắt 1 ngày render PDF):
 
   | Bỏ thêm | Tiết kiệm | Phạm vi mới |
   |---|---|---|
-  | **Bỏ toàn bộ Phần VIII (computer use)** | −12-15 ngày | **138,5-163,5 ngày = 27,7-32,7 tuần-người** |
-  | Bỏ thêm khung ③ terminal | −2-3 ngày | **136,5-160,5 ngày = 27,3-32,1 tuần-người** |
+  | **Bỏ toàn bộ Phần VIII (computer use)** | −12-15 ngày | **143,5-169 ngày = 28,7-33,8 tuần-người** |
+  | Bỏ thêm khung ③ terminal | −2-3 ngày | **141,5-166 ngày = 28,3-33,2 tuần-người** |
 
-  Đọc thẳng con số này: **ngay cả sau hai lần bỏ trên, đầu dưới (27,3) vẫn vượt ngân sách 26 tuần-người của 2 người.** Nghĩa là **với 2 người, kế hoạch không vừa 13 tuần kể cả khi mọi ước lượng rơi về đầu dưới** — và hai lần bỏ đó đã phải trả giá **mất Đ3 và mất VPI-Bench**, chỉ còn Đ1 + Đ4 đo trên AgentDojo. Với 2 người có đúng ba lựa chọn thật, phải chọn ngay tuần 0: (a) cắt sâu hơn nữa vào Phần XII — bỏ luôn khung ② xem file, còn ba khung (chat + terminal bỏ rồi nên là chat + bảng nhãn + cây file rút gọn), tiết kiệm thêm khoảng 2 ngày, vẫn chỉ về khoảng **26,9-31,7**; (b) xin kéo dài đồ án thêm **2-6 tuần lịch**; hoặc (c) bổ sung người thứ ba. Đây là đánh đổi phải nói rõ với giảng viên hướng dẫn ngay tuần 0, không phải tuần 10.
+  Đọc thẳng con số này: **ngay cả sau hai lần bỏ trên, đầu dưới (28,3) vẫn vượt ngân sách 26 tuần-người của 2 người.** Nghĩa là **với 2 người, kế hoạch không vừa 13 tuần kể cả khi mọi ước lượng rơi về đầu dưới** — và hai lần bỏ đó đã phải trả giá **mất Đ3 và mất VPI-Bench**, chỉ còn Đ1 + Đ4 đo trên AgentDojo. Với 2 người có đúng ba lựa chọn thật, phải chọn ngay tuần 0: (a) cắt sâu hơn nữa vào Phần XII — bỏ luôn khung ② xem file, còn ba khung (chat + terminal bỏ rồi nên là chat + bảng nhãn + cây file rút gọn), tiết kiệm thêm khoảng 2 ngày, vẫn chỉ về khoảng **27,9-32,8**; (b) xin kéo dài đồ án thêm **2-6 tuần lịch**; hoặc (c) bổ sung người thứ ba. Đây là đánh đổi phải nói rõ với giảng viên hướng dẫn ngay tuần 0, không phải tuần 10.
 
-- **1 người:** bỏ Phần VIII + khung ③ như trên còn **27,3-32,1 tuần-người**, vẫn gấp hơn hai lần ngân sách 13. **Kết luận dứt khoát: với 1 người, phạm vi này không vừa 3 tháng bằng bất kỳ đường cắt nào.** Hai lựa chọn thật: (a) xin kéo dài thời gian đồ án, hoặc (b) thu hẹp đề tài xuống chỉ còn Phần IX + Phần XIII + một giao diện hai khung (chat + bảng nhãn), bỏ Phần VII/VIII/X/XI và dùng thư viện agent có sẵn thay Phần V/VI — khi đó còn khoảng 15-18 tuần-người, và **vẫn phải xin thêm 2-5 tuần**. Phải nói điều này với giảng viên ngay tuần 0, không phải tuần 10.
+- **1 người:** bỏ Phần VIII + khung ③ như trên còn **28,3-33,2 tuần-người**, vẫn gấp hơn hai lần ngân sách 13. **Kết luận dứt khoát: với 1 người, phạm vi này không vừa 3 tháng bằng bất kỳ đường cắt nào.** Hai lựa chọn thật: (a) xin kéo dài thời gian đồ án, hoặc (b) thu hẹp đề tài xuống chỉ còn Phần IX + Phần XIII + một giao diện hai khung (chat + bảng nhãn), bỏ Phần VII/VIII/X/XI và dùng thư viện agent có sẵn thay Phần V/VI — khi đó còn khoảng 15-18 tuần-người, và **vẫn phải xin thêm 2-5 tuần**. Phải nói điều này với giảng viên ngay tuần 0, không phải tuần 10.
 
 Điều **không** cắt trong mọi trường hợp: Phần IX (bảo mật), bộ ca T5, và **ba cấu hình C1-C3** của Phần XIII. Cắt những thứ đó là bỏ chính đóng góp của đồ án. Cấu hình **C0** là ngoại lệ duy nhất: nó chỉ là baseline "agent thường" nên nếu Gate 1 buộc phải cắt bù, C0 được rút xuống chạy trên 5 ca mẫu (xem đường cắt riêng ở cuối mục 13.3).
 
@@ -2614,9 +2668,9 @@ Giả định 2 người: **người A** làm bảo mật + đánh giá, **ngư�
 | **4** | Lan truyền nhãn + `integrity_floor` / `confidentiality_ceiling` + BB1 | Giao diện khung xương + khung ① hội thoại | Thấy agent chạy từng bước trên giao diện |
 | **5** | Policy Engine + bảng quyết định 9.5.3 | Khung ② cây file + diff + chấm màu nhãn | Hành động WRITE khi bẩn bị chặn |
 | **6** | Lease Store + 4 loại cho phép + nguyên tử + thu hồi | Thẻ xin quyền + luồng không đồng bộ 12.4 (đủ 4 quy tắc) | **Gate 2 — quan trọng nhất:** phản ví dụ 9.5.2 bị chặn từ đầu đến cuối qua giao diện. Nếu tuần 6 chưa đạt mốc này, cắt ngay theo 14.2 mức mạnh |
-| **7** | Chuẩn thuận + ngăn cách + reset + BB2/BB3 | Khung ③ terminal xterm.js + Secret Manager + che log | Chuẩn thuận 1 artifact → chạy tiếp. Reset xóa cả cây dẫn xuất |
+| **7** | Chuẩn thuận + ngăn cách + reset + BB2/BB3 | Khung ③ **terminal của người dùng** (xterm.js + `docker exec` + audit `actor: user`) + Secret Manager + che log | Chuẩn thuận 1 artifact → chạy tiếp. Reset xóa cả cây dẫn xuất |
 | **8** | Khung chạy thí nghiệm + `SimulatedUser` P1-P6 + hai biên | Computer use: Playwright + a11y tree + tập hành động | Chạy được 1 ca test tự động ra số. Agent click được trên web |
-| **9** | Bốn cấu hình C0-C3 + **chạy thử pipeline 5 ca** | Computer use: nhãn M1 + khung ④ noVNC | **Gate 3:** pipeline đánh giá ra được số cho cả 4 cấu hình, dù số ít. Xem màn hình sandbox trên giao diện |
+| **9** | Bốn cấu hình C0-C3 + **chạy thử pipeline 5 ca** | Computer use: nhãn M1 + khung ④ **noVNC ẩn-mặc định + input tự do + V3/V4 (12.3.1)** | **Gate 3:** pipeline đánh giá ra được số cho cả 4 cấu hình, dù số ít. Xem màn hình sandbox trên giao diện |
 | **10** | Bộ ca T5 rửa nhãn + **T7 hai chế độ Plan/Act** + T6 lành tính (20 ca) | Khung ⑤ bảng nhãn & giấy phép + sổ audit trả 3 câu hỏi 9.7 | Ba câu hỏi audit trả lời được từ giao diện |
 | **11** | **Chạy thật đầy đủ**, 5 lần mỗi ca, 4 cấu hình | Sửa lỗi tồn, viết tài liệu kỹ thuật, chuẩn bị luồng demo | **Gate 4:** có số cho RQ1/RQ2/RQ3 |
 | **12** | Phân tích, bảng/hình, viết chương đánh giá | Dựng luồng demo, render an toàn nội dung bẩn, kiểm `Origin` | Demo chạy trơn từ đầu đến cuối |
@@ -2627,7 +2681,7 @@ Giả định 2 người: **người A** làm bảo mật + đánh giá, **ngư�
 | Gate | Trượt thì làm gì |
 |---|---|
 | **Gate 0** (tuần 0) — chưa hỏi được giảng viên | Giả định **không** bắt buộc ML và đi tiếp, nhưng giữ nguyên điểm cắm ở mục 11.6 để nếu tuần 3-4 mới biết là bắt buộc thì còn kịp cắt computer use |
-| **Gate 1** (tuần 1) — benchmark không cắm được | Chuyển sang nhánh tương ứng ở mục 13.3 ngay. Cắt bù theo **đường cắt riêng ở cuối mục 13.3** (giảm T6 xuống 12 ca · C0 chỉ chạy 5 ca mẫu · nếu cần thì bỏ hai đường biên), **không** dùng lại các dòng ở mục 14.2 vì chúng đã được tính vào 30,1-35,7 tuần-người. Nếu rơi vào kế hoạch B toàn phần thì phạm vi thật thành **30,5-36,2 tuần-người** và phải báo lại quyết định nhân lực |
+| **Gate 1** (tuần 1) — benchmark không cắm được | Chuyển sang nhánh tương ứng ở mục 13.3 ngay. Cắt bù theo **đường cắt riêng ở cuối mục 13.3** (giảm T6 xuống 12 ca · C0 chỉ chạy 5 ca mẫu · nếu cần thì bỏ hai đường biên), **không** dùng lại các dòng ở mục 14.2 vì chúng đã được tính vào 31,1-36,8 tuần-người. Nếu rơi vào kế hoạch B toàn phần thì phạm vi thật thành **31,5-37,3 tuần-người** và phải báo lại quyết định nhân lực |
 | **Gate 2** (tuần 6) — phản ví dụ 9.5.2 chưa chặn được đầu-cuối | Cắt mạnh: bỏ computer use xuống browser-only qua a11y (mất Đ3, mất VPI-Bench), dồn toàn bộ người vào Phần IX. Đây là mốc quan trọng nhất |
 | **Gate 3** (tuần 9-10) — pipeline chưa ra được số cho 4 cấu hình | Giảm T6 xuống 12 ca, bỏ hai đường biên, giảm số lần lặp từ 5 xuống 3 và ghi rõ trong báo cáo |
 | **Gate 4** (tuần 11) — chưa có số cho RQ1-RQ3 | Cắt xuống chỉ chạy C1 và C3 (hai cấu hình cho chênh lệch quan trọng nhất), bỏ C0 và C2. Vẫn có kết quả để báo cáo |
@@ -2666,7 +2720,7 @@ Cảnh (3) của demo là cảnh khác biệt nhất so với mọi agent đang 
 |---|---|---|
 | **S1 — Làm bản local dùng được thật** | 6-8 tuần | Bù các mục đã cắt ở mục 14.2: sửa file trong giao diện, terminal hai chiều, Memory lớp 4, chuỗi hash audit, M2 nhãn theo vùng. Đóng gói cài đặt một bước cho Windows/macOS/Linux |
 | **S2 — Có người dùng thật** | 4-6 tuần | 10-20 người dùng đầu, thu phản hồi về số lần hỏi. Sửa những chỗ hỏi quá nhiều. Đây là giai đoạn quyết định sản phẩm sống hay chết |
-| **S3 — Ngôn ngữ policy + proxy egress** | 4-5 tuần | Cho người dùng tự viết luật (học mô hình DSL của Progent, arXiv 2504.11703). Proxy egress có allowlist tên miền và quét dữ liệu ra |
+| **S3 — Ngôn ngữ policy + proxy egress** | 4-5 tuần | Cho người dùng tự viết luật (học mô hình DSL của Progent, arXiv 2504.11703). Proxy egress có allowlist tên miền và quét dữ liệu ra — là nâng cấp trực tiếp của công tắc mạng box (7.4.1): biến chế độ "bật" thành "bật qua danh sách trắng", thu hẹp cửa sổ rủi ro mà không bỏ quyền quyết của người dùng |
 | **S4 — Module thứ hai ngoài coding** | 4-6 tuần | Chứng minh kiến trúc không chỉ dùng cho code. Ứng viên: xử lý ảnh theo lô (khớp nền Computer Vision của người thực hiện), hoặc xử lý tài liệu/hợp đồng có dữ liệu mật — nhóm sau khớp thông điệp bảo mật hơn |
 | **S5 — Cloud** | 8-10 tuần | Chỉ làm khi S2 chứng minh có người muốn dùng. Xem 15.3 |
 
@@ -2732,7 +2786,7 @@ Chỉ làm khi có khách hàng doanh nghiệp thật yêu cầu. Làm sớm là
 |---|---|---|---|---|
 | **R1** | **Ngữ nghĩa nhãn không chặt (not sound)** — tìm được đường rửa nhãn mà thiết kế không chặn, làm tuyên bố 9.4.2 sai | **Cao** | Nhóm ca T5 (mục 13.4) có ca fail | Viết ngữ nghĩa ra văn bản **trước khi code** (tuần 2), và coi T5 là bộ test hồi quy chạy liên tục, không phải test cuối kỳ |
 | **R2** | **Taint explosion — sản phẩm không dùng được** vì hỏi quá nhiều | **Cao** | Bộ T6 cho số "số lần hỏi mỗi việc" cao (trên ~10) | Đo từ tuần 9 chứ không tuần 12. Giảm bằng: giấy phép có phạm vi rộng hơn, gộp nhiều yêu cầu vào một thẻ, khuyến khích mở phiên mới (mục 10.4). **Nếu số vẫn cao thì đó là một kết quả nghiên cứu, phải báo cáo thẳng chứ không che** |
-| **R3** | **Trượt thời gian** — 34,1-41,2 tuần-người (30,1-35,7 sau cắt) trên ngân sách 26 tuần-người nếu có 2 người, và biên chỉ 3,3-8,9 nếu có 3 người | **Cao** | Trượt Gate 2 (tuần 6) | Năm gate ở 14.3 + đường cắt 14.2. Nguyên tắc: cắt phạm vi, không dời hạn. **Đây là rủi ro có xác suất cao nhất trong bảng, và cách xử lý duy nhất là chốt nhân lực trước tuần 0** |
+| **R3** | **Trượt thời gian** — 34,7-41,8 tuần-người (31,1-36,8 sau cắt) trên ngân sách 26 tuần-người nếu có 2 người, và biên chỉ 2,2-7,9 nếu có 3 người | **Cao** | Trượt Gate 2 (tuần 6) | Năm gate ở 14.3 + đường cắt 14.2. Nguyên tắc: cắt phạm vi, không dời hạn. **Đây là rủi ro có xác suất cao nhất trong bảng, và cách xử lý duy nhất là chốt nhân lực trước tuần 0** |
 | **R4** | **Không cắm được vào AgentDojo/VPI-Bench** → mất phần đánh giá | **Trung bình-cao** | Spike tuần 1 | Kế hoạch B ở 13.4, quyết định ngay tuần 1 |
 | **R5** | **Giảng viên hướng dẫn yêu cầu ML tự huấn luyện** | **Trung bình** | Gate 0 tuần 0 | Nhánh ở 14.4. Hỏi ngay tuần 0, không để đến tuần 5 |
 | **R6** | **Sandbox không đủ kín** — thoát container được, làm tuyên bố bảo mật hỏng | **Trung bình** | Kiểm 6 quy tắc mục 7.4 | Nếu không đủ 6 quy tắc thì **loại `run_command` khỏi tuyên bố bảo mật và khỏi benchmark chính** thay vì tuyên bố quá tay |
@@ -2759,6 +2813,7 @@ Viết ra đây để dùng nguyên văn trong báo cáo. Một tuyên bố quá
 | Hỗ trợ MCP thật | Đồ án chỉ **mô phỏng** tấn công A2 bằng tool nội bộ giả lập (mục 9.1) |
 | Gán nhãn được từng vùng của ảnh màn hình | Đồ án chỉ làm **M1** — một nhãn cho cả ảnh (mục 8.5). Trên trục mật, quy tắc M1 ở mục 9.3 lấy mức cao nhất đang hiện trên màn hình, nên nó **thô có chủ ý** và sẽ chặn rộng hơn cần thiết. Nhãn theo vùng là M2, nằm ngoài phạm vi |
 | Bộ mô phỏng người dùng thay được cho người dùng thật | `SimulatedUser` (mục 13.5) là một policy sáu luật viết trước, không phải mô hình hành vi người. Nó cho một điểm so sánh **tái tạo được**, không cho một tuyên bố về hành vi người thật |
+| Chặn dữ liệu rời máy khi người dùng đã bật mạng box (công tắc 7.4.1) | Khi mạng bật, biên vật lý được mở theo yêu cầu hợp lệ của người dùng; hệ thống chỉ ghi nhận được **cửa sổ thời gian** và toàn bộ lệnh chạy trong cửa sổ — không chặn được theo tên miền. Proxy allowlist (Phần XV) là nâng cấp sau đồ án |
 | **Người dùng phát hiện được một bước độc nằm trong bản kế hoạch** | Nếu chỉ thị độc chen được một bước vào kế hoạch, người dùng bấm "chuyển sang Act" chính là chuẩn thuận bước đó (mục 5.3.4). Cơ chế chỉ bảo đảm bước đó **hiện ra bằng chữ, kèm nguồn gốc, trước khi thực thi** — nó **không** bảo đảm người dùng đọc kỹ và nhận ra. Nhóm ca **T7a** đo đúng chỗ này và kết quả của nó phải được báo cáo thẳng |
 | **Giấy phép theo phạm vi kế hoạch hẹp bằng giấy phép một lần** | Quy tắc tái neo (mục 5.3.4.1) chấp nhận một sự nới lỏng có chủ ý: chỉ thị độc **nằm trong** phạm vi kế hoạch điều khiển được các hành động **trong** phạm vi đó mà không sinh thêm lần hỏi nào. Ngoại lệ này được ghi thành một mục riêng ở 9.4.2, không được ẩn đi |
 

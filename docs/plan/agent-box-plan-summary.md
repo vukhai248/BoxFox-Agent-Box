@@ -64,15 +64,15 @@ Vì cơ chế dựa vào việc hỏi người dùng, ASR phụ thuộc hoàn to
 Hai luật trong sáu luật đó tồn tại vì một lý do dễ bỏ sót: nếu bộ mô phỏng chỉ biết "đồng ý một lần" hoặc "từ chối" thì nó **không bao giờ cấp một giấy phép nào**, và chênh lệch giữa cấu hình C2 và C3 sẽ bằng 0 vì bộ mô phỏng chứ không vì thiết kế.
 
 **3. Nhân lực quyết định phạm vi, và con số không dễ chịu.**
-Cộng đủ mọi phần: **170,5-206 ngày = 34,1-41,2 tuần-người** (1 tuần-người = 5 ngày của một người). Sau đường cắt ở mục 14.2 (20-27,5 ngày) còn **150,5-178,5 ngày = 30,1-35,7 tuần-người**. Con số này cao hơn bản trước vì Phần V phình thêm: bảy thành phần Controller, bộ máy hai chế độ, và bốn tính năng nền tảng ở mục 5.8. Đối chiếu ngân sách 13 tuần lịch:
+Cộng đủ mọi phần: **173,5-209 ngày = 34,7-41,8 tuần-người** (1 tuần-người = 5 ngày của một người; đã gồm +3 ngày của quyết định 12.3.1). Sau đường cắt ở mục 14.2 (18-25 ngày) còn **155,5-184 ngày = 31,1-36,8 tuần-người**. Con số này cao hơn bản trước vì Phần V phình thêm: bảy thành phần Controller, bộ máy hai chế độ, và bốn tính năng nền tảng ở mục 5.8. Đối chiếu ngân sách 13 tuần lịch:
 
 | Nhân lực | Ngân sách | Kết luận |
 |---|---|---|
 | 1 người | 13 tuần-người | **Không vừa 3 tháng bằng bất kỳ đường cắt nào.** Phải xin kéo dài, hoặc thu hẹp còn Phần IX + XIII + giao diện hai khung (~15-18 tuần-người, **vẫn thiếu 2-5 tuần**) |
-| 2 người | 26 tuần-người | **Thiếu 4,1-9,7 tuần-người ở mọi điểm trong khoảng** — không vừa kể cả ở đầu dưới. Phải cắt thêm ngay tuần 0 (bỏ Phần VIII → khoảng 27-30,5), và **mất Đ3 + VPI-Bench** |
-| 3 người | 39 tuần-người | **Cấu hình khuyến nghị duy nhất giữ được cả bốn đóng góp.** Biên an toàn **3,3-8,9 tuần-người** — đã mỏng hơn bản trước, nên vẫn phải theo đúng năm gate |
+| 2 người | 26 tuần-người | **Thiếu 5,1-10,8 tuần-người ở mọi điểm trong khoảng** — không vừa kể cả ở đầu dưới. Phải cắt thêm ngay tuần 0 (bỏ Phần VIII → khoảng 28,7-33,8), và **mất Đ3 + VPI-Bench** |
+| 3 người | 39 tuần-người | **Cấu hình khuyến nghị duy nhất giữ được cả bốn đóng góp.** Biên an toàn **2,2-7,9 tuần-người** — đã mỏng hơn bản trước, nên vẫn phải theo đúng năm gate |
 
-Nếu Gate 1 buộc dùng kế hoạch B toàn phần thì phạm vi thành **30,5-36,2 tuần-người** (mục 13.3 có đường cắt bù riêng, bù được tối đa 1,1 trên 1,5 tuần cần bù).
+Nếu Gate 1 buộc dùng kế hoạch B toàn phần thì phạm vi thành **31,5-37,3 tuần-người** (mục 13.3 có đường cắt bù riêng, bù được tối đa 1,1 trên 1,5 tuần cần bù).
 
 Không cắt trong mọi trường hợp: Phần IX (bảo mật), bộ ca **T5** (rửa nhãn) và **T7** (tấn công cơ chế hai chế độ Plan/Act), và ba cấu hình C1-C3 của Phần XIII — cắt những thứ đó là bỏ chính đóng góp. C0 là baseline nên được rút xuống 5 ca mẫu nếu phải cắt bù.
 
