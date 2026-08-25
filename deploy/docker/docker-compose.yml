@@ -1,0 +1,45 @@
+# ==============================================================================
+# BoxFox Agent Box — chạy sandbox container
+#
+# QUY TẮC ②a (7.4.1): box khởi động với data plane ĐÓNG (iptables OUTPUT DROP,
+# xem box-firewall). Port 5900/6080/8080 vẫn truy cập được từ host vì đó là
+# kết nối VÀO (conntrack ESTABLISHED cho phép trả lời).
+#
+# CÔNG TẮC MẠNG ②b (7.4.1) = hai lệnh sống, không cần restart:
+#   BẬT : docker exec --user root agentbox-box box-firewall on
+#   TẮT : docker exec --user root agentbox-box box-firewall off
+#
+# Ghi chú: entrypoint chạy root chỉ để cấu hình firewall rồi gosu hạ xuống
+# `agent` — mọi tiến trình làm việc đều non-root (quy tắc ⑥).
+# ==============================================================================
+services:
+  box:
+    build: .
+    image: agentbox-sandbox:latest
+    container_name: agentbox-box
+    hostname: box
+    user: "0"             # entrypoint cần root để set iptables, tự hạ quyền sau
+    cap_add:
+      - NET_ADMIN         # chỉ để box-firewall đổi luật iptables
+    networks:
+      - boxnet
+    ports:
+      - "5900:5900"     # VNC — người dùng xem màn hình box (VNC Viewer)
+      - "6080:6080"     # websockify — cầu WebSocket cho noVNC trong frontend
+      - "8080:8080"     # code-server — VS Code web
+    volumes:
+      # Workspace nằm ngoài vòng đời container: xóa container, giữ workspace (mục 7.6)
+      - agentbox-workspace:/home/agent/workspace
+    restart: unless-stopped
+
+networks:
+  # Quy tắc ②a — KHÔNG dùng internal:true vì nó làm hỏng published ports.
+  # Tắt NAT làm lớp phòng thủ thứ nhất; iptables trong box (box-firewall)
+  # là lớp thứ hai và là cơ chế của công tắc ②b.
+  boxnet:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+
+volumes:
+  agentbox-workspace:

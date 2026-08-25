@@ -1,0 +1,34 @@
+#!/bin/sh
+# ==============================================================================
+# box-firewall on|off — CÔNG TẮC MẠNG của box (quy tắc ②a/②b, mục 7.4.1)
+#
+# Thực thi bằng iptables NGAY TRONG container — không phụ thuộc hành vi NAT của
+# Docker Desktop. Mặc định khi box khởi động: OFF.
+#
+#   BẬT : docker exec --user root agentbox-box box-firewall on
+#   TẮT : docker exec --user root agentbox-box box-firewall off
+#
+# Yêu cầu cap NET_ADMIN (khai trong docker-compose.yml). Mọi lần gọi phải ghi
+# sổ audit với actor: user (②c) — Controller làm việc đó ở backend.
+# ==============================================================================
+set -eu
+
+case "${1:-}" in
+  off)
+    iptables -F OUTPUT
+    # Cho phép loopback + trả lời các kết nối ĐANG có (VNC/VS Code từ host)
+    iptables -A OUTPUT -o lo -j ACCEPT
+    iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    iptables -P OUTPUT DROP
+    echo "[box-firewall] OFF — data plane đã đóng"
+    ;;
+  on)
+    iptables -P OUTPUT ACCEPT
+    iptables -F OUTPUT
+    echo "[box-firewall] ON — data plane mở toàn phần"
+    ;;
+  *)
+    echo "dùng: box-firewall on|off" >&2
+    exit 2
+    ;;
+esac
