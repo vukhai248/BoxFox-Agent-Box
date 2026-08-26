@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   FileText,
   Monitor,
+  Code2,
   Folder,
   Terminal,
   Tag,
@@ -26,6 +27,7 @@ import { PlanPanel } from './components/panels/PlanPanel'
 import { DecisionsPanel } from './components/panels/DecisionsPanel'
 import { TerminalPanel } from './components/panels/TerminalPanel'
 import { SandboxScreenPanel } from './components/panels/SandboxScreenPanel'
+import { IdePanel } from './components/panels/IdePanel'
 import { LabelsLeasesPanel } from './components/panels/LabelsLeasesPanel'
 import { ModeSwitchCard } from './components/ModeSwitchCard'
 import { LabelDot } from './components/LabelDot'
@@ -38,6 +40,7 @@ const TAB_LABEL_KEY: Record<PanelTabId, string> = {
   plan: 'tabs.plan',
   decisions: 'tabs.decisions',
   sandbox: 'tabs.sandbox',
+  ide: 'tabs.ide',
   files: 'tabs.files',
   terminal: 'tabs.terminal',
   labels: 'tabs.labels',
@@ -49,6 +52,7 @@ const TAB_ICON: Record<PanelTabId, React.ComponentType<{ className?: string }>> 
   plan: FileText,
   decisions: ShieldAlert,
   sandbox: Monitor,
+  ide: Code2,
   files: Folder,
   terminal: Terminal,
   labels: Tag,
@@ -60,6 +64,7 @@ const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon:
   { id: 'plan', label: 'Plan Document', desc: 'Architecture blueprint & step review', icon: FileText },
   { id: 'decisions', label: 'Decisions & Approvals', desc: 'Security permission requests & design choices', icon: ShieldAlert },
   { id: 'sandbox', label: 'Sandbox Machine', desc: 'Live container vision & browser frame', icon: Monitor },
+  { id: 'ide', label: 'IDE (VS Code Web)', desc: 'code-server running inside the box', icon: Code2 },
   { id: 'files', label: 'Workspace Files', desc: 'Source code explorer with provenance tags', icon: Folder },
   { id: 'terminal', label: 'Integrated Terminal', desc: 'Interactive shell in sandbox container', icon: Terminal },
   { id: 'labels', label: 'Labels & Leases', desc: 'IFC security provenance & active leases', icon: Tag },
@@ -126,6 +131,8 @@ export default function App() {
         return <DecisionsPanel />
       case 'sandbox':
         return <SandboxScreenPanel />
+      case 'ide':
+        return <IdePanel />
       case 'files':
         return <FileTreePanel />
       case 'terminal':

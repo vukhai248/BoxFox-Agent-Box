@@ -23,17 +23,17 @@ ok()   { echo "  ✅ PASS — $1"; PASS=$((PASS+1)); }
 bad()  { echo "  ❌ FAIL — $1"; FAIL=$((FAIL+1)); }
 head() { echo ""; echo "== $1 =="; }
 
-cleanup() { docker network disconnect "$INTERNET_NET" "$CONTAINER" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
+# (đã bỏ trap cleanup/INTERNET_NET — công tắc mạng giờ là box-firewall trong
+#  container, không còn network connect/disconnect nào cần dọn dẹp)
 
 head "1) Container đang chạy"
 [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" = "true" ] \
   && ok "container $CONTAINER running" || bad "chưa chạy? Chạy: docker compose up -d"
 
-head "2) Tiến trình dịch vụ chạy non-root `agent` (quy tắc ⑥)"
-U=$(DX 'ps -o user= -C code-server 2>/dev/null | head -1')
+head "2) Tiến trình dịch vụ chạy non-root agent (quy tắc ⑥)"
+U=$(docker exec "$CONTAINER" ps -o user= -C Xvfb 2>/dev/null)
 [ "$U" = "agent" ] \
-  && ok "code-server/Xvfb chạy với user agent (entrypoint đã gosu hạ quyền)" \
+  && ok "Xvfb/code-server chạy với user agent (entrypoint đã gosu hạ quyền)" \
   || bad "dịch vụ đang chạy với user='$U' (mong đợi 'agent')"
 
 head "3) Màn hình ảo Xvfb :99 đang sống"

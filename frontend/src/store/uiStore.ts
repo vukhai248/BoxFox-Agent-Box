@@ -10,6 +10,7 @@ export type PanelTabId =
   | 'plan'
   | 'decisions'
   | 'sandbox'
+  | 'ide'
   | 'files'
   | 'terminal'
   | 'labels'
@@ -20,6 +21,7 @@ export const ALL_PANEL_TABS: PanelTabId[] = [
   'plan',
   'decisions',
   'sandbox',
+  'ide',
   'files',
   'terminal',
   'labels',

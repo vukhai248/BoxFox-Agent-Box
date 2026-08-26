@@ -64,6 +64,44 @@ export function Chip({
 }
 
 /**
+ * Chip trạng thái kết nối trên thanh công cụ của panel (to hơn `Chip` ở trên, có
+ * chấm tròn dẫn đầu). Khung ④ và tab IDE dùng chung để hai kênh nhìn giống nhau:
+ * `live` = đang nhận dữ liệu thật, `busy` = đang nối/đang thăm dò, `warn` = chưa
+ * nối được hoặc đang xem dữ liệu mô phỏng.
+ */
+export function StatusChip({
+  tone,
+  pulse = false,
+  children,
+}: {
+  tone: 'live' | 'busy' | 'warn'
+  /** Chấm tròn nhấp nháy — chỉ bật khi dữ liệu đang chảy về thật. */
+  pulse?: boolean
+  children: ReactNode
+}) {
+  const tones: Record<string, { box: string; dot: string }> = {
+    live: {
+      box: 'bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/40 dark:text-emerald-300',
+      dot: 'bg-emerald-500',
+    },
+    busy: { box: 'bg-brand/15 text-brand ring-1 ring-brand/40', dot: 'bg-brand' },
+    warn: {
+      box: 'bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/40 dark:text-amber-300',
+      dot: 'bg-amber-500',
+    },
+  }
+  const { box, dot } = tones[tone]
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold ${box}`}
+    >
+      <span className={`size-1.5 rounded-full ${dot} ${pulse ? 'animate-pulse' : ''}`} />
+      {children}
+    </span>
+  )
+}
+
+/**
  * Nội dung dạng VĂN BẢN THUẦN. Dùng cho mọi thứ đến từ dữ liệu.
  * Không có prop nào nhận HTML — đó là điểm chính của component này.
  */

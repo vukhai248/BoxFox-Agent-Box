@@ -21,12 +21,20 @@ services:
     user: "0"             # entrypoint cần root để set iptables, tự hạ quyền sau
     cap_add:
       - NET_ADMIN         # chỉ để box-firewall đổi luật iptables
+    environment:
+      # Quy tắc ②a: mặc định TẮT — người dùng bật bằng nút trên giao diện
+      # (endpoint /__box/network của ide-proxy, mục 12.3.1)
+      BOX_DEFAULT_NETWORK: "off"
     networks:
       - boxnet
     ports:
-      - "5900:5900"     # VNC — người dùng xem màn hình box (VNC Viewer)
-      - "6080:6080"     # websockify — cầu WebSocket cho noVNC trong frontend
-      - "8080:8080"     # code-server — VS Code web
+      # Quy tắc 12.6 — chỉ bind loopback. x11vnc chạy -nopw và code-server chạy
+      # --auth none, nên nếu publish ra 0.0.0.0 thì mọi máy trong LAN đều điều
+      # khiển được box. Người dùng xem box từ trình duyệt trên chính máy host.
+      - "127.0.0.1:5900:5900"   # VNC — người dùng xem màn hình box (VNC Viewer)
+      - "127.0.0.1:6080:6080"   # websockify — cầu WebSocket cho noVNC trong frontend
+      - "127.0.0.1:8080:8080"   # code-server — VS Code web (truy cập trực tiếp)
+      - "127.0.0.1:8081:8081"   # ide‑proxy — code‑server + CSP frame‑ancestors
     volumes:
       # Workspace nằm ngoài vòng đời container: xóa container, giữ workspace (mục 7.6)
       - agentbox-workspace:/home/agent/workspace

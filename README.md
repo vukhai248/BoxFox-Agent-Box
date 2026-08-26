@@ -110,7 +110,7 @@ The sandbox is a blank Ubuntu 24.04 machine provisioned entirely from code — n
 
 ```powershell
 cd deploy/docker
-docker compose build     # first run pulls Ubuntu + Chromium + code-server (~5–15 min)
+docker compose build     # first run pulls Ubuntu + XFCE + Chromium + code-server (~10–20 min)
 docker compose up -d
 ```
 
@@ -120,8 +120,28 @@ What gets baked into the image (and what deliberately does not):
 |---|---|
 | Chromium via **Playwright 1.49.0** (pinned) | Node.js, language SDKs, frameworks |
 | Xvfb virtual display + x11vnc (screen sharing) | Any API keys or credentials (rule ⑤) |
-| code-server (VS Code in browser) | `sudo` for the runtime user |
-| git, curl, base shell tools | Root access — runs as non-root `agent` (rule ⑥) |
+| **XFCE desktop** — taskbar, window manager, desktop icons | A full VM — this is a container (§7.5) |
+| **code-server 4.97.2** (VS Code in the browser, port 8080) — the only editor | VS Code desktop / Electron — see below |
+| Thunar (files), Ristretto (images), Mousepad (text) — §7.5 file viewing | `sudo`, root access — runs as non-root `agent` (rule ⑥) |
+| git, curl, base shell tools | |
+
+The box is a **desktop machine**, not a bare X display: opening panel ④ shows a
+normal-looking computer with a taskbar and launchers, and Chromium is one
+application inside it rather than the whole screen. That is what makes §12.3.1's
+promise — that the user can *see* what the agent is doing — mean anything, and it
+is what §7.5's "file viewer/renderer" row actually requires.
+
+**Why there is no VS Code desktop build.** Measured on this very image, the
+Electron build costs ~460 MB RAM and ~437 MB of image, and every keystroke has to
+travel back out as *pixels* through Xvfb → x11vnc → websockify → noVNC.
+code-server puts the same editor in the user's own browser as text, costs ~172 MB
+RAM inside the box, and needs no part of the graphics stack. The web UI embeds it
+directly in the **IDE tab**, and the box desktop carries a `VS Code (Web)`
+launcher that opens the same `:8080` in app mode — so nobody has to type a
+localhost address. One editor, one workspace. It also ships with **no AI
+extension**: an editor extension calling a model on its own would be a second
+egress channel that never passes the Controller (breaking N1/N3) and a
+prompt-injection path straight out of the workspace files.
 
 ### Verify with the Smoke Test
 
@@ -134,7 +154,7 @@ Expected result: **9 PASS / 0 FAIL**, proving each design rule with evidence:
 | Check | Proves |
 |---|---|
 | Container up · non-root `agent` | rule ⑥ hardening |
-| Xvfb alive · VNC :5900 listening · code-server :8080 | screen + editor furniture (§7.5) |
+| Xvfb alive · XFCE session running · VNC :5900 listening · code-server :8080 | screen + desktop + editor furniture (§7.5) |
 | Playwright 1.49.0 + `chromium-1148` present | pinned, reproducible tooling (§13.6) |
 | `curl` **fails** out of the box | rule ②a — network ships OFF |
 | toggle ON → `curl` succeeds → toggle OFF → sealed again | rule ②b — your network switch works |
@@ -143,8 +163,11 @@ Expected result: **9 PASS / 0 FAIL**, proving each design rule with evidence:
 
 | Access point | URL / address |
 |---|---|
-| VS Code web (inside the box) | <http://localhost:8080> |
-| Box screen via any VNC Viewer | `localhost:5900` |
+| Box **desktop** in the web UI | panel ④ with `VITE_SANDBOX_SCREEN_SOURCE=novnc` |
+| Box desktop via any VNC Viewer | `localhost:5900` |
+| **IDE** in the web UI (code-server embedded full-panel) | IDE tab — no address to type |
+| code-server directly | <http://localhost:8080/?folder=/home/agent/workspace> |
+| code-server from inside the box | `VS Code (Web)` launcher on the box desktop |
 | Shell into the box | `docker exec -it agentbox-box bash` |
 
 ### Network Toggle

@@ -7,8 +7,26 @@
 #   BAKE (hạ tầng của chính agent — không thể chờ agent tự cài tay chân mình):
 #     - Chromium + Playwright driver (ghim phiên bản — tái lập 13.6)
 #     - Xvfb (màn hình ảo) + x11vnc (người dùng xem qua VNC — khung ④)
-#     - code-server (VS Code trên web — khung editor của người dùng)
+#     - XFCE (môi trường desktop) + trình xem ảnh/văn bản
+#     - code-server (VS Code trên WEB — editor duy nhất trong box)
 #     - git + công cụ dòng lệnh cơ bản
+#
+# Vì sao BAKE cả một desktop: mục 7.5 ghi "Trình xem/render file (ảnh, markdown,
+# PDF) — Có, cơ bản", và mục 12.3.1 hứa người dùng NHÌN được máy đang làm gì.
+# Một `Xvfb` trống trơn không đáp ứng cả hai: mở khung ④ ra chỉ thấy màu đen,
+# và Chromium chạy toàn màn hình thì không có cách nào thoát ra để xem file hay
+# mở cửa sổ khác. Có desktop thì Chromium chỉ là MỘT ứng dụng trong máy, đúng
+# như một máy tính thật — và người dùng có taskbar, file manager, terminal,
+# trình xem ảnh để tự kiểm tra kết quả agent làm.
+#
+# Vì sao KHÔNG có VS Code bản desktop (Electron): đo trên chính image này, bản
+# desktop tốn ~460 MB RAM và ~437 MB image, lại phải đi qua Xvfb → x11vnc →
+# websockify → noVNC mới nhìn được, tức mỗi lần gõ một ký tự là một lượt truyền
+# ẢNH. code-server đưa cùng một editor tới trình duyệt của người dùng dưới dạng
+# text, tốn ~172 MB RAM trong box và không cần một pixel nào của desktop. Giao
+# diện web có tab IDE nhúng thẳng code-server nên đây là đường vào chính; desktop
+# XFCE giữ lại cho Chromium, xem file và bằng chứng "màn hình luôn không tin
+# được" (quy tắc M1, mục 8.5).
 #   KHÔNG BAKE (stack của dự án người dùng — agent tự cài khi cần, qua công tắc
 #   mạng 7.4.1):
 #     - Node.js, các framework, JDK, Rust... — KHÔNG có sẵn ở đây.
@@ -72,15 +90,99 @@ RUN curl -fsSL https://code-server.dev/install.sh \
       | sh -s -- --version "${CODE_SERVER_VERSION}" --method standalone --prefix /opt/code-server \
     && ln -s /opt/code-server/bin/code-server /usr/local/bin/code-server
 
-# --- Lớp 5: công tắc mạng + workspace + entrypoint ----------------------------
+# --- Lớp 4.5: môi trường desktop XFCE ----------------------------------------
+# Chọn XFCE chứ không phải GNOME/KDE: nhẹ (không compositing nặng, không
+# systemd), chạy được trên Xvfb không GPU, và vẫn có đủ thứ một máy tính thật
+# phải có — taskbar, menu ứng dụng, quản lý cửa sổ, file manager.
+#   xfce4-session/xfwm4/xfdesktop4/xfce4-panel : desktop + taskbar + WM
+#   thunar + ristretto + mousepad              : file manager, xem ảnh, xem/sửa
+#                                                văn bản & markdown (mục 7.5)
+#   dbus-x11                                   : XFCE cần session bus
+#   xfce4-appfinder                            : tìm/chạy ứng dụng
+#   xdg-utils                                  : mở file bằng ứng dụng mặc định
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xfce4-session xfwm4 xfdesktop4 xfce4-panel xfce4-settings \
+      xfce4-terminal xfce4-appfinder thunar \
+      ristretto mousepad \
+      dbus-x11 xdg-utils \
+      adwaita-icon-theme \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Lớp 4.6: ứng dụng trên desktop ------------------------------------------
+# Logo thật cho shortcut desktop (Chromium + VS Code): người dùng nhìn icon
+# là biết đây là trình duyệt/editor nào — minh bạch cho computer use.
+COPY assets/icons/chromium.png /usr/share/pixmaps/boxfox-chromium.png
+COPY assets/icons/vscode.png /usr/share/pixmaps/boxfox-vscode.png
+# Chromium của Playwright không nằm trong PATH và không có .desktop nên desktop
+# không thấy nó → bọc lại thành một lệnh, rồi tạo entry cho menu/taskbar.
+# Đường dẫn giải bằng glob lúc chạy: phiên bản Chromium do bản Playwright đã
+# ghim quyết định, không hardcode số hiệu build vào đây.
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      '# Chromium do Playwright quản lý — chạy như một ứng dụng bình thường trên desktop.' \
+      'set -eu' \
+      'BIN=$(ls -d /opt/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)' \
+      '[ -n "$BIN" ] || { echo "khong tim thay Chromium trong /opt/ms-playwright" >&2; exit 1; }' \
+      'exec "$BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage "$@"' \
+      > /usr/local/bin/box-chromium \
+    && chmod +x /usr/local/bin/box-chromium \
+    && printf '%s\n' \
+      '[Desktop Entry]' \
+      'Version=1.0' \
+      'Type=Application' \
+      'Name=Chromium' \
+      'Comment=Trình duyệt agent dùng để đọc và thao tác web' \
+      'Exec=box-chromium %U' \
+      'Icon=/usr/share/pixmaps/boxfox-chromium.png' \
+      'Terminal=false' \
+      'Categories=Network;WebBrowser;' \
+      > /usr/share/applications/chromium-playwright.desktop
+
+# Editor NGAY TRÊN desktop của box, mà vẫn là code-server: mở Chromium ở chế độ
+# --app (không thanh địa chỉ, không tab) trỏ vào :8081 (qua proxy). Nhờ vậy người dùng vào
+# bằng máy ảo chỉ cần bấm một icon, không phải mở trình duyệt rồi gõ địa chỉ
+# localhost. Cùng một tiến trình code-server mà tab IDE của web UI đang dùng —
+# một editor, một workspace, không có bản Electron thứ hai.
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      '# VS Code (bản web) chạy trong box — chỉ là code-server :8080 mở ở chế độ app.' \
+      'set -eu' \
+      'exec box-chromium --app="http://localhost:8081/?folder=/home/agent/workspace" "$@"' \
+      > /usr/local/bin/box-code \
+    && chmod +x /usr/local/bin/box-code \
+    && printf '%s\n' \
+      '[Desktop Entry]' \
+      'Version=1.0' \
+      'Type=Application' \
+      'Name=VS Code (Web)' \
+      'Comment=code-server trên :8080 — cùng editor với tab IDE của giao diện web' \
+      'Exec=box-code' \
+      'Icon=/usr/share/pixmaps/boxfox-vscode.png' \
+      'Terminal=false' \
+      'Categories=Development;IDE;' \
+      > /usr/share/applications/box-code.desktop
+
+# --- Lớp 5: công tắc mạng + proxy bảo vệ + workspace + entrypoint -------------
 COPY box-entrypoint.sh /usr/local/bin/box-entrypoint.sh
 COPY box-firewall /usr/local/sbin/box-firewall
+COPY ide-proxy.py /usr/local/bin/ide-proxy.py
+RUN chmod +x /usr/local/bin/ide-proxy.py
+# Proxy chèn frame-ancestors vào response của code-server để chặn clickjacking.
+# Chỉ origin của giao diện BoxFox (localhost:3100) được nhúng editor vào iframe.
+EXPOSE 8081
 RUN chmod +x /usr/local/bin/box-entrypoint.sh /usr/local/sbin/box-firewall \
-    && mkdir -p /home/agent/workspace /home/agent/.code-server \
+    && mkdir -p /home/agent/workspace /home/agent/.code-server /home/agent/Desktop \
+    # Icon sẵn trên desktop: mở máy ra là bấm chạy được, không phải đi tìm menu.
+    && for app in box-code chromium-playwright xfce4-terminal thunar; do \
+         cp "/usr/share/applications/${app}.desktop" /home/agent/Desktop/ 2>/dev/null || true; \
+       done \
+    && chmod +x /home/agent/Desktop/*.desktop \
+    # Thư mục workspace hiện luôn trên desktop cho dễ thấy.
+    && ln -sfn /home/agent/workspace /home/agent/Desktop/workspace \
     && chown -R agent:agent /home/agent
 
 USER agent
 WORKDIR /home/agent/workspace
 
-EXPOSE 5900 8080
+EXPOSE 5900 6080 8080
 ENTRYPOINT ["box-entrypoint.sh"]

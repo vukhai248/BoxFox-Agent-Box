@@ -20,11 +20,15 @@ case "${1:-}" in
     iptables -A OUTPUT -o lo -j ACCEPT
     iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     iptables -P OUTPUT DROP
+    echo off > /run/box-net-state
+    chmod 644 /run/box-net-state
     echo "[box-firewall] OFF — data plane đã đóng"
     ;;
   on)
     iptables -P OUTPUT ACCEPT
     iptables -F OUTPUT
+    echo on > /run/box-net-state
+    chmod 644 /run/box-net-state
     echo "[box-firewall] ON — data plane mở toàn phần"
     ;;
   *)

@@ -6,6 +6,7 @@
 | [`plan/agent-box-plan-summary.md`](plan/agent-box-plan-summary.md) | Bản tóm tắt — đọc trước nếu chỉ cần nắm quyết định lớn và các con số nhân lực |
 | [`research/research-brief.md`](research/research-brief.md) | Bằng chứng thị trường và các ngách đã loại, kèm nguồn trích dẫn được |
 | [`research/research-addendum-computeruse.md`](research/research-addendum-computeruse.md) | Phụ lục nghiên cứu về computer use và GUI agent |
+| [`architecture/sandbox.md`](architecture/sandbox.md) | **Kiến trúc máy ảo**: mọi tiến trình, cổng, proxy, lớp bảo vệ, và sơ đồ kết nối từ giao diện web vào box |
 
 ## Quy ước đọc bản kế hoạch
 
