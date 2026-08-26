@@ -136,6 +136,14 @@ const vi = {
   },
   terminal: {
     title: 'Terminal',
+    liveChip: 'LIVE · TERMINAL',
+    connectingChip: 'ĐANG KẾT NỐI',
+    offlineChip: 'CHƯA NỐI ĐƯỢC',
+    connectingNote: 'Đang mở shell trong box qua tty-bridge…',
+    offlineNote:
+      'Chưa nối được box. Chạy docker compose up -d trong deploy/docker rồi bấm Thử lại.',
+    retry: 'Thử lại',
+    footerInfo: 'bash · agent@agentbox-box · /home/agent/workspace',
     readOnlyNote:
       'CHỈ ĐỌC — người dùng không có ô để gõ vào terminal này. Đây là quyết định bảo mật có chủ ý, không phải thiếu tính năng.',
     mockNote: 'Dữ liệu terminal giả — backend chưa chạy.',

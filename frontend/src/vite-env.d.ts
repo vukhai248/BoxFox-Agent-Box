@@ -11,4 +11,6 @@ interface ImportMetaEnv {
   readonly VITE_IDE_SOURCE?: 'code-server' | 'off'
   /** URL code-server của box mà tab IDE nhúng (xem `src/lib/ide/config.ts`). */
   readonly VITE_IDE_URL?: string
+  /** Đường hầm Terminal qua ide-proxy — xem `src/lib/terminal/config.ts`. */
+  readonly VITE_BOX_TTY_URL?: string
 }

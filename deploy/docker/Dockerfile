@@ -162,6 +162,15 @@ RUN printf '%s\n' \
       'Categories=Development;IDE;' \
       > /usr/share/applications/box-code.desktop
 
+# --- Lớp 4.7: cầu nối Terminal ------------------------------------------------
+# aiohttp ở lớp riêng để không phá cache của các lớp nặng khi chỉnh bridge.
+RUN apt-get update && apt-get install -y --no-install-recommends python3-aiohttp \
+    && rm -rf /var/lib/apt/lists/*
+COPY tty-bridge.py /usr/local/bin/tty-bridge.py
+COPY box-services.sh /usr/local/bin/box-services.sh
+COPY box-power /usr/local/sbin/box-power
+RUN chmod +x /usr/local/bin/tty-bridge.py /usr/local/bin/box-services.sh /usr/local/sbin/box-power
+
 # --- Lớp 5: công tắc mạng + proxy bảo vệ + workspace + entrypoint -------------
 COPY box-entrypoint.sh /usr/local/bin/box-entrypoint.sh
 COPY box-firewall /usr/local/sbin/box-firewall

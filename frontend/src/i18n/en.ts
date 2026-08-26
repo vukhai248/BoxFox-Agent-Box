@@ -140,6 +140,14 @@ const en: SameShape<typeof vi> = {
   },
   terminal: {
     title: 'Terminal',
+    liveChip: 'LIVE · TERMINAL',
+    connectingChip: 'CONNECTING',
+    offlineChip: 'NOT CONNECTED',
+    connectingNote: 'Opening a shell inside the box via tty-bridge…',
+    offlineNote:
+      'Cannot reach the box. Run docker compose up -d in deploy/docker, then Retry.',
+    retry: 'Retry',
+    footerInfo: 'bash · agent@agentbox-box · /home/agent/workspace',
     readOnlyNote:
       'READ ONLY — there is no input box here. That is a deliberate security decision, not a missing feature.',
     mockNote: 'Mock terminal data — the backend is not running yet.',

@@ -25,6 +25,8 @@ services:
       # Quy tắc ②a: mặc định TẮT — người dùng bật bằng nút trên giao diện
       # (endpoint /__box/network của ide-proxy, mục 12.3.1)
       BOX_DEFAULT_NETWORK: "off"
+      # Điện mặc định BẬT lúc boot; tắt/bật bằng nút Máy (/__box/power)
+      BOX_DEFAULT_POWER: "on"
     networks:
       - boxnet
     ports:

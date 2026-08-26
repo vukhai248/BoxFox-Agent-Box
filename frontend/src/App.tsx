@@ -34,6 +34,7 @@ import { LabelDot } from './components/LabelDot'
 import { FileTreePanel } from './components/panels/FileTreePanel'
 import { AuditPanel } from './components/panels/AuditPanel'
 import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
+import { BoxControls } from './components/shell/BoxControls'
 import { SettingsModal } from './components/settings/SettingsModal'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
@@ -386,6 +387,7 @@ function TopBar({
 
       {/* Right: Security Labels & State Indicator */}
       <div className="flex items-center gap-3">
+        <BoxControls />
         <LabelDot
           integrity={context.integrity_floor as 'duoc_nguoi_dung_cho_phep'}
           confidentiality={context.confidentiality_ceiling as 'cong_khai'}

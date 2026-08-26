@@ -77,6 +77,9 @@ ALLOWED_WS_ORIGINS = (
 
 NET_STATE_FILE = "/run/box-net-state"
 FIREWALL_BIN = "/usr/local/sbin/box-firewall"
+POWER_STATE_FILE = "/run/box-power-state"
+POWER_BIN = "/usr/local/sbin/box-power"
+TTY_UPSTREAM_PORT = 7681   # tty-bridge — tab Terminal (loopback, không publish)
 
 
 def read_net_state() -> str:
@@ -86,6 +89,15 @@ def read_net_state() -> str:
             return state if state in ("on", "off") else "off"
     except OSError:
         return "off"
+
+
+def read_power_state() -> str:
+    try:
+        with open(POWER_STATE_FILE, encoding="utf-8") as fh:
+            state = fh.read().strip()
+            return state if state in ("on", "off") else "on"
+    except OSError:
+        return "on"
 
 
 class ProxyHandler(http.server.BaseHTTPRequestHandler):
@@ -114,7 +126,17 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.path == "/__box/status" and self.command == "GET":
-            self._send_json_cors(200, json.dumps({"network": read_net_state()}))
+            payload = json.dumps(
+                {"network": read_net_state(), "power": read_power_state()}
+            )
+            self._send_json_cors(200, payload)
+            return
+        if self.path == "/__box/power" and self.command == "POST":
+            length = int(self.headers.get("Content-Length", "0"))
+            state = self.rfile.read(length).decode(errors="replace").strip().lower()
+            if state in ("on", "off"):
+                subprocess.run([POWER_BIN, state], check=False)
+            self._send_json_cors(200, json.dumps({"power": read_power_state()}))
             return
         if self.path == "/__box/network" and self.command == "POST":
             length = int(self.headers.get("Content-Length", "0"))
@@ -135,7 +157,9 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def _origin_allowed(self) -> bool:
         return self.headers.get("Origin", "") in ALLOWED_WS_ORIGINS
 
-    def _relay_websocket(self) -> None:
+    def _relay_websocket(
+        self, upstream_port: int = UPSTREAM_PORT, forward_path: str | None = None
+    ) -> None:
         if not self._origin_allowed():
             self.send_response(403)
             self.end_headers()
@@ -144,7 +168,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
 
         try:
             upstream = socket.create_connection(
-                (UPSTREAM_HOST, UPSTREAM_PORT), timeout=30
+                (UPSTREAM_HOST, upstream_port), timeout=30
             )
         except OSError:
             self.send_response(502)
@@ -155,7 +179,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         # Forward NGUYÊN BẢN handshake — kể cả header Host. KHÔNG được ghi đè
         # Host sang 127.0.0.1:8080: code-server từ chối WS khi Origin lệch Host
         # (403 → trình duyệt nhận 1006). Giữ Host gốc = proxy trong suốt.
-        lines = [f"{self.command} {self.path} HTTP/1.1"]
+        lines = [f"{self.command} {forward_path or self.path} HTTP/1.1"]
         for key, value in self.headers.items():
             lines.append(f"{key}: {value}")
         try:
@@ -257,6 +281,13 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def _dispatch(self) -> None:
         if self.path.startswith("/__box/"):
             self._handle_box_api()
+            return
+        if self.path.startswith("/__tty/"):
+            # Tab Terminal: đường hầm tới tty-bridge (:7681), bỏ prefix /__tty.
+            self._relay_websocket(
+                upstream_port=TTY_UPSTREAM_PORT,
+                forward_path=self.path[len("/__tty"):],
+            )
             return
         if self._is_websocket_upgrade():
             self._relay_websocket()

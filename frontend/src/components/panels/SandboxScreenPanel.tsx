@@ -19,13 +19,12 @@
  * `ScreenState` là nhãn của kênh agent, gán nó cho một khung hình VNC không
  * liên quan là nói dối về nguồn gốc dữ liệu.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAgentStore } from '../../store/agentStore'
 import { useT, type TKey } from '../../i18n/context'
 import { useVncScreen } from '../../hooks/useVncScreen'
 import { useNow } from '../../hooks/useNow'
 import { retrySecondsLeft } from '../../lib/retry'
-import type { ScreenSource } from '../../lib/vnc/config'
 import type { VncOfflineReason } from '../../lib/vnc/state'
 import { PanelShell, Chip, StatusChip } from '../ui'
 import { IntegrityBadge, ConfidentialityBadge, LabelDot } from '../LabelDot'
@@ -84,7 +83,7 @@ function MockBrowser({ instruction }: { instruction: string }) {
  * Không có dải cảnh báo, không có viền gạch chéo, không có chip noVNC — người
  * dùng đang chủ động xem bản mô phỏng, không phải bị rơi về nó.
  */
-function SimulatedOnlyBody({ screen }: { screen: ScreenState }) {
+export function SimulatedOnlyBody({ screen }: { screen: ScreenState }) {
   const t = useT()
   return (
     <div className="p-4">
@@ -260,7 +259,7 @@ function OfflineAlert({
         <button
           type="button"
           aria-expanded={showHelp}
-          onClick={() => setShowHelp((v) => !v)}
+          onClick={() => setShowHelp((v: boolean) => !v)}
           className="rounded-md border border-line px-3 py-1.5 text-[11px] font-semibold text-muted hover:text-fg"
         >
           {t('screen.howToStartBox')}
@@ -282,88 +281,11 @@ export function SandboxScreenPanel() {
   const t = useT()
   const now = useNow()
   const screen = useAgentStore((s) => s.screen)
-  // Lựa chọn nguồn của người dùng (nút Live box/Demo). `null` = theo env mặc định.
-  const [sourcePref, setSourcePref] = useState<ScreenSource | null>(null)
-  const vnc = useVncScreen(sourcePref ?? undefined)
-  const toggleSource = () =>
-    setSourcePref(vnc.source === 'novnc' ? 'mock' : 'novnc')
+  // Máy BẬT ⇒ luôn xem live (demo chỉ bật qua env khi cần thu hình 14.5).
+  const vnc = useVncScreen('novnc')
 
-  const sourceToggle = (
-    <button
-      type="button"
-      onClick={toggleSource}
-      title={vnc.source === 'novnc' ? t('screen.toDemo') : t('screen.toLiveBox')}
-      className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-muted hover:text-fg"
-    >
-      {vnc.source === 'novnc' ? t('screen.toDemo') : t('screen.toLiveBox')}
-    </button>
-  )
-
-  // ── Công tắc mạng ②b (mục 12.3.1): gọi ide-proxy chạy root trong box ──
-  const NET_API = 'http://localhost:8081'
-  const [netState, setNetState] = useState<'on' | 'off' | 'unknown'>('unknown')
-  useEffect(() => {
-    fetch(NET_API + '/__box/status')
-      .then((r) => r.json())
-      .then((j) => setNetState(j.network))
-      .catch(() => setNetState('unknown'))
-  }, [])
-  const [netBusy, setNetBusy] = useState(false)
-  const toggleNetwork = async () => {
-    if (netBusy || netState === 'unknown') return
-    const next = netState === 'on' ? 'off' : 'on'
-    setNetBusy(true)
-    try {
-      const r = await fetch(NET_API + '/__box/network', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: next,
-      })
-      const j = await r.json()
-      setNetState(j.network)
-    } catch {
-      setNetState('unknown')
-    } finally {
-      setNetBusy(false)
-    }
-  }
-
-  const netBtn = (
-    <button
-      type="button"
-      onClick={toggleNetwork}
-      disabled={netBusy}
-      title={t('screen.netOn') + ' / ' + t('screen.netOff')}
-      className={`rounded-md border border-line px-2 py-1 text-[11px] font-semibold hover:text-fg disabled:opacity-50 ${
-        netState === 'on'
-          ? 'text-emerald-600 dark:text-emerald-400'
-          : netState === 'off'
-            ? 'text-zinc-500 dark:text-zinc-400'
-            : 'text-muted'
-      }`}
-    >
-      {netState === 'on'
-        ? t('screen.netOn')
-        : netState === 'off'
-          ? t('screen.netOff')
-          : t('screen.netUnknown')}
-    </button>
-  )
-
-  // Nguồn `mock`: đường cũ, nguyên vẹn. Hook không nạp noVNC, không mở socket.
-  if (vnc.source === 'mock') {
-    return (
-      <PanelShell title={t('screen.title')} toolbar={sourceToggle}>
-        {screen ? (
-          <SimulatedOnlyBody screen={screen} />
-        ) : (
-          <div className="flex h-full items-center justify-center p-6 text-center">
-            <p className="text-[12px] text-muted">{t('screen.empty')}</p>
-          </div>
-        )}
-      </PanelShell>
-    )
-  }
+  // Điện & mạng box — trạng thái toàn cục (useBoxState), đặt ở header trên cùng.
+  // (Không còn nút trong panel này — xem BoxControls.)
 
   const statusChip =
     vnc.phase === 'live' ? (
@@ -381,8 +303,6 @@ export function SandboxScreenPanel() {
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       {statusChip}
-      {netBtn}
-      {sourceToggle}
       {vnc.phase === 'offline' && (
         <button
           type="button"

@@ -19,6 +19,8 @@ case "${1:-}" in
     # Cho phép loopback + trả lời các kết nối ĐANG có (VNC/VS Code từ host)
     iptables -A OUTPUT -o lo -j ACCEPT
     iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    # REJECT thay vì DROP âm thầm: trình duyệt báo lỗi NGAY thay vì xoay mãi.
+    iptables -A OUTPUT -j REJECT
     iptables -P OUTPUT DROP
     echo off > /run/box-net-state
     chmod 644 /run/box-net-state

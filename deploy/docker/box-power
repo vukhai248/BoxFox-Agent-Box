@@ -1,0 +1,42 @@
+#!/bin/sh
+# ==============================================================================
+# box-power on|off — CÔNG TẮC ĐIỆN của box (mục 12.3.1).
+#
+#   OFF : kill hạ tầng hiển thị/truy cập (Xvfb, XFCE, x11vnc, websockify,
+#         tty-bridge, code-server) → tab Machine/IDE/Terminal đều mất kết nối
+#         — hành vi đúng: tắt máy thì không còn gì để vào.
+#   ON  : gosu agent chạy lại box-services.sh (mạng KHÔNG đổi — công tắc mạng
+#         ②b độc lập, xem box-firewall).
+#
+# Chạy root. Trạng thái ghi /run/box-power-state cho ide-proxy đọc.
+# ==============================================================================
+set -eu
+STATE=/run/box-power-state
+
+case "${1:-}" in
+  off)
+    pkill -f 'code-server.*--bind-addr' 2>/dev/null || true
+    pkill -f 'websockify 6080' 2>/dev/null || true
+    pkill -x x11vnc 2>/dev/null || true
+    pkill -f 'tty-bridge.py' 2>/dev/null || true
+    pkill -f 'xfce4-session' 2>/dev/null || true
+    pkill -f 'Xvfb :99' 2>/dev/null || true
+    echo off > "$STATE"
+    chmod 644 "$STATE"
+    echo "[box-power] OFF — các dịch vụ của box đã dừng"
+    ;;
+  on)
+    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ]; then
+      echo "[box-power] đã ON từ trước — bỏ qua"
+      exit 0
+    fi
+    gosu agent /usr/local/bin/box-services.sh >/home/agent/services.log 2>&1 &
+    echo on > "$STATE"
+    chmod 644 "$STATE"
+    echo "[box-power] ON — đang khởi động dịch vụ"
+    ;;
+  *)
+    echo "dùng: box-power on|off" >&2
+    exit 2
+    ;;
+esac
