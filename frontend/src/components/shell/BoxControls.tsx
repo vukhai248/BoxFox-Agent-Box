@@ -23,7 +23,11 @@ export function BoxControls() {
           : 'text-zinc-500 dark:text-zinc-400'
       }`}
     >
-      {box.network === 'on' ? t('screen.netOn') : t('screen.netOff')}
+      {box.network === 'on'
+        ? t('screen.netOn')
+        : box.network === 'off'
+          ? t('screen.netOff')
+          : t('screen.netUnknown')}
     </button>
   )
 
@@ -31,13 +35,18 @@ export function BoxControls() {
     <button
       type="button"
       onClick={box.togglePower}
+      title={box.power === 'on' ? t('screen.toDemo') : t('screen.toLiveBox')}
       className={`rounded-md border border-line px-2 py-1 text-[11px] font-semibold hover:text-fg ${
         box.power === 'on'
           ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-zinc-500 dark:text-zinc-400'
       }`}
     >
-      {box.power === 'on' ? t('screen.toDemo') : t('screen.toLiveBox')}
+      {box.power === 'on'
+        ? t('screen.machineOn')
+        : box.power === 'off'
+          ? t('screen.machineOff')
+          : t('screen.machineUnknown')}
     </button>
   )
 
