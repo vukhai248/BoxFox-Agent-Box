@@ -20,6 +20,7 @@
  * liên quan là nói dối về nguồn gốc dữ liệu.
  */
 import { useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
 import { useT, type TKey } from '../../i18n/context'
 import { useVncScreen } from '../../hooks/useVncScreen'
@@ -283,6 +284,7 @@ export function SandboxScreenPanel() {
   const screen = useAgentStore((s) => s.screen)
   // Máy BẬT ⇒ luôn xem live (demo chỉ bật qua env khi cần thu hình 14.5).
   const vnc = useVncScreen('novnc')
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   // Điện & mạng box — trạng thái toàn cục (useBoxState), đặt ở header trên cùng.
   // (Không còn nút trong panel này — xem BoxControls.)
@@ -303,6 +305,21 @@ export function SandboxScreenPanel() {
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       {statusChip}
+      {vnc.phase === 'live' && (
+        <button
+          type="button"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((v) => !v)}
+          className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+            detailsOpen
+              ? 'border-brand bg-brand/15 text-brand'
+              : 'border-line text-muted hover:border-brand/40 hover:text-fg'
+          }`}
+        >
+          {t('screen.details')}
+          {detailsOpen ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+        </button>
+      )}
       {vnc.phase === 'offline' && (
         <button
           type="button"
@@ -323,22 +340,68 @@ export function SandboxScreenPanel() {
           : undefined
 
   const retrySeconds = vnc.retryAtMs !== null ? retrySecondsLeft(vnc.retryAtMs, now) : null
+  const isLive = vnc.phase === 'live'
 
   return (
     <PanelShell title={t('screen.title')} toolbar={toolbar} note={note}>
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col px-2 py-2">
+        {/* Details drawer — trượt từ thanh trên xuống, chỉ khi live (Q1/Q2) */}
+        {isLive && detailsOpen && (
+          <div className="shrink-0 animate-in slide-in-from-top-1 overflow-hidden border-b border-line bg-panel2 duration-200">
+            <div className="px-3 py-2">
+              <LiveLabelRow />
+              <p className="text-[11px] leading-relaxed text-muted">
+                {t('sandbox.screenshotAlwaysUntrusted')}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                {t('screen.liveLabelUnknown')}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                {t('screen.liveInputNotAudited')}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={vnc.releaseKeyboard}
+                  className="rounded-md border border-line px-3 py-1.5 text-[11px] font-semibold text-muted hover:text-fg"
+                >
+                  {t('screen.releaseKeyboard')}
+                </button>
+                <span className="text-[11px] text-muted">
+                  {t('screen.frameSize', {
+                    width: vnc.frameSize?.width ?? 1280,
+                    height: vnc.frameSize?.height ?? 800,
+                  })}
+                  {' · '}
+                  {t('screen.frameSourceLive')}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                <span>
+                  noVNC · {t('screen.endpointLabel')}{' '}
+                  <code className="font-mono">{vnc.url}</code>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div
+          className={
+            isLive
+              ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
+              : 'flex min-h-0 flex-1 flex-col overflow-auto px-2 py-2'
+          }
+        >
           {/* Khung noVNC luôn được mount (không hidden/h-0) để scaleViewport đo đúng
               kích thước ngay khi hiện ra; ẩn bằng opacity + đưa ra khỏi luồng khi chưa live. */}
-          <div className={vnc.phase === 'live' ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
+          <div className={isLive ? 'relative flex min-h-0 flex-1 flex-col' : 'relative'}>
             <div
               className={
-                vnc.phase === 'live'
-                  ? // Chiếm hết chỗ còn lại của khung ④: màn hình máy thật là nội
-                    // dung chính, không phải một ô nhỏ giữa panel. noVNC bật
-                    // `scaleViewport` nên canvas tự co giãn vừa khung và căn
-                    // giữa; phần thừa là nền đen, không méo tỉ lệ.
-                    'relative mb-3 min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-black'
+                isLive
+                  ? // Full-bleed như Vorflux: chiếm toàn bộ panel, không rounded/border/padding,
+                    // nền hòa vào desktop để không lộ viền đen.
+                    'relative min-h-0 flex-1 overflow-hidden bg-[#0f172a]'
                   : 'pointer-events-none absolute left-0 top-0 -z-10 h-40 w-64 overflow-hidden opacity-0'
               }
             >
@@ -355,7 +418,7 @@ export function SandboxScreenPanel() {
                   {t('screen.canvasLabel')}
                 </span>
               )}
-              {vnc.phase === 'live' && vnc.frameSize && (
+              {isLive && vnc.frameSize && !detailsOpen && (
                 <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-slate-200">
                   {t('screen.frameSize', {
                     width: vnc.frameSize.width,
@@ -365,35 +428,6 @@ export function SandboxScreenPanel() {
               )}
             </div>
           </div>
-
-          {vnc.phase === 'live' && (
-            <details className="shrink-0 border-t border-line px-1 pt-1">
-              <summary className="cursor-pointer select-none py-1 text-[11px] font-semibold text-muted hover:text-fg">
-                {t('screen.details')} · {t('screen.releaseKeyboard')}
-              </summary>
-              <div className="pb-2">
-                <LiveLabelRow />
-                <p className="text-[11px] leading-relaxed text-muted">
-                  {t('sandbox.screenshotAlwaysUntrusted')}
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  {t('screen.liveLabelUnknown')}
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  {t('screen.liveInputNotAudited')}
-                </p>
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={vnc.releaseKeyboard}
-                    className="rounded-md border border-line px-3 py-1.5 text-[11px] font-semibold text-muted hover:text-fg"
-                  >
-                    {t('screen.releaseKeyboard')}
-                  </button>
-                </div>
-              </div>
-            </details>
-          )}
 
           {vnc.phase === 'connecting' &&
             (screen ? (
@@ -422,25 +456,24 @@ export function SandboxScreenPanel() {
           )}
 
           {retrySeconds !== null && (
-            <p className="mt-2 text-center text-[11px] text-muted">
+            <p className="mt-2 shrink-0 px-2 text-center text-[11px] text-muted">
               {t('screen.retryCountdown', { seconds: retrySeconds })}
             </p>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-panel2/60 px-3 py-1 text-[11px] text-muted">
-          <span>
-            noVNC · {t('screen.endpointLabel')}{' '}
-            <code className="font-mono text-[10px]">{vnc.url}</code>
-          </span>
-          <span>
-            {vnc.phase === 'live'
-              ? t('screen.frameSourceLive')
-              : screen
-                ? t('screen.frameSourceMock')
-                : t('screen.noFrameChip')}
-          </span>
-        </div>
+        {/* Footer cũ đã chuyển vào drawer Details khi live; chỉ giữ khi không live */}
+        {!isLive && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-panel2/60 px-3 py-1 text-[11px] text-muted">
+            <span>
+              noVNC · {t('screen.endpointLabel')}{' '}
+              <code className="font-mono text-[10px]">{vnc.url}</code>
+            </span>
+            <span>
+              {screen ? t('screen.frameSourceMock') : t('screen.noFrameChip')}
+            </span>
+          </div>
+        )}
       </div>
     </PanelShell>
   )

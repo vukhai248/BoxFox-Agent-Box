@@ -101,13 +101,13 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
       },
       configureRfb: (rfb) => {
         // V2 (quyết định 12.3.1): người dùng click/gõ được, agent không dừng.
+        // Fit như Vorflux: scaleViewport giữ, ResizeObserver sẽ dispatch resize khi kéo.
         rfb.viewOnly = false
         rfb.scaleViewport = true
         rfb.clipViewport = false
-        // Xvfb :99 cố định 1280×800 — xin đổi kích thước phiên là vô ích.
         rfb.resizeSession = false
         rfb.showDotCursor = true
-        rfb.background = '#000000' // giá trị CSS thật, không phải class Tailwind
+        rfb.background = '#0f172a' // hòa vào nền desktop, letterbox không lộ đen
       },
       onLive: () => {
         const canvas = containerRef.current?.querySelector('canvas')
@@ -152,6 +152,31 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
       container.removeEventListener('focusout', onFocusOut)
     }
   }, [])
+
+  // Effect D — fit khi kéo Resizer như Vorflux: container đổi kích thước thì
+  // noVNC phải scale lại. scaleViewport chỉ nghe window resize, không nghe
+  // container resize → dùng ResizeObserver để bắn window resize.
+  useEffect(() => {
+    if (!enabled) return
+    if (state.phase !== 'live') return
+    const el = containerRef.current
+    if (!el) return
+    if (typeof ResizeObserver === 'undefined') return
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'))
+        const canvas = el.querySelector('canvas')
+        if (canvas) setFrameSize({ width: (canvas as HTMLCanvasElement).width, height: (canvas as HTMLCanvasElement).height })
+      })
+    })
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [enabled, state.phase])
 
   const retry = useCallback(() => {
     abortAttempt()

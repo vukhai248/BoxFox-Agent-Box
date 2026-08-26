@@ -299,7 +299,15 @@ export default function App() {
             {/* Tab Content or VS Code-style Empty Watermark */}
             <div className="min-h-0 flex-1 overflow-hidden">
               {activeTab && openTabs.length > 0 ? (
-                <div className="h-full overflow-auto">{renderActiveTab()}</div>
+                <div
+                  className={
+                    activeTab === 'sandbox' || activeTab === 'ide'
+                      ? 'flex h-full flex-col overflow-hidden'
+                      : 'h-full overflow-auto'
+                  }
+                >
+                  {renderActiveTab()}
+                </div>
               ) : (
                 /* VS Code-style Empty State */
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center select-none bg-panel">

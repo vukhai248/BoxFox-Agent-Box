@@ -24,7 +24,7 @@
  * (cùng caveat V4 như khung ④, mục 12.3.1).
  */
 import { useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { useT, type TKey } from '../../i18n/context'
 import { useIdeFrame } from '../../hooks/useIdeFrame'
 import { useNow } from '../../hooks/useNow'
@@ -131,32 +131,22 @@ function OfflineCard({
   )
 }
 
-/** Dải mảnh dưới editor: nhãn + hai caveat, mở rộng khi người dùng muốn đọc. */
-function LabelStrip() {
+/** Drawer chi tiết IDE — trượt từ trên như Machine, không chiếm đáy khi đóng. */
+function IdeDetailsDrawer() {
   const t = useT()
-  const [showDetails, setShowDetails] = useState(false)
   return (
-    <div className="shrink-0 border-t border-line bg-panel2 px-3 py-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Viết thẳng, không đọc từ dữ liệu — cùng lý do như quy tắc M1 (mục 8.5). */}
-        <IntegrityBadge value="khong_tin_duoc" />
-        <span className="text-[11px] text-muted">{t('ide.a3DataNotCommand')}</span>
-        <button
-          type="button"
-          aria-expanded={showDetails}
-          onClick={() => setShowDetails((v) => !v)}
-          className="ml-auto rounded-md border border-line px-2 py-0.5 text-[11px] font-semibold text-muted hover:text-fg"
-        >
-          {t('ide.details')}
-        </button>
-      </div>
-      {showDetails && (
+    <div className="shrink-0 animate-in slide-in-from-top-1 overflow-hidden border-b border-line bg-panel2 duration-200">
+      <div className="px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <IntegrityBadge value="khong_tin_duoc" />
+          <span className="text-[11px] text-muted">{t('ide.a3DataNotCommand')}</span>
+        </div>
         <div className="mt-1.5 space-y-1">
           <p className="text-[11px] leading-relaxed text-muted">{t('ide.labelUnknown')}</p>
           <p className="text-[11px] leading-relaxed text-muted">{t('ide.inputNotAudited')}</p>
           <p className="text-[11px] leading-relaxed text-muted">{t('ide.noAiInBox')}</p>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -165,6 +155,7 @@ export function IdePanel() {
   const t = useT()
   const now = useNow()
   const ide = useIdeFrame()
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   const statusChip =
     ide.phase === 'live' ? (
@@ -204,6 +195,21 @@ export function IdePanel() {
           </a>
         </>
       )}
+      {ide.phase === 'live' && (
+        <button
+          type="button"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((v) => !v)}
+          className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+            detailsOpen
+              ? 'border-brand bg-brand/15 text-brand'
+              : 'border-line text-muted hover:border-brand/40 hover:text-fg'
+          }`}
+        >
+          {t('ide.details')}
+          {detailsOpen ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+        </button>
+      )}
     </div>
   )
 
@@ -221,6 +227,7 @@ export function IdePanel() {
       <div className="flex h-full min-h-0 flex-col">
         {ide.phase === 'live' ? (
           <>
+            {detailsOpen && <IdeDetailsDrawer />}
             <iframe
               src={ide.url}
               title={t('ide.frameLabel')}
@@ -231,7 +238,6 @@ export function IdePanel() {
               sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox"
               className="min-h-0 w-full flex-1 border-0 bg-white dark:bg-slate-900"
             />
-            <LabelStrip />
           </>
         ) : ide.phase === 'probing' ? (
           <ProbingCard url={ide.url} />
