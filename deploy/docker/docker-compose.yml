@@ -30,7 +30,7 @@ services:
     networks:
       - boxnet
     ports:
-      # Quy tắc 12.6 — chỉ bind loopback. x11vnc chạy -nopw và code-server chạy
+      # Quy tắc 12.6 — chỉ bind loopback. Xvnc chạy -SecurityTypes None và code-server chạy
       # --auth none, nên nếu publish ra 0.0.0.0 thì mọi máy trong LAN đều điều
       # khiển được box. Người dùng xem box từ trình duyệt trên chính máy host.
       - "127.0.0.1:5900:5900"   # VNC — người dùng xem màn hình box (VNC Viewer)

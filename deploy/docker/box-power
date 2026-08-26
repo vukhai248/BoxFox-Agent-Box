@@ -2,7 +2,7 @@
 # ==============================================================================
 # box-power on|off — CÔNG TẮC ĐIỆN của box (mục 12.3.1).
 #
-#   OFF : kill hạ tầng hiển thị/truy cập (Xvfb, XFCE, x11vnc, websockify,
+#   OFF : kill hạ tầng hiển thị/truy cập (Xvnc, XFCE, websockify,
 #         tty-bridge, code-server) → tab Machine/IDE/Terminal đều mất kết nối
 #         — hành vi đúng: tắt máy thì không còn gì để vào.
 #   ON  : gosu agent chạy lại box-services.sh (mạng KHÔNG đổi — công tắc mạng
@@ -17,10 +17,12 @@ case "${1:-}" in
   off)
     pkill -f 'code-server.*--bind-addr' 2>/dev/null || true
     pkill -f 'websockify 6080' 2>/dev/null || true
-    pkill -x x11vnc 2>/dev/null || true
     pkill -f 'tty-bridge.py' 2>/dev/null || true
     pkill -f 'xfce4-session' 2>/dev/null || true
-    pkill -f 'Xvfb :99' 2>/dev/null || true
+    # Xvnc là X server VÀ VNC server ⇒ chỉ còn một tiến trình phải hạ (trước đây
+    # là Xvfb + x11vnc). Bỏ sót dòng này thì display :99 vẫn bị chiếm và
+    # `box-power on` sau đó khởi động Xvnc thất bại ngầm.
+    pkill -f 'Xvnc :99' 2>/dev/null || true
     echo off > "$STATE"
     chmod 644 "$STATE"
     echo "[box-power] OFF — các dịch vụ của box đã dừng"

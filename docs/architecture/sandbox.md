@@ -16,14 +16,14 @@ Khi bạn gõ `docker compose up -d` trong `deploy/docker/`, container khởi đ
 │  CONTAINER agentbox-box (Ubuntu 24.04)                  │
 │                                                         │
 │  ┌──────────┐  ┌───────────────────┐  ┌──────────────┐ │
-│  │  Xvfb    │  │  XFCE desktop     │  │  code-server │ │
+│  │  Xvnc    │  │  XFCE desktop     │  │  code-server │ │
 │  │  :99     │  │  (panel, cửa sổ,  │  │  :8080       │ │
 │  │  màn ảo  │  │   icon, taskbar)  │  │  editor web  │ │
 │  └────┬─────┘  └────────┬──────────┘  └──────┬───────┘ │
 │       │                 │                     │         │
 │       ▼                 │                     ▼         │
 │  ┌──────────┐           │              ┌──────────────┐ │
-│  │  x11vnc  │◄──────────┘              │  ide-proxy   │ │
+│  │  (X+RFB) │◄──────────┘              │  ide-proxy   │ │
 │  │  :5900   │                          │  :8081       │ │
 │  │  server  │                          │  Python 35 d │ │
 │  │  VNC     │                          │  +CSP frame- │ │
@@ -46,9 +46,8 @@ Khi bạn gõ `docker compose up -d` trong `deploy/docker/`, container khởi đ
 
 | Tiến trình | Cổng | Vai trò |
 |---|---|---|
-| **Xvfb** (X Virtual Framebuffer — màn hình ảo) | Không có cổng, là ổ ghi `:99` | Cung cấp một "màn hình" trong RAM cho desktop và ứng dụng vẽ lên. Không có màn hình thật — mọi thứ là pixel trong bộ nhớ. |
-| **XFCE** (môi trường desktop) | Không có cổng, vẽ lên Xvfb `:99` | Tạo ra desktop giống một máy tính thật: panel trên cùng, menu Applications, icon trên màn hình, quản lý cửa sổ. Người dùng nhìn qua khung ④ thấy một cái máy bình thường. |
-| **x11vnc** (server VNC — Virtual Network Computing) | `5900` | Đọc màn hình Xvfb `:99` và phục vụ qua giao thức RFB (Remote Frame Buffer — giao thức truyền màn hình từ xa). Mỗi khi có pixel thay đổi, nó gửi đi. Khi màn hình tĩnh, nó không gửi gì. |
+| **Xvnc** (TigerVNC — X server CÓ RFB tích hợp) | `:99` (X) + `5900` (RFB) | Vừa là "màn hình" trong RAM cho desktop vẽ lên, vừa là VNC server phát màn hình đó ra. MỘT tiến trình thay cho Xvfb + x11vnc trước đây. **Điểm quan trọng: RandR động tới 32768×32768 và nhận `SetDesktopSize` từ client** — nhờ vậy khi người dùng kéo panel khung ④, noVNC xin đổi phân giải và desktop khớp đúng kích thước panel, không sinh viền đen. Xvfb không làm được điều này: `maximum` của nó BẰNG kích thước khởi tạo. |
+| **XFCE** (môi trường desktop) | Không có cổng, vẽ lên Xvnc `:99` | Tạo ra desktop giống một máy tính thật: MỘT thanh taskbar ở đáy (menu ứng dụng · danh sách cửa sổ · đồng hồ), icon trên màn hình, quản lý cửa sổ. Theme tối `Greybird-dark` + icon set `elementary-xfce-dark` để hòa với giao diện web và để icon có logo thật (XFCE trần dùng theme sáng và không có icon set nào ⇒ mọi icon thành ô vuông trống). Tự reflow khi Xvnc đổi phân giải — đã đo `_NET_WORKAREA` bám chính xác screen ở mọi khổ. |
 | **websockify** (cầu nối TCP → WebSocket) | `6080` | Bọc VNC (`:5900`, giao thức TCP thuần) thành WebSocket để trình duyệt đọc được. **Kiểm tra header `Origin`**: chỉ nhận kết nối từ `localhost:3100` và `127.0.0.1:3100`. Từ chối tất cả Origin khác — kể cả request thiếu header Origin. |
 | **code‑server** (VS Code bản web) | `8080` | Editor chạy trong box, mở sẵn `/home/agent/workspace`. Người dùng sửa file ở đây là sửa thật trong box. Chạy với `--auth none --disable-telemetry --disable-update-check`. |
 | **ide‑proxy** (proxy bảo vệ code‑server) | `8081` | Ngồi giữa giao diện web và code‑server `:8080`. Forward mọi request, nhưng **chèn CSP `frame-ancestors`** vào response — chỉ `localhost:3100` và `127.0.0.1:3100` mới nhúng được editor vào iframe. |
@@ -65,13 +64,13 @@ Giao diện BoxFox (chạy ở `localhost:3100`) kết nối với box qua **đ�
 TRÌNH DUYỆT                     │  BOX (loopback)
                                 │
 ┌──────────────────────┐        │  ┌─────────┐    ┌──────────┐    ┌──────────┐
-│  Khung ④             │        │  │ Xvfb :99│◄───│  XFCE    │    │  VS Code │
+│  Khung ④             │        │  │ Xvnc :99│◄───│  XFCE    │    │  VS Code │
 │  SandboxScreenPanel  │        │  │ 1280×800│    │ desktop  │    │  (Web)   │
 │                      │        │  └────┬─────┘    └──────────┘    └──────────┘
 │  useVncScreen        │        │       │
 │  (hook React)        │        │       ▼
 │                      │        │  ┌─────────┐
-│  @novnc/novnc        │◄───────│──│ x11vnc  │
+│  @novnc/novnc        │◄───────│──│ (X+RFB) │
 │  (thư viện VNC)      │  WS    │  │ :5900   │
 │                      │ :6080  │  └────┬─────┘
 └──────────────────────┘        │       │
@@ -90,8 +89,8 @@ TRÌNH DUYỆT                     │  BOX (loopback)
    - `Origin: http://localhost:3100` → ✅ cho qua
    - `Origin: http://evil.example.com` → ❌ 403 Invalid Origin
    - Không có header `Origin` → ❌ 403 (chặn client thô không-phải-trình-duyệt)
-4. Nếu Origin hợp lệ, websockify bắc cầu TCP tới x11vnc `:5900`.
-5. x11vnc đọc màn hình Xvfb `:99` và gửi các khung hình qua RFB.
+4. Nếu Origin hợp lệ, websockify bắc cầu TCP tới Xvnc `:5900`.
+5. Xvnc gửi các khung hình của display `:99` qua RFB. Chiều ngược lại: noVNC gửi `SetDesktopSize` khi panel đổi kích thước ⇒ Xvnc đổi phân giải thật, XFCE reflow, không có viền đen và chữ không bị nội suy.
 6. noVNC giải mã RFB và vẽ lên `<canvas>` trong khung ④.
 
 **Bảo vệ**:
@@ -184,7 +183,7 @@ TRÌNH DUYỆT                     │  BOX (loopback)
 
 | Cổng | Bind | Dịch vụ | Giao thức | Bảo vệ |
 |---|---|---|---|---|
-| `5900` | `127.0.0.1` | x11vnc (VNC) | TCP/RFB | Loopback + websockify Origin check |
+| `5900` | `127.0.0.1` | Xvnc (X server + RFB) | TCP/RFB | Loopback + websockify Origin check |
 | `6080` | `127.0.0.1` | websockify | WebSocket | **Origin check** (chỉ `localhost:3100`, `127.0.0.1:3100`) |
 | `8080` | `127.0.0.1` | code‑server | HTTP/WebSocket | Loopback + proxy CSP |
 | `8081` | `127.0.0.1` | ide‑proxy | HTTP | **CSP `frame-ancestors`** (chỉ `localhost:3100`, `127.0.0.1:3100`) |
@@ -220,16 +219,30 @@ Lưu ý: **Không còn icon "Visual Studio Code" (bản Electron)** — đã b�
 
 ---
 
-## 7. Số đo thực tế (đo ngày 2026-08-26)
+## 7. Số đo thực tế (đo ngày 2026-08-26, sau khi chuyển sang Xvnc)
 
-| Thành phần | RAM (PSS — Proportional Set Size, bộ nhớ thực dùng không tính trang chia sẻ) | Ghi chú |
+Đo bằng `docker exec agentbox-box ps -eo rss=,args=` ngay sau `docker compose up -d`
+(box vừa bật, chưa mở workspace lớn, chưa mở Chromium). Đây là **RSS** (Resident
+Set Size — toàn bộ trang trong RAM, KỂ CẢ trang chia sẻ giữa các tiến trình), nên
+cộng dồn từng dòng sẽ LỚN HƠN con số `docker stats` báo cho cả container. Không
+dùng PSS vì image không có `smem`.
+
+| Thành phần | RSS | Ghi chú |
 |---|---|---|
-| XFCE desktop | 88 MB | Panel, window manager, session |
-| Xvfb + x11vnc + websockify | 78 MB | Màn hình ảo + phát VNC + cầu WebSocket |
-| code‑server | 96 MB | Server + session workbench (không client) |
-| Khác (iptables, dbus, …) | 42 MB | Hạ tầng |
-| **Tổng** | **306 MB** | Lúc box vừa bật, chưa mở workspace lớn |
-| Docker stats | ~170 MiB | `docker stats` báo RSS (Resident Set Size — toàn bộ trang trong RAM, kể cả trang chia sẻ) |
-| Image size | 3.37 GB | `docker image ls` |
+| **Xvnc** (X server + RFB) | 43 MB | MỘT tiến trình thay cho cả `Xvfb` (45 MB) + `x11vnc` (15 MB) trước đây |
+| XFCE desktop | 237 MB | `xfce4-session` 80 + `xfdesktop` 45 + `xfce4-panel` 32 + `xfwm4` 31 + `xfsettingsd` 26 + `Thunar` 23 |
+| code‑server | 127 MB | 2 tiến trình `node` (server + extension host), không tính client |
+| websockify (VNC → WS) | 69 MB | 2 tiến trình `python3` (parent + handler) |
+| tty-bridge + ide-proxy | 52 MB | 2 tiến trình `python3` |
+| Khác (dbus, xfconfd, gpg-agent) | 19 MB | Hạ tầng |
+| **`docker stats` cho cả container** | **193 MiB** | Con số nên dùng khi tính chi phí máy chủ |
+| Image size | 3.42 GB | `docker image ls agentbox-sandbox` |
 
-> So với trước PR #2 (box có VS Code desktop Electron): RAM PSS giảm từ 1132 MB → 306 MB, image giảm từ 3.96 GB → 3.37 GB. Tiết kiệm ~826 MB RAM và ~600 MB disk.
+> Đổi `Xvfb` + `x11vnc` → `Xvnc`: bớt 1 tiến trình, RSS phần màn hình giảm
+> ~60 MB → 43 MB. Image tăng 3.37 GB → 3.42 GB (~+50 MB) vì thêm
+> `tigervnc-standalone-server` + `xfonts-base` (~+10 MB) và bộ theme/icon
+> `elementary-xfce-icon-theme` + `greybird-gtk-theme` (~+19 MB nén).
+>
+> Không so trực tiếp với bảng cũ trước PR #2 (box còn VS Code desktop Electron)
+> nữa: bảng đó đo **PSS** (1132 MB), bảng này đo **RSS** — hai thang khác nhau,
+> ghép lại sẽ ra kết luận sai. Mốc duy nhất so được là image: 3.96 GB → 3.42 GB.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Smoke-test cho agentbox-sandbox — 8 bài kiểm tra, mỗi bài ứng một bằng chứng
+# Smoke-test cho agentbox-sandbox — 9 bài kiểm tra, mỗi bài ứng một bằng chứng
 # thiết kế trong docs/plan/agent-box-plan.md.
 #
 # Dùng: bash smoke-test.sh
@@ -8,6 +8,10 @@
 #
 # Bài số 7 và 8 chính là demo sống CÔNG TẮC MẠNG ②a/②b (mục 7.4.1):
 # thất bại mạng khi tắt = ĐÚNG; thành công sau khi connect = công tắc chạy thật.
+#
+# Bài số 9 là bằng chứng sống cho AUTO-FIT khung ④: nếu ai đó quay về Xvfb
+# (framebuffer cố định) thì bài này đỏ ngay, vì trần RandR tụt về đúng kích
+# thước khởi tạo và không đổi được phân giải nữa.
 # ==============================================================================
 set -u
 
@@ -31,18 +35,26 @@ head "1) Container đang chạy"
   && ok "container $CONTAINER running" || bad "chưa chạy? Chạy: docker compose up -d"
 
 head "2) Tiến trình dịch vụ chạy non-root agent (quy tắc ⑥)"
-U=$(docker exec "$CONTAINER" ps -o user= -C Xvfb 2>/dev/null)
+U=$(docker exec "$CONTAINER" ps -o user= -C Xvnc 2>/dev/null)
 [ "$U" = "agent" ] \
-  && ok "Xvfb/code-server chạy với user agent (entrypoint đã gosu hạ quyền)" \
+  && ok "Xvnc/code-server chạy với user agent (entrypoint đã gosu hạ quyền)" \
   || bad "dịch vụ đang chạy với user='$U' (mong đợi 'agent')"
 
-head "3) Màn hình ảo Xvfb :99 đang sống"
-docker exec "$CONTAINER" pgrep -f "Xvfb :99" >/dev/null 2>&1 \
-  && ok "Xvfb :99 running (1280x800)" || bad "không thấy tiến trình Xvfb"
+head "3) X server Xvnc :99 đang sống (RFB tích hợp)"
+if docker exec "$CONTAINER" pgrep -f "Xvnc :99" >/dev/null 2>&1; then
+  # Phân giải giờ là BIẾN ĐỘNG (đổi theo khung ④) nên in giá trị đọc được,
+  # không khẳng định một hằng số nào.
+  CUR=$(DX 'DISPLAY=:99 xrandr 2>/dev/null | head -1')
+  ok "Xvnc :99 running — $CUR"
+else
+  bad "không thấy tiến trình Xvnc"
+fi
 
 head "4) VNC lắng nghe :5900 → mở Viewer localhost:5900 sẽ thấy màn hình"
-docker exec "$CONTAINER" pgrep x11vnc >/dev/null 2>&1 \
-  && ok "x11vnc running" || bad "x11vnc không chạy"
+# Không còn tiến trình VNC riêng (Xvnc nói luôn RFB) nên kiểm CỔNG, không kiểm
+# tên tiến trình. Đọc /proc/net/tcp vì image không có ss/netstat; 0x170C = 5900.
+DX 'grep -qi ":170C" /proc/net/tcp' \
+  && ok "Xvnc đang nghe RFB :5900" || bad "không thấy cổng 5900 nào đang nghe"
 
 head "5) code-server (VS Code web) :8080"
 docker exec "$CONTAINER" pgrep -f code-server >/dev/null 2>&1 \
@@ -73,6 +85,42 @@ docker exec --user root "$CONTAINER" box-firewall off >/dev/null 2>&1
 sleep 1
 docker exec "$CONTAINER" curl -m 4 -sI https://example.com >/dev/null 2>&1 \
   && bad "TẮT rồi mà vẫn ra mạng?" || ok "TẮT: biên đóng lại ngay lập tức"
+
+head "9) AUTO-FIT khung ④: desktop đổi được phân giải theo panel"
+# (a) Trần RandR đã mở? Xvfb báo "maximum 1280 x 800" (= kích thước khởi tạo),
+#     Xvnc báo "maximum 32768 x 32768".
+if DX 'DISPLAY=:99 xrandr 2>/dev/null | head -1' | grep -q "maximum 32768 x 32768"; then
+  ok "trần RandR mở tới 32768x32768 (Xvfb trước đây chỉ 1280x800)"
+else
+  bad "trần RandR chưa mở — X server vẫn có framebuffer cố định?"
+fi
+# (b) Đổi sang một kích thước LẺ rồi đọc lại — số lẻ đúng là thứ mà panel bị kéo
+#     sinh ra, và là thứ Xvfb không bao giờ làm được.
+#     CẠM BẪY: `xrandr --fb WxH` một mình KHÔNG dùng được (nó đổi screen mà không
+#     đổi CRTC → output thành disconnected + BadValue). Phải đi qua
+#     --newmode/--addmode/--output --mode.
+#     Tên output suy ra từ dòng `connected` chứ không hardcode "VNC-0": nếu
+#     TigerVNC đổi tên output, bài này phải nói "không tìm thấy output", không
+#     phải nói sai thành "auto-fit hỏng".
+OUT=$(DX 'DISPLAY=:99 xrandr 2>/dev/null' | awk '/ connected/{print $1; exit}')
+if [ -z "$OUT" ]; then
+  bad "không tìm thấy output RandR nào đang connected"
+else
+  DX "DISPLAY=:99 xrandr --newmode '1173x812' 60 1173 1174 1175 1176 812 813 814 815" >/dev/null 2>&1
+  DX "DISPLAY=:99 xrandr --addmode $OUT 1173x812" >/dev/null 2>&1
+  DX "DISPLAY=:99 xrandr --output $OUT --mode 1173x812" >/dev/null 2>&1
+  if DX 'DISPLAY=:99 xrandr 2>/dev/null | head -1' | grep -q "current 1173 x 812"; then
+    ok "đổi phân giải động sang 1173x812 (số lẻ) qua output $OUT"
+  else
+    bad "không đổi được phân giải sang 1173x812 — auto-fit sẽ không chạy"
+  fi
+  # (c) Trả lại phân giải khởi động cho gọn.
+  #     LƯU Ý: KHÔNG bảo đảm sau bài này phân giải là 1280x800. Nếu đang có một
+  #     client noVNC mở tab Machine, chính nó sẽ gửi `SetDesktopSize` theo kích
+  #     thước panel và ghi đè ngay — đó là hành vi ĐÚNG của auto-fit, không phải
+  #     lỗi. Đừng dùng "current 1280 x 800" làm điều kiện của bài kiểm nào.
+  DX "DISPLAY=:99 xrandr --output $OUT --mode 1280x800" >/dev/null 2>&1
+fi
 
 echo ""
 echo "==============================================="

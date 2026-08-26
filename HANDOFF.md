@@ -29,7 +29,15 @@ aa6a12a  feat: initialize project and build core agent box frontend
 Working tree **sạch**. Frontend đã được hoàn nguyên về bản `aa6a12a` (code hook
 noVNC chưa test đã bị gỡ — thiết kế vẫn còn ở §4).
 
-## 3. 🔴 VIỆC 1 (khẩn) — Fix bug `smoke-test.sh` bị TREO
+## 3. ✅ VIỆC 1 (ĐÃ XONG) — Fix bug `smoke-test.sh` bị TREO
+
+> **Đã xử lý.** Nguyên nhân đúng như nghi vấn ⭐ bên dưới: `cleanup()` /
+> `trap cleanup EXIT` còn tham chiếu `INTERNET_NET` đã bị xóa, gặp `set -u`.
+> Trap đã được bỏ (xem comment đầu `smoke-test.sh`). Chạy trọn vẹn
+> `bash smoke-test.sh` xong trong <60s, ra **10 PASS / 1 FAIL** — bài FAIL
+> duy nhất là bài 8 (`box-firewall on` → `curl`), thất bại vì máy chạy thử
+> không có internet ra ngoài, không phải lỗi script. Phần dưới giữ lại làm
+> hồ sơ chẩn đoán.
 
 **File:** `deploy/docker/smoke-test.sh`
 
@@ -52,7 +60,14 @@ dòng cuối của `trace.log` sau khi kill — sẽ thấy đúng lệnh đang 
 **Tiêu chí nghiệm thu:** `bash smoke-test.sh` → **9 PASS / 0 FAIL, exit = 0**,
 kết thúc trong < 60s. Ý nghĩa từng bài kiểm tra nằm ngay comment trong script.
 
-## 4. 🟡 VIỆC 2 — Hook màn hình box thật vào frontend (noVNC)
+## 4. ✅ VIỆC 2 (ĐÃ XONG) — Hook màn hình box thật vào frontend (noVNC)
+
+> **Đã xử lý.** Tab "Sandbox Machine" nối thật vào `websockify :6080` →
+> `Xvnc :5900` qua `useVncScreen.ts`, có fallback mock khi box tắt. Khác
+> một điểm so với thiết kế bên dưới: `rfb.resizeSession = true`
+> (`frontend/src/lib/vnc/fit.ts`) để desktop đổi phân giải THẬT theo bề rộng
+> khung ④, thay vì chỉ `scaleViewport` (scale ảnh → letterbox + chữ mờ).
+> Phần dưới giữ lại làm hồ sơ thiết kế.
 
 Hiện tab "Sandbox Machine" (`frontend/src/components/panels/SandboxScreenPanel.tsx`)
 chỉ render mock. Mục tiêu: khi box Docker đang chạy → hiện **màn hình live**;
@@ -62,7 +77,7 @@ của đồ án, mục 14.5).
 **Thiết kế đã duyệt (làm lại theo đây):**
 - Cài `@novnc/novnc` (npm), import `RFB from '@novnc/novnc/lib/rfb'`.
 - Kết nối tới `VITE_SANDBOX_VNC_URL` (mặc định `ws://localhost:6080/websockify`,
-  đã ghi trong `.env.example`) — websockify :6080 → x11vnc :5900 **đã chạy sẵn
+  đã ghi trong `.env.example`) — websockify :6080 → Xvnc :5900 **đã chạy sẵn
   trong box**, port 6080 đã publish và xác minh host chạm được (HTTP 405).
 - 3 trạng thái: `connecting` (≤5s timeout) → `live` (canvas noVNC) /
   `offline` (fallback mock + thanh thông báo).
@@ -108,7 +123,7 @@ mock kèm thông báo.
 deploy/docker/
 ├── Dockerfile           # recipe image lõi (ghim version ở ARG đầu file)
 ├── docker-compose.yml   # user:"0", cap NET_ADMIN, masquerade-off bridge, 3 ports
-├── box-entrypoint.sh    # root: firewall off → gosu agent → Xvfb/x11vnc/websockify/code-server
+├── box-entrypoint.sh    # root: firewall off → gosu agent → Xvnc/websockify/code-server
 ├── box-firewall         # CÔNG TẮC MẠNG (on|off)
 └── smoke-test.sh        # 9 bài kiểm tra = bằng chứng nghiệm thu
 ```

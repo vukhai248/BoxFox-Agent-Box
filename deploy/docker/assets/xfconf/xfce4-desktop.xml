@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Nền desktop + icon trên desktop.
+
+  - Nền: MÀU ĐẶC #0f172a — trùng đúng màu nền panel khung ④ của web UI
+    (`SandboxScreenPanel.tsx`, `rfb.background`). Nhờ vậy nếu có lệch 1px lúc
+    kéo panel thì cũng không lộ đường viền. Không dùng ảnh nền: ảnh nền phải
+    scale lại mỗi lần đổi phân giải (nay phân giải đổi liên tục theo panel) và
+    tốn thêm dung lượng image.
+  - icon-size 48: khớp cỡ icon trong ảnh tham chiếu của user; cỡ mặc định 32
+    quá bé khi khung ④ bị thu hẹp.
+  - Tắt "Filesystem" và "Trash": máy trống không có gì trong Thùng rác, còn
+    "Filesystem" trùng vai trò với Home + workspace. Bớt icon = desktop dễ đọc.
+
+  LƯU Ý về tên monitor: xfdesktop khoá cấu hình nền theo TÊN OUTPUT RandR.
+  Xvnc (TigerVNC) đặt tên output là `VNC-0`; các khối `monitor0`/`monitorscreen`
+  giữ lại làm dự phòng cho X server khác (Xvfb cũ đặt tên `screen`).
+-->
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitorVNC-0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value=""/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.058824"/>
+            <value type="double" value="0.090196"/>
+            <value type="double" value="0.164706"/>
+            <value type="double" value="1.000000"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitorscreen" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value=""/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.058824"/>
+            <value type="double" value="0.090196"/>
+            <value type="double" value="0.164706"/>
+            <value type="double" value="1.000000"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="image-style" type="int" value="0"/>
+          <property name="last-image" type="string" value=""/>
+          <property name="color-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.058824"/>
+            <value type="double" value="0.090196"/>
+            <value type="double" value="0.164706"/>
+            <value type="double" value="1.000000"/>
+          </property>
+        </property>
+      </property>
+    </property>
+  </property>
+  <property name="desktop-icons" type="empty">
+    <property name="style" type="int" value="2"/>
+    <property name="icon-size" type="uint" value="48"/>
+    <property name="show-tooltips" type="bool" value="false"/>
+    <property name="single-click" type="bool" value="false"/>
+    <property name="use-custom-font-size" type="bool" value="true"/>
+    <property name="font-size" type="double" value="10.000000"/>
+    <property name="file-icons" type="empty">
+      <property name="show-filesystem" type="bool" value="false"/>
+      <property name="show-home" type="bool" value="true"/>
+      <property name="show-trash" type="bool" value="false"/>
+      <property name="show-removable" type="bool" value="false"/>
+    </property>
+  </property>
+  <property name="desktop-menu" type="empty">
+    <property name="show-icons" type="bool" value="true"/>
+  </property>
+</channel>

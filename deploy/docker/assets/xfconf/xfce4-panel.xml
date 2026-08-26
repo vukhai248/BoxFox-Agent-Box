@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MỘT thanh taskbar duy nhất ở đáy màn hình — giống hệt bố cục người dùng đã
+  quen (Windows/macOS/Vorflux).
+
+  Mặc định của xfce4-panel là HAI thanh: một thanh ngang trên (trắng, có menu +
+  đồng hồ) và một "dock" nổi ở đáy. Trong khung ④ hẹp thì hai thanh chiếm mất
+  chiều cao, cái dock nổi trông như hộp thoại lạc, và không có danh sách cửa sổ
+  nên người dùng không biết máy đang mở những gì.
+
+  Bố cục ở đây: [menu ứng dụng] [dải cửa sổ đang mở] [đồng hồ]
+  - `tasklist` là thứ QUAN TRỌNG NHẤT: đây là bằng chứng "máy đang chạy gì"
+    (mục 12.3.1) và là cách duy nhất để chuyển giữa Chromium / VS Code / Thunar
+    khi cửa sổ chồng nhau.
+  - `dark-mode = true` để panel tối kể cả khi theme GTK bị đổi.
+  - `size 36` + `icon-size 22`: đủ để bấm bằng chuột qua VNC, mà chỉ chiếm ~4.5%
+    chiều cao ở 800px và không đè lên nội dung khi panel bị kéo hẹp.
+  - `position-locked`: chặn kéo lệch panel do click nhầm khi điều khiển từ xa.
+-->
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="dark-mode" type="bool" value="true"/>
+    <property name="panel-1" type="empty">
+      <!--
+        p=8 : snap ĐÁY màn hình, nằm ngang.
+
+        CẢNH BÁO — đừng đoán con số này. `p` dùng enum PanelWindowSnapPosition
+        trong panel-window.c của xfce4-panel, KHÔNG phải XfceScreenPosition của
+        libxfce4util, nên các bảng tra trên mạng thường sai. Đã đo trực tiếp
+        trong container (đổi giá trị → khởi động lại xfce4-panel → đọc màu
+        pixel ở mép trên/mép dưới của canvas noVNC):
+          p=8  → panel ở ĐÁY   (pixel mép trên = nền #0f172a, mép dưới = xám panel)
+          p=11 → panel ở ĐỈNH  (ngược lại)
+        x/y giữ 0 vì panel đã snap theo mép; xfce4-panel tự tính lại toạ độ mỗi
+        lần RandR đổi kích thước (điều xảy ra liên tục khi user kéo khung ④).
+
+        Lưu ý khi thử lại: `xfce4-panel -r` KHÔNG nạp lại giá trị `position`
+        đã đổi bằng xfconf-query — phải `pkill -x xfce4-panel` rồi chạy lại.
+      -->
+      <property name="position" type="string" value="p=8;x=0;y=0"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="length-adjust" type="bool" value="true"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="autohide-behavior" type="uint" value="0"/>
+      <property name="size" type="uint" value="36"/>
+      <property name="icon-size" type="uint" value="22"/>
+      <property name="nrows" type="uint" value="1"/>
+      <property name="background-style" type="uint" value="0"/>
+      <property name="enter-opacity" type="uint" value="100"/>
+      <property name="leave-opacity" type="uint" value="100"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="2"/>
+        <value type="int" value="3"/>
+        <value type="int" value="4"/>
+        <value type="int" value="5"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="applicationsmenu">
+      <property name="show-button-title" type="bool" value="false"/>
+      <property name="show-menu-icons" type="bool" value="true"/>
+      <property name="show-tooltips" type="bool" value="false"/>
+    </property>
+    <property name="plugin-2" type="string" value="separator">
+      <property name="style" type="uint" value="0"/>
+      <property name="expand" type="bool" value="false"/>
+    </property>
+    <property name="plugin-3" type="string" value="tasklist">
+      <property name="grouping" type="uint" value="0"/>
+      <property name="show-labels" type="bool" value="true"/>
+      <property name="flat-buttons" type="bool" value="true"/>
+      <property name="show-handle" type="bool" value="false"/>
+      <property name="middle-click" type="uint" value="0"/>
+      <property name="window-scrolling" type="bool" value="false"/>
+    </property>
+    <property name="plugin-4" type="string" value="separator">
+      <property name="style" type="uint" value="0"/>
+      <property name="expand" type="bool" value="true"/>
+    </property>
+    <property name="plugin-5" type="string" value="clock">
+      <property name="mode" type="uint" value="2"/>
+      <property name="digital-time-format" type="string" value="%H:%M"/>
+      <property name="tooltip-format" type="string" value="%A %d %B %Y"/>
+    </property>
+  </property>
+</channel>

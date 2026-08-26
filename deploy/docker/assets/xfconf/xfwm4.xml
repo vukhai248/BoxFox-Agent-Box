@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Trình quản lý cửa sổ.
+
+  - `theme Greybird-dark`: viền + thanh tiêu đề cửa sổ tối, khớp theme GTK.
+    Mặc định là "Default" (sáng) nên cửa sổ Chromium/Thunar có nẹp trắng.
+  - `use_compositing = false`: KHÔNG bật compositing. Không có GPU trong box, bật
+    lên là mọi frame phải blend bằng CPU rồi mới truyền qua VNC — vừa chậm vừa
+    tốn băng thông, không được gì vì ta không dùng bóng đổ/trong suốt.
+  - `placement_mode = center` + `snap_to_border`: cửa sổ mới ra giữa màn hình.
+    Phân giải giờ đổi theo panel, cửa sổ đặt theo góc trên-trái kiểu cũ dễ nằm
+    lọt ra ngoài vùng nhìn thấy khi khung ④ bị kéo hẹp.
+  - `title_font Sans Bold 9`: thanh tiêu đề mỏng, để lại chỗ cho nội dung.
+-->
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Greybird-dark"/>
+    <property name="title_font" type="string" value="Sans Bold 9"/>
+    <property name="title_alignment" type="string" value="center"/>
+    <property name="button_layout" type="string" value="O|HMC"/>
+    <property name="use_compositing" type="bool" value="false"/>
+    <property name="placement_mode" type="string" value="center"/>
+    <property name="placement_ratio" type="int" value="20"/>
+    <property name="snap_to_border" type="bool" value="true"/>
+    <property name="snap_to_windows" type="bool" value="true"/>
+    <property name="snap_width" type="int" value="10"/>
+    <property name="click_to_focus" type="bool" value="true"/>
+    <property name="focus_new" type="bool" value="true"/>
+    <property name="workspace_count" type="int" value="1"/>
+    <property name="wrap_workspaces" type="bool" value="false"/>
+    <property name="mousewheel_rollup" type="bool" value="false"/>
+  </property>
+</channel>

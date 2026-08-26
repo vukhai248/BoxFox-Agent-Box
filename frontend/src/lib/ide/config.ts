@@ -9,7 +9,7 @@
  *                             qua session, không qua Policy Engine.
  *
  * Vì sao nhúng bản web mà không mở VS Code bản desktop trong box: bản desktop
- * (Electron) phải vẽ ra Xvfb rồi đẩy PIXEL qua x11vnc/websockify, nên mỗi lần
+ * (Electron) phải vẽ ra Xvnc rồi đẩy PIXEL qua websockify, nên mỗi lần
  * gõ một ký tự là một lượt truyền ảnh; bản web gửi text tới trình duyệt người
  * dùng và không cần một pixel nào của desktop.
  *

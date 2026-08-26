@@ -1,0 +1,37 @@
+{
+  // Giao diện editor trong box. code-server MẶC ĐỊNH dùng theme SÁNG
+  // ("Default Light Modern") — khác VS Code desktop (mặc định tối). Đã kiểm
+  // trong container: không có file này thì `.monaco-workbench` mang class
+  // `vs vscode-theme-defaults-themes-light_modern-json`, tức nền trắng, chọi
+  // hẳn với giao diện tối của BoxFox ở tab IDE. Đặt tay theme tối; KHÔNG dựa
+  // vào `prefers-color-scheme` của trình duyệt — đã thử `set media dark`,
+  // code-server vẫn ra sáng.
+  "workbench.colorTheme": "Default Dark Modern",
+
+  // Mở tab IDE ra là thấy editor luôn, không phải trang "Get Started with VS
+  // Code for the Web" (trang này chiếm hết khung ④ và không giúp gì trong box).
+  "workbench.startupEditor": "none",
+
+  // Tắt Workspace Trust. Mặc định code-server chặn editor bằng hộp thoại
+  // "Do you trust the authors of the files in this folder?" và vào Restricted
+  // Mode — người dùng lần đầu mở tab IDE gặp ngay modal chắn màn hình.
+  // An toàn ở đây KHÔNG dựa vào Workspace Trust: cả box là biên cách ly (quy
+  // tắc ⑥ chạy non-root, quy tắc ② mạng mặc định TẮT, chỉ bind loopback), nên
+  // lớp này chỉ trùng lặp mà lại làm xấu lần dùng đầu tiên.
+  "security.workspace.trust.enabled": false,
+
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+
+  // Khung ④ hẹp: bỏ minimap để lấy chỗ cho code, bật wrap để không phải cuộn
+  // ngang, và ẩn breadcrumbs cho đỡ chật.
+  "editor.minimap.enabled": false,
+  "editor.wordWrap": "on",
+  "breadcrumbs.enabled": false,
+  "editor.fontSize": 13,
+  "terminal.integrated.fontSize": 13,
+
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  "workbench.tips.enabled": false
+}

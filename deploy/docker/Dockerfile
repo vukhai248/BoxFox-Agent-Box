@@ -6,21 +6,24 @@
 # Triết lý "MÁY TRỐNG":
 #   BAKE (hạ tầng của chính agent — không thể chờ agent tự cài tay chân mình):
 #     - Chromium + Playwright driver (ghim phiên bản — tái lập 13.6)
-#     - Xvfb (màn hình ảo) + x11vnc (người dùng xem qua VNC — khung ④)
+#     - Xvnc (TigerVNC) — X server có RFB tích hợp: MỘT tiến trình thay cho
+#       Xvfb + x11vnc, và RandR động nên desktop đổi phân giải THẬT theo kích
+#       thước khung ④ khi người dùng kéo panel (Xvfb có framebuffer cố định nên
+#       chỉ scale được ảnh ⇒ sinh viền đen)
 #     - XFCE (môi trường desktop) + trình xem ảnh/văn bản
 #     - code-server (VS Code trên WEB — editor duy nhất trong box)
 #     - git + công cụ dòng lệnh cơ bản
 #
 # Vì sao BAKE cả một desktop: mục 7.5 ghi "Trình xem/render file (ảnh, markdown,
 # PDF) — Có, cơ bản", và mục 12.3.1 hứa người dùng NHÌN được máy đang làm gì.
-# Một `Xvfb` trống trơn không đáp ứng cả hai: mở khung ④ ra chỉ thấy màu đen,
+# Một X server trống trơn không đáp ứng cả hai: mở khung ④ ra chỉ thấy màu đen,
 # và Chromium chạy toàn màn hình thì không có cách nào thoát ra để xem file hay
 # mở cửa sổ khác. Có desktop thì Chromium chỉ là MỘT ứng dụng trong máy, đúng
 # như một máy tính thật — và người dùng có taskbar, file manager, terminal,
 # trình xem ảnh để tự kiểm tra kết quả agent làm.
 #
 # Vì sao KHÔNG có VS Code bản desktop (Electron): đo trên chính image này, bản
-# desktop tốn ~460 MB RAM và ~437 MB image, lại phải đi qua Xvfb → x11vnc →
+# desktop tốn ~460 MB RAM và ~437 MB image, lại phải đi qua Xvnc →
 # websockify → noVNC mới nhìn được, tức mỗi lần gõ một ký tự là một lượt truyền
 # ẢNH. code-server đưa cùng một editor tới trình duyệt của người dùng dưới dạng
 # text, tốn ~172 MB RAM trong box và không cần một pixel nào của desktop. Giao
@@ -50,11 +53,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     DISPLAY=:99
 
-# --- Lớp 1: công cụ hệ thống cơ bản + màn hình ảo ----------------------------
+# --- Lớp 1: công cụ hệ thống cơ bản + màn hình ảo (Xvnc — X server CÓ RFB) ---
+# `tigervnc-standalone-server` cung cấp /usr/bin/Xvnc: X server nói luôn giao
+# thức RFB, thay CẢ Xvfb LẪN x11vnc. Lý do bắt buộc phải đổi: Xvfb báo
+# `xrandr → maximum 1280x800` (BẰNG kích thước khởi tạo, đúng một mode) nên
+# không thể đổi phân giải sau khi chạy, còn x11vnc chỉ THEO DÕI xrandr phía
+# server, không nhận `SetDesktopSize` do client gửi lên. Xvnc báo
+# `maximum 32768x32768` và nhận `SetDesktopSize` ⇒ noVNC xin đổi phân giải khớp
+# panel được (đã đo: 1600x900, 700x950, 2400x1300, 1173x812 đều khớp chính xác).
+# Chi phí: +~10 MB, bỏ được xvfb + x11vnc ~4 MB ⇒ net ~+6 MB.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget gnupg unzip xz-utils \
       git \
-      xvfb x11vnc \
+      tigervnc-standalone-server \
+      x11-xserver-utils \
       fonts-dejavu-core fonts-liberation \
       python3 python3-venv \
       gosu iptables \
@@ -92,7 +104,7 @@ RUN curl -fsSL https://code-server.dev/install.sh \
 
 # --- Lớp 4.5: môi trường desktop XFCE ----------------------------------------
 # Chọn XFCE chứ không phải GNOME/KDE: nhẹ (không compositing nặng, không
-# systemd), chạy được trên Xvfb không GPU, và vẫn có đủ thứ một máy tính thật
+# systemd), chạy được trên Xvnc không GPU, và vẫn có đủ thứ một máy tính thật
 # phải có — taskbar, menu ứng dụng, quản lý cửa sổ, file manager.
 #   xfce4-session/xfwm4/xfdesktop4/xfce4-panel : desktop + taskbar + WM
 #   thunar + ristretto + mousepad              : file manager, xem ảnh, xem/sửa
@@ -100,17 +112,39 @@ RUN curl -fsSL https://code-server.dev/install.sh \
 #   dbus-x11                                   : XFCE cần session bus
 #   xfce4-appfinder                            : tìm/chạy ứng dụng
 #   xdg-utils                                  : mở file bằng ứng dụng mặc định
+#
+# THEME + ICON (bắt buộc, không phải trang trí): XFCE trần dùng theme GTK
+# "Adwaita" SÁNG và không có icon theme đầy đủ nào ngoài `hicolor` (gần như
+# trống) → panel trắng chói đập vào giao diện tối của web UI, và MỌI icon rơi về
+# ô vuông xanh vô nghĩa. Người dùng mở khung ④ ra không nhận ra đâu là Terminal
+# đâu là trình duyệt. Đây là rào cản trải nghiệm ngay giây đầu tiên, nên hai gói
+# dưới đây thuộc hạ tầng chứ không phải tuỳ chọn:
+#   elementary-xfce-icon-theme (~14 MB) : icon set của Xubuntu — thư mục,
+#     Terminal, trình duyệt, file có logo thật, y như một máy Linux bình thường
+#   greybird-gtk-theme (~5 MB)          : theme tối chuẩn Xubuntu cho cả GTK và
+#     xfwm4, hòa với nền #0f172a của panel khung ④
+# adwaita-icon-theme giữ lại vì GTK cần nó cho các icon giao diện cơ bản
+# (mũi tên, nút) và làm lớp dự phòng khi elementary-xfce thiếu một tên icon.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       xfce4-session xfwm4 xfdesktop4 xfce4-panel xfce4-settings \
       xfce4-terminal xfce4-appfinder thunar \
       ristretto mousepad \
       dbus-x11 xdg-utils \
       adwaita-icon-theme \
+      elementary-xfce-icon-theme greybird-gtk-theme \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Lớp 4.6: ứng dụng trên desktop ------------------------------------------
-# Logo thật cho shortcut desktop (Chromium + VS Code): người dùng nhìn icon
-# là biết đây là trình duyệt/editor nào — minh bạch cho computer use.
+# Logo cho shortcut desktop (Chromium + VS Code): người dùng nhìn icon là biết
+# đây là trình duyệt/editor nào — minh bạch cho computer use.
+#
+# `chromium.png` là bánh xe 4 màu (đỏ/vàng/lục + tâm xanh). Logo Chromium gốc chỉ
+# có một sắc xanh nhạt, ở cỡ 48px trên nền tối #0f172a nó nhoè thành khối xám,
+# người dùng không nhận ra là trình duyệt. File PNG được commit sẵn nên build
+# KHÔNG cần mạng và KHÔNG cần ImageMagick; muốn sửa thì chạy lại
+# `assets/icons/make-chromium-icon.py` — script đó là "source" của icon.
+# Lưu ý cho người đọc code: binary bên dưới là **Chromium của Playwright**, KHÔNG
+# phải Google Chrome — icon chỉ chọn theo độ dễ nhận, đừng suy ra bản build.
 COPY assets/icons/chromium.png /usr/share/pixmaps/boxfox-chromium.png
 COPY assets/icons/vscode.png /usr/share/pixmaps/boxfox-vscode.png
 # Chromium của Playwright không nằm trong PATH và không có .desktop nên desktop
@@ -181,8 +215,12 @@ RUN chmod +x /usr/local/bin/ide-proxy.py
 EXPOSE 8081
 RUN chmod +x /usr/local/bin/box-entrypoint.sh /usr/local/sbin/box-firewall \
     && mkdir -p /home/agent/workspace /home/agent/.code-server /home/agent/Desktop \
+         /home/agent/.vnc /home/agent/.config/xfconf/xfce-perchannel-xml \
     # Icon sẵn trên desktop: mở máy ra là bấm chạy được, không phải đi tìm menu.
-    && for app in box-code chromium-playwright xfce4-terminal thunar; do \
+    # CHỦ Ý chỉ 3 ứng dụng (+ Home và workspace do xfdesktop/symlink lo): desktop
+    # trong khung ④ nhỏ, nhồi thêm Thunar/Filesystem/Trash chỉ làm rối — Home đã
+    # mở Thunar, workspace là chỗ agent làm việc.
+    && for app in box-code chromium-playwright xfce4-terminal; do \
          cp "/usr/share/applications/${app}.desktop" /home/agent/Desktop/ 2>/dev/null || true; \
        done \
     && chmod +x /home/agent/Desktop/*.desktop \
@@ -190,8 +228,30 @@ RUN chmod +x /usr/local/bin/box-entrypoint.sh /usr/local/sbin/box-firewall \
     && ln -sfn /home/agent/workspace /home/agent/Desktop/workspace \
     && chown -R agent:agent /home/agent
 
+# --- Lớp 5.5: giao diện desktop (theme tối + icon thật + taskbar 1 thanh) -----
+# Đặt Ở CUỐI, sau `chown -R agent:agent /home/agent`, và COPY thẳng với
+# --chown=agent:agent — sửa giao diện là việc sẽ làm nhiều lần, để ở đây thì mỗi
+# lần chỉnh chỉ rebuild một lớp vài KB thay vì kéo lại Chromium.
+#
+# Ghi vào HAI chỗ, có chủ ý — để một bản clone sạch trên máy mới lên đúng giao
+# diện dù môi trường có lệch:
+#   1. /home/agent/.config/...  : cấu hình của người dùng `agent`, ưu tiên cao
+#      nhất, và là chỗ xfconfd GHI LẠI khi ai đó đổi cài đặt trong máy.
+#   2. /etc/xdg/xfce4/xfconf/...: mặc định toàn hệ thống. Đây là lưới an toàn:
+#      nếu HOME bị lệch (gosu không đổi HOME — xem box-services.sh) thì xfconfd
+#      vẫn đọc được từ đây. Đã kiểm: không có file ở đây thì xfce4-panel âm thầm
+#      rơi về /etc/xdg/xfce4/panel/default.xml (hai thanh, có thanh trắng).
+#      Ghi đè xsettings.xml của greybird-gtk-theme là CÓ Ý: file đó đặt
+#      ThemeName=Greybird (bản SÁNG), đúng thứ ta cần thay bằng Greybird-dark.
+COPY --chown=agent:agent assets/xfconf/ /home/agent/.config/xfconf/xfce-perchannel-xml/
+COPY assets/xfconf/ /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/
+
+# Giao diện editor. Đường dẫn phải khớp `--user-data-dir /home/agent/.code-server`
+# trong box-services.sh — code-server đọc <user-data-dir>/User/settings.json.
+# Lý do từng dòng cấu hình nằm trong chính file settings.json.
+COPY --chown=agent:agent assets/code-server/settings.json /home/agent/.code-server/User/settings.json
+
 USER agent
 WORKDIR /home/agent/workspace
-
 EXPOSE 5900 6080 8080
 ENTRYPOINT ["box-entrypoint.sh"]

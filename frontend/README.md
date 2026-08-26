@@ -69,7 +69,7 @@ cả trong trường hợp đó.
 ### Chạy thử với box thật
 
 ```bash
-# 1) Bật box (Xvfb + desktop XFCE + x11vnc + websockify + code-server)
+# 1) Bật box (Xvnc + desktop XFCE + websockify + code-server)
 cd ../deploy/docker && docker compose up -d
 
 # 2) Bật giao diện với nguồn khung hình là máy thật

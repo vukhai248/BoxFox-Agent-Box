@@ -119,7 +119,7 @@ What gets baked into the image (and what deliberately does not):
 | Baked in — agent's own body | Deliberately absent — agent installs on demand |
 |---|---|
 | Chromium via **Playwright 1.49.0** (pinned) | Node.js, language SDKs, frameworks |
-| Xvfb virtual display + x11vnc (screen sharing) | Any API keys or credentials (rule ⑤) |
+| Xvnc — TigerVNC X server with built-in RFB (virtual display + screen sharing in one process, dynamic RandR) | Any API keys or credentials (rule ⑤) |
 | **XFCE desktop** — taskbar, window manager, desktop icons | A full VM — this is a container (§7.5) |
 | **code-server 4.97.2** (VS Code in the browser, port 8080) — the only editor | VS Code desktop / Electron — see below |
 | Thunar (files), Ristretto (images), Mousepad (text) — §7.5 file viewing | `sudo`, root access — runs as non-root `agent` (rule ⑥) |
@@ -133,7 +133,7 @@ is what §7.5's "file viewer/renderer" row actually requires.
 
 **Why there is no VS Code desktop build.** Measured on this very image, the
 Electron build costs ~460 MB RAM and ~437 MB of image, and every keystroke has to
-travel back out as *pixels* through Xvfb → x11vnc → websockify → noVNC.
+travel back out as *pixels* through Xvnc → websockify → noVNC.
 code-server puts the same editor in the user's own browser as text, costs ~172 MB
 RAM inside the box, and needs no part of the graphics stack. The web UI embeds it
 directly in the **IDE tab**, and the box desktop carries a `VS Code (Web)`
@@ -154,7 +154,7 @@ Expected result: **9 PASS / 0 FAIL**, proving each design rule with evidence:
 | Check | Proves |
 |---|---|
 | Container up · non-root `agent` | rule ⑥ hardening |
-| Xvfb alive · XFCE session running · VNC :5900 listening · code-server :8080 | screen + desktop + editor furniture (§7.5) |
+| Xvnc alive · XFCE session running · VNC :5900 listening · code-server :8080 · desktop resizes to match the panel | screen + desktop + editor furniture (§7.5) |
 | Playwright 1.49.0 + `chromium-1148` present | pinned, reproducible tooling (§13.6) |
 | `curl` **fails** out of the box | rule ②a — network ships OFF |
 | toggle ON → `curl` succeeds → toggle OFF → sealed again | rule ②b — your network switch works |

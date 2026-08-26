@@ -367,14 +367,16 @@ export function SandboxScreenPanel() {
                 >
                   {t('screen.releaseKeyboard')}
                 </button>
-                <span className="text-[11px] text-muted">
-                  {t('screen.frameSize', {
-                    width: vnc.frameSize?.width ?? 1280,
-                    height: vnc.frameSize?.height ?? 800,
-                  })}
-                  {' · '}
-                  {t('screen.frameSourceLive')}
-                </span>
+                {vnc.frameSize && (
+                  <span className="text-[11px] text-muted">
+                    {t('screen.frameSize', {
+                      width: vnc.frameSize.width,
+                      height: vnc.frameSize.height,
+                    })}
+                    {' · '}
+                    {t('screen.frameSourceLive')}
+                  </span>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted">
                 <span>
@@ -413,11 +415,12 @@ export function SandboxScreenPanel() {
                 onFocus={vnc.focusScreen}
                 className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
               />
-              {vnc.phase === 'live' && vnc.controlling && (
-                <span className="pointer-events-none absolute left-2 top-2 rounded bg-brand/80 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                  {t('screen.canvasLabel')}
-                </span>
-              )}
+              {/*
+                KHÔNG thêm lại nhãn nổi ở góc trên-trái. Nó nằm đè lên desktop
+                thật (che tab bar của Chromium trong box) mà chẳng nói thêm gì:
+                cùng chuỗi đó đã là `aria-label` của vùng `role="application"`
+                ở trên, nên trình đọc màn hình vẫn đọc được.
+              */}
               {isLive && vnc.frameSize && !detailsOpen && (
                 <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-slate-200">
                   {t('screen.frameSize', {
