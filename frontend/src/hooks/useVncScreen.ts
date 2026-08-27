@@ -35,6 +35,8 @@ export interface UseVncScreenResult {
   /** Mốc thời gian (ms) của lần tự thử lại kế tiếp — dùng cho đếm ngược. `null` nếu không có. */
   retryAtMs: number | null
   frameSize: { width: number; height: number } | null
+  /** `true` khi bàn phím/chuột đang bị canvas noVNC giữ. */
+  controlling: boolean
   retry: () => void
   skip: () => void
   focusScreen: () => void
@@ -55,6 +57,7 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
   const attemptRef = useRef<VncAttempt | null>(null)
   const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null)
   const [retryAtMs, setRetryAtMs] = useState<number | null>(null)
+  const [controlling, setControlling] = useState(false)
 
   const url = useMemo(() => resolveVncUrl(import.meta.env), [])
 
@@ -62,6 +65,7 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
     attemptRef.current?.abort()
     attemptRef.current = null
     setFrameSize(null)
+    setControlling(false)
   }, [])
 
   // Effect A — mở/đóng một lượt kết nối. `state.seq` chỉ tăng ở
@@ -109,6 +113,7 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
       attempt.abort()
       if (attemptRef.current === attempt) attemptRef.current = null
       setFrameSize(null)
+      setControlling(false)
     }
   }, [enabled, url, state.seq])
 
@@ -123,6 +128,22 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
     const id = setTimeout(() => dispatch({ type: 'connectStarted' }), delay)
     return () => clearTimeout(id)
   }, [state.phase, state.attempt, state.exhausted])
+
+  // Effect C — theo dõi quyền điều khiển trên chính canvas của noVNC.
+  // `focusin`/`focusout` nổi bọt lên container; `onBlur` của wrapper thì không
+  // dùng được vì noVNC chuyển focus từ wrapper xuống canvas con của nó.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const onFocusIn = () => setControlling(true)
+    const onFocusOut = () => setControlling(false)
+    container.addEventListener('focusin', onFocusIn)
+    container.addEventListener('focusout', onFocusOut)
+    return () => {
+      container.removeEventListener('focusin', onFocusIn)
+      container.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
 
   // Effect D — theo dõi kích thước FRAMEBUFFER THẬT để cập nhật nhãn.
   //
@@ -191,6 +212,7 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
 
   const releaseKeyboard = useCallback(() => {
     withRfb((rfb) => rfb.blur())
+    setControlling(false)
   }, [])
 
   return {
@@ -202,6 +224,7 @@ export function useVncScreen(override?: ScreenSource): UseVncScreenResult {
     url,
     retryAtMs,
     frameSize,
+    controlling,
     retry,
     skip,
     focusScreen,

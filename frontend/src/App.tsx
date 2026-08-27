@@ -164,9 +164,13 @@ export default function App() {
         />
 
         <div ref={containerRef} className="flex min-h-0 flex-1">
-          {/* Left Column — Chat & Prompt Input Bar */}
+          {/* Left Column — Chat & Prompt Input Bar.
+              min-w-0 (không còn min-w-[480px]): sàn thật do Resizer chốt
+              bằng pixel (clampSplitRatio), nên tổng min-content không bao
+              giờ vượt viewport và không còn bị overflow-hidden cắt panel
+              còn lại. */}
           <div
-            className="flex min-h-0 min-w-[480px] flex-col overflow-hidden border-r border-line"
+            className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-line"
             style={{ flex: `${splitRatio} 0 0%`, width: `${splitRatio * 100}%` }}
           >
             <div className="min-h-0 flex-1 overflow-hidden">
@@ -176,9 +180,9 @@ export default function App() {
 
           <Resizer containerRef={containerRef} />
 
-          {/* Right Column — VS Code-style Workspace Tabs */}
+          {/* Right Column — VS Code-style Workspace Tabs (cùng lý do min-w-0 như trên) */}
           <div
-            className="flex min-h-0 min-w-[480px] flex-col overflow-hidden bg-panel"
+            className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-panel"
             style={{ flex: `${1 - splitRatio} 0 0%`, width: `${(1 - splitRatio) * 100}%` }}
           >
             {/* Top Workspace Tab Bar */}

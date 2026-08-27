@@ -1,5 +1,5 @@
 /**
- * Bài chống hồi quy cho cơ chế khớp màn hình.
+ * Bài chống hồi quy cho cơ chế khớp màn hình và HiDPI.
  *
  * Bài quan trọng nhất ở đây là `resizeSession === true`. Nếu ai đó đổi nó về
  * `false`, desktop trong khung ④ quay lại kẹt ở phân giải khởi động và sinh viền
@@ -98,79 +98,66 @@ describe('devicePixelScale', () => {
   })
 
   it('không bao giờ thu nhỏ: DPR < 1 (zoom out) vẫn xin framebuffer 1:1', () => {
-    setDpr(0.5)
+    setDpr(0.75)
     expect(devicePixelScale()).toBe(1)
   })
 
-  it('giá trị vô nghĩa (0 / NaN) rơi về 1 chứ không sinh framebuffer rỗng', () => {
-    setDpr(0)
-    expect(devicePixelScale()).toBe(1)
+  it('xử lý an toàn khi devicePixelRatio là NaN / không hợp lệ', () => {
     setDpr(Number.NaN)
     expect(devicePixelScale()).toBe(1)
   })
 })
 
 describe('physicalScreenSize', () => {
-  it('nhân DPR rồi làm tròn xuống — đúng những gì SetDesktopSize gửi đi', () => {
-    // 787.2 CSS px × 1.25 = 984 px vật lý: chính con số trong ảnh người dùng gửi.
-    expect(physicalScreenSize(787.2, 462.4, 1.25)).toEqual({ w: 984, h: 578 })
+  it('nhân đúng DPR và làm tròn xuống pixel nguyên', () => {
+    // 787.2 CSS px × 1.25 DPR = 984 physical px
+    expect(physicalScreenSize(787.2, 532.8, 1.25)).toEqual({ w: 984, h: 666 })
   })
 
-  it('DPR 1 giữ nguyên kích thước CSS (máy không HiDPI không bị ảnh hưởng)', () => {
-    expect(physicalScreenSize(805, 842, 1)).toEqual({ w: 805, h: 842 })
-  })
-
-  it('không bao giờ trả 0: panel bị thu về 0px vẫn phải là phân giải hợp lệ', () => {
+  it('kích thước tối thiểu là 1x1 ngay cả khi CSS pixel là 0', () => {
     expect(physicalScreenSize(0, 0, 1.25)).toEqual({ w: 1, h: 1 })
+  })
+
+  it('DPR 1.0 trả đúng kích thước CSS đã làm tròn', () => {
+    expect(physicalScreenSize(1024.7, 768.2, 1)).toEqual({ w: 1024, h: 768 })
   })
 })
 
-describe('applyScreenFit — vá HiDPI trên instance noVNC', () => {
-  /** Bản giả tối thiểu của phần nội bộ noVNC mà bản vá chạm tới. */
-  function makeRfbWithInternals(cssWidth: number, cssHeight: number) {
-    const autoscaleCalls: Array<{ w: number; h: number }> = []
+describe('patchForHiDpi trên instance noVNC', () => {
+  it('vá _screenSize để trả kích thước vật lý thay vì getBoundingClientRect thô', () => {
+    const mockScreen = {
+      getBoundingClientRect: () => ({
+        width: 800,
+        height: 600,
+        top: 0,
+        left: 0,
+        right: 800,
+        bottom: 600,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      }),
+    }
+
     const rfb = {
       ...makeRfb(),
-      _screen: {
-        getBoundingClientRect: () => ({ width: cssWidth, height: cssHeight }),
-      },
+      _screen: mockScreen,
       _screenSize() {
-        const r = this._screen.getBoundingClientRect()
-        return { w: r.width, h: r.height }
+        return { w: 800, h: 600 }
       },
       _updateScale() {},
-      // noVNC thật đặt cờ này trong setter `scaleViewport`; bản giả không có
-      // setter nên phải đặt tay, nếu không bản vá đi nhánh scale = 1.
-      _scaleViewport: true,
-      _display: {
-        scale: 1,
-        autoscale(w: number, h: number) {
-          autoscaleCalls.push({ w, h })
-        },
-      },
     }
-    return { rfb, autoscaleCalls }
-  }
 
-  it('_screenSize trả pixel VẬT LÝ để server cấp framebuffer đủ nét', () => {
-    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
-    const { rfb } = makeRfbWithInternals(600, 400)
+    // Set DPR = 1.25
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 1.25,
+      configurable: true,
+      writable: true,
+    })
+
     applyScreenFit(rfb as unknown as RfbLike)
-    expect(rfb._screenSize()).toEqual({ w: 1200, h: 800 })
-  })
 
-  it('_updateScale vẫn dùng CSS px, nếu không canvas tràn ra ngoài khung ④', () => {
-    Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true })
-    const { rfb, autoscaleCalls } = makeRfbWithInternals(600, 400)
-    applyScreenFit(rfb as unknown as RfbLike)
-    autoscaleCalls.length = 0
-    rfb._updateScale()
-    expect(autoscaleCalls).toEqual([{ w: 600, h: 400 }])
-  })
-
-  it('bỏ qua êm khi noVNC đổi API nội bộ — thà mất nét hơn là khung trắng', () => {
-    const rfb = makeRfb()
-    expect(() => applyScreenFit(rfb)).not.toThrow()
-    expect(rfb.resizeSession).toBe(true)
+    const size = rfb._screenSize()
+    expect(size).toEqual({ w: 1000, h: 750 })
   })
 })

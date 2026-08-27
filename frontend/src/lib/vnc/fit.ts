@@ -162,5 +162,6 @@ export function applyScreenFit(rfb: RfbLike): void {
   rfb.showDotCursor = true
   rfb.background = VNC_BACKGROUND
 
+  // Vá LẠI sau setter: một số bản noVNC gán lại hàm trong setter.
   patchForHiDpi(rfb)
 }

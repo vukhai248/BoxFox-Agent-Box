@@ -135,16 +135,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Lớp 4.6: ứng dụng trên desktop ------------------------------------------
-# Logo cho shortcut desktop (Chromium + VS Code): người dùng nhìn icon là biết
-# đây là trình duyệt/editor nào — minh bạch cho computer use.
-#
-# `chromium.png` là bánh xe 4 màu (đỏ/vàng/lục + tâm xanh). Logo Chromium gốc chỉ
-# có một sắc xanh nhạt, ở cỡ 48px trên nền tối #0f172a nó nhoè thành khối xám,
-# người dùng không nhận ra là trình duyệt. File PNG được commit sẵn nên build
-# KHÔNG cần mạng và KHÔNG cần ImageMagick; muốn sửa thì chạy lại
-# `assets/icons/make-chromium-icon.py` — script đó là "source" của icon.
-# Lưu ý cho người đọc code: binary bên dưới là **Chromium của Playwright**, KHÔNG
-# phải Google Chrome — icon chỉ chọn theo độ dễ nhận, đừng suy ra bản build.
+# Logo thật cho shortcut desktop (Chromium + VS Code): người dùng nhìn icon
+# là biết đây là trình duyệt/editor nào — minh bạch cho computer use.
 COPY assets/icons/chromium.png /usr/share/pixmaps/boxfox-chromium.png
 COPY assets/icons/vscode.png /usr/share/pixmaps/boxfox-vscode.png
 # Chromium của Playwright không nằm trong PATH và không có .desktop nên desktop

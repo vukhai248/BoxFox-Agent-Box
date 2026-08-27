@@ -80,7 +80,11 @@ const en: SameShape<typeof vi> = {
     transportLabel: 'Connection',
   },
   composer: {
-    placeholder: 'Describe what the agent should do…',
+    placeholder: 'Type your message…',
+    placeholderShort: 'Message…',
+    quickAsk: 'Quick ask',
+    autopilot: 'Autopilot',
+    autopilotHint: 'Toggle automatic execution',
     send: 'Send',
     attach: 'Attach',
     model: 'Model',

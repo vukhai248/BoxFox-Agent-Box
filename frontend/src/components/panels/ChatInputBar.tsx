@@ -9,15 +9,20 @@ import {
 } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
 import { useUiStore } from '../../store/uiStore'
+import { useT } from '../../i18n/context'
+import { useCompactComposer } from '../../hooks/useCompactComposer'
 import { HarnessModelPicker } from '../chat/HarnessModelPicker'
 import { RepoPicker } from '../chat/RepoPicker'
 import { AttachmentPicker, type AttachedFile } from '../chat/AttachmentPicker'
 import { ShortcutsPopover } from '../chat/ShortcutsPopover'
 
 export function ChatInputBar() {
+  const t = useT()
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  const compact = useCompactComposer(barRef)
   const sendCommand = useAgentStore((s) => s.sendCommand)
   const isBusy = useAgentStore((s) => s.isBusy)
   const autopilotEnabled = useUiStore((s) => s.autopilotEnabled)
@@ -62,7 +67,7 @@ export function ChatInputBar() {
   }
 
   return (
-    <div className="border-t border-line bg-panel p-3 select-none">
+    <div ref={barRef} className="border-t border-line bg-panel p-3 select-none">
       <div className="relative rounded-xl border border-line bg-panel2/70 p-2.5 shadow-xs transition-all focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-600/40">
         {/* Attached files chips */}
         {attachments.length > 0 && (
@@ -104,13 +109,15 @@ export function ChatInputBar() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your message..."
+          placeholder={t(compact ? 'composer.placeholderShort' : 'composer.placeholder')}
           className="w-full resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text"
         />
 
-        {/* Toolbar below input */}
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-line/40">
-          <div className="flex items-center gap-1.5">
+        {/* Toolbar below input — bỏ flex-wrap để Mic/Send không bao giờ rớt
+            xuống dòng 2 khi cột chat hẹp; nhóm trái co lại (min-w-0 +
+            overflow-hidden), nhóm phải giữ nguyên kích thước (shrink-0). */}
+        <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-line/40">
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
             {/* Attachment Button [+] with Popover */}
             <AttachmentPicker onAttach={(file) => setAttachments((prev) => [...prev, file])} />
 
@@ -126,10 +133,12 @@ export function ChatInputBar() {
             {/* Quick Ask */}
             <button
               type="button"
+              title={t('composer.quickAsk')}
+              aria-label={t('composer.quickAsk')}
               className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
             >
               <Zap className="size-3 text-amber-400" />
-              <span>Quick ask</span>
+              {!compact && <span>{t('composer.quickAsk')}</span>}
             </button>
 
             {/* Autopilot Toggle */}
@@ -141,10 +150,13 @@ export function ChatInputBar() {
                   ? 'bg-panel2 text-fg border border-line'
                   : 'text-muted hover:bg-panel hover:text-fg border border-transparent'
               }`}
-              title="Toggle automatic execution"
+              title={t('composer.autopilotHint')}
+              aria-label={t('composer.autopilot')}
+              aria-pressed={autopilotEnabled}
             >
               <Zap className="size-3" />
-              <span>Autopilot</span>
+              {!compact && <span>{t('composer.autopilot')}</span>}
+              {/* Chấm trạng thái giữ inline ở cả hai chế độ — phải luôn nhìn thấy bật/tắt */}
               <span
                 className={`size-1.5 rounded-full ${
                   autopilotEnabled ? 'bg-brand shadow-xs' : 'bg-muted/40'
@@ -153,7 +165,7 @@ export function ChatInputBar() {
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {/* Voice Input Mic */}
             <button
               type="button"

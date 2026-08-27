@@ -76,7 +76,11 @@ const vi = {
     transportLabel: 'Kết nối',
   },
   composer: {
-    placeholder: 'Nhập việc cần agent làm…',
+    placeholder: 'Nhập tin nhắn…',
+    placeholderShort: 'Nhập…',
+    quickAsk: 'Hỏi nhanh',
+    autopilot: 'Autopilot',
+    autopilotHint: 'Bật/tắt tự động thực thi',
     send: 'Gửi',
     attach: 'Đính kèm',
     model: 'Model',

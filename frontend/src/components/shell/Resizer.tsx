@@ -2,13 +2,21 @@
  * Thanh kéo giãn giữa cột chat và panel phải (Resizer).
  * Dùng Pointer Events + setPointerCapture để kéo không bị gián đoạn
  * khi chuột lướt qua iframe (tab IDE) hoặc canvas noVNC (tab Machine).
- * Giới hạn theo pixel cứng (Min-width Chat: 480px, Min-width Workspace: 480px).
+ * Giới hạn theo pixel cứng (Min-width Chat: 400px, Min-width Workspace: 480px).
+ *
+ * Về 2 "sàn" đang tồn tại: từ khi `App.tsx` đổi `min-w-[480px]` thành
+ * `min-w-0`, sàn pixel ở đây (`clampSplitRatio`) là sàn thẩm quyền duy nhất.
+ * `MIN_SPLIT = 0.36` ở `uiStore` chỉ là chặn tỉ lệ thô, và ở container dưới
+ * ~1111px thì 0.36 × width < 400px — nghĩa là sàn tỉ lệ đó KHÔNG đủ để giữ
+ * composer khỏi chật. Vì vậy đường bàn phím cũng phải đi qua
+ * `clampSplitRatio` để không lách qua sàn pixel như trước.
  */
 import { useCallback, useEffect, useRef } from 'react'
 import { useT } from '../../i18n/context'
 import { useUiStore } from '../../store/uiStore'
+import { clampSplitRatio } from '../../lib/layout/split'
 
-export const MIN_CHAT_WIDTH_PX = 480
+export const MIN_CHAT_WIDTH_PX = 400
 export const MIN_WORKSPACE_WIDTH_PX = 480
 
 export function Resizer({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
@@ -25,13 +33,26 @@ export function Resizer({ containerRef }: { containerRef: React.RefObject<HTMLDi
       if (rect.width === 0) return
 
       const x = clientX - rect.left
-      const minChat = Math.min(MIN_CHAT_WIDTH_PX, rect.width * 0.45)
-      const minWorkspace = Math.min(MIN_WORKSPACE_WIDTH_PX, rect.width * 0.45)
-      const clampedX = Math.max(minChat, Math.min(rect.width - minWorkspace, x))
-
-      setSplitRatio(clampedX / rect.width)
+      setSplitRatio(clampSplitRatio(x, rect.width, MIN_CHAT_WIDTH_PX, MIN_WORKSPACE_WIDTH_PX))
     },
     [containerRef, setSplitRatio],
+  )
+
+  // Bàn phím: đổi delta tỉ lệ (0.02) thành pixel dựa trên bề rộng container
+  // hiện tại rồi cho qua clampSplitRatio — không gọi setSplitRatio trực tiếp
+  // như trước, tránh lách sàn pixel.
+  const nudgeRatio = useCallback(
+    (deltaRatio: number) => {
+      const container = containerRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      if (rect.width === 0) return
+
+      const currentX = splitRatio * rect.width
+      const nextX = currentX + deltaRatio * rect.width
+      setSplitRatio(clampSplitRatio(nextX, rect.width, MIN_CHAT_WIDTH_PX, MIN_WORKSPACE_WIDTH_PX))
+    },
+    [containerRef, splitRatio, setSplitRatio],
   )
 
   const stop = useCallback(() => {
@@ -93,8 +114,8 @@ export function Resizer({ containerRef }: { containerRef: React.RefObject<HTMLDi
         document.body.style.userSelect = 'none'
       }}
       onKeyDown={(event) => {
-        if (event.key === 'ArrowLeft') setSplitRatio(splitRatio - 0.02)
-        if (event.key === 'ArrowRight') setSplitRatio(splitRatio + 0.02)
+        if (event.key === 'ArrowLeft') nudgeRatio(-0.02)
+        if (event.key === 'ArrowRight') nudgeRatio(0.02)
       }}
       className="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center bg-transparent transition select-none hover:bg-brand/10 focus:bg-brand/15 focus:outline-hidden touch-none"
     >
