@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useT } from './i18n/context'
 import { useAgentStore } from './store/agentStore'
-import { useUiStore, type PanelTabId } from './store/uiStore'
+import { useUiStore, ALL_PANEL_TABS, type PanelTabId } from './store/uiStore'
 import { Sidebar } from './components/shell/Sidebar'
 import { Resizer } from './components/shell/Resizer'
 import { ChatPanel } from './components/panels/ChatPanel'
@@ -94,7 +94,8 @@ export default function App() {
   const activeSession = sessions.find((s) => s.session_id === activeSessionId)
   const sessionTitle = activeSession?.title || 'New Session'
 
-  const openTabs = useUiStore((s) => s.openTabs)
+  const rawOpenTabs = useUiStore((s) => s.openTabs)
+  const openTabs = rawOpenTabs.filter((tab) => ALL_PANEL_TABS.includes(tab))
   const activeTab = useUiStore((s) => s.activeTab)
   const openTab = useUiStore((s) => s.openTab)
   const closeTab = useUiStore((s) => s.closeTab)
