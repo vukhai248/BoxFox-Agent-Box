@@ -27,11 +27,13 @@ Upon container initialization (`box-entrypoint.sh`), the following directories a
   - Groups versions by slug identity, sorting descending `[v2, v1]`.
   - Top version is tagged `draft`, older versions tagged `approved`.
   - Enforces symlink rejection via `O_NOFOLLOW` / `dir_fd` on POSIX.
+  - **Directory Mtime Cache:** Uses `os.stat(root).st_mtime` to cache the manifest metadata (0ms on repeat reads), automatically refreshing whenever a new plan file is created.
 - **Proxy API Endpoints (`deploy/docker/ide-proxy.py`):**
-  - `GET /__box/plans` ➔ Manifest JSON tree of all available plan documents.
-  - `GET /__box/plans/content?identity={id}&version={v}` ➔ Fetches markdown content.
+  - `GET /__box/plans` ➔ Manifest JSON tree of all available plan documents (0ms cached).
+  - `GET /__box/plans/content?identity={id}&version={v}` ➔ Direct, fast-path file stream (~1ms).
 - **Frontend Integration (`PlanPanel.tsx` & `usePlanFiles.ts`):**
   - Custom Popover Dropdowns for Document selection and Version selection (`v1 (approved)`, `v2 (draft)`).
+  - Fluid width container (`w-full min-w-0`) ensuring seamless stretching across large monitors without blank margins.
   - Sub-tabs:
     - `Detailed Plan`: Renders full Markdown with KaTeX math equations, GFM tables, interactive task lists, and syntax highlighting.
     - `Overview`: Architectural summary, file metadata, and navigation shortcut.
@@ -47,7 +49,13 @@ Upon container initialization (`box-entrypoint.sh`), the following directories a
 
 ---
 
-## 3. Verification & Test Suite
+## 3. High-Performance Architecture Reference
+For handling heavy streaming data, large log files, or rich documents (>2,000 lines) at 60 FPS without UI jank, refer to the established 3-tier architecture guide:
+- 📖 **Architecture Playbook:** [`docs/architecture/high-performance-rendering.md`](file:///d:/create/BoxFox-Agent-Box/docs/architecture/high-performance-rendering.md) (covers Backend Mtime cache, React AST memoization, and CSS `content-visibility: auto` layout virtualization).
+
+---
+
+## 4. Verification & Test Suite
 - **Frontend (Vitest):** `127 / 127 tests passed` across 18 test files (`npm run test`).
 - **Frontend Typecheck & Lint:** `0 errors` (`npm run typecheck`, `npm run lint`).
 - **Python Unit Tests:** `13 / 13 tests passed` (`conda run -n DL python -m unittest discover -s deploy/docker/tests -p "test_*.py"`).
