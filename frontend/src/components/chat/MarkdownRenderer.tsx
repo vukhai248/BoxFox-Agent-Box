@@ -7,7 +7,9 @@
  * - Hỗ trợ Code Blocks với nút Copy, Language Header.
  * - Hỗ trợ Bảng biểu (Table), Danh sách (Lists), Trích dẫn (Blockquote).
  * - Cơ chế Streaming-Safe: Tự động đóng các block code hoặc thẻ toán dở dang trong lúc stream.
- * - Tối ưu hóa hiệu năng cực đại (Zero-lag Resize): Plugin và Components tĩnh + React.memo.
+ * - Tối ưu hóa hiệu năng cực đại (Zero-lag 60fps Resize):
+ *     + Plugin và Components tĩnh + React.memo
+ *     + content-visibility: auto + contain-intrinsic-size cho các khối off-screen.
  */
 import { useState, useMemo, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -47,7 +49,7 @@ export function makeStreamingSafe(rawText: string): string {
   return text
 }
 
-/** Từ điển components tĩnh — giúp ReactMarkdown tái sử dụng AST 100% khi resize */
+/** Từ điển components tĩnh — áp dụng content-visibility:auto giúp bỏ qua layout off-screen */
 const STATIC_COMPONENTS: Components = {
   // Khối Code & Inline Code
   code({ className, children, ...props }) {
@@ -73,7 +75,7 @@ const STATIC_COMPONENTS: Components = {
   // Bảng dữ liệu (Table)
   table({ children }) {
     return (
-      <div className="overflow-x-auto my-3 rounded-xl border border-line bg-panel2/40 shadow-2xs">
+      <div className="overflow-x-auto my-3 rounded-xl border border-line bg-panel2/40 shadow-2xs [content-visibility:auto] [contain-intrinsic-size:1px_120px]">
         <table className="w-full text-left text-xs border-collapse">{children}</table>
       </div>
     )
@@ -94,21 +96,41 @@ const STATIC_COMPONENTS: Components = {
 
   // Tiêu đề (Headings)
   h1({ children }) {
-    return <h1 className="text-base font-bold text-fg mt-3.5 mb-1.5">{children}</h1>
+    return (
+      <h1 className="text-base font-bold text-fg mt-3.5 mb-1.5 [content-visibility:auto] [contain-intrinsic-size:1px_32px]">
+        {children}
+      </h1>
+    )
   },
   h2({ children }) {
-    return <h2 className="text-sm font-bold text-fg mt-3 mb-1.5">{children}</h2>
+    return (
+      <h2 className="text-sm font-bold text-fg mt-3 mb-1.5 [content-visibility:auto] [contain-intrinsic-size:1px_28px]">
+        {children}
+      </h2>
+    )
   },
   h3({ children }) {
-    return <h3 className="text-xs font-bold text-fg mt-2.5 mb-1">{children}</h3>
+    return (
+      <h3 className="text-xs font-bold text-fg mt-2.5 mb-1 [content-visibility:auto] [contain-intrinsic-size:1px_24px]">
+        {children}
+      </h3>
+    )
   },
 
   // Danh sách (Lists)
   ul({ children }) {
-    return <ul className="list-disc list-outside pl-4 space-y-1 my-2 text-xs text-fg">{children}</ul>
+    return (
+      <ul className="list-disc list-outside pl-4 space-y-1 my-2 text-xs text-fg [content-visibility:auto] [contain-intrinsic-size:1px_60px]">
+        {children}
+      </ul>
+    )
   },
   ol({ children }) {
-    return <ol className="list-decimal list-outside pl-4 space-y-1 my-2 text-xs text-fg">{children}</ol>
+    return (
+      <ol className="list-decimal list-outside pl-4 space-y-1 my-2 text-xs text-fg [content-visibility:auto] [contain-intrinsic-size:1px_60px]">
+        {children}
+      </ol>
+    )
   },
   li({ children }) {
     return <li className="leading-relaxed text-xs text-fg">{children}</li>
@@ -117,7 +139,7 @@ const STATIC_COMPONENTS: Components = {
   // Trích dẫn (Blockquote)
   blockquote({ children }) {
     return (
-      <blockquote className="border-l-2 border-brand/60 bg-panel2/40 pl-3.5 py-1.5 my-2.5 italic text-muted rounded-r-xl text-xs">
+      <blockquote className="border-l-2 border-brand/60 bg-panel2/40 pl-3.5 py-1.5 my-2.5 italic text-muted rounded-r-xl text-xs [content-visibility:auto] [contain-intrinsic-size:1px_40px]">
         {children}
       </blockquote>
     )
@@ -125,7 +147,11 @@ const STATIC_COMPONENTS: Components = {
 
   // Đoạn văn (Paragraph)
   p({ children }) {
-    return <p className="leading-relaxed text-xs text-fg my-1.5">{children}</p>
+    return (
+      <p className="leading-relaxed text-xs text-fg my-1.5 [content-visibility:auto] [contain-intrinsic-size:1px_24px]">
+        {children}
+      </p>
+    )
   },
 
   // Đường link (Anchor)
@@ -185,7 +211,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-panel2 font-mono text-xs shadow-xs my-2.5">
+    <div className="overflow-hidden rounded-xl border border-line bg-panel2 font-mono text-xs shadow-xs my-2.5 [content-visibility:auto] [contain-intrinsic-size:1px_140px]">
       <div className="flex items-center justify-between border-b border-line bg-panel px-3.5 py-1.5 text-[11px] text-muted select-none">
         <span className="font-medium text-fg uppercase text-[10px] tracking-wide">{language}</span>
         <button
