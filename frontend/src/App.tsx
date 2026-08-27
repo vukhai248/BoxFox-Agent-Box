@@ -1,14 +1,14 @@
 /**
  * Main App Layout — BoxFox / Devin Professional Workspace.
- * VS Code-style tab system with '+' menu, cleaned up TopBar, and rich workspace panels.
+ * VS Code-style tab system with 'Open Workspace' TopBar menu and rich workspace panels.
  */
 import { useEffect, useRef, useState } from 'react'
 import {
   FileText,
   Monitor,
   Code2,
-  Folder,
   Terminal,
+  Shapes,
   Tag,
   ScrollText,
   GitPullRequest,
@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   X,
   Plus,
+  ChevronDown,
 } from 'lucide-react'
 import { useT } from './i18n/context'
 import { useAgentStore } from './store/agentStore'
@@ -31,7 +32,7 @@ import { IdePanel } from './components/panels/IdePanel'
 import { LabelsLeasesPanel } from './components/panels/LabelsLeasesPanel'
 import { ModeSwitchCard } from './components/ModeSwitchCard'
 import { LabelDot } from './components/LabelDot'
-import { FileTreePanel } from './components/panels/FileTreePanel'
+import { DesignCanvasPanel } from './components/panels/DesignCanvasPanel'
 import { AuditPanel } from './components/panels/AuditPanel'
 import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
 import { BoxControls } from './components/shell/BoxControls'
@@ -39,38 +40,38 @@ import { SettingsModal } from './components/settings/SettingsModal'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
   plan: 'tabs.plan',
-  decisions: 'tabs.decisions',
   sandbox: 'tabs.sandbox',
   ide: 'tabs.ide',
-  files: 'tabs.files',
   terminal: 'tabs.terminal',
+  design: 'tabs.design',
+  decisions: 'tabs.decisions',
+  pull_requests: 'tabs.pull_requests',
   labels: 'tabs.labels',
   audit: 'tabs.audit',
-  pull_requests: 'tabs.pull_requests',
 }
 
 const TAB_ICON: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
   plan: FileText,
-  decisions: ShieldAlert,
   sandbox: Monitor,
   ide: Code2,
-  files: Folder,
   terminal: Terminal,
+  design: Shapes,
+  decisions: ShieldAlert,
+  pull_requests: GitPullRequest,
   labels: Tag,
   audit: ScrollText,
-  pull_requests: GitPullRequest,
 }
 
 const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'plan', label: 'Plan Document', desc: 'Architecture blueprint & step review', icon: FileText },
-  { id: 'decisions', label: 'Decisions & Approvals', desc: 'Security permission requests & design choices', icon: ShieldAlert },
   { id: 'sandbox', label: 'Sandbox Machine', desc: 'Live container vision & browser frame', icon: Monitor },
   { id: 'ide', label: 'IDE (VS Code Web)', desc: 'code-server running inside the box', icon: Code2 },
-  { id: 'files', label: 'Workspace Files', desc: 'Source code explorer with provenance tags', icon: Folder },
   { id: 'terminal', label: 'Integrated Terminal', desc: 'Interactive shell in sandbox container', icon: Terminal },
+  { id: 'design', label: 'Design Canvas', desc: 'Interactive UI canvas, visual flow & mockup editor', icon: Shapes },
+  { id: 'decisions', label: 'Decisions & Approvals', desc: 'Security permission requests & design choices', icon: ShieldAlert },
+  { id: 'pull_requests', label: 'Pull Requests', desc: 'Git branches, PR diffs & CI checks', icon: GitPullRequest },
   { id: 'labels', label: 'Labels & Leases', desc: 'IFC security provenance & active leases', icon: Tag },
   { id: 'audit', label: 'Audit Logs', desc: 'Immutable security action ledger', icon: ScrollText },
-  { id: 'pull_requests', label: 'Pull Requests', desc: 'Git branches, PR diffs & CI checks', icon: GitPullRequest },
 ]
 
 export default function App() {
@@ -100,23 +101,8 @@ export default function App() {
   const closePanel = useUiStore((s) => s.closePanel)
   const splitRatio = useUiStore((s) => s.splitRatio)
 
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
-  const addMenuRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const showModeSwitch = proposal !== null
-
-  // Close add tab popup menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false)
-      }
-    }
-    if (addMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [addMenuOpen])
 
   const requests = useAgentStore((s) => s.requests)
   const pendingRequestsCount = Object.values(requests).filter((r) => r.status === 'dang_cho').length
@@ -128,22 +114,22 @@ export default function App() {
     switch (activeTab) {
       case 'plan':
         return <PlanPanel />
-      case 'decisions':
-        return <DecisionsPanel />
       case 'sandbox':
         return <SandboxScreenPanel />
       case 'ide':
         return <IdePanel />
-      case 'files':
-        return <FileTreePanel />
       case 'terminal':
         return <TerminalPanel />
+      case 'design':
+        return <DesignCanvasPanel />
+      case 'decisions':
+        return <DecisionsPanel />
+      case 'pull_requests':
+        return <PullRequestsPanel />
       case 'labels':
         return <LabelsLeasesPanel />
       case 'audit':
         return <AuditPanel />
-      case 'pull_requests':
-        return <PullRequestsPanel />
       default:
         return null
     }
@@ -154,7 +140,7 @@ export default function App() {
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Cleaned TopBar Header */}
+        {/* Cleaned TopBar Header with Open Workspace Dropdown */}
         <TopBar
           title={sessionTitle}
           mode={mode}
@@ -235,56 +221,6 @@ export default function App() {
                 )
               })}
 
-              {/* '+' Add Tab Button & Dropdown Menu */}
-              <div className="relative inline-block" ref={addMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setAddMenuOpen(!addMenuOpen)}
-                  className={`flex size-6 items-center justify-center rounded text-muted hover:bg-panel2 hover:text-fg transition ml-1 cursor-pointer ${
-                    addMenuOpen ? 'bg-panel2 text-fg' : ''
-                  }`}
-                  title="Add / Open Workspace Tab"
-                >
-                  <Plus className="size-3.5" />
-                </button>
-
-                {/* Dropdown Popup Menu */}
-                {addMenuOpen && (
-                  <div className="absolute left-0 top-full z-40 mt-1 w-64 rounded-lg border border-line bg-panel2 p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
-                      Open Workspace View
-                    </div>
-                    <div className="space-y-0.5 mt-0.5">
-                      {AVAILABLE_PANEL_TABS.map((tabItem) => {
-                        const Icon = tabItem.icon
-                        const isAlreadyOpen = openTabs.includes(tabItem.id)
-                        return (
-                          <button
-                            key={tabItem.id}
-                            type="button"
-                            onClick={() => {
-                              openTab(tabItem.id)
-                              setAddMenuOpen(false)
-                            }}
-                            className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
-                              isAlreadyOpen
-                                ? 'bg-panel/60 text-fg'
-                                : 'text-muted hover:bg-panel hover:text-fg'
-                            }`}
-                          >
-                            <Icon className="size-3.5 text-brand shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-fg">{tabItem.label}</div>
-                              <div className="text-[10px] text-muted truncate">{tabItem.desc}</div>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Close entire panel button */}
               {openTabs.length > 0 && (
                 <div className="ml-auto flex items-center pr-1">
@@ -322,7 +258,7 @@ export default function App() {
                     <div>
                       <h3 className="text-sm font-semibold text-fg">No Workspace View Open</h3>
                       <p className="mt-1 text-xs text-muted leading-relaxed">
-                        Select a view from the shortcuts below or click the <code className="text-brand font-mono font-bold">+</code> button above.
+                        Select a view from the shortcuts below or click the <span className="text-brand font-medium">Open Workspace</span> button above.
                       </p>
                     </div>
 
@@ -369,6 +305,24 @@ function TopBar({
   budget: { steps: number; tokens: number; costUsd: number; capUsd: number }
   context: { integrity_floor: string; confidentiality_ceiling: string }
 }) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const addMenuRef = useRef<HTMLDivElement>(null)
+  const openTab = useUiStore((s) => s.openTab)
+  const openTabs = useUiStore((s) => s.openTabs)
+
+  // Close add tab popup menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false)
+      }
+    }
+    if (addMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [addMenuOpen])
+
   return (
     <div className="flex h-10 shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 select-none">
       {/* Left: Session Title & Badges */}
@@ -397,8 +351,62 @@ function TopBar({
         </span>
       </div>
 
-      {/* Right: Security Labels & State Indicator */}
-      <div className="flex items-center gap-3">
+      {/* Right: Open Workspace Button, Machine Controls & Security Labels */}
+      <div className="flex items-center gap-2.5">
+        {/* Open Workspace Dropdown Button */}
+        <div className="relative inline-block" ref={addMenuRef}>
+          <button
+            type="button"
+            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+              addMenuOpen
+                ? 'border-brand/60 bg-panel2 text-brand shadow-xs'
+                : 'border-line/70 bg-panel2/50 text-muted hover:border-line hover:bg-panel2 hover:text-fg'
+            }`}
+            title="Open Workspace View"
+          >
+            <Plus className="size-3 text-brand" />
+            <span className="hidden sm:inline">Open Workspace</span>
+            <ChevronDown className={`size-3 transition-transform duration-150 ${addMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Dropdown Popup Menu */}
+          {addMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-line bg-panel2 p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+                Open Workspace View
+              </div>
+              <div className="space-y-0.5 mt-0.5">
+                {AVAILABLE_PANEL_TABS.map((tabItem) => {
+                  const Icon = tabItem.icon
+                  const isAlreadyOpen = openTabs.includes(tabItem.id)
+                  return (
+                    <button
+                      key={tabItem.id}
+                      type="button"
+                      onClick={() => {
+                        openTab(tabItem.id)
+                        setAddMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                        isAlreadyOpen
+                          ? 'bg-panel/60 text-fg'
+                          : 'text-muted hover:bg-panel hover:text-fg'
+                      }`}
+                    >
+                      <Icon className="size-3.5 text-brand shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-fg">{tabItem.label}</div>
+                        <div className="text-[10px] text-muted truncate">{tabItem.desc}</div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         <BoxControls />
         <LabelDot
           integrity={context.integrity_floor as 'duoc_nguoi_dung_cho_phep'}

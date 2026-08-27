@@ -419,7 +419,7 @@ function ReferencedFilesList({ files }: { files: ReferencedFile[] }) {
   const allWorkspaceFiles = useAgentStore((s) => s.files)
 
   const handleOpenFile = (path: string) => {
-    openTab('files')
+    openTab('ide')
     selectFile(path)
   }
 

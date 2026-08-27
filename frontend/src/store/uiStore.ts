@@ -8,25 +8,25 @@ import type { SettingSectionId, SettingTabId } from '../types/harness'
 
 export type PanelTabId =
   | 'plan'
-  | 'decisions'
   | 'sandbox'
   | 'ide'
-  | 'files'
   | 'terminal'
+  | 'design'
+  | 'decisions'
+  | 'pull_requests'
   | 'labels'
   | 'audit'
-  | 'pull_requests'
 
 export const ALL_PANEL_TABS: PanelTabId[] = [
   'plan',
-  'decisions',
   'sandbox',
   'ide',
-  'files',
   'terminal',
+  'design',
+  'decisions',
+  'pull_requests',
   'labels',
   'audit',
-  'pull_requests',
 ]
 
 function getInitialTheme(): 'light' | 'dark' | 'system' {
