@@ -73,6 +73,20 @@ export function PlanPanel() {
 
   const currentPlan = mode === 'ACT' && endorsed ? endorsed : workspace
 
+  const renderedDetailedContent = useMemo(() => {
+    if (planFiles.document) {
+      return <MarkdownRenderer content={planFiles.document.markdown} variant="document" />
+    }
+    if (currentPlan) {
+      return (
+        <div className="text-xs leading-relaxed">
+          <PlainText text={currentPlan.full_text} />
+        </div>
+      )
+    }
+    return null
+  }, [planFiles.document, currentPlan])
+
   const diffChunks: DiffLine[] = useMemo(() => {
     // Return empty diff when no modifications are present
     return []
@@ -586,13 +600,7 @@ export function PlanPanel() {
         ) : (
           /* Detailed Plan View — file sandbox nếu có, ngược lại dùng store */
           <div className="h-full w-full min-w-0 overflow-y-auto p-6 space-y-4">
-            {planFiles.document ? (
-              <MarkdownRenderer content={planFiles.document.markdown} variant="document" />
-            ) : currentPlan ? (
-              <div className="text-xs leading-relaxed">
-                <PlainText text={currentPlan.full_text} />
-              </div>
-            ) : null}
+            {renderedDetailedContent}
             {mode === 'ACT' && endorsed && (
               <div className="mt-4 rounded-md border border-zinc-700 bg-panel2/50 p-3 text-xs text-muted">
                 Plan endorsed by user at {endorsed.created_at}. 30-minute plan-scoped lease is active.
