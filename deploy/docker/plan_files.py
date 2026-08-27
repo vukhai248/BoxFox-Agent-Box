@@ -327,8 +327,22 @@ def _open_root_fd(root: str | Path) -> int | Path | None:
         raise PlanFileError from error
 
 
+_MANIFEST_CACHE: dict[str, tuple[float, PlanManifest]] = {}
+
+
 def scan_plans(root: str | Path) -> PlanManifest:
-    """Quét file hợp lệ dưới root với sort và xử lý collision xác định."""
+    """Quét file hợp lệ dưới root với sort, xử lý collision và cache mtime xác định."""
+
+    try:
+        root_stat = os.stat(root)
+        current_mtime = root_stat.st_mtime
+    except OSError:
+        return PlanManifest((), 0, (), frozenset())
+
+    root_key = str(Path(root).resolve())
+    cached = _MANIFEST_CACHE.get(root_key)
+    if cached is not None and cached[0] == current_mtime:
+        return cached[1]
 
     root_target = _open_root_fd(root)
     if root_target is None:
@@ -381,7 +395,9 @@ def scan_plans(root: str | Path) -> PlanManifest:
                 ),
             )
         )
-    return PlanManifest(tuple(plans), ignored_count, tuple(warnings), collisions)
+    manifest = PlanManifest(tuple(plans), ignored_count, tuple(warnings), collisions)
+    _MANIFEST_CACHE[root_key] = (current_mtime, manifest)
+    return manifest
 
 
 def _open_document_fd(root: str | Path, relative_directory: str, filename: str) -> int:

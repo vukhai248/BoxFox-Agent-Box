@@ -368,7 +368,7 @@ export function PlanPanel() {
             {/* Left Side: Summary & Compact Step List */}
             <div
               className={`h-full overflow-y-auto p-6 transition-all duration-200 ${
-                selectedStep ? 'w-1/2 border-r border-line' : 'w-full max-w-3xl'
+                selectedStep ? 'w-1/2 border-r border-line' : 'w-full min-w-0'
               }`}
             >
               <div className="space-y-5">
@@ -585,7 +585,7 @@ export function PlanPanel() {
           </div>
         ) : (
           /* Detailed Plan View — file sandbox nếu có, ngược lại dùng store */
-          <div className="h-full overflow-y-auto p-6 max-w-3xl space-y-4">
+          <div className="h-full w-full min-w-0 overflow-y-auto p-6 space-y-4">
             {planFiles.document ? (
               <MarkdownRenderer content={planFiles.document.markdown} variant="document" />
             ) : currentPlan ? (

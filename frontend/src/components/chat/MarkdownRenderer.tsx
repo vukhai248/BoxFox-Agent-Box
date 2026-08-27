@@ -49,7 +49,7 @@ export function MarkdownRenderer({ content, isStreaming = false, variant = 'chat
   return (
     <div
       className={`markdown-body text-xs leading-relaxed text-fg select-text space-y-2 font-normal ${
-        variant === 'document' ? 'min-w-0 max-w-3xl [overflow-wrap:anywhere]' : ''
+        variant === 'document' ? 'w-full min-w-0 [overflow-wrap:anywhere]' : ''
       }`}
     >
       <ReactMarkdown

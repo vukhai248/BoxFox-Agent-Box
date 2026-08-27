@@ -29,12 +29,12 @@ describe('MarkdownRenderer', () => {
     expect(host.querySelector('pre code')?.textContent).toContain('plain')
     expect(host.querySelector('a')?.getAttribute('rel')).toBe('noreferrer')
     expect(host.querySelector('.katex')).toBeTruthy()
-    expect(host.querySelector('.markdown-body')?.className).toContain('max-w-3xl')
+    expect(host.querySelector('.markdown-body')?.className).toContain('w-full')
   })
 
-  it('document variant is constrained to max-w-3xl', () => {
+  it('document variant expands fully with w-full min-w-0', () => {
     const host = renderMarkdown('text')
-    expect(host.querySelector('.markdown-body')?.className).toContain('max-w-3xl')
+    expect(host.querySelector('.markdown-body')?.className).toContain('w-full min-w-0')
   })
 
   it('does not render raw HTML', () => {
