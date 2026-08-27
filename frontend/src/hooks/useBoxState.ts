@@ -3,8 +3,9 @@
  * Module-level cache ⇒ đóng/mở tab không mất trạng thái (fix "tắt tab là mất").
  */
 import { useEffect, useState } from 'react'
+import { resolveBoxApiUrl } from '../lib/boxApi'
 
-const API = 'http://localhost:8081'
+const API = resolveBoxApiUrl(import.meta.env)
 
 export type OnOff = 'on' | 'off' | 'unknown'
 export interface BoxState {

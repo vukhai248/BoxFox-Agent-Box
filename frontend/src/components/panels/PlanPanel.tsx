@@ -19,6 +19,8 @@ import {
 import { useAgentStore } from '../../store/agentStore'
 import { useUiStore } from '../../store/uiStore'
 import { PlainText } from '../ui'
+import { MarkdownRenderer } from '../chat/MarkdownRenderer'
+import { usePlanFiles } from '../../hooks/usePlanFiles'
 import type { DiffLine } from '../../types/agent'
 
 const PLAN_VERSIONS = ['v3 (latest)', 'v2', 'v1']
@@ -39,9 +41,34 @@ export function PlanPanel() {
   const showFeedbackBanner = useUiStore((s) => s.showFeedbackBanner)
   const setShowFeedbackBanner = useUiStore((s) => s.setShowFeedbackBanner)
 
+  /** Nguồn plan từ filesystem sandbox (đọc-only). */
+  const planFiles = usePlanFiles()
+  const selectedPlan = planFiles.manifest?.plans.find((p) => p.identity === planFiles.selection?.identity)
+  const selectedFileVersion = selectedPlan?.versions.find((v) => v.version === planFiles.selection?.version)
+
+  /** Danh sách version để render trong dropdown: file thật nếu có, ngược lại dùng mock. */
+  const versionItems = selectedPlan?.versions.length
+    ? selectedPlan.versions.map((v) => ({
+        key: v.version,
+        label: `${v.label} (${v.status})`,
+        isCurrent: v.version === planFiles.selection?.version,
+        onSelect: () => planFiles.selectVersion(v.version),
+      }))
+    : PLAN_VERSIONS.map((v) => {
+        const val = v.split(' ')[0]
+        return {
+          key: val,
+          label: v,
+          isCurrent: planVersion === val,
+          onSelect: () => setPlanVersion(val),
+        }
+      })
+
   const [copied, setCopied] = useState(false)
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
+  const [identityMenuOpen, setIdentityMenuOpen] = useState(false)
   const [versionMenuOpen, setVersionMenuOpen] = useState(false)
+  const identityMenuRef = useRef<HTMLDivElement>(null)
   const versionMenuRef = useRef<HTMLDivElement>(null)
 
   const currentPlan = mode === 'ACT' && endorsed ? endorsed : workspace
@@ -56,18 +83,22 @@ export function PlanPanel() {
     return currentPlan.steps.find((s) => s.id === selectedStepId) ?? null
   }, [currentPlan, selectedStepId])
 
-  // Click outside to close version popover
+  // Click outside to close popovers
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (versionMenuRef.current && !versionMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (identityMenuRef.current && !identityMenuRef.current.contains(target)) {
+        setIdentityMenuOpen(false)
+      }
+      if (versionMenuRef.current && !versionMenuRef.current.contains(target)) {
         setVersionMenuOpen(false)
       }
     }
-    if (versionMenuOpen) {
+    if (identityMenuOpen || versionMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [versionMenuOpen])
+  }, [identityMenuOpen, versionMenuOpen])
 
   const handleApprove = () => {
     if (proposal) {
@@ -81,10 +112,11 @@ export function PlanPanel() {
   }
 
   const handleCopy = () => {
-    if (currentPlan?.full_text) {
-      navigator.clipboard.writeText(currentPlan.full_text)
+    const text = planFiles.document?.markdown ?? currentPlan?.full_text
+    if (text) {
+      void navigator.clipboard.writeText(text)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      window.setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -103,10 +135,41 @@ export function PlanPanel() {
       {/* Sub-Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-panel px-4 py-2">
         <div className="flex items-center gap-2.5">
-          {/* Document Title Selector */}
-          <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-fg transition hover:bg-panel2 cursor-pointer">
-            <span>Agent Box — Plan Document</span>
-            <ChevronDown className="size-3 text-muted" />
+          {/* Document Title Selector — dùng danh sách plan từ sandbox khi có */}
+          <div className="relative min-w-0" ref={identityMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIdentityMenuOpen((o) => !o)}
+              disabled={!planFiles.manifest?.plans.length}
+              className="flex max-w-56 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-fg transition hover:bg-panel2 disabled:cursor-default disabled:text-muted cursor-pointer"
+              title={selectedPlan?.identity ?? 'Agent Box — Plan Document'}
+            >
+              <span className="truncate">{selectedPlan?.identity ?? 'Agent Box — Plan Document'}</span>
+              <ChevronDown className="size-3 shrink-0 text-muted" />
+            </button>
+            {identityMenuOpen && planFiles.manifest && (
+              <div className="absolute left-0 top-full z-40 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                {planFiles.manifest.plans.map((plan) => {
+                  const isCurrent = plan.identity === planFiles.selection?.identity
+                  return (
+                    <button
+                      key={plan.identity}
+                      type="button"
+                      onClick={() => {
+                        planFiles.selectIdentity(plan.identity)
+                        setIdentityMenuOpen(false)
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 rounded px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                        isCurrent ? 'bg-panel font-medium text-fg' : 'text-muted hover:bg-panel hover:text-fg'
+                      }`}
+                    >
+                      <span className="truncate">{plan.identity}</span>
+                      {isCurrent && <Check className="size-3 shrink-0 text-brand" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Custom Sleek Version Dropdown Popover */}
@@ -116,34 +179,32 @@ export function PlanPanel() {
               onClick={() => setVersionMenuOpen(!versionMenuOpen)}
               className="flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-2.5 py-1 text-xs font-medium text-fg outline-hidden transition hover:border-zinc-500 cursor-pointer"
             >
-              <span>{planVersion}</span>
+              <span>
+                {selectedFileVersion
+                  ? `${selectedFileVersion.label} (${selectedFileVersion.status})`
+                  : planVersion}
+              </span>
               <ChevronDown className="size-3 text-muted" />
             </button>
 
             {versionMenuOpen && (
-              <div className="absolute left-0 top-full z-40 mt-1 w-32 overflow-hidden rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                {PLAN_VERSIONS.map((v) => {
-                  const val = v.split(' ')[0]
-                  const isCurrent = planVersion === val
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => {
-                        setPlanVersion(val)
-                        setVersionMenuOpen(false)
-                      }}
-                      className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
-                        isCurrent
-                          ? 'bg-panel text-fg font-medium'
-                          : 'text-muted hover:bg-panel hover:text-fg'
-                      }`}
-                    >
-                      <span>{v}</span>
-                      {isCurrent && <Check className="size-3 text-brand" />}
-                    </button>
-                  )
-                })}
+              <div className="absolute left-0 top-full z-40 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                {versionItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      item.onSelect()
+                      setVersionMenuOpen(false)
+                    }}
+                    className={`flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                      item.isCurrent ? 'bg-panel font-medium text-fg' : 'text-muted hover:bg-panel hover:text-fg'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {item.isCurrent && <Check className="size-3 text-brand" />}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -296,7 +357,7 @@ export function PlanPanel() {
               </div>
             </div>
           )
-        ) : !currentPlan ? (
+        ) : !currentPlan && !planFiles.document ? (
           /* Empty State */
           <div className="flex h-full items-center justify-center p-8 text-center">
             <p className="text-xs text-muted">No plan artifact generated yet.</p>
@@ -312,26 +373,69 @@ export function PlanPanel() {
             >
               <div className="space-y-5">
                 <div>
-                  <h1 className="text-base font-semibold text-fg">Agent Plan Summary</h1>
+                  <h1 className="text-base font-semibold text-fg">
+                    {planFiles.document ? planFiles.document.identity : 'Agent Plan Summary'}
+                  </h1>
                   <p className="mt-0.5 text-xs text-muted">
-                    Full architectural blueprint: <code className="text-brand font-mono text-[11px]">/docs/plan/agent-box-plan.md</code>
+                    {planFiles.document ? (
+                      <>
+                        File location: <code className="text-brand font-mono text-[11px]">.plans/{planFiles.document.relativePath}</code>
+                      </>
+                    ) : (
+                      <>
+                        Full architectural blueprint: <code className="text-brand font-mono text-[11px]">/docs/plan/agent-box-plan.md</code>
+                      </>
+                    )}
                   </p>
                 </div>
 
                 {/* Overview Highlights Card */}
-                <div className="rounded-lg border border-line bg-panel2/30 p-3.5 space-y-2">
-                  <h2 className="text-[11px] font-semibold text-fg uppercase tracking-wider">Architecture Scope</h2>
-                  <p className="text-xs leading-relaxed text-muted">
-                    Self-hosted <strong>AI Computer</strong> with runtime Information-Flow Control (IFC).
-                  </p>
-                  <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted">
-                    <li>All inputs tagged with provenance labels (Integrity, Confidentiality).</li>
-                    <li>Outbound actions gated by scoped, time-bound leases (30-min plan lease).</li>
-                  </ul>
+                <div className="rounded-lg border border-line bg-panel2/30 p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[11px] font-semibold text-fg uppercase tracking-wider">
+                      {planFiles.document ? 'Plan Metadata & Status' : 'Architecture Scope'}
+                    </h2>
+                    {planFiles.document && (
+                      <span className="rounded bg-panel px-2 py-0.5 text-[10px] font-mono text-brand border border-line">
+                        {planFiles.document.label} • {planFiles.document.status}
+                      </span>
+                    )}
+                  </div>
+                  {planFiles.document ? (
+                    <div className="space-y-2 text-xs text-muted">
+                      <p className="leading-relaxed">
+                        Tài liệu kế hoạch được tải trực tiếp từ máy ảo sandbox.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                        <div>Dung lượng: <span className="text-fg">{(planFiles.document.sizeBytes / 1024).toFixed(1)} KB</span></div>
+                        <div>Cập nhật: <span className="text-fg">{new Date(planFiles.document.modifiedAt).toLocaleTimeString()}</span></div>
+                      </div>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPlanSubTab('detailed')}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-panel border border-line px-2.5 py-1 text-xs font-medium text-fg hover:bg-panel2 hover:border-zinc-500 transition cursor-pointer"
+                        >
+                          <span>Xem toàn bộ chi tiết Markdown</span>
+                          <ArrowRight className="size-3 text-brand" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-xs leading-relaxed text-muted">
+                        Self-hosted <strong>AI Computer</strong> with runtime Information-Flow Control (IFC).
+                      </p>
+                      <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted">
+                        <li>All inputs tagged with provenance labels (Integrity, Confidentiality).</li>
+                        <li>Outbound actions gated by scoped, time-bound leases (30-min plan lease).</li>
+                      </ul>
+                    </>
+                  )}
                 </div>
 
                 {/* Compact Steps List */}
-                {currentPlan.steps && currentPlan.steps.length > 0 && (
+                {currentPlan?.steps && currentPlan.steps.length > 0 && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between pb-1 text-xs font-semibold text-fg">
                       <span>Execution Steps ({currentPlan.steps.length})</span>
@@ -480,11 +584,15 @@ export function PlanPanel() {
             )}
           </div>
         ) : (
-          /* Detailed Plan View */
+          /* Detailed Plan View — file sandbox nếu có, ngược lại dùng store */
           <div className="h-full overflow-y-auto p-6 max-w-3xl space-y-4">
-            <div className="text-xs leading-relaxed">
-              <PlainText text={currentPlan.full_text} />
-            </div>
+            {planFiles.document ? (
+              <MarkdownRenderer content={planFiles.document.markdown} variant="document" />
+            ) : currentPlan ? (
+              <div className="text-xs leading-relaxed">
+                <PlainText text={currentPlan.full_text} />
+              </div>
+            ) : null}
             {mode === 'ACT' && endorsed && (
               <div className="mt-4 rounded-md border border-zinc-700 bg-panel2/50 p-3 text-xs text-muted">
                 Plan endorsed by user at {endorsed.created_at}. 30-minute plan-scoped lease is active.

@@ -122,6 +122,107 @@ else
   DX "DISPLAY=:99 xrandr --output $OUT --mode 1280x800" >/dev/null 2>&1
 fi
 
+head "10) Workspace có đủ thư mục plan và API chỉ-đọc"
+WORKSPACE_DIRS='.generated_artifacts .plans .session-history .skills .trimmed-tool-output .uploaded_artifacts .virtual_views'
+if DX "for d in $WORKSPACE_DIRS; do [ -d /home/agent/workspace/\$d ] && [ ! -L /home/agent/workspace/\$d ] && [ \"\$(stat -c '%u:%g:%a' /home/agent/workspace/\$d)\" = '1000:1000:750' ] || exit 1; done"; then
+  ok "bảy thư mục workspace là thư mục thường của agent:agent với mode 0750"
+else
+  bad "thiếu thư mục workspace, owner/mode sai hoặc có liên kết tượng trưng"
+fi
+if DX '[ -z "$(find /home/agent/workspace/.skills /home/agent/workspace/.session-history -mindepth 1 -print -quit)" ]'; then
+  ok ".skills và .session-history vẫn rỗng"
+else
+  bad ".skills hoặc .session-history có dữ liệu được seed ngoài ý muốn"
+fi
+if DX '[ "$(find /home/agent/workspace/.plans -maxdepth 1 -type f -printf "%f\\n" | sort)" = "v1-plan-browser-demo.md" ]'; then
+  ok ".plans mới chỉ có đúng plan khởi đầu"
+else
+  bad ".plans không chỉ có plan khởi đầu trên volume fresh"
+fi
+if docker exec "$CONTAINER" python3 - <<'PY'
+import json
+import urllib.request
+
+request = urllib.request.Request(
+    "http://127.0.0.1:8081/__box/plans",
+    headers={"Origin": "http://localhost:3100"},
+)
+with urllib.request.urlopen(request) as response:
+    assert response.headers["Cache-Control"] == "no-store"
+    plans = json.load(response)["plans"]
+assert plans == [
+    {
+        "identity": "plan-browser-demo",
+        "relativeDirectory": "",
+        "slug": "plan-browser-demo",
+        "versions": [plans[0]["versions"][0]],
+    }
+]
+request = urllib.request.Request(
+    "http://127.0.0.1:8081/__box/plans/content?identity=plan-browser-demo&version=1",
+    headers={"Origin": "http://localhost:3100"},
+)
+with urllib.request.urlopen(request) as response:
+    content = json.load(response)
+assert "# Kế hoạch kiểm chứng trình duyệt plan" in content["markdown"]
+PY
+then
+  ok "API plan tìm và đọc được plan khởi đầu thật"
+else
+  bad "API plan không trả đúng plan khởi đầu"
+fi
+
+head "11) Nhiều phiên bản, summary và file sai quy tắc"
+if docker exec --user agent "$CONTAINER" sh -eu -c '
+  cp /opt/agentbox/test-fixtures/plans/v2-plan-browser-demo.md /home/agent/workspace/.plans/
+  printf "%s\\n" "# Tóm tắt" > /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
+  printf "%s\\n" "# Sai" > /home/agent/workspace/.plans/v01-plan-browser-demo.md
+' \
+  && docker exec "$CONTAINER" python3 - <<'PY'
+import json
+import urllib.request
+
+headers = {"Origin": "http://localhost:3100"}
+with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8081/__box/plans", headers=headers)) as response:
+    manifest = json.load(response)
+assert manifest["ignoredCount"] == 1, manifest
+assert len(manifest["warnings"]) == 1, manifest
+plan = manifest["plans"][0]
+assert plan["identity"] == "plan-browser-demo", plan
+assert [(item["version"], item["label"], item["status"]) for item in plan["versions"]] == [
+    (2, "v2", "draft"),
+    (1, "v1", "approved"),
+], plan
+with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8081/__box/plans/content?identity=plan-browser-demo&version=2", headers=headers)) as response:
+    content = json.load(response)
+assert content["label"] == "v2", content
+assert "phiên bản 2" in content["markdown"], content
+PY
+  && docker exec --user agent "$CONTAINER" sh -eu -c '
+    rm /home/agent/workspace/.plans/v2-plan-browser-demo.md
+    rm /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
+    rm /home/agent/workspace/.plans/v01-plan-browser-demo.md
+    test "$(find /home/agent/workspace/.plans -maxdepth 1 -type f -printf "%f\\n" | sort)" = "v1-plan-browser-demo.md"
+  '; then
+  ok "API gom/sắp version đúng, bỏ summary bình thường và cleanup chỉ giữ v1"
+else
+  bad "API plan không xử lý đúng version, summary, file sai quy tắc hoặc cleanup"
+fi
+
+if [ "${SMOKE_TEST_PERSISTENCE:-0}" = "1" ]; then
+  head "12) Restart giữ marker và không seed lại plan đã xóa"
+  if docker exec --user agent "$CONTAINER" sh -c 'touch /home/agent/workspace/.generated_artifacts/smoke-marker && rm /home/agent/workspace/.plans/v1-plan-browser-demo.md' \
+    && docker restart "$CONTAINER" >/dev/null \
+    && sleep 3 \
+    && DX '[ -f /home/agent/workspace/.generated_artifacts/smoke-marker ] && [ ! -e /home/agent/workspace/.plans/v1-plan-browser-demo.md ]'; then
+    ok "restart giữ dữ liệu người dùng và tôn trọng plan bị xóa"
+  else
+    bad "restart làm mất marker hoặc seed lại plan đã xóa"
+  fi
+else
+  echo "  BỎ QUA — đặt SMOKE_TEST_PERSISTENCE=1 trên volume test riêng để kiểm persistence phá hủy."
+fi
+
 echo ""
 echo "==============================================="
 echo "  KẾT QUẢ: $PASS PASS / $FAIL FAIL"

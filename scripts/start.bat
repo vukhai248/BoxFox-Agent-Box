@@ -1,4 +1,4 @@
 @echo off
 title BoxFox Agent Box Launcher
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start.ps1" %*
 pause

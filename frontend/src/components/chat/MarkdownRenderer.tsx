@@ -18,10 +18,11 @@ import { Copy, Check } from 'lucide-react'
 interface MarkdownRendererProps {
   content: string
   isStreaming?: boolean
+  variant?: 'chat' | 'document'
 }
 
 /** Đảm bảo các khối mở dở dang (``` hoặc $$) được đóng an toàn khi đang stream */
-function makeStreamingSafe(rawText: string): string {
+export function makeStreamingSafe(rawText: string): string {
   if (!rawText) return ''
   let text = rawText
 
@@ -40,13 +41,17 @@ function makeStreamingSafe(rawText: string): string {
   return text
 }
 
-export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, isStreaming = false, variant = 'chat' }: MarkdownRendererProps) {
   const safeContent = useMemo(() => {
     return isStreaming ? makeStreamingSafe(content) : content
   }, [content, isStreaming])
 
   return (
-    <div className="markdown-body text-xs leading-relaxed text-fg select-text space-y-2 font-normal">
+    <div
+      className={`markdown-body text-xs leading-relaxed text-fg select-text space-y-2 font-normal ${
+        variant === 'document' ? 'min-w-0 max-w-3xl [overflow-wrap:anywhere]' : ''
+      }`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

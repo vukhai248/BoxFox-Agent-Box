@@ -201,6 +201,8 @@ RUN chmod +x /usr/local/bin/tty-bridge.py /usr/local/bin/box-services.sh /usr/lo
 COPY box-entrypoint.sh /usr/local/bin/box-entrypoint.sh
 COPY box-firewall /usr/local/sbin/box-firewall
 COPY ide-proxy.py /usr/local/bin/ide-proxy.py
+COPY plan_files.py /usr/local/bin/plan_files.py
+COPY bootstrap-plans/ /opt/agentbox/bootstrap-plans/
 RUN chmod +x /usr/local/bin/ide-proxy.py
 # Proxy chèn frame-ancestors vào response của code-server để chặn clickjacking.
 # Chỉ origin của giao diện BoxFox (localhost:3100) được nhúng editor vào iframe.

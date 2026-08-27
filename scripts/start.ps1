@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # BoxFox Agent Box -- All-in-One Startup Script
 # ==============================================================================
 param (
@@ -70,15 +70,15 @@ if ($DockerRunning) {
     
     Push-Location $DockerDir
     try {
-        if (-not $ImageExists -or $Rebuild) {
-            Write-Host "  -> Image not found or rebuild requested. Building image..." -ForegroundColor Yellow
-            docker compose build
+        if ($Rebuild) {
+            Write-Host "  -> Clean rebuild requested. Rebuilding image..." -ForegroundColor Yellow
+            docker compose build --no-cache
         } else {
-            Write-Host "  -> Image 'agentbox-sandbox:latest' is ready. Starting container directly..." -ForegroundColor Green
+            Write-Host "  -> Starting Sandbox container (syncing latest config layers)..." -ForegroundColor Cyan
         }
         
-        docker compose up -d
-        Write-Host "  -> [OK] Sandbox LIVE: IDE on http://localhost:8080 | VNC on localhost:5900" -ForegroundColor Green
+        docker compose up -d --build
+        Write-Host "  -> [OK] Sandbox LIVE: IDE on http://localhost:8080 | VNC on localhost:5900 | API on :8081" -ForegroundColor Green
     } catch {
         Write-Host "  -> [WARN] Could not start Docker container: $_" -ForegroundColor Yellow
     } finally {

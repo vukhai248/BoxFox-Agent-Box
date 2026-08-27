@@ -31,13 +31,24 @@ Endpoint điều khiển công tắc mạng (②b, mục 12.3.1):
 
 import http.server
 import json
+import os
+from pathlib import Path
 import select
 import socket
 import socketserver
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
+
+try:
+    import plan_files
+except ImportError:
+    from . import plan_files
+
+PLAN_ROOT = os.environ.get("PLAN_ROOT", os.environ.get("PLANS_ROOT", "/home/agent/workspace/.plans"))
+PLANS_ROOT = PLAN_ROOT
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -145,6 +156,39 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                 subprocess.run([FIREWALL_BIN, state], check=False)
             self._send_json_cors(200, json.dumps({"network": read_net_state()}))
             return
+
+        parsed = urllib.parse.urlsplit(self.path)
+        path_only = parsed.path
+
+        if path_only in ("/__box/plans", "/__box/plans/content"):
+            if self.command != "GET":
+                self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                return
+
+        if path_only == "/__box/plans" and self.command == "GET":
+            if parsed.query:
+                self._send_json_cors(400, json.dumps({"error": "Unexpected query parameters"}))
+                return
+            try:
+                manifest = plan_files.scan_plans(PLAN_ROOT)
+                payload = json.dumps(manifest.to_payload())
+                self._send_json_cors(200, payload)
+            except plan_files.PlanFileError as error:
+                self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
+            return
+
+        if path_only == "/__box/plans/content" and self.command == "GET":
+            params = urllib.parse.parse_qs(parsed.query)
+            identity = params.get("identity", [""])[0]
+            version = params.get("version", [""])[0]
+            try:
+                document = plan_files.read_plan(PLAN_ROOT, identity, version)
+                payload = json.dumps(document.to_payload())
+                self._send_json_cors(200, payload)
+            except plan_files.PlanFileError as error:
+                self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
+            return
+
         self.send_response(404)
         self.end_headers()
 
