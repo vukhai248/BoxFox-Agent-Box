@@ -27,6 +27,12 @@ services:
       BOX_DEFAULT_NETWORK: "off"
       # Điện mặc định BẬT lúc boot; tắt/bật bằng nút Máy (/__box/power)
       BOX_DEFAULT_POWER: "on"
+      # Shared secret cho endpoint capture/record (/__box/capture, /__box/record/*).
+      # Agent backend gọi server-to-server phải gắn header X-BoxFox-Api-Key = giá
+      # trị này (§5.1, docs/architecture/screen-capture.md). Đặt qua file .env
+      # cùng thư mục. Rỗng = fail-closed với process lạ trên host (chỉ Origin của
+      # web UI :3100 / editor :8081 được dùng).
+      BOXFOX_API_KEY: "${BOXFOX_API_KEY:-}"
     networks:
       - boxnet
     ports:

@@ -16,9 +16,15 @@ set -eu
 case "${1:-}" in
   off)
     iptables -F OUTPUT
-    # Cho phép loopback + trả lời các kết nối ĐANG có (VNC/VS Code từ host)
+    # Cho phép loopback (mọi dịch vụ nội bộ nói chuyện với nhau qua lo)
     iptables -A OUTPUT -o lo -j ACCEPT
-    iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    # CHỈ ACCEPT established/related cho 4 cổng dịch vụ của box. Điều này ngăn
+    # Chrome tái dùng HTTP keep-alive ra internet: kết nối ra ngoài có source
+    # port ngẫu nhiên cao (32768–60999) → không match rule nào → rớt xuống REJECT.
+    iptables -A OUTPUT -p tcp --sport 5900 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT  # VNC
+    iptables -A OUTPUT -p tcp --sport 6080 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT  # websockify
+    iptables -A OUTPUT -p tcp --sport 8080 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT  # code-server
+    iptables -A OUTPUT -p tcp --sport 8081 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT  # ide-proxy
     # REJECT thay vì DROP âm thầm: trình duyệt báo lỗi NGAY thay vì xoay mãi.
     iptables -A OUTPUT -j REJECT
     iptables -P OUTPUT DROP

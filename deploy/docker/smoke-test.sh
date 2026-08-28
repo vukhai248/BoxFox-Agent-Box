@@ -139,7 +139,7 @@ if DX '[ "$(find /home/agent/workspace/.plans -maxdepth 1 -type f -printf "%f\\n
 else
   bad ".plans không chỉ có plan khởi đầu trên volume fresh"
 fi
-if docker exec "$CONTAINER" python3 - <<'PY'
+if docker exec -i "$CONTAINER" python3 - <<'PY'
 import json
 import urllib.request
 
@@ -173,12 +173,14 @@ else
 fi
 
 head "11) Nhiều phiên bản, summary và file sai quy tắc"
-if docker exec --user agent "$CONTAINER" sh -eu -c '
+docker exec --user agent "$CONTAINER" sh -eu -c '
   cp /opt/agentbox/test-fixtures/plans/v2-plan-browser-demo.md /home/agent/workspace/.plans/
-  printf "%s\\n" "# Tóm tắt" > /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
-  printf "%s\\n" "# Sai" > /home/agent/workspace/.plans/v01-plan-browser-demo.md
-' \
-  && docker exec "$CONTAINER" python3 - <<'PY'
+  printf "%s\n" "# Tóm tắt" > /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
+  printf "%s\n" "# Sai" > /home/agent/workspace/.plans/v01-plan-browser-demo.md
+'
+
+PASS_11=1
+if ! docker exec -i "$CONTAINER" python3 - <<'PY'
 import json
 import urllib.request
 
@@ -198,19 +200,181 @@ with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8081/__box/
 assert content["label"] == "v2", content
 assert "phiên bản 2" in content["markdown"], content
 PY
-  && docker exec --user agent "$CONTAINER" sh -eu -c '
-    rm /home/agent/workspace/.plans/v2-plan-browser-demo.md
-    rm /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
-    rm /home/agent/workspace/.plans/v01-plan-browser-demo.md
-    test "$(find /home/agent/workspace/.plans -maxdepth 1 -type f -printf "%f\\n" | sort)" = "v1-plan-browser-demo.md"
-  '; then
+then
+  PASS_11=0
+fi
+
+if [ "$PASS_11" = "1" ] && docker exec --user agent "$CONTAINER" sh -eu -c '
+  rm /home/agent/workspace/.plans/v2-plan-browser-demo.md
+  rm /home/agent/workspace/.plans/v3-plan-browser-demo-summary.md
+  rm /home/agent/workspace/.plans/v01-plan-browser-demo.md
+  test "$(find /home/agent/workspace/.plans -maxdepth 1 -type f -printf "%f\n" | sort)" = "v1-plan-browser-demo.md"
+'; then
   ok "API gom/sắp version đúng, bỏ summary bình thường và cleanup chỉ giữ v1"
 else
   bad "API plan không xử lý đúng version, summary, file sai quy tắc hoặc cleanup"
 fi
 
+head "12) Công cụ capture/record đã bake đủ"
+if DX 'for c in wmctrl import ffmpeg xwininfo xprop xdotool; do command -v "$c" >/dev/null 2>&1 || exit 1; done'; then
+  ok "wmctrl/import/ffmpeg/xwininfo/xprop/xdotool đều có mặt"
+else
+  bad "thiếu công cụ capture — kiểm tra lớp apt trong Dockerfile"
+fi
+
+head "13) GET /__box/windows liệt kê cửa sổ X11 kèm geometry"
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json
+import urllib.request
+
+req = urllib.request.Request(
+    "http://127.0.0.1:8081/__box/windows",
+    headers={"Origin": "http://localhost:3100"},
+)
+with urllib.request.urlopen(req, timeout=15) as response:
+    windows = json.load(response)["windows"]
+assert isinstance(windows, list) and windows, windows
+first = windows[0]
+for field in ("id", "desktop", "class", "title", "x", "y", "w", "h", "pid", "state", "selectable"):
+    assert field in first, (field, first)
+assert all(isinstance(w["w"], int) and isinstance(w["h"], int) and w["w"] > 0 and w["h"] > 0 for w in windows), windows
+print(f"windows={len(windows)} first={first['id']} {first['w']}x{first['h']}")
+PY
+then
+  ok "liệt kê cửa sổ X11 kèm geometry (xwininfo) hợp lệ"
+else
+  bad "windows endpoint không trả đúng cấu trúc"
+fi
+
+head "14) Capture full-screen → PNG hợp lệ"
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json
+import pathlib
+import urllib.request
+
+body = json.dumps({"target": {"kind": "screen"}}).encode()
+req = urllib.request.Request(
+    "http://127.0.0.1:8081/__box/capture",
+    data=body,
+    headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(req, timeout=60) as response:
+    data = json.load(response)
+assert data.get("ok"), data
+assert data["method"] == "x11", data
+assert data["width"] > 0 and data["height"] > 0, data
+path = pathlib.Path(data["path"])
+assert path.exists(), data
+magic = path.read_bytes()[:8]
+assert magic == b"\x89PNG\r\n\x1a\n", magic
+print(f"screen {data['width']}x{data['height']} {path.stat().st_size} bytes")
+PY
+then
+  ok "screen capture tạo file PNG hợp lệ"
+else
+  bad "screen capture thất bại"
+fi
+
+head "15) Record screen 2s → MP4 hợp lệ (bằng chứng ffmpeg x11grab + libx264)"
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json
+import pathlib
+import time
+import urllib.request
+
+
+def post(path, body):
+    req = urllib.request.Request(
+        "http://127.0.0.1:8081" + path,
+        data=json.dumps(body).encode(),
+        headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as response:
+        return json.load(response)
+
+
+start = post("/__box/record/start", {"target": {"kind": "screen", "framerate": 10, "maxDurationSec": 30}})
+assert start.get("ok"), start
+time.sleep(2.5)
+stop = post("/__box/record/stop", {"recordingId": start["recordingId"]})
+assert stop.get("ok"), stop
+assert stop["finished"] is True, stop
+assert stop["durationSec"] >= 1, stop
+assert stop["sizeBytes"] > 0, stop
+path = pathlib.Path(stop["path"])
+assert path.exists(), stop
+raw = path.read_bytes()
+assert len(raw) >= 8 and raw[4:8] == b"ftyp", (len(raw), raw[:16])
+print(f"screen MP4 {stop['durationSec']}s {stop['sizeBytes']} bytes")
+PY
+then
+  ok "record screen tạo MP4 (ftyp) với thời lượng ≥1s"
+else
+  bad "record screen thất bại"
+fi
+
+head "16) Chụp tab Chromium qua CDP :9222 (không lộ webSocketDebuggerUrl)"
+docker exec --user agent "$CONTAINER" env DISPLAY=:99 HOME=/home/agent \
+  sh -c 'nohup box-chromium about:blank >/home/agent/smoke-chromium.log 2>&1 & echo $! >/home/agent/smoke-chromium.pid'
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json
+import pathlib
+import time
+import urllib.error
+import urllib.request
+
+pages = []
+for _ in range(40):
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:9222/json/list", timeout=5) as response:
+            targets = json.load(response)
+        pages = [t for t in targets if t.get("type") == "page"]
+        if pages:
+            break
+    except Exception:
+        pass
+    time.sleep(0.5)
+assert pages, "CDP 9222 không đưa page nào trong 20s"
+
+with urllib.request.urlopen(urllib.request.Request(
+    "http://127.0.0.1:8081/__box/browser/tabs",
+    headers={"Origin": "http://localhost:3100"},
+), timeout=15) as response:
+    tabs = json.load(response)["tabs"]
+assert tabs, "ide-proxy không thấy tab nào"
+assert all("webSocketDebuggerUrl" not in tab for tab in tabs), tabs
+tab_id = tabs[0]["id"]
+
+body = json.dumps({"target": {"kind": "tab", "tabId": tab_id}}).encode()
+req = urllib.request.Request(
+    "http://127.0.0.1:8081/__box/capture",
+    data=body,
+    headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+    method="POST",
+)
+with urllib.request.urlopen(req, timeout=90) as response:
+    cap = json.load(response)
+assert cap.get("ok"), cap
+assert cap["method"] == "cdp", cap
+path = pathlib.Path(cap["path"])
+assert path.exists(), cap
+assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", cap
+print(f"tab PNG {cap['width']}x{cap['height']} {path.stat().st_size} bytes")
+PY
+then
+  ok "tab capture qua CDP tạo PNG hợp lệ, tabs endpoint không lộ ws url"
+else
+  bad "tab capture qua CDP thất bại"
+fi
+# Dọn đúng tiến trình Chromium ta vừa mở (theo PID đã lưu), không pkill mù để tránh
+# tắt nhầm Chromium người dùng đang mở bằng box-chromium.
+docker exec "$CONTAINER" sh -c 'pid=$(cat /home/agent/smoke-chromium.pid 2>/dev/null) && if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi'
+docker exec "$CONTAINER" sh -c 'rm -f /home/agent/smoke-chromium.pid /home/agent/smoke-chromium.log'
+
 if [ "${SMOKE_TEST_PERSISTENCE:-0}" = "1" ]; then
-  head "12) Restart giữ marker và không seed lại plan đã xóa"
+  head "17) Restart giữ marker và không seed lại plan đã xóa"
   if docker exec --user agent "$CONTAINER" sh -c 'touch /home/agent/workspace/.generated_artifacts/smoke-marker && rm /home/agent/workspace/.plans/v1-plan-browser-demo.md' \
     && docker restart "$CONTAINER" >/dev/null \
     && sleep 3 \

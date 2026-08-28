@@ -29,6 +29,7 @@ Endpoint điều khiển công tắc mạng (②b, mục 12.3.1):
     POST /__box/network  body "on"|"off" → chạy box-firewall (proxy chạy root)
 """
 
+import hmac
 import http.server
 import json
 import os
@@ -46,6 +47,11 @@ try:
     import plan_files
 except ImportError:
     from . import plan_files
+
+try:
+    import capture
+except ImportError:
+    from . import capture
 
 PLAN_ROOT = os.environ.get("PLAN_ROOT", os.environ.get("PLANS_ROOT", "/home/agent/workspace/.plans"))
 PLANS_ROOT = PLAN_ROOT
@@ -92,6 +98,12 @@ POWER_STATE_FILE = "/run/box-power-state"
 POWER_BIN = "/usr/local/sbin/box-power"
 TTY_UPSTREAM_PORT = 7681   # tty-bridge — tab Terminal (loopback, không publish)
 
+# Shared secret cho nhóm endpoint capture/record (§5.1). Agent backend trên host
+# gọi server-to-server (không có Origin) phải gửi header X-BoxFox-Api-Key khớp
+# giá trị này mới được phép. Rỗng = chưa cấu hình secret → chỉ Origin của giao
+# diện web (:3100) / editor (:8081) được dùng (fail-closed với process lạ trên host).
+BOXFOX_API_KEY = os.environ.get("BOXFOX_API_KEY", "")
+
 
 def read_net_state() -> str:
     try:
@@ -131,7 +143,128 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload.encode())
 
+    def _send_cors_preflight(self) -> None:
+        self.send_response(204)
+        origin = self.headers.get("Origin", "")
+        if origin in ALLOWED_WS_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-BoxFox-Api-Key")
+            self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
+
+    # ------------------------------------------------------------------
+    # Endpoint capture/record (§5) — quyền riêng, tách khỏi /__box còn lại
+    # ------------------------------------------------------------------
+    _CAPTURE_ENDPOINTS = (
+        "/__box/windows",
+        "/__box/browser/tabs",
+        "/__box/capture",
+        "/__box/record/start",
+        "/__box/record/stop",
+        "/__box/record/status",
+    )
+
+    def _is_capture_endpoint(self) -> bool:
+        return self.path in self._CAPTURE_ENDPOINTS
+
+    def _capture_allowed(self) -> bool:
+        """Cho phép qua (1) shared-secret header hoặc (2) Origin hợp lệ."""
+        if BOXFOX_API_KEY:
+            provided = self.headers.get("X-BoxFox-Api-Key", "")
+            if hmac.compare_digest(provided, BOXFOX_API_KEY):
+                return True
+        return self._origin_ok_for_box_api()
+
+    def _read_json_body(self) -> dict:
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            raise capture._invalid("Content-Length không hợp lệ")
+        if length <= 0 or length > 64 * 1024:
+            raise capture._invalid("Body JSON rỗng hoặc vượt 64KB")
+        raw = self.rfile.read(length)
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise capture._invalid(f"Body không phải JSON hợp lệ: {error}")
+        if not isinstance(data, dict):
+            raise capture._invalid("Body JSON phải là object")
+        return data
+
+    def _handle_capture_api(self) -> None:
+        if self.command == "OPTIONS":
+            # CORS preflight: trả 204 trước, không cần auth (preflight chưa gửi header bí mật).
+            self._send_cors_preflight()
+            return
+        if not self._capture_allowed():
+            self._send_json_cors(403, json.dumps({"error": "Không được phép capture/record"}))
+            return
+
+        try:
+            if self.path == "/__box/windows":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                self._send_json_cors(200, json.dumps(capture.dispatch_list_windows(), default=str))
+                return
+
+            if self.path == "/__box/browser/tabs":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                self._send_json_cors(200, json.dumps(capture.dispatch_list_tabs(), default=str))
+                return
+
+            if self.path == "/__box/capture":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                body = self._read_json_body()
+                target = body.get("target") or {}
+                output = body.get("output", "file")
+                if output not in ("file", "base64"):
+                    raise capture._invalid("output phải là file hoặc base64")
+                self._send_json_cors(200, json.dumps(capture.dispatch_capture(target, output), default=str))
+                return
+
+            if self.path == "/__box/record/start":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                body = self._read_json_body()
+                target = body.get("target") or {}
+                self._send_json_cors(200, json.dumps(capture.dispatch_record_start(target), default=str))
+                return
+
+            if self.path == "/__box/record/stop":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                body = self._read_json_body()
+                recording_id = body.get("recordingId")
+                if not recording_id:
+                    raise capture._invalid("record/stop cần recordingId")
+                self._send_json_cors(200, json.dumps(capture.dispatch_record_stop(str(recording_id)), default=str))
+                return
+
+            if self.path == "/__box/record/status":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                self._send_json_cors(200, json.dumps(capture.dispatch_record_status(), default=str))
+                return
+
+            self._send_json_cors(404, json.dumps({"error": "Not Found"}))
+        except capture.CaptureError as error:
+            self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
+        except Exception as error:  # lưới an toàn — không để request capture làm chết thread
+            self._send_json_cors(500, json.dumps({"error": f"Lỗi capture/record: {error}"}))
+
     def _handle_box_api(self) -> None:
+        if self._is_capture_endpoint():
+            self._handle_capture_api()
+            return
         if not self._origin_ok_for_box_api():
             self.send_response(403)
             self.end_headers()
@@ -371,7 +504,9 @@ def main():
         f"{UPSTREAM_HOST}:{UPSTREAM_PORT}\n"
         f"[ide-proxy] frame-ancestors = {ALLOWED_ANCESTORS}\n"
         f"[ide-proxy] WebSocket tunneling: BẬT (fix lỗi 1006)\n"
-        f"[ide-proxy] Box API: GET /__box/status · POST /__box/network on|off",
+        f"[ide-proxy] Box API: GET /__box/status · POST /__box/network on|off\n"
+        f"[ide-proxy] Capture API: /__box/windows · /__box/browser/tabs · "
+        f"/__box/capture · /__box/record/start|stop|status",
         flush=True,
     )
     server.serve_forever()

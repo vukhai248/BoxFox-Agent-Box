@@ -62,11 +62,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # `maximum 32768x32768` và nhận `SetDesktopSize` ⇒ noVNC xin đổi phân giải khớp
 # panel được (đã đo: 1600x900, 700x950, 2400x1300, 1173x812 đều khớp chính xác).
 # Chi phí: +~10 MB, bỏ được xvfb + x11vnc ~4 MB ⇒ net ~+6 MB.
+# Công cụ capture/record theo cửa sổ X11 (xem docs/architecture/screen-capture.md):
+#   xdotool     : windowactivate/windowraise — raise cửa sổ trước khi chụp
+#   wmctrl      : liệt kê cửa sổ -lx + activate
+#   imagemagick : lệnh `import` chụp ảnh -window <id> / root
+#   ffmpeg      : quay x11grab -window_id (bản Ubuntu 24.04 có sẵn libx264, đã xác minh)
+#   x11-utils   : xprop (đọc _NET_WM_PID/_NET_WM_STATE), xwininfo (lấy geometry)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget gnupg unzip xz-utils \
       git \
       tigervnc-standalone-server \
       x11-xserver-utils \
+      xdotool wmctrl imagemagick ffmpeg \
+      x11-utils \
       fonts-dejavu-core fonts-liberation \
       python3 python3-venv \
       gosu iptables \
@@ -149,7 +157,13 @@ RUN printf '%s\n' \
       'set -eu' \
       'BIN=$(ls -d /opt/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)' \
       '[ -n "$BIN" ] || { echo "khong tim thay Chromium trong /opt/ms-playwright" >&2; exit 1; }' \
-      'exec "$BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage "$@"' \
+      '# CDP :9222 cho capture/record tab (screen-capture.md). Phải có --user-data-dir' \
+      '# riêng để desktop Chromium và box-code (VS Code web) KHÔNG dùng chung profile' \
+      '# (nếu chung, box-code sẽ tham gia đúng tiến trình này và giành port 9222).' \
+      '# --remote-allow-origins=* để Chromium 111+ không từ chối WebSocket CDP.' \
+      'exec "$BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage \' \
+      '  --remote-debugging-port=9222 --remote-allow-origins=* \' \
+      '  --user-data-dir=/home/agent/.config/box-chromium "$@"' \
       > /usr/local/bin/box-chromium \
     && chmod +x /usr/local/bin/box-chromium \
     && printf '%s\n' \
@@ -173,7 +187,13 @@ RUN printf '%s\n' \
       '#!/bin/sh' \
       '# VS Code (bản web) chạy trong box — chỉ là code-server :8080 mở ở chế độ app.' \
       'set -eu' \
-      'exec box-chromium --app="http://localhost:8081/?folder=/home/agent/workspace" "$@"' \
+      'BIN=$(ls -d /opt/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)' \
+      '[ -n "$BIN" ] || { echo "khong tim thay Chromium trong /opt/ms-playwright" >&2; exit 1; }' \
+      '# Gọi THẲNG binary, KHÔNG qua box-chromium (box-chromium đã giành port 9222 cho' \
+      '# CDP capture). Dùng --user-data-dir riêng để không tham gia singleton desktop.' \
+      'exec "$BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage \' \
+      '  --user-data-dir=/home/agent/.config/box-code \' \
+      '  --app="http://localhost:8081/?folder=/home/agent/workspace" "$@"' \
       > /usr/local/bin/box-code \
     && chmod +x /usr/local/bin/box-code \
     && printf '%s\n' \
@@ -202,8 +222,10 @@ COPY box-entrypoint.sh /usr/local/bin/box-entrypoint.sh
 COPY box-firewall /usr/local/sbin/box-firewall
 COPY ide-proxy.py /usr/local/bin/ide-proxy.py
 COPY plan_files.py /usr/local/bin/plan_files.py
+COPY capture.py /usr/local/bin/capture.py
+COPY browser_capture.py /usr/local/bin/browser_capture.py
 COPY bootstrap-plans/ /opt/agentbox/bootstrap-plans/
-RUN chmod +x /usr/local/bin/ide-proxy.py
+RUN chmod +x /usr/local/bin/ide-proxy.py /usr/local/bin/capture.py /usr/local/bin/browser_capture.py
 # Proxy chèn frame-ancestors vào response của code-server để chặn clickjacking.
 # Chỉ origin của giao diện BoxFox (localhost:3100) được nhúng editor vào iframe.
 EXPOSE 8081
