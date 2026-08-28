@@ -5,6 +5,9 @@ interface ImportMetaEnv {
   readonly VITE_AGENT_WS_URL?: string
   /** Base URL của ide-proxy/Box API; để trống dùng http://localhost:8081. */
   readonly VITE_BOX_API_URL?: string
+  /** Token điều khiển box (khớp BOXFOX_API_KEY phía deploy/docker); để trống dùng
+   *  giá trị mặc định đã commit trong `src/lib/boxApi.ts`. */
+  readonly VITE_BOX_API_KEY?: string
   /** Nguồn file plan: sandbox (mặc định) | mock (chỉ test/demo). */
   readonly VITE_PLAN_SOURCE?: 'sandbox' | 'mock'
   /** Nguồn khung hình của khung ④: `mock` (mặc định) | `novnc` — xem `src/lib/vnc/config.ts`. */

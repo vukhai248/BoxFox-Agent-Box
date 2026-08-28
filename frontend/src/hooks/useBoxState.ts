@@ -3,9 +3,10 @@
  * Module-level cache ⇒ đóng/mở tab không mất trạng thái (fix "tắt tab là mất").
  */
 import { useEffect, useState } from 'react'
-import { resolveBoxApiUrl } from '../lib/boxApi'
+import { resolveBoxApiKey, resolveBoxApiUrl } from '../lib/boxApi'
 
 const API = resolveBoxApiUrl(import.meta.env)
+const BOX_API_KEY = resolveBoxApiKey(import.meta.env)
 
 export type OnOff = 'on' | 'off' | 'unknown'
 export interface BoxState {
@@ -34,7 +35,11 @@ async function refresh() {
 export async function setBoxPower(v: 'on' | 'off') {
   apply({ power: v }) // optimistic
   try {
-    const r = await fetch(API + '/__box/power', { method: 'POST', body: v })
+    const r = await fetch(API + '/__box/power', {
+      method: 'POST',
+      body: v,
+      headers: { 'X-BoxFox-Api-Key': BOX_API_KEY },
+    })
     const j = await r.json()
     apply({ power: j.power ?? v })
   } catch {
@@ -45,7 +50,11 @@ export async function setBoxPower(v: 'on' | 'off') {
 export async function setBoxNetwork(v: 'on' | 'off') {
   apply({ network: v })
   try {
-    const r = await fetch(API + '/__box/network', { method: 'POST', body: v })
+    const r = await fetch(API + '/__box/network', {
+      method: 'POST',
+      body: v,
+      headers: { 'X-BoxFox-Api-Key': BOX_API_KEY },
+    })
     const j = await r.json()
     apply({ network: j.network ?? v })
   } catch {

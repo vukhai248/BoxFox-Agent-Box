@@ -5,9 +5,10 @@
 # xem box-firewall). Port 5900/6080/8080 vẫn truy cập được từ host vì đó là
 # kết nối VÀO (conntrack ESTABLISHED cho phép trả lời).
 #
-# CÔNG TẮC MẠNG ②b (7.4.1) = hai lệnh sống, không cần restart:
-#   BẬT : docker exec --user root agentbox-box box-firewall on
-#   TẮT : docker exec --user root agentbox-box box-firewall off
+# CÔNG TẮC MẠNG ②b (7.4.1) = box-firewall trong box (iptables), không cần restart:
+#   BẬT : POST /__box/network  body "on"  (backend giữ X-BoxFox-Api-Key, proxy chạy root)
+#   TẮT : POST /__box/network  body "off"
+#   Thủ công để gỡ lỗi: docker exec --user root agentbox-box box-firewall on|off
 #
 # Ghi chú: entrypoint chạy root chỉ để cấu hình firewall rồi gosu hạ xuống
 # `agent` — mọi tiến trình làm việc đều non-root (quy tắc ⑥).
@@ -27,12 +28,16 @@ services:
       BOX_DEFAULT_NETWORK: "off"
       # Điện mặc định BẬT lúc boot; tắt/bật bằng nút Máy (/__box/power)
       BOX_DEFAULT_POWER: "on"
-      # Shared secret cho endpoint capture/record (/__box/capture, /__box/record/*).
-      # Agent backend gọi server-to-server phải gắn header X-BoxFox-Api-Key = giá
-      # trị này (§5.1, docs/architecture/screen-capture.md). Đặt qua file .env
-      # cùng thư mục. Rỗng = fail-closed với process lạ trên host (chỉ Origin của
-      # web UI :3100 / editor :8081 được dùng).
-      BOXFOX_API_KEY: "${BOXFOX_API_KEY:-}"
+      # Shared secret cho mọi endpoint điều khiển cần quyền: /__box/network,
+      # /__box/power, /__box/capture, /__box/record/*.
+      # Giao diện web (:3100) và backend gửi header X-BoxFox-Api-Key = giá trị này.
+      # GIÁ TRỊ MẶC ĐỊNH ĐÃ COMMIT để ai clone về `docker compose up -d` là chạy
+      # được ngay (token giữa frontend/box trên cùng một máy — KHÔNG phải khóa API
+      # của nhà cung cấp, vốn phải để riêng ở .env sau này). Muốn đổi token riêng:
+      # đặt BOXFOX_API_KEY trong .env cùng thư mục (xem .env.example) và đồng bộ
+      # VITE_BOX_API_KEY phía frontend. Bỏ trống (= "") thì fail-closed với
+      # network/power: không ai bật/tắt được.
+      BOXFOX_API_KEY: "${BOXFOX_API_KEY:-boxfox-local-dev-token}"
     networks:
       - boxnet
     ports:
@@ -50,12 +55,12 @@ services:
 
 networks:
   # Quy tắc ②a — KHÔNG dùng internal:true vì nó làm hỏng published ports.
-  # Tắt NAT làm lớp phòng thủ thứ nhất; iptables trong box (box-firewall)
-  # là lớp thứ hai và là cơ chế của công tắc ②b.
+  # NAT do Docker quản (mặc định): chính sách egress thực sự nằm Ở TRONG box
+  # qua box-firewall (iptables OUTPUT DROP/ACCEPT) — công tắc ②b. Bỏ dùng
+  # driver_opts enable_ip_masquerade:false vì nó không nhất quán (Docker Desktop
+  # bỏ qua cờ này) và làm Linux không ra mạng dù bật box-firewall.
   boxnet:
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.enable_ip_masquerade: "false"
 
 volumes:
   agentbox-workspace:

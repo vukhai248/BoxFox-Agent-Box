@@ -2,11 +2,14 @@
 # ==============================================================================
 # box-firewall on|off — CÔNG TẮC MẠNG của box (quy tắc ②a/②b, mục 7.4.1)
 #
-# Thực thi bằng iptables NGAY TRONG container — không phụ thuộc hành vi NAT của
-# Docker Desktop. Mặc định khi box khởi động: OFF.
+# Thực thi bằng iptables NGAY TRONG container. Đây là CÔNG TẮC CHÍNH SÁCH EGGRESS
+# duy nhất. NAT ra internet do Docker quản mặc định (không còn driver_opts
+# enable_ip_masquerade:false — cờ đó không nhất quán Windows/Linux). Mặc định khi
+# box khởi động: OFF.
 #
-#   BẬT : docker exec --user root agentbox-box box-firewall on
-#   TẮT : docker exec --user root agentbox-box box-firewall off
+#   BẬT : POST /__box/network body "on"  (backend giữ X-BoxFox-Api-Key)
+#   TẮT : POST /__box/network body "off"
+#   Thủ công để gỡ lỗi: docker exec --user root agentbox-box box-firewall on|off
 #
 # Yêu cầu cap NET_ADMIN (khai trong docker-compose.yml). Mọi lần gọi phải ghi
 # sổ audit với actor: user (②c) — Controller làm việc đó ở backend.

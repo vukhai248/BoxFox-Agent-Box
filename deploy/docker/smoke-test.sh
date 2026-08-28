@@ -373,8 +373,34 @@ fi
 docker exec "$CONTAINER" sh -c 'pid=$(cat /home/agent/smoke-chromium.pid 2>/dev/null) && if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi'
 docker exec "$CONTAINER" sh -c 'rm -f /home/agent/smoke-chromium.pid /home/agent/smoke-chromium.log'
 
+SECRET="${BOXFOX_API_KEY:-boxfox-local-dev-token}"
+
+head "17) Toggle /__box/network cần shared-secret (Origin không còn đủ)"
+docker exec --user root "$CONTAINER" box-firewall off >/dev/null 2>&1
+sleep 1
+
+# (a) Process trong box giả Origin nhưng KHÔNG có secret → phải bị 403.
+CODE=$(docker exec "$CONTAINER" sh -c 'curl -s -o /dev/null -w "%{http_code}" -X POST -H "Origin: http://localhost:3100" -d on http://127.0.0.1:8081/__box/network')
+[ "$CODE" = "403" ] && ok "giả Origin (không secret) từ trong box → 403" || bad "mong 403 khi giả Origin, nhận '$CODE'"
+docker exec "$CONTAINER" curl -m 4 -sI https://example.com >/dev/null 2>&1 \
+  && bad "giả Origin vẫn tự bật được mạng (lỗ hổng vẫn mở)!" || ok "sau 403, mạng vẫn OFF"
+
+# (b) Đúng secret → 200 và bật mạng thật (dùng chính đường 127.0.0.1).
+CODE=$(docker exec "$CONTAINER" env SECRET="$SECRET" sh -c 'curl -s -o /dev/null -w "%{http_code}" -X POST -H "X-BoxFox-Api-Key: $SECRET" -d on http://127.0.0.1:8081/__box/network')
+[ "$CODE" = "200" ] && ok "đúng secret → 200" || bad "mong 200 khi đúng secret, nhận '$CODE'"
+sleep 1
+docker exec "$CONTAINER" curl -m 6 -sI https://example.com >/dev/null 2>&1 \
+  && ok "bật mạng qua endpoint secret → curl internet thành công" \
+  || bad "đã bật mà vẫn không ra mạng (kiểm tra NAT/NET_ADMIN)"
+
+# (c) Tắt lại qua secret, biên đóng ngay.
+docker exec "$CONTAINER" env SECRET="$SECRET" sh -c 'curl -s -o /dev/null -X POST -H "X-BoxFox-Api-Key: $SECRET" -d off http://127.0.0.1:8081/__box/network' >/dev/null
+sleep 1
+docker exec "$CONTAINER" curl -m 4 -sI https://example.com >/dev/null 2>&1 \
+  && bad "tắt qua secret rồi mà vẫn ra mạng?" || ok "tắt qua secret → biên đóng lại"
+
 if [ "${SMOKE_TEST_PERSISTENCE:-0}" = "1" ]; then
-  head "17) Restart giữ marker và không seed lại plan đã xóa"
+  head "18) Restart giữ marker và không seed lại plan đã xóa"
   if docker exec --user agent "$CONTAINER" sh -c 'touch /home/agent/workspace/.generated_artifacts/smoke-marker && rm /home/agent/workspace/.plans/v1-plan-browser-demo.md' \
     && docker restart "$CONTAINER" >/dev/null \
     && sleep 3 \

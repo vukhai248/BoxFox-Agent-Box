@@ -24,9 +24,12 @@ Bảo mật kênh hầm: request WebSocket phải mang `Origin` thuộc danh sá
 phép — chặn trang lạ mở ws://localhost:8081 điều khiển box (tương đương
 ExpectOrigin của websockify).
 
-Endpoint điều khiển công tắc mạng (②b, mục 12.3.1):
-    GET  /__box/status   → {"network": "on"|"off"}
+Endpoint điều khiển box (②b, mục 12.3.1):
+    GET  /__box/status   → {"network": "on"|"off", "power": ...}  (Origin hợp lệ)
     POST /__box/network  body "on"|"off" → chạy box-firewall (proxy chạy root)
+    POST /__box/power    body "on"|"off" → chạy box-power
+  network/power LÀ endpoint CẦN QUYỀN: yêu cầu header X-BoxFox-Api-Key khớp
+  BOXFOX_API_KEY (shared secret). Origin KHÔNG đủ — ngăn process trong box tự mở mạng.
 """
 
 import hmac
@@ -176,6 +179,29 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                 return True
         return self._origin_ok_for_box_api()
 
+    def _secret_ok(self) -> bool:
+        """Endpoint CẦN quyền (network/power) chỉ nhận shared-secret — không Origin."""
+        if not BOXFOX_API_KEY:
+            return False  # fail-closed: chưa cấu hình secret thì không ai tắt/bật được
+        provided = self.headers.get("X-BoxFox-Api-Key", "")
+        return hmac.compare_digest(provided, BOXFOX_API_KEY)
+
+    def _read_toggle_state(self) -> str | None:
+        """Đọc body "on"|"off" an toàn; None nghĩa là request không hợp lệ."""
+        raw_length = self.headers.get("Content-Length", "0") or "0"
+        try:
+            length = int(raw_length)
+        except ValueError:
+            return None
+        if length <= 0 or length > 16:
+            return None
+        raw = self.rfile.read(length)
+        try:
+            state = raw.decode("utf-8").strip().lower()
+        except UnicodeDecodeError:
+            return None
+        return state if state in ("on", "off") else None
+
     def _read_json_body(self) -> dict:
         try:
             length = int(self.headers.get("Content-Length", "0") or "0")
@@ -265,6 +291,32 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         if self._is_capture_endpoint():
             self._handle_capture_api()
             return
+
+        # Endpoint điều khiển CẦN quyền (②b / Máy): chỉ nhận shared-secret.
+        # Đặt TRƯỚC khối Origin để Origin header (giả mạo được bởi process trong
+        # box) không bao giờ đủ điều kiện bật/tắt mạng hay điện.
+        if self.path in ("/__box/network", "/__box/power"):
+            if self.command == "OPTIONS":
+                self._send_cors_preflight()
+                return
+            if self.command != "POST":
+                self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                return
+            if not self._secret_ok():
+                self._send_json_cors(403, json.dumps({"error": "Cần X-BoxFox-Api-Key hợp lệ"}))
+                return
+            state = self._read_toggle_state()
+            if state is None:
+                self._send_json_cors(400, json.dumps({"error": "Body phải là 'on' hoặc 'off'"}))
+                return
+            if self.path == "/__box/network":
+                subprocess.run([FIREWALL_BIN, state], check=False)
+                self._send_json_cors(200, json.dumps({"network": read_net_state()}))
+            else:
+                subprocess.run([POWER_BIN, state], check=False)
+                self._send_json_cors(200, json.dumps({"power": read_power_state()}))
+            return
+
         if not self._origin_ok_for_box_api():
             self.send_response(403)
             self.end_headers()
@@ -274,20 +326,6 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                 {"network": read_net_state(), "power": read_power_state()}
             )
             self._send_json_cors(200, payload)
-            return
-        if self.path == "/__box/power" and self.command == "POST":
-            length = int(self.headers.get("Content-Length", "0"))
-            state = self.rfile.read(length).decode(errors="replace").strip().lower()
-            if state in ("on", "off"):
-                subprocess.run([POWER_BIN, state], check=False)
-            self._send_json_cors(200, json.dumps({"power": read_power_state()}))
-            return
-        if self.path == "/__box/network" and self.command == "POST":
-            length = int(self.headers.get("Content-Length", "0"))
-            state = self.rfile.read(length).decode(errors="replace").strip().lower()
-            if state in ("on", "off"):
-                subprocess.run([FIREWALL_BIN, state], check=False)
-            self._send_json_cors(200, json.dumps({"network": read_net_state()}))
             return
 
         parsed = urllib.parse.urlsplit(self.path)
@@ -504,7 +542,7 @@ def main():
         f"{UPSTREAM_HOST}:{UPSTREAM_PORT}\n"
         f"[ide-proxy] frame-ancestors = {ALLOWED_ANCESTORS}\n"
         f"[ide-proxy] WebSocket tunneling: BẬT (fix lỗi 1006)\n"
-        f"[ide-proxy] Box API: GET /__box/status · POST /__box/network on|off\n"
+        f"[ide-proxy] Box API: GET /__box/status · POST /__box/network|power on|off (cần secret)\n"
         f"[ide-proxy] Capture API: /__box/windows · /__box/browser/tabs · "
         f"/__box/capture · /__box/record/start|stop|status",
         flush=True,

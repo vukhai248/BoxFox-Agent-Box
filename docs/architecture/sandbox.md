@@ -1,6 +1,8 @@
 # Kiến trúc máy ảo (sandbox) của BoxFox
 
-> **Cập nhật**: 2026-08-26 — thêm proxy bảo vệ code‑server (PR #2).  
+> **Cập nhật**: 2026-08-28 — công tắc mạng/thẳng (egress) trở thành một công tắc
+> `box-firewall` duy nhất, toggle qua `POST /__box/network` yêu cầu shared‑secret
+> `X-BoxFox-Api-Key` (đóng lỗ hổng agent trong box tự bật mạng bằng Origin giả).  
 > **Đọc trước nếu chưa quen thuật ngữ**: [Phần 0 của bản kế hoạch](../plan/agent-box-plan.md) — từ điển IFC, N1–N5, V1–V5.
 
 Tài liệu này mô tả **mọi thứ chạy bên trong box** (container Docker `agentbox-box`), cách các kênh kết nối từ giao diện web vào box, và những lớp bảo vệ ở mỗi kênh.
@@ -50,7 +52,7 @@ Khi bạn gõ `docker compose up -d` trong `deploy/docker/`, container khởi đ
 | **XFCE** (môi trường desktop) | Không có cổng, vẽ lên Xvnc `:99` | Tạo ra desktop giống một máy tính thật: MỘT thanh taskbar ở đáy (menu ứng dụng · danh sách cửa sổ · đồng hồ), icon trên màn hình, quản lý cửa sổ. Theme tối `Greybird-dark` + icon set `elementary-xfce-dark` để hòa với giao diện web và để icon có logo thật (XFCE trần dùng theme sáng và không có icon set nào ⇒ mọi icon thành ô vuông trống). Tự reflow khi Xvnc đổi phân giải — đã đo `_NET_WORKAREA` bám chính xác screen ở mọi khổ. |
 | **websockify** (cầu nối TCP → WebSocket) | `6080` | Bọc VNC (`:5900`, giao thức TCP thuần) thành WebSocket để trình duyệt đọc được. **Kiểm tra header `Origin`**: chỉ nhận kết nối từ `localhost:3100` và `127.0.0.1:3100`. Từ chối tất cả Origin khác — kể cả request thiếu header Origin. |
 | **code‑server** (VS Code bản web) | `8080` | Editor chạy trong box, mở sẵn `/home/agent/workspace`. Người dùng sửa file ở đây là sửa thật trong box. Chạy với `--auth none --disable-telemetry --disable-update-check`. |
-| **ide‑proxy** (proxy bảo vệ code‑server) | `8081` | Ngồi giữa giao diện web và code‑server `:8080`. Forward mọi request, nhưng **chèn CSP `frame-ancestors`** vào response — chỉ `localhost:3100` và `127.0.0.1:3100` mới nhúng được editor vào iframe. |
+| **ide‑proxy** (proxy bảo vệ code‑server) | `8081` | Ngồi giữa giao diện web và code‑server `:8080`. Forward mọi request, nhưng **chèn CSP `frame-ancestors`** vào response — chỉ `localhost:3100` và `127.0.0.1:3100` mới nhúng được editor vào iframe. Ngoài ra còn phơi API điều khiển box: `/__box/status` (đọc trạng thái), `/__box/network` + `/__box/power` (bật/tắt mạng/điện — yêu cầu shared‑secret), và nhóm `/__box/capture`/`/__box/record/*`. |
 
 ---
 
@@ -147,7 +149,10 @@ TRÌNH DUYỆT                     │  BOX (loopback)
 
 ---
 
-## 3. Mô hình bảo vệ ba lớp
+## 3. Mô hình bảo vệ ba lớp — cho kênh VÀO (inbound)
+
+Ba lớp dưới đây chỉ bảo vệ **chiều vào** (trình duyệt → trong box). Chiều RA (egress)
+do `box-firewall` phụ trách — xem mục 3b ngay sau.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -176,6 +181,45 @@ TRÌNH DUYỆT                     │  BOX (loopback)
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 3b. Egress — công tắc mạng của box (box-firewall)
+
+Chiều RA (box → internet) được đóng/mở bằng **một công tắc duy nhất**:
+`box-firewall` (iptables trong box). Mặc định khi box khởi động: **OFF** — gói tin
+ra ngoài bị `OUTPUT DROP` từ chối, trừ kênh loopback (`-o lo -j ACCEPT`) để các
+dịch vụ nội bộ nói chuyện với nhau và 4 cổng dịch vụ trả lời kết nối đã thiết lập
+(conntrack ESTABLISHED). Không còn lớp NAT nào tách riêng nữa:
+
+| Tầng | Trước | Sau |
+|---|---|---|
+| Vận chuyển (NAT) | `com.docker.network.bridge.enable_ip_masquerade: false` — không nhất quán (Docker Desktop bỏ qua), làm Linux không ra mạng dù bật box-firewall | Docker quản mặc định — đồng nhất Windows/Linux |
+| Chính sách egress | `box-firewall` (iptables) — nhưng toggle chỉ kiểm `Origin`, giả mạo được | `box-firewall` (iptables) — toggle yêu cầu shared-secret |
+
+**Cách bật/tắt** (không cần restart container):
+
+```
+POST /__box/network   body "on"|"off"   header X-BoxFox-Api-Key: <secret>
+POST /__box/power     body "on"|"off"   header X-BoxFox-Api-Key: <secret>
+```
+
+- `/__box/network` và `/__box/power` **chỉ chấp nhận** header `X-BoxFox-Api-Key`
+  khớp `BOXFOX_API_KEY` của box (shared-secret). Không có header hoặc header sai
+  → `403`. Header `Origin` KHÔNG còn đủ điều kiện, nên một process chạy **bên trong
+  box** (agent, non‑root) không thể tự gọi `POST 127.0.0.1:8081/__box/network`
+  với Origin giả để tự bật mạng.
+- `/__box/status` vẫn chỉ cần `Origin` hợp lệ (chỉ đọc trạng thái, không có tác dụng
+  phụ).
+- `BOXFOX_API_KEY` có giá trị mặc định đã commit (`boxfox-local-dev-token`) để clone
+  về chạy ngay; đây là token chia sẻ giữa giao diện và box trên **cùng một máy sau
+  loopback**, KHÔNG phải khóa API của nhà cung cấp. Triển khai thật nên đổi sang token
+  riêng và trả frontend về bind loopback.
+
+**Tại sao agent trong box không tự sửa được iptables**: tiến trình làm việc chạy với
+user `agent` (uid 1000, non‑root); quyền `NET_ADMIN` chỉ có ở entrypoint root để cấu
+hình tường lửa, sau đó gosu hạ quyền. `box-firewall` chạy bằng root thông qua
+ide-proxy (cũng root), không phải do agent gọi.
 
 ---
 
@@ -215,6 +259,7 @@ Lưu ý: **Không còn icon "Visual Studio Code" (bản Electron)** — đã b�
 | **N3** (only Controller issues leases — chỉ Controller cấp giấy phép) | Chỉ Controller được cấp giấy phép truy cập tài nguyên. | Cùng lý do — AI extension tự gọi API là tự cấp quyền cho chính nó. |
 | **M1** (screen integrity — tính toàn vẹn màn hình) | Mọi pixel đều mang nhãn `khong_tin_duoc`. | Cả khung ④ (màn hình VNC) và tab IDE (editor web) đều hiển thị badge "Không tin được". Panel tự viết chữ này, không đọc từ dữ liệu. |
 | **Quy tắc 12.6** (loopback) | Kênh điều khiển chỉ bind loopback. | Tất cả bốn cổng (`5900`, `6080`, `8080`, `8081`) đều bind `127.0.0.1`. |
+| **Quy tắc ②a/②b** (công tắc mạng) | Mạng mặc định tắt; chỉ Controller (backend/giao diện) được bật/tắt. | `POST /__box/network` + `/__box/power` yêu cầu `X-BoxFox-Api-Key` (xem mục 3b). |
 | **V4** (caveat — lưu ý) | Người dùng gõ trực tiếp vào box thì đầu vào đó chưa vào sổ audit (nhật ký kiểm toán). | Tab IDE hiển thị rõ cảnh báo này trong dải nhãn. |
 
 ---
