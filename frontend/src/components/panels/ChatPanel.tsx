@@ -339,7 +339,7 @@ function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="max-w-[85%] rounded-2xl bg-panel2 border border-line px-4 py-3 text-xs leading-relaxed text-fg shadow-xs">
-        {text}
+        <MarkdownRenderer content={text} />
       </div>
       <div className="flex items-center gap-2 text-[10px] text-muted pr-1 select-none">
         <span>Just now</span>

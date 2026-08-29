@@ -4,6 +4,7 @@
  * throttle qua `requestAnimationFrame` để giữ render mượt. Node chỉ báo pointer
  * down lên đây — Stage giữ pointer capture và tự chạy move/up toàn cục.
  */
+import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DesignCanvas, NodeGeometryPatch } from '../../../hooks/useDesignCanvas'
@@ -491,6 +492,42 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      {/* Floating Zoom & Pan dock (Bottom-Right corner) */}
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-panel/90 backdrop-blur-md px-2 py-1 rounded-xl border border-line shadow-lg text-[11px] text-muted select-none">
+        <button
+          type="button"
+          onClick={() => canvas.setView({ scale: Math.max(0.5, canvas.view.scale - 0.1) })}
+          className="flex size-6 items-center justify-center rounded-lg hover:text-fg hover:bg-panel2 transition cursor-pointer"
+          title="Zoom out (-)"
+        >
+          <ZoomOut className="size-3.5" />
+        </button>
+        <span
+          className="font-mono text-[11px] font-medium text-fg w-9 text-center cursor-pointer hover:text-brand transition"
+          onClick={() => canvas.setView({ scale: 1 })}
+          title="Click to reset 100%"
+        >
+          {Math.round(canvas.view.scale * 100)}%
+        </span>
+        <button
+          type="button"
+          onClick={() => canvas.setView({ scale: Math.min(1.5, canvas.view.scale + 0.1) })}
+          className="flex size-6 items-center justify-center rounded-lg hover:text-fg hover:bg-panel2 transition cursor-pointer"
+          title="Zoom in (+)"
+        >
+          <ZoomIn className="size-3.5" />
+        </button>
+        <div className="h-3.5 w-px bg-line mx-0.5" />
+        <button
+          type="button"
+          onClick={() => canvas.setView({ scale: 1, pan: { x: 0, y: 0 } })}
+          className="flex size-6 items-center justify-center rounded-lg hover:text-fg hover:bg-panel2 transition cursor-pointer"
+          title="Reset zoom & center (Ctrl+0)"
+        >
+          <RotateCcw className="size-3" />
+        </button>
+      </div>
     </div>
   )
 }

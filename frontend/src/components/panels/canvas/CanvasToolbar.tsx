@@ -9,14 +9,17 @@ import {
   ChevronDown,
   Circle,
   Diamond,
+  Eye,
   Globe,
   Hand,
+  Layers,
   MousePointer,
   MoveRight,
   Pencil,
   Plus,
   RotateCcw,
   Shapes,
+  Sliders,
   Sparkles,
   Square,
   Trash2,
@@ -50,9 +53,8 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
   return (
     <div className="relative flex h-11 shrink-0 items-center justify-between border-b border-line bg-panel px-3.5">
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 pr-2.5 border-r border-line">
+        <div className="flex items-center pr-2 border-r border-line" title="Design Canvas">
           <Shapes className="size-4 text-brand" />
-          {!compact && <span className="text-xs font-semibold text-fg">Design Canvas</span>}
         </div>
 
         {/* Cụm công cụ chính */}
@@ -124,13 +126,13 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
           </button>
         </div>
 
-        {/* Nút "+" thêm card */}
+        {/* Nút "+" thêm card & web preview */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setDropdown(dropdown === 'cards' ? null : 'cards')}
             className="flex size-7 items-center justify-center rounded-md text-xs text-muted hover:text-fg hover:bg-panel transition cursor-pointer border border-line bg-panel2/40"
-            title="Add card"
+            title="Add card or web preview"
           >
             <Plus className="size-3.5" />
           </button>
@@ -140,21 +142,27 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
               <div className="absolute left-0 top-8 z-30 w-56 rounded-lg border border-line bg-panel p-1 shadow-2xl">
                 {(
                   [
-                    { kind: 'ui-mockup', label: 'UI Mockup' },
-                    { kind: 'agent-reasoning-flow', label: 'Agent Reasoning Flow' },
-                    { kind: 'directive-annotation', label: 'Directive Annotation' },
+                    { kind: 'ui-mockup', label: 'UI Mockup', Icon: Layers, color: 'text-brand' },
+                    { kind: 'agent-reasoning-flow', label: 'Agent Reasoning Flow', Icon: Sliders, color: 'text-amber-400' },
+                    { kind: 'directive-annotation', label: 'Directive Annotation', Icon: Eye, color: 'text-amber-300' },
+                    { kind: 'webview', label: 'Live Web Preview', Icon: Globe, color: 'text-sky-400' },
                   ] as const
-                ).map(({ kind, label }) => (
+                ).map(({ kind, label, Icon, color }) => (
                   <button
                     key={kind}
                     type="button"
                     onClick={() => {
-                      canvas.addCard(kind)
+                      if (kind === 'webview') {
+                        canvas.addWebview('https://example.com')
+                      } else {
+                        canvas.addCard(kind)
+                      }
                       setDropdown(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-fg hover:bg-panel2 transition cursor-pointer"
+                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-fg hover:bg-panel2 transition cursor-pointer"
                   >
-                    {label}
+                    <Icon className={`size-3.5 ${color}`} />
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
@@ -162,22 +170,12 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
           )}
         </div>
 
-        {/* Thêm node webview (live preview) */}
-        <button
-          type="button"
-          onClick={() => canvas.addWebview('https://example.com')}
-          className="flex size-7 items-center justify-center rounded-md text-xs text-muted hover:text-fg hover:bg-panel transition cursor-pointer border border-line bg-panel2/40"
-          title="Add live web preview"
-        >
-          <Globe className="size-3.5" />
-        </button>
-
         {canvas.scene.strokes.length > 0 && (
           <button
             type="button"
             onClick={canvas.clearStrokes}
             className={`flex items-center gap-1 text-[11px] text-muted hover:text-rose-400 rounded bg-panel2/40 border border-line transition cursor-pointer ${
-              compact ? 'size-7 justify-center' : 'px-2 py-1 ml-1'
+              compact ? 'size-7 justify-center px-0' : 'px-2 py-1 ml-1'
             }`}
             title="Clear all sketches"
           >
@@ -187,32 +185,23 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
         )}
       </div>
 
-      {/* Zoom + Send */}
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-1 bg-panel2/60 px-2 py-0.5 rounded-lg border border-line text-[11px] text-muted">
-          <button type="button" onClick={() => canvas.setView({ scale: Math.max(0.5, canvas.view.scale - 0.1) })} className="p-1 hover:text-fg transition cursor-pointer" title="Zoom out">
-            <ZoomOut className="size-3" />
-          </button>
-          <span className="font-mono text-[11px] w-8 text-center">{Math.round(canvas.view.scale * 100)}%</span>
-          <button type="button" onClick={() => canvas.setView({ scale: Math.min(1.5, canvas.view.scale + 0.1) })} className="p-1 hover:text-fg transition cursor-pointer" title="Zoom in">
-            <ZoomIn className="size-3" />
-          </button>
-          <button type="button" onClick={() => canvas.setView({ scale: 1, pan: { x: 0, y: 0 } })} className="p-1 hover:text-fg transition cursor-pointer ml-0.5" title="Reset zoom & pan">
-            <RotateCcw className="size-2.5" />
-          </button>
-        </div>
-
+      {/* Send to Agent */}
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => canvas.sendToAgent()}
-          className={`flex items-center gap-1.5 rounded-md text-xs font-semibold transition cursor-pointer shadow-xs ${
+          className={`flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md text-xs font-semibold transition cursor-pointer shadow-xs ${
             canvas.syncStatus === 'synced'
               ? 'bg-emerald-600 text-white border border-emerald-500'
               : 'bg-brand text-white hover:bg-brand/90 border border-brand/60'
-          } ${compact ? 'size-7 justify-center' : 'px-3 py-1'}`}
-          title="Send scene to agent"
+          } ${compact ? 'size-7 justify-center px-0' : 'px-2.5 py-1'}`}
+          title={canvas.syncStatus === 'synced' ? 'Scene synced with agent' : 'Send scene to agent'}
         >
-          {canvas.syncStatus === 'synced' ? <CheckCircle2 className="size-3.5 text-white" /> : <Sparkles className="size-3.5 text-white animate-pulse" />}
+          {canvas.syncStatus === 'synced' ? (
+            <CheckCircle2 className="size-3.5 text-white" />
+          ) : (
+            <Sparkles className="size-3.5 text-white animate-pulse" />
+          )}
           {!compact && <span>{canvas.syncStatus === 'synced' ? 'Synced' : 'Send to Agent'}</span>}
         </button>
       </div>
