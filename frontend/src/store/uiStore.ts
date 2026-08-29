@@ -146,6 +146,11 @@ interface UiState {
   autopilotEnabled: boolean
   setAutopilotEnabled: (enabled: boolean) => void
 
+  // Command palette / Quick search
+  searchOpen: boolean
+  openSearch: () => void
+  closeSearch: () => void
+
   // Email notifications (mock)
   userEmail: string
   setUserEmail: (email: string) => void
@@ -254,6 +259,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   // Autopilot
   autopilotEnabled: true,
   setAutopilotEnabled: (enabled) => set({ autopilotEnabled: enabled }),
+
+  // Search modal
+  searchOpen: false,
+  openSearch: () => set({ searchOpen: true }),
+  closeSearch: () => set({ searchOpen: false }),
 
   // Email notifications (mock)
   userEmail: '',

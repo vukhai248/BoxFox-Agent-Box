@@ -14,6 +14,7 @@ import type { ToolName } from './lease'
 export type SessionStatus =
   | 'dang_chay'
   | 'cho_nguoi_dung'
+  | 'idle'
   | 'xong'
   | 'da_tu_choi'
   | 'het_ngan_sach'
@@ -33,6 +34,16 @@ export interface SessionSummary {
   mode: AgentMode
   /** Số giấy phép CÒN HIỆU LỰC của phiên đó. */
   active_lease_count: number
+  /** Được ghim lên đầu danh sách hay không. */
+  is_pinned?: boolean
+  /** Tên nhóm phiên (tab Groups). */
+  group_name?: string
+  /** Người được gán xử lý phiên, ví dụ "Me (Khai Vu)". */
+  assigned_to?: string
+  /** Phiên đã lưu trữ (ẩn khỏi danh sách chính). */
+  is_archived?: boolean
+  /** Số bước đã chạy, hiển thị phụ ở dòng phiên. */
+  step_count?: number
 }
 
 export interface Budget {

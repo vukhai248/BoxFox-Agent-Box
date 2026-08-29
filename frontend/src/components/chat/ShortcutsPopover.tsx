@@ -10,10 +10,15 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import { Command, Keyboard, X, Terminal } from 'lucide-react'
+import { useUiStore } from '../../store/uiStore'
 
 export interface ShortcutItem {
   keys: string[]
   label: string
+  /** true = tính năng đang mock, chưa có handler thật (hiển thị "(mock)"). */
+  mock?: boolean
+  /** id gắn với hành động thật đã có handler (vd 'search'). */
+  id?: string
 }
 
 export interface SlashCommandItem {
@@ -22,14 +27,14 @@ export interface SlashCommandItem {
 }
 
 const SHORTCUTS: ShortcutItem[] = [
-  { keys: ['↑', '↓'], label: 'Browse message history' },
-  { keys: ['Ctrl', 'K'], label: 'Focus input' },
-  { keys: ['Ctrl', 'Shift', 'L'], label: 'Clear input' },
-  { keys: ['Ctrl', 'Shift', 'O'], label: 'Toggle diff panel' },
-  { keys: ['Ctrl', 'Shift', 'I'], label: 'Toggle IDE / Code Studio' },
-  { keys: ['Ctrl', 'Shift', 'X'], label: 'Toggle terminal' },
-  { keys: ['Ctrl', 'C'], label: 'Cancel session (when active)' },
-  { keys: ['Shift', 'Tab'], label: 'Toggle Autopilot' },
+  { keys: ['↑', '↓'], label: 'Browse message history', mock: true },
+  { keys: ['Ctrl', 'K'], label: 'Search sessions', id: 'search' },
+  { keys: ['Ctrl', 'Shift', 'L'], label: 'Clear input', mock: true },
+  { keys: ['Ctrl', 'Shift', 'O'], label: 'Toggle diff panel', mock: true },
+  { keys: ['Ctrl', 'Shift', 'I'], label: 'Toggle IDE / Code Studio', mock: true },
+  { keys: ['Ctrl', 'Shift', 'X'], label: 'Toggle terminal', mock: true },
+  { keys: ['Ctrl', 'C'], label: 'Cancel session (when active)', mock: true },
+  { keys: ['Shift', 'Tab'], label: 'Toggle Autopilot', mock: true },
 ]
 
 const SLASH_COMMANDS: SlashCommandItem[] = [
@@ -53,6 +58,13 @@ export function ShortcutsPopover({
   const [internalOpen, setInternalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'shortcuts' | 'commands'>('shortcuts')
   const popoverRef = useRef<HTMLDivElement>(null)
+  const openSearch = useUiStore((s) => s.openSearch)
+
+  // Kích hoạt hành động tương ứng với một dòng phím tắt (đóng popover trước).
+  const activateShortcut = (item: ShortcutItem) => {
+    setOpen(false)
+    if (item.id === 'search') openSearch()
+  }
 
   const isControlled = customOpen !== undefined
   const open = isControlled ? customOpen : internalOpen
@@ -169,9 +181,11 @@ export function ShortcutsPopover({
               <span className="text-[11px] font-semibold text-muted px-1">Keyboard shortcuts</span>
               <div className="space-y-1.5 pt-1">
                 {SHORTCUTS.map((item, i) => (
-                  <div
+                  <button
                     key={i}
-                    className="flex items-center justify-between rounded-lg px-2 py-1 text-xs hover:bg-panel2/50 transition"
+                    type="button"
+                    onClick={() => activateShortcut(item)}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs hover:bg-panel2/50 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-1 shrink-0">
                       {item.keys.map((k, ki) => (
@@ -183,8 +197,11 @@ export function ShortcutsPopover({
                         </kbd>
                       ))}
                     </div>
-                    <span className="text-[11px] text-muted text-right ml-3 truncate">{item.label}</span>
-                  </div>
+                    <span className="text-[11px] text-muted text-right ml-3 truncate">
+                      {item.label}
+                      {item.mock ? ' (mock)' : ''}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>

@@ -64,6 +64,19 @@ export interface AgentState {
   sendCommand: (command: ClientCommand) => void
   setRejectBundle: (value: boolean) => void
   resetScenario: () => void
+
+  /** Bật/tắt ghim một phiên; phiên được ghim xếp lên đầu. */
+  pinSession: (id: string) => void
+  /** Đổi tên một phiên ở thanh bên. */
+  renameSession: (id: string, title: string) => void
+  /** Gán phiên vào một nhóm (chuỗi rỗng = bỏ nhóm). */
+  setSessionGroup: (id: string, groupName: string) => void
+  /** Gán người xử lý cho phiên. */
+  assignSession: (id: string, assignee: string) => void
+  /** Lưu trữ phiên (ẩn khỏi danh sách chính). */
+  archiveSession: (id: string) => void
+  /** Mở một phiên (đổi phiên đang active ở giao diện). */
+  setActiveSessionId: (id: string) => void
 }
 
 let transport: AgentTransport | null = null
@@ -136,6 +149,29 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   resetScenario: () => {
     get().sendCommand({ type: 'scenario_reset' })
   },
+
+  pinSession: (id) =>
+    set((state) => ({
+      sessions: sortPinnedFirst(
+        state.sessions.map((session) =>
+          session.session_id === id ? { ...session, is_pinned: !session.is_pinned } : session,
+        ),
+      ),
+    })),
+
+  renameSession: (id, title) =>
+    set((state) => ({ sessions: updateSession(state.sessions, id, { title }) })),
+
+  setSessionGroup: (id, groupName) =>
+    set((state) => ({ sessions: updateSession(state.sessions, id, { group_name: groupName }) })),
+
+  assignSession: (id, assignee) =>
+    set((state) => ({ sessions: updateSession(state.sessions, id, { assigned_to: assignee }) })),
+
+  archiveSession: (id) =>
+    set((state) => ({ sessions: updateSession(state.sessions, id, { is_archived: true }) })),
+
+  setActiveSessionId: (id) => set({ activeSessionId: id }),
 
   applyEvent: (event) => set((state) => reduce(state, event)),
 }))
@@ -371,6 +407,29 @@ export function reduce(state: AgentState, event: ServerEvent): Partial<AgentStat
 
 function nowIso(): string {
   return new Date().toISOString()
+}
+
+/** Cập nhật một phiên theo id, giữ nguyên thứ tự và các phiên khác. */
+function updateSession(
+  sessions: readonly SessionSummary[],
+  id: string,
+  patch: Partial<SessionSummary>,
+): SessionSummary[] {
+  return sessions.map((session) =>
+    session.session_id === id ? { ...session, ...patch } : session,
+  )
+}
+
+/** Phiên được ghim xếp lên đầu, giữ thứ tự tương đối trong từng nhóm (sort ổn định). */
+function sortPinnedFirst(sessions: readonly SessionSummary[]): SessionSummary[] {
+  return sessions
+    .map((session, index) => ({ session, index }))
+    .sort((a, b) => {
+      const aPin = a.session.is_pinned ? 1 : 0
+      const bPin = b.session.is_pinned ? 1 : 0
+      return bPin - aPin || a.index - b.index
+    })
+    .map(({ session }) => session)
 }
 
 function countActive(leases: readonly Lease[]): number {

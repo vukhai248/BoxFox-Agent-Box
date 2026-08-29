@@ -40,6 +40,7 @@ import { WorkspaceFilesPanel } from './components/panels/workspace/WorkspaceFile
 import { BoxControls } from './components/shell/BoxControls'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { CompletionEmailNotice } from './components/CompletionEmailNotice'
+import { SearchSessionsModal } from './components/shell/SearchSessionsModal'
 import { useCompletionEmail } from './hooks/useCompletionEmail'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
@@ -427,6 +428,9 @@ function TopBar({
           integrity={context.integrity_floor as 'duoc_nguoi_dung_cho_phep'}
           confidentiality={context.confidentiality_ceiling as 'cong_khai'}
         />
+        <SettingsModal />
+        <CompletionEmailNotice />
+        <SearchSessionsModal />
       </div>
     </div>
   )
