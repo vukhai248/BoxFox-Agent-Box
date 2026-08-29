@@ -25,6 +25,9 @@
  *  Proxy chèn CSP frame-ancestors — bảo vệ chống clickjacking. */
 export const DEFAULT_IDE_URL = 'http://localhost:8081/?folder=/home/agent/workspace'
 
+/** Gốc workspace trong box — khớp `WORKSPACE_ROOT` / `AGENT_HOME` phía deploy. */
+export const IDE_WORKSPACE_ROOT = '/home/agent/workspace'
+
 /**
  * `codeServer` — nhúng code-server của box (mặc định).
  * `off`        — không nhúng gì, không thăm dò mạng. Dùng khi demo giao diện
@@ -56,6 +59,38 @@ export function resolveIdeSource(env?: { VITE_IDE_SOURCE?: string }): IdeSource 
 export function resolveIdeUrl(env?: { VITE_IDE_URL?: string }): string {
   const raw = env?.VITE_IDE_URL?.trim()
   return raw ? raw : DEFAULT_IDE_URL
+}
+
+/**
+ * Dựng URL nhúng code-server mở sẵn một thư mục (và tùy chọn một file) trong
+ * workspace. Chỉ gửi `?folder=` khi không có file; khi có file, code-server
+ * KHÔNG có tham số `?file=` (chỉ mở thư mục, bỏ qua file), nên phải gửi
+ * `payload` → thao tác `openFile` với URI `vscode-remote://<host>/<absolute
+ * path>` (host = host:port đang truy cập code-server) — đây là cách VSCode Web
+ * dùng chung với vscode.dev, mở đúng file mà vẫn giữ `folder` gốc.
+ *
+ * Giữ slash literal cho `folder` (không dùng URLSearchParams) để khớp
+ * `DEFAULT_IDE_URL` và tránh `%2F` — code-server vẫn hiểu đường dẫn tuyệt đối.
+ */
+export function buildIdeUrl(
+  env?: { VITE_IDE_URL?: string },
+  folder: string = '',
+  file?: string,
+): string {
+  const base = resolveIdeUrl(env)
+  const origin = base.split('?')[0]!
+  const folderPath = folder ? `${IDE_WORKSPACE_ROOT}/${folder}` : IDE_WORKSPACE_ROOT
+  let url = `${origin}?folder=${folderPath}`
+  if (file) {
+    const absoluteFile = `${IDE_WORKSPACE_ROOT}/${file}`
+    const host = new URL(origin).host
+    const payload = JSON.stringify([
+      ['gotoLineMode', 'true'],
+      ['openFile', `vscode-remote://${host}${absoluteFile}`],
+    ])
+    url += `&payload=${encodeURIComponent(payload)}`
+  }
+  return url
 }
 
 export type IdeContextProblem = 'mixedContent'

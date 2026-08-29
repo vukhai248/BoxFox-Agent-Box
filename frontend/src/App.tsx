@@ -17,6 +17,7 @@ import {
   X,
   Plus,
   ChevronDown,
+  FolderOpen,
 } from 'lucide-react'
 import { useT } from './i18n/context'
 import { useAgentStore } from './store/agentStore'
@@ -35,6 +36,7 @@ import { LabelDot } from './components/LabelDot'
 import { DesignCanvasPanel } from './components/panels/DesignCanvasPanel'
 import { AuditPanel } from './components/panels/AuditPanel'
 import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
+import { WorkspaceFilesPanel } from './components/panels/workspace/WorkspaceFilesPanel'
 import { BoxControls } from './components/shell/BoxControls'
 import { SettingsModal } from './components/settings/SettingsModal'
 
@@ -48,6 +50,7 @@ const TAB_LABEL_KEY: Record<PanelTabId, string> = {
   pull_requests: 'tabs.pull_requests',
   labels: 'tabs.labels',
   audit: 'tabs.audit',
+  files: 'tabs.files',
 }
 
 const TAB_ICON: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
@@ -60,6 +63,7 @@ const TAB_ICON: Record<PanelTabId, React.ComponentType<{ className?: string }>> 
   pull_requests: GitPullRequest,
   labels: Tag,
   audit: ScrollText,
+  files: FolderOpen,
 }
 
 const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -72,6 +76,7 @@ const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon:
   { id: 'pull_requests', label: 'Pull Requests', desc: 'Git branches, PR diffs & CI checks', icon: GitPullRequest },
   { id: 'labels', label: 'Labels & Leases', desc: 'IFC security provenance & active leases', icon: Tag },
   { id: 'audit', label: 'Audit Logs', desc: 'Immutable security action ledger', icon: ScrollText },
+  { id: 'files', label: 'Workspace Files', desc: 'Browse, preview & manage workspace files', icon: FolderOpen },
 ]
 
 export default function App() {
@@ -131,6 +136,8 @@ export default function App() {
         return <LabelsLeasesPanel />
       case 'audit':
         return <AuditPanel />
+      case 'files':
+        return <WorkspaceFilesPanel />
       default:
         return null
     }

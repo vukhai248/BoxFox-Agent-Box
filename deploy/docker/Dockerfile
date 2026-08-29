@@ -223,6 +223,7 @@ COPY box-firewall /usr/local/sbin/box-firewall
 COPY ide-proxy.py /usr/local/bin/ide-proxy.py
 COPY plan_files.py /usr/local/bin/plan_files.py
 COPY capture.py /usr/local/bin/capture.py
+COPY workspace_files.py /usr/local/bin/workspace_files.py
 COPY browser_capture.py /usr/local/bin/browser_capture.py
 COPY bootstrap-plans/ /opt/agentbox/bootstrap-plans/
 RUN chmod +x /usr/local/bin/ide-proxy.py /usr/local/bin/capture.py /usr/local/bin/browser_capture.py

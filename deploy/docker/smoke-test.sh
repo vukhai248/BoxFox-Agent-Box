@@ -413,6 +413,112 @@ else
   echo "  BỎ QUA — đặt SMOKE_TEST_PERSISTENCE=1 trên volume test riêng để kiểm persistence phá hủy."
 fi
 
+head "19) Workspace Files API: list / read / media Range / upload / zip / unzip"
+# Seed một file nhị phân nhỏ để kiểm media Range (chạy dưới agent, file thuộc agent).
+docker exec --user agent "$CONTAINER" sh -c 'head -c 64 /dev/urandom > /home/agent/workspace/smoke-media.bin'
+
+PASS_19=1
+if ! docker exec -i --user agent -e SECRET="$SECRET" "$CONTAINER" python3 - <<'PY'
+import json
+import os
+import pathlib
+import urllib.error
+import urllib.request
+
+BASE = "http://127.0.0.1:8081"
+ORIGIN = "http://localhost:3100"
+SECRET = os.environ.get("SECRET", "boxfox-local-dev-token")
+
+
+def get(path, headers=None, range_hdr=None):
+    h = dict(headers or {})
+    if range_hdr:
+        h["Range"] = range_hdr
+    req = urllib.request.Request(BASE + path, headers=h)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+def post(path, body, headers=None):
+    req = urllib.request.Request(BASE + path, data=body, method="POST", headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+# 1) Liệt kê thư mục gốc (Origin gate)
+st, h, b = get("/__box/files?path=", {"Origin": ORIGIN})
+assert st == 200, ("list", st, b)
+names = [e["name"] for e in json.loads(b)["entries"]]
+assert ".plans" in names, names
+assert ".generated_artifacts" not in names, names  # cache máy sinh bị ẩn
+
+# 2) Đọc file text biết trước
+st, h, b = get("/__box/file/content?path=.plans/v1-plan-browser-demo.md", {"Origin": ORIGIN})
+assert st == 200, ("content", st, b)
+assert "# " in json.loads(b)["content"], b
+
+# 3) Media Range -> 206 + Accept-Ranges + Content-Range
+st, h, b = get("/__box/file/media?path=smoke-media.bin", {"Origin": ORIGIN}, "bytes=0-")
+assert st == 206, ("media", st, b)
+assert h.get("Accept-Ranges") == "bytes", h
+assert h.get("Content-Range", "").startswith("bytes 0-"), h.get("Content-Range")
+assert int(h.get("Content-Length")) == 64, h
+
+# 4) Upload KHÔNG secret -> 403
+st, _, _ = post("/__box/file/upload?path=&name=nope.txt", b"x",
+                {"Content-Type": "application/octet-stream"})
+assert st == 403, ("upload no secret", st)
+
+# 5) Upload CÓ secret -> 200
+st, _, b = post("/__box/file/upload?path=&name=smoke-uploaded.txt", b"hello-smoke",
+                {"Content-Type": "application/octet-stream", "X-BoxFox-Api-Key": SECRET})
+assert st == 200, ("upload", st, b)
+assert json.loads(b) == {"path": "smoke-uploaded.txt", "sizeBytes": 11}, b
+
+# 6) Zip + unzip roundtrip (giải nén vào subdir để không trùng file gốc)
+st, h, b = post("/__box/files/zip", json.dumps({"paths": ["smoke-uploaded.txt"]}).encode(),
+                {"Origin": ORIGIN, "Content-Type": "application/json"})
+assert st == 200, ("zip", st, b)
+assert h.get("Content-Type") == "application/zip", h
+zdir = pathlib.Path("/home/agent/workspace/smoke-zips")
+zdir.mkdir(exist_ok=True)
+(zdir / "smoke-round.zip").write_bytes(b)
+st, _, b = post("/__box/file/unzip?path=smoke-zips/smoke-round.zip", b"",
+                {"X-BoxFox-Api-Key": SECRET})
+assert st == 200, ("unzip", st, b)
+res = json.loads(b)
+assert res["extracted"] == 1, res
+assert (zdir / "smoke-uploaded.txt").read_text() == "hello-smoke", res
+
+print("workspace-files smoke ok")
+PY
+then
+  PASS_19=0
+fi
+
+if [ "$PASS_19" = "1" ]; then
+  ok "list/read/media-206/upload/zip/unzip endpoint workspace files đúng"
+else
+  bad "một hoặc nhiều endpoint workspace files sai"
+fi
+
+# File upload do ide-proxy (root) ghi qua fchown -> phải thuộc 1000:1000 (agent)
+OWN=$(docker exec "$CONTAINER" stat -c '%u:%g' /home/agent/workspace/smoke-uploaded.txt 2>/dev/null)
+if [ "$OWN" = "1000:1000" ]; then
+  ok "file upload thuộc 1000:1000 (hạ quyền về agent)"
+else
+  bad "file upload owner='$OWN' (mong 1000:1000)"
+fi
+
+# Dọn dẹp file smoke (agent sở hữu nên rm được)
+docker exec --user agent "$CONTAINER" sh -c 'rm -f /home/agent/workspace/smoke-media.bin /home/agent/workspace/smoke-uploaded.txt /home/agent/workspace/smoke-zips/smoke-round.zip /home/agent/workspace/smoke-zips/smoke-uploaded.txt; rmdir /home/agent/workspace/smoke-zips 2>/dev/null || true'
+
 echo ""
 echo "==============================================="
 echo "  KẾT QUẢ: $PASS PASS / $FAIL FAIL"

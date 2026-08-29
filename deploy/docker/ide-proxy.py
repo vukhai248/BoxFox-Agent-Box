@@ -56,6 +56,11 @@ try:
 except ImportError:
     from . import capture
 
+try:
+    import workspace_files
+except ImportError:
+    from . import workspace_files
+
 PLAN_ROOT = os.environ.get("PLAN_ROOT", os.environ.get("PLANS_ROOT", "/home/agent/workspace/.plans"))
 PLANS_ROOT = PLAN_ROOT
 
@@ -287,9 +292,227 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         except Exception as error:  # lưới an toàn — không để request capture làm chết thread
             self._send_json_cors(500, json.dumps({"error": f"Lỗi capture/record: {error}"}))
 
+    # ------------------------------------------------------------------
+    # Endpoint workspace files (§Workspace Files)
+    # ------------------------------------------------------------------
+    def _is_workspace_endpoint(self) -> bool:
+        return self.path.startswith("/__box/files") or self.path.startswith("/__box/file/")
+
+    def _send_stream_response(
+        self, status: int, headers: dict[str, str], chunk_iter
+    ) -> None:
+        """Phản hồi binary (media/download/thumbnail/zip) với CORS phản chiếu; không qua do_one."""
+
+        self.send_response(status)
+        origin = self.headers.get("Origin", "")
+        if origin in ALLOWED_WS_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+        for key, value in headers.items():
+            self.send_header(key, value)
+        self.end_headers()
+        try:
+            for chunk in chunk_iter:
+                self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    @staticmethod
+    def _content_disposition(disposition: str, name: str) -> str:
+        """Dựng Content-Disposition an toàn: ASCII fallback + RFC 5987 cho tên Unicode."""
+
+        ascii_name = name.encode("ascii", "ignore").decode("ascii").strip() or "file"
+        ascii_name = ascii_name.replace('"', "").replace("\\", "").replace("\r", "").replace("\n", "")
+        quoted = urllib.parse.quote(name, safe="")
+        return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quoted}"
+
+    def _serve_media(self, rel: str, disposition: str) -> None:
+        size, mtime, content_type, name = workspace_files.media_stat(rel)
+        range_header = self.headers.get("Range")
+        try:
+            parsed_range = workspace_files.parse_range(range_header, size)
+        except workspace_files.WorkspaceRangeNotSatisfiable:
+            self._send_stream_response(416, {
+                "Content-Type": content_type,
+                "Content-Range": f"bytes */{size}",
+                "Content-Length": "0",
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "private, max-age=0, must-revalidate",
+            }, iter(()))
+            return
+        if parsed_range is not None:
+            start, end = parsed_range
+            status = 206
+        else:
+            start, end = 0, size - 1
+            status = 200
+        length = end - start + 1
+        headers = {
+            "Content-Type": content_type,
+            "Content-Length": str(length),
+            "Content-Disposition": self._content_disposition(disposition, name),
+            "Accept-Ranges": "bytes",
+            "Last-Modified": self.date_time_string(mtime),
+            "Cache-Control": "private, max-age=0, must-revalidate",
+        }
+        if status == 206:
+            headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+        self._send_stream_response(
+            status, headers, workspace_files.iter_file_chunks(rel, start, end)
+        )
+
+    def _serve_thumbnail(self, rel: str) -> None:
+        data = workspace_files.make_thumbnail(rel)
+        if data is None:
+            self._send_json_cors(404, json.dumps({"error": "Không tạo được thumbnail"}))
+            return
+        self._send_stream_response(200, {
+            "Content-Type": "image/jpeg",
+            "Content-Length": str(len(data)),
+            "Cache-Control": "private, max-age=3600",
+        }, iter([data]))
+
+    def _handle_workspace_api(self) -> None:
+        if self.command == "OPTIONS":
+            self._send_cors_preflight()
+            return
+        parsed = urllib.parse.urlsplit(self.path)
+        path_only = parsed.path
+        try:
+            if path_only == "/__box/files":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                if not self._origin_ok_for_box_api():
+                    self._send_json_cors(403, json.dumps({"error": "Không được phép truy cập"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                listing = workspace_files.list_directory(rel)
+                self._send_json_cors(200, json.dumps(listing))
+                return
+
+            if path_only == "/__box/file/content":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                if not self._origin_ok_for_box_api():
+                    self._send_json_cors(403, json.dumps({"error": "Không được phép truy cập"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                content = workspace_files.read_content(rel)
+                self._send_json_cors(200, json.dumps(content))
+                return
+
+            if path_only == "/__box/file/media":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                self._serve_media(rel, "inline")
+                return
+
+            if path_only == "/__box/file/thumbnail":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                self._serve_thumbnail(rel)
+                return
+
+            if path_only == "/__box/file/download":
+                if self.command != "GET":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                self._serve_media(rel, "attachment")
+                return
+
+            if path_only == "/__box/files/zip":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                if not self._origin_ok_for_box_api():
+                    self._send_json_cors(403, json.dumps({"error": "Không được phép truy cập"}))
+                    return
+                body = self._read_json_body()
+                paths = body.get("paths")
+                data = workspace_files.build_zip(paths)
+                self._send_stream_response(200, {
+                    "Content-Type": "application/zip",
+                    "Content-Disposition": 'attachment; filename="boxfox-workspace.zip"',
+                    "Content-Length": str(len(data)),
+                    "Cache-Control": "no-store",
+                }, iter([data]))
+                return
+
+            if path_only == "/__box/file/upload":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                if not self._secret_ok():
+                    self._send_json_cors(403, json.dumps({"error": "Cần X-BoxFox-Api-Key hợp lệ"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                target_dir = params.get("path", [""])[0]
+                filename = params.get("name", [""])[0]
+                try:
+                    size_hint = int(self.headers.get("Content-Length", "0") or "0")
+                except ValueError:
+                    size_hint = 0
+
+                def body_chunks() -> bytes:
+                    # Stream từ rfile theo chunk 64 KiB — không nạp cả body vào bộ nhớ.
+                    # size_hint đã được write_upload kiểm tra giới hạn trước khi ghi.
+                    remaining = size_hint
+                    while remaining > 0:
+                        chunk = self.rfile.read(min(64 * 1024, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+
+                result = workspace_files.write_upload(target_dir, filename, body_chunks(), size_hint)
+                self._send_json_cors(200, json.dumps(result))
+                return
+
+            if path_only == "/__box/file/unzip":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Phương thức không được phép"}))
+                    return
+                if not self._secret_ok():
+                    self._send_json_cors(403, json.dumps({"error": "Cần X-BoxFox-Api-Key hợp lệ"}))
+                    return
+                params = urllib.parse.parse_qs(parsed.query)
+                rel = params.get("path", [""])[0]
+                result = workspace_files.extract_zip(rel)
+                self._send_json_cors(200, json.dumps(result))
+                return
+
+            self._send_json_cors(404, json.dumps({"error": "Không tìm thấy endpoint."}))
+        except workspace_files.WorkspaceFileError as error:
+            self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
+        except capture.CaptureError as error:
+            # Body JSON sai (zip) — trả đúng 4xx thay vì rơi vào lưới an toàn 500.
+            self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
+        except Exception as error:  # lưới an toàn cho thread
+            # Không đưa `str(error)` ra ngoài — có thể rò đường dẫn/internal; chỉ ghi log.
+            print(f"[ide-proxy] lỗi workspace: {error!r}", file=sys.stderr)
+            self._send_json_cors(500, json.dumps({"error": "Lỗi nội bộ."}))
+
+
     def _handle_box_api(self) -> None:
         if self._is_capture_endpoint():
             self._handle_capture_api()
+            return
+
+        # Endpoint workspace files (§Workspace Files) — nhóm đọc/ghi file riêng,
+        # đặt ngay sau capture và trước network/power để khối files tự chứa.
+        if self._is_workspace_endpoint():
+            self._handle_workspace_api()
             return
 
         # Endpoint điều khiển CẦN quyền (②b / Máy): chỉ nhận shared-secret.
@@ -544,7 +767,9 @@ def main():
         f"[ide-proxy] WebSocket tunneling: BẬT (fix lỗi 1006)\n"
         f"[ide-proxy] Box API: GET /__box/status · POST /__box/network|power on|off (cần secret)\n"
         f"[ide-proxy] Capture API: /__box/windows · /__box/browser/tabs · "
-        f"/__box/capture · /__box/record/start|stop|status",
+        f"/__box/capture · /__box/record/start|stop|status\n"
+        f"[ide-proxy] Workspace API: GET /__box/files · /__box/file/content|media|thumbnail|download · "
+        f"POST /__box/files/zip · /__box/file/upload|unzip",
         flush=True,
     )
     server.serve_forever()

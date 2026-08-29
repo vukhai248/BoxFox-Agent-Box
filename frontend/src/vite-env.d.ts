@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_BOX_API_KEY?: string
   /** Nguồn file plan: sandbox (mặc định) | mock (chỉ test/demo). */
   readonly VITE_PLAN_SOURCE?: 'sandbox' | 'mock'
+  /** Nguồn trình duyệt file workspace: sandbox (mặc định) | mock (chỉ test/demo). */
+  readonly VITE_WORKSPACE_SOURCE?: 'sandbox' | 'mock'
   /** Nguồn khung hình của khung ④: `mock` (mặc định) | `novnc` — xem `src/lib/vnc/config.ts`. */
   readonly VITE_SANDBOX_SCREEN_SOURCE?: 'mock' | 'novnc'
   /** URL websockify của kênh noVNC riêng của người dùng (xem `src/lib/vnc/config.ts`). */

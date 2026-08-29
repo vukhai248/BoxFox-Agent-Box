@@ -32,6 +32,7 @@ import {
   type IdeOfflineReason,
   type IdePhase,
 } from '../lib/ide/state'
+import { useUiStore } from '../store/uiStore'
 
 export interface UseIdeFrameResult {
   /** `off` ⇒ không thăm dò, không mount iframe nào. */
@@ -51,7 +52,10 @@ export function useIdeFrame(): UseIdeFrameResult {
   const [state, dispatch] = useReducer(reduceIde, enabled ? initialIdeState : offIdeState)
   const [retryAtMs, setRetryAtMs] = useState<number | null>(null)
 
-  const url = useMemo(() => resolveIdeUrl(import.meta.env), [])
+  // Khi người dùng "Mở trong VS Code Web" từ tab Files, store đặt `ideLaunchUrl`
+  // trỏ tới thư mục cha của file đó; ưu tiên URL này, ngược lại về mặc định.
+  const ideLaunchUrl = useUiStore((s) => s.ideLaunchUrl)
+  const url = useMemo(() => ideLaunchUrl ?? resolveIdeUrl(import.meta.env), [ideLaunchUrl])
 
   // Effect A — một lượt thăm dò. `state.seq` chỉ tăng ở `probeStarted` /
   // `manualRetry`, cả hai đều đặt phase='probing'.

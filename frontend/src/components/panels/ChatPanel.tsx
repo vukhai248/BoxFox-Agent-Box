@@ -414,12 +414,12 @@ function formatBytes(bytes?: number) {
  * - Nút [⬇ Download]: Xuất file trực tiếp về máy tính người dùng.
  */
 function ReferencedFilesList({ files }: { files: ReferencedFile[] }) {
-  const openTab = useUiStore((s) => s.openTab)
   const selectFile = useUiStore((s) => s.selectFile)
   const allWorkspaceFiles = useAgentStore((s) => s.files)
 
+  // Chỉ gọi selectFile — nó đã tự mở tab Files (panel Workspace Files). Không
+  // mở song song tab IDE nữa, tránh hai tab bật lên cùng lúc.
   const handleOpenFile = (path: string) => {
-    openTab('ide')
     selectFile(path)
   }
 

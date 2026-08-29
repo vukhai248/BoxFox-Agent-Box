@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildIdeUrl,
   DEFAULT_IDE_URL,
   describeIdeContextProblem,
+  IDE_WORKSPACE_ROOT,
   resolveIdeSource,
   resolveIdeUrl,
 } from './config'
@@ -59,5 +61,49 @@ describe('describeIdeContextProblem', () => {
     expect(
       describeIdeContextProblem({ pageProtocol: 'https:', url: 'https://box.example/' }),
     ).toBe(null)
+  })
+})
+
+describe('buildIdeUrl', () => {
+  it('không có folder → mở sẵn gốc workspace (khớp DEFAULT_IDE_URL)', () => {
+    expect(buildIdeUrl()).toBe(DEFAULT_IDE_URL)
+    expect(buildIdeUrl()).toBe(`http://localhost:8081/?folder=${IDE_WORKSPACE_ROOT}`)
+  })
+
+  it('folder con → nối vào gốc, giữ slash literal (không %2F)', () => {
+    const url = buildIdeUrl({}, 'frontend/src')
+    expect(url).toBe(`http://localhost:8081/?folder=${IDE_WORKSPACE_ROOT}/frontend/src`)
+    expect(url).not.toContain('%2F')
+  })
+
+  it('truyền file → dùng payload openFile vscode-remote, giữ folder gốc', () => {
+    const url = buildIdeUrl({}, '', '.plans/v1-agent-box-plan.md')
+    const payload = encodeURIComponent(
+      JSON.stringify([
+        ['gotoLineMode', 'true'],
+        ['openFile', `vscode-remote://localhost:8081${IDE_WORKSPACE_ROOT}/.plans/v1-agent-box-plan.md`],
+      ]),
+    )
+    expect(url).toBe(`http://localhost:8081/?folder=${IDE_WORKSPACE_ROOT}&payload=${payload}`)
+  })
+
+  it('host trong openFile lấy từ origin theo VITE_IDE_URL tường minh', () => {
+    const url = buildIdeUrl({ VITE_IDE_URL: 'http://box.local:9000/' }, '', 'src/a.py')
+    const payloadRaw = new URL(url).searchParams.get('payload')!
+    const decoded = JSON.parse(decodeURIComponent(payloadRaw))
+    expect(decoded).toEqual([
+      ['gotoLineMode', 'true'],
+      ['openFile', `vscode-remote://box.local:9000${IDE_WORKSPACE_ROOT}/src/a.py`],
+    ])
+  })
+
+  it('không có file → không sinh payload (chỉ ?folder=)', () => {
+    expect(buildIdeUrl({}, 'docs')).not.toContain('payload')
+  })
+
+  it('dùng VITE_IDE_URL tường minh làm origin, bỏ query cũ của base', () => {
+    expect(buildIdeUrl({ VITE_IDE_URL: 'http://box.local:9000/?folder=/old' }, 'docs')).toBe(
+      `http://box.local:9000/?folder=${IDE_WORKSPACE_ROOT}/docs`,
+    )
   })
 })

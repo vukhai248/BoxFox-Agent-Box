@@ -28,7 +28,7 @@ dist/
 *.sqlite
 *.sqlite3
 data/
-workspace/
+/workspace/
 
 # Kết quả chạy thí nghiệm còn dở
 benchmark/results/tmp/

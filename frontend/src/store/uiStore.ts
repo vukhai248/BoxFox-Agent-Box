@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import type { AuditQueryId } from '../types/session'
 import type { SettingSectionId, SettingTabId } from '../types/harness'
+import { buildIdeUrl } from '../lib/ide/config'
 
 export type PanelTabId =
   | 'plan'
@@ -16,6 +17,7 @@ export type PanelTabId =
   | 'pull_requests'
   | 'labels'
   | 'audit'
+  | 'files'
 
 export const ALL_PANEL_TABS: PanelTabId[] = [
   'plan',
@@ -27,6 +29,7 @@ export const ALL_PANEL_TABS: PanelTabId[] = [
   'pull_requests',
   'labels',
   'audit',
+  'files',
 ]
 
 function getInitialTheme(): 'light' | 'dark' | 'system' {
@@ -78,6 +81,17 @@ interface UiState {
 
   selectedFilePath: string | null
   selectFile: (path: string) => void
+  /** Xóa `selectedFilePath` sau khi panel Files đã tiêu thụ (mở file). */
+  clearSelectedFile: () => void
+
+  /**
+   * URL code-server mà tab IDE sẽ nhúng khi mở theo yêu cầu "Mở trong VS Code
+   * Web" từ tab Files. `null` ⇒ dùng mặc định (gốc workspace). `useIdeFrame`
+   * theo dõi giá trị này để iframe tải đúng thư mục.
+   */
+  ideLaunchUrl: string | null
+  /** Đặt `ideLaunchUrl` mở đúng `filePath` nhưng giữ gốc workspace rồi mở tab IDE. */
+  openFileInIde: (filePath: string) => void
 
   sourceLabelId: string | null
   openSource: (labelId: string) => void
@@ -121,7 +135,7 @@ interface UiState {
 export const MIN_SPLIT = 0.36
 export const MAX_SPLIT = 0.64
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
@@ -154,7 +168,19 @@ export const useUiStore = create<UiState>((set) => ({
     set({ splitRatio: Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, ratio)) }),
 
   selectedFilePath: null,
-  selectFile: (path) => set({ selectedFilePath: path }),
+  // Định tuyến lại: chọn file → mở tab Files (panel Workspace Files tiêu thụ
+  // `selectedFilePath` rồi mở file đó, không mở song song cả tab IDE nữa).
+  selectFile: (path) => {
+    set({ selectedFilePath: path })
+    get().openTab('files')
+  },
+  clearSelectedFile: () => set({ selectedFilePath: null }),
+
+  ideLaunchUrl: null,
+  openFileInIde: (filePath) => {
+    set({ ideLaunchUrl: buildIdeUrl(import.meta.env, '', filePath) })
+    get().openTab('ide')
+  },
 
   sourceLabelId: null,
   openSource: (labelId) => set({ sourceLabelId: labelId }),
