@@ -2,6 +2,7 @@
  * Thanh bên trái — phong cách BoxFox / Devin.
  */
 import {
+  Bell,
   ChevronsUpDown,
   ListFilter,
   LogOut,
@@ -31,6 +32,8 @@ export function Sidebar() {
   const sessionTab = useUiStore((s) => s.sessionTab)
   const setSessionTab = useUiStore((s) => s.setSessionTab)
   const openSettings = useUiStore((s) => s.openSettings)
+  const userEmail = useUiStore((s) => s.userEmail)
+  const notifyOnComplete = useUiStore((s) => s.notifyOnComplete)
   const sessions = useAgentStore((s) => s.sessions)
   const activeSessionId = useAgentStore((s) => s.activeSessionId)
 
@@ -66,7 +69,7 @@ export function Sidebar() {
           </button>
           <span
             className="flex size-6 items-center justify-center rounded-full bg-blue-600/20 text-[10px] font-bold text-blue-400"
-            title={MOCK_ACCOUNT.email}
+            title={userEmail || t('sidebar.undefinedUser')}
           >
             {MOCK_ACCOUNT.initials}
           </span>
@@ -115,8 +118,14 @@ export function Sidebar() {
             {MOCK_ACCOUNT.initials}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-muted">
-            {MOCK_ACCOUNT.email}
+            {userEmail || t('sidebar.undefinedUser')}
           </span>
+          {notifyOnComplete && (
+            <Bell
+              className="size-3 shrink-0 text-brand"
+              aria-label={t('notifications.title')}
+            />
+          )}
           <ChevronsUpDown className="size-3 shrink-0 text-muted" />
         </button>
 
@@ -133,6 +142,14 @@ export function Sidebar() {
               onClick={() => {
                 setAccountMenuOpen(false)
                 openSettings()
+              }}
+            />
+            <MenuItem
+              icon={<Bell className="size-3.5" />}
+              label={t('notifications.title')}
+              onClick={() => {
+                setAccountMenuOpen(false)
+                openSettings('notifications')
               }}
             />
             <MenuItem

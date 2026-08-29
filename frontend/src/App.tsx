@@ -39,6 +39,8 @@ import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
 import { WorkspaceFilesPanel } from './components/panels/workspace/WorkspaceFilesPanel'
 import { BoxControls } from './components/shell/BoxControls'
 import { SettingsModal } from './components/settings/SettingsModal'
+import { CompletionEmailNotice } from './components/CompletionEmailNotice'
+import { useCompletionEmail } from './hooks/useCompletionEmail'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
   plan: 'tabs.plan',
@@ -87,6 +89,8 @@ export default function App() {
     init()
     return () => teardown()
   }, [init, teardown])
+
+  useCompletionEmail()
 
   const mode = useAgentStore((s) => s.mode)
   const taskEpoch = useAgentStore((s) => s.taskEpoch)
@@ -296,6 +300,9 @@ export default function App() {
 
       {/* Global Full-Screen Settings Modal */}
       <SettingsModal />
+
+      {/* Mock email preview banner (dismissible) */}
+      <CompletionEmailNotice />
     </div>
   )
 }

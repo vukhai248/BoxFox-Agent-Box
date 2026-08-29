@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  User,
   Sliders,
   FileText,
   Sparkles,
@@ -35,6 +36,14 @@ interface NavSection {
 
 const SECTIONS: NavSection[] = [
   {
+    id: 'ACCOUNT',
+    title: 'ACCOUNT',
+    items: [
+      { id: 'account', label: 'Account', icon: User },
+      { id: 'notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
+  {
     id: 'AGENTS',
     title: 'AGENTS',
     items: [
@@ -60,7 +69,6 @@ const SECTIONS: NavSection[] = [
     title: 'FEATURES',
     items: [
       { id: 'integrations', label: 'Integrations', icon: Zap },
-      { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'pull_requests', label: 'Pull Requests', icon: GitPullRequest },
       { id: 'appearance', label: 'Appearance', icon: Palette },
     ],

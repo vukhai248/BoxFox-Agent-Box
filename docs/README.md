@@ -7,6 +7,7 @@
 | [`research/research-brief.md`](research/research-brief.md) | Bằng chứng thị trường và các ngách đã loại, kèm nguồn trích dẫn được |
 | [`research/research-addendum-computeruse.md`](research/research-addendum-computeruse.md) | Phụ lục nghiên cứu về computer use và GUI agent |
 | [`architecture/sandbox.md`](architecture/sandbox.md) | **Kiến trúc máy ảo**: mọi tiến trình, cổng, proxy, lớp bảo vệ, và sơ đồ kết nối từ giao diện web vào box |
+| [`architecture/email-notification.md`](architecture/email-notification.md) | **Gửi mail thật khi task xong**: kênh `notify_owner` do Controller nắm, đi qua Policy Engine, provider Resend/SMTP, và lộ trình biến mock `completionEmail` thành live |
 
 ## Quy ước đọc bản kế hoạch
 

@@ -19,7 +19,9 @@ export const MOCK_SESSIONS: SessionSummary[] = [
 
 export const MOCK_ACCOUNT = {
   displayName: 'Khai Vu (Me)',
-  email: 'khaikhaichimtoonly@gmail.com',
+  // Để trống: email thật do người dùng nhập ở Settings → Notifications. Sidebar
+  // hiện "undefined user" khi chưa nhập (xem `userEmail` trong `uiStore`).
+  email: '',
   initials: 'KV',
   workspace: 'agent-box / local machine',
 }

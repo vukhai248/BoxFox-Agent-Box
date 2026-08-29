@@ -19,9 +19,12 @@ export interface Harness {
   updatedAt?: string
 }
 
-export type SettingSectionId = 'AGENTS' | 'MACHINES' | 'FEATURES' | 'ADMINISTRATION'
+export type SettingSectionId = 'ACCOUNT' | 'AGENTS' | 'MACHINES' | 'FEATURES' | 'ADMINISTRATION'
 
 export type SettingTabId =
+  // ACCOUNT
+  | 'account'
+  | 'notifications'
   // AGENTS
   | 'harness'
   | 'instructions'
@@ -35,7 +38,6 @@ export type SettingTabId =
   | 'browser'
   // FEATURES
   | 'integrations'
-  | 'notifications'
   | 'pull_requests'
   | 'appearance'
   // ADMINISTRATION

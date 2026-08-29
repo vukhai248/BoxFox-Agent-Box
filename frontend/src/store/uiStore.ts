@@ -5,7 +5,22 @@
 import { create } from 'zustand'
 import type { AuditQueryId } from '../types/session'
 import type { SettingSectionId, SettingTabId } from '../types/harness'
+import type { Lang } from '../i18n/context'
+import type { ExecutedWork } from '../lib/notifyEmail'
 import { buildIdeUrl } from '../lib/ide/config'
+
+/**
+ * Trạng thái của một email mock "đã gửi" — lưu lại để hiển thị banner xem trước
+ * sau khi phiên đạt trạng thái `xong`. `lang`/`title`/`work` được chốt tại thời
+ * điểm gửi để banner không đổi theo locale hay kịch bản sau đó.
+ */
+export interface CompletionEmail {
+  to: string
+  at: string
+  lang: Lang
+  title: string
+  work: ExecutedWork[]
+}
 
 export type PanelTabId =
   | 'plan'
@@ -130,6 +145,14 @@ interface UiState {
   // Autopilot toggle in chat bar
   autopilotEnabled: boolean
   setAutopilotEnabled: (enabled: boolean) => void
+
+  // Email notifications (mock)
+  userEmail: string
+  setUserEmail: (email: string) => void
+  notifyOnComplete: boolean
+  setNotifyOnComplete: (enabled: boolean) => void
+  completionEmail: CompletionEmail | null
+  setCompletionEmail: (email: CompletionEmail | null) => void
 }
 
 export const MIN_SPLIT = 0.36
@@ -231,4 +254,12 @@ export const useUiStore = create<UiState>((set, get) => ({
   // Autopilot
   autopilotEnabled: true,
   setAutopilotEnabled: (enabled) => set({ autopilotEnabled: enabled }),
+
+  // Email notifications (mock)
+  userEmail: '',
+  setUserEmail: (email) => set({ userEmail: email }),
+  notifyOnComplete: false,
+  setNotifyOnComplete: (enabled) => set({ notifyOnComplete: enabled }),
+  completionEmail: null,
+  setCompletionEmail: (completionEmail) => set({ completionEmail }),
 }))

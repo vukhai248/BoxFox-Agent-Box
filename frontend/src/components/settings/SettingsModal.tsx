@@ -9,6 +9,8 @@ import { SecretsView } from './SecretsView'
 import { BrowserView } from './BrowserView'
 import { PullRequestsView } from './PullRequestsView'
 import { AppearanceView } from './AppearanceView'
+import { AccountView } from './AccountView'
+import { NotificationsView } from './NotificationsView'
 import { UsageView } from './UsageView'
 import { ReferralsView } from './ReferralsView'
 import { LlmApiKeysView } from './LlmApiKeysView'
@@ -82,6 +84,10 @@ export function SettingsModal() {
         return <PullRequestsView />
       case 'appearance':
         return <AppearanceView />
+      case 'account':
+        return <AccountView />
+      case 'notifications':
+        return <NotificationsView />
       case 'usage':
         return <UsageView />
       case 'referrals':
