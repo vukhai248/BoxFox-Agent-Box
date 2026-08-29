@@ -17,7 +17,6 @@ import {
   MoveRight,
   Pencil,
   Plus,
-  RotateCcw,
   Shapes,
   Sliders,
   Sparkles,
@@ -25,8 +24,6 @@ import {
   Trash2,
   Triangle,
   Type,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { DesignCanvas } from '../../../hooks/useDesignCanvas'
