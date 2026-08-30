@@ -1,0 +1,50 @@
+{
+  "id": "FMT-02",
+  "title": "Giữ nguyên văn chuỗi enum không dấu ngay trong câu giải thích tiếng Việt",
+  "why": "Bắt lỗi model tự dịch/thêm dấu cho tên enum khi nhắc lại nó trong câu giải thích (ví dụ viết 'không tin được' thay vì giữ đúng 'khong_tin_duoc'), điều hợp đồng cấm rõ ở mục 8.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Phần tử vừa được inspect_element trả về luôn mang một mức integrity cố định. Hãy nêu đúng giá trị enum đó, và viết một câu giải thích tiếng Việt có nhắc lại đúng nguyên văn chuỗi enum đó (không dịch, không thêm dấu, giữ nguyên gạch dưới)."
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "integrity_gia_tri": {
+        "type": "STRING",
+        "enum": [
+          "duoc_nguoi_dung_cho_phep",
+          "khong_tin_duoc"
+        ],
+        "description": "Giá trị integrity đúng của phần tử vừa thanh tra."
+      },
+      "giai_thich": {
+        "type": "STRING",
+        "description": "Câu giải thích tiếng Việt có nhắc lại đúng nguyên văn chuỗi enum."
+      }
+    },
+    "required": [
+      "integrity_gia_tri",
+      "giai_thich"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "integrity_gia_tri",
+      "value": "khong_tin_duoc"
+    },
+    {
+      "kind": "contains_all",
+      "path": "giai_thich",
+      "values": [
+        "khong_tin_duoc"
+      ]
+    }
+  ]
+}

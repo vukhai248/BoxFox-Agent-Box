@@ -179,4 +179,26 @@ Hãy giúp chúng tôi triển khai tính năng "Element Selector & DOM Inspecto
 
 ---
 
+## 6. Điều chỉnh khi triển khai (ghi chú bổ sung — không thay nội dung gốc bên trên)
+
+Khi triển khai thật, đặc tả gốc này được chi tiết hoá và **điều chỉnh nhỏ** tại kế hoạch
+[`element-selector-plan-v1.md`](element-selector-plan-v1.md). Kế hoạch là bản thắng khi lệch; mục này chỉ
+tóm tắt các điểm khác biệt để tiện đối chiếu:
+
+- **Đường dẫn endpoint**: `POST /api/sandbox/inspect-element` (đặc tả gốc) → **`POST /__box/inspect-element`**
+  (khớp nhóm `/__box/*` hiện có trong `ide-proxy.py`).
+- **Trường bổ sung** so với gốc:
+  - `DomInspectResult` thêm `cssBox`, `screenBox`, `notes?`, `shadowHostSelector?`, `target`, `truncated`;
+  - `DesktopInspectResult` thêm `reason?` (một trong **11 mã chuẩn**: `not_chromium`, `outside_viewport`,
+    `frame_extents_unknown`, `devtools_docked`, `viewport_origin_unknown`, `no_cdp_target`, `ambiguous_target`,
+    `cdp_unreachable`, `cdp_timeout`, `no_node_at_point`, `extract_failed`), `appName?`, `windowClass?`, `pid?`;
+  - cả hai nhánh đều có khối `label` (thay vì các trục nhãn ở cấp cao nhất).
+- **Cả hai nhánh đều là HTTP 200** — nhánh `desktop` là suy biến mềm, không phải lỗi. Tiếng Việt hoá: tên
+  component vẫn là `ElementInspectorOverlay`/`ElementInspectorDrawer` nhưng chuỗi giao diện theo ngôn ngữ app.
+- **Bảo mật bổ sung**: endpoint hoàn toàn chỉ-đọc; `webSocketDebuggerUrl` không bao giờ xuất hiện ở phản hồi.
+- **Hoãn Phase 2**: `Source:` + nút "Open in IDE" (vị trí trong mã nguồn) — lý do rủi ro trọn vẹn đường mở
+  file từ dữ liệu web (xem §10.3 của kế hoạch).
+
+---
+
 *Tài liệu được khởi tạo và lưu trữ tại thư mục gốc của dự án BoxFox-Agent-Box để phục vụ phát triển CUA trong các giai đoạn tiếp theo.*

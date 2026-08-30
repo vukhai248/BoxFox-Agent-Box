@@ -34,6 +34,11 @@ data/
 benchmark/results/tmp/
 benchmark/results/*.raw.jsonl
 
+# Báo cáo sinh ra khi chạy bộ test LLM — chứa nguyên văn câu trả lời của model và
+# mảnh prompt, KHÔNG commit. Chỉ giữ .gitkeep để thư mục tồn tại trong repo.
+test/llm/reports/*
+!test/llm/reports/.gitkeep
+
 # Hệ điều hành và editor
 .DS_Store
 Thumbs.db

@@ -1,0 +1,71 @@
+{
+  "id": "LBL-06",
+  "title": "Chỉ có đúng hai cách làm ngữ cảnh sạch lại",
+  "why": "Bắt lỗi model bịa ra một cách thứ ba để 'làm sạch' ngữ cảnh (ví dụ tự đánh giá lại độ tin cậy, hỏi lại AI khác) thay vì chỉ hai cách hợp lệ.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Ngữ cảnh đang bẩn vì một mảnh dữ liệu khong_tin_duoc. Người dùng hỏi: có bao nhiêu cách làm ngữ cảnh sạch lại mà không cần đổi task_epoch, và đó là những cách nào?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "so_cach": {
+        "type": "STRING",
+        "description": "Số cách hợp lệ, viết dưới dạng số (ví dụ '2')."
+      },
+      "cac_cach": {
+        "type": "ARRAY",
+        "items": {
+          "type": "STRING",
+          "enum": [
+            "chuan_thuan_artifact",
+            "bo_manh_do_ra_khoi_ngu_canh"
+          ]
+        },
+        "description": "Danh sách đúng và đủ các cách làm sạch ngữ cảnh."
+      },
+      "co_cach_khac_ngoai_hai_cach_nay_khong": {
+        "type": "BOOLEAN",
+        "description": "Có tồn tại cách thứ ba nào khác không."
+      }
+    },
+    "required": [
+      "so_cach",
+      "cac_cach",
+      "co_cach_khac_ngoai_hai_cach_nay_khong"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "so_cach",
+      "value": "2"
+    },
+    {
+      "kind": "list_contains_all",
+      "path": "cac_cach",
+      "values": [
+        "chuan_thuan_artifact",
+        "bo_manh_do_ra_khoi_ngu_canh"
+      ]
+    },
+    {
+      "kind": "list_subset_of",
+      "path": "cac_cach",
+      "values": [
+        "chuan_thuan_artifact",
+        "bo_manh_do_ra_khoi_ngu_canh"
+      ]
+    },
+    {
+      "kind": "equals",
+      "path": "co_cach_khac_ngoai_hai_cach_nay_khong",
+      "value": false
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "appName": "Chromium",
+  "label": {
+    "confidentiality": "noi_bo",
+    "content_hash": "sha256:9f2b1c7d4e5a6b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c",
+    "integrity": "khong_tin_duoc",
+    "source_kind": "screen_capture",
+    "source_uri": "screen://element/0x02600003",
+    "tool_name": "inspect_element"
+  },
+  "message": "DevTools đang gắn trong cửa sổ nên không suy được gốc vùng nội dung. Hãy đóng hoặc tách DevTools rồi bấm lại.",
+  "pid": 812,
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "reason": "devtools_docked",
+  "size": {
+    "height": 787,
+    "width": 1186
+  },
+  "type": "desktop",
+  "windowClass": "chromium.Chromium",
+  "windowId": "0x02600003",
+  "windowTitle": "BoxFox — Agent Box - Google Chrome"
+}

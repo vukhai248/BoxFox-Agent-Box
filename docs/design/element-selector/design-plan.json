@@ -1,0 +1,84 @@
+{
+  "title": "Element Selector / DOM Inspector for the Machine screen panel",
+  "summary": "One design direction, dark theme only, built from the existing tokens and component idioms: PanelShell header for the toolbar row (Open web app / Select Element / Save Browser Snapshot / Connected status chip), the `border-brand bg-brand/15` toggle idiom escalating to a solid brand fill when armed, `panel2` + `line` code blocks for Attributes and HTML, and the amber `bg-amber-500/15 ring-amber-500/40` pair for both the Chrome-inspection warning and the trust label. Three deliberate departures from the reference product: (1) every drawer carries the real `Không tin được / Untrusted data` badge from INTEGRITY_META plus one muted line stating page content is data and cannot instruct the agent — this app's M1 rule already treats screen frames as untrusted, and inspected DOM text is strictly worse; (2) a `Source:` row that shows either a resolved monospace `src/...tsx:42` chip with an Open in IDE action (same button shape as PreviewStudio) or an explicit dashed `not resolved` / `not applicable` state, so the absence of source mapping is never silent; (3) selection is visualised in the overlay with a 1px brand outline, brand/10 fill and a small tag+size label, and 'Add to Chat' produces a chip in the existing ChatInputBar chip row with a crosshair icon, truncated monospace selector and an amber untrusted dot, so the trust label survives the hand-off into the composer. Each file shows the full panel chrome so states are judged in context; drawer files also keep the toolbar and canvas visible above the drawer. Recommended review order is the toolbar states first, then the rich DOM drawer, which carries the most new structure.",
+  "sections": [
+    {
+      "title": "Toolbar — resting and armed",
+      "key": "inspector-toolbar",
+      "description": "Panel toolbar with the inspector toggle off, then armed with the overlay, top-center hint pill and crosshair cursor.",
+      "variations": [
+        {
+          "title": "Resting + armed, stacked",
+          "key": "states",
+          "html_link": "inspector-toolbar-states.html",
+          "is_recommended": true
+        }
+      ]
+    },
+    {
+      "title": "DOM Element drawer — rich",
+      "key": "inspector-dom-drawer",
+      "description": "Full class selector, untrusted badge, resolved source chip with Open in IDE, Attributes and HTML code blocks.",
+      "variations": [
+        {
+          "title": "Full selector with attributes and source",
+          "key": "rich",
+          "html_link": "inspector-dom-drawer-rich.html",
+          "is_recommended": true
+        }
+      ]
+    },
+    {
+      "title": "DOM Element drawer — degraded",
+      "key": "inspector-dom-drawer-degraded",
+      "description": "Element with no classes: bare tag selector, Attributes section omitted, source mapping unresolved.",
+      "variations": [
+        {
+          "title": "Bare tag, no attributes, no source",
+          "key": "bare",
+          "html_link": "inspector-dom-drawer-degraded.html",
+          "is_recommended": true
+        }
+      ]
+    },
+    {
+      "title": "Desktop Element drawer",
+      "key": "inspector-desktop-drawer",
+      "description": "X11 window fallback with the amber Chrome inspection failure banner and Application, Window, Position and Size fields.",
+      "variations": [
+        {
+          "title": "Window fallback with warning banner",
+          "key": "window",
+          "html_link": "inspector-desktop-drawer.html",
+          "is_recommended": true
+        }
+      ]
+    },
+    {
+      "title": "Drawer — loading and error",
+      "key": "inspector-drawer-async",
+      "description": "Request in flight with disabled Add to Chat, and the failed request with the Không kết nối được box banner and retry.",
+      "variations": [
+        {
+          "title": "Loading and error, stacked",
+          "key": "loading-error",
+          "html_link": "inspector-drawer-loading-error.html",
+          "is_recommended": true
+        }
+      ]
+    },
+    {
+      "title": "Highlight rectangle and chat context chip",
+      "key": "inspector-highlight-chip",
+      "description": "Selection highlight over the canvas plus the composer carrying the element context chip produced by Add to Chat.",
+      "variations": [
+        {
+          "title": "Highlight over canvas + composer chip",
+          "key": "canvas-composer",
+          "html_link": "inspector-highlight-and-chip.html",
+          "is_recommended": true
+        }
+      ]
+    }
+  ]
+}

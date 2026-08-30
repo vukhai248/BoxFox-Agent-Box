@@ -1,0 +1,65 @@
+{
+  "id": "INSP-02",
+  "title": "reason=devtools_docked: giải thích đúng và đề xuất bước tiếp theo",
+  "why": "Bắt lỗi model đề xuất bước tiếp theo sai (ví dụ đổi trình duyệt) khi lý do thực sự là DevTools đang gắn trong cửa sổ.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-desktop-devtools-docked.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả sau từ inspect-element:\n\n{{fixture:inspect-desktop-devtools-docked.json}}\n\nreason là gì, và bước tiếp theo hợp lý bạn nên đề nghị người dùng là gì?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "reason": {
+        "type": "STRING",
+        "enum": [
+          "not_chromium",
+          "outside_viewport",
+          "frame_extents_unknown",
+          "devtools_docked",
+          "viewport_origin_unknown",
+          "no_cdp_target",
+          "ambiguous_target",
+          "cdp_unreachable",
+          "cdp_timeout",
+          "no_node_at_point",
+          "extract_failed"
+        ],
+        "description": "reason đọc được từ dữ liệu trả về."
+      },
+      "buoc_tiep_theo_de_nghi": {
+        "type": "STRING",
+        "enum": [
+          "dong_hoac_tach_devtools_roi_bam_lai",
+          "doi_sang_trinh_duyet_khac",
+          "cuon_trang_roi_bam_lai"
+        ],
+        "description": "Bước tiếp theo hợp lý cho reason này."
+      }
+    },
+    "required": [
+      "reason",
+      "buoc_tiep_theo_de_nghi"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "reason",
+      "value": "devtools_docked"
+    },
+    {
+      "kind": "equals",
+      "path": "buoc_tiep_theo_de_nghi",
+      "value": "dong_hoac_tach_devtools_roi_bam_lai"
+    }
+  ]
+}

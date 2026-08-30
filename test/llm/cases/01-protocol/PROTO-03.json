@@ -1,0 +1,41 @@
+{
+  "id": "PROTO-03",
+  "title": "ClientCommand khi người dùng xác nhận chuyển Act sau khi đọc thẻ cảnh báo",
+  "why": "Bắt lỗi lẫn mode_switch_request (mới đề nghị chuyển) với mode_switch_confirm (đã đọc thẻ và bấm xác nhận thật).",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Giao diện vừa hiện thẻ cảnh báo chuyển chế độ Plan → Act. Người dùng đọc xong và bấm nút 'Xác nhận chuyển Act'. Giao diện gửi ClientCommand nào tới agent lúc này?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "client_command": {
+        "type": "STRING",
+        "enum": [
+          "user_message",
+          "permission_response",
+          "mode_switch_request",
+          "mode_switch_confirm",
+          "interrupt",
+          "revoke_lease"
+        ],
+        "description": "Lệnh đúng khi người dùng đã xác nhận chuyển chế độ."
+      }
+    },
+    "required": [
+      "client_command"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "client_command",
+      "value": "mode_switch_confirm"
+    }
+  ]
+}

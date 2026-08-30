@@ -519,6 +519,161 @@ fi
 # Dọn dẹp file smoke (agent sở hữu nên rm được)
 docker exec --user agent "$CONTAINER" sh -c 'rm -f /home/agent/workspace/smoke-media.bin /home/agent/workspace/smoke-uploaded.txt /home/agent/workspace/smoke-zips/smoke-round.zip /home/agent/workspace/smoke-zips/smoke-uploaded.txt; rmdir /home/agent/workspace/smoke-zips 2>/dev/null || true'
 
+# ==============================================================================
+# Mục 20 — Element Selector /__box/inspect-element (chỉ-đọc, không lộ ws url).
+# Mở Chromium TRỰC TIẾP (KHÔNG qua box-chromium), kiểu box-code: box-chromium
+# dùng profile dính `/home/agent/.config/box-chromium` (single-instance trên
+# :9222, bookmark bar + trạng thái khôi phục tích luỹ) khiến browser chrome dày
+# ~249px > MAX_CHROME_HEIGHT_PX(200) ⇒ inspect trả viewport_origin_unknown.
+# Profile sạch + --no-first-run cho chrome ~196px (tab strip + omnibox) ≤ 200
+# ⇒ nhánh dom. Trước khi mở phải giải phóng :9222 (singleton mục 16 còn sót).
+# ==============================================================================
+head "20) Element Selector /__box/inspect-element (chỉ-đọc, không lộ webSocketDebuggerUrl)"
+# Giải phóng :9222: singleton box-chromium mục 16 còn sót + profile lần chạy trước.
+# Dùng [u]ser-data-dir (self-exclude) để pkill không giết chính sh -c đang chạy.
+docker exec "$CONTAINER" sh -c 'pkill -f "[u]ser-data-dir=/home/agent/.config/box-chromium" 2>/dev/null || true; pkill -f "[u]ser-data-dir=/home/agent/smoke-inspect-profile" 2>/dev/null || true'
+docker exec "$CONTAINER" sh -c 'for _ in $(seq 1 40); do curl -s --max-time 1 http://127.0.0.1:9222/json/version >/dev/null 2>&1 || break; sleep 0.5; done'
+docker exec --user agent "$CONTAINER" env DISPLAY=:99 HOME=/home/agent \
+  sh -c 'BIN=$(ls -d /opt/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1); rm -rf /home/agent/smoke-inspect-profile; nohup "$BIN" --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=/home/agent/smoke-inspect-profile --no-first-run --no-default-browser-check --disable-extensions about:blank >/home/agent/smoke-inspect.log 2>&1 & echo $! >/home/agent/smoke-inspect.pid'
+
+# (20a) Bấm vào vùng nội dung ⇒ nhánh dom + nhãn khong_tin_duoc + screenBox đủ 4 khoá.
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json, time, urllib.request, urllib.error
+
+def urlopen(req, timeout=20):
+    return urllib.request.urlopen(req, timeout=timeout)
+
+# 1. Chờ Chromium đưa page lên CDP :9222.
+pages = []
+for _ in range(40):
+    try:
+        with urlopen(urllib.request.Request("http://127.0.0.1:9222/json/list", )) as r:
+            pages = [t for t in json.load(r) if t.get("type") == "page"]
+        if pages:
+            break
+    except Exception:
+        pass
+    time.sleep(0.5)
+assert pages, "CDP 9222 không đưa page nào trong 20s"
+
+# 2. Tìm cửa sổ X11 class chứa 'hromium'.
+with urlopen(urllib.request.Request("http://127.0.0.1:8081/__box/windows",
+        headers={"Origin": "http://localhost:3100"})) as r:
+    windows = json.load(r)["windows"]
+chromes = [w for w in windows if "hromium" in w.get("class", "").lower()]
+assert chromes, f"không thấy cửa sổ chromium: {[w.get('class') for w in windows]}"
+win = max(chromes, key=lambda w: (w.get("w", 0) * w.get("h", 0)))
+
+# 3. Bấm giữa-đáy vùng nội dung.
+x, y, w, h = win["x"], win["y"], win["w"], win["h"]
+body = json.dumps({"x": x + w // 2, "y": y + h - 60}).encode()
+req = urllib.request.Request("http://127.0.0.1:8081/__box/inspect-element",
+    data=body, headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+    method="POST")
+with urlopen(req) as r:
+    result = json.load(r)
+assert result.get("type") == "dom", result
+assert result.get("label", {}).get("integrity") == "khong_tin_duoc", result
+sb = result.get("screenBox", {})
+assert all(k in sb for k in ("x", "y", "width", "height")), result
+open("/home/agent/smoke-inspect-dom.json", "w").write(json.dumps(result))
+print(f"dom selector={result.get('selector')!r} screenBox={sb}")
+PY
+then
+  ok "bấm vùng nội dung ⇒ nhánh dom + khong_tin_duoc + screenBox đủ 4 khoá"
+else
+  bad "bấm vùng nội dung không ra nhánh dom đúng hợp đồng"
+fi
+
+# (20b) Bấm titlebar ⇒ nhánh desktop + reason=outside_viewport.
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json, urllib.request
+
+with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8081/__box/windows",
+        headers={"Origin": "http://localhost:3100"}), timeout=20) as r:
+    windows = json.load(r)["windows"]
+chromes = [w for w in windows if "hromium" in w.get("class", "").lower()]
+assert chromes, "không thấy cửa sổ chromium"
+win = max(chromes, key=lambda w: (w.get("w", 0) * w.get("h", 0)))
+x, y, w, h = win["x"], win["y"], win["w"], win["h"]
+body = json.dumps({"x": x + w // 2, "y": y + 15}).encode()   # titlebar ≈ 30 px trên cùng
+req = urllib.request.Request("http://127.0.0.1:8081/__box/inspect-element",
+    data=body, headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+    method="POST")
+with urllib.request.urlopen(req, timeout=20) as r:
+    result = json.load(r)
+assert result.get("type") == "desktop", result
+assert result.get("reason") == "outside_viewport", result
+open("/home/agent/smoke-inspect-desktop.json", "w").write(json.dumps(result))
+print(f"desktop reason={result.get('reason')} windowId={result.get('windowId')}")
+PY
+then
+  ok "bấm titlebar ⇒ nhánh desktop + reason=outside_viewport"
+else
+  bad "bấm titlebar không ra nhánh desktop/outside_viewport"
+fi
+
+# (20c) Không lộ webSocketDebuggerUrl ở BẤT KỲ nhánh nào.
+if docker exec "$CONTAINER" sh -c \
+  '! grep -q "webSocketDebuggerUrl" /home/agent/smoke-inspect-dom.json /home/agent/smoke-inspect-desktop.json'; then
+  ok "cả hai nhánh không lộ webSocketDebuggerUrl"
+else
+  bad "phản hồi inspect-element LỘ webSocketDebuggerUrl (mất TCB)"
+fi
+
+# (20d) Không lộ ws:// ở BẤT KỲ nhánh nào.
+if docker exec "$CONTAINER" sh -c \
+  '! grep -q "ws://" /home/agent/smoke-inspect-dom.json /home/agent/smoke-inspect-desktop.json'; then
+  ok "cả hai nhánh không chứa ws://"
+else
+  bad "phản hồi inspect-element chứa ws://"
+fi
+
+# (20e) Toạ độ ngoài màn hình ⇒ 400.
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json, urllib.request, urllib.error
+body = json.dumps({"x": 999999, "y": 1}).encode()
+req = urllib.request.Request("http://127.0.0.1:8081/__box/inspect-element",
+    data=body, headers={"Origin": "http://localhost:3100", "Content-Type": "application/json"},
+    method="POST")
+try:
+    urllib.request.urlopen(req, timeout=20)
+    raise SystemExit("mong 400 nhưng nhận 200")
+except urllib.error.HTTPError as e:
+    assert e.code == 400, f"mong 400, nhận {e.code}"
+print("toạ độ ngoài màn hình bị từ chối 400 như mong đợi")
+PY
+then
+  ok "toạ độ ngoài màn hình ⇒ 400"
+else
+  bad "toạ độ ngoài màn hình không trả 400"
+fi
+
+# (20f) Origin lạ + không secret ⇒ 403.
+if docker exec -i "$CONTAINER" python3 - <<'PY'
+import json, urllib.request, urllib.error
+body = json.dumps({"x": 400, "y": 300}).encode()
+req = urllib.request.Request("http://127.0.0.1:8081/__box/inspect-element",
+    data=body, headers={"Origin": "http://evil.example", "Content-Type": "application/json"},
+    method="POST")
+try:
+    urllib.request.urlopen(req, timeout=20)
+    raise SystemExit("mong 403 nhưng nhận 200")
+except urllib.error.HTTPError as e:
+    assert e.code == 403, f"mong 403, nhận {e.code}"
+print("Origin lạ không secret bị từ chối 403 như mong đợi")
+PY
+then
+  ok "Origin lạ + không secret ⇒ 403"
+else
+  bad "Origin lạ + không secret không bị chặn 403"
+fi
+
+# Dọn Chromium vừa mở (theo PID đã lưu + profile riêng), không pkill mù.
+docker exec "$CONTAINER" sh -c 'pid=$(cat /home/agent/smoke-inspect.pid 2>/dev/null) && if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi'
+docker exec "$CONTAINER" sh -c 'pkill -f "[u]ser-data-dir=/home/agent/smoke-inspect-profile" 2>/dev/null || true'
+docker exec "$CONTAINER" sh -c 'rm -rf /home/agent/smoke-inspect-profile /home/agent/smoke-inspect.pid /home/agent/smoke-inspect.log /home/agent/smoke-inspect-dom.json /home/agent/smoke-inspect-desktop.json'
+
 echo ""
 echo "==============================================="
 echo "  KẾT QUẢ: $PASS PASS / $FAIL FAIL"

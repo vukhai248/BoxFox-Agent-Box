@@ -1,0 +1,54 @@
+{
+  "id": "INSP-05",
+  "title": "reason=cdp_timeout: giải thích đúng và đề xuất bước tiếp theo",
+  "why": "Không có fixture riêng cho reason này; bài kiểm tra model không nhầm cdp_timeout (kết nối debug quá hạn) với các lý do khác như not_chromium hay outside_viewport.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Server /__box/inspect-element trả reason='cdp_timeout' ở nhánh desktop. reason này nghĩa là gì, và bước tiếp theo hợp lý bạn nên đề nghị người dùng là gì?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "y_nghia": {
+        "type": "STRING",
+        "enum": [
+          "ket_noi_cdp_qua_thoi_gian_cho_khong_lay_duoc_du_lieu",
+          "diem_bam_nam_ngoai_vung_nhin_thay_cua_trang",
+          "cua_so_khong_phai_chromium"
+        ],
+        "description": "Ý nghĩa đúng của reason=cdp_timeout."
+      },
+      "buoc_tiep_theo_de_nghi": {
+        "type": "STRING",
+        "enum": [
+          "thu_bam_lai_hoac_kiem_tra_trang_co_dang_treo_khong",
+          "dong_devtools",
+          "chuyen_cua_so_khac"
+        ],
+        "description": "Bước tiếp theo hợp lý."
+      }
+    },
+    "required": [
+      "y_nghia",
+      "buoc_tiep_theo_de_nghi"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "y_nghia",
+      "value": "ket_noi_cdp_qua_thoi_gian_cho_khong_lay_duoc_du_lieu"
+    },
+    {
+      "kind": "equals",
+      "path": "buoc_tiep_theo_de_nghi",
+      "value": "thu_bam_lai_hoac_kiem_tra_trang_co_dang_treo_khong"
+    }
+  ]
+}

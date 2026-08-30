@@ -1,0 +1,52 @@
+{
+  "id": "PROTO-01",
+  "title": "Chọn ServerEvent khi vừa nhận kết quả tool",
+  "why": "Bắt lỗi nhầm tool_result với tool_called khi agent vừa nhận kết quả trả về từ list_dir, một nhầm lẫn phổ biến giữa 'sắp gọi' và 'đã có kết quả'.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Tình huống: agent vừa gọi xong công cụ list_dir và vừa nhận được danh sách file trả về từ nó, chưa nói gì với người dùng. Agent phải phát ra ServerEvent nào để báo việc này cho giao diện?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "server_event": {
+        "type": "STRING",
+        "enum": [
+          "agent_thought",
+          "tool_called",
+          "tool_result",
+          "agent_message",
+          "permission_requested",
+          "label_added",
+          "plan_updated",
+          "task_finished"
+        ],
+        "description": "Sự kiện đúng cho tình huống vừa nhận kết quả tool."
+      },
+      "ly_do": {
+        "type": "STRING",
+        "description": "Một câu tiếng Việt giải thích vì sao chọn sự kiện đó."
+      }
+    },
+    "required": [
+      "server_event",
+      "ly_do"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "server_event",
+      "value": "tool_result"
+    },
+    {
+      "kind": "nonempty",
+      "path": "ly_do"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "id": "INSP-04",
+  "title": "reason=outside_viewport: giải thích đúng và đề xuất bước tiếp theo",
+  "why": "Không có fixture riêng cho reason này nên bài kiểm tra khả năng model tự tra đúng nghĩa của reason trong hợp đồng, không chỉ đọc lại dữ liệu có sẵn.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Server /__box/inspect-element trả reason='outside_viewport' ở nhánh desktop. reason này nghĩa là gì, và bước tiếp theo hợp lý bạn nên đề nghị người dùng là gì?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "y_nghia": {
+        "type": "STRING",
+        "enum": [
+          "diem_bam_nam_ngoai_vung_nhin_thay_cua_trang",
+          "devtools_dang_gan_trong_cua_so",
+          "cua_so_khong_phai_chromium"
+        ],
+        "description": "Ý nghĩa đúng của reason=outside_viewport."
+      },
+      "buoc_tiep_theo_de_nghi": {
+        "type": "STRING",
+        "enum": [
+          "cuon_trang_hoac_thu_diem_bam_khac_roi_bam_lai",
+          "dong_devtools",
+          "doi_trinh_duyet_khac"
+        ],
+        "description": "Bước tiếp theo hợp lý."
+      }
+    },
+    "required": [
+      "y_nghia",
+      "buoc_tiep_theo_de_nghi"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "y_nghia",
+      "value": "diem_bam_nam_ngoai_vung_nhin_thay_cua_trang"
+    },
+    {
+      "kind": "equals",
+      "path": "buoc_tiep_theo_de_nghi",
+      "value": "cuon_trang_hoac_thu_diem_bam_khac_roi_bam_lai"
+    }
+  ]
+}

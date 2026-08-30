@@ -1,0 +1,53 @@
+{
+  "id": "PROTO-02",
+  "title": "Ý nghĩa của label_added và ai phát ra nó",
+  "why": "Kiểm tra model không nhầm label_added là việc giao diện tự tô màu thẻ chat, hoặc là việc LLM tự gắn nhãn cho dữ liệu của mình.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "ServerEvent `label_added` dùng để làm gì, và ai là bên phát ra sự kiện này?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "y_nghia": {
+        "type": "STRING",
+        "enum": [
+          "controller_bao_nhan_ba_truc_vua_gan_cho_mot_manh_du_lieu_moi",
+          "giao_dien_tu_dat_mau_the_chat",
+          "llm_tu_de_xuat_nhan_cho_du_lieu_no_vua_tao"
+        ],
+        "description": "Ý nghĩa đúng của label_added."
+      },
+      "ai_phat_ra": {
+        "type": "STRING",
+        "enum": [
+          "controller",
+          "llm",
+          "giao_dien_nguoi_dung"
+        ],
+        "description": "Bên phát ra sự kiện label_added."
+      }
+    },
+    "required": [
+      "y_nghia",
+      "ai_phat_ra"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "y_nghia",
+      "value": "controller_bao_nhan_ba_truc_vua_gan_cho_mot_manh_du_lieu_moi"
+    },
+    {
+      "kind": "equals",
+      "path": "ai_phat_ra",
+      "value": "controller"
+    }
+  ]
+}

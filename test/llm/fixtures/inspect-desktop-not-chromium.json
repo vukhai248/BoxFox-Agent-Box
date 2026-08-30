@@ -1,0 +1,25 @@
+{
+  "appName": "Xfce4-terminal",
+  "label": {
+    "confidentiality": "noi_bo",
+    "content_hash": "sha256:9f2b1c7d4e5a6b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c",
+    "integrity": "khong_tin_duoc",
+    "source_kind": "screen_capture",
+    "source_uri": "screen://element/0x01c00007",
+    "tool_name": "inspect_element"
+  },
+  "pid": 640,
+  "position": {
+    "x": 320,
+    "y": 180
+  },
+  "reason": "not_chromium",
+  "size": {
+    "height": 520,
+    "width": 820
+  },
+  "type": "desktop",
+  "windowClass": "xfce4-terminal.Xfce4-terminal",
+  "windowId": "0x01c00007",
+  "windowTitle": "agent@box: ~/workspace"
+}

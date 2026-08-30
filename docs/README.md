@@ -9,6 +9,22 @@
 | [`architecture/sandbox.md`](architecture/sandbox.md) | **Kiến trúc máy ảo**: mọi tiến trình, cổng, proxy, lớp bảo vệ, và sơ đồ kết nối từ giao diện web vào box |
 | [`architecture/email-notification.md`](architecture/email-notification.md) | **Gửi mail thật khi task xong**: kênh `notify_owner` do Controller nắm, đi qua Policy Engine, provider Resend/SMTP, và lộ trình biến mock `completionEmail` thành live |
 
+## Element Selector / DOM Inspector
+
+| Đường dẫn | Nội dung |
+|---|---|
+| [`plan/element-selector-plan-v1.md`](plan/element-selector-plan-v1.md) | **Kế hoạch v1 đã phê duyệt** — chia 3 phase, mô hình nhãn tin cậy, bộ **11 mã `reason`**, hợp đồng `POST /__box/inspect-element`, bảo mật §10, và §5.6 liệt kê 10 điểm ghi đè đặc tả gốc |
+| [`plan/element-selector-plan-v1-summary.md`](plan/element-selector-plan-v1-summary.md) | Bản rút gọn — đọc trước nếu chỉ cần nắm quyết định lớn |
+| [`plan/element-selector-spec.md`](plan/element-selector-spec.md) | Đặc tả gốc. Chỗ nào lệch với kế hoạch v1 thì **kế hoạch v1 thắng** (§5.6) |
+| [`research/element-selector-competitive-research.md`](research/element-selector-competitive-research.md) | Vorflux / Devin / Cursor / Lovable làm tính năng chọn phần tử thế nào, và ta chọn khác ở đâu |
+| [`design/element-selector/`](design/element-selector/) | 6 mockup HTML đã phê duyệt (toolbar, drawer DOM đầy đủ/suy biến, drawer desktop, tải/lỗi, khung sáng + chip) kèm `design-plan.json` |
+
+## Kiểm thử
+
+| Đường dẫn | Nội dung |
+|---|---|
+| [`../test/README.md`](../test/README.md) | **Bộ test cấp repo**: bộ test LLM (LLM có nắm đúng quy trình và chống được tiêm nhiễm không) và cầu nối chat để thử giao diện với model thật. Cũng giải thích vì sao test Vitest và test unittest của box vẫn nằm cạnh mã nguồn |
+
 ## Quy ước đọc bản kế hoạch
 
 - Mọi phần kỹ thuật (V-XIII) kết thúc bằng đúng hai khối: **▸ Phạm vi đồ án (3 tháng)** và **▸ Cần gì để thành sản phẩm**.

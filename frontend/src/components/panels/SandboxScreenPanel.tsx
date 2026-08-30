@@ -19,16 +19,20 @@
  * `ScreenState` là nhãn của kênh agent, gán nó cho một khung hình VNC không
  * liên quan là nói dối về nguồn gốc dữ liệu.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
+import { useComposerStore } from '../../store/composerStore'
 import { useT, type TKey } from '../../i18n/context'
 import { useVncScreen } from '../../hooks/useVncScreen'
 import { useNow } from '../../hooks/useNow'
+import { useElementInspector } from '../../hooks/useElementInspector'
 import { retrySecondsLeft } from '../../lib/retry'
 import type { VncOfflineReason } from '../../lib/vnc/state'
 import { PanelShell, Chip, StatusChip } from '../ui'
 import { IntegrityBadge, ConfidentialityBadge, LabelDot } from '../LabelDot'
+import { ElementInspectorOverlay } from '../sandbox/ElementInspectorOverlay'
+import { ElementInspectorDrawer } from '../sandbox/ElementInspectorDrawer'
 import type { ScreenState } from '../../types/session'
 
 /** Map lý do offline → khoá i18n. Record chứ không nối chuỗi động — TKey vẫn kiểm được lúc biên dịch. */
@@ -284,10 +288,47 @@ export function SandboxScreenPanel() {
   const screen = useAgentStore((s) => s.screen)
   // Máy BẬT ⇒ luôn xem live (demo chỉ bật qua env khi cần thu hình 14.5).
   const vnc = useVncScreen('novnc')
+  // Dời lên đây (trước `toolbar`, TRAP F-8 mục 12 kế hoạch): khai báo sau khi
+  // `toolbar` dùng tới sẽ ném `ReferenceError` do TDZ — TypeScript KHÔNG bắt
+  // được lỗi này vì `const` vẫn hợp lệ về kiểu, chỉ sai thứ tự runtime.
+  const isLive = vnc.phase === 'live'
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const inspector = useElementInspector()
+  const addPendingElement = useComposerStore((s) => s.addPendingElement)
 
   // Điện & mạng box — trạng thái toàn cục (useBoxState), đặt ở header trên cùng.
   // (Không còn nút trong panel này — xem BoxControls.)
+
+  // Chỉ dùng được khi đang xem máy thật: nút bật (`toolbar`) đã disable khi
+  // không live, nhưng người dùng có thể đã bật rồi máy MỚI rớt kết nối — tắt
+  // hộ để lớp bắt cú bấm không treo lơ lửng trên một canvas không còn sống.
+  useEffect(() => {
+    if (!isLive && inspector.armed) inspector.disarm()
+  }, [isLive, inspector.armed, inspector.disarm])
+
+  // Khung sáng trên lớp phủ — chỉ vẽ khi ngăn kéo đang hiện MỘT KẾT QUẢ DOM
+  // (có `screenBox` framebuffer sẵn); nhánh desktop không có toạ độ nào để
+  // khoanh vùng nên không vẽ gì (đúng những gì mockup thể hiện).
+  const highlightResult =
+    inspector.drawer?.status === 'success' && inspector.drawer.result.type === 'dom'
+      ? inspector.drawer.result
+      : null
+  const highlightBox = highlightResult?.screenBox ?? null
+  const highlightLabel = highlightResult
+    ? t('screen.inspector.highlightLabel', {
+        tag: highlightResult.tagName,
+        width: Math.round(highlightResult.screenBox.width),
+        height: Math.round(highlightResult.screenBox.height),
+      })
+    : null
+
+  function handleAddToChat() {
+    const state = inspector.drawer
+    if (!state || state.status !== 'success') return
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `element-${Date.now()}`
+    addPendingElement({ id, point: state.point, result: state.result })
+    inspector.closeDrawer()
+  }
 
   const statusChip =
     vnc.phase === 'live' ? (
@@ -305,6 +346,20 @@ export function SandboxScreenPanel() {
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       {statusChip}
+      <button
+        type="button"
+        aria-pressed={inspector.armed}
+        disabled={!isLive}
+        title={isLive ? undefined : t('screen.inspector.toggleDisabledHint')}
+        onClick={inspector.toggleArmed}
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+          inspector.armed
+            ? 'border-brand bg-brand text-white'
+            : 'border-line text-muted hover:border-brand/40 hover:text-fg'
+        }`}
+      >
+        {inspector.armed ? t('screen.inspector.toggleOff') : t('screen.inspector.toggleOn')}
+      </button>
       {vnc.phase === 'live' && (
         <button
           type="button"
@@ -340,7 +395,6 @@ export function SandboxScreenPanel() {
           : undefined
 
   const retrySeconds = vnc.retryAtMs !== null ? retrySecondsLeft(vnc.retryAtMs, now) : null
-  const isLive = vnc.phase === 'live'
 
   return (
     <PanelShell title={t('screen.title')} toolbar={toolbar} note={note}>
@@ -421,6 +475,20 @@ export function SandboxScreenPanel() {
                 cùng chuỗi đó đã là `aria-label` của vùng `role="application"`
                 ở trên, nên trình đọc màn hình vẫn đọc được.
               */}
+              {/* Banner "đã lên nòng" — dải TUYỆT ĐỐI đè lên mép trên canvas
+                  (như thẻ kích thước khung hình ở dưới), KHÔNG nằm trong luồng
+                  flex. Đặt `shrink-0` trong luồng lại co kéo container noVNC ⇒
+                  `rfb.resizeSession=true` đổi độ phân giải màn hình thật (trap
+                  F-3, mục 12 — đúng lỗi review đã chỉ). `pointer-events-none`
+                  để cú bấm vẫn tới lớp bắt của `ElementInspectorOverlay`. */}
+              {inspector.armed && (
+                <div
+                  role="status"
+                  className="pointer-events-none absolute inset-x-0 top-0 bg-brand/10 px-3 py-1.5 text-center text-[11px] font-medium text-brand"
+                >
+                  {t('screen.inspector.armedBanner')}
+                </div>
+              )}
               {isLive && vnc.frameSize && !detailsOpen && (
                 <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-slate-200">
                   {t('screen.frameSize', {
@@ -428,6 +496,26 @@ export function SandboxScreenPanel() {
                     height: vnc.frameSize.height,
                   })}
                 </span>
+              )}
+              {/* Lớp phủ + ngăn kéo Element Selector (khung ④, F9/F10/F11) — thêm
+                  làm ANH/EM tuyệt đối với div `containerRef` ở trên, theo đúng
+                  khuôn của thẻ kích thước khung hình ngay phía trên: KHÔNG chạm
+                  vào kích thước/layout của div đó (trap F-3, mục 12 kế hoạch). */}
+              <ElementInspectorOverlay
+                armed={inspector.armed}
+                canvasContainerRef={vnc.containerRef}
+                highlightBox={highlightBox}
+                highlightLabel={highlightLabel}
+                onPick={inspector.handlePick}
+                onEscape={inspector.disarm}
+              />
+              {inspector.drawer && (
+                <ElementInspectorDrawer
+                  state={inspector.drawer}
+                  onClose={inspector.closeDrawer}
+                  onRetry={inspector.retry}
+                  onAddToChat={handleAddToChat}
+                />
               )}
             </div>
           </div>

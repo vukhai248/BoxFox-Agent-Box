@@ -1,0 +1,19 @@
+# Phụ thuộc cho thư mục `test/` (bộ test LLM + cầu nối chat).
+#
+# Cài:
+#   pip install -r test/requirements.txt
+#
+# Trên máy Debian/Ubuntu có Python "được quản lý bởi hệ thống", nếu pip báo
+# `externally-managed-environment` thì dùng một trong hai cách:
+#   python3 -m venv .venv && . .venv/bin/activate && pip install -r test/requirements.txt
+#   pip install --break-system-packages -r test/requirements.txt
+#
+# LƯU Ý: các phụ thuộc này CHỈ dùng cho `test/`. Chúng không phải phụ thuộc
+# runtime của box (deploy/docker) hay của frontend.
+
+# SDK Google Gen AI — gọi Gemini trong test/llm và test/chat-bridge.
+google-genai>=1.0,<3
+
+# Server WebSocket cho test/chat-bridge/bridge.py.
+# API dùng ở đây là websockets.asyncio.server.serve (có từ 13.0).
+websockets>=13.0

@@ -5,6 +5,8 @@
  * đổi `VITE_TRANSPORT=live` là chuyển sang WebSocket, không sửa store.
  */
 import type { ClientCommand, ServerEvent } from '../../types/transport'
+import type { InspectedElementContext } from '../../types/inspect'
+import { buildInspectedElementChunk } from '../inspect/chunk'
 import {
   SCENARIO_STEPS,
   SCENARIO_TOTAL,
@@ -66,12 +68,16 @@ export class MockTransport extends BaseTransport {
           message_id: `m-user-${Date.now()}`,
           text: command.text,
         })
+        // Nạp mọi phần tử đã đính kèm (chip khung ④) vào ngữ cảnh TRƯỚC khi
+        // báo hệ thống, đúng như box thật sẽ làm cho `elements` — để bản mock
+        // tự giải thích tính năng mà không cần backend (F7, §8-F7).
+        for (const element of command.elements ?? []) {
+          this.emit({ type: 'label_added', chunk: buildInspectedElementChunk(element) })
+        }
         this.emit({
           type: 'system_note',
           message_id: `m-mock-${Date.now()}`,
-          text:
-            'Đang chạy bản MOCK, chưa nối backend nên agent không trả lời câu tự do. ' +
-            'Dùng nút "Bước tiếp" ở bộ điều khiển demo để chạy kịch bản.',
+          text: this.userMessageNote(command.elements),
         })
         break
 
@@ -126,6 +132,25 @@ export class MockTransport extends BaseTransport {
         // Bản mock không có WebRTC — bỏ qua signaling.
         break
     }
+  }
+
+  /**
+   * Nội dung `system_note` sau `user_message`. Khi có `elements` đính kèm,
+   * nói rõ số lượng, nhãn KHÔNG TIN ĐƯỢC, và `integrity_floor` của phiên vừa
+   * sụt — nếu không nói thì bản mock âm thầm đổi hành vi mà không giải thích.
+   */
+  private userMessageNote(elements: InspectedElementContext[] | undefined): string {
+    if (!elements || elements.length === 0) {
+      return (
+        'Đang chạy bản MOCK, chưa nối backend nên agent không trả lời câu tự do. ' +
+        'Dùng nút "Bước tiếp" ở bộ điều khiển demo để chạy kịch bản.'
+      )
+    }
+    return (
+      `Đã nạp ${elements.length} phần tử từ khung ④ vào ngữ cảnh, nhãn KHÔNG TIN ĐƯỢC ` +
+      '(khong_tin_duoc) — integrity_floor của phiên vừa sụt theo. Đang chạy bản MOCK, ' +
+      'chưa nối backend nên agent không trả lời câu tự do.'
+    )
   }
 
   private resolvePermission(requestId: string, button: PermissionButtonId): void {

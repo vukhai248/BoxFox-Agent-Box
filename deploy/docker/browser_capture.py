@@ -201,6 +201,398 @@ class WebSocket:
             # RSV/unknown opcode → bỏ qua để không treo
 
 
+# ---------------------------------------------------------------------------
+# inspect_point — element-selector §7-B2. Đọc JSON từ STDIN (không qua argv,
+# vì `candidates` mang webSocketDebuggerUrl — argv hiện trong `ps`/`/proc/<pid>/cmdline`
+# của MỌI tiến trình trong container).
+# ---------------------------------------------------------------------------
+
+# Ngưỡng khớp cửa sổ khi có nhiều CDP target ứng viên (Browser.getWindowForTarget
+# so với hình học X11 đã hit-test).
+WINDOW_MATCH_TOLERANCE_PX = 80
+# Chốt chặn 2 (sanity check còn lại sau khi đã loại DevTools docked ở chốt chặn 1):
+# side panel / theme lạ vượt ngưỡng này ⇒ viewport_origin_unknown thay vì suy sai.
+MAX_CHROME_HEIGHT_PX = 200
+MAX_SIDE_SLACK_PX = 24
+
+VIEWPORT_EXPRESSION = r"""
+(() => ({
+  dpr: window.devicePixelRatio || 1,
+  innerWidth: window.innerWidth,
+  innerHeight: window.innerHeight,
+  outerWidth: window.outerWidth,
+  outerHeight: window.outerHeight,
+  screenX: window.screenX,
+  screenY: window.screenY,
+  url: document.location ? document.location.href : '',
+  title: document.title || '',
+}))()
+"""
+
+# Text/comment node → cha có phần tử (DOM.getNodeForLocation có thể trả một text
+# node — CSS box/attributes chỉ có ý nghĩa trên phần tử).
+ELEMENT_OF_FN = r"""
+function() {
+  var TEXT_NODE = 3, COMMENT_NODE = 8;
+  if ((this.nodeType === TEXT_NODE || this.nodeType === COMMENT_NODE) && this.parentElement) {
+    return this.parentElement;
+  }
+  return this;
+}
+"""
+
+# Selector theo thứ tự ưu tiên #id → tag.class(tối đa 4) → :nth-of-type → giữ +
+# ghi chú "selector_not_unique". KHÔNG đọc data-boxfox-src (Phase 1, §10.3).
+# Kiểm tra duy nhất chạy trên getRootNode() — KHÔNG document — để đúng trong
+# shadow root (author).
+EXTRACT_FN = r"""
+function(maxText, maxAttrs, maxAttrValue) {
+  var notes = [];
+  var node = this;
+  if (node.nodeType !== 1) {
+    return {error: 'not_element'};
+  }
+  var root = node.getRootNode ? node.getRootNode() : document;
+  var isUnique = function(sel) {
+    try {
+      var found = root.querySelectorAll(sel);
+      return found.length === 1 && found[0] === node;
+    } catch (e) {
+      return false;
+    }
+  };
+  var selector = null;
+  if (node.id && /^[A-Za-z][A-Za-z0-9_-]*$/.test(node.id)) {
+    var byId = '#' + node.id;
+    if (isUnique(byId)) selector = byId;
+  }
+  if (!selector) {
+    var tag = node.tagName.toLowerCase();
+    var classes = (node.className && typeof node.className === 'string')
+      ? node.className.trim().split(/\s+/).filter(Boolean).slice(0, 4)
+      : [];
+    var candidate = tag + classes.map(function(c) { return '.' + c; }).join('');
+    if (isUnique(candidate)) {
+      selector = candidate;
+    } else {
+      var index = 1;
+      var sibling = node;
+      while ((sibling = sibling.previousElementSibling)) {
+        if (sibling.tagName === node.tagName) index += 1;
+      }
+      candidate = candidate + ':nth-of-type(' + index + ')';
+      selector = candidate;
+      if (!isUnique(candidate)) notes.push('selector_not_unique');
+    }
+  }
+  var shadowHostSelector = null;
+  if (root !== document && root.host) {
+    shadowHostSelector = root.host.tagName ? root.host.tagName.toLowerCase() : null;
+    notes.push('shadow_dom');
+  }
+  if (node.ownerDocument !== document) {
+    notes.push('iframe_boundary');
+  }
+  var fullText = node.textContent || '';
+  var textTruncated = fullText.length > maxText;
+  var text = fullText.slice(0, maxText);
+
+  var attributes = {};
+  var attrCount = 0;
+  var attrsTruncated = false;
+  var attrList = Array.prototype.slice.call(node.attributes || []);
+  for (var i = 0; i < attrList.length; i++) {
+    if (attrCount >= maxAttrs) { attrsTruncated = true; break; }
+    var attr = attrList[i];
+    var value = attr.value || '';
+    if (value.length > maxAttrValue) { value = value.slice(0, maxAttrValue); attrsTruncated = true; }
+    attributes[attr.name] = value;
+    attrCount += 1;
+  }
+
+  return {
+    tagName: node.tagName.toLowerCase(),
+    selector: selector,
+    text: text,
+    textTruncated: textTruncated,
+    attributes: attributes,
+    attrsTruncated: attrsTruncated,
+    notes: notes,
+    shadowHostSelector: shadowHostSelector,
+  };
+}
+"""
+
+
+# --- Hàm thuần (test được không cần socket) ---------------------------------
+def content_origin(win_geom: dict, metrics: dict) -> tuple[float, float]:
+    """Gốc (trên-trái) của viewport CSS trong toạ độ màn hình X11.
+
+    Giả định (KHÔNG luôn đúng — xem sanity check `_viewport_origin_plausible`):
+    viewport sát ĐÁY cửa sổ client, căn GIỮA ngang.
+    """
+    dpr = float(metrics.get("dpr") or 1.0) or 1.0
+    origin_y = win_geom["y"] + win_geom["h"] - metrics["innerHeight"] * dpr
+    origin_x = win_geom["x"] + (win_geom["w"] - metrics["innerWidth"] * dpr) / 2.0
+    return origin_x, origin_y
+
+
+def screen_to_css(screen_x: float, screen_y: float, win_geom: dict, metrics: dict) -> tuple[float, float]:
+    origin_x, origin_y = content_origin(win_geom, metrics)
+    dpr = float(metrics.get("dpr") or 1.0) or 1.0
+    return (screen_x - origin_x) / dpr, (screen_y - origin_y) / dpr
+
+
+def point_in_viewport(css_x: float, css_y: float, metrics: dict) -> bool:
+    return 0 <= css_x < metrics["innerWidth"] and 0 <= css_y < metrics["innerHeight"]
+
+
+def quad_to_css_box(quad: list[float]) -> dict:
+    # CDP content quad: 8 số [x1,y1, x2,y2, x3,y3, x4,y4] (4 góc, không nhất thiết
+    # theo thứ tự trục) → bounding box qua min/max.
+    xs = quad[0::2]
+    ys = quad[1::2]
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+    return {"x": x_min, "y": y_min, "width": x_max - x_min, "height": y_max - y_min}
+
+
+def css_box_to_screen_box(css_box: dict, origin_x: float, origin_y: float, dpr: float) -> dict:
+    return {
+        "x": round(origin_x + css_box["x"] * dpr),
+        "y": round(origin_y + css_box["y"] * dpr),
+        "width": round(css_box["width"] * dpr),
+        "height": round(css_box["height"] * dpr),
+    }
+
+
+def _bounds_score(bounds: dict, win_geom: dict) -> float:
+    left = abs(float(bounds.get("left", 0)) - float(win_geom.get("x", 0)))
+    top = abs(float(bounds.get("top", 0)) - float(win_geom.get("y", 0)))
+    width = abs(float(bounds.get("width", 0)) - float(win_geom.get("w", 0)))
+    height = abs(float(bounds.get("height", 0)) - float(win_geom.get("h", 0)))
+    return left + top + width + height
+
+
+def _viewport_origin_plausible(win_geom: dict, metrics: dict) -> bool:
+    """Chốt chặn 2: sai lệch còn lại (side panel, theme lạ) sau khi chốt chặn 1
+    (DevTools docked, xem `_devtools_docked`) đã loại DevTools."""
+    dpr = float(metrics.get("dpr") or 1.0) or 1.0
+    slack_x = win_geom["w"] - metrics["innerWidth"] * dpr
+    slack_y = win_geom["h"] - metrics["innerHeight"] * dpr
+    return 0 <= slack_y <= MAX_CHROME_HEIGHT_PX and 0 <= slack_x <= MAX_SIDE_SLACK_PX
+
+
+def viewport_metrics(ws: "WebSocket") -> dict:
+    response = ws.call("Runtime.evaluate", {
+        "expression": VIEWPORT_EXPRESSION,
+        "returnByValue": True,
+    })
+    value = response.get("result", {}).get("result", {}).get("value")
+    if not isinstance(value, dict):
+        raise WebSocketError("Runtime.evaluate không trả object viewport hợp lệ")
+    for key in ("dpr", "innerWidth", "innerHeight"):
+        if key not in value:
+            raise WebSocketError(f"Viewport metrics thiếu khoá {key}")
+    return value
+
+
+def _select_target(ws_browser: "WebSocket | None", candidates: list[dict], win_geom: dict) -> tuple[dict | None, str | None]:
+    if len(candidates) == 1:
+        return candidates[0], None
+    if ws_browser is None:
+        return None, "ambiguous_target"
+
+    scored: list[tuple[float, dict]] = []
+    for candidate in candidates:
+        try:
+            response = ws_browser.call("Browser.getWindowForTarget", {"targetId": candidate.get("targetId")})
+            bounds = response.get("result", {}).get("bounds") or {}
+        except (WebSocketError, OSError, KeyError, TypeError):
+            continue
+        scored.append((_bounds_score(bounds, win_geom), candidate))
+
+    if scored:
+        scored.sort(key=lambda item: item[0])
+        within_tolerance = [item for item in scored if item[0] <= WINDOW_MATCH_TOLERANCE_PX]
+        if len(within_tolerance) == 1:
+            return within_tolerance[0][1], None
+
+    # Dự phòng cuối: khớp theo tiêu đề (tiêu đề trang thường là tiền tố tiêu đề cửa sổ).
+    window_title = win_geom.get("title") or ""
+    title_matches = [
+        candidate for candidate in candidates
+        if window_title and window_title.startswith(candidate.get("title") or "\0")
+    ]
+    if len(title_matches) == 1:
+        return title_matches[0], None
+
+    return None, "ambiguous_target"
+
+
+def _devtools_docked(ws_browser: "WebSocket | None", page_target_id: str, devtools_target_ids: list[str]) -> bool:
+    """Chốt chặn 1 — tất định, KHÔNG dựa vào ngưỡng slackY. Mọi lỗi đọc/gọi CDP
+    trên đường này FAIL-CLOSED thành docked=True (§7-B2)."""
+    if not devtools_target_ids:
+        return False
+    if ws_browser is None:
+        return True
+    try:
+        page_window_id = ws_browser.call(
+            "Browser.getWindowForTarget", {"targetId": page_target_id}
+        )["result"]["windowId"]
+    except (WebSocketError, OSError, KeyError, TypeError):
+        return True
+    for devtools_id in devtools_target_ids:
+        try:
+            dt_window_id = ws_browser.call(
+                "Browser.getWindowForTarget", {"targetId": devtools_id}
+            )["result"]["windowId"]
+        except (WebSocketError, OSError, KeyError, TypeError):
+            return True
+        if dt_window_id == page_window_id:
+            return True
+    return False
+
+
+def extract_at(ws: "WebSocket", point: dict, win_geom: dict, limits: dict, selected: dict) -> dict:
+    """Chuỗi CDP trên MỘT kết nối cấp page — thứ tự lệnh là hợp đồng có test khoá."""
+    max_text = int(limits.get("maxText") or 2048)
+    max_attrs = int(limits.get("maxAttrs") or 32)
+    max_attr_value = int(limits.get("maxAttrValue") or 512)
+
+    metrics = viewport_metrics(ws)  # (1) Runtime.evaluate
+
+    if not _viewport_origin_plausible(win_geom, metrics):
+        return {"ok": False, "reason": "viewport_origin_unknown"}
+
+    dpr = float(metrics.get("dpr") or 1.0) or 1.0
+    origin_x, origin_y = content_origin(win_geom, metrics)
+    css_x, css_y = screen_to_css(float(point["x"]), float(point["y"]), win_geom, metrics)
+
+    if not point_in_viewport(css_x, css_y, metrics):
+        return {"ok": False, "reason": "outside_viewport"}
+
+    try:
+        ws.call("DOM.enable", {})  # (2)
+        ws.call("DOM.getDocument", {"depth": 0})  # (3)
+
+        location = ws.call("DOM.getNodeForLocation", {  # (4)
+            "x": round(css_x), "y": round(css_y), "includeUserAgentShadowDOM": False,
+        }).get("result", {})
+        backend_node_id = location.get("backendNodeId")
+        if not backend_node_id:
+            return {"ok": False, "reason": "no_node_at_point"}
+
+        resolved = ws.call("DOM.resolveNode", {"backendNodeId": backend_node_id}).get("result", {})  # (5)
+        object_id = (resolved.get("object") or {}).get("objectId")
+        if not object_id:
+            return {"ok": False, "reason": "no_node_at_point"}
+
+        promoted = ws.call("Runtime.callFunctionOn", {  # (6)
+            "objectId": object_id,
+            "functionDeclaration": ELEMENT_OF_FN,
+            "returnByValue": False,
+        }).get("result", {}).get("result", {})
+        element_object_id = promoted.get("objectId") or object_id
+
+        extracted = ws.call("Runtime.callFunctionOn", {  # (7)
+            "objectId": element_object_id,
+            "functionDeclaration": EXTRACT_FN,
+            "arguments": [
+                {"value": max_text}, {"value": max_attrs}, {"value": max_attr_value},
+            ],
+            "returnByValue": True,
+        }).get("result", {}).get("result", {})
+        data = extracted.get("value")
+        if not isinstance(data, dict) or data.get("error"):
+            return {"ok": False, "reason": "extract_failed"}
+
+        html = ws.call("DOM.getOuterHTML", {"objectId": element_object_id}).get(  # (8)
+            "result", {}
+        ).get("outerHTML", "")
+    except (WebSocketError, KeyError, TypeError):
+        return {"ok": False, "reason": "extract_failed"}
+
+    css_box = None
+    screen_box = None
+    try:
+        box_model = ws.call("DOM.getBoxModel", {"objectId": element_object_id}).get(  # (9)
+            "result", {}
+        ).get("model")
+        if box_model and box_model.get("content"):
+            css_box = quad_to_css_box(box_model["content"])
+            screen_box = css_box_to_screen_box(css_box, origin_x, origin_y, dpr)
+    except WebSocketError:
+        pass  # box model thiếu vẫn OK — trả cssBox/screenBox = None (§7-B2)
+
+    return {
+        "ok": True,
+        "url": metrics.get("url", ""),
+        "title": metrics.get("title", ""),
+        "tagName": data.get("tagName", ""),
+        "selector": data.get("selector"),
+        "text": data.get("text", ""),
+        "attributes": data.get("attributes", {}),
+        "html": html,
+        "truncatedInPage": bool(data.get("textTruncated") or data.get("attrsTruncated")),
+        "cssBox": css_box,
+        "screenBox": screen_box,
+        "notes": data.get("notes", []),
+        "shadowHostSelector": data.get("shadowHostSelector"),
+        "targetId": str(selected.get("targetId") or ""),
+    }
+
+
+def inspect_point(request: dict) -> dict:
+    """Điểm vào duy nhất của subcommand `inspect_point` — orchestrate lựa target,
+    kiểm DevTools docked, rồi `extract_at` trên kết nối cấp page.
+
+    KHÔNG BAO GIỜ in `webSocketDebuggerUrl`/`browserWebSocketUrl` ra stdout hay
+    stderr — chỉ `targetId`/`url` (URL TRANG WEB, không phải debugger)/`title`/`reason`.
+    """
+    point = request["point"]
+    win_geom = request["window"]
+    candidates = request.get("candidates") or []
+    devtools_ids = request.get("devtoolsTargetIds") or []
+    limits = request.get("limits") or {}
+    browser_ws_url = request.get("browserWebSocketUrl")
+    cdp_timeout = float(limits.get("cdpTimeoutSec") or 5.0)
+
+    if not candidates:
+        return {"ok": False, "reason": "no_cdp_target"}
+
+    need_browser_ws = len(candidates) > 1 or bool(devtools_ids)
+    ws_browser: WebSocket | None = None
+    try:
+        if need_browser_ws:
+            if not browser_ws_url:
+                return {"ok": False, "reason": "cdp_unreachable"}
+            ws_browser = WebSocket(browser_ws_url, timeout=cdp_timeout)
+            ws_browser.connect()
+
+        selected, reason = _select_target(ws_browser, candidates, win_geom)
+        if selected is None:
+            return {"ok": False, "reason": reason or "ambiguous_target"}
+
+        if _devtools_docked(ws_browser, str(selected.get("targetId") or ""), devtools_ids):
+            return {"ok": False, "reason": "devtools_docked"}
+    finally:
+        if ws_browser is not None:
+            ws_browser.close()
+
+    page_ws_url = selected.get("webSocketDebuggerUrl")
+    if not page_ws_url:
+        return {"ok": False, "reason": "no_cdp_target"}
+
+    ws_page = WebSocket(page_ws_url, timeout=cdp_timeout)
+    try:
+        ws_page.connect()
+        return extract_at(ws_page, point, win_geom, limits, selected)
+    finally:
+        ws_page.close()
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command")
@@ -210,6 +602,10 @@ def _parse_args() -> argparse.Namespace:
     capture.add_argument("--path", required=True)
     capture.add_argument("--format", default="png", choices=("png", "jpg"))
     capture.add_argument("--full-page", action="store_true")
+
+    # Không flag — request (có URL debugger) tới bằng JSON trên STDIN, không qua
+    # argv (§10.1: argv hiện trong ps của mọi tiến trình trong container).
+    sub.add_parser("inspect_point")
     return parser.parse_args()
 
 
@@ -256,8 +652,17 @@ def capture_tab(ws_url: str, path: str, fmt: str, full_page: bool) -> dict:
 
 def main() -> int:
     args = _parse_args()
+    if args.command == "inspect_point":
+        try:
+            request = json.load(sys.stdin)
+            result = inspect_point(request)
+        except (WebSocketError, OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            print(f"browser_capture: {error}", file=sys.stderr)
+            return 1
+        print(json.dumps(result))
+        return 0
     if args.command != "capture_tab":
-        print("Chưa có lệnh — dùng subcommand capture_tab.", file=sys.stderr)
+        print("Chưa có lệnh — dùng subcommand capture_tab hoặc inspect_point.", file=sys.stderr)
         return 2
     try:
         result = capture_tab(args.web_socket_url, args.path, args.format, args.full_page)

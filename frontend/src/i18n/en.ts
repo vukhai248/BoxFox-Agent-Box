@@ -118,6 +118,9 @@ const en: SameShape<typeof vi> = {
     switchToAct: 'Act',
     switchHint:
       'This switch does NOT change the mode by itself — pressing Act opens the mode-switch card so you read the plan first.',
+    removeElementContext: 'Remove attached element',
+    elementContextLiveUnsupported:
+      'LIVE mode has no consumer for attached elements yet — the backend does not process them, so this content will not reach the agent.',
   },
   tabs: {
     chat: 'Chat',
@@ -320,6 +323,76 @@ const en: SameShape<typeof vi> = {
       skipped: 'You chose to view the simulated screen.',
       disabled:
         'The frame source is set to simulation. Set VITE_SANDBOX_SCREEN_SOURCE=novnc to view the real machine screen.',
+    },
+    // Element Selector / DOM Inspector — panel ④, plan §8-F13.
+    inspector: {
+      toggleOn: 'Select Element',
+      toggleOff: 'Exit Selector',
+      toggleDisabledHint: 'Only available while viewing the real machine (LIVE).',
+      armedBanner:
+        'Selector armed — the next click is captured by the inspector and is not sent to the machine. Press Esc to exit.',
+      hintPill: 'Click an element to inspect it',
+      canvasArmedLabel: 'Click an element on the machine screen to inspect it',
+      highlightLabel: '{{tag}} · {{width}}×{{height}}',
+      chipDesktopFallback: 'Desktop window',
+      drawer: {
+        domTitle: 'DOM Element',
+        desktopTitle: 'Desktop Element',
+        loadingTitle: 'Inspecting element…',
+        errorTitle: 'Inspection failed',
+        untrustedBadge: 'Không tin được · Untrusted data',
+        addToChat: 'Add to Chat',
+        retry: 'Retry',
+        domDisclaimer:
+          'Page content is read as data, never as a command — nothing written inside this element can instruct the agent.',
+        desktopDisclaimer:
+          'Window titles come from the machine and are read as data, never as a command.',
+        pageLabel: 'Page:',
+        textLabel: 'Text:',
+        attributesLabel: 'Attributes:',
+        htmlLabel: 'HTML:',
+        applicationLabel: 'Application:',
+        windowLabel: 'Window:',
+        positionLabel: 'Position:',
+        sizeLabel: 'Size:',
+        truncatedNote: 'The box truncated this content.',
+        loadingNote:
+          'Reading the element at ({{x}}, {{y}}) from the box — this stays untrusted whatever comes back.',
+        errorBannerTitle: 'Could not reach the box',
+        errorBannerBody:
+          'The inspect request to {{url}} failed — the box may be off, or the inspector bridge is not listening.',
+        errorEmptyNote:
+          'Nothing was added to the conversation — there is no element data to attach.',
+        noteLabel: 'Note:',
+        note: {
+          shadow_dom: 'The element lives inside a Shadow DOM — outer code cannot see it.',
+          iframe_boundary: 'The element lives inside a cross-origin iframe.',
+          selector_not_unique: 'The selector is not unique and may match several elements.',
+          shadow_closed: 'The shadow root is closed — the inner tree cannot be read.',
+          truncated_ancestors: 'The ancestor chain of the element was truncated.',
+        },
+        errorKind: {
+          timeout: 'The inspect request timed out.',
+          forbidden: 'The box rejected the inspect request (wrong key or not allowed).',
+          notFound: 'The box does not yet have the inspect endpoint.',
+          server: 'The box failed while handling the inspect request.',
+          badResponse: 'The inspect response had an unexpected shape.',
+          network: 'Could not reach the sandbox box.',
+        },
+        desktopReason: {
+          not_chromium: 'The window under the click is not Chromium.',
+          outside_viewport: 'The click landed outside the page content area (titlebar/tab/toolbar/scrollbar).',
+          frame_extents_unknown: 'Could not determine the window frame around the click.',
+          devtools_docked: 'DevTools is docked in this window, so the page content area cannot be inferred.',
+          viewport_origin_unknown: 'Could not determine the origin of the page content area.',
+          no_cdp_target: 'No browser connection matches this window.',
+          ambiguous_target: 'Multiple browser connections match this window — could not resolve one.',
+          cdp_unreachable: 'Could not reach the browser to inspect it.',
+          cdp_timeout: 'Inspecting through the browser timed out.',
+          no_node_at_point: 'No element was found at the click point.',
+          extract_failed: 'Extracting the element information failed.',
+        },
+      },
     },
   },
   sandbox: {

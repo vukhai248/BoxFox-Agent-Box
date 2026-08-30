@@ -22,4 +22,6 @@ interface ImportMetaEnv {
   readonly VITE_IDE_URL?: string
   /** Đường hầm Terminal qua ide-proxy — xem `src/lib/terminal/config.ts`. */
   readonly VITE_BOX_TTY_URL?: string
+  /** Nguồn dữ liệu của Element Selector (khung ④): sandbox (mặc định) | mock — xem `src/lib/inspect/index.ts`. */
+  readonly VITE_ELEMENT_INSPECT_SOURCE?: 'sandbox' | 'mock'
 }

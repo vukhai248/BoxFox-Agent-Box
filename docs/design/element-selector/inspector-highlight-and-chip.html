@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Element Selector — highlight rectangle & chat context chip | Machine screen</title>
+    <meta name="description" content="Selected element highlight rectangle drawn over the machine screen plus the chat composer carrying the element context chip produced by Add to Chat." />
+    <style>
+    :root {
+      --c-bg: hsl(0 0% 4%);
+      --c-panel: hsl(0 0% 7%);
+      --c-panel2: hsl(0 0% 11%);
+      --c-line: hsl(0 0% 15%);
+      --c-fg: hsl(0 0% 96%);
+      --c-muted: hsl(0 0% 55%);
+      --c-brand: hsl(217 91% 60%);
+      --c-brandfg: hsl(0 0% 100%);
+      --c-amber: hsl(38 92% 50%);
+      --c-amber-fg: hsl(46 96% 76%);
+      --c-emerald: hsl(160 84% 39%);
+      --c-emerald-fg: hsl(152 76% 80%);
+      --ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        Helvetica, Arial, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--c-bg);
+      color: var(--c-fg);
+      font-family: var(--ui);
+      font-size: 12px;
+      letter-spacing: -0.012em;
+      -webkit-font-smoothing: antialiased;
+      padding: 24px 20px 48px;
+    }
+    code, pre, .mono { font-family: var(--mono); }
+    .stage { width: 1160px; margin: 0 auto; }
+    .stage-note {
+      font-size: 11px;
+      color: var(--c-muted);
+      margin: 0 0 8px;
+    }
+    .stage-note b { color: var(--c-fg); font-weight: 600; }
+    .stage + .stage { margin-top: 28px; }
+
+    /* ---------- PanelShell (frontend/src/components/ui.tsx) ---------- */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--c-panel);
+      border: 1px solid var(--c-line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--c-line);
+      padding: 8px 12px;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; margin: 0; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+    /* ---------- buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 6px;
+      border: 1px solid var(--c-line);
+      background: transparent;
+      color: var(--c-muted);
+      font-family: var(--ui);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.012em;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: color-mix(in srgb, var(--c-brand) 40%, transparent); color: var(--c-fg); }
+    .btn-armed {
+      border-color: var(--c-brand);
+      background: var(--c-brand);
+      color: var(--c-brandfg);
+    }
+    .btn-toggle-on {
+      border-color: var(--c-brand);
+      background: color-mix(in srgb, var(--c-brand) 15%, transparent);
+      color: var(--c-brand);
+    }
+    .btn-brand {
+      border-color: var(--c-brand);
+      background: var(--c-brand);
+      color: var(--c-brandfg);
+      padding: 5px 10px;
+    }
+    .btn-brand:hover { color: var(--c-brandfg); }
+    .btn-brand[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--c-line);
+      background: transparent;
+      color: var(--c-muted);
+      cursor: pointer;
+    }
+    .icon-btn:hover { color: var(--c-fg); }
+    svg { display: block; }
+
+    /* ---------- chips / badges ---------- */
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      background: color-mix(in srgb, var(--c-emerald) 15%, transparent);
+      color: var(--c-emerald-fg);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-emerald) 40%, transparent);
+    }
+    .dot { width: 6px; height: 6px; border-radius: 999px; }
+    .dot-emerald { background: var(--c-emerald); }
+    .dot-amber { background: var(--c-amber); }
+    .badge-untrusted {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 500;
+      background: color-mix(in srgb, var(--c-amber) 15%, transparent);
+      color: var(--c-amber-fg);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-amber) 40%, transparent);
+      white-space: nowrap;
+    }
+    .chip-neutral {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: var(--c-panel2);
+      color: var(--c-muted);
+      box-shadow: inset 0 0 0 1px var(--c-line);
+    }
+
+    /* ---------- screen area (noVNC canvas stand-in) ---------- */
+    .screen {
+      position: relative;
+      height: 470px;
+      background: #0f172a;
+      overflow: hidden;
+    }
+    .screen-armed { cursor: crosshair; }
+    .frame-size {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 6px;
+      font-size: 10px;
+      color: #e2e8f0;
+    }
+    /* mock guest desktop: a Chromium window inside the box */
+    .guest {
+      position: absolute;
+      inset: 14px;
+      border-radius: 6px;
+      background: #17181b;
+      border: 1px solid #2b2f36;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .guest-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #202226;
+      padding: 6px 8px 0;
+    }
+    .guest-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #2c2f34;
+      color: #c7ccd4;
+      border-radius: 6px 6px 0 0;
+      padding: 5px 10px;
+      font-size: 10px;
+      max-width: 220px;
+    }
+    .guest-omni {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #202226;
+      padding: 6px 8px;
+      border-bottom: 1px solid #2b2f36;
+    }
+    .guest-url {
+      flex: 1;
+      background: #2c2f34;
+      color: #9aa2ad;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+    .guest-body { flex: 1; display: flex; min-height: 0; background: #0a0a0a; }
+    .guest-side {
+      width: 168px;
+      border-right: 1px solid #262626;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .guest-brand { display: flex; align-items: center; gap: 6px; }
+    .guest-brand-mark {
+      width: 16px; height: 16px; border-radius: 4px;
+      background: color-mix(in srgb, var(--c-brand) 30%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-brand) 55%, transparent);
+    }
+    .guest-brand-text { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; color: #f5f5f5; }
+    .guest-nav { font-size: 10px; color: #8c8c8c; padding: 4px 6px; border-radius: 4px; }
+    .guest-nav-active { background: #1c1c1c; color: #f5f5f5; }
+    .guest-main { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .guest-skel { height: 8px; border-radius: 3px; background: #1c1c1c; }
+    .guest-card {
+      border: 1px solid #262626;
+      border-radius: 6px;
+      background: #121212;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .ph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed #2f2f2f;
+      border-radius: 6px;
+      color: #6b6b6b;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* ---------- armed hint pill ---------- */
+    .hint-pill {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: var(--c-brand);
+      color: var(--c-brandfg);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+    }
+    /* transparent click-interceptor overlay */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+      background: rgba(59, 130, 246, 0.04);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-brand) 35%, transparent);
+    }
+    .cursor-mark { position: absolute; color: var(--c-brand); }
+    .cursor-note {
+      position: absolute;
+      font-size: 10px;
+      color: color-mix(in srgb, var(--c-brand) 75%, white);
+      font-family: var(--mono);
+    }
+
+    /* ---------- highlight rectangle ---------- */
+    .hl {
+      position: absolute;
+      outline: 1px solid var(--c-brand);
+      background: color-mix(in srgb, var(--c-brand) 10%, transparent);
+    }
+    .hl-label {
+      position: absolute;
+      top: calc(100% + 3px);
+      left: -1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--c-brand);
+      color: var(--c-brandfg);
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 1;
+      padding: 3px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    /* ---------- bottom drawer ---------- */
+    .drawer {
+      border-top: 1px solid var(--c-line);
+      background: var(--c-panel);
+    }
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--c-line);
+    }
+    .drawer-title { font-size: 12px; font-weight: 600; }
+    .drawer-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .drawer-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .micro { font-size: 11px; line-height: 1.5; color: var(--c-muted); margin: 0; }
+    .sel-badge {
+      align-self: flex-start;
+      max-width: 100%;
+      border-radius: 6px;
+      background: var(--c-panel2);
+      border: 1px solid var(--c-line);
+      padding: 4px 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--c-fg);
+      overflow-wrap: anywhere;
+    }
+    .kv { font-size: 11px; color: var(--c-fg); margin: 0; }
+    .kv .k { color: var(--c-muted); font-weight: 600; }
+    .kv .v-mono { font-family: var(--mono); color: var(--c-fg); }
+    .kv .v-it { font-style: italic; color: var(--c-fg); }
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--c-muted);
+      margin-bottom: 4px;
+    }
+    pre.code {
+      margin: 0;
+      background: var(--c-panel2);
+      border: 1px solid var(--c-line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.6;
+      color: var(--c-fg);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 116px;
+      overflow: auto;
+    }
+    .tok-attr { color: var(--c-brand); }
+    .tok-val { color: var(--c-emerald-fg); }
+    .tok-tag { color: var(--c-brand); }
+    .tok-punct { color: var(--c-muted); }
+
+    /* source mapping */
+    .src-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .src-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 6px;
+      background: var(--c-panel2);
+      border: 1px solid var(--c-line);
+      padding: 3px 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--c-fg);
+    }
+    .src-missing {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--c-muted);
+    }
+    .src-missing .src-dashed {
+      border: 1px dashed var(--c-line);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-family: var(--mono);
+      color: var(--c-muted);
+    }
+
+    /* amber banner */
+    .banner-warn {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--c-amber) 15%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-amber) 40%, transparent);
+      color: var(--c-amber-fg);
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .banner-warn .mono { font-size: 11px; }
+
+    /* loading / error */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 2px solid var(--c-line);
+      border-top-color: var(--c-brand);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .skel {
+      border-radius: 6px;
+      background: var(--c-panel2);
+      border: 1px solid var(--c-line);
+    }
+    .skel-pulse { animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+    /* ---------- composer (ChatInputBar) ---------- */
+    .composer-wrap { border-top: 1px solid var(--c-line); background: var(--c-panel); padding: 12px; }
+    .composer {
+      border: 1px solid var(--c-line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--c-panel2) 70%, transparent);
+      padding: 10px;
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 4px 8px; }
+    .ctx-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--c-line);
+      border-radius: 8px;
+      background: var(--c-panel);
+      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--c-fg);
+    }
+    .ctx-chip .sel {
+      font-family: var(--mono);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ctx-chip .x { color: var(--c-muted); background: none; border: 0; padding: 0; cursor: pointer; display: flex; }
+    .composer-text {
+      width: 100%;
+      resize: none;
+      background: transparent;
+      border: 0;
+      outline: none;
+      color: var(--c-fg);
+      font-family: var(--ui);
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 4px 6px;
+    }
+    .composer-text::placeholder { color: color-mix(in srgb, var(--c-muted) 60%, transparent); }
+    .composer-bar {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid color-mix(in srgb, var(--c-line) 40%, transparent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .composer-left { display: flex; align-items: center; gap: 6px; }
+    .mini-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 0;
+      background: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: var(--ui);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--c-muted);
+      cursor: pointer;
+    }
+    .send-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 0;
+      background: hsl(0 0% 92%);
+      color: hsl(0 0% 9%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .target { position: relative; }
+    .screen{height:340px}
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <p class="stage-note"><b>6a — Highlight rectangle over the canvas.</b> 1px brand outline, brand/10 fill, and a small attached label carrying the tag name and pixel size. Drawn in the overlay, never in the guest page.</p>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Machine screen</h2>
+          <div class="toolbar">
+            <button type="button" class="btn" data-component-id="sandbox-open-web-app" aria-label="Open web app">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              Open web app
+            </button>
+            <button type="button" class="btn" data-component-id="sandbox-inspector-toggle" aria-pressed="false" aria-label="Select element">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+              Select Element
+            </button>
+            <button type="button" class="btn" data-component-id="sandbox-save-snapshot" aria-label="Save Browser Snapshot">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              Save Browser Snapshot
+            </button>
+            <span class="status-chip"><span class="dot dot-emerald"></span>Connected</span>
+          </div>
+        </div>
+        <div class="screen">
+                <div class="guest">
+        <div class="guest-tabs">
+          <div class="guest-tab">
+            <span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;flex:none;"></span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">BoxFox — Agent Box</span>
+          </div>
+          <div class="guest-tab" style="background:#25282c;color:#7d848d;">localhost:8080</div>
+        </div>
+        <div class="guest-omni">
+          <span class="guest-url">http://localhost:3100/</span>
+        </div>
+        <div class="guest-body">
+          <div class="guest-side">
+            <div class="guest-brand">
+              <span class="guest-brand-mark"></span><span class="guest-brand-text target">boxfox<span class="hl" style="inset:-3px -4px;" aria-hidden="true"><span class="hl-label">span &middot; 58&times;17</span></span></span>
+            </div>
+            <div class="guest-nav guest-nav-active">Conversation</div>
+            <div class="guest-nav">Machine screen</div>
+            <div class="guest-nav">IDE</div>
+            <div class="guest-nav">Terminal</div>
+            <div class="guest-nav">Labels &amp; Leases</div>
+            <div class="guest-nav">Audit log</div>
+          </div>
+          <div class="guest-main">
+            <div class="guest-card">
+              <div class="guest-skel" style="width:38%"></div>
+              <div class="guest-skel" style="width:72%"></div>
+              <div class="guest-skel" style="width:56%"></div>
+            </div>
+            <div class="ph" style="flex:1;min-height:70px;">Guest desktop — Chromium in box (placeholder)</div>
+          </div>
+        </div>
+      </div>
+
+          <span class="frame-size">1186 × 787 · frames from the real machine</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage" style="width:520px;margin-left:0;">
+      <p class="stage-note"><b>6b — Element context chip in the composer.</b> What “Add to Chat” produces: same chip row as file attachments, plus a crosshair icon, truncated monospace selector and an amber untrusted dot.</p>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Conversation</h2>
+          <div class="toolbar">
+            <span class="chip-neutral">Plan</span>
+            <span class="status-chip"><span class="dot dot-emerald"></span>Connected</span>
+          </div>
+        </div>
+        <div style="height:170px;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="align-self:flex-end;max-width:80%;border:1px solid var(--c-line);background:var(--c-panel2);border-radius:8px;padding:6px 8px;font-size:11px;">
+            Rename the sidebar brand text to “Agent Box”.
+          </div>
+          <div style="max-width:88%;font-size:11px;line-height:1.6;color:var(--c-fg);">
+            <span style="font-weight:600;">Agent</span>
+            <span style="color:var(--c-muted);"> · reading the element you attached as data only.</span>
+          </div>
+          <div class="ph" style="flex:1;min-height:40px;">Conversation transcript (placeholder)</div>
+        </div>
+        <div class="composer-wrap">
+          <div class="composer">
+            <div class="chip-row">
+              <div class="ctx-chip" data-component-id="composer-element-context-chip">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--c-brand);flex:none;" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                <span class="sel" title="span.text-sm.font-semibold.tracking-tight.text-fg">span.text-sm.font-semibold.tracking-tight.text-fg</span>
+                <span class="dot dot-amber" role="img" title="Integrity: Không tin được" aria-label="Integrity: Không tin được" style="flex:none;"></span>
+                <button type="button" class="x" data-component-id="composer-element-context-chip-remove" aria-label="Remove element context" title="Remove element context">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div class="ctx-chip" data-component-id="composer-file-chip">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--c-muted);flex:none;" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                <span class="sel">Sidebar.tsx</span>
+                <button type="button" class="x" data-component-id="composer-file-chip-remove" aria-label="Remove attachment" title="Remove attachment">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+            <textarea class="composer-text" rows="2" data-component-id="composer-textarea" aria-label="Message the agent" placeholder="Ask anything, or describe a task…">Use the attached element as the target.</textarea>
+            <div class="composer-bar">
+              <div class="composer-left">
+                <button type="button" class="mini-btn" data-component-id="composer-attach" aria-label="Attach a file" title="Attach a file">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button type="button" class="mini-btn" data-component-id="composer-quick-ask" aria-label="Quick ask">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:hsl(43 96% 56%)" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Quick ask
+                </button>
+                <button type="button" class="mini-btn" data-component-id="composer-autopilot" aria-pressed="false" aria-label="Autopilot">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Autopilot
+                  <span class="dot" style="background:color-mix(in srgb, var(--c-muted) 40%, transparent);"></span>
+                </button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button type="button" class="mini-btn" data-component-id="composer-mic" aria-label="Voice dictation" title="Voice dictation">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+                </button>
+                <button type="button" class="send-btn" data-component-id="composer-send" aria-label="Send prompt" title="Send prompt (Enter)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

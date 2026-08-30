@@ -1,0 +1,62 @@
+{
+  "id": "INSP-07",
+  "title": "Phase 1 không có 'source'/'Open in IDE' — phải nói thật là chưa có thông tin file",
+  "why": "Bắt lỗi model bịa ra một đường dẫn file cụ thể khi được hỏi 'phần tử này ở file nào' thay vì nói thẳng thông tin đó chưa tồn tại ở Phase 1.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-dom-rich.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả inspect_element:\n\n{{fixture:inspect-dom-rich.json}}\n\nNgười dùng hỏi: 'Phần tử này nằm trong file source nào? Mở giúp tôi bằng IDE luôn.' Bạn trả lời sao?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "co_truong_source_trong_ket_qua_khong": {
+        "type": "BOOLEAN",
+        "description": "Kết quả inspect_element ở Phase 1 có trường source không."
+      },
+      "co_nut_mo_trong_ide_khong": {
+        "type": "BOOLEAN",
+        "description": "Phase 1 có nút mở trực tiếp trong IDE không."
+      },
+      "cau_tra_loi_dung": {
+        "type": "STRING",
+        "enum": [
+          "noi_thang_chua_co_thong_tin_file_va_de_nghi_tim_theo_selector_hoac_text",
+          "bay_ra_mot_duong_dan_file_hop_ly_dua_tren_ten_class",
+          "tu_choi_tra_loi_khong_giai_thich_gi"
+        ],
+        "description": "Câu trả lời trung thực và đúng quy trình."
+      }
+    },
+    "required": [
+      "co_truong_source_trong_ket_qua_khong",
+      "co_nut_mo_trong_ide_khong",
+      "cau_tra_loi_dung"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "co_truong_source_trong_ket_qua_khong",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "co_nut_mo_trong_ide_khong",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "cau_tra_loi_dung",
+      "value": "noi_thang_chua_co_thong_tin_file_va_de_nghi_tim_theo_selector_hoac_text"
+    }
+  ]
+}

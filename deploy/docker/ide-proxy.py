@@ -61,6 +61,11 @@ try:
 except ImportError:
     from . import workspace_files
 
+try:
+    import inspect_element
+except ImportError:
+    from . import inspect_element
+
 PLAN_ROOT = os.environ.get("PLAN_ROOT", os.environ.get("PLANS_ROOT", "/home/agent/workspace/.plans"))
 PLANS_ROOT = PLAN_ROOT
 
@@ -171,6 +176,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         "/__box/record/start",
         "/__box/record/stop",
         "/__box/record/status",
+        "/__box/inspect-element",
     )
 
     def _is_capture_endpoint(self) -> bool:
@@ -286,11 +292,22 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json_cors(200, json.dumps(capture.dispatch_record_status(), default=str))
                 return
 
+            if self.path == "/__box/inspect-element":
+                if self.command != "POST":
+                    self._send_json_cors(405, json.dumps({"error": "Method Not Allowed"}))
+                    return
+                body = self._read_json_body()
+                result = inspect_element.dispatch_inspect_element(body.get("x"), body.get("y"))
+                self._send_json_cors(200, json.dumps(result, default=str))
+                return
+
             self._send_json_cors(404, json.dumps({"error": "Not Found"}))
         except capture.CaptureError as error:
             self._send_json_cors(error.status_code, json.dumps({"error": error.public_message}))
         except Exception as error:  # lưới an toàn — không để request capture làm chết thread
-            self._send_json_cors(500, json.dumps({"error": f"Lỗi capture/record: {error}"}))
+            # Không nội suy str(error) — có thể mang debugger URL/đường dẫn nội bộ (§10.2).
+            print(f"[ide-proxy] lỗi capture: {error!r}", file=sys.stderr)
+            self._send_json_cors(500, json.dumps({"error": "Lỗi nội bộ."}))
 
     # ------------------------------------------------------------------
     # Endpoint workspace files (§Workspace Files)
@@ -767,7 +784,7 @@ def main():
         f"[ide-proxy] WebSocket tunneling: BẬT (fix lỗi 1006)\n"
         f"[ide-proxy] Box API: GET /__box/status · POST /__box/network|power on|off (cần secret)\n"
         f"[ide-proxy] Capture API: /__box/windows · /__box/browser/tabs · "
-        f"/__box/capture · /__box/record/start|stop|status\n"
+        f"/__box/capture · /__box/record/start|stop|status · /__box/inspect-element\n"
         f"[ide-proxy] Workspace API: GET /__box/files · /__box/file/content|media|thumbnail|download · "
         f"POST /__box/files/zip · /__box/file/upload|unzip",
         flush=True,

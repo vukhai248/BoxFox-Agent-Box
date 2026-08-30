@@ -235,3 +235,11 @@ Response lỗi luôn: `{"error": "<chuỗi tiếng Việt>"}`.
 - **Full-page tab**: hỗ trợ qua `fullPage: true` (CDP `Page.getLayoutMetrics` + clip + `captureBeyondViewport`). Mặc định chụp **viewport** (đúng thứ đang hiển thị).
 - **Kích thước**: trần an toàn 4096×4096; vượt → `413` buộc chụp nhỏ hơn (tránh OOM vì RandR cho phép tới 32768×32768).
 - **Không thu âm thanh**, không gộp nhiều cửa sổ, không tối ưu vùng thay đổi — ngoài phạm vi v1.
+
+---
+
+## 9. Liên quan: Element Selector / DOM Inspector
+
+Endpoint **`POST /__box/inspect-element`** (chọn phần tử trên màn hình rồi đọc node qua CDP) dùng lại
+`capture.py` cho hit-test X11 và CDP. Kiến trúc riêng của nó nằm ở
+[`element-selector.md`](element-selector.md).

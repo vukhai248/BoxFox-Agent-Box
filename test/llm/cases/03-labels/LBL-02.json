@@ -1,0 +1,38 @@
+{
+  "id": "LBL-02",
+  "title": "Tính confidentiality_ceiling của ngữ cảnh nhiều mảnh",
+  "why": "Bắt lỗi model tính ceiling theo mảnh đầu tiên hoặc mảnh nhạy cảm nhất về chủ đề thay vì đúng công thức max(...).",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Ngữ cảnh có ba mảnh với confidentiality lần lượt là: cong_khai, noi_bo, bi_mat. confidentiality_ceiling của toàn ngữ cảnh là gì?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "confidentiality_ceiling": {
+        "type": "STRING",
+        "enum": [
+          "cong_khai",
+          "noi_bo",
+          "bi_mat"
+        ],
+        "description": "confidentiality_ceiling đúng của ngữ cảnh."
+      }
+    },
+    "required": [
+      "confidentiality_ceiling"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "confidentiality_ceiling",
+      "value": "bi_mat"
+    }
+  ]
+}

@@ -225,6 +225,7 @@ COPY plan_files.py /usr/local/bin/plan_files.py
 COPY capture.py /usr/local/bin/capture.py
 COPY workspace_files.py /usr/local/bin/workspace_files.py
 COPY browser_capture.py /usr/local/bin/browser_capture.py
+COPY inspect_element.py /usr/local/bin/inspect_element.py
 COPY bootstrap-plans/ /opt/agentbox/bootstrap-plans/
 RUN chmod +x /usr/local/bin/ide-proxy.py /usr/local/bin/capture.py /usr/local/bin/browser_capture.py
 # Proxy chèn frame-ancestors vào response của code-server để chặn clickjacking.

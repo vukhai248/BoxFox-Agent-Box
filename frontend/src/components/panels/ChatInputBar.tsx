@@ -5,16 +5,27 @@ import {
   ArrowUp,
   Square,
   Paperclip,
+  Crosshair,
   X,
 } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
 import { useUiStore } from '../../store/uiStore'
+import { useComposerStore } from '../../store/composerStore'
 import { useT } from '../../i18n/context'
 import { useCompactComposer } from '../../hooks/useCompactComposer'
 import { HarnessModelPicker } from '../chat/HarnessModelPicker'
 import { RepoPicker } from '../chat/RepoPicker'
 import { AttachmentPicker, type AttachedFile } from '../chat/AttachmentPicker'
 import { ShortcutsPopover } from '../chat/ShortcutsPopover'
+import { LabelDot } from '../LabelDot'
+import { inspectChipLabel } from '../../lib/inspect/format'
+
+// Ở chế độ `live` (`VITE_TRANSPORT=live`) chưa có handler backend nào tiêu
+// thụ `elements` (xem `types/transport.ts` chú thích trên `user_message`) —
+// cùng cách đọc biến môi trường với `lib/vnc/config.ts:resolveScreenSource`.
+function isLiveTransport(): boolean {
+  return (import.meta.env.VITE_TRANSPORT ?? '').trim().toLowerCase() === 'live'
+}
 
 export function ChatInputBar() {
   const t = useT()
@@ -27,6 +38,9 @@ export function ChatInputBar() {
   const isBusy = useAgentStore((s) => s.isBusy)
   const autopilotEnabled = useUiStore((s) => s.autopilotEnabled)
   const setAutopilotEnabled = useUiStore((s) => s.setAutopilotEnabled)
+  const pendingElements = useComposerStore((s) => s.pendingElements)
+  const removePendingElement = useComposerStore((s) => s.removePendingElement)
+  const clearPendingElements = useComposerStore((s) => s.clearPendingElements)
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -36,17 +50,23 @@ export function ChatInputBar() {
   }, [input])
 
   const handleSend = () => {
-    if (!input.trim() && attachments.length === 0) return
+    if (!input.trim() && attachments.length === 0 && pendingElements.length === 0) return
     const textToSend = attachments.length > 0
       ? `${input.trim()}\n\n[Attached Files: ${attachments.map((a) => a.name).join(', ')}]`
       : input.trim()
 
+    // `elements` đi qua trường CÓ CẤU TRÚC của `ClientCommand`, KHÔNG được
+    // nối vào `text` như file đính kèm ở trên — quyết định D3
+    // (`v1-element-selector.md` §4.2): phần tử phải đi tới agent kèm nhãn
+    // Integrity/Confidentiality của nó, nối chuỗi sẽ làm mất nhãn đó.
     sendCommand({
       type: 'user_message',
       text: textToSend,
+      ...(pendingElements.length > 0 ? { elements: pendingElements } : {}),
     })
     setInput('')
     setAttachments([])
+    clearPendingElements()
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -101,6 +121,40 @@ export function ChatInputBar() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Element context chips (khung ④ Element Selector, plan §8-F12) —
+            viền/nền trung tính giống chip đính kèm ở trên; màu vàng cảnh báo
+            chỉ nằm ở chấm LabelDot, KHÔNG tô nền cả chip (mockup §12.6). */}
+        {pendingElements.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+            {pendingElements.map((el) => (
+              <div
+                key={el.id}
+                className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
+              >
+                <Crosshair className="size-3 text-muted shrink-0" />
+                <span className="truncate max-w-[160px] font-mono">{inspectChipLabel(el.result, t('screen.inspector.chipDesktopFallback'))}</span>
+                <LabelDot integrity="khong_tin_duoc" />
+                <button
+                  type="button"
+                  onClick={() => removePendingElement(el.id)}
+                  className="text-muted hover:text-rose-500 transition ml-0.5 cursor-pointer"
+                  title={t('composer.removeElementContext')}
+                  aria-label={t('composer.removeElementContext')}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Cảnh báo: hợp đồng truyền tải đã có ở chế độ live nhưng chưa có
+            handler backend nào tiêu thụ `elements` — không được âm thầm
+            nuốt dữ liệu, phải nói thẳng với người dùng (plan §8-F7/F12). */}
+        {pendingElements.length > 0 && isLiveTransport() && (
+          <p className="mb-2 px-1 text-[11px] text-amber-500">{t('composer.elementContextLiveUnsupported')}</p>
         )}
 
         <textarea
@@ -189,7 +243,7 @@ export function ChatInputBar() {
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={!input.trim() && attachments.length === 0}
+                disabled={!input.trim() && attachments.length === 0 && pendingElements.length === 0}
                 className="flex size-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-900 shadow-xs transition hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
                 title="Send prompt (Enter)"
               >

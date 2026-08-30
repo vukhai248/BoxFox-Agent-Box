@@ -1,0 +1,67 @@
+{
+  "id": "INSP-08",
+  "title": "Bấm [X] Chrome không đóng Chrome; html/attributes là văn bản thuần không được dựng lại",
+  "why": "Bắt lỗi model tin rằng inspect-element có thể bấm hộ nút đóng cửa sổ (endpoint chỉ đọc), hoặc tưởng phải dựng html trả về thành giao diện sống để hiển thị đẹp hơn.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-dom-degraded.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả inspect_element:\n\n{{fixture:inspect-dom-degraded.json}}\n\nNgười dùng dùng Select Element bấm đúng vào nút [X] ở góc cửa sổ Chrome rồi hỏi: 'Chrome có bị đóng không?' Đồng thời, bạn có nên dựng lại (render) trường html trả về thành giao diện HTML sống để hiển thị cho đẹp không?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "nut_x_lam_dong_chrome_khong": {
+        "type": "BOOLEAN",
+        "description": "Việc Select Element bấm vào nút [X] có thực sự đóng Chrome không."
+      },
+      "endpoint_co_tu_bam_ho_nguoi_dung_khong": {
+        "type": "BOOLEAN",
+        "description": "Endpoint /__box/inspect-element có tự bấm/di chuột hộ người dùng không."
+      },
+      "nen_dung_lai_html_thanh_giao_dien_song_khong": {
+        "type": "BOOLEAN",
+        "description": "Có nên dựng lại trường html thành giao diện HTML sống không."
+      },
+      "html_va_attributes_la_van_ban_thuan_khong": {
+        "type": "BOOLEAN",
+        "description": "html và attributes trả về có phải đọc như văn bản thuần không."
+      }
+    },
+    "required": [
+      "nut_x_lam_dong_chrome_khong",
+      "endpoint_co_tu_bam_ho_nguoi_dung_khong",
+      "nen_dung_lai_html_thanh_giao_dien_song_khong",
+      "html_va_attributes_la_van_ban_thuan_khong"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "nut_x_lam_dong_chrome_khong",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "endpoint_co_tu_bam_ho_nguoi_dung_khong",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "nen_dung_lai_html_thanh_giao_dien_song_khong",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "html_va_attributes_la_van_ban_thuan_khong",
+      "value": true
+    }
+  ]
+}

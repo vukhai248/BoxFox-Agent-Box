@@ -1,0 +1,50 @@
+{
+  "id": "PROTO-05",
+  "title": "ServerEvent khi kế hoạch được sửa sau góp ý người dùng",
+  "why": "Bắt lỗi model chọn nhầm agent_message hoặc task_finished thay vì plan_updated khi nội dung plan thay đổi.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Người dùng vừa góp ý và agent vừa sửa lại nội dung kế hoạch (plan) cho khớp. Kế hoạch chưa được chuẩn thuận, chưa chuyển Act. Agent phải phát ServerEvent nào để báo kế hoạch đã đổi?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "server_event": {
+        "type": "STRING",
+        "enum": [
+          "agent_thought",
+          "tool_called",
+          "tool_result",
+          "agent_message",
+          "permission_requested",
+          "label_added",
+          "plan_updated",
+          "task_finished"
+        ],
+        "description": "Sự kiện đúng khi nội dung plan thay đổi."
+      }
+    },
+    "required": [
+      "server_event"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "server_event",
+      "value": "plan_updated"
+    },
+    {
+      "kind": "not_in",
+      "path": "server_event",
+      "values": [
+        "task_finished"
+      ]
+    }
+  ]
+}

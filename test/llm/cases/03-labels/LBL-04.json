@@ -1,0 +1,89 @@
+{
+  "id": "LBL-04",
+  "title": "Phân loại source_kind cho ba tình huống dữ liệu khác nhau",
+  "why": "Bắt lỗi model gộp chung mọi nguồn dữ liệu vào 'external_tool' hoặc 'web_content' thay vì phân loại đúng theo mô tả từng tình huống.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Phân loại provenance đúng cho ba mảnh dữ liệu sau: (a) người dùng gõ trực tiếp vào khung chat; (b) kết quả văn bản trả về từ lệnh `cat file.txt` mà agent vừa chạy; (c) nội dung agent tải về được từ một trang web bên ngoài."
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "provenance_a": {
+        "type": "STRING",
+        "enum": [
+          "user_input",
+          "user_pasted",
+          "workspace_file",
+          "web_content",
+          "external_tool",
+          "screen_capture",
+          "command_output",
+          "agent_config",
+          "external_file",
+          "plan_artifact"
+        ],
+        "description": "Provenance của tình huống (a)."
+      },
+      "provenance_b": {
+        "type": "STRING",
+        "enum": [
+          "user_input",
+          "user_pasted",
+          "workspace_file",
+          "web_content",
+          "external_tool",
+          "screen_capture",
+          "command_output",
+          "agent_config",
+          "external_file",
+          "plan_artifact"
+        ],
+        "description": "Provenance của tình huống (b)."
+      },
+      "provenance_c": {
+        "type": "STRING",
+        "enum": [
+          "user_input",
+          "user_pasted",
+          "workspace_file",
+          "web_content",
+          "external_tool",
+          "screen_capture",
+          "command_output",
+          "agent_config",
+          "external_file",
+          "plan_artifact"
+        ],
+        "description": "Provenance của tình huống (c)."
+      }
+    },
+    "required": [
+      "provenance_a",
+      "provenance_b",
+      "provenance_c"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "provenance_a",
+      "value": "user_input"
+    },
+    {
+      "kind": "equals",
+      "path": "provenance_b",
+      "value": "command_output"
+    },
+    {
+      "kind": "equals",
+      "path": "provenance_c",
+      "value": "web_content"
+    }
+  ]
+}

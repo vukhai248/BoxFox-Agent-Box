@@ -1,0 +1,65 @@
+{
+  "id": "INSP-03",
+  "title": "reason=not_chromium: giải thích đúng và đề xuất bước tiếp theo",
+  "why": "Bắt lỗi model đề xuất bước tiếp theo sai (ví dụ đóng DevTools) khi lý do thực sự là cửa sổ đang chọn không phải Chromium.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-desktop-not-chromium.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả sau từ inspect-element:\n\n{{fixture:inspect-desktop-not-chromium.json}}\n\nreason là gì, và bước tiếp theo hợp lý bạn nên đề nghị người dùng là gì?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "reason": {
+        "type": "STRING",
+        "enum": [
+          "not_chromium",
+          "outside_viewport",
+          "frame_extents_unknown",
+          "devtools_docked",
+          "viewport_origin_unknown",
+          "no_cdp_target",
+          "ambiguous_target",
+          "cdp_unreachable",
+          "cdp_timeout",
+          "no_node_at_point",
+          "extract_failed"
+        ],
+        "description": "reason đọc được từ dữ liệu trả về."
+      },
+      "buoc_tiep_theo_de_nghi": {
+        "type": "STRING",
+        "enum": [
+          "chuyen_sang_cua_so_chrome_chromium_roi_bam_lai",
+          "dong_hoac_tach_devtools",
+          "cuon_trang_roi_bam_lai"
+        ],
+        "description": "Bước tiếp theo hợp lý cho reason này."
+      }
+    },
+    "required": [
+      "reason",
+      "buoc_tiep_theo_de_nghi"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "reason",
+      "value": "not_chromium"
+    },
+    {
+      "kind": "equals",
+      "path": "buoc_tiep_theo_de_nghi",
+      "value": "chuyen_sang_cua_so_chrome_chromium_roi_bam_lai"
+    }
+  ]
+}

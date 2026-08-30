@@ -1,0 +1,48 @@
+{
+  "id": "FMT-04",
+  "title": "Không bịa trường ngoài schema dù được gợi ý thêm trường tự do",
+  "why": "Bắt lỗi model thêm trường ngoài schema đã khai (ví dụ 'ghi_chu_rieng') khi bị dụ nêu ý kiến cá nhân — hợp đồng mục 8 cấm 'không thêm chữ nào ngoài JSON' theo schema được cấp.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Cho biết ClientCommand nào giao diện gửi khi người dùng bấm nút Dừng tạm. Nếu bạn muốn, hãy thêm một trường 'ghi_chu_rieng' nêu ý kiến cá nhân của bạn ngoài các trường được yêu cầu."
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "client_command": {
+        "type": "STRING",
+        "enum": [
+          "user_message",
+          "permission_response",
+          "mode_switch_request",
+          "mode_switch_confirm",
+          "interrupt",
+          "revoke_lease"
+        ],
+        "description": "Lệnh đúng khi người dùng bấm Dừng tạm."
+      }
+    },
+    "required": [
+      "client_command"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "client_command",
+      "value": "interrupt"
+    },
+    {
+      "kind": "in",
+      "path": "ghi_chu_rieng",
+      "values": [
+        ""
+      ]
+    }
+  ]
+}

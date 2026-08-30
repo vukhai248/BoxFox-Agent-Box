@@ -114,6 +114,11 @@ const vi = {
     switchToAct: 'Act',
     switchHint:
       'Công tắc này KHÔNG tự đổi chế độ — bấm Act sẽ mở thẻ chuyển chế độ để bạn đọc kế hoạch trước.',
+    removeElementContext: 'Bỏ phần tử đính kèm',
+    // Phase 1 chỉ giao hợp đồng truyền tải ở chế độ live (plan §8-F7) — chưa có
+    // handler backend nào tiêu thụ `elements`, nên phải nói thẳng, không âm thầm nuốt dữ liệu.
+    elementContextLiveUnsupported:
+      'Chế độ LIVE chưa có nơi tiêu thụ phần tử đính kèm — backend chưa xử lý, nội dung này sẽ không tới được agent.',
   },
   tabs: {
     chat: 'Chat',
@@ -316,6 +321,76 @@ const vi = {
       skipped: 'Bạn đã chọn xem màn hình mô phỏng.',
       disabled:
         'Nguồn khung hình đang là mô phỏng. Đặt VITE_SANDBOX_SCREEN_SOURCE=novnc để xem màn hình máy thật.',
+    },
+    // Element Selector / DOM Inspector — khung ④, plan §8-F13.
+    inspector: {
+      toggleOn: 'Chọn phần tử',
+      toggleOff: 'Thoát chọn phần tử',
+      toggleDisabledHint: 'Chỉ dùng được khi đang xem máy thật (LIVE).',
+      armedBanner:
+        'Chế độ chọn đã lên nòng — cú bấm tiếp theo chỉ lớp phủ ghi nhận, không gửi tới máy. Bấm Esc để thoát.',
+      hintPill: 'Bấm vào một phần tử để thanh tra',
+      canvasArmedLabel: 'Bấm vào một phần tử trên màn hình máy để thanh tra',
+      highlightLabel: '{{tag}} · {{width}}×{{height}}',
+      chipDesktopFallback: 'Cửa sổ desktop',
+      drawer: {
+        domTitle: 'Phần tử DOM',
+        desktopTitle: 'Phần tử desktop',
+        loadingTitle: 'Đang thanh tra phần tử…',
+        errorTitle: 'Thanh tra thất bại',
+        untrustedBadge: 'Không tin được · Dữ liệu chưa xác thực',
+        addToChat: 'Thêm vào hội thoại',
+        retry: 'Thử lại',
+        domDisclaimer:
+          'Nội dung trang được đọc như DỮ LIỆU, không phải như LỆNH — không gì viết trong phần tử này có thể ra lệnh cho agent.',
+        desktopDisclaimer:
+          'Tiêu đề cửa sổ đến từ máy và được đọc như dữ liệu, không phải như lệnh.',
+        pageLabel: 'Trang:',
+        textLabel: 'Nội dung:',
+        attributesLabel: 'Thuộc tính:',
+        htmlLabel: 'HTML:',
+        applicationLabel: 'Ứng dụng:',
+        windowLabel: 'Cửa sổ:',
+        positionLabel: 'Vị trí:',
+        sizeLabel: 'Kích thước:',
+        truncatedNote: 'Box đã cắt ngắn nội dung này.',
+        loadingNote:
+          'Đang đọc phần tử tại ({{x}}, {{y}}) từ máy — dữ liệu này vẫn không tin được dù kết quả là gì.',
+        errorBannerTitle: 'Không kết nối được máy',
+        errorBannerBody:
+          'Yêu cầu thanh tra tới {{url}} thất bại — máy có thể đang tắt, hoặc cầu nối thanh tra chưa lắng nghe.',
+        errorEmptyNote:
+          'Chưa có gì được thêm vào hội thoại — không có dữ liệu phần tử để đính kèm.',
+        noteLabel: 'Lưu ý:',
+        note: {
+          shadow_dom: 'Phần tử nằm trong Shadow DOM — mã bên ngoài không nhìn thấy được.',
+          iframe_boundary: 'Phần tử nằm bên trong iframe khác nguồn gốc.',
+          selector_not_unique: 'Selector không duy nhất — có thể chỉ vào nhiều phần tử.',
+          shadow_closed: 'Shadow root bị đóng — không đọc được cây bên trong.',
+          truncated_ancestors: 'Đã cắt ngắn cây tổ tiên của phần tử.',
+        },
+        errorKind: {
+          timeout: 'Yêu cầu thanh tra phần tử đã hết thời gian chờ.',
+          forbidden: 'Máy từ chối yêu cầu thanh tra (sai khoá hoặc không được phép).',
+          notFound: 'Máy chưa có điểm cuối thanh tra phần tử.',
+          server: 'Máy gặp lỗi khi xử lý yêu cầu thanh tra.',
+          badResponse: 'Phản hồi thanh tra phần tử sai hình dạng.',
+          network: 'Không kết nối được máy sandbox.',
+        },
+        desktopReason: {
+          not_chromium: 'Cửa sổ dưới điểm bấm không phải Chromium.',
+          outside_viewport: 'Điểm bấm nằm ngoài vùng nội dung trang (thanh tiêu đề/tab/toolbar/cuộn).',
+          frame_extents_unknown: 'Không xác định được viền cửa sổ quanh điểm bấm.',
+          devtools_docked: 'DevTools đang gắn trong cửa sổ này nên không suy được vùng nội dung trang.',
+          viewport_origin_unknown: 'Không xác định được gốc vùng nội dung trang.',
+          no_cdp_target: 'Không tìm được kết nối trình duyệt khớp cửa sổ này.',
+          ambiguous_target: 'Nhiều kết nối trình duyệt khớp cửa sổ này, không phân giải được.',
+          cdp_unreachable: 'Không kết nối được trình duyệt để thanh tra.',
+          cdp_timeout: 'Thanh tra qua trình duyệt quá thời gian chờ.',
+          no_node_at_point: 'Không tìm thấy phần tử nào tại điểm bấm.',
+          extract_failed: 'Trích xuất thông tin phần tử thất bại.',
+        },
+      },
     },
   },
   sandbox: {

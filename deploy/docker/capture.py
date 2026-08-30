@@ -116,6 +116,7 @@ def _run_as_agent(args: list[str], *, timeout: int = 30) -> subprocess.Completed
 def _popen_as_agent(args: list[str]) -> subprocess.Popen:
     return subprocess.Popen(
         _as_agent_argv(args),
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -171,10 +172,10 @@ def _file_size(path: Path) -> int:
 # ---------------------------------------------------------------------------
 # X11 — liệt kê + nhận diện cửa sổ
 # ---------------------------------------------------------------------------
-def _wmctrl_list() -> str:
+def _wmctrl_list(*, timeout: int = 15) -> str:
     # wmctrl -lx (KHÔNG -lxG): cột ổn định `<id> <desktop> <class> <host> <title...>`,
     # title nằm cuối nên không bị nhập nhằng với hình học. Hình học lấy riêng qua xwininfo.
-    proc = _run_as_agent(["wmctrl", "-lx"], timeout=15)
+    proc = _run_as_agent(["wmctrl", "-lx"], timeout=timeout)
     if proc.returncode != 0:
         raise CaptureError("Không chạy được wmctrl (X11 chưa sẵn sàng?).", status_code=500)
     return proc.stdout or ""
@@ -201,12 +202,13 @@ def _int_after_colon(text: str) -> int | None:
         return None
 
 
-def _wininfo_geometry(win_id: str) -> dict | None:
-    proc = _run_as_agent(["xwininfo", "-id", win_id], timeout=10)
-    if proc.returncode != 0:
-        return None
+def _parse_xwininfo(stdout: str) -> dict | None:
+    # Tách phần parse ra khỏi phần gọi subprocess để dùng chung cho `_wininfo_geometry`
+    # (hình học 4 khoá công khai của /__box/windows) và `_wininfo_probe` (thêm
+    # `mapState` — cần cho hit-test element-selector, §7-B1).
     x = y = width = height = None
-    for line in (proc.stdout or "").splitlines():
+    map_state = ""
+    for line in (stdout or "").splitlines():
         stripped = line.strip()
         if stripped.startswith("Absolute upper-left X:"):
             x = _int_after_colon(stripped)
@@ -216,17 +218,109 @@ def _wininfo_geometry(win_id: str) -> dict | None:
             width = _int_after_colon(stripped)
         elif stripped.startswith("Height:"):
             height = _int_after_colon(stripped)
+        elif stripped.startswith("Map State:"):
+            map_state = stripped.split(":", 1)[1].strip()
     if None in (x, y, width, height):
         return None
-    return {"x": x, "y": y, "w": width, "h": height}
+    return {"x": x, "y": y, "w": width, "h": height, "mapState": map_state}
 
 
-def _xprop_many(win_id: str, props: list[str]) -> dict[str, str]:
+def _wininfo_probe(win_id: str, *, timeout: int = 10) -> dict | None:
+    """`xwininfo -id` với `mapState` — dùng cho hit-test, KHÔNG dùng cho /__box/windows."""
+    try:
+        proc = _run_as_agent(["xwininfo", "-id", win_id], timeout=timeout)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return _parse_xwininfo(proc.stdout or "")
+
+
+def _wininfo_geometry(win_id: str) -> dict | None:
+    # Hợp đồng công khai của /__box/windows — GIỮ NGUYÊN đúng 4 khoá {x,y,w,h}.
+    probe = _wininfo_probe(win_id)
+    if probe is None:
+        return None
+    return {"x": probe["x"], "y": probe["y"], "w": probe["w"], "h": probe["h"]}
+
+
+def frame_extents(win_id: str, *, timeout: int = 10) -> dict | None:
+    """Đọc `_NET_FRAME_EXTENTS` — phân biệt "vắng mặt hợp lệ" và "lỗi đọc".
+
+    Hợp đồng (element-selector §7-B1, KHÔNG được đổi):
+    - rc 0, parse ra đúng 4 số nguyên >= 0  -> {"left","right","top","bottom"}.
+    - rc 0, stdout chứa "not found."        -> {0,0,0,0} (vắng mặt HỢP LỆ).
+    - rc != 0 / TimeoutExpired / rỗng / không parse được -> None (LỖI ĐỌC, fail-closed).
+    Gọi hàm này KHÔNG BAO GIỜ được coi None như {0,0,0,0} — sai sẽ làm cú bấm vào
+    titlebar trượt xuống cửa sổ dưới một cách âm thầm.
+    """
+    try:
+        proc = _run_as_agent(["xprop", "-id", win_id, "_NET_FRAME_EXTENTS"], timeout=timeout)
+    except (subprocess.SubprocessError, OSError):
+        return None
+    stdout = proc.stdout or ""
+    if proc.returncode != 0:
+        return None
+    if "not found." in stdout:
+        return {"left": 0, "right": 0, "top": 0, "bottom": 0}
+    for line in stdout.splitlines():
+        if "=" not in line:
+            continue
+        _, _, value = line.partition("=")
+        parts = [part.strip() for part in value.split(",")]
+        if len(parts) != 4:
+            continue
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            continue
+        if any(number < 0 for number in numbers):
+            continue
+        left, right, top, bottom = numbers
+        return {"left": left, "right": right, "top": top, "bottom": bottom}
+    return None
+
+
+def _parse_stacking(stdout: str) -> list[int]:
+    # `xprop -root _NET_CLIENT_LIST_STACKING` in dạng
+    # `_NET_CLIENT_LIST_STACKING(WINDOW): window id # 0x1e00003, 0x2600003`.
+    # Token không parse được (rác) bị BỎ QUA từng cái, không làm rỗng cả danh sách.
+    text = stdout or ""
+    if "not found." in text or "#" not in text:
+        return []
+    _, _, value = text.partition("#")
+    ids: list[int] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            ids.append(int(token, 16))
+        except ValueError:
+            continue
+    return ids
+
+
+def client_list_stacking(*, timeout: int = 10) -> list[int]:
+    """Thứ tự stacking DƯỚI→TRÊN của toàn bộ client window (id đã normalize hoá 16)."""
+    try:
+        proc = _run_as_agent(["xprop", "-root", "_NET_CLIENT_LIST_STACKING"], timeout=timeout)
+    except (subprocess.SubprocessError, OSError):
+        return []
+    if proc.returncode != 0:
+        return []
+    return _parse_stacking(proc.stdout or "")
+
+
+def _xprop_many(win_id: str, props: list[str], *, timeout: int = 10) -> dict[str, str]:
     # xprop nhận nhiều property cùng lúc → 1 subprocess cho cả state + pid.
     if not props:
         return {}
-    proc = _run_as_agent(["xprop", "-id", win_id, *props], timeout=10)
     result: dict[str, str] = {}
+    try:
+        proc = _run_as_agent(["xprop", "-id", win_id, *props], timeout=timeout)
+    except (subprocess.SubprocessError, OSError):
+        return result
     if proc.returncode != 0:
         return result
     for line in (proc.stdout or "").splitlines():
@@ -257,6 +351,12 @@ def _is_selectable(state: list[str]) -> bool:
     # nên phải kiểm chuỗi con chứ KHÔNG so khớp nguyên ký tự bằng nhau (bug cũ đã
     # để panel/dock lọt thành selectable).
     return not any("SKIP_TASKBAR" in atom or "HIDDEN" in atom for atom in state)
+
+
+def _is_hittable(state: list[str]) -> bool:
+    # CỐ Ý khác `_is_selectable()`: một cửa sổ SKIP_TASKBAR (panel/dock) vẫn *hit
+    # được* khi bấm trực tiếp lên nó, dù không *chọn được* trong danh sách capture.
+    return not any("HIDDEN" in atom for atom in state)
 
 
 def list_windows() -> list[dict]:
@@ -396,6 +496,26 @@ def list_tabs() -> list[dict]:
             "webSocketDebuggerUrl": target.get("webSocketDebuggerUrl", ""),
         })
     return tabs
+
+
+def browser_debugger_url(*, timeout: int = 10) -> str:
+    """`webSocketDebuggerUrl` CẤP BROWSER (không phải cấp page) — dùng để mở kết nối
+    `Browser.getWindowForTarget` khi phát hiện DevTools docked (element-selector §7-B2).
+
+    CHỈ dùng nội bộ để mở WebSocket — KHÔNG BAO GIỜ đưa ra endpoint public.
+    """
+    try:
+        with urllib.request.urlopen(f"{CDP_ENDPOINT}/json/version", timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as error:
+        raise CaptureError(
+            f"CDP 9222 chưa sẵn sàng (Chromium desktop chưa mở qua box-chromium?): {error}",
+            status_code=502,
+        )
+    url = payload.get("webSocketDebuggerUrl")
+    if not url:
+        raise CaptureError("CDP không trả webSocketDebuggerUrl cấp browser.", status_code=502)
+    return url
 
 
 def resolve_tab(spec: dict) -> dict:
@@ -762,6 +882,21 @@ def _public_tab(tab: dict) -> dict:
     # Không để lộ webSocketDebuggerUrl nội bộ ra endpoint public — chỉ capture_tab
     # (qua resolve_tab → list_tabs) dùng nó khi chụp.
     return {key: value for key, value in tab.items() if key != "webSocketDebuggerUrl"}
+
+
+# Chokepoint DUY NHẤT cho khối `target` của /__box/inspect-element (element-selector
+# §10.1). Allow-list — KHÔNG bao giờ `{**tab}` / `dict(tab)` / `tab.copy()` /
+# `"target": tab` / `result.update(tab)` ở bất kỳ đâu khác trong inspect_element.py
+# hay browser_capture.py. Cần thêm trường thì sửa DUY NHẤT tuple này.
+_INSPECT_TARGET_FIELDS = ("windowId", "windowTitle", "targetId")
+
+
+def _public_inspect_target(win: dict, tab: dict) -> dict:
+    return {
+        "windowId": str(win.get("id") or ""),
+        "windowTitle": str(win.get("title") or ""),
+        "targetId": str(tab.get("targetId") or tab.get("id") or ""),
+    }
 
 
 def dispatch_list_tabs() -> dict:

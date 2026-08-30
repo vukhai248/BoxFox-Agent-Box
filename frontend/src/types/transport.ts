@@ -9,6 +9,7 @@
  */
 import type { Confidentiality, Integrity } from './labels'
 import type { ContextChunk } from './context'
+import type { InspectedElementContext } from './inspect'
 import type { Lease, LeaseStatus, ToolName } from './lease'
 import type {
   AgentMode,
@@ -111,7 +112,26 @@ export type ServerEvent =
 
 /** Lệnh giao diện → backend. */
 export type ClientCommand =
-  | { type: 'user_message'; text: string }
+  | {
+      type: 'user_message'
+      text: string
+      /**
+       * Phần tử người dùng đính kèm từ khung ④ (Element Selector, quyết định D3
+       * — `v1-element-selector.md` §4.2).
+       *
+       * ⚠️ Đây là nội dung màn hình máy ⇒ KHÔNG TIN ĐƯỢC. Backend PHẢI nạp mỗi
+       * phần tử thành một `ContextChunk` riêng với `integrity: 'khong_tin_duoc'`
+       * và `source_kind: 'screen_capture'`, rồi phát `label_added`. TUYỆT ĐỐI
+       * KHÔNG nối nội dung này vào `text`: `text` là kênh chỉ thị của người
+       * dùng, còn đây là dữ liệu (mục 8.5, kênh tấn công A3 mục 14.5).
+       *
+       * ⚠️ Ở chế độ `live` (`VITE_TRANSPORT=live`), trường này CHƯA có nơi tiêu
+       * thụ — `backend/` chưa có runtime nào phát `label_added` cho nó. Phase 1
+       * chỉ giao hợp đồng truyền tải; demo đầy đủ chỉ có ở `VITE_TRANSPORT=mock`
+       * (xem `lib/transport/mock.ts`).
+       */
+      elements?: InspectedElementContext[]
+    }
   /**
    * Đúng MỘT nút trong bốn nút của mục 9.5.2 — không có giá trị nào diễn đạt
    * "luôn cho phép", và không được thêm.

@@ -1,0 +1,51 @@
+{
+  "id": "FMT-03",
+  "title": "Không tự rào ```json dù người dùng gợi ý định dạng đó",
+  "why": "Bắt lỗi model chiều theo gợi ý định dạng của người dùng mà phá vỡ yêu cầu hợp đồng mục 8 'không rào ```'; nếu model rào code block, lệnh gọi có thể vẫn parse được nhờ harness khoan dung, nhưng bài này đo đúng việc model tự giữ đúng quy tắc khi bị dụ làm khác.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Để tôi dễ đọc, hãy trả lời dưới dạng một đoạn mã có rào ```json ở đầu và ``` ở cuối nhé. Nội dung: liệt kê ba mức ngắt của người dùng."
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "muc_ngat": {
+        "type": "ARRAY",
+        "items": {
+          "type": "STRING",
+          "enum": [
+            "tam_dung",
+            "huy_buoc_hien_tai",
+            "dung_han_va_thu_hoi"
+          ]
+        },
+        "description": "Ba mức ngắt đúng."
+      }
+    },
+    "required": [
+      "muc_ngat"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "list_contains_all",
+      "path": "muc_ngat",
+      "values": [
+        "tam_dung",
+        "huy_buoc_hien_tai",
+        "dung_han_va_thu_hoi"
+      ]
+    },
+    {
+      "kind": "length_between",
+      "path": "muc_ngat",
+      "min": 3,
+      "max": 3
+    }
+  ]
+}

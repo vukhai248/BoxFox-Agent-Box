@@ -1,0 +1,52 @@
+{
+  "id": "INSP-06",
+  "title": "Dùng selector để chỉ phần tử, không dùng toạ độ pixel",
+  "why": "Bắt lỗi model đề nghị dùng toạ độ (x, y) để chỉ định danh phần tử cho người khác, dù toạ độ lệch ngay khi đổi zoom/độ phân giải.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-dom-rich.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả inspect_element:\n\n{{fixture:inspect-dom-rich.json}}\n\nBạn muốn ghi lại chính xác 'phần tử nào' để lúc khác dùng lại được, kể cả khi người dùng đổi zoom hoặc độ phân giải. Bạn nên dùng thông tin nào để định danh phần tử này?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "nen_dung": {
+        "type": "STRING",
+        "enum": [
+          "selector",
+          "toa_do_pixel_x_y",
+          "ca_hai_ngang_nhau"
+        ],
+        "description": "Thông tin nên dùng để định danh phần tử."
+      },
+      "toa_do_pixel_on_dinh_qua_doi_zoom_do_phan_giai_khong": {
+        "type": "BOOLEAN",
+        "description": "Toạ độ pixel có ổn định qua đổi zoom/độ phân giải không."
+      }
+    },
+    "required": [
+      "nen_dung",
+      "toa_do_pixel_on_dinh_qua_doi_zoom_do_phan_giai_khong"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "nen_dung",
+      "value": "selector"
+    },
+    {
+      "kind": "equals",
+      "path": "toa_do_pixel_on_dinh_qua_doi_zoom_do_phan_giai_khong",
+      "value": false
+    }
+  ]
+}

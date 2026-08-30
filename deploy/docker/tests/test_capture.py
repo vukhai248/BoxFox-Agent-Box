@@ -414,5 +414,115 @@ class BrowserCaptureFrameTest(unittest.TestCase):
             browser_capture.WebSocket("http://127.0.0.1:9222/devtools/page/X").connect()
 
 
+class ParseStackingTest(unittest.TestCase):
+    def test_parses_hex_ids_without_zero_padding(self) -> None:
+        stdout = "_NET_CLIENT_LIST_STACKING(WINDOW): window id # 0x1e00003, 0x2600003\n"
+        self.assertEqual(capture._parse_stacking(stdout), [0x1E00003, 0x2600003])
+
+    def test_parses_hex_ids_with_zero_padding(self) -> None:
+        # Cạm bẫy P1: _NET_CLIENT_LIST_STACKING có thể in id với zero-padding
+        # khác wmctrl -lx — cả hai phải normalize hoá bằng int(id, 16).
+        stdout = "_NET_CLIENT_LIST_STACKING(WINDOW): window id # 0x02600003\n"
+        self.assertEqual(capture._parse_stacking(stdout), [0x2600003])
+
+    def test_not_found_returns_empty(self) -> None:
+        self.assertEqual(capture._parse_stacking("_NET_CLIENT_LIST_STACKING:  not found.\n"), [])
+
+    def test_empty_string_returns_empty(self) -> None:
+        self.assertEqual(capture._parse_stacking(""), [])
+        self.assertEqual(capture._parse_stacking(None), [])
+
+    def test_garbage_tokens_are_dropped_not_whole_list(self) -> None:
+        stdout = "_NET_CLIENT_LIST_STACKING(WINDOW): window id # 0x1, garbage, 0x2\n"
+        self.assertEqual(capture._parse_stacking(stdout), [0x1, 0x2])
+
+    def test_client_list_stacking_wraps_subprocess_error(self) -> None:
+        with patch.object(capture, "_run_as_agent", side_effect=subprocess.TimeoutExpired("xprop", 10)):
+            self.assertEqual(capture.client_list_stacking(), [])
+
+
+class IsHittableTest(unittest.TestCase):
+    def test_hittable_differs_from_selectable_on_skip_taskbar(self) -> None:
+        state = ["_NET_WM_STATE_SKIP_TASKBAR"]
+        self.assertTrue(capture._is_hittable(state))
+        self.assertFalse(capture._is_selectable(state))
+
+    def test_hidden_is_neither_hittable_nor_selectable(self) -> None:
+        state = ["_NET_WM_STATE_HIDDEN"]
+        self.assertFalse(capture._is_hittable(state))
+        self.assertFalse(capture._is_selectable(state))
+
+    def test_normal_window_is_both(self) -> None:
+        self.assertTrue(capture._is_hittable([]))
+        self.assertTrue(capture._is_selectable([]))
+
+
+class PublicInspectTargetTest(unittest.TestCase):
+    def test_allow_lists_exactly_three_keys(self) -> None:
+        win = {
+            "id": "0x02600003", "title": "BoxFox — Chromium", "class": "chromium.Chromium",
+            "x": 0, "y": 0, "w": 100, "h": 100, "pid": 42, "state": [],
+        }
+        tab = {
+            "targetId": "A1B2", "url": "http://x/", "title": "x",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/SENTINEL",
+        }
+        target = capture._public_inspect_target(win, tab)
+        self.assertEqual(set(target.keys()), {"windowId", "windowTitle", "targetId"})
+        self.assertEqual(target, {
+            "windowId": "0x02600003", "windowTitle": "BoxFox — Chromium", "targetId": "A1B2",
+        })
+
+    def test_falls_back_to_tab_id_when_no_target_id(self) -> None:
+        target = capture._public_inspect_target({}, {"id": "fallback-id"})
+        self.assertEqual(target["targetId"], "fallback-id")
+
+    def test_missing_fields_become_empty_strings_not_none(self) -> None:
+        target = capture._public_inspect_target({}, {})
+        self.assertEqual(target, {"windowId": "", "windowTitle": "", "targetId": ""})
+
+
+class FrameExtentsTest(unittest.TestCase):
+    def test_parses_four_non_negative_ints(self) -> None:
+        stdout = "_NET_FRAME_EXTENTS(CARDINAL) = 1, 2, 30, 4\n"
+        proc = subprocess.CompletedProcess([], 0, stdout, "")
+        with patch.object(capture, "_run_as_agent", return_value=proc):
+            self.assertEqual(
+                capture.frame_extents("0x1"),
+                {"left": 1, "right": 2, "top": 30, "bottom": 4},
+            )
+
+    def test_not_found_is_valid_absence_zero(self) -> None:
+        proc = subprocess.CompletedProcess([], 0, "_NET_FRAME_EXTENTS:  not found.\n", "")
+        with patch.object(capture, "_run_as_agent", return_value=proc):
+            self.assertEqual(
+                capture.frame_extents("0x1"),
+                {"left": 0, "right": 0, "top": 0, "bottom": 0},
+            )
+
+    def test_nonzero_returncode_is_read_error_none(self) -> None:
+        proc = subprocess.CompletedProcess([], 1, "", "xprop: error")
+        with patch.object(capture, "_run_as_agent", return_value=proc):
+            self.assertIsNone(capture.frame_extents("0x1"))
+
+    def test_unparseable_stdout_is_read_error_none(self) -> None:
+        proc = subprocess.CompletedProcess([], 0, "garbage without equals\n", "")
+        with patch.object(capture, "_run_as_agent", return_value=proc):
+            self.assertIsNone(capture.frame_extents("0x1"))
+
+    def test_timeout_expired_is_read_error_none(self) -> None:
+        with patch.object(capture, "_run_as_agent", side_effect=subprocess.TimeoutExpired("xprop", 10)):
+            self.assertIsNone(capture.frame_extents("0x1"))
+
+    def test_none_is_not_treated_as_zero_extents(self) -> None:
+        # Khẳng định trực tiếp bất biến fail-closed: None và {0,0,0,0} PHẢI
+        # là hai giá trị phân biệt được ở phía gọi (frame_extents_unknown).
+        proc = subprocess.CompletedProcess([], 1, "", "boom")
+        with patch.object(capture, "_run_as_agent", return_value=proc):
+            result = capture.frame_extents("0x1")
+        self.assertIsNone(result)
+        self.assertNotEqual(result, {"left": 0, "right": 0, "top": 0, "bottom": 0})
+
+
 if __name__ == "__main__":
     unittest.main()

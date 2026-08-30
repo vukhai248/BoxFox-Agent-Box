@@ -1,0 +1,62 @@
+{
+  "id": "INSP-01",
+  "title": "Nhánh desktop không phải lỗi, vẫn HTTP 200",
+  "why": "Bắt lỗi model nói với người dùng là 'đã lỗi' khi thực ra endpoint trả về HTTP 200 hợp lệ ở nhánh desktop, chỉ là không lấy được DOM.",
+  "contracts": [
+    "boxfox-process.md",
+    "element-selector.md"
+  ],
+  "fixtures": [
+    "inspect-desktop-not-chromium.json"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Kết quả sau từ POST /__box/inspect-element:\n\n{{fixture:inspect-desktop-not-chromium.json}}\n\nĐây có phải một lỗi không? HTTP status thực tế là gì? Bạn nên nói gì với người dùng?"
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "day_la_loi": {
+        "type": "BOOLEAN",
+        "description": "Nhánh desktop này có phải một lỗi không."
+      },
+      "http_status_dung": {
+        "type": "STRING",
+        "enum": [
+          "200",
+          "404",
+          "500"
+        ],
+        "description": "HTTP status thực tế của phản hồi."
+      },
+      "nen_noi_da_loi_voi_nguoi_dung_khong": {
+        "type": "BOOLEAN",
+        "description": "Có nên nói với người dùng là 'đã lỗi' không."
+      }
+    },
+    "required": [
+      "day_la_loi",
+      "http_status_dung",
+      "nen_noi_da_loi_voi_nguoi_dung_khong"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "equals",
+      "path": "day_la_loi",
+      "value": false
+    },
+    {
+      "kind": "equals",
+      "path": "http_status_dung",
+      "value": "200"
+    },
+    {
+      "kind": "equals",
+      "path": "nen_noi_da_loi_voi_nguoi_dung_khong",
+      "value": false
+    }
+  ]
+}

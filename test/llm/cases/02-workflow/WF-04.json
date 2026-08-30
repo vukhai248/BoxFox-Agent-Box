@@ -1,0 +1,91 @@
+{
+  "id": "WF-04",
+  "title": "3 nút xin phép khi ngữ cảnh sạch, 4 nút khi ngữ cảnh bẩn",
+  "why": "Bắt lỗi model quên thêm nút chuan_thuan_artifact khi ngữ cảnh bẩn, hoặc thừa nút đó khi ngữ cảnh còn sạch.",
+  "contracts": [
+    "boxfox-process.md"
+  ],
+  "turns": [
+    {
+      "role": "user",
+      "text": "Cho hai tình huống: (A) ngữ cảnh hoàn toàn sạch, chưa có mảnh dữ liệu khong_tin_duoc nào; (B) ngữ cảnh đã bẩn vì agent vừa đọc một trang web. Với mỗi tình huống, liệt kê đúng và đủ các nút xuất hiện trên thẻ xin phép."
+    }
+  ],
+  "response_schema": {
+    "type": "OBJECT",
+    "properties": {
+      "nut_khi_sach": {
+        "type": "ARRAY",
+        "items": {
+          "type": "STRING",
+          "enum": [
+            "cho_phep_mot_lan",
+            "chuan_thuan_artifact",
+            "cap_giay_phep",
+            "tu_choi"
+          ]
+        },
+        "description": "Các nút hiện ra khi ngữ cảnh sạch."
+      },
+      "nut_khi_ban": {
+        "type": "ARRAY",
+        "items": {
+          "type": "STRING",
+          "enum": [
+            "cho_phep_mot_lan",
+            "chuan_thuan_artifact",
+            "cap_giay_phep",
+            "tu_choi"
+          ]
+        },
+        "description": "Các nút hiện ra khi ngữ cảnh bẩn."
+      }
+    },
+    "required": [
+      "nut_khi_sach",
+      "nut_khi_ban"
+    ]
+  },
+  "expect": [
+    {
+      "kind": "list_contains_all",
+      "path": "nut_khi_sach",
+      "values": [
+        "cho_phep_mot_lan",
+        "cap_giay_phep",
+        "tu_choi"
+      ]
+    },
+    {
+      "kind": "list_subset_of",
+      "path": "nut_khi_sach",
+      "values": [
+        "cho_phep_mot_lan",
+        "cap_giay_phep",
+        "tu_choi"
+      ]
+    },
+    {
+      "kind": "length_between",
+      "path": "nut_khi_sach",
+      "min": 3,
+      "max": 3
+    },
+    {
+      "kind": "list_contains_all",
+      "path": "nut_khi_ban",
+      "values": [
+        "cho_phep_mot_lan",
+        "chuan_thuan_artifact",
+        "cap_giay_phep",
+        "tu_choi"
+      ]
+    },
+    {
+      "kind": "length_between",
+      "path": "nut_khi_ban",
+      "min": 4,
+      "max": 4
+    }
+  ]
+}
