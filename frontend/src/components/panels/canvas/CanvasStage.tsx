@@ -8,8 +8,10 @@ import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DesignCanvas, NodeGeometryPatch } from '../../../hooks/useDesignCanvas'
+import { useT } from '../../../i18n/context'
 import type { CanvasView, Point } from '../../../lib/canvas'
 import { anchorPoint, distanceToSegment, screenToWorld } from '../../../lib/canvas'
+import { AgentCursor } from './AgentCursor'
 import { CardNode } from './CardNode'
 import { ConnectorLayer } from './ConnectorLayer'
 import { ContextMenu } from './ContextMenu'
@@ -69,7 +71,13 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
   const rafRef = useRef(0)
   const moveCoordsRef = useRef<Point | null>(null)
 
-  const { scene, selection, activeTool, view, draftStroke } = canvas
+  const t = useT()
+  // Thao tác/hit-test đọc cảnh THẬT (`scene`); chỉ phần VẼ dùng `displayScene` — cảnh đang được lớp
+  // phát lại dựng dần. Nhờ vậy một cú click không bao giờ chọn nhầm node chưa vẽ xong.
+  const { scene, displayScene, selection, activeTool, view, draftStroke } = canvas
+
+  /** Chủ nhà chạm canvas ⇒ bỏ hoạt hình, hiện ngay cảnh thật (đừng để ai đó vẽ tiếp khi đang được vẽ). */
+  const takeOver = useCallback(() => canvasRef.current.skipPlayback(), [])
 
   const clientView = useCallback((): CanvasView => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -266,6 +274,7 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
   }
 
   function onBackgroundPointerDown(e: ReactPointerEvent) {
+    takeOver()
     if (e.button === 1 || spacePressed || activeTool === 'hand') {
       beginPan(e)
       return
@@ -293,6 +302,7 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
   }
 
   function onNodePointerDown(e: ReactPointerEvent, nodeId: string) {
+    takeOver()
     if (e.button === 1 || spacePressed || activeTool === 'hand') return
     if (activeTool === 'pencil' && e.button === 0) {
       e.stopPropagation()
@@ -437,9 +447,14 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
           className="absolute inset-0 origin-top-left"
           style={{ transform: `translate(${view.pan.x}px, ${view.pan.y}px) scale(${view.scale})` }}
         >
-          <ConnectorLayer nodes={scene.nodes} connectors={scene.connectors} preview={connectorPreview} />
-          <StrokeLayer strokes={scene.strokes} draftStroke={draftStroke} selection={selection} />
-          {scene.nodes.map((node) => {
+          <ConnectorLayer
+            nodes={displayScene.nodes}
+            connectors={displayScene.connectors}
+            progress={canvas.connectorProgress}
+            preview={connectorPreview}
+          />
+          <StrokeLayer strokes={displayScene.strokes} draftStroke={draftStroke} selection={selection} />
+          {displayScene.nodes.map((node) => {
             if (node.kind === 'shape') {
               return (
                 <ShapeNode
@@ -475,7 +490,8 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
               />
             )
           })}
-          <SelectionOverlay nodes={scene.nodes} selection={selection} scale={view.scale} onHandlePointerDown={onHandlePointerDown} />
+          <SelectionOverlay nodes={displayScene.nodes} selection={selection} scale={view.scale} onHandlePointerDown={onHandlePointerDown} />
+          {canvas.cursor && <AgentCursor cursor={canvas.cursor} scale={view.scale} label={t('design.canvasCursorLabel')} />}
         </div>
       </div>
 

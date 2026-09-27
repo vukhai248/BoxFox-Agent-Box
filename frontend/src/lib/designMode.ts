@@ -8,6 +8,7 @@
  * Tên trường bám đúng hợp đồng đã đông cứng ở `/code/.plans/design-interfaces.md` (§2, §9, §10) và
  * §7 của `/code/.plans/v1-design-mode-agent.md`.
  */
+import { deserialize, type CanvasScene } from './canvas'
 import type { TKey } from '../i18n/context'
 import { asBool, asNumber, asRecord, asString, type Json } from './researchMode'
 
@@ -323,6 +324,15 @@ export interface DesignRun {
   batch: DesignBatch | null
   /** Kết quả soát độc lập (P4) — `null` khi chưa soát. */
   review: DesignReview | null
+  /**
+   * Cảnh canvas của run, chỉ có ở payload CHI TIẾT (`?canvasScene`) — `null` khi tuyến không gửi.
+   *
+   * Vì sao cần: `design_canvas` chỉ là sự kiện; cửa sổ sự kiện có thể không còn lô op đầu tiên, nên
+   * thiếu cảnh này thì tải lại trang là mất canvas. `canvasSeq` là bộ đếm đơn điệu của run, dùng để
+   * biết cảnh trong payload đã bao gồm tới sự kiện nào.
+   */
+  canvasScene: CanvasScene | null
+  canvasSeq: number
 }
 
 // ── Lô ghi + soát độc lập (P3/P4) ──────────────────────────────────────────
@@ -422,6 +432,18 @@ export function readRun(value: unknown): DesignRun | null {
     prompts: readPrompts(run.prompts),
     batch: readBatch(run.batch),
     review: readReview(run.review),
+    canvasScene: readCanvasScene(run.canvasScene),
+    canvasSeq: asNumber(run.canvasSeq) ?? 0,
+  }
+}
+
+/** Cảnh canvas từ payload (`null` khi thiếu/sai hình dạng — `deserialize` bỏ field lạ). */
+export function readCanvasScene(value: unknown): CanvasScene | null {
+  if (value === null || value === undefined) return null
+  try {
+    return deserialize(value)
+  } catch {
+    return null
   }
 }
 

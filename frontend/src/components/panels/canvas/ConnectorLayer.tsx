@@ -10,15 +10,39 @@ interface ConnectorLayerProps {
   nodes: CanvasNode[]
   connectors: CanvasConnector[]
   preview: { from: Point; to: Point } | null
+  /**
+   * `id -> tiến độ 0..1` của connector đang ĐƯỢC VẼ DẦN (lớp phát lại). Có mặt trong bản đồ này
+   * nghĩa là mũi tên mới hiện một phần: `pathLength={1}` + `strokeDasharray="1"` biến chiều dài
+   * đường thành một đơn vị, nên `strokeDashoffset = 1 - tiến độ` để lộ đúng phần đã vẽ.
+   */
+  progress?: Record<string, number>
 }
 
-export function ConnectorLayer({ nodes, connectors, preview }: ConnectorLayerProps) {
+export function ConnectorLayer({ nodes, connectors, preview, progress }: ConnectorLayerProps) {
   return (
     <svg className="absolute left-0 top-0" style={{ width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}>
       {connectors.map((c) => {
         const d = connectorPath(c, nodes)
         if (!d) return null
-        return <path key={c.id} d={d} stroke={c.stroke} strokeWidth={c.strokeWidth} fill="none" strokeLinecap="round" />
+        const drawn = progress?.[c.id]
+        if (drawn === undefined || drawn >= 1) {
+          return <path key={c.id} d={d} stroke={c.stroke} strokeWidth={c.strokeWidth} fill="none" strokeLinecap="round" />
+        }
+        return (
+          <path
+            key={c.id}
+            data-testid="design-canvas-connector-drawing"
+            data-progress={drawn}
+            d={d}
+            stroke={c.stroke}
+            strokeWidth={c.strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+            pathLength={1}
+            strokeDasharray="1 1"
+            strokeDashoffset={1 - Math.max(0, drawn)}
+          />
+        )
       })}
       {preview && (
         <path

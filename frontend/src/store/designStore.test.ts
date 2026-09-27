@@ -38,7 +38,9 @@ beforeEach(() => {
     runs: [],
     activeRunId: DESIGN_ID,
     scenes: {},
+    sceneSeq: {},
     sceneActor: {},
+    lastOps: {},
     sceneVersion: 0,
     prompts: [],
     rejectedOps: 0,
@@ -272,5 +274,62 @@ describe('designStore — thẻ thoát chỉ sống khi chế độ BẬT (BUG-B
     stubRunsWithExit()
     useDesignStore.getState().sync('s-store', { designMode: { on: false } }, [])
     expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+})
+
+describe('designStore — cảnh canvas có HAI nguồn (P1 v3)', () => {
+  /** Tuyến chi tiết trả cảnh + `canvasSeq` — nguồn dựng lại canvas sau khi tải lại trang. */
+  function stubRunDetail(payload: Record<string, unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ job: payload }) }) as unknown as Response),
+    )
+  }
+
+  it('sự kiện phát LẠI (sceneVersion đã có trong cảnh đang giữ) bị bỏ qua, không đếm là op bị chối', () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 2))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+
+    // Cùng một sự kiện quay lại sau khi cảnh đã bao gồm nó: KHÔNG áp lần hai (CREATE_NODE trùng id sẽ
+    // bị reducer từ chối và badge "N op bị bỏ" nói dối).
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 2))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes).toHaveLength(1)
+  })
+
+  it('tuyến chi tiết mang cảnh ⇒ nhận vào store kèm `canvasSeq` (tải lại trang vẫn thấy canvas)', async () => {
+    stubRunDetail({
+      designId: DESIGN_ID, status: 'designing', phase: 'drawing', canvasSeq: 4,
+      canvasScene: { version: 1, nodes: [node('seed-1'), node('seed-2')], connectors: [], strokes: [] },
+    })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['seed-1', 'seed-2'])
+    expect(useDesignStore.getState().sceneSeq[DESIGN_ID]).toBe(4)
+
+    // Sự kiện phát lại của ĐÚNG cảnh ấy (sceneVersion 4) không được áp lên trên.
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('seed-1') }], 4))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes).toHaveLength(2)
+  })
+
+  it('cảnh dựng từ sự kiện MỚI HƠN payload ⇒ vòng fetch cũ không ghi đè ngược', async () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('agent-1') }], 9))
+    stubRunDetail({
+      designId: DESIGN_ID, status: 'designing', phase: 'drawing', canvasSeq: 3,
+      canvasScene: { version: 1, nodes: [node('seed-1')], connectors: [], strokes: [] },
+    })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['agent-1'])
+    expect(useDesignStore.getState().sceneSeq[DESIGN_ID]).toBe(9)
+  })
+
+  it('payload không có cảnh (tuyến danh sách) ⇒ không đụng vào cảnh đang giữ', async () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1))
+    stubRunDetail({ designId: DESIGN_ID, status: 'designing', phase: 'drawing' })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['n1'])
   })
 })
