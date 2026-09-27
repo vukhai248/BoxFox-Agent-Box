@@ -190,6 +190,36 @@ def test_a_rejected_decision_is_pinned_as_rejected(tmp_path):
     asyncio.run(run())
 
 
+def test_a_typed_free_text_answer_is_pinned_as_an_answer_not_a_rejection(tmp_path):
+    """Lỗi vòng kiểm thử: đường route trả `{status:'resolved', outcome:'answered'}` và bản merge cũ
+    để `status:'resolved'` đè lên `status:'answered'` của bản đã settle ⇒ hàng `D:` ghim thành "từ chối".
+    """
+    async def run():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([answer('chờ chốt')]))
+        sid = runtime.create({'skills': []})['id']
+        runtime.pending['dec-3'] = {
+            'sessionId': sid, 'decisionId': 'dec-3', 'resolved': False,
+            'options': [{'id': 'yes', 'label': 'Duyệt', 'kind': 'approve'},
+                        {'id': 'other', 'label': 'Khác (tự nhập)', 'kind': 'alternative',
+                         'allowFreeText': True}],
+            'future': asyncio.get_running_loop().create_future()}
+
+        result = runtime.resolve_decision(sid, 'dec-3', 'other', note='Không đồng ý, sửa lại phần X')
+        assert result['outcome'] == 'answered'
+        await runtime.pin_decision(sid, result)
+
+        pinned = [record for _, record in records(store, sid, 'decision')][0]
+        assert pinned['status'] == 'info', 'câu trả lời tự nhập là tin trung tính, không phải lời từ chối'
+        assert pinned['data']['status'] == 'answered', 'kết cục đã settle phải sống qua bản merge của route'
+        row = [row for row in store.journal_tail(sid, limit=50, kinds=['decision'])][0]['payload']['record']
+        assert row['text'] == 'trả lời: Khác (tự nhập)', row['text']
+        assert pinned['data']['note'] == 'Không đồng ý, sửa lại phần X'
+        store.close()
+
+    asyncio.run(run())
+
+
 def test_a_failing_journal_layer_never_breaks_the_plan_write(tmp_path):
     """Tầng file hỏng ⇒ một `notice`, còn kế hoạch vẫn được ghi và vẫn có bản ghi `P:` trong DB."""
 

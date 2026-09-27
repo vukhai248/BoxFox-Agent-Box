@@ -5921,7 +5921,15 @@ class HarnessRuntime(RuntimeCommands):
         # Hai đường gọi khác nhau: route đưa kết quả của `resolve_decision` (`{status: 'resolved',
         # choice, outcome}`), còn đường hết hạn đưa `record['outcome']` đã settle. Bản đã settle là
         # bản đầy đủ nhất (có `note`, `reason`, `status`), nên nó thắng khi có.
-        outcome = {**(record.get('outcome') or {}), **outcome} if record.get('outcome') else outcome
+        #
+        # P4 (vá vòng kiểm thử): hai khoá của đường route là trạng thái VẬN CHUYỂN, không phải kết cục
+        # quyết định — `status:'resolved'` và `outcome:'answered'` (một CHUỖI, không phải bản settle).
+        # Để chúng đè lên bản settle thì `outcome.get('status')` đọc ra `'resolved'`, nhánh `answered`
+        # rơi mất, và một câu trả lời tự nhập bị ghim thành hàng `D:` "từ chối" (status `rejected`).
+        settled = record.get('outcome') or {}
+        if settled:
+            outcome = {**settled, **{key: value for key, value in outcome.items()
+                                     if key not in ('status', 'outcome')}}
         options = record.get('options') or []
         chosen = next((item for item in options if item.get('id') == outcome.get('choice')), None)
         expired = outcome.get('status') == 'expired'
