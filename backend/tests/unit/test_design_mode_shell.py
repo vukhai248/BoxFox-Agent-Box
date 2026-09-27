@@ -542,7 +542,7 @@ def test_an_interview_prompt_survives_the_exit_choice(harness):
     job = _mode_on(store, runtime, sid)
     design_runtime.design_prompt_new(
         runtime, sid, store.design_job(job['design_id']), 'interview',
-        questions=[{'id': 'q', 'text': 'màn hình nào?', 'required': True}])
+        questions=[{'id': 'dq-screen', 'text': 'màn hình nào?', 'required': True}])
     _ask_exit_choice(store, runtime, sid)
 
     design_runtime.apply_design_mode(runtime, sid, False, 'toggle', active_run='pause')

@@ -481,8 +481,10 @@ SCHEMAS = [
          'Ghi thẻ brief của run thiết kế (nguồn sự thật cho màn hình, nền tảng, dự án đích, phạm vi, '
          'phong cách, điểm vào, ràng buộc) VÀ đề xuất danh sách chạm. action="propose" đặt brief lần '
          'đầu, "update" sửa brief hoặc danh sách chạm (kèm revision hiện tại), "ask" mở một lời hỏi '
-         'tối đa 3 câu để chốt điều còn mơ hồ. patch.touchList.items[] mỗi mục có kind new|insert, '
-         'path, reason, risk. Ghi làm tăng revision; revision cũ bị chối.',
+         'tối đa 3 câu để chốt điều còn mơ hồ; câu hỏi phỏng vấn PHẢI mang mã cố định '
+         '(dq-screen, dq-platform, dq-project, dq-scope, dq-style, dq-entry, dq-constraints) — mã khác '
+         'bị chối vì câu trả lời không ghi được vào trường nào của brief. patch.touchList.items[] mỗi '
+         'mục có kind new|insert, path, reason, risk. Ghi làm tăng revision; revision cũ bị chối.',
          {'action': {'type': 'string', 'enum': ['propose', 'update', 'ask']},
           'designId': STRING, 'patch': {'type': 'object'},
           'questions': {'type': 'array', 'items': {'type': 'object', 'properties': {

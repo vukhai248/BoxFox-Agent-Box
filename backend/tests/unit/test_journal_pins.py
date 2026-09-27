@@ -204,7 +204,10 @@ def test_a_failing_journal_layer_never_breaks_the_plan_write(tmp_path):
         store = SessionStore(tmp_path / 'sessions.db')
         runtime = HarnessRuntime(store, BrokenJournal(), FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'nhat-ky-phien', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi kế hoạch')]))
+            answer('Đã ghi kế hoạch'),
+            # F3 (đợt soát 2026-09-27): lượt ghi kế hoạch mà chưa có phán quyết thì harness bơm ĐÚNG
+            # MỘT bước nhắc, nên lượt này tiêu thụ thêm một câu trả lời.
+            answer('Ghi xong, chưa chạy phản biện.')]))
         sid = runtime.create({'skills': []})['id']
         await runtime.start(sid, 'Lên kế hoạch nhật ký')
 

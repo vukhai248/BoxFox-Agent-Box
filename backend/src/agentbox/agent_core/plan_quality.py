@@ -25,7 +25,18 @@ import re
 
 __all__ = ['REQUIRED_SECTIONS', 'PLAN_QUALITY_PREFIX', 'plan_quality_issues', 'plan_quality_message',
            'check_plan_quality', 'sections', 'has_concrete_check', 'has_expected_result',
-           'claims_external_facts', 'source_lines', 'cited_hosts', 'sources_issues', 'sources_message']
+           'claims_external_facts', 'source_lines', 'cited_hosts', 'sources_issues', 'sources_message',
+           'ASSUMPTION_HEADING_KEYS', 'assumption_items']
+
+#: Tiêu đề của một mục GIẢ ĐỊNH / CÂU HỎI MỞ (F2, đợt soát 2026-09-27). Độc lập với
+#: `REQUIRED_SECTIONS['risks']`: mục rủi ro nói về thất bại, còn mục này nói về điều CHƯA BIẾT —
+#: thứ duy nhất mà một câu hỏi cho chủ nhà gỡ được.
+ASSUMPTION_HEADING_KEYS = ('assumption', 'unknown', 'open question', 'unconfirmed', 'to confirm',
+                            'giả định', 'chưa xác nhận', 'cần xác nhận', 'câu hỏi mở')
+
+#: Trần số mục và số ký tự mỗi mục: notice chỉ cần đủ để chủ nhà nhận ra GIẢ ĐỊNH NÀO chưa xác nhận.
+ASSUMPTION_ITEMS_MAX = 5
+ASSUMPTION_ITEM_CHARS = 160
 
 PLAN_QUALITY_PREFIX = 'PLAN_QUALITY_REJECTED'
 
@@ -218,6 +229,30 @@ def has_expected_result(body: str) -> bool:
     """True when the section states what the check must produce."""
     lowered = body.lower()
     return any(marker in lowered for marker in _EXPECTED_MARKERS) or bool(_EXPECTED_RE.search(body))
+
+
+def assumption_items(markdown: str):
+    """Các dòng của mục GIẢ ĐỊNH / CÂU HỎI MỞ trong bản kế hoạch (rỗng = không có mục ấy).
+
+    Đọc từ chính văn bản vừa ghi, không mở lại tệp trong box: `write_plan` đã cầm nó trên tay, và một
+    lần `docker exec` chỉ để đếm dòng là thứ không thể trả giá. Một dòng dài bị cắt ở
+    `ASSUMPTION_ITEM_CHARS`; số dòng bị cắt ở `ASSUMPTION_ITEMS_MAX`, và số dòng BỊ CẮT được nói ra
+    trong chính danh sách (`... và N mục nữa`) để notice không nói thiếu.
+    """
+    found = _find_with_body(sections(markdown), ASSUMPTION_HEADING_KEYS)
+    if found is None:
+        return []
+    items = []
+    for line in str(found[1] or '').splitlines():
+        text = line.strip().lstrip('-*+ ').strip()
+        text = re.sub(r'^\d+[.)]\s*', '', text).strip()
+        if not text or text.startswith('#'):
+            continue
+        items.append(text[:ASSUMPTION_ITEM_CHARS])
+    if len(items) > ASSUMPTION_ITEMS_MAX:
+        extra = len(items) - ASSUMPTION_ITEMS_MAX
+        items = items[:ASSUMPTION_ITEMS_MAX] + [f'... và {extra} mục nữa']
+    return items
 
 
 def claims_external_facts(markdown: str) -> bool:

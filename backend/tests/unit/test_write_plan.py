@@ -127,8 +127,12 @@ def test_write_plan_emits_plan_written_then_ui_intent(tmp_path):
         model = FixtureModel([
             answer('Viết plan', calls=[call('write_plan', {'slug': 'Workspace Plan', 'markdown': PLAN_MARKDOWN, 'title': ''})]),
             answer('Đã ghi plan'),
+            # F3 (đợt soát 2026-09-27): lượt có `write_plan` mà chưa có phán quyết thì harness bơm
+            # ĐÚNG MỘT bước nhắc giữa lượt, nên mỗi lượt plan tiêu thụ thêm một câu trả lời ở đây.
+            answer('Ghi xong, chưa chạy phản biện.'),
             answer('Viết tiếp', calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN_V2})]),
-            answer('Đã ghi bản 2')])
+            answer('Đã ghi bản 2'),
+            answer('Ghi xong, chưa chạy phản biện.')])
         runtime = HarnessRuntime(store, executor, model)
         sid = runtime.create({'skills': []})['id']
 
