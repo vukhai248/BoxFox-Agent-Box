@@ -490,7 +490,8 @@ SCHEMAS = [
               'required': {'type': 'boolean'},
               'options': {'type': 'array', 'items': {'type': 'object', 'properties': {
                   'id': STRING, 'label': STRING}}}}, 'required': ['id', 'text']}},
-          'kind': {'type': 'string', 'enum': ['interview', 'brief', 'touch-list', 'exit-choice']}},
+          'kind': {'type': 'string',
+                   'enum': ['interview', 'brief', 'touch-list', 'exit-choice', 'out-of-scope']}},
          ['action']),
     tool('design_branch_create',
          'Tạo nhánh thiết kế cho run này từ HEAD của dự án trong box và ghi lại base sha. Tên nhánh '

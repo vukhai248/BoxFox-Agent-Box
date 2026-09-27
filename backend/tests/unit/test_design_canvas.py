@@ -189,3 +189,33 @@ def test_user_scene_and_directive_routes(harness):
 
     # Directive xếp hàng và xuất hiện trong khối lời dặn của lượt Design Lead kế tiếp.
     assert 'đổi nút gửi thành màu xanh' in block
+
+
+# ------------------------------------------ Sự kiện mang cảnh ĐÃ RÚT GỌN (§6.4, IF-1)
+
+
+def test_canvas_events_carry_the_reduced_scene(harness):
+    """Cả hai chiều phát kèm `scene` đã rút gọn — thiếu nó, sửa của chủ nhà (`ops:[]`) là mù."""
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    draw(runtime, store, sid, {'designId': job['design_id'],
+                               'actions': [{'type': 'CREATE_NODE', 'node': node('n1')}]})
+    stored = store.design_job(job['design_id'])['state']['canvasScene']
+    assert events(store, sid, 'design_canvas')[0]['scene'] == stored, 'agent: cảnh khớp `state`'
+
+    async def run():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                body = {'protocol': 'boxfox.canvas.v1', 'type': 'scene',
+                        'scene': {**empty_scene(), 'nodes': [node('n1'), node('u1')]}}
+                async with http.post(str(server.make_url(f'/api/agent/sessions/{sid}/canvas')),
+                                     json=body) as resp:
+                    assert resp.status == 200
+                return (events(store, sid, 'design_canvas'),
+                        store.design_job(job['design_id'])['state']['canvasScene'])
+
+    canvas_events, stored = asyncio.run(run())
+    user_event = [event for event in canvas_events if event['actor'] == 'user'][0]
+    assert user_event['ops'] == []
+    assert [item['id'] for item in user_event['scene']['nodes']] == ['n1', 'u1']
+    assert user_event['scene'] == stored, 'chủ nhà: cảnh phát ra khớp cảnh đã lưu'

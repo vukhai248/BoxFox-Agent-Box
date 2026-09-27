@@ -363,3 +363,97 @@ def test_switching_the_feature_off_keeps_the_old_role_command_and_no_design_tool
     resolved = registry.resolve('/design specify contracts', subagents=[{'id': 'design'}])
     store.close()
     assert resolved.kind == 'task' and resolved.role == 'design', '/design là lệnh VAI khi tắt'
+
+
+# ------------------- Ngoài phạm vi (§5.9), neo `entrySeq` (§5.1), sự kiện tạm dừng/tiếp tục (§7.3)
+
+
+def _mode_on(store, runtime, sid, goal='thiết kế lại màn hình chat'):
+    """Bật mode và mở một run đang hoạt động cho phiên (khuôn `open_run` của các bài khác)."""
+    design_runtime.apply_design_mode(runtime, sid, True, 'toggle')
+    job = design_runtime.new_design_job(runtime, sid, goal)
+    config = dict(session_of(store, sid)['config'])
+    config['designMode'] = {**config['designMode'], 'on': True, 'activeRunId': job['design_id']}
+    store.update_config(sid, config)
+    return store.design_job(job['design_id'])
+
+
+def _scope(store, runtime, sid, args):
+    async def call():
+        return await runtime.dispatch(store.get(sid), 'design_scope', args)
+
+    return asyncio.run(call())
+
+
+def _out_of_scope_prompt(store, job):
+    live = store.design_job(job['design_id'])
+    return live, [row for row in live['state']['prompts'] if row['kind'] == 'out-of-scope'][0]
+
+
+def test_the_out_of_scope_prompt_pins_exit_and_keep(harness):
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+    result = _scope(store, runtime, sid, {'action': 'ask', 'kind': 'out-of-scope',
+                                          'patch': {'request': 'sửa giúp tôi package.json'},
+                                          'questions': [{'id': 'q',
+                                                         'text': 'việc này ngoài phạm vi thiết kế'}]})
+    live, prompt = _out_of_scope_prompt(store, job)
+    assert prompt['questions'] == [
+        {'id': 'out-of-scope', 'text': 'việc này ngoài phạm vi thiết kế', 'why': '',
+         'allowFreeText': False, 'required': True,
+         'options': [{'id': 'exit', 'label': 'Tạm thoát để main xử lý'},
+                     {'id': 'keep', 'label': 'Giữ trong design'}]}]
+    assert prompt['meta'] == {'request': 'sửa giúp tôi package.json'}
+    assert prompt['status'] == 'open'
+    assert live['status'] == 'needs_user', 'câu hỏi bắt buộc ⇒ run dừng chờ chủ nhà'
+    assert result['promptId'] == prompt['promptId']
+    assert prompt['promptId'] in [row['promptId'] for row in events(store, sid, 'design_prompt')]
+
+
+def test_the_out_of_scope_prompt_falls_back_to_the_owner_message(harness):
+    """Không nêu `request` ⇒ lấy TIN NHẮN GỐC gần nhất của chủ nhà (IF-2)."""
+    store, runtime, sid = harness
+    messages = list(session_of(store, sid)['messages'])
+    store.save(sid, messages + [{'role': 'user', 'content': 'đổi màn hình chat giúp tôi'}])
+    job = _mode_on(store, runtime, sid)
+    _scope(store, runtime, sid, {'action': 'ask', 'kind': 'out-of-scope'})
+    _, prompt = _out_of_scope_prompt(store, job)
+    assert prompt['meta'] == {'request': 'đổi màn hình chat giúp tôi'}
+    assert prompt['questions'][0]['text'] == 'đổi màn hình chat giúp tôi'
+
+
+def test_turning_the_mode_on_records_the_entry_seq(harness):
+    store, runtime, sid = harness
+    tail = store.events_tail(sid, 1)
+    expected = int(tail[-1]['seq']) if tail else 0
+    first = design_runtime.apply_design_mode(runtime, sid, True, 'toggle')
+    assert first['mode']['entrySeq'] == expected
+    assert session_of(store, sid)['config']['designMode']['entrySeq'] == expected
+    again = design_runtime.apply_design_mode(runtime, sid, True, 'toggle')
+    assert again['mode']['entrySeq'] == expected, 'bật lại khi đang bật không dời mốc'
+
+
+def test_pause_and_resume_each_emit_one_design_run_event(harness):
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+
+    async def run():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                url = str(server.make_url(f'/api/agent/design/runs/{job["design_id"]}'))
+                before = len(events(store, sid, 'design_run'))
+                async with http.patch(url, json={'action': 'pause'}) as resp:
+                    assert resp.status == 200
+                    paused = await resp.json()
+                after_pause = len(events(store, sid, 'design_run'))
+                async with http.patch(url, json={'action': 'resume'}) as resp:
+                    assert resp.status == 200
+                    resumed = await resp.json()
+                after_resume = len(events(store, sid, 'design_run'))
+            return before, after_pause, after_resume, paused, resumed
+
+    before, after_pause, after_resume, paused, resumed = asyncio.run(run())
+    assert paused['job']['status'] == 'paused'
+    assert resumed['job']['status'] == 'designing', 'tiếp tục đưa run về trạng thái làm việc'
+    assert after_pause == before + 1, 'tạm dừng phát ĐÚNG MỘT `design_run`'
+    assert after_resume == after_pause + 1, 'tiếp tục phát ĐÚNG MỘT `design_run`'

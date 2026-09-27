@@ -3326,6 +3326,15 @@ class HarnessRuntime(RuntimeCommands):
         lines.append(DESIGN_MODE_BLOCK_END)
         return '\n'.join(lines)
 
+    def design_resume_turn(self, sid):
+        """Lượt hiện tại có phải lượt BƠM của một run nền (`design-resume-*`) không?
+
+        `turn_profile` cấp họ công cụ design cho lượt bơm ấy KỂ CẢ khi mode đã tắt (đó là cách run
+        nền tiếp tục sau khi chủ nhà chọn "Tiếp tục chạy nền"); cổng cứng ở `dispatch` phải nói
+        cùng một luật, nếu không lượt bơm nhận công cụ mà gọi nào cũng bị `DESIGN_MODE_REQUIRED`.
+        """
+        return str(self.turn_invocations.get(sid) or '').startswith('design-resume-')
+
     def design_job_for(self, session, args=None):
         """Run design của lời gọi công cụ: `designId` trong tham số, ngược lại `activeRunId` (§4)."""
         wanted = str((args or {}).get('designId') or '').strip() or str(
@@ -4379,7 +4388,8 @@ class HarnessRuntime(RuntimeCommands):
         # P1 (design-interfaces §4): công cụ của gia đình design chỉ sống TRONG mode. Gọi ngoài mode
         # ⇒ `DESIGN_MODE_REQUIRED`, kể cả khi phiên còn giữ tên công cụ từ một lượt design trước —
         # nếu không, một phiên từng bật mode sẽ mang công cụ ghi được vào lượt main.
-        if name in DESIGN_TOOL_FAMILY and not design_mode(session)['on']:
+        if name in DESIGN_TOOL_FAMILY and not design_mode(session)['on'] \
+                and not self.design_resume_turn(sid):
             raise ValueError(f'{DESIGN_MODE_REQUIRED_CODE}: công cụ design chỉ dùng được trong chế độ '
                              'Design — hãy bật chế độ trước.')
         if name in DECISION_TOOLS:
@@ -4447,7 +4457,7 @@ class HarnessRuntime(RuntimeCommands):
         if name == 'design_scope':
             return design_runtime.design_scope(self, sid, self.design_job_for(session, args),
                                                args.get('action'), args.get('patch'),
-                                               args.get('questions'))
+                                               args.get('questions'), args.get('kind'))
         if name == 'design_branch_create':
             return await design_runtime.design_branch_create(self, sid,
                                                              self.design_job_for(session, args),

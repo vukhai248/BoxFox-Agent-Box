@@ -950,6 +950,24 @@ def design_write(args):
     return {'path': relative, 'mode': mode, 'sha256': sha256_of(encoded), 'bytes': len(encoded)}
 
 
+def design_file_sha(args):
+    """Băm TOÀN BỘ tệp theo byte (`design_file_sha`) — cổng `DESIGN_WRITE_STALE` đọc ở đây.
+
+    `file_read` cắt ở 30 000 ký tự nên băm của `content` không bao giờ khớp băm full-file mà
+    `design_write` ghim cho tệp dài — cổng cũ từ chối OAN mọi lần `insert` sau lần ghi đầu. Op
+    này trả băm của CẢ tệp (cùng đơn vị `sha256sum`), đi qua `path()` như mọi op ghi, và chối
+    khi tệp chưa tồn tại.
+    """
+    relative, target = design_relative_path(args.get('path'))
+    if not target.is_file():
+        raise ValueError("DESIGN_WRITE_MISSING: Tệp chưa tồn tại; dùng kiểu 'tạo mới' thay vì 'chèn'.")
+    try:
+        size_chars = len(target.read_text(encoding='utf-8'))
+    except (UnicodeDecodeError, OSError):
+        size_chars = None
+    return {'path': relative, 'sha256': file_digest(target), 'sizeChars': size_chars}
+
+
 def design_status_map(base, paths):
     """`{đường dẫn: ký tự trạng thái}` của `git diff --name-status <base>`; tệp đổi tên lấy đích."""
     args = ['diff', '--name-status', base]
@@ -1043,7 +1061,9 @@ def design_revert(args):
     paths = design_paths_arg(args.get('paths'))
     if mode == 'file' and not paths:
         return {'reverted': [], 'deleted': []}
-    scope = paths if mode == 'file' else None
+    # `paths` (danh sách LÔ đã ghim ở tầng harness) là phạm vi hoàn tác cho CẢ hai mode; chỉ
+    # `None` mới quét cả cây — nếu không, `revert-batch` nuốt luôn sửa tay của chủ nhà.
+    scope = paths
     changed = design_status_map(base, scope)
     for untracked in design_untracked_paths(scope):
         changed.setdefault(untracked, '?')
@@ -1127,6 +1147,8 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None):
         return design_branch_create(args)
     if name == 'design_write':
         return design_write(args)
+    if name == 'design_file_sha':
+        return design_file_sha(args)
     if name == 'design_diff':
         return design_diff(args)
     if name == 'design_revert':

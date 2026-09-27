@@ -777,7 +777,7 @@ DESIGN_ACTIVE_STATUSES = ('scoping', 'designing', 'writing', 'reviewing')
 #: Kiểu việc của một mục danh sách chạm và trạng thái của nó (plan v1 §7.10).
 DESIGN_TOUCH_KINDS = ('new', 'insert')
 DESIGN_TOUCH_STATUSES = ('proposed', 'approved', 'rejected', 'written')
-DESIGN_PROMPT_KINDS = ('interview', 'exit-choice', 'touch-list')
+DESIGN_PROMPT_KINDS = ('interview', 'exit-choice', 'touch-list', 'out-of-scope')
 
 #: 20 mã lỗi (plan v1 §7.6). Tên hằng `*_CODE` BẰNG chính mã — một quy ước để test đối chiếu tên.
 DESIGN_MODE_UNAVAILABLE_CODE = 'DESIGN_MODE_UNAVAILABLE'

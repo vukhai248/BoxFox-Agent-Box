@@ -155,6 +155,41 @@ def test_no_branch_is_required_before_writing(harness):
         write(runtime, store, sid, path='src/new.txt', content='x\n', mode='create')
 
 
+@pytest.mark.parametrize('path', ['.design/../src/x.ts', '.design/../package.json',
+                                  '.design/../.git/config', '..', '/etc/passwd'])
+def test_dotdot_and_absolute_paths_are_refused(harness, path):
+    """Đường dẫn phải được CHUẨN HOÁ trước khi xét quyền (§6.5).
+
+    Tiền tố `.design/` trên chuỗi THÔ từng khiến `'.design/../src/x.ts'` được coi là "đồ của run" ⇒
+    bỏ qua cả danh sách chạm lẫn cổng nhánh, rồi worker `resolve()` ra đường dẫn THẬT trong dự án —
+    kể cả `.git/config`. Bài này ghim: không đường dẫn nào có `..`/tuyệt đối lọt qua.
+    """
+    store, runtime, sid, root = harness
+    job = open_run(runtime, store, sid)
+    approve(runtime, store, sid, job, [item('new', 'src/inside.txt')])
+    make_branch(runtime, store, sid)
+    git_config = (root / '.git' / 'config').read_bytes()
+
+    with pytest.raises(ValueError, match=limits.DESIGN_PATH_NOT_APPROVED_CODE):
+        write(runtime, store, sid, path=path, content='x\n', mode='create')
+    assert not (root / 'src/x.ts').exists()
+    assert not (root / 'package.json').exists()
+    assert (root / '.git' / 'config').read_bytes() == git_config, '`.git/` không được chạm'
+
+
+def test_run_owned_path_with_redundant_prefix_still_writes(harness):
+    """Chuẩn hoá không được làm mất quyền của `.design/**` (ví dụ `./.design/<slug>/note.md`)."""
+    store, runtime, sid, root = harness
+    job = open_run(runtime, store, sid)
+    approve(runtime, store, sid, job, [item('new', 'src/inside.txt')])
+    make_branch(runtime, store, sid)
+
+    result = write(runtime, store, sid, path=f'./.design/{design_runtime._slug(job["design_id"])}'
+                                             '/note.md', content='ghi chú\n', mode='create')
+    assert result['path'] == f'.design/{design_runtime._slug(job["design_id"])}/note.md'
+    assert (root / result['path']).read_text(encoding='utf-8') == 'ghi chú\n'
+
+
 # ---------------------------------------------------------------- create / insert
 
 
@@ -228,6 +263,36 @@ def test_stale_file_is_refused(harness):
     with pytest.raises(ValueError, match=limits.DESIGN_WRITE_STALE_CODE):
         write(runtime, store, sid, path='app.txt', content='X\n', mode='insert', anchor='beta\n')
     assert (root / 'app.txt').read_text(encoding='utf-8') == 'alpha\nBETA\ngamma\n'
+
+
+def test_large_file_insert_is_not_falsely_stale(harness):
+    """Cổng `DESIGN_WRITE_STALE` đọc băm của CẢ tệp, không phải của bản `file_read` bị cắt (§6.5).
+
+    `file_read` cắt ở 30 000 ký tự, nên với tệp dài hơn, băm của `content` không bao giờ khớp băm
+    full-file mà `design_write` ghim ⇒ mọi `insert` sau lần ghi đầu bị chối OAN dù tệp y nguyên.
+    """
+    store, runtime, sid, root = harness
+    job = open_run(runtime, store, sid)
+    approve(runtime, store, sid, job, [item('insert', 'big.txt')])
+    make_branch(runtime, store, sid)
+    big = 'START\n' + ''.join(f'line {i:04d}\n' for i in range(4000)) + 'END\n'
+    assert len(big) > 30000
+
+    write(runtime, store, sid, path='big.txt', content=big, mode='create')
+    assert (root / 'big.txt').read_text(encoding='utf-8') == big
+
+    # Tệp KHÔNG đổi ⇒ lần chèn này phải qua được (trước đây bị `DESIGN_WRITE_STALE` oan).
+    result = write(runtime, store, sid, path='big.txt', content='INSERTED\n', mode='insert',
+                   anchor='START\n')
+    assert result['sha256']
+    assert (root / 'big.txt').read_text(encoding='utf-8') == 'START\nINSERTED\n' \
+        + big[len('START\n'):]
+
+    # Tệp ĐỔI thật ⇒ cổng vẫn là cổng thật: từ chối trước khi gọi worker.
+    (root / 'big.txt').write_text(big + 'TAMPER\n', encoding='utf-8')
+    with pytest.raises(ValueError, match=limits.DESIGN_WRITE_STALE_CODE):
+        write(runtime, store, sid, path='big.txt', content='X\n', mode='insert', anchor='START\n')
+    assert (root / 'big.txt').read_text(encoding='utf-8') == big + 'TAMPER\n'
 
 
 def test_parameters_with_shell_meta_never_reach_a_shell(harness):

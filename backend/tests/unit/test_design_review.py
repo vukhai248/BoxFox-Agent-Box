@@ -6,6 +6,7 @@ Bốn cổng của `design_review` (`NO_CRITIC`, `VERDICT_MISSING`, `VERDICT_MIS
 from __future__ import annotations
 
 import asyncio
+import hashlib
 
 import pytest
 
@@ -31,9 +32,17 @@ CRITIQUE_TEMPLATE = (
 class RecordingExecutor:
     def __init__(self):
         self.ops = []
+        # `design_file_sha` phải trả băm THẬT của bản nháp khi bài muốn cổng §7.9 chạy; bài nào
+        # không khai thì box coi như chưa có tệp (ném, tầng runtime nuốt thành `None`).
+        self.hashes = {}
 
     async def execute(self, name, args, sid, **kwargs):
         self.ops.append((name, dict(args)))
+        if name == 'design_file_sha':
+            hit = self.hashes.get(str(args.get('path')))
+            if hit is None:
+                raise ValueError('DESIGN_WRITE_MISSING: no such file in the box')
+            return {'path': args.get('path'), 'sha256': hit[0], 'sizeChars': hit[1]}
         return {'content': 'ok'}
 
     async def cleanup(self, sid):
@@ -81,8 +90,12 @@ def events(store, sid, kind):
 
 
 def seed_critic(store, sid, job, version, text, *, status='completed', role='plan-review',
-                design_id=None, version_override=None, target=True, answer_chars=None):
-    """Một con `plan-review` đã xong, mang `reviewTarget` trỏ đúng bản thiết kế (hoặc cố tình sai)."""
+                design_id=None, version_override=None, target=True, answer_chars=None, reads=None):
+    """Một con `plan-review` đã xong, mang `reviewTarget` trỏ đúng bản thiết kế (hoặc cố tình sai).
+
+    `reads` là danh sách `(path, text)`: mỗi cặp phát một `tool_end file_read` ĐỌC TRỌN tệp — bằng
+    chứng đọc mà cổng §7.9 đòi khi bản nháp có băm thật trong box.
+    """
     child = store.create({'skills': []}, role=role, parent_id=sid)['id']
     store.child_start(child, sid, 1, 2, role, 'review the design')
     config = dict(store.get(child)['config'] or {})
@@ -94,9 +107,19 @@ def seed_critic(store, sid, job, version, text, *, status='completed', role='pla
     store.update_config(child, config)
     if text is not None:
         store.emit(child, 'assistant', {'text': text, 'final': True})
+    for path, content in (reads or []):
+        store.emit(child, 'tool_end', {'name': 'file_read', 'args': {'path': path},
+                                       'result': {'content': content, 'truncated': False}})
     store.child_finish(child, status, reason=None, steps_used=4,
                        answer_chars=answer_chars if answer_chars is not None else len(text or ''))
     return child
+
+
+def seed_draft(executor, job, version, text):
+    """Ghim bản nháp `<version>` vào box giả và trả đường dẫn quy ước của nó (§7.9)."""
+    path = design_runtime.design_draft_path(job, version)
+    executor.hashes[path] = (hashlib.sha256(text.encode('utf-8')).hexdigest(), len(text))
+    return path
 
 
 # ------------------------------------------------------------------ Cổng design_review
@@ -312,3 +335,111 @@ def test_paused_run_notifies_blocked_exactly_once(harness):
     assert design_runtime.notify_run(runtime, sid, store.design_job(job['design_id'])) is None
     kinds = [row['data']['kind'] for row in store.events(sid) if row['type'] == 'design_notice']
     assert kinds.count('blocked') == 1
+
+
+# ------------------------ Cổng đọc + ràng buộc `version`↔cây (§7.9, các finding fix-round)
+
+
+DRAFT_TEXT = '# bản nháp v1\n\n- khung hội thoại\n- danh sách tin nhắn\n'
+
+
+def test_review_refuses_a_critic_that_never_read_the_draft(harness):
+    """Bản nháp CÓ thật trong box ⇒ con soát phải chứng minh đã đọc trước khi mở cổng `ok`."""
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    seed_draft(executor, job, 1, DRAFT_TEXT)
+    seed_critic(store, sid, job, 1, CRITIQUE_TEMPLATE + '\nVERDICT: ok')  # không hề `file_read`
+    with pytest.raises(ValueError) as caught:
+        call(runtime, store, sid, 'design_review',
+             {'designId': job['design_id'], 'version': 1, 'verdict': 'ok'})
+    assert limits.DESIGN_REVIEW_NO_CRITIC_CODE in str(caught.value)
+    assert 'review' not in (store.design_job(job['design_id'])['state'] or {})
+
+
+def test_review_accepts_a_critic_that_read_the_draft_and_pins_the_hashes(harness):
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    draft = seed_draft(executor, job, 1, DRAFT_TEXT)
+    seed_critic(store, sid, job, 1, CRITIQUE_TEMPLATE + '\nVERDICT: ok',
+                reads=[(draft, DRAFT_TEXT)])
+    call(runtime, store, sid, 'design_review',
+         {'designId': job['design_id'], 'version': 1, 'verdict': 'ok'})
+    live = store.design_job(job['design_id'])
+    review = live['state']['review']
+    assert review['draftPath'] == draft
+    assert review['contentHash'] == executor.hashes[draft][0]
+    assert review['treeHash'] == design_runtime._tree_identity(live['state'])
+    # Ghim đúng thứ đã soát ⇒ bàn giao KHÔNG bị chặn oan.
+    call(runtime, store, sid, 'design_report', {'summary': 'sẵn sàng'})
+    assert store.design_job(job['design_id'])['status'] == 'completed'
+
+
+def test_report_refuses_when_the_draft_changed_after_the_ok(harness):
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    draft = seed_draft(executor, job, 1, DRAFT_TEXT)
+    seed_critic(store, sid, job, 1, CRITIQUE_TEMPLATE + '\nVERDICT: ok',
+                reads=[(draft, DRAFT_TEXT)])
+    call(runtime, store, sid, 'design_review',
+         {'designId': job['design_id'], 'version': 1, 'verdict': 'ok'})
+    changed = DRAFT_TEXT + '- sửa lén sau lúc soát\n'
+    executor.hashes[draft] = (hashlib.sha256(changed.encode('utf-8')).hexdigest(), len(changed))
+    with pytest.raises(ValueError) as caught:
+        call(runtime, store, sid, 'design_report', {'summary': 'xong'})
+    assert limits.DESIGN_HANDOFF_UNREVIEWED_CODE in str(caught.value)
+
+
+def test_report_refuses_when_the_tree_changed_after_the_ok(harness):
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    draft = seed_draft(executor, job, 1, DRAFT_TEXT)
+    seed_critic(store, sid, job, 1, CRITIQUE_TEMPLATE + '\nVERDICT: ok',
+                reads=[(draft, DRAFT_TEXT)])
+    call(runtime, store, sid, 'design_review',
+         {'designId': job['design_id'], 'version': 1, 'verdict': 'ok'})
+    live = store.design_job(job['design_id'])
+    state = dict(live['state'])
+    state['actions'] = list(state.get('actions') or []) + [
+        {'at': '2026-09-27T00:00:00Z', 'path': 'src/ui/ChatPanel.tsx', 'mode': 'create',
+         'sha256After': 'deadbeef'}]
+    store.design_job_save(job['design_id'], sid, state, revision=live['revision'])
+    with pytest.raises(ValueError) as caught:
+        call(runtime, store, sid, 'design_report', {'summary': 'xong'})
+    assert limits.DESIGN_HANDOFF_UNREVIEWED_CODE in str(caught.value)
+
+
+# ------------------------------------- Run đã đóng không hồi sinh (§7.2, finding fix-round)
+
+
+def test_closed_run_closes_its_prompts_and_refuses_late_answers(harness):
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    live = store.design_job(job['design_id'])
+    prompt = live['state']['prompts'][0]
+    assert prompt['status'] == 'open'
+
+    design_runtime.close_run(runtime, sid, live, 'cancelled', 'owner-cancel')
+
+    after = store.design_job(job['design_id'])
+    assert after['status'] == 'cancelled' and after['state']['phase'] == design_runtime.PHASE_DONE
+    closed = after['state']['prompts'][0]
+    assert closed['status'] == 'closed' and closed.get('closedAt')
+    assert not store.get(sid)['config']['designMode'].get('activeRunId')
+    with pytest.raises(ValueError, match='DESIGN_PROMPT_ANSWERED'):
+        design_runtime.design_prompt_answer(runtime, sid, prompt['promptId'],
+                                            [{'questionId': 'dq-screen', 'text': 'x'}], start=True)
+    assert store.design_job(job['design_id'])['status'] == 'cancelled', 'run đóng không hồi sinh'
+
+
+def test_a_paused_run_cancelled_later_notifies_blocked_only_once(harness):
+    """Tạm dừng đã nhắc `blocked` ⇒ lúc huỷ KHÔNG nhắc lại lần hai (§7.2)."""
+    store, runtime, sid, executor = harness
+    job = open_run(runtime, store, sid)
+    live = store.design_job(job['design_id'])
+    paused = store.design_job_save(job['design_id'], sid, dict(live['state']), status='paused',
+                                   revision=live['revision'])
+    assert design_runtime.notify_run(runtime, sid, paused) is not None
+    design_runtime.close_run(runtime, sid, store.design_job(job['design_id']), 'cancelled',
+                             'owner-cancel')
+    kinds = [row['data']['kind'] for row in store.events(sid) if row['type'] == 'design_notice']
+    assert kinds.count('blocked') == 1, 'huỷ run đã nhắc `blocked` không nhắc thêm'

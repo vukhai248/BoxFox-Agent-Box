@@ -139,11 +139,38 @@ def test_batch_revert_restores_tree_and_never_moves_head(harness):
     assert {'src/a.ts', 'src/b.ts', 'app.txt'} <= set(result['result']['reverted']
                                                       + result['result'].get('deleted', []))
 
-    # Byte-identical với `base`, `main` đứng yên, cây làm việc sạch.
+    # Byte-identical với `base`, `main` đứng yên; cây DỰ ÁN sạch — chỉ còn đồ của RUN (`.design/`)
+    # và db của phiên, KHÔNG bị quét theo lô (§6.5: hoàn tác chỉ trong phạm vi lô đã ghim).
     assert (root / 'app.txt').read_text(encoding='utf-8') == INITIAL
     assert not (root / 'src/a.ts').exists() and not (root / 'src/b.ts').exists()
     assert _git(root, 'rev-parse', 'main').stdout.strip() == main_before
-    assert porcelain(root) == []
+    assert not [line for line in porcelain(root) if 'src/' in line or 'app.txt' in line]
+    assert (root / '.design').exists(), 'đồ của run không nằm trong lô nên không bị hoàn tác'
+
+
+def test_batch_revert_leaves_a_file_outside_the_batch_alone(harness):
+    """Lô chỉ gồm `src/a.ts`; sửa tay ở `src/manual.ts` và `second.txt` phải SỐNG SÓT (§6.5)."""
+    store, runtime, sid, root = harness
+    job = open_run(runtime, store, sid)
+    approve(runtime, store, sid, job,
+            [item('new', 'src/a.ts'), item('insert', 'second.txt')])
+    call(runtime, store, sid, 'design_branch_create', {'name': 'design/ui-20260927-1400'})
+
+    call(runtime, store, sid, 'design_write', {'path': 'src/a.ts', 'content': A_BODY,
+                                               'mode': 'create'})
+    # Lô = diff SAU lần ghi đầu ⇒ `src/a.ts` là lô đã ghim.
+    diff = call(runtime, store, sid, 'design_diff', {})
+    assert 'src/a.ts' in {row['path'] for row in diff['files']}
+    # Sửa tay NGOÀI lô (chủ nhà tự thêm tệp, và tự sửa một tệp khác của repo).
+    (root / 'src').mkdir(exist_ok=True)
+    (root / 'src/manual.ts').write_text('export const manual = true;\n', encoding='utf-8')
+    (root / 'second.txt').write_text('one\nTWO\n', encoding='utf-8')
+
+    result = call(runtime, store, sid, 'design_revert', {'mode': 'batch'})
+    assert result['reverted'] == ['src/a.ts']
+    assert not (root / 'src/a.ts').exists(), 'tệp TRONG lô được hoàn tác'
+    assert (root / 'src/manual.ts').read_text(encoding='utf-8') == 'export const manual = true;\n'
+    assert (root / 'second.txt').read_text(encoding='utf-8') == 'one\nTWO\n'
 
 
 def test_single_file_revert_leaves_other_files_alone(harness):
@@ -163,3 +190,21 @@ def test_single_file_revert_leaves_other_files_alone(harness):
     assert not (root / 'src/a.ts').exists()
     assert (root / 'src/b.ts').read_text(encoding='utf-8') == B_BODY
     assert _git(root, 'rev-parse', 'main').stdout.strip() == main_before
+
+
+@pytest.mark.parametrize('path', ['.design/../src/outside.ts', '.design/../package.json',
+                                  '.design/../.git/config', '..', '/etc/passwd'])
+def test_file_revert_refuses_dotdot_and_absolute_paths(harness, path):
+    """Hoàn tác MỘT tệp cũng phải chuẩn hoá đường dẫn như đường ghi (§6.5)."""
+    store, runtime, sid, root = harness
+    job = open_run(runtime, store, sid)
+    approve(runtime, store, sid, job, [item('new', 'src/a.ts')])
+    call(runtime, store, sid, 'design_branch_create', {'name': 'design/ui-20260927-1500'})
+    call(runtime, store, sid, 'design_write', {'path': 'src/a.ts', 'content': A_BODY,
+                                               'mode': 'create'})
+    git_config = (root / '.git' / 'config').read_bytes()
+
+    with pytest.raises(ValueError, match=limits.DESIGN_PATH_NOT_APPROVED_CODE):
+        call(runtime, store, sid, 'design_revert', {'paths': [path], 'mode': 'file'})
+    assert (root / 'src/a.ts').read_text(encoding='utf-8') == A_BODY, 'không hoàn tác gì'
+    assert (root / '.git' / 'config').read_bytes() == git_config

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import uuid
 
@@ -184,10 +185,16 @@ def apply_design_mode(rt, session_id, on, by='toggle', active_run=None):
     if want_on:
         config = dict(session.get('config') or {})
         entered = str(by or 'toggle')
+        was_on = bool(mode.get('on'))
         mode = {**mode, 'on': True,
                 'since': mode.get('since') or journal.utc_now_iso(),
-                'enteredBy': entered if not mode.get('on') else mode.get('enteredBy') or entered,
+                'enteredBy': entered if not was_on else mode.get('enteredBy') or entered,
                 'revision': int(mode.get('revision') or 0) + 1}
+        if not was_on:
+            # §2/§5.1: `entrySeq` = mốc sự kiện lúc BẬT mode (khuôn `research._set_mode`), để giao
+            # diện neo dải trạng thái vào đúng chỗ chế độ bắt đầu.
+            tail = rt.store.events_tail(session_id, 1)
+            mode['entrySeq'] = int(tail[-1]['seq']) if tail else 0
         if job is not None:
             mode['activeRunId'] = job['design_id']
             state = dict(job['state'] or {})
@@ -347,16 +354,53 @@ def set_phase(rt, session_id, job, phase, reason, *, force=False):
 
 
 def close_run(rt, session_id, job, status, reason, *, revision=None):
-    """Đóng một run: ghim `status` + pha `done`, phát `design_run` và `design_notice`."""
+    """Đóng một run: ghim `status` + pha `done`, đóng prompt còn mở, nhả `activeRunId` rồi phát tin.
+
+    `design_notice` đi qua CÙNG gác `state.notified` như `notify_run` (§7.2/§12: mỗi loại nhắc chỉ
+    nói một lần cho mỗi run) — nếu không, một run đã bị nhắc `blocked` lúc tạm dừng mà sau đó bị huỷ
+    sẽ nhắc `blocked` lần thứ hai.
+    """
     state = dict(job['state'] or {})
     state['stopReason'] = str(reason or '')
+    kind = 'background-done' if state.get('background') else 'blocked'
+    notified = dict(state.get('notified') or {})
+    fresh_notice = not notified.get(kind)
+    if fresh_notice:
+        notified[kind] = journal.utc_now_iso()
+    state['notified'] = notified
     updated = rt.store.design_job_save(job['design_id'], session_id, state, status=status,
                                        revision=revision)
     updated = set_phase(rt, session_id, updated, PHASE_DONE, reason, force=True) or updated
-    rt.store.emit(session_id, 'design_notice',
-                  {'designId': job['design_id'],
-                   'kind': 'background-done' if state.get('background') else 'blocked'})
+    # Huỷ run thì không được để prompt nào còn `open`: prompt mở sót là đường hồi sinh run đã đóng.
+    _close_open_prompts(rt, session_id, updated)
+    if fresh_notice:
+        rt.store.emit(session_id, 'design_notice',
+                      {'designId': job['design_id'], 'kind': kind})
+    release_active_run(rt, session_id, job['design_id'])
     return updated
+
+
+def _close_open_prompts(rt, session_id, job):
+    """Ghim `status:'closed'` cho mọi prompt còn `open` của run; trả `True` khi có prompt phải đóng.
+
+    Prompt mở sót sau khi run đã đóng là đường hồi sinh run (§7.2): `design_prompt_answer` vẫn tìm
+    thấy prompt ấy và có thể nhích run về `briefing`.
+    """
+    state = dict(job.get('state') or {})
+    prompts = state.get('prompts')
+    if not isinstance(prompts, list):
+        return False
+    changed = False
+    now = journal.utc_now_iso()
+    for prompt in prompts:
+        if isinstance(prompt, dict) and prompt.get('status') == 'open':
+            prompt['status'] = 'closed'
+            prompt['closedAt'] = now
+            changed = True
+    if changed:
+        state['prompts'] = prompts
+        rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    return changed
 
 
 def notify_run(rt, session_id, job):
@@ -537,8 +581,22 @@ def _normalize_touch_item(item, index):
             'sha256': item.get('sha256')}
 
 
-def design_scope(rt, session_id, job, action, patch=None, questions=None):
-    """`design_scope` (§7.1): `propose`/`update` ghép brief, `ask` mở một lời hỏi phỏng vấn.
+def _last_user_request(rt, session_id):
+    """Tin nhắn GẦN NHẤT của chủ nhà — thứ nút "Tạm thoát" nộp lại (§5.9, IF-2)."""
+    session = rt.store.get(session_id) or {}
+    for row in reversed(session.get('messages') or []):
+        if isinstance(row, dict) and str(row.get('role') or '') == 'user':
+            text = str(row.get('content') or '').strip()
+            if text:
+                return text
+    return ''
+
+
+def design_scope(rt, session_id, job, action, patch=None, questions=None, kind=None):
+    """`design_scope` (§7.1): `propose`/`update` ghép brief, `ask` mở một lời hỏi.
+
+    `ask` mặc định mở lời hỏi `interview`; `kind='out-of-scope'` mở thẻ ngoài phạm vi (§5.9) với
+    hai lựa chọn ghim `exit`/`keep` và `meta.request` là tin nhắn gốc của chủ nhà.
 
     `update` với `patch.revision` là khoá lạc quan so với `design_jobs.revision` SỐNG: lệch ⇒
     `DESIGN_TOUCH_LIST_REVISION_STALE` (không ghi gì).
@@ -549,6 +607,15 @@ def design_scope(rt, session_id, job, action, patch=None, questions=None):
                          f'nhận {action!r}')
     state = dict(job['state'] or {})
     if action == 'ask':
+        wanted = str(kind or '').strip().lower()
+        if wanted == 'out-of-scope':
+            patch = patch if isinstance(patch, dict) else {}
+            request = str(patch.get('request') or patch.get('note') or '').strip() \
+                or _last_user_request(rt, session_id)
+            prompt = design_prompt_new(rt, session_id, job, 'out-of-scope',
+                                       questions=questions, meta={'request': request})
+            return {'designId': job['design_id'], 'revision': prompt['revision'],
+                    'phase': state.get('phase'), 'promptId': prompt['promptId']}
         prompt = design_prompt_new(rt, session_id, job, 'interview',
                                    questions=questions or design_interview_questions(
                                        state.get('brief') or {}))
@@ -648,18 +715,20 @@ def design_canvas_path(job):
     return f'{design_dir(job)}canvas.v1.json'
 
 
-def _sha256_text(text):
-    return hashlib.sha256(str(text).encode('utf-8')).hexdigest()
+async def _box_file_sha(rt, session_id, path):
+    """Băm TOÀN BỘ tệp trong box qua op `design_file_sha`; `None` khi chưa có/không đọc được.
 
-
-async def _read_box_text(rt, session_id, path):
-    """Nội dung tệp trong box, hoặc `None` khi chưa có/không đọc được (không ném)."""
+    `file_read` cắt ở 30 000 ký tự, nên băm của `content` không bao giờ khớp băm full-file mà
+    `design_write` ghim cho tệp dài — đó là `DESIGN_WRITE_STALE` OAN. Cổng stale đọc băm của CẢ
+    tệp qua op riêng; op ấy ném khi tệp thiếu, ở đây nuốt thành `None` — đúng nghĩa "chưa có tệp"
+    cho nhánh `create`.
+    """
     try:
-        result = await rt.executor.execute('file_read', {'path': path}, session_id)
+        result = await rt.executor.execute('design_file_sha', {'path': path}, session_id)
     except (ValueError, OSError):
         return None
-    content = result.get('content') if isinstance(result, dict) else None
-    return content if isinstance(content, str) else None
+    value = result.get('sha256') if isinstance(result, dict) else None
+    return value if isinstance(value, str) and value else None
 
 
 async def _write_box_text(rt, session_id, path, content):
@@ -670,6 +739,54 @@ async def _write_box_text(rt, session_id, path, content):
 def _branch_state(state):
     branch = state.get('branch') if isinstance(state.get('branch'), dict) else {}
     return branch if str(branch.get('base') or '').strip() else {}
+
+
+def _design_target_path(value):
+    """Đường dẫn tương đối CHUẨN của một tham số `path` (§6.5), hoặc chối bằng mã hợp đồng.
+
+    Lớp gác của harness phải quyết định trên ĐÚNG chuỗi mà worker sẽ `resolve()`: trước đây tiền
+    tố `.design/` xét trên chuỗi THÔ nên `'.design/../src/App.tsx'` vừa "thuộc run" (bỏ qua cả
+    danh sách chạm lẫn cổng nhánh) vừa `resolve()` ra `src/App.tsx` — ghi thẳng vào dự án. Ở đây:
+    bỏ khoảng trắng, chối đường dẫn tuyệt đối/mọi đốt `..`/ký tự `\\`, rồi `normpath` về dạng posix.
+    """
+    text = str(value or '').strip()
+    if not text or text.startswith('/') or '\\' in text:
+        raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
+    normalized = posixpath.normpath(text)
+    if normalized in ('.', '..') or normalized.startswith('../'):
+        raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
+    return normalized
+
+
+def _is_hard_forbidden(path):
+    """Danh sách đen cứng áp theo TIỀN TỐ thư mục, không chỉ so khớp nguyên chuỗi (§6.5).
+
+    `.git/` phải chặn cả `.git/config`: nếu không, mục `.git/` chỉ khớp đúng chuỗi `.git/` còn
+    `.git/config` lọt qua phép so nguyên chuỗi và worker ghi được tệp bên trong `.git/`.
+    """
+    for entry in DESIGN_HARD_FORBIDDEN:
+        if path == entry or path.startswith(entry) or path.startswith(entry.rstrip('/') + '/'):
+            return True
+    return False
+
+
+def _batch_revert_paths(state):
+    """Đường dẫn của LÔ ghi đã ghim (`state.diff.files`, dự phòng `state.actions`) (§6.5).
+
+    Chỉ đường của DỰ ÁN: `.design/**` là đồ của run, không phải lô cần hoàn tác. Danh sách rỗng
+    nghĩa là chưa có lô nào — `revert-batch` không được quét cả cây.
+    """
+    diff = state.get('diff') if isinstance(state.get('diff'), dict) else {}
+    rows = [row.get('path') for row in (diff.get('files') or []) if isinstance(row, dict)]
+    if not any(str(value or '').strip() for value in rows):
+        rows = [row.get('path') for row in (state.get('actions') or []) if isinstance(row, dict)]
+    out = []
+    for value in rows:
+        text = _design_target_path(value) if str(value or '').strip() else ''
+        if not text or text.startswith(DESIGN_OWNED_PREFIX) or text in out:
+            continue
+        out.append(text)
+    return out
 
 
 def _approved_items(touch_list):
@@ -717,20 +834,21 @@ async def design_write(rt, session_id, job, path, content, mode, anchor=None, po
     touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
     if not touch_list or not touch_list.get('approvedAt'):
         raise _error(DESIGN_TOUCH_LIST_REQUIRED_CODE)
-    normalized = str(path or '').strip()
+    normalized = _design_target_path(path)
+    if _is_hard_forbidden(normalized):
+        raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
     owned = normalized.startswith(DESIGN_OWNED_PREFIX)
     entry = next((item for item in touch_list.get('items') or []
                   if item.get('path') == normalized), None)
-    if normalized in DESIGN_HARD_FORBIDDEN:
-        raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
     if not owned and (entry is None or entry.get('status') not in ('approved', 'written')):
         raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
     if not owned and not _branch_state(state):
         raise _error(DESIGN_BRANCH_REQUIRED_CODE)
 
-    before_text = await _read_box_text(rt, session_id, normalized)
+    # §6.5: `insert` đã ghim băm ⇒ phải đối chiếu băm của CẢ tệp (xem `_box_file_sha`).
+    before_sha = await _box_file_sha(rt, session_id, normalized)
     if (entry is not None and entry.get('sha256') and mode == 'insert'
-            and (before_text is None or _sha256_text(before_text) != entry['sha256'])):
+            and before_sha != entry['sha256']):
         raise _error(DESIGN_WRITE_STALE_CODE)
 
     write_args = {'path': normalized, 'content': content, 'mode': mode}
@@ -754,8 +872,8 @@ async def design_write(rt, session_id, job, path, content, mode, anchor=None, po
         state['touchList'] = touch_list
     log_path = f'{design_dir(job)}actions.jsonl'
     action = {'at': journal.utc_now_iso(), 'path': result['path'], 'mode': result['mode'],
-              'sha256Before': _sha256_text(before_text) if before_text is not None else None,
-              'sha256After': result['sha256'], 'bytes': result.get('bytes'), 'reason': reason,
+              'sha256Before': before_sha, 'sha256After': result['sha256'],
+              'bytes': result.get('bytes'), 'reason': reason,
               'logPath': log_path, 'author': 'agent'}
     state['actions'] = (state.get('actions') or []) + [action]
     updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=live.get('revision'))
@@ -798,32 +916,41 @@ async def design_revert(rt, session_id, job, paths=None, mode='file'):
     state = dict(job['state'] or {})
     branch = _branch_state(state)
     base = branch['base'] if branch else 'HEAD'
-    scope = None
     if mode == 'file':
-        scope = [str(item).strip() for item in (paths or []) if str(item).strip()]
+        # Quy về đường dẫn chuẩn TRƯỚC khi đối chiếu danh sách chạm — xem `_design_target_path`.
+        scope = [_design_target_path(item) for item in (paths or []) if str(item or '').strip()]
         allowed = _approved_items(state.get('touchList'))
         for path in scope:
             if path not in allowed and not path.startswith(DESIGN_OWNED_PREFIX):
                 raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
         if not scope:
             return {'reverted': []}
+    else:
+        # §6.5: cổng nhánh như đường ghi; phạm vi = ĐÚNG lô đã ghim, không quét cả cây.
+        if not branch:
+            raise _error(DESIGN_BRANCH_REQUIRED_CODE)
+        scope = _batch_revert_paths(state)
+        if not scope:
+            return {'reverted': []}
     result = await rt.executor.execute('design_revert',
                                        {'base': base, 'paths': scope, 'mode': mode}, session_id)
     reverted = list(result.get('reverted') or []) + list(result.get('deleted') or [])
+    # Đọc lại state MỚI NHẤT rồi mới gộp: cửa sổ giữa `execute` và đây có thể có lượt khác đã ghi
+    # thêm `diff`/`prompts`/`reviews`; chép đè bằng state cũ sẽ nuốt mất chúng.
     live = rt.store.design_job(job['design_id'])
-    state = dict(live['state'] or {})
-    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
+    fresh = dict(live['state'] or {})
+    touch_list = fresh.get('touchList') if isinstance(fresh.get('touchList'), dict) else None
     if touch_list is not None:
         for item in touch_list.get('items') or []:
             if item.get('path') in set(reverted) and item.get('status') == 'written':
                 item['status'] = 'approved'
                 item['sha256'] = None
-        state['touchList'] = touch_list
+        fresh['touchList'] = touch_list
     undone = set(reverted)
-    state['actions'] = [row for row in (state.get('actions') or [])
+    fresh['actions'] = [row for row in (fresh.get('actions') or [])
                         if row.get('path') not in undone]
-    state['revert'] = {'paths': reverted, 'mode': mode, 'at': journal.utc_now_iso()}
-    rt.store.design_job_save(job['design_id'], session_id, state, revision=live.get('revision'))
+    fresh['revert'] = {'paths': reverted, 'mode': mode, 'at': journal.utc_now_iso()}
+    rt.store.design_job_save(job['design_id'], session_id, fresh, revision=live.get('revision'))
     return {'reverted': reverted}
 
 
@@ -987,7 +1114,7 @@ def canvas_draw(rt, session_id, job, action=None, actions=None):
     rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'agent', 'ops': applied,
-                   'sceneVersion': seq})
+                   'scene': scene, 'sceneVersion': seq})
     return {'applied': len(applied), 'rejected': rejected, 'sceneVersion': seq}
 
 
@@ -1008,15 +1135,21 @@ async def persist_design_canvas(rt, session_id, job):
 
 
 def canvas_store_scene(rt, session_id, job, scene):
-    """Lưu cảnh do CHỦ NHÀ gửi (`type:'scene'`) và phát một `design_canvas {actor:'user'}`."""
+    """Lưu cảnh do CHỦ NHÀ gửi (`type:'scene'`) và phát một `design_canvas {actor:'user'}`.
+
+    IF-1: sự kiện mang luôn `scene` ĐÃ RÚT GỌN như lúc lưu trong `state.canvasScene` — sửa của chủ
+    nhà đi với `ops: []`, nên thiếu `scene` thì client không dựng lại được và báo oan các op sau của
+    agent là bị chối.
+    """
     state = dict(job['state'] or {})
     seq = int(state.get('canvasSeq') or 0) + 1
+    stored = _canvas_scene(scene)
     state['canvasSeq'] = seq
-    state['canvasScene'] = _canvas_scene(scene)
+    state['canvasScene'] = stored
     updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'user', 'ops': [],
-                   'sceneVersion': seq})
+                   'scene': stored, 'sceneVersion': seq})
     return updated
 
 
@@ -1049,12 +1182,26 @@ def design_prompt_new(rt, session_id, job, kind, questions=None, meta=None):
     if kind not in DESIGN_PROMPT_KINDS:
         raise ValueError(f'DESIGN_PROMPT_KIND_INVALID: kind ∈ {DESIGN_PROMPT_KINDS}, nhận {kind!r}')
     meta = meta if isinstance(meta, dict) else {}
+    if kind == 'out-of-scope':
+        # §5.9/IF-2: hai lựa chọn ĐƯỢC GHIM id `exit`/`keep` như `exit-choice` ghim `pause`/
+        # `background`; thẻ giao diện chỉ hiện được khi có đủ cặp ấy.
+        request = str(meta.get('request') or '').strip()
+        given = [item for item in (questions or []) if isinstance(item, dict)]
+        text = str((given[0] if given else {}).get('text') or '').strip() or request \
+            or 'Yêu cầu này nằm ngoài phạm vi thiết kế.'
+        questions = [{'id': 'out-of-scope', 'text': text, 'why': '',
+                      'allowFreeText': False, 'required': True,
+                      'options': [{'id': 'exit', 'label': 'Tạm thoát để main xử lý'},
+                                  {'id': 'keep', 'label': 'Giữ trong design'}]}]
     state = dict(job['state'] or {})
     prompt = {'promptId': f'dp-{uuid.uuid4().hex[:12]}', 'designId': job['design_id'], 'kind': kind,
               'revision': int(job['revision'] or 0), 'status': 'open',
               'createdAt': journal.utc_now_iso(), 'questions': list(questions or []),
               'actions': ['chooseExit'] if kind == 'exit-choice' else ['start', 'answer'],
               'note': str(meta.get('note') or '')}
+    if kind == 'out-of-scope' and meta.get('request'):
+        # IF-2: `meta.request` là TIN NHẮN GỐC của chủ nhà — nút "Tạm thoát" nộp lại tin ấy.
+        prompt['meta'] = {'request': str(meta.get('request'))}
     prompts = list(state.get('prompts') or [])
     prompts.append(prompt)
     state['prompts'] = prompts
@@ -1096,6 +1243,11 @@ def design_prompt_answer(rt, session_id, prompt_id, answers, *, start=False):
         raise ValueError('DESIGN_PROMPT_UNKNOWN: no such prompt on this run')
     if prompt.get('status') == 'answered':
         raise ValueError('DESIGN_PROMPT_ANSWERED: that prompt is already answered')
+    # §7.2: run đã đóng (huỷ/xong) thì lời hỏi không còn hiệu lực — không được nhích pha lùi về
+    # `briefing` hay hồi sinh run. `close_run` đóng prompt còn mở, đây là lớp gác thứ hai.
+    if (str(job.get('status') or '') in DESIGN_TERMINAL_STATUSES
+            or str((job.get('state') or {}).get('phase') or '') == PHASE_DONE):
+        raise ValueError('DESIGN_PROMPT_ANSWERED: the run is closed; that prompt no longer applies')
     state = dict(job['state'] or {})
     brief = dict(state.get('brief') or {})
     resolved = []
@@ -1175,7 +1327,34 @@ def design_draft_path(job, version):
     return f'{design_dir(job)}{wanted}'
 
 
-def _design_critic(rt, session_id, job, design_id, version):
+def _tree_identity(state):
+    """Vân tay của CÂY ĐÃ GHI tại một thời điểm: danh sách lô + băm các lần ghi (§7.9).
+
+    `design_review(ok)` ghim vân tay này; `design_report` so lại — ghi thêm/rút bớt SAU lúc `ok`
+    làm vân tay đổi và bản bàn giao không còn khớp thứ đã được soát.
+    """
+    diff = state.get('diff') if isinstance(state.get('diff'), dict) else {}
+    files = [{'path': row.get('path'), 'status': row.get('status'), 'sha256': row.get('sha256')}
+             for row in (diff.get('files') or []) if isinstance(row, dict)]
+    actions = [[row.get('path'), row.get('sha256After')] for row in (state.get('actions') or [])
+               if isinstance(row, dict)]
+    blob = json.dumps({'files': files, 'actions': actions}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode('utf-8')).hexdigest()
+
+
+def _read_proof(rt, child_id, path, content_hash):
+    """Con soát có ĐỌC đúng byte của bản nháp không — dùng lại `research._review_read_proof`.
+
+    Một hàm, một luật (đọc mọi lát cắt liền mạch rồi băm ra đúng `content_hash`): bản soát nói mình
+    đã đọc bản nháp mà chưa từng `file_read` nó thì không mở được cổng `design_review`.
+    """
+    if not path or not content_hash:
+        return False
+    from . import research_runtime
+    return research_runtime._review_read_proof(rt, child_id, str(path), str(content_hash))
+
+
+def _design_critic(rt, session_id, job, design_id, version, *, draft=None, draft_hash=None):
     """Con `plan-review` ĐỦ ĐIỀU KIỆN cho `(designId, version)` này, hoặc ném mã lỗi cổng (§7.9).
 
     Bốn điều kiện tiên quyết: vai `plan-review`, đã `completed`, sinh SAU khi run mở, và mang
@@ -1183,6 +1362,10 @@ def _design_critic(rt, session_id, job, design_id, version):
     đọc chữ — một bản soát đúng danh tính mà thiếu dòng VERDICT phải ra
     `DESIGN_REVIEW_VERDICT_MISSING`, không phải `DESIGN_REVIEW_NO_CRITIC` (bài học finding 7 của
     `research_critique`). Dòng `VERDICT:` chỉ đọc từ dòng CUỐI có chữ.
+
+    Khi có `draft_hash` (bản nháp đã ghi thật trong box), con được chọn phải chứng minh nó đã ĐỌC
+    đúng bản ấy — khuôn bằng chứng đọc của `research._review_read_proof`. Con mới nhất có dòng
+    VERDICT nhưng đọc thiếu không được mở cổng; khi ấy cả lô không còn con nào dùng được.
     """
     created = float(job.get('created') or 0)
     usable = []
@@ -1216,6 +1399,8 @@ def _design_critic(rt, session_id, job, design_id, version):
         lines = [line.strip() for line in str(text or '').splitlines() if line.strip()]
         found = re.match(r'(?i)^VERDICT:\s*(ok|revise)$', lines[-1] if lines else '')
         if found is not None:
+            if draft_hash and not _read_proof(rt, critic['session_id'], draft, draft_hash):
+                continue
             return critic, found.group(1).lower()
         if str(critic['session_id']) == str(newest['session_id']):
             tail = ' | '.join(line[:120] for line in lines[-2:])
@@ -1259,16 +1444,23 @@ async def design_review(rt, session_id, job, design_id, version, verdict, issues
     verdict = str(verdict or '').strip().lower()
     if verdict not in ('ok', 'revise'):
         raise ValueError("DESIGN_REVIEW_INVALID: verdict must be 'ok' or 'revise'")
-    critic, critic_verdict = _design_critic(rt, session_id, job, design_id, version)
+    # §7.9: ràng buộc `version` với nội dung THẬT của bản nháp — cổng soát phải đứng trên bản đã
+    # ghi, và con soát phải chứng minh đã đọc đúng byte ấy (khuôn `research._review_read_proof`).
+    draft = design_draft_path(job, int(version))
+    draft_hash = await _box_file_sha(rt, session_id, draft)
+    critic, critic_verdict = _design_critic(rt, session_id, job, design_id, version,
+                                            draft=draft, draft_hash=draft_hash)
     if critic_verdict != verdict:
         raise ValueError(f'{DESIGN_REVIEW_VERDICT_MISMATCH_CODE}: '
                          f'{DESIGN_ERROR_TEXT[DESIGN_REVIEW_VERDICT_MISMATCH_CODE]} '
                          f'(bản soát nói {critic_verdict!r}, bạn ghi {verdict!r})')
+    live = rt.store.design_job(design_id) or job
     review = {'version': int(version), 'verdict': critic_verdict,
               'summary': str(summary or '')[:DESIGN_REVIEW_SUMMARY_CHARS],
               'issues': _clamp_issues(issues), 'at': journal.utc_now_iso(),
-              'criticSessionId': critic['session_id']}
-    live = rt.store.design_job(design_id) or job
+              'criticSessionId': critic['session_id'],
+              'draftPath': draft, 'contentHash': draft_hash,
+              'treeHash': _tree_identity(live.get('state') or {})}
     state = dict(live['state'] or {})
     state['review'] = review
     state['reviews'] = [row for row in (state.get('reviews') or [])
@@ -1313,6 +1505,14 @@ async def design_report(rt, session_id, job, summary, labels=None, next_steps=No
     if latest is None or latest.get('verdict') != 'ok':
         raise _error(DESIGN_HANDOFF_UNREVIEWED_CODE)
     version = int(latest.get('version') or 0)
+    # §7.9: bàn giao ĐÚNG thứ đã được soát. Bản nháp đã ghim băm mà nay khác ⇒ nội dung đổi sau lúc
+    # `ok`; vân tay cây đổi ⇒ có lần ghi/rút thêm sau lúc `ok`. Cả hai đều là bàn giao chưa soát.
+    if latest.get('contentHash'):
+        current_hash = await _box_file_sha(rt, session_id, design_draft_path(job, version))
+        if current_hash != latest['contentHash']:
+            raise _error(DESIGN_HANDOFF_UNREVIEWED_CODE)
+    if latest.get('treeHash') and _tree_identity(state) != latest['treeHash']:
+        raise _error(DESIGN_HANDOFF_UNREVIEWED_CODE)
     labels = [str(item).strip() for item in (labels or []) if str(item).strip()]
     next_steps = [str(item).strip() for item in (next_steps or []) if str(item).strip()]
     branch = _branch_state(state)

@@ -13,7 +13,9 @@ tác canvas với 0 bị bỏ (A3, chốt Q4); thẻ báo cáo đúng MỘT lầ
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -52,6 +54,12 @@ def _git(root, *args, check=True):
     return proc
 
 
+def _binding_draft_path(text):
+    """Đường dẫn bản nháp trong dòng gắn kết của harness (`runtime.delegate`)."""
+    found = re.search(r'read the complete file with file_read before judging it: (\S+)', str(text))
+    return found.group(1).rstrip('.') if found else ''
+
+
 def _repo(tmp_path):
     root = Path(tmp_path).resolve()
     worker.ROOT = root
@@ -73,11 +81,16 @@ class WorkerExecutor:
 
 
 class ScriptedModel:
-    """Lượt cha trả `ok`; CON `plan-review` (nhận diện qua dòng gắn kết của harness) trả bài soát."""
+    """Lượt cha trả `ok`; CON `plan-review` ĐỌC bản nháp rồi trả bài soát (§7.9).
+
+    Con phải `file_read` đúng bản nháp trước khi phán: cổng `design_review` đòi bằng chứng đọc
+    (khuôn `research._review_read_proof`), nên bài này chạy cả đường đọc chứ không chỉ chữ verdict.
+    """
 
     def __init__(self):
         self.parent_calls = 0
         self.child_calls = 0
+        self.child_reads = 0
 
     async def model_metadata_map(self):
         return {}
@@ -87,6 +100,14 @@ class ScriptedModel:
                          if message.get('role') == 'user')
         if 'Binding from the harness' in text:
             self.child_calls += 1
+            path = _binding_draft_path(text)
+            if path and self.child_reads == 0:
+                self.child_reads += 1
+                calls = [{'id': 'read-draft', 'type': 'function',
+                          'function': {'name': 'file_read',
+                                       'arguments': json.dumps({'path': path})}}]
+                return {'choices': [{'message': {'content': '', 'tool_calls': calls},
+                                     'finish_reason': 'tool_calls'}], 'usage': None, 'boxfox': None}
             body = CRITIQUE
         else:
             self.parent_calls += 1
@@ -249,11 +270,17 @@ def test_e2e_writes_land_on_the_design_branch(finished):
 
 def test_e2e_independent_review_gated_the_handoff(finished):
     store, runtime, sid, root, model, result = finished
-    assert model.child_calls == 1, 'đúng MỘT con soát độc lập'
+    children = [row for row in store.children_of(sid) if row.get('role') == 'plan-review']
+    assert len(children) == 1, 'đúng MỘT con soát độc lập'
+    assert model.child_reads == 1, 'con soát phải file_read đúng bản nháp trước khi phán'
     assert result['child']['status'] == 'completed'
     live = store.design_job(result['designId'])
     assert live['state']['review']['verdict'] == 'ok'
     assert live['state']['review']['criticSessionId'] == result['child']['sessionId']
+    # §7.9: `version` được GHIM vào nội dung thật của bản nháp tại lúc soát.
+    draft = root / f'.design/{_slug(result["designId"])}/v1-design.md'
+    assert live['state']['review']['contentHash'] == hashlib.sha256(
+        draft.read_bytes()).hexdigest()
 
 
 def test_e2e_report_card_and_handoff_appear_exactly_once(finished):

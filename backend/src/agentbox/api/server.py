@@ -950,10 +950,16 @@ def create_app(runtime):
         if action == 'pause':
             # P4 (§7.2): run vừa rơi vào `paused` ⇒ đúng MỘT `design_notice` loại `blocked`.
             updated = design_runtime.notify_run(runtime, sid, updated) or updated
+        phase_moved = False
         if action == 'resume' and (job['state'] or {}).get('phase') == design_runtime.PHASE_DONE:
             # Pha `done` là pha ĐÓNG; một run vừa được hồi sức không được mang pha ấy.
             updated = design_runtime.set_phase(runtime, sid, updated, 'briefing', 'owner-resume',
                                                force=True) or updated
+            phase_moved = True  # `set_phase` đã phát `design_run` cho lần nhích pha này.
+        if not phase_moved:
+            # §9: pause/resume đổi `status` ⇒ phải có đúng một `design_run`, nếu không giao diện
+            # không biết run vừa tạm dừng hay chạy lại.
+            runtime.store.emit(sid, 'design_run', design_runtime.design_job_event(updated))
         return web.json_response({'job': design_runtime.design_run_payload(updated)})
 
     async def design_touch_list_approve(request):
