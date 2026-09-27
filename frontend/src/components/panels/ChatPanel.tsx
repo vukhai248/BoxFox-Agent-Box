@@ -53,6 +53,8 @@ import { useHarnessStore } from '../../store/harnessStore'
 import { useHarnessChatStore } from '../../store/harnessChatStore'
 import { useResearchSync } from '../../hooks/useResearchSync'
 import { ResearchConversationCards } from './research/ResearchConversationCards'
+import { DesignConversationCards } from './design/DesignConversationCards'
+import { useDesignSync } from '../../hooks/useDesignSync'
 import { resolveThinkingLevel } from '../../lib/harnessThinking'
 import { composerModels, findRouteOption, routerChatOptions, routable, selectionKey } from '../../lib/routeOptions'
 
@@ -207,6 +209,8 @@ export function ChatPanel() {
   // cho vòng hỏi 5000 ms của `ResearchPanel`: nguồn sự thật là luồng sự kiện phiên, vòng 1200 ms
   // bên dưới đã hỏi luồng rồi.
   useResearchSync()
+  // P1 — chế độ Design: cùng cầu nối, cùng luồng sự kiện phiên (một vòng 1200 ms, không thêm vòng nào).
+  useDesignSync()
   const researchSuggest = useMemo<{ reason: string; draftGoal: string } | null>(() => {
     const latest = [...(harnessRun?.events ?? [])].reverse().find((event) => event.type === 'research_suggested')
     if (!latest) return null
@@ -667,6 +671,8 @@ export function ChatPanel() {
         {/* P4 — thẻ Research trong hội thoại: lời hỏi nhiều câu, thẻ ngoài phạm vi, thẻ báo cáo
             (kể cả run chạy nền xong sau khi đã tắt chế độ) và thẻ gợi ý của main. */}
         <ResearchConversationCards suggest={researchSuggest} />
+        {/* P1 — thẻ Design trong hội thoại: lời hỏi phỏng vấn, thẻ brief + danh sách chạm, dòng thời gian. */}
+        <DesignConversationCards />
         </div>
 
       </div>

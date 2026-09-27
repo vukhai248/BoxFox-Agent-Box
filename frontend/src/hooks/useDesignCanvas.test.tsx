@@ -1,8 +1,10 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDesignCanvas, type DesignCanvas } from './useDesignCanvas'
 import { boundsOfNode, PALETTE } from '../lib/canvas'
+import { DESIGN_MODE_OFF } from '../lib/designMode'
+import { useDesignStore } from '../store/designStore'
 
 /** Mount hook bằng tạo root + component Probe (khuôn `useWorkspaceFiles.test.tsx`). */
 function mount() {
@@ -176,6 +178,80 @@ describe('useDesignCanvas', () => {
 
     act(() => hook.state.undo())
     expect(hook.state.scene.nodes.find((n) => n.id === id)!.width).toBe(300)
+    hook.unmount()
+  })
+})
+
+/**
+ * P2 — hai chiều vận chuyển (kế hoạch §6.4). Người dùng → agent đi qua đường
+ * thật `lib/designApi.postCanvas` (`/api/agent/sessions/{sid}/canvas`), KHÔNG
+ * dùng `agentStore`/`ClientCommand` cũ. Hôm nay hook chỉ `setLastSentMessage`
+ * nên hai bài này ĐỎ; xanh khi hook thực sự POST.
+ */
+describe('useDesignCanvas — transport (P2)', () => {
+  const calls: { url: string; body: Record<string, unknown> | null; method: string }[] = []
+
+  beforeEach(() => {
+    calls.length = 0
+    useDesignStore.setState({
+      sessionId: 's-canvas',
+      mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: 'd-canvas' },
+      runs: [],
+      activeRunId: 'd-canvas',
+      scenes: {},
+      rejectedOps: 0,
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null,
+          method: init?.method ?? 'GET',
+        })
+        return { ok: true, status: 200, json: async () => ({ ok: true, sceneVersion: 1 }) } as unknown as Response
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    useDesignStore.setState({ sessionId: '' })
+  })
+
+  it('sendToAgent_posts_scene', async () => {
+    const hook = mount()
+    act(() => hook.state.addShape('rect'))
+
+    await act(async () => {
+      hook.state.sendToAgent()
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].url).toContain('/api/agent/sessions/s-canvas/canvas')
+    expect(calls[0].body?.protocol).toBe('boxfox.canvas.v1')
+    expect(calls[0].body?.type).toBe('scene')
+    const sent = calls[0].body?.scene as { nodes: unknown[] } | undefined
+    expect(sent?.nodes.length).toBeGreaterThan(0)
+    hook.unmount()
+  })
+
+  it('instructAgent_posts_directive', async () => {
+    const hook = mount()
+    act(() => hook.state.addShape('rect'))
+    const id = lastNodeId(hook.state)
+
+    await act(async () => {
+      hook.state.instructAgent(id)
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].url).toContain('/api/agent/sessions/s-canvas/canvas')
+    expect(calls[0].body?.protocol).toBe('boxfox.canvas.v1')
+    expect(calls[0].body?.type).toBe('directive')
+    expect(calls[0].body?.targetNodeId).toBe(id)
     hook.unmount()
   })
 })

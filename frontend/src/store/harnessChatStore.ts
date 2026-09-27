@@ -60,6 +60,11 @@ interface RunView { id: string | null; status: string; events: HarnessEvent[]; e
    * `lib/researchMode.ts`, nên trường lạ/thiếu không làm sập vòng poll.
    */
   researchMode?: unknown
+  /**
+   * P1 — khối `config.designMode` nguyên dạng server gửi, để `useDesignSync` đọc chế độ `/design`
+   * mà KHÔNG mở thêm một vòng hỏi phiên thứ hai (cùng luật với `researchMode` ở trên).
+   */
+  designMode?: unknown
   /** Nhật ký bền của phiên (khối `journal` đã gộp qua các vòng poll). */
   journal?: HarnessJournal | null
   /**
@@ -308,7 +313,7 @@ export function dispatchTabIntents(params: {
     // được tôn trọng. Tab lạ thì bỏ qua.
     if (event.type === 'ui_intent') {
       const tab = asString(event.data.tab)
-      if (tab !== 'plan' && tab !== 'decisions' && tab !== 'files' && tab !== 'subagents' && tab !== 'research') continue
+      if (tab !== 'plan' && tab !== 'decisions' && tab !== 'files' && tab !== 'subagents' && tab !== 'research' && tab !== 'design') continue
       if (firstHydration && (tab === 'plan' || tab === 'decisions')) continue
       const rawTarget = event.data.target
       request(
@@ -519,6 +524,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               journal: journalPush ? mergeJournal(current.journal, journalPush) : current.journal,
               ...sessionContextWindow(session.config),
               researchMode: session.config?.researchMode,
+              designMode: session.config?.designMode,
               // Lời xác nhận "đã xếp hàng" chỉ sống trong lúc lượt còn đang chạy: lượt đã đóng thì
               // nó là thông tin cũ, và bong bóng "can thiệp" trong transcript đã là biên nhận thật.
               steerNotice: session.status === 'running' || session.status === 'awaiting_decision'

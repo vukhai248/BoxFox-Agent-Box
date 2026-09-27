@@ -223,11 +223,13 @@ SCHEMAS = [
                         'branch explores, so its rows, claims and coverage land on the right entry '
                         'of the map. Leave it out when the branch is not tied to one direction.'},
           'reviewTarget': {'type': 'object', 'description': 'Required for research-review or plan-review: '
-                           '{kind:"research", researchId, version, mode:"evidence"|"critique"|"coverage"} '
-                           'or {kind:"plan", identity, version}. '
+                           '{kind:"research", researchId, version, mode:"evidence"|"critique"|"coverage"}, '
+                           '{kind:"plan", identity, version} '
+                           'or {kind:"design", designId, version}. '
                            'The runtime binds the exact saved '
                            'path and content hash; the child must read every slice of that file.',
                            'properties': {'kind': STRING, 'researchId': STRING, 'identity': STRING,
+                                          'designId': STRING,
                                           'version': {'type': 'integer'},
                                           'mode': {'type': 'string',
                                                    'enum': ['evidence', 'critique', 'coverage']}}},
@@ -472,6 +474,73 @@ SCHEMAS = [
          'is closed as cancelled, its slot is released, and the result reaches you like any other child result. '
          'It does not touch the other branches.',
          {'sessionId': STRING, 'reason': STRING}, ['sessionId', 'reason']),
+    # P1 — họ công cụ design (plan v1 §6.5, design-interfaces §6). Mô tả tiếng Việt, mỗi tham số nói
+    # rõ việc của nó; chưa nối vào `dispatch` thì `turn_profile` cũng không quảng cáo (xem
+    # `design_runtime.WIRED_DESIGN_TOOLS`).
+    tool('design_scope',
+         'Ghi thẻ brief của run thiết kế (nguồn sự thật cho màn hình, nền tảng, dự án đích, phạm vi, '
+         'phong cách, điểm vào, ràng buộc) VÀ đề xuất danh sách chạm. action="propose" đặt brief lần '
+         'đầu, "update" sửa brief hoặc danh sách chạm (kèm revision hiện tại), "ask" mở một lời hỏi '
+         'tối đa 3 câu để chốt điều còn mơ hồ. patch.touchList.items[] mỗi mục có kind new|insert, '
+         'path, reason, risk. Ghi làm tăng revision; revision cũ bị chối.',
+         {'action': {'type': 'string', 'enum': ['propose', 'update', 'ask']},
+          'designId': STRING, 'patch': {'type': 'object'},
+          'questions': {'type': 'array', 'items': {'type': 'object', 'properties': {
+              'id': STRING, 'text': STRING, 'why': STRING, 'allowFreeText': {'type': 'boolean'},
+              'required': {'type': 'boolean'},
+              'options': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                  'id': STRING, 'label': STRING}}}}, 'required': ['id', 'text']}},
+          'kind': {'type': 'string',
+                   'enum': ['interview', 'brief', 'touch-list', 'exit-choice', 'out-of-scope']}},
+         ['action']),
+    tool('design_branch_create',
+         'Tạo nhánh thiết kế cho run này từ HEAD của dự án trong box và ghi lại base sha. Tên nhánh '
+         'do bạn đặt theo khuôn design/<slug>-<yyyymmdd-hhmm>; tên main/master bị chối, tên đã tồn '
+         'tại bị chối, workspace không phải repo git bị chối. Mọi lần ghi vào dự án chỉ xảy ra trên '
+         'nhánh này.',
+         {'name': STRING, 'designId': STRING}, ['name']),
+    tool('design_write',
+         'Ghi MỘT tệp vào DỰ ÁN, một lần gọi một tệp, chỉ sau khi danh sách chạm đã được chủ nhà '
+         'DUYỆT. path phải nằm trong danh sách đã duyệt (trừ .design/<slug>/ do run tự sở hữu) và '
+         'run phải đang ở nhánh thiết kế. mode="create" tạo tệp mới (tệp đã có bị chối); "insert" '
+         'chèn quanh một anchor khớp đúng một lần, hoặc nối cuối bằng position="append".',
+         {'path': STRING, 'content': STRING,
+          'mode': {'type': 'string', 'enum': ['create', 'insert']},
+          'anchor': STRING, 'position': {'type': 'string', 'enum': ['append']},
+          'designId': STRING}, ['path', 'content', 'mode']),
+    tool('design_diff',
+         'Trả bản so sánh hợp nhất giữa nhánh thiết kế và base sha: danh sách tệp kèm số dòng thêm/bớt '
+         'và đường dẫn tệp patch. paths (tuỳ chọn) giới hạn phạm vi so sánh. Gọi sau mỗi lô ghi để '
+         'giao diện hiện thẻ so sánh theo lô.',
+         {'paths': {'type': 'array', 'items': STRING}, 'designId': STRING}, []),
+    tool('design_revert',
+         'Hoàn tác các đường dẫn ĐÃ ĐƯỢC DUYỆT: tệp kind insert được khôi phục về nội dung ở base, '
+         'tệp kind new bị xoá. mode="file" chỉ chạm paths đã nêu; mode="batch" hoàn tác cả lô vừa '
+         'ghi. Nhánh chính không bao giờ bị chạm.',
+         {'paths': {'type': 'array', 'items': STRING},
+          'mode': {'type': 'string', 'enum': ['file', 'batch']}, 'designId': STRING}, []),
+    tool('canvas_draw',
+         'Vẽ lên Design Canvas của tab Design: truyền một action hoặc một mảng actions[] theo giao '
+         'thức canvas (boxfox.canvas.v1). Mỗi op hợp lệ được áp và phát sự kiện design_canvas; op '
+         'sai bị BỎ và đếm vào rejected, không bao giờ vẽ dữ liệu bịa. Khi run đang mở, cảnh còn '
+         'được ghi vào .design/<slug>/canvas.v1.json.',
+         {'action': {'type': 'object'}, 'actions': {'type': 'array', 'items': {'type': 'object'}},
+          'designId': STRING}, []),
+    tool('design_review',
+         'Ghi kết luận soát ĐỘC LẬP cho một bản thiết kế: designId của run, version nhận xét, verdict '
+         '"ok" hoặc "revise" phải KHỚP dòng VERDICT: của con plan-review đã đọc đúng bản ấy, kèm '
+         'issues[] và summary. Thiếu con phản biện đã xong, thiếu verdict, hoặc verdict lệch đều bị '
+         'chối. Không có kết luận này thì bàn giao bị chối.',
+         {'designId': STRING, 'version': {'type': 'integer'},
+          'verdict': {'type': 'string', 'enum': ['ok', 'revise']},
+          'issues': {'type': 'array', 'items': {'type': 'object'}}, 'summary': STRING},
+         ['designId', 'version', 'verdict']),
+    tool('design_report',
+         'Phát thẻ báo cáo thiết kế và khối bàn giao cho lượt main kế tiếp: tóm tắt, nhãn (labels) và '
+         'việc còn lại cho agent xây dựng. Bàn giao chỉ được khi bản thiết kế đã có kết luận soát độc '
+         'lập. Khối bàn giao nói rõ phần chủ nhà ĐÃ xác nhận và phần agent GIẢ ĐỊNH.',
+         {'summary': STRING, 'labels': {'type': 'array', 'items': STRING},
+          'nextSteps': {'type': 'array', 'items': STRING}, 'designId': STRING}, ['summary']),
 ]
 
 

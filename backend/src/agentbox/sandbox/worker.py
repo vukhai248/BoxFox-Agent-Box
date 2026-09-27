@@ -779,6 +779,309 @@ def dossier_write_payload(args):
             'writtenAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 
 
+# ---------------------------------------------------------------------------
+# P3 — bốn op nguyên thuỷ của đường ghi có gác (§6.5, §8 P3).
+# Worker chỉ dựng ĐÚNG lệnh `git` cần thiết từ tham số đã kiểm: mọi lời gọi là
+# danh sách tham số (`shell=False`), tên nhánh/đường dẫn qua regex/`path()` trước
+# khi chạm tới `git`; không có đường nào chạy chuỗi của model.
+# ---------------------------------------------------------------------------
+DESIGN_OWNED_PREFIX = '.design/'
+DESIGN_BRANCH_RE = re.compile(r'^design/[a-z0-9._/-]+$')
+DESIGN_MAIN_BRANCHES = ('main', 'master', 'HEAD')
+# `base` là revision do harness cấp (mã sha/tên ref): chặn tham số bắt đầu bằng `-`
+# để không bao giờ lọt thành một tuỳ chọn của `git`.
+DESIGN_BASE_RE = re.compile(r'^[0-9A-Za-z][0-9A-Za-z._/~^-]{0,200}$')
+DESIGN_WRITE_MODES = ('create', 'insert')
+DESIGN_REVERT_MODES = ('file', 'batch')
+DESIGN_GIT_TIMEOUT = 60
+
+
+def git_run(args, timeout=DESIGN_GIT_TIMEOUT):
+    """Chạy MỘT lệnh `git` từ danh sách tham số đã kiểm — KHÔNG bao giờ qua shell.
+
+    Trả `subprocess.CompletedProcess` (text, UTF-8 thay thế). Không tự ném khi git thoát
+    khác 0: chỗ gọi quyết định câu lỗi tiếng Việt theo đúng việc nó đang làm. Workspace
+    không phải repo git (hoặc git không chạy được) ⇒ câu lỗi đã chốt của hợp đồng.
+    """
+    try:
+        return subprocess.run(['git', *args], cwd=str(ROOT), capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', timeout=timeout, shell=False)
+    except (OSError, subprocess.SubprocessError):
+        raise ValueError('DESIGN_WORKSPACE_NOT_REPO: Workspace trong box không phải một repo git.')
+
+
+def design_require_repo():
+    """Workspace phải là repo git; không thì từ chối bằng câu đã chốt."""
+    if git_run(['rev-parse', '--git-dir']).returncode:
+        raise ValueError('DESIGN_WORKSPACE_NOT_REPO: Workspace trong box không phải một repo git.')
+
+
+def design_current_branch():
+    """Nhánh hiện tại; `''` khi detached HEAD hoặc repo chưa có commit."""
+    proc = git_run(['symbolic-ref', '--short', '-q', 'HEAD'])
+    return proc.stdout.strip() if not proc.returncode else ''
+
+
+def design_relative_path(value):
+    """`(đường dẫn tương đối posix, Path)` cho một tham số `path` của model.
+
+    Mọi đường dẫn đi qua `path()` (cổng chặn thoát workspace) TRƯỚC, nên `../` và đường
+    dẫn tuyệt đối nhận đúng câu 'Path Traversal Denied' của mô-đun; rỗng/gốc workspace bị
+    chối tại đây vì op ghi là thao tác trên MỘT tệp.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('DESIGN_PATH_INVALID: cần một đường dẫn tệp tương đối trong workspace.')
+    target = path(value)
+    relative = target.relative_to(ROOT).as_posix()
+    if relative in ('', '.'):
+        raise ValueError('DESIGN_PATH_INVALID: cần một đường dẫn tệp tương đối trong workspace.')
+    return relative, target
+
+
+def design_paths_arg(value):
+    """Danh sách đường dẫn đã kiểm của `design_diff`/`design_revert`; rỗng ⇒ `None`."""
+    if value in (None, '', []):
+        return None
+    items = [value] if isinstance(value, str) else value
+    if not isinstance(items, list):
+        raise ValueError('Danh sách đường dẫn không hợp lệ.')
+    relatives = [design_relative_path(item)[0] for item in items]
+    return relatives or None
+
+
+def design_base_arg(value):
+    """Revision `base` đã kiểm; chặn tham số bắt đầu bằng `-` lọt thành tuỳ chọn của git."""
+    text = value.strip() if isinstance(value, str) else ''
+    if not DESIGN_BASE_RE.fullmatch(text):
+        raise ValueError('DESIGN_BASE_INVALID: cần một revision git hợp lệ (mã sha hoặc tên ref).')
+    return text
+
+
+def design_branch_create(args):
+    """Tạo nhánh thiết kế từ `HEAD` hiện tại rồi chuyển sang nó; trả `{branch, base, head}`.
+
+    Chối `main`/`master`/`HEAD` TRƯỚC khi kiểm khuôn (câu lỗi phải là "nhánh chính", không phải
+    "sai khuôn"); tên phải đúng `^design/[a-z0-9._/-]+$` — nhờ vậy `;`, `&&`, khoảng trắng,
+    chữ hoa và `..` không bao giờ tới được `git`.
+    """
+    raw = args.get('name')
+    name = raw.strip() if isinstance(raw, str) else ''
+    if name in DESIGN_MAIN_BRANCHES:
+        raise ValueError('DESIGN_MAIN_BRANCH_FORBIDDEN: Không bao giờ ghi vào nhánh chính.')
+    if (not DESIGN_BRANCH_RE.fullmatch(name) or '..' in name or '//' in name
+            or name.endswith('/') or name.endswith('.lock') or '/.' in name):
+        raise ValueError('Tên nhánh thiết kế không hợp lệ; dùng dạng design/<slug> chỉ gồm '
+                         'chữ thường, số, ., _, - và /.')
+    design_require_repo()
+    if git_run(['show-ref', '--verify', '--quiet', 'refs/heads/' + name]).returncode == 0:
+        raise ValueError('DESIGN_BRANCH_EXISTS: Tên nhánh thiết kế đã tồn tại.')
+    head = git_run(['rev-parse', 'HEAD'])
+    if head.returncode:
+        raise ValueError('DESIGN_WORKSPACE_NOT_REPO: Repo git trong workspace chưa có commit (HEAD trống).')
+    sha = head.stdout.strip()
+    created = git_run(['checkout', '-b', name])
+    if created.returncode:
+        raise ValueError('DESIGN_BRANCH_EXISTS: Tên nhánh thiết kế đã tồn tại.')
+    return {'branch': name, 'base': sha, 'head': sha}
+
+
+def design_insert_content(current, content, anchor, position):
+    """Nội dung MỚI của kiểu `insert`: nối cuối khi `position='append'`, ngược lại chèn NGAY SAU
+    mốc `anchor` khớp đúng một lần (mốc giữ nguyên, nội dung theo sau nó)."""
+    if position == 'append':
+        return current + content
+    if position not in (None, ''):
+        raise ValueError("DESIGN_WRITE_INVALID: position chỉ nhận 'append'.")
+    if not isinstance(anchor, str) or not anchor:
+        raise ValueError("DESIGN_WRITE_INVALID: kiểu 'insert' cần `anchor` khớp đúng một lần "
+                         "hoặc `position='append'`.")
+    if current.count(anchor) != 1:
+        raise ValueError('DESIGN_ANCHOR_NOT_UNIQUE: Mốc chèn không khớp đúng một lần trong tệp.')
+    return current.replace(anchor, anchor + content, 1)
+
+
+def design_write_branch_gate(relative):
+    """Ghi vào dự án chỉ khi đang ở nhánh thiết kế; `.design/**` là ngoại lệ do run sở hữu."""
+    design_require_repo()
+    if relative == '.design' or relative.startswith(DESIGN_OWNED_PREFIX):
+        return
+    branch = design_current_branch()
+    if branch in ('main', 'master'):
+        raise ValueError('DESIGN_MAIN_BRANCH_FORBIDDEN: Không bao giờ ghi vào nhánh chính.')
+    if not branch or not DESIGN_BRANCH_RE.fullmatch(branch):
+        raise ValueError('DESIGN_BRANCH_REQUIRED: Chưa có nhánh thiết kế cho run này.')
+
+
+def design_write(args):
+    """Ghi MỘT tệp theo kiểu `create`/`insert`; trả `{path, mode, sha256, bytes}`.
+
+    `create` đòi tệp CHƯA tồn tại; `insert` đòi tệp ĐÃ tồn tại và xác định vị trí bằng `anchor`
+    khớp đúng một lần hoặc `position='append'`. Tệp được `git add` ngay sau khi ghi để
+    `design_diff`/`design_revert` nhìn thấy tệp mới bằng chính `git diff` (tệp chưa theo dõi
+    không bao giờ xuất hiện trong `git diff`).
+    """
+    relative, target = design_relative_path(args.get('path'))
+    content = args.get('content')
+    if not isinstance(content, str):
+        raise ValueError('DESIGN_WRITE_INVALID: nội dung ghi phải là chuỗi.')
+    mode = args.get('mode')
+    if mode not in DESIGN_WRITE_MODES:
+        raise ValueError("DESIGN_WRITE_INVALID: kiểu ghi phải là 'create' hoặc 'insert'.")
+    design_write_branch_gate(relative)
+    if mode == 'create':
+        if target.exists():
+            raise ValueError("DESIGN_WRITE_EXISTS: Tệp đã tồn tại; dùng kiểu 'chèn' thay vì 'tạo mới'.")
+        new_content = content
+    else:
+        if not target.is_file():
+            raise ValueError("DESIGN_WRITE_MISSING: Tệp chưa tồn tại; dùng kiểu 'tạo mới' thay vì 'chèn'.")
+        try:
+            current = target.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            raise ValueError('DESIGN_WRITE_INVALID: tệp hiện tại không phải văn bản UTF-8.')
+        new_content = design_insert_content(current, content, args.get('anchor'), args.get('position'))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(new_content, encoding='utf-8')
+    encoded = new_content.encode('utf-8')
+    staged = git_run(['add', '-f', '--', relative])
+    if staged.returncode:
+        raise ValueError('DESIGN_WRITE_INVALID: không đưa được tệp vào chỉ mục git: %s'
+                         % staged.stderr.strip()[:200])
+    return {'path': relative, 'mode': mode, 'sha256': sha256_of(encoded), 'bytes': len(encoded)}
+
+
+def design_file_sha(args):
+    """Băm TOÀN BỘ tệp theo byte (`design_file_sha`) — cổng `DESIGN_WRITE_STALE` đọc ở đây.
+
+    `file_read` cắt ở 30 000 ký tự nên băm của `content` không bao giờ khớp băm full-file mà
+    `design_write` ghim cho tệp dài — cổng cũ từ chối OAN mọi lần `insert` sau lần ghi đầu. Op
+    này trả băm của CẢ tệp (cùng đơn vị `sha256sum`), đi qua `path()` như mọi op ghi, và chối
+    khi tệp chưa tồn tại.
+    """
+    relative, target = design_relative_path(args.get('path'))
+    if not target.is_file():
+        raise ValueError("DESIGN_WRITE_MISSING: Tệp chưa tồn tại; dùng kiểu 'tạo mới' thay vì 'chèn'.")
+    try:
+        size_chars = len(target.read_text(encoding='utf-8'))
+    except (UnicodeDecodeError, OSError):
+        size_chars = None
+    return {'path': relative, 'sha256': file_digest(target), 'sizeChars': size_chars}
+
+
+def design_status_map(base, paths):
+    """`{đường dẫn: ký tự trạng thái}` của `git diff --name-status <base>`; tệp đổi tên lấy đích."""
+    args = ['diff', '--name-status', base]
+    if paths:
+        args += ['--', *paths]
+    proc = git_run(args)
+    if proc.returncode:
+        raise ValueError('Không so được với mốc `%s`: %s' % (base, proc.stderr.strip()[:200]))
+    statuses = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split('\t')
+        if len(parts) < 2:
+            continue
+        code = parts[0][:1]
+        path_value = parts[-1] if code in ('R', 'C') and len(parts) >= 3 else parts[1]
+        statuses[path_value] = code
+    return statuses
+
+
+def design_numstat_map(base, paths):
+    """`{đường dẫn: (added, removed)}` của `git diff --numstat <base>`; tệp nhị phân (`-`) đếm 0."""
+    args = ['diff', '--numstat', base]
+    if paths:
+        args += ['--', *paths]
+    proc = git_run(args)
+    if proc.returncode:
+        raise ValueError('Không so được với mốc `%s`: %s' % (base, proc.stderr.strip()[:200]))
+    counts = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split('\t')
+        if len(parts) < 3:
+            continue
+        added = 0 if parts[0] == '-' else read_int_arg(parts[0], 0)
+        removed = 0 if parts[1] == '-' else read_int_arg(parts[1], 0)
+        counts[parts[2]] = (added, removed)
+    return counts
+
+
+def design_diff(args):
+    """So cây làm việc với `base`: số dòng thêm/bớt mỗi tệp + patch hợp nhất.
+
+    Chỉ chạy `git diff` với tham số đã kiểm (`base` khớp `DESIGN_BASE_RE`, đường dẫn qua
+    `path()`); `--` luôn đứng trước danh sách đường dẫn nên không có nội suy shell.
+    """
+    base = design_base_arg(args.get('base'))
+    paths = design_paths_arg(args.get('paths'))
+    design_require_repo()
+    statuses = design_status_map(base, paths)
+    counts = design_numstat_map(base, paths)
+    patch = git_run(['diff', base] + (['--', *paths] if paths else []))
+    if patch.returncode:
+        raise ValueError('Không so được với mốc `%s`: %s' % (base, patch.stderr.strip()[:200]))
+    names = {'A': 'added', 'D': 'deleted'}
+    files = []
+    for path_value, code in statuses.items():
+        added, removed = counts.get(path_value, (0, 0))
+        files.append({'path': path_value, 'status': names.get(code, 'modified'),
+                      'added': added, 'removed': removed})
+    return {'files': files, 'patch': patch.stdout}
+
+
+def design_untracked_paths(paths):
+    """Các đường dẫn CHƯA được git theo dõi (`??`) — chúng không xuất hiện trong `git diff`."""
+    args = ['status', '--porcelain', '--untracked-files=all']
+    if paths:
+        args += ['--', *paths]
+    found = []
+    for line in git_run(args).stdout.splitlines():
+        if len(line) >= 4 and line[:2] == '??':
+            found.append(line[3:].strip())
+    return found
+
+
+def design_existed_at_base(base, relative):
+    """Tệp có tồn tại ở `base` không (`git cat-file -e <base>:<path>`)."""
+    return git_run(['cat-file', '-e', base + ':' + relative]).returncode == 0
+
+
+def design_revert(args):
+    """Hoàn tác thay đổi so với `base`: `mode='batch'` cả lô, `mode='file'` các đường dẫn đã nêu.
+
+    Tệp CÓ ở `base` được khôi phục byte-identical bằng `git checkout <base> -- <đường dẫn>`;
+    tệp KHÔNG có ở `base` (mục `new`) bị xoá và bỏ khỏi chỉ mục. Vì chỉ dùng `checkout <base>`
+    (không checkout nhánh, không commit) nên `HEAD` không bao giờ nhích.
+    """
+    base = design_base_arg(args.get('base'))
+    mode = args.get('mode') or 'file'
+    if mode not in DESIGN_REVERT_MODES:
+        raise ValueError("DESIGN_REVERT_INVALID: kiểu hoàn tác phải là 'file' hoặc 'batch'.")
+    design_require_repo()
+    paths = design_paths_arg(args.get('paths'))
+    if mode == 'file' and not paths:
+        return {'reverted': [], 'deleted': []}
+    # `paths` (danh sách LÔ đã ghim ở tầng harness) là phạm vi hoàn tác cho CẢ hai mode; chỉ
+    # `None` mới quét cả cây — nếu không, `revert-batch` nuốt luôn sửa tay của chủ nhà.
+    scope = paths
+    changed = design_status_map(base, scope)
+    for untracked in design_untracked_paths(scope):
+        changed.setdefault(untracked, '?')
+    reverted = []
+    deleted = []
+    for relative in sorted(changed):
+        if design_existed_at_base(base, relative):
+            restored = git_run(['checkout', base, '--', relative])
+            if restored.returncode:
+                raise ValueError('DESIGN_REVERT_FAILED: không khôi phục được %s: %s'
+                                 % (relative, restored.stderr.strip()[:200]))
+            reverted.append(relative)
+        else:
+            path(relative).unlink(missing_ok=True)
+            git_run(['rm', '--cached', '-q', '--ignore-unmatch', '--', relative])
+            deleted.append(relative)
+    return {'reverted': reverted, 'deleted': deleted}
+
 try:  # pragma: no cover - đường dẫn chỉ tồn tại khi worker chạy TRONG box
     sys.path.insert(0, '/usr/local/bin')
     import session_ops as _session_ops
@@ -840,6 +1143,16 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None):
         return write_plan(args)
     if name == 'dossier_write':
         return dossier_write_payload(args)
+    if name == 'design_branch_create':
+        return design_branch_create(args)
+    if name == 'design_write':
+        return design_write(args)
+    if name == 'design_file_sha':
+        return design_file_sha(args)
+    if name == 'design_diff':
+        return design_diff(args)
+    if name == 'design_revert':
+        return design_revert(args)
     if name == 'file_edit_block':
         target = path(args['path'])
         content = target.read_text(encoding='utf-8')

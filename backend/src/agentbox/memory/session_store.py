@@ -196,6 +196,15 @@ class SessionStore:
                 created REAL NOT NULL,
                 updated REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS research_jobs_session ON research_jobs(session_id, updated);
+            CREATE TABLE IF NOT EXISTS design_jobs (
+                design_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                state TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'scoping',
+                revision INTEGER NOT NULL DEFAULT 1,
+                created REAL NOT NULL,
+                updated REAL NOT NULL);
+            CREATE INDEX IF NOT EXISTS design_jobs_session ON design_jobs(session_id, updated);
             CREATE TABLE IF NOT EXISTS research_sources (
                 source_id TEXT NOT NULL, session_id TEXT NOT NULL,
                 url TEXT NOT NULL, normalized_url TEXT NOT NULL,
@@ -1810,6 +1819,94 @@ class SessionStore:
                 tags.setdefault(turn, set()).add(str(event['researchId']))
         return round(sum(ms for turn, ms in used.items()
                          if research_id is None or str(research_id) in tags.get(turn, set())) / 1000, 1)
+
+    # --- design_jobs: run của chế độ `/design` (hợp đồng design-interfaces §3) -----
+
+    def design_job(self, design_id):
+        row = self.db.execute('SELECT * FROM design_jobs WHERE design_id=?',
+                              (str(design_id),)).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        item['state'] = json.loads(item['state'])
+        return item
+
+    def design_jobs_for(self, session_id):
+        rows = self.db.execute('SELECT design_id FROM design_jobs WHERE session_id=? '
+                               'ORDER BY updated DESC', (session_id,)).fetchall()
+        return [self.design_job(row['design_id']) for row in rows]
+
+    def design_jobs_active(self):
+        """Mọi run còn HOạT ĐỘNG (để bơm). Danh sách trạng thái là CHUỖI TRỰC TIẾP ở đây.
+
+        Cố ý không import `agent_core.design_runtime`: vòng import chạy ngược (agent_core ⇒ memory),
+        cùng luật với `research_jobs_active` (`:1773`).
+        """
+        rows = self.db.execute("SELECT design_id FROM design_jobs WHERE status IN "
+                               "('scoping','designing','writing','reviewing') "
+                               'ORDER BY updated').fetchall()
+        return [self.design_job(row['design_id']) for row in rows]
+
+    def design_job_by_prompt(self, prompt_id):
+        """Run chứa một `promptId` — tuyến `answer` chỉ có id lời hỏi, không có phiên."""
+        wanted = str(prompt_id)
+        rows = self.db.execute('SELECT design_id FROM design_jobs WHERE state LIKE ?',
+                               (f'%{wanted}%',)).fetchall()
+        for row in rows:
+            job = self.design_job(row['design_id'])
+            if any(str(item.get('promptId')) == wanted
+                   for item in (job['state'].get('prompts') or []) if isinstance(item, dict)):
+                return job
+        return None
+
+    def design_job_save(self, design_id, session_id, state, status=None, revision=None):
+        """Một giao dịch SQLite cho checkpoint + khoá lạc quan của chủ nhà (khuôn `research_job_save`)."""
+        allowed = {'scoping', 'designing', 'writing', 'reviewing', 'needs_user', 'completed',
+                   'partial', 'paused', 'cancelled'}
+        current = self.design_job(design_id)
+        if current and current['session_id'] != session_id:
+            raise ValueError('DESIGN_JOB_OWNER_MISMATCH')
+        if revision is not None and current and current['revision'] != revision:
+            raise ValueError('DESIGN_JOB_REVISION_CONFLICT')
+        selected = status or (current['status'] if current else 'scoping')
+        if selected not in allowed:
+            raise ValueError('DESIGN_JOB_STATUS_INVALID')
+        now = time.time()
+        with self.db:
+            self.db.execute('INSERT INTO design_jobs '
+                            '(design_id,session_id,state,status,revision,created,updated) '
+                            'VALUES(?,?,?,?,?,?,?) ON CONFLICT(design_id) DO UPDATE SET '
+                            'state=excluded.state,status=excluded.status,revision=excluded.revision,'
+                            'updated=excluded.updated',
+                            (design_id, session_id, json.dumps(state, ensure_ascii=False), selected,
+                             (current['revision'] + 1 if current else 1),
+                             current['created'] if current else now, now))
+        return self.design_job(design_id)
+
+    def design_job_phase(self, design_id, session_id, phase, reason, at, *, force=False):
+        """Ghim `phase`/`phaseHistory` của một run mà KHÔNG nhích `revision` (hợp đồng §3).
+
+        LUẬT CỦA PHA nằm ở đây, trên hàng ĐỌC LẠI NGAY TRƯỚC KHI GHI (khuôn
+        `research_job_phase`): trả `None` khi pha đã đúng, hoặc khi run đã ở pha ĐÓNG `done` mà
+        không có `force`. Dựng lại `phaseHistory` từ state MỚI NHẤT rồi UPDATE, không nhích `revision`.
+        """
+        job = self.design_job(design_id)
+        if job is None or job['session_id'] != session_id:
+            raise ValueError('DESIGN_JOB_UNKNOWN')
+        state = dict(job['state'] or {})
+        current = str(state.get('phase') or '')
+        if str(phase) == current:
+            return None
+        if current == 'done' and not force:
+            return None
+        history = list(state.get('phaseHistory') or [])
+        history.append({'phase': str(phase), 'at': str(at or ''), 'reason': str(reason or '')})
+        state['phase'] = str(phase)
+        state['phaseHistory'] = history
+        with self.db:
+            self.db.execute('UPDATE design_jobs SET state=?, updated=? WHERE design_id=?',
+                            (json.dumps(state, ensure_ascii=False), time.time(), str(design_id)))
+        return self.design_job(design_id)
 
     def dossier_versions(self, research_id):
         """Số version đang có của một việc, tăng dần."""

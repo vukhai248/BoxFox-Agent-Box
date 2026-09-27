@@ -70,6 +70,9 @@ KNOWN_PREFIXES = (
     'WORKSPACE_',
     'WEB_',
     'CLI_',
+    # Vòng soát hộp thật: chối của đường thiết kế phải ra ĐÚNG mã hợp đồng `DESIGN_*`
+    # (khuôn `WEB_`) chứ không phải `TURN_FAILED_VALUEERROR`, để giao diện có mã mà ánh xạ.
+    'DESIGN_',
 )
 
 # Exceptions that mean "the upstream endpoint is gone"; their ``str()`` is often
