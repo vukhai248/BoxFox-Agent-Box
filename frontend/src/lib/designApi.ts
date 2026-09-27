@@ -6,6 +6,7 @@
  * giao diện cần chính lời hỏi đó để dựng thẻ neo vào nút Design.
  */
 import { ApiError, agentApi } from './agentApi'
+import type { CanvasOutboundMessage } from './canvas'
 import { readPrompt, type DesignPrompt } from './designMode'
 
 export interface DesignPromptAnswerItem {
@@ -18,6 +19,8 @@ export interface DesignPromptAnswerBody {
   answers: DesignPromptAnswerItem[]
   /** `true` ở câu trả lời cuối của phỏng vấn ⇒ run rời pha `interviewing`. */
   start?: boolean
+  /** Khoá lạc quan của lời hỏi đang thấy (như mọi nhánh ghi khác). */
+  revision?: number
 }
 
 export interface DesignExitChoice {
@@ -116,10 +119,13 @@ export async function setDesignMode(
   }
 }
 
-/** `POST /api/agent/sessions/{sid}/canvas` — op canvas của chủ nhà (P2 mới nối vào hook canvas). */
+/**
+ * `POST /api/agent/sessions/{sid}/canvas` — thân là một thông điệp `boxfox.canvas.v1`:
+ * `buildCanvasMessage(scene)` (ảnh chụp cảnh) hoặc `buildCanvasDirective(...)` (chỉ thị cho node).
+ */
 export function postCanvas(
   sessionId: string,
-  body: { ops: unknown[] } & Record<string, unknown>,
+  body: CanvasOutboundMessage | Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   return agentApi(`/sessions/${encodeURIComponent(sessionId)}/canvas`, body)
 }

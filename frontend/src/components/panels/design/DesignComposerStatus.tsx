@@ -12,6 +12,7 @@ import { PenTool } from 'lucide-react'
 import { useT, type TKey } from '../../../i18n/context'
 import { selectActiveRun, useDesignStore } from '../../../store/designStore'
 import { runLabel, stepForPhase } from '../../../lib/designMode'
+import { DesignExitChoiceCard } from './DesignExitChoiceCard'
 import { STEP_LABEL_KEY } from './steps'
 
 type T = (key: TKey, vars?: Record<string, string | number>) => string
@@ -20,77 +21,22 @@ function stepLabel(t: T, phase: string): string {
   return t(STEP_LABEL_KEY[stepForPhase(phase)])
 }
 
-/** Lời hỏi thoát chế độ — neo ngay trên ô nhập, hai lựa chọn không có mặc định. */
-function ExitChoice() {
-  const t = useT()
-  const exitChoice = useDesignStore((s) => s.exitChoice)
-  const runs = useDesignStore((s) => s.runs)
-  const resolveExit = useDesignStore((s) => s.resolveExit)
-  const clearExitChoice = useDesignStore((s) => s.clearExitChoice)
-  if (!exitChoice) return null
-  const run = runs.find((item) => item.designId === exitChoice.prompt.designId) ?? null
-  // Luật "không mặc định": chỉ vẽ `background` khi server còn mời nó. Một lời hỏi cũ chỉ còn `pause`
-  // thì giao diện cũng chỉ được hiện `pause`.
-  const options = exitChoice.prompt.questions[0]?.options ?? []
-  const showBackground = options.length === 0 || options.some((option) => option.id === 'background')
-  return (
-    <div
-      data-testid="design-exit-choice"
-      role="alertdialog"
-      aria-label={t('design.exitChoiceTitle')}
-      className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]"
-    >
-      <p className="font-medium text-amber-300">{t('design.exitTitle')}</p>
-      <p className="mt-0.5 text-muted">
-        {run
-          ? t('design.exitBody', { id: runLabel(run.designId), step: stepLabel(t, run.phase) })
-          : exitChoice.prompt.questions[0]?.text ?? ''}
-      </p>
-      <div className="mt-1.5 space-y-1">
-        <button
-          type="button"
-          data-testid="design-exit-pause"
-          onClick={() => void resolveExit('pause')}
-          className="block w-full rounded border border-line bg-panel px-2 py-1 text-left transition hover:border-brand cursor-pointer"
-        >
-          <span className="font-medium text-fg">{t('design.exitPause')}</span>
-          <span className="ml-1 text-muted">{t('design.exitPauseHint')}</span>
-        </button>
-        {showBackground && (
-          <button
-            type="button"
-            data-testid="design-exit-background"
-            onClick={() => void resolveExit('background')}
-            className="block w-full rounded border border-line bg-panel px-2 py-1 text-left transition hover:border-brand cursor-pointer"
-          >
-            <span className="font-medium text-fg">{t('design.exitBackground')}</span>
-            <span className="ml-1 text-muted">{t('design.exitBackgroundHint')}</span>
-          </button>
-        )}
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          data-testid="design-exit-cancel"
-          onClick={clearExitChoice}
-          className="rounded border border-line px-2 py-0.5 text-muted transition hover:text-fg cursor-pointer"
-        >
-          {t('design.exitCancel')}
-        </button>
-        <span className="text-muted">{t('design.exitNoDefault')}</span>
-      </div>
-    </div>
-  )
-}
-
 /** Toàn bộ khối trạng thái trong ô soạn tin. */
 export function DesignComposerStatus() {
   const t = useT()
   const mode = useDesignStore((s) => s.mode)
   const run = useDesignStore(selectActiveRun)
+  const runs = useDesignStore((s) => s.runs)
   const exitChoice = useDesignStore((s) => s.exitChoice)
   const setMode = useDesignStore((s) => s.setMode)
-  if (exitChoice) return <ExitChoice />
+  if (exitChoice) {
+    const exitRun = runs.find((item) => item.designId === exitChoice.prompt.designId) ?? run
+    return (
+      <div className="mb-2">
+        <DesignExitChoiceCard prompt={exitChoice.prompt} run={exitRun} />
+      </div>
+    )
+  }
   if (!mode.on) return null
   const done = run !== null && (run.status === 'completed' || run.status === 'cancelled')
   return (

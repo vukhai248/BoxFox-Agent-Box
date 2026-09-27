@@ -894,7 +894,8 @@ def create_app(runtime):
         job = design_job_known(request.match_info['design_id'])
         sid, body = job['session_id'], await request.json()
         action = str(body.get('action') or '')
-        if action not in {'pause', 'resume', 'cancel', 'scope', 'touch-list'}:
+        if action not in {'pause', 'resume', 'cancel', 'scope', 'touch-list', 'approve-batch',
+                          'revert-batch'}:
             raise ApiError('DESIGN_ACTION_INVALID', action)
         if action == 'scope':
             try:
@@ -911,6 +912,22 @@ def create_app(runtime):
                     body.get('revision')))
             except ValueError as exc:
                 raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if action == 'approve-batch':
+            # P3 (§6.5): duyệt CẢ LÔ — ghim dấu đã duyệt cho thẻ so sánh; không còn gì phải ghi thêm.
+            state = dict(job['state'] or {})
+            state['batchApprovedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            updated = runtime.store.design_job_save(job['design_id'], sid, state,
+                                                    revision=body.get('revision'))
+            return web.json_response({'job': design_runtime.design_run_payload(updated)})
+        if action == 'revert-batch':
+            # P3 (§6.5): hoàn tác cả lô đã ghi — gọi op `design_revert` của worker qua harness.
+            try:
+                result = await design_runtime.design_revert(runtime, sid, job, None, 'batch')
+            except ValueError as exc:
+                raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+            updated = runtime.store.design_job(job['design_id'])
+            return web.json_response({'job': design_runtime.design_run_payload(updated),
+                                      'result': result})
         if action == 'cancel':
             updated = design_runtime.close_run(runtime, sid, job, 'cancelled',
                                                str(body.get('reason') or 'owner-cancel'),
@@ -960,10 +977,11 @@ def create_app(runtime):
         return web.json_response(result)
 
     async def session_canvas(request):
-        """P1 (§10): `POST /api/agent/sessions/{sid}/canvas` — op canvas của chủ nhà cho run đang mở.
+        """P2 (§6.4, hợp đồng §5): `POST /api/agent/sessions/{sid}/canvas` — giao thức boxfox.canvas.v1.
 
-        Op được ghi vào run (tăng `canvasSeq`) và phát một `design_canvas` actor `owner`; cảnh hợp lệ
-        hay không là việc của reducer ở giao diện, nên tuyến này KHÔNG tự vẽ.
+        `type:'scene'` lưu cảnh chủ nhà vào run (và ảnh chụp `.design/<slug>/canvas.v1.json`) rồi phát
+        một `design_canvas {actor:'user'}` — KHÔNG mở lượt. `type:'directive'` xếp chỉ thị cho lượt
+        Design Lead kế tiếp và trả `{accepted:true}`. Gói sai giao thức ⇒ `DESIGN_CANVAS_PROTOCOL_INVALID`.
         """
         sid = request.match_info['sid']
         session = known_session(sid)
@@ -976,17 +994,29 @@ def create_app(runtime):
         if job is None or job['session_id'] != sid:
             raise ApiError('DESIGN_JOB_UNKNOWN', run_id or 'no active run', 404)
         body = await request.json()
-        ops = body.get('ops')
-        if not isinstance(ops, list) or not ops:
-            raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID', 'body needs a non-empty `ops` array')
-        state = dict(job['state'] or {})
-        seq = int(state.get('canvasSeq') or 0) + 1
-        state['canvasSeq'] = seq
-        runtime.store.design_job_save(job['design_id'], sid, state, revision=job['revision'])
-        runtime.store.emit(sid, 'design_canvas',
-                           {'designId': job['design_id'], 'seq': seq, 'actor': 'owner', 'ops': ops,
-                            'sceneVersion': seq})
-        return web.json_response({'ok': True, 'seq': seq, 'sceneVersion': seq})
+        if str(body.get('protocol') or '') != design_runtime.CANVAS_PROTOCOL:
+            raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID', 'body needs protocol boxfox.canvas.v1')
+        kind = str(body.get('type') or '')
+        if kind == 'scene':
+            scene = body.get('scene')
+            if not isinstance(scene, dict):
+                raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID', 'body needs a `scene` object')
+            updated = design_runtime.canvas_store_scene(runtime, sid, job, scene)
+            await design_runtime.persist_design_canvas(
+                runtime, sid, runtime.store.design_job(job['design_id']))
+            state = updated['state'] if isinstance(updated.get('state'), dict) else {}
+            seq = int(state.get('canvasSeq') or 0)
+            return web.json_response({'ok': True, 'seq': seq, 'sceneVersion': seq})
+        if kind == 'directive':
+            instruction = str(body.get('instruction') or '').strip()
+            target = str(body.get('targetNodeId') or '').strip()
+            if not instruction or not target:
+                raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID',
+                               'a directive needs targetNodeId and instruction')
+            design_runtime.canvas_queue_directive(runtime, sid, job, target,
+                                                  body.get('targetNodeTitle'), instruction)
+            return web.json_response({'accepted': True})
+        raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID', 'type must be scene or directive')
 
     def known_session(sid):
         """The session record, or an explicit 404 the UI can act on."""

@@ -3304,6 +3304,16 @@ class HarnessRuntime(RuntimeCommands):
             'block with the run, its branch, the touch list, and a clear split between what the USER '
             'confirmed and what the AGENT assumed.',
         ]
+        mode = design_mode(session)
+        run_id = str(mode.get('activeRunId') or '')
+        queued = design_runtime.canvas_queued_directives(
+            self.store.design_job(run_id) if run_id else None)
+        if queued:
+            lines.append('Queued canvas directives from the user (act on these next):')
+            for row in queued[-5:]:
+                lines.append('- node %s (%s): %s'
+                             % (row.get('targetNodeId'), row.get('targetNodeTitle'),
+                                row.get('instruction')))
         if skills:
             lines.append('Design skills in force:')
             lines.extend(skills)
@@ -4404,17 +4414,35 @@ class HarnessRuntime(RuntimeCommands):
             return research_runtime.research_scope(self, session, args)
         if name == 'cancel_child':
             return await research_runtime.cancel_child(self, session, args)
-        # P1 (§7.1): hai công cụ design của đợt này. P2–P5 nối thêm phần của chúng vào đây và vào
+        # P1–P3 (§7.1, §6.4, §6.5): họ công cụ design. P4–P5 nối thêm phần của chúng vào đây và vào
         # `design_runtime.WIRED_DESIGN_TOOLS`; chưa nối thì đừng quảng cáo.
         if name == 'design_scope':
             return design_runtime.design_scope(self, sid, self.design_job_for(session, args),
                                                args.get('action'), args.get('patch'),
                                                args.get('questions'))
+        if name == 'design_branch_create':
+            return await design_runtime.design_branch_create(self, sid,
+                                                             self.design_job_for(session, args),
+                                                             args.get('name'))
         if name == 'design_write':
-            return design_runtime.design_write(self, sid, self.design_job_for(session, args),
-                                              args.get('path'), args.get('content'),
-                                              args.get('mode'), args.get('anchor'),
-                                              args.get('position'))
+            return await design_runtime.design_write(self, sid, self.design_job_for(session, args),
+                                                     args.get('path'), args.get('content'),
+                                                     args.get('mode'), args.get('anchor'),
+                                                     args.get('position'))
+        if name == 'design_diff':
+            return await design_runtime.design_diff(self, sid, self.design_job_for(session, args),
+                                                    args.get('paths'))
+        if name == 'design_revert':
+            return await design_runtime.design_revert(self, sid, self.design_job_for(session, args),
+                                                      args.get('paths'), args.get('mode') or 'file')
+        if name == 'canvas_draw':
+            job = self.design_job_for(session, args)
+            result = design_runtime.canvas_draw(self, sid, job, args.get('action'),
+                                                args.get('actions'))
+            # `canvas_draw` giữ chữ ký đồng bộ (§2); ảnh chụp bền ghi qua box ở đây.
+            await design_runtime.persist_design_canvas(self, sid,
+                                                       self.store.design_job(job['design_id']))
+            return result
         if name == 'journal_write':
             return await self.journal_write(sid, args)
         if name == 'journal_brief':

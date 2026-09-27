@@ -22,6 +22,24 @@ export function DesignRunTimeline({ run }: { run: DesignRun }) {
         <span className="font-medium text-fg">{t('design.timelineTitle', { id: runLabel(run.designId) })}</span>
         <span className="text-muted">{t('design.timelinePhase', { step: t(STEP_LABEL_KEY[run.step]) })}</span>
       </header>
+      {(run.batch || run.review) && (
+        <p className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
+          {run.batch && (
+            <span data-testid="design-timeline-batch" data-status={run.batch.status} className="rounded border border-line px-1 py-0.5 text-muted">
+              {t('design.timelineBatch', {
+                index: run.batch.index,
+                total: run.batch.total,
+                status: run.batch.status,
+              })}
+            </span>
+          )}
+          {run.review && (
+            <span data-testid="design-timeline-review" data-verdict={run.review.verdict} className="rounded border border-line px-1 py-0.5 text-muted">
+              {t('design.timelineReview', { version: run.review.version || 'v1', verdict: run.review.verdict })}
+            </span>
+          )}
+        </p>
+      )}
       <ol className="flex flex-wrap items-center gap-1">
         {DESIGN_STEPS.map((step, position) => (
           <li

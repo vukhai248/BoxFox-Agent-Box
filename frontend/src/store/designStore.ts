@@ -9,15 +9,24 @@
  * KHÔNG tự bịa op nào: op sai thì bỏ và tăng `rejectedOps`.
  */
 import { create } from 'zustand'
-import { applyCanvasAction, createEmptyScene, type CanvasAction, type CanvasScene } from '../lib/canvas'
+import {
+  applyCanvasAction,
+  CANVAS_PROTOCOL,
+  createEmptyScene,
+  parseCanvasMessage,
+  type CanvasAction,
+  type CanvasScene,
+} from '../lib/canvas'
 import { asBool, asNumber, asRecord, asString } from '../lib/researchMode'
 import {
   activeRun,
   DESIGN_MODE_OFF,
   isDesignEvent,
   openExitPrompt,
+  readBatch,
   readDesignMode,
   readPrompt,
+  readReview,
   readRun,
   readRuns,
   stepForPhase,
@@ -53,12 +62,18 @@ interface DesignState {
   activeRunId: string
   /** `designId -> CanvasScene` do sự kiện `design_canvas` dựng nên. */
   scenes: Record<string, CanvasScene>
+  /** `designId -> actor` của sự kiện `design_canvas` gần nhất (`'agent'`/`'user'`/…). */
+  sceneActor: Record<string, string>
+  /** `sceneVersion` lớn nhất đã thấy — nguồn sự thật cho nhãn "cảnh ở bản N". */
+  sceneVersion: number
   /** Lời hỏi đang thấy, gộp mọi run (nền + chi tiết) — một chỗ cho thẻ lời hỏi. */
   prompts: DesignPrompt[]
   /** Số op canvas bị bỏ vì sai giao thức (A3) — không bao giờ vẽ dữ liệu bịa. */
   rejectedOps: number
   /** Brief của run đang mở (`state.brief` từ tuyến chi tiết). */
   brief: Json
+  /** `designId -> payload` báo cáo bàn giao gần nhất (P4). */
+  reports: Record<string, Json>
   /** Lời hỏi 409 khi tắt mode lúc run còn chạy: có thì phải neo thẻ vào nút Design. */
   exitChoice: DesignExitChoice | null
   loading: boolean
@@ -115,24 +130,22 @@ function mergeRun(current: DesignRun | null, data: Json): DesignRun | null {
     touchList: current?.touchList ?? null,
     prompts: current?.prompts ?? [],
     phaseHistory: current?.phaseHistory ?? [],
+    // Lô ghi/soát độc lập: nhận từ sự kiện nếu backend gửi kèm, ngược lại giữ cái đang có
+    // (tuyến chi tiết `refreshDetail` là nguồn chính).
+    batch: readBatch(data.batch) ?? current?.batch ?? null,
+    review: readReview(data.review) ?? current?.review ?? null,
   }
 }
 
 /**
  * Parse MỘT op canvas từ `unknown`; `null` khi sai hình dạng.
  *
- * Vì sao không dùng `parseCanvasMessage`: sự kiện `design_canvas` mang `ops[]` trần (hợp đồng §9),
- * không phải một message bọc giao thức; và ta cần biết op nào bị bỏ để đếm, nên phải phân tích TRƯỚC
- * rồi mới reduce.
+ * Vì sao bọc `parseCanvasMessage` thay vì tự đoán trường: giao thức canvas đã đông cứng, nên một op
+ * trần chỉ hợp lệ nếu parse được thành `CanvasActionMessage` của `boxfox.canvas.v1`.
  */
 export function parseCanvasOp(value: unknown): CanvasAction | null {
-  const op = asRecord(value)
-  const type = asString(op.type)
-  if (type === 'CREATE_NODE' && asRecord(op.node).id) return op as unknown as CanvasAction
-  if (type === 'CONNECT_NODES' && asRecord(op.connector).fromNodeId) return op as unknown as CanvasAction
-  if (type === 'UPDATE_NODE' && asString(op.nodeId)) return op as unknown as CanvasAction
-  if (type === 'DELETE_NODE' && asString(op.nodeId)) return op as unknown as CanvasAction
-  return null
+  const parsed = parseCanvasMessage({ protocol: CANVAS_PROTOCOL, type: 'action', action: value })
+  return parsed && parsed.type === 'action' ? parsed.action : null
 }
 
 export const useDesignStore = create<DesignState>((set, get) => ({
@@ -141,9 +154,12 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   runs: [],
   activeRunId: '',
   scenes: {},
+  sceneActor: {},
+  sceneVersion: 0,
   prompts: [],
   rejectedOps: 0,
   brief: {},
+  reports: {},
   exitChoice: null,
   loading: false,
   error: null,
@@ -186,15 +202,19 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         set({ exitChoice: { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt, message: prompt.note } })
       }
     }
-    // `design_report`/`design_notice` (P4/P6) chưa có hình dạng chốt cho giao diện P1 — bỏ qua
-    // thay vì đoán.
+    // `design_notice` (P6) chưa có hình dạng chốt cho giao diện — bỏ qua thay vì đoán.
+    if (event.type === 'design_report') {
+      const designId = asString(data.designId)
+      if (!designId) return
+      set({ reports: { ...get().reports, [designId]: data } })
+    }
   },
 
   applyCanvas: (event) => {
     const data = asRecord(event.data)
     const designId = asString(data.designId)
+    if (!designId) return
     const ops = Array.isArray(data.ops) ? data.ops : []
-    if (!designId || ops.length === 0) return
     let scene = get().scenes[designId] ?? createEmptyScene()
     let rejected = get().rejectedOps
     for (const raw of ops) {
@@ -208,14 +228,24 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       if (next === scene) rejected += 1
       else scene = next
     }
-    set({ scenes: { ...get().scenes, [designId]: scene }, rejectedOps: rejected })
+    const actor = asString(data.actor) || get().sceneActor[designId] || ''
+    const version = asNumber(data.sceneVersion) ?? asNumber(data.seq) ?? get().sceneVersion
+    set({
+      scenes: { ...get().scenes, [designId]: scene },
+      sceneActor: actor ? { ...get().sceneActor, [designId]: actor } : get().sceneActor,
+      sceneVersion: Math.max(get().sceneVersion, version),
+      rejectedOps: rejected,
+    })
   },
 
   clearSessionChange: () => set({
     runs: [],
     prompts: [],
     scenes: {},
+    sceneActor: {},
+    sceneVersion: 0,
     brief: {},
+    reports: {},
     activeRunId: '',
     exitChoice: null,
     rejectedOps: 0,
@@ -270,7 +300,15 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     if (!designId) return
     try {
       const envelope = asRecord(await fetchDesignRun(designId))
-      const run = readRun({ ...asRecord(envelope.job), prompts: envelope.prompts, touchList: envelope.touchList })
+      const job = asRecord(envelope.job)
+      const run = readRun({
+        ...job,
+        prompts: envelope.prompts ?? job.prompts,
+        touchList: envelope.touchList ?? job.touchList,
+        // Lô ghi: backend đang gọi nó là `diff` (`{files, patchPath, at}`, §6.5) — nhận cả hai tên.
+        batch: job.batch ?? envelope.batch ?? job.diff ?? envelope.diff,
+        review: job.review ?? envelope.review,
+      })
       if (!run) return
       set({
         runs: get().runs.some((item) => item.designId === designId)

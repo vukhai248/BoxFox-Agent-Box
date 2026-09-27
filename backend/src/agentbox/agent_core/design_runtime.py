@@ -13,6 +13,8 @@ duyệt (`design_write`). Đường ghi thật, canvas, soát độc lập và b
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import uuid
 
@@ -20,11 +22,11 @@ from . import journal
 from .limits import (
     DESIGN_ACTIVE_STATUSES, DESIGN_ERROR_TEXT, DESIGN_EXIT_CHOICE_REQUIRED_CODE,
     DESIGN_HANDOFF_BLOCK_END, DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HARD_FORBIDDEN,
-    DESIGN_BRANCH_REQUIRED_CODE, DESIGN_INTERVIEW_IDS, DESIGN_INTERVIEW_MAX_QUESTIONS,
+    DESIGN_BRANCH_REQUIRED_CODE, DESIGN_CANVAS_PROTOCOL_INVALID_CODE,
+    DESIGN_DIFF_DIRTY_BASE_CODE, DESIGN_INTERVIEW_IDS, DESIGN_INTERVIEW_MAX_QUESTIONS,
     DESIGN_MODE_EVENT_CODE, DESIGN_OWNED_PREFIX, DESIGN_PATH_NOT_APPROVED_CODE,
-    DESIGN_PROMPT_KINDS, DESIGN_STEPS, DESIGN_TOUCH_KINDS,
-    DESIGN_TOUCH_LIST_REQUIRED_CODE, DESIGN_TOUCH_LIST_REVISION_STALE_CODE,
-    DESIGN_TOUCH_STATUSES,
+    DESIGN_PROMPT_KINDS, DESIGN_STEPS, DESIGN_TOUCH_KINDS, DESIGN_TOUCH_LIST_REQUIRED_CODE,
+    DESIGN_TOUCH_LIST_REVISION_STALE_CODE, DESIGN_TOUCH_STATUSES, DESIGN_WRITE_STALE_CODE,
 )
 
 # Bảy bước và tám pha được hợp đồng §2 đặt trong mô-đun này; `limits` là nguồn duy nhất, ở đây chỉ
@@ -42,9 +44,11 @@ PHASE_DONE = 'done'
 #: Bốn kỹ năng của lượt design (§7.9) — tên khớp `limits.DESIGN_SKILLS`.
 DESIGN_SKILL_NAMES = ('claude-design', 'design-md', 'popular-web-designs', 'architecture-diagram')
 
-#: Công cụ design ĐÃ nối vào `dispatch` ở đợt P1. P2–P5 thêm tên vào ĐÚNG danh sách này khi nối
-#: phần của chúng: chưa nối thì không được quảng cáo cho mô hình.
-WIRED_DESIGN_TOOLS = ('design_scope', 'design_write')
+#: Công cụ design ĐÃ nối vào `dispatch`. P1 nối `design_scope`/`design_write`; P2/P3 nối thêm đường
+#: canvas và bốn công cụ đường ghi. P4–P5 (soát độc lập, báo cáo) thêm tên vào ĐÚNG danh sách này
+#: khi nối phần của chúng: chưa nối thì không được quảng cáo cho mô hình.
+WIRED_DESIGN_TOOLS = ('design_scope', 'design_branch_create', 'design_write', 'design_diff',
+                      'design_revert', 'canvas_draw')
 
 #: `origin` của một run: `mode` = run của chế độ (được bơm khi mode bật hoặc đang chạy nền),
 #: `delegate` = run mở bởi `delegate_task(role='design')` từ ngoài mode (không bao giờ bơm).
@@ -521,26 +525,405 @@ def design_touch_list_approve(rt, session_id, job, revision, answers=None):
             'approved': approved, 'approvedAt': touch_list['approvedAt']}
 
 
-def design_write(rt, session_id, job, path, content, mode, anchor=None, position=None):
-    """CỔNG của đường ghi (§7.1, D-08) — P1 chỉ dựng luật từ chối, P3 nối op worker.
+# ── Đường ghi có gác (§6.5) ─────────────────────────────────────────────────
 
-    Trước khi danh sách chạm được duyệt, MỌI lần ghi đều bị chối `DESIGN_TOUCH_LIST_REQUIRED`.
-    Sau đó: đường dẫn phải nằm trong danh sách đã duyệt (`DESIGN_PATH_NOT_APPROVED`) và run phải có
-    nhánh thiết kế (`DESIGN_BRANCH_REQUIRED`). Đường ghi thật (gọi op `design_write` trong box) do P3
-    nối vào đây.
+
+def design_dir(job):
+    """`.design/<slug>/` — thư mục do run tự sở hữu."""
+    return f'{DESIGN_OWNED_PREFIX}{_slug(job["design_id"])}/'
+
+
+def design_canvas_path(job):
+    """Đường dẫn ảnh chụp cảnh của run (hợp đồng §7.5)."""
+    return f'{design_dir(job)}canvas.v1.json'
+
+
+def _sha256_text(text):
+    return hashlib.sha256(str(text).encode('utf-8')).hexdigest()
+
+
+async def _read_box_text(rt, session_id, path):
+    """Nội dung tệp trong box, hoặc `None` khi chưa có/không đọc được (không ném)."""
+    try:
+        result = await rt.executor.execute('file_read', {'path': path}, session_id)
+    except (ValueError, OSError):
+        return None
+    content = result.get('content') if isinstance(result, dict) else None
+    return content if isinstance(content, str) else None
+
+
+async def _write_box_text(rt, session_id, path, content):
+    """Ghi một tệp trong box qua op `file_write` (đường `.design/**` do run sở hữu)."""
+    return await rt.executor.execute('file_write', {'path': path, 'content': content}, session_id)
+
+
+def _branch_state(state):
+    branch = state.get('branch') if isinstance(state.get('branch'), dict) else {}
+    return branch if str(branch.get('base') or '').strip() else {}
+
+
+def _approved_items(touch_list):
+    return {item.get('path') for item in (touch_list or {}).get('items') or []
+            if item.get('status') in ('approved', 'written')}
+
+
+async def design_branch_create(rt, session_id, job, name):
+    """`design_branch_create` (§6.5): tạo nhánh thiết kế từ `HEAD` và ghim `base` sha vào run.
+
+    Cây làm việc còn thay đổi chưa lưu của chủ nhà ⇒ `DESIGN_DIFF_DIRTY_BASE` (không tạo nhánh trên
+    một nền bẩn). Việc dựng lệnh git nằm trong worker; lỗi worker (`DESIGN_MAIN_BRANCH_FORBIDDEN`,
+    `DESIGN_BRANCH_EXISTS`, `DESIGN_WORKSPACE_NOT_REPO`) đi thẳng ra ngoài.
+    """
+    dirty = await rt.executor.execute('design_diff', {'base': 'HEAD', 'paths': None}, session_id)
+    if (dirty.get('files') if isinstance(dirty, dict) else None):
+        raise _error(DESIGN_DIFF_DIRTY_BASE_CODE)
+    result = await rt.executor.execute('design_branch_create', {'name': str(name or '')},
+                                       session_id)
+    state = dict(job['state'] or {})
+    branch = {'name': result['branch'], 'base': result['base'], 'head': result['head'],
+              'status': 'active'}
+    state['branch'] = branch
+    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
+    if touch_list is not None:
+        touch_list = dict(touch_list)
+        touch_list['branch'] = {'name': branch['name'], 'base': branch['base'], 'status': 'active'}
+        state['touchList'] = touch_list
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    rt.store.emit(session_id, 'design_run', design_job_event(updated))
+    set_phase(rt, session_id, updated, 'scaffolding', 'branch-created')
+    return {'branch': result['branch'], 'base': result['base'], 'head': result['head']}
+
+
+async def design_write(rt, session_id, job, path, content, mode, anchor=None, position=None):
+    """`design_write` (§6.5): ghi MỘT tệp DỰ ÁN sau khi danh sách chạm được duyệt.
+
+    Lớp gác của HARNESS chạy trước khi chạm box: danh sách chạm phải được duyệt
+    (`DESIGN_TOUCH_LIST_REQUIRED`), đường dẫn phải nằm trong danh sách đã duyệt hoặc thuộc
+    `.design/**` (`DESIGN_PATH_NOT_APPROVED`), danh sách đen cứng luôn bị chối, run phải có nhánh
+    thiết kế (`DESIGN_BRANCH_REQUIRED`), và tệp `insert` đã ghim băm mà nay đổi ⇒ `DESIGN_WRITE_STALE`.
+    Việc ghi thật đi qua op `design_write` của worker (chỉ `git` với tham số đã kiểm, không shell).
     """
     state = dict(job['state'] or {})
     touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
     if not touch_list or not touch_list.get('approvedAt'):
         raise _error(DESIGN_TOUCH_LIST_REQUIRED_CODE)
     normalized = str(path or '').strip()
-    allowed = {item.get('path') for item in touch_list.get('items') or []
-               if item.get('status') in ('approved', 'written')}
     owned = normalized.startswith(DESIGN_OWNED_PREFIX)
-    if not owned and normalized not in allowed:
+    entry = next((item for item in touch_list.get('items') or []
+                  if item.get('path') == normalized), None)
+    if normalized in DESIGN_HARD_FORBIDDEN:
         raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
-    # Danh sách đã duyệt nhưng run CHƯA có nhánh thiết kế (P3 tạo nhánh): không có chỗ để ghi.
-    raise _error(DESIGN_BRANCH_REQUIRED_CODE)
+    if not owned and (entry is None or entry.get('status') not in ('approved', 'written')):
+        raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
+    if not owned and not _branch_state(state):
+        raise _error(DESIGN_BRANCH_REQUIRED_CODE)
+
+    before_text = await _read_box_text(rt, session_id, normalized)
+    if (entry is not None and entry.get('sha256') and mode == 'insert'
+            and (before_text is None or _sha256_text(before_text) != entry['sha256'])):
+        raise _error(DESIGN_WRITE_STALE_CODE)
+
+    write_args = {'path': normalized, 'content': content, 'mode': mode}
+    if anchor is not None:
+        write_args['anchor'] = anchor
+    if position is not None:
+        write_args['position'] = position
+    result = await rt.executor.execute('design_write', write_args, session_id)
+
+    live = rt.store.design_job(job['design_id'])
+    state = dict(live['state'] or {})
+    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
+    reason = ''
+    if touch_list is not None:
+        for item in touch_list.get('items') or []:
+            if item.get('path') == result['path']:
+                item['status'] = 'written'
+                item['sha256'] = result['sha256']
+                reason = str(item.get('reason') or '')
+                break
+        state['touchList'] = touch_list
+    log_path = f'{design_dir(job)}actions.jsonl'
+    action = {'at': journal.utc_now_iso(), 'path': result['path'], 'mode': result['mode'],
+              'sha256Before': _sha256_text(before_text) if before_text is not None else None,
+              'sha256After': result['sha256'], 'bytes': result.get('bytes'), 'reason': reason,
+              'logPath': log_path, 'author': 'agent'}
+    state['actions'] = (state.get('actions') or []) + [action]
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=live.get('revision'))
+    lines = [json.dumps(row, ensure_ascii=False) for row in state['actions']]
+    await _write_box_text(rt, session_id, log_path, '\n'.join(lines) + '\n')
+    rt.store.emit(session_id, 'design_run', design_job_event(updated))
+    return {'path': result['path'], 'mode': result['mode'], 'sha256': result['sha256'],
+            'bytes': result.get('bytes'), 'revision': updated['revision']}
+
+
+async def design_diff(rt, session_id, job, paths=None):
+    """`design_diff` (§6.5): so nhánh thiết kế với `base`, ghim `diff.patch`, trả `patchPath`."""
+    state = dict(job['state'] or {})
+    branch = _branch_state(state)
+    if not branch:
+        raise _error(DESIGN_BRANCH_REQUIRED_CODE)
+    diff = await rt.executor.execute('design_diff', {'base': branch['base'], 'paths': paths or None},
+                                     session_id)
+    files = diff.get('files') or []
+    patch_path = f'{design_dir(job)}diff.patch'
+    await _write_box_text(rt, session_id, patch_path, diff.get('patch') or '')
+    live = rt.store.design_job(job['design_id'])
+    state = dict(live['state'] or {})
+    state['diff'] = {'files': files, 'patchPath': patch_path, 'at': journal.utc_now_iso()}
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=live.get('revision'))
+    return {'designId': job['design_id'], 'revision': updated['revision'], 'files': files,
+            'patchPath': patch_path}
+
+
+async def design_revert(rt, session_id, job, paths=None, mode='file'):
+    """`design_revert` (§6.5): khôi phục tệp `insert` về `base`, xoá tệp `new`; `HEAD` không nhích.
+
+    Chỉ những đường dẫn trong danh sách chạm đã duyệt (hoặc `.design/**`) mới được hoàn tác khi
+    `mode='file'`; `mode='batch'` hoàn tác cả lô vừa ghi. Kết quả trả về gộp cả tệp khôi phục lẫn
+    tệp bị xoá vào một danh sách `reverted` theo hợp đồng §6.
+    """
+    mode = str(mode or 'file')
+    if mode not in ('file', 'batch'):
+        raise ValueError("DESIGN_REVERT_INVALID: kiểu hoàn tác phải là 'file' hoặc 'batch'.")
+    state = dict(job['state'] or {})
+    branch = _branch_state(state)
+    base = branch['base'] if branch else 'HEAD'
+    scope = None
+    if mode == 'file':
+        scope = [str(item).strip() for item in (paths or []) if str(item).strip()]
+        allowed = _approved_items(state.get('touchList'))
+        for path in scope:
+            if path not in allowed and not path.startswith(DESIGN_OWNED_PREFIX):
+                raise _error(DESIGN_PATH_NOT_APPROVED_CODE)
+        if not scope:
+            return {'reverted': []}
+    result = await rt.executor.execute('design_revert',
+                                       {'base': base, 'paths': scope, 'mode': mode}, session_id)
+    reverted = list(result.get('reverted') or []) + list(result.get('deleted') or [])
+    live = rt.store.design_job(job['design_id'])
+    state = dict(live['state'] or {})
+    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
+    if touch_list is not None:
+        for item in touch_list.get('items') or []:
+            if item.get('path') in set(reverted) and item.get('status') == 'written':
+                item['status'] = 'approved'
+                item['sha256'] = None
+        state['touchList'] = touch_list
+    undone = set(reverted)
+    state['actions'] = [row for row in (state.get('actions') or [])
+                        if row.get('path') not in undone]
+    state['revert'] = {'paths': reverted, 'mode': mode, 'at': journal.utc_now_iso()}
+    rt.store.design_job_save(job['design_id'], session_id, state, revision=live.get('revision'))
+    return {'reverted': reverted}
+
+
+# ── Canvas hai chiều (§6.4) ─────────────────────────────────────────────────
+
+
+CANVAS_PROTOCOL = 'boxfox.canvas.v1'
+CANVAS_NODE_KINDS = ('shape', 'card', 'webview')
+CANVAS_SHAPES = ('rect', 'ellipse', 'triangle', 'diamond')
+CANVAS_CARDS = ('ui-mockup', 'agent-reasoning-flow', 'directive-annotation')
+CANVAS_ANCHORS = ('top', 'right', 'bottom', 'left', 'center')
+
+
+def _canvas_number(value, default):
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) \
+        else float(default)
+
+
+def _canvas_node(value):
+    """Chuẩn hoá MỘT node theo `CanvasNode` (types.ts); thiếu `id` ⇒ `None` (op sai)."""
+    if not isinstance(value, dict):
+        return None
+    node_id = value.get('id')
+    if not isinstance(node_id, str) or not node_id.strip():
+        return None
+    style = value.get('style') if isinstance(value.get('style'), dict) else {}
+    return {'id': node_id,
+            'kind': value['kind'] if value.get('kind') in CANVAS_NODE_KINDS else 'shape',
+            'shape': value.get('shape') if value.get('shape') in CANVAS_SHAPES else None,
+            'card': value.get('card') if value.get('card') in CANVAS_CARDS else None,
+            'x': _canvas_number(value.get('x'), 0), 'y': _canvas_number(value.get('y'), 0),
+            'width': _canvas_number(value.get('width'), 160),
+            'height': _canvas_number(value.get('height'), 100),
+            'title': str(value.get('title') or ''), 'body': str(value.get('body') or ''),
+            'url': value.get('url') if isinstance(value.get('url'), str) else None,
+            'style': {'fill': str(style.get('fill') or '#ffffff'),
+                      'stroke': str(style.get('stroke') or '#111827'),
+                      'strokeWidth': _canvas_number(style.get('strokeWidth'), 1),
+                      'radius': _canvas_number(style.get('radius'), 8)}}
+
+
+def _canvas_op(op):
+    """Chuẩn hoá MỘT op theo `CanvasAction` (agent-protocol.ts); sai giao thức ⇒ `None`."""
+    if not isinstance(op, dict):
+        return None
+    kind = op.get('type')
+    if kind == 'CREATE_NODE':
+        node = _canvas_node(op.get('node'))
+        return None if node is None else {'type': 'CREATE_NODE', 'node': node}
+    if kind == 'CONNECT_NODES':
+        connector = op.get('connector')
+        if not isinstance(connector, dict):
+            return None
+        source, target = connector.get('fromNodeId'), connector.get('toNodeId')
+        if not (isinstance(source, str) and source and isinstance(target, str) and target):
+            return None
+        result = {'fromNodeId': source, 'toNodeId': target,
+                  'fromAnchor': connector.get('fromAnchor') if connector.get('fromAnchor')
+                  in CANVAS_ANCHORS else 'center',
+                  'toAnchor': connector.get('toAnchor') if connector.get('toAnchor')
+                  in CANVAS_ANCHORS else 'center',
+                  'stroke': str(connector.get('stroke') or '#3b82f6'),
+                  'strokeWidth': _canvas_number(connector.get('strokeWidth'), 2)}
+        if isinstance(connector.get('id'), str) and connector['id']:
+            result['id'] = connector['id']
+        return {'type': 'CONNECT_NODES', 'connector': result}
+    if kind == 'UPDATE_NODE':
+        node_id = op.get('nodeId')
+        if not (isinstance(node_id, str) and node_id) or not isinstance(op.get('patch'), dict):
+            return None
+        return {'type': 'UPDATE_NODE', 'nodeId': node_id, 'patch': dict(op['patch'])}
+    if kind == 'DELETE_NODE':
+        node_id = op.get('nodeId')
+        return {'type': 'DELETE_NODE', 'nodeId': node_id} \
+            if isinstance(node_id, str) and node_id else None
+    return None
+
+
+def _canvas_scene(value):
+    """Chuẩn hoá MỘT cảnh (`CanvasScene`, `version:1`) từ dữ liệu chủ nhà hoặc đã lưu."""
+    scene = value if isinstance(value, dict) else {}
+    nodes = [node for node in (_canvas_node(raw) for raw in scene.get('nodes') or [])
+             if node is not None]
+    connectors = []
+    for raw in scene.get('connectors') or []:
+        op = _canvas_op({'type': 'CONNECT_NODES', 'connector': raw})
+        if op is None:
+            continue
+        connector = op['connector']
+        raw_id = raw.get('id') if isinstance(raw, dict) else None
+        connector['id'] = raw_id if isinstance(raw_id, str) and raw_id else uuid.uuid4().hex[:12]
+        connectors.append(connector)
+    strokes = [dict(raw) for raw in (scene.get('strokes') or []) if isinstance(raw, dict)]
+    return {'version': 1, 'nodes': nodes, 'connectors': connectors, 'strokes': strokes}
+
+
+def _canvas_apply(scene, op):
+    """Áp MỘT op đã chuẩn hoá lên cảnh (giống `applyCanvasAction`); không hợp lệ ⇒ `False`."""
+    kind = op['type']
+    if kind == 'CREATE_NODE':
+        if any(node['id'] == op['node']['id'] for node in scene['nodes']):
+            return False
+        scene['nodes'].append(op['node'])
+        return True
+    if kind == 'CONNECT_NODES':
+        connector = dict(op['connector'])
+        ids = {node['id'] for node in scene['nodes']}
+        if connector['fromNodeId'] not in ids or connector['toNodeId'] not in ids:
+            return False
+        connector.setdefault('id', uuid.uuid4().hex[:12])
+        scene['connectors'].append(connector)
+        return True
+    if kind == 'UPDATE_NODE':
+        for index, node in enumerate(scene['nodes']):
+            if node['id'] == op['nodeId']:
+                merged = {**node, **op['patch'], 'id': node['id']}
+                scene['nodes'][index] = _canvas_node(merged) or merged
+                return True
+        return False
+    if kind == 'DELETE_NODE':
+        node_id = op['nodeId']
+        remaining = [node for node in scene['nodes'] if node['id'] != node_id]
+        if len(remaining) == len(scene['nodes']):
+            return False
+        scene['nodes'] = remaining
+        scene['connectors'] = [row for row in scene['connectors']
+                               if row['fromNodeId'] != node_id and row['toNodeId'] != node_id]
+        return True
+    return False
+
+
+def canvas_draw(rt, session_id, job, action=None, actions=None):
+    """`canvas_draw` (§6.4): áp một/một mảng op rồi phát ĐÚNG MỘT `design_canvas` gộp.
+
+    Envelope thiếu hoặc sai kiểu ⇒ `DESIGN_CANVAS_PROTOCOL_INVALID`. Từng op kiểm riêng: op hợp lệ
+    được áp và đếm vào `applied`, op sai bị BỎ và đếm vào `rejected` — không bao giờ dựng node bịa.
+    Sự kiện chỉ mang các op ĐÃ áp; `sceneVersion` là bộ đếm đơn điệu của run.
+    """
+    if actions is None:
+        if action is None:
+            raise _error(DESIGN_CANVAS_PROTOCOL_INVALID_CODE)
+        ops = [action]
+    elif action is None and isinstance(actions, list):
+        ops = actions
+    else:
+        raise _error(DESIGN_CANVAS_PROTOCOL_INVALID_CODE)
+    if not ops:
+        raise _error(DESIGN_CANVAS_PROTOCOL_INVALID_CODE)
+    state = dict(job['state'] or {})
+    scene = _canvas_scene(state.get('canvasScene'))
+    applied, rejected = [], 0
+    for raw in ops:
+        op = _canvas_op(raw)
+        if op is None or not _canvas_apply(scene, op):
+            rejected += 1
+            continue
+        applied.append(op)
+    seq = int(state.get('canvasSeq') or 0) + 1
+    state['canvasSeq'] = seq
+    state['canvasScene'] = scene
+    rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    rt.store.emit(session_id, 'design_canvas',
+                  {'designId': job['design_id'], 'seq': seq, 'actor': 'agent', 'ops': applied,
+                   'sceneVersion': seq})
+    return {'applied': len(applied), 'rejected': rejected, 'sceneVersion': seq}
+
+
+async def persist_design_canvas(rt, session_id, job):
+    """Ghi ảnh chụp cảnh vào `.design/<slug>/canvas.v1.json` (đường run tự sở hữu, duyệt ngầm).
+
+    `canvas_draw` giữ chữ ký ĐỒNG BỘ của hợp đồng §2, nên lời gọi box nằm ở đây; tầng dispatch và
+    tuyến canvas cùng gọi một chỗ để ảnh chụp bền không lệch khỏi sự kiện.
+    """
+    state = job['state'] if isinstance(job.get('state'), dict) else {}
+    scene = state.get('canvasScene')
+    if not isinstance(scene, dict):
+        return None
+    content = json.dumps(scene, ensure_ascii=False, separators=(',', ':'))
+    path = design_canvas_path(job)
+    await _write_box_text(rt, session_id, path, content)
+    return path
+
+
+def canvas_store_scene(rt, session_id, job, scene):
+    """Lưu cảnh do CHỦ NHÀ gửi (`type:'scene'`) và phát một `design_canvas {actor:'user'}`."""
+    state = dict(job['state'] or {})
+    seq = int(state.get('canvasSeq') or 0) + 1
+    state['canvasSeq'] = seq
+    state['canvasScene'] = _canvas_scene(scene)
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    rt.store.emit(session_id, 'design_canvas',
+                  {'designId': job['design_id'], 'seq': seq, 'actor': 'user', 'ops': [],
+                   'sceneVersion': seq})
+    return updated
+
+
+def canvas_queue_directive(rt, session_id, job, target_node_id, target_node_title, instruction):
+    """Xếp chỉ thị canvas (`type:'directive'`) cho lượt Design Lead kế tiếp; trả bản ghi."""
+    state = dict(job['state'] or {})
+    directive = {'targetNodeId': str(target_node_id or ''), 'targetNodeTitle': str(target_node_title or ''),
+                 'instruction': str(instruction or ''), 'at': journal.utc_now_iso()}
+    state['directives'] = (state.get('directives') or []) + [directive]
+    rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    return directive
+
+
+def canvas_queued_directives(job):
+    """Chỉ thị canvas đang xếp hàng của một run (khối lời dặn đọc lại)."""
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    return [row for row in (state.get('directives') or []) if isinstance(row, dict)]
 
 
 # ── Lời hỏi nhiều câu (§7.3) ────────────────────────────────────────────────

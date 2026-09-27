@@ -13,10 +13,16 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../../i18n'
 import { useDesignStore, selectActiveRun, parseCanvasOp } from '../../../store/designStore'
-import { DESIGN_MODE_OFF, readRun, stepForPhase } from '../../../lib/designMode'
+import { DESIGN_MODE_OFF, readRun, readBatch, stepForPhase, type DesignBatch } from '../../../lib/designMode'
+import { DesignBatchDiffCard } from './DesignBatchDiffCard'
 import { DesignBriefCard } from './DesignBriefCard'
+import { DesignCanvasPanel } from '../DesignCanvasPanel'
 import { DesignComposerStatus } from './DesignComposerStatus'
 import { DesignConversationCards } from './DesignConversationCards'
+import { DesignExitChoiceCard } from './DesignExitChoiceCard'
+import { DesignHandoffCard } from './DesignHandoffCard'
+import { DesignOutOfScopeCard } from './DesignOutOfScopeCard'
+import { DesignPanel } from './DesignPanel'
 import { DesignPromptCard } from './DesignPromptCard'
 import { DesignRunTimeline } from './DesignRunTimeline'
 import { DesignToggle } from './DesignToggle'
@@ -179,10 +185,13 @@ beforeEach(() => {
     runs: [],
     activeRunId: DESIGN_ID,
     scenes: {},
+    sceneActor: {},
+    sceneVersion: 0,
     prompts: [],
     rejectedOps: 0,
     brief: {},
     exitChoice: null,
+    reports: {},
     loading: false,
     error: null,
     lastEventSeq: 0,
@@ -400,5 +409,218 @@ describe('luồng chế độ Design', () => {
     expect(stepForPhase('touch-list')).toBe('approve')
     expect(stepForPhase('scaffolding')).toBe('write')
     expect(stepForPhase('reviewing')).toBe('review')
+  })
+})
+
+/** Lô ghi thật như backend trả (`batch` trong payload run). */
+function batchRow(overrides: Record<string, unknown> = {}): DesignBatch {
+  return readBatch({
+    index: 2,
+    total: 3,
+    status: 'proposed',
+    revision: 5,
+    patchPath: '.design/chat-panel/diff.patch',
+    added: 8,
+    removed: 1,
+    files: [
+      { path: 'src/ui/ChatPanel.tsx', status: 'insert', added: 2, removed: 0 },
+      { path: 'src/styles/tokens.css', status: 'insert', added: 6, removed: 1 },
+    ],
+    ...overrides,
+  })!
+}
+
+const outOfScopePrompt = {
+  promptId: 'dp-oos',
+  designId: DESIGN_ID,
+  kind: 'out-of-scope',
+  status: 'open',
+  revision: 6,
+  createdAt: '',
+  note: '',
+  actions: [],
+  questions: [
+    {
+      id: 'oos',
+      text: 'Yêu cầu này nằm ngoài phạm vi thiết kế.',
+      allowFreeText: false,
+      required: true,
+      options: [
+        { id: 'exit', label: 'Tạm thoát để main xử lý' },
+        { id: 'keep', label: 'Giữ trong design' },
+      ],
+    },
+  ],
+}
+
+describe('thẻ P5 của chế độ Design', () => {
+  it('batch_diff_card_renders_files: danh sách tệp +/−, đường patch, và hai nút gửi đúng action', async () => {
+    const api = stubApi()
+    const host = render(<DesignBatchDiffCard designId={DESIGN_ID} batch={batchRow()} revision={5} />)
+
+    const card = host.querySelector('[data-testid="design-diff-batch-card"]')
+    expect(card).toBeTruthy()
+    expect(card?.textContent).toContain('src/ui/ChatPanel.tsx')
+    expect(card?.textContent).toContain('src/styles/tokens.css')
+    expect(card?.textContent).toContain('.design/chat-panel/diff.patch')
+    expect(card?.textContent).toContain('+8')
+    expect(card?.textContent).toContain('−1')
+
+    await act(async () => {
+      click(host, '[data-testid="design-batch-approve"]')
+    })
+    expect(api.calls.find((call) => call.body?.action === 'approve-batch')).toBeTruthy()
+
+    await act(async () => {
+      click(host, '[data-testid="design-batch-revert"]')
+    })
+    expect(api.calls.find((call) => call.body?.action === 'revert-batch')).toBeTruthy()
+    act(() => { host.remove() })
+  })
+
+  it('batch card khi chưa có lô: vẫn có thẻ nhưng không bịa nút duyệt/hoàn tác', () => {
+    const host = render(<DesignBatchDiffCard designId={DESIGN_ID} batch={null} revision={5} />)
+    expect(host.querySelector('[data-testid="design-diff-batch-card"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-batch-approve"]')).toBeNull()
+    expect(host.querySelector('[data-testid="design-batch-revert"]')).toBeNull()
+    act(() => { host.remove() })
+  })
+
+  it('handoff card: nhánh + base, đường design-md, danh sách chạm đã ghi, phán quyết soát độc lập', () => {
+    const run = readRun(
+      runRow({
+        status: 'completed',
+        phase: 'done',
+        touchList: {
+          ...touchList,
+          approvedAt: '2026-09-27T09:00:00Z',
+          items: [{ ...touchList.items[0], status: 'written' }],
+        },
+        review: { version: 'v1', verdict: 'passed', summary: 'không lệch hợp đồng' },
+      }),
+    )!
+    const host = render(
+      <DesignHandoffCard
+        run={run}
+        report={{ branch: { name: 'design/chat-panel-20260927-0900', base: 'abc1234' }, path: '.design/chat-panel/v1-design.md', version: 'v1', summary: 'xong' }}
+      />,
+    )
+    const card = host.querySelector('[data-testid="design-handoff-card"]')
+    expect(card).toBeTruthy()
+    expect(card?.textContent).toContain('design/chat-panel-20260927-0900')
+    expect(card?.textContent).toContain('abc1234')
+    expect(card?.textContent).toContain('.design/chat-panel/v1-design.md')
+    expect(card?.textContent).toContain('src/ui/ChatPanel.tsx')
+    expect(host.querySelector('[data-testid="design-handoff-verdict"]')?.getAttribute('data-verdict')).toBe('passed')
+    expect(host.querySelector('[data-testid="design-handoff-done"]')).toBeTruthy()
+    act(() => { host.remove() })
+  })
+
+  it('out-of-scope card: đúng hai đường, không có đường nào mặc định', () => {
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
+    const host = render(<DesignOutOfScopeCard run={run} prompt={outOfScopePrompt as never} />)
+    expect(host.querySelector('[data-testid="design-out-of-scope"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')?.getAttribute('aria-pressed')).toBeNull()
+    expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')?.getAttribute('aria-pressed')).toBeNull()
+    act(() => { host.remove() })
+  })
+
+  it('exit-choice card: hai lựa chọn kèm hệ quả, KHÔNG chọn sẵn', () => {
+    const prompt = {
+      promptId: 'dp-exit',
+      designId: DESIGN_ID,
+      kind: 'exit-choice',
+      status: 'open',
+      revision: 7,
+      createdAt: '',
+      note: '',
+      actions: [],
+      questions: [
+        {
+          id: 'exit',
+          text: 'Run còn đang chạy.',
+          allowFreeText: false,
+          required: true,
+          options: [
+            { id: 'pause', label: 'Tạm dừng run' },
+            { id: 'background', label: 'Tiếp tục chạy nền' },
+          ],
+        },
+      ],
+    }
+    const host = render(<DesignExitChoiceCard prompt={prompt as never} run={readRun(runRow({ background: false }))} />)
+    const pause = host.querySelector('[data-testid="design-exit-pause"]')
+    const background = host.querySelector('[data-testid="design-exit-background"]')
+    expect(pause).toBeTruthy()
+    expect(background).toBeTruthy()
+    expect(pause?.getAttribute('aria-pressed')).toBeNull()
+    expect(background?.getAttribute('aria-pressed')).toBeNull()
+    expect(host.textContent).toContain('Pause the run')
+    expect(host.textContent).toContain('Keep running in background')
+    act(() => { host.remove() })
+  })
+
+  it('canvas panel: hiện trạng thái Design Lead đang vẽ + đếm op bị từ chối', () => {
+    act(() => {
+      useDesignStore.setState({
+        runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+        sceneActor: { [DESIGN_ID]: 'agent' },
+        rejectedOps: 2,
+      })
+      useDesignStore.getState().applyEvent({
+        seq: 20,
+        type: 'design_canvas',
+        data: {
+          designId: DESIGN_ID,
+          actor: 'agent',
+          sceneVersion: 1,
+          ops: [
+            { type: 'CREATE_NODE', node: { id: 'n1', kind: 'ui-mockup', x: 0, y: 0, width: 10, height: 10, title: 't', body: '' } },
+          ],
+        },
+      })
+    })
+    const host = render(<DesignCanvasPanel />)
+    const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+    expect(live).toBeTruthy()
+    expect(live?.getAttribute('data-drawing')).toBe('true')
+    expect(live?.getAttribute('data-actor')).toBe('agent')
+    expect(live?.textContent).toContain('Design Lead')
+    expect(live?.textContent).toContain('2')
+    act(() => { host.remove() })
+  })
+})
+
+describe('tab Design (P5)', () => {
+  it('panel_shows_five_panes_and_switches_to_brief', () => {
+    act(() => {
+      useDesignStore.setState({ runs: [readRun(runRow({ status: 'briefing', phase: 'briefing' }))!] })
+    })
+    const host = render(<DesignPanel />)
+
+    expect(host.querySelector('[data-testid="design-panel"]')?.getAttribute('data-tab')).toBe('canvas')
+    for (const tab of ['canvas', 'brief', 'branch', 'review', 'report']) {
+      expect(host.querySelector(`[data-testid="design-panel-tab-${tab}"]`)).toBeTruthy()
+    }
+    expect(host.querySelector('[data-testid="design-panel-run"]')?.textContent).toContain('D-')
+
+    click(host, '[data-testid="design-panel-tab-brief"]')
+    const panel = host.querySelector('[data-testid="design-panel"]')
+    expect(panel?.getAttribute('data-tab')).toBe('brief')
+    expect(host.querySelector('[data-testid="design-brief-card"]')).toBeTruthy()
+
+    click(host, '[data-testid="design-panel-tab-review"]')
+    expect(host.querySelector('[data-testid="design-panel-review-empty"]')).toBeTruthy()
+    act(() => { host.remove() })
+  })
+
+  it('panel_keeps_an_empty_state_without_any_run', () => {
+    const host = render(<DesignPanel />)
+    click(host, '[data-testid="design-panel-tab-report"]')
+    expect(host.querySelector('[data-testid="design-panel-empty"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-handoff-card"]')).toBeFalsy()
+    act(() => { host.remove() })
   })
 })

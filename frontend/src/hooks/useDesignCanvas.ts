@@ -32,6 +32,8 @@ import {
   serialize,
   type CanvasView,
 } from '../lib/canvas'
+import { postCanvas } from '../lib/designApi'
+import { selectActiveRun, useDesignStore } from '../store/designStore'
 
 export type ToolMode = 'select' | 'hand' | 'pencil' | 'wireframe' | 'text' | 'arrow'
 
@@ -111,11 +113,18 @@ function translateStroke(stroke: CanvasStroke, delta: Point): CanvasStroke {
 }
 
 export function useDesignCanvas(): DesignCanvas {
-  const [history, setHistory] = useState<History>(() => ({
-    present: createInitialScene(),
-    past: [],
-    future: [],
-  }))
+  // Cảnh là CỦA STORE: agent vẽ qua sự kiện `design_canvas` ghi vào `designStore.scenes`, hook chỉ
+  // giữ lịch sử undo/redo quanh cảnh đó. Run đang mở quyết định cảnh nào (P2).
+  const designId = useDesignStore((s) => selectActiveRun(s)?.designId ?? '')
+  const storedScene = useDesignStore((s) => (designId ? s.scenes[designId] : undefined))
+  const [history, setHistory] = useState<History>(() => {
+    const state = useDesignStore.getState()
+    const id = selectActiveRun(state)?.designId ?? ''
+    const seed = id ? state.scenes[id] : undefined
+    return { present: seed ?? createInitialScene(), past: [], future: [] }
+  })
+  // Cảnh đã áp từ store (tránh đẩy lại chính nó thành một bước undo).
+  const appliedSceneRef = useRef<CanvasScene | null>(history.present)
   const [selection, setSelection] = useState<Set<string>>(() => new Set())
   const [activeTool, setActiveTool] = useState<ToolMode>('select')
   const [view, setViewState] = useState<CanvasView>({ scale: 1, pan: { x: 0, y: 0 }, origin: { x: 0, y: 0 } })
@@ -150,6 +159,13 @@ export function useDesignCanvas(): DesignCanvas {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(() => setSyncStatus('idle'), 3000)
   }, [])
+
+  // Cảnh agent vẽ được ghi vào store (nguồn sự thật); khi nó đổi, áp vào lịch sử như MỘT bước.
+  useEffect(() => {
+    if (!storedScene || storedScene === appliedSceneRef.current) return
+    appliedSceneRef.current = storedScene
+    commit(storedScene)
+  }, [storedScene, commit])
 
   /** Tọa độ world ở giữa khung nhìn hiện tại (để thêm node vào chỗ nhìn thấy). */
   const centerWorld = useCallback((): Point => {
@@ -411,25 +427,33 @@ export function useDesignCanvas(): DesignCanvas {
     [scene, transient],
   )
 
+  /** Gửi một thông điệp canvas tới server — đường thật `POST /sessions/{sid}/canvas`. */
+  const postCanvasMessage = useCallback((message: CanvasOutboundMessage) => {
+    const sessionId = useDesignStore.getState().sessionId
+    if (!sessionId) return
+    void postCanvas(sessionId, { ...message }).catch(() => {
+      // Lỗi mạng không chặn canvas cục bộ; cảnh vẫn nằm trong store và sẽ gửi lại ở lần sau.
+    })
+  }, [])
+
   const sendToAgent = useCallback((): string => {
     const message = buildCanvasMessage(scene)
-    // TODO(transport): khi backend hỗ trợ command canvas, thay mock dưới đây bằng
-    //   useAgentStore.getState().sendCommand(...) — hợp đồng `boxfox.canvas.v1` đã sẵn.
     setLastSentMessage(message)
+    postCanvasMessage(message)
     flashSync()
     return serialize(scene)
-  }, [flashSync, scene])
+  }, [flashSync, postCanvasMessage, scene])
 
   const instructAgent = useCallback(
     (nodeId: string) => {
       const node = nodeById(scene, nodeId)
       if (!node) return
       const directive = buildCanvasDirective(node.id, node.title || cardTitleFallback(node.card), AGENT_DIRECTIVE_TEXT)
-      // TODO(transport): điểm tích hợp transport thật sau này (xem sendToAgent).
       setLastSentMessage(directive)
+      postCanvasMessage(directive)
       flashSync()
     },
-    [flashSync, scene],
+    [flashSync, postCanvasMessage, scene],
   )
 
   const undo = useCallback(() => {

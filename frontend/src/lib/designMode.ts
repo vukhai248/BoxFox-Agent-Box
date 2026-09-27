@@ -90,12 +90,13 @@ export const PHASE_STEP: Record<string, DesignStepKey> = {
   done: 'handoff',
 }
 
-export function stepForPhase(phase: string): DesignStepKey {
-  return PHASE_STEP[phase] ?? 'clarify'
+/** Bước của một pha; pha lạ/`null` ⇒ bước đầu (không bao giờ ném). */
+export function stepForPhase(phase: unknown): DesignStepKey {
+  return PHASE_STEP[asString(phase)] ?? 'clarify'
 }
 
 /** Chỉ số (0-based) của bước đang chạy; bước cuối khi run đã đóng. */
-export function activeStepIndex(phase: string, status: string): number {
+export function activeStepIndex(phase: unknown, status: string): number {
   if (status === 'completed' || status === 'partial' || status === 'cancelled') {
     return DESIGN_STEPS.length - 1
   }
@@ -275,6 +276,75 @@ export interface DesignRun {
   touchList: DesignTouchList | null
   prompts: DesignPrompt[]
   phaseHistory: { phase: string; at: string; reason: string }[]
+  /** Lô ghi đang chờ duyệt/đã ghi (P3) — `null` khi run chưa ghi gì. */
+  batch: DesignBatch | null
+  /** Kết quả soát độc lập (P4) — `null` khi chưa soát. */
+  review: DesignReview | null
+}
+
+// ── Lô ghi + soát độc lập (P3/P4) ──────────────────────────────────────────
+
+export interface DesignBatchFile {
+  path: string
+  status: string
+  added: number
+  removed: number
+}
+
+/** Một lô ghi các tệp đã chạm — hợp đồng §5 (thẻ `design-diff-batch-card`). */
+export interface DesignBatch {
+  index: number
+  total: number
+  /** `'proposed' | 'approved' | 'reverted' | …` — giữ chuỗi thô để không bịa trạng thái. */
+  status: string
+  revision: number
+  /** Đường patch trên nhánh thiết kế (`.design/<slug>/diff.patch`). */
+  patchPath: string
+  added: number
+  removed: number
+  files: DesignBatchFile[]
+}
+
+export function readBatch(value: unknown): DesignBatch | null {
+  if (value === null || value === undefined) return null
+  const row = asRecord(value)
+  const files = (Array.isArray(row.files) ? row.files : []).map((entry) => {
+    const file = asRecord(entry)
+    return {
+      path: asString(file.path),
+      status: asString(file.status),
+      added: asNumber(file.added) ?? 0,
+      removed: asNumber(file.removed) ?? 0,
+    }
+  })
+  const patchPath = asString(row.patchPath)
+  if (!patchPath && files.length === 0) return null
+  return {
+    index: asNumber(row.index) ?? 0,
+    total: asNumber(row.total) ?? 0,
+    status: asString(row.status),
+    revision: asNumber(row.revision) ?? 0,
+    patchPath,
+    added: asNumber(row.added) ?? files.reduce((sum, file) => sum + file.added, 0),
+    removed: asNumber(row.removed) ?? files.reduce((sum, file) => sum + file.removed, 0),
+    files,
+  }
+}
+
+/** Vòng soát độc lập (P4) — `verdict` là chuỗi thô (`'passed'`, `'changes'`, …). */
+export interface DesignReview {
+  version: string
+  verdict: string
+  summary: string
+}
+
+export function readReview(value: unknown): DesignReview | null {
+  if (value === null || value === undefined) return null
+  const row = asRecord(value)
+  const verdict = asString(row.verdict)
+  const summary = asString(row.summary)
+  if (!verdict && !summary) return null
+  return { version: asString(row.version), verdict, summary }
 }
 
 /** Bước hiển thị của run: ưu tiên `step` backend gửi, thiếu thì suy từ pha. */
@@ -314,6 +384,8 @@ export function readRun(value: unknown): DesignRun | null {
     touchList,
     prompts: readPrompts(run.prompts),
     phaseHistory: readPhaseHistory(run.phaseHistory),
+    batch: readBatch(run.batch),
+    review: readReview(run.review),
   }
 }
 
@@ -323,14 +395,16 @@ export function readRuns(payload: unknown): DesignRun[] {
 }
 
 /** Run đang mở: ưu tiên `activeRunId`, nếu không thì run chưa đóng mới nhất. */
-export function activeRun(runs: readonly DesignRun[], activeRunId: string): DesignRun | null {
-  const pinned = activeRunId ? runs.find((run) => run.designId === activeRunId) : undefined
+export function activeRun(runs: readonly DesignRun[], activeRunId: unknown): DesignRun | null {
+  const pinned = activeRunId
+    ? runs.find((run) => run.designId === asString(activeRunId))
+    : undefined
   if (pinned) return pinned
   return runs.find((run) => !DESIGN_TERMINAL_STATUSES.includes(run.status)) ?? runs[0] ?? null
 }
 
 /** Sự kiện nào thuộc chế độ Design — một chỗ để luồng sự kiện và store không lệch nhau. */
-export function isDesignEvent(event: { type: string }): boolean {
+export function isDesignEvent<T extends { type: string }>(event: T): boolean {
   return event.type.startsWith('design_')
 }
 

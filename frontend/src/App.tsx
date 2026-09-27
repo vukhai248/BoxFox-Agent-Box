@@ -40,7 +40,7 @@ import { IdePanel } from './components/panels/IdePanel'
 import { LabelsLeasesPanel } from './components/panels/LabelsLeasesPanel'
 import { ModeSwitchCard } from './components/ModeSwitchCard'
 import { LabelDot } from './components/LabelDot'
-import { DesignCanvasPanel } from './components/panels/DesignCanvasPanel'
+import { DesignPanel } from './components/panels/design/DesignPanel'
 import { AuditPanel } from './components/panels/AuditPanel'
 import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
 import { WorkspaceFilesPanel } from './components/panels/workspace/WorkspaceFilesPanel'
@@ -232,7 +232,8 @@ export default function App() {
       case 'terminal':
         return <TerminalPanel />
       case 'design':
-        return <DesignCanvasPanel />
+        // P5: tab Design là vỏ năm ngăn (Canvas mặc định + Brief/Nhánh/Soát/Báo cáo).
+        return <DesignPanel />
       case 'decisions':
         return <DecisionsPanel />
       case 'pull_requests':
