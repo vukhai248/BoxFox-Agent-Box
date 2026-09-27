@@ -275,7 +275,6 @@ export interface DesignRun {
   touchListRevision: number
   touchList: DesignTouchList | null
   prompts: DesignPrompt[]
-  phaseHistory: { phase: string; at: string; reason: string }[]
   /** Lô ghi đang chờ duyệt/đã ghi (P3) — `null` khi run chưa ghi gì. */
   batch: DesignBatch | null
   /** Kết quả soát độc lập (P4) — `null` khi chưa soát. */
@@ -353,12 +352,6 @@ function readStep(value: unknown, phase: string): DesignStepKey {
   return (DESIGN_STEPS as readonly string[]).includes(text) ? (text as DesignStepKey) : stepForPhase(phase)
 }
 
-function readPhaseHistory(value: unknown): { phase: string; at: string; reason: string }[] {  return (Array.isArray(value) ? value : []).map((entry) => {
-    const row = asRecord(entry)
-    return { phase: asString(row.phase), at: asString(row.at), reason: asString(row.reason) }
-  })
-}
-
 /** Một run từ `unknown`; thiếu `designId` ⇒ `null`. */
 export function readRun(value: unknown): DesignRun | null {
   const run = asRecord(value)
@@ -383,7 +376,6 @@ export function readRun(value: unknown): DesignRun | null {
     touchListRevision: asNumber(run.touchListRevision) ?? touchList?.revision ?? 0,
     touchList,
     prompts: readPrompts(run.prompts),
-    phaseHistory: readPhaseHistory(run.phaseHistory),
     batch: readBatch(run.batch),
     review: readReview(run.review),
   }

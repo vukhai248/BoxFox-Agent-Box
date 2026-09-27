@@ -122,7 +122,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
     touchListRevision: 3,
     touchList,
     prompts: [interviewPrompt],
-    phaseHistory: [],
     ...overrides,
   }
 }

@@ -112,8 +112,8 @@ def design_job_pumpable(runtime, job, session):
 
 
 async def design_continuation_step(runtime):
-    """Resume eligible design jobs once. P1 chưa có pha `scaffolding`/`reviewing`, nên vòng này
-    đứng yên cho tới khi P2/P3 mở một run tới đó; móc nối sẵn để đợt sau không phải sửa vòng bơm.
+    """Bơm lại một lần cho mỗi run design đủ điều kiện: phải đang ở pha `scaffolding`/`reviewing`
+    và qua được `design_job_pumpable` (mode đang bật với `activeRunId`, hoặc cờ chạy nền).
     """
     for job in runtime.store.design_jobs_active():
         try:

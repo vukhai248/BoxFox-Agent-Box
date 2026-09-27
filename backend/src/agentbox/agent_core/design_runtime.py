@@ -25,15 +25,16 @@ from .limits import (
     DESIGN_BRANCH_REQUIRED_CODE, DESIGN_CANVAS_PROTOCOL_INVALID_CODE,
     DESIGN_DIFF_DIRTY_BASE_CODE, DESIGN_HANDOFF_UNREVIEWED_CODE, DESIGN_INTERVIEW_IDS,
     DESIGN_INTERVIEW_MAX_QUESTIONS, DESIGN_MODE_EVENT_CODE, DESIGN_OWNED_PREFIX,
-    DESIGN_PATH_NOT_APPROVED_CODE, DESIGN_PROMPT_KINDS, DESIGN_REVIEW_NO_CRITIC_CODE,
-    DESIGN_REVIEW_VERDICT_MISMATCH_CODE, DESIGN_REVIEW_VERDICT_MISSING_CODE, DESIGN_STEPS,
-    DESIGN_TOUCH_KINDS, DESIGN_TOUCH_LIST_REQUIRED_CODE, DESIGN_TOUCH_LIST_REVISION_STALE_CODE,
-    DESIGN_TOUCH_STATUSES, DESIGN_WRITE_STALE_CODE, PLAN_REVIEW_MIN_ANSWER_CHARS,
+    DESIGN_PATH_NOT_APPROVED_CODE, DESIGN_PHASES, DESIGN_PROMPT_KINDS,
+    DESIGN_REVIEW_NO_CRITIC_CODE, DESIGN_REVIEW_VERDICT_MISMATCH_CODE,
+    DESIGN_REVIEW_VERDICT_MISSING_CODE, DESIGN_STATUSES, DESIGN_STEPS,
+    DESIGN_TERMINAL_STATUSES, DESIGN_TOUCH_KINDS, DESIGN_TOUCH_LIST_REQUIRED_CODE,
+    DESIGN_TOUCH_LIST_REVISION_STALE_CODE, DESIGN_TOUCH_STATUSES, DESIGN_WRITE_STALE_CODE,
+    PLAN_REVIEW_MIN_ANSWER_CHARS,
 )
 
-# Bảy bước và tám pha được hợp đồng §2 đặt trong mô-đun này; `limits` là nguồn duy nhất, ở đây chỉ
-# tái xuất cho `design_runtime.PHASE_STEP`/`DESIGN_STEPS` khớp hợp đồng.
-from .limits import DESIGN_PHASES, DESIGN_STATUSES, DESIGN_TERMINAL_STATUSES  # noqa: E402
+# `DESIGN_PHASES`/`DESIGN_STATUSES` chỉ có mặt ở đây để TÁI XUẤT: hợp đồng §2 chốt chúng là thuộc
+# tính của mô-đun này (`design_runtime.DESIGN_PHASES`), còn luật đọc chúng nằm ở `limits`.
 
 #: Bảy bước hiển thị của một run, và pha → bước (hợp đồng design-interfaces §2).
 PHASE_STEP = {'interviewing': 'clarify', 'briefing': 'brief', 'touch-list': 'approve',
@@ -1054,8 +1055,7 @@ def design_prompt_new(rt, session_id, job, kind, questions=None, meta=None):
               'createdAt': journal.utc_now_iso(), 'questions': list(questions or []),
               'actions': ['chooseExit'] if kind == 'exit-choice' else ['start', 'answer'],
               'note': str(meta.get('note') or '')}
-    prompts = [item for item in (state.get('prompts') or [])
-               if item.get('promptId') != prompt['promptId']]
+    prompts = list(state.get('prompts') or [])
     prompts.append(prompt)
     state['prompts'] = prompts
     # §6.3/§7.8: một lời hỏi có câu BẮT BUỘC là câu CHẶN — run dừng ở `needs_user` tới khi chủ nhà

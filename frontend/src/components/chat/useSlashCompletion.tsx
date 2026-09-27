@@ -22,27 +22,13 @@ export const RESEARCH_MODE_COMMANDS = new Set([
 ])
 
 /**
- * Lệnh còn dùng được khi chế độ Design đang bật (P1).
+ * Lệnh còn dùng được khi MỘT chế độ đang bật (P1).
  *
- * Cùng lý do với `RESEARCH_MODE_COMMANDS`: giữa một design run, một lệnh VAI sẽ mở lượt vai khác và
- * phá ranh giới mà chế độ Design dựng ra. Vì cả hai chế độ chia một ô soạn tin, danh sách lọc là HỢP
- * của hai bộ — người dùng đang ở chế độ nào thì vẫn thấy đủ lệnh điều khiển của cả hai.
+ * Cùng lý do với `RESEARCH_MODE_COMMANDS`: giữa một run, một lệnh VAI sẽ mở lượt vai khác và phá
+ * ranh giới mà chế độ dựng ra. Vì cả hai chế độ chia một ô soạn tin, danh sách lọc là HỢP của hai
+ * bộ — người dùng đang ở chế độ nào thì vẫn thấy đủ lệnh điều khiển của cả hai.
  */
-export const DESIGN_MODE_COMMANDS = new Set([
-  'design',
-  'research',
-  'stop',
-  'context',
-  'compact',
-  'help',
-  'status',
-  'skills',
-  'agents',
-  'skill',
-])
-
-/** Danh sách lọc dùng chung khi BẤT KỲ chế độ nào đang bật. */
-export const MODE_COMMANDS = new Set([...RESEARCH_MODE_COMMANDS, ...DESIGN_MODE_COMMANDS])
+export const MODE_COMMANDS = new Set([...RESEARCH_MODE_COMMANDS, 'design'])
 
 export function useSlashCompletion(input: string, change: (value: string) => void, options?: { modeOnly?: boolean }) {
   const { commands, load } = useCommandsStore()

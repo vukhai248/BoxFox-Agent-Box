@@ -145,7 +145,6 @@ function mergeRun(current: DesignRun | null, data: Json): DesignRun | null {
     touchListRevision: current?.touchListRevision ?? 0,
     touchList: current?.touchList ?? null,
     prompts: current?.prompts ?? [],
-    phaseHistory: current?.phaseHistory ?? [],
     // Lô ghi/soát độc lập: nhận từ sự kiện nếu backend gửi kèm, ngược lại giữ cái đang có
     // (tuyến chi tiết `refreshDetail` là nguồn chính).
     batch: readBatch(data.batch) ?? current?.batch ?? null,
@@ -335,8 +334,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         ...job,
         prompts: envelope.prompts ?? job.prompts,
         touchList: envelope.touchList ?? job.touchList,
-        // Lô ghi: backend đang gọi nó là `diff` (`{files, patchPath, at}`, §6.5) — nhận cả hai tên.
-        batch: job.batch ?? envelope.batch ?? job.diff ?? envelope.diff,
+        batch: job.batch ?? envelope.batch,
         review: job.review ?? envelope.review,
       })
       if (!run) return

@@ -3562,12 +3562,7 @@ class HarnessRuntime(RuntimeCommands):
 
     def mark_design_handoff_delivered(self, session, design_id, version):
         """Ghim bản thiết kế đã bàn giao — lượt main kế tiếp không nhắc lại cùng một bản (§4)."""
-        mode = design_mode(session)
-        delivered = dict(mode.get('handoffDeliveredVersion') or {})
-        delivered[str(design_id)] = str(version)
-        mode['handoffDeliveredVersion'] = delivered
-        session.setdefault('config', {})[DESIGN_MODE_CONFIG_KEY] = mode
-        self.store.update_config(session['id'], session['config'])
+        design_runtime.mark_design_handoff_delivered(self, session['id'], design_id, version)
 
     def background_design_run(self, session_id, design_id, reason):
         """Đánh dấu một run design là CHẠY NỀN rồi trả về hàng job (§4) — luật ở `design_runtime`."""
@@ -6000,7 +5995,8 @@ class HarnessRuntime(RuntimeCommands):
             current = str(mode.get('activeRunId') or '')
             active = self.store.design_job(current) if current else None
             if active is None or active['session_id'] != session['id']:
-                job = design_runtime.new_design_job(self, session['id'], goal, origin='delegate',
+                job = design_runtime.new_design_job(self, session['id'], goal,
+                                                    origin=design_runtime.DESIGN_DELEGATE_ORIGIN,
                                                     entered_by='delegate')
                 if mode['on']:
                     mode['activeRunId'] = job['design_id']

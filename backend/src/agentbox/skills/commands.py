@@ -190,34 +190,22 @@ class CommandRegistry:
                     raise ValueError('This command takes no arguments')
                 result.kind = 'control'
                 return result
-            if key == 'research':
-                from ..agent_core.runtime import research_mode_available
-                if research_mode_available():
-                    # Lệnh MODE: `/research` (rỗng) bật mode, `/research <text>` bật + nộp lượt,
-                    # `/research off` và `/research status` là hai từ khoá điều khiển.
-                    result.kind, result.command, result.reason = 'mode', 'research', 'mode_command'
+            if key in ('research', 'design'):
+                from ..agent_core import runtime as _runtime
+                # Lệnh MODE (§5.2): `/x` (rỗng) bật mode, `/x <text>` bật + mở lượt, `/x off` và
+                # `/x status` là hai từ khoá điều khiển — chỉ khi công tắc của mode đó đang bật.
+                available = (_runtime.research_mode_available() if key == 'research'
+                             else _runtime.design_mode_available())
+                if available:
+                    result.kind, result.command, result.reason = 'mode', key, 'mode_command'
                     low = args.strip().lower()
                     result.prompt = '' if low in ('', 'on') else (low if low in ('off', 'status')
                                                                   else args.strip())
                     self.validate_skills(result.skills, enabled, result.executor, result.role)
                     return result
-                # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai research.
-                result.kind, result.role = 'task', 'research'
-                result.skills = sorted(set(enabled) & ROLE_SKILLS['research'])
-            elif key == 'design':
-                from ..agent_core.runtime import design_mode_available
-                if design_mode_available():
-                    # Lệnh MODE: `/design` (rỗng) bật mode, `/design <text>` bật + mở run,
-                    # `/design off` và `/design status` là hai từ khoá điều khiển.
-                    result.kind, result.command, result.reason = 'mode', 'design', 'mode_command'
-                    low = args.strip().lower()
-                    result.prompt = '' if low in ('', 'on') else (low if low in ('off', 'status')
-                                                                  else args.strip())
-                    self.validate_skills(result.skills, enabled, result.executor, result.role)
-                    return result
-                # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai design.
-                result.kind, result.role = 'task', 'design'
-                result.skills = sorted(set(enabled) & ROLE_SKILLS['design'])
+                # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai cùng tên.
+                result.kind, result.role = 'task', key
+                result.skills = sorted(set(enabled) & ROLE_SKILLS[key])
             elif key in ROLE_COMMANDS:
                 result.kind, result.role = 'task', ROLE_COMMANDS[key]
                 result.skills = sorted(set(enabled) & ROLE_SKILLS[result.role])

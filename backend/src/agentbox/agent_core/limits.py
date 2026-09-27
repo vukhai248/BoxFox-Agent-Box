@@ -737,7 +737,6 @@ DESIGN_MODE_DEFAULT_MODE = 'on'
 #: Khoá cấu hình của chế độ: `session.config.designMode` (plan v1 §7.4).
 DESIGN_MODE_CONFIG_KEY = 'designMode'
 DESIGN_MODE_EVENT_CODE = 'design_mode'
-DESIGN_MODE_ENTRY_BY = ('toggle', 'command')
 
 #: Cặp mốc khối lời dặn và khối bàn giao — hợp đồng để `_sync_mode_block` GỠ khối cũ trước khi chèn
 #: khối mới (chỉ-ghi-thêm thì mỗi bản thiết kế để lại một khối nằm mãi trong prompt hệ thống).
@@ -779,7 +778,6 @@ DESIGN_ACTIVE_STATUSES = ('scoping', 'designing', 'writing', 'reviewing')
 DESIGN_TOUCH_KINDS = ('new', 'insert')
 DESIGN_TOUCH_STATUSES = ('proposed', 'approved', 'rejected', 'written')
 DESIGN_PROMPT_KINDS = ('interview', 'exit-choice', 'touch-list')
-DESIGN_EXIT_CHOICES = ('pause', 'background')
 
 #: 20 mã lỗi (plan v1 §7.6). Tên hằng `*_CODE` BẰNG chính mã — một quy ước để test đối chiếu tên.
 DESIGN_MODE_UNAVAILABLE_CODE = 'DESIGN_MODE_UNAVAILABLE'
