@@ -187,3 +187,90 @@ describe('designStore — thông báo nền và hàng đợi lượt main (P5 §
     expect(useDesignStore.getState().pendingTurn).toBe('')
   })
 })
+
+/**
+ * BUG-B: thẻ thoát không được quay lại sau khi chủ nhà đã chọn.
+ *
+ * Backend đóng lời hỏi `exit-choice` là fix chính; đây là lớp phòng thủ phía client — một lời hỏi
+ * còn MỞ không bao giờ được dựng/vẽ thẻ khi `mode.on === false`, và chế độ tắt phải xoá thẻ đang có.
+ */
+describe('designStore — thẻ thoát chỉ sống khi chế độ BẬT (BUG-B)', () => {
+  const exitPrompt = {
+    promptId: 'dp-exit',
+    designId: DESIGN_ID,
+    kind: 'exit-choice',
+    status: 'open',
+    revision: 4,
+    note: '',
+    createdAt: '',
+    actions: [],
+    questions: [
+      {
+        id: 'exit',
+        text: 'Run còn đang chạy.',
+        allowFreeText: false,
+        required: true,
+        options: [
+          { id: 'pause', label: 'Tạm dừng run' },
+          { id: 'background', label: 'Tiếp tục chạy nền' },
+        ],
+      },
+    ],
+  }
+
+  const runWithOpenExit = {
+    designId: DESIGN_ID,
+    sessionId: 's-store',
+    status: 'designing',
+    phase: 'drawing',
+    origin: 'mode',
+    background: false,
+    revision: 7,
+    prompts: [exitPrompt],
+  }
+
+  /** `refresh()` trả về payload run CÒN mang lời hỏi mở — đúng ca backend chưa kịp đóng. */
+  function stubRunsWithExit() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ runs: [runWithOpenExit] }) }) as unknown as Response),
+    )
+  }
+
+  it('refresh() khi chế độ đã tắt mà payload vẫn mang lời hỏi mở ⇒ KHÔNG dựng lại thẻ', async () => {
+    stubRunsWithExit()
+    useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: false, activeRunId: DESIGN_ID }, exitChoice: null })
+    await useDesignStore.getState().refresh()
+    expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+
+  it('refresh() khi chế độ còn BẬT vẫn dựng thẻ thoát từ lời hỏi mở (guard không phá luồng đúng)', async () => {
+    stubRunsWithExit()
+    useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID } })
+    await useDesignStore.getState().refresh()
+    expect(useDesignStore.getState().exitChoice?.prompt.promptId).toBe('dp-exit')
+  })
+
+  it('sự kiện `design_mode` tắt xoá thẻ thoát đang hiện', () => {
+    useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID }, exitChoice: null })
+    useDesignStore.getState().applyEvent({ seq: 51, type: 'design_prompt', data: exitPrompt })
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+    useDesignStore.getState().applyEvent({ seq: 52, type: 'design_mode', data: { on: false, by: 'toggle' } })
+    expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+
+  it('sự kiện `design_prompt` exit-choice khi chế độ TẮT không dựng thẻ', () => {
+    useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: false }, exitChoice: null })
+    useDesignStore.getState().applyEvent({ seq: 53, type: 'design_prompt', data: exitPrompt })
+    expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+
+  it('sync() với config chế độ tắt xoá thẻ thoát đang hiện', () => {
+    useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID }, exitChoice: null })
+    useDesignStore.getState().applyEvent({ seq: 54, type: 'design_prompt', data: exitPrompt })
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+    stubRunsWithExit()
+    useDesignStore.getState().sync('s-store', { designMode: { on: false } }, [])
+    expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+})

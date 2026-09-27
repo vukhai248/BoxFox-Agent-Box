@@ -9,6 +9,7 @@ import {
   activeRun,
   activeStepIndex,
   asVersionString,
+  designErrorKey,
   isDesignEvent,
   openExitPrompt,
   readDesignMode,
@@ -240,5 +241,27 @@ describe('chuẩn hoá phiên bản và loại lời hỏi (P5)', () => {
     expect(readPromptKind('out-of-scope')).toBe('out-of-scope')
     expect(readPromptKind('bịa')).toBe('unknown')
     expect(readPromptKind(undefined)).toBe('unknown')
+  })
+})
+
+describe('câu đọc được cho mã lỗi tầng worker (vi + en)', () => {
+  it('mọi mã worker còn thiếu đều có khoá i18n trong bảng', () => {
+    for (const code of [
+      'DESIGN_PATH_INVALID',
+      'DESIGN_WRITE_INVALID',
+      'DESIGN_REVERT_INVALID',
+      'DESIGN_REVERT_FAILED',
+      'DESIGN_BASE_INVALID',
+      'DESIGN_GIT_TIMEOUT',
+    ] as const) {
+      expect(designErrorKey(code)).toBe(`design.errors.${code}`)
+    }
+  })
+
+  it('mã đã có từ trước KHÔNG đổi tên/khoá; mã lạ vẫn rơi về thông điệp thô (dự phòng giữ nguyên)', () => {
+    expect(designErrorKey('DESIGN_WRITE_EXISTS')).toBe('design.errors.DESIGN_WRITE_EXISTS')
+    expect(designErrorKey('DESIGN_ANCHOR_NOT_UNIQUE')).toBe('design.errors.DESIGN_ANCHOR_NOT_UNIQUE')
+    expect(designErrorKey('DESIGN_BỊA')).toBeNull()
+    expect(designErrorKey('')).toBeNull()
   })
 })

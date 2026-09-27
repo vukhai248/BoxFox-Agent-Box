@@ -517,6 +517,13 @@ export const DESIGN_ERROR_KEY: Record<string, TKey> = {
   DESIGN_WRITE_EXISTS: 'design.errors.DESIGN_WRITE_EXISTS',
   DESIGN_WRITE_MISSING: 'design.errors.DESIGN_WRITE_MISSING',
   DESIGN_ANCHOR_NOT_UNIQUE: 'design.errors.DESIGN_ANCHOR_NOT_UNIQUE',
+  // Mã ở tầng op worker trong box: trước đây rơi vào dự phòng thô, giờ có câu đọc được (vi + en).
+  DESIGN_PATH_INVALID: 'design.errors.DESIGN_PATH_INVALID',
+  DESIGN_WRITE_INVALID: 'design.errors.DESIGN_WRITE_INVALID',
+  DESIGN_REVERT_INVALID: 'design.errors.DESIGN_REVERT_INVALID',
+  DESIGN_REVERT_FAILED: 'design.errors.DESIGN_REVERT_FAILED',
+  DESIGN_BASE_INVALID: 'design.errors.DESIGN_BASE_INVALID',
+  DESIGN_GIT_TIMEOUT: 'design.errors.DESIGN_GIT_TIMEOUT',
   DESIGN_WRITE_STALE: 'design.errors.DESIGN_WRITE_STALE',
   DESIGN_DIFF_DIRTY_BASE: 'design.errors.DESIGN_DIFF_DIRTY_BASE',
   DESIGN_REVIEW_NO_CRITIC: 'design.errors.DESIGN_REVIEW_NO_CRITIC',

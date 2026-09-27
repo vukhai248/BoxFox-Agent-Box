@@ -218,7 +218,12 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   applyEvent: (event) => {
     const data = asRecord(event.data)
     if (event.type === 'design_mode') {
-      set({ mode: { ...get().mode, on: asBool(data.on), enteredBy: asString(data.by) } })
+      const on = asBool(data.on)
+      set({
+        mode: { ...get().mode, on, enteredBy: asString(data.by) },
+        // Chế độ vừa TẮT ⇒ lời hỏi thoát không còn nghĩa: xoá NGAY, không đợi lần tải sau dựng lại thẻ.
+        ...(on ? {} : { exitChoice: null }),
+      })
       return
     }
     if (event.type === 'design_canvas') {
@@ -248,7 +253,10 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         ? get().prompts.map((item) => (item.promptId === prompt.promptId ? prompt : item))
         : [...get().prompts, prompt]
       set({ prompts })
-      if (prompt.kind === 'exit-choice' && prompt.status === 'open') {
+      // Thẻ thoát CHỈ có nghĩa khi chế độ còn BẬT: server đóng lời hỏi là fix chính, còn đây là lớp
+      // phòng thủ phía client — một lời hỏi `exit-choice` còn mở không bao giờ được dựng thẻ sau khi
+      // chế độ đã tắt (nếu không, chủ nhà chọn xong vẫn thấy thẻ quay lại và phải chọn lần nữa).
+      if (prompt.kind === 'exit-choice' && prompt.status === 'open' && get().mode.on) {
         set({ exitChoice: { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt, message: prompt.note } })
       }
     }
@@ -330,6 +338,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       mode,
       activeRunId: mode.activeRunId || (switched ? '' : get().activeRunId),
       prompts: switched ? [] : get().prompts,
+      // Chế độ tắt theo config ⇒ thẻ thoát đang hiện cũng phải biến mất.
+      exitChoice: mode.on ? get().exitChoice : null,
       lastEventSeq: events.reduce(
         (max, event) => (isDesignEvent(event) ? Math.max(max, event.seq) : max),
         switched ? 0 : get().lastEventSeq,
@@ -346,14 +356,20 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     try {
       const runs = readRuns(await fetchDesignRuns(sessionId))
       const exitPrompt = openExitPrompt(runs)
+      // Chỉ giữ/dựng lại thẻ thoát khi chế độ còn BẬT: sau khi chủ nhà đã chọn lối thoát, `refresh()`
+      // (và `sync()` gọi nó) có thể còn thấy lời hỏi mở trong payload run nếu server chưa kịp đóng —
+      // khi đó thẻ KHÔNG được vẽ lại, và nó cũng tự biến mất vì `mode.on` đã là false.
+      const modeOn = get().mode.on
       set({
         runs,
         error: null,
         loading: false,
         prompts: mergePrompts(get().prompts, runs.flatMap((run) => run.prompts)),
-        exitChoice: exitPrompt
-          ? { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt: exitPrompt, message: exitPrompt.note }
-          : get().exitChoice?.prompt.status === 'open' ? get().exitChoice : null,
+        exitChoice: !modeOn
+          ? null
+          : exitPrompt
+            ? { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt: exitPrompt, message: exitPrompt.note }
+            : get().exitChoice?.prompt.status === 'open' ? get().exitChoice : null,
       })
       const foreground = activeRun(runs, get().mode.activeRunId || get().activeRunId)
       if (foreground) void get().refreshDetail(foreground.designId)
@@ -414,7 +430,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   resolveExit: async (choice) => {
     const sessionId = get().sessionId
     const previous = get().exitChoice
-    const active = previous?.prompt.designId || get().mode.activeRunId
+    // Chốt chống nộp trùng: lối thoát chỉ có nghĩa khi ĐANG có lời hỏi chờ. Lần chọn thứ hai — kể cả
+    // double-click trong cùng một nhịp, trước khi React kịp gỡ thẻ — thấy `exitChoice` đã bị xoá ở
+    // lần đầu nên trả về ngay, KHÔNG gửi thêm `PUT …/design-mode` và không nộp thêm lượt main.
+    if (!previous) return
+    const active = previous.prompt.designId || get().mode.activeRunId
     set({ exitChoice: null })
     if (!sessionId) {
       set({ exitChoice: previous })

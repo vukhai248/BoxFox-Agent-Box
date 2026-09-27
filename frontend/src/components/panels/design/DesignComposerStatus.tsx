@@ -30,7 +30,9 @@ export function DesignComposerStatus() {
   const runs = useDesignStore((s) => s.runs)
   const exitChoice = useDesignStore((s) => s.exitChoice)
   const setMode = useDesignStore((s) => s.setMode)
-  if (exitChoice) {
+  // Lời hỏi thoát chỉ được vẽ khi chế độ CÒN BẬT: `mode.on === false` mà vẫn còn lời hỏi mở (ví dụ
+  // payload cũ chưa kịp đóng) KHÔNG được dựng thẻ — chủ nhà đã quyết rồi thì không hỏi lại.
+  if (exitChoice && mode.on) {
     const exitRun = runs.find((item) => item.designId === exitChoice.prompt.designId) ?? run
     return (
       <div className="mb-2">

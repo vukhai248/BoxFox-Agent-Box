@@ -781,6 +781,94 @@ describe('thông báo, chạy nền và điều khiển run (P5 §5.1/§5.2/§5.
     act(() => { strip.remove() })
   })
 
+  it('BUG-B: chế độ đã tắt mà lời hỏi thoát còn mở ⇒ DesignComposerStatus KHÔNG vẽ thẻ', () => {
+    const prompt = readPrompt({
+      promptId: 'dp-exit',
+      designId: DESIGN_ID,
+      kind: 'exit-choice',
+      status: 'open',
+      revision: 4,
+      questions: [
+        {
+          id: 'exit',
+          text: 'Run còn đang chạy.',
+          allowFreeText: false,
+          required: true,
+          options: [
+            { id: 'pause', label: 'Tạm dừng run' },
+            { id: 'background', label: 'Tiếp tục chạy nền' },
+          ],
+        },
+      ],
+    })!
+    act(() => {
+      useDesignStore.setState({
+        mode: { ...DESIGN_MODE_OFF },
+        exitChoice: { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt, message: '' },
+      })
+    })
+    const strip = render(<DesignComposerStatus />)
+    // Không thẻ thoát, và cũng không dải trạng thái (vì chế độ đã tắt).
+    expect(strip.querySelector('[data-testid="design-exit-choice"]')).toBeNull()
+    expect(strip.querySelector('[data-testid="design-mode-strip"]')).toBeNull()
+    act(() => { strip.remove() })
+  })
+
+  it('BUG-B: bấm nút Design hai lần khi lời hỏi thoát đang chờ ⇒ CHỈ một PUT …/design-mode', async () => {
+    const api = stubApi()
+    act(() => {
+      useDesignStore.setState({
+        mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID },
+        runs: [readRun(runRow())!],
+      })
+    })
+    const host = render(<DesignToggle />)
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="composer-design-toggle"]')!
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // Lần bấm thứ hai gặp `exitChoice` đang chờ ⇒ chốt cũ chặn ngay, không sinh lời hỏi thứ hai.
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    expect(api.calls.filter((call) => call.url.includes('/design-mode'))).toHaveLength(1)
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+    expect(useDesignStore.getState().mode.on).toBe(true)
+    act(() => { host.remove() })
+  })
+
+  it('BUG-B: chọn lối thoát hai lần trong cùng một nhịp ⇒ CHỈ một PUT …/design-mode mang exitChoice', async () => {
+    const api = stubApi()
+    act(() => {
+      useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID }, runs: [readRun(runRow())!] })
+    })
+    await act(async () => { await useDesignStore.getState().setMode(false, 'toggle') })
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+    const strip = render(<DesignComposerStatus />)
+    const pause = strip.querySelector<HTMLButtonElement>('[data-testid="design-exit-pause"]')!
+    await act(async () => {
+      pause.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      pause.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(api.calls.filter((call) => call.body?.exitChoice === 'pause')).toHaveLength(1)
+    act(() => { strip.remove() })
+  })
+
+  it('BUG-C: màn "Phiên mới" — nút Design bị khoá kèm chú thích và KHÔNG gửi PUT nào', async () => {
+    const api = stubApi()
+    act(() => {
+      useDesignStore.setState({ sessionId: '', mode: { ...DESIGN_MODE_OFF } })
+    })
+    const host = render(<DesignToggle />)
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="composer-design-toggle"]')!
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.getAttribute('data-no-session')).toBe('true')
+    // I18nProvider mặc định tiếng Anh — chú thích lấy từ `design.toggleNoSession`.
+    expect(button.getAttribute('title')).toBe('Create a session before turning on Design mode.')
+    expect(host.querySelector('[data-testid="design-no-session-note"]')?.textContent).toContain('Create a session')
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(api.calls.filter((call) => call.url.includes('/design-mode'))).toHaveLength(0)
+    act(() => { host.remove() })
+  })
+
   it('out-of-scope: "Tạm thoát" theo luật thoát rồi nộp lượt main; "Giữ" chỉ trả lời', async () => {
     const api = stubApi()
     seedSession()
