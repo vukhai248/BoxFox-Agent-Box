@@ -1,0 +1,130 @@
+{
+  "id": "SD3",
+  "case": "misattributed",
+  "kind": "misattributed",
+  "detector": "misattributed",
+  "reviewer": "verifier",
+  "expectation": "Nhận định gán cho nguồn không nhắc tới nó (hoặc sai host) là lỗi phải bắt.",
+  "request": "Nhận định gán cho nguồn không nhắc tới nó (hoặc sai host) là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://vanban.example/post",
+          "host": "vanban.example",
+          "tier": 2,
+          "excerpt": "Nghị định 13/2023/NĐ-CP quy định về bảo vệ dữ liệu cá nhân.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Nghị định 13/2023/NĐ-CP quy định về bảo vệ dữ liệu cá nhân.",
+          "claimType": "event",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ],
+          "subject": "Nghị định 13/2023/NĐ-CP",
+          "attributedTo": "vanban.example"
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://study.example/post",
+          "host": "study.example",
+          "tier": 2,
+          "excerpt": "The registry lists 4 200 confirmed cases in 2024.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "The registry lists 4 200 confirmed cases in 2024.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ],
+          "subject": "4 200",
+          "attributedTo": "study.example"
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://vanban.example/post",
+          "host": "vanban.example",
+          "tier": 2,
+          "excerpt": "Nghị định 52/2013/NĐ-CP quy định về thương mại điện tử.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Nghị định 13/2023/NĐ-CP quy định về bảo vệ dữ liệu cá nhân.",
+          "claimType": "event",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ],
+          "subject": "Nghị định 13/2023/NĐ-CP",
+          "attributedTo": "vanban.example"
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://oldblog.example/post",
+          "host": "oldblog.example",
+          "tier": 2,
+          "excerpt": "The registry lists 4 200 confirmed cases in 2024.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "The registry lists 4 200 confirmed cases in 2024.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ],
+          "subject": "4 200",
+          "attributedTo": "study.example"
+        }
+      ]
+    }
+  ]
+}

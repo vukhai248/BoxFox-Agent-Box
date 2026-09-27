@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { ALL_PANEL_TABS } from './store/uiStore'
-import { availablePanelTabs, isPanelTabAvailable } from './App'
+import { TAB_ICON, availablePanelTabs, isPanelTabAvailable } from './App'
 
 const DEV = { DEV: true } as ImportMetaEnv
 const PROD = { DEV: false } as ImportMetaEnv
@@ -36,5 +36,29 @@ describe('tab Nhật ký hệ thống chỉ có trong chế độ dev', () => {
     for (const id of ALL_PANEL_TABS.filter((value) => value !== 'system_log')) {
       expect(isPanelTabAvailable(id, PROD)).toBe(true)
     }
+  })
+})
+
+/**
+ * #6108 — icon của tab Research phải khác tab Sub-agents: người dùng yêu cầu đổi
+ * icon để không nhầm "workspace Research" với "workspace sub agent". Khoá cả hai
+ * đường: sổ `TAB_ICON` (thứ TabBar vẽ) và mục trong menu "Open Workspace".
+ */
+describe('icon tab Research tách khỏi tab Sub-agents (#6108)', () => {
+  it('tab Research dùng icon riêng, không trùng tab Sub-agents', () => {
+    expect(TAB_ICON.research).toBeTruthy()
+    expect(TAB_ICON.research).not.toBe(TAB_ICON.subagents)
+  })
+
+  it('mục Research trong menu Open Workspace dùng đúng icon riêng đó', () => {
+    const entry = availablePanelTabs(DEV).find((tab) => tab.id === 'research')
+    expect(entry?.icon).toBe(TAB_ICON.research)
+    expect(entry?.icon).not.toBe(TAB_ICON.subagents)
+  })
+
+  it('mỗi tab trong sổ đăng ký có một icon riêng', () => {
+    const icons = ALL_PANEL_TABS.map((id) => TAB_ICON[id])
+    expect(icons.every(Boolean)).toBe(true)
+    expect(new Set(icons).size).toBe(icons.length)
   })
 })

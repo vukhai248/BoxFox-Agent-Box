@@ -51,7 +51,7 @@
   ["/plan inspect auth architecture", "plan"],
   ["/review check the diff", "review"],
   ["/test run regression checks", "testing"],
-  ["/research tìm tài liệu chính thức", "research"],
+  ["/research tìm tài liệu chính thức", "mode"],
   ["/explore locate the router", "explore"],
   ["/debug isolate the failure", "debug"],
   ["/simplify refactor this module", "simplify"],

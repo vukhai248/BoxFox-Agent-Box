@@ -875,8 +875,9 @@ def test_owner_views_three_labels_truot_thieu_nguon(tmp_path, evalmods):
 def test_bang_ten_oracle_khop_rubric_va_dung_thu_tu(evalmods):
     """`rubric.RESEARCH_CHECKS` và `research_checks.CHECKS` là CÙNG một danh sách, cùng thứ tự."""
     assert evalmods.rubric.RESEARCH_CHECKS == tuple(evalmods.checks.CHECKS)
-    assert len(evalmods.rubric.RESEARCH_CHECKS) == 27
-    assert len(set(evalmods.rubric.RESEARCH_CHECKS)) == 27
+    assert len(evalmods.rubric.RESEARCH_CHECKS) == 28
+    assert len(set(evalmods.rubric.RESEARCH_CHECKS)) == 28
+    assert 'modules_present' in evalmods.rubric.RESEARCH_CHECKS
     assert evalmods.rubric.RESEARCH_CHECK_KEYS == ('name', 'ok', 'detail')
 
 
@@ -1033,3 +1034,88 @@ def test_cli_help_doc_duoc():
     assert done.returncode == 0
     for needle in ('--workspace', '--case', '--append', '--checks'):
         assert needle in done.stdout
+
+
+# ------------------------------------------- keo P2: nhật ký tìm và mô-đun
+
+
+def test_section_word_lists_come_from_the_harness_when_it_is_available(oracle):
+    """Ba bộ từ khoá mục đọc từ `research_quality` — một nguồn định nghĩa, không chép tay."""
+    from agentbox.agent_core import research_quality
+    assert oracle.CRITIQUE_SECTION_WORDS == tuple(research_quality._CRITIQUE_WORDS)
+    assert oracle.CONFLICT_SECTION_WORDS == tuple(research_quality._CONFLICTS_WORDS)
+    assert oracle.FINDINGS_SECTION_WORDS == tuple(research_quality._FINDINGS_WORDS)
+    assert oracle.section_words('KHÔNG_CÓ_TÊN_NÀY', ('x', 'y')) == ('x', 'y')
+    # Tên công khai thắng tên riêng tư khi có: P2 chỉ cần đặt bí danh, không phải sửa hai chỗ.
+    research_quality.CRITIQUE_SECTION_WORDS = ('phan bien',)
+    try:
+        assert oracle.section_words('CRITIQUE_SECTION_WORDS', ('x',), '_CRITIQUE_WORDS') == ('phan bien',)
+    finally:
+        del research_quality.CRITIQUE_SECTION_WORDS
+
+
+def test_search_log_rows_are_found_in_both_record_shapes(oracle):
+    rows = [{'facetId': 'f-1', 'results': 10, 'relevantNew': 0, 'created': 1.0}]
+    assert oracle.search_log_rows({'searchLog': rows}) == rows
+    assert oracle.search_log_rows([{'kind': 'search', 'payload': rows[0]}]) == rows
+    assert oracle.search_log_rows([{'searchLog': rows}]) == rows
+    assert oracle.search_log_rows([{'kind': 'tool_end', 'payload': {'name': 'web_fetch'}}]) == []
+    assert oracle.search_log_rows(None) == []
+
+
+def test_saturation_logged_measures_from_the_search_log_not_from_words(oracle, tmp_path):
+    """Hai sóng liên tiếp dưới 10% ⇒ đạt, dù hồ sơ KHÔNG hề nhắc chữ "bão hoà"."""
+    ws = room(tmp_path)
+    dossier(ws, 'nhk', level=2, body='# Hồ sơ\n\n## Phát hiện\n\n- Dữ kiện (r1).\n')
+    records = {'searchLog': [{'facetId': 'f-1', 'results': 20, 'relevantNew': 0, 'created': 1.0},
+                             {'facetId': 'f-1', 'results': 20, 'relevantNew': 1, 'created': 2.0}]}
+    result = oracle.saturation_logged(room=ws, records=records)
+    assert result['ok'] is True
+    assert 'nhật ký tìm' in result['detail']
+    assert 'f-1' in result['detail']
+
+
+def test_saturation_logged_fails_when_the_log_still_brings_new_results(oracle, tmp_path):
+    ws = room(tmp_path)
+    dossier(ws, 'nhk2', level=1)
+    records = {'searchLog': [{'facetId': 'f-1', 'results': 10, 'relevantNew': 0, 'created': 1.0},
+                             {'facetId': 'f-1', 'results': 10, 'relevantNew': 8, 'created': 2.0}]}
+    result = oracle.saturation_logged(room=ws, records=records)
+    assert result['ok'] is False
+    assert 'chưa có hai sóng liên tiếp dưới 10% mới' in result['detail']
+
+
+def test_saturation_logged_falls_back_to_wording_for_old_records(oracle, tmp_path):
+    ws = room(tmp_path)
+    dossier(ws, 'cu', level=2,
+            body='# Hồ sơ\n\n## Phát hiện\n\n- Săn trích dẫn đã bão hoà sau ba vòng (r1).\n')
+    result = oracle.saturation_logged(room=ws, records=[])
+    assert result['ok'] is True
+    assert 'bão hoà' in result['detail']
+
+
+def test_modules_present_reads_the_structured_report_file(oracle, tmp_path):
+    ws = room(tmp_path)
+    folder = dossier(ws, 'md', level=2)
+    (folder / 'v1-report.json').write_text(json.dumps({'modules': ['M-landscape', 'M-gaps']}),
+                                           encoding='utf-8')
+    result = oracle.modules_present(room=ws, modules=['M-landscape', 'gaps'])
+    assert result['ok'] is True
+    assert 'M-landscape' in result['detail']
+
+
+def test_modules_present_falls_back_to_the_reader_facing_prose(oracle, tmp_path):
+    ws = room(tmp_path)
+    dossier(ws, 'md2', level=2,
+            body='# Hồ sơ\n\n## Cảnh quan hướng × nhóm phương pháp\n\n- Hướng A (r1).\n')
+    assert oracle.modules_present(room=ws, modules=['M-landscape'])['ok'] is True
+    missing = oracle.modules_present(room=ws, modules=['M-landscape', 'M-market'])
+    assert missing['ok'] is False
+    assert 'M-market' in missing['detail']
+    assert oracle.modules_present(room=ws, modules=[])['ok'] is True
+
+
+def test_modules_present_is_addressable_by_name(oracle):
+    assert 'modules_present' in oracle.CHECKS
+    assert oracle.run_checks(['modules_present'], room=None, records=None,
+                             options={'modules_present': {'modules': []}})[0]['ok'] is True

@@ -54,7 +54,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      RESEARCH_PROGRESS_NUDGE_SECONDS, RESEARCH_HARD_CEILING_NOTICE_CODE,
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
-from . import plan_quality, research_runtime
+from . import plan_quality, research_review, research_runtime
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import OWNER_STEER_PREFIX, RESEARCH_NUDGE_PREFIX
@@ -68,6 +68,80 @@ from ..skills.lifecycle import SkillLoader
 from ..skills.runtime_commands import RuntimeCommands
 from ..observability.system_log import system_log
 from .tool_arg_errors import parse_tool_arguments
+# P1 — vỏ chế độ Research: hằng và cổng của mode (plan v2 §5.2).
+from .limits import (RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAULT_MODE,
+                     RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
+                     RESEARCH_MODE_EXCLUDED_TOOLS, RESEARCH_MODE_DELEGATE_ROLES,
+                     RESEARCH_MODE_REQUIRED_CODE, RESEARCH_MODE_EXIT_CHOICE_REQUIRED_CODE,
+                     RESEARCH_TIER3_MODE_ONLY_ENV, RESEARCH_TIER3_MODE_ONLY_MODES,
+                     RESEARCH_TIER3_MODE_ONLY_DEFAULT_MODE, RESEARCH_BACKGROUND_RUNS_ENV,
+                     RESEARCH_BACKGROUND_RUNS_MODES, RESEARCH_BACKGROUND_RUNS_DEFAULT_MODE,
+                     RESEARCH_TURN_TARGET_SECONDS_ENV, RESEARCH_TURN_TARGET_SECONDS,
+                     RESEARCH_JOB_ORIGIN, RESEARCH_JOB_ORIGIN_MAIN, RESEARCH_SCOPE_MAX_QUESTIONS,
+                     RESEARCH_EXIT_CHOICES, RESEARCH_CRITIQUE_LABEL,
+                     RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
+                     RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END,
+                     research_branch_report_enabled)  # P3 (§5.9)
+
+def _env_switch(env_name, modes, default, env=None):
+    """Đọc một công tắc `on|off`; giá trị lạ ⇒ mặc định (không bao giờ ném)."""
+    source = os.environ if env is None else env
+    raw = str(source.get(env_name, '') or '').strip().lower()
+    return raw if raw in modes else default
+
+
+def research_mode_available(env=None):
+    """Công tắc giết `BOXFOX_RESEARCH_MODE` — mặc định `on` nghĩa là tính năng CÓ MẶT.
+
+    Có mặt KHÔNG có nghĩa là bật: mọi phiên vẫn khởi đầu với mode TẮT (`research_mode()['on']`
+    là `False` cho tới khi người dùng bấm nút hoặc gõ `/research`).
+    """
+    return _env_switch(RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAULT_MODE, env) == 'on'
+
+
+def tier3_mode_only(env=None):
+    """`on` (mặc định) ⇒ chỉ mode được mở mức 3; `off` ⇒ main mở mức 3 như cũ (§5.2)."""
+    return _env_switch(RESEARCH_TIER3_MODE_ONLY_ENV, RESEARCH_TIER3_MODE_ONLY_MODES,
+                       RESEARCH_TIER3_MODE_ONLY_DEFAULT_MODE, env) == 'on'
+
+
+def background_runs_enabled(env=None):
+    """Công tắc chạy nền (#6078) — `off` ⇒ tắt mode luôn tạm dừng run."""
+    return _env_switch(RESEARCH_BACKGROUND_RUNS_ENV, RESEARCH_BACKGROUND_RUNS_MODES,
+                       RESEARCH_BACKGROUND_RUNS_DEFAULT_MODE, env) == 'on'
+
+
+def research_turn_target_seconds(env=None):
+    """Mục tiêu giây của MỘT lượt research (mặc định 600); `0` = tắt chia lượt ngắn."""
+    source = os.environ if env is None else env
+    try:
+        value = int(source.get(RESEARCH_TURN_TARGET_SECONDS_ENV, RESEARCH_TURN_TARGET_SECONDS))
+    except (TypeError, ValueError):
+        return RESEARCH_TURN_TARGET_SECONDS
+    return max(0, value)
+
+
+def _normalize_research_mode(value):
+    """Hình dạng cố định của `config['researchMode']` (§4.1). Thiếu khoá ⇒ mode TẮT."""
+    value = value if isinstance(value, dict) else {}
+    mode = {'on': bool(value.get('on')),
+            'since': value.get('since'),
+            'enteredBy': str(value.get('enteredBy') or ''),
+            'entrySeq': int(value.get('entrySeq') or 0),
+            'activeRunId': value.get('activeRunId') or None,
+            'revision': int(value.get('revision') or 0),
+            # P1 nội bộ: mỗi bản hồ sơ chỉ phát khối bàn giao MỘT lần (§5.10).
+            'handoffDeliveredVersion': value.get('handoffDeliveredVersion')
+            if isinstance(value.get('handoffDeliveredVersion'), dict) else {}}
+    return mode
+
+
+def research_mode(session):
+    """`session.config.researchMode` đã chuẩn hoá — `on=False` khi phiên chưa từng bật mode."""
+    config = session.get('config') if isinstance(session, dict) else None
+    value = config.get('researchMode') if isinstance(config, dict) else None
+    return _normalize_research_mode(value)
+
 
 TOOL_USE_ENFORCEMENT_GUIDANCE = """# Tool-Use Enforcement
 You MUST use your available tools or delegate to specialist subagents to make tangible progress — NEVER simply describe what you would do or promise future actions without executing them now.
@@ -96,6 +170,7 @@ PARALLEL_TOOL_CALL_GUIDANCE = """# Parallel Tool Calls
 When you need several independent pieces of information (e.g. reading multiple files, searching multiple patterns), issue them together in a single assistant turn. Batching independent calls saves conversation context and reduces round trips."""
 
 ORCHESTRATOR_SOP_GUIDANCE = """You are the Supreme Orchestrator Brain of BoxFox.
+When a prompt section named "ACTIVE MODE: RESEARCH" is present, THAT section wins over this SOP: follow the research persona and its rules for that turn.
 Your primary responsibility is to analyze user requests, break down complex engineering objectives, and coordinate your 10 specialist subagents to achieve verified, production-grade results.
 
 CORE MULTI-AGENT DELEGATION PROTOCOL:
@@ -105,8 +180,10 @@ CORE MULTI-AGENT DELEGATION PROTOCOL:
 2. Hierarchical 5-Phase Execution Workflow:
    - Phase 1 (Explore): Delegate to role='explore' to survey files, symbols, dependency trees, and existing architecture.
      * `write_plan` refuses a plan that leans on outside facts without a Sources / Citations section naming where each fact came from; that answer must come from a real tool call of this session (`web_search`/`web_fetch` host-side, or `role='research'`), never from memory.
-     * Hand every external-knowledge question (a library's real API, a standard, a version, a web page) to role='research'. It reaches the browser AND the host-side `web_search`/`web_fetch` tools; you hold those two tools as well, so answer a quick fact yourself and delegate the deep survey. The sandbox network can be OFF — the host tools are not affected — so a research answer may still honestly say "could not verify". Accept that over a guessed source.
-     * For research, first map the decision and questions that could change it. Call `research_brief` with goal, questions, methods, output, budgetSeconds and a tier estimate. Tell the owner the estimate. Mix evidence methods when appropriate; a market question can need papers and code. Delegate bounded questions with `questionId`, not website categories. Main updates question states and blocked sources through `research_update`, then chooses follow-ups by their likely impact on the decision.
+     * You hold the host-side `web_search`/`web_fetch` tools yourself: answer a quick fact directly instead of delegating it. Hand only the deep survey to role='research'. The sandbox network can be OFF — the host tools are not affected — so a research answer may still honestly say "could not verify". Accept that over a guessed source.
+     * Outside Research mode you may open LIGHT work yourself: call `research_brief` with goal, questions, methods, output, budgetSeconds and a tier estimate of 1 or 2, then delegate bounded questions with `questionId`, not website categories. Tell the owner the estimate.
+     * When a request crosses the "big job" threshold — tier 3, an estimate over 10 minutes, more than 3 branches, or a landscape / literature-map / state-of-the-field survey — do NOT open it. Call `research_suggest(reason, draftGoal)` instead: it posts a suggestion card and does NOT turn on Research mode. Answer the quick part yourself if you can. Tier 3 is refused outside Research mode (`RESEARCH_MODE_REQUIRED`).
+     * Inside Research mode the ACTIVE MODE block governs: map the decision and the questions that could change it, write a scope card with `research_scope`, ask at most three blocking questions in one prompt, then delegate bounded branches with `questionId`. Main updates question states and blocked sources through `research_update`, then chooses follow-ups by their likely impact on the decision.
      * Research children only read and add ledger rows; MAIN writes dossiers. A new-format job saves incomplete drafts too. For consequential tier-3 conclusions, run two separate `research-review` children, one `reviewTarget.mode='evidence'` and one `mode='critique'`, each bound to the exact dossier id/version. Record each verdict with matching `research_verify.mode`. Only claim verification when both pass for the current version. Stop with a conditional answer at the budget limit or after two unproductive loops; state the unanswered questions and impact.
    - Phase 2 (Plan & Design):
      * Delegate to role='plan' to construct ordered milestones, risks, and acceptance criteria.
@@ -677,6 +754,9 @@ class RouterClient:
                     reasoning_content = ''
                     tool_calls = {}
                     finish_reason = 'stop'
+                    # A cut stream SAYS NOTHING: an OpenAI-compatible stream ends with a chunk
+                    # carrying `finish_reason`, so its absence is the truncation signal.
+                    saw_finish = False
                     req_id = 'resp_' + uuid.uuid4().hex[:12]
                     usage = None
                     boxfox_meta = None
@@ -703,6 +783,7 @@ class RouterClient:
                         choice = choices[0]
                         if choice.get('finish_reason'):
                             finish_reason = choice['finish_reason']
+                            saw_finish = True
                         delta = choice.get('delta') or {}
                         if delta.get('content'):
                             content += delta['content']
@@ -736,6 +817,15 @@ class RouterClient:
                                 old['thought_signature'] = sig
                                 old['thoughtSignature'] = sig
 
+                    if not saw_finish:
+                        # Measured live 2026-09-26 on a `muse-spark-1.3-contributor-free` review turn:
+                        # the provider cut the answer mid-sentence, sent no usage and no final chunk, and
+                        # the default `stop` above made that severed answer look complete - so a review
+                        # without its required final `VERDICT:` line passed as a finished review and the
+                        # parent burned 40 tool calls chasing a line that never arrived. `length` is the
+                        # honest reason here: it is the one the C2 branch already turns into
+                        # PROVIDER_OUTPUT_TRUNCATED (status `partial`), instead of a clean stop.
+                        finish_reason = 'length'
                     if not content and not tool_calls:
                         raise ValueError('Upstream did not return any SSE completion content')
                     return {
@@ -1441,6 +1531,9 @@ class HarnessRuntime(RuntimeCommands):
         # một chiều và sống qua lần khởi động lại harness; dict này chỉ là bản đọc nhanh cho
         # event/log của lượt đang chạy.
         self.active_turn = {}
+        # P1 — `invocation_id` của LƯỢT đang chạy, để lượt bơm `research-resume-*` dùng hồ sơ
+        # lượt research kể cả khi mode đã tắt (§5.2).
+        self.turn_invocations = {}
         # T3 — sessionId -> số BƯỚC đang mở của lượt. Cha ghi sổ con bằng cặp (lượt, bước)
         # ngay lúc sinh con; cặp đó đã nằm trong event `turn_start`/`turn_end` nhưng không
         # nằm trong RAM, nên `delegate` cần bản đọc nhanh này.
@@ -1681,6 +1774,10 @@ class HarnessRuntime(RuntimeCommands):
             config['peerMeshOff'] = True
         if values.get('parallelReadTools') is True:
             config['parallelReadTools'] = True
+        # P1 (§4.1): `researchMode` là trạng thái MODE của phiên. Mặc định TẮT cho mỗi phiên mới,
+        # kể cả khi tính năng khả dụng; chỉ ghi khi harness gửi lên (UI lưu lựa chọn của người dùng).
+        if values.get('researchMode') is not None:
+            config['researchMode'] = _normalize_research_mode(values.get('researchMode'))
         if engine_clamped_deadline:
             config['deadlineClamped'] = True
         if engine_clamped_steps:
@@ -1782,11 +1879,14 @@ class HarnessRuntime(RuntimeCommands):
         return record if isinstance(record, dict) else None
 
     def start(self, sid, prompt, image=None, route=None, route_metadata=None, images=None,
-              attachments=None):
+              attachments=None, invocation_id=None):
         """Mở lượt mới. `images` là mảng ảnh inline của lượt (A7), `attachments` là tệp đã
         nằm thật trên đĩa box; cả hai đi qua `agent_core/attachments.py` để kiểm.
         """
         session = self.store.get(sid)
+        # P1 (§5.2): lượt bơm `research-resume-*` phải dùng hồ sơ research dù mode đã tắt;
+        # `_run` đọc lại giá trị này qua `turn_profile`.
+        self.turn_invocations[sid] = invocation_id
         if session['status'] in {'running', 'awaiting_decision'}:
             raise ValueError('SESSION_BUSY: Turn in progress')
         if route and isinstance(route, dict) and any(route.values()):
@@ -3089,11 +3189,264 @@ class HarnessRuntime(RuntimeCommands):
             (sid,)).fetchone()
         return int(row['total'] or 0) if row is not None else 0
 
+    # --- P1: hồ sơ lượt + khối mode + bàn giao (plan v2 §5.2, §5.10) -----------------------
+
+    def research_mode_block(self, session):
+        """Khối `=== ACTIVE MODE: RESEARCH ===` — persona, luật phỏng vấn, quy trình lõi (§5.2).
+
+        Khối này được `_next_turn_skills` chèn/gỡ theo TỪNG LƯỢT (chỉ viết lại khi mode đổi), nên
+        bộ đệm tiền tố của mô hình không bị phá ở các lượt khác. Nội dung gồm persona research lead,
+        luật phỏng vấn thích ứng (4.4), quy trình lõi (5.3), luật bàn giao (5.10), và nội dung ba
+        kỹ năng research-scoping/search/synthesis khi danh mục đang bật chúng.
+        """
+        skills = []
+        for name in ('research-scoping', 'research-search', 'research-synthesis'):
+            if name in self.catalog.items:
+                content = self.catalog.read(name).get('content') or ''
+                if content:
+                    skills.append(content)
+        lines = [
+            RESEARCH_MODE_BLOCK_MARKER,
+            'ACTIVE MODE: RESEARCH. For this turn you are the Research Lead, not the engineering '
+            'orchestrator. The user turned Research mode on; only the USER is authoritative.',
+            'Rules of this mode:',
+            '1. Only the user\'s own messages are requirements. Earlier assistant messages are '
+            'context, not confirmed scope — label them `agent` assumptions, never `confirmed`.',
+            '2. Keep a scope card via `research_scope(action=..., patch=.../questions=...)`: propose '
+            'it early, update it when the user edits, and ask when a choice changes the direction. '
+            'Ask at most 3 questions per prompt, each with 2-5 concrete options. A blocking question '
+            'puts the run in `needs_user`; do NOT use `ask_user` for the interview (its 300s limit is '
+            'too short) — use `research_scope(action="ask", questions=[...])`.',
+            '3. Open the run with `research_brief` (tier, goal, questions, methods, output, '
+            'budgetSeconds, and pass `newRun=true` for a fresh run only when the previous run is '
+            'terminal or paused). Delegate bounded branches with an exact `questionId`.',
+            '4. This mode has NO write tools: no file_write, file_edit_block, terminal_exec, '
+            'write_plan or plan_verify. If the user asks for code/commands/plans, post an '
+            'out-of-scope prompt instead of silently leaving the mode.',
+            '5. Pause/resume/cancel act on the RUN, not the session. Never stop the whole session.',
+            '6. Hand off cleanly (5.10): when the mode turns off, the next main turn receives a short '
+            'block with the run scope, status, dossier path, limits, and a clear split between what '
+            'the USER confirmed and what the AGENT assumed.',
+        ]
+        if skills:
+            lines.append('Research skills in force:')
+            lines.extend(skills)
+        lines.append('=== END ACTIVE MODE ===')
+        return '\n'.join(lines)
+
+    def background_run(self, session):
+        """Job chạy nền còn HOẠT ĐỘNG của phiên này, hoặc `None` (§5.3).
+
+        Chỉ job `origin='mode'`, `state.background=true`, status còn hoạt động (không
+        `needs_user`/`paused`) được coi là chạy nền. Dùng cho dòng nhắc ở lượt main và luật bơm.
+        """
+        if not isinstance(session, dict):
+            return None
+        for job in self.store.research_jobs_for(session.get('id')):
+            state = job.get('state') if isinstance(job.get('state'), dict) else {}
+            if str(state.get('origin') or '') != RESEARCH_JOB_ORIGIN:
+                continue
+            if state.get('background') and job['status'] in {'scoping', 'researching', 'verifying',
+                                                              'synthesizing', 'critiquing'}:
+                return job
+        return None
+
+    def turn_budget_seconds(self, session, invocation_id=None):
+        """Trần giây của LƯỢT này (§5.5): lượt research bị kẹp về `RESEARCH_TURN_TARGET_SECONDS`.
+
+        Nhà cung cấp miễn phí cắt ở phút 8,5–14, nên lượt research phải kết thúc TRƯỚC ngưỡng đó và
+        ghi pha; trần an toàn cũ (`deadlineSeconds`) chỉ là trần trên. `0` ⇒ tắt chia lượt ngắn.
+        """
+        deadline = int((session.get('config') or {}).get('deadlineSeconds') or DEADLINE_DEFAULT_SECONDS)
+        if self.turn_profile(session, invocation_id)['mode'] != 'research':
+            return deadline
+        target = research_turn_target_seconds()
+        return deadline if target <= 0 else min(deadline, target)
+
+    def turn_profile(self, session, invocation_id=None):
+        """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
+
+        `mode='research'` khi mode đang bật, HOẶC khi đây là lượt bơm `research-resume-*` (run chạy
+        nền vẫn dùng hồ sơ research kể cả khi mode đã tắt). Bộ công cụ research = bộ công cụ phiên
+        trừ các công cụ ghi (§5.2). `invocation_id` mặc định `None` để chỗ gọi chỉ cần biết mode có
+        bật hay không (khối lời dặn theo lượt).
+        """
+        mode = research_mode(session)
+        resume = bool(invocation_id) and str(invocation_id).startswith('research-resume-')
+        config = session.get('config') if isinstance(session, dict) else {}
+        config = config if isinstance(config, dict) else {}
+        if mode['on'] or resume:
+            tools = [name for name in (config.get('tools') or [])
+                     if name not in RESEARCH_MODE_EXCLUDED_TOOLS]
+            return {'mode': 'research', 'tools': tools,
+                    'promptBlock': self.research_mode_block(session)}
+        block = ''
+        background = self.background_run(session)
+        if background is not None:
+            state = background.get('state') or {}
+            # Cặp mốc là hợp đồng để `_sync_mode_block` GỠ khối của lượt trước rồi chèn lại đúng MỘT
+            # lần (review F5) — đừng viết lại hai mốc này bằng chuỗi trần ở chỗ khác.
+            block = (f'{RESEARCH_BACKGROUND_BLOCK_MARKER}\n'
+                     f'Run {background["research_id"]} is still running in the background '
+                     f'(status {background["status"]}, phase {state.get("phase") or "unknown"}). You may '
+                     'call `research_status` and `research_update` (pause/cancel) for it, but do NOT '
+                     'delegate branches to it and do NOT open a new tier-3 run while the mode is off.\n'
+                     f'{RESEARCH_BACKGROUND_BLOCK_END}')
+        return {'mode': 'main', 'tools': list(config.get('tools') or []), 'promptBlock': block}
+
+    def named_handoff_run(self, session, prompt):
+        """Mã run được NÓI RÕ trong lượt (`''` khi lượt không nhắc tên run nào).
+
+        Đối chiếu theo TỪNG token slug, KHÔNG dùng `in` thô: `'r-2' in 'r-22'` là đúng, và bàn giao
+        nhầm run vì một chuỗi con là lỗi im lặng (review vòng kiểm thử P2–P5, mục D-5).
+        """
+        text = str(prompt or '').lower()
+        if not text:
+            return ''
+        tokens = set(re.findall(r'[a-z0-9-]+', text))
+        if not tokens:
+            return ''
+        for job in self.store.research_jobs_for(session.get('id')):
+            research_id = str(job.get('research_id') or '')
+            if research_id.lower() in tokens:
+                return research_id
+        return ''
+
+    def research_handoff(self, session, prompt=''):
+        """Khối bàn giao research → main (§5.10), hoặc `None` khi không có gì để bàn giao.
+
+        Chỉ dựng khi mode đang TẮT, chọn run có hồ sơ mới nhất, và **một lần cho mỗi bản hồ sơ**
+        (`researchMode.handoffDeliveredVersion`). Nhãn `Bạn đã xác nhận` / `Giả định của agent` là
+        hợp đồng giao diện, không được trộn hai danh sách.
+
+        `prompt` = lượt đang dựng khối. Nút "Dùng cho plan" gửi câu có NÊU TÊN run ("Lập plan dựa
+        trên báo cáo research <id> v<N>"): khi ấy CHỈ run ấy được bàn giao, kể cả khi một run khác
+        mới hơn vẫn chưa bàn giao. Trước bản vá này hàm luôn lấy run chưa bàn giao mới nhất, nên
+        bấm ở thẻ của run cũ lại bàn giao run khác trong khi câu lệnh nói tên run cũ.
+        """
+        mode = research_mode(session)
+        if mode['on']:
+            return None
+        delivered = mode.get('handoffDeliveredVersion') or {}
+        wanted = self.named_handoff_run(session, prompt)
+        for job in self.store.research_jobs_for(session.get('id')):
+            if wanted and job['research_id'] != wanted:
+                continue
+            state = job.get('state') if isinstance(job.get('state'), dict) else {}
+            if str(state.get('origin') or '') not in {'', RESEARCH_JOB_ORIGIN}:
+                continue
+            dossier = self.store.dossier_latest(job['research_id'])
+            if dossier is None:
+                continue
+            version = int(dossier['version'])
+            if str(delivered.get(job['research_id'])) == str(version):
+                continue
+            scope = state.get('scope') if isinstance(state.get('scope'), dict) else {}
+            labels = []
+            if job['status'] == 'partial':
+                labels.append('partial')
+            review_modes = [mode_name for mode_name in research_runtime.GATE_REVIEW_MODES
+                            if mode_name in (state.get('reviewModes') or [])]
+            if review_modes and dossier.get('critique') != 'ok':
+                labels.append(RESEARCH_CRITIQUE_LABEL)
+            if dossier.get('quality_ok') is not None and not dossier.get('quality_ok') and job['status'] != 'partial':
+                labels.append('bao phủ chưa đủ')
+            confirmed, assumed = [], []
+            for key in ('goal', 'purpose', 'timePolicy', 'depth'):
+                item = scope.get(key)
+                if not isinstance(item, dict) or not item.get('text') and not item.get('velocity'):
+                    continue
+                text = item.get('text') or item.get('velocity')
+                target = confirmed if item.get('status') == 'confirmed' else assumed
+                target.append(f'{key}: {text}')
+            for item in (scope.get('exclusions') or []):
+                if isinstance(item, dict) and item.get('text'):
+                    (confirmed if item.get('status') == 'confirmed' else assumed).append('exclude: ' + item['text'])
+            if not confirmed and not assumed:
+                assumed.append('goal: ' + str(state.get('goal') or state.get('question') or '(unset)'))
+            budget = int(state.get('budgetSeconds') or 0)
+            lines = [RESEARCH_HANDOFF_BLOCK_MARKER,
+                     f'researchId: {job["research_id"]}  dossier: {dossier["relative_path"]} '
+                     f'(version {version}, hash {dossier.get("content_hash") or "n/a"})',
+                     'labels: ' + (', '.join(labels) if labels else 'none'),
+                     'Bạn đã xác nhận: ' + ('; '.join(confirmed) if confirmed else '(chưa có mục nào)'),
+                     'Giả định của agent: ' + ('; '.join(assumed) if assumed else '(không có)'),
+                     f'limits: budget {budget}s, used {self.store.research_job_used_seconds(job["session_id"], job["research_id"])}s, '
+                     f'status {job["status"]}']
+            open_questions = [q.get('text') for q in (scope.get('openQuestions') or [])
+                              if isinstance(q, dict) and q.get('text') and not q.get('answer')]
+            if open_questions:
+                lines.append('open questions: ' + '; '.join(open_questions))
+            lines.append('Rule: do NOT raise the confidence of the run; keep the labels above. When you '
+                         'write a plan, pass researchDependencies.')
+            lines.append(RESEARCH_HANDOFF_BLOCK_END)
+            return {'block': '\n'.join(lines), 'researchId': job['research_id'], 'version': version}
+        return None
+
+    def mark_handoff_delivered(self, session, research_id, version):
+        """Ghim bản hồ sơ đã bàn giao — lượt main kế tiếp không nhắc lại cùng một báo cáo (§5.10)."""
+        mode = research_mode(session)
+        delivered = dict(mode.get('handoffDeliveredVersion') or {})
+        delivered[str(research_id)] = str(version)
+        mode['handoffDeliveredVersion'] = delivered
+        session.setdefault('config', {})['researchMode'] = mode
+        self.store.update_config(session['id'], session['config'])
+
+    async def research_halt(self, job, reason):
+        """Dừng/huỷ MỘT run theo job (§5.3, M-09) — KHÔNG bao giờ `stop` cả phiên.
+
+        `reason` = `'pause'` ⇒ `status='paused'`; mọi giá trị khác ⇒ `status='cancelled'`. Pha cũ
+        được giữ trong `state.phase`/`phaseHistory`. Thứ tự theo §5.3: (1) ghi trạng thái TRƯỚC,
+        (2) huỷ con của job, (3) dừng lượt đang chạy — và chỉ khi lượt ấy ĐÚNG là lượt tiếp tục
+        của job (`research-resume-<id>`). Bước (3) KHÔNG bao giờ `await` chính task đang gọi
+        `research_halt`: lượt bơm tự tạm dừng job của mình là đường hợp lệ, mà chờ chính mình thì
+        treo lượt và mất luôn trạng thái vừa ghi (review F2).
+        """
+        sid = job['session_id']
+        state = dict(job['state'] or {})
+        status = 'paused' if str(reason) == 'pause' else 'cancelled'
+        history = list(state.get('phaseHistory') or [])
+        history.append({'phase': state.get('phase'), 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                        'reason': str(reason)})
+        state['phaseHistory'] = history
+        updated = self.store.research_job_save(job['research_id'], sid, state, status=status)
+        self.store.emit(sid, 'research_run', {'researchId': job['research_id'], 'status': updated['status'],
+                                              'phase': state.get('phase'), 'background': bool(state.get('background')),
+                                              'revision': updated['revision']})
+        system_log.write('research.job.halted', level='info', session_id=sid, code='RESEARCH_JOB_HALTED',
+                         researchId=job['research_id'], status=status, reason=str(reason))
+        question_ids = {item.get('id') for item in (state.get('questions') or []) if isinstance(item, dict)}
+        try:
+            owner = self.store.get(sid)
+        except KeyError:
+            owner = None
+        for branch in self.store.children_of(sid):
+            if branch.get('status') != 'started':
+                continue
+            child = self.store.get(branch['session_id'])
+            cfg = (child.get('config') or {})
+            if cfg.get('researchQuestionId') in question_ids and owner is not None:
+                await research_runtime.cancel_child(self, owner, {
+                    'sessionId': branch['session_id'], 'reason': f'run {job["research_id"]} {reason}'})
+        invocation = str(self.turn_invocations.get(sid) or '')
+        task = self.tasks.get(sid)
+        if task is not None and not task.done() and invocation.startswith(f'research-resume-{job["research_id"]}'):
+            task.cancel()
+            if task is not asyncio.current_task():
+                await asyncio.gather(task, return_exceptions=True)
+        return updated
+
     async def _run(self, sid):
         session = self.store.get(sid)
         config, messages = session['config'], session['messages']
         self.active_messages[sid] = messages
-        tools = schemas_for(config['tools'])
+        # P1 (§5.2): bộ công cụ theo LƯỢT đọc từ `turn_profile` — ở mode, công cụ ghi bị bỏ;
+        # lượt bơm `research-resume-*` dùng hồ sơ research kể cả khi mode đã tắt.
+        profile = self.turn_profile(session, self.turn_invocations.get(sid))
+        allowed_tools = set(profile['tools'])
+        # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
+        turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
+        tools = schemas_for(profile['tools'])
         loop_guard = AntiLoopGuard(threshold=3)
         started = time.time()
         steps_used = 0
@@ -3344,7 +3697,7 @@ class HarnessRuntime(RuntimeCommands):
             # Vòng 25 (D-35): mốc bắt đầu lượt theo đồng hồ đơn điệu — `extend_turn_budget` cần nó
             # để phần nới không bao giờ vượt trần `DEADLINE_MAX_SECONDS` của cả lượt.
             self.turn_started_at[sid] = time.monotonic()
-            async with asyncio.timeout(config['deadlineSeconds']) as budget:
+            async with asyncio.timeout(turn_budget) as budget:
                 self.run_budget[sid] = budget
                 for step in range(config['maxSteps']):
                     async def summarize(history, max_tokens=None):
@@ -3593,8 +3946,9 @@ class HarnessRuntime(RuntimeCommands):
                             'code': TRUNCATED_OUTPUT_NOTICE_CODE,
                             'partial': True,
                             'outputTokens': (response.get('usage') or {}).get('completion_tokens'),
-                            'message': (f'{TRUNCATED_OUTPUT_NOTICE_CODE}: the provider stopped at the output '
-                                        f'cap twice — this turn only produced a partial answer'),
+                            'message': (f'{TRUNCATED_OUTPUT_NOTICE_CODE}: the provider ended the answer '
+                                        f'before its terminal chunk twice (an output cap OR a severed '
+                                        f'stream) — this turn only produced a partial answer'),
                         })
                         truncated_partial = True
                     if not calls and not truncated_partial and (choice.get('finish_reason') not in {'stop', 'end_turn'} or not text.strip()):
@@ -3716,7 +4070,7 @@ class HarnessRuntime(RuntimeCommands):
                         try:
                             if error:
                                 raise ValueError(error)
-                            if name not in config['tools']:
+                            if name not in allowed_tools:
                                 raise PermissionError('Tool not permitted for this role: ' + name)
                             result = await self.dispatch(session, name, args, call['id'])
                         except Exception as exc:
@@ -3882,6 +4236,9 @@ class HarnessRuntime(RuntimeCommands):
             return await self.research_ledger_tool(session, name, args)
         if name == 'claim_assess':
             return research_runtime.claim_assess(self, session, args)
+        if name == 'research_branch_report':
+            # P3 (§5.9): vỏ mỏng — luật ghi sổ/thẻ nằm ở `research_review`.
+            return research_review.apply_branch_report(self, session, args)
         if name == 'dossier_write':
             return await research_runtime.dossier_write(self, session, args)
         if name == 'research_brief':
@@ -3891,7 +4248,16 @@ class HarnessRuntime(RuntimeCommands):
         if name == 'research_status':
             return research_runtime.research_status(self, session, args)
         if name == 'research_update':
-            return research_runtime.research_update(self, session, args)
+            result = research_runtime.research_update(self, session, args)
+            # P1 (§5.3): `research_update(action='pause'|'cancel')` phải huỷ con của job — việc đó là
+            # async, nên hàm luật trả về coroutine trong đúng nhánh ấy.
+            if asyncio.iscoroutine(result):
+                result = await result
+            return result
+        if name == 'research_suggest':
+            return research_runtime.research_suggest(self, session, args)
+        if name == 'research_scope':
+            return research_runtime.research_scope(self, session, args)
         if name == 'cancel_child':
             return await research_runtime.cancel_child(self, session, args)
         if name == 'journal_write':
@@ -5391,9 +5757,21 @@ class HarnessRuntime(RuntimeCommands):
         configured = next((r for r in session['config']['subagents'] if r['id'] == role and r.get('enabled', True)), None)
         if not configured:
             raise PermissionError('Specialist is disabled or unknown')
+        # F9 (§5.2): trong mode `delegate_task` chỉ được giao cho `RESEARCH_MODE_DELEGATE_ROLES`.
+        # Mode không có công cụ ghi, nên một nhánh `build`/`debug`/`plan` được giao từ đây là một
+        # nhánh không thể làm việc — từ chối sớm thay vì để con chết giữa đường.
+        if research_mode(session)['on'] and role not in RESEARCH_MODE_DELEGATE_ROLES:
+            raise PermissionError('RESEARCH_MODE_DELEGATE_ROLE: trong chế độ Research chỉ được giao cho '
+                                  + ', '.join(sorted(RESEARCH_MODE_DELEGATE_ROLES))
+                                  + f' — vai {role!r} cần công cụ ghi mà mode đã bỏ')
         goal = args.get('goal', '')
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError('Child goal required')
+        # P3 (§5.9): `taskKind` là kiểu VIỆC của nhánh (không phải vai mới). Giá trị lạ bị TỪ
+        # CHỐI kèm mã `RESEARCH_TASK_KIND_INVALID` thay vì lặng lẽ thành `branch`; thiếu thì
+        # mặc định `branch`. `facetId` ghim nhánh vào một hướng của bản đồ bao phủ.
+        task_kind = research_review.resolve_task_kind(args.get('taskKind'))
+        facet_id = str(args.get('facetId') or '').strip()
         research_question_id = None
         research_cfg = research_runtime.research_config(session)
         if role == 'research' and research_cfg.get('jobMode') == 'v2':
@@ -5418,7 +5796,7 @@ class HarnessRuntime(RuntimeCommands):
                              'version': requested['version'], 'path': dossier['relative_path'],
                              'contentHash': dossier.get('content_hash') or '',
                              'mode': requested.get('mode') or 'critique'}
-            if review_target['mode'] not in {'evidence', 'critique'}:
+            if review_target['mode'] not in research_review.REVIEW_MODES:
                 raise ValueError('RESEARCH_REVIEW_MODE_INVALID')
         if role == 'plan-review':
             requested = args.get('reviewTarget') or {}
@@ -5453,6 +5831,13 @@ class HarnessRuntime(RuntimeCommands):
         tier = int(research_runtime.research_config(session).get('tier') or 0)
         child_steps = min(CHILD_MAX_STEPS, config['maxSteps'])
         child_deadline = min(CHILD_DEADLINE_SECONDS, config['deadlineSeconds'])
+        if role == 'research' and not tier:
+            # P1 (cửa 2, M-07): ngoài mode, nhánh research ĐẦU TIÊN không brief là tra cứu nhanh ⇒
+            # kẹp vào trần mức 1 (20 bước/180 s). `missing_brief_gate` đã từ chối nhánh thứ hai.
+            quick = research_runtime.quick_lookup_clamp(self, session, role)
+            if quick:
+                child_steps = min(child_steps, int(quick['childSteps']))
+                child_deadline = min(child_deadline, int(quick['childSeconds']))
         if role == 'research' and tier:
             tier_limits = research_runtime.research_tier_limits(tier)
             child_steps = min(child_steps, tier_limits['childSteps'])
@@ -5477,8 +5862,10 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['reviewTarget'] = review_target
             if research_question_id:
                 child['config']['researchQuestionId'] = research_question_id
-            if review_target is not None or research_question_id:
-                self.store.update_config(child['id'], child['config'])
+            child['config']['taskKind'] = task_kind
+            if facet_id:
+                child['config']['facetId'] = facet_id
+            self.store.update_config(child['id'], child['config'])
         except BaseException:
             # Một slot rò làm mọi lần sinh con sau của cha này `FANOUT_BUSY` vĩnh viễn.
             self.release_child_slot(parent_id)
@@ -5488,7 +5875,18 @@ class HarnessRuntime(RuntimeCommands):
         self.track_child_slot(child['id'], parent_id)
         context_data = str(args.get('context', ''))[:16000] if args.get('context') else ''
         expectation = str(args.get('expect', ''))[:CHILD_EXPECT_MAX_CHARS] if args.get('expect') else ''
-        prompt_parts = [goal]
+        # P3 (§5.9): brief của con do RUNTIME dựng từ `job.state.scope` — mô hình KHÔNG tự viết
+        # yêu cầu. Phần "đã xác nhận" chỉ nhận mục `status='confirmed'` VÀ `source.kind='user'`;
+        # mọi mục còn lại vào phần giả định kèm nhãn. Công tắc `BOXFOX_RESEARCH_BRANCH_REPORT=off`
+        # giữ nguyên hành vi cũ: con chỉ nhận `goal` tự do như trước.
+        branch_brief = None
+        if (role == 'research' and research_cfg.get('jobMode') == 'v2'
+                and research_branch_report_enabled()):
+            scope_job = self.store.research_job(research_cfg.get('researchId'))
+            scope_card = ((scope_job or {}).get('state') or {}).get('scope')
+            branch_brief = research_review.build_child_brief(scope_card, question=goal,
+                                                             task_kind=task_kind)
+        prompt_parts = [branch_brief['text']] if branch_brief else [goal]
         if review_target is not None:
             prompt_parts.append('Binding from the harness: read the complete file with file_read before '
                                 f'judging it: {review_target["path"]}. This review is only for '
@@ -5536,6 +5934,7 @@ class HarnessRuntime(RuntimeCommands):
             'goal': echo_goal,
             'context': echo_context,
             'prompt': echo_prompt,
+            'taskKind': task_kind,
         })
         try:
             # T3 — `wallMs` đo đúng thời gian CON chạy, không tính lúc xếp hàng chờ slot.
@@ -5551,8 +5950,13 @@ class HarnessRuntime(RuntimeCommands):
                                    if item['id'] == research_question_id and
                                    item.get('status') == 'unexplored' else item)
                                   for item in state.get('questions', [])]
-            self.store.research_job_save(research_cfg['researchId'], parent_id, state,
-                                         status='researching', revision=job['revision'])
+            saved = self.store.research_job_save(research_cfg['researchId'], parent_id, state,
+                                                 status='researching', revision=job['revision'])
+            # C1 (§5.3): nhánh tra cứu đầu tiên đưa run sang pha `searching` — sổ pha phải kể được
+            # việc đã xảy ra. `research_job_phase` KHÔNG nhích `revision`, nên nó không đụng vào khoá
+            # lạc quan vừa dùng ở dòng trên. Dùng luôn hàng vừa ghi (`research_job_save` trả về hàng
+            # ấy) thay vì đọc lại lần nữa.
+            research_runtime.set_phase(self, parent_id, saved, 'searching', 'branch-delegated')
         # T5 — slot sống bằng VÒNG ĐỜI của con, không bằng khối `async with`: con `wait=false`
         # (T6) trả về ngay trong khi nó vẫn chạy, nên chỗ nhả duy nhất đúng là lúc task đóng
         # (chạy cả khi con bị huỷ).

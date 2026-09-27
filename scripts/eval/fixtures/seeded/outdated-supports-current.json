@@ -1,0 +1,150 @@
+{
+  "id": "SD4",
+  "case": "outdated-supports-current",
+  "kind": "outdated-supports-current",
+  "detector": "outdated_supports_current",
+  "reviewer": "verifier",
+  "expectation": "Nguồn cũ đỡ nhận định \"hiện tại\" là lỗi phải bắt (cửa sổ hiện trạng).",
+  "request": "Nguồn cũ đỡ nhận định \"hiện tại\" là lỗi phải bắt (cửa sổ hiện trạng).",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "scope": {
+        "timePolicy": {
+          "velocity": "fast"
+        },
+        "surveyDate": "2026-09-25"
+      },
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Tính đến 2026-06-01, X đang dẫn đầu thị trường.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "publishedAt": "2026-06-01"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "X đang dẫn đầu thị trường.",
+          "claimType": "current-fact",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "scope": {
+        "timePolicy": {
+          "velocity": "fast"
+        },
+        "surveyDate": "2026-09-25"
+      },
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Báo cáo 2026-05-10 xác nhận mức ổn định.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "publishedAt": "2026-05-10"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "X hiện đang ổn định.",
+          "claimType": "current-fact",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "scope": {
+        "timePolicy": {
+          "velocity": "fast"
+        },
+        "surveyDate": "2026-09-25"
+      },
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Báo cáo 2022-03-01 nói X đang dẫn đầu thị trường.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "publishedAt": "2022-03-01"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "X đang dẫn đầu thị trường.",
+          "claimType": "current-fact",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "scope": {
+        "timePolicy": {
+          "velocity": "fast"
+        },
+        "surveyDate": "2026-09-25"
+      },
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Tài liệu 2021-12-20 nói mức ổn định.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "publishedAt": "2021-12-20"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "X hiện đang ổn định.",
+          "claimType": "current-fact",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ]
+}

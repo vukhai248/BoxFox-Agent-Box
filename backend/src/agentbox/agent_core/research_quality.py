@@ -20,6 +20,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from . import plan_quality
 from . import limits
+from . import research_report
 from .limits import (
     RESEARCH_GATE_DEFAULT_MODE,
     RESEARCH_GATE_ENV,
@@ -49,6 +50,19 @@ RESEARCH_CODES: tuple[str, ...] = (
     'research-critique-missing',
     'research-lineage-missing',
     'research-owner-views-missing',
+    # P2 — cổng cấu trúc trên `report` (bật/tắt bằng `BOXFOX_RESEARCH_STRUCTURED_REPORT`) và cổng
+    # chính sách thời gian. Mã của bộ kiểm cấu trúc lấy thẳng từ `research_report` (một nguồn).
+    research_report.ERROR_MISSING,
+    research_report.ERROR_MODULE_UNKNOWN,
+    research_report.ERROR_MODULE_MISSING,
+    research_report.ERROR_SECTION_MISSING,
+    research_report.ERROR_CLAIM_MISSING,
+    research_report.ERROR_CLAIM_UNKNOWN,
+    research_report.ERROR_UNEXPLORED_MISMATCH,
+    research_report.ERROR_INFERENCE_CONFIDENCE,
+    #: Mã gói "có lỗi cấu trúc" (bộ đánh giá đọc để khỏi phải biết từng mã lẻ).
+    limits.RESEARCH_REPORT_STRUCTURE_CODE,
+    limits.RESEARCH_STALE_CURRENT_CLAIM_CODE,
 )
 
 #: Ba nhãn soi ý kiến chủ nhà (#6025) — `(nhãn tiếng Việt, từ tiếng Anh nhận dạng)`. Máy chỉ kiểm
@@ -77,6 +91,17 @@ REMEDIES: Mapping[str, str] = {
     'research-critique-missing': 'Giao `research-review` rồi gọi `research_verify` cho đúng version này.',
     'research-lineage-missing': 'Mỗi nhánh con `research` phải để lại ít nhất một dòng sổ.',
     'research-owner-views-missing': 'Thêm mục soi ý kiến chủ nhà đủ ba nhãn ủng hộ / phản bác / chưa chắc, mỗi nhãn kèm nguồn.',
+    # P2 — cổng cấu trúc (`report`) và cổng chính sách thời gian.
+    'research-report-missing': 'Gửi kèm `report` là object có `modules`/`sections`/`claims` thay cho văn xuôi tự do.',
+    'research-report-module-unknown': 'Chỉ khai mô-đun có trong danh mục (`research_report.module_ids()`) hoặc bỏ mô-đun lạ.',
+    'research-report-module-missing': 'Thêm mô-đun bắt buộc của kiểu việc đã chọn, hoặc hạ kiểu việc cho đúng phần đã làm.',
+    'research-report-section-missing': 'Bổ sung mục khung còn thiếu của hồ sơ (kèm `sectionId` đúng danh mục).',
+    'research-report-claim-missing': 'Mỗi nhận định chính phải có `claimId` trỏ vào sổ dòng của run.',
+    'research-report-claim-unknown': 'Trỏ `claimId` vào dòng sổ có thật, hoặc bỏ nhận định không có dòng sổ.',
+    'research-report-unexplored-mismatch': 'Mục "Chưa khảo sát" phải khớp đúng tập facet chưa bão hoà của run.',
+    'research-report-inference-confidence': 'Nhận định suy luận phải khai `confidence` dữ kiện và liệt kê `premises` (claim id).',
+    limits.RESEARCH_REPORT_STRUCTURE_CODE: 'Sửa các lỗi cấu trúc lẻ ở trên rồi ghi lại hồ sơ.',
+    limits.RESEARCH_STALE_CURRENT_CLAIM_CODE: 'Tìm nguồn trong cửa sổ thời gian cho nhận định hiện trạng, hoặc đổi nhận định thành quá khứ/suy luận.',
 }
 
 #: Hai mã này sống ở `limits` (nguồn chân lý cho mã notice của vòng 27) — giữ tên ở đây làm bí danh
@@ -111,6 +136,13 @@ _TODO_WORDS: tuple[str, ...] = (
 #: lại. Chỉ TIÊU ĐỀ được quét (thân bài không), và mọi luật theo DÒNG (nguồn, đoạn trích, tầng) vẫn
 #: nguyên độ chặt — nới bộ từ ở đây là để cổng thôi từ chối oan hồ sơ viết bằng tiếng Việt tự nhiên.
 _CRITIQUE_WORDS: tuple[str, ...] = ('phan bien', 'critique', 'review', 'nhan xet', 'soi xet', 'diem yeu')
+
+#: Bí danh CÔNG KHAI của ba bộ từ trên — `scripts/eval/research_checks.py` đọc tên công khai trước,
+#: tên riêng tư chỉ là đường lui cho bản cũ. Một nguồn định nghĩa: ở đây gán chứ không chép lại từ,
+#: để bộ từ không trôi lệch giữa cổng (chấm thật) và bộ đánh giá (chấm điểm).
+FINDINGS_SECTION_WORDS: tuple[str, ...] = _FINDINGS_WORDS
+CONFLICT_SECTION_WORDS: tuple[str, ...] = _CONFLICTS_WORDS
+CRITIQUE_SECTION_WORDS: tuple[str, ...] = _CRITIQUE_WORDS
 
 #: `mức -> ((khoá, nhãn), các từ khoá nhận dạng trong TIÊU ĐỀ)`. Khớp bỏ dấu, không phân biệt hoa thường.
 DOSSIER_SECTIONS: Mapping[int, tuple[tuple[str, tuple[str, ...]], ...]] = {
@@ -311,8 +343,22 @@ def assess(
     owner_views: Sequence[str] = (),
     review: str = '',
     require_claim_citations: bool = False,
+    report: Any = None,
+    job_types: Any = (),
+    facets: Any = None,
+    claim_ids: Any = None,
+    extra_issues: Sequence[Any] = (),
 ) -> Verdict:
-    """Cổng tầng hồ sơ. `mode=None` ⇒ đọc từ môi trường. Không bao giờ ném."""
+    """Cổng tầng hồ sơ. `mode=None` ⇒ đọc từ môi trường. Không bao giờ ném.
+
+    P2 — khi có `report` (báo cáo có cấu trúc) **và** công tắc `BOXFOX_RESEARCH_STRUCTURED_REPORT`
+    bật, hình dạng hồ sơ được chấm bằng `research_report.validate_report()` (mục khung, mô-đun bắt
+    buộc, `claimId` trỏ vào sổ, mục "Chưa khảo sát" khớp facet) thay cho luật dò từ khoá tiêu đề.
+    Công tắc `off` giữ nguyên hành vi cũ từng byte — `report` khi đó bị bỏ qua.
+
+    `extra_issues` là chỗ máy chấm gắn thêm lỗi đã tính sẵn (ví dụ cổng chính sách thời gian); chúng
+    đi cùng kênh với lỗi cấu trúc nên `warn` cũng kể ra, `enforce` cũng từ chối.
+    """
     _ = session  # chỗ cắm cho tương lai; cổng này thuần theo tham số
     selected_mode = (mode or gate_mode()[0]).strip().lower()
     if selected_mode not in RESEARCH_GATE_MODES:
@@ -323,8 +369,22 @@ def assess(
     soft: list[str] = []
 
     if selected_mode != 'off':
-        for label in missing_sections(markdown, level):
-            issues.append(Issue('research-shape-missing', label))
+        structured = report is not None and limits.research_structured_report_enabled()
+        if structured:
+            for item in research_report.validate_report(report, job_types=job_types, level=level,
+                                                        facets=facets, claim_ids=claim_ids):
+                code = str((item or {}).get('code') or '')
+                if code:
+                    issues.append(Issue(code, str((item or {}).get('detail') or '')))
+        else:
+            for label in missing_sections(markdown, level):
+                issues.append(Issue('research-shape-missing', label))
+
+        for item in extra_issues or ():
+            # Lỗi đã tính sẵn của máy (`research_ledger.Issue`) — đi cùng kênh với lỗi cấu trúc.
+            code = str(getattr(item, 'code', '') or '')
+            if code:
+                issues.append(Issue(code, str(getattr(item, 'detail', '') or '')))
 
         # `r12` mà sổ không có — dấu vết trỏ sai; hồ sơ này chưa mở được dòng nào.
         for row_id in pinned_row_ids(markdown, rows):

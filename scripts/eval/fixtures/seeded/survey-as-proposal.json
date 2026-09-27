@@ -1,0 +1,122 @@
+{
+  "id": "SD6",
+  "case": "survey-as-proposal",
+  "kind": "survey-as-proposal",
+  "detector": "survey_as_proposal",
+  "reviewer": "critic",
+  "expectation": "Đề xuất/suy luận bị trình như điều nguồn nói là lỗi phải bắt.",
+  "request": "Đề xuất/suy luận bị trình như điều nguồn nói là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://survey.example/post",
+          "host": "survey.example",
+          "tier": 2,
+          "excerpt": "Bài tổng quan 2025 liệt kê ba hướng tiếp cận.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Nên ưu tiên hướng học sâu.",
+          "claimType": "recommendation",
+          "stanceOrigin": "agent-proposal",
+          "confidence": "unknown",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://survey.example/post",
+          "host": "survey.example",
+          "tier": 2,
+          "excerpt": "The survey lists three approaches.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "We should adopt approach three.",
+          "claimType": "inference",
+          "stanceOrigin": "agent-proposal",
+          "confidence": "unknown",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://survey.example/post",
+          "host": "survey.example",
+          "tier": 2,
+          "excerpt": "Bài tổng quan 2025 liệt kê ba hướng tiếp cận.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Nên ưu tiên hướng học sâu.",
+          "claimType": "recommendation",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://survey.example/post",
+          "host": "survey.example",
+          "tier": 2,
+          "excerpt": "The survey lists three approaches.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "We should adopt approach three.",
+          "claimType": "inference",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+# BoxFox — SearXNG tự host cho lớp tìm không khoá (P0b). Ảnh đã được kéo sẵn: searxng/searxng:latest.
+#
+#   docker compose -f deploy/searxng/docker-compose.yml up -d
+#   docker compose -f deploy/searxng/docker-compose.yml logs -f
+#   docker compose -f deploy/searxng/docker-compose.yml down
+#
+# `network_mode: host` để instance nghe ĐÚNG `127.0.0.1:8888` như `settings.yml` khai — không lộ
+# ra LAN. Trên Docker Desktop (Mac/Windows) host networking có thể không dùng được; khi đó thay
+# bằng biến thể port-mapping đã chú thích ở cuối tệp (đổi `bind_address` trong settings.yml thành
+# "0.0.0.0" và bỏ `network_mode`).
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: boxfox-searxng
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      # Chỉ đọc: container không được sửa cấu hình của chủ nhà.
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+      # ĐO ĐƯỢC 2026-09-25: ảnh `searxng/searxng:latest` mở cổng 8080 của granian, KHÔNG đọc
+      # `server.port` trong settings.yml. Thiếu biến này thì cổng 8888 không có ai nghe và mọi
+      # lời gọi bị "Connection reset by peer". `SEARXNG_PORT` mới là nút thật.
+      - SEARXNG_PORT=8888
+
+# --- Biến thể port-mapping (Docker Desktop / Mac / Windows, và môi trường sandbox nơi
+#     `network_mode: host` không bind được — đo 2026-09-25: báo `Address already in use`):
+#     bỏ `network_mode: host` ở trên, đặt `server.bind_address: "0.0.0.0"` trong settings.yml.
+#     Chỉ loopback HOST được publish, nên vẫn không lộ ra LAN:
+#
+#     ports:
+#       - "127.0.0.1:8888:8888"

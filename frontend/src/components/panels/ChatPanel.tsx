@@ -51,6 +51,8 @@ import { HarnessStepView } from '../chat/HarnessStepView'
 import { ProviderIcon } from '../providers/ProviderIcon'
 import { useHarnessStore } from '../../store/harnessStore'
 import { useHarnessChatStore } from '../../store/harnessChatStore'
+import { useResearchSync } from '../../hooks/useResearchSync'
+import { ResearchConversationCards } from './research/ResearchConversationCards'
 import { resolveThinkingLevel } from '../../lib/harnessThinking'
 import { composerModels, findRouteOption, routerChatOptions, routable, selectionKey } from '../../lib/routeOptions'
 
@@ -201,6 +203,15 @@ export function ChatPanel() {
   // Vòng 27 / C-5 — lượt đang chạy nhận chỉ thị giữa lượt: nhận ở `running`/`awaiting_decision`
   // và áp ở BƯỚC KẾ. Riêng `starting` (lượt chưa mở xong, chưa có bước nào để áp) vẫn khoá nút gửi.
   const harnessSteerable = harnessRun?.status === 'running' || harnessRun?.status === 'awaiting_decision'
+  // P4 — chế độ Research: đẩy (cấu hình, sự kiện `research_*`) vào store. Cầu nối này là thứ THAY
+  // cho vòng hỏi 5000 ms của `ResearchPanel`: nguồn sự thật là luồng sự kiện phiên, vòng 1200 ms
+  // bên dưới đã hỏi luồng rồi.
+  useResearchSync()
+  const researchSuggest = useMemo<{ reason: string; draftGoal: string } | null>(() => {
+    const latest = [...(harnessRun?.events ?? [])].reverse().find((event) => event.type === 'research_suggested')
+    if (!latest) return null
+    return { reason: String(latest.data.reason ?? ''), draftGoal: String(latest.data.draftGoal ?? '') }
+  }, [harnessRun?.events])
 
   // Lỗi của lần gửi/dừng vừa rồi được giữ thêm một bản cục bộ: `refresh` được
   // gọi mỗi 1200ms ghi lại `sessions[id].error` (thành `null` khi phiên không
@@ -653,6 +664,9 @@ export function ChatPanel() {
         )}
 
         <div ref={messagesEndRef} />
+        {/* P4 — thẻ Research trong hội thoại: lời hỏi nhiều câu, thẻ ngoài phạm vi, thẻ báo cáo
+            (kể cả run chạy nền xong sau khi đã tắt chế độ) và thẻ gợi ý của main. */}
+        <ResearchConversationCards suggest={researchSuggest} />
         </div>
 
       </div>

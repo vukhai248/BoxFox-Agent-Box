@@ -139,6 +139,7 @@ RESEARCH_CHECKS: tuple[str, ...] = (
     'milestone_ceiling_declared',
     'hard_ceiling_reported',
     'owner_views_three_labels',
+    'modules_present',
 )
 
 #: Bộ ca R và oracle máy của từng ca — cột "Oracle máy (layer1_checks)" của flow §7.1, cộng

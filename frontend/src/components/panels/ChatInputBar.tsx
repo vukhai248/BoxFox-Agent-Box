@@ -34,6 +34,9 @@ import { useSlashCompletion } from '../chat/useSlashCompletion'
 import { LabelDot } from '../LabelDot'
 import { inspectChipLabel } from '../../lib/inspect/format'
 import type { SteerNotice } from '../../store/harnessChatStore'
+import { useResearchStore } from '../../store/researchStore'
+import { ResearchComposerStatus } from './research/ResearchComposerStatus'
+import { ResearchToggle } from './research/ResearchToggle'
 
 // Ở chế độ `live` (`VITE_TRANSPORT=live`) chưa có handler backend nào tiêu
 // thụ `elements` (xem `types/transport.ts` chú thích trên `user_message`) —
@@ -129,7 +132,10 @@ export function ChatInputBar({
 }) {
   const t = useT()
   const [input, setInput] = useState('')
-  const slash = useSlashCompletion(input, setInput)
+  // Chế độ Research (P4): placeholder đổi khi đang bật, và danh sách lệnh gợi ý chỉ còn lệnh mode
+  // (loại `/review` và mọi lệnh vai khác — bảng 4.8 dòng 1).
+  const researchOn = useResearchStore((s) => s.mode.on)
+  const slash = useSlashCompletion(input, setInput, { modeOnly: researchOn })
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
@@ -354,6 +360,9 @@ export function ChatInputBar({
         className={`relative rounded-xl border border-line bg-panel2/70 p-2.5 shadow-xs transition-all focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-600/40 ${readingColumnClass(workspaceHidden)}`}
       >
         {slash.popup}
+        {/* P4 — dải trạng thái Research: chế độ đang bật, lời hỏi thoát chế độ, hoặc run chạy nền.
+            Khối này thay cho thẻ rời rạc: nó luôn nằm ngay trên ô nhập. */}
+        <ResearchComposerStatus />
         {/* Attached files chips — E5: mỗi chip mang trạng thái tải lên THẬT của nó
             (`data-attach-state`, đúng tên thuộc tính của mockup `attachments-chip-row`). */}
         {attachments.length > 0 && (
@@ -545,7 +554,7 @@ export function ChatInputBar({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={t(compact ? 'composer.placeholderShort' : 'composer.placeholder')}
+          placeholder={t(researchOn ? 'research.placeholderRunning' : compact ? 'composer.placeholderShort' : 'composer.placeholder')}
           className="w-full resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text"
         />
 
@@ -599,6 +608,10 @@ export function ChatInputBar({
                 }`}
               />
             </button>
+
+            {/* P4 — nút Research trong thanh công cụ (`composer-toggle-toolbar-pill.html`).
+                Chế độ đang tắt mà còn run chạy nền thì bấm vào mở tab Research thay vì bật chế độ. */}
+            <ResearchToggle compact={compact} />
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">

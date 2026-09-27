@@ -1,0 +1,120 @@
+{
+  "id": "SD2",
+  "case": "unsupported-claim",
+  "kind": "unsupported-claim",
+  "detector": "claim_without_source",
+  "reviewer": "verifier",
+  "expectation": "Nhận định không dòng sổ nào đỡ là lỗi phải bắt.",
+  "request": "Nhận định không dòng sổ nào đỡ là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Báo cáo nêu rõ mức tiêu thụ 40 kWh.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mức tiêu thụ là 40 kWh.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "The paper reports a 7% error rate.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "The error rate is 7%.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Báo cáo nêu rõ mức tiêu thụ 40 kWh.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mức tiêu thụ là 40 kWh.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": []
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "The paper reports a 7% error rate.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "The error rate is 7%.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "medium",
+          "rowIds": [
+            "r-missing"
+          ]
+        }
+      ]
+    }
+  ]
+}

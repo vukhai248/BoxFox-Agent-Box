@@ -21,6 +21,17 @@ from agentbox.memory.session_store import SessionStore
 ARGS = {'role': 'research', 'goal': 'khảo sát'}
 
 
+@pytest.fixture(autouse=True)
+def _legacy_research_mode(monkeypatch):
+    """Bộ kiểm này khoá CƠ CHẾ fan-out, không khoá chế độ Research.
+
+    Khi công tắc `BOXFOX_RESEARCH_MODE` bật (mặc định từ F4 của phiếu soát), cửa 2 đổi hành vi của
+    nhánh research KHÔNG brief: nhánh đầu bị kẹp mức 1 và từ nhánh thứ hai thì bị từ chối. Các ca ở
+    đây cố tình sinh nhiều nhánh research không brief nên phải chạy ở đường CŨ (công tắc tắt); hành vi
+    mới được khoá riêng trong `test_research_mode_shell.py` (M-07)."""
+    monkeypatch.setenv('BOXFOX_RESEARCH_MODE', 'off')
+
+
 class FixtureExecutor:
     async def execute(self, name, args, sid):
         return {'content': 'observed fixture result'}

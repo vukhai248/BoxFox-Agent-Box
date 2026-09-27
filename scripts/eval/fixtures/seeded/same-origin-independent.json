@@ -1,0 +1,162 @@
+{
+  "id": "SD8",
+  "case": "same-origin-independent",
+  "kind": "same-origin-independent",
+  "detector": "same_origin_independent",
+  "reviewer": "verifier",
+  "expectation": "Hai bản của cùng một nguồn đếm thành hai nguồn độc lập là lỗi phải bắt.",
+  "request": "Hai bản của cùng một nguồn đếm thành hai nguồn độc lập là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 3,
+          "excerpt": "Bản gốc: mức 120.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        },
+        {
+          "rowId": "r2",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 3,
+          "excerpt": "Bản độc lập: mức 118.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mức đạt khoảng 120.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://gamma.example/post",
+          "host": "gamma.example",
+          "tier": 3,
+          "excerpt": "Đo lần một: 42.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        },
+        {
+          "rowId": "r2",
+          "url": "https://delta.example/post",
+          "host": "delta.example",
+          "tier": 3,
+          "excerpt": "Đo lần hai: 44.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Kết quả khoảng 42 đến 44.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 3,
+          "excerpt": "Bản gốc: mức 120.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        },
+        {
+          "rowId": "r2",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 3,
+          "excerpt": "Bài viết lại: mức 120.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mức đạt khoảng 120.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://gamma.example/post",
+          "host": "gamma.example",
+          "tier": 3,
+          "excerpt": "Đo lần một: 42.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        },
+        {
+          "rowId": "r2",
+          "url": "https://gamma.example/post",
+          "host": "gamma.example",
+          "tier": 3,
+          "excerpt": "Bản sao: 42.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Kết quả khoảng 42.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    }
+  ]
+}

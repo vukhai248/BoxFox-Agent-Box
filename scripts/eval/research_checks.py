@@ -400,15 +400,62 @@ STRUCTURED_READ_TIERS = ('html', 'jats')
 READ_TIERS = ('html', 'jats', 'pdf-table', 'reader-text', 'page-image')
 READ_TOOLS = ('web_fetch', 'read_source', 'file_read')
 SEARCH_TOOLS = ('web_search', 'paper_search')
-CRITIQUE_SECTION_WORDS = ('phan bien', 'critique', 'review')
-CONFLICT_SECTION_WORDS = ('mau thuan', 'conflict')
-FINDINGS_SECTION_WORDS = ('phat hien', 'ket qua', 'findings')
+HARNESS_ROOT = pathlib.Path(__file__).resolve().parents[2] / 'backend' / 'src'
+
+
+def harness_module(name: str):
+    """Module của mã harness (`agentbox.agent_core.<name>`) nếu import được, không thì `None`.
+
+    Bản chấm cố ý **không** phụ thuộc mã harness (chạy độc lập ngoài `backend/src`), nhưng khi mã
+    harness có mặt thì luật phải là MỘT nguồn: bộ từ khoá mục, danh mục mô-đun, luật bão hoà.
+    """
+    target = 'agentbox.agent_core.' + name
+    if target in sys.modules:
+        return sys.modules[target]
+    import importlib
+    attempts = []
+    if HARNESS_ROOT.is_dir():
+        attempts.append(str(HARNESS_ROOT))
+    for root in attempts:
+        if root not in sys.path:
+            sys.path.insert(0, root)
+    try:
+        return importlib.import_module(target)
+    except Exception:  # pragma: no cover — chỉ chạy khi thiếu mã harness
+        return None
+
+
+def section_words(name: str, fallback: tuple, *aliases: str) -> tuple:
+    """Bộ từ khoá nhận dạng TIÊU ĐỀ mục, lấy từ `research_quality`; thiếu mã harness thì dùng bản sao.
+
+    Bản sao chỉ để bản chấm chạy được một mình; khi harness có mặt, `research_quality` là nguồn
+    (thêm/bớt từ khoá ở đó là đổi cả cổng lẫn bộ chấm, không phải sửa hai chỗ). `aliases` là tên
+    cũ/còn riêng tư ở `research_quality`, nhận để bản chấm không lệch khi tên công khai chưa có.
+    """
+    module = harness_module('research_quality')
+    if module is not None:
+        for key in (name,) + tuple(aliases):
+            words = getattr(module, key, None)
+            if isinstance(words, (list, tuple)) and words:
+                return tuple(words)
+    return fallback
+
+
+CRITIQUE_SECTION_WORDS = section_words('CRITIQUE_SECTION_WORDS',
+                                       ('phan bien', 'critique', 'review', 'nhan xet', 'soi xet',
+                                        'diem yeu'), '_CRITIQUE_WORDS')
+CONFLICT_SECTION_WORDS = section_words('CONFLICT_SECTION_WORDS', ('mau thuan', 'conflict'),
+                                       '_CONFLICTS_WORDS', '_CONFLICT_WORDS')
+FINDINGS_SECTION_WORDS = section_words('FINDINGS_SECTION_WORDS',
+                                       ('phat hien', 'ket qua', 'findings'), '_FINDINGS_WORDS')
 HEADING_RE = re.compile(r'^\s{0,3}#{1,6}\s+(.*)$', re.MULTILINE)
 SATURATION_WORDS = ('bão hoà', 'bão hòa', 'saturation', 'không thêm bài mới', 'hết vòng',
                     'dừng săn đuổi', 'đã bão hoà')
 #: Ba nhãn R12; mỗi cặp là (nhãn tiếng Việt, từ tiếng Anh hay dùng trong `review.md`).
 OWNER_VIEW_LABELS = (('ủng hộ', 'support'), ('phản bác', 'oppose'), ('chưa chắc', 'unsure'))
 ROW_ID_RE = re.compile(r'\br(\d{1,6})\b')
+#: Tệp phụ có cấu trúc của một run ở P2 (`research_report.sidecar_names`).
+REPORT_JSON_RE = re.compile(r'^v\d+-report\.json$')
 NUMBER_TOKEN_RE = re.compile(r'\d+(?:[.,]\d+)?')
 
 
@@ -807,6 +854,128 @@ def records_text(transcript) -> str:
                      for item in transcript or [] if isinstance(item, dict))
 
 
+LOG_KEYS = ('searchLog', 'search_log')
+#: Khoá nhận dạng một hàng nhật ký tìm (`research_search_log` của harness).
+LOG_ROW_KEYS = ('facetId', 'facet_id')
+
+
+def search_log_rows(records) -> list:
+    """Nhật ký tìm trong bản ghi của một lượt.
+
+    Nhận hai hình dạng đang có thật: `records['searchLog']` (dict bản ghi đã gom) và event mang
+    sẵn hàng nhật ký (`{'kind': 'search', 'payload': {...}}` hoặc hàng trần). Hàng nhật ký là
+    `{'facetId','results','relevantNew','created'}`; chìa snake_case cũng nhận.
+    """
+    if isinstance(records, dict):
+        for key in LOG_KEYS:
+            rows = records.get(key)
+            if isinstance(rows, (list, tuple)):
+                return [row for row in rows if isinstance(row, dict)]
+        return []
+    out: list = []
+    for item in records or []:
+        if not isinstance(item, dict):
+            continue
+        for key in LOG_KEYS:
+            rows = item.get(key)
+            if isinstance(rows, (list, tuple)):
+                out.extend(row for row in rows if isinstance(row, dict))
+        payload = item.get('payload') if isinstance(item.get('payload'), dict) else {}
+        for candidate in (item, payload):
+            if not isinstance(candidate, dict):
+                continue
+            if any(key in candidate for key in LOG_ROW_KEYS) and (
+                    'results' in candidate or 'relevantNew' in candidate or 'relevant_new' in candidate):
+                out.append(candidate)
+                break
+        else:
+            continue
+    return out
+
+
+#: Ngưỡng bão hoà — bản sao của `limits.RESEARCH_SATURATION_*` cho đường chạy độc lập.
+SATURATION_WAVES = 2
+SATURATION_NEW_RATIO = 0.10
+
+
+def saturation_from_log(rows) -> dict:
+    """Bão hoà theo facet, đo từ NHẬT KÝ TÌM (không dò từ khoá trong văn bản).
+
+    Dùng `research_facets.saturation_from_log` khi mã harness có mặt; không thì luật tối thiểu
+    ngay tại đây, cùng ngưỡng: `waves` sóng liên tiếp có `relevant_new / results` dưới 10%.
+    """
+    module = harness_module('research_facets')
+    if module is not None:
+        try:
+            return module.saturation_from_log(rows)
+        except Exception:  # pragma: no cover — hình dạng lạ thì rơi về luật tại chỗ
+            pass
+    grouped: dict = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        facet_id = str(row.get('facetId') or row.get('facet_id') or '')
+        grouped.setdefault(facet_id, []).append(row)
+    facets = {}
+    for facet_id, facet_rows in grouped.items():
+        ratios = [_log_ratio(row) for row in facet_rows]
+        below = 0
+        for ratio in reversed(ratios):
+            if ratio < SATURATION_NEW_RATIO:
+                below += 1
+            else:
+                break
+        status = 'unexplored' if not ratios else ('saturated' if below >= SATURATION_WAVES and
+                                                  len(ratios) >= SATURATION_WAVES else 'searched')
+        facets[facet_id] = {'status': status, 'waves': below, 'ratios': ratios,
+                            'lastRatio': ratios[-1] if ratios else -1.0}
+    return {'facets': facets, 'facetIds': sorted(facets)}
+
+
+def _log_ratio(row) -> float:
+    """`relevant_new / results` của một lượt tìm; lượt không trả kết quả nào tính là 0."""
+    def number(*keys):
+        for key in keys:
+            value = row.get(key)
+            if value not in (None, ''):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return 0
+        return 0
+    results = number('results')
+    new = number('relevantNew', 'relevant_new')
+    if results <= 0:
+        return 0.0 if new <= 0 else 1.0
+    return max(0.0, min(1.0, new / float(results)))
+
+
+def _module_catalogue() -> dict:
+    """Danh mục mô-đun của `research_report` (một nguồn định nghĩa); thiếu mã harness thì `{}`."""
+    module = harness_module('research_report')
+    return dict(getattr(module, 'MODULES', {}) or {}) if module is not None else {}
+
+
+def report_json_modules(room) -> set:
+    """Mô-đun khai trong `v<N>-report.json` của phòng (tệp phụ có cấu trúc của P2)."""
+    found: set = set()
+    for path in room_files(room):
+        if not REPORT_JSON_RE.match(path.name):
+            continue
+        try:
+            payload = json.loads(read_text(path) or 'null')
+        except (TypeError, ValueError):
+            continue
+        modules = payload.get('modules') if isinstance(payload, dict) else None
+        for item in modules or []:
+            if isinstance(item, dict):
+                item = item.get('moduleId') or item.get('id') or item.get('name') or ''
+            key = str(item or '').strip()
+            if key:
+                found.add(key.casefold() if not key.startswith('M-') else key)
+    return found
+
+
 # ----------------------------------------------------------------------- 27 oracle
 
 def dossier_frontmatter_present(room=None, records=None, **options) -> dict:
@@ -1024,8 +1193,28 @@ def citation_chase_logged(room=None, records=None, *, backward=1, forward=1, **o
 
 
 def saturation_logged(room=None, records=None, *, minimum=1, **options) -> dict:
-    """R4 — hồ sơ/nhật ký ghi dấu hiệu bão hoà (dừng khi vòng mới không thêm bài nào)."""
+    """R4 — bão hoà ĐO TỪ NHẬT KÝ TÌM; không có nhật ký thì mới dò dấu hiệu trong văn bản.
+
+    Đường dò từ khoá cũ giữ làm đường lui cho bản ghi cũ (`records` không mang `searchLog`), và
+    khi ấy kết quả `detail` nói rõ là chưa đo được từ nhật ký.
+    """
     name = 'saturation_logged'
+    rows = search_log_rows(records)
+    if rows:
+        measured = saturation_from_log(rows)
+        facets = measured.get('facets') or {}
+        saturated = sorted(facet_id for facet_id, state in facets.items()
+                           if (state or {}).get('status') == 'saturated')
+        hits = len(saturated)
+        where = 'nhật ký tìm'
+        if not facets and (measured.get('overall') or {}).get('status') == 'saturated':
+            hits = 1
+        if hits >= minimum:
+            return _result(name, True, f'{where}: {len(rows)} lượt tìm, {len(facets)} facet, '
+                                       f'{len(saturated)} facet bão hoà'
+                                       + (f' ({", ".join(saturated[:3])})' if saturated else ''))
+        return _result(name, False, f'{where}: {len(rows)} lượt tìm nhưng chỉ {hits} facet bão hoà '
+                                    f'(cần ≥ {minimum}) — chưa có hai sóng liên tiếp dưới 10% mới')
     in_room = _fold(prose_text(room))
     hits = [word for word in SATURATION_WORDS if _fold(word) in in_room]
     where = 'hồ sơ'
@@ -1353,6 +1542,64 @@ def owner_views_three_labels(room=None, records=None, **options) -> dict:
 
 #: Tên oracle → hàm. `rubric.RESEARCH_CHECKS` giữ danh sách tên này ở dạng hằng số để tài
 #: liệu/UI/`layer1_checks` của fixture dùng chung một nguồn sự thật.
+def modules_present(room=None, records=None, *, modules=(), **options) -> dict:
+    """P2 — hồ sơ có đủ MÔ-ĐUN đã hứa trong thẻ phạm vi (§5.8).
+
+    Đọc `v<N>-report.json` trước (tệp phụ có cấu trúc); không có thì soi bản người đọc để tìm id
+    hoặc nhãn mô-đun. Danh mục lấy từ `research_report` khi mã harness có mặt.
+    """
+    name = 'modules_present'
+    promised = [_module_key(item) for item in _as_sequence(modules)]
+    promised = [item for item in promised if item]
+    if not promised:
+        return _result(name, True, 'thẻ phạm vi không hứa mô-đun nào ở mức này')
+    catalogue = _module_catalogue()
+    found = report_json_modules(room)
+    prose = _fold(prose_text(room))
+    for module_id in promised:
+        if module_id in found or module_id.casefold() in found:
+            continue
+        title = ''
+        for key, meta in catalogue.items():
+            if key.casefold() == module_id.casefold():
+                title = str((meta or {}).get('title') or '')
+                break
+        keys = [_fold(module_id), _fold(title) if title else '']
+        if any(key and key in prose for key in keys):
+            found.add(module_id)
+    missing = [item for item in promised if item not in found and item.casefold() not in found]
+    if missing:
+        return _result(name, False, 'thiếu mô-đun đã hứa: ' + ', '.join(missing))
+    return _result(name, True, f'đủ {len(promised)} mô-đun đã hứa: ' + ', '.join(promised))
+
+
+def _as_sequence(value) -> list:
+    if isinstance(value, (list, tuple, set)):
+        return [item for item in value if item not in (None, '')]
+    if value in (None, ''):
+        return []
+    return [value]
+
+
+def _module_key(value) -> str:
+    """Khoá mô-đun để so khớp: `'gaps'`/`'M-GAPS'` → `'M-gaps'`; lạ thì giữ nguyên chữ đã cắt."""
+    module = harness_module('research_report')
+    if module is not None:
+        key = module.normalize_module(value)
+        if key:
+            return key
+    text = str(value or '').strip()
+    text = text.replace('_', '-').replace(' ', '-')
+    if not text:
+        return ''
+    if not text.casefold().startswith('m-'):
+        text = 'M-' + text
+    for key in _module_catalogue():
+        if key.casefold() == text.casefold():
+            return key
+    return text
+
+
 CHECKS: dict = {
     'dossier_frontmatter_present': dossier_frontmatter_present,
     'sources_opened': sources_opened,
@@ -1381,6 +1628,7 @@ CHECKS: dict = {
     'milestone_ceiling_declared': milestone_ceiling_declared,
     'hard_ceiling_reported': hard_ceiling_reported,
     'owner_views_three_labels': owner_views_three_labels,
+    'modules_present': modules_present,
 }
 
 #: Tuỳ chọn mặc định của từng oracle, lấy từ chính bộ ca R (mức, trần…). Gọi thẳng hàm vẫn

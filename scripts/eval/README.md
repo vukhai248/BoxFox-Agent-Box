@@ -45,19 +45,23 @@ Thêm bốn biến kết nối, thiếu thì dừng với mã thoát 4 **trướ
 
 **Không dán giá trị bí mật vào chat.** Khoá do chủ sở hữu đặt trong môi trường của máy.
 
-Ngay cả khi mở đủ khoá, **hôm nay vẫn không có gì gọi model**: `run_eval.py --execute` trả về mã
-thoát 5 kèm danh sách việc còn thiếu, `judge.JudgeRunner.request()` ném `NotImplementedError` ghi rõ
-các bước còn lại. Đây là cố ý: giàn dựng trước, runner viết sau.
+**Từ P0a, `--execute` thật sự chạy**: nó gọi `runner.run_scenario` cho từng ô
+(fixture × cấu hình × lần lặp), rồi ghi `scores.jsonl` theo schema `research-scores-v2`
+và `manifest.json` (ghim commit, băm gói nguồn, route, model, tỉ lệ lỗi hạ tầng).
+`judge.JudgeRunner.request()` gọi thẳng router (`/v1/chat/completions`, hạn chờ 120 s,
+thử lại hai lần khi 5xx) — vẫn qua cổng `guard.py` trước mọi lời gọi. Chưa có lượt
+thật nào được chạy; ô `validity=infra-failed`/`harness-bug` ghi `metrics: null` (chưa
+đo), không bao giờ ghi 0.
 
 ### Mã thoát
 
 | Mã | Nghĩa |
 |---|---|
-| 0 | xong (dry-run, hoặc in danh sách/prompt) |
+| 0 | xong (dry-run, hoặc lượt `--execute` có ít nhất một ô hợp lệ về chất lượng) |
 | 2 | sai cách dùng |
 | 3 | bị cổng chi tiêu từ chối (thiếu opt-in hoặc thiếu ngân sách) |
-| 4 | thiếu biến kết nối — dừng trước khi gọi |
-| 5 | chưa cài đặt runner (chưa gọi model nào) |
+| 4 | thiếu biến kết nối — dừng trước khi gọi; hoặc `--execute` xong mà không ô nào hợp lệ |
+| 5 | (nghỉ hưu) trước đây là "chưa cài đặt runner"; `--execute` không còn trả mã này |
 
 ## 3. Chi phí ước lượng theo tầng (số của kế hoạch, chưa đo)
 
@@ -76,8 +80,14 @@ kèm lý do lệch. Chỗ lệch đã biết: §7 của kế hoạch chất lư�
 
 | Tệp | Việc |
 |---|---|
-| `run_eval.py` | cửa vào duy nhất: `--list`, `--dry-run`, `--plan-tier`, `--execute` (bị chặn) |
+| `run_eval.py` | cửa vào duy nhất: `--list`, `--dry-run`, `--plan-tier`, `--execute` (chạy thật khi đủ khoá) |
 | `guard.py` | cổng chi tiêu hai yếu tố + kiểm biến kết nối |
+| `net.py` | **chỗ duy nhất** mở socket trong `scripts/eval` (`urllib`, stdlib); chỉ gọi trong đường `--execute` |
+| `runner.py` | chạy một ca qua harness, phân loại `quality-valid`/`infra-failed`/`harness-bug`, chạy lại, băm gói nguồn |
+| `reference_map.py` | bản đồ tham chiếu (§8.3) + recall có trọng số |
+| `grading.py` | gói chấm mù `G-0NN` (§8.6), bảng chấm 0–4, mở khoá + độ khớp |
+| `search_bench.py` | đo 8.7: `search_queries.jsonl`, nDCG@10, recall top-20, tỉ lệ mới/lỗi, p50/p95 |
+| `packs/build_pack.py` + `packs/README.md` | dựng/kiểm gói nguồn đúng định dạng §3 |
 | `rubric.py` | rubric C1–C8, điều kiện cứng, dải điểm, thống kê; tách lớp 1/lớp 2 |
 | `rushed_index.py` | chỉ số vội S1–S10 đọc từ nhật ký hệ thống; tín hiệu không đo được thì ghi `not_measured` |
 | `logread.py` | đọc JSONL thuần, không import `agentbox`, không mở socket; cửa sổ gồm cả `harness.previous.jsonl` (và `.0-.3` khi `--rotated`), bỏ dòng trùng giữa các tệp |
@@ -95,8 +105,10 @@ thời gian render nên tính lại được từ dữ liệu thô; `--verify` s
 
 ## 6. Còn thiếu (nói thẳng)
 
-- Runner chạy fixture thật và runner BFCL: **chưa cài đặt**.
-- Lớp 2 (gọi giám khảo LLM) và lớp 3 (chấm tay): có prompt, **chưa gọi lần nào**.
+- Runner chạy fixture thật: **đã cài đặt (P0a)** — chưa chạy lượt thật nào (cần opt-in + ngân sách + harness).
+- Lớp 2 (gọi giám khảo LLM): **đã cài đặt (P0a)** — chưa gọi lần nào; lớp 3 (chấm tay) có prompt + bảng chấm.
+- Gói nguồn cố định cho 13 tình huống (§8.3): **chưa thu thập** — xem `packs/README.md`.
+- Bộ 120 truy vấn đo 8.7: **đã có** (`search_queries.jsonl`), chưa chạy lượt đo nào.
 - Lớp 1 mới có chỉ số vội; phần oracle kiểm từng fixture còn thiếu, và mỗi fixture đều có mục
   `open_questions` ghi rõ chỗ chưa có dữ liệu (repo mẫu, phiên 30 lượt, giả lập lỗi upstream rỗng…).
 - Ba tín hiệu S1/S4/S5: **S4 đã đo được** từ vòng 22 — cổng bằng chứng ghi

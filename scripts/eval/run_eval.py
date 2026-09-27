@@ -7,13 +7,17 @@ the two plan documents — and stops. It opens no socket and calls no model, whi
 
 `--execute` is the only path that could ever spend money. It refuses unless both
 the explicit opt-in (`BOXFOX_EVAL_ALLOW_SPEND=1`) and a stated budget are
-present, and then stops at the not-implemented runner instead of guessing.
+present, then hands each (fixture, config, repeat) cell to `runner.run_scenario`
+and writes `results/<run>/scores.jsonl` under schema `research-scores-v2` (a cell
+that never ran quality-validly is written with `metrics: null`, never 0).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -22,6 +26,7 @@ import guard  # noqa: E402
 import judge  # noqa: E402
 import manifest as manifest_mod  # noqa: E402
 import rubric  # noqa: E402
+import runner  # noqa: E402
 import rushed_index  # noqa: E402
 
 REPO_DIR = Path(__file__).resolve().parents[2]
@@ -33,6 +38,10 @@ DEFAULT_OUT_ROOT = Path.home() / 'BoxFox' / 'eval-runs'
 TIER_WITH_QUALITY_FIXTURES = '1'   # §3 tầng 1 liệt kê đúng bộ 12 fixture chất lượng
 
 EXIT_OK, EXIT_USAGE, EXIT_SPEND, EXIT_CONNECTION, EXIT_NOT_IMPLEMENTED = 0, 2, 3, 4, 5
+# Mã 5 (`EXIT_NOT_IMPLEMENTED`) nay KHÔNG còn đường nào trả về: `--execute` đã gọi
+# `runner.run_scenario` thật (hợp đồng P0 §7). Giữ hằng số để mã cũ/tài liệu tham chiếu
+# không vỡ, nhưng đừng dùng nó cho hành vi mới.
+SCORES_SCHEMA_VERSION = 'research-scores-v2'
 
 # §7 fixes the COUNT (12 fixture × 3 cấu hình) but not what the three are. These
 # are placeholders so the cost arithmetic has something to multiply; the A/B axis
@@ -156,9 +165,11 @@ def build_plan(*, fixtures: dict[str, dict], config_count: int, repeat: int, tie
         'judgePrompt': judge.prompt_info(),
         'rubricVersion': f'C1-C8 / manifest {manifest_mod.MANIFEST_VERSION}',
         'implementationGaps': [
-            'runner chạy fixture thật: CHƯA cài đặt (dừng ở NotImplementedError, không tiêu tiền)',
-            'lớp 2 (giám khảo LLM): CHƯA cài đặt',
+            'runner chạy fixture thật: ĐÃ cài đặt (P0a) — chưa chạy lượt thật nào (cần opt-in + '
+            'ngân sách + harness)',
+            'lớp 2 (giám khảo LLM): ĐÃ cài đặt qua router (P0a) — chưa gọi lượt thật nào',
             'lớp 1 (oracle máy): đã có phần chỉ số vội (rushed_index.py); phần kiểm từng fixture còn thiếu',
+            'gói nguồn cố định cho 13 tình huống (§8.3): chưa thu thập — xem scripts/eval/packs/README.md',
         ],
     }
     return plan
@@ -307,6 +318,96 @@ def render_plan(plan: dict, out_dir: Path) -> str:
     return '\n'.join(lines)
 
 
+def scenarios_from(selected: dict[str, dict], *, pack: str | None = None,
+                   workspace: str | None = None) -> list[dict]:
+    """Biến fixture đã chọn thành `scenario` cho `runner.run_scenario` (không gọi gì)."""
+    scenarios: list[dict] = []
+    for code, item in selected.items():
+        budget = item.get('budget') or {}
+        scenarios.append({
+            'id': code,
+            'prompt': item.get('request') or '',
+            'pack': pack,
+            'workspace': workspace or item.get('workspace'),
+            'budget': {'max_steps': budget.get('max_steps'),
+                       'deadline_seconds': budget.get('deadline_seconds'),
+                       'wall_seconds': budget.get('wall_seconds')},
+            'seed': budget.get('seed', 0),
+        })
+    return scenarios
+
+
+def write_scores(out_dir: Path, rows: list[dict], *, pack_hash: dict, route: str,
+                 agent_model: str, judge_prompt: dict) -> dict:
+    """Ghi `scores.jsonl` (schema `research-scores-v2`) + `manifest.json`, trả tóm tắt."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scores_path = out_dir / 'scores.jsonl'
+    recorded_at = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+    with scores_path.open('w', encoding='utf-8') as handle:
+        for row in rows:
+            # H3 — `measured: true` chỉ khi THẬT SỰ có khối `metrics`; không bao giờ ghi
+            # `measured: true, metrics: null`.
+            metrics = row.get('metrics')
+            measured = bool(row.get('measured')) and metrics is not None
+            handle.write(json.dumps({
+                'schemaVersion': SCORES_SCHEMA_VERSION,
+                'recordedAt': recorded_at,
+                'scenarioId': row.get('scenarioId'),
+                'configId': row.get('configId'),
+                'repeat': row.get('repeat'),
+                'validity': row.get('validity'),
+                'measured': measured,
+                'metrics': metrics if measured else None,
+                'reruns': row.get('reruns'),
+                'infraFailureRate': row.get('infraFailureRate'),
+                'infraErrorCodes': row.get('infraErrorCodes') or {},
+                'errorCode': row.get('errorCode'),
+                'artifacts': row.get('artifacts') or {},
+            }, ensure_ascii=False) + '\n')
+    infra = runner.summarize_infra(rows)
+    flags = runner.flag_rate_divergence(infra['byConfig'])
+    manifest = manifest_mod.build_manifest(
+        benchmark_name='boxfox-research-eval', benchmark_version='v2',
+        repo_dir=REPO_DIR, fixture_ids=sorted({row.get('scenarioId') for row in rows}),
+        provider=route, model=agent_model, seed=0, temperature=0.0,
+        network=manifest_mod.env_network_state(), judge_prompt=judge_prompt,
+        created_at=recorded_at,
+        extra={
+            'scoresSchema': SCORES_SCHEMA_VERSION,
+            'pack': pack_hash,
+            'infraFailure': infra,
+            'infraDivergence': flags,
+            'runWindow': {'recordedAt': recorded_at},
+        })
+    manifest_mod.write_manifest(out_dir / 'manifest.json', manifest)
+    summary = {
+        'scoresPath': str(scores_path),
+        'manifestPath': str(out_dir / 'manifest.json'),
+        'cells': len(rows),
+        'measured': sum(1 for row in rows if row.get('measured')),
+        'infraFailure': infra,
+        'infraDivergence': flags,
+    }
+    return summary
+
+
+def render_execute(summary: dict) -> str:
+    lines = ['=' * 78, 'BOXFOX EVAL — lượt chạy thật đã ghi số', '=' * 78, '']
+    lines.append(f"Ô đo: {summary['cells']} | đo được: {summary['measured']} | "
+                 f"chưa đo: {summary['cells'] - summary['measured']}")
+    for config_id, rate in (summary['infraFailure'].get('byConfig') or {}).items():
+        shown = 'chưa đo' if rate is None else f'{rate * 100:.1f}%'
+        lines.append(f"  - tỉ lệ lỗi hạ tầng {config_id}: {shown}")
+    if summary['infraDivergence'].get('flagged'):
+        lines.append('  ! CẢNH BÁO: tỉ lệ lỗi hạ tầng lệch > 10 điểm % giữa các cấu hình — '
+                     'kết quả so sánh bị gắn cờ.')
+    lines.append(f"  - bảng điểm: {summary['scoresPath']}")
+    lines.append(f"  - manifest:  {summary['manifestPath']}")
+    lines.append('')
+    lines.append('Ô `validity=infra-failed` và `harness-bug` ghi `metrics: null` (chưa đo), không ghi 0.')
+    return '\n'.join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description='Đánh giá chất lượng đầu ra + benchmark cho BoxFox (mặc định: dry-run).')
@@ -394,13 +495,32 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {item['name']}: {item['why']}", file=sys.stderr)
         print('Đặt các biến này rồi chạy lại. Không dán giá trị bí mật vào chat.', file=sys.stderr)
         return EXIT_CONNECTION
-    print('Cổng chi tiền đã qua và kết nối đã có — nhưng runner CHƯA được cài đặt.')
-    print('Việc còn thiếu: (1) sinh phiên harness cho từng fixture và chạy tới hết trần bước,')
-    print('(2) ghi đầu ra thô + cost_from_entries từ nhật ký hệ thống vào --out,')
-    print('(3) chấm lớp 1 (rushed_index + kiểm từng fixture), (4) chấm lớp 2 qua judge.py.')
-    print('Cho tới lúc đó KHÔNG có lệnh nào trong scripts/eval gọi model. Dừng ở đây,')
-    print('không tiêu đồng nào.')
-    return EXIT_NOT_IMPLEMENTED
+    print('Cổng chi tiền đã qua và kết nối đã có — bắt đầu chạy thật qua harness.')
+    scenarios = scenarios_from(selected, pack=os.environ.get('BOXFOX_WEB_PACK') or None)
+    configs = [dict(item) for item in CONFIGS[:args.configs]]
+    rows: list[dict] = []
+    for scenario in scenarios:
+        for config in configs:
+            for repeat in range(args.repeat):
+                try:
+                    rows.append(runner.run_scenario(
+                        scenario, config, repeat=repeat, allow_spend=True,
+                        budget_usd=verdict['budgetUsd']))
+                except runner.SpendRefused as exc:
+                    print(f'cổng chi tiền đóng giữa chừng: {exc}', file=sys.stderr)
+                    return EXIT_SPEND
+    summary = write_scores(
+        out_dir, rows,
+        pack_hash=runner.pack_hash(os.environ.get('BOXFOX_WEB_PACK')),
+        route=os.environ.get('BOXFOX_ROUTER_BASE_URL') or runner.DEFAULT_ROUTE,
+        agent_model=os.environ.get('BOXFOX_EVAL_AGENT_MODEL') or runner.DEFAULT_AGENT_MODEL,
+        judge_prompt=judge.prompt_info())
+    print(render_execute(summary))
+    if rows and not summary['measured']:
+        print('Không ô nào chạy tới trạng thái hợp lệ về chất lượng: hạ tầng chưa sẵn sàng.',
+              file=sys.stderr)
+        return EXIT_CONNECTION
+    return EXIT_OK
 
 
 if __name__ == '__main__':

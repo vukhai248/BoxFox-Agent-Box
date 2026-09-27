@@ -158,3 +158,25 @@ def test_a_verdict_that_disagrees_with_the_critique_is_refused(harness):
         asyncio.run(runtime.dispatch(session, 'research_verify',
                                      {'researchId': 'gia-dich-vu-2026', 'version': 'v1', 'verdict': 'ok'}))
     assert store.research_verification_count('gia-dich-vu-2026') == 0
+
+
+def test_a_review_child_that_declares_another_target_cannot_decide(harness):
+    """Đợt soát `3dc745f`, finding 7: con nào đã KHAI đích danh bản và mức soát thì phải khớp —
+    kể cả khi hàng hồ sơ không có băm. Trước đây cả khối kiểm danh tính nằm trong
+    `if row.get('content_hash'):`, nên lượt quét MỚI-NHẤT-TRƯỚC (A2) có thể nhận một con
+    `evidence` cho một lần kiểm `critique`, hoặc một con trỏ vào bản khác, chỉ vì nó xong sau cùng.
+    """
+    store, runtime, sid, session = harness
+    record_dossier(store, sid, 1)
+    wrong_mode = review_child(store, runtime, sid)
+    config = store.get(wrong_mode['id'])['config']
+    config['reviewTarget'] = {'kind': 'research', 'researchId': 'gia-dich-vu-2026',
+                              'version': 1, 'mode': 'evidence'}
+    store.update_config(wrong_mode['id'], config)
+    wrong_version = review_child(store, runtime, sid)
+    config = store.get(wrong_version['id'])['config']
+    config['reviewTarget'] = {'kind': 'research', 'researchId': 'gia-dich-vu-2026',
+                              'version': 2, 'mode': 'critique'}
+    store.update_config(wrong_version['id'], config)
+    with pytest.raises(ValueError, match=limits.RESEARCH_VERIFY_NO_CRITIC_CODE):
+        research_runtime.research_critique(runtime, sid, 'gia-dich-vu-2026', 1, mode='critique')

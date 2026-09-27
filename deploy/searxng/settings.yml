@@ -1,0 +1,133 @@
+# BoxFox — cấu hình SearXNG tự host (phía HOST, KHÔNG chạy trong box).
+#
+# VÌ SAO nằm ngoài box: box không có mạng (`BOX_DEFAULT_NETWORK: "off"`), và mở mạng cho box là trái
+# thiết kế an toàn. Metasearch chạy trên host, chỉ văn bản đã trích đi qua ranh giới.
+#
+# Mặc định ở đây theo kế hoạch v2 §5.4.2. Chủ nhà sửa được: tắt một engine chỉ cần `disabled: true`
+# (hoặc bỏ nó khỏi danh sách). Chạy kèm `docker-compose.yml` trong cùng thư mục.
+#
+# `server.bind_address: 127.0.0.1` + compose dùng `network_mode: host`: instance CHỈ nghe ở loopback
+# của host — không lộ ra LAN. Nếu chạy Docker Desktop (Mac/Windows) không có host network, xem
+# biến thể port-mapping đã chú thích trong `docker-compose.yml`.
+
+use_default_settings: true
+
+server:
+  bind_address: "127.0.0.1"
+  port: 8888
+  # Chỉ harness gọi; không có người lạ ⇒ không cần `limiter` (limiter còn cần thêm Valkey).
+  public_instance: false
+  limiter: false
+  image_proxy: false
+  # Sinh NGẪU NHIÊN lúc cài: đây chỉ là chỗ giữ chỗ cho máy cục bộ, không phải bí mật dùng chung.
+  secret_key: "CHANGE_ME_boxfox_local_searxng_secret"
+
+general:
+  # Không ghi truy vấn: tắt debug, log mức WARNING (xem `logging` bên dưới).
+  debug: false
+  instance_name: "BoxFox local SearXNG"
+  # Số đếm engine TRONG MÁY cho bước 7 (sức khoẻ/ngưng). Không có telemetry gửi ra ngoài.
+  enable_metrics: true
+
+search:
+  # Tắt gợi ý: autocomplete sẽ gửi chữ đang gõ dở cho bên ngoài.
+  autocomplete: ""
+  safe_search: 0
+  default_lang: "auto"
+  # `json` là BẮT BUỘC để harness đọc được API; `html` để chủ nhà mở xem bằng mắt.
+  formats:
+    - html
+    - json
+
+ui:
+  query_in_title: false
+
+logging:
+  level: WARNING
+
+outgoing:
+  # ĐO/HỢP ĐỒNG 5.4.2: 4,0 s cho một request engine, trần 8,0 s.
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  using_tor_proxy: false
+  # KHÔNG đặt email/tên người trong user-agent; giữ mặc định trung tính của SearXNG.
+  useragent_suffix: ""
+
+# ---------------------------------------------------------------------------------------------
+# Engine bật mặc định (bộ luân phiên bước 7 chỉ chọn một tập con mỗi truy vấn).
+# Tên `engine:` là tên mô-đun của SearXNG; `name:` là nhãn trong kế hoạch 5.4.2.
+engines:
+  # --- Web chung ---
+  - name: brave
+    engine: brave
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: false
+  - name: mojeek
+    engine: mojeek
+    disabled: false
+  - name: qwant
+    engine: qwant
+    disabled: false
+  - name: startpage
+    engine: startpage
+    disabled: false
+  - name: bing
+    engine: bing
+    disabled: false
+  - name: google
+    engine: google
+    disabled: false
+  # --- Tin tức (facet hiện trạng, thị trường) ---
+  - name: bing news
+    engine: bing_news
+    disabled: false
+  # ĐO ĐƯỢC 2026-09-25: ảnh 2026.9.23 không còn mô-đun `qwant_news.py`; khai nó chỉ sinh một dòng
+  # ERROR lúc khởi động. Tin tức tiếng Việt vẫn đi qua `bing news` và `google news`.
+  - name: google news
+    engine: google_news
+    disabled: false
+  # --- Tham khảo (định nghĩa, tên gọi khác, thực thể) ---
+  - name: wikipedia
+    engine: wikipedia
+    disabled: false
+  - name: wikidata
+    engine: wikidata
+    disabled: false
+  # --- Mã nguồn (bổ sung cho chân GitHub API) ---
+  - name: github
+    engine: github
+    disabled: false
+  # --- Học thuật (không có API; trọng số thấp vì hay bị chặn) ---
+  - name: google scholar
+    engine: google_scholar
+    disabled: false
+  # --- TẮT mặc định: harness gọi các API này trực tiếp (5.4.3), gọi thêm qua SearXNG là tiêu hạn
+  #     mức của cùng IP hai lần. ---
+  - name: openalex
+    engine: openalex
+    disabled: true
+  - name: semantic scholar
+    engine: semantic_scholar
+    disabled: true
+  - name: crossref
+    engine: crossref
+    disabled: true
+  - name: arxiv
+    engine: arxiv
+    disabled: true
+  - name: pubmed
+    engine: pubmed
+    disabled: true
+
+# GHI CHÚ (đo 2026-09-25): ảnh `searxng/searxng:latest` tự khai hai engine onion trong
+# settings mặc định của nó (`ahmia`, `torch`) và cả hai in một dòng ERROR lúc khởi động vì không có
+# Tor / vì mô-đun `torch.py` không còn trong ảnh. Đó là tiếng ồn của ảnh gốc, KHÔNG phải lỗi cấu
+# hình của BoxFox: khai lại chúng ở đây cũng không làm dòng lỗi biến mất, nên ta để nguyên.
+#
+# ĐO ĐƯỢC 2026-09-25 từ máy chủ BoxFox (IP trung tâm dữ liệu, không khoá):
+#   brave 24 kết quả · mojeek 34 · startpage 34 · bing 10 · google 9 · google cse 16 —
+#   duckduckgo và qwant bị CAPTCHA (không dùng được từ IP này). Bước 7 của ống tìm tự luân phiên
+#   và tự ngưng engine hỏng, nên hai engine bị chặn không làm hỏng lượt tìm.
+#   Muốn bỏ hẳn một engine: thêm `disabled: true` cho nó ở khối `engines:` phía trên.

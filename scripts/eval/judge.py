@@ -9,15 +9,17 @@
 3. human sample — the owner scores 3–5 cases by hand to calibrate layer 2.
 
 This module owns the layer-2 and layer-3 prompts (they live in `prompts/`, not
-inline) and the plumbing that *would* call the router. The provider call is not
-implemented: `--execute` stops at `NotImplementedError` carrying the exact next
-step, so no accidental spend is possible from this file.
+inline) and the plumbing that calls the router. The call is real as of P0a:
+`JudgeRunner.request()` POSTs `{ROUTER}/v1/chat/completions` (no stream, 120 s
+timeout, two retries on 5xx) — and it refuses to send anything unless
+`guard.check()` passes first, so no accidental spend is possible.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -26,12 +28,24 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixtureset  # noqa: E402
 import guard  # noqa: E402
+import net  # noqa: E402
 import rubric  # noqa: E402
 
 PROMPT_DIR = Path(__file__).resolve().parent / 'prompts'
 LAYER2_TEMPLATE = 'judge-layer2.md'
 LAYER3_TEMPLATE = 'judge-layer3-human.md'
 LAYERS = (1, 2, 3)
+
+#: §1 của hợp đồng P0: tên biến đã đóng băng.
+ROUTER_ENV = 'BOXFOX_ROUTER_BASE_URL'
+ROUTER_KEY_ENV = 'BOXFOX_ROUTER_KEY'
+JUDGE_MODEL_ENV = 'BOXFOX_EVAL_JUDGE_MODEL'
+DEFAULT_ROUTER = 'http://127.0.0.1:3101'
+DEFAULT_JUDGE_MODEL = 'muse-spark-1.3-contributor-free'
+#: §7: hạn chờ 120 s cho mỗi lời chấm.
+JUDGE_TIMEOUT = 120.0
+#: §7: thử lại **hai lần** khi máy chủ trả 5xx (tổng tối đa 3 lời gọi).
+RETRY_ON_5XX = 2
 
 VERSION_RE = re.compile(r'<!--\s*version:\s*([A-Za-z0-9._-]+)\s*-->')
 MIN_ORACLE_LEAK_CHARS = 30  # ngắn hơn thì dễ trùng ngẫu nhiên, không tính là rò oracle
@@ -165,24 +179,67 @@ def merge_layers(layer1: dict[str, int], layer2: dict[str, int]) -> dict[str, in
 
 
 class JudgeRunner:
-    """Plumbing for the layer-2 call. Deliberately does not call anything yet."""
+    """Plumbing for the layer-2 call. Real HTTP, but only through the spend gate."""
 
     def __init__(self, base_url: str | None = None, model: str | None = None,
-                 temperature: float = 0.0):
-        self.base_url = base_url
-        self.model = model
+                 temperature: float = 0.0, budget_usd: float | None = None):
+        self.base_url = (base_url or os.environ.get(ROUTER_ENV) or DEFAULT_ROUTER).rstrip('/')
+        self.model = model or os.environ.get(JUDGE_MODEL_ENV) or DEFAULT_JUDGE_MODEL
         self.temperature = temperature
+        self.budget_usd = budget_usd
 
-    def request(self, prompt: str) -> str:  # pragma: no cover - không có đường chạy thật
-        raise NotImplementedError(
-            'Đường gọi giám khảo LLM chưa được cài đặt. Việc còn thiếu: (1) chốt provider/model '
-            'giám khảo và ghi vào manifest, (2) gửi prompt qua router BoxFox '
-            '(/v1/chat/completions) bằng khoá bf_…, (3) chấm mỗi đầu ra hai lần ở temperature thấp '
-            'và ghi mức lệch, (4) ghi kết quả thô vào --out để bảng điểm tính lại được. '
-            'Mọi thứ khác trong scripts/eval chỉ đọc tệp và không tiêu tiền.')
+    def request(self, prompt: str) -> str:
+        """Gửi MỘT prompt tới router và trả nguyên văn nội dung giám khảo trả về.
 
-    def score(self, prompt: str) -> dict[str, int]:  # pragma: no cover
+        Từ chối trước khi mở socket nếu `guard.check()` chưa cho phép (§7: cổng
+        trước mọi lời gọi). 5xx ⇒ thử lại tối đa `RETRY_ON_5XX` lần; lỗi transport
+        hoặc 4xx ⇒ ném thẳng.
+        """
+        verdict = guard.check(self.budget_usd)
+        if not verdict['allowed']:
+            raise SpendRefused('cổng chi tiền chưa mở: ' + (verdict['reason'] or 'không rõ'))
+        headers = {'Content-Type': 'application/json'}
+        api_key = str(os.environ.get(ROUTER_KEY_ENV) or '').strip()
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+        payload = {
+            'model': self.model,
+            'messages': [{'role': 'user', 'content': prompt}],
+            'temperature': self.temperature,
+            'stream': False,
+        }
+        last_error: net.HttpStatusError | None = None
+        for attempt in range(RETRY_ON_5XX + 1):
+            try:
+                data = net.request_json(f'{self.base_url}/v1/chat/completions', method='POST',
+                                        payload=payload, headers=headers, timeout=JUDGE_TIMEOUT)
+            except net.HttpStatusError as exc:
+                if 500 <= exc.status < 600 and attempt < RETRY_ON_5XX:
+                    last_error = exc
+                    continue
+                raise
+            return _content_of(data)
+        raise last_error or net.NetError('giám khảo: không có câu trả lời nào')
+
+    def score(self, prompt: str) -> dict[str, int]:
         return parse_scores(self.request(prompt))
+
+
+class SpendRefused(RuntimeError):
+    """Cổng chi tiền chưa mở: thiếu opt-in hoặc thiếu ngân sách."""
+
+
+def _content_of(data: dict) -> str:
+    """Bóc phần nội dung từ câu trả lời `/v1/chat/completions` (hợp kiểu OpenAI)."""
+    choices = data.get('choices') if isinstance(data, dict) else None
+    if not isinstance(choices, list) or not choices:
+        raise ValueError(f'router không trả "choices": {str(data)[:200]}')
+    message = choices[0].get('message') if isinstance(choices[0], dict) else None
+    if isinstance(message, dict) and message.get('content') is not None:
+        return str(message['content'])
+    if isinstance(choices[0], dict) and choices[0].get('text') is not None:
+        return str(choices[0]['text'])
+    raise ValueError(f'router không trả nội dung trong "choices[0]": {str(choices[0])[:200]}')
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,13 +274,18 @@ def main(argv: list[str] | None = None) -> int:
         if not verdict['allowed']:
             print(guard.rendered_refusal(verdict, guard.missing_connection()))
             return 3
-        print('Cổng chi tiền đã qua, nhưng đường gọi model CHƯA được cài đặt — dừng ở đây,',
-              'không gửi gì cả.')
-        try:
-            JudgeRunner(base_url=args.base_url, model=args.model).request('(không gửi gì cả)')
-        except NotImplementedError as exc:
-            print(str(exc))
-        return 5
+        if not args.answer_file:
+            print('--execute cần --answer-file: đó là đầu ra THẬT cần chấm. Không có tệp thì '
+                  'prompt chỉ là chỗ trống, gọi model là tiêu tiền vô ích.', file=sys.stderr)
+            return 2
+        fixture = fixtureset.load_fixtures()[args.fixture]
+        answer = Path(args.answer_file).read_text(encoding='utf-8')
+        prompt = render_layer2(fixture, answer, args.label)
+        runner = JudgeRunner(base_url=args.base_url, model=args.model, budget_usd=args.budget_usd)
+        scores = runner.score(prompt)
+        print(json.dumps({'fixture': args.fixture, 'label': args.label or blind_label(answer),
+                          'model': runner.model, 'scores': scores}, ensure_ascii=False, indent=2))
+        return 0
 
     if args.layer == 1:
         print('Lớp 1 không có prompt: đây là oracle máy. Chạy:')

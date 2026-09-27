@@ -141,7 +141,7 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))
-    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS), 'thiếu trường thì lượt vẫn thấy đủ 35 công cụ'
+    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS), 'thiếu trường thì lượt vẫn thấy đủ 38 công cụ'
 
 
 def test_the_eleven_groups_cover_the_orchestrator_exactly():
@@ -154,7 +154,7 @@ def test_the_eleven_groups_cover_the_orchestrator_exactly():
     assert all(set(g) == {'key', 'tools', 'alwaysOn'} for g in groups)
     assert all(g['tools'] for g in groups)
     union = [tool for g in groups for tool in g['tools']]
-    assert len(union) == len(set(union)) == 36, 'mười nhóm không chồng nhau'
+    assert len(union) == len(set(union)) == 38, 'mười nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
     assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
@@ -166,7 +166,7 @@ def test_the_route_answers_the_same_eleven_groups(tmp_path):
     info = runtime_info(tmp_path)
     assert info['toolGroups'] == tool_groups_module.tool_groups()
     assert info['tools'] == sorted(ORCHESTRATOR_TOOLS)
-    assert len(info['tools']) == 36
+    assert len(info['tools']) == 38
 
 
 def test_every_role_row_equals_the_roles_definition(tmp_path):

@@ -1,0 +1,122 @@
+{
+  "id": "SD1",
+  "case": "wrong-number",
+  "kind": "wrong-number",
+  "detector": "number_not_backed",
+  "reviewer": "verifier",
+  "expectation": "Con số trong nhận định phải có trong đoạn trích đã dẫn; số 120 vs 96 là lỗi phải bắt.",
+  "request": "Con số trong nhận định phải có trong đoạn trích đã dẫn; số 120 vs 96 là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Benchmark A: X đạt 120 điểm trên tập kiểm tra.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "X đạt 120 điểm trên tập kiểm tra.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Chi phí giảm 12% so với bản trước.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Chi phí giảm 12% so với bản trước.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Benchmark A: X đạt 96 điểm trên tập kiểm tra.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "X đạt 120 điểm trên tập kiểm tra.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Chi phí giảm 4% so với bản trước.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs"
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Chi phí giảm 12% so với bản trước.",
+          "claimType": "numeric",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ]
+}

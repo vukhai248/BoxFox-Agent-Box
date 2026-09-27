@@ -45,6 +45,9 @@ class SessionStore:
         # trang, cùng đoạn trích thì luật idempotent (BUG-92) giữ MỘT dòng, và nếu dòng ấy chỉ nhớ
         # nhánh A thì nhánh B bị `research-lineage-missing` mà không có cách nào gỡ (vòng 27, đợt 8).
         self._add_missing_columns('source_ledger', {'branches': "TEXT NOT NULL DEFAULT '[]'"})
+        # P1 (§5.3): `research_id` — sổ nguồn gắn theo PHIÊN, nhưng một phiên có nhiều RUN. Cột
+        # này cho `source_list`/cổng hồ sơ/đếm bằng chứng lọc theo đúng run đang mở.
+        self._add_missing_columns('source_ledger', {'research_id': "TEXT NOT NULL DEFAULT ''"})
         self._add_missing_columns('checkpoints', {
             'before_estimate': 'INTEGER', 'after_estimate': 'INTEGER',
             'context_window': 'INTEGER', 'model_id': 'TEXT',
@@ -140,6 +143,7 @@ class SessionStore:
                 fingerprint TEXT NOT NULL DEFAULT '',
                 payload TEXT NOT NULL DEFAULT '{}',
                 branches TEXT NOT NULL DEFAULT '[]',
+                research_id TEXT NOT NULL DEFAULT '',
                 turn INTEGER NOT NULL DEFAULT 0,
                 step INTEGER,
                 created REAL NOT NULL,
@@ -231,6 +235,51 @@ class SessionStore:
                 research_hash TEXT NOT NULL, created REAL NOT NULL,
                 PRIMARY KEY(identity, version, research_id));
         ''')
+        # P2 (§5.5, §5.7): hai bảng MỚI của mô hình bằng chứng. Vì sao bảng mới chứ không sửa bảng cũ:
+        # `research_claims.claim_id` là băm của VĂN BẢN và dùng chung giữa các phiên, nên không được
+        # nhét mức tin cậy của MỘT run vào đó; `research_facets` thì chỉ có nghĩa trong một run.
+        self.db.executescript('''
+            CREATE TABLE IF NOT EXISTS research_claim_meta (
+                research_id TEXT NOT NULL, claim_id TEXT NOT NULL,
+                question_id TEXT NOT NULL DEFAULT '', facet_id TEXT NOT NULL DEFAULT '',
+                claim_type TEXT NOT NULL DEFAULT 'inference',
+                stance_origin TEXT NOT NULL DEFAULT 'agent-inference',
+                confidence TEXT NOT NULL DEFAULT 'unknown',
+                confidence_cap TEXT NOT NULL DEFAULT 'unknown',
+                basis TEXT NOT NULL DEFAULT '{}', as_of TEXT NOT NULL DEFAULT '',
+                updated REAL NOT NULL,
+                PRIMARY KEY(research_id, claim_id));
+            CREATE INDEX IF NOT EXISTS research_claim_meta_run
+                ON research_claim_meta(research_id, claim_type);
+            CREATE TABLE IF NOT EXISTS research_facets (
+                research_id TEXT NOT NULL, facet_id TEXT NOT NULL,
+                question_id TEXT NOT NULL DEFAULT '', label TEXT NOT NULL DEFAULT '',
+                kind TEXT NOT NULL DEFAULT 'direction', terms TEXT NOT NULL DEFAULT '[]',
+                priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'unexplored',
+                seed_source TEXT NOT NULL DEFAULT 'agent', evidence_count INTEGER NOT NULL DEFAULT 0,
+                origin_clusters INTEGER NOT NULL DEFAULT 0, last_new_ratio REAL NOT NULL DEFAULT -1.0,
+                note TEXT NOT NULL DEFAULT '', updated REAL NOT NULL,
+                PRIMARY KEY(research_id, facet_id));
+            CREATE INDEX IF NOT EXISTS research_facets_status
+                ON research_facets(research_id, status);
+        ''')
+        # P2: cột mới của sổ nguồn (ngày, phiên bản, loại nguồn, cụm gốc, mức truy cập). Cột cộng
+        # thêm: hàng cũ đọc ra `''`/`'snippet'`, và cổng thời gian coi `''` là "không rõ ngày".
+        self._add_missing_columns('source_ledger', {
+            'published_at': "TEXT NOT NULL DEFAULT ''", 'updated_at': "TEXT NOT NULL DEFAULT ''",
+            'version_label': "TEXT NOT NULL DEFAULT ''", 'source_kind': "TEXT NOT NULL DEFAULT ''",
+            'origin_cluster': "TEXT NOT NULL DEFAULT ''",
+            'access_level': "TEXT NOT NULL DEFAULT 'snippet'",
+            'section_kind': "TEXT NOT NULL DEFAULT ''", 'event_date': "TEXT NOT NULL DEFAULT ''"})
+        self._add_missing_columns('research_sources', {
+            'published_at': "TEXT NOT NULL DEFAULT ''", 'updated_at': "TEXT NOT NULL DEFAULT ''",
+            'version_label': "TEXT NOT NULL DEFAULT ''", 'source_kind': "TEXT NOT NULL DEFAULT ''",
+            'origin_cluster': "TEXT NOT NULL DEFAULT ''",
+            'access_level_max': "TEXT NOT NULL DEFAULT 'snippet'",
+            'research_id': "TEXT NOT NULL DEFAULT ''"})
+        self._add_missing_columns('research_passages', {
+            'access_level': "TEXT NOT NULL DEFAULT 'snippet'", 'section_kind': "TEXT NOT NULL DEFAULT ''",
+            'event_date': "TEXT NOT NULL DEFAULT ''", 'research_id': "TEXT NOT NULL DEFAULT ''"})
         self._add_missing_columns('research_dossiers', {'content_hash': "TEXT NOT NULL DEFAULT ''"})
         self._add_missing_columns('research_dossiers', {'quality_ok': 'INTEGER NOT NULL DEFAULT 0'})
         self._add_missing_columns('research_verifications', {'mode': "TEXT NOT NULL DEFAULT 'critique'"})
@@ -438,7 +487,7 @@ class SessionStore:
         with self.db:
             self.db.execute(
                 'INSERT INTO children(session_id,parent_id,parent_turn,spawn_step,role,goal,status,started)'
-                ' VALUES(?,?,?,?,?,?,?,?)'
+                        ' VALUES(?,?,?,?,?,?,?,?)'
                 ' ON CONFLICT(session_id) DO UPDATE SET parent_id=excluded.parent_id,'
                 ' parent_turn=excluded.parent_turn, spawn_step=excluded.spawn_step,'
                 ' role=excluded.role, goal=excluded.goal, started=excluded.started',
@@ -960,7 +1009,9 @@ class SessionStore:
     # `price`, `captureAt`…); đổi cột theo từng luật mới là đổi schema theo từng ý chủ nhà.
 
     SOURCE_FIELDS = ('child_id', 'job', 'claim', 'url', 'host', 'tier', 'type', 'excerpt', 'fetched_at',
-                     'origin', 'method', 'source_row_id', 'status', 'fingerprint', 'payload', 'turn', 'step')
+                     'origin', 'method', 'source_row_id', 'status', 'fingerprint', 'payload', 'turn', 'step',
+                     'research_id', 'published_at', 'updated_at', 'version_label', 'source_kind',
+                     'origin_cluster', 'access_level', 'section_kind', 'event_date')
 
     def next_source_row_id(self, sid):
         """Mã dòng kế tiếp của phiên: `r1`, `r2`… — đọc từ mã LỚN NHẤT, không từ số hàng."""
@@ -990,8 +1041,9 @@ class SessionStore:
                     cursor = self.db.execute(
                         'INSERT INTO source_ledger(session_id,row_id,child_id,job,claim,url,host,tier,type,'
                         ' excerpt,fetched_at,origin,method,source_row_id,status,fingerprint,payload,branches,'
-                        ' turn,step,created)'
-                        ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        ' turn,step,created,research_id,published_at,updated_at,version_label,source_kind,'
+                        ' origin_cluster,access_level,section_kind,event_date)'
+                        ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (sid, row_id, values.get('child_id'), values.get('job'),
                          str(values.get('claim') or ''), str(values.get('url') or ''),
                          str(values.get('host') or ''),
@@ -1004,7 +1056,15 @@ class SessionStore:
                          json.dumps(list(values.get('branches') or []), ensure_ascii=False),
                          int(values.get('turn') or 0),
                          None if values.get('step') is None else int(values.get('step')),
-                         time.time()))
+                         time.time(), str(values.get('research_id') or values.get('researchId') or ''),
+                         str(values.get('published_at') or values.get('publishedAt') or ''),
+                         str(values.get('updated_at') or values.get('updatedAt') or ''),
+                         str(values.get('version_label') or values.get('versionLabel') or ''),
+                         str(values.get('source_kind') or values.get('sourceKind') or ''),
+                         str(values.get('origin_cluster') or values.get('originCluster') or ''),
+                         str(values.get('access_level') or values.get('accessLevel') or 'snippet'),
+                         str(values.get('section_kind') or values.get('sectionKind') or ''),
+                         str(values.get('event_date') or values.get('eventDate') or '')))
                 return self.source_row(sid, row_id)
             except sqlite3.IntegrityError as exc:
                 last_error = exc
@@ -1021,13 +1081,17 @@ class SessionStore:
                               (sid, str(row_id))).fetchone()
         return self._source_view(row) if row is not None else None
 
-    def source_rows(self, sid, child_id=None, turn=None, tier=None, limit=None, newest_first=False):
+    def source_rows(self, sid, child_id=None, turn=None, tier=None, limit=None, newest_first=False,
+                    research_id=None):
         """Các dòng sổ của một phiên, cũ → mới (hoặc mới → cũ), có trần."""
         sql = 'SELECT * FROM source_ledger WHERE session_id=?'
         params = [sid]
         if child_id:
             sql += ' AND child_id=?'
             params.append(child_id)
+        if research_id is not None:
+            sql += ' AND research_id=?'
+            params.append(str(research_id))
         if turn is not None:
             sql += ' AND turn=?'
             params.append(int(turn))
@@ -1046,8 +1110,14 @@ class SessionStore:
                               (sid,)).fetchone()
         return int((row['total'] if row else 0) or 0)
 
-    def evidence_link(self, sid, row_id, claim, *, proposed_by=None):
-        """Normalize a legacy ledger row into source, passage, claim and relation."""
+    def evidence_link(self, sid, row_id, claim, *, proposed_by=None, published_at='', updated_at='',
+                      version_label='', source_kind='', origin_cluster='', access_level='',
+                      section_kind='', event_date='', research_id=''):
+        """Normalize a legacy ledger row into source, passage, claim and relation.
+
+        P2 (§5.7): nhận thêm siêu dữ liệu của nguồn/đoạn trích. Cột mới chỉ ghi khi có giá trị, nên
+        đường gọi cũ (không truyền gì) giữ nguyên hành vi `6eb2fd8`.
+        """
         from ..agent_core.reading import normalize_url
         row = self.source_row(sid, row_id)
         if row is None:
@@ -1063,15 +1133,59 @@ class SessionStore:
         payload = row.get('payload') or {}
         locator = {key: payload[key] for key in ('page', 'section', 'line', 'locator', 'commit')
                    if key in payload}
+        # Mức truy cập chỉ ĐI LÊN: lượt ghi sau biết nhiều hơn (đã đọc toàn văn) thì hàng cũ nhận,
+        # còn lượt ghi sau chỉ có đoạn trích ngắn thì không kéo hàng cũ xuống. Mức của đoạn trích
+        # không thấp hơn mức dòng sổ đã khai (`row['accessLevel']`), vì đoạn trích lấy từ chính nó.
+        access = self._best_access(access_level, row.get('accessLevel'))
+        was_source = self.db.execute('SELECT access_level_max FROM research_sources '
+                                     'WHERE session_id=? AND source_id=?',
+                                     (sid, source_id)).fetchone()
+        source_access = self._best_access(
+            access, (was_source['access_level_max'] if was_source is not None else ''))
+        was_passage = self.db.execute('SELECT access_level FROM research_passages '
+                                      'WHERE session_id=? AND passage_id=?',
+                                      (sid, passage_id)).fetchone()
+        passage_access = self._best_access(
+            access, (was_passage['access_level'] if was_passage is not None else ''))
         with self.db:
-            self.db.execute('INSERT OR IGNORE INTO research_sources '
-                            '(source_id,session_id,url,normalized_url,host,origin) VALUES(?,?,?,?,?,?)',
-                            (source_id, sid, row['url'], normalized, row['host'], row.get('origin')))
-            self.db.execute('INSERT OR IGNORE INTO research_passages '
-                            '(passage_id,session_id,source_id,excerpt,excerpt_hash,locator,extraction_method) '
-                            'VALUES(?,?,?,?,?,?,?)',
+            # `DO UPDATE` (không `OR IGNORE`): lượt `source_add` sau mang thêm ngày/phiên bản/mức
+            # truy cập thì hàng đã có phải NHẬN, nếu không thì `access_level_max` mãi là giá trị của
+            # lần ghi đầu và luật trần độ tin cậy đọc phải dữ liệu cũ.
+            self.db.execute('INSERT INTO research_sources '
+                            '(source_id,session_id,url,normalized_url,host,origin,published_at,'
+                            ' updated_at,version_label,source_kind,origin_cluster,access_level_max,'
+                            ' research_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) '
+                            'ON CONFLICT(session_id,source_id) DO UPDATE SET '
+                            'published_at=COALESCE(NULLIF(excluded.published_at,\'\'),published_at),'
+                            'updated_at=COALESCE(NULLIF(excluded.updated_at,\'\'),updated_at),'
+                            'version_label=COALESCE(NULLIF(excluded.version_label,\'\'),version_label),'
+                            'source_kind=COALESCE(NULLIF(excluded.source_kind,\'\'),source_kind),'
+                            'origin_cluster=COALESCE(NULLIF(excluded.origin_cluster,\'\'),origin_cluster),'
+                            'access_level_max=excluded.access_level_max,'
+                            'research_id=COALESCE(NULLIF(excluded.research_id,\'\'),research_id)',
+                            (source_id, sid, row['url'], normalized, row['host'], row.get('origin'),
+                             str(published_at or row.get('publishedAt') or ''),
+                             str(updated_at or row.get('updatedAt') or ''),
+                             str(version_label or row.get('versionLabel') or ''),
+                             str(source_kind or row.get('sourceKind') or ''),
+                             str(origin_cluster or row.get('originCluster') or ''),
+                             source_access,
+                             str(research_id or row.get('researchId') or '')))
+            self.db.execute('INSERT INTO research_passages '
+                            '(passage_id,session_id,source_id,excerpt,excerpt_hash,locator,extraction_method,'
+                            ' access_level,section_kind,event_date,research_id) '
+                            'VALUES(?,?,?,?,?,?,?,?,?,?,?) '
+                            'ON CONFLICT(session_id,passage_id) DO UPDATE SET '
+                            'access_level=excluded.access_level,'
+                            'section_kind=COALESCE(NULLIF(excluded.section_kind,\'\'),section_kind),'
+                            'event_date=COALESCE(NULLIF(excluded.event_date,\'\'),event_date),'
+                            'research_id=COALESCE(NULLIF(excluded.research_id,\'\'),research_id)',
                             (passage_id, sid, source_id, excerpt, excerpt_hash,
-                             json.dumps(locator, ensure_ascii=False), row.get('method') or ''))
+                             json.dumps(locator, ensure_ascii=False), row.get('method') or '',
+                             passage_access,
+                             str(section_kind or row.get('sectionKind') or ''),
+                             str(event_date or row.get('eventDate') or ''),
+                             str(research_id or row.get('researchId') or '')))
             self.db.execute('INSERT OR IGNORE INTO research_claims '
                             '(claim_id,session_id,text,text_hash) VALUES(?,?,?,?)',
                             (claim_id, sid, claim, claim_hash))
@@ -1116,6 +1230,298 @@ class SessionStore:
                              relation, rationale, time.time()))
         return {'passageId': passage_id, 'claimId': claim_id, 'relation': relation,
                 'reviewerId': reviewer_id, 'contentHash': content_hash}
+
+    # ------------------------------------------------------------------
+    # P2 (§5.5, §5.7): siêu dữ liệu bằng chứng, nhận định và bản đồ bao phủ
+    # ------------------------------------------------------------------
+
+    #: Cột của `research_claim_meta`, tên trả ra (camel) → tên cột.
+    CLAIM_META_FIELDS = {'questionId': 'question_id', 'facetId': 'facet_id', 'claimType': 'claim_type',
+                         'stanceOrigin': 'stance_origin', 'confidence': 'confidence',
+                         'confidenceCap': 'confidence_cap', 'basis': 'basis', 'asOf': 'as_of'}
+    #: Cột của `research_facets`, tên trả ra (camel) → tên cột.
+    FACET_FIELDS = {'questionId': 'question_id', 'label': 'label', 'kind': 'kind', 'terms': 'terms',
+                    'priority': 'priority', 'status': 'status', 'seedSource': 'seed_source',
+                    'evidenceCount': 'evidence_count', 'originClusters': 'origin_clusters',
+                    'lastNewRatio': 'last_new_ratio', 'note': 'note'}
+
+    @staticmethod
+    def _best_access(*levels):
+        """Mức truy cập cao nhất trong các mức đã biết; thứ tự đọc từ `source_pack.ACCESS_LEVELS`."""
+        from ..agent_core.source_pack import ACCESS_LEVELS
+        best = ''
+        for level in levels:
+            level = str(level or '')
+            if level not in ACCESS_LEVELS:
+                continue
+            if not best or ACCESS_LEVELS.index(level) > ACCESS_LEVELS.index(best):
+                best = level
+        return best or 'snippet'
+
+    @staticmethod
+    def _first(*values):
+        """Giá trị khác rỗng ĐẦU TIÊN; dùng khi hàng dòng sổ thiếu mà hàng nguồn đã biết."""
+        for value in values:
+            value = str(value or '')
+            if value:
+                return value
+        return ''
+
+    def source_evidence_meta(self, sid, row_id):
+        """Siêu dữ liệu P2 của MỘT dòng sổ (ngày, phiên bản, loại nguồn, cụm gốc, mức truy cập).
+
+        Hàng dòng sổ là nơi ghi TRƯỚC, hàng nguồn (`research_sources`, khoá theo URL) là nơi biết
+        NHIỀU HƠN: một lượt `evidence_link` sau khi đọc toàn văn nâng mức truy cập của cả nguồn, và
+        cụm gốc thì đúng cho mọi dòng của cùng một URL. Vì vậy: giá trị của dòng sổ thắng, hàng
+        nguồn chỉ ĐIỀN CHỖ TRỐNG, riêng mức truy cập lấy mức cao nhất đã biết.
+        """
+        row = self.source_row(sid, row_id)
+        if row is None:
+            return {}
+        linked = self.db.execute('SELECT access_level_max,published_at,updated_at,version_label,'
+                                 'source_kind,origin_cluster,research_id FROM research_sources '
+                                 'WHERE session_id=? AND url=?', (sid, row['url'])).fetchone()
+        other = dict(linked) if linked is not None else {}
+
+        def known(name, *columns):
+            return self._first(*[row.get(column) or '' for column in columns]) or self._first(
+                *[other.get(column) or '' for column in columns])
+
+        return {'publishedAt': known('publishedAt', 'publishedAt', 'published_at'),
+                'updatedAt': known('updatedAt', 'updatedAt', 'updated_at'),
+                'versionLabel': known('versionLabel', 'versionLabel', 'version_label'),
+                'sourceKind': known('sourceKind', 'sourceKind', 'source_kind'),
+                'originCluster': known('originCluster', 'originCluster', 'origin_cluster'),
+                'accessLevel': self._best_access(row.get('accessLevel'), other.get('access_level_max')),
+                'sectionKind': known('sectionKind', 'sectionKind', 'section_kind'),
+                'eventDate': known('eventDate', 'eventDate', 'event_date'),
+                'researchId': known('researchId', 'researchId', 'research_id')}
+
+    def evidence_claims(self, sid, research_id=None):
+        """Mọi cặp (nhận định, đoạn trích, nguồn) của phiên, kèm siêu dữ liệu P2.
+
+        Lọc theo `research_id` khi được hỏi: cột `research_id` có ở CẢ nguồn và dòng sổ, nên nhận
+        hàng khớp ở một trong hai (dòng sổ ghi trước P1 chưa mang `research_id` vẫn phải đọc ra).
+        """
+        sql = ('SELECT r.row_id,c.claim_id,c.text,p.passage_id,p.access_level,p.section_kind,'
+               'p.event_date,p.excerpt,s.url,s.source_id,l.tier,s.host,s.origin,s.source_kind,s.published_at,'
+               's.updated_at,s.access_level_max,s.origin_cluster,s.research_id,'
+               'l.id AS row_seq,l.status,'
+               # Quan hệ ĐÃ SOÁT của cặp (đoạn trích, nhận định): phán quyết mới nhất của người soát
+               # (`research_assessments`), vì `research_relations` chỉ giữ liên kết chứ không giữ quan hệ.
+               '(SELECT a.relation FROM research_assessments a WHERE a.session_id=r.session_id'
+               ' AND a.passage_id=r.passage_id AND a.claim_id=r.claim_id'
+               ' ORDER BY a.created DESC LIMIT 1) AS judged_relation '
+               'FROM research_relations r '
+               'JOIN research_claims c ON c.session_id=r.session_id AND c.claim_id=r.claim_id '
+               'JOIN research_passages p ON p.session_id=r.session_id AND p.passage_id=r.passage_id '
+               'JOIN research_sources s ON s.session_id=r.session_id AND s.source_id=p.source_id '
+               'LEFT JOIN source_ledger l ON l.session_id=r.session_id AND l.row_id=r.row_id '
+               'WHERE r.session_id=?')
+        params = [sid]
+        if research_id:
+            sql += (' AND (s.research_id=? OR r.row_id IN'
+                    ' (SELECT row_id FROM source_ledger WHERE session_id=? AND research_id=?))')
+            params += [str(research_id), sid, str(research_id)]
+        sql += ' ORDER BY r.row_id'
+        out = []
+        for row in self.db.execute(sql, params).fetchall():
+            item = dict(row)
+            access = item.get('access_level') or item.get('access_level_max') or 'snippet'
+            out.append({'rowId': item['row_id'], 'claimId': item['claim_id'], 'text': item['text'],
+                        'sourceId': item.get('source_id') or '',
+                        'tier': int(item.get('tier') or 0),
+                        'passageId': item['passage_id'], 'accessLevel': access,
+                        # Mức của NGUỒN, để người đọc soi lại: mức của đoạn trích mới là thứ nhận
+                        # định dựa vào, còn đây là thứ đã đọc được của cả nguồn.
+                        'sourceAccessLevel': self._best_access(item.get('access_level'),
+                                                               item.get('access_level_max')),
+                        'sectionKind': item.get('section_kind') or '',
+                        'eventDate': item.get('event_date') or '', 'excerpt': item.get('excerpt') or '',
+                        'url': item['url'], 'host': item['host'], 'origin': item.get('origin') or '',
+                        'sourceKind': item.get('source_kind') or '',
+                        'publishedAt': item.get('published_at') or '',
+                        'updatedAt': item.get('updated_at') or '',
+                        'originCluster': item.get('origin_cluster') or '',
+                        'researchId': item.get('research_id') or '',
+                        # Thứ tự ghi trong sổ (0 khi dòng sổ đã biến mất) — nơi gọi sắp theo thứ tự này
+                        # thay vì so chuỗi `row_id` (`r10` đứng trước `r2` nếu so chuỗi).
+                        'rowSeq': int(item.get('row_seq') or 0),
+                        'status': item.get('status') or '',
+                        'relation': item.get('judged_relation') or ''})
+        return out
+
+    @staticmethod
+    def _claim_meta_view(row):
+        item = dict(row)
+        basis = item.get('basis') or '{}'
+        try:
+            basis = json.loads(basis)
+        except (TypeError, ValueError):
+            basis = {}
+        return {'researchId': item.get('research_id') or '', 'claimId': item.get('claim_id') or '',
+                'questionId': item.get('question_id') or '', 'facetId': item.get('facet_id') or '',
+                'claimType': item.get('claim_type') or 'inference',
+                'stanceOrigin': item.get('stance_origin') or 'agent-inference',
+                'confidence': item.get('confidence') or 'unknown',
+                'confidenceCap': item.get('confidence_cap') or 'unknown',
+                'basis': basis if isinstance(basis, dict) else {}, 'asOf': item.get('as_of') or '',
+                'updated': item.get('updated')}
+
+    def claim_meta(self, research_id, claim_id):
+        """Một hàng `research_claim_meta`, hoặc `{}` khi chưa có (chưa chấm thì chưa có mức trần)."""
+        row = self.db.execute('SELECT * FROM research_claim_meta WHERE research_id=? AND claim_id=?',
+                              (str(research_id or ''), str(claim_id or ''))).fetchone()
+        return self._claim_meta_view(row) if row is not None else {}
+
+    def claim_meta_save(self, research_id, claim_id, **fields):
+        """Ghi (thêm hoặc cập nhật) mức tin cậy của MỘT nhận định trong MỘT run.
+
+        Trường không truyền giữ nguyên giá trị cũ — máy tính mức trần rồi mô hình hạ xuống là hai
+        lần ghi khác nhau trên cùng một hàng.
+        """
+        research_id, claim_id = str(research_id or ''), str(claim_id or '')
+        if not research_id or not claim_id:
+            raise ValueError('RESEARCH_CLAIM_META_KEY')
+        current = self.claim_meta(research_id, claim_id)
+        merged = {key: current.get(key) for key in self.CLAIM_META_FIELDS}
+        merged['claimType'] = merged.get('claimType') or 'inference'
+        merged['stanceOrigin'] = merged.get('stanceOrigin') or 'agent-inference'
+        merged['confidence'] = merged.get('confidence') or 'unknown'
+        merged['confidenceCap'] = merged.get('confidenceCap') or 'unknown'
+        merged['basis'] = dict(merged.get('basis') or {})
+        reverse = {value: key for key, value in self.CLAIM_META_FIELDS.items()}
+        for key, value in (fields or {}).items():
+            camel = key if key in self.CLAIM_META_FIELDS else reverse.get(key)
+            if camel is None or value is None:
+                continue
+            merged[camel] = dict(value) if camel == 'basis' and isinstance(value, dict) else value
+        with self.db:
+            self.db.execute(
+                'INSERT INTO research_claim_meta(research_id,claim_id,question_id,facet_id,claim_type,'
+                ' stance_origin,confidence,confidence_cap,basis,as_of,updated) '
+                'VALUES(?,?,?,?,?,?,?,?,?,?,?) '
+                'ON CONFLICT(research_id,claim_id) DO UPDATE SET question_id=excluded.question_id,'
+                ' facet_id=excluded.facet_id,claim_type=excluded.claim_type,'
+                ' stance_origin=excluded.stance_origin,confidence=excluded.confidence,'
+                ' confidence_cap=excluded.confidence_cap,basis=excluded.basis,as_of=excluded.as_of,'
+                ' updated=excluded.updated',
+                (research_id, claim_id, str(merged.get('questionId') or ''), str(merged.get('facetId') or ''),
+                 str(merged.get('claimType') or 'inference'),
+                 str(merged.get('stanceOrigin') or 'agent-inference'),
+                 str(merged.get('confidence') or 'unknown'), str(merged.get('confidenceCap') or 'unknown'),
+                 json.dumps(merged.get('basis') or {}, ensure_ascii=False), str(merged.get('asOf') or ''),
+                 time.time()))
+        return self.claim_meta(research_id, claim_id)
+
+    def claim_meta_list(self, research_id):
+        """Mọi hàng của một run, xếp theo `claim_id` (thứ tự ổn định cho test và giao diện)."""
+        rows = self.db.execute('SELECT * FROM research_claim_meta WHERE research_id=? ORDER BY claim_id',
+                               (str(research_id or ''),)).fetchall()
+        return [self._claim_meta_view(row) for row in rows]
+
+    def claim_meta_upsert_many(self, research_id, items):
+        """Ghi nhiều hàng một lượt; trả về số hàng đã ghi (bỏ qua mục không có `claimId`)."""
+        written = 0
+        for item in items or ():
+            if not isinstance(item, dict):
+                continue
+            claim_id = str(item.get('claimId') or item.get('claim_id') or '')
+            if not claim_id:
+                continue
+            extra = {key: value for key, value in item.items()
+                     if key not in ('claimId', 'claim_id', 'researchId', 'research_id')}
+            self.claim_meta_save(research_id, claim_id, **extra)
+            written += 1
+        return written
+
+    @staticmethod
+    def _facet_view(row):
+        item = dict(row)
+        terms = item.get('terms') or '[]'
+        try:
+            terms = json.loads(terms)
+        except (TypeError, ValueError):
+            terms = []
+        return {'researchId': item.get('research_id') or '', 'facetId': item.get('facet_id') or '',
+                'questionId': item.get('question_id') or '', 'label': item.get('label') or '',
+                'kind': item.get('kind') or 'direction',
+                'terms': [term for term in (terms if isinstance(terms, list) else []) if term],
+                'priority': item.get('priority') or 'medium', 'status': item.get('status') or 'unexplored',
+                'seedSource': item.get('seed_source') or 'agent',
+                'evidenceCount': int(item.get('evidence_count') or 0),
+                'originClusters': int(item.get('origin_clusters') or 0),
+                'lastNewRatio': float(item.get('last_new_ratio')
+                                      if item.get('last_new_ratio') is not None else -1.0),
+                'note': item.get('note') or '', 'updated': item.get('updated')}
+
+    def facet(self, research_id, facet_id):
+        row = self.db.execute('SELECT * FROM research_facets WHERE research_id=? AND facet_id=?',
+                              (str(research_id or ''), str(facet_id or ''))).fetchone()
+        return self._facet_view(row) if row is not None else {}
+
+    def facet_list(self, research_id):
+        rows = self.db.execute('SELECT * FROM research_facets WHERE research_id=? ORDER BY facet_id',
+                               (str(research_id or ''),)).fetchall()
+        return [self._facet_view(row) for row in rows]
+
+    def facet_save(self, research_id, facet):
+        """Ghi (thêm hoặc cập nhật) MỘT facet. Trường không truyền giữ nguyên giá trị cũ."""
+        research_id = str(research_id or '')
+        facet_id = str((facet or {}).get('facetId') or (facet or {}).get('facet_id') or '')
+        if not facet_id and (facet or {}).get('label'):
+            # Nhãn không phải khoá: băm ra cùng công thức với `research_facets.facet_id_for` để
+            # đường gọi chỉ có nhãn vẫn ghi được, mà khoá vẫn ổn định giữa các lượt.
+            from ..agent_core.research_facets import facet_id_for
+            facet_id = facet_id_for(facet.get('label'))
+        if not research_id or not facet_id:
+            raise ValueError('RESEARCH_FACET_KEY')
+        current = self.facet(research_id, facet_id)
+        merged = {key: current.get(key) for key in self.FACET_FIELDS}
+        merged['kind'] = merged.get('kind') or 'direction'
+        merged['status'] = merged.get('status') or 'unexplored'
+        merged['seedSource'] = merged.get('seedSource') or 'agent'
+        merged['priority'] = merged.get('priority') or 'medium'
+        if merged.get('lastNewRatio') is None:
+            merged['lastNewRatio'] = -1.0
+        reverse = {value: key for key, value in self.FACET_FIELDS.items()}
+        for key, value in (facet or {}).items():
+            camel = key if key in self.FACET_FIELDS else reverse.get(key)
+            if camel is None or value is None:
+                continue
+            merged[camel] = value
+        terms = merged.get('terms')
+        if isinstance(terms, str):
+            try:
+                terms = json.loads(terms)
+            except (TypeError, ValueError):
+                terms = []
+        with self.db:
+            self.db.execute(
+                'INSERT INTO research_facets(research_id,facet_id,question_id,label,kind,terms,priority,'
+                ' status,seed_source,evidence_count,origin_clusters,last_new_ratio,note,updated) '
+                'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) '
+                'ON CONFLICT(research_id,facet_id) DO UPDATE SET question_id=excluded.question_id,'
+                ' label=excluded.label,kind=excluded.kind,terms=excluded.terms,priority=excluded.priority,'
+                ' status=excluded.status,seed_source=excluded.seed_source,'
+                ' evidence_count=excluded.evidence_count,origin_clusters=excluded.origin_clusters,'
+                ' last_new_ratio=excluded.last_new_ratio,note=excluded.note,updated=excluded.updated',
+                (research_id, facet_id, str(merged.get('questionId') or ''), str(merged.get('label') or ''),
+                 str(merged.get('kind') or 'direction'),
+                 json.dumps(list(terms or []), ensure_ascii=False),
+                 str(merged.get('priority') or 'medium'), str(merged.get('status') or 'unexplored'),
+                 str(merged.get('seedSource') or 'agent'), int(merged.get('evidenceCount') or 0),
+                 int(merged.get('originClusters') or 0),
+                 float(merged.get('lastNewRatio') if merged.get('lastNewRatio') is not None else -1.0),
+                 str(merged.get('note') or ''), time.time()))
+        return self.facet(research_id, facet_id)
+
+    def facet_delete(self, research_id, facet_id):
+        """Xoá một facet; trả `True` khi có hàng bị xoá."""
+        with self.db:
+            cursor = self.db.execute('DELETE FROM research_facets WHERE research_id=? AND facet_id=?',
+                                     (str(research_id or ''), str(facet_id or '')))
+        return bool(cursor.rowcount)
 
     def research_snapshot_save(self, scope_id, normalized_url, entry):
         """Persist the full bounded reader copy for a root research session."""
@@ -1252,6 +1658,15 @@ class SessionStore:
         item['fetchedAt'] = item.pop('fetched_at', '')
         item['childId'] = item.pop('child_id', None)
         item['sourceRowId'] = item.pop('source_row_id', None)
+        item['researchId'] = item.pop('research_id', '') or ''
+        item['publishedAt'] = item.pop('published_at', '') or ''
+        item['updatedAt'] = item.pop('updated_at', '') or ''
+        item['versionLabel'] = item.pop('version_label', '') or ''
+        item['sourceKind'] = item.pop('source_kind', '') or ''
+        item['originCluster'] = item.pop('origin_cluster', '') or ''
+        item['accessLevel'] = item.pop('access_level', '') or ''
+        item['sectionKind'] = item.pop('section_kind', '') or ''
+        item['eventDate'] = item.pop('event_date', '') or ''
         item.pop('id', None)
         item.pop('session_id', None)
         return item
@@ -1295,6 +1710,22 @@ class SessionStore:
                                'ORDER BY updated DESC', (session_id,)).fetchall()
         return [self.research_job(row['research_id']) for row in rows]
 
+    def research_job_by_prompt(self, prompt_id):
+        """Job chứa một `promptId` (§5.12) — tuyến `answer` chỉ có id lời hỏi, không có phiên.
+
+        Quét thô bằng LIKE rồi xác nhận trên `state` đã giải JSON: LIKE chỉ là cách thu hẹp hàng,
+        không phải căn cứ để trả lời.
+        """
+        wanted = str(prompt_id)
+        rows = self.db.execute('SELECT research_id FROM research_jobs WHERE state LIKE ?',
+                               (f'%{wanted}%',)).fetchall()
+        for row in rows:
+            job = self.research_job(row['research_id'])
+            if any(str(item.get('promptId')) == wanted for item in (job['state'].get('prompts') or [])
+                   if isinstance(item, dict)):
+                return job
+        return None
+
     def research_jobs_active(self):
         rows = self.db.execute("SELECT research_id FROM research_jobs WHERE status IN "
                                "('scoping','researching','verifying','synthesizing','critiquing') "
@@ -1323,6 +1754,42 @@ class SessionStore:
                             (research_id, session_id, json.dumps(state, ensure_ascii=False), selected,
                              (current['revision'] + 1 if current else 1),
                              current['created'] if current else now, now))
+        return self.research_job(research_id)
+
+    def research_job_phase(self, research_id, session_id, phase, reason, at, *, force=False):
+        """Ghim `phase`/`phaseHistory` của một run mà KHÔNG nhích `revision` (§5.3).
+
+        Đổi pha là việc của harness đi kèm một tool call khác, không phải một bản ghi mới của run:
+        nhích `revision` ở đây sẽ làm `research_update(revision=…)` của model va chạm giả
+        (`RESEARCH_JOB_REVISION_CONFLICT`) ngay sau khi hồ sơ vừa được ghi.
+
+        LUẬT CỦA PHA NẰM Ở ĐÂY, trên hàng ĐỌC LẠI NGAY TRƯỚC KHI GHI: người gọi cầm một bản chụp
+        job đã cũ — một lượt chạy song song có thể vừa thêm hàng lịch sử (chủ nhà tạm dừng giữa
+        lượt) hoặc vừa đóng run — nên cả hai quyết định ("có gì để ghi không", "ghép lịch sử thế
+        nào") phải tính từ hàng TƯƠI. Trả về hàng sau khi ghi, hoặc `None` khi không có gì để
+        ghi: pha đang đứng, hay run đã ở pha ĐÓNG `done` mà không có `force` (chủ nhà bấm Tiếp
+        tục một run đã đóng, xem `research_runtime.PHASE_DONE`).
+
+        `at` do người gọi cấp (`agent_core.journal.utc_now_iso()`): lớp này không import mô-đun
+        `agent_core` (vòng import chạy ngược), và mốc thời gian phải cùng khuôn với mọi hàng
+        `phaseHistory` khác.
+        """
+        job = self.research_job(research_id)
+        if job is None or job['session_id'] != session_id:
+            raise ValueError('RESEARCH_JOB_UNKNOWN')
+        state = dict(job['state'] or {})
+        current = str(state.get('phase') or '')
+        if str(phase) == current:
+            return None
+        if current == 'done' and not force:
+            return None
+        history = list(state.get('phaseHistory') or [])
+        history.append({'phase': str(phase), 'at': str(at or ''), 'reason': str(reason or '')})
+        state['phase'] = str(phase)
+        state['phaseHistory'] = history
+        with self.db:
+            self.db.execute('UPDATE research_jobs SET state=?, updated=? WHERE research_id=?',
+                            (json.dumps(state, ensure_ascii=False), time.time(), str(research_id)))
         return self.research_job(research_id)
 
     def research_job_used_seconds(self, session_id, research_id=None):

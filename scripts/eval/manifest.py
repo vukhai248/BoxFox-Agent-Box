@@ -23,10 +23,15 @@ from pathlib import Path
 
 MANIFEST_VERSION = 'eval-manifest-v1'
 
+#: Gốc kho: `scripts/eval/manifest.py` lùi ba cấp. Hai tệp dưới đây được băm bằng
+#: đường dẫn TUYỆT ĐỐI so với gốc này — trước P0a chúng là đường dẫn tương đối nên
+#: `sha256` thành `null` mỗi khi pytest chạy từ `backend/` thay vì gốc kho.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 # Files the plan calls "prompt" and "schema công cụ". Hashed as whole files; the
 # label in the manifest says so instead of pretending it is a structural hash.
-TOOL_SCHEMA_SOURCE = Path('backend/src/agentbox/agent_core/tool_contracts.py')
-ROLES_PROMPT_SOURCE = Path('backend/src/agentbox/skills/roles.py')
+TOOL_SCHEMA_SOURCE = REPO_ROOT / 'backend/src/agentbox/agent_core/tool_contracts.py'
+ROLES_PROMPT_SOURCE = REPO_ROOT / 'backend/src/agentbox/skills/roles.py'
 
 UNMEASURED = 'chưa đo'
 

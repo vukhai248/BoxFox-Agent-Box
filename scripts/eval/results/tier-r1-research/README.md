@@ -4,8 +4,8 @@
 `fixture-workspace/` (tên miền `.example`), không phải kết quả của một lượt research.
 **CHƯA CHẠY một lượt research thật nào và CHƯA CHẠY một lượt benchmark research nào** — bất biến
 F19. Muốn có số **đo được** thì phải có một máy có model + box: một lượt research thật sinh
-`.research/**`, rồi chạy `research_scores.py` trên phòng hồ sơ đó; cho tới lúc đó runner thật vẫn
-dừng ở `EXIT_NOT_IMPLEMENTED` (mã 5 — xem `scripts/eval/README.md`).
+`.research/**`, rồi chạy `research_scores.py` trên phòng hồ sơ đó. Đường `--execute` nay đã gọi
+`runner.run_scenario` thật (P0a), nhưng **chưa lượt nào được chạy**; xem `scripts/eval/README.md`.
 
 Bộ ca và oracle là việc của `docs/plan/v27/subplans/flow.md` §7 (C-7) cộng bốn ca R8–R12 của
 `docs/plan/v27/research-rework.md` §5; năm số của mỗi ca ở flow §7.3.

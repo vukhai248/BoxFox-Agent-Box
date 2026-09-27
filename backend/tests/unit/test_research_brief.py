@@ -33,6 +33,18 @@ class FixtureModel:
         return {'choices': [{'message': {'content': 'ok'}, 'finish_reason': 'stop'}]}
 
 
+@pytest.fixture(autouse=True)
+def _legacy_mode_switch(monkeypatch):
+    """P1: bộ test này đo đường main của f17d54b — trong đó main được mở mức 3.
+
+    Khi công tắc mode bật (mặc định P1), mức 3 ngoài mode bị TỪ CHỐI `RESEARCH_MODE_REQUIRED`
+    (cổng bốn cửa §5.2); hành vi mới được ghim ở `test_research_mode_shell.py` (M-05). Ghim công tắc
+    TẮT ở đây để giữ nguyên ca kiểm đường cũ — đúng bất biến parity: `BOXFOX_RESEARCH_MODE=off` phải
+    hành xử y như trước.
+    """
+    monkeypatch.setenv(limits.RESEARCH_MODE_ENV, 'off')
+
+
 @pytest.fixture()
 def harness(tmp_path):
     store = SessionStore(tmp_path / 'sessions.db')

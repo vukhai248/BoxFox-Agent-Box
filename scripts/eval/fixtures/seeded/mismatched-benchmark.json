@@ -1,0 +1,157 @@
+{
+  "id": "SD9",
+  "case": "mismatched-benchmark",
+  "kind": "mismatched-benchmark",
+  "detector": "mismatched_benchmark",
+  "reviewer": "critic",
+  "expectation": "Số của hai bàn đo khác điều kiện bị so thẳng với nhau là lỗi phải bắt.",
+  "request": "Số của hai bàn đo khác điều kiện bị so thẳng với nhau là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Results table on split A, batch 64.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "sectionKind": "results",
+          "recordedConditions": true,
+          "independentReplication": true
+        },
+        {
+          "rowId": "r2",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Replication on split A, batch 64.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "sectionKind": "results",
+          "recordedConditions": true,
+          "independentReplication": true
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mô hình đạt 88 điểm trên split A, batch 64.",
+          "claimType": "benchmark",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://gamma.example/post",
+          "host": "gamma.example",
+          "tier": 2,
+          "excerpt": "Table 2: latency 18 ms, batch 1.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "sectionKind": "results",
+          "recordedConditions": true,
+          "independentReplication": true
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Độ trễ 18 ms ở batch 1.",
+          "claimType": "benchmark",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://alpha.example/post",
+          "host": "alpha.example",
+          "tier": 2,
+          "excerpt": "Results table on split A, batch 64.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "docs",
+          "sectionKind": "results",
+          "recordedConditions": false
+        },
+        {
+          "rowId": "r2",
+          "url": "https://beta.example/post",
+          "host": "beta.example",
+          "tier": 2,
+          "excerpt": "Numbers from a blog post about split B.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "blog",
+          "sectionKind": "results",
+          "recordedConditions": false
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c1",
+          "text": "Mô hình đạt 88 điểm trên split A, batch 64.",
+          "claimType": "benchmark",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1",
+            "r2"
+          ]
+        }
+      ]
+    },
+    {
+      "rows": [
+        {
+          "rowId": "r1",
+          "url": "https://gamma.example/post",
+          "host": "gamma.example",
+          "tier": 2,
+          "excerpt": "Blog says latency 18 ms on another machine.",
+          "accessLevel": "fulltext-read",
+          "sourceKind": "blog",
+          "sectionKind": "results",
+          "recordedConditions": false
+        }
+      ],
+      "claims": [
+        {
+          "claimId": "c2",
+          "text": "Độ trễ 18 ms với cấu hình tham chiếu.",
+          "claimType": "benchmark",
+          "stanceOrigin": "source-stated",
+          "confidence": "high",
+          "rowIds": [
+            "r1"
+          ]
+        }
+      ]
+    }
+  ]
+}

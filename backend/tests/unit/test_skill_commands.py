@@ -28,7 +28,9 @@ def test_intent_policy(registry, prompt, expected):
             registry.resolve(prompt)
         return
     result = registry.resolve(prompt)
-    actual = result.kind if result.kind in {'message', 'control'} else result.skills[0] if result.command in {'claude-code', 'claude-design', 'skill'} or result.reason == 'explicit_use_intent' else result.role
+    # P1 (§5.2, cửa 3): `/research` giờ là lệnh MODE (`kind='mode'`) khi công tắc bật; ghim thẳng
+    # `kind` cho nó thay vì suy ra `role` (mode không có vai con).
+    actual = result.kind if result.kind in {'message', 'control', 'mode'} else result.skills[0] if result.command in {'claude-code', 'claude-design', 'skill'} or result.reason == 'explicit_use_intent' else result.role
     assert actual == expected
 
 

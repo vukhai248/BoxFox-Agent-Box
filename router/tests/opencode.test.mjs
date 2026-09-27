@@ -88,6 +88,25 @@ test('the versioned user agent is what the free tier checks', () => {
   assert.equal(hasValidOpencodeVersion('curl/8'), false);
 });
 
+test('a chat stream folded for a non-streaming caller reports `length` when it was cut', async () => {
+  // The harness falls back to a non-streaming POST when the SSE channel breaks; the router folds
+  // the provider stream with `aggregate`, and its `stop` default used to turn a severed answer into
+  // a clean finish (measured live 2026-09-26, `muse-spark-1.3-contributor-free` review turn).
+  const cut = recorder(() => sse(chatFrames().slice(0, -1)));
+  const severed = await collect(createProviders({ fetchImpl: cut.fetchImpl }).opencode.generate({
+    connection, credentials: {}, body: { model: "deepseek-v4-flash-free", messages, stream: false },
+  }));
+  const cutFinish = severed.filter(event => event.type === 'finish').at(-1);
+  assert.equal(cutFinish.finishReason, 'length', 'a stream with no finish chunk was cut');
+  assert.equal(severed.filter(event => event.type === 'delta').at(-1).delta.content, 'Xin chào',
+               'the severed text is still delivered, only its honesty changes');
+  const healthy = recorder(() => sse(chatFrames()));
+  const whole = await collect(createProviders({ fetchImpl: healthy.fetchImpl }).opencode.generate({
+    connection, credentials: {}, body: { model: "deepseek-v4-flash-free", messages, stream: false },
+  }));
+  assert.equal(whole.filter(event => event.type === 'finish').at(-1).finishReason, 'stop');
+});
+
 test('session and request ids use the shapes the free tier accepts', () => {
   const session = mintOpencodeId('ses', 'conversation-a');
   assert.match(session, OPENCODE_SESSION_RE, 'ses_<12hex><14base62>');
@@ -314,4 +333,21 @@ test('helpers keep their shape on odd input', () => {
   assert.deepEqual(toResponsesInput([{ role: 'system', content: 'rules' }, { role: 'user', content: 'hi' }]).instructions, 'rules');
   assert.deepEqual(responsesTools([{ type: 'function', function: { name: '' } }]), []);
   assert.deepEqual(responsesTools([{ name: 'x', parameters: { type: 'object' } }])[0].parameters, { type: 'object', properties: {} });
+});
+test('a stream cut before its completion event reports `length`, not a clean stop', async () => {
+  // Measured live 2026-09-26: a muse-spark-1.3 review turn was severed mid-sentence, the
+  // provider sent no `response.completed` and no usage, and the adapter's default made the
+  // harness call the severed answer a finished one. The missing terminal event is the signal.
+  const cut = responsesEvent(responsesFrames().filter(frame => frame !== '[DONE]'
+    && !(typeof frame === 'object' && (frame.type === 'response.completed' || frame.type === 'response.done'))));
+  const { fetchImpl } = recorder(() => sse(cut));
+  const adapter = createProviders({ fetchImpl }).opencode;
+  const events = await collect(adapter.generate({ connection, credentials: {}, body: { model: 'muse-spark-1.3-contributor-free', messages, stream: false } }));
+  assert.equal(events.at(-1).type, 'finish');
+  assert.equal(events.at(-1).finishReason, 'length', 'a severed answer is not a completed one');
+  assert.equal(events.some(event => event.type === 'usage'), false, 'and it carries no usage to pretend with');
+
+  const healthy = recorder(() => sse(responsesEvent(responsesFrames())));
+  const whole = await collect(createProviders({ fetchImpl: healthy.fetchImpl }).opencode.generate({ connection, credentials: {}, body: { model: 'muse-spark-1.3-contributor-free', messages, stream: false } }));
+  assert.equal(whole.at(-1).finishReason, 'tool_calls', 'a stream that does complete keeps its own reason');
 });

@@ -1,0 +1,120 @@
+{"id": "A-01", "text": "survey of transformer architectures for long-context language modeling", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-02", "text": "retrieval-augmented generation evaluation benchmarks", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-03", "text": "diffusion models for time series forecasting", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-04", "text": "federated learning privacy guarantees with differential privacy", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-05", "text": "graph neural networks for molecular property prediction", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-06", "text": "vision-language models for document understanding", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-07", "text": "reinforcement learning from human feedback reward modeling", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-08", "text": "chain-of-thought prompting for reasoning in large language models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-09", "text": "mixture of experts sparse training and inference efficiency", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-10", "text": "causal inference from observational data sensitivity analysis", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-11", "text": "protein structure prediction beyond alphafold", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-12", "text": "quantization methods for large language model inference", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-13", "text": "watermarking and detection of AI-generated text", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-14", "text": "state space models versus transformers for sequence modeling", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-15", "text": "benchmarks for agentic large language model tool use", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-16", "text": "small language models for on-device inference", "lang": "en", "needsFresh": false, "facet": "academic", "split": "dev", "mapItems": []}
+{"id": "A-17", "text": "speculative decoding for inference acceleration", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-18", "text": "knowledge editing in large language models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-19", "text": "multimodal retrieval augmented generation", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-20", "text": "AI safety red teaming and evaluation methods", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-21", "text": "continual learning and catastrophic forgetting mitigation", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-22", "text": "contrastive learning for sentence embeddings", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-23", "text": "parameter-efficient fine-tuning LoRA variants", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-24", "text": "hallucination detection in large language models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-25", "text": "code generation benchmarks for large language models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-26", "text": "neural radiance fields for 3D reconstruction", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-27", "text": "self-supervised pretraining for automatic speech recognition", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-28", "text": "sequential deep learning for recommender systems", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-29", "text": "deep learning versus gradient boosting for tabular data", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-30", "text": "zero-shot transfer in multilingual NLP", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-31", "text": "curriculum learning and data ordering effects", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-32", "text": "test-time compute scaling for reasoning models", "lang": "en", "needsFresh": true, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-33", "text": "needle in a haystack long-context retrieval evaluation", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-34", "text": "parallelism strategies for distributed training of large models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-35", "text": "synthetic data generation for language model training", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-36", "text": "model merging and weight averaging techniques", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-37", "text": "interpretability probing classifiers for language models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-38", "text": "energy consumption and carbon emissions of training large models", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-39", "text": "dense retrieval and semantic search evaluation metrics", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "A-40", "text": "foundation models for medical imaging segmentation", "lang": "en", "needsFresh": false, "facet": "academic", "split": "test", "mapItems": []}
+{"id": "T-01", "text": "open source vector database comparison 2025", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-02", "text": "self-hosted search engine alternatives to Elasticsearch", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-03", "text": "kubernetes gateway API versus ingress", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-04", "text": "rust web framework production comparison axum actix rocket", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-05", "text": "local LLM inference server options llama.cpp and vLLM", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-06", "text": "searxng which search engines it supports", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-07", "text": "opentelemetry collector deployment patterns", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-08", "text": "postgres full text search versus pgvector for hybrid retrieval", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-09", "text": "terraform versus pulumi versus cdk state management", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-10", "text": "python dependency management uv versus poetry", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-11", "text": "eBPF observability tools comparison", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-12", "text": "playwright versus cypress versus selenium 2025", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "dev", "mapItems": []}
+{"id": "T-13", "text": "webassembly runtimes for edge functions", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-14", "text": "message queue comparison kafka nats rabbitmq", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-15", "text": "gRPC versus REST versus GraphQL for internal services", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-16", "text": "open source secrets management alternatives to HashiCorp Vault", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-17", "text": "data lakehouse table format iceberg versus delta lake", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-18", "text": "AI code review automation tools", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-19", "text": "browser automation bot detection evasion techniques", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-20", "text": "embedded key value store options for edge devices", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-21", "text": "openinference semantic conventions for LLM tracing", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-22", "text": "open source LLM gateway proxies for routing", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-23", "text": "sqlite extensions for vector search", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-24", "text": "static site generators 2025 astro versus hugo", "lang": "en", "needsFresh": true, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-25", "text": "serverless cold start mitigation techniques", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-26", "text": "distributed cron scheduler alternatives", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-27", "text": "flink versus spark streaming comparison", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-28", "text": "grafana loki versus elasticsearch for log storage", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-29", "text": "container image vulnerability scanning tools comparison", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "T-30", "text": "open source feature flag platforms", "lang": "en", "needsFresh": false, "facet": "tech-landscape", "split": "test", "mapItems": []}
+{"id": "M-01", "text": "AI coding assistant market share 2025", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-02", "text": "cloud infrastructure spending forecast 2026", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-03", "text": "semiconductor fab capacity expansion announcements", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-04", "text": "electric vehicle sales trends by region", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-05", "text": "open source commercialization business models", "lang": "en", "needsFresh": false, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-06", "text": "developer tools startup funding rounds 2025", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-07", "text": "search advertising revenue versus AI chat referrals", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-08", "text": "GPU rental market pricing trends", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-09", "text": "enterprise AI adoption survey results", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-10", "text": "data center power constraints and grid capacity", "lang": "en", "needsFresh": true, "facet": "market", "split": "dev", "mapItems": []}
+{"id": "M-11", "text": "streaming subscription market saturation", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-12", "text": "fintech regulation changes affecting startups", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-13", "text": "robotics startup investment trends", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-14", "text": "cybersecurity spending growth forecast", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-15", "text": "quantum computing commercial milestones", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-16", "text": "satellite internet market competition", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-17", "text": "ecommerce logistics automation investment", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-18", "text": "cloud repatriation enterprise surveys", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-19", "text": "AI regulation timeline by jurisdiction", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-20", "text": "battery technology manufacturing scale-up", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-21", "text": "healthcare AI reimbursement policy changes", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-22", "text": "enterprise software vendor consolidation trend", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-23", "text": "chip export controls impact analysis", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-24", "text": "gaming industry revenue trends 2025", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "M-25", "text": "open model ecosystem adoption metrics", "lang": "en", "needsFresh": true, "facet": "market", "split": "test", "mapItems": []}
+{"id": "V-01", "text": "so sánh giá dịch vụ cloud tại Việt Nam 2025", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-02", "text": "quy định lưu trữ dữ liệu cá nhân tại Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-03", "text": "thủ tục thành lập công ty công nghệ tại Việt Nam", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-04", "text": "làn sóng đầu tư AI tại Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-05", "text": "học bổng du học ngành khoa học máy tính", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-06", "text": "báo cáo thị trường thương mại điện tử Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-07", "text": "lương kỹ sư phần mềm tại Hà Nội và thành phố Hồ Chí Minh", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-08", "text": "chính sách thuế cho startup công nghệ Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-09", "text": "các trường đại học đào tạo trí tuệ nhân tạo tốt ở Việt Nam", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-10", "text": "kinh nghiệm xin visa làm việc tại nước ngoài cho kỹ sư", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "dev", "mapItems": []}
+{"id": "V-11", "text": "giá điện và chi phí vận hành trung tâm dữ liệu Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-12", "text": "quy định về hóa đơn điện tử cho doanh nghiệp", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-13", "text": "kim ngạch xuất khẩu phần mềm Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-14", "text": "dịch vụ thanh toán số phổ biến ở Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-15", "text": "chương trình hỗ trợ doanh nghiệp chuyển đổi số của nhà nước", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-16", "text": "thị trường xe điện Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-17", "text": "bằng sáng chế và sở hữu trí tuệ cho phần mềm", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-18", "text": "tuyển dụng kỹ sư AI ở Việt Nam và mức lương", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-19", "text": "quy định an toàn thông tin mạng theo cấp độ", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-20", "text": "hạ tầng trạm sạc xe điện tại Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-21", "text": "các khóa học lập trình trực tuyến tiếng Việt chất lượng", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-22", "text": "thị trường bất động sản công nghiệp và khu công nghệ", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-23", "text": "chuyển tiền quốc tế cho freelancer Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-24", "text": "tiêu chuẩn dữ liệu mở của cơ quan nhà nước Việt Nam", "lang": "vi", "needsFresh": false, "facet": "vietnamese", "split": "test", "mapItems": []}
+{"id": "V-25", "text": "chi phí thuê máy chủ GPU tại Việt Nam", "lang": "vi", "needsFresh": true, "facet": "vietnamese", "split": "test", "mapItems": []}

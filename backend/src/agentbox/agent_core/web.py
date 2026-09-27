@@ -46,7 +46,7 @@ import urllib.request
 from html.parser import HTMLParser
 
 from ..observability.system_log import system_log
-from . import reading
+from . import reading, search_pipeline, source_pack
 from .limits import (OPENALEX_MAILTO_DEFAULT, OPENALEX_MAILTO_ENV, PAPER_CITATIONS_LIMIT_MAX,
                      PAPER_CITATIONS_RESOLVE_MAX, READ_FIND_MAX_TERMS, READ_OFFSET_MAX,
                      SEARCH_CACHE_MAX_ENTRIES, SEARCH_PAYLOAD_CHARS,
@@ -862,8 +862,56 @@ def _provider_parallel(query: str, count: int, options: dict | None = None) -> l
             for item in (rows or []) if isinstance(item, dict) and item.get('url')][:count]
 
 
-GENERAL_PROVIDERS = (_provider_firecrawl, _provider_brave, _provider_tavily, _provider_exa,
-                     _provider_parallel)
+def _provider_searxng(query: str, count: int, options: dict | None = None) -> list[dict]:
+    """Chân SearXNG tự host, đứng ĐẦU chuỗi tìm chung khi có `BOXFOX_SEARXNG_URL` (#6071).
+
+    Thiếu biến ⇒ ném lỗi NÊU TÊN biến rồi để chuỗi rơi tiếp; nhờ vậy khi URL chưa đặt (mặc định)
+    đường cũ chạy y như trước. Bộ luân phiên (bước 7) chọn một tập engine con mỗi lần, nên một
+    engine ít bị chặn hơn. Hàng trả về mang `engines` để bước gộp biết nó đến từ đâu.
+    """
+    if not search_pipeline.searxng_url():
+        raise WebError('WEB_SEARCH_UNAVAILABLE', 'BOXFOX_SEARXNG_URL is not set')
+    options = options or {}
+    engines = search_pipeline.pick_engines()
+    response = search_pipeline.searxng_search(query, engines=engines, count=count,
+                                              time_range=options.get('freshness') or None,
+                                              language=str(options.get('lang') or ''))
+    if response.get('error') and not response.get('results'):
+        raise WebError('WEB_SEARCH_UNAVAILABLE',
+                       f'the local SearXNG refused the query ({response["error"]})')
+    return [{'title': _bounded_snippet(row.get('title')), 'url': str(row.get('url') or ''),
+             'snippet': _bounded_snippet(row.get('snippet')), 'provider': 'searxng',
+             'engines': [row.get('engine')] if row.get('engine') else []}
+            for row in (response.get('results') or []) if row.get('url')][:count]
+
+
+def _academic_module():
+    """Nhập `academic.py` MUỘN và phòng thủ: B2 có thể chưa land ⇒ bỏ nhóm papers, giữ đường cũ."""
+    try:
+        from . import academic
+        return academic
+    except ImportError:  # pragma: no cover - nhánh chạy không có academic.py
+        return None
+
+
+def _provider_papers_first(query: str, count: int, options: dict | None = None) -> list[dict]:
+    """Chân ĐẦU nhóm papers: pipeline bật ⇒ nhóm học thuật của B2; tắt ⇒ y hệt `_provider_papers`.
+
+    Khi tắt, hàm PHẢI trả lại đúng chuỗi cũ (OpenAlex trước): `_search_leg` vẫn `_retry` và rơi
+    tiếp sang Crossref/Europe PMC/arXiv y như trước khi có lớp tìm mới.
+    """
+    if search_pipeline.pipeline_enabled():
+        papers_module = _academic_module()
+        if papers_module is not None and hasattr(papers_module, 'papers_search'):
+            rows = papers_module.papers_search([query], count=count, options=options or {})
+            if rows:
+                return rows
+            raise WebError('WEB_SEARCH_UNAVAILABLE', 'the academic papers group returned nothing')
+    return _provider_papers(query, count, options)
+
+
+GENERAL_PROVIDERS = (_provider_searxng, _provider_firecrawl, _provider_brave, _provider_tavily,
+                     _provider_exa, _provider_parallel)
 SOURCE_PROVIDERS = {
     'wikipedia': (_provider_wikipedia,),
     'stackoverflow': (_provider_stackexchange,),
@@ -871,7 +919,8 @@ SOURCE_PROVIDERS = {
     'openreview': (_provider_openreview,),
     # Thứ tự là HỢP ĐỒNG (đo 2026-09-23): OpenAlex trả hồ sơ đầy đủ nhất và có `select` nên nhẹ
     # nhất; Crossref có hồ sơ DOI; Europe PMC phủ y–sinh; arXiv để CUỐI vì nó chập chờn (406).
-    'papers': (_provider_papers, _provider_crossref, _provider_europepmc, _provider_arxiv),
+    # Chân đầu `_provider_papers_first` chỉ đổi hành vi khi BOXFOX_SEARCH_PIPELINE=on.
+    'papers': (_provider_papers_first, _provider_crossref, _provider_europepmc, _provider_arxiv),
 }
 
 
@@ -1097,6 +1146,28 @@ class WebTools:
             return {**cached, 'cached': True}
 
         options = {'freshness': freshness, 'lang': lang, 'exclude': exclude, 'cursor': cursor}
+        # Chế độ gói nguồn (8.3) và ống tìm 10 bước (5.4.1) ĐỨNG TRƯỚC đường cũ. Khi cả hai tắt,
+        # đoạn dưới chạy y như trước (không đổi một byte cho tới khi `BOXFOX_WEB_PACK`/
+        # `BOXFOX_SEARCH_PIPELINE` được bật).
+        pack_warning = None
+        if source_pack.active_pack() is not None:
+            pack_rows = source_pack.pack_search(queries[0], count, options)
+            if pack_rows is not None:
+                payload = self._pack_search_payload(queries, source, pack_rows, site=site,
+                                                    freshness=freshness, lang=lang, exclude=exclude)
+                self._cache_put(cache_key, payload)
+                return payload
+            # Gói KHÔNG có `search_index.jsonl` ⇒ rơi xuống đường thật (hợp đồng §3 cho phép), nhưng
+            # lời gọi này ĐÃ chạm mạng — payload phải nói rõ (§1/§8.3: "gói ⇒ không gọi mạng").
+            pack_warning = ('source pack has no search_index.jsonl: this call fell through to '
+                            'the live network instead of answering from the pack')
+        if search_pipeline.pipeline_enabled():
+            payload = search_pipeline.run_pipeline(queries, source=source, count=count, options=options,
+                                                   session_id=self._snapshot_scope.get())
+            if pack_warning:
+                payload['packWarning'] = pack_warning
+            self._cache_put(cache_key, payload)
+            return payload
         providers = SOURCE_PROVIDERS.get(source) or GENERAL_PROVIDERS
         rows: list[dict] = []
         per_query: list[dict] = []
@@ -1175,6 +1246,8 @@ class WebTools:
                                                  else None)},
                    'filters': {'site': site or None, 'exclude': sorted(exclude),
                                'freshness': freshness or None, 'lang': lang or None}}
+        if pack_warning:
+            payload['packWarning'] = pack_warning
         self._cache_put(cache_key, payload)
         return payload
 
@@ -1223,6 +1296,29 @@ class WebTools:
         while len(self._search_cache) > SEARCH_CACHE_MAX_ENTRIES:
             self._search_cache.popitem(last=False)
 
+    def _pack_search_payload(self, queries: list[str], source: str, rows: list[dict], *,
+                             site: str, freshness: str, lang: str,
+                             exclude: set[str]) -> dict:
+        """Payload cho chế độ gói nguồn: CÙNG hình dạng đường cũ + `pack: true`, KHÔNG gọi mạng.
+
+        Gói có chỉ mục nhưng không khớp ⇒ `rows == []` và đây vẫn là payload hợp lệ (nói đúng "gói
+        không có gì"), khác hẳn "gói không có chỉ mục" (lúc đó `pack_search` trả `None` và người gọi
+        rơi về đường thật).
+        """
+        results, dropped = _fit_results(rows)
+        per_query = [{'query': queries[0], 'count': len(rows)}]
+        per_query += [{'query': query, 'count': 0} for query in queries[1:]]
+        candidates = [{'url': str(row.get('url') or ''), 'disposition': 'retained'} for row in rows]
+        return {'query': queries[0], 'queries': queries, 'source': source, 'count': len(results),
+                'results': results, 'perQuery': per_query, 'deduped': 0, 'dropped': dropped,
+                'searchTrace': {'perQuery': [{'query': queries[0], 'candidates': candidates}],
+                                'omittedCandidates': 0},
+                'untrusted': True, 'note': UNTRUSTED_NOTE, 'cached': False, 'fetchedAt': _now(),
+                'pagination': {'supported': False, 'nextCursor': None},
+                'filters': {'site': site or None, 'exclude': sorted(exclude),
+                            'freshness': freshness or None, 'lang': lang or None},
+                'pack': True}
+
     # ------------------------------------------------------------------- fetch
 
     def fetch(self, args: dict) -> dict:
@@ -1255,6 +1351,25 @@ class WebTools:
         url = str(args.get('url') or '').strip()
         if not url:
             raise WebError('WEB_URL_INVALID', 'web_fetch requires a URL')
+        # Chế độ gói nguồn (8.3): đọc tệp của gói, KHÔNG chạm mạng. URL không có trong gói là lỗi
+        # nói rõ, không rơi về mạng (mạng phải tắt trong chế độ gói).
+        if source_pack.active_pack() is not None:
+            packed = source_pack.pack_fetch(url)
+            if packed is None:
+                raise WebError('WEB_FETCH_FAILED',
+                               f'{url} không có trong gói nguồn (BOXFOX_WEB_PACK)',
+                               'the URL is not in the active source pack')
+            text = str(packed.get('text') or '')
+            returned = text[offset:offset + max_chars]
+            more = offset + len(returned) < len(text)
+            return {'url': url, 'finalUrl': url, 'host': _host_of(url), 'status': 200,
+                    'contentType': packed.get('contentType') or 'text/plain',
+                    'title': packed.get('title') or '', 'text': returned, 'textChars': len(text),
+                    'truncated': more, 'links': [], 'reader': None, 'readerReason': 'source-pack',
+                    'readTier': 'pack', 'quality': None, 'contentEncoding': 'identity',
+                    'decoded': False, 'partial': False, 'untrusted': True, 'note': UNTRUSTED_NOTE,
+                    'fetchedAt': _now(), 'pack': True, 'offset': offset, 'more': more,
+                    'nextOffset': (offset + len(returned)) if more else None, 'fromStore': False}
         if offset > 0:
             stored = self._entry_by_url(url)
             if stored is not None:
@@ -1507,6 +1622,18 @@ class WebTools:
         except (TypeError, ValueError):
             raise WebError('WEB_URL_INVALID', 'limit must be a number') from None
         limit = max(1, min(limit, PAPER_CITATIONS_LIMIT_MAX))
+        # Pipeline bật + B2 có mặt (5.4.3) ⇒ săn trích dẫn qua Semantic Scholar (chân chính) rồi
+        # mới tới dự phòng. Tắt pipeline ⇒ giữ NGUYÊN đường OpenAlex cũ bên dưới.
+        if search_pipeline.pipeline_enabled():
+            papers_module = _academic_module()
+            if papers_module is not None and hasattr(papers_module, 'citation_chase'):
+                identifier = work_id or doi
+                found = papers_module.citation_chase(identifier, direction=direction, limit=limit,
+                                                     options={})
+                rows = [row for row in (found or []) if isinstance(row, dict)]
+                return {'work': identifier, 'direction': direction, 'total': len(rows),
+                        'count': len(rows), 'results': rows, 'source': 'academic',
+                        'untrusted': True, 'note': UNTRUSTED_NOTE, 'fetchedAt': _now()}
         ident = _openalex_work_id(work_id, doi)
         if direction == 'backward':
             base = _openalex_json({'select': f'{PAPER_SELECT},referenced_works'}, ident)

@@ -358,6 +358,30 @@ SEARCH_QUERY_MAX = 3
 SEARCH_PAYLOAD_CHARS = 18_000
 SEARCH_RETRY_ATTEMPTS = 2
 
+# --- Vòng research v2 (P0b) — lớp tìm kiếm 10 bước (#6077) -------------------------------------
+# Hợp đồng `/code/.plans/p0-interfaces.md` §6: ĐÚNG những hằng dưới đây, không thêm bớt tên.
+# Nguồn nội dung: kế hoạch v2 §5.4.1 (bước 2 hạn chờ, bước 4 k=60, bước 5 đa dạng tên miền),
+# §5.4.2 (mặc định riêng tư), §5.4.3 (học thuật), §5.4.4 (top-k). Mọi con số là [ƯỚC LƯỢNG] và
+# được chỉnh trên tập `dev` của 8.7, KHÔNG chỉnh trên tập `test`.
+SEARXNG_TIMEOUT_SECONDS = 8.0
+ACADEMIC_TIMEOUT_SECONDS = 10.0
+SEARCH_PIPELINE_VARIANTS_L2 = 6
+SEARCH_PIPELINE_VARIANTS_L3 = 10
+SEARCH_RRF_K = 60
+SEARCH_PER_DOMAIN_TOP = 2
+# Cầu dao engine: 3 lần lỗi liên tiếp ⇒ ngưng 5', rồi 15', rồi 60' (bước 7, lùi theo cấp số).
+SEARCH_ENGINE_FAIL_STREAK = 3
+SEARCH_ENGINE_SUSPEND_SECONDS = (300, 900, 3600)
+# Bộ đệm bền (bước 9): web chung 24 h · tin tức/hiện trạng 6 h · metadata học thuật 7 ngày.
+SEARCH_CACHE_TTL_WEB = 24 * 3600
+SEARCH_CACHE_TTL_NEWS = 6 * 3600
+SEARCH_CACHE_TTL_ACADEMIC = 7 * 86400
+SEARCH_PIPELINE_TOP_K = 8
+SEARCH_ENGINE_ROTATION_N = 4
+SEARCH_WEIGHTS = {'rrf': 0.4, 'bm25': 0.2, 'llm': 0.3, 'tier': 0.05, 'fresh': 0.05}
+PAPERS_GROUP_MAX_LEGS = 6
+OPENALEX_DAILY_CALLS_DEFAULT = 50
+
 
 def _web_switch(name, modes, default):
     """Giá trị công tắc trong `modes`, hoặc `default` khi biến trống/giá trị lạ."""
@@ -485,3 +509,215 @@ SOURCE_ROW_LIMIT_MAX = 200
 SOURCE_SPOT_TARGETS = ('vanban.chinhphu.vn', 'vbpl.vn', 'moh.gov.vn', 'thuvienphapluat.vn')
 SOURCE_FAKE_SUCCESS_TITLE_MARKERS = ('Trang chủ', 'Warning: This page maybe not yet fully loaded')
 SOURCE_FAKE_SUCCESS_MIN_CHARS = 300
+
+
+# --- P1 research mode (appended block) ---
+# Vỏ chế độ Research (plan v2 §4.1, §5.2, §5.3, §5.12). Mọi hằng ở đây chỉ thuộc pha P1; khối
+# này nằm CUỐI tệp để không đụng phần thân mà một tác nhân khác đang sửa.
+#
+# Công tắc giết: mặc định `on` = tính năng CÓ MẶT, nhưng mọi phiên vẫn bắt đầu với mode TẮT
+# (mode chỉ bật khi người dùng bấm nút hoặc gõ `/research`). `off` ⇒ mọi hành vi cũ của f17d54b.
+RESEARCH_MODE_ENV = 'BOXFOX_RESEARCH_MODE'
+RESEARCH_MODE_MODES = ('on', 'off')
+# Mặc định `on`: tính năng CÓ MẶT (vỏ mode + cửa 1..4 chạy thật). Người dùng vẫn phải TỰ bật mode
+# cho từng phiên. `off` là công tắc giết, quay về đúng f17d54b. Docstring `runtime.research_mode_available`
+# và ý O1 của kế hoạch đã nói `on`; để `off` thì cả P1 là mã chết (review F4).
+RESEARCH_MODE_DEFAULT_MODE = 'on'
+
+# Mức 3 chỉ mở được trong mode (cổng bốn cửa, §5.2). `off` ⇒ main được mở mức 3 như cũ.
+RESEARCH_TIER3_MODE_ONLY_ENV = 'BOXFOX_RESEARCH_TIER3_MODE_ONLY'
+RESEARCH_TIER3_MODE_ONLY_MODES = ('on', 'off')
+RESEARCH_TIER3_MODE_ONLY_DEFAULT_MODE = 'on'
+
+# Chạy nền khi tắt mode (#6078). `off` ⇒ tắt mode luôn tạm dừng run (không có lựa chọn chạy nền).
+RESEARCH_BACKGROUND_RUNS_ENV = 'BOXFOX_RESEARCH_BACKGROUND_RUNS'
+RESEARCH_BACKGROUND_RUNS_MODES = ('on', 'off')
+RESEARCH_BACKGROUND_RUNS_DEFAULT_MODE = 'on'
+
+# Mỗi lượt research nhắm xong trong ngắn hạn (5.3); việc dài chạy qua nhiều lượt tiếp tục.
+RESEARCH_TURN_TARGET_SECONDS_ENV = 'BOXFOX_RESEARCH_TURN_TARGET_SECONDS'
+RESEARCH_TURN_TARGET_SECONDS = 600
+
+# Mã lỗi/sự kiện ổn định cho giao diện và test.
+RESEARCH_MODE_REQUIRED_CODE = 'RESEARCH_MODE_REQUIRED'
+RESEARCH_MODE_EXIT_CHOICE_REQUIRED_CODE = 'RESEARCH_EXIT_CHOICE_REQUIRED'
+# Công tắc `BOXFOX_RESEARCH_MODE=off`: API bật/tắt mode phải trả lỗi RÕ thay vì bật một chế độ
+# nửa vời (mọi cổng khác đều tắt khi công tắc tắt).
+RESEARCH_MODE_UNAVAILABLE_CODE = 'RESEARCH_MODE_UNAVAILABLE'
+RESEARCH_SCOPE_REVISION_STALE_CODE = 'RESEARCH_SCOPE_REVISION_STALE'
+# Khoá lạc quan nhận thẳng từ thân HTTP: giá trị không phải số phải trả về một MÃ hợp đồng, chứ
+# không phải `int() argument must be ...` của Python (đợt soát `ed485f3`, finding 2).
+RESEARCH_SCOPE_REVISION_INVALID_CODE = 'RESEARCH_SCOPE_REVISION_INVALID'
+RESEARCH_JOB_BUDGET_EXHAUSTED_CODE = 'RESEARCH_JOB_BUDGET_EXHAUSTED'
+RESEARCH_MODE_ENTRY_BY = ('toggle', 'command')
+RESEARCH_MODE_BLOCK_MARKER = '=== ACTIVE MODE: RESEARCH ==='
+RESEARCH_MODE_BLOCK_END = '=== END ACTIVE MODE ==='
+RESEARCH_MODE_EVENT_CODE = 'research_mode'
+# Khối bàn giao research → main (§5.10). Cặp mốc này là hợp đồng để `_sync_mode_block` GỠ được khối
+# cũ trước khi chèn khối mới: chỉ-ghi-thêm thì mỗi bản hồ sơ để lại một khối cũ nằm mãi trong
+# prompt hệ thống (đo sống 2026-09-25: hồ sơ v4 ⇒ prompt mang CẢ nhãn `partial` của v3 lẫn
+# `status completed` của v4).
+RESEARCH_HANDOFF_BLOCK_MARKER = '=== RESEARCH HANDOFF ==='
+RESEARCH_HANDOFF_BLOCK_END = '=== END RESEARCH HANDOFF ==='
+# Dòng nhắc "run đang chạy nền" ở lượt main (§5.2). Cặp mốc cũng là hợp đồng để `_sync_mode_block`
+# GỠ khối của lượt trước trước khi chèn lại: chỉ-ghi-thêm thì mỗi lượt chất thêm một bản (đo sống
+# 2026-09-25: ba lượt ⇒ ba khối trong cùng một prompt hệ thống).
+RESEARCH_BACKGROUND_BLOCK_MARKER = '=== BACKGROUND RESEARCH RUN ==='
+RESEARCH_BACKGROUND_BLOCK_END = '=== END BACKGROUND RESEARCH RUN ==='
+
+# Công cụ bị BỎ khỏi hồ sơ lượt khi ở mode: mode không có công cụ ghi (5.2, M-14).
+RESEARCH_MODE_EXCLUDED_TOOLS = frozenset({'file_write', 'file_edit_block', 'terminal_exec',
+                                          'write_plan', 'plan_verify'})
+# Vai con mà `delegate_task` của mode được phép giao (5.2).
+RESEARCH_MODE_DELEGATE_ROLES = frozenset({'research', 'research-review', 'explore'})
+
+# Thẻ phạm vi (5.3, 5.12): vòng hỏi tối đa 3 câu; lựa chọn mỗi câu 2–5.
+RESEARCH_SCOPE_MAX_QUESTIONS = 3
+RESEARCH_PROMPT_KINDS = ('interview', 'scope-change', 'exit-choice', 'out-of-scope', 'budget')
+RESEARCH_EXIT_CHOICES = ('pause', 'background')
+
+# Cờ `state` của một job trong mode.
+RESEARCH_JOB_ORIGIN = 'mode'
+RESEARCH_JOB_ORIGIN_MAIN = 'main'
+
+
+# --- P2 research evidence / time / coverage (appended block) ----------------
+# Mô hình bằng chứng, chính sách thời gian và bản đồ bao phủ (plan v2 §5.5–5.8, §7 P2). Mọi hằng ở
+# đây chỉ thuộc pha P2/P3; khối nằm CUỐI tệp để không đụng phần thân. Mặc định `on` = tính năng CÓ
+# MẶT; `off` = hành vi y hệt `6eb2fd8` (mọi cổng mới tắt, cổng cũ dò tiêu đề vẫn chạy).
+RESEARCH_COVERAGE_ENV = 'BOXFOX_RESEARCH_COVERAGE'
+RESEARCH_COVERAGE_MODES = ('on', 'off')
+RESEARCH_COVERAGE_DEFAULT_MODE = 'on'
+
+# Cổng cấu trúc thay cho dò từ khoá tiêu đề (`research_quality.DOSSIER_SECTIONS`).
+RESEARCH_STRUCTURED_REPORT_ENV = 'BOXFOX_RESEARCH_STRUCTURED_REPORT'
+RESEARCH_STRUCTURED_REPORT_MODES = ('on', 'off')
+RESEARCH_STRUCTURED_REPORT_DEFAULT_MODE = 'on'
+
+# Cửa sổ "hiện trạng" (5.6): nhận định `trend`/`current-fact` chỉ đỡ bằng nguồn ngoài cửa sổ ⇒ lỗi.
+RESEARCH_TIME_POLICY_ENV = 'BOXFOX_RESEARCH_TIME_POLICY'
+RESEARCH_TIME_POLICY_MODES = ('on', 'off')
+RESEARCH_TIME_POLICY_DEFAULT_MODE = 'on'
+
+# Mã ổn định cho cổng/test/giao diện.
+RESEARCH_STALE_CURRENT_CLAIM_CODE = 'research-stale-current-claim'
+RESEARCH_REPORT_STRUCTURE_CODE = 'research-report-structure'
+RESEARCH_STALE_CURRENT_CLAIM_LABEL = 'nguồn cũ cho nhận định hiện trạng'
+
+# Bão hoà (5.5): hai sóng liên tiếp dưới 10% kết quả mới ⇒ `saturated`; săn trích dẫn dừng sau 3 vòng
+# liên tiếp không thêm bài mới liên quan (#6008).
+RESEARCH_SATURATION_NEW_RATIO = 0.10
+RESEARCH_SATURATION_WAVES = 2
+RESEARCH_CITATION_CHASE_STOP_ROUNDS = 3
+
+# --- P3 subagent roles (appended block) -------------------------------------
+# Vai con và hợp đồng của chúng (plan v2 §5.9, §5.11, §7 P3, §8.4). Không thêm vai mới vào
+# `ROLES`: dùng `task.kind` trên hai vai có sẵn `research` và `research-review`.
+RESEARCH_BRANCH_REPORT_ENV = 'BOXFOX_RESEARCH_BRANCH_REPORT'
+RESEARCH_BRANCH_REPORT_MODES = ('on', 'off')
+RESEARCH_BRANCH_REPORT_DEFAULT_MODE = 'on'
+RESEARCH_BRANCH_REPORT_MISSING_CODE = 'RESEARCH_BRANCH_REPORT_MISSING'
+
+# Phản biện bắt buộc từ mức 2 (#6072, §5.11). `off` ⇒ quay lại `RESEARCH_TIER_CRITIQUE` cũ.
+RESEARCH_CRITIQUE_TIER2_ENV = 'BOXFOX_RESEARCH_CRITIQUE_TIER2'
+RESEARCH_CRITIQUE_TIER2_MODES = ('on', 'off')
+RESEARCH_CRITIQUE_TIER2_DEFAULT_MODE = 'on'
+
+#: Kiểu việc của một nhánh con (`delegate_task.taskKind`). Không phải vai mới: vai vẫn là
+#: `research` hoặc `research-review`, quyền công cụ giữ nguyên đã kiểm.
+RESEARCH_BRANCH_KINDS = ('branch', 'deep-read', 'counter', 'critique', 'evidence', 'coverage')
+RESEARCH_TASK_KIND_INVALID_CODE = 'RESEARCH_TASK_KIND_INVALID'
+RESEARCH_TASK_KIND_DEFAULT = 'branch'
+
+#: Mã phát hiện của bên soát (§5.9). Giữ `severity`; `kind` là trường MỚI, thêm được, không đổi cũ.
+RESEARCH_ISSUE_KINDS = ('unsupported', 'misattributed', 'outdated', 'missing-direction',
+                        'counter-evidence', 'reasoning', 'fit', 'unlabeled-assumption')
+#: Phát hiện `missing-direction` mức cao chưa xử lý ⇒ nhãn này trên hồ sơ (§5.9).
+RESEARCH_COVERAGE_LABEL = 'bao phủ chưa đủ'
+#: Nhãn khi vòng sửa vẫn bị `revise` (#5968) — đã có từ trước, nhắc lại cho một chỗ đọc.
+RESEARCH_CRITIQUE_LABEL_KEPT = 'chưa đạt phản biện'
+
+#: Thẻ trích xuất của con `deep-read`: số nguồn trụ cột mỗi lần theo mức (§5.9, §5.11).
+RESEARCH_DEEP_READ_SOURCES = {1: 0, 2: 2, 3: 10}
+RESEARCH_EXTRACTION_MAX_FIELDS = 24
+
+#: Ngưỡng nghiệm thu của bộ lỗi cấy sẵn (§8.4): critic+verifier bắt ≥ 70% lỗi dữ kiện/gán sai;
+#: coverage reviewer bắt ≥ 60% hướng lớn bị gỡ; tỉ lệ báo sai ≤ 20% [ƯỚC LƯỢNG ngưỡng].
+RESEARCH_SEEDED_CATCH_MIN = 0.70
+RESEARCH_SEEDED_COVERAGE_MIN = 0.60
+RESEARCH_SEEDED_FALSE_ALARM_MAX = 0.20
+RESEARCH_SEEDED_DEFECT_KINDS = ('wrong-number', 'unsupported-claim', 'misattributed',
+                                'outdated-supports-current', 'removed-direction', 'survey-as-proposal',
+                                'unlabeled-assumption', 'same-origin-independent',
+                                'mismatched-benchmark')
+
+# --- P5 (làm mới báo cáo) ----------------------------------------------------
+#: Run LÀM MỚI (`refresh`, use case H của §5.1) — công tắc giết: `off` ⇒ tuyến `refresh` biến mất,
+#: hành vi y hệt `6eb2fd8`.
+RESEARCH_REFRESH_ENV = 'BOXFOX_RESEARCH_REFRESH'
+RESEARCH_REFRESH_MODES = ('on', 'off')
+RESEARCH_REFRESH_DEFAULT_MODE = 'on'
+RESEARCH_REFRESH_MODE_UNKNOWN_CODE = 'RESEARCH_REFRESH_MODE_UNKNOWN'
+#: Dòng sổ của run cũ chép sang run làm mới được đánh dấu thế nào (§5.3): chưa đọc lại thì không
+#: được đỡ một nhận định "hiện trạng".
+RESEARCH_REFRESH_INHERITED_STATUS = 'unverified'
+#: Trạng thái một dòng sổ coi như RÚT khỏi run làm mới (nguồn cũ không còn đọc lại được).
+RESEARCH_REFRESH_WITHDRAWN_STATUSES = ('blocked', 'unverified', 'gone', 'removed')
+#: Mã lỗi của tuyến làm mới.
+RESEARCH_REFRESH_DISABLED_CODE = 'RESEARCH_REFRESH_DISABLED'
+RESEARCH_REFRESH_NO_DOSSIER_CODE = 'RESEARCH_REFRESH_NO_DOSSIER'
+RESEARCH_REFRESH_SOURCE_ACTIVE_CODE = 'RESEARCH_REFRESH_SOURCE_ACTIVE'
+RESEARCH_REFRESH_RUN_ACTIVE_CODE = 'RESEARCH_REFRESH_RUN_ACTIVE'
+
+
+# --- Công tắc P2/P3: một chỗ đọc --------------------------------------------
+# `runtime._env_switch` là bản riêng tư của P1. P2/P3 đọc công tắc qua đây để không mọc bản sao thứ
+# ba, và để bài kiểm truyền `env={...}` thay vì vá `os.environ` (thứ tự kiểm không ảnh hưởng nhau).
+def env_switch(name, modes, default, env=None):
+    """Giá trị công tắc trong `modes`; biến trống hoặc giá trị lạ ⇒ `default` (không bao giờ ném)."""
+    source = os.environ if env is None else env
+    raw = str(source.get(name) or '').strip().lower()
+    return raw if raw in modes else default
+
+
+def research_coverage_enabled(env=None):
+    """`BOXFOX_RESEARCH_COVERAGE`: `on` (mặc định) ⇒ facet, bão hoà và cổng bao phủ CÓ MẶT.
+
+    Mặc định `on` là "tính năng CÓ MẶT", không phải "đang bật": một run chỉ dựng bản đồ bao phủ khi
+    mode `/research` đang bật, còn `off` là đường lùi về đúng hành vi `6eb2fd8`.
+    """
+    return env_switch(RESEARCH_COVERAGE_ENV, RESEARCH_COVERAGE_MODES,
+                      RESEARCH_COVERAGE_DEFAULT_MODE, env) == 'on'
+
+
+def research_structured_report_enabled(env=None):
+    """`BOXFOX_RESEARCH_STRUCTURED_REPORT`: `on` ⇒ cổng kiểm CẤU TRÚC; `off` ⇒ quay lại dò tiêu đề."""
+    return env_switch(RESEARCH_STRUCTURED_REPORT_ENV, RESEARCH_STRUCTURED_REPORT_MODES,
+                      RESEARCH_STRUCTURED_REPORT_DEFAULT_MODE, env) == 'on'
+
+
+def research_time_policy_enabled(env=None):
+    """`BOXFOX_RESEARCH_TIME_POLICY`: `on` ⇒ có cửa sổ "hiện trạng" và lỗi nguồn cũ."""
+    return env_switch(RESEARCH_TIME_POLICY_ENV, RESEARCH_TIME_POLICY_MODES,
+                      RESEARCH_TIME_POLICY_DEFAULT_MODE, env) == 'on'
+
+
+def research_critique_tier2_enabled(env=None):
+    """`BOXFOX_RESEARCH_CRITIQUE_TIER2`: `on` (mặc định) ⇒ phản biện từ mức 2 (vòng 34, #6072).
+
+    `off` ⇒ quay lại đúng `RESEARCH_TIER_CRITIQUE` (critic chỉ ở mức 3).
+    """
+    return env_switch(RESEARCH_CRITIQUE_TIER2_ENV, RESEARCH_CRITIQUE_TIER2_MODES,
+                      RESEARCH_CRITIQUE_TIER2_DEFAULT_MODE, env) == 'on'
+
+
+def research_branch_report_enabled(env=None):
+    """`BOXFOX_RESEARCH_BRANCH_REPORT`: `on` ⇒ con research trả thẻ có cấu trúc; `off` ⇒ văn bản tự do."""
+    return env_switch(RESEARCH_BRANCH_REPORT_ENV, RESEARCH_BRANCH_REPORT_MODES,
+                      RESEARCH_BRANCH_REPORT_DEFAULT_MODE, env) == 'on'
+
+
+def research_refresh_enabled(env=None):
+    """`BOXFOX_RESEARCH_REFRESH`: `on` (mặc định) ⇒ `PATCH .../jobs/{id}` nhận `action: 'refresh'`."""
+    return env_switch(RESEARCH_REFRESH_ENV, RESEARCH_REFRESH_MODES,
+                      RESEARCH_REFRESH_DEFAULT_MODE, env) == 'on'

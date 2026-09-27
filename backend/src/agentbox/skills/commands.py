@@ -11,9 +11,16 @@ from .catalog import DEFAULT_SKILLS
 
 ROLE_COMMANDS = {name: name for name in ROLES} | {'test': 'testing'}
 ROLE_COMMANDS.pop('testing')
+# P1 (§5.2, cửa 3): `/research` không còn là lệnh VAI. Nó là lệnh MODE (bật mode, mở run) khi
+# BOXFOX_RESEARCH_MODE bật; khi công tắc tắt, `resolve` vẫn trả về hành vi lệnh vai cũ.
+ROLE_COMMANDS.pop('research', None)
 INFO = {'help', 'skills', 'agents', 'status', 'context'}
-BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design'}
+BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design',
+                                       'research'}
 EXTERNAL = {'claude-code', 'codex', 'opencode'}
+# P1 (§5.2): mô tả cho các lệnh MODE trong `/help`.
+MODE_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
+                                '`/research off` exits, `/research status` shows the run'}
 # Default role per CLI command. The role is not tied to the executor: change these entries
 # (or use a custom command with an explicit role) instead of hardcoding a role in the dispatcher.
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
@@ -100,7 +107,7 @@ class CommandRegistry:
 
     def list(self):
         enabled = set(self.settings()['enabled'])
-        rows = [{'slug': key, 'description': ('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' '),
+        rows = [{'slug': key, 'description': MODE_DESCRIPTIONS.get(key) or (('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' ')),
                  'kind': 'builtin', 'enabled': key not in {'claude-code', 'claude-design'} or key in enabled} for key in sorted(BUILTINS)]
         rows += [{'slug': key, 'description': self.catalog.items[sid]['description'], 'kind': 'skill',
                   'enabled': sid in enabled and sid not in {'codex', 'opencode'}, 'skillId': sid,
@@ -177,7 +184,21 @@ class CommandRegistry:
                     raise ValueError('This command takes no arguments')
                 result.kind = 'control'
                 return result
-            if key in ROLE_COMMANDS:
+            if key == 'research':
+                from ..agent_core.runtime import research_mode_available
+                if research_mode_available():
+                    # Lệnh MODE: `/research` (rỗng) bật mode, `/research <text>` bật + nộp lượt,
+                    # `/research off` và `/research status` là hai từ khoá điều khiển.
+                    result.kind, result.command, result.reason = 'mode', 'research', 'mode_command'
+                    low = args.strip().lower()
+                    result.prompt = '' if low in ('', 'on') else (low if low in ('off', 'status')
+                                                                  else args.strip())
+                    self.validate_skills(result.skills, enabled, result.executor, result.role)
+                    return result
+                # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai research.
+                result.kind, result.role = 'task', 'research'
+                result.skills = sorted(set(enabled) & ROLE_SKILLS['research'])
+            elif key in ROLE_COMMANDS:
                 result.kind, result.role = 'task', ROLE_COMMANDS[key]
                 result.skills = sorted(set(enabled) & ROLE_SKILLS[result.role])
             elif key in {'claude-code', 'claude-design'}:

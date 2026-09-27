@@ -33,6 +33,7 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { formatAttachmentSize } from './AttachmentPicker'
 import { absoluteWorkspacePath } from '../../lib/chat/attachmentUpload'
 import { appendStreamText } from '../../lib/streamText'
+import { researchActivity } from '../../lib/researchMode'
 import {
   deliveryLabel,
   peerDeliveries,
@@ -1072,6 +1073,58 @@ function getToolDisplay(name: string, args: Record<string, unknown> | null, isEr
         icon: <BrainCircuit className="size-3.5 text-brand" />,
       }
     }
+    // P4 — công cụ của chế độ Research: một hàng vẫn hiện đủ, nhưng dòng GOM phía trên
+    // (`researchActivity`) mới là thứ cho biết nhịp tìm/đọc của run.
+    case 'web_search':
+    case 'paper_citations':
+    case 'research_search': {
+      const q = String(args?.query || args?.q || args?.topic || 'queries')
+      return {
+        actionLabel: 'Searched',
+        detailLabel: q.length > 38 ? q.slice(0, 35) + '...' : q,
+        icon: <Search className="size-3.5 text-brand" />,
+      }
+    }
+    case 'web_fetch':
+    case 'research_read': {
+      const url = String(args?.url || args?.source || args?.path || 'source')
+      const short = url.length > 38 ? url.slice(0, 35) + '...' : url
+      return {
+        actionLabel: 'Read source',
+        detailLabel: short,
+        icon: <FileText className="size-3.5 text-sky-400" />,
+      }
+    }
+    case 'research_brief':
+    case 'research_status': {
+      return {
+        actionLabel: 'Research state',
+        detailLabel: String(args?.researchId || 'run'),
+        icon: <BrainCircuit className="size-3.5 text-brand" />,
+      }
+    }
+    case 'research_scope': {
+      return {
+        actionLabel: 'Scope card',
+        detailLabel: String(args?.action || 'update'),
+        icon: <FileText className="size-3.5 text-amber-400" />,
+      }
+    }
+    case 'research_update':
+    case 'research_branch_report': {
+      return {
+        actionLabel: 'Recorded evidence',
+        detailLabel: String(args?.questionId || args?.facetId || 'claim'),
+        icon: <FileText className="size-3.5 text-emerald-400" />,
+      }
+    }
+    case 'dossier_write': {
+      return {
+        actionLabel: 'Wrote dossier',
+        detailLabel: String(args?.version ? `v${String(args.version)}` : 'report'),
+        icon: <FileText className="size-3.5 text-emerald-400" />,
+      }
+    }
     default: {
       return {
         actionLabel: isError ? 'Failed' : 'Executed',
@@ -1899,6 +1952,26 @@ function TurnBlock({
         {activityOpen && (
           <div className="space-y-3">
             {thoughtText && <ThoughtProse thought={thoughtText} isLive={isTurnBusy} />}
+
+            {/* P4 §4.5 — dòng công cụ gom: thay vì để người đọc đếm loạt hàng `Searched …`,
+                một dòng nói đúng nhịp của run. `researchActivity` chỉ đếm `tool_start`
+                nên một lời gọi không bị tính hai lần. */}
+            {(() => {
+              const activity = researchActivity(
+                turn.items
+                  .filter((item): item is Extract<TurnTimelineItem, { kind: 'tool' }> => item.kind === 'tool' && !!item.start)
+                  .map((item) => ({ type: 'tool_start', data: (item.start as HarnessEvent).data })),
+              )
+              if (activity.searches + activity.reads === 0) return null
+              return (
+                <div className="flex items-center gap-1.5 text-xs text-muted" data-testid="research-activity-line">
+                  <BrainCircuit className="size-3.5 shrink-0 text-brand" />
+                  <span className="text-zinc-300">
+                    {t('research.activity', { searches: activity.searches, reads: activity.reads })}
+                  </span>
+                </div>
+              )
+            })()}
 
             {turn.items.map((item) => {
               if (item.kind === 'text') {

@@ -208,14 +208,29 @@ SCHEMAS = [
                                     'must show, which sources). The child must return exactly this.'},
           'questionId': {'type': 'string', 'description': 'For a new-format research job, the question id '
                          'from research_brief/research_status that this branch will answer.'},
+          'taskKind': {'type': 'string',
+                       'enum': ['branch', 'deep-read', 'counter', 'critique', 'evidence', 'coverage'],
+                       'description': 'P3: WHAT KIND of branch this is, when role is research or '
+                                      'research-review. `branch` (default) is an ordinary line of '
+                                      'enquiry; `deep-read` extracts full fields from a few pillar '
+                                      'sources; `counter` hunts contrary evidence; `critique`, '
+                                      '`evidence` and `coverage` are the three review modes. An '
+                                      'unknown value is refused (RESEARCH_TASK_KIND_INVALID) instead '
+                                      'of being quietly treated as `branch`. It does not widen the '
+                                      'role tools: the runtime builds the child brief from the scope '
+                                      'card, so you do not restate requirements here.'},
+          'facetId': {'type': 'string', 'description': 'P3: the coverage-map facet (direction) this '
+                        'branch explores, so its rows, claims and coverage land on the right entry '
+                        'of the map. Leave it out when the branch is not tied to one direction.'},
           'reviewTarget': {'type': 'object', 'description': 'Required for research-review or plan-review: '
-                           '{kind:"research", researchId, version, mode:"evidence"|"critique"} '
+                           '{kind:"research", researchId, version, mode:"evidence"|"critique"|"coverage"} '
                            'or {kind:"plan", identity, version}. '
                            'The runtime binds the exact saved '
                            'path and content hash; the child must read every slice of that file.',
                            'properties': {'kind': STRING, 'researchId': STRING, 'identity': STRING,
                                           'version': {'type': 'integer'},
-                                          'mode': {'type': 'string', 'enum': ['evidence', 'critique']}}},
+                                          'mode': {'type': 'string',
+                                                   'enum': ['evidence', 'critique', 'coverage']}}},
           'wait': {'type': 'boolean',
                    'description': 'false = start the child and return at once with its sessionId; you read the '
                                   'result later with `await_children` (or it is delivered to you). Default true: '
@@ -323,8 +338,40 @@ SCHEMAS = [
           'profile': {'type': 'string', 'description': 'Profile key: law, health, finance, paper, vendor-doc, '
                                                        'repo, price, competitor or users.'},
           'tables': {'type': 'array', 'items': {'type': 'object', 'properties': {'name': STRING, 'markdown': STRING}}},
-          'review': STRING, 'critique': STRING, 'rows': {'type': 'array', 'items': STRING}},
+          'review': STRING, 'critique': STRING, 'rows': {'type': 'array', 'items': STRING},
+          'report': {'type': 'object', 'description': 'P3: the machine-readable sidecar of this '
+                     'dossier version — modules present, sections written, claims used with their '
+                     'confidence and cap, and the unexplored directions. The runtime validates it '
+                     'against the ledger and the coverage map and refuses a dossier whose report '
+                     'disagrees with them; leave it out and the dossier is judged by its markdown '
+                     'alone.'}},
          ['researchId', 'markdown', 'level']),
+    tool('research_branch_report',
+         'P3: a research BRANCH hands work back in structure instead of prose. Records ledger rows '
+         '(each with the exact excerpt you read), the claims those rows support, the coverage-map '
+         'facet state and blocked leads in ONE call, so the parent can merge them without re-reading '
+         'your summary. Only a `research` child holds this tool; the confidence cap of every claim '
+         'is computed from the ledger by the harness, and you may only lower a level, never raise it '
+         'above the cap.',
+         {'researchId': STRING, 'questionId': STRING, 'facetId': STRING,
+          'rows': {'type': 'array', 'items': {'type': 'object', 'properties': {
+              'claim': STRING, 'url': STRING, 'excerpt': STRING, 'type': STRING,
+              'publishedAt': STRING, 'sourceKind': STRING, 'accessLevel': STRING,
+              'origin': STRING, 'payload': {'type': 'object'}}}},
+          'claims': {'type': 'array', 'items': {'type': 'object', 'properties': {
+              'text': STRING, 'rowIds': {'type': 'array', 'items': STRING},
+              'claimType': STRING,
+              'stanceOrigin': {'type': 'string', 'enum': ['source-stated', 'agent-inference',
+                                                          'agent-proposal']},
+              'confidence': {'type': 'string', 'enum': ['high', 'medium', 'low', 'unknown']},
+              'facetId': STRING, 'conflict': {'type': 'boolean'}}, 'required': ['text']}},
+          'status': {'type': 'string', 'enum': ['unexplored', 'searched', 'saturated', 'thin',
+                                               'blocked', 'out-of-scope']},
+          'label': STRING, 'kind': STRING,
+          'newTerms': {'type': 'array', 'items': STRING},
+          'blocked': {'type': 'object', 'properties': {'url': STRING, 'reason': STRING}},
+          'leads': {'type': 'array', 'items': STRING}, 'note': STRING},
+         ['rows', 'claims']),
     tool('research_brief',
          'Open a durable research job BEFORE spawning branches. Set the decision goal, important questions, '
          'methods, output and aggregate budget; mixed methods are allowed. The tier guides child limits, and '
@@ -365,6 +412,13 @@ SCHEMAS = [
           'verdict': {'type': 'string', 'enum': ['ok', 'revise']},
           'issues': {'type': 'array', 'items': {'type': 'object', 'properties': {
               'severity': {'type': 'string', 'enum': ['high', 'medium', 'low']},
+              'kind': {'type': 'string',
+                       'enum': ['unsupported', 'misattributed', 'outdated', 'missing-direction',
+                                'counter-evidence', 'reasoning', 'fit', 'unlabeled-assumption'],
+                       'description': 'P3: WHICH class of defect this finding is, so the harness can '
+                                      'count them and label a dossier with `bao phủ chưa đủ` when a '
+                                      'high missing-direction finding is left unhandled. Optional: a '
+                                      'finding without a kind keeps the old shape.'},
               'text': STRING, 'fix': STRING}, 'required': ['severity', 'text']}},
           'summary': STRING},
          ['researchId', 'version', 'verdict']),
@@ -381,11 +435,38 @@ SCHEMAS = [
           'questionId': STRING, 'questionStatus': {'type': 'string', 'enum': [
               'unexplored', 'researching', 'evidenced', 'contested', 'blocked', 'answered']},
           'note': STRING, 'finding': STRING,
+          'action': {'type': 'string', 'enum': ['pause', 'cancel'],
+                     'description': 'Pause or cancel the whole run. Outside Research mode this is '
+                                    'allowed only for a background run.'},
           'blockedSource': {'type': 'object', 'properties': {'url': STRING,
                              'attempt': STRING, 'impact': STRING}},
           'status': {'type': 'string', 'enum': ['scoping', 'researching', 'verifying',
                     'synthesizing', 'critiquing', 'needs_user', 'completed', 'partial',
-                    'paused', 'cancelled']}}, ['researchId']),
+                    'paused', 'cancelled']},
+          'stopReason': {'type': 'string',
+                         'description': 'One line saying WHY this run stops. Say it whenever you pass '
+                                        'status `partial`: it is pinned as `state.stopReason` and is the '
+                                        'line the owner reads next to the report card.'}}, ['researchId']),
+    tool('research_suggest',
+         'Offer to open Research mode for a question that is bigger than one turn (a landscape, a '
+         'literature map, or any job over about ten minutes). This only SHOWS the suggestion card in '
+         'the conversation: it never changes the session config, and the mode stays off until the owner '
+         'turns it on. Do NOT open a tier-3 job instead.',
+         {'reason': STRING, 'draftGoal': STRING}, ['reason', 'draftGoal']),
+    tool('research_scope',
+         'Write the scope card of the run (the single source of truth for goal, questions, time policy, '
+         'source kinds, exclusions, outputs, depth and budget) and ask the owner up to three blocking '
+         'questions in ONE prompt. Use action="ask" for interview or scope-change questions; each '
+         'question carries concrete options. Unanswered blocking questions put the run in needs_user.',
+         {'action': {'type': 'string', 'enum': ['propose', 'update', 'ask']},
+          'researchId': STRING, 'patch': {'type': 'object'},
+          'questions': {'type': 'array', 'items': {'type': 'object', 'properties': {
+              'id': STRING, 'text': STRING, 'why': STRING, 'affects': {'type': 'array', 'items': STRING},
+              'blocking': {'type': 'boolean'}, 'allowFreeText': {'type': 'boolean'},
+              'options': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                  'id': STRING, 'label': STRING, 'cost': STRING}}}}, 'required': ['text']}},
+          'kind': {'type': 'string', 'enum': ['interview', 'scope-change', 'out-of-scope', 'budget']}},
+         ['action']),
     tool('cancel_child',
          'Stop ONE running child of this session (the owner asked for it, or the branch is off-track). The child '
          'is closed as cancelled, its slot is released, and the result reaches you like any other child result. '

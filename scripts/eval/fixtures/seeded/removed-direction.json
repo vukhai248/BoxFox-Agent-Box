@@ -1,0 +1,100 @@
+{
+  "id": "SD5",
+  "case": "removed-direction",
+  "kind": "removed-direction",
+  "detector": "removed_direction",
+  "reviewer": "coverage",
+  "expectation": "Hướng lớn bị gỡ khỏi hồ sơ là lỗi phải bắt (coverage reviewer).",
+  "request": "Hướng lớn bị gỡ khỏi hồ sơ là lỗi phải bắt (coverage reviewer).",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "report": {
+        "modules": [
+          "Hướng A",
+          "Hướng B"
+        ],
+        "unexplored": [
+          "f-b"
+        ]
+      },
+      "facets": [
+        {
+          "facetId": "f-a",
+          "label": "Hướng A",
+          "status": "saturated"
+        },
+        {
+          "facetId": "f-b",
+          "label": "Hướng B",
+          "status": "unexplored"
+        }
+      ]
+    },
+    {
+      "report": {
+        "modules": [
+          "Hướng C"
+        ],
+        "unexplored": []
+      },
+      "facets": [
+        {
+          "facetId": "f-c",
+          "label": "Hướng C",
+          "status": "saturated"
+        }
+      ]
+    }
+  ],
+  "injected": [
+    {
+      "report": {
+        "modules": [
+          "Hướng A"
+        ],
+        "unexplored": []
+      },
+      "facets": [
+        {
+          "facetId": "f-a",
+          "label": "Hướng A",
+          "status": "saturated"
+        },
+        {
+          "facetId": "f-b",
+          "label": "Hướng B",
+          "status": "unexplored"
+        }
+      ]
+    },
+    {
+      "report": {
+        "modules": [
+          "Hướng C"
+        ],
+        "unexplored": []
+      },
+      "facets": [
+        {
+          "facetId": "f-c",
+          "label": "Hướng C",
+          "status": "saturated"
+        },
+        {
+          "facetId": "f-d",
+          "label": "Hướng D",
+          "status": "thin"
+        }
+      ]
+    }
+  ]
+}

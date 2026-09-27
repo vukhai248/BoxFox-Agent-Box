@@ -33,6 +33,7 @@ import logread  # noqa: E402
 import manifest as manifest_mod  # noqa: E402
 import rubric  # noqa: E402
 import run_eval  # noqa: E402
+import runner  # noqa: E402
 import rushed_index  # noqa: E402
 import scoreboard  # noqa: E402
 
@@ -581,14 +582,28 @@ def test_execute_stops_before_spending_when_a_connection_is_missing(monkeypatch,
     assert 'BOXFOX_ROUTER_KEY' in err
 
 
-def test_execute_with_everything_set_still_does_not_call_a_model(monkeypatch, capsys):
+def test_execute_with_everything_set_reaches_the_runner(monkeypatch, capsys, tmp_path):
+    """`--execute` nay gọi `runner.run_scenario` thật (P0a) — ở đây thay bằng hàm giả.
+
+    Không có lượt mạng nào: bộ chạy giả trả một ô `infra-failed` để chứng minh ô chưa
+    đo ghi `metrics: null`, không ghi 0.
+    """
     monkeypatch.setenv(guard.SPEND_ENV, '1')
     monkeypatch.setenv(guard.BUDGET_ENV, '5')
     monkeypatch.setenv('BOXFOX_ROUTER_KEY', 'bf_not-a-real-key')
     monkeypatch.setenv('BOXFOX_HARNESS_ADMIN_TOKEN', 'not-a-real-token')
-    assert run_eval.main(['--execute', '--budget-usd', '0.01']) == run_eval.EXIT_NOT_IMPLEMENTED
-    out = capsys.readouterr().out
-    assert 'CHƯA được cài đặt' in out and 'không tiêu đồng nào' in out
+    monkeypatch.setattr(run_eval.runner, 'run_scenario', lambda *a, **k: {
+        'scenarioId': 'Q1', 'configId': 'c1', 'repeat': 0, 'validity': runner.INFRA_FAILED,
+        'measured': False, 'metrics': None, 'reruns': 2, 'infraFailureRate': 1.0,
+        'infraErrorCodes': {'UPSTREAM_TIMEOUT': 3}, 'errorCode': 'UPSTREAM_TIMEOUT',
+        'artifacts': {}})
+    code = run_eval.main(['--execute', '--fixture', 'Q1', '--configs', '1',
+                          '--budget-usd', '0.01', '--out', str(tmp_path)])
+    assert code == run_eval.EXIT_CONNECTION  # không ô nào hợp lệ về chất lượng
+    rows = [json.loads(line) for line in
+            (tmp_path / 'scores.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert rows[0]['metrics'] is None and rows[0]['validity'] == 'infra-failed'
+    assert 'TIÊU TIỀN' not in capsys.readouterr().out
 
 
 def test_judge_execute_is_refused_without_the_opt_in(capsys, monkeypatch):
@@ -598,19 +613,35 @@ def test_judge_execute_is_refused_without_the_opt_in(capsys, monkeypatch):
     assert 'TIÊU TIỀN' in capsys.readouterr().out
 
 
-def test_eval_sources_import_no_network_library():
+def test_eval_sources_import_no_network_library_except_net_py():
+    """P0a nới bất biến cũ ĐÚNG một chỗ: chỉ `net.py` được import thư viện mạng.
+
+    `net.py` là cửa duy nhất mở socket (chạy harness, gọi giám khảo, đo 8.7) và chỉ
+    được gọi trong thân hàm của đường `--execute` / cổng chi tiền. Mọi mô-đun khác
+    trong `scripts/eval/*.py` phải ở lại stdlib-không-mạng để `--dry-run` không mở socket.
+    """
     forbidden = ('socket', 'urllib', 'requests', 'httpx', 'aiohttp', 'http', 'ssl', 'ftplib',
                  'smtplib', 'xmlrpc')
+    allowed = {'net.py'}
     offenders: list[str] = []
+    net_lines: list[str] = []
     for path in sorted(EVAL_DIR.glob('*.py')):
         for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
             stripped = line.strip()
             if not (stripped.startswith('import ') or stripped.startswith('from ')):
                 continue
             module = stripped.split()[1].split('.')[0]
-            if module in forbidden:
+            if module not in forbidden:
+                continue
+            if path.name in allowed:
+                net_lines.append(f'{path.name}:{number}: {stripped}')
+            else:
                 offenders.append(f'{path.name}:{number}: {stripped}')
-    assert offenders == [], 'scripts/eval phải ở lại stdlib-không-mạng: ' + '; '.join(offenders)
+    assert offenders == [], ('chỉ net.py được dùng thư viện mạng trong scripts/eval: '
+                             + '; '.join(offenders))
+    # Whitelist phải có thật: net.py chính là chỗ import thư viện mạng.
+    assert any('urllib' in line for line in net_lines), 'net.py phải import urllib'
+    assert any(line.startswith('net.py') for line in net_lines)
 
 
 # --------------------------------------------------------------------------- judge

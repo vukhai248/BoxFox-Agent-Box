@@ -93,6 +93,11 @@ DOSSIER_PATH_RE = re.compile(r'^\.research/[a-z0-9][a-z0-9._-]{0,60}/[a-zA-Z0-9]
 # Tên bảng đi thẳng vào đường dẫn (`tables/<tên>.md`) nên phải kiểm như một ĐOẠN đường dẫn: không
 # `..`, không dấu `/`, không rỗng — cùng khuôn đoạn tên tệp của DOSSIER_PATH_RE.
 DOSSIER_TABLE_NAME_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,60}$')
+# Tệp phụ của run (P2, §5.8): `v<N>-scope.json`, `extractions/<source_id>.json`, `changelog.md` —
+# MỘT đốt đường dẫn, hoặc hai đốt khi đốt đầu là một thư mục con. Không `..`, không rỗng, không
+# đốt thứ ba: tên tệp phụ đi thẳng vào đường dẫn nên phải kiểm như một đường dẫn, không như nhãn.
+DOSSIER_SIDECAR_RE = re.compile(r'^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,60}/)?'
+                                r'[A-Za-z0-9][A-Za-z0-9._-]{0,60}$')
 # Số version đọc từ tiền tố `v<N>-` của TÊN tệp hồ sơ, không đọc từ nội dung.
 DOSSIER_VERSION_RE = re.compile(r'^v([1-9][0-9]{0,9})-')
 
@@ -675,6 +680,36 @@ def dossier_table_writes(folder, tables):
     return writes
 
 
+def dossier_sidecar_writes(folder, sidecars):
+    """Cặp `(đường dẫn, nội dung)` cho từng tệp PHỤ của run (P2 §5.8) — nhận cả hai hình dạng.
+
+    Lược đồ công bố là DANH SÁCH `[{'name': …, 'content': …}]` (tên do
+    `research_report.sidecar_names()` cấp ở phía harness), nhưng đường gửi thật chỉ chuyển tiếp được
+    dạng MAPPING `{tên: nội dung}`; nhận cả hai để một hình dạng lạ không giết CẢ lần ghi hồ sơ.
+    Tên đi thẳng vào đường dẫn nên phải qua `DOSSIER_SIDECAR_RE`; vắng tham số ⇒ không tệp nào.
+    """
+    if isinstance(sidecars, dict):
+        items = [{'name': name, 'content': content} for name, content in sidecars.items()]
+    elif isinstance(sidecars, list):
+        items = sidecars
+    else:
+        items = [] if sidecars in (None, '') else [sidecars]
+    writes = []
+    for entry in items:
+        item = entry if isinstance(entry, dict) else {}
+        name = str(item.get('name') or item.get('path') or '').strip()
+        if not DOSSIER_SIDECAR_RE.fullmatch(name):
+            raise ValueError('DOSSIER_SIDECAR_INVALID: name must be e.g. v2-scope.json or '
+                             'extractions/s-1.json')
+        body = item.get('content')
+        if body is None:
+            body = item.get('markdown')
+        if not isinstance(body, str):
+            raise ValueError('DOSSIER_SIDECAR_INVALID: content must be a string')
+        writes.append((folder + '/' + name, body))
+    return writes
+
+
 def dossier_write_payload(args):
     """Ghi TRỌN một hồ sơ nghiên cứu vào `.research/<việc>/` (C-2, vòng 27).
 
@@ -684,6 +719,9 @@ def dossier_write_payload(args):
     - tệp hồ sơ tại `path` (`markdown` đã kèm khối `<!-- boxfox-research … -->` do harness dựng);
     - `sources.jsonl` (một đối tượng JSON mỗi hàng của `rows`) + `sources.md` (bản người đọc);
     - `tables/<tên>.md` cho từng mục của `tables`; `review.md` khi `review` không rỗng.
+    - tệp PHỤ của run khi `sidecars` có mặt (`v<N>-scope.json`, `v<N>-coverage.json`,
+      `v<N>-claims.jsonl`, `v<N>-report.json`, `extractions/<source_id>.json`, `changelog.md`) —
+      P2, §5.8; tên do phía harness cấp, op chỉ kiểm khuôn đường dẫn.
 
     Ghi là TẤT CẢ hoặc KHÔNG GÌ: mọi nội dung được dựng trước, mọi kích thước bị kiểm trước (trần
     `DOSSIER_MAX_BYTES` cho TỪNG tệp), tệp hồ sơ đã tồn tại thì từ chối khi chưa cho phép ghi đè
@@ -712,6 +750,9 @@ def dossier_write_payload(args):
               (folder + '/sources.jsonl', dossier_sources_jsonl(rows)),
               (folder + '/sources.md', dossier_sources_markdown(rows))]
     writes.extend(dossier_table_writes(folder, args.get('tables')))
+    # P2 (§7.7): tệp phụ của run (phạm vi, bao phủ, nhận định, báo cáo cấu trúc, trích xuất,
+    # nhật ký thay đổi). Vắng tham số ⇒ không ghi gì thêm, đường cũ giữ nguyên từng tệp.
+    writes.extend(dossier_sidecar_writes(folder, args.get('sidecars')))
     review = args.get('review')
     if isinstance(review, str) and review.strip():
         writes.append((folder + '/review.md', review))

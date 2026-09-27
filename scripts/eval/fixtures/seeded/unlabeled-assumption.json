@@ -1,0 +1,117 @@
+{
+  "id": "SD7",
+  "case": "unlabeled-assumption",
+  "kind": "unlabeled-assumption",
+  "detector": "unlabeled_assumption",
+  "reviewer": "critic",
+  "expectation": "Giả định chưa xác nhận viết thành câu khẳng định là lỗi phải bắt.",
+  "request": "Giả định chưa xác nhận viết thành câu khẳng định là lỗi phải bắt.",
+  "request_source": "seeded",
+  "oracle_pass": true,
+  "environment": {
+    "network": "off"
+  },
+  "budget": {
+    "max_steps": 0,
+    "deadline_seconds": 0
+  },
+  "clean": [
+    {
+      "scope": {
+        "goal": {
+          "text": "Chọn công cụ thay thế cho hệ cũ",
+          "status": "assumed",
+          "source": {
+            "kind": "agent"
+          }
+        },
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Công cụ nào rẻ hơn?",
+            "importance": "high"
+          }
+        ]
+      },
+      "report": {
+        "facts": [
+          "GIẢ ĐỊNH (chưa xác nhận): Chọn công cụ thay thế cho hệ cũ — cần xác nhận."
+        ]
+      }
+    },
+    {
+      "scope": {
+        "goal": {
+          "text": "Chọn công cụ thay thế cho hệ cũ",
+          "status": "assumed",
+          "source": {
+            "kind": "agent"
+          }
+        },
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Công cụ nào rẻ hơn?",
+            "importance": "high"
+          }
+        ]
+      },
+      "report": {
+        "facts": [
+          "Chưa xác nhận: việc thay thế hệ cũ."
+        ],
+        "assumptions": [
+          "GIẢ ĐỊNH (chưa xác nhận): Chọn công cụ thay thế cho hệ cũ"
+        ]
+      }
+    }
+  ],
+  "injected": [
+    {
+      "scope": {
+        "goal": {
+          "text": "Chọn công cụ thay thế cho hệ cũ",
+          "status": "assumed",
+          "source": {
+            "kind": "agent"
+          }
+        },
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Công cụ nào rẻ hơn?",
+            "importance": "high"
+          }
+        ]
+      },
+      "report": {
+        "facts": [
+          "Chọn công cụ thay thế cho hệ cũ là yêu cầu đã rõ."
+        ]
+      }
+    },
+    {
+      "scope": {
+        "goal": {
+          "text": "Chọn công cụ thay thế cho hệ cũ",
+          "status": "assumed",
+          "source": {
+            "kind": "agent"
+          }
+        },
+        "questions": [
+          {
+            "id": "q1",
+            "text": "Công cụ nào rẻ hơn?",
+            "importance": "high"
+          }
+        ]
+      },
+      "report": {
+        "facts": [
+          "Mục tiêu: Chọn công cụ thay thế cho hệ cũ."
+        ]
+      }
+    }
+  ]
+}
