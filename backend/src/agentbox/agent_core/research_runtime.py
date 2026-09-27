@@ -2324,20 +2324,21 @@ async def queue_owner_steer(rt, sid, text, turn=None, kind='steer'):
                          f'chờ lượt bơm bớt rồi gửi tiếp')
     turn_no = int(turn if turn is not None else (rt.active_turn.get(sid) or 0))
     label = 'btw' if kind == 'btw' else 'steer'
+    is_btw = label == 'btw'
     record = rt.store.queue_steer(sid, body, turn_no, kind=label)
     # Hàng `btw` hiện nguyên câu hỏi (nhãn do chip "btw" đảm nhiệm); hàng `steer` giữ tiền tố
     # trong chính văn bản như trước để người đọc thấy đây là chỉ thị giữa lượt.
-    event = ({'text': body, 'control': True, 'steer': True, 'btw': True,
-              'steerId': record['id'], 'turn': turn_no} if label == 'btw' else
-             {'text': f'{OWNER_STEER_PREFIX} {body}', 'control': True, 'steer': True,
-              'steerId': record['id'], 'turn': turn_no})
+    event = {'text': body if is_btw else f'{OWNER_STEER_PREFIX} {body}', 'control': True,
+             'steer': True, 'steerId': record['id'], 'turn': turn_no}
+    if is_btw:
+        event['btw'] = True
     rt.store.emit(sid, 'user', event)
-    title = 'câu hỏi phụ (btw)' if label == 'btw' else 'chỉ thị giữa lượt'
+    title = 'câu hỏi phụ (btw)' if is_btw else 'chỉ thị giữa lượt'
     try:
         await session_journal.append(
             rt.executor, rt.store, sid, 'decision',
             f'{title}: {body[:120]}',
-            data={'kind': 'btw-ask' if label == 'btw' else 'owner-steer', 'steerId': record['id'],
+            data={'kind': 'btw-ask' if is_btw else 'owner-steer', 'steerId': record['id'],
                   'chars': len(body)},
             turn=turn_no)
     except Exception:  # pragma: no cover - ghi sổ hỏng ⇒ log + đi tiếp
