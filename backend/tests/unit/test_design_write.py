@@ -36,10 +36,11 @@ def _repo(tmp_path):
     root = Path(tmp_path).resolve()
     worker.ROOT = root
     _git(root, 'init', '-q', '-b', 'main')
+    _git(root, 'config', 'core.autocrlf', 'false')
     _git(root, 'config', 'user.email', 'box@example.com')
     _git(root, 'config', 'user.name', 'Box')
-    (root / 'app.txt').write_text(INITIAL, encoding='utf-8')
-    (root / 'second.txt').write_text('one\ntwo\n', encoding='utf-8')
+    (root / 'app.txt').write_text(INITIAL, encoding='utf-8', newline='')
+    (root / 'second.txt').write_text('one\ntwo\n', encoding='utf-8', newline='')
     _git(root, 'add', '.')
     _git(root, 'commit', '-q', '-m', 'init')
     return root

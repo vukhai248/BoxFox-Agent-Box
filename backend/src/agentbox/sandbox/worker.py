@@ -941,7 +941,7 @@ def design_write(args):
             raise ValueError('DESIGN_WRITE_INVALID: tệp hiện tại không phải văn bản UTF-8.')
         new_content = design_insert_content(current, content, args.get('anchor'), args.get('position'))
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(new_content, encoding='utf-8')
+    target.write_text(new_content, encoding='utf-8', newline='')
     encoded = new_content.encode('utf-8')
     staged = git_run(['add', '-f', '--', relative])
     if staged.returncode:
