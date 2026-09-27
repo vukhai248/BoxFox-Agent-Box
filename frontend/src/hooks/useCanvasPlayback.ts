@@ -8,7 +8,11 @@
  *
  * Năm luật của lớp này:
  * 1. Chỉ phát lại op của AGENT (`actor:'user'` là tay chủ nhà vẽ — không diễn lại).
- * 2. Mỗi lô op chỉ phát MỘT lần (khoá `seq`), kể cả khi React render lại nhiều lần.
+ * 2. Mỗi lô op chỉ phát MỘT lần (khoá `seq`), kể cả khi React render lại nhiều lần — nhưng lô op chỉ
+ *    được coi là "đã phát" khi khung hình ĐẦU TIÊN đã vẽ ra, không phải lúc dựng kế hoạch: StrictMode
+ *    (dev) chạy mount → cleanup → mount lại, lượt mount đầu bị huỷ TRƯỚC khung hình nào thì chủ nhà
+ *    chưa thấy gì, nên lô op phải còn nguyên cho lượt sau diễn. Vì thế `playedSeqRef` và sổ bền
+ *    `playedOpsSeq` (store) chỉ ghi ở khung hình đầu (xem `tick`).
  * 3. Không dựng được kế hoạch trung thực (`planPlayback` trả rỗng) thì hiện thẳng cảnh thật.
  * 4. Chủ nhà chạm canvas, hoặc bấm "Bỏ qua hiệu ứng" ⇒ nhảy NGAY về cảnh thật.
  * 5. Cảnh tới mà KHÔNG kèm op (payload chi tiết của run: tải lại trang, cảnh gieo lúc duyệt touch
@@ -90,6 +94,7 @@ export function useCanvasPlayback(input: {
   const [visual, setVisual] = useState<PlaybackVisual | null>(null)
   // Cảnh THẬT đã biết gần nhất — mốc xuất phát cho kế hoạch của lô op kế tiếp.
   const settledRef = useRef<CanvasScene>(scene)
+  // Lô op đã phát XONG trong các lượt mount trước (sổ nhanh của riêng hook; sổ bền nằm ở store).
   const playedSeqRef = useRef(0)
   const planRef = useRef<DrawingPlan | null>(null)
   const rafRef = useRef(0)
@@ -141,15 +146,6 @@ export function useCanvasPlayback(input: {
       if (planRef.current) stop()
       return
     }
-    if (fresh) {
-      // Sắp diễn lô này ⇒ ghi vào store: nhịp sau (và lần lắp lại canvas) không diễn lại nữa. Chỉ
-      // ghi khi kế hoạch THẬT SỰ dựng được — kế hoạch rỗng là "chưa diễn được", không phải "đã diễn".
-      // Đó cũng là cách xử lý nhịp lô op tới SỚM HƠN cảnh thật (`useDesignCanvas` ghi cảnh store vào
-      // lịch sử ở nhịp render sau): ở nhịp ấy cảnh nguồn bằng đúng cảnh đang giữ nên kế hoạch rỗng,
-      // lô op còn nguyên cho nhịp sau diễn — không bị đốt.
-      playedSeqRef.current = fresh.seq
-      useDesignStore.getState().markOpsPlayed(designId, fresh.seq)
-    }
     // Lô mới tới giữa lúc đang vẽ: bỏ hoạt hình cũ rồi vẽ tiếp từ cảnh thật vừa nhận.
     if (planRef.current) stop()
     const total = drawStepCount(plan)
@@ -157,8 +153,18 @@ export function useCanvasPlayback(input: {
     const first = plan.steps[0].at
     planRef.current = plan
     setVisual({ scene: plan.from, cursor: { visible: true, x: first.x, y: first.y, pressed: false }, activeIds: NO_IDS, connectorProgress: NO_PROGRESS, drawn: 0, total })
+    let booked = false
     const tick = () => {
       const elapsed = Date.now() - startedAt
+      if (!booked && fresh) {
+        // Khung hình ĐẦU TIÊN đã thực sự chạy ⇒ hoạt hình này là thật với chủ nhà: ghi sổ để nhịp
+        // sau (và lần lắp lại canvas) không diễn lại nữa. Ghi ở ĐÂY chứ không phải lúc dựng kế hoạch
+        // vì StrictMode (dev) chạy mount → cleanup → mount lại: lượt mount đầu bị huỷ trước khung
+        // hình nào thì chủ nhà chưa thấy gì, lô op phải còn nguyên cho lượt sau diễn.
+        booked = true
+        playedSeqRef.current = fresh.seq
+        useDesignStore.getState().markOpsPlayed(designId, fresh.seq)
+      }
       if (elapsed >= plan.totalMs) {
         rafRef.current = 0
         planRef.current = null

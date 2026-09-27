@@ -9,6 +9,7 @@
  * `ResearchFlow.test.tsx` và `ChatInputBar.test.tsx`.
  */
 import { act } from 'react'
+import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../../i18n'
@@ -39,7 +40,14 @@ function render(node: React.ReactNode): HTMLElement {
   const root = createRoot(host)
   roots.push(root)
   act(() => {
-    root.render(<I18nProvider>{node}</I18nProvider>)
+    // Bọc ĐÚNG như `main.tsx`: StrictMode (chỉ ở dev) chạy mount → cleanup → mount lại, nên mọi
+    // hoạt hình phải chịu được việc bị huỷ TRƯỚC khung hình đầu — bọc ở đây để bài kiểm canh đúng
+    // đường chạy chủ nhà dùng, không phải đường "một lượt mount".
+    root.render(
+      <StrictMode>
+        <I18nProvider>{node}</I18nProvider>
+      </StrictMode>,
+    )
   })
   return host
 }

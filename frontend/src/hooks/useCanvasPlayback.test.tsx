@@ -4,7 +4,7 @@
  * đây khoá trực tiếp bốn ca: cảnh mới tới giữa lúc đang vẽ, vòng poll gửi lại đúng cảnh cũ, tay
  * chủ nhà vẽ, và tháo hook giữa lúc vẽ.
  */
-import { act } from 'react'
+import { StrictMode, act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCanvasPlayback, type CanvasPlayback } from './useCanvasPlayback'
@@ -65,7 +65,13 @@ function mount(options?: { reducedMotion?: boolean }) {
   }
 
   act(() => {
-    root.render(<Probe />)
+    // Bọc ĐÚNG như `main.tsx`: StrictMode (dev) chạy mount → cleanup → mount lại, nên ca nào cũng
+    // phải chịu được lượt mount bị huỷ trước khung hình đầu.
+    root.render(
+      <StrictMode>
+        <Probe />
+      </StrictMode>,
+    )
   })
 
   return {
