@@ -133,6 +133,25 @@ describe('PermissionCard — thẻ quyết định thật', () => {
     expect(host.textContent).toContain('chốt phương án gọn')
   })
 
+  it('câu trả lời tự nhập hiện trung tính, không đội lốt "đã duyệt" hay "bị từ chối"', () => {
+    const host = render(
+      <PermissionCard
+        decision={decision({
+          status: 'answered',
+          choice: 'in-harness',
+          note: 'Không đồng ý, sửa lại phần X',
+          resolvedReason: 'user',
+          resolvedAt: 1_758_300_200,
+        })}
+      />,
+    )
+
+    expect(host.textContent).toContain('Answered')
+    expect(host.textContent).not.toContain('Approved')
+    expect(host.textContent).not.toContain('Rejected')
+    expect(host.textContent).toContain('Không đồng ý, sửa lại phần X')
+  })
+
   it('yêu cầu phê duyệt hiện hành động thật và lý do agent đưa ra', () => {
     const host = render(
       <PermissionCard

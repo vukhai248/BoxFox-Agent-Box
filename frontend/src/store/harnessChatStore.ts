@@ -97,7 +97,9 @@ export interface SavedSessionRow {
 
 export type DecisionKind = 'question' | 'approval'
 export type DecisionOptionKind = 'approve' | 'reject' | 'alternative'
-export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
+// P4 (vá vòng soát) — `answered`: chủ nhà GÕ câu trả lời vào ô tự nhập. Đó là một hàng ĐÃ CHỐT
+// nhưng trung tính: không phải "đã duyệt" và cũng không phải "bị từ chối".
+export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'answered' | 'expired' | 'cancelled'
 export type DecisionResolveReason = 'user' | 'timeout' | 'session_cancelled'
 
 export interface DecisionOption {
@@ -186,7 +188,13 @@ export function parseDecisionOptions(value: unknown): DecisionOption[] {
 }
 
 export function decisionStatusFrom(value: unknown): DecisionStatus {
-  return value === 'approved' || value === 'rejected' || value === 'expired' || value === 'cancelled'
+  // `'answered'` (P4 — chữ tự nhập) phải đi nguyên qua đây, nếu không cập nhật lạc quan sau khi
+  // bấm sẽ rơi vào nhánh mặc định và hiện hàng tự nhập thành "đã duyệt".
+  return value === 'answered' ||
+    value === 'approved' ||
+    value === 'rejected' ||
+    value === 'expired' ||
+    value === 'cancelled'
     ? value
     : 'pending'
 }

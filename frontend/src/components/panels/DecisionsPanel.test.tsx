@@ -193,6 +193,29 @@ describe('DecisionsPanel — quyết định thật', () => {
     expect(host.textContent).not.toContain('10:00')
   })
 
+  it('hàng trả lời tự nhập hiện trung tính: không "đã duyệt", không "bị từ chối"', () => {
+    seedDecisions([
+      entry({
+        status: 'answered',
+        choice: 'in-harness',
+        note: 'Không đồng ý, sửa lại phần X',
+        resolvedReason: 'user',
+        resolvedAt: 1_758_300_200,
+      }),
+    ])
+    const host = render(<DecisionsPanel />)
+
+    click(host.querySelector('[data-testid="decisions-filter-resolved"]'))
+    expect(host.textContent).toContain('Answered')
+    expect(host.textContent).not.toContain('Approved')
+    expect(host.textContent).not.toContain('Rejected')
+    expect(host.textContent).toContain('Không đồng ý, sửa lại phần X')
+    // Biểu tượng trung tính: hàng tự nhập không mang dấu X đỏ của "bị từ chối".
+    const row = host.querySelector('[data-decision-id="d1"]')
+    expect(row?.querySelector('svg.lucide-message-square')).not.toBeNull()
+    expect(row?.querySelector('svg.lucide-circle-x')).toBeNull()
+  })
+
   it('bộ đếm hạn lấy từ `deadline` của server', () => {
     seedDecisions([entry({ deadline: Date.now() / 1000 + 125 })])
     const host = render(<DecisionsPanel />)

@@ -1288,6 +1288,7 @@ const vi = {
       pending: 'Đang chờ',
       approved: 'Đã duyệt',
       rejected: 'Đã từ chối',
+      answered: 'Đã trả lời',
       expired: 'Đã quá hạn',
       cancelled: 'Đã huỷ',
     },

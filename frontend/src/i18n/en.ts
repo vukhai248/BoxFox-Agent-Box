@@ -1292,6 +1292,7 @@ const en: SameShape<typeof vi> = {
       pending: 'Pending',
       approved: 'Approved',
       rejected: 'Rejected',
+      answered: 'Answered',
       expired: 'Expired',
       cancelled: 'Cancelled',
     },

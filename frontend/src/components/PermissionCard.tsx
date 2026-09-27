@@ -221,6 +221,8 @@ function DecisionCard({
     if (expired) return { tone: 'danger' as const, label: t('permission.timedOut') }
     if (decision.status === 'cancelled') return { tone: 'danger' as const, label: t('decisions.status.cancelled') }
     if (decision.status === 'rejected') return { tone: 'danger' as const, label: t('decisions.status.rejected') }
+    // P4 — chữ tự nhập: đã chốt nhưng TRUNG TÍNH, không mượn nhãn "đã duyệt" của một cái gật đầu.
+    if (decision.status === 'answered') return { tone: 'neutral' as const, label: t('decisions.status.answered') }
     if (decision.status === 'approved') return { tone: 'neutral' as const, label: t('decisions.status.approved') }
     return null
   }

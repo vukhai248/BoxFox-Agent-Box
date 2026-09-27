@@ -7,7 +7,7 @@
  * mock, nên không có bộ đếm hạn nào do giao diện tự bịa.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldAlert, CheckCircle2, XCircle } from 'lucide-react'
+import { ShieldAlert, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
 import { pendingDecisions, useHarnessChatStore } from '../../store/harnessChatStore'
 import type { DecisionEntry, DecisionStatus } from '../../store/harnessChatStore'
@@ -18,10 +18,12 @@ import { PermissionCard } from '../PermissionCard'
 
 type DecisionsFilter = 'all' | 'pending' | 'resolved'
 
-/** Màu trạng thái dùng chung: emerald = đã duyệt, đỏ = từ chối/quá hạn, xám = huỷ. */
+/** Màu trạng thái dùng chung: emerald = đã duyệt, đỏ = từ chối/quá hạn, xám = huỷ/trả lời tự nhập. */
 const STATUS_TONE: Record<DecisionStatus, string> = {
   approved: 'bg-emerald-500/15 text-emerald-400',
   rejected: 'bg-rose-500/15 text-rose-400',
+  // P4 — chữ tự nhập: đã chốt nhưng trung tính, không nhuộm xanh "đã duyệt" cũng không nhuộm đỏ "từ chối".
+  answered: 'bg-zinc-500/15 text-zinc-300',
   expired: 'bg-rose-500/15 text-rose-400',
   cancelled: 'bg-zinc-500/15 text-zinc-400',
   pending: 'bg-amber-500/20 text-amber-300',
@@ -101,11 +103,13 @@ export function DecisionsPanel() {
       ? t('decisions.status.expired')
       : decision.status === 'approved'
         ? t('decisions.status.approved')
-        : decision.status === 'rejected'
-          ? t('decisions.status.rejected')
-          : decision.status === 'cancelled'
-            ? t('decisions.status.cancelled')
-            : t('decisions.status.pending')
+        : decision.status === 'answered'
+          ? t('decisions.status.answered')
+          : decision.status === 'rejected'
+            ? t('decisions.status.rejected')
+            : decision.status === 'cancelled'
+              ? t('decisions.status.cancelled')
+              : t('decisions.status.pending')
 
   const reasonLabel = (decision: DecisionEntry) =>
     decision.resolvedReason === 'timeout'
@@ -285,6 +289,9 @@ export function DecisionsPanel() {
                     : (decision.options.find((option) => option.id === decision.choice)?.label ??
                       decision.choice)
                 const approved = decision.status === 'approved'
+                // P4 — hàng trả lời tự nhập đã chốt nhưng không phải một lời duyệt: biểu tượng
+                // trung tính, không được đội lốt XCircle (đỏ = "bị từ chối").
+                const answered = decision.status === 'answered'
 
                 return (
                   <div
@@ -295,6 +302,8 @@ export function DecisionsPanel() {
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       {approved ? (
                         <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                      ) : answered ? (
+                        <MessageSquare className="size-4 text-zinc-400 shrink-0" />
                       ) : (
                         <XCircle className="size-4 text-rose-400 shrink-0" />
                       )}

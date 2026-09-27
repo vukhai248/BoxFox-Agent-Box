@@ -1334,11 +1334,13 @@ function DecisionRow({
     ? t('decisions.status.expired')
     : status === 'approved'
       ? t('decisions.status.approved')
-      : status === 'rejected'
-        ? t('decisions.status.rejected')
-        : status === 'cancelled'
-          ? t('decisions.status.cancelled')
-          : t('decisions.status.pending')
+      : status === 'answered'
+        ? t('decisions.status.answered')
+        : status === 'rejected'
+          ? t('decisions.status.rejected')
+          : status === 'cancelled'
+            ? t('decisions.status.cancelled')
+            : t('decisions.status.pending')
 
   return (
     <div
