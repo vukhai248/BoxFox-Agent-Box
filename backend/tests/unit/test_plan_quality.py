@@ -223,14 +223,21 @@ def test_write_plan_rejects_before_the_sandbox_writer_runs(tmp_path):
 
 
 def test_a_compliant_plan_is_written_exactly_as_before_the_gate(tmp_path):
-    """The gate must not change what a good plan writes: same events, same payload, same file body."""
+    """The gate must not change what a good plan writes: same events, same payload, same file body.
+
+    The turn itself is ONE step longer than before the gate: F3 injects a nudge step unless the plan
+    already carries a critique verdict, so this good turn needs a third reply. Without it the fixture
+    iterator runs dry and the turn dies (2026-09-27 review) while the write-side asserts below stay
+    green — hence the explicit `completed` check.
+    """
 
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
         executor = PlanFixtureExecutor()
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': GOOD_PLAN, 'title': ''})]),
-            answer('Đã ghi plan')]))
+            answer('Đã ghi plan'),
+            answer('Chưa chạy phản biện, dừng ở đây.')]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan')
@@ -249,6 +256,8 @@ def test_a_compliant_plan_is_written_exactly_as_before_the_gate(tmp_path):
         assert events_of(store, sid, 'ui_intent')[0]['data'] == \
             {'tab': 'plan', 'target': {'identity': 'workspace-plan', 'version': 1}, 'reason': 'plan_written'}
         assert tool_results(store, sid)[-1]['relativePath'] == '.plans/v1-workspace-plan.md'
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt tốt lành phải ĐÓNG TRỌN VẸN, không phải chết vì fixture cạn câu trả lời'
         store.close()
 
     asyncio.run(run())

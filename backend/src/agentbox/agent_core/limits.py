@@ -292,6 +292,9 @@ PLAN_ASSUMPTIONS_UNCONFIRMED_CODE = 'PLAN_ASSUMPTIONS_UNCONFIRMED'
 #: lượt (chỉ nhắc khi còn ít nhất `PLAN_VERDICT_NUDGE_MIN_SECONDS` — một con `plan-review` cần thời
 #: gian thật), và nếu vẫn thiếu thì ghim notice nói vì sao lệnh xin duyệt sẽ bị chối.
 PLAN_VERDICT_NUDGE_CODE = 'PLAN_VERDICT_NUDGE'
+#: Tiền tố của câu nhắc trong transcript. `turn_prompt_excerpt` bỏ qua nó khi dựng bản nhắc việc,
+#: nếu không chỉ dẫn của harness sẽ đội lốt "việc chủ giao ở lượt này".
+PLAN_VERDICT_NUDGE_PREFIX = PLAN_VERDICT_NUDGE_CODE + ':'
 PLAN_VERDICT_MISSING_TURN_CODE = 'PLAN_VERDICT_MISSING_AT_TURN_END'
 PLAN_VERDICT_NUDGE_MAX = 1
 PLAN_VERDICT_NUDGE_MIN_SECONDS = 180

@@ -190,7 +190,8 @@ def test_nested_plan_target_uses_the_reader_identity_and_version(tmp_path):
         store = SessionStore(tmp_path / 'sessions.db')
         runtime = HarnessRuntime(store, NestedPlanExecutor(), FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'docs', 'markdown': PLAN_MARKDOWN, 'title': 'Docs'})]),
-            answer('Đã ghi plan')]))
+            answer('Đã ghi plan'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan')
@@ -202,6 +203,8 @@ def test_nested_plan_target_uses_the_reader_identity_and_version(tmp_path):
         assert events_of(store, sid, 'ui_intent')[0]['data'] == \
             {'tab': 'plan', 'target': {'identity': 'docs/docs', 'version': 1}, 'reason': 'plan_written'}
         assert tool_results(store, sid)[-1]['relativePath'] == '.plans/docs/v1-docs.md'
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -440,6 +443,12 @@ def scored(store, sid):
     return events_of(store, sid, 'plan_evaluated')
 
 
+#: F3 (đợt soát 2026-09-27): lượt ghi plan mà chưa có phán quyết phản biện bị nhắc ĐÚNG MỘT bước,
+#: nên mỗi lượt ghi thành công cần thêm một câu trả lời. Thiếu nó thì iterator của fixture cạn, lượt
+#: chết `TURN_FAILED_RUNTIMEERROR`, mà các phép kiểm ở đây chỉ đọc mặt ghi nên vẫn xanh — vì thế mỗi
+#: bài dưới còn chốt cả `status` của phiên.
+NUDGE_ANSWER = answer('Chưa chạy phản biện, dừng ở đây.')
+
 def op_calls(executor):
     """Các op THẬT SỰ đi xuống box (bỏ `session_ensure`/`journal_append` — hạ tầng, không phải công cụ)."""
     return [(name, args) for name, args, _ in executor.calls if name not in JOURNAL_OPS]
@@ -453,7 +462,8 @@ def test_the_index_decides_the_version_and_the_write_is_scored(tmp_path):
         executor = BoxIndexExecutor()
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi plan')]))
+            answer('Đã ghi plan'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan')
@@ -483,6 +493,8 @@ def test_the_index_decides_the_version_and_the_write_is_scored(tmp_path):
         assert row['total'] == 14 and row['verdict'] == 'pass' and row['payload']['written'] is True
         assert tool_results(store, sid)[-1]['rubric']['total'] == 14
         assert executor.index_reads == 1, 'một lần ghi chỉ đọc chỉ mục một lần'
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -499,7 +511,8 @@ def test_a_revision_must_name_the_version_it_revises(tmp_path):
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN})]),
             answer('Ghi lại cho đúng'),
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN_V2})]),
-            answer('Đã ghi bản 2')]))
+            answer('Đã ghi bản 2'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Sửa plan')
@@ -525,6 +538,8 @@ def test_a_revision_must_name_the_version_it_revises(tmp_path):
         assert len(written) == 1 and written[0]['data']['parentVersion'] == 1
         assert len(scored(store, sid)) == 2, 'bản bị từ chối cũng có sự kiện; bản ghi được có thêm một cái'
         assert store.plan_evaluation('workspace-plan', 2)['payload']['written'] is True
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -585,7 +600,8 @@ def test_an_unreadable_index_falls_back_and_invents_nothing(tmp_path):
         executor = PlanFixtureExecutor()  # không có `request` → chỉ mục không đọc được
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi plan')]))
+            answer('Đã ghi plan'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan')
@@ -596,6 +612,8 @@ def test_an_unreadable_index_falls_back_and_invents_nothing(tmp_path):
         assert set(data) == {'identity', 'version', 'slug', 'relativePath', 'title', 'bytes', 'contentHash'}, \
             'nhánh suy giảm không được thêm `parentVersion`/`headerSource` — hai giá trị đó chưa ai biết'
         assert scored(store, sid) == [] and store.plan_evaluation('workspace-plan', 1) is None
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -613,7 +631,8 @@ def test_a_taken_version_is_retried_once_with_a_fresh_index(tmp_path):
         executor = BoxIndexExecutor(race=True)
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'workspace-plan', 'markdown': PLAN_MARKDOWN_V2})]),
-            answer('Đã ghi plan')]))
+            answer('Đã ghi plan'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan đua')
@@ -628,6 +647,8 @@ def test_a_taken_version_is_retried_once_with_a_fresh_index(tmp_path):
             'lần ghi bị chiếm số không được để lại hàng điểm'
         assert store.plan_evaluation('workspace-plan', 2)['payload']['written'] is True
         assert store.plan_evaluation('workspace-plan', 1) is None
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -762,8 +783,10 @@ def test_resending_the_same_plan_verbatim_is_accepted_once(tmp_path):
             answer('Chọn nhóm đi'),
             answer(calls=[call('write_plan', {'slug': AMBIGUOUS_SLUG, 'markdown': PLAN_MARKDOWN})]),
             answer('Đã ghi bản mới'),
+            NUDGE_ANSWER,
             answer(calls=[call('write_plan', {'slug': AMBIGUOUS_SLUG, 'markdown': PLAN_MARKDOWN_V2})]),
-            answer('Đã ghi bản 2')]))
+            answer('Đã ghi bản 2'),
+            NUDGE_ANSWER]))
         sid = runtime.create({'skills': []})['id']
 
         await runtime.start(sid, 'Ghi plan mơ hồ')
@@ -791,6 +814,8 @@ def test_resending_the_same_plan_verbatim_is_accepted_once(tmp_path):
         assert [row['payload']['record']['data']['version'] for row in pinned] == [1, 2]
         assert pinned[0]['payload']['record']['data']['identityAmbiguity'] == AMBIGUITY_MARK
         assert 'identityAmbiguity' not in pinned[1]['payload']['record']['data']
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -845,7 +870,8 @@ def test_a_plan_written_by_a_delegated_session_belongs_to_the_root_session(tmp_p
         model = FixtureModel([
             answer('Viết plan', calls=[call('write_plan', {'slug': 'Workspace Plan',
                                                            'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi plan')])
+            answer('Đã ghi plan'),
+            NUDGE_ANSWER])
         runtime = HarnessRuntime(store, executor, model)
         root = runtime.create({'skills': []})['id']
         # Con thật trong cây: cùng cấu hình đã chuẩn hoá của phiên gốc, khác `parent_id`.
@@ -868,6 +894,8 @@ def test_a_plan_written_by_a_delegated_session_belongs_to_the_root_session(tmp_p
         assert rows == 1
         assert store.plan_owner('workspace-plan')['session_id'] == root
         assert store.plan_owner('workspace-plan')['first_session_id'] == root
+        assert store.get(child)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())

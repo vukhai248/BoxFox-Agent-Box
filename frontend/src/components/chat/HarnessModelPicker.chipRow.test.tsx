@@ -132,8 +132,32 @@ describe('HarnessModelPicker — chip model ở ô soạn là một hàng', () =
     expect(chip.textContent).toContain(TAIL)
 
     const title = chip.getAttribute('title') ?? ''
-    expect(title).toContain(`Model: ${GROUP_NAME}`), 'tên đầy đủ của model'
+    expect(title).toContain(`Model: ${GROUP_NAME}`, 'tên đầy đủ của model')
     expect(title).toContain('(opencode)')
-    expect(title).toContain('pinned OpenCode Free (key 2)'), 'connection đã ghim'
+    expect(title).toContain('pinned OpenCode Free (key 2)', 'connection đã ghim')
+  })
+
+  it('nhánh harness: chip giữ nguyên hợp đồng một hàng, nhãn chỉ là con số', () => {
+    // Nhánh này không có chuỗi dài nào để xuống hàng, nhưng nó dùng CHUNG chip với nhánh model —
+    // nên hợp đồng (co được ở chip, mọi mảnh khác `shrink-0`) phải đúng ở đây nữa.
+    useHarnessStore.getState().setActiveHarness('open-model-harness-copy-1')
+    const harness = useHarnessStore.getState().getHarnessById('open-model-harness-copy-1')
+    const host = render(<HarnessModelPicker />)
+    const chip = Array.from(host.querySelectorAll('button'))
+      .find((b) => (b.getAttribute('title') ?? '').startsWith('Harness:'))
+    if (!chip) throw new Error('Không tìm thấy chip harness trong ô soạn')
+
+    expect(chip.className).toContain('min-w-0')
+    expect(chip.className).toContain('max-w-[260px]')
+    const classes = (el: Element) => el.getAttribute('class') ?? ''
+    for (const child of Array.from(chip.children)) {
+      const own = classes(child)
+      const nested = Array.from(child.querySelectorAll('*')).map(classes).join(' ')
+      expect(`${own} ${nested}`, 'mọi mảnh của chip phải là shrink-0').toContain('shrink-0')
+    }
+
+    const enabled = harness?.subagents.filter((s) => s.enabled).length ?? 1
+    expect(chip.textContent).toContain(String(enabled))
+    expect(chip.getAttribute('title') ?? '').toContain('sub-agents')
   })
 })

@@ -281,7 +281,9 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
         {activeType === 'harness' ? (
           <>
             <Bot className="size-3.5 shrink-0 text-brand" />
-            <span className="font-semibold text-fg">{subagentCount}</span>
+            {/* Nhãn của nhánh này là một CON SỐ nên nó không tự xuống hàng; `shrink-0` giữ đúng hợp
+                đồng của chip: chỉ phần tên model được co và cắt, mọi mảnh khác đứng yên. */}
+            <span className="shrink-0 font-semibold text-fg">{subagentCount}</span>
           </>
         ) : (
           <>

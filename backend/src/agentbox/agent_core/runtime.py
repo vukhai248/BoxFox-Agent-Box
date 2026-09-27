@@ -59,7 +59,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
 from . import plan_quality, research_review, research_runtime
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
-from .limits import OWNER_STEER_PREFIX, RESEARCH_NUDGE_PREFIX
+from .limits import OWNER_STEER_PREFIX, PLAN_VERDICT_NUDGE_PREFIX, RESEARCH_NUDGE_PREFIX
 from . import evidence_gate, journal, plan_eval, plan_header, plan_registry, session_journal
 from .tool_contracts import schemas_for
 from .tool_groups import TOOL_GROUPS
@@ -1463,6 +1463,9 @@ def turn_prompt_excerpt(messages, limit=RECAP_REQUEST_CHARS):
     Vòng 27 (D-43, #5969) bỏ qua thêm HAI tiền tố của đường research: `OWNER_STEER_PREFIX` (chỉ
     thị giữa lượt) và `RESEARCH_NUDGE_PREFIX` (nhịp báo tiến độ). Cả hai đều không phải việc chủ
     giao ở lượt này — thứ nhất là một điều chỉnh giữa lượt, thứ hai do máy bơm.
+    Đợt soát 2026-09-27 (F3) bỏ qua thêm `PLAN_VERDICT_NUDGE_PREFIX`: câu nhắc phán quyết phản
+    biện do HARNESS bơm, và không có nó thì bước kế tiếp đọc bản nhắc việc như thể chủ nhà vừa
+    yêu cầu giao một con `plan-review`.
     """
     for message in reversed(list(messages or [])):
         if message.get('role') != 'user':
@@ -1472,7 +1475,7 @@ def turn_prompt_excerpt(messages, limit=RECAP_REQUEST_CHARS):
             content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
         text = ' '.join(str(content or '').split())
         if not text or text.startswith((PEER_DELIVERY_PREFIX, OWNER_STEER_PREFIX,
-                                        RESEARCH_NUDGE_PREFIX)):
+                                        RESEARCH_NUDGE_PREFIX, PLAN_VERDICT_NUDGE_PREFIX)):
             continue
         return text[:limit]
     return ''
@@ -3062,15 +3065,19 @@ class HarnessRuntime(RuntimeCommands):
             return None
         return note
 
-    def plan_verdict_nudge(self, sid, turn_no, steps_used=None, wrap_up_at=None):
+    def plan_verdict_nudge(self, sid, turn_no, steps_used=None, wrap_up_at=None, can_delegate=True):
         """Ghi chú của lượt khi nó ĐÁNG được nhắc vì thiếu phán quyết, ngược lại `None` (F3).
 
-        Bốn điều kiện, mỗi điều kiện đóng một cách nhắc vô ích: lượt này có ghi kế hoạch; bản ấy chưa
-        có phán quyết `ok`; lượt chưa dùng hết `PLAN_VERDICT_NUDGE_MAX` lần nhắc; và lượt còn đủ thời
+        Năm điều kiện, mỗi điều kiện đóng một cách nhắc vô ích: lượt này có ghi kế hoạch; bản ấy chưa
+        có phán quyết `ok`; lượt chưa dùng hết `PLAN_VERDICT_NUDGE_MAX` lần nhắc; lượt còn đủ thời
         gian cho một con `plan-review` thật (`PLAN_VERDICT_NUDGE_MIN_SECONDS`) — nhắc khi chỉ còn vài
-        giây là biến lượt thành một cú hết giờ, không phải một vòng phản biện. Cửa sổ giữ chỗ cuối lượt
-        là của việc CHẨN ĐOÁN, nên nhắc cũng không chen vào đó.
+        giây là biến lượt thành một cú hết giờ, không phải một vòng phản biện; và PHIÊN NÀY có
+        `delegate_task` (vai `plan` không có: nhắc nó giao một con là nhắc một việc nó không làm được,
+        đổi một bước lấy một `PermissionError`). Cửa sổ giữ chỗ cuối lượt là của việc CHẨN ĐOÁN, nên
+        nhắc cũng không chen vào đó.
         """
+        if not can_delegate:
+            return None
         state = self.plan_verdict_nudges.get(sid)
         if isinstance(state, dict) and state.get('turn') == turn_no \
                 and int(state.get('count') or 0) >= PLAN_VERDICT_NUDGE_MAX:
@@ -3115,24 +3122,33 @@ class HarnessRuntime(RuntimeCommands):
         Không chặn lượt, không sửa một chữ nào của câu trả lời, và mỗi cặp (phiên, mã, identity@version)
         chỉ ghim ĐÚNG MỘT lần. Đây là mặt NÓI RA của hai cổng ấy: cổng thật vẫn là `plan_approval_blocked`
         (duyệt) và lời nhắc giữa lượt, còn notice chỉ để chủ nhà biết vì sao bản ấy chưa duyệt được.
+
+        HAI notice ĐỘC LẬP với nhau: một phán quyết `ok` nói bản kế hoạch đã được phản biện, KHÔNG nói
+        chủ nhà đã xác nhận các giả định nằm trong nó. Vì thế cổng phán quyết chỉ chặn notice của chính
+        nó — bản đo 2026-09-27 cho thấy ghép hai cổng làm một thì kế hoạch mang mục giả định vẫn im lặng
+        chỉ vì một con phản biện đã kịp ghi `ok`.
         """
-        note = self.plan_turn_verdict_open(sid, self.active_turn.get(sid))
+        turn_no = self.active_turn.get(sid)
+        note = self.plan_turn_note(sid, turn_no)
         if note is None:
             return
         version = f"{note['identity']}@v{int(note['version'])}"
-        verdict_key = (sid, PLAN_VERDICT_MISSING_TURN_CODE, note['identity'], int(note['version']))
-        if verdict_key not in self.plan_notice_keys:
-            self.plan_notice_keys.add(verdict_key)
-            self.store.emit(sid, 'notice', {
-                'code': PLAN_VERDICT_MISSING_TURN_CODE, 'partial': False,
-                'identity': note['identity'], 'version': int(note['version']),
-                'message': (f'{PLAN_VERDICT_MISSING_TURN_CODE}: lượt này ghi kế hoạch {version} mà chưa có '
-                            'phán quyết phản biện nào được ghi, nên lệnh xin duyệt cho bản này bị chối '
-                            "(PLAN_APPROVAL_UNVERIFIED) — chạy delegate_task(role='plan-review') trên đúng "
-                            'tệp ấy rồi ghi phán quyết của nó bằng plan_verify')})
-            system_log.write('plan.verdict.missing', level='warn', session_id=sid,
-                             code=PLAN_VERDICT_MISSING_TURN_CODE, identity=note['identity'],
-                             version=int(note['version']))
+        # F3 — chỉ khi sổ phán quyết CHƯA có `ok` cho đúng bản ấy.
+        if self.plan_turn_verdict_open(sid, turn_no) is not None:
+            verdict_key = (sid, PLAN_VERDICT_MISSING_TURN_CODE, note['identity'], int(note['version']))
+            if verdict_key not in self.plan_notice_keys:
+                self.plan_notice_keys.add(verdict_key)
+                self.store.emit(sid, 'notice', {
+                    'code': PLAN_VERDICT_MISSING_TURN_CODE, 'partial': False,
+                    'identity': note['identity'], 'version': int(note['version']),
+                    'message': (f'{PLAN_VERDICT_MISSING_TURN_CODE}: lượt này ghi kế hoạch {version} mà chưa có '
+                                'phán quyết phản biện nào được ghi, nên lệnh xin duyệt cho bản này bị chối '
+                                "(PLAN_APPROVAL_UNVERIFIED) — chạy delegate_task(role='plan-review') trên đúng "
+                                'tệp ấy rồi ghi phán quyết của nó bằng plan_verify')})
+                system_log.write('plan.verdict.missing', level='warn', session_id=sid,
+                                 code=PLAN_VERDICT_MISSING_TURN_CODE, identity=note['identity'],
+                                 version=int(note['version']))
+        # F2 — không phụ thuộc phán quyết (xem docstring).
         items = note.get('assumptions') or []
         asked = self._decision_seen(sid) or any(
             str((call or {}).get('name') or '') in DECISION_TOOLS
@@ -4335,7 +4351,9 @@ class HarnessRuntime(RuntimeCommands):
                     if not calls and not truncated_partial:
                         # Cửa sổ giữ chỗ cuối lượt là của việc chẩn đoán: `plan_verdict_nudge` từ chối
                         # nhắc khi bước đã chạm `wrap_up_at`.
-                        verdict_note = self.plan_verdict_nudge(sid, turn_no, steps_used, wrap_up_at)
+                        verdict_note = self.plan_verdict_nudge(
+                            sid, turn_no, steps_used, wrap_up_at,
+                            can_delegate='delegate_task' in (config.get('tools') or []))
                         text, answer_partial = await self.enforce_answer_length(sid, text, steps_used)
                         # Đợt 3 (P3.1) — cổng chạy SAU cổng độ dài và TRƯỚC khi câu trả lời được
                         # phát: bằng chứng đi KÈM văn (`assistant.evidence`), không nhét vào văn.
@@ -4355,7 +4373,11 @@ class HarnessRuntime(RuntimeCommands):
                         self.store.emit(sid, 'thought', {'text': thought})
                     self.store.emit(sid, 'usage', {'usage': response.get('usage'), 'target': response.get('boxfox'), 'requestId': response.get('id')})
                     if text:
-                        payload = {'text': text, 'thought': thought, 'final': not calls}
+                        # F3 — `final` là tín hiệu "lượt đã xong" của giao diện (`turn.isCompleted`,
+                        # thẻ câu trả lời cuối). Bước sắp bị nhắc thì lượt CHƯA xong, nên câu nói
+                        # dở này phải đi ra như văn giữa lượt, không phải câu trả lời cuối.
+                        payload = {'text': text, 'thought': thought,
+                                   'final': not calls and verdict_note is None}
                         if evidence_info:
                             payload['evidence'] = evidence_info
                         self.store.emit(sid, 'assistant', payload)
@@ -4531,6 +4553,10 @@ class HarnessRuntime(RuntimeCommands):
                                                                      out_of_time=True)
                 if self.diagnosis_ok(diagnosis):
                     return await finish_partial(diagnosis, DEADLINE_NOTICE_CODE, read_tool_calls=read_calls)
+            # F2/F3 — lượt CHẾT sau khi đã ghi kế hoạch cũng phải nói được hai chuyện ấy: đây là
+            # đúng ca chủ nhà cần biết nhất (kế hoạch nằm trên đĩa, không ai phản biện, và lượt
+            # không có câu trả lời nào để đọc). Cổng ghim một lần cho mỗi bản nên gọi ở đây là an toàn.
+            self.plan_turn_notices(sid, turn_calls)
             close_turn('error')
             retries = getattr(exc, 'retry_attempts', 0)
             if retries:
@@ -4550,6 +4576,11 @@ class HarnessRuntime(RuntimeCommands):
             self.run_budget.pop(sid, None)
             self.turn_started_at.pop(sid, None)
             self.turn_extensions.pop(sid, None)
+            # Chú thích `write_plan` và bộ đếm nhắc chỉ có nghĩa trong CHÍNH lượt ấy; giữ lại thì
+            # tiến trình harness sống lâu sẽ phình theo số lượt. `plan_notice_keys` thì KHÔNG xoá:
+            # nó là bộ nhớ chống ghim trùng, và bản ghi ấy phải sống qua các lượt.
+            self.plan_turn_notes.pop(sid, None)
+            self.plan_verdict_nudges.pop(sid, None)
             # The turn ended (completed, failed or cancelled) while a decision was still open.
             for record in self.pending_for(sid):
                 self.settle(record, record['defaultChoice'], 'cancelled', 'session_cancelled', None)

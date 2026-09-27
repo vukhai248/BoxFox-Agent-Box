@@ -215,7 +215,12 @@ def test_the_turn_deadline_extension_is_recorded_for_the_write(tmp_path):
 
 
 def test_the_nudge_would_extend_a_turn_that_still_has_its_extension(tmp_path):
-    """Phần nới của bước nhắc là lưới an toàn: nó chạy khi lượt CHƯA dùng lần nới nào."""
+    """Phần nới của bước nhắc là lưới an toàn: nó chạy khi lượt CHƯA dùng lần nới nào.
+
+    Bài này chốt HỢP ĐỒNG CỦA HELPER, không chốt đường nhắc: `extend_turn_budget` là hàm cũ và
+    nhận mọi lý do, nên bài vẫn xanh nếu nhánh nhắc biến mất. Đường nhắc thật được chốt ở
+    `test_the_turn_deadline_extension_is_recorded_for_the_write` (thứ tự nới của lượt plan).
+    """
     store, runtime, sid, _ = runtime_at(tmp_path, [])
     runtime.run_budget[sid] = FakeBudget(1000.0)
     runtime.turn_started_at[sid] = 900.0
@@ -240,8 +245,12 @@ def test_a_turn_without_a_written_plan_is_never_nudged(tmp_path):
     asyncio.run(run())
 
 
-def test_a_recorded_ok_verdict_closes_the_gate(tmp_path):
-    """Có phán quyết `ok` thì hết việc: không nhắc, không notice — cổng đọc SỔ, không đếm event."""
+def test_a_recorded_ok_verdict_closes_only_the_verdict_gate(tmp_path):
+    """Phán quyết `ok` đóng cổng PHÁN QUYẾT (không nhắc, không notice) — cổng đọc SỔ, không đếm event.
+
+    Cổng GIẢ ĐỊNH thì vẫn mở: `ok` nói bản kế hoạch đã được phản biện, không nói chủ nhà đã xác nhận
+    các giả định nằm trong nó. Gộp hai cổng làm một là chỗ bản trước im lặng sai (soát 2026-09-27).
+    """
 
     async def run():
         store, runtime, sid, model = runtime_at(tmp_path, [answer('Xong việc.')])
@@ -253,8 +262,11 @@ def test_a_recorded_ok_verdict_closes_the_gate(tmp_path):
         store.record_plan_verification('workspace-plan', 1, 'ok', summary='đã phản biện')
         assert runtime.plan_verdict_nudge(sid, 1) is None
         runtime.plan_turn_notices(sid, [])
-        assert notices(store, sid, limits.PLAN_VERDICT_MISSING_TURN_CODE) == []
-        assert notices(store, sid, limits.PLAN_ASSUMPTIONS_UNCONFIRMED_CODE) == []
+        assert notices(store, sid, limits.PLAN_VERDICT_MISSING_TURN_CODE) == [], \
+            'có `ok` thì không còn gì thiếu để nói'
+        rows = notices(store, sid, limits.PLAN_ASSUMPTIONS_UNCONFIRMED_CODE)
+        assert len(rows) == 1 and rows[0]['items'] == ['giả định chưa xác nhận'], \
+            'giả định chưa ai xác nhận vẫn phải được nói ra, kể cả khi đã có `ok`'
         store.close()
 
     asyncio.run(run())
@@ -298,6 +310,17 @@ def test_the_nudge_leaves_the_wrap_up_window_to_the_diagnosis(tmp_path):
 
     assert runtime.plan_verdict_nudge(sid, 2, steps_used=9, wrap_up_at=10) is not None
     assert runtime.plan_verdict_nudge(sid, 2, steps_used=10, wrap_up_at=10) is None
+    store.close()
+
+
+def test_a_session_that_cannot_delegate_is_never_nudged(tmp_path):
+    """Vai không có `delegate_task` (vai `plan` là một): nhắc nó giao con là nhắc việc nó không làm được."""
+    store, runtime, sid, _ = runtime_at(tmp_path, [])
+    runtime.active_turn[sid] = 7
+    runtime.plan_turn_notes[sid] = {'turn': 7, 'identity': 'workspace-plan', 'version': 1,
+                                    'assumptions': []}
+    assert runtime.plan_verdict_nudge(sid, 7, can_delegate=False) is None
+    assert runtime.plan_verdict_nudge(sid, 7, can_delegate=True) is not None
     store.close()
 
 
