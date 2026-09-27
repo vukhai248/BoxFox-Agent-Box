@@ -7,6 +7,7 @@ from agentbox.skills.commands import CommandRegistry, BUILTINS, ROLE_COMMANDS, R
 from agentbox.skills.catalog import SkillCatalog
 from agentbox.skills.lifecycle import SkillLoader
 from agentbox.memory.session_store import SessionStore
+from agentbox.agent_core import limits
 from agentbox.agent_core.runtime import HarnessRuntime
 
 INTENTS = json.loads((Path(__file__).parents[1] / 'fixtures/skill_intents_v1.json').read_text(encoding='utf-8'))
@@ -336,4 +337,85 @@ def test_command_child_never_gets_more_steps_than_the_session(registry):
         child = registry.store.get(children[0]['id'])
         assert child['config']['maxSteps'] == 12, 'con phải kẹp theo cha, không phải mặc định 40'
         assert child['config']['deadlineSeconds'] <= 600
+    asyncio.run(run())
+
+
+def test_btw_requires_a_question_and_caps_its_length(registry):
+    """P5 — `/btw <câu hỏi>` là lệnh thật: thiếu câu hỏi là 400 có mã, câu hỏi dài quá trần cũng vậy."""
+    resolved = registry.resolve('/btw   pin này để làm gì?  ')
+    assert resolved.kind == 'message' and resolved.reason == 'btw_command'
+    assert resolved.prompt == 'pin này để làm gì?'
+    with pytest.raises(ValueError, match='BTW_QUESTION_REQUIRED'):
+        registry.resolve('/btw')
+    with pytest.raises(ValueError, match='BTW_QUESTION_REQUIRED'):
+        registry.resolve('/btw    ')
+    with pytest.raises(ValueError, match='BTW_QUESTION_TOO_LONG'):
+        registry.resolve('/btw ' + 'x' * (limits.BTW_QUESTION_MAX_CHARS + 1))
+
+
+def test_btw_is_listed_in_help_with_a_description(registry):
+    row = next(item for item in registry.list() if item['slug'] == 'btw')
+    assert row['kind'] == 'builtin' and row['enabled'] is True and row['description']
+
+
+def test_an_idle_btw_opens_one_turn_framed_as_a_side_question(registry, monkeypatch):
+    """P5 — `/btw` lúc rảnh: MỘT lượt thật, prompt mang tiền tố câu hỏi phụ; hàng `user` mang nhãn btw."""
+    monkeypatch.delenv('BOXFOX_STEER', raising=False)
+
+    async def run():
+        model = Model()
+        runtime = HarnessRuntime(registry.store, Executor(), model, registry.catalog)
+        sid = runtime.create({'skills': []})['id']
+        answer = await runtime.submit(sid, '/btw pin này để làm gì?')
+        assert answer['status'] == 'running', 'rảnh thì mở lượt thật, không phải hàng chờ'
+        assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'verified fixture result'
+        events = [row['data'] for row in registry.store.events(sid) if row['type'] == 'user']
+        assert events[-1]['btw'] is True and events[-1]['text'] == 'pin này để làm gì?'
+        sent = model.requests[0][-1]['content']
+        assert sent.startswith(limits.BTW_ASK_PREFIX) and sent.endswith('pin này để làm gì?')
+    asyncio.run(run())
+
+
+def test_a_busy_btw_question_queues_with_its_label_and_the_turn_finishes(registry, monkeypatch):
+    """P5 — `/btw` giữa lượt: vào hàng chờ steer nhãn btw; lượt đang chạy đi tiếp và tự kết thúc."""
+    monkeypatch.delenv('BOXFOX_STEER', raising=False)
+
+    async def run():
+        started, finish = asyncio.Event(), asyncio.Event()
+        calls = {'n': 0}
+
+        class Waiting(Model):
+            async def complete(self, messages, tools, route, **kwargs):
+                calls['n'] += 1
+                if calls['n'] == 1:
+                    # Bước 1 chờ tới khi câu hỏi phụ đã vào hàng, rồi trả một tool_call lạ: lượt
+                    # phải đi tiếp qua bước 2 (chỗ `drain_steers` bơm khối btw) chứ không bị đóng.
+                    started.set()
+                    await finish.wait()
+                    self.requests.append(copy.deepcopy(messages))
+                    return {'choices': [{'message': {'content': '', 'tool_calls': [
+                        {'id': 'b1', 'type': 'function',
+                         'function': {'name': 'not_a_real_tool', 'arguments': '{}'}}]},
+                        'finish_reason': 'tool_calls'}]}
+                return await super().complete(messages, tools, route, **kwargs)
+
+        model = Waiting()
+        runtime = HarnessRuntime(registry.store, Executor(), model, registry.catalog)
+        sid = runtime.create({'skills': []})['id']
+        await runtime.submit(sid, 'hello')
+        await started.wait()
+        answer = await runtime.submit(sid, '/btw pin này để làm gì?')
+        assert answer['status'] == 'steered' and answer['steerId']
+        assert calls['n'] == 1, 'câu hỏi phụ KHÔNG mở lượt model thứ hai'
+        row = runtime.store.steer(answer['steerId'])
+        assert row['kind'] == 'btw' and row['text'] == 'pin này để làm gì?'
+        # lượt đang chạy không bị cắt: nó bơm khối btw ở ranh giới bước rồi tự kết thúc.
+        finish.set()
+        assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'verified fixture result'
+        assert runtime.store.get(sid)['status'] == 'completed'
+        assert calls['n'] >= 2, 'lượt gốc đi tiếp qua bước kế tiếp chứ không bị đóng'
+        injected = [m['content'] for m in runtime.store.get(sid)['messages']
+                    if m['role'] == 'user' and str(m['content']).startswith(limits.BTW_ASK_PREFIX)]
+        assert injected and 'pin này để làm gì?' in injected[0]
+        assert runtime.store.pending_steer_count(sid) == 0, 'bơm rồi thì hàng không còn chờ'
     asyncio.run(run())

@@ -25,8 +25,9 @@ from . import limits
 from . import research_evidence, research_facets, research_report, research_review
 from .limits import (
     CHILD_DEADLINE_SECONDS, CHILD_MAX_STEPS, DOSSIER_DIR_MISMATCH_CODE, DOSSIER_MAX_BYTES, DOSSIER_ROOM,
-    DOSSIER_VERSION_ATTEMPTS_MAX,
-    FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX, RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
+    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX, BTW_QUESTION_MAX_CHARS,
+    FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX,
+    RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
     RESEARCH_BRIEF_MISSING_CODE, RESEARCH_BRIEF_MODES, RESEARCH_BRIEF_MODE_UNKNOWN_CODE,
     RESEARCH_BRIEF_TAKEN_CODE, RESEARCH_CRITIQUE_LABEL, RESEARCH_CRITIQUE_MISSING_CODE,
     RESEARCH_GATE_NOTE_CODE, RESEARCH_LEVEL_INVALID_CODE, RESEARCH_MAX_ROWS_PER_DOSSIER,
@@ -2301,8 +2302,13 @@ async def cancel_child(rt, session, args):
 # --------------------------------------------------------------- chỉ thị giữa lượt (đợt 7)
 
 
-async def queue_owner_steer(rt, sid, text, turn=None):
-    """Xếp một chỉ thị giữa lượt — trả `(answer, notice)` cho route, hoặc `None` khi công tắc tắt."""
+async def queue_owner_steer(rt, sid, text, turn=None, kind='steer'):
+    """Xếp một chỉ thị giữa lượt — trả `(answer, notice)` cho route, hoặc `None` khi công tắc tắt.
+
+    `kind='btw'` (P5): `/btw <câu hỏi>` dùng ĐÚNG hàng đợi này — lượt đang chạy không bị cắt —
+    nhưng hàng mang nhãn `btw` nên khối bơm mở đầu bằng `BTW_ASK_PREFIX` và hàng transcript hiện
+    như một câu hỏi phụ, không phải một chỉ thị giữa lượt.
+    """
     mode, unknown = steer_mode()
     if unknown is not None:
         mode_notice(rt, sid, STEER_MODE_UNKNOWN_CODE, STEER_ENV, unknown, STEER_DEFAULT_MODE)
@@ -2317,13 +2323,22 @@ async def queue_owner_steer(rt, sid, text, turn=None):
         raise ValueError(f'STEER_QUEUE_FULL: đã có {STEER_MAX_PENDING} chỉ thị đang chờ bơm vào lượt này — '
                          f'chờ lượt bơm bớt rồi gửi tiếp')
     turn_no = int(turn if turn is not None else (rt.active_turn.get(sid) or 0))
-    record = rt.store.queue_steer(sid, body, turn_no)
-    rt.store.emit(sid, 'user', {'text': f'{OWNER_STEER_PREFIX} {body}', 'control': True,
-                                'steer': True, 'steerId': record['id'], 'turn': turn_no})
+    label = 'btw' if kind == 'btw' else 'steer'
+    record = rt.store.queue_steer(sid, body, turn_no, kind=label)
+    # Hàng `btw` hiện nguyên câu hỏi (nhãn do chip "btw" đảm nhiệm); hàng `steer` giữ tiền tố
+    # trong chính văn bản như trước để người đọc thấy đây là chỉ thị giữa lượt.
+    event = ({'text': body, 'control': True, 'steer': True, 'btw': True,
+              'steerId': record['id'], 'turn': turn_no} if label == 'btw' else
+             {'text': f'{OWNER_STEER_PREFIX} {body}', 'control': True, 'steer': True,
+              'steerId': record['id'], 'turn': turn_no})
+    rt.store.emit(sid, 'user', event)
+    title = 'câu hỏi phụ (btw)' if label == 'btw' else 'chỉ thị giữa lượt'
     try:
         await session_journal.append(
-            rt.executor, rt.store, sid, 'decision', f'chỉ thị giữa lượt: {body[:120]}',
-            data={'kind': 'owner-steer', 'steerId': record['id'], 'chars': len(body)},
+            rt.executor, rt.store, sid, 'decision',
+            f'{title}: {body[:120]}',
+            data={'kind': 'btw-ask' if label == 'btw' else 'owner-steer', 'steerId': record['id'],
+                  'chars': len(body)},
             turn=turn_no)
     except Exception:  # pragma: no cover - ghi sổ hỏng ⇒ log + đi tiếp
         system_log.write('steer.journal_failed', level='warn', session_id=sid, code='JOURNAL_FAILED')
@@ -2334,11 +2349,31 @@ async def queue_owner_steer(rt, sid, text, turn=None):
 
 
 def steer_block(records) -> str:
-    """Khối văn bản bơm vào transcript: mỗi chỉ thị một mục, giữ nguyên văn của chủ nhà."""
+    """Khối văn bản bơm vào transcript: mỗi hàng một mục, giữ nguyên văn của chủ nhà.
+
+    Tiền tố theo NHÃN hàng: hàng `btw` phải nói rõ luật trả lời ngắn + KHÔNG đổi việc đang làm,
+    còn hàng `steer` giữ nguyên tiền tố chỉ thị. Một khối có thể trộn cả hai nhãn.
+    """
     lines = []
     for record in records:
-        lines.append(f'{OWNER_STEER_PREFIX} {str(record.get("text") or "").strip()}')
+        prefix = BTW_ASK_PREFIX if str(record.get('kind') or 'steer') == 'btw' else OWNER_STEER_PREFIX
+        lines.append(f'{prefix} {str(record.get("text") or "").strip()}')
     return '\n\n'.join(lines)
+
+
+def btw_question_prompt(question) -> str:
+    """Khung CÂU HỎI PHỤ cho lượt RẢNH (P5): `/btw` ngoài lượt đang chạy mở một lượt thật.
+
+    Lượt rảnh không có đường steer để bơm vào, nên `/btw <câu hỏi>` mở lượt bình thường với prompt
+    mang `BTW_ASK_PREFIX` — model biết đây là câu hỏi phụ và trả lời ngắn, không biến nó thành một
+    việc mới. Hàng transcript vẫn hiện nguyên câu hỏi kèm nhãn btw (`btw: true` trên event `user`).
+    """
+    body = str(question or '').strip()
+    if not body:
+        raise ValueError('BTW_EMPTY: câu hỏi trống — gõ `/btw <câu hỏi>`')
+    if len(body) > BTW_QUESTION_MAX_CHARS:
+        body = body[:BTW_QUESTION_MAX_CHARS]
+    return f'{BTW_ASK_PREFIX} {body}'
 
 
 def drain_steers(rt, sid, messages) -> int:
