@@ -59,6 +59,11 @@ class RuntimeCommands:
         enabled = settings['enabled'] if settings['initialized'] else session['config']['skills']
         resolved = self.commands.resolve(prompt, enabled, session['config']['subagents'])
         busy = session['status'] in {'running', 'awaiting_decision'}
+        # P5 — `/btw <câu hỏi>`: câu hỏi là `resolved.prompt` (phần sau lệnh), KHÔNG phải cả dòng
+        # `/btw …`. Mọi đường đi tiếp (hàng chờ steer, hàng `user`, prompt gửi model) dùng câu hỏi
+        # sạch, nếu không model đọc được cả chữ `/btw` và transcript hiện sai thứ chủ nhà đã gõ.
+        is_btw = resolved.reason == 'btw_command'
+        steer_text = resolved.prompt if is_btw else prompt
         steered = False
         if busy and not (resolved.kind == 'control' and resolved.command in INFO | {'stop'}):
             # Vòng 27 (đợt 7, D-43): lượt của PHIÊN GỐC đang chạy thì lời nhắn của chủ nhà không bị
@@ -80,10 +85,13 @@ class RuntimeCommands:
             self.store.db.execute('INSERT INTO command_invocations VALUES(?,?,?,?)', (sid, invocation_id, request, json.dumps(result)))
         self.store.emit(sid, 'command_resolved', asdict(resolved) | {'invocationId': invocation_id})
         if steered:
-            queued = await self.queue_owner_steer(sid, prompt)
+            # P5 — `/btw` đi CÙNG hàng đợi steer (lượt đang chạy không bị cắt), chỉ khác NHÃN hàng:
+            # khối bơm của nó dùng tiền tố câu hỏi phụ nên model trả lời ngắn rồi đi tiếp.
+            queued = await self.queue_owner_steer(sid, steer_text, kind='btw' if is_btw else 'steer')
             result.update({'steerId': (queued or {}).get('steerId'), 'turn': (queued or {}).get('turn'),
                            'pending': (queued or {}).get('pending'),
-                           'output': 'Chỉ thị đã vào hàng đợi của lượt đang chạy.'})
+                           'output': ('Câu hỏi phụ đã vào hàng đợi của lượt đang chạy; câu trả lời sẽ ở bước kế tiếp.'
+                                      if is_btw else 'Chỉ thị đã vào hàng đợi của lượt đang chạy.')})
             with self.store.db:
                 self.store.db.execute('UPDATE command_invocations SET result=? WHERE session_id=? AND id=?',
                                       (json.dumps(result), sid, invocation_id))
@@ -184,12 +192,13 @@ class RuntimeCommands:
                            await self.route_metadata(session, route), images=images,
                            attachments=attachments, invocation_id=invocation_id)
         elif resolved.kind == 'message':
-            self._next_turn_skills(session, enabled, invocation_id, prompt)
+            self._next_turn_skills(session, enabled, invocation_id, steer_text)
             # Route của lượt có thể đổi model; tra metadata của CHÍNH model đó (cùng
             # nguồn như lúc tạo phiên) để `start()` vẫn đối chiếu được `thinkingLevel`
-            # thay vì bỏ qua kiểm tra (B13).
-            self.start(sid, prompt, image, route, await self.route_metadata(session, route),
-                       images=images, attachments=attachments, invocation_id=invocation_id)
+            # thay vì bỏ qua kiểm tra (B13). `btw=True` (P5): `/btw` ngoài lượt đang chạy mở
+            # một lượt THẬT nhưng prompt mang tiền tố câu hỏi phụ (trả lời ngắn, không thành việc mới).
+            self.start(sid, steer_text, image, route, await self.route_metadata(session, route),
+                       images=images, attachments=attachments, invocation_id=invocation_id, btw=is_btw)
         else:
             self._next_turn_skills(session, enabled, invocation_id, prompt)
             session = self.store.get(sid)

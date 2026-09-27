@@ -28,7 +28,9 @@ export const RESEARCH_MODE_COMMANDS = new Set([
  * ranh giới mà chế độ dựng ra. Vì cả hai chế độ chia một ô soạn tin, danh sách lọc là HỢP của hai
  * bộ — người dùng đang ở chế độ nào thì vẫn thấy đủ lệnh điều khiển của cả hai.
  */
-export const MODE_COMMANDS = new Set([...RESEARCH_MODE_COMMANDS, 'design'])
+// P5 — `/btw` được phép ở MỌI chế độ: nó không mở lượt vai nào và không phá ranh giới mode, nó
+// chỉ hỏi thêm giữa lượt (hàng chờ steer). Vì vậy nó nằm trong danh sách lọc chung.
+export const MODE_COMMANDS = new Set([...RESEARCH_MODE_COMMANDS, 'design', 'btw'])
 
 export function useSlashCompletion(input: string, change: (value: string) => void, options?: { modeOnly?: boolean }) {
   const { commands, load } = useCommandsStore()

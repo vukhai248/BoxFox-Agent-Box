@@ -140,6 +140,22 @@ describe('parseDecisions', () => {
     expect(entry.options).toEqual([{ id: 'ok', label: 'Được', kind: 'approve' }])
   })
 
+  it('giữ cờ `allowFreeText` của lựa chọn tự nhập (P4)', () => {
+    const [entry] = parseDecisions([
+      requested(5, 'd1', {
+        options: [
+          { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+          { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+        ],
+      }),
+    ])
+
+    expect(entry.options).toEqual([
+      { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+      { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+    ])
+  })
+
   it('`request_approval` giữ nguyên kind, action và lý do', () => {
     const [entry] = parseDecisions([
       requested(2, 'a1', {

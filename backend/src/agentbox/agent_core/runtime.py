@@ -57,7 +57,9 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
 from . import plan_quality, research_review, research_runtime
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
-from .limits import OWNER_STEER_PREFIX, RESEARCH_NUDGE_PREFIX
+from .limits import (BTW_ASK_PREFIX, DECISION_NOTE_MAX_CHARS, DECISION_NOTE_REQUIRED_CODE,
+                      DECISION_NOTE_TOO_LONG_CODE, DECISION_OTHER_LABEL, DECISION_OTHER_OPTION_ID,
+                      OWNER_STEER_PREFIX, RESEARCH_NUDGE_PREFIX)
 from . import evidence_gate, journal, plan_eval, plan_header, plan_registry, session_journal
 from .tool_contracts import schemas_for
 from .tool_groups import TOOL_GROUPS
@@ -1182,6 +1184,11 @@ DECISION_OPTION_KINDS = frozenset({'approve', 'reject', 'alternative'})
 # validation, defaultChoice and the UI can rely on them; only the labels are model-supplied.
 DEFAULT_APPROVE_OPTION = {'id': 'approve', 'label': 'Duyệt', 'kind': 'approve'}
 DEFAULT_REJECT_OPTION = {'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'}
+# P4 — lựa chọn "Khác (tự nhập)" mà runtime LUÔN thêm vào mọi quyết định. `allowFreeText=True`
+# nói với UI (và `resolve_decision`) rằng chọn nó BẮT BUỘC kèm chữ đã gõ. Trần 2-5 của hợp đồng
+# đếm lựa chọn CỦA MODEL; danh sách phát ra có thể nhiều hơn đúng một mục này.
+DEFAULT_OTHER_OPTION = {'id': DECISION_OTHER_OPTION_ID, 'label': DECISION_OTHER_LABEL,
+                        'kind': 'alternative', 'allowFreeText': True}
 
 DECISION_OUTCOME_MESSAGES = {
     'approved': 'User approved this request; continue with exactly the approved action.',
@@ -1461,6 +1468,7 @@ def turn_prompt_excerpt(messages, limit=RECAP_REQUEST_CHARS):
     Vòng 27 (D-43, #5969) bỏ qua thêm HAI tiền tố của đường research: `OWNER_STEER_PREFIX` (chỉ
     thị giữa lượt) và `RESEARCH_NUDGE_PREFIX` (nhịp báo tiến độ). Cả hai đều không phải việc chủ
     giao ở lượt này — thứ nhất là một điều chỉnh giữa lượt, thứ hai do máy bơm.
+    P5 bỏ qua thêm `BTW_ASK_PREFIX`: `/btw` là câu hỏi phụ của chủ nhà, không phải việc chủ giao.
     """
     for message in reversed(list(messages or [])):
         if message.get('role') != 'user':
@@ -1470,7 +1478,7 @@ def turn_prompt_excerpt(messages, limit=RECAP_REQUEST_CHARS):
             content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
         text = ' '.join(str(content or '').split())
         if not text or text.startswith((PEER_DELIVERY_PREFIX, OWNER_STEER_PREFIX,
-                                        RESEARCH_NUDGE_PREFIX)):
+                                        RESEARCH_NUDGE_PREFIX, BTW_ASK_PREFIX)):
             continue
         return text[:limit]
     return ''
@@ -1485,22 +1493,28 @@ def normalize_decision_options(raw, kind):
     options = []
     for item in items:
         if isinstance(item, str):
-            label, oid, option_kind = item.strip(), '', 'alternative'
+            label, oid, option_kind, free_text = item.strip(), '', 'alternative', False
         elif isinstance(item, dict):
             label = str(item.get('label') or item.get('id') or '').strip()
             oid = str(item.get('id') or '')
             option_kind = item.get('kind') if item.get('kind') in DECISION_OPTION_KINDS else 'alternative'
+            # P4 — cờ tự nhập là của CHÍNH lựa chọn model đưa ra, phải đi nguyên xuống danh sách
+            # phát ra; thiếu nó thì lựa chọn "tự nhập" của model mất ô gõ chữ ở UI.
+            free_text = item.get('allowFreeText') is True
         else:
             raise ValueError('DECISION_INVALID: each option must be a text label or an object with a label')
         if not label:
             raise ValueError('DECISION_INVALID: every option needs a label')
         if option_kind in {'approve', 'reject'}:
-            options.append({'id': option_kind, 'label': label, 'kind': option_kind})
+            option = {'id': option_kind, 'label': label, 'kind': option_kind}
         else:
             oid = re.sub(r'[^a-z0-9]+', '-', (oid or label).strip().lower()).strip('-')[:40]
             if not oid:
                 raise ValueError('DECISION_INVALID: an option needs a label or id with letters or digits')
-            options.append({'id': oid, 'label': label, 'kind': 'alternative'})
+            option = {'id': oid, 'label': label, 'kind': 'alternative'}
+        if free_text:
+            option['allowFreeText'] = True
+        options.append(option)
     if not options:
         if kind != 'approval':
             raise ValueError('DECISION_INVALID: ask_user requires 2-5 options')
@@ -1523,6 +1537,22 @@ def normalize_decision_options(raw, kind):
         seen.add(oid)
         unique.append({**option, 'id': oid})
     return unique
+
+
+def with_other_option(options):
+    """P4 — thêm lựa chọn "Khác (tự nhập)" vào danh sách đã chuẩn hoá.
+
+    Mọi `ask_user`/`request_approval` đều có đường tự nhập, kể cả khi model không đưa ra lựa chọn
+    nào cho việc đó. Model đã tự phát ra `id='other'` thì hàng đó được GIỮ NGUYÊN và chỉ được đánh
+    dấu `allowFreeText` — id ấy là ô tự nhập theo hợp đồng, nên không thêm hàng thứ hai.
+    """
+    items = [dict(option) for option in options]
+    for option in items:
+        if option.get('id') == DECISION_OTHER_OPTION_ID:
+            option['allowFreeText'] = True
+            return items
+    items.append(dict(DEFAULT_OTHER_OPTION))
+    return items
 
 
 def decision_deadline(args, kind, now=None):
@@ -1916,9 +1946,13 @@ class HarnessRuntime(RuntimeCommands):
         return record if isinstance(record, dict) else None
 
     def start(self, sid, prompt, image=None, route=None, route_metadata=None, images=None,
-              attachments=None, invocation_id=None):
+              attachments=None, invocation_id=None, btw=False):
         """Mở lượt mới. `images` là mảng ảnh inline của lượt (A7), `attachments` là tệp đã
         nằm thật trên đĩa box; cả hai đi qua `agent_core/attachments.py` để kiểm.
+
+        `btw=True` (P5): lượt rảnh của `/btw <câu hỏi>` — prompt gửi model mang tiền tố câu hỏi
+        phụ (`research_runtime.btw_question_prompt`), còn hàng `user` phát ra giữ nguyên câu hỏi
+        kèm `btw: true` để transcript hiện đúng như chủ nhà đã gõ.
         """
         session = self.store.get(sid)
         # P1 (§5.2): lượt bơm `research-resume-*` phải dùng hồ sơ research dù mode đã tắt;
@@ -1989,7 +2023,8 @@ class HarnessRuntime(RuntimeCommands):
         # Khối tệp đính kèm do HARNESS dựng (`attachment_prompt_block`) — nguồn duy nhất cho
         # cả đường lượt thường lẫn đường command/skill; client không tự nhồi đường dẫn.
         block = attachment_prompt_block(checked_attachments)
-        text = f'{prompt}\n\n{block}' if block else prompt
+        framed = research_runtime.btw_question_prompt(prompt) if btw else prompt
+        text = f'{framed}\n\n{block}' if block else framed
         if checked_images:
             content = [{'type': 'text', 'text': text}] + [{'type': 'image_url', 'image_url': {'url': row}}
                                                          for row in checked_images]
@@ -2012,6 +2047,8 @@ class HarnessRuntime(RuntimeCommands):
             turn = counted
         self.active_turn[sid] = turn
         event = {'text': prompt, 'turn': turn}
+        if btw:
+            event['btw'] = True
         if checked_attachments:
             event['attachments'] = checked_attachments
         if checked_images:
@@ -2869,9 +2906,12 @@ class HarnessRuntime(RuntimeCommands):
 
     # --- Vòng 27 (đợt 3–8): sổ nguồn, ba mức, nhịp tiến độ --------------------------------
 
-    async def queue_owner_steer(self, sid, text):
-        """Cửa duy nhất xếp chỉ thị giữa lượt — `submit` của phiên gốc gọi nó khi lượt đang chạy."""
-        return await research_runtime.queue_owner_steer(self, sid, text)
+    async def queue_owner_steer(self, sid, text, kind='steer'):
+        """Cửa duy nhất xếp hàng giữa lượt — `submit` của phiên gốc gọi nó khi lượt đang chạy.
+
+        `kind='btw'` là câu hỏi phụ của `/btw` (P5): cùng hàng đợi steer, khác nhãn + tiền tố.
+        """
+        return await research_runtime.queue_owner_steer(self, sid, text, kind=kind)
 
     async def research_ledger_tool(self, session, name, args):
         """Ba công cụ sổ nguồn đi qua MỘT cửa: luật nằm ở `research_runtime`, không chép lại."""
@@ -5016,7 +5056,7 @@ class HarnessRuntime(RuntimeCommands):
                     system_log.write('plan.approval.unverified', level='warn',
                                      code=PLAN_APPROVAL_UNVERIFIED_CODE, message=blocked,
                                      session_id=sid, identity=plan_id, version=plan_version, mode=mode)
-        options = normalize_decision_options(args.get('options'), kind)
+        options = with_other_option(normalize_decision_options(args.get('options'), kind))
         decision_id = uuid.uuid4().hex[:16]
         record = {'decisionId': decision_id, 'sessionId': sid, 'kind': kind, 'options': options,
                   'deadline': decision_deadline(args, name), 'defaultChoice': 'reject',
@@ -5195,8 +5235,20 @@ class HarnessRuntime(RuntimeCommands):
         option = next((item for item in record['options'] if item['id'] == choice), None)
         if option is None:
             raise DecisionError('DECISION_INVALID', 'choice ' + choice + ' is not one of this decision options', 400)
+        written = (note or '').strip()
+        # P4 — lựa chọn tự nhập phải kèm chữ đã gõ: bấm `other` mà để trống thì model không có gì
+        # để đọc (một "Khác" rỗng là câu trả lời vô nghĩa), còn chữ dài quá trần thì bị cắt ở
+        # đâu đó tùy đường — chặn ngay tại hợp đồng. Chữ đã gõ đi xuống model qua khoá `note`
+        # trong `outcome` (tool-result đọc nguyên dict) và được ghim ở hàng `D:`.
+        if option.get('allowFreeText') is True and not written:
+            raise DecisionError(DECISION_NOTE_REQUIRED_CODE,
+                                'choice ' + choice + ' is a free-text option: send a non-empty note ' +
+                                'with the typed answer', 400)
+        if len(written) > DECISION_NOTE_MAX_CHARS:
+            raise DecisionError(DECISION_NOTE_TOO_LONG_CODE,
+                                'note is limited to ' + str(DECISION_NOTE_MAX_CHARS) + ' characters', 400)
         status = 'approved' if option['kind'] in {'approve', 'alternative'} else 'rejected'
-        self.settle(record, choice, status, 'user', (note or '').strip() or None)
+        self.settle(record, choice, status, 'user', written or None)
         return {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': status}
 
     async def registration_or_refuse(self, session, sid, slug, args, declared):

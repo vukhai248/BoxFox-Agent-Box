@@ -160,3 +160,53 @@ def test_a_failed_transcript_write_puts_the_steer_back_in_the_queue(tmp_path, mo
     assert research_runtime.drain_steers(runtime, sid, messages) == 1
     assert store.pending_steer_count(sid) == 0
     assert 'giá vàng' in messages[0]['content']
+
+
+def test_a_btw_question_uses_the_same_queue_with_its_own_label(harness):
+    """P5 — `/btw` giữa lượt KHÔNG cắt lượt: nó vào đúng hàng đợi steer nhưng mang nhãn `btw`."""
+    store, runtime, sid, session = harness
+    answer = asyncio.run(research_runtime.queue_owner_steer(runtime, sid, 'pin này dùng ở đâu?', kind='btw'))
+    assert answer['status'] == 'steered'
+    row = store.steer(answer['steerId'])
+    assert row['kind'] == 'btw' and row['state'] == 'pending'
+    events = [row['data'] for row in store.events(sid) if row['type'] == 'user']
+    assert events[-1]['btw'] is True and events[-1]['steer'] is True
+    assert events[-1]['text'] == 'pin này dùng ở đâu?', 'hàng btw hiện nguyên câu hỏi, nhãn do chip btw lo'
+    assert not events[-1]['text'].startswith(limits.OWNER_STEER_PREFIX)
+    rows = store.journal_tail(sid, limit=10, kinds=('decision',))
+    assert rows[-1]['payload']['record']['data']['kind'] == 'btw-ask', 'sổ phiên phải đọc ra đây là câu hỏi phụ'
+
+
+def test_the_btw_block_carries_its_own_prefix_and_rules(harness):
+    store, runtime, sid, session = harness
+    messages = list(session['messages'])
+    asyncio.run(research_runtime.queue_owner_steer(runtime, sid, 'chỉ thị thường'))
+    asyncio.run(research_runtime.queue_owner_steer(runtime, sid, 'câu hỏi phụ?', kind='btw'))
+    assert research_runtime.drain_steers(runtime, sid, messages) == 2
+    injected = [m['content'] for m in messages if m['role'] == 'user']
+    assert len(injected) == 1, 'hai hàng vẫn vào ĐÚNG MỘT khối user — không mở lượt thứ hai'
+    assert limits.OWNER_STEER_PREFIX in injected[0] and limits.BTW_ASK_PREFIX in injected[0]
+    assert 'KHÔNG ghi tệp' in injected[0], 'khối btw phải nói rõ luật: ngắn, không đổi việc, không ghi tệp'
+    assert injected[0].index(limits.OWNER_STEER_PREFIX) < injected[0].index(limits.BTW_ASK_PREFIX)
+    assert store.pending_steer_count(sid) == 0
+
+
+def test_an_idle_btw_question_is_framed_as_a_side_question():
+    framed = research_runtime.btw_question_prompt('  pin này để làm gì?  ')
+    assert framed.startswith(limits.BTW_ASK_PREFIX) and framed.endswith('pin này để làm gì?')
+    with pytest.raises(ValueError, match='BTW_EMPTY'):
+        research_runtime.btw_question_prompt('   ')
+    long = research_runtime.btw_question_prompt('x' * (limits.BTW_QUESTION_MAX_CHARS + 100))
+    assert long == limits.BTW_ASK_PREFIX + ' ' + 'x' * limits.BTW_QUESTION_MAX_CHARS
+
+
+def test_the_recap_excerpt_skips_a_btw_question():
+    """P4/P5 — bản nhắc việc không được đội lốt "việc chủ giao" cho một câu hỏi phụ của `/btw`."""
+    from agentbox.agent_core.runtime import turn_prompt_excerpt
+    mostly = [{'role': 'user', 'content': 'việc thật của lượt'},
+              {'role': 'user', 'content': limits.BTW_ASK_PREFIX + ' pin này để làm gì?'}]
+    assert turn_prompt_excerpt(mostly) == 'việc thật của lượt'
+    assert turn_prompt_excerpt(mostly[:1] + mostly[:1]) == 'việc thật của lượt'
+    only_btw = [{'role': 'user', 'content': limits.BTW_ASK_PREFIX + ' pin này để làm gì?'}]
+    assert turn_prompt_excerpt(only_btw) == '', 'hết việc của chủ thì phải nói là không thấy'
+    assert turn_prompt_excerpt([{'role': 'user', 'content': '  '}]) == ''

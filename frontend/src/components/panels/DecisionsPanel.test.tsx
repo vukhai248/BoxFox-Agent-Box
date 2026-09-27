@@ -76,6 +76,12 @@ function click(el: Element | null) {
   })
 }
 
+function typeInto(textarea: HTMLTextAreaElement, text: string) {
+  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+  nativeSetter.call(textarea, text)
+  textarea.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 beforeEach(() => {
   localStorage.clear()
   useAgentStore.setState({ activeSessionId: CHAT_ID })
@@ -207,6 +213,58 @@ describe('DecisionsPanel — quyết định thật', () => {
     click(host.querySelector('[data-testid="decisions-filter-all"]'))
     expect(host.textContent).toContain('Chỉ mục phiên nên nằm ở đâu?')
     expect(host.textContent).toContain('Approved')
+  })
+
+  it('lựa chọn tự nhập (`other`) khoá nút khi rỗng và gửi kèm chữ đã gõ', async () => {
+    // P4 — runtime luôn thêm lựa chọn tự nhập; chọn nó MÀ BỎ TRỐNG là vô nghĩa (route trả
+    // `DECISION_NOTE_REQUIRED`), nên nút gửi bị khoá cho tới khi có chữ.
+    agentApiMock.mockImplementation(async () => ({
+      status: 'resolved',
+      decisionId: 'd1',
+      choice: 'other',
+      outcome: 'approved',
+    }))
+    seedDecisions([
+      entry({
+        options: [
+          { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+          { id: 'reject', label: 'Không chọn gì', kind: 'reject' },
+          { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+        ],
+      }),
+    ])
+    const host = render(<DecisionsPanel />)
+
+    const open = Array.from(host.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Khác (tự nhập)'),
+    )
+    expect(open).toBeTruthy()
+    expect(host.querySelector('[data-testid="decision-free-text-input"]')).toBeNull()
+    click(open ?? null)
+
+    const input = host.querySelector('[data-testid="decision-free-text-input"]') as HTMLTextAreaElement | null
+    expect(input).toBeTruthy()
+    const submit = () => host.querySelector('[data-testid="decision-free-text-submit"]') as HTMLButtonElement
+    expect(submit().disabled).toBe(true)
+
+    await act(async () => {
+      typeInto(input!, '   ')
+    })
+    expect(submit().disabled).toBe(true)
+
+    await act(async () => {
+      typeInto(input!, '  Chọn phương án C  ')
+    })
+    expect(submit().disabled).toBe(false)
+
+    await act(async () => {
+      submit().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const decisionCalls = agentApiMock.mock.calls.filter(([path]) => String(path).endsWith('/decisions'))
+    expect(decisionCalls).toHaveLength(1)
+    expect(decisionCalls[0][1]).toEqual({ decisionId: 'd1', choice: 'other', note: 'Chọn phương án C' })
+    expect(useHarnessChatStore.getState().decisions[CHAT_ID][0].note).toBe('Chọn phương án C')
   })
 
   it('đích của ý định mở tab (`requestId`) thì cuộn tới đúng thẻ đó', () => {

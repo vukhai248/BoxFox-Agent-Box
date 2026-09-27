@@ -552,6 +552,9 @@ const en: SameShape<typeof vi> = {
     // Round 27 / C-5 — a mid-turn instruction from the owner: the bubble sits where it was sent
     // (by `seq`) with this small label so it is not read as a new turn.
     steerLabel: 'steering',
+    // P5 — `/btw <question>`: a side question mid-turn carries its own label so it is not read
+    // as a mid-turn instruction.
+    btwLabel: 'btw',
     // Round 27 / C-5 — a branch stopped by the owner via `cancel_child`: the child book still says
     // `failed`, but the sentence on screen must say what actually happened.
     childStoppedByOwner: 'stopped by the owner',
@@ -1309,6 +1312,8 @@ const en: SameShape<typeof vi> = {
     emptyHistory: 'No decision has been recorded yet.',
     noteLabel: 'Note',
     sendingAnswer: 'Sending your answer…',
+    freeTextPlaceholder: 'Type your answer…',
+    freeTextSubmit: 'Send',
     answerError: 'Could not send your answer',
     expiredNote: 'Past the deadline — counted as REJECTED automatically.',
     deadline: 'Deadline',
