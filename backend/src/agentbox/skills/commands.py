@@ -24,15 +24,14 @@ INFO = {'help', 'skills', 'agents', 'status', 'context'}
 BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design',
                                        'research', 'design', 'btw'}
 EXTERNAL = {'claude-code', 'codex', 'opencode'}
-# P1 (§5.2): mô tả cho các lệnh MODE trong `/help`.
-MODE_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
-                                '`/research off` exits, `/research status` shows the run',
-                      'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
-                                '`/design off` exits, `/design status` shows the run'}
-# Mô tả cho `/help` và gợi ý `/` của `/btw`: đây KHÔNG phải lệnh mode, nên nó ở ngoài
-# `MODE_DESCRIPTIONS`, nhưng cùng một chỗ đọc để mô tả đi kèm mọi lệnh builtin.
-BTW_DESCRIPTION = ('Ask the agent a side question WITHOUT interrupting the running turn; '
-                   '`/btw <question>` is answered briefly in the next step')
+# P1 (§5.2) + P5: mô tả cho `/help` và gợi ý `/` — lệnh MODE nói cách bật/thoát, `/btw` nói luật
+# không cắt lượt. Lệnh nào không có mục ở đây thì `list` suy mô tả từ tên.
+BUILTIN_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
+                                   '`/research off` exits, `/research status` shows the run',
+                        'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
+                                  '`/design off` exits, `/design status` shows the run',
+                        'btw': 'Ask the agent a side question WITHOUT interrupting the running turn; '
+                               '`/btw <question>` is answered briefly in the next step'}
 # Default role per CLI command. The role is not tied to the executor: change these entries
 # (or use a custom command with an explicit role) instead of hardcoding a role in the dispatcher.
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
@@ -119,7 +118,7 @@ class CommandRegistry:
 
     def list(self):
         enabled = set(self.settings()['enabled'])
-        rows = [{'slug': key, 'description': (BTW_DESCRIPTION if key == 'btw' else MODE_DESCRIPTIONS.get(key)) or (('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' ')),
+        rows = [{'slug': key, 'description': BUILTIN_DESCRIPTIONS.get(key) or (('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' ')),
                  'kind': 'builtin', 'enabled': key not in {'claude-code', 'claude-design'} or key in enabled} for key in sorted(BUILTINS)]
         rows += [{'slug': key, 'description': self.catalog.items[sid]['description'], 'kind': 'skill',
                   'enabled': sid in enabled and sid not in {'codex', 'opencode'}, 'skillId': sid,
