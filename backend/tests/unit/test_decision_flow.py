@@ -12,8 +12,9 @@ from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
-from agentbox.agent_core.runtime import (DECISION_MAX_SECONDS, HarnessRuntime, decision_deadline,
-                                         normalize_decision_options)
+from agentbox.agent_core.runtime import (DECISION_MAX_SECONDS, DecisionError, HarnessRuntime,
+                                         decision_deadline, normalize_decision_options,
+                                         with_other_option)
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
 
@@ -118,11 +119,14 @@ def test_ask_user_blocks_until_answered_through_the_route(tmp_path):
         assert payload['action'] is None and payload['reason'] is None
         assert payload['defaultChoice'] == 'reject'
         assert payload['toolCallId'] == 'c1'
-        assert all(set(option) == {'id', 'label', 'kind'} for option in payload['options'])
-        assert [option['kind'] for option in payload['options']] == ['approve', 'alternative', 'reject']
-        # 'fast' fills the guaranteed approve slot; the untouched alternative keeps its own id
-        assert [option['id'] for option in payload['options']] == ['approve', 'safe', 'reject']
-        assert [option['label'] for option in payload['options']] == ['Nhanh', 'An toàn', 'Từ chối']
+        assert payload['options'][:-1] == [
+            {'id': 'approve', 'label': 'Nhanh', 'kind': 'approve'},
+            # 'fast' fills the guaranteed approve slot; the untouched alternative keeps its own id
+            {'id': 'safe', 'label': 'An toàn', 'kind': 'alternative'},
+            {'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'}]
+        # P4: runtime LUÔN thêm lựa chọn tự nhập, và nó là lựa chọn free-text
+        assert payload['options'][-1] == {'id': 'other', 'label': 'Khác (tự nhập)',
+                                          'kind': 'alternative', 'allowFreeText': True}
         assert 290 <= payload['deadline'] - started <= 300.5, 'ask_user defaults to 300 s'
         assert isinstance(payload['deadline'], float)
 
@@ -177,7 +181,8 @@ def test_rejection_is_honest_and_the_status_returns_to_running(tmp_path):
         assert payload['kind'] == 'approval'
         assert payload['action'] == 'rm -rf build' and payload['reason'] == 'Xoá thư mục build'
         assert payload['question'] is None
-        assert [option['id'] for option in payload['options']] == ['approve', 'reject'], 'approval defaults to the pair'
+        assert [option['id'] for option in payload['options']] == ['approve', 'reject', 'other'], \
+            'approval defaults to the pair plus the free-text choice'
         assert 590 <= payload['deadline'] - started <= 600.5, 'request_approval defaults to 600 s'
 
         assert runtime.resolve_decision(sid, record['decisionId'], 'reject', None) == {
@@ -418,6 +423,20 @@ def test_option_normalization_and_deadline_ceiling():
             normalize_decision_options(bad, 'question')
     assert [option['id'] for option in normalize_decision_options(None, 'approval')] == ['approve', 'reject']
 
+    # P4: cờ tự nhập của lựa chọn model đi nguyên xuống danh sách phát ra…
+    free = normalize_decision_options([{'id': 'a', 'label': 'A', 'allowFreeText': True}, 'B'], 'question')
+    assert free[0]['allowFreeText'] is True
+    assert all('allowFreeText' not in option for option in free[1:])
+    # …và mọi danh sách phát ra đều được thêm ô tự nhập, không nhân đôi khi model đã tự phát 'other'.
+    other = with_other_option(normalize_decision_options(['A', 'B'], 'question'))
+    assert other[-1] == {'id': 'other', 'label': 'Khác (tự nhập)', 'kind': 'alternative',
+                         'allowFreeText': True}
+    twice = with_other_option([{'id': 'other', 'label': 'Tự nhập', 'kind': 'alternative'},
+                               {'id': 'reject', 'label': 'Không', 'kind': 'reject'}])
+    assert [option['id'] for option in twice] == ['other', 'reject']
+    assert twice[0]['allowFreeText'] is True and twice[0]['label'] == 'Tự nhập', \
+        'id other là ô tự nhập theo hợp đồng, dù nhãn của model vẫn được giữ'
+
     now = 1000000.0
     assert decision_deadline({}, 'ask_user', now) == now + 300
     assert decision_deadline({}, 'request_approval', now) == now + 600
@@ -425,3 +444,82 @@ def test_option_normalization_and_deadline_ceiling():
     assert decision_deadline({'deadlineSeconds': 120}, 'ask_user', now) == now + 120
     assert decision_deadline({'deadline': 5}, 'ask_user', now) == now + 5
     assert decision_deadline({'deadlineSeconds': 'nonsense'}, 'ask_user', now) == now + 300
+
+
+def test_the_free_text_choice_needs_typed_text_and_the_text_reaches_the_model(tmp_path):
+    """P4: `choice='other'` without text is 400; with text the answer is pinned and reaches the model."""
+
+    async def run():
+        store = SessionStore(tmp_path / 'sessions.db')
+        model = FixtureModel([answer('Cần bạn chọn', calls=[call('ask_user', {'question': 'Chọn?', 'options': ['A', 'B']})]),
+                              answer('Xong theo câu trả lời tự nhập')])
+        runtime = HarnessRuntime(store, FixtureExecutor(), model)
+        sid, record = await blocked_session(runtime, store, 'Việc')
+        payload = only(store, sid, 'decision_requested')['data']
+        assert payload['options'][-1] == {'id': 'other', 'label': 'Khác (tự nhập)',
+                                          'kind': 'alternative', 'allowFreeText': True}
+        typed = 'Chọn phương án C và ghi rõ lý do'
+
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as client:
+                url = str(server.make_url('/api/agent/sessions')) + '/' + sid + '/decisions'
+
+                async def post(body):
+                    async with client.post(url, json=body) as response:
+                        return response.status, await response.json()
+
+                status, body = await post({'decisionId': record['decisionId'], 'choice': 'other'})
+                assert status == 400 and body['error'].startswith('DECISION_NOTE_REQUIRED:')
+                status, body = await post({'decisionId': record['decisionId'], 'choice': 'other', 'note': '   '})
+                assert status == 400 and body['error'].startswith('DECISION_NOTE_REQUIRED:'), \
+                    'chữ chỉ có khoảng trắng vẫn là chưa gõ gì'
+                status, body = await post({'decisionId': record['decisionId'], 'choice': 'other',
+                                           'note': 'x' * 2001})
+                assert status == 400 and body['error'].startswith('DECISION_NOTE_TOO_LONG:')
+                # Ba lần từ chối trên KHÔNG chốt gì: quyết định vẫn treo tới câu trả lời hợp lệ.
+                assert store.get(sid)['status'] == 'awaiting_decision' and events_of(store, sid, 'decision_resolved') == []
+                status, body = await post({'decisionId': record['decisionId'], 'choice': 'other',
+                                           'note': f'  {typed}  '})
+                assert status == 200 and body['outcome'] == 'approved'
+                assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'Xong theo câu trả lời tự nhập'
+
+                # `TestServer.__aexit__` đóng store (app cleanup), nên mọi khẳng định phải ở trong khối.
+                resolved = only(store, sid, 'decision_resolved')['data']
+                assert resolved['choice'] == 'other' and resolved['note'] == typed
+                seen = tool_results(store, sid)[-1]
+                assert seen['choice'] == 'other' and seen['note'] == typed, 'model phải đọc được chữ đã gõ'
+                assert typed in json.dumps(model.requests[-1][0], ensure_ascii=False), 'chữ đã gõ phải tới model'
+                pins = [row['payload']['record'] for row in store.journal_tail(sid, limit=50, kinds=['decision'])
+                        if (row['payload'] or {}).get('record')]
+                chosen = [pin for pin in pins if pin.get('data', {}).get('choice') == 'other']
+                assert chosen and chosen[-1]['data']['note'] == typed, 'hàng D: phải ghim chữ đã gõ'
+        store.close()
+
+    asyncio.run(run())
+
+
+def test_a_model_supplied_free_text_option_keeps_its_flag(tmp_path):
+    """P4: a model option marked `allowFreeText` renders a text box and requires text when picked."""
+
+    async def run():
+        store = SessionStore(tmp_path / 'sessions.db')
+        model = FixtureModel([
+            answer('Cần bạn chọn', calls=[call('ask_user', {
+                'question': 'Chọn?',
+                'options': [{'id': 'a', 'label': 'A', 'allowFreeText': True}, 'B']})]),
+            answer('Xong theo chữ tự nhập')])
+        runtime = HarnessRuntime(store, FixtureExecutor(), model)
+        sid, record = await blocked_session(runtime, store, 'Việc')
+
+        payload = only(store, sid, 'decision_requested')['data']
+        assert payload['options'][0]['id'] == 'approve' and payload['options'][0]['allowFreeText'] is True
+        assert [option['id'] for option in payload['options']] == ['approve', 'reject', 'other']
+
+        with pytest.raises(DecisionError) as excinfo:
+            runtime.resolve_decision(sid, record['decisionId'], 'approve', None)
+        assert 'DECISION_NOTE_REQUIRED' in str(excinfo.value) and excinfo.value.status == 400
+        assert runtime.resolve_decision(sid, record['decisionId'], 'approve', 'chữ tự nhập')['outcome'] == 'approved'
+        assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'Xong theo chữ tự nhập'
+        store.close()
+
+    asyncio.run(run())
