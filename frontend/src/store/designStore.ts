@@ -75,6 +75,16 @@ export interface CanvasOpBatch {
   ops: CanvasAction[]
   /** `seq` của sự kiện `design_canvas` sinh ra lô này (khoá chống phát lại hai lần). */
   seq: number
+  /**
+   * Cảnh TRƯỚC lô op này — chỉ có khi lô op được SUY RA từ chênh lệch cảnh (cảnh tới từ payload
+   * chi tiết của run, không kèm op gốc).
+   *
+   * Vì sao phải giữ: canvas mở SAU khi cảnh đã nằm sẵn trong store (chủ nhà đang ở tab Brief lúc
+   * agent vẽ) thì `useCanvasPlayback` mount ra với `scene` ĐÃ là cảnh cuối ⇒ nó không suy được cảnh
+   * xuất phát, và nếu chỉ có `ops` thì kế hoạch phát lại sẽ dựng từ chính cảnh cuối (không vẽ được
+   * gì). Có cảnh nguồn, lớp phát lại diễn đúng nét vẽ từ đầu.
+   */
+  from?: CanvasScene
 }
 
 interface DesignState {
@@ -103,6 +113,14 @@ interface DesignState {
    * Chỉ op đã qua `parseCanvasOp` + được reducer chấp nhận mới nằm đây.
    */
   lastOps: Record<string, CanvasOpBatch>
+  /**
+   * `designId -> seq` của lô op đã được tầng NHÌN phát xong.
+   *
+   * Vì sao store phải giữ (không phải ref trong hook): canvas bị THÁO khi chủ nhà đổi tab, nên ref
+   * của hook mất trí nhớ theo từng lần lắp lại — thiếu bộ đếm này thì mỗi lần mở lại tab Canvas là
+   * hoạt hình của lô op cũ diễn lại từ đầu. Có nó, một lô op chỉ được diễn MỘT lần cho mỗi `designId`.
+   */
+  playedOpsSeq: Record<string, number>
   /** `sceneVersion` lớn nhất đã thấy — nguồn sự thật cho nhãn "cảnh ở bản N". */
   sceneVersion: number
   /** Lời hỏi đang thấy, gộp mọi run (nền + chi tiết) — một chỗ cho thẻ lời hỏi. */
@@ -138,6 +156,8 @@ interface DesignState {
   applyEvent: (event: DesignEvent) => void
   /** Áp một sự kiện `design_canvas`: reduce từng op, đếm op bị bỏ. */
   applyCanvas: (event: DesignEvent) => void
+  /** Tầng nhìn báo đã phát xong lô op `seq` của run — chặn diễn lại khi canvas lắp lại. */
+  markOpsPlayed: (designId: string, seq: number) => void
   /** Xoá dữ liệu của phiên TRƯỚC khi đổi phiên (jobs/prompts/brief/lỗi/thẻ thoát). */
   clearSessionChange: () => void
   sync: (sessionId: string, config: unknown, events: readonly DesignEvent[]) => void
@@ -218,6 +238,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   sceneSeq: {},
   sceneActor: {},
   lastOps: {},
+  playedOpsSeq: {},
   sceneVersion: 0,
   prompts: [],
   rejectedOps: 0,
@@ -308,6 +329,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     // đó cập nhật đúng node ấy thay vì bị chối oan.
     const adopted = actor === 'user' ? readCanvasScene(data.scene) : null
     let scene = adopted ?? get().scenes[designId] ?? createEmptyScene()
+    // Cảnh NGUỒN của lô sắp reduce — phải chụp TRƯỚC vòng lặp (`scene` bị gán lại theo từng op).
+    const from = scene
     let rejected = get().rejectedOps
     const accepted: CanvasAction[] = []
     for (const raw of ops) {
@@ -329,10 +352,19 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       scenes: { ...get().scenes, [designId]: scene },
       sceneSeq: { ...get().sceneSeq, [designId]: Math.max(get().sceneSeq[designId] ?? 0, version) },
       sceneActor: actor ? { ...get().sceneActor, [designId]: actor } : get().sceneActor,
-      lastOps: { ...get().lastOps, [designId]: { actor, ops: accepted, seq: event.seq } },
+      // `from` = cảnh TRƯỚC khi reduce lô này: tầng phát lại cần nó khi canvas chỉ được MỞ SAU khi lô
+      // op đã vào store (cảnh đang giữ đã là cảnh cuối, không suy ngược được cảnh xuất phát).
+      lastOps: { ...get().lastOps,
+                 [designId]: { actor, ops: accepted, seq: event.seq, from } },
       sceneVersion: Math.max(get().sceneVersion, version),
       rejectedOps: rejected,
     })
+  },
+
+  markOpsPlayed: (designId, seq) => {
+    if (!designId || seq <= 0) return
+    if (seq <= (get().playedOpsSeq[designId] ?? 0)) return
+    set({ playedOpsSeq: { ...get().playedOpsSeq, [designId]: seq } })
   },
 
   clearSessionChange: () => set({
@@ -342,6 +374,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     sceneSeq: {},
     sceneActor: {},
     lastOps: {},
+    playedOpsSeq: {},
     sceneVersion: 0,
     brief: {},
     reports: {},
@@ -429,9 +462,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       // guard chống phát lại bỏ NGUYÊN, nên lô op ấy không bao giờ vào store — canvas không được vẽ
       // dần. Nên nhận cảnh thì ghi luôn CẢ HAI: người vẽ (`canvasActor` của payload) và lô op suy ra
       // từ chênh lệch cảnh cũ → cảnh vừa nhận (đúng đường mà hook phát lại dùng khi cảnh không kèm op).
-      const adoptedOps = adopt
-        ? diffSceneOps(get().scenes[designId] ?? createEmptyScene(), run.canvasScene as CanvasScene)
-        : []
+      const heldScene = get().scenes[designId] ?? createEmptyScene()
+      const adoptedOps = adopt ? diffSceneOps(heldScene, run.canvasScene as CanvasScene) : []
       set({
         runs: get().runs.some((item) => item.designId === designId)
           ? get().runs.map((item) => (item.designId === designId ? run : item))
@@ -443,7 +475,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
           sceneSeq: { ...get().sceneSeq, [designId]: run.canvasSeq },
           sceneActor: { ...get().sceneActor, [designId]: run.canvasActor },
           lastOps: { ...get().lastOps,
-                     [designId]: { actor: run.canvasActor, ops: adoptedOps, seq: run.canvasSeq } },
+                     [designId]: { actor: run.canvasActor, ops: adoptedOps, seq: run.canvasSeq,
+                                   from: heldScene } },
         } : {}),
       })
     } catch (error) {

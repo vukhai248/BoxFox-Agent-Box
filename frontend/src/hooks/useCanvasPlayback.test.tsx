@@ -96,6 +96,7 @@ describe('useCanvasPlayback — vòng đời', () => {
       sceneSeq: {},
       sceneActor: {},
       lastOps: {},
+      playedOpsSeq: {},
       rejectedOps: 0,
       error: null,
     })
@@ -109,6 +110,39 @@ describe('useCanvasPlayback — vòng đời', () => {
     vi.clearAllTimers()
     vi.useRealTimers()
     document.body.innerHTML = ''
+  })
+
+  it('canvas mở SAU khi lô op đã vào store: vẫn vẽ dần từ CẢNH NGUỒN, và không diễn lại khi mở lại', () => {
+    // Đúng thứ store giao cho hook sau lượt duyệt khi canvas đang ĐÓNG: cảnh cuối đã nằm sẵn trong
+    // store, kèm lô op suy từ chênh lệch + cảnh nguồn (`from`). Vòng kiểm thử bắt được ca này: hook
+    // mount ra với `scene === from` nên hàng rào "cảnh không đổi" nuốt luôn lô op ⇒ canvas hiện ra đã
+    // vẽ xong, không con trỏ, không nút Bỏ qua.
+    act(() => {
+      useDesignStore.setState({
+        scenes: { [DESIGN_ID]: sceneWith(node('n1')) },
+        sceneSeq: { [DESIGN_ID]: 1 },
+        sceneActor: { [DESIGN_ID]: 'agent' },
+        lastOps: { [DESIGN_ID]: { actor: 'agent', ops: [create('n1')], seq: 1, from: EMPTY } },
+        playedOpsSeq: {},
+        rejectedOps: 0,
+      })
+    })
+    const host = tracked(mount())
+    expect(host.value.playing).toBe(true)
+    // Cảnh đang vẽ dở bắt đầu từ cảnh NGUỒN (trống) — không phải cảnh cuối hiện ra đột ngột.
+    expect(host.value.displayScene.nodes).toHaveLength(0)
+    expect(host.value.cursor).not.toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(8000)
+    })
+    expect(host.value.playing).toBe(false)
+    expect(host.value.displayScene.nodes.map((entry) => entry.id)).toEqual(['n1'])
+
+    // Mở lại canvas (đổi tab rồi quay lại): lô op đã diễn MỘT lần ⇒ không diễn lại lần nữa.
+    host.unmount()
+    const again = tracked(mount())
+    expect(again.value.playing).toBe(false)
+    expect(again.value.displayScene.nodes.map((entry) => entry.id)).toEqual(['n1'])
   })
 
   it('cảnh mới tới giữa lúc đang vẽ: bỏ hoạt hình cũ rồi vẽ tiếp từ cảnh THẬT', () => {

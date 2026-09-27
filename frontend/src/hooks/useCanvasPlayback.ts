@@ -13,10 +13,11 @@
  * 4. Chủ nhà chạm canvas, hoặc bấm "Bỏ qua hiệu ứng" ⇒ nhảy NGAY về cảnh thật.
  * 5. Cảnh tới mà KHÔNG kèm op (payload chi tiết của run: tải lại trang, cảnh gieo lúc duyệt touch
  *    list) thì lấy chênh lệch `from → to` làm op (`diffSceneOps`) — vẫn là agent vẽ, không phải cảnh
- *    hiện ra đột ngột.
+ *    hiện ra đột ngột. Cảnh nguồn cho phép toán ấy do store gửi kèm lô op (`CanvasOpBatch.from`), nên
+ *    luật này đúng CẢ khi canvas chỉ được mở SAU khi cảnh đã nằm sẵn trong store.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CanvasScene, CursorState } from '../lib/canvas'
+import type { CanvasAction, CanvasScene, CursorState } from '../lib/canvas'
 import { diffSceneOps, drawnStepCount, drawStepCount, frameAt, planPlayback, sameScene, type DrawingPlan } from '../lib/canvas'
 import { useDesignStore } from '../store/designStore'
 
@@ -107,28 +108,47 @@ export function useCanvasPlayback(input: {
 
   useEffect(() => {
     const from = settledRef.current
+    // Lô op CHƯA ai phát (kể cả khi nó tới từ payload, xem `CanvasOpBatch.from`). Phải xét TRƯỚC hàng
+    // rào "cảnh không đổi" bên dưới: canvas mở SAU khi cảnh đã nằm sẵn trong store (chủ nhà ở tab
+    // Brief lúc agent vẽ) thì `scene === from` ngay từ khung hình đầu, nhưng lô op ấy vẫn chưa được
+    // diễn lần nào — nuốt nó nghĩa là canvas hiện ra đã vẽ xong, không có con trỏ, không có nút Bỏ qua.
+    const played = Math.max(playedSeqRef.current, useDesignStore.getState().playedOpsSeq[designId] ?? 0)
+    const fresh = batch && batch.ops.length > 0 && batch.seq > played ? batch : undefined
+    // Cảnh XUẤT PHÁT của kế hoạch: cảnh nguồn đi kèm lô op (store ghi lúc reduce, hoặc cảnh trước khi
+    // nhận cảnh từ payload); không có thì lấy mốc cảnh thật gần nhất.
+    const origin = fresh?.from ?? from
     // Vòng poll có thể gửi lại ĐÚNG cảnh ấy dưới object mới: bỏ qua theo GIÁ TRỊ (`sameScene`), nếu
     // không thì mỗi vòng lại cập nhật mốc và cắt ngang hoạt hình đang chạy.
-    if (scene === from || sameScene(scene, from)) return
+    if (!fresh && (scene === from || sameScene(scene, from))) return
     settledRef.current = scene
     // Tay chủ nhà vẽ thì không diễn lại — cảnh của họ hiện thẳng.
     if (actor === 'user') {
       if (planRef.current) stop()
       return
     }
-    let ops = batch?.ops ?? []
-    if (ops.length > 0) {
-      // Cùng một lô op có thể được đọc lại nhiều lần (render lại, poll): mỗi `seq` chỉ phát một lần.
-      if (batch!.seq <= playedSeqRef.current) return
-      playedSeqRef.current = batch!.seq
+    let ops: CanvasAction[]
+    if (fresh) {
+      ops = fresh.ops
+    } else if (batch && batch.ops.length > 0) {
+      // Lô cũ đã phát xong (render lại, sự kiện phát lại): không diễn lại.
+      return
     } else {
       // Không có lô op: cảnh tới từ payload run ⇒ tự dựng op từ chênh lệch cảnh.
       ops = diffSceneOps(from, scene)
     }
-    const plan = planPlayback({ ops, from, to: scene, options: { reducedMotion: reducedRef.current } })
+    const plan = planPlayback({ ops, from: origin, to: scene, options: { reducedMotion: reducedRef.current } })
     if (plan.steps.length === 0) {
       if (planRef.current) stop()
       return
+    }
+    if (fresh) {
+      // Sắp diễn lô này ⇒ ghi vào store: nhịp sau (và lần lắp lại canvas) không diễn lại nữa. Chỉ
+      // ghi khi kế hoạch THẬT SỰ dựng được — kế hoạch rỗng là "chưa diễn được", không phải "đã diễn".
+      // Đó cũng là cách xử lý nhịp lô op tới SỚM HƠN cảnh thật (`useDesignCanvas` ghi cảnh store vào
+      // lịch sử ở nhịp render sau): ở nhịp ấy cảnh nguồn bằng đúng cảnh đang giữ nên kế hoạch rỗng,
+      // lô op còn nguyên cho nhịp sau diễn — không bị đốt.
+      playedSeqRef.current = fresh.seq
+      useDesignStore.getState().markOpsPlayed(designId, fresh.seq)
     }
     // Lô mới tới giữa lúc đang vẽ: bỏ hoạt hình cũ rồi vẽ tiếp từ cảnh thật vừa nhận.
     if (planRef.current) stop()
