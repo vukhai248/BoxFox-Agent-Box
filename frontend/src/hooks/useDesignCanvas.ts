@@ -467,34 +467,32 @@ export function useDesignCanvas(): DesignCanvas {
     })
   }, [])
 
-  const sendToAgent = useCallback((): string => {
-    const message = buildCanvasMessage(scene)
+  /** Ghi lại tin vừa gửi (hộp soạn đọc nó), đẩy lên agent rồi báo "đã đồng bộ". */
+  const pushMessage = useCallback((message: CanvasOutboundMessage) => {
     setLastSentMessage(message)
     postCanvasMessage(message)
     flashSync()
+  }, [flashSync, postCanvasMessage])
+
+  const sendToAgent = useCallback((): string => {
+    pushMessage(buildCanvasMessage(scene))
     return serialize(scene)
-  }, [flashSync, postCanvasMessage, scene])
+  }, [pushMessage, scene])
 
   const instructAgent = useCallback(
     (nodeId: string) => {
       const node = nodeById(scene, nodeId)
       if (!node) return
-      const directive = buildCanvasDirective(node.id, node.title || cardTitleFallback(node.card), AGENT_DIRECTIVE_TEXT)
-      setLastSentMessage(directive)
-      postCanvasMessage(directive)
-      flashSync()
+      pushMessage(buildCanvasDirective(node.id, node.title || cardTitleFallback(node.card), AGENT_DIRECTIVE_TEXT))
     },
-    [flashSync, postCanvasMessage, scene],
+    [pushMessage, scene],
   )
 
   const requestProjectMap = useCallback(() => {
     // Chỉ thị KHÔNG neo node: `targetNodeId` rỗng là hợp lệ ở tuyến canvas (nghĩa "cả canvas"), nên
     // canvas trống vẫn có đường nhờ agent vẽ thay vì bắt chủ nhà tự thêm node trước.
-    const directive = buildCanvasDirective('', '', PROJECT_MAP_INSTRUCTION)
-    setLastSentMessage(directive)
-    postCanvasMessage(directive)
-    flashSync()
-  }, [flashSync, postCanvasMessage])
+    pushMessage(buildCanvasDirective('', '', PROJECT_MAP_INSTRUCTION))
+  }, [pushMessage])
 
   const undo = useCallback(() => {
     setHistory((h) => {
