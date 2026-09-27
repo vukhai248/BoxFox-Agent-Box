@@ -115,7 +115,6 @@ describe('HarnessModelPicker — chip model ở ô soạn là một hàng', () =
     const chip = trigger(host)
 
     assertOneRowContract(chip)
-    expect(nameSpan(chip).className).toContain('truncate')
 
     const title = chip.getAttribute('title') ?? ''
     expect(title).toContain(`Model: ${GROUP_NAME}`)

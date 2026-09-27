@@ -245,7 +245,7 @@ def assumption_items(markdown: str):
     items = []
     for line in str(found[1] or '').splitlines():
         text = line.strip().lstrip('-*+ ').strip()
-        text = re.sub(r'^\d+[.)]\s*', '', text).strip()
+        text = re.sub(r'^\d+[.)]\s*', '', text)
         if not text or text.startswith('#'):
             continue
         items.append(text[:ASSUMPTION_ITEM_CHARS])

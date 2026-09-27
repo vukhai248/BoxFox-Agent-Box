@@ -3084,20 +3084,26 @@ class HarnessRuntime(RuntimeCommands):
 
     def plan_verdict_nudge_text(self, note):
         """Câu nhắc (F3): nói ĐÚNG việc còn thiếu, và nói cả đường lui khi nhà cung cấp lỗi tạm thời."""
+        identity, version = note['identity'], int(note['version'])
         return (
-            f'{PLAN_VERDICT_NUDGE_CODE}: lượt này đã ghi kế hoạch {note["identity"]}@v{int(note["version"])} '
+            f'{PLAN_VERDICT_NUDGE_CODE}: lượt này đã ghi kế hoạch {identity}@v{version} '
             'nhưng chưa có phán quyết phản biện nào được ghi, nên lệnh xin duyệt cho bản này sẽ bị chối '
             '(PLAN_APPROVAL_UNVERIFIED). Đừng kết thúc lượt ở đây: giao '
-            "delegate_task(role='plan-review', reviewTarget={{kind:'plan', identity:'{identity}', "
-            'version:{version}}}) trên ĐÚNG tệp vừa ghi, chờ nó xong, rồi ghi phán quyết của nó bằng '
-            "plan_verify(identity='{identity}', version={version}, verdict=<phán quyết của nó>). Nếu con "
+            f"delegate_task(role='plan-review', reviewTarget={{kind:'plan', identity:'{identity}', "
+            f'version:{version}}}) trên ĐÚNG tệp vừa ghi, chờ nó xong, rồi ghi phán quyết của nó bằng '
+            f"plan_verify(identity='{identity}', version={version}, verdict=<phán quyết của nó>). Nếu con "
             'phản biện vừa chết vì lỗi tạm thời của nhà cung cấp (ví dụ UPSTREAM_HTTP_502), hãy giao LẠI '
             'một con mới — đó là lỗi tạm thời, không phải kết luận gì về bản kế hoạch. Nếu việc ấy bất '
             'khả thi, hãy nói thẳng cho chủ nhà biết phần nào còn thiếu; đừng tự bịa phán quyết.'
-        ).format(identity=note['identity'], version=int(note['version']))
+        )
 
     def _decision_seen(self, sid):
-        """True khi phiên này đã từng hỏi chủ nhà (`decision_requested` là bản ghi bền của việc đó)."""
+        """True khi phiên này đã từng hỏi chủ nhà (`decision_requested` là bản ghi bền của việc đó).
+
+        Hỏi ở BẤT KỲ lượt nào trước đó cũng đủ: chủ nhà vừa trả lời một câu hỏi thì nhắc lại giả định
+        ngay lượt sau chỉ là tiếng ồn. Lượt ĐANG chạy có hỏi hay không thì `plan_turn_notices` đọc
+        riêng từ `turn_calls` của chính lượt ấy.
+        """
         row = self.store.db.execute(
             "SELECT COUNT(*) AS total FROM events WHERE session_id=? AND kind='decision_requested'",
             (sid,)).fetchone()
@@ -4326,12 +4332,10 @@ class HarnessRuntime(RuntimeCommands):
                     # nhắc ĐÚNG MỘT lần, để câu nhắc là một bước thật của lượt chứ không phải lời bình
                     # sau khi lượt đã đóng.
                     verdict_note = None
-                    plan_nudge = False
                     if not calls and not truncated_partial:
                         # Cửa sổ giữ chỗ cuối lượt là của việc chẩn đoán: `plan_verdict_nudge` từ chối
                         # nhắc khi bước đã chạm `wrap_up_at`.
                         verdict_note = self.plan_verdict_nudge(sid, turn_no, steps_used, wrap_up_at)
-                        plan_nudge = verdict_note is not None
                         text, answer_partial = await self.enforce_answer_length(sid, text, steps_used)
                         # Đợt 3 (P3.1) — cổng chạy SAU cổng độ dài và TRƯỚC khi câu trả lời được
                         # phát: bằng chứng đi KÈM văn (`assistant.evidence`), không nhét vào văn.
@@ -4356,7 +4360,9 @@ class HarnessRuntime(RuntimeCommands):
                             payload['evidence'] = evidence_info
                         self.store.emit(sid, 'assistant', payload)
                     if not calls:
-                        if plan_nudge:
+                        # `verdict_note` chỉ sống trong nhánh trên; đường `truncated_partial` đi tới đây
+                        # mà không vào nhánh ấy nên vẫn là `None`.
+                        if verdict_note is not None:
                             # F3 — một bước THẬT, không phải một notice: row `assistant` ở trên đã mang
                             # câu nói dở của mô hình, và bước kế tiếp bắt đầu bằng chỉ dẫn này. Bộ đếm
                             # `plan_verdict_nudges` khoá lại nên vòng lặp không thể lặp vô hạn ở đây.
@@ -4375,6 +4381,8 @@ class HarnessRuntime(RuntimeCommands):
                             messages.append({'role': 'user',
                                              'content': self.plan_verdict_nudge_text(verdict_note)})
                             self.store.save(sid, messages)
+                            # `status='tool_calls'` là giá trị "bước còn nối tiếp" mà lớp đọc
+                            # `turn_end` đã biết: lượt CHƯA đóng, chỉ bước này đóng.
                             close_turn('tool_calls', choice.get('finish_reason'), 0, response.get('usage'))
                             # Lưới an toàn, không phải đường sống: trong lượt plan thường
                             # `plan_written` đã dùng mất lần nới duy nhất

@@ -87,6 +87,22 @@ def test_a_free_question_id_is_refused_with_the_list_of_valid_ones(harness):
     assert prompt_ids(store, job, 'interview') == before, 'bị chối thì KHÔNG được mở lời hỏi nào'
 
 
+def test_a_question_that_is_not_a_mapping_is_refused_instead_of_crashing(harness):
+    """Mục không phải từ điển (`["màn hình nào?"]`) cũng là mã lạ: chối bằng lỗi chỉ đường.
+
+    Đo được của bản trước: biểu thức lọc bỏ qua mục ấy rồi `.get` gọi trên `str` ⇒ `AttributeError`
+    thay cho `DESIGN_INTERVIEW_IDS_UNKNOWN` — một lời gọi méo hình dạng làm lượt chết vì lỗi lạ.
+    """
+    store, runtime, sid, job = harness
+    before = prompt_ids(store, job, 'interview')
+    with pytest.raises(ValueError) as excinfo:
+        scope(runtime, store, sid, {'action': 'ask', 'questions': ['màn hình nào?']})
+
+    message = str(excinfo.value)
+    assert message.startswith(limits.DESIGN_INTERVIEW_IDS_UNKNOWN_CODE), message
+    assert prompt_ids(store, job, 'interview') == before
+
+
 def test_one_free_id_in_a_batch_is_enough_to_refuse_the_whole_batch(harness):
     """Ba câu, một mã lạ: chối cả lô, vì một lời hỏi không ghi được câu trả lời là một lời hỏi hỏng."""
     store, runtime, sid, job = harness
@@ -145,7 +161,5 @@ def test_the_tool_contract_names_the_ids_it_accepts():
     """Mô tả công cụ phải nói ra danh sách mã: mô hình gọi đúng ngay từ lần đầu, không đoán."""
     from agentbox.agent_core import tool_contracts
 
-    text = repr(tool_contracts.DESIGN_TOOL_SCHEMAS if hasattr(tool_contracts, 'DESIGN_TOOL_SCHEMAS')
-                else tool_contracts.__dict__)
-    assert limits.DESIGN_INTERVIEW_IDS_UNKNOWN_CODE.split('_')[0] in text or 'dq-screen' in text
+    text = str(tool_contracts.SCHEMAS)
     assert 'dq-screen' in text and 'dq-constraints' in text

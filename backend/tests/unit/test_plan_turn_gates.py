@@ -176,6 +176,10 @@ def test_a_plan_without_a_verdict_gets_exactly_one_nudge_step(tmp_path):
                           limits.PLAN_VERDICT_NUDGE_CODE)]
         assert len(nudge_text) == 1
         assert "role='plan-review'" in nudge_text[0]
+        assert "reviewTarget={kind:'plan', identity:'workspace-plan', version:1}" in nudge_text[0], \
+            'câu nhắc phải mang ĐÚNG danh tính và bản của kế hoạch, không phải chỗ trống'
+        assert '{identity}' not in nudge_text[0] and '{{' not in nudge_text[0], \
+            'mẫu còn sót chỗ trống hoặc ngoặc đôi là chỉ dẫn mô hình không đọc được'
         assert 'PLAN_APPROVAL_UNVERIFIED' in nudge_text[0]
         assert 'UPSTREAM_HTTP_502' in nudge_text[0], 'lỗi tạm thời của nhà cung cấp phải được nói rõ'
         assert len(model.requests) == 3, 'hai câu trả lời của mô hình + một bước nhắc'

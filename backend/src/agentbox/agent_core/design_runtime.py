@@ -1257,8 +1257,11 @@ def design_prompt_new(rt, session_id, job, kind, questions=None, meta=None):
         # mã → trường của brief. Một mã tự đặt vẫn mở được lời hỏi, nhưng câu trả lời không ghi được
         # vào trường nào, nên nội dung chủ nhà gõ bị bỏ im lặng. Từ chối ở ĐÂY, kèm đúng danh sách mã
         # hợp lệ để mô hình gọi lại — chối một lần còn hơn nhận rồi bỏ.
-        unknown = [str((item or {}).get('id') or '') for item in (questions or [])
-                   if not (isinstance(item, dict) and str(item.get('id') or '') in DESIGN_INTERVIEW_IDS)]
+        # Mục không phải từ điển cũng tính là mã lạ (mã rỗng): đường dưới `out-of-scope` bỏ qua
+        # mục như thế, nhưng ở đây phải CHỐI chứ không được làm vỡ lời gọi.
+        ids = [str(item.get('id') or '') if isinstance(item, dict) else ''
+               for item in (questions or [])]
+        unknown = [item for item in ids if item not in DESIGN_INTERVIEW_IDS]
         if unknown:
             raise ValueError(
                 f'{DESIGN_INTERVIEW_IDS_UNKNOWN_CODE}: câu hỏi phỏng vấn phải mang mã cố định trong '
