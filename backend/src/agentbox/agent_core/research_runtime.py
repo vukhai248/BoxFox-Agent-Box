@@ -25,7 +25,7 @@ from . import limits
 from . import research_evidence, research_facets, research_report, research_review
 from .limits import (
     CHILD_DEADLINE_SECONDS, CHILD_MAX_STEPS, DOSSIER_DIR_MISMATCH_CODE, DOSSIER_MAX_BYTES, DOSSIER_ROOM,
-    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX,
+    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX, BTW_PENDING_NOTICE_CODE,
     FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX,
     RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
     RESEARCH_BRIEF_MISSING_CODE, RESEARCH_BRIEF_MODES, RESEARCH_BRIEF_MODE_UNKNOWN_CODE,
@@ -2377,6 +2377,32 @@ def btw_question_prompt(question) -> str:
     # cắt im lặng (bản trước có một nhánh cắt chết: chỉ đường lệnh tới đây và nó đã từ chối từ
     # trước) — câu hỏi đi nguyên vẹn, người hỏi thấy đúng lệnh của mình thay vì bị xén lặng lẽ.
     return f'{BTW_ASK_PREFIX} {body}'
+
+
+def notice_pending_btw(rt, sid) -> int:
+    """Lượt vừa đóng mà câu hỏi phụ `/btw` chưa vào được bước nào ⇒ NÓI RA, đừng im lặng.
+
+    Hàng đợi chỉ được bơm ở ranh giới BƯỚC (`drain_steers`), nên một câu hỏi gửi khi lượt đã ở
+    bước chót sẽ nằm im tới lượt kế. Vòng kiểm thử đầu-cuối vòng 3 bắt được đúng khuôn ấy: phiên
+    `d378b42b` để lại hàng `pending` sau khi lượt `completed`, không hàng nào nói vì sao câu hỏi
+    chưa được trả lời. Hàm này trả số hàng còn chờ (0 khi không có gì để nói).
+
+    Chỉ soi hàng `kind='btw'`: chỉ thị giữa lượt (`steer`) vốn là "áp ở ranh giới bước" — hàng
+    của nó chờ lượt sau là đúng luật đã công bố, không cần báo thêm.
+    """
+    stranded = rt.store.pending_steers(sid, kind='btw')
+    if not stranded:
+        return 0
+    steer_ids = [int(row['id']) for row in stranded]
+    rt.store.emit(sid, 'notice', {
+        'code': BTW_PENDING_NOTICE_CODE, 'partial': False, 'count': len(stranded),
+        'steerIds': steer_ids,
+        'message': (f'{BTW_PENDING_NOTICE_CODE}: lượt vừa xong không còn bước nào để bơm '
+                    f'{len(stranded)} câu hỏi phụ — câu hỏi sẽ được trả lời ở lượt kế tiếp '
+                    '(gửi một câu bất kỳ để mở lượt).')})
+    system_log.write('steer.btw_pending', level='info', session_id=sid, code=BTW_PENDING_NOTICE_CODE,
+                     count=len(stranded), steerIds=steer_ids)
+    return len(stranded)
 
 
 def drain_steers(rt, sid, messages) -> int:

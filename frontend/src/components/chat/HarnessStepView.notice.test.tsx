@@ -107,6 +107,38 @@ describe('HarnessStepView — notice thử lại', () => {
     expect(host.textContent).toContain('Báo cáo đầy đủ')
   })
 
+  it('notice BTW_PENDING sau `finish` vẫn nằm trong lượt vừa xong (câu hỏi phụ chưa kịp bơm)', () => {
+    // P5 (vòng kiểm thử đầu-cuối vòng 3): lượt đóng mà câu hỏi phụ `/btw` còn nằm trong hàng chờ thì
+    // harness phát `notice` NGAY SAU `finish`. Hàng ấy phải đọc được — nếu bộ dựng lượt đóng lượt
+    // trước khi notice tới thì chủ nhà không bao giờ biết vì sao câu hỏi không được trả lời.
+    const host = render(
+      <HarnessStepView
+        events={[
+          ev('user', { text: '/btw pin này dùng ở đâu?' }),
+          ev('assistant', { text: 'Xong việc chính.', final: true }),
+          ev('turn_end', { status: 'completed', stepsUsed: 1 }),
+          ev('finish', { status: 'completed', turn: 1 }),
+          ev('notice', {
+            code: 'BTW_PENDING',
+            partial: false,
+            count: 1,
+            steerIds: [7],
+            message: 'BTW_PENDING: lượt vừa xong không còn bước nào để bơm 1 câu hỏi phụ — câu hỏi sẽ '
+              + 'được trả lời ở lượt kế tiếp (gửi một câu bất kỳ để mở lượt).',
+          }),
+        ]}
+        status="completed"
+        error={null}
+      />,
+    )
+    openActivity(host)
+
+    const notice = host.querySelector('[data-notice-code="BTW_PENDING"]') as HTMLElement | null
+    expect(notice).toBeTruthy()
+    expect(notice?.textContent).toContain('lượt kế tiếp')
+    expect(notice!.closest('[data-turn-user="true"]')).not.toBeNull()
+  })
+
   it('bỏ văn bản đang stream của lần thử hỏng, không dán vào câu trả lời mới', () => {
     const host = render(
       <HarnessStepView

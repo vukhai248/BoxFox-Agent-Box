@@ -495,6 +495,10 @@ BTW_ASK_PREFIX = ('[Câu hỏi phụ (btw) — trả lời NGẮN trong bước 
 BTW_QUESTION_REQUIRED_CODE = 'BTW_QUESTION_REQUIRED'
 BTW_QUESTION_TOO_LONG_CODE = 'BTW_QUESTION_TOO_LONG'
 BTW_QUESTION_MAX_CHARS = 2000
+# P5 (vòng kiểm thử đầu-cuối vòng 3): hàng chứa câu hỏi phụ chưa kịp bơm thì phải NÓI RA lúc
+# đóng lượt — hàng đợi chỉ được bơm ở ranh giới BƯỚC, nên câu hỏi tới khi lượt đã ở bước chót sẽ
+# nằm im tới lượt kế. Im lặng ở đây là chủ nhà tưởng câu hỏi đã biến mất.
+BTW_PENDING_NOTICE_CODE = 'BTW_PENDING'
 
 # P4 — lựa chọn "Khác (tự nhập)" cho ask_user/request_approval: runtime LUÔN thêm lựa chọn này,
 # và nó là lựa chọn free-text. Chọn nó mà không gõ chữ ⇒ 400 (mã dưới), chữ dài quá trần ⇒ 400.

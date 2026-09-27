@@ -4426,6 +4426,15 @@ class HarnessRuntime(RuntimeCommands):
             self.active_step.pop(sid, None)
             self.progress_state.pop(sid, None)
             self.research_extensions.pop(sid, None)
+            # P5 (vòng kiểm thử đầu-cuối vòng 3) — lượt đóng mà câu hỏi phụ `/btw` còn nằm trong
+            # hàng chờ thì phải NÓI RA: hàng chờ chỉ bơm ở ranh giới BƯỚC, nên câu hỏi gửi khi
+            # lượt đã ở bước chót sẽ nằm im tới lượt kế. Im lặng là chủ nhà tưởng nó biến mất.
+            # Hỏng ở đây không bao giờ được làm hỏng việc đóng lượt — ghi log rồi đi tiếp.
+            try:
+                research_runtime.notice_pending_btw(self, sid)
+            except Exception as exc:  # pragma: no cover - chốt chặn cuối
+                system_log.write('steer.btw_pending_failed', level='warn', session_id=sid,
+                                 message=str(exc)[:200])
             await self.executor.cleanup(sid)
             # T7 — lượt này đóng thì con của CHÍNH NÓ không được sống tiếp. Con đã xong trước đó
             # thì hàm này không thấy hàng `started` nào, nên đây là no-op ở lượt thường. Dọn con

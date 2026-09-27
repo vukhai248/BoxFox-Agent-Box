@@ -1965,6 +1965,20 @@ class SessionStore:
                               (sid,)).fetchone()
         return int((row['total'] if row else 0) or 0)
 
+    def pending_steers(self, sid, kind=None):
+        """Các hàng còn chờ bơm, lọc theo `kind` khi cần (`'btw'` cho câu hỏi phụ).
+
+        `pending_steer_count` chỉ đếm; đường đóng lượt cần ĐỌC hàng còn chờ để nói ra vì sao
+        câu hỏi phụ chưa được trả lời (P5, vòng kiểm thử vòng 3).
+        """
+        query = "SELECT * FROM session_steers WHERE session_id=? AND state='pending'"
+        params = [sid]
+        if kind is not None:
+            query += ' AND kind=?'
+            params.append(str(kind))
+        rows = self.db.execute(query + ' ORDER BY id', tuple(params)).fetchall()
+        return [dict(row) for row in rows]
+
     def claim_steers(self, sid, limit=3):
         """Giành các chỉ thị `pending` để bơm vào transcript — **một lần**, y như `claim_deliveries`.
 
