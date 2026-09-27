@@ -41,6 +41,7 @@
 | Lượt / bước | 1 lượt / 15 bước | 3 lượt / 5+6+3 bước | 1 lượt / 8 bước |
 | Thời gian tường | 756 s (ngân sách 1200) | 86 + 202 + 96 ≈ 384 s | 648 s |
 | Sự kiện ghi được | 201 | 329 | 101 |
+| Bản ghi phiên con (đọc riêng) | `224de9af…`: 47 sự kiện, `error` bước 5 | — | `e69a5397…`: 51 sự kiện, `completed` bước 4; `ed6a6104…`: 46, `error` bước 5; `4be064d0…`: 27, `error` bước 3 |
 | **Lời hỏi qua `ask_user`** | **0** | **0** | **0** |
 | Lời hỏi qua đường design | — | 3 (`dp-48ce3be3cd62`, `dp-202a70d484d5` phỏng vấn; `dp-be5d1e19e28c` out-of-scope) | — |
 | Tìm kiếm (chính / con) | 1 / 0 | 0 / 0 | 0 / 0 |
@@ -132,8 +133,9 @@ Ba vết trừ về công tâm, nói thẳng:
    khi `BOXFOX_PLAN_JUDGE=1` (mặc định TẮT). Nghĩa là điểm ấy là **giá trị mặc định**, không phải kết
    quả đo — đọc bảng `P1–P8` phải trừ `P5` ra.
 2. **Không ca nào có `plan_verified`.** Con `plan-review` của ca A (sid `224de9af953b44328903f9b3b07bf430`,
-   chết ở bước 5, `deadlineUsedMs` 220327) và của ca C (sid `ed6a6104b3f440cdb95c733a1a62b4ad`
-   bước 5 / `4be064d0bc8b4e50af1b9eaffa6cffad` bước 6, `deadlineUsedMs` 604034) đều chết vì
+   `turn_end` cuối ở bước 5, `status: error`, `deadlineUsedMs` 220327) và của ca C (sid
+   `ed6a6104b3f440cdb95c733a1a62b4ad` bước 5 / `4be064d0bc8b4e50af1b9eaffa6cffad` bước 3,
+   `deadlineUsedMs` 225532 / 76153) đều chết vì
    `UPSTREAM_HTTP_502: the model router answered Router HTTP 502 (Provider returned no complete
    response.)` — lỗi nhà cung cấp phía router, **không phải lỗi harness**. Thêm một con ở ca C
    *hoàn tất* nhưng chỉ trả **78 ký tự** — dưới ngưỡng `PLAN_REVIEW_MIN_ANSWER_CHARS = 400` nên cổng
@@ -145,13 +147,20 @@ Ba vết trừ về công tâm, nói thẳng:
 
 ## 5. Phát hiện kèm mức độ
 
+Số của từng phiên con dưới đây đọc từ **bản ghi riêng của phiên con** (`GET /api/agent/sessions/<sid>`
+với `sid` của chính con ấy, đọc hết trang), không phải từ hàng `child` của phiên cha — hàng ấy chỉ có
+vai, trạng thái và độ dài câu trả lời.
+
 ### F1 — (NẶNG, ĐÃ SỬA trong nhánh này) Trả lời lời hỏi design không mở lượt tiếp tục
 
 Số đo sống: lời hỏi `dp-be5d1e19e28c` (ca B) được trả lời lúc `13:54:24.584Z` với `start=true`;
 tuyến trả `{"status": "answered", "start": true, "resume": true}` và ghi `phaseHistory` mục
 `briefing/prompt-answered`; run còn `status='designing'`, `phase='briefing'`. Sau đó: **không lượt
-nào chạy tiếp** (kiểm lúc `14:17Z` — 23 phút — phiên vẫn `completed`, sự kiện cuối vẫn là
-`design_run` ở seq 9798).
+nào chạy tiếp** — kiểm lúc `14:17:13Z` bằng một lần đọc sống `GET /api/agent/design/runs/<id>`:
+`answeredAt` vẫn là `13:54:24.584Z`, `phaseHistory` vẫn dừng ở mục
+`briefing/prompt-answered`, run vẫn `designing`; bản ghi sự kiện của phiên (kết thúc `13:54Z`) có
+sự kiện cuối là `design_run` ở seq 9798. Cả hai con số ấy nằm ngoài ba bản dump (dump dừng ở
+`13:54Z`) nên được dẫn nguồn riêng như trên.
 
 Nguyên nhân trong mã:
 
@@ -162,11 +171,16 @@ Nguyên nhân trong mã:
   `scaffolding`/`reviewing`**, không phủ `briefing`.
 
 Đã sửa trong nhánh `vorflux/plan-mode-verification`: tuyến `design_prompt_answer` nay mở lượt tiếp
-tục khi `resume` và run còn thuộc mode (`design_job_pumpable`), bỏ qua khi phiên đang chạy
-(`running`/`awaiting_decision`), và không biến cửa sổ đua thành 500 (`SESSION_BUSY` ghi nhật ký hệ
-thống). Bốn bài kiểm mới ở `backend/tests/unit/test_design_prompt_resume.py` chứng minh: có `start`
-⇒ mở đúng một lượt (và **không** mở khi thiếu `start`, khi phiên bận, khi run không thuộc mode);
-bài F1-01 **fail trên cây chưa vá** và **pass sau khi vá**.
+tục khi `resume` và run còn thuộc mode (`design_job_pumpable`) — đúng khuôn `research_prompt_answer`.
+Khi phiên **đang chạy** lượt khác thì tuyến KHÔNG bỏ qua: nó để `submit` biến lời dặn thành **chỉ thị
+giữa lượt** (mặc định), vì bỏ qua hẳn chính là cách run bị bỏ rơi ở `briefing`; chỉ khi chủ nhà tắt
+`BOXFOX_STEER` thì `submit` mới ném `SESSION_BUSY`, và tuyến ghi nhật ký hệ thống
+(`DESIGN_RESUME_BUSY`) rồi trả kết quả bình thường — câu trả lời đã ghi sổ, không biến thành lỗi cho
+giao diện. Bảy bài kiểm ở `backend/tests/unit/test_design_prompt_resume.py` chứng minh: có `start` ⇒
+mở đúng một lượt và lượt ấy **thật sự chạy** (đếm lượt gọi mô hình); thiếu `start`, run không thuộc
+mode, phiên bận + tắt chỉ thị giữa lượt ⇒ **không** mở lượt; hai lời hỏi khác nhau của cùng một run ⇒
+hai lượt; trả lời lại cùng một lời hỏi ⇒ bị chối và không mở lượt. Bài F1-01 **fail trên cây chưa
+vá** và **pass sau khi vá** (đã chạy lại sau mỗi lần sửa).
 
 ### F2 — (NẶNG về sản phẩm, CHƯA sửa) Không có bước hỏi lại bắt buộc khi yêu cầu mơ hồ
 
@@ -221,6 +235,8 @@ của thang). **Tổng không so sánh được giữa các ca** vì số chiề
 - Ba ca, **một mô hình**, một cấu hình harness. Không suy ra được cho model khác.
 - `UPSTREAM_HTTP_502` của nhà cung cấp làm hỏng đúng phần **phản biện** — phần quan trọng nhất của
   chế độ plan. Vì vậy các kết luận về `plan_verify` là "chưa đo được", không phải "hỏng".
+- Số của ba ca lấy từ bản ghi sự kiện đọc hết trang; hai số nằm ngoài bản ghi ấy được dẫn nguồn riêng
+  ngay tại chỗ (§3 hàng "bản ghi phiên con", §5.F1).
 - `BOXFOX_PLAN_JUDGE` đang TẮT ⇒ chiều `P5` chưa từng được chấm thật.
 - Không đo chi phí token theo đồng, không đo nDCG, không so nhiều model.
 - Ca B bị môi trường chặn ở bước ghi file (F5) nên phần "design ghi được gì trong box" **chưa** đo được.
