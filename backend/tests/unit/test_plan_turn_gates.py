@@ -21,7 +21,7 @@ import copy
 import json
 
 from agentbox.agent_core import limits, plan_quality
-from agentbox.agent_core.runtime import HarnessRuntime
+from agentbox.agent_core.runtime import HarnessRuntime, turn_prompt_excerpt
 from agentbox.memory.session_store import SessionStore
 
 # Kế hoạch đã qua trọn thang chấm (lấy từ `test_write_plan.py`) + mục giả định — thứ mà F2 đọc.
@@ -191,6 +191,41 @@ def test_a_plan_without_a_verdict_gets_exactly_one_nudge_step(tmp_path):
         assert kinds(store, sid).count('finish') == 1, 'một lượt, không mở lượt mới'
         assert [n['code'] for n in notices(store, sid) if n['code'].startswith('PLAN_VERDICT')] == \
             [limits.PLAN_VERDICT_NUDGE_CODE, limits.PLAN_VERDICT_MISSING_TURN_CODE]
+        store.close()
+
+    asyncio.run(run())
+
+
+def test_the_nudge_carries_the_prefix_the_recap_knows_to_skip(tmp_path):
+    """Tiền tố câu nhắc là HỢP ĐỒNG giữa chỗ VIẾT (harness) và chỗ BỎ QUA (`turn_prompt_excerpt`).
+
+    Đây là dây nối hai đầu: câu nhắc do harness bơm phải mang `PLAN_VERDICT_NUDGE_PREFIX`, và hàm
+    dựng bản nhắc việc phải nhận ra ĐÚNG tiền tố ấy. Đứt dây thì bước sau đọc chỉ dẫn của harness
+    như thể chủ nhà vừa yêu cầu giao một con `plan-review` (`owner request (excerpt): …`), còn việc
+    đổi tên hằng số thì không ai bắt được — cả hai đầu đều nằm trong một tệp khác.
+    """
+    assert limits.PLAN_VERDICT_NUDGE_PREFIX == limits.PLAN_VERDICT_NUDGE_CODE + ':', \
+        'tiền tố phải dựng TỪ mã, không phải một chuỗi chép tay'
+
+    async def run():
+        store, runtime, sid, _ = runtime_at(tmp_path, [
+            answer('Viết plan', calls=[write_call()]),
+            answer('Xong, plan đã viết.'),
+            answer('Xong thật rồi.')])
+        await asyncio.wait_for(runtime.start(sid, 'Lên plan'), 20)
+
+        nudge = [m['content'] for m in turn_messages(store, sid)
+                 if m['role'] == 'user' and str(m.get('content') or '').startswith(
+                     limits.PLAN_VERDICT_NUDGE_CODE)]
+        assert len(nudge) == 1, 'lượt này phải có đúng một bước nhắc để đem ra thử'
+        assert nudge[0].startswith(limits.PLAN_VERDICT_NUDGE_PREFIX), \
+            'chỗ VIẾT phải dùng đúng tiền tố mà chỗ BỎ QUA biết'
+        assert turn_prompt_excerpt([{'role': 'user', 'content': nudge[0]}]) == '', \
+            'chỉ dẫn của harness không bao giờ là "việc chủ giao"'
+
+        owner = {'role': 'user', 'content': 'Làm nốt phần phản biện giúp tôi.'}
+        assert turn_prompt_excerpt([owner, {'role': 'user', 'content': nudge[0]}]) == owner['content'], \
+            'việc THẬT của chủ vẫn phải đọc được khi câu nhắc nằm sau nó'
         store.close()
 
     asyncio.run(run())
