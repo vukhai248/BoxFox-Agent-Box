@@ -1318,8 +1318,7 @@ def canvas_seed_from_run(rt, session_id, job):
     ops = canvas_seed_ops(job)
     if not ops:
         return None
-    fresh = rt.store.design_job(job['design_id']) or job
-    return canvas_draw(rt, session_id, fresh, actions=ops)
+    return canvas_draw(rt, session_id, job, actions=ops)
 
 
 def canvas_queue_directive(rt, session_id, job, target_node_id, target_node_title, instruction):
