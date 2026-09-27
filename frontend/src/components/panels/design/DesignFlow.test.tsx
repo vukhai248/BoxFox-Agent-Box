@@ -755,6 +755,39 @@ describe('thẻ P5 của chế độ Design', () => {
     }
   })
 
+  it('cảnh của agent nhận từ payload (không lô op nào) vẫn nói đúng "agent đã vẽ", không hô canvas trống', () => {
+    act(() => {
+      useDesignStore.setState({
+        runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+        scenes: {
+          [DESIGN_ID]: {
+            version: 1,
+            nodes: [
+              { id: 'seed-workspace', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 40, width: 380, height: 180, title: 'Dự án: BoxFox', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+            ],
+            connectors: [],
+            strokes: [],
+          },
+        },
+        sceneSeq: { [DESIGN_ID]: 1 },
+        sceneActor: { [DESIGN_ID]: 'agent' },
+        lastOps: { [DESIGN_ID]: { actor: 'agent', ops: [], seq: 1 } },
+        rejectedOps: 0,
+      })
+    })
+    const host = render(<DesignCanvasPanel />)
+
+    // Vòng kiểm thử bắt được: đúng khuôn này từng cho `data-drawing='false'` suốt pha vẽ và KHÔNG có
+    // chip người vẽ, vì `agentHasDrawn` chỉ hỏi `lastOps`. Cảnh đang giữ là của agent và có nội dung.
+    const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+    expect(live?.getAttribute('data-drawing')).toBe('true')
+    expect(live?.getAttribute('data-actor')).toBe('agent')
+    expect(live?.getAttribute('data-playing')).toBe('false')
+    expect(host.querySelector('[data-testid="design-canvas-actor"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-canvas-empty"]')).toBeNull()
+    act(() => { host.remove() })
+  })
+
   it('cảnh tới KHÔNG kèm op (payload chi tiết của run: tải lại trang, cảnh gieo) vẫn được VẼ dần', () => {
     vi.useFakeTimers()
     try {

@@ -347,7 +347,10 @@ def design_run_payload(job, with_canvas=False):
             'touchListRevision': int((touch_list or {}).get('revision') or 0),
             'batch': batch, 'review': review_payload(state),
             **({'canvasScene': _canvas_scene(state.get('canvasScene')),
-                'canvasSeq': int(state.get('canvasSeq') or 0)} if with_canvas else {})}
+                'canvasSeq': int(state.get('canvasSeq') or 0),
+                # Hàng cũ (ghi trước khi có khoá này) đọc ra `'agent'`: mọi đường gieo/vẽ đều đi
+                # qua `canvas_draw`, nên đó là chủ nhân ĐÚNG của một cảnh đã có sẵn.
+                'canvasActor': str(state.get('canvasActor') or 'agent')} if with_canvas else {})}
 
 
 def set_phase(rt, session_id, job, phase, reason, *, force=False):
@@ -1188,6 +1191,9 @@ def canvas_draw(rt, session_id, job, action=None, actions=None):
     seq = int(state.get('canvasSeq') or 0) + 1
     state['canvasSeq'] = seq
     state['canvasScene'] = scene
+    # Ai vừa ghi cảnh: hàng `design_jobs` là nguồn duy nhất còn lại khi cửa sổ sự kiện đã trôi
+    # (tải lại trang), nên tuyến chi tiết phải nói được cảnh ấy của AGENT hay của CHỦ NHÀ.
+    state['canvasActor'] = 'agent'
     rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'agent', 'ops': applied,
@@ -1235,6 +1241,7 @@ def canvas_store_scene(rt, session_id, job, scene):
     stored = _canvas_scene(scene)
     state['canvasSeq'] = seq
     state['canvasScene'] = stored
+    state['canvasActor'] = 'user'
     updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'user', 'ops': [],

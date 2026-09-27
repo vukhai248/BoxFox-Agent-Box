@@ -306,6 +306,13 @@ describe('designStore — cảnh canvas có HAI nguồn (P1 v3)', () => {
 
     expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['seed-1', 'seed-2'])
     expect(useDesignStore.getState().sceneSeq[DESIGN_ID]).toBe(4)
+    // Vòng kiểm thử bắt được: cảnh nhận từ payload phải mang theo NGƯỜI VẼ và LÔ OP, nếu không thì
+    // sự kiện `design_canvas` cùng số thứ tự tới sau bị chặn là mất trắng (không chip, không vẽ dần).
+    expect(useDesignStore.getState().sceneActor[DESIGN_ID]).toBe('agent')
+    const adopted = useDesignStore.getState().lastOps[DESIGN_ID]
+    expect(adopted.actor).toBe('agent')
+    expect(adopted.seq).toBe(4)
+    expect(adopted.ops.map((op) => (op.type === 'CREATE_NODE' ? op.node.id : ''))).toEqual(['seed-1', 'seed-2'])
 
     // Sự kiện phát lại của ĐÚNG cảnh ấy (sceneVersion 4) không được áp lên trên.
     useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('seed-1') }], 4))

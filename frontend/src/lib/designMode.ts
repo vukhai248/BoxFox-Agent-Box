@@ -333,6 +333,15 @@ export interface DesignRun {
    */
   canvasScene: CanvasScene | null
   canvasSeq: number
+  /**
+   * Ai ghi cảnh ấy lần cuối (`'agent'` | `'user'`) — chỉ có ở payload CHI TIẾT cùng `canvasScene`.
+   *
+   * Vì sao cần: khi cảnh sống sót nhờ payload (cửa sổ sự kiện đã trôi, canvas đóng lúc agent vẽ) thì
+   * sự kiện `design_canvas` không còn để hỏi "ai vẽ"; thiếu khoá này, giao diện mất chip "do agent
+   * vẽ" và lớp phát lại không biết cảnh nào là tay chủ nhà. Hàng cũ đọc ra `'agent'` (mọi đường gieo
+   * đều đi qua `canvas_draw`).
+   */
+  canvasActor: string
 }
 
 // ── Lô ghi + soát độc lập (P3/P4) ──────────────────────────────────────────
@@ -434,6 +443,7 @@ export function readRun(value: unknown): DesignRun | null {
     review: readReview(run.review),
     canvasScene: readCanvasScene(run.canvasScene),
     canvasSeq: asNumber(run.canvasSeq) ?? 0,
+    canvasActor: asString(run.canvasActor) || 'agent',
   }
 }
 

@@ -39,8 +39,15 @@ export function DesignCanvasLiveDraw({
   const run = useDesignStore(selectActiveRun)
   const actor = useDesignStore((s) => (run ? s.sceneActor[run.designId] ?? '' : ''))
   const agentHasDrawn = useDesignStore((s) => {
-    const batch = run ? s.lastOps[run.designId] : undefined
-    return Boolean(batch && batch.actor === 'agent' && batch.ops.length > 0)
+    if (!run) return false
+    const batch = s.lastOps[run.designId]
+    if (batch && batch.actor === 'agent' && batch.ops.length > 0) return true
+    // Cảnh sống sót nhờ payload CHI TIẾT (canvas đóng lúc agent vẽ, hoặc vòng đồng bộ về trước sự
+    // kiện): không có lô op nào trong cửa sổ sự kiện, nhưng cảnh đang giữ LÀ của agent và có nội
+    // dung — vẫn là "agent đã vẽ", không được nói canvas trống.
+    const scene = s.scenes[run.designId]
+    return s.sceneActor[run.designId] === 'agent'
+      && Boolean(scene && scene.nodes.length + scene.connectors.length + scene.strokes.length > 0)
   })
   const rejectedOps = useDesignStore((s) => s.rejectedOps)
   // `drawing` = "canvas này là của agent ở pha vẽ", KHÔNG phải "đang có hoạt hình trên màn hình":

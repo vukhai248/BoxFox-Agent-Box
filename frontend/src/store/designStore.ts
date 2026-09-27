@@ -13,6 +13,7 @@ import {
   applyCanvasAction,
   CANVAS_PROTOCOL,
   createEmptyScene,
+  diffSceneOps,
   parseCanvasMessage,
   type CanvasAction,
   type CanvasScene,
@@ -193,6 +194,7 @@ function mergeRun(current: DesignRun | null, data: Json): DesignRun | null {
     // Sự kiện `design_run` KHÔNG mang cảnh (payload gọn) — giữ cảnh đang biết, chờ tuyến chi tiết.
     canvasScene: current?.canvasScene ?? null,
     canvasSeq: current?.canvasSeq ?? 0,
+    canvasActor: current?.canvasActor ?? 'agent',
   }
 }
 
@@ -422,6 +424,14 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       const held = get().sceneSeq[designId] ?? 0
       const adopt = run.canvasScene !== null && run.canvasScene.nodes.length + run.canvasScene.connectors.length > 0
         && run.canvasSeq > held
+      // Vòng kiểm thử bắt được: nhận cảnh mà QUÊN người vẽ thì (a) chip "do agent vẽ" không bao giờ
+      // hiện (`agentHasDrawn` đọc `lastOps`), và (b) sự kiện `design_canvas` cùng số thứ tự tới sau bị
+      // guard chống phát lại bỏ NGUYÊN, nên lô op ấy không bao giờ vào store — canvas không được vẽ
+      // dần. Nên nhận cảnh thì ghi luôn CẢ HAI: người vẽ (`canvasActor` của payload) và lô op suy ra
+      // từ chênh lệch cảnh cũ → cảnh vừa nhận (đúng đường mà hook phát lại dùng khi cảnh không kèm op).
+      const adoptedOps = adopt
+        ? diffSceneOps(get().scenes[designId] ?? createEmptyScene(), run.canvasScene as CanvasScene)
+        : []
       set({
         runs: get().runs.some((item) => item.designId === designId)
           ? get().runs.map((item) => (item.designId === designId ? run : item))
@@ -431,6 +441,9 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         ...(adopt ? {
           scenes: { ...get().scenes, [designId]: run.canvasScene as CanvasScene },
           sceneSeq: { ...get().sceneSeq, [designId]: run.canvasSeq },
+          sceneActor: { ...get().sceneActor, [designId]: run.canvasActor },
+          lastOps: { ...get().lastOps,
+                     [designId]: { actor: run.canvasActor, ops: adoptedOps, seq: run.canvasSeq } },
         } : {}),
       })
     } catch (error) {
