@@ -166,8 +166,23 @@ def test_seed_ops_read_brief_fields_in_their_wrapped_shapes(harness):
     assert 'web; mobile' in created[1]['body']
 
 
-def test_seed_ops_leave_a_canvas_that_already_has_a_drawing_untouched(harness):
-    """Bản vẽ của chủ nhà/agent là bất khả xâm phạm: gieo chỉ xảy ra trên canvas TRỐNG."""
+def test_seed_ops_stay_out_of_a_canvas_that_already_carries_the_seed_anchor(harness):
+    """Gieo chỉ xảy ra MỘT lần: cảnh đã có neo `seed-workspace` thì không gieo lại (không nhân đôi)."""
+    store, runtime, sid, executor = harness
+    job = save_brief(store, sid, open_run(runtime, store, sid))
+    approve(runtime, store, sid, job, touch_items(2))
+    live = store.design_job(job['design_id'])
+
+    assert design_runtime.canvas_seed_ops(live) == []
+    result = design_runtime.design_touch_list_approve(
+        runtime, sid, live, live['state']['touchList']['revision'])
+    assert 'canvasOps' not in result, 'cảnh đã có neo gieo ⇒ không gieo lại, không báo op nào'
+    stored = store.design_job(job['design_id'])['state']['canvasScene']
+    assert [item['id'] for item in stored['nodes']].count('seed-workspace') == 1, 'không nhân đôi neo'
+
+
+def test_seed_ops_keep_an_earlier_drawing_and_still_build_the_map(harness):
+    """Bản vẽ sớm của agent không được chặn bản đồ: mẻ gieo chỉ THÊM node, không sửa node của ai."""
     store, runtime, sid, executor = harness
     job = open_run(runtime, store, sid)
     draw(runtime, store, sid, {'designId': job['design_id'],
@@ -175,12 +190,14 @@ def test_seed_ops_leave_a_canvas_that_already_has_a_drawing_untouched(harness):
     store_touch_list(runtime, store, sid, job, touch_items(2))
     live = store.design_job(job['design_id'])
 
-    assert design_runtime.canvas_seed_ops(live) == []
+    created = [op['node']['id'] for op in design_runtime.canvas_seed_ops(live) if op['type'] == 'CREATE_NODE']
+    assert created == ['seed-workspace', 'seed-screen', 'seed-touch-1', 'seed-touch-2']
     result = design_runtime.design_touch_list_approve(
         runtime, sid, live, live['state']['touchList']['revision'])
-    assert 'canvasOps' not in result, 'canvas đã có bản vẽ ⇒ không gieo, không báo op nào'
+    assert result['canvasOps'] == 7
     stored = store.design_job(job['design_id'])['state']['canvasScene']
-    assert [item['id'] for item in stored['nodes']] == ['owner-1'], 'không ghi đè bản vẽ cũ'
+    assert [item['id'] for item in stored['nodes']][0] == 'owner-1', 'node cũ vẫn nguyên chỗ cũ'
+    assert [item['id'] for item in stored['nodes']][1:3] == ['seed-workspace', 'seed-screen']
 
 
 # ------------------------------------------------- duyệt danh sách chạm ⇒ gieo
@@ -278,6 +295,33 @@ def test_approve_route_pins_the_seeded_scene_to_the_box(harness):
     assert path.startswith('.design/') and path.endswith('/canvas.v1.json')
     pinned = json.loads(writes[0][1]['content'])
     assert [item['id'] for item in pinned['nodes']][:2] == ['seed-workspace', 'seed-screen']
+
+
+def test_approve_route_rewrites_the_snapshot_even_when_the_scene_is_already_drawn(harness):
+    """Ảnh chụp phải sống sót qua một lần ghi hỏng: duyệt lại (không op nào) vẫn ghim lại cảnh."""
+    store, runtime, sid, executor = harness
+    job = save_brief(store, sid, open_run(runtime, store, sid))
+    store_touch_list(runtime, store, sid, job, touch_items(1))
+    live = store.design_job(job['design_id'])
+    revision = live['state']['touchList']['revision']
+    # Cảnh ĐÃ có (đúng cảnh một lần gieo trước để lại: neo `seed-workspace` ⇒ lần này không gieo lại).
+    assert design_runtime.canvas_scene_has_nodes(live) is False
+    design_runtime.design_touch_list_approve(runtime, sid, live, revision)
+    executor.calls.clear()
+
+    async def run():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                url = str(server.make_url(f"/api/agent/design/runs/{job['design_id']}/touch-list/approve"))
+                async with http.post(url, json={'revision': revision}) as resp:
+                    assert resp.status == 200
+                    return await resp.json()
+
+    result = asyncio.run(run())
+    assert 'canvasOps' not in result, 'cảnh đã có neo gieo ⇒ lượt duyệt này không thêm op nào'
+    writes = [call for call in executor.calls if call[0] == 'file_write']
+    assert len(writes) == 1, 'cảnh có nội dung ⇒ ảnh chụp vẫn được ghim lại'
+    assert writes[0][1]['path'].endswith('/canvas.v1.json')
 
 
 def test_directive_route_accepts_a_whole_canvas_note_without_a_target_node(harness):

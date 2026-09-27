@@ -973,11 +973,13 @@ def create_app(runtime):
                                                               body.get('answers'))
         except ValueError as exc:
             raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
-        if result.get('canvasOps'):
+        live = runtime.store.design_job(job['design_id'])
+        if result.get('canvasOps') or design_runtime.canvas_scene_has_nodes(live):
             # Cảnh gieo (P1) đi cùng đường với mọi lần vẽ khác: ảnh chụp bền ghi qua box, cùng chỗ
             # với `canvas_draw` của agent — không có đường vẽ tắt nào.
-            await design_runtime.persist_design_canvas(
-                runtime, job['session_id'], runtime.store.design_job(job['design_id']))
+            # Điều kiện là "cảnh CÓ nội dung", không phải "lượt này có op": một lần ghi hỏng trước
+            # đó làm lượt duyệt lại không sinh op nào, và ảnh chụp sẽ mất hẳn nếu chỉ hỏi `canvasOps`.
+            await design_runtime.persist_design_canvas(runtime, job['session_id'], live)
         return web.json_response(result)
 
     async def design_prompt_answer(request):

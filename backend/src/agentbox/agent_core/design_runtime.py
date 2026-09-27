@@ -1195,6 +1195,18 @@ def canvas_draw(rt, session_id, job, action=None, actions=None):
     return {'applied': len(applied), 'rejected': rejected, 'sceneVersion': seq}
 
 
+def canvas_scene_has_nodes(job):
+    """Cảnh canvas trong hàng run đã có node nào chưa.
+
+    Tuyến duyệt danh sách chạm dùng hàm này để quyết định ghim ảnh chụp: cảnh ĐÃ có nội dung thì ảnh
+    chụp phải được ghi kể cả khi lượt duyệt này không thêm op nào (một lần ghi hỏng trước đó không
+    được để ảnh chụp mất hẳn — cơ sở dữ liệu đã giữ cảnh, tệp chỉ là bản soi).
+    """
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    scene = state.get('canvasScene') if isinstance(state.get('canvasScene'), dict) else {}
+    return any(isinstance(raw, dict) for raw in (scene.get('nodes') or []))
+
+
 async def persist_design_canvas(rt, session_id, job):
     """Ghi ảnh chụp cảnh vào `.design/<slug>/canvas.v1.json` (đường run tự sở hữu, duyệt ngầm).
 
@@ -1270,12 +1282,14 @@ def canvas_seed_ops(job):
     bản đồ tối thiểu từ dữ liệu ĐÃ CÓ (brief + danh sách chạm vừa được duyệt): khối dự án → màn hình
     đích → từng mục sẽ chạm, kèm lý do/rủi ro và mũi tên nối.
 
-    Hàm THUẦN (không đụng store, không phát sự kiện) và KHÔNG ghi đè: cảnh đã có node ⇒ `[]`, vì bản
-    vẽ của chủ nhà/agent quan trọng hơn bản đồ khởi đầu.
+    Hàm THUẦN (không đụng store, không phát sự kiện) và KHÔNG ghi đè: cảnh đã có NEO GIEO
+    (`seed-workspace`) ⇒ `[]`. Điều kiện chỉ hỏi "cảnh có node nào chưa" là quá rộng: agent vẽ một
+    node trong lúc hỏi brief là cả run mất luôn bản đồ — trong khi mẻ gieo chỉ THÊM node, không sửa
+    node của ai.
     """
     state = job.get('state') if isinstance(job.get('state'), dict) else {}
     scene = _canvas_scene(state.get('canvasScene'))
-    if scene['nodes']:
+    if any(node.get('id') == CANVAS_SEED_WORKSPACE_ID for node in scene['nodes']):
         return []
     brief = state.get('brief') if isinstance(state.get('brief'), dict) else {}
     touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else {}
