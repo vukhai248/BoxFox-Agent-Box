@@ -79,8 +79,6 @@ export interface SetDesignModeBody {
   /** `'pause'` hoặc `'background'` — bắt buộc khi tắt mode lúc run còn hoạt động. */
   exitChoice?: 'pause' | 'background'
   activeRun?: 'pause' | 'background'
-  /** Gửi lại lời hỏi `exit-choice` đã nhận để server dùng lại nó thay vì tạo thêm lời hỏi mới. */
-  prompt?: DesignPrompt
 }
 
 export type SetDesignModeOutcome =

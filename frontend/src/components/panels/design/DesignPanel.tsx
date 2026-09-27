@@ -15,6 +15,7 @@ import { selectActiveRun, useDesignStore } from '../../../store/designStore'
 import { DesignCanvasPanel } from '../DesignCanvasPanel'
 import { DesignBatchDiffCard } from './DesignBatchDiffCard'
 import { DesignBriefCard } from './DesignBriefCard'
+import { DesignErrorNotice } from './DesignErrorNotice'
 import { DesignHandoffCard } from './DesignHandoffCard'
 import { DesignRunTimeline } from './DesignRunTimeline'
 
@@ -112,6 +113,7 @@ export function DesignPanel() {
     >
       {strip}
       <div className="min-h-0 flex-1 space-y-2 overflow-auto p-2 text-[11px]">
+        <DesignErrorNotice />
         {!run ? (
           <p data-testid="design-panel-empty" className="text-muted">
             {t('design.panelEmpty')}

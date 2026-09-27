@@ -13,10 +13,12 @@ import {
   applyCanvasAction,
   CANVAS_PROTOCOL,
   createEmptyScene,
+  deserialize,
   parseCanvasMessage,
   type CanvasAction,
   type CanvasScene,
 } from '../lib/canvas'
+import { ApiError } from '../lib/agentApi'
 import { asBool, asNumber, asRecord, asString } from '../lib/researchMode'
 import {
   activeRun,
@@ -57,6 +59,15 @@ export interface DesignEvent {
   created?: number
 }
 
+/**
+ * Lỗi gần nhất của một nhánh ghi: giữ CẢ mã (để giao diện dịch thành câu đọc được, §7.6) lẫn thông
+ * điệp thô (dự phòng khi mã lạ). Trước đây chỉ giữ chuỗi thô nên mọi từ chối đều hiện như nút chết.
+ */
+export interface DesignError {
+  code: string
+  message: string
+}
+
 interface DesignState {
   sessionId: string
   mode: DesignMode
@@ -91,7 +102,7 @@ interface DesignState {
   /** Lời hỏi 409 khi tắt mode lúc run còn chạy: có thì phải neo thẻ vào nút Design. */
   exitChoice: DesignExitChoice | null
   loading: boolean
-  error: string | null
+  error: DesignError | null
   /**
    * `seq` lớn nhất của sự kiện `design_*` đã xử lý. Phiên CHƯA có khoá ở đây là phiên chưa từng
    * nhận payload có sự kiện, nên payload đầu tiên (một ảnh chụp lịch sử) không được coi là tin mới.
@@ -119,6 +130,12 @@ interface DesignState {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Lỗi → `{code, message}`: `ApiError` mang mã trong `code`; lỗi khác chỉ có thông điệp. */
+function readError(error: unknown): DesignError {
+  if (error instanceof ApiError) return { code: error.code ?? '', message: error.message }
+  return { code: '', message: message(error) }
 }
 
 /** Bước hiển thị từ payload `design_run` — backend gửi `step`, thiếu thì suy từ pha. */
@@ -161,6 +178,22 @@ function mergeRun(current: DesignRun | null, data: Json): DesignRun | null {
 export function parseCanvasOp(value: unknown): CanvasAction | null {
   const parsed = parseCanvasMessage({ protocol: CANVAS_PROTOCOL, type: 'action', action: value })
   return parsed && parsed.type === 'action' ? parsed.action : null
+}
+
+/**
+ * Cảnh gửi kèm sự kiện `design_canvas` (IF-1) → `CanvasScene`; `null` khi sai hình dạng.
+ *
+ * Vì sao cần: sự kiện `actor:'user'` mang cảnh CHỦ NHÀ đã vẽ nhưng KHÔNG mang op nào, nên store (vốn
+ * dựng cảnh bằng cách reduce op) không thể tái tạo nó. Nhận thẳng `scene` mới giữ được node/nét của
+ * chủ nhà và để các op agent sau đó reduce lên một cảnh đã có chúng.
+ */
+export function readCanvasScene(value: unknown): CanvasScene | null {
+  if (value === null || value === undefined) return null
+  try {
+    return deserialize(value)
+  } catch {
+    return null
+  }
 }
 
 export const useDesignStore = create<DesignState>((set, get) => ({
@@ -242,7 +275,12 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     const designId = asString(data.designId)
     if (!designId) return
     const ops = Array.isArray(data.ops) ? data.ops : []
-    let scene = get().scenes[designId] ?? createEmptyScene()
+    const actor = asString(data.actor) || get().sceneActor[designId] || ''
+    // `actor:'user'` mang cảnh chủ nhà nhưng KHÔNG mang op (IF-1): nhận thẳng cảnh ấy làm nền, rồi
+    // reduce các op còn lại lên trên — nhờ vậy cảnh store chứa node/nét của chủ nhà và op agent sau
+    // đó cập nhật đúng node ấy thay vì bị chối oan.
+    const adopted = actor === 'user' ? readCanvasScene(data.scene) : null
+    let scene = adopted ?? get().scenes[designId] ?? createEmptyScene()
     let rejected = get().rejectedOps
     for (const raw of ops) {
       const action = parseCanvasOp(raw)
@@ -255,7 +293,6 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       if (next === scene) rejected += 1
       else scene = next
     }
-    const actor = asString(data.actor) || get().sceneActor[designId] || ''
     const version = asNumber(data.sceneVersion) ?? asNumber(data.seq) ?? get().sceneVersion
     set({
       scenes: { ...get().scenes, [designId]: scene },
@@ -321,7 +358,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       const foreground = activeRun(runs, get().mode.activeRunId || get().activeRunId)
       if (foreground) void get().refreshDetail(foreground.designId)
     } catch (error) {
-      set({ error: message(error), loading: false })
+      set({ error: readError(error), loading: false })
     }
   },
 
@@ -346,15 +383,16 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         error: null,
       })
     } catch (error) {
-      set({ error: message(error) })
+      set({ error: readError(error) })
     }
   },
 
   setMode: async (on, by) => {
     const sessionId = get().sessionId
     if (!sessionId) return 'error'
-    // Đang có lời hỏi thoát chưa chọn thì bấm nút lần nữa KHÔNG được gửi thêm một PUT không `prompt`
-    // — mỗi lần như vậy server lại tạo thêm một lời hỏi `exit-choice` mở mãi mãi.
+    // Đang có lời hỏi thoát chưa chọn thì bấm nút lần nữa KHÔNG được gửi thêm một PUT tắt chế độ:
+    // chốt giữ ở đây (không phải trên thân request — server chỉ đọc `by`/`activeRun`) nên không có
+    // lời hỏi `exit-choice` thứ hai nào được sinh ra.
     if (!on && get().exitChoice) return 'exit-choice'
     try {
       const outcome = await setDesignMode(sessionId, { on, by })
@@ -368,7 +406,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       void get().refresh()
       return 'ok'
     } catch (error) {
-      set({ error: message(error) })
+      set({ error: readError(error) })
       return 'error'
     }
   },
@@ -385,7 +423,6 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     try {
       const outcome = await setDesignMode(sessionId, {
         on: false, by: 'toggle', exitChoice: choice, activeRun: choice,
-        ...(previous ? { prompt: previous.prompt } : {}),
       })
       if (outcome.kind === 'ok') {
         set({ mode: readDesignMode({ designMode: outcome.result.mode }) })
@@ -395,7 +432,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       if (active) void get().refreshDetail(active)
       void get().refresh()
     } catch (error) {
-      set({ exitChoice: previous, error: message(error) })
+      set({ exitChoice: previous, error: readError(error) })
     }
   },
 
@@ -408,7 +445,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       void get().refresh()
       return true
     } catch (error) {
-      set({ error: message(error) })
+      set({ error: readError(error) })
       return false
     }
   },
@@ -419,7 +456,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       void get().refreshDetail(designId)
       return true
     } catch (error) {
-      set({ error: message(error) })
+      set({ error: readError(error) })
       return false
     }
   },
@@ -432,7 +469,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       void get().refresh()
       return true
     } catch (error) {
-      set({ error: message(error) })
+      set({ error: readError(error) })
       return false
     }
   },

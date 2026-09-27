@@ -432,7 +432,9 @@ export function useDesignCanvas(): DesignCanvas {
     const sessionId = useDesignStore.getState().sessionId
     if (!sessionId) return
     void postCanvas(sessionId, { ...message }).catch(() => {
-      // Lỗi mạng không chặn canvas cục bộ; cảnh vẫn nằm trong store và sẽ gửi lại ở lần sau.
+      // Lỗi mạng không chặn canvas cục bộ: cảnh vẫn nằm trong `history` của hook này. Nhưng store
+      // (nguồn sự thật cho tab khác) chỉ giữ cảnh do sự kiện `design_canvas` bơm vào, KHÔNG giữ op
+      // cục bộ, và không có cơ chế gửi lại tự động — lần gửi kế tiếp của chủ nhà mới đẩy cảnh mới.
     })
   }, [])
 

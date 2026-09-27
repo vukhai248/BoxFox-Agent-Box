@@ -8,16 +8,19 @@ import { describe, expect, it } from 'vitest'
 import {
   activeRun,
   activeStepIndex,
+  asVersionString,
   isDesignEvent,
   openExitPrompt,
   readDesignMode,
   readNotice,
   readPrompt,
+  readPromptKind,
   readRun,
   readRuns,
   readTouchItem,
   readTouchList,
   runIsCancellable,
+  runIsClosed,
   runIsPausable,
   runIsRunningInBackground,
   runIsSuspendable,
@@ -212,5 +215,30 @@ describe('thông báo nền và trạng thái điều khiển được', () => {
     expect(runIsCancellable(run)).toBe(true)
     expect(runIsCancellable({ ...run, status: 'completed' })).toBe(false)
     expect(runIsCancellable({ ...run, status: 'cancelled' })).toBe(false)
+  })
+
+  it('runIsClosed: `partial` cũng là trạng thái ĐÓNG (một luật dùng chung với dòng thời gian)', () => {
+    expect(runIsClosed('completed')).toBe(true)
+    expect(runIsClosed('partial')).toBe(true)
+    expect(runIsClosed('cancelled')).toBe(true)
+    expect(runIsClosed('designing')).toBe(false)
+    expect(activeStepIndex('scaffolding', 'partial')).toBe(DESIGN_STEPS.length - 1)
+  })
+})
+
+describe('chuẩn hoá phiên bản và loại lời hỏi (P5)', () => {
+  it('asVersionString nhận cả số lẫn chuỗi; rỗng/rác ⇒ chuỗi rỗng', () => {
+    expect(asVersionString('v2')).toBe('v2')
+    expect(asVersionString(2)).toBe('2')
+    expect(asVersionString(0)).toBe('0')
+    expect(asVersionString(null)).toBe('')
+    expect(asVersionString({})).toBe('')
+  })
+
+  it('readPromptKind: giữ loại backend thật, loại lạ ⇒ `unknown` (không đoán bừa)', () => {
+    expect(readPromptKind('touch-list')).toBe('touch-list')
+    expect(readPromptKind('out-of-scope')).toBe('out-of-scope')
+    expect(readPromptKind('bịa')).toBe('unknown')
+    expect(readPromptKind(undefined)).toBe('unknown')
   })
 })

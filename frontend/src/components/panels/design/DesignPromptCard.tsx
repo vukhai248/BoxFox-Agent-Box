@@ -7,11 +7,21 @@
  * chỗ duy nhất, để nhánh thoát không bị hai nơi xử lý khác nhau (cùng luật với Research).
  */
 import { useState } from 'react'
-import { useT } from '../../../i18n/context'
+import { useT, type TKey } from '../../../i18n/context'
 import { useDesignStore } from '../../../store/designStore'
-import type { DesignPrompt } from '../../../lib/designMode'
+import type { DesignPrompt, DesignPromptKind } from '../../../lib/designMode'
 
 type AnswerDraft = { optionId?: string; text?: string }
+
+/** Nhãn của MỌI loại lời hỏi backend gửi — loại lạ có nhãn riêng thay vì bị gán nhầm "phỏng vấn". */
+const PROMPT_KIND_KEY: Record<DesignPromptKind, TKey> = {
+  interview: 'design.promptKindInterview',
+  'scope-change': 'design.promptKindScope',
+  'touch-list': 'design.promptKindTouchList',
+  'exit-choice': 'design.promptKindScope',
+  'out-of-scope': 'design.promptKindOutOfScope',
+  unknown: 'design.promptKindUnknown',
+}
 
 export function DesignPromptCard({ prompt }: { prompt: DesignPrompt }) {
   const t = useT()
@@ -60,9 +70,7 @@ export function DesignPromptCard({ prompt }: { prompt: DesignPrompt }) {
       className="rounded-lg border border-line bg-panel2 p-2 text-[11px]"
     >
       <header className="flex items-center justify-between gap-2">
-        <span className="font-medium text-fg">
-          {prompt.kind === 'interview' ? t('design.promptKindInterview') : t('design.promptKindScope')}
-        </span>
+        <span className="font-medium text-fg">{t(PROMPT_KIND_KEY[prompt.kind])}</span>
         <span className="text-muted">{answered ? t('design.promptAnswered') : t('design.promptOpen')}</span>
       </header>
       {prompt.questions.length === 0 ? (

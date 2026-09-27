@@ -4,7 +4,7 @@
  * Nguồn sự thật là sự kiện `design_canvas` gộp nhiều op; store KHÔNG được vẽ dữ liệu bịa: op sai giao
  * thức hoặc op mà reducer từ chối đều bị bỏ và đếm vào `rejectedOps`, cảnh giữ nguyên.
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DESIGN_MODE_OFF } from '../lib/designMode'
 import { selectScene, useDesignStore } from './designStore'
 
@@ -21,6 +21,14 @@ function canvasEvent(ops: unknown[], sceneVersion = 1, actor = 'agent') {
     type: 'design_canvas',
     data: { designId: DESIGN_ID, seq: sceneVersion, actor, ops, sceneVersion },
   }
+}
+
+/** `sync` gọi `refresh()` (mạng) — chặn fetch để bài kiểm không chạm mạng thật. */
+function stubEmptyRuns() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ runs: [] }) }) as unknown as Response),
+  )
 }
 
 beforeEach(() => {
@@ -43,6 +51,10 @@ beforeEach(() => {
     error: null,
     lastEventSeq: 0,
   })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('designStore — canvas slice (P2)', () => {
@@ -75,6 +87,70 @@ describe('designStore — canvas slice (P2)', () => {
   it('records the actor of the last canvas event per run', () => {
     useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1, 'user'))
     expect(useDesignStore.getState().sceneActor[DESIGN_ID]).toBe('user')
+  })
+
+  it('sự kiện actor `user` mang `scene`: giữ node chủ nhà, op agent sau đó KHÔNG bị chối oan', () => {
+    // IF-1: sự kiện của chủ nhà mang cảnh nhưng KHÔNG mang op — store phải nhận thẳng cảnh ấy.
+    useDesignStore.getState().applyEvent({
+      seq: 1,
+      type: 'design_canvas',
+      data: {
+        designId: DESIGN_ID,
+        seq: 1,
+        actor: 'user',
+        sceneVersion: 1,
+        ops: [],
+        scene: { version: 1, nodes: [node('owner-1')], connectors: [], strokes: [] },
+      },
+    })
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['owner-1'])
+
+    // Agent cập nhật ĐÚNG node chủ nhà: server đã áp, client phải nhận (không rơi vào op bị từ chối).
+    useDesignStore.getState().applyEvent({
+      seq: 2,
+      type: 'design_canvas',
+      data: {
+        designId: DESIGN_ID,
+        seq: 2,
+        actor: 'agent',
+        sceneVersion: 2,
+        ops: [{ type: 'UPDATE_NODE', nodeId: 'owner-1', patch: { title: 'đã sửa' } }],
+      },
+    })
+    const scene = selectScene(DESIGN_ID)(useDesignStore.getState())
+    expect(scene.nodes.find((item) => item.id === 'owner-1')?.title).toBe('đã sửa')
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+  })
+})
+
+describe('designStore — sync (P5 §10)', () => {
+  it('áp sự kiện tươi, ghim lastEventSeq, và BỎ QUA sự kiện bơm lại', () => {
+    stubEmptyRuns()
+    const events = [
+      { seq: 5, type: 'design_notice', data: { designId: DESIGN_ID, kind: 'blocked' } },
+      { seq: 8, type: 'design_notice', data: { designId: DESIGN_ID, kind: 'needs-user' } },
+    ]
+    useDesignStore.getState().sync('s-store', { designMode: { on: true, activeRunId: DESIGN_ID } }, events)
+    expect(useDesignStore.getState().notices).toHaveLength(2)
+    expect(useDesignStore.getState().lastEventSeq).toBe(8)
+
+    // Cùng một payload lịch sử (poll lặp) ⇒ không có sự kiện nào tươi ⇒ không nhân đôi thẻ.
+    useDesignStore.getState().sync('s-store', { designMode: { on: true, activeRunId: DESIGN_ID } }, events)
+    expect(useDesignStore.getState().notices).toHaveLength(2)
+  })
+
+  it('đổi phiên ⇒ xoá dữ liệu phiên cũ và đặt lại mốc `lastEventSeq`', () => {
+    stubEmptyRuns()
+    useDesignStore.setState({ sessionId: 's-old', lastEventSeq: 9, notices: [{ designId: 'd-old', kind: 'blocked', seq: 9 }] })
+
+    useDesignStore.getState().sync('s-new', { designMode: { on: true } }, [
+      { seq: 2, type: 'design_notice', data: { designId: DESIGN_ID, kind: 'blocked' } },
+    ])
+
+    expect(useDesignStore.getState().sessionId).toBe('s-new')
+    // Dữ liệu phiên cũ biến mất; mốc tính lại từ 0 nên sự kiện seq 2 vẫn được áp.
+    expect(useDesignStore.getState().notices).toEqual([{ designId: DESIGN_ID, kind: 'blocked', seq: 2 }])
+    expect(useDesignStore.getState().lastEventSeq).toBe(2)
   })
 })
 

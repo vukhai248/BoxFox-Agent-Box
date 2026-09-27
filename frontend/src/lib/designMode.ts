@@ -8,10 +8,22 @@
  * Tên trường bám đúng hợp đồng đã đông cứng ở `/code/.plans/design-interfaces.md` (§2, §9, §10) và
  * §7 của `/code/.plans/v1-design-mode-agent.md`.
  */
+import type { TKey } from '../i18n/context'
 import { asBool, asNumber, asRecord, asString, type Json } from './researchMode'
 
 export { asBool, asNumber, asRecord, asString }
 export type { Json }
+
+/**
+ * `version` của backend có thể là số hoặc chuỗi (hợp đồng IF-3): nhận cả hai rồi ép về chuỗi, để
+ * một báo cáo `v2` dạng số không bị hiển thị nhầm thành `v1` (hay mất hẳn chip `v…`).
+ */
+export function asVersionString(value: unknown): string {
+  const text = asString(value)
+  if (text) return text
+  const numeric = asNumber(value)
+  return numeric === null ? '' : String(numeric)
+}
 
 // ── Chế độ (session.config.designMode) ─────────────────────────────────────
 
@@ -97,10 +109,17 @@ export function stepForPhase(phase: unknown): DesignStepKey {
 
 /** Chỉ số (0-based) của bước đang chạy; bước cuối khi run đã đóng. */
 export function activeStepIndex(phase: unknown, status: string): number {
-  if (status === 'completed' || status === 'partial' || status === 'cancelled') {
-    return DESIGN_STEPS.length - 1
-  }
+  if (runIsClosed(status)) return DESIGN_STEPS.length - 1
   return DESIGN_STEPS.indexOf(stepForPhase(phase))
+}
+
+/**
+ * Run đã đóng hẳn (`completed`/`partial`/`cancelled`) — MỘT luật dùng chung cho dòng thời gian
+ * (`activeStepIndex`) và dải trạng thái (`DesignComposerStatus`), để `partial` không bị một chỗ coi
+ * là đang chạy còn chỗ kia coi là xong.
+ */
+export function runIsClosed(status: string): boolean {
+  return DESIGN_TERMINAL_STATUSES.includes(status as DesignRunStatus)
 }
 
 /** Nhãn ngắn của run ("D-1A2B3") — suy từ `designId`, không phải dữ liệu mới. */
@@ -172,10 +191,32 @@ export function readTouchList(value: unknown): DesignTouchList | null {
 
 // ── Lời hỏi (`design_prompt`) ──────────────────────────────────────────────
 
-/** Bốn loại lời hỏi của chế độ (§2): phỏng vấn, làm rõ phạm vi, thoát chế độ, chọn lựa giữa. */
-export type DesignPromptKind = 'interview' | 'scope-change' | 'exit-choice' | 'out-of-scope'
+/**
+ * Các loại lời hỏi của chế độ (§2 `DESIGN_PROMPT_KINDS`): phỏng vấn, làm rõ phạm vi, danh sách chạm,
+ * thoát chế độ, ngoài phạm vi. Loại lạ rơi về `'unknown'` — KHÔNG đoán bừa thành `'interview'`, vì như
+ * vậy một lời hỏi `touch-list` sẽ hiện nhầm là "Câu hỏi phỏng vấn".
+ */
+export type DesignPromptKind =
+  | 'interview'
+  | 'scope-change'
+  | 'touch-list'
+  | 'exit-choice'
+  | 'out-of-scope'
+  | 'unknown'
 
-const PROMPT_KINDS: DesignPromptKind[] = ['interview', 'scope-change', 'exit-choice', 'out-of-scope']
+const PROMPT_KINDS: DesignPromptKind[] = [
+  'interview',
+  'scope-change',
+  'touch-list',
+  'exit-choice',
+  'out-of-scope',
+]
+
+/** Loại lời hỏi đã biết; loại lạ ⇒ `'unknown'` (không ném, không gán nhãn sai). */
+export function readPromptKind(value: unknown): DesignPromptKind {
+  const text = asString(value)
+  return (PROMPT_KINDS as readonly string[]).includes(text) ? (text as DesignPromptKind) : 'unknown'
+}
 
 export interface DesignPromptOption {
   id: string
@@ -203,6 +244,8 @@ export interface DesignPrompt {
   questions: DesignPromptQuestion[]
   actions: string[]
   note: string
+  /** Dữ liệu phụ của server — với `out-of-scope`, `meta.request` giữ nguyên văn tin nhắn gốc (§5.9). */
+  meta: Json
 }
 
 function readQuestion(value: unknown): DesignPromptQuestion {
@@ -232,13 +275,14 @@ export function readPrompt(value: unknown): DesignPrompt | null {
   return {
     promptId,
     designId: asString(prompt.designId),
-    kind: oneOf(prompt.kind, PROMPT_KINDS, 'interview'),
+    kind: readPromptKind(prompt.kind),
     revision: asNumber(prompt.revision) ?? 0,
     status: oneOf(prompt.status, ['open', 'answered', 'dismissed'] as const, 'open'),
     createdAt: asString(prompt.createdAt),
     questions: (Array.isArray(prompt.questions) ? prompt.questions : []).map(readQuestion),
     actions: (Array.isArray(prompt.actions) ? prompt.actions : []).filter((x): x is string => typeof x === 'string'),
     note: asString(prompt.note),
+    meta: asRecord(prompt.meta),
   }
 }
 
@@ -343,7 +387,7 @@ export function readReview(value: unknown): DesignReview | null {
   const verdict = asString(row.verdict)
   const summary = asString(row.summary)
   if (!verdict && !summary) return null
-  return { version: asString(row.version), verdict, summary }
+  return { version: asVersionString(row.version), verdict, summary }
 }
 
 /** Bước hiển thị của run: ưu tiên `step` backend gửi, thiếu thì suy từ pha. */
@@ -451,4 +495,39 @@ export function readNotice(value: unknown, seq: number): DesignNotice | null {
   const designId = asString(row.designId)
   if (!designId) return null
   return { designId, kind: oneOf(row.kind, NOTICE_KINDS, 'blocked'), seq }
+}
+
+// ── Lỗi chế độ (§7.6/§8) ──────────────────────────────────────────────────
+
+/**
+ * `mã lỗi -> khoá i18n` cho câu tiếng Việt/Anh đọc được của backend. Mã lạ rơi về thông điệp thô
+ * (đã gồm mã) nên giao diện không bao giờ hiện một nút chết im lặng.
+ */
+export const DESIGN_ERROR_KEY: Record<string, TKey> = {
+  DESIGN_MODE_UNAVAILABLE: 'design.errors.DESIGN_MODE_UNAVAILABLE',
+  DESIGN_MODE_REQUIRED: 'design.errors.DESIGN_MODE_REQUIRED',
+  DESIGN_EXIT_CHOICE_REQUIRED: 'design.errors.DESIGN_EXIT_CHOICE_REQUIRED',
+  DESIGN_TOUCH_LIST_REQUIRED: 'design.errors.DESIGN_TOUCH_LIST_REQUIRED',
+  DESIGN_TOUCH_LIST_REVISION_STALE: 'design.errors.DESIGN_TOUCH_LIST_REVISION_STALE',
+  DESIGN_PATH_NOT_APPROVED: 'design.errors.DESIGN_PATH_NOT_APPROVED',
+  DESIGN_BRANCH_REQUIRED: 'design.errors.DESIGN_BRANCH_REQUIRED',
+  DESIGN_BRANCH_EXISTS: 'design.errors.DESIGN_BRANCH_EXISTS',
+  DESIGN_MAIN_BRANCH_FORBIDDEN: 'design.errors.DESIGN_MAIN_BRANCH_FORBIDDEN',
+  DESIGN_WORKSPACE_NOT_REPO: 'design.errors.DESIGN_WORKSPACE_NOT_REPO',
+  DESIGN_WRITE_EXISTS: 'design.errors.DESIGN_WRITE_EXISTS',
+  DESIGN_WRITE_MISSING: 'design.errors.DESIGN_WRITE_MISSING',
+  DESIGN_ANCHOR_NOT_UNIQUE: 'design.errors.DESIGN_ANCHOR_NOT_UNIQUE',
+  DESIGN_WRITE_STALE: 'design.errors.DESIGN_WRITE_STALE',
+  DESIGN_DIFF_DIRTY_BASE: 'design.errors.DESIGN_DIFF_DIRTY_BASE',
+  DESIGN_REVIEW_NO_CRITIC: 'design.errors.DESIGN_REVIEW_NO_CRITIC',
+  DESIGN_REVIEW_VERDICT_MISSING: 'design.errors.DESIGN_REVIEW_VERDICT_MISSING',
+  DESIGN_REVIEW_VERDICT_MISMATCH: 'design.errors.DESIGN_REVIEW_VERDICT_MISMATCH',
+  DESIGN_HANDOFF_UNREVIEWED: 'design.errors.DESIGN_HANDOFF_UNREVIEWED',
+  DESIGN_CANVAS_PROTOCOL_INVALID: 'design.errors.DESIGN_CANVAS_PROTOCOL_INVALID',
+  DESIGN_PROMPT_ANSWERED: 'design.errors.DESIGN_PROMPT_ANSWERED',
+}
+
+/** Khoá i18n của một mã lỗi; `null` khi mã không có trong bảng (dùng thông điệp thô). */
+export function designErrorKey(code: string): TKey | null {
+  return DESIGN_ERROR_KEY[asString(code)] ?? null
 }

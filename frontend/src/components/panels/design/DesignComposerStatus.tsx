@@ -11,7 +11,8 @@
 import { PenTool } from 'lucide-react'
 import { useT, type TKey } from '../../../i18n/context'
 import { selectActiveRun, useDesignStore } from '../../../store/designStore'
-import { runLabel, stepForPhase } from '../../../lib/designMode'
+import { runIsClosed, runLabel, stepForPhase } from '../../../lib/designMode'
+import { DesignErrorNotice } from './DesignErrorNotice'
 import { DesignExitChoiceCard } from './DesignExitChoiceCard'
 import { STEP_LABEL_KEY } from './steps'
 
@@ -33,12 +34,15 @@ export function DesignComposerStatus() {
     const exitRun = runs.find((item) => item.designId === exitChoice.prompt.designId) ?? run
     return (
       <div className="mb-2">
+        <DesignErrorNotice />
         <DesignExitChoiceCard prompt={exitChoice.prompt} run={exitRun} />
       </div>
     )
   }
   if (!mode.on) return null
-  const done = run !== null && (run.status === 'completed' || run.status === 'cancelled')
+  // `partial` là trạng thái ĐÓNG (cùng luật với `activeStepIndex` của dòng thời gian): run đóng dù
+  // đóng dở vẫn không còn "đang ở bước" nào để hiện.
+  const done = run !== null && runIsClosed(run.status)
   return (
     <div
       data-testid="design-mode-strip"

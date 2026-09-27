@@ -15,7 +15,7 @@ import { I18nProvider } from '../../../i18n'
 import { useDesignStore, selectActiveRun, parseCanvasOp } from '../../../store/designStore'
 import { useHarnessChatStore } from '../../../store/harnessChatStore'
 import { useUiStore } from '../../../store/uiStore'
-import { DESIGN_MODE_OFF, readRun, readBatch, stepForPhase, type DesignBatch } from '../../../lib/designMode'
+import { DESIGN_MODE_OFF, readRun, readBatch, readPrompt, stepForPhase, type DesignBatch } from '../../../lib/designMode'
 import { DesignBatchDiffCard } from './DesignBatchDiffCard'
 import { DesignBriefCard } from './DesignBriefCard'
 import { DesignCanvasPanel } from '../DesignCanvasPanel'
@@ -364,18 +364,35 @@ describe('luồng chế độ Design', () => {
     expect(host.querySelector('[data-testid="design-run-timeline"]')).toBeTruthy()
     act(() => { host.remove() })
 
-    act(() => { useDesignStore.setState({ mode: { ...DESIGN_MODE_OFF, on: false } }) })
+    act(() => {
+      useDesignStore.setState({
+        mode: { ...DESIGN_MODE_OFF, on: false },
+        notices: [{ designId: DESIGN_ID, kind: 'needs-user', seq: 61 }],
+      })
+    })
     const off = render(<DesignConversationCards />)
+    // Thẻ của run đang chạy KHÔNG vẽ khi chế độ tắt…
     expect(off.querySelector('[data-testid="design-brief-card"]')).toBeNull()
+    // …nhưng thông báo nền VẪN vẽ: đó chính là lúc backend phát nó (run nền đã xong).
+    expect(off.querySelector('[data-testid="design-notice-card"]')).toBeTruthy()
     act(() => { off.remove() })
   })
 
   it('thiếu cấu hình `designMode` ⇒ chế độ tắt: dải và nút đều không vẽ', () => {
-    act(() => { useDesignStore.setState({ mode: DESIGN_MODE_OFF, runs: [readRun(runRow())!], exitChoice: null }) })
+    act(() => {
+      useDesignStore.setState({
+        mode: DESIGN_MODE_OFF,
+        runs: [readRun(runRow())!],
+        exitChoice: null,
+        notices: [{ designId: DESIGN_ID, kind: 'blocked', seq: 62 }],
+      })
+    })
     const strip = render(<DesignComposerStatus />)
     expect(strip.querySelector('[data-testid="design-mode-strip"]')).toBeNull()
     const cards = render(<DesignConversationCards />)
     expect(cards.querySelector('[data-testid="design-brief-card"]')).toBeNull()
+    // Thông báo nền không phụ thuộc công tắc chế độ.
+    expect(cards.querySelector('[data-testid="design-notice-card"]')).toBeTruthy()
     const toggle = render(<DesignToggle />)
     expect(toggle.querySelector('[data-testid="composer-design-toggle"]')?.getAttribute('aria-pressed')).toBe('false')
     act(() => { strip.remove(); cards.remove(); toggle.remove() })
@@ -521,12 +538,41 @@ describe('thẻ P5 của chế độ Design', () => {
 
   it('out-of-scope card: đúng hai đường, không có đường nào mặc định', () => {
     const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
-    const host = render(<DesignOutOfScopeCard run={run} prompt={outOfScopePrompt as never} />)
+    // Đi qua đúng tầng chuẩn hoá (`readPrompt`) thay vì prompt dựng tay.
+    const prompt = readPrompt(outOfScopePrompt)!
+    const host = render(<DesignOutOfScopeCard run={run} prompt={prompt} />)
     expect(host.querySelector('[data-testid="design-out-of-scope"]')).toBeTruthy()
-    expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')).toBeTruthy()
-    expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-out-of-scope"]')?.getAttribute('data-pinned')).toBe('true')
+    expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')?.hasAttribute('disabled')).toBe(false)
+    expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')?.hasAttribute('disabled')).toBe(false)
     expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')?.getAttribute('aria-pressed')).toBeNull()
     expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')?.getAttribute('aria-pressed')).toBeNull()
+    act(() => { host.remove() })
+  })
+
+  it('out-of-scope thiếu id ghim ⇒ khoá hai nút và nói rõ, KHÔNG đoán theo vị trí', () => {
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing' }))!
+    const prompt = readPrompt({
+      promptId: 'dp-unpinned',
+      designId: DESIGN_ID,
+      kind: 'out-of-scope',
+      status: 'open',
+      revision: 1,
+      questions: [
+        {
+          id: 'oos',
+          text: 'Yêu cầu ngoài phạm vi.',
+          allowFreeText: false,
+          required: true,
+          options: [{ id: 'a', label: 'Một' }, { id: 'b', label: 'Hai' }],
+        },
+      ],
+    })!
+    const host = render(<DesignOutOfScopeCard run={run} prompt={prompt} />)
+    expect(host.querySelector('[data-testid="design-out-of-scope"]')?.getAttribute('data-pinned')).toBe('false')
+    expect(host.querySelector('[data-testid="design-out-of-scope-exit"]')?.hasAttribute('disabled')).toBe(true)
+    expect(host.querySelector('[data-testid="design-out-of-scope-keep"]')?.hasAttribute('disabled')).toBe(true)
+    expect(host.querySelector('[data-testid="design-out-of-scope-unpinned"]')).toBeTruthy()
     act(() => { host.remove() })
   })
 
@@ -776,6 +822,44 @@ describe('thông báo, chạy nền và điều khiển run (P5 §5.1/§5.2/§5.
     act(() => { cards.remove() })
   })
 
+  it('out-of-scope: "Tạm thoát" nộp lại TIN NHẮN GỐC của chủ nhà (`meta.request`)', async () => {
+    const api = stubApi({ modeResponse: () => jsonResponse({ mode: { on: false, activeRunId: '', revision: 6 } }) })
+    seedSession()
+    // IF-2: `meta.request` giữ nguyên văn tin nhắn gốc — khác với câu chữ của Design Lead (`question.text`).
+    const prompt = readPrompt({ ...outOfScopePrompt, meta: { request: 'làm luôn trang thanh toán' } })!
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
+    act(() => {
+      useDesignStore.setState({ runs: [run], prompts: [prompt] })
+    })
+    const cards = render(<DesignConversationCards />)
+    await clickAsync(cards, '[data-testid="design-out-of-scope-exit"]')
+    const turn = api.calls.find((call) => call.url.includes('/turns'))
+    expect(turn).toBeTruthy()
+    expect(String(turn?.body?.prompt)).toContain('làm luôn trang thanh toán')
+    expect(useDesignStore.getState().mode.on).toBe(false)
+    act(() => { cards.remove() })
+  })
+
+  it('out-of-scope: trả lời bị từ chối ⇒ KHÔNG xếp lượt main và KHÔNG tắt chế độ', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          jsonResponse({ error: 'Lời hỏi này đã được trả lời rồi.', code: 'DESIGN_PROMPT_ANSWERED' }, 409),
+      ),
+    )
+    seedSession()
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
+    act(() => {
+      useDesignStore.setState({ runs: [run], prompts: [run.prompts[0]] })
+    })
+    const cards = render(<DesignConversationCards />)
+    await clickAsync(cards, '[data-testid="design-out-of-scope-exit"]')
+    expect(useDesignStore.getState().mode.on).toBe(true)
+    expect(useDesignStore.getState().pendingTurn).toBe('')
+    act(() => { cards.remove() })
+  })
+
   it('thẻ bàn giao: "Dùng cho plan" thoát chế độ rồi nộp lượt main có khối bàn giao', async () => {
     const api = stubApi({ modeResponse: () => jsonResponse({ mode: { on: false, activeRunId: '', revision: 6 } }) })
     seedSession()
@@ -828,6 +912,88 @@ describe('thông báo, chạy nền và điều khiển run (P5 §5.1/§5.2/§5.
     expect(pane?.getAttribute('data-verdict')).toBe('passed')
     expect(pane?.textContent).toContain('v1')
     expect(pane?.textContent).toContain('không lệch hợp đồng')
+    act(() => { host.remove() })
+  })
+})
+
+describe('sửa lỗi soát chế độ Design (P5)', () => {
+  it('chế độ TẮT: thông báo nền và thẻ bàn giao vẫn hiện khi run nền xong', () => {
+    act(() => {
+      useDesignStore.setState({
+        mode: { ...DESIGN_MODE_OFF, on: false },
+        activeRunId: DESIGN_ID,
+        runs: [readRun(runRow({ status: 'completed', phase: 'done' }))!],
+        notices: [{ designId: DESIGN_ID, kind: 'background-done', seq: 71 }],
+        reports: {
+          [DESIGN_ID]: { version: 2, branch: { name: 'design/chat', base: 'abc1234' }, path: '.design/chat/v2.md', verdict: 'passed' },
+        },
+      })
+    })
+    const host = render(<DesignConversationCards />)
+    expect(host.querySelector('[data-testid="design-notice-card"]')?.getAttribute('data-kind')).toBe('background-done')
+    expect(host.querySelector('[data-testid="design-handoff-card"]')).toBeTruthy()
+    // Thẻ thuộc run đang chạy vẫn bị chặn khi chế độ tắt.
+    expect(host.querySelector('[data-testid="design-brief-card"]')).toBeNull()
+    expect(host.querySelector('[data-testid="design-run-timeline"]')).toBeNull()
+    act(() => { host.remove() })
+  })
+
+  it('báo cáo `version` dạng SỐ không bị dán nhãn v1', () => {
+    const run = readRun(runRow({ status: 'completed', phase: 'done' }))!
+    const host = render(
+      <DesignHandoffCard
+        run={run}
+        report={{ version: 2, branch: { name: 'design/chat', base: 'abc1234' }, path: '.design/chat/v2.md', verdict: 'passed' }}
+      />,
+    )
+    expect(host.textContent).toContain('v2')
+    expect(host.textContent).not.toContain('v1')
+    act(() => { host.remove() })
+  })
+
+  it('loại lời hỏi lạ hiện nhãn riêng, KHÔNG bị gán nhầm thành phỏng vấn', () => {
+    const touch = readPrompt({ promptId: 'dp-t', designId: DESIGN_ID, kind: 'touch-list', status: 'open', revision: 1, questions: [] })!
+    const unknown = readPrompt({ promptId: 'dp-u', designId: DESIGN_ID, kind: 'bịa', status: 'open', revision: 1, questions: [] })!
+    const touchHost = render(<DesignPromptCard prompt={touch} />)
+    expect(touchHost.textContent).toContain('Touch list')
+    const unknownHost = render(<DesignPromptCard prompt={unknown} />)
+    expect(unknownHost.textContent).toContain('Prompt of an unknown kind')
+    act(() => { touchHost.remove(); unknownHost.remove() })
+  })
+
+  it('`partial` là trạng thái ĐÓNG trên CẢ dải lẫn dòng thời gian', () => {
+    const run = readRun(runRow({ status: 'partial', phase: 'scaffolding' }))!
+    act(() => {
+      useDesignStore.setState({ runs: [run], mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID } })
+    })
+    const strip = render(<DesignComposerStatus />)
+    // "run finished" (tiếng Anh mặc định của I18nProvider) — không còn "đang ở bước Bàn giao".
+    expect(strip.querySelector('[data-testid="design-mode-strip"]')?.textContent).toContain('run finished')
+    const timeline = render(<DesignRunTimeline run={run} />)
+    expect(timeline.querySelector('[data-step="handoff"]')?.getAttribute('data-active')).toBe('true')
+    act(() => { strip.remove(); timeline.remove() })
+  })
+
+  it('từ chối ghi ⇒ hiện CÂU LỖI đọc được (mã → i18n) thay vì nút chết', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          jsonResponse(
+            { error: 'Danh sách chạm đã đổi; hãy tải lại rồi duyệt lại.', code: 'DESIGN_TOUCH_LIST_REVISION_STALE' },
+            409,
+          ),
+      ),
+    )
+    const run = readRun(runRow())!
+    act(() => {
+      useDesignStore.setState({ runs: [run], mode: { ...DESIGN_MODE_OFF, on: true, activeRunId: DESIGN_ID } })
+    })
+    const host = render(<DesignConversationCards />)
+    await clickAsync(host, '[data-testid="design-touch-list-approve"]')
+    const error = host.querySelector('[data-testid="design-error"]')
+    expect(error?.getAttribute('data-code')).toBe('DESIGN_TOUCH_LIST_REVISION_STALE')
+    expect(error?.textContent).toContain('touch list changed')
     act(() => { host.remove() })
   })
 })

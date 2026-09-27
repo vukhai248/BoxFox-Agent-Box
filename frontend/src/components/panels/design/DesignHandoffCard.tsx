@@ -8,7 +8,7 @@
  */
 import { useState } from 'react'
 import { useT } from '../../../i18n/context'
-import { asRecord, asString, runLabel, type DesignRun, type Json } from '../../../lib/designMode'
+import { asRecord, asString, asVersionString, runLabel, type DesignRun, type Json } from '../../../lib/designMode'
 import { useDesignStore } from '../../../store/designStore'
 import { useUiStore } from '../../../store/uiStore'
 
@@ -33,7 +33,7 @@ export function DesignHandoffCard({
   const branch = asString(branchRow.name) || asString(row.branch) || run.touchList?.branch.name || ''
   const base = asString(branchRow.base) || run.touchList?.branch.base || ''
   const path = asString(row.path)
-  const version = asString(row.version)
+  const version = asVersionString(row.version)
   const verdict = asString(row.verdict) || run.review?.verdict || ''
   const written = (run.touchList?.items ?? []).filter((item) => item.status === 'written')
   const remaining = stringList(row.nextSteps)
