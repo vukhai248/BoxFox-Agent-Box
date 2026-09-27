@@ -1255,6 +1255,13 @@ def _seed_card(node_id, x, y, width, height, card, title, body):
             'style': {'fill': '#121212', 'stroke': '#262626', 'strokeWidth': 1, 'radius': 12}}
 
 
+def _seed_link(from_node_id, to_node_id):
+    """Một nét nối của cảnh gieo — cùng kiểu nét với mọi mũi tên khác trên canvas."""
+    return {'type': 'CONNECT_NODES', 'connector': {'fromNodeId': from_node_id, 'toNodeId': to_node_id,
+                                                   'fromAnchor': 'right', 'toAnchor': 'left',
+                                                   'stroke': '#3b82f6', 'strokeWidth': 2}}
+
+
 def canvas_seed_ops(job):
     """Op gieo cảnh canvas từ brief + danh sách chạm ĐÃ DUYỆT (P1: canvas không được để trống).
 
@@ -1276,20 +1283,18 @@ def canvas_seed_ops(job):
     scope = _brief_text(brief, 'mode') or 'chưa rõ'
     target = _brief_text(brief, 'screen') or 'màn hình đích'
     project = _brief_text(brief, 'project') or _brief_text(brief, 'path') or ''
+    goal = _brief_text(brief, 'goal')
     ops = [
         {'type': 'CREATE_NODE', 'node': _seed_card(
             CANVAS_SEED_WORKSPACE_ID, 40, 40, 380, 180, 'ui-mockup',
             (f'Dự án: {project}' if project else 'Dự án đang mở'),
             'Bản đồ khởi đầu do run tự dựng từ brief và danh sách chạm đã duyệt. '
-            + ('Mục tiêu: ' + _brief_text(brief, 'goal') if _brief_text(brief, 'goal') else ''))},
+            + (f'Mục tiêu: {goal}' if goal else ''))},
         {'type': 'CREATE_NODE', 'node': _seed_card(
             CANVAS_SEED_SCREEN_ID, 520, 40, 380, 180, 'ui-mockup',
             f'Màn hình đích: {target}',
             f'Phạm vi: {scope} · Nền tảng: {_brief_text(brief, "platform") or "chưa rõ"}')},
-        {'type': 'CONNECT_NODES', 'connector': {'fromNodeId': CANVAS_SEED_WORKSPACE_ID,
-                                                'toNodeId': CANVAS_SEED_SCREEN_ID,
-                                                'fromAnchor': 'right', 'toAnchor': 'left',
-                                                'stroke': '#3b82f6', 'strokeWidth': 2}},
+        _seed_link(CANVAS_SEED_WORKSPACE_ID, CANVAS_SEED_SCREEN_ID),
     ]
     for index, item in enumerate(items[:CANVAS_SEED_ITEMS_MAX]):
         node_id = f'seed-touch-{index + 1}'
@@ -1299,10 +1304,7 @@ def canvas_seed_ops(job):
                                             f"rủi ro: {item.get('risk') or 'low'}") if part)
         ops.append({'type': 'CREATE_NODE', 'node': _seed_card(
             node_id, 960, 40 + 160 * index, 380, 130, 'directive-annotation', path, body)})
-        ops.append({'type': 'CONNECT_NODES', 'connector': {'fromNodeId': CANVAS_SEED_SCREEN_ID,
-                                                           'toNodeId': node_id,
-                                                           'fromAnchor': 'right', 'toAnchor': 'left',
-                                                           'stroke': '#3b82f6', 'strokeWidth': 2}})
+        ops.append(_seed_link(CANVAS_SEED_SCREEN_ID, node_id))
     return ops
 
 
