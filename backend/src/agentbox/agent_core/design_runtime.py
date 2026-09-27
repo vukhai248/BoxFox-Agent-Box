@@ -201,6 +201,9 @@ def apply_design_mode(rt, session_id, on, by='toggle', active_run=None):
             if state.get('background'):
                 state['background'] = False
                 rt.store.design_job_save(job['design_id'], session_id, state)
+            # §7.3: bật lại mode đóng lời hỏi `exit-choice` còn sót của run — thẻ thoát cũ không được
+            # sống qua một lần bật khác.
+            _close_exit_prompt(rt, session_id, rt.store.design_job(job['design_id']))
         config[runtime_module.DESIGN_MODE_CONFIG_KEY] = mode
         rt.store.update_config(session_id, config)
         rt.store.emit(session_id, DESIGN_MODE_EVENT_CODE,
@@ -234,6 +237,9 @@ def apply_design_mode(rt, session_id, on, by='toggle', active_run=None):
             rt.store.design_job_save(job['design_id'], session_id, state)
             rt.store.emit(session_id, 'design_run', design_job_event(
                 rt.store.design_job(job['design_id'])))
+        # §7.3: lựa chọn đã được ÁP ⇒ đóng lời hỏi `exit-choice` còn mở; nếu không, `refresh` dựng lại
+        # thẻ thoát ngay sau khi chủ nhà vừa quyết.
+        _close_exit_prompt(rt, session_id, rt.store.design_job(job['design_id']))
     config = dict(session.get('config') or {})
     mode = {**mode, 'on': False, 'activeRunId': run_id if active else mode.get('activeRunId'),
             'revision': int(mode.get('revision') or 0) + 1}
@@ -401,6 +407,39 @@ def _close_open_prompts(rt, session_id, job):
         state['prompts'] = prompts
         rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     return changed
+
+
+def _close_exit_prompt(rt, session_id, job):
+    """Đóng lời hỏi `exit-choice` còn mở khi chủ nhà ĐÃ quyết (§7.3); `True` khi có prompt phải đóng.
+
+    `designStore.refresh()` dựng lại thẻ thoát từ BẤT KỲ lời hỏi `exit-choice` còn `open` của run,
+    nên một lời hỏi mở sót sau khi lựa chọn đã được áp sẽ làm thẻ quay lại đúng lúc chủ nhà vừa quyết
+    (và lần tắt mode sau đó không gửi gì nữa). Chỉ đóng ĐÚNG loại `exit-choice`; lời hỏi khác
+    (`interview`/`out-of-scope`) KHÔNG bị chạm. Ghi `answered` kèm một `design_prompt` — trạng thái ấy
+    là thứ giao diện hiểu là đã xử lý (`'closed'` bị nó chuẩn hoá ngược về `open`), và lưu lại hàng
+    (nhích `revision`) để lần `refresh` kế tiếp không còn thấy lời hỏi mở.
+    """
+    state = dict(job.get('state') or {})
+    prompts = state.get('prompts')
+    if not isinstance(prompts, list):
+        return False
+    closed = []
+    now = journal.utc_now_iso()
+    for prompt in prompts:
+        if (isinstance(prompt, dict) and prompt.get('kind') == 'exit-choice'
+                and prompt.get('status') == 'open'):
+            prompt['status'] = 'answered'
+            prompt['answeredAt'] = now
+            closed.append(prompt['promptId'])
+    if not closed:
+        return False
+    state['prompts'] = prompts
+    rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    for prompt_id in closed:
+        rt.store.emit(session_id, 'design_prompt',
+                      {'promptId': prompt_id, 'designId': job['design_id'], 'kind': 'exit-choice',
+                       'status': 'answered'})
+    return True
 
 
 def notify_run(rt, session_id, job):
@@ -715,6 +754,30 @@ def design_canvas_path(job):
     return f'{design_dir(job)}canvas.v1.json'
 
 
+#: Mã hợp đồng nằm ở ĐẦU câu lỗi của worker (`'DESIGN_X: câu'`) — dùng để dựng lại lỗi chuẩn.
+_DESIGN_CODE_RE = re.compile(r'(DESIGN_[A-Z0-9_]+)')
+
+
+async def _box_op(rt, session_id, name, args):
+    """Gọi MỘT op worker của đường thiết kế rồi quy lỗi của box về mã hợp đồng (§7.6).
+
+    Qua box THẬT (`sandbox/executor.py`), `_execute` trả payload của worker NGUYÊN VĂN, nên một op bị
+    chối về dưới dạng `{'is_error': True, 'error': 'MÃ: câu'}` thay vì NÉM. Chỗ gọi cũ cứ đánh chỉ số
+    `result['path']`/`result['branch']`/`result['sha256']` ⇒ `KeyError` và lượt chết với
+    `TURN_FAILED_KEYERROR`, còn mã hợp đồng (và câu `DESIGN_ERROR_TEXT`) không bao giờ ra tới chủ nhà.
+    Ở đây đọc mã ở đầu câu của worker rồi ném lại ĐÚNG khuôn `MÃ: câu`; câu KHÔNG có mã hợp đồng đã
+    biết thì giữ NGUYÊN VĂN (không bao giờ nuốt lỗi) và bản thân câu ấy vẫn là một `ValueError`.
+    """
+    result = await rt.executor.execute(name, args, session_id)
+    if not (isinstance(result, dict) and result.get('is_error')):
+        return result
+    message = str(result.get('error') or '').strip()
+    match = _DESIGN_CODE_RE.match(message)
+    if match and match.group(1) in DESIGN_ERROR_TEXT:
+        raise _error(match.group(1))
+    raise ValueError(message or f'{name}: op trong box thất bại')
+
+
 async def _box_file_sha(rt, session_id, path):
     """Băm TOÀN BỘ tệp trong box qua op `design_file_sha`; `None` khi chưa có/không đọc được.
 
@@ -724,7 +787,7 @@ async def _box_file_sha(rt, session_id, path):
     cho nhánh `create`.
     """
     try:
-        result = await rt.executor.execute('design_file_sha', {'path': path}, session_id)
+        result = await _box_op(rt, session_id, 'design_file_sha', {'path': path})
     except (ValueError, OSError):
         return None
     value = result.get('sha256') if isinstance(result, dict) else None
@@ -733,7 +796,7 @@ async def _box_file_sha(rt, session_id, path):
 
 async def _write_box_text(rt, session_id, path, content):
     """Ghi một tệp trong box qua op `file_write` (đường `.design/**` do run sở hữu)."""
-    return await rt.executor.execute('file_write', {'path': path, 'content': content}, session_id)
+    return await _box_op(rt, session_id, 'file_write', {'path': path, 'content': content})
 
 
 def _branch_state(state):
@@ -801,11 +864,10 @@ async def design_branch_create(rt, session_id, job, name):
     một nền bẩn). Việc dựng lệnh git nằm trong worker; lỗi worker (`DESIGN_MAIN_BRANCH_FORBIDDEN`,
     `DESIGN_BRANCH_EXISTS`, `DESIGN_WORKSPACE_NOT_REPO`) đi thẳng ra ngoài.
     """
-    dirty = await rt.executor.execute('design_diff', {'base': 'HEAD', 'paths': None}, session_id)
+    dirty = await _box_op(rt, session_id, 'design_diff', {'base': 'HEAD', 'paths': None})
     if (dirty.get('files') if isinstance(dirty, dict) else None):
         raise _error(DESIGN_DIFF_DIRTY_BASE_CODE)
-    result = await rt.executor.execute('design_branch_create', {'name': str(name or '')},
-                                       session_id)
+    result = await _box_op(rt, session_id, 'design_branch_create', {'name': str(name or '')})
     state = dict(job['state'] or {})
     branch = {'name': result['branch'], 'base': result['base'], 'head': result['head'],
               'status': 'active'}
@@ -856,7 +918,7 @@ async def design_write(rt, session_id, job, path, content, mode, anchor=None, po
         write_args['anchor'] = anchor
     if position is not None:
         write_args['position'] = position
-    result = await rt.executor.execute('design_write', write_args, session_id)
+    result = await _box_op(rt, session_id, 'design_write', write_args)
 
     live = rt.store.design_job(job['design_id'])
     state = dict(live['state'] or {})
@@ -890,8 +952,8 @@ async def design_diff(rt, session_id, job, paths=None):
     branch = _branch_state(state)
     if not branch:
         raise _error(DESIGN_BRANCH_REQUIRED_CODE)
-    diff = await rt.executor.execute('design_diff', {'base': branch['base'], 'paths': paths or None},
-                                     session_id)
+    diff = await _box_op(rt, session_id, 'design_diff',
+                         {'base': branch['base'], 'paths': paths or None})
     files = diff.get('files') or []
     patch_path = f'{design_dir(job)}diff.patch'
     await _write_box_text(rt, session_id, patch_path, diff.get('patch') or '')
@@ -932,8 +994,7 @@ async def design_revert(rt, session_id, job, paths=None, mode='file'):
         scope = _batch_revert_paths(state)
         if not scope:
             return {'reverted': []}
-    result = await rt.executor.execute('design_revert',
-                                       {'base': base, 'paths': scope, 'mode': mode}, session_id)
+    result = await _box_op(rt, session_id, 'design_revert', {'base': base, 'paths': scope, 'mode': mode})
     reverted = list(result.get('reverted') or []) + list(result.get('deleted') or [])
     # Đọc lại state MỚI NHẤT rồi mới gộp: cửa sổ giữa `execute` và đây có thể có lượt khác đã ghi
     # thêm `diff`/`prompts`/`reviews`; chép đè bằng state cũ sẽ nuốt mất chúng.

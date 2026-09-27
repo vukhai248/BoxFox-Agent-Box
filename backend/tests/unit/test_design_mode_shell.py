@@ -457,3 +457,98 @@ def test_pause_and_resume_each_emit_one_design_run_event(harness):
     assert resumed['job']['status'] == 'designing', 'tiếp tục đưa run về trạng thái làm việc'
     assert after_pause == before + 1, 'tạm dừng phát ĐÚNG MỘT `design_run`'
     assert after_resume == after_pause + 1, 'tiếp tục phát ĐÚNG MỘT `design_run`'
+
+
+# --------- Thẻ thoát KHÔNG được sống qua quyết định của chủ nhà (vòng soát hộp thật)
+
+
+def _exit_prompts(store, design_id):
+    job = store.design_job(design_id)
+    return [row for row in job['state']['prompts'] if row['kind'] == 'exit-choice']
+
+
+def _ask_exit_choice(store, runtime, sid):
+    """Tắt mode khi run còn sống mà chưa chọn ⇒ 409 kèm lời hỏi `exit-choice`, mode KHÔNG đổi."""
+    with pytest.raises(ValueError) as raised:
+        design_runtime.apply_design_mode(runtime, sid, False, 'toggle')
+    prompt = raised.value.payload['prompt']
+    assert prompt['kind'] == 'exit-choice'
+    assert prompt['status'] == 'open'
+    assert runtime_module.design_mode(store.get(sid))['on'] is True, 'mode KHÔNG đổi'
+    return prompt
+
+
+def _run_detail(runtime, design_id):
+    async def run():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                async with http.get(str(server.make_url(
+                        f'/api/agent/design/runs/{design_id}'))) as resp:
+                    assert resp.status == 200
+                    return await resp.json()
+
+    return asyncio.run(run())
+
+
+def test_the_exit_choice_is_closed_after_pause(harness):
+    """Đã chọn 'Tạm dừng' ⇒ lời hỏi thoát phải đóng; nếu không, thẻ quay lại sau khi chủ nhà quyết."""
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+    prompt = _ask_exit_choice(store, runtime, sid)
+    assert _exit_prompts(store, job['design_id'])[0]['status'] == 'open'
+
+    result = design_runtime.apply_design_mode(runtime, sid, False, 'toggle', active_run='pause')
+
+    assert result['on'] is False
+    rows = _exit_prompts(store, job['design_id'])
+    assert [row['promptId'] for row in rows] == [prompt['promptId']]
+    assert rows[0]['status'] == 'answered'
+    detail = _run_detail(runtime, job['design_id'])
+    open_exit = [row for row in detail['job']['prompts']
+                 if row['kind'] == 'exit-choice' and row['status'] == 'open']
+    assert open_exit == [], 'payload chi tiết không còn lời hỏi thoát nào mở'
+
+
+def test_the_exit_choice_is_closed_after_background(harness):
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+    prompt = _ask_exit_choice(store, runtime, sid)
+
+    result = design_runtime.apply_design_mode(runtime, sid, False, 'toggle', active_run='background')
+
+    assert result['on'] is False
+    rows = _exit_prompts(store, job['design_id'])
+    assert [row['promptId'] for row in rows] == [prompt['promptId']]
+    assert rows[0]['status'] == 'answered'
+    detail = _run_detail(runtime, job['design_id'])
+    assert [row['status'] for row in detail['job']['prompts'] if row['kind'] == 'exit-choice'] \
+        == ['answered']
+
+
+def test_re_enabling_the_mode_closes_a_stale_exit_prompt(harness):
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+    _ask_exit_choice(store, runtime, sid)
+
+    design_runtime.apply_design_mode(runtime, sid, True, 'toggle')
+
+    assert runtime_module.design_mode(store.get(sid))['on'] is True
+    assert [row['status'] for row in _exit_prompts(store, job['design_id'])] == ['answered']
+
+
+def test_an_interview_prompt_survives_the_exit_choice(harness):
+    """Chỉ ĐÚNG loại `exit-choice` bị đóng: lời hỏi phỏng vấn còn mở thì vẫn còn mở."""
+    store, runtime, sid = harness
+    job = _mode_on(store, runtime, sid)
+    design_runtime.design_prompt_new(
+        runtime, sid, store.design_job(job['design_id']), 'interview',
+        questions=[{'id': 'q', 'text': 'màn hình nào?', 'required': True}])
+    _ask_exit_choice(store, runtime, sid)
+
+    design_runtime.apply_design_mode(runtime, sid, False, 'toggle', active_run='pause')
+
+    live = store.design_job(job['design_id'])
+    interview = [row for row in live['state']['prompts'] if row['kind'] == 'interview']
+    assert interview and all(row['status'] == 'open' for row in interview)
+    assert all(row['status'] == 'answered'
+               for row in live['state']['prompts'] if row['kind'] == 'exit-choice')
