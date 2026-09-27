@@ -21,6 +21,29 @@ export const RESEARCH_MODE_COMMANDS = new Set([
   'skill',
 ])
 
+/**
+ * Lệnh còn dùng được khi chế độ Design đang bật (P1).
+ *
+ * Cùng lý do với `RESEARCH_MODE_COMMANDS`: giữa một design run, một lệnh VAI sẽ mở lượt vai khác và
+ * phá ranh giới mà chế độ Design dựng ra. Vì cả hai chế độ chia một ô soạn tin, danh sách lọc là HỢP
+ * của hai bộ — người dùng đang ở chế độ nào thì vẫn thấy đủ lệnh điều khiển của cả hai.
+ */
+export const DESIGN_MODE_COMMANDS = new Set([
+  'design',
+  'research',
+  'stop',
+  'context',
+  'compact',
+  'help',
+  'status',
+  'skills',
+  'agents',
+  'skill',
+])
+
+/** Danh sách lọc dùng chung khi BẤT KỲ chế độ nào đang bật. */
+export const MODE_COMMANDS = new Set([...RESEARCH_MODE_COMMANDS, ...DESIGN_MODE_COMMANDS])
+
 export function useSlashCompletion(input: string, change: (value: string) => void, options?: { modeOnly?: boolean }) {
   const { commands, load } = useCommandsStore()
   const modeOnly = options?.modeOnly ?? false
@@ -29,7 +52,7 @@ export function useSlashCompletion(input: string, change: (value: string) => voi
   const query = /^\/[\w-]*$/.test(input) ? input.slice(1).toLowerCase() : null
   useEffect(() => { if (query !== null) void load() }, [query === null, load])
   useEffect(() => { setIndex(0); setDismissed(false) }, [input])
-  const options2 = query !== null && !dismissed ? commands.filter(c => c.enabled && c.slug.startsWith(query) && (!modeOnly || RESEARCH_MODE_COMMANDS.has(c.slug))).slice(0, 8) : []
+  const options2 = query !== null && !dismissed ? commands.filter(c => c.enabled && c.slug.startsWith(query) && (!modeOnly || MODE_COMMANDS.has(c.slug))).slice(0, 8) : []
   const choose = (slug: string) => { change('/' + slug + ' '); setDismissed(true) }
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229) return true

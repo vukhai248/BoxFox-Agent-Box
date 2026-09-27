@@ -56,7 +56,7 @@
   ["/debug isolate the failure", "debug"],
   ["/simplify refactor this module", "simplify"],
   ["/build implement the patch", "build"],
-  ["/design specify contracts", "design"],
+  ["/design specify contracts", "mode"],
   ["/context", "control"],
   ["/help", "control"]
 ]

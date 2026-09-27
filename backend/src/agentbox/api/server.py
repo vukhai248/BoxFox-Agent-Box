@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import plan_registry, research_runtime
+from ..agent_core import design_runtime, plan_registry, research_runtime
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
 from ..agent_core.runtime import HarnessRuntime, DecisionError
@@ -85,6 +85,58 @@ def research_job_pumpable(runtime, job, session):
         return False
     mode = runtime_module.research_mode(session)
     return bool(mode['on']) and str(mode.get('activeRunId') or '') == str(job['research_id'])
+
+
+def design_job_pumpable(runtime, job, session):
+    """P1 (design-interfaces §5): bơm chỉ chạy job thuộc MODE, theo hai đường như research.
+
+    (a) mode đang bật và `designMode.activeRunId` = job đó;
+    (b) `state.background = true` (chủ nhà chọn "Tiếp tục chạy nền") dù mode đã tắt.
+
+    Run `origin='delegate'` KHÔNG bao giờ được bơm: lượt của nó là lượt của nhánh được giao.
+    Run đang `needs_user`/`paused` cũng không — nó đang chờ người dùng.
+    """
+    from ..agent_core import runtime as runtime_module
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    origin = str(state.get('origin') or '')
+    if origin != design_runtime.DESIGN_JOB_ORIGIN:
+        return False
+    if job['status'] in {'needs_user', 'paused'}:
+        return False
+    if bool(state.get('background')):
+        return True
+    if not runtime_module.design_mode_available():
+        return False
+    mode = runtime_module.design_mode(session)
+    return bool(mode['on']) and str(mode.get('activeRunId') or '') == str(job['design_id'])
+
+
+async def design_continuation_step(runtime):
+    """Resume eligible design jobs once. P1 chưa có pha `scaffolding`/`reviewing`, nên vòng này
+    đứng yên cho tới khi P2/P3 mở một run tới đó; móc nối sẵn để đợt sau không phải sửa vòng bơm.
+    """
+    for job in runtime.store.design_jobs_active():
+        try:
+            sid = job['session_id']
+            session = runtime.store.get(sid)
+            if session['status'] in {'running', 'awaiting_decision'}:
+                continue
+            state = job.get('state') if isinstance(job.get('state'), dict) else {}
+            if str(state.get('phase') or '') not in {'scaffolding', 'reviewing'}:
+                continue
+            if not design_job_pumpable(runtime, job, session):
+                continue
+            attempt = int(state.get('continuationAttempt') or 0) + 1
+            state['continuationAttempt'] = attempt
+            runtime.store.design_job_save(job['design_id'], sid, state, revision=job['revision'])
+            await runtime.submit(
+                sid,
+                f'Continue design job {job["design_id"]} from design_status. Keep the touch list '
+                'authoritative, write only approved paths, and stop with a qualified partial result '
+                'if a path is blocked.',
+                invocation_id=f'design-resume-{job["design_id"]}-{attempt}')
+        except Exception:
+            logger.exception('design continuation could not start for %s', job['design_id'])
 
 
 async def research_continuation_step(runtime):
@@ -204,6 +256,11 @@ _RESEARCH_CONFLICT_STATUS = {'RESEARCH_SCOPE_REVISION_STALE': 409,
                              'RESEARCH_REFRESH_NO_DOSSIER': 409,
                              'RESEARCH_REFRESH_SOURCE_ACTIVE': 409,
                              'RESEARCH_REFRESH_RUN_ACTIVE': 409}
+
+#: Mã khoá lạc quan của các tuyến design → status HTTP: khoá cũ ⇒ 409. Cùng luật với research.
+_DESIGN_CONFLICT_STATUS = {'DESIGN_TOUCH_LIST_REVISION_STALE': 409,
+                           'DESIGN_TOUCH_LIST_REQUIRED': 409,
+                           'DESIGN_JOB_REVISION_CONFLICT': 409}
 
 
 def _plan_review_json(row):
@@ -333,6 +390,7 @@ def create_app(runtime):
             while True:
                 await asyncio.sleep(15)
                 await research_continuation_step(runtime)
+                await design_continuation_step(runtime)
         _app[RESEARCH_PUMP_KEY] = asyncio.create_task(pump())
 
     async def stop_research_continuations(_app):
@@ -775,6 +833,160 @@ def create_app(runtime):
             'evidence': research_runtime.evidence_rows(runtime, sid, research_id, limit=50),
             'dossier': runtime.store.dossier_latest(research_id),
             'reviews': runtime.store.research_verifications(research_id, limit=10)})
+
+    def design_job_known(design_id):
+        job = runtime.store.design_job(design_id)
+        if job is None:
+            raise ApiError('DESIGN_JOB_UNKNOWN', design_id, 404)
+        return job
+
+    async def design_mode_set(request):
+        """P1 (design-interfaces §5): `PUT /api/agent/sessions/{sid}/design-mode` — bật/tắt mode.
+
+        Tắt khi có run đang hoạt động mà thiếu lựa chọn ⇒ 409 `DESIGN_EXIT_CHOICE_REQUIRED` kèm một
+        lời hỏi `exit-choice`; mode KHÔNG đổi.
+        """
+        sid = request.match_info['sid']
+        known_session(sid)
+        body = await request.json()
+        if 'on' not in body:
+            raise ApiError('DESIGN_MODE_BODY_INVALID', 'body needs `on` (true/false)')
+        from ..agent_core import runtime as runtime_module
+        from ..agent_core.limits import DESIGN_MODE_UNAVAILABLE_CODE
+        if not runtime_module.design_mode_available():
+            raise ApiError(DESIGN_MODE_UNAVAILABLE_CODE,
+                           'Design mode is switched off in this build (BOXFOX_DESIGN_MODE=off) — '
+                           'turn the switch on before using it', 409)
+        try:
+            result = design_runtime.apply_design_mode(runtime, sid, body.get('on'),
+                                                      str(body.get('by') or 'toggle'),
+                                                      body.get('activeRun'))
+        except ValueError as exc:
+            payload = getattr(exc, 'payload', None)
+            if isinstance(payload, dict) and payload.get('prompt'):
+                raise ApiError(payload.get('code') or 'DESIGN_EXIT_CHOICE_REQUIRED', str(exc),
+                               int(payload.get('status') or 409),
+                               extra={'prompt': payload['prompt']}) from None
+            raise
+        return web.json_response(result)
+
+    async def design_runs(request):
+        """P1 (§5): `GET /api/agent/design/runs?sessionId=` — danh sách run của một phiên."""
+        sid = request.query.get('sessionId', '').strip()
+        if not sid:
+            raise ApiError('DESIGN_SESSION_REQUIRED', 'sessionId is required')
+        known_session(sid)
+        return web.json_response({'runs': [design_runtime.design_run_payload(job)
+                                           for job in runtime.store.design_jobs_for(sid)]})
+
+    async def design_run_detail(request):
+        """P1 (§5): `GET /api/agent/design/runs/{id}` — chi tiết một run cho tab Design."""
+        job = design_job_known(request.match_info['design_id'])
+        state = job['state'] if isinstance(job.get('state'), dict) else {}
+        return web.json_response({'job': design_runtime.design_run_payload(job),
+                                  'prompts': state.get('prompts') or [],
+                                  'touchList': state.get('touchList'),
+                                  'brief': state.get('brief') or {},
+                                  'phaseHistory': state.get('phaseHistory') or []})
+
+    async def design_run_update(request):
+        """P1 (§5): `PATCH /api/agent/design/runs/{id}` — tạm dừng/chạy tiếp/huỷ/sửa brief."""
+        job = design_job_known(request.match_info['design_id'])
+        sid, body = job['session_id'], await request.json()
+        action = str(body.get('action') or '')
+        if action not in {'pause', 'resume', 'cancel', 'scope', 'touch-list'}:
+            raise ApiError('DESIGN_ACTION_INVALID', action)
+        if action == 'scope':
+            try:
+                return web.json_response(design_runtime.design_scope(runtime, sid, job, 'update',
+                                                                     body.get('patch')))
+            except ValueError as exc:
+                raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if action == 'touch-list':
+            # §5: sửa từng dòng của danh sách chạm đi qua CÙNG tuyến với đề xuất — mỗi lần ghi tăng
+            # `touchList.revision`, nên một thẻ cũ không thể ghi đè một thẻ mới.
+            try:
+                return web.json_response(design_runtime.design_touch_list_store(
+                    runtime, sid, job, body.get('items') or [], body.get('forbidden'),
+                    body.get('revision')))
+            except ValueError as exc:
+                raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if action == 'cancel':
+            updated = design_runtime.close_run(runtime, sid, job, 'cancelled',
+                                               str(body.get('reason') or 'owner-cancel'),
+                                               revision=body.get('revision'))
+            return web.json_response({'job': design_runtime.design_run_payload(updated)})
+        if action == 'resume' and job['status'] not in {'paused', 'partial', 'needs_user'}:
+            raise ApiError('DESIGN_RESUME_INVALID', 'Run is not paused or partial')
+        state = dict(job['state'] or {})
+        try:
+            updated = runtime.store.design_job_save(job['design_id'], sid, state,
+                                                    status='paused' if action == 'pause'
+                                                    else 'designing',
+                                                    revision=body.get('revision'))
+        except ValueError as exc:
+            raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if action == 'resume' and (job['state'] or {}).get('phase') == design_runtime.PHASE_DONE:
+            # Pha `done` là pha ĐÓNG; một run vừa được hồi sức không được mang pha ấy.
+            updated = design_runtime.set_phase(runtime, sid, updated, 'briefing', 'owner-resume',
+                                               force=True) or updated
+        return web.json_response({'job': design_runtime.design_run_payload(updated)})
+
+    async def design_touch_list_approve(request):
+        """P1 (§5): `POST /api/agent/design/runs/{id}/touch-list/approve` — duyệt cả danh sách."""
+        job = design_job_known(request.match_info['design_id'])
+        body = await request.json()
+        try:
+            result = design_runtime.design_touch_list_approve(runtime, job['session_id'], job,
+                                                              body.get('revision'),
+                                                              body.get('answers'))
+        except ValueError as exc:
+            raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        return web.json_response(result)
+
+    async def design_prompt_answer(request):
+        """P1 (§5): `POST /api/agent/design/prompts/{promptId}/answer` — trả lời MỘT lời hỏi."""
+        prompt_id = request.match_info['prompt_id']
+        body = await request.json()
+        job = runtime.store.design_job_by_prompt(prompt_id)
+        if job is None:
+            raise ApiError('DESIGN_PROMPT_UNKNOWN', prompt_id, 404)
+        try:
+            result = design_runtime.design_prompt_answer(runtime, job['session_id'], prompt_id,
+                                                         body.get('answers'),
+                                                         start=bool(body.get('start')))
+        except ValueError as exc:
+            raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        return web.json_response(result)
+
+    async def session_canvas(request):
+        """P1 (§10): `POST /api/agent/sessions/{sid}/canvas` — op canvas của chủ nhà cho run đang mở.
+
+        Op được ghi vào run (tăng `canvasSeq`) và phát một `design_canvas` actor `owner`; cảnh hợp lệ
+        hay không là việc của reducer ở giao diện, nên tuyến này KHÔNG tự vẽ.
+        """
+        sid = request.match_info['sid']
+        session = known_session(sid)
+        from ..agent_core import runtime as runtime_module
+        mode = runtime_module.design_mode(session)
+        if not mode['on']:
+            raise ApiError('DESIGN_MODE_REQUIRED', 'Design mode is off for this session', 409)
+        run_id = str(mode.get('activeRunId') or '')
+        job = runtime.store.design_job(run_id) if run_id else None
+        if job is None or job['session_id'] != sid:
+            raise ApiError('DESIGN_JOB_UNKNOWN', run_id or 'no active run', 404)
+        body = await request.json()
+        ops = body.get('ops')
+        if not isinstance(ops, list) or not ops:
+            raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID', 'body needs a non-empty `ops` array')
+        state = dict(job['state'] or {})
+        seq = int(state.get('canvasSeq') or 0) + 1
+        state['canvasSeq'] = seq
+        runtime.store.design_job_save(job['design_id'], sid, state, revision=job['revision'])
+        runtime.store.emit(sid, 'design_canvas',
+                           {'designId': job['design_id'], 'seq': seq, 'actor': 'owner', 'ops': ops,
+                            'sceneVersion': seq})
+        return web.json_response({'ok': True, 'seq': seq, 'sceneVersion': seq})
 
     def known_session(sid):
         """The session record, or an explicit 404 the UI can act on."""
@@ -1270,6 +1482,14 @@ def create_app(runtime):
     app.router.add_put('/api/agent/sessions/{sid}/research-mode', research_mode_set)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/answer', research_prompt_answer)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/dismiss', research_prompt_dismiss)
+    # P1 (design-interfaces §5) — bảy tuyến của chế độ Design.
+    app.router.add_put('/api/agent/sessions/{sid}/design-mode', design_mode_set)
+    app.router.add_get('/api/agent/design/runs', design_runs)
+    app.router.add_get('/api/agent/design/runs/{design_id}', design_run_detail)
+    app.router.add_patch('/api/agent/design/runs/{design_id}', design_run_update)
+    app.router.add_post('/api/agent/design/runs/{design_id}/touch-list/approve', design_touch_list_approve)
+    app.router.add_post('/api/agent/design/prompts/{prompt_id}/answer', design_prompt_answer)
+    app.router.add_post('/api/agent/sessions/{sid}/canvas', session_canvas)
     app.router.add_post('/api/agent/sessions', create)
     app.router.add_get('/api/agent/sessions/{sid}', session)
     app.router.add_delete('/api/agent/sessions/{sid}', delete_session)

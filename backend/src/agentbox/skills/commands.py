@@ -14,13 +14,19 @@ ROLE_COMMANDS.pop('testing')
 # P1 (§5.2, cửa 3): `/research` không còn là lệnh VAI. Nó là lệnh MODE (bật mode, mở run) khi
 # BOXFOX_RESEARCH_MODE bật; khi công tắc tắt, `resolve` vẫn trả về hành vi lệnh vai cũ.
 ROLE_COMMANDS.pop('research', None)
+# P1 (design-interfaces §4): `/design` theo đúng khuôn `/research` — lệnh MODE khi BOXFOX_DESIGN_MODE
+# bật, lệnh VAI cũ khi công tắc tắt. Bỏ khoá khỏi `ROLE_COMMANDS` để bật mode không bị nhánh lệnh vai
+# nuốt mất, và `resolve` tự trả về hành vi cũ trên nhánh công-tắc-tắt.
+ROLE_COMMANDS.pop('design', None)
 INFO = {'help', 'skills', 'agents', 'status', 'context'}
 BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design',
-                                       'research'}
+                                       'research', 'design'}
 EXTERNAL = {'claude-code', 'codex', 'opencode'}
 # P1 (§5.2): mô tả cho các lệnh MODE trong `/help`.
 MODE_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
-                                '`/research off` exits, `/research status` shows the run'}
+                                '`/research off` exits, `/research status` shows the run',
+                      'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
+                                '`/design off` exits, `/design status` shows the run'}
 # Default role per CLI command. The role is not tied to the executor: change these entries
 # (or use a custom command with an explicit role) instead of hardcoding a role in the dispatcher.
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
@@ -198,6 +204,20 @@ class CommandRegistry:
                 # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai research.
                 result.kind, result.role = 'task', 'research'
                 result.skills = sorted(set(enabled) & ROLE_SKILLS['research'])
+            elif key == 'design':
+                from ..agent_core.runtime import design_mode_available
+                if design_mode_available():
+                    # Lệnh MODE: `/design` (rỗng) bật mode, `/design <text>` bật + mở run,
+                    # `/design off` và `/design status` là hai từ khoá điều khiển.
+                    result.kind, result.command, result.reason = 'mode', 'design', 'mode_command'
+                    low = args.strip().lower()
+                    result.prompt = '' if low in ('', 'on') else (low if low in ('off', 'status')
+                                                                  else args.strip())
+                    self.validate_skills(result.skills, enabled, result.executor, result.role)
+                    return result
+                # Công tắc tắt ⇒ giữ nguyên hành vi cũ: lệnh vai design.
+                result.kind, result.role = 'task', 'design'
+                result.skills = sorted(set(enabled) & ROLE_SKILLS['design'])
             elif key in ROLE_COMMANDS:
                 result.kind, result.role = 'task', ROLE_COMMANDS[key]
                 result.skills = sorted(set(enabled) & ROLE_SKILLS[result.role])

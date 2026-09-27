@@ -82,6 +82,13 @@ from .limits import (RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAU
                      RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
                      RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END,
                      research_branch_report_enabled)  # P3 (§5.9)
+# P1 — vỏ chế độ Design: hằng và cổng của mode (plan v1 §4, design-interfaces §2).
+from .limits import (DESIGN_MODE_ENV, DESIGN_MODE_MODES, DESIGN_MODE_DEFAULT_MODE,
+                     DESIGN_MODE_CONFIG_KEY, DESIGN_MODE_BLOCK_MARKER, DESIGN_MODE_BLOCK_END,
+                     DESIGN_MODE_EVENT_CODE, DESIGN_MODE_EXCLUDED_TOOLS,
+                     DESIGN_MODE_DELEGATE_ROLES, DESIGN_MODE_REQUIRED_CODE, DESIGN_TOOL_FAMILY,
+                     DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HANDOFF_BLOCK_END)
+from . import design_runtime
 
 def _env_switch(env_name, modes, default, env=None):
     """Đọc một công tắc `on|off`; giá trị lạ ⇒ mặc định (không bao giờ ném)."""
@@ -141,6 +148,32 @@ def research_mode(session):
     config = session.get('config') if isinstance(session, dict) else None
     value = config.get('researchMode') if isinstance(config, dict) else None
     return _normalize_research_mode(value)
+
+
+def design_mode_available(env=None):
+    """Công tắc giết `BOXFOX_DESIGN_MODE` (mặc định `on`) — tắt thì tính năng KHÔNG tồn tại."""
+    return _env_switch(DESIGN_MODE_ENV, DESIGN_MODE_MODES, DESIGN_MODE_DEFAULT_MODE, env) == 'on'
+
+
+def _normalize_design_mode(value):
+    """Hình dạng cố định của `config['designMode']` (design-interfaces §4). Thiếu khoá ⇒ mode TẮT."""
+    value = value if isinstance(value, dict) else {}
+    return {'on': bool(value.get('on')),
+            'since': value.get('since'),
+            'enteredBy': str(value.get('enteredBy') or ''),
+            'entrySeq': int(value.get('entrySeq') or 0),
+            'activeRunId': value.get('activeRunId') or None,
+            'revision': int(value.get('revision') or 0),
+            # Mỗi bản thiết kế chỉ phát khối bàn giao MỘT lần (§4).
+            'handoffDeliveredVersion': value.get('handoffDeliveredVersion')
+            if isinstance(value.get('handoffDeliveredVersion'), dict) else {}}
+
+
+def design_mode(session):
+    """`session.config.designMode` đã chuẩn hoá — `on=False` khi phiên chưa từng bật mode."""
+    config = session.get('config') if isinstance(session, dict) else None
+    value = config.get('designMode') if isinstance(config, dict) else None
+    return _normalize_design_mode(value)
 
 
 TOOL_USE_ENFORCEMENT_GUIDANCE = """# Tool-Use Enforcement
@@ -1778,6 +1811,10 @@ class HarnessRuntime(RuntimeCommands):
         # kể cả khi tính năng khả dụng; chỉ ghi khi harness gửi lên (UI lưu lựa chọn của người dùng).
         if values.get('researchMode') is not None:
             config['researchMode'] = _normalize_research_mode(values.get('researchMode'))
+        # P1 (§4): `designMode` cùng luật với `researchMode` — trạng thái MODE của phiên, mặc định
+        # TẮT cho mỗi phiên mới; chỉ ghi khi harness gửi lên.
+        if values.get('designMode') is not None:
+            config['designMode'] = _normalize_design_mode(values.get('designMode'))
         if engine_clamped_deadline:
             config['deadlineClamped'] = True
         if engine_clamped_steps:
@@ -3234,6 +3271,54 @@ class HarnessRuntime(RuntimeCommands):
         lines.append('=== END ACTIVE MODE ===')
         return '\n'.join(lines)
 
+    def design_mode_block(self, session):
+        """Khối `=== ACTIVE MODE: DESIGN ===` — persona Design Lead + luật phỏng vấn/danh sách
+        chạm (§4). `_sync_mode_block` chèn/gỡ theo TỪNG LƯỢT nên bộ đệm tiền tố không bị phá."""
+        skills = []
+        for name in design_runtime.DESIGN_SKILL_NAMES:
+            if hasattr(self.catalog, 'items') and name in self.catalog.items:
+                content = self.catalog.read(name).get('content') or ''
+                if content:
+                    skills.append(content)
+        lines = [
+            DESIGN_MODE_BLOCK_MARKER,
+            'ACTIVE MODE: DESIGN. For this turn you are the Design Lead, not the engineering '
+            'orchestrator. The user turned Design mode on; only the USER is authoritative.',
+            'Rules of this mode:',
+            '1. Only the user\'s own messages are requirements. Earlier assistant messages are '
+            'context, not confirmed scope — label them `agent` assumptions, never `confirmed`.',
+            '2. Keep the brief via `design_scope(action=..., patch=...)`: propose it early, update it '
+            'when the user edits, and ask when a choice changes the direction. Ask at most 3 '
+            'questions per prompt, each with 2-5 concrete options, using '
+            '`design_scope(action="ask", questions=[...])`. A blocking question puts the run in '
+            '`needs_user`; do NOT use `ask_user` for the interview.',
+            '3. Before you may write anything into the project the user must APPROVE a touch list '
+            '(`design_scope(action="update", patch={touchList: {...}})`, items with kind new|insert, '
+            'a reason and a risk). `.design/<slug>/` is run-owned and implicitly approved.',
+            '4. This mode has NO write tools: no file_write, file_edit_block or terminal_exec. '
+            '`design_write` refuses until the touch list is approved (`DESIGN_TOUCH_LIST_REQUIRED`); '
+            'if the user asks for code or commands, post an out-of-scope prompt instead of silently '
+            'leaving the mode.',
+            '5. Pause/resume/cancel act on the RUN, not the session. Never stop the whole session.',
+            '6. Hand off cleanly (§4): when the mode turns off, the next main turn receives a short '
+            'block with the run, its branch, the touch list, and a clear split between what the USER '
+            'confirmed and what the AGENT assumed.',
+        ]
+        if skills:
+            lines.append('Design skills in force:')
+            lines.extend(skills)
+        lines.append(DESIGN_MODE_BLOCK_END)
+        return '\n'.join(lines)
+
+    def design_job_for(self, session, args=None):
+        """Run design của lời gọi công cụ: `designId` trong tham số, ngược lại `activeRunId` (§4)."""
+        wanted = str((args or {}).get('designId') or '').strip() or str(
+            design_mode(session).get('activeRunId') or '')
+        job = self.store.design_job(wanted) if wanted else None
+        if job is None or job['session_id'] != session['id']:
+            raise ValueError('DESIGN_JOB_UNKNOWN: open a run first (design_scope / the mode toggle)')
+        return job
+
     def background_run(self, session):
         """Job chạy nền còn HOẠT ĐỘNG của phiên này, hoặc `None` (§5.3).
 
@@ -3280,6 +3365,16 @@ class HarnessRuntime(RuntimeCommands):
                      if name not in RESEARCH_MODE_EXCLUDED_TOOLS]
             return {'mode': 'research', 'tools': tools,
                     'promptBlock': self.research_mode_block(session)}
+        # P1 (§4): hồ sơ design song song hồ sơ research. Công cụ ghi của phiên bị bỏ, và CHỈ những
+        # công cụ design đã nối vào `dispatch` được thêm vào (P2–P5 tự mở rộng danh sách ấy).
+        d_mode = design_mode(session)
+        d_resume = bool(invocation_id) and str(invocation_id).startswith('design-resume-')
+        if d_mode['on'] or d_resume:
+            tools = [name for name in (config.get('tools') or [])
+                     if name not in DESIGN_MODE_EXCLUDED_TOOLS]
+            tools += [name for name in design_runtime.WIRED_DESIGN_TOOLS if name not in tools]
+            return {'mode': 'design', 'tools': tools,
+                    'promptBlock': self.design_mode_block(session)}
         block = ''
         background = self.background_run(session)
         if background is not None:
@@ -3391,6 +3486,49 @@ class HarnessRuntime(RuntimeCommands):
         mode['handoffDeliveredVersion'] = delivered
         session.setdefault('config', {})['researchMode'] = mode
         self.store.update_config(session['id'], session['config'])
+
+    def design_handoff_block(self, session, job, version=None):
+        """Khối bàn giao design → main của ĐÚNG run này, hoặc `None` (§4).
+
+        P1 chưa có hồ sơ soát độc lập (P4), nên `design_runtime` trả `None` cho tới khi run có
+        `report` đã soát — một chỗ dựng khối, P4 chỉ điền thêm dữ liệu vào cùng cặp mốc.
+        """
+        return design_runtime.design_handoff_block(self, session['id'], job, version)
+
+    def design_handoff(self, session):
+        """Run design CHƯA bàn giao bản mới nhất của phiên, hoặc `None` (§4).
+
+        Chỉ dựng khi mode đang TẮT — trong mode, bàn giao là việc của chính run.
+        """
+        mode = design_mode(session)
+        if mode['on']:
+            return None
+        delivered = mode.get('handoffDeliveredVersion') or {}
+        for job in self.store.design_jobs_for(session.get('id')):
+            state = job.get('state') if isinstance(job.get('state'), dict) else {}
+            report = state.get('report') if isinstance(state.get('report'), dict) else None
+            if not report or not report.get('path'):
+                continue
+            version = report.get('version')
+            if str(delivered.get(job['design_id'])) == str(version):
+                continue
+            block = self.design_handoff_block(session, job, version)
+            if block:
+                return {'block': block, 'designId': job['design_id'], 'version': version}
+        return None
+
+    def mark_design_handoff_delivered(self, session, design_id, version):
+        """Ghim bản thiết kế đã bàn giao — lượt main kế tiếp không nhắc lại cùng một bản (§4)."""
+        mode = design_mode(session)
+        delivered = dict(mode.get('handoffDeliveredVersion') or {})
+        delivered[str(design_id)] = str(version)
+        mode['handoffDeliveredVersion'] = delivered
+        session.setdefault('config', {})[DESIGN_MODE_CONFIG_KEY] = mode
+        self.store.update_config(session['id'], session['config'])
+
+    def background_design_run(self, session_id, design_id, reason):
+        """Đánh dấu một run design là CHẠY NỀN rồi trả về hàng job (§4) — luật ở `design_runtime`."""
+        return design_runtime.background_design_run(self, session_id, design_id, reason)
 
     async def research_halt(self, job, reason):
         """Dừng/huỷ MỘT run theo job (§5.3, M-09) — KHÔNG bao giờ `stop` cả phiên.
@@ -4200,6 +4338,12 @@ class HarnessRuntime(RuntimeCommands):
 
     async def dispatch(self, session, name, args, call_id=None):
         sid, config = session['id'], session['config']
+        # P1 (design-interfaces §4): công cụ của gia đình design chỉ sống TRONG mode. Gọi ngoài mode
+        # ⇒ `DESIGN_MODE_REQUIRED`, kể cả khi phiên còn giữ tên công cụ từ một lượt design trước —
+        # nếu không, một phiên từng bật mode sẽ mang công cụ ghi được vào lượt main.
+        if name in DESIGN_TOOL_FAMILY and not design_mode(session)['on']:
+            raise ValueError(f'{DESIGN_MODE_REQUIRED_CODE}: công cụ design chỉ dùng được trong chế độ '
+                             'Design — hãy bật chế độ trước.')
         if name in DECISION_TOOLS:
             return await self.decision(session, name, args, call_id)
         if name == 'skills_list':
@@ -4260,6 +4404,17 @@ class HarnessRuntime(RuntimeCommands):
             return research_runtime.research_scope(self, session, args)
         if name == 'cancel_child':
             return await research_runtime.cancel_child(self, session, args)
+        # P1 (§7.1): hai công cụ design của đợt này. P2–P5 nối thêm phần của chúng vào đây và vào
+        # `design_runtime.WIRED_DESIGN_TOOLS`; chưa nối thì đừng quảng cáo.
+        if name == 'design_scope':
+            return design_runtime.design_scope(self, sid, self.design_job_for(session, args),
+                                               args.get('action'), args.get('patch'),
+                                               args.get('questions'))
+        if name == 'design_write':
+            return design_runtime.design_write(self, sid, self.design_job_for(session, args),
+                                              args.get('path'), args.get('content'),
+                                              args.get('mode'), args.get('anchor'),
+                                              args.get('position'))
         if name == 'journal_write':
             return await self.journal_write(sid, args)
         if name == 'journal_brief':
@@ -5767,6 +5922,19 @@ class HarnessRuntime(RuntimeCommands):
         goal = args.get('goal', '')
         if not isinstance(goal, str) or not goal.strip():
             raise ValueError('Child goal required')
+        # P1 (D-05, §7.7): giao cho vai `design` từ NGOÀI mode vẫn mở một run thiết kế với
+        # `origin='delegate'` — run là sổ của cuộc thiết kế, không phụ thuộc việc ai bấm nút.
+        if role == 'design' and design_mode_available():
+            mode = design_mode(session)
+            current = str(mode.get('activeRunId') or '')
+            active = self.store.design_job(current) if current else None
+            if active is None or active['session_id'] != session['id']:
+                job = design_runtime.new_design_job(self, session['id'], goal, origin='delegate',
+                                                    entered_by='delegate')
+                if mode['on']:
+                    mode['activeRunId'] = job['design_id']
+                    session.setdefault('config', {})[DESIGN_MODE_CONFIG_KEY] = mode
+                    self.store.update_config(session['id'], session['config'])
         # P3 (§5.9): `taskKind` là kiểu VIỆC của nhánh (không phải vai mới). Giá trị lạ bị TỪ
         # CHỐI kèm mã `RESEARCH_TASK_KIND_INVALID` thay vì lặng lẽ thành `branch`; thiếu thì
         # mặc định `branch`. `facetId` ghim nhánh vào một hướng của bản đồ bao phủ.

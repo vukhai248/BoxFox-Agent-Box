@@ -7,7 +7,10 @@ from ..agent_core import research_runtime
 from ..agent_core.limits import (STEER_MAX_PENDING, RESEARCH_MODE_BLOCK_MARKER,
                                  RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
                                  RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
-                                 RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END)
+                                 RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END,
+                                 DESIGN_MODE_BLOCK_MARKER, DESIGN_MODE_BLOCK_END,
+                                 DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HANDOFF_BLOCK_END,
+                                 DESIGN_SKILLS)
 from dataclasses import asdict
 from .commands import INFO, ROLE_SKILLS, EXTERNAL
 from ..agent_core.attachments import (attachment_prompt_block, validate_attachments,
@@ -246,7 +249,11 @@ class RuntimeCommands:
         # Gỡ cả ba khối đã chèn ở lượt trước: khối mode, dòng nhắc run nền, và khối bàn giao.
         for marker, end_marker in ((RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END),
                                    (RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END),
-                                   (RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END)):
+                                   (RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END),
+                                   # P1 (§4): cùng luật cho hai khối của chế độ Design — mỗi khối
+                                   # xuất hiện ĐÚNG MỘT lần trong prompt hệ thống.
+                                   (DESIGN_MODE_BLOCK_MARKER, DESIGN_MODE_BLOCK_END),
+                                   (DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HANDOFF_BLOCK_END)):
             current = _strip_prompt_block(current, marker, end_marker)
         # Lượt đang dựng là `turn_text`: nếu lượt NÓI TÊN một run thì khối bàn giao phải là run ấy,
         # không phải run chưa bàn giao mới nhất (review D-5). KHÔNG đọc `messages[0]`: đó là PROMPT
@@ -254,14 +261,21 @@ class RuntimeCommands:
         # kiểm thử P2–P5 lần 3) cho thấy nó không chứa token `r-<n>` nào, nên mọi lượt đều rơi về luật
         # "run mới nhất" và nút "Dùng cho plan" bàn giao SAI run.
         handoff = self.research_handoff(session, turn_text)
+        # P1 (§4): bàn giao design đi cùng đường với bàn giao research — mỗi bản chỉ MỘT lần, và chỉ
+        # khi mode đang tắt (`design_handoff` tự trả `None` trong mode).
+        handoff_design = self.design_handoff(session)
         content = current.rstrip()
-        for block in [profile['promptBlock'], (handoff or {}).get('block')]:
+        for block in [profile['promptBlock'], (handoff or {}).get('block'),
+                      (handoff_design or {}).get('block')]:
             if block:
                 content = (content + '\n\n' + block) if content else block
         if content != (messages[0].get('content') or ''):
             messages[0]['content'] = content
         if handoff:
             self.mark_handoff_delivered(session, handoff['researchId'], handoff['version'])
+        if handoff_design:
+            self.mark_design_handoff_delivered(session, handoff_design['designId'],
+                                               handoff_design['version'])
 
     def _set_mode(self, sid, session, on, entered_by):
         """Bật/tắt mode trong `config.researchMode` + phát sự kiện `research_mode` (§4.1)."""
@@ -345,6 +359,8 @@ class RuntimeCommands:
         thường. `/research status` phát lại thẻ trạng thái. `/research off` có run đang chạy thì
         phát lời hỏi thoát và GIỮ mode (M-10c).
         """
+        if resolved.command == 'design':
+            return self._design_mode_command(sid, session, resolved)
         arg = (resolved.prompt or '').strip()
         low = arg.lower()
         result = {'output': ''}
@@ -385,6 +401,65 @@ class RuntimeCommands:
         result['output'] = 'Đã bật chế độ Research.'
         return {'result': result, 'submit': bool(arg)}
 
+    def _design_mode_command(self, sid, session, resolved):
+        """Xử lý lệnh MODE `/design` (§4, D-02/D-03/D-04).
+
+        `/design` (rỗng) bật mode, KHÔNG mở lượt và KHÔNG gọi mô hình. `/design <text>` bật mode rồi
+        nộp lượt thường (run do lượt ấy mở). `/design status` phát lại thẻ trạng thái. `/design off`
+        có run đang chạy thì phát lời hỏi thoát và GIỮ mode.
+        """
+        from ..agent_core import design_runtime
+        arg = (resolved.prompt or '').strip()
+        low = arg.lower()
+        result = {'output': ''}
+        if low == 'status':
+            card = self._design_status_card(sid)
+            result['output'] = card['message']
+            self.store.emit(sid, 'design_run', card)
+            return {'result': result}
+        if low == 'off':
+            try:
+                outcome = design_runtime.apply_design_mode(self, sid, False, 'command')
+            except ValueError as exc:
+                payload = getattr(exc, 'payload', None) or {}
+                if not payload.get('prompt'):
+                    raise
+                # Lời hỏi thoát đã được `apply_design_mode` ghim vào run và phát `design_prompt`;
+                # chế độ KHÔNG đổi cho tới khi chủ nhà chọn.
+                result['output'] = ('Run đang chạy — chọn "Tạm dừng" hoặc "Tiếp tục chạy nền" '
+                                    '(lời hỏi exit-choice).')
+                return {'result': result, 'prompt': payload['prompt']}
+            result['output'] = ('Đã tắt chế độ Design và cho run tiếp tục chạy nền.'
+                                if outcome.get('exitChoice') == 'background'
+                                else 'Đã tắt chế độ Design.')
+            return {'result': result}
+        # `/design` hoặc `/design <nội dung>` ⇒ bật mode. Run mở NGAY khi có nội dung, không chờ mô
+        # hình gọi `design_scope` (D-02): nhờ vậy thẻ brief và lời hỏi phỏng vấn có điều kiện (§7.8)
+        # xuất hiện tất định, còn `/design` rỗng thì KHÔNG mở run và KHÔNG mở lượt (D-03).
+        design_runtime.apply_design_mode(self, sid, True, 'command')
+        if arg:
+            job = design_runtime.new_design_job(self, sid, arg, origin='mode',
+                                                entered_by='command')
+            session = self.store.get(sid)
+            config = dict(session['config'])
+            config['designMode'] = {**config['designMode'], 'activeRunId': job['design_id']}
+            self.store.update_config(sid, config)
+        result['output'] = 'Đã bật chế độ Design.'
+        return {'result': result, 'submit': bool(arg)}
+
+    def _design_status_card(self, sid):
+        """Thẻ trạng thái run design cho `/design status` — KHÔNG mở lượt, KHÔNG gọi mô hình (D-04)."""
+        job = next((item for item in self.store.design_jobs_for(sid)), None)
+        if job is None:
+            return {'kind': 'status', 'message': 'Chưa có design run nào trong phiên này.'}
+        state = job.get('state') if isinstance(job.get('state'), dict) else {}
+        return {'kind': 'status', 'designId': job['design_id'], 'status': job['status'],
+                'phase': state.get('phase'), 'background': bool(state.get('background')),
+                'revision': job.get('revision'),
+                'message': (f'{job["design_id"]} · {job["status"]}'
+                            f' · pha {state.get("phase") or "—"}'
+                            f'{" · chạy nền" if state.get("background") else ""}')}
+
     def _next_turn_skills(self, session, enabled, invocation_id=None, turn_text=''):
         """Viết lại khối kỹ năng + khối mode/nền/bàn giao cho LƯỢT này.
 
@@ -395,6 +470,11 @@ class RuntimeCommands:
         `self.start(...)`, nên lượt mới CHƯA nằm trong `session['messages']` — đi tiếp xuống
         `_sync_mode_block` để chọn đúng run khi bàn giao (D-8).
         """
+        # P1 (§7.9): trong chế độ Design, bốn kỹ năng design vào danh sách bật của LƯỢT này — cùng
+        # đường với khối ENABLED SKILLS, nên nội dung chúng có mặt mà không phải sửa cấu hình phiên.
+        from ..agent_core.runtime import design_mode
+        if design_mode(session)['on']:
+            enabled = sorted(set(enabled) | (set(DESIGN_SKILLS) & set(self.catalog.items)))
         session['config']['skills'] = list(enabled)
         self.store.update_config(session['id'], session['config'])
         messages = session['messages']

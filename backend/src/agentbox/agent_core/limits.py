@@ -721,3 +721,120 @@ def research_refresh_enabled(env=None):
     """`BOXFOX_RESEARCH_REFRESH`: `on` (mặc định) ⇒ `PATCH .../jobs/{id}` nhận `action: 'refresh'`."""
     return env_switch(RESEARCH_REFRESH_ENV, RESEARCH_REFRESH_MODES,
                       RESEARCH_REFRESH_DEFAULT_MODE, env) == 'on'
+
+
+# --- P1 design mode (appended block) ---------------------------------------
+# Vỏ chế độ `/design` (plan v1 §7.4, §7.6, hợp đồng design-interfaces §2, §8). Mọi hằng ở đây chỉ
+# thuộc sóng P1; khối nằm CUỐI tệp để không đụng phần thân mà tác nhân khác đang sửa.
+#
+# Công tắc giết: mặc định `on` = tính năng CÓ MẶT, nhưng mọi phiên vẫn bắt đầu với chế độ TẮT (chỉ
+# bật khi người dùng bấm nút hoặc gõ `/design`). `off` ⇒ hành vi y hệt `139c2aa`: không khoá cấu
+# hình mới, không công cụ design nào trong hồ sơ lượt, `/design` không tồn tại.
+DESIGN_MODE_ENV = 'BOXFOX_DESIGN_MODE'
+DESIGN_MODE_MODES = ('on', 'off')
+DESIGN_MODE_DEFAULT_MODE = 'on'
+
+#: Khoá cấu hình của chế độ: `session.config.designMode` (plan v1 §7.4).
+DESIGN_MODE_CONFIG_KEY = 'designMode'
+DESIGN_MODE_EVENT_CODE = 'design_mode'
+DESIGN_MODE_ENTRY_BY = ('toggle', 'command')
+
+#: Cặp mốc khối lời dặn và khối bàn giao — hợp đồng để `_sync_mode_block` GỠ khối cũ trước khi chèn
+#: khối mới (chỉ-ghi-thêm thì mỗi bản thiết kế để lại một khối nằm mãi trong prompt hệ thống).
+DESIGN_MODE_BLOCK_MARKER = '=== ACTIVE MODE: DESIGN ==='
+DESIGN_MODE_BLOCK_END = '=== END ACTIVE MODE ==='
+DESIGN_HANDOFF_BLOCK_MARKER = '=== DESIGN HANDOFF ==='
+DESIGN_HANDOFF_BLOCK_END = '=== END DESIGN HANDOFF ==='
+
+#: Công cụ bị BỎ khỏi hồ sơ lượt khi ở chế độ design: chế độ không có công cụ ghi trực tiếp (plan
+#: v1 §7.4). Công cụ design mới được THÊM vào hồ sơ lượt khi chế độ bật.
+DESIGN_MODE_EXCLUDED_TOOLS = frozenset({'terminal_exec', 'file_write', 'file_edit_block'})
+#: Vai con mà `delegate_task` của chế độ được phép giao (plan v1 §7.4).
+DESIGN_MODE_DELEGATE_ROLES = frozenset({'design', 'plan-review', 'explore'})
+#: Kỹ năng design bật THEO LƯỢT khi chế độ bật — không ghi vào `config['skills']` thường trực.
+DESIGN_SKILLS = frozenset({'claude-design', 'design-md', 'popular-web-designs', 'architecture-diagram'})
+#: Họ công cụ của chế độ; chốt chặn trong `dispatch` đọc đúng danh sách này.
+DESIGN_TOOL_FAMILY = ('design_scope', 'design_branch_create', 'design_write', 'design_diff',
+                      'design_revert', 'canvas_draw', 'design_review', 'design_report')
+
+#: `.design/<slug>/` là thư mục do run sở hữu; danh sách đen cứng không bao giờ được ghi.
+DESIGN_OWNED_PREFIX = '.design/'
+DESIGN_HARD_FORBIDDEN = ('.env', '.git/', 'package.json', 'package-lock.json')
+
+#: Id câu hỏi phỏng vấn cố định (plan v1 §7.8) và trần số câu MỘT vòng.
+DESIGN_INTERVIEW_IDS = ('dq-screen', 'dq-platform', 'dq-project', 'dq-scope', 'dq-style',
+                        'dq-entry', 'dq-constraints')
+DESIGN_INTERVIEW_MAX_QUESTIONS = 3
+
+#: Từ vựng pha/bước/trạng thái (plan v1 §7.7) — một chỗ khai, `design_runtime` đọc lại.
+DESIGN_PHASES = ('interviewing', 'briefing', 'touch-list', 'drawing', 'scaffolding',
+                 'reviewing', 'handoff', 'done')
+DESIGN_STEPS = ('clarify', 'brief', 'approve', 'draw', 'write', 'review', 'handoff')
+DESIGN_STATUSES = ('scoping', 'designing', 'writing', 'reviewing', 'completed', 'partial',
+                   'needs_user', 'paused', 'cancelled')
+DESIGN_TERMINAL_STATUSES = ('completed', 'partial', 'cancelled')
+#: Trạng thái còn HOẠT ĐỘNG của một run (bơm/API đọc).
+DESIGN_ACTIVE_STATUSES = ('scoping', 'designing', 'writing', 'reviewing')
+#: Kiểu việc của một mục danh sách chạm và trạng thái của nó (plan v1 §7.10).
+DESIGN_TOUCH_KINDS = ('new', 'insert')
+DESIGN_TOUCH_STATUSES = ('proposed', 'approved', 'rejected', 'written')
+DESIGN_PROMPT_KINDS = ('interview', 'exit-choice', 'touch-list')
+DESIGN_EXIT_CHOICES = ('pause', 'background')
+
+#: 20 mã lỗi (plan v1 §7.6). Tên hằng `*_CODE` BẰNG chính mã — một quy ước để test đối chiếu tên.
+DESIGN_MODE_UNAVAILABLE_CODE = 'DESIGN_MODE_UNAVAILABLE'
+DESIGN_MODE_REQUIRED_CODE = 'DESIGN_MODE_REQUIRED'
+DESIGN_EXIT_CHOICE_REQUIRED_CODE = 'DESIGN_EXIT_CHOICE_REQUIRED'
+DESIGN_TOUCH_LIST_REQUIRED_CODE = 'DESIGN_TOUCH_LIST_REQUIRED'
+DESIGN_TOUCH_LIST_REVISION_STALE_CODE = 'DESIGN_TOUCH_LIST_REVISION_STALE'
+DESIGN_PATH_NOT_APPROVED_CODE = 'DESIGN_PATH_NOT_APPROVED'
+DESIGN_BRANCH_REQUIRED_CODE = 'DESIGN_BRANCH_REQUIRED'
+DESIGN_BRANCH_EXISTS_CODE = 'DESIGN_BRANCH_EXISTS'
+DESIGN_MAIN_BRANCH_FORBIDDEN_CODE = 'DESIGN_MAIN_BRANCH_FORBIDDEN'
+DESIGN_WORKSPACE_NOT_REPO_CODE = 'DESIGN_WORKSPACE_NOT_REPO'
+DESIGN_WRITE_EXISTS_CODE = 'DESIGN_WRITE_EXISTS'
+DESIGN_WRITE_MISSING_CODE = 'DESIGN_WRITE_MISSING'
+DESIGN_ANCHOR_NOT_UNIQUE_CODE = 'DESIGN_ANCHOR_NOT_UNIQUE'
+DESIGN_WRITE_STALE_CODE = 'DESIGN_WRITE_STALE'
+DESIGN_DIFF_DIRTY_BASE_CODE = 'DESIGN_DIFF_DIRTY_BASE'
+DESIGN_REVIEW_NO_CRITIC_CODE = 'DESIGN_REVIEW_NO_CRITIC'
+DESIGN_REVIEW_VERDICT_MISSING_CODE = 'DESIGN_REVIEW_VERDICT_MISSING'
+DESIGN_REVIEW_VERDICT_MISMATCH_CODE = 'DESIGN_REVIEW_VERDICT_MISMATCH'
+DESIGN_HANDOFF_UNREVIEWED_CODE = 'DESIGN_HANDOFF_UNREVIEWED'
+DESIGN_CANVAS_PROTOCOL_INVALID_CODE = 'DESIGN_CANVAS_PROTOCOL_INVALID'
+
+#: Câu tiếng Việt của từng mã (plan v1 §7.6) — `design_runtime` dựng `DESIGN_ERROR_TEXT` từ đây.
+DESIGN_ERROR_TEXT = {
+    DESIGN_MODE_UNAVAILABLE_CODE: 'Chế độ Design đang tắt bằng công tắc cấu hình.',
+    DESIGN_MODE_REQUIRED_CODE: 'Việc này cần chế độ Design; hãy bật chế độ hoặc giao bước thiết kế '
+                               'qua delegate_task.',
+    DESIGN_EXIT_CHOICE_REQUIRED_CODE: "Run thiết kế còn hoạt động: chọn 'Tạm dừng' hoặc 'Tiếp tục "
+                                       "chạy nền'.",
+    DESIGN_TOUCH_LIST_REQUIRED_CODE: 'Chưa có danh sách chạm được duyệt, nên chưa được ghi vào dự án.',
+    DESIGN_TOUCH_LIST_REVISION_STALE_CODE: 'Danh sách chạm đã đổi; hãy tải lại rồi duyệt lại.',
+    DESIGN_PATH_NOT_APPROVED_CODE: 'Đường dẫn này không nằm trong danh sách chạm đã duyệt.',
+    DESIGN_BRANCH_REQUIRED_CODE: 'Chưa có nhánh thiết kế cho run này.',
+    DESIGN_BRANCH_EXISTS_CODE: 'Tên nhánh thiết kế đã tồn tại.',
+    DESIGN_MAIN_BRANCH_FORBIDDEN_CODE: 'Không bao giờ ghi vào nhánh chính.',
+    DESIGN_WORKSPACE_NOT_REPO_CODE: 'Workspace trong box không phải một repo git.',
+    DESIGN_WRITE_EXISTS_CODE: "Tệp đã tồn tại; dùng kiểu 'chèn' thay vì 'tạo mới'.",
+    DESIGN_WRITE_MISSING_CODE: "Tệp chưa tồn tại; dùng kiểu 'tạo mới' thay vì 'chèn'.",
+    DESIGN_ANCHOR_NOT_UNIQUE_CODE: 'Mốc chèn không khớp đúng một lần trong tệp.',
+    DESIGN_WRITE_STALE_CODE: 'Tệp đã đổi kể từ lúc duyệt danh sách chạm; hãy soát lại.',
+    DESIGN_DIFF_DIRTY_BASE_CODE: 'Cây làm việc đang có thay đổi chưa lưu; hãy lưu hoặc xác nhận '
+                                 'trước khi tạo nhánh.',
+    DESIGN_REVIEW_NO_CRITIC_CODE: 'Chưa có lượt soát độc lập nào cho phiên bản này.',
+    DESIGN_REVIEW_VERDICT_MISSING_CODE: 'Bản soát độc lập không có dòng VERDICT.',
+    DESIGN_REVIEW_VERDICT_MISMATCH_CODE: 'Kết luận ghi vào không khớp dòng VERDICT của bản soát.',
+    DESIGN_HANDOFF_UNREVIEWED_CODE: 'Chưa có kết luận soát độc lập đạt, nên chưa được bàn giao.',
+    DESIGN_CANVAS_PROTOCOL_INVALID_CODE: 'Gói canvas sai giao thức boxfox.canvas.v1.',
+}
+
+
+def design_mode_enabled(env=None):
+    """`BOXFOX_DESIGN_MODE`: `on` (mặc định) ⇒ tính năng CÓ MẶT; `off` ⇒ hành vi y hệt `139c2aa`.
+
+    Một chỗ đọc công tắc cho cả `runtime.design_mode_available` lẫn `design_runtime`, để hai bản
+    không lệch nhau (và để bài kiểm truyền `env={...}` thay vì vá `os.environ`).
+    """
+    return env_switch(DESIGN_MODE_ENV, DESIGN_MODE_MODES, DESIGN_MODE_DEFAULT_MODE, env) == 'on'
