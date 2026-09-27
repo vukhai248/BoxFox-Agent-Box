@@ -3307,6 +3307,11 @@ class HarnessRuntime(RuntimeCommands):
             '(`delegate_task(role="plan-review", reviewTarget={kind:"design", designId, version})`), '
             'then record its verdict with `design_review` — a draft without an `ok` verdict cannot be '
             'reported (`DESIGN_HANDOFF_UNREVIEWED`). `design_report` closes the run and hands it off.',
+            '8. The canvas is the shared surface, not a scratch pad: the run seeds it from the approved '
+            'touch list, and YOU keep it current with `canvas_draw` — the target screen, every block you '
+            'intend to touch, and the arrows between them — when you propose a change and whenever the '
+            'user edits. A node the user right-clicked carries a directive: act on it, then update that '
+            'node so the canvas still describes the plan.',
         ]
         mode = design_mode(session)
         run_id = str(mode.get('activeRunId') or '')
@@ -3317,9 +3322,14 @@ class HarnessRuntime(RuntimeCommands):
         if queued:
             lines.append('Queued canvas directives from the user (act on these next):')
             for row in queued[-5:]:
-                lines.append('- node %s (%s): %s'
-                             % (row.get('targetNodeId'), row.get('targetNodeTitle'),
-                                row.get('instruction')))
+                # `targetNodeId` rỗng = chỉ thị cho CẢ canvas (chủ nhà gửi khi canvas còn trống);
+                # in ra "node  ():" thì mô hình đọc thành một id rỗng và đi tìm node không có.
+                if str(row.get('targetNodeId') or ''):
+                    lines.append('- node %s (%s): %s'
+                                 % (row.get('targetNodeId'), row.get('targetNodeTitle'),
+                                    row.get('instruction')))
+                else:
+                    lines.append('- whole canvas: %s' % (row.get('instruction'),))
         if skills:
             lines.append('Design skills in force:')
             lines.extend(skills)
