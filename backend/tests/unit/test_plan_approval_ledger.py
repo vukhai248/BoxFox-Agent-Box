@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from agentbox.agent_core import plan_registry
+from agentbox.agent_core import limits, plan_registry
 from agentbox.agent_core.runtime import HarnessRuntime, plan_approval_target
 from agentbox.memory.session_store import SessionStore
 
@@ -189,6 +189,52 @@ def test_an_expired_approval_is_not_an_approval(tmp_path):
 
     asyncio.run(run())
 
+
+
+def test_a_free_text_answer_on_a_plan_gate_is_not_an_approval(tmp_path):
+    """P4 (vá vòng soát) — chữ tự nhập ở cổng duyệt kế hoạch là CÂU TRẢ LỜI, không phải một lời duyệt.
+
+    Đo được trước khi vá: lựa chọn `other` mang `kind='alternative'` nên `resolve_decision` chốt thẳng
+    `approved`; chủ nhà gõ "Không đồng ý, sửa lại phần X" vào ô tự nhập vẫn ghi một hàng `approved`
+    vào sổ duyệt — hàng mà tab Plan đọc là "chủ nhà thật sự đồng ý". Nay kết cục là `answered`:
+    không hàng nào vào sổ, nhưng sự thật vẫn có dấu vết (`plan_decision_skipped` + một dòng nhật ký).
+    """
+
+    async def run():
+        store = SessionStore(tmp_path / 'sessions.db')
+        model = FixtureModel([
+            answer('Xin bạn duyệt', calls=[call('request_approval', approval_args())]),
+            answer('Tôi sửa lại theo ghi chú.')])
+        runtime = HarnessRuntime(store, FixtureExecutor(), model)
+        sid, record = await blocked_session(runtime, store, 'Trình kế hoạch')
+
+        assert limits.DECISION_OTHER_OPTION_ID in [option['id'] for option in record['options']], \
+            'mọi cổng duyệt đều mở ô tự nhập (P4)'
+        note = 'Không đồng ý, sửa lại phần đo độ trễ'
+        result = runtime.resolve_decision(sid, record['decisionId'], limits.DECISION_OTHER_OPTION_ID, note)
+        assert result['outcome'] == 'answered'
+        assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'Tôi sửa lại theo ghi chú.'
+
+        assert store.plan_review(IDENTITY, 1) is None, 'chữ tự nhập không được ghi hàng duyệt nào'
+        assert store.plan_reviews_for(IDENTITY) == []
+        skipped = [event['data'] for event in store.events(sid)
+                   if event['type'] == 'plan_decision_skipped']
+        assert len(skipped) == 1
+        assert (skipped[0]['identity'], skipped[0]['version'], skipped[0]['status']) == (IDENTITY, 1,
+                                                                                        'answered')
+        assert skipped[0]['reason'] == 'free_text' and skipped[0]['kind'] == 'approval'
+        # Nhóm vẫn `draft`: câu trả lời tự nhập không mở khoá R1 (không phải `approved`) và
+        # cũng không bật R3 (không phải `changes_requested`).
+        assert plan_registry.group_state(versions_of(1), reviews=store.plan_reviews_for(IDENTITY),
+                                         submitted=()).state == 'draft'
+        # Chữ đã gõ tới được model như câu trả lời thật, kèm lời nhắn nói rõ đây KHÔNG phải đồng ý.
+        seen = [json.loads(message['content']) for message in store.get(sid)['messages']
+                if message['role'] == 'tool'][-1]
+        assert seen['decision'] == 'answered' and seen['note'] == note
+        assert 'Do NOT treat this as approval' in seen['message']
+        store.close()
+
+    asyncio.run(run())
 
 
 def test_an_answer_to_a_question_about_a_plan_lands_in_the_ledger(tmp_path):

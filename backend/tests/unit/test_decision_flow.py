@@ -480,7 +480,8 @@ def test_the_free_text_choice_needs_typed_text_and_the_text_reaches_the_model(tm
                 assert store.get(sid)['status'] == 'awaiting_decision' and events_of(store, sid, 'decision_resolved') == []
                 status, body = await post({'decisionId': record['decisionId'], 'choice': 'other',
                                            'note': f'  {typed}  '})
-                assert status == 200 and body['outcome'] == 'approved'
+                # P4 (vá vòng soát) — chữ tự nhập là CÂU TRẢ LỜI trung tính, không phải một lời duyệt.
+                assert status == 200 and body['outcome'] == 'answered'
                 assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'Xong theo câu trả lời tự nhập'
 
                 # `TestServer.__aexit__` đóng store (app cleanup), nên mọi khẳng định phải ở trong khối.
@@ -488,6 +489,10 @@ def test_the_free_text_choice_needs_typed_text_and_the_text_reaches_the_model(tm
                 assert resolved['choice'] == 'other' and resolved['note'] == typed
                 seen = tool_results(store, sid)[-1]
                 assert seen['choice'] == 'other' and seen['note'] == typed, 'model phải đọc được chữ đã gõ'
+                assert seen['decision'] == 'answered' and seen['status'] == 'answered', \
+                    'kết cục tự nhập phải giữ đúng chữ `answered`, không bị hoá thành `approved`'
+                assert 'Do NOT treat this as approval' in seen['message'], \
+                    'lời nhắn cho model phải nói thẳng: chữ tự nhập KHÔNG phải đồng ý'
                 assert typed in json.dumps(model.requests[-1][0], ensure_ascii=False), 'chữ đã gõ phải tới model'
                 pins = [row['payload']['record'] for row in store.journal_tail(sid, limit=50, kinds=['decision'])
                         if (row['payload'] or {}).get('record')]
@@ -518,7 +523,9 @@ def test_a_model_supplied_free_text_option_keeps_its_flag(tmp_path):
         with pytest.raises(DecisionError) as excinfo:
             runtime.resolve_decision(sid, record['decisionId'], 'approve', None)
         assert 'DECISION_NOTE_REQUIRED' in str(excinfo.value) and excinfo.value.status == 400
-        assert runtime.resolve_decision(sid, record['decisionId'], 'approve', 'chữ tự nhập')['outcome'] == 'approved'
+        # Lựa chọn của MODEL mang cờ tự nhập cũng chốt `answered`: hễ có ô gõ chữ thì đó là trả lời,
+        # không phải một cái gật đầu (P4, vá vòng soát) — dù nhãn/id là `approve` đi nữa.
+        assert runtime.resolve_decision(sid, record['decisionId'], 'approve', 'chữ tự nhập')['outcome'] == 'answered'
         assert await asyncio.wait_for(runtime.tasks[sid], 5) == 'Xong theo chữ tự nhập'
         store.close()
 

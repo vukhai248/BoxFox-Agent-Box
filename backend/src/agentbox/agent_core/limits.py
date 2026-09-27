@@ -503,6 +503,11 @@ DECISION_OTHER_LABEL = 'Khác (tự nhập)'
 DECISION_NOTE_REQUIRED_CODE = 'DECISION_NOTE_REQUIRED'
 DECISION_NOTE_TOO_LONG_CODE = 'DECISION_NOTE_TOO_LONG'
 DECISION_NOTE_MAX_CHARS = 2000
+# P4 (vá vòng soát) — kết cục RIÊNG cho câu trả lời tự nhập: chủ nhà GÕ chữ là trả lời, KHÔNG phải
+# một lời duyệt. Đo được trước khi vá: `kind='alternative'` chốt thẳng thành `approved`, nên một cổng
+# `request_approval` mang cặp khoá plan ghi một hàng `approved` vào sổ duyệt dù chủ nhà vứt vào ô tự nhập
+# câu "không đồng ý, sửa lại phần X".
+DECISION_ANSWERED_STATUS = 'answered'
 
 # Phòng hồ sơ trong workspace (.research) — hình dạng khớp `deploy/docker/research_files.py`.
 DOSSIER_ROOM = '.research'

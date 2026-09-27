@@ -57,7 +57,8 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
 from . import plan_quality, research_review, research_runtime
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
-from .limits import (BTW_ASK_PREFIX, DECISION_NOTE_MAX_CHARS, DECISION_NOTE_REQUIRED_CODE,
+from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
+                      DECISION_NOTE_REQUIRED_CODE,
                       DECISION_NOTE_TOO_LONG_CODE, DECISION_OTHER_LABEL, DECISION_OTHER_OPTION_ID,
                       OWNER_STEER_PREFIX, RESEARCH_NUDGE_PREFIX)
 from . import evidence_gate, journal, plan_eval, plan_header, plan_registry, session_journal
@@ -1192,6 +1193,8 @@ DEFAULT_OTHER_OPTION = {'id': DECISION_OTHER_OPTION_ID, 'label': DECISION_OTHER_
 
 DECISION_OUTCOME_MESSAGES = {
     'approved': 'User approved this request; continue with exactly the approved action.',
+# P4 (vá vòng soát) — chủ nhà GÕ câu trả lời vào ô tự nhập: đó là câu trả lời, không phải cái gật đầu.
+    'answered': 'The user TYPED an answer instead of approving or rejecting; read `note` as their real answer. Do NOT treat this as approval.',
     'rejected': 'User rejected this request. Do not perform it; explain plainly and choose another approach.',
     'expired': 'Nobody answered before the deadline, so the request expired and counts as rejected. Do not perform this action and say so plainly.',
     'cancelled': 'The session was stopped before an answer arrived; the request counts as rejected.',
@@ -5105,7 +5108,11 @@ class HarnessRuntime(RuntimeCommands):
         if record['resolved']:
             return False
         record['resolved'] = True
-        record['outcome'] = {'decision': 'approved' if status == 'approved' else 'rejected',
+        # P4 (vá vòng soát) — 'answered' (chủ nhà GÕ chữ vào ô tự nhập) là CÂU TRẢ LỜI, không phải
+        # một lời từ chối: khoá `decision` giữ đúng chữ ấy để mọi chỗ đọc outcome không gọi nó là
+        # "rejected" (bản trước hoá mọi thứ khác 'approved' thành 'rejected').
+        record['outcome'] = {'decision': status if status in ('approved', DECISION_ANSWERED_STATUS)
+                             else 'rejected',
                              'choice': choice, 'status': status, 'reason': reason, 'note': note,
                              'decisionId': record['decisionId'], 'message': DECISION_OUTCOME_MESSAGES[status]}
         # §4.1: quyết định về một kế hoạch vào sổ duyệt TRƯỚC `decision_resolved`, để ai đọc sổ ngay
@@ -5133,6 +5140,9 @@ class HarnessRuntime(RuntimeCommands):
           nào**, phát `plan_decision_skipped` + một dòng `system_log` để sự thật vẫn có dấu vết, chỉ là
           không nằm trong sổ duyệt.
         * `cancelled` — phiên bị huỷ, cũng không ghi hàng.
+        * `answered` — chủ nhà GÕ câu trả lời vào ô tự nhập (P4, vá vòng soát): đó là câu trả lời
+          chứ không phải một lời duyệt, nên cũng không ghi hàng nào — chỉ `plan_decision_skipped`
+          + một dòng `system_log` với `reason='free_text'`.
         * `rejected` — người dùng thật sự từ chối, và chỉ có nghĩa với đường `request_approval`
           (`ask_user` không từ chối kế hoạch nào): ghi `changes_requested` của luật R1, điều kiện để bản
           sửa bắt buộc khai cha.
@@ -5156,6 +5166,19 @@ class HarnessRuntime(RuntimeCommands):
                                    else 'PLAN_REVIEW_CANCELLED'),
                              message=(f'không ghi sổ duyệt cho {identity} v{version}: {reason} '
                                       f'(không phải một lời từ chối)'),
+                             session_id=record['sessionId'], identity=identity, version=version,
+                             status=status, kind=record.get('kind'))
+            return None
+        if status == DECISION_ANSWERED_STATUS:
+            # P4 (vá vòng soát) — chủ nhà gõ câu trả lời vào ô tự nhập: đó là CÂU TRẢ LỜI, không phải
+            # một lời duyệt kế hoạch. Cùng khuôn với `expired`/`cancelled`: KHÔNG hàng nào vào sổ duyệt,
+            # nhưng `plan_decision_skipped` + một dòng `system_log` giữ lại sự thật đã xảy ra.
+            self.store.emit(record['sessionId'], 'plan_decision_skipped',
+                            {'identity': identity, 'version': version, 'status': status,
+                             'kind': record.get('kind'), 'reason': 'free_text'})
+            system_log.write('plan.review.answered', level='info', code='PLAN_REVIEW_ANSWERED',
+                             message=(f'không ghi sổ duyệt cho {identity} v{version}: chủ nhà GÕ câu '
+                                      f'trả lời (free_text), không duyệt và cũng không từ chối'),
                              session_id=record['sessionId'], identity=identity, version=version,
                              status=status, kind=record.get('kind'))
             return None
@@ -5247,7 +5270,15 @@ class HarnessRuntime(RuntimeCommands):
         if len(written) > DECISION_NOTE_MAX_CHARS:
             raise DecisionError(DECISION_NOTE_TOO_LONG_CODE,
                                 'note is limited to ' + str(DECISION_NOTE_MAX_CHARS) + ' characters', 400)
-        status = 'approved' if option['kind'] in {'approve', 'alternative'} else 'rejected'
+        # P4 (vá vòng soát) — lựa chọn tự nhập (`allowFreeText`) là chỗ chủ nhà GÕ câu trả lời, nên
+        # nó chốt bằng kết cục TRUNG TÍNH `answered`, KHÔNG phải 'approved'. Trước khi vá, một câu
+        # "không đồng ý, sửa lại phần X" ở cổng duyệt mang cặp khoá plan ghi thẳng một hàng `approved`
+        # vào sổ duyệt — hàng mà tab Plan đọc là "chủ nhà thật sự đồng ý". Các lựa chọn khác của mô
+        # hình (kể cả `alternative` không kèm cờ tự nhập) giữ nguyên hành vi cũ.
+        if option.get('allowFreeText') is True:
+            status = DECISION_ANSWERED_STATUS
+        else:
+            status = 'approved' if option['kind'] in {'approve', 'alternative'} else 'rejected'
         self.settle(record, choice, status, 'user', written or None)
         return {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': status}
 
@@ -5895,9 +5926,14 @@ class HarnessRuntime(RuntimeCommands):
         chosen = next((item for item in options if item.get('id') == outcome.get('choice')), None)
         expired = outcome.get('status') == 'expired'
         approved = outcome.get('decision') == 'approved'
-        status = 'approved' if approved else ('info' if expired else 'rejected')
+        # P4 (vá vòng soát) — 'answered' là chủ nhà GÕ câu trả lời: hàng `D:` của nó không được
+        # đọc thành "từ chối" (bản trước ghim status='rejected' + tiền tố 'từ chối' cho mọi kết cục
+        # không phải 'approved').
+        answered = outcome.get('status') == DECISION_ANSWERED_STATUS
+        status = ('info' if (expired or answered) else ('approved' if approved else 'rejected'))
         label = (chosen or {}).get('label') or outcome.get('choice') or '?'
-        prefix = 'hết hạn, lấy mặc định' if expired else ('chốt' if approved else 'từ chối')
+        prefix = ('hết hạn, lấy mặc định' if expired else
+                  ('trả lời' if answered else ('chốt' if approved else 'từ chối')))
         return await session_journal.append(
             self.executor, self.store, sid, 'decision', f"{prefix}: {label}",
             data={'decisionId': outcome.get('decisionId'), 'choice': outcome.get('choice'),
