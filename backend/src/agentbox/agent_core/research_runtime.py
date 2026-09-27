@@ -25,7 +25,7 @@ from . import limits
 from . import research_evidence, research_facets, research_report, research_review
 from .limits import (
     CHILD_DEADLINE_SECONDS, CHILD_MAX_STEPS, DOSSIER_DIR_MISMATCH_CODE, DOSSIER_MAX_BYTES, DOSSIER_ROOM,
-    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX, BTW_QUESTION_MAX_CHARS,
+    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX,
     FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX,
     RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
     RESEARCH_BRIEF_MISSING_CODE, RESEARCH_BRIEF_MODES, RESEARCH_BRIEF_MODE_UNKNOWN_CODE,
@@ -2372,8 +2372,10 @@ def btw_question_prompt(question) -> str:
     body = str(question or '').strip()
     if not body:
         raise ValueError('BTW_EMPTY: câu hỏi trống — gõ `/btw <câu hỏi>`')
-    if len(body) > BTW_QUESTION_MAX_CHARS:
-        body = body[:BTW_QUESTION_MAX_CHARS]
+    # P5 — MỘT luật độ dài duy nhất: cổng lệnh (`skills/commands.resolve`) TỪ CHỐI câu hỏi
+    # dài quá `BTW_QUESTION_MAX_CHARS` bằng mã `BTW_QUESTION_TOO_LONG`. Hàm dựng khung này KHÔNG
+    # cắt im lặng (bản trước có một nhánh cắt chết: chỉ đường lệnh tới đây và nó đã từ chối từ
+    # trước) — câu hỏi đi nguyên vẹn, người hỏi thấy đúng lệnh của mình thay vì bị xén lặng lẽ.
     return f'{BTW_ASK_PREFIX} {body}'
 
 

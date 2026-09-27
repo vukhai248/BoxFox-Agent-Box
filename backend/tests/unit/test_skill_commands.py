@@ -341,7 +341,11 @@ def test_command_child_never_gets_more_steps_than_the_session(registry):
 
 
 def test_btw_requires_a_question_and_caps_its_length(registry):
-    """P5 — `/btw <câu hỏi>` là lệnh thật: thiếu câu hỏi là 400 có mã, câu hỏi dài quá trần cũng vậy."""
+    """P5 — `/btw <câu hỏi>` là lệnh thật: thiếu câu hỏi là 400 có mã, câu hỏi dài quá trần cũng vậy.
+
+    Đây là NƠI DUY NHẤT chốt độ dài `/btw`: hàm dựng khung (`research_runtime.btw_question_prompt`)
+    không cắt im lặng, nên câu hỏi quá trần phải bị TỪ CHỐI ở đây (xem `test_steer_queue`).
+    """
     resolved = registry.resolve('/btw   pin này để làm gì?  ')
     assert resolved.kind == 'message' and resolved.reason == 'btw_command'
     assert resolved.prompt == 'pin này để làm gì?'

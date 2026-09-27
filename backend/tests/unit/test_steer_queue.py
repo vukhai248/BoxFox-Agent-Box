@@ -196,8 +196,11 @@ def test_an_idle_btw_question_is_framed_as_a_side_question():
     assert framed.startswith(limits.BTW_ASK_PREFIX) and framed.endswith('pin này để làm gì?')
     with pytest.raises(ValueError, match='BTW_EMPTY'):
         research_runtime.btw_question_prompt('   ')
-    long = research_runtime.btw_question_prompt('x' * (limits.BTW_QUESTION_MAX_CHARS + 100))
-    assert long == limits.BTW_ASK_PREFIX + ' ' + 'x' * limits.BTW_QUESTION_MAX_CHARS
+    # P5 — MỘT luật độ dài duy nhất: hàm dựng khung KHÔNG cắt im lặng. Cổng lệnh là nơi từ chối
+    # (`BTW_QUESTION_TOO_LONG`, xem `test_skill_commands.test_btw_requires_a_question_and_caps_its_length`),
+    # nên ở đây câu hỏi đi nguyên vẹn dù dài hơn trần — người hỏi không bị xén lặng lẽ.
+    over = 'x' * (limits.BTW_QUESTION_MAX_CHARS + 100)
+    assert research_runtime.btw_question_prompt(over) == limits.BTW_ASK_PREFIX + ' ' + over
 
 
 def test_the_recap_excerpt_skips_a_btw_question():
