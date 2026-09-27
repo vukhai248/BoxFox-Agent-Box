@@ -241,8 +241,8 @@ export function planPlayback(input: {
   to: CanvasScene
   options?: PlaybackOptions
 }): DrawingPlan {
-  const tuning = { ...PLAYBACK_DEFAULTS, ...(input.options ?? {}) }
   const options = input.options ?? {}
+  const tuning = { ...PLAYBACK_DEFAULTS, ...options }
   const from = input.from
   const to = input.to
   const empty: DrawingPlan = { steps: [], totalMs: 0, from, to, reducedMotion: true }
@@ -324,17 +324,22 @@ export function planPlayback(input: {
   }
 }
 
+/** Bước VẼ (bỏ `move`/`settle` — chúng không tạo ra hình gì). */
+function isDrawStep(step: PlaybackStep): boolean {
+  return step.kind !== 'move' && step.kind !== 'settle'
+}
+
 /**
- * Tổng số bước VẼ của kế hoạch (bỏ `move`/`settle` — chúng không tạo ra hình gì) để dải "canvas sống"
- * nói được "đang vẽ N/M" mà không đếm nhầm bước con trỏ đi.
+ * Tổng số bước VẼ của kế hoạch, để dải "canvas sống" nói được "đang vẽ N/M" mà không đếm nhầm bước
+ * con trỏ đi.
  */
 export function drawStepCount(plan: DrawingPlan): number {
-  return plan.steps.filter((step) => step.kind !== 'move' && step.kind !== 'settle').length
+  return plan.steps.filter(isDrawStep).length
 }
 
 /** Số bước vẽ đã xong tại thời điểm `tMs`. */
 export function drawnStepCount(plan: DrawingPlan, tMs: number): number {
-  return plan.steps.filter((step) => step.kind !== 'move' && step.kind !== 'settle' && tMs >= step.endMs).length
+  return plan.steps.filter((step) => isDrawStep(step) && tMs >= step.endMs).length
 }
 
 /** Tiến độ 0..1 bên trong một bước (bước có thời lượng 0 coi như đã xong). */
@@ -400,8 +405,8 @@ function lerpNode(before: CanvasNode, after: CanvasNode, progress: number): Canv
  * connector vẽ dần, node đổi hình học/biến mất). Hết `totalMs` (hoặc kế hoạch rỗng) trả ĐÚNG `to`
  * và con trỏ ẩn.
  */
-export function frameAt(plan: DrawingPlan, tMs: number, tuning?: Partial<PlaybackTuning>): PlaybackFrame {
-  const growRatio = (tuning ?? PLAYBACK_DEFAULTS).createGrowRatio ?? PLAYBACK_DEFAULTS.createGrowRatio
+export function frameAt(plan: DrawingPlan, tMs: number): PlaybackFrame {
+  const growRatio = PLAYBACK_DEFAULTS.createGrowRatio
   if (plan.steps.length === 0 || tMs >= plan.totalMs) {
     return { scene: plan.to, cursor: HIDDEN_CURSOR, activeIds: [], connectorProgress: {}, done: true }
   }
