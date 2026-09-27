@@ -33,8 +33,11 @@ export interface PermissionCardProps {
   request?: PermissionRequest
   /** Quyết định THẬT của agent (`decision_requested`/`decision_resolved`). */
   decision?: DecisionEntry
-  /** Trả lời quyết định thật; `choice` là `id` trong `decision.options`. */
-  onAnswer?: (choice: string) => void
+  /**
+   * Trả lời quyết định thật; `choice` là `id` trong `decision.options`.
+   * P4 — lựa chọn tự nhập (`allowFreeText`) gửi kèm `note` là chữ chủ nhà đã gõ.
+   */
+  onAnswer?: (choice: string, note?: string) => void
   /** Đang gửi câu trả lời → hàng này tạm khoá. */
   busy?: boolean
 }
@@ -192,7 +195,7 @@ function DecisionCard({
   busy,
 }: {
   decision: DecisionEntry
-  onAnswer?: (choice: string) => void
+  onAnswer?: (choice: string, note?: string) => void
   busy: boolean
 }) {
   const t = useT()
@@ -268,14 +271,25 @@ function DecisionCard({
       {/* 5. Lựa chọn + bộ đếm ngược theo deadline của server */}
       {isPending ? (
         <div className="flex flex-wrap items-center gap-2">
-          {decision.options.map((option) => (
-            <DecisionOptionButton
-              key={option.id}
-              option={option}
-              disabled={busy}
-              onClick={() => onAnswer?.(option.id)}
-            />
-          ))}
+          {decision.options.map((option) =>
+            // P4 — lựa chọn tự nhập mở ô gõ chữ rồi mới gửi; chọn nó mà bỏ trống là vô nghĩa
+            // (route cũng từ chối bằng `DECISION_NOTE_REQUIRED`), nên nút gửi bị khoá khi rỗng.
+            option.allowFreeText ? (
+              <DecisionFreeTextOption
+                key={option.id}
+                option={option}
+                disabled={busy}
+                onSubmit={(choice, note) => onAnswer?.(choice, note)}
+              />
+            ) : (
+              <DecisionOptionButton
+                key={option.id}
+                option={option}
+                disabled={busy}
+                onClick={() => onAnswer?.(option.id)}
+              />
+            ),
+          )}
           {remainingMin !== null && remainingSecPart !== null && (
             <span
               className={`ml-auto text-[11px] font-mono tabular-nums ${
@@ -328,6 +342,54 @@ function DecisionOptionButton({
     >
       {option.label}
     </button>
+  )
+}
+
+/**
+ * P4 — lựa chọn "tự nhập": nút mở ô chữ, chữ đã gõ đi cùng `choice` trong `note`.
+ * `id` gửi đi vẫn là `option.id` (runtime thêm `id='other'` cho MỌI quyết định).
+ */
+function DecisionFreeTextOption({
+  option,
+  disabled,
+  onSubmit,
+}: {
+  option: DecisionOption
+  disabled: boolean
+  onSubmit: (choice: string, note: string) => void
+}) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const ready = text.trim().length > 0
+
+  return (
+    <div className="flex w-full flex-col gap-1.5" data-testid="decision-free-text">
+      <DecisionOptionButton option={option} disabled={disabled} onClick={() => setOpen(true)} />
+      {open && (
+        <div className="flex items-end gap-2">
+          <textarea
+            data-testid="decision-free-text-input"
+            value={text}
+            rows={2}
+            autoFocus
+            disabled={disabled}
+            placeholder={t('decisions.freeTextPlaceholder')}
+            onChange={(event) => setText(event.target.value)}
+            className="min-h-9 w-full resize-y rounded-md border border-line bg-panel2 px-2 py-1 text-[12px] text-fg outline-none focus:border-brand/60"
+          />
+          <button
+            type="button"
+            data-testid="decision-free-text-submit"
+            disabled={disabled || !ready}
+            onClick={() => onSubmit(option.id, text.trim())}
+            className="rounded-md border border-brand/50 px-2.5 py-1 text-[12px] font-medium text-brand transition hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t('decisions.freeTextSubmit')}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -75,11 +75,12 @@ export function DecisionsPanel() {
   }, [targetRequestId, totalPending])
 
   const handleAnswer = useCallback(
-    async (decision: DecisionEntry, choice: string) => {
+    async (decision: DecisionEntry, choice: string, note?: string) => {
       setSendingId(decision.id)
       setAnswerError(null)
       try {
-        await answerDecision(chatId, decision.id, choice)
+        // P4 — lựa chọn tự nhập gửi kèm chữ đã gõ; các lựa chọn khác vẫn đi đường cũ (`note` rỗng).
+        await answerDecision(chatId, decision.id, choice, note)
         // `answerDecision` không ném: nó ghi lỗi thật của route vào store. Hàng
         // chỉ quay về "đang chờ" khi lần trả lời thất bại, nên lỗi chỉ hiện khi
         // đúng hàng đó vẫn còn chờ.
@@ -248,7 +249,7 @@ export function DecisionsPanel() {
                 <PermissionCard
                   decision={decision}
                   busy={sendingId === decision.id}
-                  onAnswer={(choice) => void handleAnswer(decision, choice)}
+                  onAnswer={(choice, note) => void handleAnswer(decision, choice, note)}
                 />
               </div>
             ))}
