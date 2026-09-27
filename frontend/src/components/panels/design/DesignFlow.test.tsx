@@ -611,7 +611,7 @@ describe('thẻ P5 của chế độ Design', () => {
     act(() => { host.remove() })
   })
 
-  it('canvas panel: đếm op THẬT trên canvas và đếm op bị từ chối (không hô \"đang vẽ\" khi rảnh)', () => {
+  it('canvas panel: đếm op THẬT trên canvas và đếm op bị từ chối (không hô "đang vẽ" khi rảnh)', () => {
     act(() => {
       useDesignStore.setState({
         runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
@@ -726,8 +726,8 @@ describe('thẻ P5 của chế độ Design', () => {
             [DESIGN_ID]: {
               version: 1,
               nodes: [
-                { id: 'seed-workspace', kind: 'ui-mockup', shape: null, card: 'ui-mockup', x: 40, y: 40, width: 380, height: 180, title: 'Dự án: BoxFox', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
-                { id: 'seed-screen', kind: 'ui-mockup', shape: null, card: 'ui-mockup', x: 520, y: 40, width: 380, height: 180, title: 'Màn hình đích: Bảng tin', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+                { id: 'seed-workspace', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 40, width: 380, height: 180, title: 'Dự án: BoxFox', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+                { id: 'seed-screen', kind: 'card', shape: null, card: 'ui-mockup', x: 520, y: 40, width: 380, height: 180, title: 'Màn hình đích: Bảng tin', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
               ],
               connectors: [{ id: 'seed-c1', fromNodeId: 'seed-workspace', toNodeId: 'seed-screen', fromAnchor: 'right', toAnchor: 'left', stroke: '#3b82f6', strokeWidth: 2 }],
               strokes: [],
