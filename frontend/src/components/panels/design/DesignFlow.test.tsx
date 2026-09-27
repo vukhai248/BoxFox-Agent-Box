@@ -13,6 +13,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../../i18n'
 import { useDesignStore, selectActiveRun, parseCanvasOp } from '../../../store/designStore'
+import { useHarnessChatStore } from '../../../store/harnessChatStore'
+import { useUiStore } from '../../../store/uiStore'
 import { DESIGN_MODE_OFF, readRun, readBatch, stepForPhase, type DesignBatch } from '../../../lib/designMode'
 import { DesignBatchDiffCard } from './DesignBatchDiffCard'
 import { DesignBriefCard } from './DesignBriefCard'
@@ -192,6 +194,8 @@ beforeEach(() => {
     brief: {},
     exitChoice: null,
     reports: {},
+    notices: [],
+    pendingTurn: '',
     loading: false,
     error: null,
     lastEventSeq: 0,
@@ -621,6 +625,210 @@ describe('tab Design (P5)', () => {
     click(host, '[data-testid="design-panel-tab-report"]')
     expect(host.querySelector('[data-testid="design-panel-empty"]')).toBeTruthy()
     expect(host.querySelector('[data-testid="design-handoff-card"]')).toBeFalsy()
+    act(() => { host.remove() })
+  })
+})
+
+/** Bấm một nút có xử lý async rồi để microtask chạy xong. */
+async function clickAsync(host: HTMLElement, selector: string): Promise<void> {
+  const node = host.querySelector<HTMLButtonElement>(selector)
+  if (!node) throw new Error(`không thấy ${selector}`)
+  await act(async () => {
+    node.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await act(async () => {})
+}
+
+/** Phiên chat có id sẵn để `send` không phải mở phiên mới (bài kiểm chỉ soi lời gọi mạng). */
+function seedSession(): void {
+  useHarnessChatStore.setState((state) => ({
+    sessions: {
+      ...state.sessions,
+      s1: {
+        ...(state.sessions['s1'] ?? { id: null, status: 'idle', events: [], error: null }),
+        id: 'sess-1',
+        status: 'idle',
+      },
+    },
+  }))
+}
+
+describe('thông báo, chạy nền và điều khiển run (P5 §5.1/§5.2/§5.6/§5.8/§5.9)', () => {
+  it('design_notice: đúng MỘT thẻ thông báo cho mỗi sự kiện, không nhân đôi thẻ báo cáo', () => {
+    act(() => {
+      useDesignStore.setState({ runs: [readRun(runRow({ status: 'completed', phase: 'done' }))!] })
+    })
+    act(() => {
+      const event = { seq: 31, type: 'design_notice', data: { designId: DESIGN_ID, kind: 'background-done' } }
+      useDesignStore.getState().applyEvent(event)
+      // Cùng một sự kiện được bơm lại (poll trùng seq) KHÔNG được dựng thẻ thứ hai.
+      useDesignStore.getState().applyEvent(event)
+    })
+    const host = render(<DesignConversationCards />)
+    const cards = host.querySelectorAll('[data-testid="design-notice-card"]')
+    expect(cards).toHaveLength(1)
+    expect(cards[0].getAttribute('data-kind')).toBe('background-done')
+    // Run đóng nhưng CHƯA có `design_report` ⇒ không được dựng thẻ bàn giao "rỗng" chồng lên.
+    expect(host.querySelector('[data-testid="design-handoff-card"]')).toBeNull()
+    act(() => { host.remove() })
+  })
+
+  it('run chạy nền khi chế độ tắt: chấm hổ phách + chú thích; bật lại đưa run về tiền cảnh', async () => {
+    const api = stubApi()
+    act(() => {
+      useDesignStore.setState({
+        mode: { ...DESIGN_MODE_OFF },
+        activeRunId: '',
+        runs: [readRun(runRow({ status: 'designing', phase: 'drawing', background: true }))!],
+      })
+    })
+    const host = render(<DesignToggle />)
+    const note = host.querySelector('[data-testid="design-background-note"]')
+    expect(note?.textContent).toContain('1')
+    expect(host.querySelector('[data-testid="design-toggle-dot"]')?.getAttribute('data-tone')).toBe('background')
+
+    await clickAsync(host, '[data-testid="composer-design-toggle"]')
+    const onCall = api.calls.find((call) => call.url.includes('/design-mode') && call.body?.on === true)
+    expect(onCall).toBeTruthy()
+    expect(useDesignStore.getState().mode.on).toBe(true)
+    expect(useDesignStore.getState().mode.activeRunId).toBe(DESIGN_ID)
+    act(() => { host.remove() })
+  })
+
+  it('điều khiển run: tạm dừng / tiếp tục / huỷ gửi PATCH; run tạm dừng nói rõ nhánh và tệp giữ nguyên', async () => {
+    const api = stubApi()
+    const active = render(<DesignRunTimeline run={readRun(runRow({ status: 'designing', phase: 'drawing' }))!} />)
+    expect(active.querySelector('[data-testid="design-run-pause"]')).toBeTruthy()
+    await clickAsync(active, '[data-testid="design-run-pause"]')
+    expect(api.calls.find((call) => call.body?.action === 'pause')).toBeTruthy()
+
+    await clickAsync(active, '[data-testid="design-run-cancel"]')
+    expect(api.calls.find((call) => call.body?.action === 'cancel')).toBeTruthy()
+
+    const paused = render(<DesignRunTimeline run={readRun(runRow({ status: 'paused', phase: 'drawing' }))!} />)
+    expect(paused.querySelector('[data-testid="design-run-resume-ask"]')?.textContent).toContain('D-')
+    expect(paused.querySelector('[data-testid="design-run-paused-note"]')?.textContent).toBeTruthy()
+    expect(paused.querySelector('[data-testid="design-run-pause"]')).toBeNull()
+    await clickAsync(paused, '[data-testid="design-run-resume"]')
+    expect(api.calls.find((call) => call.body?.action === 'resume')).toBeTruthy()
+    act(() => { active.remove(); paused.remove() })
+  })
+
+  it('exit-choice: 409 dựng thẻ, KHÔNG chọn sẵn, đóng lời hỏi mà không chọn thì không đổi gì', async () => {
+    const api = stubApi()
+    act(() => {
+      useDesignStore.setState({ runs: [readRun(runRow())!] })
+    })
+    await act(async () => {
+      await useDesignStore.getState().setMode(false, 'toggle')
+    })
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+
+    const strip = render(<DesignComposerStatus />)
+    expect(strip.querySelector('[data-testid="design-exit-choice"]')).toBeTruthy()
+    expect(strip.querySelector('[data-testid="design-exit-pause"]')?.getAttribute('aria-pressed')).toBeNull()
+    expect(strip.querySelector('[data-testid="design-exit-background"]')?.getAttribute('aria-pressed')).toBeNull()
+
+    await clickAsync(strip, '[data-testid="design-exit-cancel"]')
+    expect(useDesignStore.getState().exitChoice).toBeNull()
+    expect(useDesignStore.getState().mode.on).toBe(true)
+    expect(api.calls.filter((call) => call.body?.exitChoice).length).toBe(0)
+    act(() => { strip.remove() })
+  })
+
+  it('out-of-scope: "Tạm thoát" theo luật thoát rồi nộp lượt main; "Giữ" chỉ trả lời', async () => {
+    const api = stubApi()
+    seedSession()
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
+    act(() => {
+      useDesignStore.setState({ runs: [run], prompts: [run.prompts[0]] })
+    })
+    const cards = render(<DesignConversationCards />)
+    const strip = render(<DesignComposerStatus />)
+
+    await clickAsync(cards, '[data-testid="design-out-of-scope-exit"]')
+    expect(api.calls.some((call) => call.url.includes('/design/prompts/dp-oos/answer'))).toBe(true)
+    // Run còn hoạt động ⇒ server đòi chọn thoát: thẻ thoát hiện, CHƯA nộp lượt nào.
+    expect(useDesignStore.getState().exitChoice).not.toBeNull()
+    expect(api.calls.some((call) => call.url.includes('/turns'))).toBe(false)
+
+    // Chọn "Tạm dừng" ⇒ chế độ tắt và tin nhắn được nộp thành lượt main.
+    await clickAsync(strip, '[data-testid="design-exit-pause"]')
+    const turn = api.calls.find((call) => call.url.includes('/turns'))
+    expect(turn).toBeTruthy()
+    expect(String(turn?.body?.prompt)).toContain('Yêu cầu này')
+    expect(useDesignStore.getState().mode.on).toBe(false)
+    act(() => { cards.remove(); strip.remove() })
+  })
+
+  it('out-of-scope: "Giữ trong design" chỉ trả lời, chế độ vẫn bật', async () => {
+    const api = stubApi()
+    const run = readRun(runRow({ status: 'scoping', phase: 'interviewing', prompts: [outOfScopePrompt] }))!
+    act(() => {
+      useDesignStore.setState({ runs: [run], prompts: [run.prompts[0]] })
+    })
+    const cards = render(<DesignConversationCards />)
+    await clickAsync(cards, '[data-testid="design-out-of-scope-keep"]')
+    const answer = api.calls.find((call) => call.url.includes('/design/prompts/dp-oos/answer'))
+    expect(answer).toBeTruthy()
+    expect((answer?.body?.answers as { optionId: string }[])[0].optionId).toBe('keep')
+    expect(useDesignStore.getState().mode.on).toBe(true)
+    expect(api.calls.some((call) => call.url.includes('/turns'))).toBe(false)
+    act(() => { cards.remove() })
+  })
+
+  it('thẻ bàn giao: "Dùng cho plan" thoát chế độ rồi nộp lượt main có khối bàn giao', async () => {
+    const api = stubApi({ modeResponse: () => jsonResponse({ mode: { on: false, activeRunId: '', revision: 6 } }) })
+    seedSession()
+    const run = readRun(runRow({ status: 'completed', phase: 'done' }))!
+    const host = render(
+      <DesignHandoffCard
+        run={run}
+        report={{ branch: { name: 'design/chat-panel-x', base: 'abc1234' }, path: '.design/chat-panel/v1-design.md', version: 'v1', summary: 'xong' }}
+      />,
+    )
+    await clickAsync(host, '[data-testid="design-handoff-use-plan"]')
+    expect(api.calls.find((call) => call.url.includes('/design-mode') && call.body?.on === false)).toBeTruthy()
+    const turn = api.calls.find((call) => call.url.includes('/turns'))
+    expect(turn).toBeTruthy()
+    expect(String(turn?.body?.prompt)).toContain('D-')
+    expect(useDesignStore.getState().mode.on).toBe(false)
+    act(() => { host.remove() })
+  })
+
+  it('thẻ bàn giao: "Mở nhánh"/"Mở bản thiết kế" mở tab Design; "Thoát" tắt chế độ', async () => {
+    const api = stubApi()
+    const run = readRun(runRow({ status: 'completed', phase: 'done' }))!
+    const host = render(
+      <DesignHandoffCard
+        run={run}
+        report={{ branch: { name: 'design/chat-panel-x', base: 'abc1234' }, path: '.design/chat-panel/v1-design.md', version: 'v1', summary: 'xong' }}
+      />,
+    )
+    await clickAsync(host, '[data-testid="design-handoff-open-branch"]')
+    expect(useUiStore.getState().activeTab).toBe('design')
+    await clickAsync(host, '[data-testid="design-handoff-done"]')
+    expect(api.calls.find((call) => call.url.includes('/design-mode') && call.body?.on === false)).toBeTruthy()
+    act(() => { host.remove() })
+  })
+
+  it('ngăn Soát của tab Design: hiện phán quyết, bản và tóm tắt của vòng soát độc lập', () => {
+    act(() => {
+      useDesignStore.setState({
+        runs: [
+          readRun(
+            runRow({ status: 'completed', phase: 'done', review: { version: 'v1', verdict: 'passed', summary: 'không lệch hợp đồng' } }),
+          )!,
+        ],
+      })
+    })
+    const host = render(<DesignPanel />)
+    click(host, '[data-testid="design-panel-tab-review"]')
+    const pane = host.querySelector('[data-testid="design-panel-review"]')
+    expect(pane).toBeTruthy()
+    expect(pane?.getAttribute('data-verdict')).toBe('passed')
+    expect(pane?.textContent).toContain('v1')
+    expect(pane?.textContent).toContain('không lệch hợp đồng')
     act(() => { host.remove() })
   })
 })

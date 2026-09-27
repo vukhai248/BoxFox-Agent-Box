@@ -23,10 +23,12 @@ from .limits import (
     DESIGN_ACTIVE_STATUSES, DESIGN_ERROR_TEXT, DESIGN_EXIT_CHOICE_REQUIRED_CODE,
     DESIGN_HANDOFF_BLOCK_END, DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HARD_FORBIDDEN,
     DESIGN_BRANCH_REQUIRED_CODE, DESIGN_CANVAS_PROTOCOL_INVALID_CODE,
-    DESIGN_DIFF_DIRTY_BASE_CODE, DESIGN_INTERVIEW_IDS, DESIGN_INTERVIEW_MAX_QUESTIONS,
-    DESIGN_MODE_EVENT_CODE, DESIGN_OWNED_PREFIX, DESIGN_PATH_NOT_APPROVED_CODE,
-    DESIGN_PROMPT_KINDS, DESIGN_STEPS, DESIGN_TOUCH_KINDS, DESIGN_TOUCH_LIST_REQUIRED_CODE,
-    DESIGN_TOUCH_LIST_REVISION_STALE_CODE, DESIGN_TOUCH_STATUSES, DESIGN_WRITE_STALE_CODE,
+    DESIGN_DIFF_DIRTY_BASE_CODE, DESIGN_HANDOFF_UNREVIEWED_CODE, DESIGN_INTERVIEW_IDS,
+    DESIGN_INTERVIEW_MAX_QUESTIONS, DESIGN_MODE_EVENT_CODE, DESIGN_OWNED_PREFIX,
+    DESIGN_PATH_NOT_APPROVED_CODE, DESIGN_PROMPT_KINDS, DESIGN_REVIEW_NO_CRITIC_CODE,
+    DESIGN_REVIEW_VERDICT_MISMATCH_CODE, DESIGN_REVIEW_VERDICT_MISSING_CODE, DESIGN_STEPS,
+    DESIGN_TOUCH_KINDS, DESIGN_TOUCH_LIST_REQUIRED_CODE, DESIGN_TOUCH_LIST_REVISION_STALE_CODE,
+    DESIGN_TOUCH_STATUSES, DESIGN_WRITE_STALE_CODE, PLAN_REVIEW_MIN_ANSWER_CHARS,
 )
 
 # Bảy bước và tám pha được hợp đồng §2 đặt trong mô-đun này; `limits` là nguồn duy nhất, ở đây chỉ
@@ -48,7 +50,17 @@ DESIGN_SKILL_NAMES = ('claude-design', 'design-md', 'popular-web-designs', 'arch
 #: canvas và bốn công cụ đường ghi. P4–P5 (soát độc lập, báo cáo) thêm tên vào ĐÚNG danh sách này
 #: khi nối phần của chúng: chưa nối thì không được quảng cáo cho mô hình.
 WIRED_DESIGN_TOOLS = ('design_scope', 'design_branch_create', 'design_write', 'design_diff',
-                      'design_revert', 'canvas_draw')
+                      'design_revert', 'canvas_draw', 'design_review', 'design_report')
+
+#: P4 (§7.9): cổng provenance của một kết luận soát độc lập. Bản soát phải là con `plan-review`
+#: đã XONG, đã đọc đủ dài (`PLAN_REVIEW_MIN_ANSWER_CHARS`, cùng trần với bản soát plan — không có
+#: lý do để bản thiết kế chịu một trần khác), sinh SAU khi run mở, và mang `reviewTarget` đúng
+#: `(designId, version)`. Dòng `VERDICT:` đọc từ dòng CUỐI có chữ (khuôn `research_critique`).
+DESIGN_REVIEW_SUMMARY_CHARS = 800
+DESIGN_REPORT_SUMMARY_CHARS = 1200
+
+#: Nhãn `labels` của `design_report` → vào thẻ báo cáo/handoff. `partial` còn đổi cả status.
+DESIGN_PARTIAL_LABEL = 'partial'
 
 #: `origin` của một run: `mode` = run của chế độ (được bơm khi mode bật hoặc đang chạy nền),
 #: `delegate` = run mở bởi `delegate_task(role='design')` từ ngoài mode (không bao giờ bơm).
@@ -206,9 +218,9 @@ def apply_design_mode(rt, session_id, on, by='toggle', active_run=None):
         state = dict(job['state'] or {})
         if choice == 'pause':
             state['background'] = False
-            rt.store.design_job_save(job['design_id'], session_id, state, 'paused')
-            rt.store.emit(session_id, 'design_run', design_job_event(
-                rt.store.design_job(job['design_id'])))
+            paused = rt.store.design_job_save(job['design_id'], session_id, state, 'paused')
+            rt.store.emit(session_id, 'design_run', design_job_event(paused))
+            notify_run(rt, session_id, paused)
         else:
             state['background'] = True
             rt.store.design_job_save(job['design_id'], session_id, state)
@@ -256,10 +268,54 @@ def design_job_event(job):
             'origin': str(state.get('origin') or ''), 'step': PHASE_STEP.get(phase, 'clarify')}
 
 
+def batch_payload(state):
+    """Lô ghi của một run từ `state['diff']` (`{files, patchPath, at}`, §6.5) — khoá `batch` (§6).
+
+    `None` khi chưa có `design_diff` nào (frontend hiểu `null` là chưa có lô). `status` đọc từ mốc
+    admin đã ghim (`batchApprovedAt`/`batchRevertedAt`), không phải từ phỏng đoán của giao diện.
+    """
+    state = state if isinstance(state, dict) else {}
+    diff = state.get('diff') if isinstance(state.get('diff'), dict) else None
+    if not diff or not (diff.get('patchPath') or diff.get('files')):
+        return None
+    files = [row for row in (diff.get('files') or []) if isinstance(row, dict)]
+    revert = state.get('revert') if isinstance(state.get('revert'), dict) else {}
+    if revert.get('mode') == 'batch':
+        status = 'reverted'
+    elif state.get('batchApprovedAt'):
+        status = 'approved'
+    else:
+        status = 'proposed'
+    return {'index': 0, 'total': 1, 'status': status,
+            'revision': 0, 'patchPath': diff.get('patchPath'),
+            'added': sum(int(row.get('added') or 0) for row in files),
+            'removed': sum(int(row.get('removed') or 0) for row in files),
+            'files': files}
+
+
+def review_payload(state):
+    """Kết luận soát độc lập gần nhất của một run — khoá `review` (§6), hoặc `None`.
+
+    Hợp đồng backend là `ok`/`revise` (§7.6), nhưng CẶP GIÁ TRỊ ĐÃ ĐÓNG BĂNG CỦA GIAO DIỆN là
+    `passed`/`changes` (`frontend/src/lib/designMode.ts`, `DesignPanel.tsx`). Một chỗ dịch: phát
+    ra đúng cặp giao diện đang đọc.
+    """
+    state = state if isinstance(state, dict) else {}
+    review = state.get('review') if isinstance(state.get('review'), dict) else None
+    if not review or not review.get('verdict'):
+        return None
+    return {'version': str(review.get('version') or ''),
+            'verdict': 'passed' if review.get('verdict') == 'ok' else 'changes',
+            'summary': str(review.get('summary') or '')}
+
+
 def design_run_payload(job):
     """Bản camelCase của một hàng `design_jobs` cho API (hợp đồng §5, §6)."""
     state = job.get('state') if isinstance(job.get('state'), dict) else {}
     touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
+    batch = batch_payload(state)
+    if batch is not None:
+        batch['revision'] = int(job.get('revision') or 0)
     return {'designId': job.get('design_id'), 'sessionId': job.get('session_id'),
             'status': job.get('status'), 'revision': int(job.get('revision') or 0),
             'phase': state.get('phase'), 'origin': state.get('origin'),
@@ -268,7 +324,8 @@ def design_run_payload(job):
             'goal': state.get('goal'), 'brief': state.get('brief') or {},
             'touchList': touch_list, 'prompts': state.get('prompts') or [],
             'phaseHistory': state.get('phaseHistory') or [], 'actions': state.get('actions') or [],
-            'touchListRevision': int((touch_list or {}).get('revision') or 0)}
+            'touchListRevision': int((touch_list or {}).get('revision') or 0),
+            'batch': batch, 'review': review_payload(state)}
 
 
 def set_phase(rt, session_id, job, phase, reason, *, force=False):
@@ -299,6 +356,56 @@ def close_run(rt, session_id, job, status, reason, *, revision=None):
                   {'designId': job['design_id'],
                    'kind': 'background-done' if state.get('background') else 'blocked'})
     return updated
+
+
+def notify_run(rt, session_id, job):
+    """Phát ĐÚNG MỘT `design_notice` khi run chạm một trạng thái đáng nhắc (§6.3, §7.2).
+
+    Ba loại: `background-done` (run nền tới pha ĐÓNG), `needs-user` (run dừng chờ chủ nhà) và
+    `blocked` (run bị tạm dừng). Gác bằng `state.notified[<kind>]` — mỗi lần nhắc chỉ nói một lần
+    cho mỗi run, nên một vòng bơm gọi lại không nhân thông báo. Trả hàng job sau khi ghim mốc, hoặc
+    `None` khi không có gì để nhắc.
+    """
+    state = dict(job['state'] or {})
+    status = str(job.get('status') or '')
+    terminal = status in DESIGN_TERMINAL_STATUSES or str(state.get('phase') or '') == PHASE_DONE
+    if bool(state.get('background')) and terminal:
+        kind = 'background-done'
+    elif status == 'needs_user':
+        kind = 'needs-user'
+    elif status == 'paused':
+        kind = 'blocked'
+    else:
+        return None
+    notified = dict(state.get('notified') or {})
+    if notified.get(kind):
+        return None
+    notified[kind] = journal.utc_now_iso()
+    state['notified'] = notified
+    updated = rt.store.design_job_save(job['design_id'], session_id, state,
+                                       revision=job.get('revision'))
+    rt.store.emit(session_id, 'design_notice', {'designId': job['design_id'], 'kind': kind})
+    return updated
+
+
+def release_active_run(rt, session_id, design_id):
+    """Nhả `designMode.activeRunId` khi run đã đóng — chế độ vẫn bật, nhưng không còn run nào sống.
+
+    Không nhả thì lượt main sau vẫn nghĩ run đang hoạt động (`design_job_pumpable`, khối mode) và
+    chặn mở run mới.
+    """
+    runtime_module = _mode_mod()
+    session = rt.store.get(session_id)
+    if session is None:
+        return None
+    mode = dict(runtime_module.design_mode(session))
+    if str(mode.get('activeRunId') or '') != str(design_id):
+        return mode
+    mode['activeRunId'] = ''
+    config = dict(session.get('config') or {})
+    config[runtime_module.DESIGN_MODE_CONFIG_KEY] = mode
+    rt.store.update_config(session_id, config)
+    return mode
 
 
 def background_design_run(rt, session_id, design_id, reason):
@@ -516,7 +623,9 @@ def design_touch_list_approve(rt, session_id, job, revision, answers=None):
             approved += 1
     touch_list['approvedAt'] = journal.utc_now_iso()
     state['touchList'] = touch_list
+    # §6.3: duyệt cả danh sách là một câu trả lời — run RỜI `needs_user` và mở lượt tiếp tục.
     updated = rt.store.design_job_save(job['design_id'], session_id, state,
+                                       status='designing' if job['status'] == 'needs_user' else None,
                                        revision=job.get('revision'))
     rt.store.emit(session_id, 'design_scope',
                   {'designId': job['design_id'], 'revision': updated['revision']})
@@ -921,8 +1030,12 @@ def canvas_queue_directive(rt, session_id, job, target_node_id, target_node_titl
 
 
 def canvas_queued_directives(job):
-    """Chỉ thị canvas đang xếp hàng của một run (khối lời dặn đọc lại)."""
-    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    """Chỉ thị canvas đang xếp hàng của một run (khối lời dặn đọc lại).
+
+    `job` có thể là `None`: lượt design của một chế độ đang bật mà `activeRunId` đã được nhả
+    (run xong) vẫn dựng khối mode, và một khối mode không được sập vì thiếu run.
+    """
+    state = job.get('state') if isinstance(job, dict) and isinstance(job.get('state'), dict) else {}
     return [row for row in (state.get('directives') or []) if isinstance(row, dict)]
 
 
@@ -945,10 +1058,20 @@ def design_prompt_new(rt, session_id, job, kind, questions=None, meta=None):
                if item.get('promptId') != prompt['promptId']]
     prompts.append(prompt)
     state['prompts'] = prompts
-    rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
+    # §6.3/§7.8: một lời hỏi có câu BẮT BUỘC là câu CHẶN — run dừng ở `needs_user` tới khi chủ nhà
+    # trả lời (`design_prompt_answer(start=true)`) hoặc duyệt danh sách chạm.
+    blocking = any(bool(item.get('required')) for item in (questions or []) if isinstance(item, dict))
+    status = job['status']
+    if blocking and status in DESIGN_ACTIVE_STATUSES:
+        status = 'needs_user'
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, status=status,
+                                       revision=job.get('revision'))
     rt.store.emit(session_id, 'design_prompt',
                   {'promptId': prompt['promptId'], 'designId': job['design_id'], 'kind': kind,
                    'status': 'open'})
+    if status != job['status']:
+        rt.store.emit(session_id, 'design_run', design_job_event(updated))
+        notify_run(rt, session_id, updated)
     return prompt
 
 
@@ -997,8 +1120,10 @@ def design_prompt_answer(rt, session_id, prompt_id, answers, *, start=False):
     state['prompts'] = prompts
     state['brief'] = brief
     status = job['status']
+    advanced = False
     if start:
         status = 'designing'
+        advanced = state.get('phase') != 'briefing'
         state['phase'] = 'briefing'
         history = list(state.get('phaseHistory') or [])
         history.append({'phase': 'briefing', 'at': journal.utc_now_iso(), 'reason': 'prompt-answered'})
@@ -1010,31 +1135,292 @@ def design_prompt_answer(rt, session_id, prompt_id, answers, *, start=False):
                    'status': 'answered'})
     rt.store.emit(session_id, 'design_scope',
                   {'designId': job['design_id'], 'revision': updated['revision']})
+    # §6.3/§7.2: trả lời "Bắt đầu" là một lần NHÍCH PHA (`-` → `briefing`) — cùng luật "mỗi lần
+    # nhích pha phát đúng một `design_run`" như `set_phase` (đường này tự ghi pha vì phải ghi kèm
+    # brief/status trong MỘT giao dịch).
+    if advanced:
+        rt.store.emit(session_id, 'design_run', design_job_event(updated))
     return {'designId': job['design_id'], 'promptId': prompt_id, 'status': prompt['status'],
             'revision': updated['revision'], 'start': bool(start), 'resume': bool(start)}
+
+
+# ── Soát độc lập + báo cáo (§7.9, §6.3) ─────────────────────────────────────
+
+
+def _clamp_issues(issues, limit=30):
+    """Ghim `issues[]` về hình dạng của lược đồ `design_review` (khuôn `research._clamp_issues`)."""
+    rows = []
+    for item in (issues or []):
+        if not isinstance(item, dict):
+            continue
+        rows.append({'severity': str(item.get('severity') or 'medium'),
+                     'title': str(item.get('title') or item.get('summary') or '')[:200],
+                     'detail': str(item.get('detail') or item.get('text') or '')[:2000],
+                     'path': str(item.get('path') or '') or None})
+    return rows[:limit]
+
+
+def design_draft_path(job, version):
+    """`.design/<slug>/v<N>-design.md` — bản nháp của một version, hoặc đường dẫn mà nó SẼ mang.
+
+    Bản nháp do Design Lead ghi qua `design_write` nên nó nằm trong `state.actions`; chưa ghi thì
+    trả về đường dẫn quy ước để `delegate_task(reviewTarget.kind='design')` có chỗ bám.
+    """
+    wanted = f'v{int(version)}-design.md'
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    for row in reversed(state.get('actions') or []):
+        path = str((row or {}).get('path') or '')
+        if path == f'{design_dir(job)}{wanted}':
+            return path
+    return f'{design_dir(job)}{wanted}'
+
+
+def _design_critic(rt, session_id, job, design_id, version):
+    """Con `plan-review` ĐỦ ĐIỀU KIỆN cho `(designId, version)` này, hoặc ném mã lỗi cổng (§7.9).
+
+    Bốn điều kiện tiên quyết: vai `plan-review`, đã `completed`, sinh SAU khi run mở, và mang
+    `reviewTarget` trỏ ĐÚNG `(kind='design', designId, version)`. Các kiểm này đứng TRƯỚC mọi nhánh
+    đọc chữ — một bản soát đúng danh tính mà thiếu dòng VERDICT phải ra
+    `DESIGN_REVIEW_VERDICT_MISSING`, không phải `DESIGN_REVIEW_NO_CRITIC` (bài học finding 7 của
+    `research_critique`). Dòng `VERDICT:` chỉ đọc từ dòng CUỐI có chữ.
+    """
+    created = float(job.get('created') or 0)
+    usable = []
+    for child in rt.store.children_of(session_id):
+        if child.get('role') != 'plan-review' or child.get('status') != 'completed':
+            continue
+        if float(child.get('started') or 0) < created:
+            continue
+        if int(child.get('answer_chars') or 0) < PLAN_REVIEW_MIN_ANSWER_CHARS:
+            continue
+        session = rt.store.get(child['session_id']) or {}
+        target = (session.get('config') or {}).get('reviewTarget') or {}
+        if target.get('kind') != 'design' or str(target.get('designId') or '') != str(design_id) \
+                or target.get('version') != version:
+            continue
+        usable.append(child)
+    if not usable:
+        raise _error(DESIGN_REVIEW_NO_CRITIC_CODE)
+    ordered = sorted(usable, key=lambda row: (float(row.get('started') or 0),
+                                              str(row.get('session_id'))), reverse=True)
+    newest = ordered[0]
+    for critic in ordered:
+        text = ''
+        for event in rt.store.events_tail(critic['session_id']):
+            if event.get('type') != 'assistant':
+                continue
+            data = event.get('data') if isinstance(event.get('data'), dict) else {}
+            piece = data.get('text')
+            if isinstance(piece, str) and piece.strip():
+                text = piece
+        lines = [line.strip() for line in str(text or '').splitlines() if line.strip()]
+        found = re.match(r'(?i)^VERDICT:\s*(ok|revise)$', lines[-1] if lines else '')
+        if found is not None:
+            return critic, found.group(1).lower()
+        if str(critic['session_id']) == str(newest['session_id']):
+            tail = ' | '.join(line[:120] for line in lines[-2:])
+            raise ValueError(f'{DESIGN_REVIEW_VERDICT_MISSING_CODE}: '
+                             f'{DESIGN_ERROR_TEXT[DESIGN_REVIEW_VERDICT_MISSING_CODE]} '
+                             f'(con {str(newest["session_id"])[:8]}: {len(lines)} dòng có chữ; '
+                             f'cuối: {tail!r})')
+    raise _error(DESIGN_REVIEW_NO_CRITIC_CODE)
+
+
+def _review_markdown(review):
+    """`review.md` — kết luận soát độc lập, cùng hình dạng cho mọi version (§7.9)."""
+    lines = [f'# Design review v{review["version"]}', '',
+             f'- verdict: {review["verdict"]}',
+             f'- critic: {review.get("criticSessionId") or "?"}',
+             f'- at: {review.get("at") or ""}', '',
+             '## Summary', '', str(review.get('summary') or '(none)'), '', '## Issues', '']
+    issues = review.get('issues') or []
+    lines.extend([f'- [{row.get("severity")}] {row.get("title")}'
+                  + (f' ({row.get("path")})' if row.get('path') else '')
+                  + (f' — {row.get("detail")}' if row.get('detail') else '')
+                  for row in issues] or ['- (none)'])
+    return '\n'.join(lines) + '\n'
+
+
+async def design_review(rt, session_id, job, design_id, version, verdict, issues=None, summary=''):
+    """`design_review` (§7.9): ghi kết luận soát ĐỘC LẬP của một version, chỉ khi có bản soát thật.
+
+    Ba cổng theo ĐÚNG thứ tự: chưa có con `plan-review` đạt ⇒ `DESIGN_REVIEW_NO_CRITIC`; bản soát
+    không có dòng `VERDICT:` ⇒ `DESIGN_REVIEW_VERDICT_MISSING`; `verdict` ghi vào LỆCH dòng ấy ⇒
+    `DESIGN_REVIEW_VERDICT_MISMATCH`. Ghi `review.md` vào `.design/<slug>/`, cập nhật `state.review`
+    rồi đẩy pha: `ok` ⇒ `reviewing`, `revise` ⇒ về `scaffolding`. Trả hình dạng §6.
+    """
+    if job is None:
+        raise ValueError('DESIGN_JOB_UNKNOWN: open a run first (design_scope / the mode toggle)')
+    design_id = str(design_id or job['design_id']).strip()
+    if design_id != str(job['design_id']):
+        raise ValueError('DESIGN_JOB_UNKNOWN: that run belongs to another conversation')
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError('DESIGN_REVIEW_INVALID: version must be a positive integer')
+    verdict = str(verdict or '').strip().lower()
+    if verdict not in ('ok', 'revise'):
+        raise ValueError("DESIGN_REVIEW_INVALID: verdict must be 'ok' or 'revise'")
+    critic, critic_verdict = _design_critic(rt, session_id, job, design_id, version)
+    if critic_verdict != verdict:
+        raise ValueError(f'{DESIGN_REVIEW_VERDICT_MISMATCH_CODE}: '
+                         f'{DESIGN_ERROR_TEXT[DESIGN_REVIEW_VERDICT_MISMATCH_CODE]} '
+                         f'(bản soát nói {critic_verdict!r}, bạn ghi {verdict!r})')
+    review = {'version': int(version), 'verdict': critic_verdict,
+              'summary': str(summary or '')[:DESIGN_REVIEW_SUMMARY_CHARS],
+              'issues': _clamp_issues(issues), 'at': journal.utc_now_iso(),
+              'criticSessionId': critic['session_id']}
+    live = rt.store.design_job(design_id) or job
+    state = dict(live['state'] or {})
+    state['review'] = review
+    state['reviews'] = [row for row in (state.get('reviews') or [])
+                        if int((row or {}).get('version') or 0) != int(version)] + [review]
+    updated = rt.store.design_job_save(design_id, session_id, state,
+                                       revision=live.get('revision'))
+    rt.store.emit(session_id, 'design_run', design_job_event(updated))
+    await _write_box_text(rt, session_id, f'{design_dir(updated)}review.md',
+                          _review_markdown(review))
+    set_phase(rt, session_id, updated, 'reviewing' if verdict == 'ok' else 'scaffolding',
+              f'review-{verdict}')
+    return {'designId': design_id, 'version': int(version), 'verdict': verdict, 'recorded': True}
+
+
+def _report_markdown(job, report):
+    """`report.md` — thẻ báo cáo của run (một tệp cho mỗi run, bản mới nhất thắng)."""
+    lines = [f'# Design report {job["design_id"]}', '',
+             f'- status: {job["status"]}',
+             f'- version: v{report["version"]}',
+             f'- branch: {(report.get("branch") or {}).get("name") or "(none)"} '
+             f'(base {(report.get("branch") or {}).get("base") or "?"})',
+             f'- draft: {report.get("path")}',
+             f'- labels: {", ".join(report.get("labels") or []) or "none"}', '',
+             '## Summary', '', str(report.get('summary') or '(none)'), '',
+             '## Next steps for the build agent', '']
+    lines.extend([f'- {text}' for text in (report.get('nextSteps') or [])] or ['- (none)'])
+    return '\n'.join(lines) + '\n'
+
+
+async def design_report(rt, session_id, job, summary, labels=None, next_steps=None):
+    """`design_report` (§7.9): thẻ báo cáo + khối bàn giao, CHỈ khi version hiện tại đã `ok`.
+
+    Chưa có kết luận `ok` ⇒ `DESIGN_HANDOFF_UNREVIEWED`. Ghi `report.md`, phát `design_report` với
+    đúng khoá §9, đóng run (pha `done`, nhả `activeRunId`) và nhắc `background-done` một lần nếu run
+    đang chạy nền. Trả hình dạng §6.
+    """
+    if job is None:
+        raise ValueError('DESIGN_JOB_UNKNOWN: open a run first (design_scope / the mode toggle)')
+    state = dict(job['state'] or {})
+    reviews = [row for row in (state.get('reviews') or []) if isinstance(row, dict)]
+    latest = max(reviews, key=lambda row: int(row.get('version') or 0), default=None)
+    if latest is None or latest.get('verdict') != 'ok':
+        raise _error(DESIGN_HANDOFF_UNREVIEWED_CODE)
+    version = int(latest.get('version') or 0)
+    labels = [str(item).strip() for item in (labels or []) if str(item).strip()]
+    next_steps = [str(item).strip() for item in (next_steps or []) if str(item).strip()]
+    branch = _branch_state(state)
+    report = {'version': version, 'path': design_draft_path(job, version),
+              'reportPath': f'{design_dir(job)}report.md', 'labels': labels,
+              'summary': str(summary or '')[:DESIGN_REPORT_SUMMARY_CHARS],
+              'nextSteps': next_steps, 'verdict': latest.get('verdict'),
+              'criticSessionId': latest.get('criticSessionId'), 'at': journal.utc_now_iso(),
+              'branch': {'name': branch.get('name'), 'base': branch.get('base')} if branch else None}
+    state['report'] = report
+    state['stopReason'] = 'design-report'
+    status = 'partial' if DESIGN_PARTIAL_LABEL in labels else 'completed'
+    updated = rt.store.design_job_save(job['design_id'], session_id, state, status=status,
+                                       revision=job.get('revision'))
+    await _write_box_text(rt, session_id, report['reportPath'], _report_markdown(updated, report))
+    updated = set_phase(rt, session_id, updated, PHASE_DONE, 'design-report', force=True) or updated
+    rt.store.emit(session_id, 'design_report',
+                  {'designId': job['design_id'], 'version': version,
+                   'branch': report['branch'], 'path': report['path'], 'labels': labels,
+                   'summary': report['summary']})
+    # Bàn giao: run đóng ⇒ không còn run sống để bơm hoặc để khối mode bám vào.
+    release_active_run(rt, session_id, job['design_id'])
+    if state.get('background'):
+        # Nhắc `background-done` TRƯỚC khi hạ cờ — `notify_run` chỉ thấy run nền khi cờ còn bật.
+        updated = notify_run(rt, session_id, updated) or updated
+        live = dict(updated['state'] or {})
+        live['background'] = False
+        updated = rt.store.design_job_save(job['design_id'], session_id, live,
+                                           revision=updated.get('revision'))
+    rt.store.emit(session_id, 'design_run', design_job_event(updated))
+    return {'designId': job['design_id'], 'version': version, 'path': report['path'],
+            'labels': labels}
 
 
 # ── Bàn giao (§7.4, §4) ─────────────────────────────────────────────────────
 
 
-def design_handoff_block(rt, session_id, job, version=None):
-    """Khối bàn giao design → main, hoặc `None` khi chưa có gì để bàn giao.
+def _brief_split(brief):
+    """Chia brief thành HAI danh sách không trộn: phần chủ nhà xác nhận, phần agent giả định (§6.6).
 
-    P1 chưa có hồ sơ soát độc lập (P4), nên hàm trả `None` cho tới khi run có `report` đã soát — một
-    chỗ dựng khối, P4 chỉ điền thêm dữ liệu vào cùng cặp mốc.
+    `confirmed` chỉ nhận mục `status='confirmed'` VÀ `source.kind='user'` — khuôn `research_handoff`.
+    """
+    confirmed, assumed = [], []
+    for key, value in (brief or {}).items():
+        if key == 'revision':
+            continue
+        if isinstance(value, dict):
+            text = str(value.get('text') or value.get('value') or '').strip()
+            source = value.get('source') if isinstance(value.get('source'), dict) else {}
+            if not text:
+                continue
+            if value.get('status') == 'confirmed' and source.get('kind') == 'user':
+                confirmed.append(f'{key}: {text}')
+            else:
+                assumed.append(f'{key}: {text}')
+            continue
+        text = '; '.join(str(item) for item in value if str(item).strip()) \
+            if isinstance(value, list) else str(value or '').strip()
+        if text:
+            assumed.append(f'{key}: {text}')
+    return confirmed, assumed
+
+
+def _handoff_review(state, version):
+    """Kết luận soát của ĐÚNG version bàn giao (bản mới nhất nếu thiếu bản khớp)."""
+    review = state.get('review') if isinstance(state.get('review'), dict) else {}
+    if int(review.get('version') or 0) == int(version or 0):
+        return review
+    return next((row for row in (state.get('reviews') or [])
+                 if isinstance(row, dict) and int(row.get('version') or 0) == int(version or 0)), {})
+
+
+def design_handoff_block(rt, session_id, job, version=None):
+    """Khối `=== DESIGN HANDOFF ===` của một run ĐÃ có `report`, hoặc `None` (§6.6).
+
+    Nội dung là hợp đồng giao diện: run + status, nhánh thiết kế + base, đường dẫn `v<N>-design.md`,
+    các tệp đã ghi, danh sách chạm, kết luận độc lập, việc còn lại cho agent xây dựng, và hai danh
+    sách TÁCH BIỆT "Bạn đã xác nhận" / "Giả định của agent". Khối được dựng MỘT LẦN cho mỗi
+    `(designId, version)`; `_sync_mode_block` gỡ rồi chèn lại đúng một lần.
     """
     state = job.get('state') if isinstance(job.get('state'), dict) else {}
     report = state.get('report') if isinstance(state.get('report'), dict) else None
     if not report or not report.get('path'):
         return None
     version = version or report.get('version')
+    review = _handoff_review(state, version)
+    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else {}
+    branch = _branch_state(state) or (touch_list.get('branch') or {})
+    confirmed, assumed = _brief_split(state.get('brief') or {})
+    items = [row for row in (touch_list.get('items') or []) if isinstance(row, dict)]
+    written = [row for row in items if row.get('status') == 'written']
     lines = [DESIGN_HANDOFF_BLOCK_MARKER,
-             f'Design run {job["design_id"]} handed off at version {version}.',
-             f'Report: {report.get("path")}']
-    if state.get('touchList'):
-        lines.append(f'Touch list revision: {state["touchList"].get("revision")}; '
-                     f'branch: {(state["touchList"].get("branch") or {}).get("name")}')
-    lines.append('Rule: build from the handed-off design; do not raise its confidence.')
+             f'designId: {job["design_id"]}  status: {job["status"]}  version: v{version}',
+             f'branch: {branch.get("name") or "(none)"} (base {branch.get("base") or "?"})',
+             f'draft: {report.get("path")}  report: {report.get("reportPath") or ""}',
+             'files written (approved touch list): '
+             + ('; '.join(str(row.get('path')) for row in written) if written else '(none)'),
+             'independent verdict: '
+             + f'{review.get("verdict") or "?"} — {review.get("summary") or ""}'.strip()]
+    for row in items:
+        lines.append(f'touch: [{row.get("kind")}/{row.get("status")}] {row.get("path")}'
+                     f' — {row.get("reason") or ""}')
+    lines.append('Bạn đã xác nhận: ' + ('; '.join(confirmed) if confirmed else '(chưa có mục nào)'))
+    lines.append('Giả định của agent: ' + ('; '.join(assumed) if assumed else '(không có)'))
+    lines.append('Việc còn lại cho agent xây dựng: '
+                 + ('; '.join(report.get('nextSteps') or []) or '(không có)'))
+    lines.append('Rule: build on the SAME design branch; do not raise the confidence of this design, '
+                 'and do not write paths outside the approved touch list.')
     lines.append(DESIGN_HANDOFF_BLOCK_END)
     return '\n'.join(lines)
 

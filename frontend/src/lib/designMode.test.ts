@@ -11,11 +11,16 @@ import {
   isDesignEvent,
   openExitPrompt,
   readDesignMode,
+  readNotice,
   readPrompt,
   readRun,
   readRuns,
   readTouchItem,
   readTouchList,
+  runIsCancellable,
+  runIsPausable,
+  runIsRunningInBackground,
+  runIsSuspendable,
   runLabel,
   stepForPhase,
   DESIGN_MODE_OFF,
@@ -177,5 +182,35 @@ describe('sự kiện và lời hỏi thoát', () => {
     const answered = [readRun({ designId: 'd-1', status: 'designing', phase: 'drawing', prompts: [{ ...prompt, status: 'answered' }] })!]
     expect(openExitPrompt(answered)).toBeNull()
     expect(openExitPrompt([])).toBeNull()
+  })
+})
+
+describe('thông báo nền và trạng thái điều khiển được', () => {
+  it('readNotice: thiếu designId ⇒ null; kind lạ rơi về `blocked`, không ném', () => {
+    expect(readNotice({ kind: 'background-done' }, 5)).toBeNull()
+    expect(readNotice({ designId: 'd-1', kind: 'background-done' }, 5)).toEqual({
+      designId: 'd-1', kind: 'background-done', seq: 5,
+    })
+    expect(readNotice({ designId: 'd-1', kind: 'bịa' }, 6)?.kind).toBe('blocked')
+  })
+
+  it('runIsRunningInBackground: chỉ run nền CHƯA đóng', () => {
+    const run = readRun({ designId: 'd-1', status: 'designing', phase: 'drawing', background: true })!
+    expect(runIsRunningInBackground(run)).toBe(true)
+    expect(runIsRunningInBackground({ ...run, status: 'completed' })).toBe(false)
+    expect(runIsRunningInBackground({ ...run, background: false })).toBe(false)
+  })
+
+  it('runIsPausable/runIsSuspendable/runIsCancellable: đúng bốn trạng thái chạy + ba trạng thái tiếp tục', () => {
+    const run = readRun({ designId: 'd-1', status: 'designing', phase: 'drawing' })!
+    expect(runIsPausable(run)).toBe(true)
+    expect(runIsPausable({ ...run, status: 'paused' })).toBe(false)
+    expect(runIsSuspendable({ ...run, status: 'paused' })).toBe(true)
+    expect(runIsSuspendable({ ...run, status: 'partial' })).toBe(true)
+    expect(runIsSuspendable({ ...run, status: 'needs_user' })).toBe(true)
+    expect(runIsSuspendable(run)).toBe(false)
+    expect(runIsCancellable(run)).toBe(true)
+    expect(runIsCancellable({ ...run, status: 'completed' })).toBe(false)
+    expect(runIsCancellable({ ...run, status: 'cancelled' })).toBe(false)
   })
 })

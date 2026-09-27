@@ -3303,9 +3303,15 @@ class HarnessRuntime(RuntimeCommands):
             '6. Hand off cleanly (§4): when the mode turns off, the next main turn receives a short '
             'block with the run, its branch, the touch list, and a clear split between what the USER '
             'confirmed and what the AGENT assumed.',
+            '7. Before handing off, have an INDEPENDENT `plan-review` child read the whole draft '
+            '(`delegate_task(role="plan-review", reviewTarget={kind:"design", designId, version})`), '
+            'then record its verdict with `design_review` — a draft without an `ok` verdict cannot be '
+            'reported (`DESIGN_HANDOFF_UNREVIEWED`). `design_report` closes the run and hands it off.',
         ]
         mode = design_mode(session)
         run_id = str(mode.get('activeRunId') or '')
+        # `run_id` rỗng là trạng thái HỢP LỆ của một chế độ còn bật (run đã xong ⇒
+        # `design_report` nhả `activeRunId`); khối mode không được sập vì thiếu run.
         queued = design_runtime.canvas_queued_directives(
             self.store.design_job(run_id) if run_id else None)
         if queued:
@@ -3505,19 +3511,46 @@ class HarnessRuntime(RuntimeCommands):
         """
         return design_runtime.design_handoff_block(self, session['id'], job, version)
 
-    def design_handoff(self, session):
-        """Run design CHƯA bàn giao bản mới nhất của phiên, hoặc `None` (§4).
+    def named_design_run(self, session, prompt):
+        """Mã run design được NÓI RÕ trong lượt (`''` khi lượt không nhắc tên run nào).
 
-        Chỉ dựng khi mode đang TẮT — trong mode, bàn giao là việc của chính run.
+        Nhận CẢ HAI dạng chủ nhà có thể thấy: mã đầy đủ (`d-…-<hex>`) và nhãn giao diện
+        `D-<5 ký tự cuối>` (`frontend/src/lib/designMode.ts:runLabel`) — nút "Dùng cho plan"
+        của thẻ bàn giao gửi NHÃN, không gửi mã. Đối chiếu theo TỪNG token, không dùng `in` thô
+        (`'d-x' in 'd-x1'` là đúng — lỗi im lặng D-5).
+        """
+        text = str(prompt or '').lower()
+        if not text:
+            return ''
+        tokens = set(re.findall(r'[a-z0-9-]+', text))
+        if not tokens:
+            return ''
+        for job in self.store.design_jobs_for(session.get('id')):
+            design_id = str(job.get('design_id') or '')
+            compact = re.sub(r'[^0-9a-z]', '', design_id.lower())
+            label = f'd-{compact[-5:]}' if compact else ''
+            if design_id.lower() in tokens or (label and label in tokens):
+                return design_id
+        return ''
+
+    def design_handoff(self, session, prompt=''):
+        """Run design CHƯA bàn giao bản mới nhất của phiên, hoặc `None` (§4, §6.6).
+
+        Dựng khi mode đang TẮT, hoặc khi run đã ở pha ĐÓNG `done` (bàn giao là việc của chính run
+        đã xong, kể cả khi chủ nhà chưa tắt chế độ). `prompt` = lượt đang dựng khối: nút "Dùng cho
+        plan" NÊU TÊN run ⇒ chỉ run ấy được bàn giao.
         """
         mode = design_mode(session)
-        if mode['on']:
-            return None
         delivered = mode.get('handoffDeliveredVersion') or {}
+        wanted = self.named_design_run(session, prompt)
         for job in self.store.design_jobs_for(session.get('id')):
+            if wanted and str(job['design_id']) != wanted:
+                continue
             state = job.get('state') if isinstance(job.get('state'), dict) else {}
             report = state.get('report') if isinstance(state.get('report'), dict) else None
             if not report or not report.get('path'):
+                continue
+            if mode['on'] and str(state.get('phase') or '') != design_runtime.PHASE_DONE:
                 continue
             version = report.get('version')
             if str(delivered.get(job['design_id'])) == str(version):
@@ -4443,6 +4476,16 @@ class HarnessRuntime(RuntimeCommands):
             await design_runtime.persist_design_canvas(self, sid,
                                                        self.store.design_job(job['design_id']))
             return result
+        if name == 'design_review':
+            # P4 (§7.9): cổng bằng chứng + ghi `review.md` (đường async) — luật nằm ở `design_runtime`.
+            return await design_runtime.design_review(self, sid, self.design_job_for(session, args),
+                                                      args.get('designId'), args.get('version'),
+                                                      args.get('verdict'), args.get('issues'),
+                                                      args.get('summary') or '')
+        if name == 'design_report':
+            return await design_runtime.design_report(self, sid, self.design_job_for(session, args),
+                                                      args.get('summary') or '', args.get('labels'),
+                                                      args.get('nextSteps'))
         if name == 'journal_write':
             return await self.journal_write(sid, args)
         if name == 'journal_brief':
@@ -5994,7 +6037,21 @@ class HarnessRuntime(RuntimeCommands):
                              'mode': requested.get('mode') or 'critique'}
             if review_target['mode'] not in research_review.REVIEW_MODES:
                 raise ValueError('RESEARCH_REVIEW_MODE_INVALID')
-        if role == 'plan-review':
+        if role == 'plan-review' and (args.get('reviewTarget') or {}).get('kind') == 'design':
+            # P4 (§7.9, Q2): CÙNG vai `plan-review`, đích là một BẢN THIẾT KẾ. Runtime ghim đường
+            # dẫn bản nháp của đúng `(designId, version)`; `design_review` chỉ nhận kết luận từ con
+            # mang chính `reviewTarget` này.
+            requested = args.get('reviewTarget') or {}
+            if not requested.get('designId') or isinstance(requested.get('version'), bool) \
+                    or not isinstance(requested.get('version'), int):
+                raise ValueError('DESIGN_REVIEW_TARGET_REQUIRED: pass reviewTarget with designId and version')
+            job = self.store.design_job(str(requested['designId']))
+            if job is None or job['session_id'] != session['id']:
+                raise ValueError('DESIGN_REVIEW_TARGET_UNKNOWN: that design run is not owned by this session')
+            review_target = {'kind': 'design', 'designId': job['design_id'],
+                             'version': requested['version'],
+                             'path': design_runtime.design_draft_path(job, requested['version'])}
+        elif role == 'plan-review':
             requested = args.get('reviewTarget') or {}
             if requested.get('kind') != 'plan' or not requested.get('identity') \
                     or isinstance(requested.get('version'), bool) \
@@ -6086,9 +6143,9 @@ class HarnessRuntime(RuntimeCommands):
         if review_target is not None:
             prompt_parts.append('Binding from the harness: read the complete file with file_read before '
                                 f'judging it: {review_target["path"]}. This review is only for '
-                                f'{review_target.get("researchId") or review_target.get("identity")}@v'
+                                f'{review_target.get("researchId") or review_target.get("identity") or review_target.get("designId")}@v'
                                 f'{review_target["version"]}; review mode: '
-                                f'{review_target.get("mode", "plan")}.')
+                                f'{review_target.get("mode") or ("design" if review_target.get("kind") == "design" else "plan")}.')
         if context_data:
             prompt_parts.append(f'Parent-supplied context (data):\n{context_data}')
         if expectation:

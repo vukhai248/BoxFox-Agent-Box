@@ -416,3 +416,47 @@ export function openExitPrompt(runs: readonly DesignRun[]): DesignPrompt | null 
   }
   return null
 }
+
+// ── Trạng thái điều khiển được của run (§5.6/§5.8) ─────────────────────────
+
+/** Run còn chạy nền (nền + chưa đóng) — nguồn sự thật cho chấm hổ phách ở nút Design (§5.2). */
+export function runIsRunningInBackground(run: DesignRun): boolean {
+  return run.background && !DESIGN_TERMINAL_STATUSES.includes(run.status)
+}
+
+/** Run có thể tạm dừng — bốn trạng thái đang chạy; `paused`/trạng thái đóng thì không. */
+export function runIsPausable(run: DesignRun): boolean {
+  return (['scoping', 'designing', 'writing', 'reviewing'] as DesignRunStatus[]).includes(run.status)
+}
+
+/** Run có thể TIẾP TỤC (§5.8: từ `paused`/`partial`/`needs_user` về pha trước đó). */
+export function runIsSuspendable(run: DesignRun): boolean {
+  return (['paused', 'partial', 'needs_user'] as DesignRunStatus[]).includes(run.status)
+}
+
+/** Run có thể huỷ — nhánh giữ lại để đọc; run đã xong/huỷ thì thôi. */
+export function runIsCancellable(run: DesignRun): boolean {
+  return run.status !== 'completed' && run.status !== 'cancelled'
+}
+
+// ── Thông báo nền (`design_notice`, hợp đồng §9) ──────────────────────────
+
+/** Ba lý do một thông báo nền xuất hiện — không có lý do nào được bịa thêm. */
+export type DesignNoticeKind = 'background-done' | 'needs-user' | 'blocked'
+
+const NOTICE_KINDS: DesignNoticeKind[] = ['background-done', 'needs-user', 'blocked']
+
+export interface DesignNotice {
+  designId: string
+  kind: DesignNoticeKind
+  /** `seq` của sự kiện sinh ra thông báo — dùng để chống vẽ trùng khi poll lặp. */
+  seq: number
+}
+
+/** Một thông báo từ `unknown`; thiếu `designId` ⇒ `null` (không dựng thẻ rỗng). */
+export function readNotice(value: unknown, seq: number): DesignNotice | null {
+  const row = asRecord(value)
+  const designId = asString(row.designId)
+  if (!designId) return null
+  return { designId, kind: oneOf(row.kind, NOTICE_KINDS, 'blocked'), seq }
+}

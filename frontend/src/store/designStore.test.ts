@@ -37,6 +37,8 @@ beforeEach(() => {
     brief: {},
     exitChoice: null,
     reports: {},
+    notices: [],
+    pendingTurn: '',
     loading: false,
     error: null,
     lastEventSeq: 0,
@@ -73,5 +75,39 @@ describe('designStore — canvas slice (P2)', () => {
   it('records the actor of the last canvas event per run', () => {
     useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1, 'user'))
     expect(useDesignStore.getState().sceneActor[DESIGN_ID]).toBe('user')
+  })
+})
+
+describe('designStore — thông báo nền và hàng đợi lượt main (P5 §5.2/§5.9)', () => {
+  function noticeEvent(kind: string, seq: number) {
+    return { seq, type: 'design_notice', data: { designId: DESIGN_ID, kind } }
+  }
+
+  it('mỗi sự kiện `design_notice` đúng một thẻ; poll lặp cùng seq không nhân đôi', () => {
+    useDesignStore.getState().applyEvent(noticeEvent('background-done', 41))
+    useDesignStore.getState().applyEvent(noticeEvent('background-done', 41))
+    expect(useDesignStore.getState().notices).toEqual([
+      { designId: DESIGN_ID, kind: 'background-done', seq: 41 },
+    ])
+    useDesignStore.getState().applyEvent(noticeEvent('needs-user', 42))
+    expect(useDesignStore.getState().notices).toHaveLength(2)
+  })
+
+  it('design_notice thiếu designId bị bỏ thay vì dựng thẻ rỗng', () => {
+    useDesignStore.getState().applyEvent({ seq: 43, type: 'design_notice', data: { kind: 'blocked' } })
+    expect(useDesignStore.getState().notices).toHaveLength(0)
+  })
+
+  it('queueTurn: chuỗi rỗng huỷ xếp hàng; đổi phiên xoá cả thông báo lẫn hàng đợi', () => {
+    useDesignStore.getState().queueTurn('gửi main')
+    expect(useDesignStore.getState().pendingTurn).toBe('gửi main')
+    useDesignStore.getState().queueTurn('')
+    expect(useDesignStore.getState().pendingTurn).toBe('')
+
+    useDesignStore.getState().applyEvent(noticeEvent('blocked', 44))
+    useDesignStore.getState().queueTurn('x')
+    useDesignStore.getState().clearSessionChange()
+    expect(useDesignStore.getState().notices).toHaveLength(0)
+    expect(useDesignStore.getState().pendingTurn).toBe('')
   })
 })

@@ -25,16 +25,19 @@ import {
   openExitPrompt,
   readBatch,
   readDesignMode,
+  readNotice,
   readPrompt,
   readReview,
   readRun,
   readRuns,
   stepForPhase,
   type DesignMode,
+  type DesignNotice,
   type DesignPrompt,
   type DesignRun,
   type Json,
 } from '../lib/designMode'
+import { useHarnessChatStore } from './harnessChatStore'
 import {
   answerDesignPrompt,
   approveTouchList,
@@ -74,6 +77,17 @@ interface DesignState {
   brief: Json
   /** `designId -> payload` báo cáo bàn giao gần nhất (P4). */
   reports: Record<string, Json>
+  /**
+   * Thông báo nền `design_notice` (§9) theo thứ tự đến — mỗi sự kiện đúng MỘT thẻ, khoá chống
+   * trùng là `(designId, kind, seq)`. Store KHÔNG suy diễn thêm loại thông báo nào.
+   */
+  notices: DesignNotice[]
+  /**
+   * Tin nhắn chờ nộp thành lượt main sau khi thoát chế độ (ra khỏi phạm vi / dùng cho plan). Vì sao
+   * tách khỏi component: lượt chỉ được nộp khi thoát chế độ THÀNH CÔNG — nếu server còn đòi chọn thoát
+   * (§5.1) thì tin nhắn nằm đây và được xả ở `resolveExit`.
+   */
+  pendingTurn: string
   /** Lời hỏi 409 khi tắt mode lúc run còn chạy: có thì phải neo thẻ vào nút Design. */
   exitChoice: DesignExitChoice | null
   loading: boolean
@@ -99,6 +113,8 @@ interface DesignState {
   approveTouchList: (designId: string, revision: number, answers?: DesignPromptAnswerBody) => Promise<boolean>
   updateRun: (designId: string, body: { action: string; revision?: number } & Record<string, unknown>) => Promise<boolean>
   answerPrompt: (promptId: string, body: DesignPromptAnswerBody) => Promise<boolean>
+  /** Xếp một tin nhắn main để nộp sau khi thoát chế độ; chuỗi rỗng = huỷ xếp hàng. */
+  queueTurn: (text: string) => void
 }
 
 function message(error: unknown): string {
@@ -160,6 +176,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   rejectedOps: 0,
   brief: {},
   reports: {},
+  notices: [],
+  pendingTurn: '',
   exitChoice: null,
   loading: false,
   error: null,
@@ -202,7 +220,17 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         set({ exitChoice: { code: 'DESIGN_EXIT_CHOICE_REQUIRED', prompt, message: prompt.note } })
       }
     }
-    // `design_notice` (P6) chưa có hình dạng chốt cho giao diện — bỏ qua thay vì đoán.
+    if (event.type === 'design_notice') {
+      const notice = readNotice(data, event.seq)
+      if (!notice) return
+      // Poll có thể bơm lại cùng `seq`; khoá chống trùng giữ đúng MỘT thẻ cho mỗi sự kiện (§9).
+      const duplicate = get().notices.some(
+        (item) => item.designId === notice.designId && item.kind === notice.kind && item.seq === notice.seq,
+      )
+      if (duplicate) return
+      set({ notices: [...get().notices, notice] })
+      return
+    }
     if (event.type === 'design_report') {
       const designId = asString(data.designId)
       if (!designId) return
@@ -246,6 +274,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     sceneVersion: 0,
     brief: {},
     reports: {},
+    notices: [],
+    pendingTurn: '',
     activeRunId: '',
     exitChoice: null,
     rejectedOps: 0,
@@ -335,6 +365,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         return 'exit-choice'
       }
       set({ exitChoice: null, mode: readDesignMode({ designMode: outcome.result.mode }) })
+      // Thoát chế độ thành công ⇒ xả tin nhắn main đang chờ (ra khỏi phạm vi / dùng cho plan).
+      if (!on) void deliverPendingTurn()
       void get().refresh()
       return 'ok'
     } catch (error) {
@@ -357,7 +389,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
         on: false, by: 'toggle', exitChoice: choice, activeRun: choice,
         ...(previous ? { prompt: previous.prompt } : {}),
       })
-      if (outcome.kind === 'ok') set({ mode: readDesignMode({ designMode: outcome.result.mode }) })
+      if (outcome.kind === 'ok') {
+        set({ mode: readDesignMode({ designMode: outcome.result.mode }) })
+        // Chọn xong lối thoát ⇒ chế độ đã tắt, tin nhắn main chờ từ trước được nộp ngay.
+        void deliverPendingTurn()
+      }
       if (active) void get().refreshDetail(active)
       void get().refresh()
     } catch (error) {
@@ -402,7 +438,20 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       return false
     }
   },
+
+  queueTurn: (text) => set({ pendingTurn: text }),
 }))
+
+/**
+ * Nộp tin nhắn main đang chờ (nếu có) và xoá hàng đợi TRƯỚC khi gửi — một tin nhắn chỉ được nộp một
+ * lần. Chỉ gọi sau khi chế độ đã tắt THÀNH CÔNG; còn lời hỏi thoát chưa chọn thì tin nhắn ở lại.
+ */
+async function deliverPendingTurn(): Promise<void> {
+  const { pendingTurn, sessionId } = useDesignStore.getState()
+  if (!pendingTurn || !sessionId) return
+  useDesignStore.setState({ pendingTurn: '' })
+  await useHarnessChatStore.getState().send(sessionId, pendingTurn, null)
+}
 
 /** Gộp lời hỏi từ nhiều nguồn (giữ cái MỚI nhất theo `promptId`). */
 function mergePrompts(current: readonly DesignPrompt[], incoming: readonly DesignPrompt[]): DesignPrompt[] {

@@ -883,7 +883,11 @@ def create_app(runtime):
         """P1 (§5): `GET /api/agent/design/runs/{id}` — chi tiết một run cho tab Design."""
         job = design_job_known(request.match_info['design_id'])
         state = job['state'] if isinstance(job.get('state'), dict) else {}
-        return web.json_response({'job': design_runtime.design_run_payload(job),
+        payload = design_runtime.design_run_payload(job)
+        # P4 (§5, §6): `batch`/`review` đi CẢ trong `job` (payload chuẩn) LẪN ở tầng vỏ — giao diện
+        # đọc `job.batch ?? envelope.batch` (`designStore.refreshDetail`), nên hai đường đều phải có.
+        return web.json_response({'job': payload, 'batch': payload['batch'],
+                                  'review': payload['review'],
                                   'prompts': state.get('prompts') or [],
                                   'touchList': state.get('touchList'),
                                   'brief': state.get('brief') or {},
@@ -943,6 +947,9 @@ def create_app(runtime):
                                                     revision=body.get('revision'))
         except ValueError as exc:
             raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if action == 'pause':
+            # P4 (§7.2): run vừa rơi vào `paused` ⇒ đúng MỘT `design_notice` loại `blocked`.
+            updated = design_runtime.notify_run(runtime, sid, updated) or updated
         if action == 'resume' and (job['state'] or {}).get('phase') == design_runtime.PHASE_DONE:
             # Pha `done` là pha ĐÓNG; một run vừa được hồi sức không được mang pha ấy.
             updated = design_runtime.set_phase(runtime, sid, updated, 'briefing', 'owner-resume',

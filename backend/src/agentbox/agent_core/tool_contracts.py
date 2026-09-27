@@ -223,11 +223,13 @@ SCHEMAS = [
                         'branch explores, so its rows, claims and coverage land on the right entry '
                         'of the map. Leave it out when the branch is not tied to one direction.'},
           'reviewTarget': {'type': 'object', 'description': 'Required for research-review or plan-review: '
-                           '{kind:"research", researchId, version, mode:"evidence"|"critique"|"coverage"} '
-                           'or {kind:"plan", identity, version}. '
+                           '{kind:"research", researchId, version, mode:"evidence"|"critique"|"coverage"}, '
+                           '{kind:"plan", identity, version} '
+                           'or {kind:"design", designId, version}. '
                            'The runtime binds the exact saved '
                            'path and content hash; the child must read every slice of that file.',
                            'properties': {'kind': STRING, 'researchId': STRING, 'identity': STRING,
+                                          'designId': STRING,
                                           'version': {'type': 'integer'},
                                           'mode': {'type': 'string',
                                                    'enum': ['evidence', 'critique', 'coverage']}}},

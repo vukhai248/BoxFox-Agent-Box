@@ -8,7 +8,7 @@
 import { PenTool } from 'lucide-react'
 import { useT } from '../../../i18n/context'
 import { useDesignStore } from '../../../store/designStore'
-import { DESIGN_TERMINAL_STATUSES } from '../../../lib/designMode'
+import { runIsRunningInBackground } from '../../../lib/designMode'
 
 export function DesignToggle({ compact }: { compact?: boolean }) {
   const t = useT()
@@ -16,10 +16,9 @@ export function DesignToggle({ compact }: { compact?: boolean }) {
   const runs = useDesignStore((s) => s.runs)
   const setMode = useDesignStore((s) => s.setMode)
 
-  const background = runs.filter(
-    (run) => run.background && !DESIGN_TERMINAL_STATUSES.includes(run.status),
-  ).length
+  const background = runs.filter(runIsRunningInBackground).length
   const label = mode.on ? t('design.toggleOff') : t('design.toggleOn')
+  const tone = mode.on ? 'on' : background > 0 ? 'background' : 'off'
 
   return (
     <button
@@ -39,10 +38,18 @@ export function DesignToggle({ compact }: { compact?: boolean }) {
       {!compact && <span>{t('design.name')}</span>}
       {/* Chấm trạng thái: xanh khi chế độ bật; hổ phách khi chỉ còn run chạy nền. */}
       <span
+        data-testid="design-toggle-dot"
+        data-tone={tone}
         className={`size-1.5 rounded-full ${
           mode.on ? 'bg-brand shadow-xs' : background > 0 ? 'bg-amber-400' : 'bg-muted/40'
         }`}
       />
+      {/* §5.2: chế độ tắt mà còn run nền ⇒ chú thích đọc được bằng trình đọc màn hình. */}
+      {!mode.on && background > 0 && (
+        <span data-testid="design-background-note" className="sr-only">
+          {t('design.backgroundRuns', { count: background })}
+        </span>
+      )}
     </button>
   )
 }

@@ -263,7 +263,7 @@ class RuntimeCommands:
         handoff = self.research_handoff(session, turn_text)
         # P1 (§4): bàn giao design đi cùng đường với bàn giao research — mỗi bản chỉ MỘT lần, và chỉ
         # khi mode đang tắt (`design_handoff` tự trả `None` trong mode).
-        handoff_design = self.design_handoff(session)
+        handoff_design = self.design_handoff(session, turn_text)
         content = current.rstrip()
         for block in [profile['promptBlock'], (handoff or {}).get('block'),
                       (handoff_design or {}).get('block')]:

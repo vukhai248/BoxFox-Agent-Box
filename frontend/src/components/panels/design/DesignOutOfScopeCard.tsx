@@ -5,21 +5,51 @@
  * - "Tạm thoát để main xử lý": trả lời lời hỏi rồi để lượt main tiếp nhận yêu cầu.
  * - "Giữ trong design": ghi nhận yêu cầu như một phần phạm vi của run.
  */
+import { useState } from 'react'
 import { useT } from '../../../i18n/context'
-import { runLabel, type DesignPrompt, type DesignRun } from '../../../lib/designMode'
+import { runLabel, type DesignPrompt, type DesignPromptOption, type DesignRun } from '../../../lib/designMode'
 import { useDesignStore } from '../../../store/designStore'
+
+/** Chọn lựa của server theo Ý NGHĨA, không theo thứ tự: id/nhãn khớp trước, thiếu thì lấy vị trí. */
+function pick(options: readonly DesignPromptOption[], pattern: RegExp, fallbackIndex: number): DesignPromptOption | undefined {
+  return options.find((option) => pattern.test(`${option.id} ${option.label}`)) ?? options[fallbackIndex]
+}
 
 export function DesignOutOfScopeCard({ run, prompt }: { run: DesignRun; prompt: DesignPrompt }) {
   const t = useT()
   const answerPrompt = useDesignStore((s) => s.answerPrompt)
+  const setMode = useDesignStore((s) => s.setMode)
+  const queueTurn = useDesignStore((s) => s.queueTurn)
+  const [needsChoice, setNeedsChoice] = useState(false)
   const question = prompt.questions[0]
+  const options = question?.options ?? []
+  const exitOption = pick(options, /exit|thoát|thoat|main/i, 0)
+  const keepOption = pick(options, /keep|giữ|giu|design/i, 1)
 
-  function answer(optionId: string) {
-    if (!question) return
-    void answerPrompt(prompt.promptId, {
+  async function answer(option: DesignPromptOption | undefined): Promise<void> {
+    if (!question || !option) return
+    await answerPrompt(prompt.promptId, {
       revision: prompt.revision,
-      answers: [{ questionId: question.id, optionId }],
+      answers: [{ questionId: question.id, optionId: option.id }],
     })
+  }
+
+  /**
+   * §5.9 — tắt chế độ (nếu run hoạt động thì theo luật thoát §5.8) rồi nộp lại yêu cầu thành một
+   * lượt main KHÔNG mang giả định chưa xác nhận của run. Tin nhắn chỉ được nộp khi chế độ đã tắt
+   * thành công, nên nó đi qua hàng đợi của store (`queueTurn`) chứ không gửi thẳng.
+   */
+  async function exitToMain(): Promise<void> {
+    await answer(exitOption)
+    queueTurn(t('design.oosExitTurn', { request: question?.text || prompt.note || '' }))
+    const outcome = await setMode(false, 'toggle')
+    if (outcome === 'exit-choice') setNeedsChoice(true)
+    else if (outcome === 'error') queueTurn('')
+  }
+
+  async function keepInDesign(): Promise<void> {
+    setNeedsChoice(false)
+    await answer(keepOption)
   }
 
   return (
@@ -37,7 +67,7 @@ export function DesignOutOfScopeCard({ run, prompt }: { run: DesignRun; prompt: 
         <button
           type="button"
           data-testid="design-out-of-scope-exit"
-          onClick={() => answer('exit')}
+          onClick={() => void exitToMain()}
           className="block w-full rounded border border-line bg-panel px-2 py-1 text-left transition hover:border-brand cursor-pointer"
         >
           <span className="font-medium text-fg">{t('design.oosExit')}</span>
@@ -46,13 +76,18 @@ export function DesignOutOfScopeCard({ run, prompt }: { run: DesignRun; prompt: 
         <button
           type="button"
           data-testid="design-out-of-scope-keep"
-          onClick={() => answer('keep')}
+          onClick={() => void keepInDesign()}
           className="block w-full rounded border border-line bg-panel px-2 py-1 text-left transition hover:border-brand cursor-pointer"
         >
           <span className="font-medium text-fg">{t('design.oosKeep')}</span>
           <span className="ml-1 text-muted">{t('design.oosKeepHint')}</span>
         </button>
       </div>
+      {needsChoice && (
+        <p data-testid="design-out-of-scope-hint" className="mt-1 text-[10px] text-amber-300">
+          {t('design.oosExitQueued')}
+        </p>
+      )}
     </section>
   )
 }

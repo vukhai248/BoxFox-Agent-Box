@@ -6,9 +6,11 @@
  * danh sách tệp đã ghi, kết quả soát độc lập, việc còn lại, rồi bốn lối ra. Chỉ hiện khi có dữ liệu
  * thật — thiếu thì hiện "chưa có báo cáo", không dựng số liệu giả.
  */
+import { useState } from 'react'
 import { useT } from '../../../i18n/context'
-import { asRecord, asString, type DesignRun, type Json } from '../../../lib/designMode'
+import { asRecord, asString, runLabel, type DesignRun, type Json } from '../../../lib/designMode'
 import { useDesignStore } from '../../../store/designStore'
+import { useUiStore } from '../../../store/uiStore'
 
 function stringList(value: unknown): string[] {
   return (Array.isArray(value) ? value : []).filter((item): item is string => typeof item === 'string')
@@ -23,6 +25,9 @@ export function DesignHandoffCard({
 }) {
   const t = useT()
   const setMode = useDesignStore((s) => s.setMode)
+  const queueTurn = useDesignStore((s) => s.queueTurn)
+  const showTab = useUiStore((s) => s.showTab)
+  const [needsChoice, setNeedsChoice] = useState(false)
   const row = asRecord(report)
   const branchRow = asRecord(row.branch)
   const branch = asString(branchRow.name) || asString(row.branch) || run.touchList?.branch.name || ''
@@ -33,6 +38,19 @@ export function DesignHandoffCard({
   const written = (run.touchList?.items ?? []).filter((item) => item.status === 'written')
   const remaining = stringList(row.nextSteps)
   const empty = !branch && !path && written.length === 0 && !verdict
+
+  /**
+   * "Dùng cho plan" (§5.7): thoát chế độ (nếu run còn hoạt động thì theo luật §5.1) rồi nộp MỘT lượt
+   * main mang khối bàn giao. Lượt chỉ được nộp khi chế độ đã tắt — nếu server còn đòi chọn thoát thì
+   * tin nhắn nằm trong hàng đợi của store và được xả ngay sau khi chủ nhà chọn xong.
+   */
+  async function useForPlan(): Promise<void> {
+    setNeedsChoice(false)
+    queueTurn(t('design.handoffUseForPlanTurn', { id: runLabel(run.designId), version: version || 'v1' }))
+    const outcome = await setMode(false, 'command')
+    if (outcome === 'exit-choice') setNeedsChoice(true)
+    else if (outcome === 'error') queueTurn('')
+  }
 
   if (empty) {
     return (
@@ -98,6 +116,7 @@ export function DesignHandoffCard({
         <button
           type="button"
           data-testid="design-handoff-open-branch"
+          onClick={() => showTab('design')}
           className="rounded border border-line px-2 py-0.5 text-muted transition hover:text-fg cursor-pointer"
         >
           {t('design.handoffOpenBranch')}
@@ -105,6 +124,7 @@ export function DesignHandoffCard({
         <button
           type="button"
           data-testid="design-handoff-open-design"
+          onClick={() => showTab('design')}
           className="rounded border border-line px-2 py-0.5 text-muted transition hover:text-fg cursor-pointer"
         >
           {t('design.handoffOpenDesign')}
@@ -112,6 +132,7 @@ export function DesignHandoffCard({
         <button
           type="button"
           data-testid="design-handoff-use-plan"
+          onClick={() => void useForPlan()}
           className="rounded border border-line px-2 py-0.5 text-muted transition hover:text-fg cursor-pointer"
         >
           {t('design.handoffUseForPlan')}
@@ -125,6 +146,11 @@ export function DesignHandoffCard({
           {t('design.handoffExit')}
         </button>
       </div>
+      {needsChoice && (
+        <p data-testid="design-handoff-hint" className="mt-1 text-[10px] text-amber-300">
+          {t('design.handoffUseForPlanNeedsChoice')}
+        </p>
+      )}
     </section>
   )
 }

@@ -10,11 +10,11 @@
  * run có dữ liệu tương ứng, không dựng số liệu giả.
  */
 import { useT } from '../../../i18n/context'
-import { DESIGN_TERMINAL_STATUSES } from '../../../lib/designMode'
 import { selectActiveRun, useDesignStore } from '../../../store/designStore'
 import { DesignBatchDiffCard } from './DesignBatchDiffCard'
 import { DesignBriefCard } from './DesignBriefCard'
 import { DesignHandoffCard } from './DesignHandoffCard'
+import { DesignNoticeCard } from './DesignNoticeCard'
 import { DesignOutOfScopeCard } from './DesignOutOfScopeCard'
 import { DesignPromptCard } from './DesignPromptCard'
 import { DesignRunTimeline } from './DesignRunTimeline'
@@ -27,13 +27,17 @@ export function DesignConversationCards() {
   const brief = useDesignStore((s) => s.brief)
   const rejectedOps = useDesignStore((s) => s.rejectedOps)
   const reports = useDesignStore((s) => s.reports)
+  const notices = useDesignStore((s) => s.notices)
   if (!mode.on || !run) return null
 
   const openPrompts = prompts.filter(
     (prompt) => prompt.status === 'open' && prompt.kind !== 'exit-choice',
   )
   const report = reports[run.designId] ?? null
-  const handoff = DESIGN_TERMINAL_STATUSES.includes(run.status) || report !== null
+  // Thẻ bàn giao chỉ đến khi có báo cáo THẬT: một run đóng chưa phát `design_report` không được
+  // dựng thẻ "chưa có báo cáo" chồng lên — thông báo nền mới là thứ nói run đã xong.
+  const handoff = report !== null
+  const runNotices = notices.filter((notice) => notice.designId === run.designId)
 
   return (
     <div className="space-y-2">
@@ -42,6 +46,9 @@ export function DesignConversationCards() {
           {t('design.rejectCount', { count: rejectedOps })}
         </p>
       )}
+      {runNotices.map((notice) => (
+        <DesignNoticeCard key={`${notice.designId}:${notice.seq}:${notice.kind}`} notice={notice} />
+      ))}
       {openPrompts.map((prompt) =>
         prompt.kind === 'out-of-scope' ? (
           <DesignOutOfScopeCard key={prompt.promptId} run={run} prompt={prompt} />
