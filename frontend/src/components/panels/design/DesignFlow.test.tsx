@@ -705,6 +705,56 @@ describe('thẻ P5 của chế độ Design', () => {
     }
   })
 
+  it('chủ nhà chạm xuống canvas giữa lúc agent vẽ ⇒ hoạt hình dừng và cảnh THẬT hiện ra', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          scenes: {},
+          sceneSeq: {},
+          sceneActor: {},
+          lastOps: {},
+          rejectedOps: 0,
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      act(() => {
+        useDesignStore.getState().applyEvent({
+          seq: 51,
+          type: 'design_canvas',
+          data: {
+            designId: DESIGN_ID,
+            actor: 'agent',
+            sceneVersion: 1,
+            ops: [
+              { type: 'CREATE_NODE', node: { id: 'n-takeover', kind: 'ui-mockup', x: 40, y: 60, width: 200, height: 120, title: 'Màn hình', body: '' } },
+            ],
+          },
+        })
+      })
+      act(() => {
+        vi.advanceTimersByTime(80)
+      })
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('true')
+
+      // Chạm xuống nền sân khấu là "tôi cầm lái": cắt hoạt hình NGAY (không phát nốt), con trỏ biến mất,
+      // và cảnh đang bày là cảnh thật trong store — không phải khung hình trung gian.
+      const stage = host.querySelector('[data-testid="design-canvas-stage"]')
+      if (!stage) throw new Error('không thấy design-canvas-stage')
+      act(() => {
+        stage.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 320, clientY: 240 }))
+      })
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('false')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeNull()
+      const drawn = useDesignStore.getState().scenes[DESIGN_ID]
+      expect(drawn?.nodes.map((item) => item.id)).toEqual(['n-takeover'])
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('cảnh tới KHÔNG kèm op (payload chi tiết của run: tải lại trang, cảnh gieo) vẫn được VẼ dần', () => {
     vi.useFakeTimers()
     try {

@@ -421,6 +421,10 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
   function onNodeContextMenu(e: ReactMouseEvent, nodeId: string) {
     e.preventDefault()
     e.stopPropagation()
+    // Menu này là thao tác SỬA (nhân bản, xoá): phải cắt hoạt hình trước, nếu không cảnh đang phát lại
+    // vẽ đè lên hình vừa bị xoá. Zoom/kéo khung nhìn thì không cần — con trỏ nằm trong cùng phép biến
+    // đổi của sân khấu nên hoạt hình vẫn đúng.
+    takeOver()
     canvas.select(nodeId)
     setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
   }
@@ -439,6 +443,7 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
     <div className="relative flex-1 overflow-hidden">
       <div
         ref={containerRef}
+        data-testid="design-canvas-stage"
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finishPointer}
