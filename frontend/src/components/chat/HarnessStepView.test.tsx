@@ -872,4 +872,36 @@ describe('HarnessStepView — C-5 can thiệp giữa lúc chạy', () => {
     expect(chip?.textContent).toContain('stopped by the owner')
     expect(chip?.textContent).not.toContain('failed')
   })
+
+  it('câu hỏi phụ của `/btw` giữa lượt mang nhãn riêng, không phải nhãn "can thiệp"', () => {
+    // P5 — `btw` đi cùng đường steer nhưng KHÔNG phải một chỉ thị: cùng chỗ đứng, khác nhãn,
+    // và vẫn đúng MỘT lượt (câu hỏi phụ không mở lượt mới).
+    const events = [
+      ev('user', { text: 'Nhờ em nghiên cứu chuyển tuyến' }),
+      ev('tool_start', { id: 't1', name: 'web_search' }),
+      ev('user', { text: 'pin này đọc ở đâu?', steer: true, control: true, btw: true }),
+      ev('assistant', { text: 'Trả lời ngắn ở bước kế', final: false }),
+    ]
+    const host = renderSession(events)
+
+    expect(host.querySelectorAll('[data-turn-user="true"]').length).toBe(1)
+    const row = host.querySelector('[data-timeline="owner-steer"][data-btw="true"]')
+    expect(row).toBeTruthy()
+    expect(row?.textContent).toContain('pin này đọc ở đâu?')
+    expect(row?.querySelector('[data-testid="owner-btw-label"]')?.textContent).toBe('btw')
+    expect(row?.querySelector('[data-testid="owner-steer-label"]')).toBeNull()
+  })
+
+  it('lượt rảnh của `/btw` mang nhãn "btw" trên hàng của chủ nhà', () => {
+    const events = [
+      ev('user', { text: 'pin này đọc ở đâu?', btw: true }),
+      ev('assistant', { text: 'Câu trả lời ngắn', final: true }),
+      ev('finish', { status: 'completed' }),
+    ]
+    const host = renderSession(events)
+
+    expect(host.querySelector('[data-testid="user-btw-label"]')?.textContent).toBe('btw')
+    expect(host.querySelectorAll('[data-turn-user="true"]').length).toBe(1)
+    expect(host.querySelector('[data-testid="owner-btw-label"]')).toBeNull()
+  })
 })
