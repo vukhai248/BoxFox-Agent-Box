@@ -220,14 +220,24 @@ export function diffSceneOps(from: CanvasScene, to: CanvasScene): CanvasAction[]
  * hoạt hình.
  */
 export function alignConnectorIds(ops: CanvasAction[], from: CanvasScene, to: CanvasScene): CanvasAction[] {
-  let added = from.connectors.length
+  const known = new Set(from.connectors.map((connector) => connector.id))
+  const fresh = to.connectors.filter((connector) => !known.has(connector.id))
+  const taken = new Set<string>()
+  let fallback = 0
   return ops.map((op) => {
-    if (op.type !== 'CONNECT_NODES') return op
-    const opId = op.connector.id
-    const expected = to.connectors[added]?.id
-    added += 1
-    if (opId || !expected) return op
-    return { type: 'CONNECT_NODES', connector: { ...op.connector, id: expected } }
+    if (op.type !== 'CONNECT_NODES' || op.connector.id) return op
+    const wanted = op.connector
+    // Khớp trước theo HAI ĐẦU: thứ tự nét trong cảnh không phải là hợp đồng, chỉ có hai đầu là dữ
+    // liệu thật của op. Chỉ khi không có nét nào khớp hai đầu mới lùi về đúng vị trí thêm — cách
+    // backend dựng cảnh (áp lô op theo thứ tự, `setdefault('id', …)` cho từng nét mới).
+    const byEnds = fresh.find((connector) => !taken.has(connector.id)
+      && connector.fromNodeId === wanted.fromNodeId && connector.toNodeId === wanted.toNodeId)
+    const byIndex = fresh[fallback]
+    const chosen = byEnds ?? (byIndex && !taken.has(byIndex.id) ? byIndex : fresh.find((one) => !taken.has(one.id)))
+    fallback += 1
+    if (!chosen) return op
+    taken.add(chosen.id)
+    return { type: 'CONNECT_NODES', connector: { ...wanted, id: chosen.id } }
   })
 }
 

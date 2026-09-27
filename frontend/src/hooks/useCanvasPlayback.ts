@@ -62,14 +62,19 @@ export function prefersReducedMotion(): boolean {
   }
 }
 
+/** Một lần dò cho cả cặp: môi trường có `rAF` thì phải có `cAF` (trình duyệt và jsdom đều vậy). */
+function hasFrames(): boolean {
+  return typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function'
+}
+
 /** Đặt lịch khung hình kế tiếp — `rAF` khi có, `setTimeout` khi môi trường test không có. */
 function scheduleFrame(callback: () => void): number {
-  if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)
+  if (hasFrames()) return requestAnimationFrame(callback)
   return window.setTimeout(callback, 16)
 }
 
 function cancelFrame(handle: number): void {
-  if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(handle)
+  if (hasFrames()) cancelAnimationFrame(handle)
   else window.clearTimeout(handle)
 }
 

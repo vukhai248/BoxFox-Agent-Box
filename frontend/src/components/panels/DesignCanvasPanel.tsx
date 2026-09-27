@@ -43,6 +43,9 @@ export function DesignCanvasLiveDraw({
     return Boolean(batch && batch.actor === 'agent' && batch.ops.length > 0)
   })
   const rejectedOps = useDesignStore((s) => s.rejectedOps)
+  // `drawing` = "canvas này là của agent ở pha vẽ", KHÔNG phải "đang có hoạt hình trên màn hình":
+  // pha `drawing` mà lô op đã vẽ xong vẫn giữ `drawing=true` trong khi `playing=false`. Muốn hỏi
+  // "có hoạt hình đang chạy không" thì đọc `data-playing`.
   const drawing = playing || (run?.phase === 'drawing' && agentHasDrawn)
   return (
     <div

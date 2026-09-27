@@ -18,6 +18,7 @@ export function AgentCursor({ cursor, scale, label }: { cursor: CursorState; sca
     <div
       data-testid="design-canvas-cursor"
       data-pressed={cursor.pressed ? 'true' : 'false'}
+      aria-hidden
       className="pointer-events-none absolute left-0 top-0 z-30"
       style={{ transform: `translate(${cursor.x}px, ${cursor.y}px) scale(${shrink})`, transformOrigin: '0 0' }}
     >

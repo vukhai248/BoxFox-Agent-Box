@@ -168,6 +168,30 @@ describe('alignConnectorIds', () => {
     const aligned = alignConnectorIds([op], from, apply(from, [op]))
     expect(aligned[0]).toBe(op)
   })
+
+  it('gán id theo HAI ĐẦU của nét, không tin vào thứ tự trong cảnh', () => {
+    const from: CanvasScene = { ...createEmptyScene(), nodes: [node('a'), node('b'), node('c')] }
+    const to: CanvasScene = {
+      ...from,
+      connectors: [
+        { id: 'c2', fromNodeId: 'b', toNodeId: 'c', fromAnchor: 'right', toAnchor: 'left', stroke: '#3b82f6', strokeWidth: 2 },
+        { id: 'c1', fromNodeId: 'a', toNodeId: 'b', fromAnchor: 'right', toAnchor: 'left', stroke: '#3b82f6', strokeWidth: 2 },
+      ],
+    }
+    const aligned = alignConnectorIds(
+      [stripConnectorId(connector('c1', 'a', 'b')), stripConnectorId(connector('c2', 'b', 'c'))],
+      from,
+      to,
+    )
+    expect(aligned.map((op) => (op.type === 'CONNECT_NODES' ? op.connector.id : null))).toEqual(['c1', 'c2'])
+  })
+
+  it('hai nét cùng hai đầu thì lùi về đúng vị trí thêm', () => {
+    const from: CanvasScene = { ...createEmptyScene(), nodes: [node('a'), node('b')] }
+    const to = apply(from, [connector('x1', 'a', 'b'), connector('x2', 'a', 'b')])
+    const aligned = alignConnectorIds([stripConnectorId(connector('x1', 'a', 'b')), stripConnectorId(connector('x2', 'a', 'b'))], from, to)
+    expect(aligned.map((op) => (op.type === 'CONNECT_NODES' ? op.connector.id : null))).toEqual(['x1', 'x2'])
+  })
 })
 
 describe('frameAt', () => {

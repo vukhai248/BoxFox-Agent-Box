@@ -324,6 +324,9 @@ export function CanvasStage({ canvas }: { canvas: DesignCanvas }) {
   function onHandlePointerDown(e: ReactPointerEvent, nodeId: string, handle: ResizeHandle) {
     e.stopPropagation()
     e.preventDefault()
+    // Kéo tay nắm là chủ nhà đang sửa hình học của node THẬT — dừng phát lại trước khi lấy node ra,
+    // nếu không thao tác sẽ bám vào cảnh trung gian của hoạt hình.
+    takeOver()
     const node = canvas.scene.nodes.find((n) => n.id === nodeId)
     if (!node) return
     pointerRef.current = {
