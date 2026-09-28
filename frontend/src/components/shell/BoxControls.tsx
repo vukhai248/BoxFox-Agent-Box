@@ -17,7 +17,7 @@ export function BoxControls() {
     <button
       type="button"
       onClick={box.toggleNetwork}
-      className={`rounded-md border border-line px-2 py-1 text-[11px] font-semibold hover:text-fg ${
+      className={`rounded-md border border-line/30 bg-panel2/60 px-2 py-1 text-[11px] font-semibold transition hover:border-line/50 hover:bg-panel2 hover:text-fg ${
         box.network === 'on'
           ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-zinc-500 dark:text-zinc-400'
@@ -36,7 +36,7 @@ export function BoxControls() {
       type="button"
       onClick={box.togglePower}
       title={box.power === 'on' ? t('screen.toDemo') : t('screen.toLiveBox')}
-      className={`rounded-md border border-line px-2 py-1 text-[11px] font-semibold hover:text-fg ${
+      className={`rounded-md border border-line/30 bg-panel2/60 px-2 py-1 text-[11px] font-semibold transition hover:border-line/50 hover:bg-panel2 hover:text-fg ${
         box.power === 'on'
           ? 'text-emerald-600 dark:text-emerald-400'
           : 'text-zinc-500 dark:text-zinc-400'

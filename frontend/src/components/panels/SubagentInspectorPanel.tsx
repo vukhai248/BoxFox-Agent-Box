@@ -387,6 +387,20 @@ export function SubagentInspectorPanel() {
   const [childEvents, setChildEvents] = useState<HarnessEvent[]>([])
   const [copied, setCopied] = useState(false)
   const [sidCopied, setSidCopied] = useState(false)
+  const [showInfoPopover, setShowInfoPopover] = useState(false)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showInfoPopover) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setShowInfoPopover(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showInfoPopover])
+
   // Lượt đang xem: mặc định lượt mới nhất (lượt vừa hỏi), đổi được bằng chip lượt hoặc công tắc.
   const [viewedTurn, setViewedTurn] = useState<number | null>(null)
   const [allTurns, setAllTurns] = useState(false)
@@ -400,6 +414,7 @@ export function SubagentInspectorPanel() {
     setViewedTurn(null)
     setAllTurns(false)
     setSelectedSessionId(null)
+    setShowInfoPopover(false)
   }, [activeChatId])
 
   const latestTurn = turnGroups.length > 0 ? turnGroups[turnGroups.length - 1].turn : null
@@ -679,77 +694,84 @@ export function SubagentInspectorPanel() {
             <span>Specialists Pipeline</span>
             {/* Nút Info thay cho phần đếm số con */}
             {activeChild && (
-              <div className="relative group">
+              <div ref={popoverRef} className="relative">
                 <button
                   type="button"
                   data-testid="subagent-info-trigger"
-                  className="flex size-5 items-center justify-center rounded border border-transparent text-muted hover:border-line hover:bg-panel2 hover:text-fg transition cursor-pointer"
-                  title="Specialist Info"
+                  onClick={() => setShowInfoPopover((prev) => !prev)}
+                  className={`flex size-5 items-center justify-center rounded border transition cursor-pointer ${
+                    showInfoPopover
+                      ? 'border-line bg-panel2 text-fg shadow-2xs'
+                      : 'border-transparent text-muted hover:border-line hover:bg-panel2 hover:text-fg'
+                  }`}
                   aria-label="Specialist Info"
+                  aria-expanded={showInfoPopover}
                 >
                   <Info className="size-3.5" />
                 </button>
-                {/* Popup thông tin khi hover / focus */}
-                <div className="absolute right-0 top-full mt-1.5 z-30 hidden w-64 rounded-xl border border-line bg-panel p-3 shadow-xl group-hover:block group-focus-within:block text-xs normal-case tracking-normal">
-                  <div className="flex items-center justify-between pb-2 border-b border-line/50">
-                    <span className="font-semibold text-fg capitalize truncate mr-2">
-                      {activeChild.role} Specialist
-                    </span>
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
-                        activeChild.status === 'completed'
-                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                          : activeChild.status === 'running'
-                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                            : activeChild.status === 'partial'
-                              ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                              : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                      }`}
-                    >
-                      {activeChild.status}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 space-y-2">
-                    <div>
-                      <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">
-                        Session ID
-                      </div>
-                      <div className="flex items-center justify-between gap-1 mt-0.5 font-mono text-[10px] text-fg bg-panel2 px-2 py-1 rounded border border-line/40">
-                        <span className="truncate" title={activeChild.sessionId}>
-                          {activeChild.sessionId}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(activeChild.sessionId)
-                            setSidCopied(true)
-                            setTimeout(() => setSidCopied(false), 1500)
-                          }}
-                          className="shrink-0 text-muted hover:text-fg cursor-pointer p-0.5"
-                          title="Copy Session ID"
-                        >
-                          {sidCopied ? (
-                            <Check className="size-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="size-3" />
-                          )}
-                        </button>
-                      </div>
+                {/* Popup thông tin khi click */}
+                {showInfoPopover && (
+                  <div className="absolute right-0 top-full mt-1.5 z-50 w-72 rounded-xl border border-line bg-panel p-3 shadow-2xl text-xs normal-case tracking-normal">
+                    <div className="flex items-center justify-between pb-2 border-b border-line/50">
+                      <span className="font-semibold text-fg capitalize truncate mr-2">
+                        {activeChild.role} Specialist
+                      </span>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
+                          activeChild.status === 'completed'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : activeChild.status === 'running'
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              : activeChild.status === 'partial'
+                                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                        }`}
+                      >
+                        {activeChild.status}
+                      </span>
                     </div>
 
-                    {roleDescription && (
+                    <div className="mt-2 space-y-2">
                       <div>
                         <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">
-                          Description
+                          Session ID
                         </div>
-                        <p className="mt-0.5 text-[11px] text-muted leading-relaxed">
-                          {roleDescription}
-                        </p>
+                        <div className="flex items-center justify-between gap-1 mt-0.5 font-mono text-[10px] text-fg bg-panel2 px-2 py-1 rounded border border-line/40">
+                          <span className="truncate" title={activeChild.sessionId}>
+                            {activeChild.sessionId}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(activeChild.sessionId)
+                              setSidCopied(true)
+                              setTimeout(() => setSidCopied(false), 1500)
+                            }}
+                            className="shrink-0 text-muted hover:text-fg cursor-pointer p-0.5"
+                            title="Copy Session ID"
+                          >
+                            {sidCopied ? (
+                              <Check className="size-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="size-3" />
+                            )}
+                          </button>
+                        </div>
                       </div>
-                    )}
+
+                      {roleDescription && (
+                        <div>
+                          <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">
+                            Description
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-muted leading-relaxed">
+                            {roleDescription}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>

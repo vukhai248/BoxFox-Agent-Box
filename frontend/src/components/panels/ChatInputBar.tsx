@@ -144,6 +144,7 @@ export function ChatInputBar({
     'minndty4-pixel/BoxFox-Agent-Box',
   ])
   const [isFocused, setIsFocused] = useState(false)
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false)
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false)
   const toggleRepo = (id: string) => {
     setSelectedRepoIds((prev) =>
@@ -197,6 +198,7 @@ export function ChatInputBar({
       if ((target as Element)?.closest?.('[data-testid="attach-menu"]')) return
       if ((target as Element)?.closest?.('[data-testid="model-menu"]')) return
       setIsFocused(false)
+      setIsTextareaFocused(false)
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -389,17 +391,28 @@ export function ChatInputBar({
     slash.expanded ||
     isMoreMenuOpen
 
+  useEffect(() => {
+    if (isExpanded && isTextareaFocused && document.activeElement !== textareaRef.current) {
+      textareaRef.current?.focus()
+    }
+  }, [isExpanded, isTextareaFocused])
+
   return (
     <div ref={barRef} className="px-3 pb-3 pt-1 select-none">
       {/* Hộp soạn tin gom theo cột đọc khi bảng Workspace ẩn */}
       <div
         data-testid="chat-input-bar"
-        className={`relative rounded-2xl border border-line/80 bg-panel shadow-2xs transition-all duration-150 focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-600/40 ${readingColumnClass(workspaceHidden)} ${
+        className={`relative rounded-2xl border bg-panel shadow-2xs transition-all duration-150 ${readingColumnClass(workspaceHidden)} ${
+          isTextareaFocused
+            ? 'border-zinc-500 ring-1 ring-zinc-600/40'
+            : 'border-line/80'
+        } ${
           !isExpanded ? 'flex items-center gap-1.5 px-2.5 py-1.5' : 'p-2.5'
         }`}
         onClick={() => {
           if (!isExpanded) {
             setIsFocused(true)
+            setIsTextareaFocused(true)
             textareaRef.current?.focus()
           }
         }}
@@ -449,7 +462,11 @@ export function ChatInputBar({
               ref={textareaRef}
               rows={1}
               value={input}
-              onFocus={() => setIsFocused(true)}
+              onFocus={() => {
+                setIsTextareaFocused(true)
+                setIsFocused(true)
+              }}
+              onBlur={() => setIsTextareaFocused(false)}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
@@ -708,7 +725,11 @@ export function ChatInputBar({
               ref={textareaRef}
               rows={1}
               value={input}
-              onFocus={() => setIsFocused(true)}
+              onFocus={() => {
+                setIsTextareaFocused(true)
+                setIsFocused(true)
+              }}
+              onBlur={() => setIsTextareaFocused(false)}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
