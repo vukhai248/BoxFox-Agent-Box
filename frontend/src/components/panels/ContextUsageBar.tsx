@@ -259,6 +259,8 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
   const sendHarnessCommand = useHarnessChatStore((s) => s.send)
   const activeModelId = useHarnessStore((s) => s.activeModelId)
   const workspaceHidden = useUiStore((s) => s.workspaceHidden)
+  const openTabs = useUiStore((s) => s.openTabs)
+  const isReadingColumn = workspaceHidden || openTabs.length === 0
 
   const context = useAgentStore((s) => s.context)
   const contextChunks = context?.chunks || []
@@ -444,7 +446,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
         className={
           variant === 'topbar'
             ? 'flex items-center gap-2.5 sm:gap-3.5 overflow-hidden whitespace-nowrap min-w-0'
-            : `flex @container items-center justify-between gap-3 overflow-hidden whitespace-nowrap ${readingColumnClass(workspaceHidden)}`
+            : `flex @container items-center justify-between gap-3 overflow-hidden whitespace-nowrap ${readingColumnClass(isReadingColumn)}`
         }
       >
         {/* Left: Context Window Title & Expand Toggle */}
