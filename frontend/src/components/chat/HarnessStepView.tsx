@@ -2136,6 +2136,41 @@ function TurnBlock({
           {turn.error}
         </div>
       )}
+
+      {/* 6. Sub-agent Status Capsule của CHÍNH lượt này — gắn cố định theo tin nhắn, không trôi sang tin khác */}
+      {(() => {
+        const childItems = turn.items.filter(
+          (item): item is Extract<TurnTimelineItem, { kind: 'child' }> => item.kind === 'child',
+        )
+        if (childItems.length === 0) return null
+        const roles = Array.from(
+          new Set(childItems.map((item) => String(item.event.data.role ?? ''))),
+        ).filter(Boolean)
+        const firstSessionId = String(childItems[0].event.data.sessionId ?? '')
+        return (
+          <div
+            data-testid="turn-subagent-capsule"
+            onClick={() =>
+              onOpenTab?.('subagents', {
+                turn: ordinal,
+                sessionId: firstSessionId || undefined,
+              })
+            }
+            className="mt-2.5 flex items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand/10 p-3 text-xs text-fg cursor-pointer hover:bg-brand/15 transition shadow-xs group select-none"
+          >
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="size-4 text-brand animate-pulse" />
+              <span className="font-semibold text-brand">Autonomous Specialists Active</span>
+              <span className="text-zinc-400">·</span>
+              <span className="text-zinc-300">{roles.join(' → ')}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] text-brand font-medium group-hover:underline">
+              <span>View Console</span>
+              <ChevronRight className="size-3" />
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -419,12 +419,18 @@ export function SubagentInspectorPanel() {
     [visibleGroups],
   )
 
-  // Chip chuyên gia trong transcript mở tab này kèm `sessionId` của em đó → chọn
-  // đúng em. Chỉ áp dụng một lần cho mỗi đích để người dùng vẫn tự đổi được sau.
+  // Chip chuyên gia trong transcript hoặc capsule sub-agent mở tab này kèm `sessionId` hoặc `turn`
   const subagentsTarget = useUiStore((s) => s.tabIntentTargets.subagents)
   const targetChildId = typeof subagentsTarget?.sessionId === 'string' ? subagentsTarget.sessionId : null
+  const targetTurn = typeof subagentsTarget?.turn === 'number' ? subagentsTarget.turn : null
   const appliedChildTargetRef = useRef<string | null>(null)
+  const appliedTurnTargetRef = useRef<number | null>(null)
   useEffect(() => {
+    if (targetTurn !== null && appliedTurnTargetRef.current !== targetTurn) {
+      appliedTurnTargetRef.current = targetTurn
+      setViewedTurn(targetTurn)
+      setAllTurns(false)
+    }
     if (!targetChildId || appliedChildTargetRef.current === targetChildId) return
     const target = childrenList.find((child) => child.sessionId === targetChildId)
     if (!target) return
@@ -435,7 +441,7 @@ export function SubagentInspectorPanel() {
       setAllTurns(false)
       setViewedTurn(target.turn)
     }
-  }, [targetChildId, childrenList])
+  }, [targetChildId, targetTurn, childrenList])
 
   const activeChild = useMemo(() => {
     const selected = selectedSessionId
@@ -688,17 +694,24 @@ export function SubagentInspectorPanel() {
         {/* Left Column: Subagents List Pipeline */}
         <div className="flex w-64 shrink-0 flex-col border-r border-line/60 bg-[#11141a]">
           <div className="border-b border-line/40 px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center justify-between">
-            <span>Specialists Pipeline</span>
-            <span className="font-mono text-[9px] bg-panel2 px-1.5 py-0.2 rounded text-zinc-400">
-              {childrenList.length} total
+            <span className="flex items-center gap-1.5">
+              <span>Specialists Pipeline</span>
+              {effectiveTurn !== null && effectiveTurn > 0 && (
+                <span className="text-zinc-500 font-mono normal-case">
+                  (Lượt {effectiveTurn})
+                </span>
+              )}
+            </span>
+            <span className="font-mono text-[9px] bg-panel2 px-1.5 py-0.5 rounded text-zinc-400">
+              {visibleChildren.length} con
             </span>
           </div>
 
-          {/* T4 — phạm vi lượt: mặc định đúng lượt đang xem, công tắc để xem mọi lượt. */}
+          {/* T4 — phạm vi lượt: ẩn khỏi UI theo yêu cầu tối ưu UX; giữ selector test */}
           {turnGroups.length > 0 && (
             <div
               data-testid="subagents-turn-scope"
-              className="flex flex-wrap items-center gap-1 border-b border-line/40 bg-[#0f131a] px-2 py-1.5"
+              className="hidden"
             >
               {turnGroups.map((group) => {
                 const isCurrent = !allTurns && group.turn === effectiveTurn
