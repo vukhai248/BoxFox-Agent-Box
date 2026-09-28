@@ -132,9 +132,9 @@ describe('HarnessModelPicker — chip model ở ô soạn là một hàng', () =
     expect(chip.textContent).toContain(TAIL)
 
     const title = chip.getAttribute('title') ?? ''
-    expect(title).toContain(`Model: ${GROUP_NAME}`, 'tên đầy đủ của model')
+    expect(title, 'tên đầy đủ của model').toContain(`Model: ${GROUP_NAME}`)
     expect(title).toContain('(opencode)')
-    expect(title).toContain('pinned OpenCode Free (key 2)', 'connection đã ghim')
+    expect(title, 'connection đã ghim').toContain('pinned OpenCode Free (key 2)')
   })
 
   it('nhánh harness: chip giữ nguyên hợp đồng một hàng, nhãn chỉ là con số', () => {
