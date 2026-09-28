@@ -25,7 +25,8 @@ from .limits import (
     DESIGN_HANDOFF_BLOCK_END, DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HARD_FORBIDDEN,
     DESIGN_BRANCH_REQUIRED_CODE, DESIGN_CANVAS_PROTOCOL_INVALID_CODE,
     DESIGN_DIFF_DIRTY_BASE_CODE, DESIGN_HANDOFF_UNREVIEWED_CODE, DESIGN_INTERVIEW_IDS,
-    DESIGN_INTERVIEW_MAX_QUESTIONS, DESIGN_MODE_EVENT_CODE, DESIGN_OWNED_PREFIX,
+    DESIGN_INTERVIEW_IDS_UNKNOWN_CODE, DESIGN_INTERVIEW_MAX_QUESTIONS, DESIGN_MODE_EVENT_CODE,
+    DESIGN_OWNED_PREFIX,
     DESIGN_PATH_NOT_APPROVED_CODE, DESIGN_PHASES, DESIGN_PROMPT_KINDS,
     DESIGN_REVIEW_NO_CRITIC_CODE, DESIGN_REVIEW_VERDICT_MISMATCH_CODE,
     DESIGN_REVIEW_VERDICT_MISSING_CODE, DESIGN_STATUSES, DESIGN_STEPS,
@@ -36,6 +37,10 @@ from .limits import (
 
 # `DESIGN_PHASES`/`DESIGN_STATUSES` chỉ có mặt ở đây để TÁI XUẤT: hợp đồng §2 chốt chúng là thuộc
 # tính của mô-đun này (`design_runtime.DESIGN_PHASES`), còn luật đọc chúng nằm ở `limits`.
+
+#: Danh sách mã phỏng vấn dạng ĐỌC ĐƯỢC (`'dq-screen, dq-platform, …'`) — câu lỗi của F6 nói
+#: bằng dạng này, vì một `list` Python trong thông báo là thứ mô hình phải tự đoán lại.
+INTERVIEW_ID_LIST = ', '.join(DESIGN_INTERVIEW_IDS)
 
 #: Bảy bước hiển thị của một run, và pha → bước (hợp đồng design-interfaces §2).
 PHASE_STEP = {'interviewing': 'clarify', 'briefing': 'brief', 'touch-list': 'approve',
@@ -1238,10 +1243,30 @@ def canvas_queued_directives(job):
 
 
 def design_prompt_new(rt, session_id, job, kind, questions=None, meta=None):
-    """Ghim một lời hỏi nhiều câu vào `state.prompts` rồi phát `design_prompt` (§7.2)."""
+    """Ghim một lời hỏi nhiều câu vào `state.prompts` rồi phát `design_prompt` (§7.2).
+
+    Lời hỏi `interview` chỉ nhận bộ mã CỐ ĐỊNH `DESIGN_INTERVIEW_IDS`: `QUESTION_FIELD` ánh xạ mã
+    → trường của brief, nên một mã tự đặt sẽ mở được lời hỏi mà câu trả lời không ghi được vào đâu
+    (`DESIGN_INTERVIEW_IDS_UNKNOWN`, F6).
+    """
     kind = str(kind or '')
     if kind not in DESIGN_PROMPT_KINDS:
         raise ValueError(f'DESIGN_PROMPT_KIND_INVALID: kind ∈ {DESIGN_PROMPT_KINDS}, nhận {kind!r}')
+    if kind == 'interview':
+        # F6 (đợt soát 2026-09-27) — mã câu hỏi phỏng vấn là CỐ ĐỊNH (§7.8) vì `QUESTION_FIELD` ánh xạ
+        # mã → trường của brief. Một mã tự đặt vẫn mở được lời hỏi, nhưng câu trả lời không ghi được
+        # vào trường nào, nên nội dung chủ nhà gõ bị bỏ im lặng. Từ chối ở ĐÂY, kèm đúng danh sách mã
+        # hợp lệ để mô hình gọi lại — chối một lần còn hơn nhận rồi bỏ.
+        # Mục không phải từ điển cũng tính là mã lạ (mã rỗng): đường dưới `out-of-scope` bỏ qua
+        # mục như thế, nhưng ở đây phải CHỐI chứ không được làm vỡ lời gọi.
+        ids = [str(item.get('id') or '') if isinstance(item, dict) else ''
+               for item in (questions or [])]
+        unknown = [item for item in ids if item not in DESIGN_INTERVIEW_IDS]
+        if unknown:
+            raise ValueError(
+                f'{DESIGN_INTERVIEW_IDS_UNKNOWN_CODE}: câu hỏi phỏng vấn phải mang mã cố định trong '
+                f'{INTERVIEW_ID_LIST}, nhận {unknown} — gọi lại `ask` với các mã ấy, phần chữ '
+                f'của câu hỏi thì tự đặt')
     meta = meta if isinstance(meta, dict) else {}
     if kind == 'out-of-scope':
         # §5.9/IF-2: hai lựa chọn ĐƯỢC GHIM id `exit`/`keep` như `exit-choice` ghim `pause`/

@@ -285,6 +285,19 @@ PLAN_VERIFY_VERDICT_MISMATCH_CODE = 'PLAN_VERIFY_VERDICT_MISMATCH'
 PLAN_SOURCES_REJECTED_CODE = 'PLAN_SOURCES_REJECTED'
 PLAN_WAKE_NO_OWNER_CODE = 'PLAN_WAKE_NO_OWNER'
 PLAN_WAKE_FAILED_CODE = 'PLAN_WAKE_FAILED'
+#: F2 (đợt soát 2026-09-27) — một lượt ghi plan có mục giả định/câu hỏi mở mà KHÔNG hỏi chủ nhà
+#: lần nào: notice MỀM nói thẳng ra. Không chặn lượt, không thêm một lượt gọi mô hình nào.
+PLAN_ASSUMPTIONS_UNCONFIRMED_CODE = 'PLAN_ASSUMPTIONS_UNCONFIRMED'
+#: F3 — lượt ghi plan mà chưa có phán quyết phản biện: harness nhắc ĐÚNG MỘT lần trước khi đóng
+#: lượt (chỉ nhắc khi còn ít nhất `PLAN_VERDICT_NUDGE_MIN_SECONDS` — một con `plan-review` cần thời
+#: gian thật), và nếu vẫn thiếu thì ghim notice nói vì sao lệnh xin duyệt sẽ bị chối.
+PLAN_VERDICT_NUDGE_CODE = 'PLAN_VERDICT_NUDGE'
+#: Tiền tố của câu nhắc trong transcript. `turn_prompt_excerpt` bỏ qua nó khi dựng bản nhắc việc,
+#: nếu không chỉ dẫn của harness sẽ đội lốt "việc chủ giao ở lượt này".
+PLAN_VERDICT_NUDGE_PREFIX = PLAN_VERDICT_NUDGE_CODE + ':'
+PLAN_VERDICT_MISSING_TURN_CODE = 'PLAN_VERDICT_MISSING_AT_TURN_END'
+PLAN_VERDICT_NUDGE_MAX = 1
+PLAN_VERDICT_NUDGE_MIN_SECONDS = 180
 # P1.1 — mã của dòng log nói bộ đếm lượt và transcript lệch nhau.
 TURN_INDEX_DRIFT_CODE = 'TURN_INDEX_DRIFT'
 
@@ -800,6 +813,9 @@ DESIGN_REVIEW_VERDICT_MISSING_CODE = 'DESIGN_REVIEW_VERDICT_MISSING'
 DESIGN_REVIEW_VERDICT_MISMATCH_CODE = 'DESIGN_REVIEW_VERDICT_MISMATCH'
 DESIGN_HANDOFF_UNREVIEWED_CODE = 'DESIGN_HANDOFF_UNREVIEWED'
 DESIGN_CANVAS_PROTOCOL_INVALID_CODE = 'DESIGN_CANVAS_PROTOCOL_INVALID'
+#: F6 (đợt soát 2026-09-27) — câu hỏi phỏng vấn phải mang mã CỐ ĐỊNH (§7.8): mã tự đặt không ánh xạ
+#: được vào trường nào của brief, nên câu trả lời của chủ nhà bị bỏ im lặng. Chỗ này từ chối mã lạ.
+DESIGN_INTERVIEW_IDS_UNKNOWN_CODE = 'DESIGN_INTERVIEW_IDS_UNKNOWN'
 
 #: Câu tiếng Việt của từng mã (plan v1 §7.6) — `design_runtime` dựng `DESIGN_ERROR_TEXT` từ đây.
 DESIGN_ERROR_TEXT = {

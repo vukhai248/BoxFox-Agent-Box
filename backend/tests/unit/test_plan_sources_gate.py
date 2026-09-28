@@ -113,19 +113,27 @@ def research_child(store, sid, output, *, role='research', status='completed', r
 
 
 def run_write(tmp_path, markdown, seed=None, step_response=None, timeout=10.0):
-    """Một lượt thật: model gọi `write_plan`, rồi trả lời. Trả `(store, executor, sid)`."""
+    """Một lượt thật: model gọi `write_plan`, rồi trả lời. Trả `(store, executor, sid)`.
+
+    Lượt này cần BA câu trả lời từ 2026-09-27: bản kế hoạch ghi ra chưa có phán quyết phản biện nên
+    F3 bơm thêm một bước nhắc. Thiếu câu thứ ba thì iterator cạn, lượt chết, mà phép kiểm dưới đây
+    chỉ đọc mặt ghi nên vẫn xanh — vì thế `go()` chốt luôn trạng thái lượt.
+    """
     async def go():
         store = SessionStore(tmp_path / 'sessions.db')
         executor = PlanExecutor()
         model = FixtureModel([
             step_response or answer('Viết plan', calls=[call('write_plan', {
                 'slug': 'Source Plan', 'markdown': markdown, 'title': ''})]),
-            answer('Xong lượt.')])
+            answer('Xong lượt.'),
+            answer('Chưa chạy phản biện, dừng ở đây.')])
         runtime = HarnessRuntime(store, executor, model)
         sid = runtime.create({'skills': []})['id']
         if seed is not None:
             seed(store, sid)
         await asyncio.wait_for(runtime.start(sid, 'Lên kế hoạch'), timeout)
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt ghi plan phải đóng trọn vẹn (fixture cạn câu trả lời ⇒ lượt chết âm thầm)'
         return store, executor, sid
 
     return asyncio.run(go())
