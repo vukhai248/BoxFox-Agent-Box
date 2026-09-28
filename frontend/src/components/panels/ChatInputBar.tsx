@@ -726,7 +726,7 @@ export function ChatInputBar({
 
             {/* Toolbar tầng dưới */}
             <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-line/40">
-              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <AttachmentPicker
                   onAttach={(file) => setAttachments((prev) => [...prev, file])}
                   onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
@@ -748,7 +748,9 @@ export function ChatInputBar({
                   selectedRepoIds={selectedRepoIds}
                   onToggleRepo={toggleRepo}
                 />
+              </div>
 
+              <div className="flex shrink-0 items-center gap-1">
                 <HarnessModelPicker
                   routerModels={router?.models}
                   activeRouterModelId={router?.activeModelId}
@@ -759,7 +761,7 @@ export function ChatInputBar({
                   type="button"
                   title={t('composer.quickAsk')}
                   aria-label={t('composer.quickAsk')}
-                  className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer border border-transparent"
                 >
                   <Zap className="size-3 text-amber-400" />
                   {!compact && <span>{t('composer.quickAsk')}</span>}
@@ -773,12 +775,10 @@ export function ChatInputBar({
                   onToggleRepo={toggleRepo}
                   onOpenChange={setIsMoreMenuOpen}
                 />
-              </div>
 
-              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
+                  className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
                   title="Voice dictation"
                 >
                   <Mic className="size-3.5" />

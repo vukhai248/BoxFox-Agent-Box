@@ -242,8 +242,9 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
       const rect = triggerRef.current?.getBoundingClientRect()
       if (!rect) return
       const width = 320
+      const idealLeft = rect.right - width
       setPanelPosition({
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        left: Math.max(8, Math.min(idealLeft, window.innerWidth - width - 8)),
         bottom: Math.max(8, window.innerHeight - rect.top + 8),
       })
     }
