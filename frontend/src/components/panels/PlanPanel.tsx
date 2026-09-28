@@ -680,14 +680,14 @@ export function PlanPanel() {
         </div>
       </div>
 
-      {/* Vì sao nút Duyệt bị khoá — ngay dưới hàng công cụ, không im lặng (luật bất biến 1). */}
+      {/* Vì sao nút Duyệt bị khoá — ẩn hiển thị thị giác (sr-only) để giải phóng diện tích theo yêu cầu user */}
       {planFiles.document && approveLocked && (
         <div
           data-component-id="plan-approve-blocked-reason"
           data-testid="plan-approve-blocked"
           id={APPROVE_BLOCKED_ID}
           role="status"
-          className="flex items-start gap-2 border-b border-line bg-amber-500/10 px-4 py-1.5 text-xs text-amber-300"
+          className="sr-only"
         >
           <Shield className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0 flex-1">{approveBlockedReason}</span>

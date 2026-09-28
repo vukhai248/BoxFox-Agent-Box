@@ -80,21 +80,21 @@ describe('IconButton', () => {
     )
     const button = buttonOf(host)
     expect(button.className).toBe(
-      'inline-flex h-[26px] w-[28px] items-center justify-center rounded-md border border-line bg-panel2/60 text-muted transition hover:text-fg  relative',
+      'inline-flex h-[26px] w-[28px] items-center justify-center rounded-md border border-line/30 bg-panel2/60 text-muted transition hover:border-line/50 hover:bg-panel2 hover:text-fg  relative',
     )
     expect(button.getAttribute('aria-pressed')).toBe('false')
-    // Pill KHÔNG dùng lại nền hover của ghost (nút nằm cạnh các pill có viền).
-    expect(button.className).not.toContain('hover:bg-panel2')
   })
 
-  it("variant 'pill' + active ⇒ nền panel2, chữ brand, viền brand", () => {
+  it("variant 'pill' + active ⇒ nền panel2, chữ sáng text-fg, không viền xanh", () => {
     const host = render(
       <IconButton variant="pill" active label="Hiện bảng Workspace" onClick={() => {}}>
         <span>x</span>
       </IconButton>,
     )
     const button = buttonOf(host)
-    expect(button.className).toContain('bg-panel2 text-brand ring-1 ring-brand/40')
+    expect(button.className).toContain('bg-panel2 text-fg')
+    expect(button.className).not.toContain('text-brand')
+    expect(button.className).not.toContain('ring-brand')
     expect(button.getAttribute('aria-pressed')).toBe('true')
   })
 

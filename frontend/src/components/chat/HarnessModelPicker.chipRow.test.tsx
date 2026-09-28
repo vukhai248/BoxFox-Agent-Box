@@ -160,4 +160,33 @@ describe('HarnessModelPicker — chip model ở ô soạn là một hàng', () =
     expect(chip.textContent).toContain(String(enabled))
     expect(chip.getAttribute('title') ?? '').toContain('sub-agents')
   })
+
+  it('popover mở ra với vị trí được neo ổn định và có origin-bottom-right', () => {
+    const host = render(<HarnessModelPicker />)
+    const chip = trigger(host)
+
+    // Giả lập tọa độ trigger của ô soạn ở vị trí thực tế
+    vi.spyOn(chip.parentElement!, 'getBoundingClientRect').mockReturnValue({
+      left: 400,
+      right: 550,
+      top: 600,
+      bottom: 630,
+      width: 150,
+      height: 30,
+      x: 400,
+      y: 600,
+      toJSON: () => {},
+    })
+
+    // Bấm mở
+    act(() => {
+      chip.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const popover = document.querySelector<HTMLElement>('.fixed.z-50.w-80')
+    expect(popover).not.toBeNull()
+    expect(popover?.className).toContain('origin-bottom-right')
+    // idealLeft = 550 - 320 = 230
+    expect(popover?.style.left).toBe('230px')
+  })
 })

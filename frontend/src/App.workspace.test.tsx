@@ -14,7 +14,7 @@ import App from './App'
 import { I18nProvider } from './i18n'
 import { useAgentStore } from './store/agentStore'
 import { useHarnessChatStore } from './store/harnessChatStore'
-import { useUiStore, WORKSPACE_HIDDEN_KEY } from './store/uiStore'
+import { useUiStore } from './store/uiStore'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -68,8 +68,8 @@ function render(): void {
   })
 }
 
-function toggle(): HTMLElement | null {
-  return host.querySelector('[data-testid="workspace-toggle"]')
+function moreBtn(): HTMLElement | null {
+  return host.querySelector('[data-testid="workspace-more-btn"]')
 }
 
 function pane(): HTMLElement | null {
@@ -84,13 +84,11 @@ function chatColumn(): HTMLElement {
   return host.querySelector('[data-testid="chat-column"]')!
 }
 
-function openMenuTab(label: string): void {
-  const menuButton = [...host.querySelectorAll('button')].find(
-    (button) => button.textContent?.includes('Open Workspace') && button.title === 'Open Workspace View',
-  )
-  act(() => menuButton?.click())
+function openWorkspaceFromMenu(label: string): void {
+  const more = moreBtn()
+  act(() => more?.click())
   const item = [...host.querySelectorAll('button')].find(
-    (button) => button.textContent?.includes(label) && button !== menuButton,
+    (button) => button.textContent?.includes(label) && button !== more,
   )
   act(() => item?.click())
 }
@@ -127,112 +125,52 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('công tắc có mặt trên thanh trên', () => {
-  it('mặc định bảng đang hiện ⇒ aria-pressed true, cột phải và Resizer đều có', () => {
+describe('Nút More (...) trên thanh TopBar', () => {
+  it('nút ... có mặt trên TopBar', () => {
     render()
-
-    expect(toggle()).not.toBeNull()
-    expect(toggle()!.getAttribute('aria-pressed')).toBe('true')
-    expect(toggle()!.getAttribute('aria-label')).toBe('Hide workspace pane')
-    expect(pane()).not.toBeNull()
-    expect(resizer()).not.toBeNull()
+    expect(moreBtn()).not.toBeNull()
   })
 
-  it('không có ý định nào xếp hàng thì không có huy hiệu', () => {
+  it('bấm nút ... mở dropdown menu chọn workspace', () => {
     render()
-    expect(host.querySelector('[data-testid="workspace-toggle-badge"]')).toBeNull()
+    act(() => moreBtn()!.click())
+
+    const text = host.textContent
+    expect(text).toContain('Workspaces')
+    expect(text).toContain('Sandbox Controls')
+    expect(text).toContain('Machine')
+    expect(text).toContain('Network')
   })
 })
 
-describe('bấm công tắc ⇒ ẩn bảng, cột chat giãn hết', () => {
-  it('cột phải và Resizer biến mất, khoá localStorage được ghi, cột chat `flex 1 1 0%`', () => {
+describe('Cơ chế tự động đóng/mở Workspace theo Devin', () => {
+  it('khi có tab mở (openTabs > 0) ⇒ cột phải và Resizer hiển thị', () => {
+    useUiStore.setState({ openTabs: ['plan'], activeTab: 'plan' })
     render()
-    expect(chatColumn().style.flex).toBe('0.46 0 0%')
 
-    act(() => toggle()!.click())
+    expect(pane()).not.toBeNull()
+    expect(resizer()).not.toBeNull()
+    expect(chatColumn().style.flex).toBe('0.46 0 0%')
+  })
+
+  it('khi không có tab nào mở (openTabs = []) ⇒ workspace tự đóng, chat giãn 100%', () => {
+    useUiStore.setState({ openTabs: [], activeTab: null })
+    render()
 
     expect(pane()).toBeNull()
     expect(resizer()).toBeNull()
-    expect(localStorage.getItem(WORKSPACE_HIDDEN_KEY)).toBe('1')
     expect(chatColumn().style.flex).toBe('1 1 0%')
-    expect(chatColumn().style.width).toBe('auto')
-    expect(toggle()!.getAttribute('aria-pressed')).toBe('false')
-    expect(toggle()!.getAttribute('aria-label')).toBe('Show workspace pane')
   })
 
-  it('hiện lại ⇒ về đúng tỉ lệ cũ và khoá localStorage bị xoá', () => {
-    render()
-
-    act(() => toggle()!.click())
-    act(() => toggle()!.click())
-
-    expect(pane()).not.toBeNull()
-    expect(resizer()).not.toBeNull()
-    expect(useUiStore.getState().splitRatio).toBe(0.46)
-    expect(chatColumn().style.flex).toBe('0.46 0 0%')
-    expect(localStorage.getItem(WORKSPACE_HIDDEN_KEY)).toBeNull()
-  })
-})
-
-describe('huy hiệu đếm view đang xếp hàng', () => {
-  it('có ý định xếp hàng thì huy hiệu hiện và tên đọc nêu tên view', () => {
-    useUiStore.setState({ workspaceHidden: true })
-    render()
-
-    act(() => {
-      const result = useUiStore
-        .getState()
-        .requestTabIntent({ tab: 'plan', target: { identity: 'agent-box-plan' }, reason: 'plan_written' })
-      expect(result).toBe('queued')
-    })
-
-    const badge = host.querySelector('[data-testid="workspace-toggle-badge"]')
-    expect(badge?.textContent).toBe('1')
-    expect(toggle()!.getAttribute('aria-label')).toBe(
-      'Show workspace pane · 1 queued view(s): Plan Document',
-    )
-  })
-
-  it('bảng đang hiện thì huy hiệu không dựng (không có gì bị chặn)', () => {
-    useUiStore.setState({
-      pendingIntents: [{ tab: 'plan', target: null, reason: 'plan_written' }],
-    })
-    render()
-
-    expect(host.querySelector('[data-testid="workspace-toggle-badge"]')).toBeNull()
-    expect(toggle()!.getAttribute('aria-label')).toBe('Hide workspace pane')
-  })
-})
-
-describe('màn hẹp (<768px)', () => {
-  it('nút vẫn ở đó nhưng `disabled`, và `title` nói lý do', () => {
-    viewport.width = 700
-    render()
-
-    expect(toggle()).not.toBeNull()
-    expect(toggle()!.hasAttribute('disabled')).toBe(true)
-    expect(toggle()!.getAttribute('title')).toBe(
-      'Workspace pane is unavailable on this screen width',
-    )
-    expect(toggle()!.getAttribute('aria-pressed')).toBe('false')
-    // Cột phải vẫn ẩn theo luật bề rộng như trước.
-    expect(pane()).toBeNull()
-  })
-})
-
-describe('đường người dùng tự bấm', () => {
-  it('bấm menu `Open Workspace` ⇒ bảng hiện lại và tab được mở', () => {
-    useUiStore.setState({ workspaceHidden: true, openTabs: ['plan'], activeTab: 'plan' })
+  it('bấm chọn workspace từ menu ... ⇒ tab được mở và workspace tự động hiển thị', () => {
+    useUiStore.setState({ openTabs: [], activeTab: null })
     render()
     expect(pane()).toBeNull()
 
-    // Không dùng tab Terminal ở đây: xterm cần `matchMedia`, thứ jsdom không có,
-    // và bài test này chỉ quan tâm công tắc — không quan tâm panel nào được mở.
-    openMenuTab('Decisions & Approvals')
+    openWorkspaceFromMenu('Decisions & Approvals')
 
     expect(pane()).not.toBeNull()
-    expect(useUiStore.getState().workspaceHidden).toBe(false)
+    expect(useUiStore.getState().openTabs).toContain('decisions')
     expect(useUiStore.getState().activeTab).toBe('decisions')
-    expect(useUiStore.getState().pinnedTab).toBe('decisions')
   })
 })

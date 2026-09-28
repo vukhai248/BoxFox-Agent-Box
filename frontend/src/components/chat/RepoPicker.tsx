@@ -32,7 +32,13 @@ export interface RepoItem {
   configured: boolean
 }
 
-const INITIAL_REPOS: RepoItem[] = []
+const INITIAL_REPOS: RepoItem[] = [
+  {
+    id: 'minndty4-pixel/BoxFox-Agent-Box',
+    fullName: 'minndty4-pixel/BoxFox-Agent-Box',
+    configured: true,
+  },
+]
 
 /** Bề rộng panel lớn nhất (`sm:w-96`) — dùng để kẹp mép phải vào viewport. */
 const PANEL_WIDTH = 384

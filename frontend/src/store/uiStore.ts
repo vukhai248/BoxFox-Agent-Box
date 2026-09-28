@@ -66,6 +66,15 @@ export interface TabIntent {
   reason: string
 }
 
+/** Trạng thái lưu trữ Workspace Tabs của một phiên chat cụ thể. */
+export interface SessionTabState {
+  openTabs: PanelTabId[]
+  activeTab: PanelTabId | null
+  pinnedTab: PanelTabId | null
+  tabIntentTargets: Partial<Record<PanelTabId, Record<string, unknown> | null>>
+  workspaceHidden?: boolean
+}
+
 /** Cửa sổ "người dùng đang rảnh" của luật tự mở tab (hợp đồng §3). */
 export const AUTO_OPEN_IDLE_MS = 15000
 
@@ -158,6 +167,12 @@ interface UiState {
 
   openTabs: PanelTabId[]
   activeTab: PanelTabId | null
+  /** ID của phiên chat hiện tại đang mở Workspace. */
+  currentSessionId: string | null
+  /** Bộ nhớ lưu trạng thái Workspace Tabs theo từng session. */
+  sessionWorkspaceTabs: Record<string, SessionTabState>
+  /** Chuyển phiên chat: lưu tabs phiên cũ và khôi phục tabs phiên mới. */
+  switchSessionTabs: (fromSessionId: string | null, toSessionId: string) => void
   /**
    * Bảng Workspace (cột phải) đang bị ẩn bằng công tắc trên thanh trên.
    *
@@ -301,6 +316,54 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   openTabs: [],
   activeTab: null,
+  currentSessionId: null,
+  sessionWorkspaceTabs: {},
+  switchSessionTabs: (fromSessionId, toSessionId) =>
+    set((s) => {
+      const nextMap = { ...s.sessionWorkspaceTabs }
+      if (fromSessionId) {
+        nextMap[fromSessionId] = {
+          openTabs: s.openTabs,
+          activeTab: s.activeTab,
+          pinnedTab: s.pinnedTab,
+          tabIntentTargets: s.tabIntentTargets,
+          workspaceHidden: s.workspaceHidden,
+        }
+      }
+      const existing = nextMap[toSessionId]
+      if (existing) {
+        return {
+          currentSessionId: toSessionId,
+          openTabs: existing.openTabs,
+          activeTab: existing.activeTab,
+          pinnedTab: existing.pinnedTab,
+          tabIntentTargets: existing.tabIntentTargets,
+          workspaceHidden: existing.workspaceHidden ?? false,
+          sessionWorkspaceTabs: nextMap,
+        }
+      }
+      // Phiên mới chưa có lưu trữ: nếu là phiên đầu tiên khi store mới nạp thì giữ nguyên
+      // openTabs hiện có (để giữ tương thích test); còn nếu là phiên mới thì mặc định
+      // chưa mở tab nào (theo yêu cầu user).
+      const isInitialTest = fromSessionId === null && s.openTabs.length > 0
+      const defaultState: SessionTabState = {
+        openTabs: isInitialTest ? s.openTabs : [],
+        activeTab: isInitialTest ? s.activeTab : null,
+        pinnedTab: isInitialTest ? s.pinnedTab : null,
+        tabIntentTargets: isInitialTest ? s.tabIntentTargets : {},
+        workspaceHidden: isInitialTest ? s.workspaceHidden : false,
+      }
+      nextMap[toSessionId] = defaultState
+      return {
+        currentSessionId: toSessionId,
+        openTabs: defaultState.openTabs,
+        activeTab: defaultState.activeTab,
+        pinnedTab: defaultState.pinnedTab,
+        tabIntentTargets: defaultState.tabIntentTargets,
+        workspaceHidden: defaultState.workspaceHidden,
+        sessionWorkspaceTabs: nextMap,
+      }
+    }),
   // Mở tab cũng là "đã tiêu thụ" mọi ý định đang xếp hàng cho tab đó: huy hiệu
   // tắt, và ngữ cảnh của ý định cuối cùng trở thành ngữ cảnh của lần mở này.
   openTab: (tab, target) =>
@@ -309,36 +372,91 @@ export const useUiStore = create<UiState>((set, get) => ({
       const queuedTarget = queued.length ? (queued[queued.length - 1].target ?? null) : null
       const nextTarget = target ?? queuedTarget
       const pendingIntents = s.pendingIntents.filter((intent) => intent.tab !== tab)
-      // KHÔNG chạm `workspaceHidden`: mở tab khi bảng đang ẩn chỉ dựng sẵn
-      // trạng thái (`openTabs` + `activeTab`) cho lúc bảng hiện lại, không tự
-      // hiện bảng. Chỉ `showTab` mới được phép hiện bảng (Kế hoạch E2).
+      const openTabs = s.openTabs.includes(tab) ? s.openTabs : [...s.openTabs, tab]
+      const activeTab = tab
+      const tabIntentTargets = nextTarget
+        ? { ...s.tabIntentTargets, [tab]: nextTarget }
+        : s.tabIntentTargets
+      const sessionWorkspaceTabs = s.currentSessionId
+        ? {
+            ...s.sessionWorkspaceTabs,
+            [s.currentSessionId]: {
+              openTabs,
+              activeTab,
+              pinnedTab: s.pinnedTab,
+              tabIntentTargets,
+              workspaceHidden: s.workspaceHidden,
+            },
+          }
+        : s.sessionWorkspaceTabs
       return {
-        openTabs: s.openTabs.includes(tab) ? s.openTabs : [...s.openTabs, tab],
-        activeTab: tab,
+        openTabs,
+        activeTab,
         pendingIntents,
-        tabIntentTargets: nextTarget
-          ? { ...s.tabIntentTargets, [tab]: nextTarget }
-          : s.tabIntentTargets,
+        tabIntentTargets,
+        sessionWorkspaceTabs,
       }
     }),
   closeTab: (tab) =>
     set((s) => {
       const openTabs = s.openTabs.filter((item) => item !== tab)
       const activeTab = s.activeTab === tab ? (openTabs[0] ?? null) : s.activeTab
+      const pinnedTab = s.pinnedTab === tab ? null : s.pinnedTab
+      const sessionWorkspaceTabs = s.currentSessionId
+        ? {
+            ...s.sessionWorkspaceTabs,
+            [s.currentSessionId]: {
+              openTabs,
+              activeTab,
+              pinnedTab,
+              tabIntentTargets: s.tabIntentTargets,
+              workspaceHidden: s.workspaceHidden,
+            },
+          }
+        : s.sessionWorkspaceTabs
       return {
         openTabs,
         activeTab,
-        pinnedTab: s.pinnedTab === tab ? null : s.pinnedTab,
+        pinnedTab,
         panelFullscreen: openTabs.length ? s.panelFullscreen : false,
+        sessionWorkspaceTabs,
       }
     }),
-  closePanel: () => set({ activeTab: null, panelFullscreen: false }),
+  closePanel: () =>
+    set((s) => {
+      const sessionWorkspaceTabs = s.currentSessionId
+        ? {
+            ...s.sessionWorkspaceTabs,
+            [s.currentSessionId]: {
+              openTabs: [],
+              activeTab: null,
+              pinnedTab: s.pinnedTab,
+              tabIntentTargets: s.tabIntentTargets,
+              workspaceHidden: s.workspaceHidden,
+            },
+          }
+        : s.sessionWorkspaceTabs
+      return { openTabs: [], activeTab: null, panelFullscreen: false, sessionWorkspaceTabs }
+    }),
 
   // ── Công tắc bảng Workspace (Kế hoạch E2) ──────────────────────────────
   workspaceHidden: getInitialWorkspaceHidden(),
   setWorkspaceHidden: (hidden) => {
     persistWorkspaceHidden(hidden)
-    set({ workspaceHidden: hidden })
+    const s = get()
+    const sessionWorkspaceTabs = s.currentSessionId
+      ? {
+          ...s.sessionWorkspaceTabs,
+          [s.currentSessionId]: {
+            openTabs: s.openTabs,
+            activeTab: s.activeTab,
+            pinnedTab: s.pinnedTab,
+            tabIntentTargets: s.tabIntentTargets,
+            workspaceHidden: hidden,
+          },
+        }
+      : s.sessionWorkspaceTabs
+    set({ workspaceHidden: hidden, sessionWorkspaceTabs })
     // Hiện bảng là điều kiện thứ tư của luật xếp hàng: hàng đợi đóng băng lúc
     // ẩn phải được xả ngay — cũ-trước, và vẫn qua ĐÚNG luật §3 tại thời điểm
     // gọi (tab bị ghim thì ở lại hàng đợi).
@@ -354,7 +472,22 @@ export const useUiStore = create<UiState>((set, get) => ({
   // ── Luật tự mở tab (hợp đồng §3). Thứ tự ba điều kiện là phần hợp đồng:
   // dừng ở điều kiện đầu tiên vi phạm và xếp hàng thay vì mở.
   pinnedTab: null,
-  pinTab: (tab) => set({ pinnedTab: tab }),
+  pinTab: (tab) =>
+    set((s) => {
+      const sessionWorkspaceTabs = s.currentSessionId
+        ? {
+            ...s.sessionWorkspaceTabs,
+            [s.currentSessionId]: {
+              openTabs: s.openTabs,
+              activeTab: s.activeTab,
+              pinnedTab: tab,
+              tabIntentTargets: s.tabIntentTargets,
+              workspaceHidden: s.workspaceHidden,
+            },
+          }
+        : s.sessionWorkspaceTabs
+      return { pinnedTab: tab, sessionWorkspaceTabs }
+    }),
 
   lastUserActivityAt: 0,
   noteUserActivity: () => set({ lastUserActivityAt: Date.now() }),

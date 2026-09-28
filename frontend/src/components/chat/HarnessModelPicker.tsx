@@ -6,7 +6,7 @@
  * - Hỗ trợ chọn mức độ Thinking (Low / Medium / High) cho các model hỗ trợ reasoning
  * - Footer: [⚙️ Manage Harnesses] và [+ Create Harness]
  */
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { resolveThinkingLevel, thinkingLevelIsPublished } from '../../lib/harnessThinking'
 import {
@@ -70,7 +70,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
   const [activeTab, setActiveTab] = useState<'harness' | 'model'>('harness')
   const triggerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const [panelPosition, setPanelPosition] = useState({ left: 8, bottom: 8 })
+  const [panelPosition, setPanelPosition] = useState<{ left: number; bottom: number } | null>(null)
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed)
 
   const harnesses = useHarnessStore((s) => s.harnesses)
   const activeHarnessId = useHarnessStore((s) => s.activeHarnessId)
@@ -235,18 +236,20 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
+  // Tính toán vị trí dropdown neo phía trên nút trigger
+  const updatePosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const width = 320
+    const idealLeft = rect.right - width
+    setPanelPosition({
+      left: Math.max(8, Math.min(idealLeft, window.innerWidth - width - 8)),
+      bottom: Math.max(8, window.innerHeight - rect.top + 8),
+    })
+  }, [])
 
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const width = 320
-      setPanelPosition({
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        bottom: Math.max(8, window.innerHeight - rect.top + 8),
-      })
-    }
+  useLayoutEffect(() => {
+    if (!open) return
 
     updatePosition()
     window.addEventListener('resize', updatePosition)
@@ -255,14 +258,23 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [open])
+  }, [open, updatePosition, sidebarCollapsed])
+
+  const handleToggle = () => {
+    if (!open) {
+      updatePosition()
+      setOpen(true)
+    } else {
+      setOpen(false)
+    }
+  }
 
   return (
     <div className="relative inline-block" ref={triggerRef}>
       {/* Trigger Button inside Chat Input Toolbar */}
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         // F7 (đợt soát 2026-09-27) — chip này nằm trong hàng nút của ô soạn: `min-w-0` cho nó co lại
         // thay vì đẩy cả hàng, và mọi mảnh bên trong là `shrink-0` để tên model dài KHÔNG xuống ba
         // hàng (đo ở bố cục 1440: `OpenCode Free · mimo-v2.5-free` từng làm ô soạn cao bất thường).
@@ -310,11 +322,11 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
       </button>
 
       {/* Floating Popover (Anchored above the chat bar) */}
-      {open && createPortal(
+      {open && panelPosition && createPortal(
         <>
           <div
             ref={panelRef}
-            className="fixed z-50 w-80 overflow-hidden rounded-xl border border-line bg-panel shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none"
+            className="fixed z-50 w-80 overflow-hidden rounded-xl border border-line bg-panel shadow-2xl animate-in fade-in zoom-in-95 duration-150 origin-bottom-right select-none"
             style={{ left: panelPosition.left, bottom: panelPosition.bottom }}
           >
             {/* Search Header */}

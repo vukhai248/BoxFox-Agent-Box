@@ -42,7 +42,7 @@ import { LabelDot } from '../LabelDot'
 import { ChatInputBar, type RouterComposerAdapter } from './ChatInputBar'
 import type { OutgoingAttachment } from '../../lib/chat/attachmentUpload'
 import { MediaLightboxModal, type LightboxMediaProps } from '../chat/MediaLightboxModal'
-import { Video, Play, BrainCircuit } from 'lucide-react'
+import { Video, Play } from 'lucide-react'
 
 
 import { MarkdownRenderer } from '../chat/MarkdownRenderer'
@@ -642,26 +642,7 @@ export function ChatPanel() {
             journal={harnessRun.journal ?? null}
           />
         )}
-        {/* Sub-agent Status Capsule — Theo dõi tiến độ sub-agent và mở SubagentInspectorPanel */}
-        {harnessRun?.events.some(e => e.type === 'child') && (
-          <div
-            onClick={() => showTab('subagents')}
-            className="flex items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand/10 p-3 text-xs text-fg cursor-pointer hover:bg-brand/15 transition shadow-xs group"
-          >
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="size-4 text-brand animate-pulse" />
-              <span className="font-semibold text-brand">Autonomous Specialists Active</span>
-              <span className="text-zinc-400">·</span>
-              <span className="text-zinc-300">
-                {Array.from(new Set(harnessRun.events.filter(e => e.type === 'child').map(e => String(e.data.role)))).join(' → ')}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-[11px] text-brand font-medium group-hover:underline">
-              <span>View Console</span>
-              <ChevronRight className="size-3" />
-            </div>
-          </div>
-        )}
+
 
         <div ref={messagesEndRef} />
         {/* P4 — thẻ Research trong hội thoại: lời hỏi nhiều câu, thẻ ngoài phạm vi, thẻ báo cáo
@@ -1137,7 +1118,7 @@ function StepBlock({
 
           {/* Thinking Content */}
           {thinkingOpen && (
-            <div className="border-l-2 border-brand/50 pl-3.5 py-1.5 text-xs italic text-muted leading-relaxed animate-in fade-in duration-150 bg-panel2/30 rounded-r-xl">
+            <div className="mt-1.5 rounded-xl border border-line bg-panel2/40 p-3 text-[12.5px] font-light text-zinc-400 leading-relaxed animate-in fade-in duration-150">
               {message.thought}
             </div>
           )}

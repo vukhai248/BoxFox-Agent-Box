@@ -207,7 +207,9 @@ export function Sidebar() {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="rounded-md p-1 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
+            className={`rounded-md p-1 transition cursor-pointer ${
+              !collapsed ? 'text-fg bg-panel2/60 shadow-2xs hover:bg-panel2' : 'text-muted hover:bg-panel2 hover:text-fg'
+            }`}
             title={t('common.collapseSidebar')}
           >
             <PanelLeft className="size-3.5" />

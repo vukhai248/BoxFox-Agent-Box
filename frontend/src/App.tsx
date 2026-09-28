@@ -15,12 +15,12 @@ import {
   GitPullRequest,
   ShieldAlert,
   X,
-  Plus,
-  ChevronDown,
   FolderOpen,
   BrainCircuit,
   Microscope,
-  PanelRight,
+  MoreHorizontal,
+  Power,
+  Wifi,
 } from 'lucide-react'
 import { useT } from './i18n/context'
 import { useAgentStore } from './store/agentStore'
@@ -38,18 +38,16 @@ import { SubagentInspectorPanel } from './components/panels/SubagentInspectorPan
 import { IdePanel } from './components/panels/IdePanel'
 import { LabelsLeasesPanel } from './components/panels/LabelsLeasesPanel'
 import { ModeSwitchCard } from './components/ModeSwitchCard'
-import { LabelDot } from './components/LabelDot'
 import { DesignPanel } from './components/panels/design/DesignPanel'
 import { AuditPanel } from './components/panels/AuditPanel'
 import { PullRequestsPanel } from './components/panels/PullRequestsPanel'
 import { WorkspaceFilesPanel } from './components/panels/workspace/WorkspaceFilesPanel'
 import { SystemLogPanel } from './components/panels/SystemLogPanel'
-import { BoxControls } from './components/shell/BoxControls'
-import { IconButton } from './components/ui'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { CompletionEmailNotice } from './components/CompletionEmailNotice'
 import { SearchSessionsModal } from './components/shell/SearchSessionsModal'
 import { useCompletionEmail } from './hooks/useCompletionEmail'
+import { useBoxState } from './hooks/useBoxState'
 import { ContextUsageBar, formatTokenCount } from './components/panels/ContextUsageBar'
 import { formatClock } from './components/panels/research/format'
 
@@ -127,6 +125,14 @@ const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon:
   { id: 'system_log', label: 'System Log', desc: 'Dev log written on the host, outside the box', icon: TAB_ICON.system_log },
 ]
 
+/** Phím tắt điều hướng nhanh tương ứng từng Workspace view (Devin Style). */
+const WORKSPACE_SHORTCUTS: Partial<Record<PanelTabId, string[]>> = {
+  plan: ['Ctrl', 'Shift', 'P'],
+  ide: ['Ctrl', 'Shift', 'I'],
+  terminal: ['Ctrl', 'Shift', 'X'],
+  pull_requests: ['Ctrl', 'Shift', 'O'],
+}
+
 /**
  * Tab CHỈ dành cho chế độ phát triển. Bảng Nhật ký hệ thống là công cụ của dev
  * (việc 5, bản v2): nó đọc log của harness trên host qua `/api/agent/system-log`,
@@ -171,6 +177,17 @@ export default function App() {
   const activeSession = sessions.find((s) => s.session_id === activeSessionId)
   const sessionTitle = activeSession?.title || 'New Session'
 
+  // Đồng bộ và khôi phục các tab Workspace riêng cho từng phiên chat
+  const previousSessionIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeSessionId) return
+    const prevId = previousSessionIdRef.current
+    if (prevId !== activeSessionId) {
+      previousSessionIdRef.current = activeSessionId
+      useUiStore.getState().switchSessionTabs(prevId, activeSessionId)
+    }
+  }, [activeSessionId])
+
   const rawOpenTabs = useUiStore((s) => s.openTabs)
   // Bảng nhật ký hệ thống là tab DEV: ở bản dựng sản phẩm nó không mở được, kể cả
   // khi trạng thái tab còn sót lại từ trước.
@@ -183,13 +200,9 @@ export default function App() {
   // Dưới ~768px cột chat phải chiếm trọn bề ngang: cột chat 120px ở 390px là
   // không dùng được (BUG-23). Sidebar tự thu về thanh biểu tượng ở <1024px.
   const compactLayout = isCompactViewport(useViewportWidth())
-  // Công tắc bảng Workspace (Kế hoạch E2): bảng Workspace và màn Máy là CÙNG một
-  // cột phải, nên ẩn bảng = ẩn cột đó. Cột chat giãn hết bề ngang và nội dung đọc
-  // gom vào cột 768 px (việc của `ChatPanel`). `splitRatio` KHÔNG bị đụng: hiện
-  // lại là về đúng tỉ lệ cũ.
-  const workspaceHidden = useUiStore((s) => s.workspaceHidden)
-  const toggleWorkspace = useUiStore((s) => s.toggleWorkspace)
-  const paneHidden = workspaceHidden || compactLayout
+  // Cơ chế đóng/mở Workspace tự động như Devin: khi không có tab nào mở thì
+  // ẩn luôn bảng Workspace; cột chat chiếm 100% bề ngang.
+  const paneHidden = openTabs.length === 0 || compactLayout
 
   const containerRef = useRef<HTMLDivElement>(null)
   const showModeSwitch = proposal !== null
@@ -202,15 +215,6 @@ export default function App() {
   const pendingIntents = useUiStore((s) => s.pendingIntents)
   const intentCountFor = (tab: PanelTabId) =>
     pendingIntents.filter((intent) => intent.tab === tab).length
-  // Tên các view đang xếp hàng, theo đúng nhãn menu "Open Workspace" — dùng cho
-  // tên đọc của công tắc (trùng tab thì chỉ kể một lần).
-  const queuedViewLabels = [
-    ...new Set(
-      pendingIntents.map(
-        (intent) => AVAILABLE_PANEL_TABS.find((tab) => tab.id === intent.tab)?.label ?? intent.tab,
-      ),
-    ),
-  ].join(', ')
 
   function renderActiveTab() {
     if (showModeSwitch && activeTab === 'plan') {
@@ -257,7 +261,7 @@ export default function App() {
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Cleaned TopBar Header with Open Workspace Dropdown */}
+        {/* Cleaned TopBar Header with Devin-style More (...) Menu */}
         <TopBar
           title={sessionTitle}
           mode={mode}
@@ -265,13 +269,6 @@ export default function App() {
           budget={budget}
           elapsedSeconds={elapsedSeconds}
           context={context}
-          // Công tắc bảng Workspace (Kế hoạch E2): tên đọc nêu cả số view đang xếp
-          // hàng và tên của chúng, để huy hiệu không chỉ là một con số.
-          workspaceHidden={workspaceHidden}
-          workspaceToggleDisabled={compactLayout}
-          hiddenIntentCount={pendingIntents.length}
-          queuedViewLabel={queuedViewLabels}
-          onToggleWorkspace={toggleWorkspace}
         />
 
         <div ref={containerRef} className="flex min-h-0 flex-1">
@@ -304,66 +301,82 @@ export default function App() {
             style={{ flex: `${1 - splitRatio} 0 0%`, width: `${(1 - splitRatio) * 100}%` }}
           >
             {/* Top Workspace Tab Bar */}
-            <div className="flex items-center gap-0.5 border-b border-line bg-panel px-2 pt-1 relative">
-              {openTabs.map((tab) => {
-                const Icon = TAB_ICON[tab]
-                const isActive = activeTab === tab
-                // Huy hiệu đếm = yêu cầu mock đang chờ (tab Decisions) + số ý định
-                // tự mở đang xếp hàng cho tab này.
-                const badgeCount = intentCountFor(tab) + (tab === 'decisions' ? pendingRequestsCount : 0)
-                const isDecisionsWithPending = badgeCount > 0
+            <div className="flex items-center border-b border-line bg-panel px-1.5 pt-1 relative">
+              {/* Chrome-like flexible tab list with horizontal scroll */}
+              <div
+                className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scroll-smooth py-0.5"
+                onWheel={(e) => {
+                  if (e.deltaY !== 0) {
+                    e.currentTarget.scrollLeft += e.deltaY
+                  }
+                }}
+              >
+                {openTabs.map((tab) => {
+                  const Icon = TAB_ICON[tab]
+                  const isActive = activeTab === tab
+                  // Huy hiệu đếm = yêu cầu mock đang chờ (tab Decisions) + số ý định
+                  // tự mở đang xếp hàng cho tab này.
+                  const badgeCount = intentCountFor(tab) + (tab === 'decisions' ? pendingRequestsCount : 0)
+                  const isDecisionsWithPending = badgeCount > 0
+                  const tabLabel = tab === 'decisions' ? 'Decisions' : tab === 'subagents' ? 'Sub-agents' : t(TAB_LABEL_KEY[tab] as 'tabs.plan')
 
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => {
-                      pinTab(tab)
-                      openTab(tab)
-                    }}
-                    aria-selected={isActive}
-                    className={`group flex items-center gap-1.5 rounded-t-md border-t border-x px-3 py-1.5 text-xs font-medium transition cursor-pointer ${isActive
-                        ? 'border-line bg-panel2 text-fg shadow-xs'
-                        : 'border-transparent text-muted hover:text-fg hover:bg-panel2/40'
-                      }`}
-                  >
-                    <Icon
-                      className={`size-3.5 ${isDecisionsWithPending
-                          ? 'text-amber-400 animate-pulse'
-                          : isActive
-                            ? 'text-brand'
-                            : 'text-muted'
-                        }`}
-                    />
-                    <span>{tab === 'decisions' ? 'Decisions' : tab === 'subagents' ? 'Sub-agents' : t(TAB_LABEL_KEY[tab] as 'tabs.plan')}</span>
-
-                    {isDecisionsWithPending && (
-                      <span
-                        data-testid={`tab-badge-${tab}`}
-                        className="flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[9px] font-bold text-amber-300"
-                      >
-                        {badgeCount}
-                      </span>
-                    )}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        closeTab(tab)
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => {
+                        pinTab(tab)
+                        openTab(tab)
                       }}
-                      className="ml-1 rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-panel hover:text-fg cursor-pointer transition"
-                      aria-label="Close tab"
+                      aria-selected={isActive}
+                      title={tabLabel}
+                      className={`group flex min-w-[34px] max-w-[180px] flex-1 shrink items-center justify-between gap-1.5 rounded-t-md border-t border-x px-2 py-1.5 text-xs font-medium transition cursor-pointer overflow-hidden ${isActive
+                          ? 'border-line bg-panel2 text-fg shadow-xs'
+                          : 'border-transparent text-muted hover:text-fg hover:bg-panel2/40'
+                        }`}
                     >
-                      <X className="size-2.5" />
-                    </span>
-                  </button>
-                )
-              })}
+                      <div className="flex min-w-0 items-center gap-1.5 flex-1">
+                        <Icon
+                          className={`size-3.5 shrink-0 ${isDecisionsWithPending
+                              ? 'text-amber-400 animate-pulse'
+                              : isActive
+                                ? 'text-brand'
+                                : 'text-muted'
+                            }`}
+                        />
+                        <span className="truncate text-left leading-none min-w-0 flex-1">
+                          {tabLabel}
+                        </span>
+                      </div>
 
-              {/* Close entire panel button */}
+                      {isDecisionsWithPending && (
+                        <span
+                          data-testid={`tab-badge-${tab}`}
+                          className="shrink-0 flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[9px] font-bold text-amber-300"
+                        >
+                          {badgeCount}
+                        </span>
+                      )}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          closeTab(tab)
+                        }}
+                        className="shrink-0 ml-0.5 rounded p-0.5 text-muted opacity-0 group-hover:opacity-100 hover:bg-panel hover:text-fg cursor-pointer transition"
+                        aria-label="Close tab"
+                      >
+                        <X className="size-2.5" />
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Close entire panel button - pinned on right */}
               {openTabs.length > 0 && (
-                <div className="ml-auto flex items-center pr-1">
+                <div className="shrink-0 flex items-center pl-1 pr-1 bg-panel border-l border-line/40 z-10">
                   <button
                     type="button"
                     onClick={closePanel}
@@ -376,9 +389,9 @@ export default function App() {
               )}
             </div>
 
-            {/* Tab Content or VS Code-style Empty Watermark */}
+            {/* Tab Content */}
             <div className="min-h-0 flex-1 overflow-hidden">
-              {activeTab && openTabs.length > 0 ? (
+              {activeTab && (
                 <div
                   className={
                     activeTab === 'sandbox' || activeTab === 'ide'
@@ -387,38 +400,6 @@ export default function App() {
                   }
                 >
                   {renderActiveTab()}
-                </div>
-              ) : (
-                /* VS Code-style Empty State */
-                <div className="flex h-full flex-col items-center justify-center p-8 text-center select-none bg-panel">
-                  <div className="max-w-md space-y-4">
-                    <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-panel2 border border-line text-muted">
-                      <Monitor className="size-6 text-brand" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-fg">No Workspace View Open</h3>
-                      <p className="mt-1 text-xs text-muted leading-relaxed">
-                        Select a view from the shortcuts below or click the <span className="text-brand font-medium">Open Workspace</span> button above.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-2">
-                      {availablePanelTabs().map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => openTab(item.id)}
-                            className="flex items-center gap-2 rounded-lg border border-line bg-panel2/50 p-2.5 text-left text-xs font-medium text-fg hover:bg-panel2 hover:border-zinc-500 transition cursor-pointer"
-                          >
-                            <Icon className="size-4 text-brand shrink-0" />
-                            <span className="truncate">{item.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
@@ -442,62 +423,39 @@ export function TopBar({
   taskEpoch: _taskEpoch,
   budget,
   elapsedSeconds,
-  context,
-  workspaceHidden,
-  workspaceToggleDisabled,
-  hiddenIntentCount,
-  queuedViewLabel,
-  onToggleWorkspace,
+  context: _context,
 }: {
-  title: string
-  mode: string
-  taskEpoch: number
+  title?: string
+  mode?: string
+  taskEpoch?: number
   budget: { steps: number; tokens: number; costUsd: number; capUsd: number }
-  /**
-   * Thời gian đã chạy của epoch hiện tại, tính bằng giây. Table 4.8 dòng 11:
-   * thanh trên hiện token + thời gian; USD chỉ hiện khi route có giá (#6079) —
-   * route đánh giá miễn phí không được vẽ `$0.00`.
-   */
   elapsedSeconds: number
-  context: { integrity_floor: string; confidentiality_ceiling: string }
-  /** Bảng Workspace (cùng cột với màn Máy) đang bị người dùng ẩn. */
-  workspaceHidden: boolean
-  /** Màn hẹp (<768px): bảng không đủ chỗ, nút bị `disabled` kèm lý do. */
-  workspaceToggleDisabled: boolean
-  /** Số ý định tự mở tab đang xếp hàng vì bảng đang ẩn. */
-  hiddenIntentCount: number
-  /** Tên các view đang xếp hàng, ví dụ `Plan Document`. */
-  queuedViewLabel: string
-  onToggleWorkspace: () => void
+  context?: { integrity_floor: string; confidentiality_ceiling: string }
+  workspaceHidden?: boolean
+  workspaceToggleDisabled?: boolean
+  hiddenIntentCount?: number
+  queuedViewLabel?: string
+  onToggleWorkspace?: () => void
 }) {
   const t = useT()
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
-  const addMenuRef = useRef<HTMLDivElement>(null)
+  const box = useBoxState()
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
   const openTabs = useUiStore((s) => s.openTabs)
-  // Chọn tab từ menu này là người dùng tự bấm một thứ cần bảng ⇒ `showTab` vừa
-  // hiện bảng, vừa ghim, vừa mở (Kế hoạch E2, việc 5/6).
   const showTab = useUiStore((s) => s.showTab)
 
-  const toggleLabel = workspaceToggleDisabled
-    ? t('shell.workspaceUnavailable')
-    : workspaceHidden
-      ? hiddenIntentCount > 0
-        ? `${t('shell.showWorkspacePane')} · ${t('shell.queuedViews', { n: hiddenIntentCount })}${queuedViewLabel ? `: ${queuedViewLabel}` : ''}`
-        : t('shell.showWorkspacePane')
-      : t('shell.hideWorkspacePane')
-
-  // Close add tab popup menu when clicking outside
+  // Đóng menu khi bấm ra ngoài
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setAddMenuOpen(false)
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false)
       }
     }
-    if (addMenuOpen) {
+    if (moreMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [addMenuOpen])
+  }, [moreMenuOpen])
 
   return (
     <div className="flex h-10 shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 select-none">
@@ -526,93 +484,126 @@ export function TopBar({
         </span>
       </div>
 
-      {/* Right: Open Workspace Button, Machine Controls & Security Labels */}
-      <div className="flex items-center gap-2.5">
-        {/* Công tắc bảng Workspace (Kế hoạch E2) — đứng ngay trước cụm điều khiển
-            box, đúng chỗ mũi tên trong ảnh 3083.png. Glyph `PanelRight` là hình
-            trong ảnh 3081.png: rect chia dọc, nửa phải là bảng.
-            `aria-pressed` = bảng đang hiện VÀ nút còn dùng được; ở màn hẹp nút
-            KHÔNG biến mất (một control tự ẩn đi là nói dối về trạng thái), nó
-            `disabled` kèm lý do trong `title`. */}
-        <IconButton
-          variant="pill"
-          active={!workspaceHidden && !workspaceToggleDisabled}
-          label={toggleLabel}
-          onClick={onToggleWorkspace}
-          disabled={workspaceToggleDisabled}
-          className="relative"
-          testId="workspace-toggle"
-        >
-          <PanelRight className="size-3.5" />
-          {hiddenIntentCount > 0 && workspaceHidden && (
-            <span
-              data-testid="workspace-toggle-badge"
-              aria-hidden="true"
-              className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[9px] font-bold text-amber-300 ring-2 ring-panel"
-            >
-              {hiddenIntentCount}
-            </span>
-          )}
-        </IconButton>
-
-        {/* Open Workspace Dropdown Button */}
-        <div className="relative inline-block" ref={addMenuRef}>
+      {/* Right: More Options (...) Button (Devin Style) */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative inline-block" ref={moreMenuRef}>
           <button
             type="button"
-            onClick={() => setAddMenuOpen(!addMenuOpen)}
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition cursor-pointer ${addMenuOpen
-                ? 'border-brand/60 bg-panel2 text-brand shadow-xs'
-                : 'border-line/70 bg-panel2/50 text-muted hover:border-line hover:bg-panel2 hover:text-fg'
-              }`}
-            title="Open Workspace View"
+            onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+            className={`flex size-7 items-center justify-center rounded-md text-muted transition cursor-pointer ${
+              moreMenuOpen ? 'bg-panel2 text-fg shadow-2xs' : 'hover:bg-panel2 hover:text-fg'
+            }`}
+            title="Workspaces & Controls"
+            aria-label="Workspaces & Controls"
+            aria-expanded={moreMenuOpen}
+            data-testid="workspace-more-btn"
           >
-            <Plus className="size-3 text-brand" />
-            <span className="hidden sm:inline">Open Workspace</span>
-            <ChevronDown className={`size-3 transition-transform duration-150 ${addMenuOpen ? 'rotate-180' : ''}`} />
+            <MoreHorizontal className="size-4" />
           </button>
 
-          {/* Dropdown Popup Menu */}
-          {addMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border border-line bg-panel2 p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
-                Open Workspace View
+          {/* Dropdown Popup Menu (Devin Style) */}
+          {moreMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-zinc-200/90 dark:border-line bg-white dark:bg-panel p-1.5 shadow-2xl shadow-black/10 dark:shadow-black/50 animate-in fade-in zoom-in-95 duration-100 select-none">
+              {/* Section 1: Workspaces */}
+              <div className="px-2.5 py-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                Workspaces
               </div>
               <div className="space-y-0.5 mt-0.5">
                 {availablePanelTabs().map((tabItem) => {
                   const Icon = tabItem.icon
                   const isAlreadyOpen = openTabs.includes(tabItem.id)
+                  const shortcut = WORKSPACE_SHORTCUTS[tabItem.id]
                   return (
                     <button
                       key={tabItem.id}
                       type="button"
                       onClick={() => {
-                        // Người dùng bấm menu ⇒ ý định của họ: hiện bảng + ghim + mở.
                         showTab(tabItem.id)
-                        setAddMenuOpen(false)
+                        setMoreMenuOpen(false)
                       }}
-                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${isAlreadyOpen
-                          ? 'bg-panel/60 text-fg'
-                          : 'text-muted hover:bg-panel hover:text-fg'
-                        }`}
+                      className={`group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                        isAlreadyOpen
+                          ? 'bg-zinc-100 dark:bg-panel2/80 text-zinc-900 dark:text-fg font-medium'
+                          : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/80 dark:hover:bg-panel2/60 hover:text-zinc-900 dark:hover:text-fg'
+                      }`}
                     >
-                      <Icon className="size-3.5 text-brand shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-fg">{tabItem.label}</div>
-                        <div className="text-[10px] text-muted truncate">{tabItem.desc}</div>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Icon
+                          className={`size-3.5 shrink-0 transition ${
+                            isAlreadyOpen
+                              ? 'text-zinc-900 dark:text-fg'
+                              : 'text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
+                          }`}
+                        />
+                        <span className="truncate">{tabItem.label}</span>
                       </div>
+                      {shortcut && (
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {shortcut.map((key) => (
+                            <kbd
+                              key={key}
+                              className="rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-panel2 px-1 py-0.5 text-[9px] font-mono text-zinc-400 dark:text-zinc-400 leading-none"
+                            >
+                              {key}
+                            </kbd>
+                          ))}
+                        </div>
+                      )}
                     </button>
                   )
                 })}
+              </div>
+
+              {/* Section 2: Sandbox Machine & Network Controls */}
+              <div className="my-1.5 border-t border-zinc-100 dark:border-line/40" />
+              <div className="px-2.5 py-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                Sandbox Controls
+              </div>
+              <div className="space-y-0.5 mt-0.5">
+                <button
+                  type="button"
+                  onClick={() => box.togglePower()}
+                  className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/80 dark:hover:bg-panel2/60 hover:text-zinc-900 dark:hover:text-fg transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Power className={`size-3.5 ${box.power === 'on' ? 'text-emerald-500' : 'text-zinc-400 dark:text-zinc-500'}`} />
+                    <span className="font-medium">Machine</span>
+                  </div>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider ${
+                      box.power === 'on'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400'
+                    }`}
+                  >
+                    {box.power === 'on' ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => box.toggleNetwork()}
+                  className="group flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/80 dark:hover:bg-panel2/60 hover:text-zinc-900 dark:hover:text-fg transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Wifi className={`size-3.5 ${box.network === 'on' ? 'text-emerald-500' : 'text-zinc-400 dark:text-zinc-500'}`} />
+                    <span className="font-medium">Network</span>
+                  </div>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider ${
+                      box.network === 'on'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400'
+                    }`}
+                  >
+                    {box.network === 'on' ? 'ON' : 'OFF'}
+                  </span>
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        <BoxControls />
-        <LabelDot
-          integrity={context.integrity_floor as 'duoc_nguoi_dung_cho_phep'}
-          confidentiality={context.confidentiality_ceiling as 'cong_khai'}
-        />
         <SearchSessionsModal />
       </div>
     </div>

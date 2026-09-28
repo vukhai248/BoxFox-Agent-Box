@@ -22,7 +22,10 @@ const ICON_BUTTON_GHOST_CLASS =
  * `Machine: ON`) mà không thành hai lớp nền chọi nhau.
  */
 const ICON_BUTTON_PILL_CLASS =
-  'inline-flex h-[26px] w-[28px] items-center justify-center rounded-md border border-line bg-panel2/60 text-muted transition hover:text-fg'
+  'inline-flex h-[26px] w-[28px] items-center justify-center rounded-md border border-line/30 bg-panel2/60 text-muted transition hover:border-line/50 hover:bg-panel2 hover:text-fg'
+
+const ICON_BUTTON_PILL_ACTIVE_CLASS =
+  'inline-flex h-[26px] w-[28px] items-center justify-center rounded-md border border-line/30 bg-panel2 text-fg shadow-2xs transition hover:border-line/50 hover:bg-panel2 hover:text-fg'
 
 export function IconButton({
   label,
@@ -45,8 +48,13 @@ export function IconButton({
   className?: string
   testId?: string
 }) {
-  const base = variant === 'pill' ? ICON_BUTTON_PILL_CLASS : ICON_BUTTON_GHOST_CLASS
-  const activeClass = variant === 'pill' ? 'bg-panel2 text-brand ring-1 ring-brand/40' : 'bg-panel2 text-fg'
+  let btnClasses = ''
+  if (variant === 'pill') {
+    btnClasses = active ? `${ICON_BUTTON_PILL_ACTIVE_CLASS} ` : `${ICON_BUTTON_PILL_CLASS} `
+  } else {
+    btnClasses = `${ICON_BUTTON_GHOST_CLASS} ${active ? 'bg-panel2 text-fg' : ''}`
+  }
+
   return (
     <button
       type="button"
@@ -56,7 +64,7 @@ export function IconButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`${base} ${active ? activeClass : ''} ${className}${disabled ? ' cursor-not-allowed opacity-50' : ''}`}
+      className={`${btnClasses} ${className}${disabled ? ' cursor-not-allowed opacity-50' : ''}`}
     >
       {children}
     </button>
