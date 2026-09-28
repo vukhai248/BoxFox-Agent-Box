@@ -1,0 +1,2 @@
+# Preserve the owner's pasted sample verbatim, including its CRLF bytes and checksum.
+medical-record-plan-legacy.md -text whitespace=cr-at-eol

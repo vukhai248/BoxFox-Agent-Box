@@ -1094,11 +1094,22 @@ const vi = {
     reviewStoredNote: 'Quyết định lưu ở sổ duyệt của harness.',
     statusError: 'Không đọc được sổ duyệt của harness',
     notForwarded: 'Quyết định đã vào sổ duyệt của harness nhưng CHƯA chuyển được sang máy sandbox.',
+    workflow: {
+      statusActive: 'Đang xử lý', statusNeedsUser: 'Chờ bạn trả lời', statusPaused: 'Tạm dừng', statusBlocked: 'Cần xử lý', statusCancelled: 'Đã hủy', statusExecuting: 'Đang triển khai', sourceUser: 'Bạn đã nêu', sourceObserved: 'Đã xác minh', sourceProposed: 'Đề xuất', sourceUnresolved: 'Chưa quyết định',
+      phaseScoping: 'Làm rõ mục tiêu', phaseInvestigating: 'Khảo sát', phaseInterviewing: 'Phỏng vấn', phaseDrafting: 'Soạn kế hoạch', phaseReviewing: 'Phản biện', phaseReady: 'Sẵn sàng duyệt', phaseApproved: 'Đã duyệt',
+      fieldGoal: 'Mục tiêu', fieldUsers: 'Người dùng', fieldWorkflow: 'Luồng sử dụng', fieldScope: 'Phạm vi', fieldData: 'Dữ liệu', fieldConstraints: 'Ràng buộc', fieldSuccess: 'Nghiệm thu',
+      active: 'Chế độ Plan', waitGoal: 'Chờ yêu cầu', pause: 'Tạm dừng',
+      interview: 'Làm rõ kế hoạch', freeText: 'Nhập câu trả lời hoặc yêu cầu đề xuất',
+      saving: 'Đang lưu…', savePartial: 'Lưu câu đã trả lời', continue: 'Tiếp tục',
+      durableWait: 'Câu trả lời được lưu. Có thể quay lại sau khi tải lại hoặc khởi động lại.',
+      brief: 'Brief và quyết định', execute: 'Triển khai bản', executionQueued: 'Đã yêu cầu triển khai',
+      review: 'Phản biện độc lập · SWE-AI/1',
+    },
     eval: {
-      title: 'Đánh giá kế hoạch',
+      title: 'Kiểm tra cấu trúc / proxy (P1–P8)',
       titleOf: 'Đánh giá lần ghi v{{version}}',
       rubric:
-        'Thang 0–2 mỗi chiều: ≥13 đạt · 9–12 đạt có điều kiện · ≤8 chưa đạt. Cổng cứng ở mức 0 thì bản kế hoạch không được ghi.',
+        'Chỉ là proxy cấu trúc, không phải đánh giá SWE/AI. Thang 0–2 mỗi chiều: ≥13 đạt · 9–12 đạt có điều kiện · ≤8 chưa đạt. Cổng cứng ở mức 0 thì bản kế hoạch không được ghi.',
       rubricRejected:
         'Cổng cứng ở mức 0 thì bản kế hoạch không được ghi. Lần ghi này bị từ chối nên file trong .plans giữ nguyên.',
       scoreUnknown: 'chưa đọc được điểm',

@@ -35,6 +35,16 @@ DECISION_OPTION = {'type': 'object', 'properties': {
     'kind': {'type': 'string', 'enum': ['approve', 'reject', 'alternative']}}, 'required': ['label']}
 DECISION_OPTIONS = {'type': 'array', 'items': DECISION_OPTION}
 SCHEMAS = [
+    tool('plan_scope',
+         'Root-owned durable planning: status, update brief/decisions, ask 1–3 questions, confirm brief, '
+         'or switch project. Questions end computation and wait persistently. Use current revision for mutations.',
+         {'action': {'type': 'string', 'enum': ['status', 'update', 'ask', 'confirm', 'switch', 'answer']},
+          'runId': STRING, 'revision': {'type': 'integer'},
+          'profile': {'type': 'string', 'enum': ['task', 'software', 'ai']},
+          'brief': {'type': 'object'}, 'decisions': {'type': 'array', 'items': {'type': 'object'}},
+          'evidence': {'type': 'array', 'items': STRING}, 'goal': STRING,
+          'questions': {'type': 'array', 'minItems': 1, 'maxItems': 3, 'items': {'type': 'object'}},
+          'answers': {'type': 'array', 'items': {'type': 'object'}}}, ['action']),
     tool('file_read',
          'Read a UTF-8 file inside the sandbox workspace. A file longer than the answer can be read '
          'in slices: pass `offset` (character index to start at) and `limit` (how many characters '
@@ -268,6 +278,8 @@ SCHEMAS = [
          'verdict with `plan_verify`. Until a passing critique exists for this exact version, `request_approval` for '
          'the plan is refused.',
          {'slug': STRING, 'markdown': STRING, 'title': STRING, 'identity': STRING, 'relatesTo': STRING,
+          'runId': STRING, 'briefRevision': {'type': 'integer'},
+          'traceability': {'type': 'array', 'items': {'type': 'object'}},
           'researchDependencies': {'type': 'array', 'items': {'type': 'object', 'properties': {
               'researchId': STRING, 'version': {'type': 'integer'}},
               'required': ['researchId', 'version']},

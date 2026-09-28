@@ -54,6 +54,8 @@ import { useResearchSync } from '../../hooks/useResearchSync'
 import { ResearchConversationCards } from './research/ResearchConversationCards'
 import { DesignConversationCards } from './design/DesignConversationCards'
 import { useDesignSync } from '../../hooks/useDesignSync'
+import { usePlanSync } from '../../hooks/usePlanSync'
+import { PlanWorkflowView } from './plan/PlanWorkflowView'
 import { resolveThinkingLevel } from '../../lib/harnessThinking'
 import { composerModels, findRouteOption, routerChatOptions, routable, selectionKey } from '../../lib/routeOptions'
 
@@ -212,6 +214,7 @@ export function ChatPanel() {
   useResearchSync()
   // P1 — chế độ Design: cùng cầu nối, cùng luồng sự kiện phiên (một vòng 1200 ms, không thêm vòng nào).
   useDesignSync()
+  usePlanSync()
   const researchSuggest = useMemo<{ reason: string; draftGoal: string } | null>(() => {
     const latest = [...(harnessRun?.events ?? [])].reverse().find((event) => event.type === 'research_suggested')
     if (!latest) return null
@@ -707,6 +710,7 @@ export function ChatPanel() {
         <ResearchConversationCards suggest={researchSuggest} />
         {/* P1 — thẻ Design trong hội thoại: lời hỏi phỏng vấn, thẻ brief + danh sách chạm, dòng thời gian. */}
         <DesignConversationCards />
+        <PlanWorkflowView />
         <div ref={messagesEndRef} />
         </div>
 

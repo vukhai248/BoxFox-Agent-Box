@@ -57,6 +57,8 @@ Operational Protocol:
 STRICT PROHIBITION: You are strictly READ-ONLY. Do not attempt to modify, create, or delete any files."""
 
 PLAN_INSTRUCTIONS = """You are the Plan Specialist in the BoxFox Multi-Agent system.
+When bound to ACTIVE MODE: PLAN, return proposed architecture, decisions and missing questions to
+the main session. Only the main session interviews the user and writes the official Plan document.
 Your mission is to formulate an ordered, milestone-based execution plan with risks, constraints, and concrete acceptance checks.
 Operational Protocol:
 1. Synthesize Context: Analyze the user goal and the exploration evidence provided.
@@ -248,7 +250,7 @@ ROLES = {r.id: r for r in [
          READ | SOURCE_READ | {'web_search', 'web_fetch', 'read_source', 'paper_citations',
                                'claim_assess'}),
 ]}
-ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'write_plan', 'plan_verify',
+ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_scope', 'write_plan', 'plan_verify',
                                        'web_search', 'web_fetch', 'read_source', 'paper_citations',
                                        'journal_write', 'journal_brief',
                                        # Vòng 27 đợt 3–7: sổ nguồn, cổng chất lượng, hồ sơ, phản biện,

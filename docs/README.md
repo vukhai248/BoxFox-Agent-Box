@@ -18,6 +18,7 @@
 ### 1.1 Kế hoạch và đánh giá
 
 - [Kế hoạch sản phẩm BoxFox Agent Box](plan/agent-box-plan.md) — mục tiêu, trạng thái hiện tại đã xác minh, các quyết định sản phẩm, lộ trình và bảng chuyển nội dung từ kế hoạch cũ.
+- [Cải tổ Plan mode — tiến độ và bàn giao](plan/plan-mode-reform-v1.md) — đặc tả đã chốt, checklist triển khai trên nhánh B, kiểm thử và phần còn dở.
 - [Tóm tắt kế hoạch](plan/agent-box-plan-summary.md) — bản đọc nhanh của các quyết định và giới hạn quan trọng.
 - [Đánh giá BoxFox Agent Box](plan/agent-box-evaluation.md) — câu hỏi nghiên cứu, cấu hình, benchmark, chỉ số an toàn/utility và cách tái lập đánh giá; đây là đặc tả đánh giá, không phải kết quả benchmark đã chạy.
 - [Chế độ plan dưới mắt mô hình thật (2026-09-27)](plan/plan-mode-live-verification-2026-09-27.md) — số đo ba ca trên harness thật với `muse-spark-1.3-contributor-free`: xử lý yêu cầu mơ hồ, độ sâu tìm hiểu, chuyển sang design khi là việc UI, và vì sao chưa lượt nào có kết luận phản biện ghi sổ.

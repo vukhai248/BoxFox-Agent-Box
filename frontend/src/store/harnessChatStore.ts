@@ -65,6 +65,7 @@ interface RunView { id: string | null; status: string; events: HarnessEvent[]; e
    * mà KHÔNG mở thêm một vòng hỏi phiên thứ hai (cùng luật với `researchMode` ở trên).
    */
   designMode?: unknown
+  planMode?: unknown
   /** Nhật ký bền của phiên (khối `journal` đã gộp qua các vòng poll). */
   journal?: HarnessJournal | null
   /**
@@ -539,6 +540,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               ...sessionContextWindow(session.config),
               researchMode: session.config?.researchMode,
               designMode: session.config?.designMode,
+              planMode: session.config?.planMode,
               // Lời xác nhận "đã xếp hàng" chỉ sống trong lúc lượt còn đang chạy: lượt đã đóng thì
               // nó là thông tin cũ, và bong bóng "can thiệp" trong transcript đã là biên nhận thật.
               steerNotice: session.status === 'running' || session.status === 'awaiting_decision'

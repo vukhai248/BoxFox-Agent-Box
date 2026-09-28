@@ -20,13 +20,15 @@ ROLE_COMMANDS.pop('research', None)
 # bật, lệnh VAI cũ khi công tắc tắt. Bỏ khoá khỏi `ROLE_COMMANDS` để bật mode không bị nhánh lệnh vai
 # nuốt mất, và `resolve` tự trả về hành vi cũ trên nhánh công-tắc-tắt.
 ROLE_COMMANDS.pop('design', None)
+ROLE_COMMANDS.pop('plan', None)
 INFO = {'help', 'skills', 'agents', 'status', 'context'}
 BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design',
-                                       'research', 'design', 'btw'}
+                                       'research', 'design', 'plan', 'btw'}
 EXTERNAL = {'claude-code', 'codex', 'opencode'}
 # P1 (§5.2) + P5: mô tả cho `/help` và gợi ý `/` — lệnh MODE nói cách bật/thoát, `/btw` nói luật
 # không cắt lượt. Lệnh nào không có mục ở đây thì `list` suy mô tả từ tên.
-BUILTIN_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
+BUILTIN_DESCRIPTIONS = {'plan': 'Enable root Plan workflow; `/plan <task>` scopes and interviews; `/plan off` pauses; `/plan status` resumes visibility',
+                        'research': 'Enable Research mode; `/research <task>` starts it right away, '
                                    '`/research off` exits, `/research status` shows the run',
                         'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
                                   '`/design off` exits, `/design status` shows the run',
@@ -37,7 +39,7 @@ BUILTIN_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` st
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
 ROLE_SKILLS = {
     'explore': {'codebase-inspection', 'ast-grep'},
-    'plan': {'codebase-inspection', 'grill-me'},
+    'plan': {'codebase-inspection', 'planning', 'grill-me'},
     # Vòng 25 (D-33): người phản biện kế hoạch — vai read-only nên chỉ cần kỹ năng soi mã.
     'plan-review': {'codebase-inspection'},
     'design': {'design-md', 'claude-design', 'popular-web-designs', 'architecture-diagram'},
@@ -207,6 +209,11 @@ class CommandRegistry:
                     raise ValueError(f'{BTW_QUESTION_TOO_LONG_CODE}: câu hỏi dài quá '
                                      f'{BTW_QUESTION_MAX_CHARS} ký tự — hỏi ngắn hơn')
                 result.kind, result.prompt, result.reason = 'message', question, 'btw_command'
+                return result
+            if key == 'plan':
+                result.kind, result.command, result.reason = 'mode', key, 'mode_command'
+                low = args.strip().lower()
+                result.prompt = '' if low in ('', 'on') else args.strip()
                 return result
             if key in ('research', 'design'):
                 from ..agent_core import runtime as _runtime

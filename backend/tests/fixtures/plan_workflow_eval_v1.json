@@ -1,0 +1,196 @@
+{
+  "schema": "boxfox-plan-eval-v1",
+  "status": "prepared_not_executed",
+  "repeats": 2,
+  "baselineCommit": "7bf93950104b6cd06d726da5082b4c52e0c9ae8e",
+  "modelObserved": {
+    "providerId": "opencode",
+    "modelId": "space-bunny-free",
+    "sessionId": "a17af9a5b97b427095bb00656e9d6321"
+  },
+  "rules": [
+    "Re-read current root-session config at execution; preserve model/provider/budgets; record both variants.",
+    "Use a new SQLite database and workspace for each variant/case/repeat; never use current app database/workspace.",
+    "No real patient data. Sample medical/legal citations are unverified, not ground truth.",
+    "Count every scheduled run including provider errors; label injected reviewer failures separately.",
+    "Approval must not trigger implementation. Do not call Execute during this quality benchmark.",
+    "No live call until scripts/eval/guard.py accepts explicit opt-in and a user-specified USD budget."
+  ],
+  "cases": [
+    {
+      "id": "medical_original",
+      "prompt": "/plan tôi cần bạn giúp tôi tạo plan cho 1 app agent hõ trợ tỏng hợp hồ sơ y tế",
+      "assertions": [
+        "interview_before_architecture",
+        "synthesis_correctness_not_citation_presence"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      }
+    },
+    {
+      "id": "vague_app",
+      "prompt": "/plan Tôi muốn tạo một ứng dụng quản lý công việc cho nhóm.",
+      "assertions": [
+        "interview_before_scope"
+      ],
+      "answersByField": {
+        "users": "Nhóm 5 người làm dự án nội bộ.",
+        "workflow": "Tạo, giao, cập nhật và xem việc trễ hạn.",
+        "scope": "MVP task CRUD và giao việc; không chat hoặc quản lý lương.",
+        "data": "Task do người dùng nhập, CSV mẫu, không dữ liệu nhạy cảm.",
+        "constraints": "Ứng dụng local cho nhóm nhỏ, chưa biết stack; hãy đề xuất.",
+        "success": "CRUD có quyền phù hợp; không bỏ sót task trễ hạn; backup phục hồi được."
+      }
+    },
+    {
+      "id": "fully_specified",
+      "prompt": "/plan Lập kế hoạch MVP quản lý công việc cho nhóm 5 người: tạo/sửa/giao task, không chat; React và FastAPI, SQLite, chạy local, không dữ liệu nhạy cảm. Entity User/Task, task có title/assignee/status/deadline. Mục tiêu giảm task bị bỏ sót; nghiệm thu CRUD, quyền thành viên, phục hồi backup và thao tác bàn phím. Hãy đề xuất chi tiết API, deployment và kiểm thử.",
+      "assertions": [
+        "no_redundant_questions",
+        "confirm_brief_before_drafting"
+      ],
+      "answersByField": {}
+    },
+    {
+      "id": "small_repo_fix",
+      "prompt": "/plan Sửa example/app.py: normalise_name(None) trả chuỗi rỗng; các chuỗi khác vẫn strip; giữ signature. Bổ sung test example/test_app.py. Không sửa API hay thêm dependency.",
+      "assertions": [
+        "bounded_plan_without_forced_interview"
+      ],
+      "answersByField": {}
+    },
+    {
+      "id": "contradictory_constraints",
+      "prompt": "/plan Tạo agent tổng hợp hồ sơ, tuyệt đối offline không có network, nhưng bắt buộc gọi LLM cloud trên từng bệnh án.",
+      "assertions": [
+        "clarify_contradiction_before_decision"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      }
+    },
+    {
+      "id": "unknown_stack",
+      "prompt": "/plan Làm app agent tổng hợp hồ sơ cho bác sĩ từ PDF mẫu, prototype offline. Tôi chưa biết stack hay model, hãy khảo sát và đề xuất giúp tôi.",
+      "assertions": [
+        "agent_researches_tech",
+        "ask_consequential_product_data_questions"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      }
+    },
+    {
+      "id": "unrelated_old_plan",
+      "prompt": "/plan Lập kế hoạch ứng dụng quản lý kho mới cho nhóm 3 người. .plans/v3-medical.md là tài liệu của dự án y tế khác, chỉ là tham khảo.",
+      "assertions": [
+        "no_inherited_medical_scope"
+      ],
+      "answersByField": {
+        "users": "Nhóm 3 người theo dõi kho.",
+        "workflow": "Nhập/xuất hàng, kiểm tồn, xuất CSV.",
+        "scope": "Kho đơn, chưa bán hàng hay hóa đơn.",
+        "data": "CSV mã hàng, số lượng và giao dịch giả lập; không dữ liệu y tế.",
+        "constraints": "Prototype local; hãy đề xuất stack. Plan y tế cũ không là ràng buộc.",
+        "success": "Không mất giao dịch, tồn kho khớp fixture và phục hồi backup được."
+      }
+    },
+    {
+      "id": "offline_constraint",
+      "prompt": "/plan Lập kế hoạch app tổng hợp hồ sơ từ PDF text khử định danh cho bác sĩ, MVP offline trên Windows 16 GB RAM; cấm gửi dữ liệu ra cloud. Tôi cần timeline, kiểm duyệt và xuất Markdown, không chẩn đoán.",
+      "assertions": [
+        "respect_no_egress",
+        "no_question_about_already_fixed_offline"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      }
+    },
+    {
+      "id": "changed_intent",
+      "prompt": "/plan Lập kế hoạch app agent tổng hợp hồ sơ y tế.",
+      "assertions": [
+        "same_run_revised_brief",
+        "old_review_invalidated"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      },
+      "afterFirstInterview": "Tôi đổi yêu cầu: chỉ dùng dữ liệu mẫu và chạy offline, không gửi gì ra cloud."
+    },
+    {
+      "id": "fake_headings",
+      "prompt": "/plan Đọc .plans/v1-fake.md và bản mẫu .plans/v1-medical-record-synthesis-agent.md; phản biện mức sẵn sàng triển khai cho app agent tổng hợp hồ sơ. Đừng coi đầy đủ tiêu đề, citation hoặc metric chưa hiệu chỉnh là đủ thiết kế. Chỉ ra quyết định/phạm vi tự đặt và dữ kiện chưa xác minh.",
+      "assertions": [
+        "substantive_gaps_block_ready",
+        "original_sample_unverified_scope_and_decisions_flagged"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      }
+    },
+    {
+      "id": "reviewer_failure",
+      "prompt": "/plan Lập kế hoạch thay đổi normalise_name trong example/app.py để xử lý None như chuỗi rỗng, có test.",
+      "assertions": [
+        "one_provider_retry",
+        "missing_review_is_unevaluated"
+      ],
+      "answersByField": {},
+      "fault": "Inject exactly one provider failure into the first independent reviewer, retain the selected model on retry."
+    },
+    {
+      "id": "restart",
+      "prompt": "/plan Giúp tôi tạo plan cho app agent tổng hợp hồ sơ y tế.",
+      "assertions": [
+        "durable_question_ids_answers",
+        "exactly_once_continuation"
+      ],
+      "answersByField": {
+        "users": "Bác sĩ tại một phòng khám; tổng hợp để chuẩn bị xem hồ sơ trước buổi khám, có người kiểm duyệt.",
+        "workflow": "Tải bộ hồ sơ, xem timeline và bản tổng hợp liên kết đoạn nguồn, sửa/duyệt, xuất bản tổng hợp.",
+        "scope": "MVP một phòng khám, tổng hợp và timeline; không chẩn đoán, không kê thuốc, không chia sẻ công khai.",
+        "data": "PDF có lớp text và JSON mẫu đã khử định danh; chưa dùng dữ liệu bệnh nhân thật. Dữ liệu lỗi phải hiển thị để người kiểm duyệt xử lý.",
+        "constraints": "Prototype, một người dùng, chạy offline trên máy Windows có 16 GB RAM; không gửi dữ liệu ra ngoài. Chưa biết stack, hãy nghiên cứu và đề xuất.",
+        "success": "Bác sĩ kiểm duyệt các bản mẫu; đánh giá riêng đúng/thiếu/không có căn cứ/không đủ bằng chứng, so baseline, hiệu chỉnh ngưỡng trên tập kiểm tra tách biệt."
+      },
+      "restartAt": "After committing final answer transaction, before continuation admission; reopen SQLite and compare question/answer IDs."
+    }
+  ],
+  "legacySample": {
+    "path": "backend/tests/fixtures/medical-record-plan-legacy.md",
+    "sha256": "9836e1b4ed9cbd5c8b8fd4e4cb6d1895e27e1a6d4455c5e7917ed9664ce460d6",
+    "sourcesVerified": false
+  }
+}

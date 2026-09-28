@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 D:/create/BoxFox-Agent-Box/frontend
+
+
+ Test Files  3 passed (3)
+      Tests  71 passed (71)
+   Start at  05:05:31
+   Duration  3.98s (transform 1.42s, setup 0ms, import 2.59s, tests 1.15s, environment 4.70s)

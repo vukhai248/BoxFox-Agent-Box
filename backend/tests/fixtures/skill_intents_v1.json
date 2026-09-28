@@ -48,7 +48,7 @@
   ["/codex fix this", "unavailable"],
   ["/opencode add a test", "unavailable"],
   ["/skill codex fix this", "unavailable"],
-  ["/plan inspect auth architecture", "plan"],
+  ["/plan inspect auth architecture", "mode"],
   ["/review check the diff", "review"],
   ["/test run regression checks", "testing"],
   ["/research tìm tài liệu chính thức", "mode"],

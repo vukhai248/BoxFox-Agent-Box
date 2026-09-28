@@ -1,94 +1,57 @@
 ---
 name: planning
-description: "The plan loop: research, write, independent critique, recorded verdict, then approval — without a critique you cannot request approval."
-version: 1.0.0
-author: BoxFox Agent (vòng 25, D-33)
+description: "Root-owned Plan workflow: ground intent, interview, confirm brief, design, critique, approve and separately execute."
+version: 2.0.0
 license: MIT
 platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [planning, review, verification, approval, evidence]
-    related_skills: [codebase-inspection, requesting-code-review]
 ---
 
-# Planning — write a plan, then let somebody else attack it
+# Planning a decision-complete implementation
 
-## Overview
+Invariant: without a critique you cannot request approval.
 
-A plan is a claim about work that has not happened yet. Written by the same mind that will execute
-it, it is self-reported evidence, and self-reported evidence is the weakest kind. The loop below is
-mandatory, and its second half is the half that is usually missing.
+When ACTIVE MODE: PLAN is present this procedure is mandatory, even if skills were disabled.
+Use BoxFox tools only. Child specialists return evidence, proposed designs and missing questions;
+the main session owns interview, brief and the official document.
 
-**The invariant, in full: without a critique you cannot request approval.**
+1. Read goal, attachments and relevant code before asking. Classify a bounded code task, software
+system or AI system. Distinguish observed existing components from proposed components. Old plans
+are evidence to inspect, not automatically requirements to inherit.
+2. Call plan_scope status, then update brief with source per field (goal/users/workflow/scope/data/
+constraints/success). Exact user quotes, observed paths/URLs actually read, or proposed choices with
+reasons and alternatives. Never promote a proposal to user-confirmed. Important unknowns are blocking
+decisions; do not hide them in an assumptions section and continue writing.
+3. Ask 1–3 consequential questions with plan_scope ask. Include options/tradeoffs when helpful,
+always permit free text, and accept 'recommend'. End the compute turn and wait for durable answers.
+Do not ask code facts you can read. A fully specified small task does not need an interview.
+For a medical synthesis app first establish user/job, inputs and permission to use real data,
+prototype vs production and operating constraints. Do not select offline/cloud/OCR/RAG by guessing.
+4. Research alternatives and recommend technology. Explain cost/data consequences in a concise brief.
+For software/AI call plan_scope confirm and wait for the user's confirmation before drafting.
+5. write_plan requires runId, briefRevision and traceability covering requirement -> decision ->
+milestone -> acceptance. The requirement IDs are brief field keys, plus any explicitly modeled
+requirements. Each milestone specifies dependencies, concrete changes, deliverables and meaningful
+checks. Describe product, existing state/evidence, stack/architecture/alternatives, data/schema/
+lifecycle/errors/migrations, component/API contracts/errors/auth/async, deployment/config/secrets/
+observability/retries/idempotency/backup/rollback. Explain any inapplicable part; bounded tasks can
+combine sections. Existing paths must really exist; label new paths 'planned'. Never claim tests ran.
+6. AI plans must justify AI vs a simple baseline, choose/evaluate models, define grounding and any
+OCR/retrieval, fallback/abstention/human review, latency and cost. Define evaluation dataset, unit,
+annotation/scoring method, baseline and calibrated thresholds. Unmeasured thresholds are proposed
+targets requiring calibration. Evaluate correctness, omissions, unsupported claims and insufficient
+evidence separately. Citation presence alone does not prove a synthesized claim is correct.
+7. Delegate plan-review on the exact written path with reviewTarget. Reviewer receives original goal,
+answers, brief, evidence and snapshot. Require every SWE-AI/1 dimension with evidence, blocking
+findings and PLAN_REVIEW_JSON before a final VERDICT: ok or revise. Record with plan_verify.
+P1–P8 scores are structural/proxy checks, not semantic SWE/AI quality. Missing/provider-failed critique
+means unevaluated; one provider retry in budget. Repair at most two rounds per batch; otherwise save
+blocked checkpoint and report exact findings. Changed decisions/hash invalidate old conclusions.
+8. Only a ready plan may request approval. Approval stores acceptance only. Implementation needs
+the separate Execute action and exact approved version/hash; never delegate Build after approval.
 
-## The loop
+Write in the user's language. Vietnamese must have accents even with misspelled input. Preserve code,
+identifiers, paths and verbatim quotes. Put the full technical plan in the document and summarize in
+chat. Stop with an honest saved checkpoint on budget exhaustion.
 
-0. **Ask before you assume** — a plan is a promise about somebody else's intent. When the request
-   leaves a decision open that changes what you build (which screen, which scope, who it is for,
-   what "done" means), `ask_user` FIRST — one short question, not a questionnaire. If you cannot ask
-   at that moment, write the assumption down in the plan as unconfirmed and say what the answer would
-   change. The harness looks for exactly that: a plan whose Assumptions / Open questions section is
-   non-empty while nobody was asked gets `PLAN_ASSUMPTIONS_UNCONFIRMED` (a notice, not a block).
-   Measured 2026-09-27: a vague request produced a plausible plan built on guesses, and no question
-   was asked in the whole session — the owner's answer would have changed two of its five steps.
-1. **Ground it** — `delegate_task role='explore'` for the code and `role='research'` for anything
-   outside the workspace. A plan that cites external facts needs a Sources section with real,
-   reachable addresses.
-2. **Write it** — one writer only: you. `write_plan` stores `vN-slug.md` and scores P1–P8; a plan
-   without an exact acceptance command, without risks, or without sources when it relies on external
-   facts is refused before it is stored.
-3. **Critique it** — `delegate_task role='plan-review'` on the **file that was just written**. State
-   the exact path, demand a report with severities and `path:line`, and demand its answer end with
-   `VERDICT: ok` or `VERDICT: revise`. The critic is read-only and never rewrites your plan.
-4. **Record the verdict** — `plan_verify(identity, version, verdict, issues, summary)`. The harness
-   accepts the verdict only when that `plan-review` child of this session really ran after the write,
-   completed, produced enough text, and its own `VERDICT:` line matches what you record. Ending the
-   turn with a written plan and no recorded verdict no longer passes silently: the harness injects one
-   `PLAN_VERDICT_NUDGE` step (once per turn, only when enough turn time is left for a real critique),
-   and if the turn still closes without a verdict it records `PLAN_VERDICT_MISSING_AT_TURN_END`. If the
-   critic child died on a provider error such as `UPSTREAM_HTTP_502`, that is a temporary failure —
-   delegate a fresh critic instead of treating it as a verdict.
-5. **Repair or approve** — `verdict='revise'` means fix the findings and write the **next** version,
-   then critique that one; two revise rounds per turn is the cap. `verdict='ok'` means you may ask
-   the owner to approve that exact version.
-
-## What the harness enforces (not advice — gates)
-
-| Gate | Code | Meaning |
-|---|---|---|
-| Independent critique | `PLAN_APPROVAL_UNVERIFIED` | Approval (chat `request_approval` or the Plan tab) of a version with no recorded passing critique is refused. |
-| Critique provenance | `PLAN_VERIFY_NO_CRITIC` | No completed `plan-review` child ran after this version was written. |
-| Verdict line | `PLAN_VERIFY_VERDICT_MISSING` | The critique's answer has no final `VERDICT:` line. |
-| Verdict mismatch | `PLAN_VERIFY_VERDICT_MISMATCH` | You recorded a different verdict than the critique gave. |
-| Sources | `PLAN_QUALITY_REJECTED` / sources findings | A plan leaning on outside facts must name where each fact came from. |
-| Unconfirmed assumptions | `PLAN_ASSUMPTIONS_UNCONFIRMED` | Notice only: the plan has an Assumptions / Open questions section and nobody was asked this session. The plan still stands; the assumption is now visible to the owner. |
-| Verdict missing at close | `PLAN_VERDICT_MISSING_AT_TURN_END` | Notice only, after one `PLAN_VERDICT_NUDGE` step per turn: the turn closed with a written plan and no recorded verdict, so approval stays refused. |
-| Interview question ids (design mode) | `DESIGN_INTERVIEW_IDS_UNKNOWN` | `design_scope action='ask'` refuses an interview question whose id is not one of the fixed `dq-*` ids, because an answer to a free id maps to no brief field. |
-
-Two switches exist for the owner, not for you: `BOXFOX_PLAN_VERIFY` and
-`BOXFOX_PLAN_SOURCES_GATE` (`enforce` / `warn` / `off`). Never argue for lowering them to get a plan
-through; report the finding instead.
-
-## Anti-patterns (measured, not guessed)
-
-- **Stopping after `write_plan`.** A written plan is not a finished job; the turn ends at an approval
-  request that carries a passing verdict, or at an honest report of the open findings. One
-  `PLAN_VERDICT_NUDGE` step is spent telling you this, and `PLAN_VERDICT_MISSING_AT_TURN_END` records
-  it in the log when the nudge is not enough.
-- **Assuming instead of asking.** A plausible plan built on guesses costs the owner a review cycle and
-  can be wrong in the one dimension that mattered. Assumptions belong in the plan AND, when the answer
-  changes what you build, in an `ask_user` call.
-- **Critiquing your own plan.** You wrote it, so you will defend it. Delegate the critique.
-- **Critiquing the previous version.** The verdict is bound to `(identity, version)`: after a
-  revision the critique and the verdict are needed again for the new version.
-- **Inventing a verdict.** Recording `ok` when the critique said `revise` fails the mismatch gate and
-  is visible in the Plan tab.
-- **Asking for approval when the owner said "already old".** Approval resumes the turn for the
-  version that was clicked and says so; do not silently execute a newer draft.
-
-## Time
-
-A planning turn can run long. The default turn budget is 600 s and one event-driven extension of
-420 s applies after a plan is written, so do not rush the critique to save time — but do not spend
-the budget on retries of the same failing call either. The verdict nudge is only injected when at
-least 180 s of the turn are left, because a `plan-review` child needs real time to read the file.
+Outside Plan mode, preserve legacy write_plan -> independent plan-review -> plan_verify gates.
+For a substantive new planning request open Plan rather than inventing an unconfirmed architecture.

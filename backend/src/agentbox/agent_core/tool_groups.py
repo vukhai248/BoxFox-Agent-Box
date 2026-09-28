@@ -28,7 +28,7 @@ TOOL_GROUPS = [
      'tools': ['web_search', 'web_fetch', 'read_source', 'paper_citations'],
      'alwaysOn': False},
     {'key': 'delegationPlans',
-     'tools': ['delegate_task', 'session_search', 'write_plan', 'plan_verify', 'journal_write', 'journal_brief'],
+     'tools': ['delegate_task', 'session_search', 'plan_scope', 'write_plan', 'plan_verify', 'journal_write', 'journal_brief'],
      'alwaysOn': False},
     # Vòng 27 (đợt 3–7) — sổ nguồn và hồ sơ research, chèn NGAY SAU `delegationPlans`:
     # hai nhóm này là phần "research có kiểm chứng" của cùng một việc giao cho con,
