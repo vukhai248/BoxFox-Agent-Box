@@ -263,37 +263,50 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 rounded-lg border border-line/50 bg-panel px-2 py-1 text-xs text-muted transition hover:border-zinc-500 hover:text-fg cursor-pointer select-none ${open ? 'border-brand/60 bg-panel2 text-fg ring-1 ring-brand/30' : ''
+        // F7 (đợt soát 2026-09-27) — chip này nằm trong hàng nút của ô soạn: `min-w-0` cho nó co lại
+        // thay vì đẩy cả hàng, và mọi mảnh bên trong là `shrink-0` để tên model dài KHÔNG xuống ba
+        // hàng (đo ở bố cục 1440: `OpenCode Free · mimo-v2.5-free` từng làm ô soạn cao bất thường).
+        className={`flex min-w-0 max-w-[260px] items-center gap-1.5 rounded-lg border border-line/50 bg-panel px-2 py-1 text-xs text-muted transition hover:border-zinc-500 hover:text-fg cursor-pointer select-none ${open ? 'border-brand/60 bg-panel2 text-fg ring-1 ring-brand/30' : ''
           }`}
         title={
           activeType === 'harness'
             ? `Harness: ${currentHarness?.name} (${subagentCount} sub-agents)`
-            : `Model: ${selectedModelName} (${selectedModelProvider})`
+            : pinnedConnection && pinnedModel
+              // Nhãn ghim bị cắt trong chip (`pinned: …`); chuột vào đây là đọc được cả connection đã
+              // ghim lẫn tên ĐẦY ĐỦ của model — hai thứ mà nhãn cắt không nói hết.
+              ? `Model: ${pinnedModel.name} (${selectedModelProvider}) · pinned ${pinnedConnection.name}`
+              : `Model: ${selectedModelName} (${selectedModelProvider})`
         }
       >
         {activeType === 'harness' ? (
           <>
-            <Bot className="size-3.5 text-brand" />
-            <span className="font-semibold text-fg">{subagentCount}</span>
+            <Bot className="size-3.5 shrink-0 text-brand" />
+            {/* Nhãn của nhánh này là một CON SỐ nên nó không tự xuống hàng; `shrink-0` giữ đúng hợp
+                đồng của chip: chỉ phần tên model được co và cắt, mọi mảnh khác đứng yên. */}
+            <span className="shrink-0 font-semibold text-fg">{subagentCount}</span>
           </>
         ) : (
           <>
             {hasLive && selectedModelProvider ? (
-              <ProviderIcon providerId={selectedModelProvider} className="size-3.5" />
+              <ProviderIcon providerId={selectedModelProvider} className="size-3.5 shrink-0" />
             ) : (
-              <Cpu className="size-3.5 text-amber-400" />
+              <Cpu className="size-3.5 shrink-0 text-amber-400" />
             )}
-            <span className="font-semibold text-fg flex items-center gap-1.5">
-              <span>{displayModelName}</span>
+            <span className="flex min-w-0 items-center gap-1.5 font-semibold text-fg">
+              {/* `truncate` + trần bề rộng: tên model dài đi vào một dòng, phần bị cắt vẫn đọc được
+                  trọn vẹn ở `title` của nút. */}
+              <span className="truncate max-w-[170px]" data-testid="composer-model-name">
+                {displayModelName}
+              </span>
               {activeThinkingModel && (
-                <span className="text-[10px] text-brand font-medium px-1.5 py-0.5 rounded bg-brand/10 border border-brand/25 capitalize leading-none">
+                <span className="shrink-0 text-[10px] text-brand font-medium px-1.5 py-0.5 rounded bg-brand/10 border border-brand/25 capitalize leading-none">
                   {thinkingLevel}
                 </span>
               )}
             </span>
           </>
         )}
-        <ChevronDown className={`size-2.5 text-muted transition ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`size-2.5 shrink-0 text-muted transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Floating Popover (Anchored above the chat bar) */}

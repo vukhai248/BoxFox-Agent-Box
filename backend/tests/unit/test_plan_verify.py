@@ -406,7 +406,9 @@ def test_the_write_plan_result_names_the_mandatory_next_step(tmp_path):
                                                                 '3 passed.\n\n## Risks / '
                                                                 'Limitations\n- chưa có mạng trong '
                                                                 'máy này.\n'})]),
-        answer('Xong.')]))
+        answer('Xong.'),
+        # F3: bước nhắc sau một lần ghi plan chưa có phán quyết — thiếu câu này thì lượt chết.
+        answer('Chưa chạy phản biện, dừng ở đây.')]))
     sid = runtime.create({'skills': []})['id']
 
     async def go():
@@ -419,4 +421,6 @@ def test_the_write_plan_result_names_the_mandatory_next_step(tmp_path):
     result = only_result(store, sid)
     assert "role='plan-review'" in result['next'] and 'plan_verify' in result['next']
     assert 'request_approval' in result['next'] and 'PLAN_APPROVAL_UNVERIFIED' in result['next']
+    assert store.get(sid)['status'] == 'completed', \
+        'lượt phải đóng TRỌN VẸN: fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
     store.close()

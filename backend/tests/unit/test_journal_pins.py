@@ -86,9 +86,12 @@ def test_a_written_plan_is_pinned_once_with_its_identity_and_version(tmp_path):
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
         executor = FixtureExecutor()
+        # F3 (2026-09-27): lượt ghi plan mà chưa có phán quyết phản biện bị nhắc ĐÚNG MỘT bước, nên
+        # fixture cần thêm câu trả lời cho bước ấy; thiếu nó thì lượt chết mà mặt ghim vẫn xanh.
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'nhat-ky-phien', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi kế hoạch')]))
+            answer('Đã ghi kế hoạch'),
+            answer('Chưa chạy phản biện, dừng ở đây.')]))
         sid = runtime.create({'skills': []})['id']
         await runtime.start(sid, 'Lên kế hoạch nhật ký')
 
@@ -100,6 +103,8 @@ def test_a_written_plan_is_pinned_once_with_its_identity_and_version(tmp_path):
         assert record['data']['relativePath'] == '.plans/v1-nhat-ky-phien.md'
         assert record['kind'] == 'plan'
         assert record['sid8'] == sid[:8], 'bản ghi phải nói nó thuộc phiên nào'
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN — fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -110,9 +115,12 @@ def test_the_plan_pin_points_at_the_open_task_when_the_session_has_one(tmp_path)
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
         executor = FixtureExecutor()
+        # F3 (2026-09-27): lượt ghi plan mà chưa có phán quyết phản biện bị nhắc ĐÚNG MỘT bước, nên
+        # fixture cần thêm câu trả lời cho bước ấy; thiếu nó thì lượt chết mà mặt ghim vẫn xanh.
         runtime = HarnessRuntime(store, executor, FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'nhat-ky-phien', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi kế hoạch')]))
+            answer('Đã ghi kế hoạch'),
+            answer('Chưa chạy phản biện, dừng ở đây.')]))
         sid = runtime.create({'skills': []})['id']
 
         # Không có `T:` nào ⇒ không có `refs` (đường thường gặp trước khi agent gọi journal_write).
@@ -132,6 +140,8 @@ def test_the_plan_pin_points_at_the_open_task_when_the_session_has_one(tmp_path)
         tasks = [row['payload']['record'] for row in store.journal_tail(sid, limit=50, kinds=['task'])]
         assert tasks and tasks[0]['id'].startswith('T:') and tasks[0]['status'] == 'doing'
         assert pinned['refs'] == [tasks[0]['id']]
+        assert store.get(sid)['status'] == 'completed', \
+            'lượt phải đóng TRỌN VẸN — fixture cạn câu trả lời làm lượt chết sau khi đã ghi plan'
         store.close()
 
     asyncio.run(run())
@@ -204,7 +214,10 @@ def test_a_failing_journal_layer_never_breaks_the_plan_write(tmp_path):
         store = SessionStore(tmp_path / 'sessions.db')
         runtime = HarnessRuntime(store, BrokenJournal(), FixtureModel([
             answer(calls=[call('write_plan', {'slug': 'nhat-ky-phien', 'markdown': PLAN_MARKDOWN})]),
-            answer('Đã ghi kế hoạch')]))
+            answer('Đã ghi kế hoạch'),
+            # F3 (đợt soát 2026-09-27): lượt ghi kế hoạch mà chưa có phán quyết thì harness bơm ĐÚNG
+            # MỘT bước nhắc, nên lượt này tiêu thụ thêm một câu trả lời.
+            answer('Ghi xong, chưa chạy phản biện.')]))
         sid = runtime.create({'skills': []})['id']
         await runtime.start(sid, 'Lên kế hoạch nhật ký')
 
