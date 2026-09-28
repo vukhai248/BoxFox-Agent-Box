@@ -905,3 +905,50 @@ describe('HarnessStepView — C-5 can thiệp giữa lúc chạy', () => {
     expect(host.querySelector('[data-testid="owner-btw-label"]')).toBeNull()
   })
 })
+
+describe('HarnessStepView — Luồng suy luận và Tool xen kẽ (Interleaved Thinking & Tools)', () => {
+  it('suy luận và tool hiển thị xen kẽ theo đúng trình tự thời gian seq', () => {
+    const events = [
+      ev('user', { text: 'Mở Youtube Shorts và lướt 5 video' }),
+      ev('thought', { text: 'Bước 1: Mở trình duyệt vào shorts.' }),
+      ev('tool_start', { id: 't1', name: 'browser_action', args: { action: 'open' } }),
+      ev('tool_end', { id: 't1', name: 'browser_action', args: { action: 'open' }, result: { ok: true } }),
+      ev('thought', { text: 'Bước 2: Lướt video short 1 và 2.' }),
+      ev('tool_start', { id: 't2', name: 'browser_action', args: { action: 'scroll' } }),
+      ev('tool_end', { id: 't2', name: 'browser_action', args: { action: 'scroll' }, result: { ok: true } }),
+      ev('tool_start', { id: 't3', name: 'computer_screen_capture', args: {} }),
+      ev('tool_end', { id: 't3', name: 'computer_screen_capture', args: {}, result: { ok: true } }),
+      ev('thought', { text: 'Bước 3: Hoàn thành tác vụ.' }),
+      ev('assistant', { text: 'Đã xem xong 5 video shorts.', final: true }),
+      ev('finish', { status: 'completed' }),
+    ]
+
+    const host = renderSession(events)
+    // Mở khối activity để xem nội dung
+    click(host.querySelector('[data-activity-toggle="true"]')!)
+
+    const activity = host.querySelector('[data-activity="true"]')
+    expect(activity).toBeTruthy()
+
+    // Kiểm tra các phần tử bên trong activity xuất hiện đúng thứ tự:
+    // Thought 1 -> Tool 1 -> Thought 2 -> Group Header (Executed 2 commands) -> Thought 3
+    const textContent = activity?.textContent ?? ''
+    const idxThought1 = textContent.indexOf('Bước 1: Mở trình duyệt vào shorts.')
+    const idxTool1 = textContent.indexOf('browser_action')
+    const idxThought2 = textContent.indexOf('Bước 2: Lướt video short 1 và 2.')
+    const idxGroupHeader = textContent.indexOf('Executed 2 commands')
+    const idxThought3 = textContent.indexOf('Bước 3: Hoàn thành tác vụ.')
+
+    expect(idxThought1).toBeGreaterThanOrEqual(0)
+    expect(idxTool1).toBeGreaterThan(idxThought1)
+    expect(idxThought2).toBeGreaterThan(idxTool1)
+    expect(idxGroupHeader).toBeGreaterThan(idxThought2)
+    expect(idxThought3).toBeGreaterThan(idxGroupHeader)
+
+    // Khối group header có mặt với số lượng 2
+    const groupHeader = host.querySelector('[data-tool-group-header="true"]')
+    expect(groupHeader).toBeTruthy()
+    expect(groupHeader?.textContent).toContain('Executed 2 commands')
+  })
+})
+

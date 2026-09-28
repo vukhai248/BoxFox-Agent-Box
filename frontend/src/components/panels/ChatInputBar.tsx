@@ -174,6 +174,8 @@ export function ChatInputBar({
   const agentBusy = useAgentStore((s) => s.isBusy)
   const isBusy = router?.isBusy ?? agentBusy
   const workspaceHidden = useUiStore((s) => s.workspaceHidden)
+  const openTabs = useUiStore((s) => s.openTabs)
+  const isReadingColumn = workspaceHidden || openTabs.length === 0
   // E5 — chip "Mở trong Files" của tệp ĐÃ lên box dùng đúng hành động có sẵn của app.
   const selectFile = useUiStore((s) => s.selectFile)
   const autopilotEnabled = useUiStore((s) => s.autopilotEnabled)
@@ -402,7 +404,7 @@ export function ChatInputBar({
       {/* Hộp soạn tin gom theo cột đọc khi bảng Workspace ẩn */}
       <div
         data-testid="chat-input-bar"
-        className={`relative rounded-2xl border bg-panel shadow-2xs transition-all duration-150 ${readingColumnClass(workspaceHidden)} ${
+        className={`relative rounded-2xl border bg-panel shadow-2xs transition-all duration-150 ${readingColumnClass(isReadingColumn)} ${
           isTextareaFocused
             ? 'border-zinc-500 ring-1 ring-zinc-600/40'
             : 'border-line/80'

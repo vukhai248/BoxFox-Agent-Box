@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect, useCallback, Fragment } from 'react'
 import { useT } from '../../i18n/context'
 import { useAnswerLabels } from '../../i18n/answerLabels'
 import {
@@ -90,6 +90,7 @@ interface HarnessStepViewProps {
  * phẳng theo `seq`, không gom tool/ảnh vào accordion hay gallery riêng.
  */
 type TurnTimelineItem =
+  | { kind: 'thought'; id: string; seq: number; text: string; live: boolean }
   | { kind: 'text'; id: string; seq: number; text: string; live: boolean }
   // Vòng 27 / C-5 — chỉ thị chủ nhà gửi GIỮA lượt (harness phát `user` với `{steer:true}`): nó
   // thuộc lượt ĐANG chạy, không mở lượt mới, nên nằm trong dòng thời gian ở đúng chỗ `seq` của nó.
@@ -1170,10 +1171,23 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
     turn.endTime = Math.max(turn.endTime, event.created)
   }
 
+  // Chốt trạng thái live của thought khi có sự kiện khác tới
+  const lastItem = turn.items[turn.items.length - 1]
+  if (lastItem && lastItem.kind === 'thought' && lastItem.live && event.type !== 'thought') {
+    lastItem.live = false
+  }
+
   switch (event.type) {
     case 'thought': {
       // Event có thể là văn bản tích luỹ (harness cũ) hoặc mảnh rời (harness mới).
-      turn.thought = appendStreamText(turn.thought ?? '', String(event.data.text ?? ''))
+      const text = String(event.data.text ?? '')
+      turn.thought = appendStreamText(turn.thought ?? '', text)
+      const last = turn.items[turn.items.length - 1]
+      if (last && last.kind === 'thought' && last.live) {
+        last.text = appendStreamText(last.text, text)
+      } else {
+        turn.items.push({ kind: 'thought', id: `thought_${event.seq}`, seq: event.seq, text, live: true })
+      }
       return
     }
     case 'usage': {
@@ -1193,7 +1207,19 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
       return
     }
     case 'assistant': {
-      if (event.data.thought) turn.thought = String(event.data.thought)
+      if (event.data.thought) {
+        turn.thought = String(event.data.thought)
+        const hasThought = turn.items.some((it) => it.kind === 'thought')
+        if (!hasThought && String(event.data.thought).trim()) {
+          turn.items.unshift({
+            kind: 'thought',
+            id: `thought_assistant_${event.seq}`,
+            seq: event.seq,
+            text: String(event.data.thought),
+            live: false,
+          })
+        }
+      }
       const text = String(event.data.text ?? '')
       const isFinal = event.data.final !== false
       const last = turn.items[turn.items.length - 1]
@@ -1276,7 +1302,8 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
       if (event.data.reset) {
         while (turn.items.length > 0) {
           const last = turn.items[turn.items.length - 1]
-          if (last.kind !== 'text' || !last.live) break
+          if (last.kind !== 'text' && last.kind !== 'thought') break
+          if (!last.live) break
           turn.items.pop()
         }
         turn.thought = ''
@@ -1483,7 +1510,7 @@ export function HarnessStepView({
         const isTurnBusy = isLastTurn && isBusy && !turn.isCompleted
 
         return (
-          <div key={turn.id} data-turn-latest={isLastTurn ? 'true' : undefined} data-turn-user="true">
+          <div key={turn.id} data-turn-latest={isLastTurn ? 'true' : undefined} data-turn-user="true" className={isLastTurn ? 'scroll-mt-3' : undefined}>
             <TurnBlock
               turn={turn}
               sessionId={sessionId ?? null}
@@ -1546,6 +1573,46 @@ function attachmentKindLabel(label: string): string {
     return 'văn bản'
   }
   return 'tệp'
+}
+
+function ToolGroupHeader({
+  count,
+  hasRunning,
+  hasError,
+  collapsed,
+  onToggle,
+}: {
+  count: number
+  hasRunning: boolean
+  hasError: boolean
+  collapsed: boolean
+  onToggle: () => void
+}) {
+  const label = hasRunning ? 'Running commands' : `Executed ${count} commands`
+
+  return (
+    <div className="pt-0.5 pb-1 select-none" data-tool-group-header="true">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-2 text-xs text-muted hover:text-fg transition cursor-pointer group"
+      >
+        <span className="font-mono text-zinc-500 font-bold">$</span>
+        <span className={`font-medium ${hasRunning ? 'text-blue-300 animate-pulse' : 'text-zinc-300'}`}>
+          {label}
+        </span>
+        <span className="rounded-md bg-panel px-1.5 py-0.5 text-[10px] font-mono border border-line/60 text-zinc-400">
+          {count}
+        </span>
+        {hasError && <span className="text-[10px] text-rose-400 font-medium">· error</span>}
+        {!collapsed ? (
+          <ChevronDown className="size-3 text-muted group-hover:text-fg" />
+        ) : (
+          <ChevronRight className="size-3 text-muted group-hover:text-fg" />
+        )}
+      </button>
+    </div>
+  )
 }
 
 function TurnBlock({
@@ -1752,6 +1819,51 @@ function TurnBlock({
     if (!activityTouched && turn.isCompleted) setActivityOpen(false)
   }, [turn.isCompleted, activityTouched])
 
+  // Xác định các nhóm tool liên tiếp trong turn.items
+  const toolGroupMeta = useMemo(() => {
+    const map = new Map<string, { groupId: string; isFirst: boolean; count: number; hasRunning: boolean; hasError: boolean }>()
+    let currentGroup: Extract<TurnTimelineItem, { kind: 'tool' }>[] = []
+
+    const flush = () => {
+      if (currentGroup.length >= 2) {
+        const groupId = `group_${currentGroup[0].id}`
+        const hasRunning = currentGroup.some((t) => !t.end && isTurnBusy)
+        const hasError = currentGroup.some((t) => {
+          const res = t.end?.data?.result
+          return res && typeof res === 'object' && (res as Record<string, unknown>).is_error
+        })
+        currentGroup.forEach((t, idx) => {
+          map.set(t.id, {
+            groupId,
+            isFirst: idx === 0,
+            count: currentGroup.length,
+            hasRunning,
+            hasError,
+          })
+        })
+      }
+      currentGroup = []
+    }
+
+    for (const item of turn.items) {
+      if (item.kind === 'tool') {
+        currentGroup.push(item)
+      } else {
+        flush()
+      }
+    }
+    flush()
+    return map
+  }, [turn.items, isTurnBusy])
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const toggleGroup = useCallback((groupId: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [groupId]: prev[groupId] === undefined ? false : !prev[groupId],
+    }))
+  }, [])
+
   const handleCopyUser = () => {
     const text = String(turn.userEvent?.data?.text ?? '')
     if (!text) return
@@ -1933,8 +2045,9 @@ function TurnBlock({
             ))}
         </button>
 
-        {/* R2: dòng biên nhận — in đúng những gì đang nằm trong khối, kể cả lệnh chưa trả kết quả */}
-        {receipt.length > 0 && (
+        {/* R2: dòng biên nhận — in đúng những gì đang nằm trong khối, kể cả lệnh chưa trả kết quả.
+            Ẩn đi khi khối đang mở và chỉ có đúng 1 nhãn suy luận mồ côi (tránh chữ Suy luận thừa thãi). */}
+        {receipt.length > 0 && !(activityOpen && receipt.length === 1 && counts.thinking) && (
           <div className="flex flex-wrap items-center text-[11px] font-mono select-none" data-activity-receipt="true">
             {receipt.map((part, index) => (
               <span key={part.label} className="flex items-center">
@@ -1961,8 +2074,11 @@ function TurnBlock({
           Được bọc trong box viền ngoài với chữ nhỏ hơn, nét mỏng và màu nhạt hơn câu trả lời cuối. */}
       <div data-activity="true" data-activity-open={activityOpen ? 'true' : 'false'}>
         {activityOpen && (
-          <div className="mt-2.5 rounded-xl border border-line bg-panel2/40 p-3.5 space-y-3 shadow-2xs text-[12.5px] font-light text-zinc-400 leading-relaxed [&_p]:text-[12.5px] [&_p]:font-light [&_p]:text-zinc-400 [&_p]:leading-relaxed [&_li]:text-[12.5px] [&_li]:font-light [&_li]:text-zinc-400 [&_li]:leading-relaxed [&_h1]:text-xs [&_h1]:font-medium [&_h1]:text-zinc-300 [&_h2]:text-xs [&_h2]:font-medium [&_h2]:text-zinc-300 [&_h3]:text-xs [&_h3]:font-medium [&_h3]:text-zinc-300 [&_strong]:font-normal [&_strong]:text-zinc-300">
-            {thoughtText && <ThoughtProse thought={thoughtText} isLive={isTurnBusy} />}
+          <div className="mt-2.5 max-h-[380px] overflow-y-auto overscroll-contain rounded-xl border border-line bg-panel2/40 p-3.5 space-y-3 shadow-2xs text-[12.5px] font-light text-zinc-400 leading-relaxed [&_p]:text-[12.5px] [&_p]:font-light [&_p]:text-zinc-400 [&_p]:leading-relaxed [&_li]:text-[12.5px] [&_li]:font-light [&_li]:text-zinc-400 [&_li]:leading-relaxed [&_h1]:text-xs [&_h1]:font-medium [&_h1]:text-zinc-300 [&_h2]:text-xs [&_h2]:font-medium [&_h2]:text-zinc-300 [&_h3]:text-xs [&_h3]:font-medium [&_h3]:text-zinc-300 [&_strong]:font-normal [&_strong]:text-zinc-300">
+            {/* Fallback cho lượt cũ không có item thought rời trong items */}
+            {!turn.items.some((it) => it.kind === 'thought') && thoughtText && (
+              <ThoughtProse thought={thoughtText} isLive={isTurnBusy} />
+            )}
 
             {/* P4 §4.5 — dòng công cụ gom: thay vì để người đọc đếm loạt hàng `Searched …`,
                 một dòng nói đúng nhịp của run. `researchActivity` chỉ đếm `tool_start`
@@ -1985,6 +2101,9 @@ function TurnBlock({
             })()}
 
             {turn.items.map((item) => {
+              if (item.kind === 'thought') {
+                return <ThoughtProse key={item.id} thought={item.text} isLive={item.live && isTurnBusy} />
+              }
               if (item.kind === 'text') {
                 return <TimelineTextBlock key={item.id} text={item.text} isLive={item.live && isTurnBusy} />
               }
@@ -1992,16 +2111,31 @@ function TurnBlock({
                 return <OwnerSteerRow key={item.id} event={item.event} />
               }
               if (item.kind === 'tool') {
+                const meta = toolGroupMeta.get(item.id)
+                const isGrouped = Boolean(meta)
+                const isCollapsed = isGrouped ? (collapsedGroups[meta!.groupId] ?? !meta!.hasRunning) : false
                 return (
-                  <ToolTimelineRow
-                    key={item.id}
-                    start={item.start}
-                    end={item.end}
-                    isTurnBusy={isTurnBusy}
-                    allowStartMedia={item.end ? startAllowedSeqs.has(item.end.seq) : false}
-                    onOpenLightbox={onOpenLightbox}
-                    captionFor={mediaCaption}
-                  />
+                  <Fragment key={item.id}>
+                    {meta && meta.isFirst && (
+                      <ToolGroupHeader
+                        count={meta.count}
+                        hasRunning={meta.hasRunning}
+                        hasError={meta.hasError}
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleGroup(meta.groupId)}
+                      />
+                    )}
+                    <div className={isGrouped ? (isCollapsed ? 'hidden' : 'ml-2 pl-2.5 border-l border-line/40') : undefined}>
+                      <ToolTimelineRow
+                        start={item.start}
+                        end={item.end}
+                        isTurnBusy={isTurnBusy}
+                        allowStartMedia={item.end ? startAllowedSeqs.has(item.end.seq) : false}
+                        onOpenLightbox={onOpenLightbox}
+                        captionFor={mediaCaption}
+                      />
+                    </div>
+                  </Fragment>
                 )
               }
               if (item.kind === 'child') {

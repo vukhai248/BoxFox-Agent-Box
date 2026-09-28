@@ -197,12 +197,13 @@ export default function App() {
   const closeTab = useUiStore((s) => s.closeTab)
   const closePanel = useUiStore((s) => s.closePanel)
   const splitRatio = useUiStore((s) => s.splitRatio)
+  const workspaceHidden = useUiStore((s) => s.workspaceHidden)
   // Dưới ~768px cột chat phải chiếm trọn bề ngang: cột chat 120px ở 390px là
   // không dùng được (BUG-23). Sidebar tự thu về thanh biểu tượng ở <1024px.
   const compactLayout = isCompactViewport(useViewportWidth())
   // Cơ chế đóng/mở Workspace tự động như Devin: khi không có tab nào mở thì
   // ẩn luôn bảng Workspace; cột chat chiếm 100% bề ngang.
-  const paneHidden = openTabs.length === 0 || compactLayout
+  const paneHidden = workspaceHidden || openTabs.length === 0 || compactLayout
 
   const containerRef = useRef<HTMLDivElement>(null)
   const showModeSwitch = proposal !== null

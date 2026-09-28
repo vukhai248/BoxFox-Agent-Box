@@ -185,6 +185,8 @@ export function ChatPanel() {
   const showTab = useUiStore((s) => s.showTab)
   // Bảng Workspace ẩn ⇒ cột chat giãn hết, nội dung đọc gom vào cột 768 px (việc 7).
   const workspaceHidden = useUiStore((s) => s.workspaceHidden)
+  const openTabs = useUiStore((s) => s.openTabs)
+  const isReadingColumn = workspaceHidden || openTabs.length === 0
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatId = useAgentStore((s) => s.activeSessionId)
@@ -248,6 +250,26 @@ export function ChatPanel() {
       programmaticScrollTimer.current = null
     }, 400)
     messagesEndRef.current?.scrollIntoView?.({ behavior, block: 'end' })
+  }, [])
+
+  // Cuộn lượt mới của người dùng lên đỉnh khung nhìn (chuẩn Devin/Claude/ChatGPT).
+  const scrollToNewTurn = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    programmaticScrollRef.current = true
+    if (programmaticScrollTimer.current !== null) window.clearTimeout(programmaticScrollTimer.current)
+    programmaticScrollTimer.current = window.setTimeout(() => {
+      programmaticScrollRef.current = false
+      programmaticScrollTimer.current = null
+    }, 400)
+
+    const scrollContainer = chatScrollRef.current
+    const latestTurnEl = scrollContainer?.querySelector<HTMLElement>(
+      '[data-turn-latest="true"], [data-latest-turn="true"], [data-testid="router-turn-bubble"]:last-child, [data-user-bubble="true"]:last-child'
+    )
+    if (latestTurnEl) {
+      latestTurnEl.scrollIntoView?.({ behavior, block: 'start' })
+    } else {
+      messagesEndRef.current?.scrollIntoView?.({ behavior, block: 'end' })
+    }
   }, [])
 
   const handleChatScroll = useCallback(() => {
@@ -486,24 +508,34 @@ export function ChatPanel() {
   const messageGroups = useMemo(() => groupMessages(messages), [messages])
 
   const prevEventsLengthRef = useRef(0)
+  const prevUserEventsLengthRef = useRef(0)
   const prevTurnsLengthRef = useRef(0)
   const prevTotalRef = useRef(0)
 
   useEffect(() => {
-    const currentEvents = harnessRun?.events.length ?? 0
+    const events = harnessRun?.events ?? []
+    const currentEvents = events.length
+    const currentUserEvents = events.filter((e) => e.type === 'user' && !e.data?.steer).length
     const currentTurns = routerTurns.length
     const total = currentEvents + currentTurns + messages.length
     const delta = Math.max(0, total - prevTotalRef.current)
-    const isNewTurn = (currentEvents > 0 && prevEventsLengthRef.current === 0) || currentTurns > prevTurnsLengthRef.current
+    const isNewTurn =
+      currentUserEvents > prevUserEventsLengthRef.current ||
+      (currentEvents > 0 && prevEventsLengthRef.current === 0) ||
+      currentTurns > prevTurnsLengthRef.current
 
     prevEventsLengthRef.current = currentEvents
+    prevUserEventsLengthRef.current = currentUserEvents
     prevTurnsLengthRef.current = currentTurns
     prevTotalRef.current = total
 
-    // Gửi tin mới → bám lại đáy rồi đi theo nội dung agent sinh ra.
+    // Gửi tin mới → bám theo lượt mới và cuộn tin nhắn người dùng lên đỉnh khung nhìn (chuẩn Devin/Claude).
     if (isNewTurn) {
       followingRef.current = true
       setShowJumpToLatest(false)
+      setUnseenCount(0)
+      scrollToNewTurn('smooth')
+      return
     }
     // Người dùng đã kéo lên đọc → không giật khung nhìn về đáy nữa, nhưng đếm
     // số mục mới để nút "xuống cuối" nói đúng đang có bao nhiêu thứ chờ.
@@ -513,8 +545,8 @@ export function ChatPanel() {
     }
     setUnseenCount((count) => (count === 0 ? count : 0))
 
-    scrollToLatest(isNewTurn ? 'smooth' : 'auto')
-  }, [messages.length, routerTurns.length, harnessRun?.events.length, harnessRun?.status, scrollToLatest])
+    scrollToLatest('auto')
+  }, [messages.length, routerTurns.length, harnessRun?.events, harnessRun?.status, scrollToLatest, scrollToNewTurn])
 
   // Đổi phiên: khôi phục đúng vị trí đọc đã nhớ của phiên đó (nếu có), ngược
   // lại thì bám đáy. Chạy sau khi transcript của phiên mới đã dựng.
@@ -569,7 +601,7 @@ export function ChatPanel() {
             neo của trạng thái rỗng/đang nạp (khối đó tự căn giữa theo `h-full`). */}
         <div
           data-testid="chat-reading-column"
-          className={`h-full space-y-6 ${readingColumnClass(workspaceHidden)}`}
+          className={`h-full space-y-6 ${readingColumnClass(isReadingColumn)}`}
         >
         {showEmptyState && hydratingSession ? (
           <div
@@ -920,7 +952,7 @@ function UserBubble({ text }: { text: string }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex flex-col items-end gap-1.5" data-user-bubble="true">
       <div className="max-w-[85%] rounded-2xl bg-panel2 border border-line px-4 py-3 text-xs leading-relaxed text-fg shadow-xs">
         <MarkdownRenderer content={text} />
       </div>

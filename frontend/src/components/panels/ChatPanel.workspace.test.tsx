@@ -85,7 +85,7 @@ beforeEach(() => {
   useHarnessChatStore.setState({ sessions: {}, decisions: {} })
   useRouterChatStore.setState({ turns: [] })
   useAgentStore.setState({ activeSessionId: '' })
-  useUiStore.setState({ workspaceHidden: false })
+  useUiStore.setState({ workspaceHidden: false, openTabs: ['plan'] })
 })
 
 afterEach(() => {
@@ -119,7 +119,7 @@ describe('bảng Workspace hiện ⇒ cột chat giữ nguyên', () => {
 
 describe('bảng Workspace ẩn ⇒ nội dung gom vào cột 768 px ở giữa', () => {
   it('cả ba chỗ mang `mx-auto w-full max-w-3xl`', () => {
-    useUiStore.setState({ workspaceHidden: true })
+    useUiStore.setState({ workspaceHidden: true, openTabs: ['plan'] })
     render()
 
     for (const node of measuredNodes()) {
@@ -128,7 +128,7 @@ describe('bảng Workspace ẩn ⇒ nội dung gom vào cột 768 px ở giữa'
   })
 
   it('bật/tắt công tắc không làm mất lớp của hai chỗ còn lại', () => {
-    useUiStore.setState({ workspaceHidden: true })
+    useUiStore.setState({ workspaceHidden: true, openTabs: ['plan'] })
     render()
     expect(host.querySelector('[data-testid="chat-input-bar"]')!.className).toContain(
       READING_COLUMN_CLASS,
@@ -145,4 +145,14 @@ describe('bảng Workspace ẩn ⇒ nội dung gom vào cột 768 px ở giữa'
       READING_COLUMN_CLASS,
     )
   })
+
+  it('khi chưa mở tab nào (openTabs = []) ⇒ tự động gom vào giữa', () => {
+    useUiStore.setState({ workspaceHidden: false, openTabs: [] })
+    render()
+
+    for (const node of measuredNodes()) {
+      expect(node!.className).toContain(READING_COLUMN_CLASS)
+    }
+  })
 })
+
