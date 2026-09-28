@@ -132,12 +132,47 @@ describe('parseDecisions', () => {
     expect(pendingDecisions([entry])).toEqual([])
   })
 
+  it('giữ kết cục `answered` của chữ tự nhập, không hoá thành `approved` (P4)', () => {
+    // P4 (vá vòng soát) — `decision_resolved` mang `status: 'answered'`: hàng phải đọc ra đúng
+    // chữ ấy, nếu không nó rơi vào nhánh mặc định và hiện như một lời duyệt.
+    const [entry] = parseDecisions([
+      requested(4, 'd1', {
+        options: [
+          { id: 'reject', label: 'Không chọn gì', kind: 'reject' },
+          { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+        ],
+      }),
+      resolved(9, 'd1', { status: 'answered', choice: 'other', note: 'Không đồng ý, sửa lại phần X', reason: 'user' }),
+    ])
+
+    expect(entry.status).toBe('answered')
+    expect(entry.choice).toBe('other')
+    expect(entry.note).toBe('Không đồng ý, sửa lại phần X')
+    expect(pendingDecisions([entry])).toEqual([])
+  })
+
   it('bỏ qua lựa chọn hỏng nhưng giữ hàng lại', () => {
     const [entry] = parseDecisions([
       requested(4, 'd1', { options: [{ id: 1, label: 2 }, { id: 'ok', label: 'Được', kind: 'approve' }] }),
     ])
 
     expect(entry.options).toEqual([{ id: 'ok', label: 'Được', kind: 'approve' }])
+  })
+
+  it('giữ cờ `allowFreeText` của lựa chọn tự nhập (P4)', () => {
+    const [entry] = parseDecisions([
+      requested(5, 'd1', {
+        options: [
+          { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+          { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+        ],
+      }),
+    ])
+
+    expect(entry.options).toEqual([
+      { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+      { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+    ])
   })
 
   it('`request_approval` giữ nguyên kind, action và lý do', () => {
@@ -354,6 +389,19 @@ describe('answerDecision', () => {
       resolvedReason: 'user',
     })
     expect(entry.resolvedAt).toBeTypeOf('number')
+  })
+
+  it('chữ tự nhập (`outcome: answered`) không bị ghi thành `approved` ngay tại chỗ', async () => {
+    decisionRoute = {
+      ok: true,
+      payload: { status: 'resolved', decisionId: 'd1', choice: 'other', outcome: 'answered' },
+    }
+
+    await useHarnessChatStore.getState().answerDecision(CHAT, 'd1', 'other', 'Không đồng ý, sửa lại phần X')
+
+    const entry = useHarnessChatStore.getState().decisions[CHAT][0]
+    expect(entry.status).toBe('answered')
+    expect(entry.note).toBe('Không đồng ý, sửa lại phần X')
   })
 
   it('route trả về thiếu `choice` thì vẫn lấy lựa chọn vừa gửi', async () => {

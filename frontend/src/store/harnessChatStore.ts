@@ -97,13 +97,20 @@ export interface SavedSessionRow {
 
 export type DecisionKind = 'question' | 'approval'
 export type DecisionOptionKind = 'approve' | 'reject' | 'alternative'
-export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled'
+// P4 (vá vòng soát) — `answered`: chủ nhà GÕ câu trả lời vào ô tự nhập. Đó là một hàng ĐÃ CHỐT
+// nhưng trung tính: không phải "đã duyệt" và cũng không phải "bị từ chối".
+export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'answered' | 'expired' | 'cancelled'
 export type DecisionResolveReason = 'user' | 'timeout' | 'session_cancelled'
 
 export interface DecisionOption {
   id: string
   label: string
   kind: DecisionOptionKind
+  /**
+   * P4 — lựa chọn cần CHỮ đã gõ: UI mở ô nhập và route từ chối khi chọn mà bỏ trống.
+   * Runtime LUÔN thêm một lựa chọn như vậy (`id='other'`) vào mọi quyết định.
+   */
+  allowFreeText?: boolean
 }
 
 /**
@@ -167,20 +174,27 @@ export function parseDecisionOptions(value: unknown): DecisionOption[] {
   const options: DecisionOption[] = []
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue
-    const item = raw as { id?: unknown; label?: unknown; kind?: unknown }
+    const item = raw as { id?: unknown; label?: unknown; kind?: unknown; allowFreeText?: unknown }
     const id = asString(item.id)
     const label = asString(item.label)
     if (!id || !label) continue
     const kind = OPTION_KINDS.includes(item.kind as DecisionOptionKind)
       ? (item.kind as DecisionOptionKind)
       : 'alternative'
-    options.push({ id, label, kind })
+    // Cờ tự nhập đi nguyên từ server (đúng cả với `id='other'` runtime luôn thêm).
+    options.push(item.allowFreeText === true ? { id, label, kind, allowFreeText: true } : { id, label, kind })
   }
   return options
 }
 
 export function decisionStatusFrom(value: unknown): DecisionStatus {
-  return value === 'approved' || value === 'rejected' || value === 'expired' || value === 'cancelled'
+  // `'answered'` (P4 — chữ tự nhập) phải đi nguyên qua đây, nếu không cập nhật lạc quan sau khi
+  // bấm sẽ rơi vào nhánh mặc định và hiện hàng tự nhập thành "đã duyệt".
+  return value === 'answered' ||
+    value === 'approved' ||
+    value === 'rejected' ||
+    value === 'expired' ||
+    value === 'cancelled'
     ? value
     : 'pending'
 }

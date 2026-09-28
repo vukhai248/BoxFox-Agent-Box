@@ -883,7 +883,8 @@ def create_app(runtime):
         """P1 (§5): `GET /api/agent/design/runs/{id}` — chi tiết một run cho tab Design."""
         job = design_job_known(request.match_info['design_id'])
         state = job['state'] if isinstance(job.get('state'), dict) else {}
-        payload = design_runtime.design_run_payload(job)
+        # `with_canvas=True`: chỉ tuyến chi tiết mang cảnh canvas (xem `design_run_payload`).
+        payload = design_runtime.design_run_payload(job, with_canvas=True)
         # P4 (§5, §6): `batch`/`review` đi CẢ trong `job` (payload chuẩn) LẪN ở tầng vỏ — giao diện
         # đọc `job.batch ?? envelope.batch` (`designStore.refreshDetail`), nên hai đường đều phải có.
         return web.json_response({'job': payload, 'batch': payload['batch'],
@@ -972,6 +973,13 @@ def create_app(runtime):
                                                               body.get('answers'))
         except ValueError as exc:
             raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        live = runtime.store.design_job(job['design_id'])
+        if result.get('canvasOps') or design_runtime.canvas_scene_has_nodes(live):
+            # Cảnh gieo (P1) đi cùng đường với mọi lần vẽ khác: ảnh chụp bền ghi qua box, cùng chỗ
+            # với `canvas_draw` của agent — không có đường vẽ tắt nào.
+            # Điều kiện là "cảnh CÓ nội dung", không phải "lượt này có op": một lần ghi hỏng trước
+            # đó làm lượt duyệt lại không sinh op nào, và ảnh chụp sẽ mất hẳn nếu chỉ hỏi `canvasOps`.
+            await design_runtime.persist_design_canvas(runtime, job['session_id'], live)
         return web.json_response(result)
 
     async def design_prompt_answer(request):
@@ -1060,9 +1068,11 @@ def create_app(runtime):
         if kind == 'directive':
             instruction = str(body.get('instruction') or '').strip()
             target = str(body.get('targetNodeId') or '').strip()
-            if not instruction or not target:
+            # `target` rỗng là HỢP LỆ: nghĩa "cả canvas" — dùng cho canvas đang trống, khi chủ nhà
+            # chưa có node nào để bấm vào. Chỉ thiếu CHỮ mới là gói sai.
+            if not instruction:
                 raise ApiError('DESIGN_CANVAS_PROTOCOL_INVALID',
-                               'a directive needs targetNodeId and instruction')
+                               'a directive needs instruction (targetNodeId may be empty)')
             design_runtime.canvas_queue_directive(runtime, sid, job, target,
                                                   body.get('targetNodeTitle'), instruction)
             return web.json_response({'accepted': True})

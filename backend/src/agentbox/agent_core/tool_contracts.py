@@ -25,10 +25,13 @@ CAPTURE_TARGET_SCHEMA = {'type': 'object', 'properties': {
     'windowId': STRING, 'pid': {'type': 'integer'}, 'class': STRING, 'title': STRING,
     'tabId': STRING, 'url': STRING}, 'required': ['kind']}
 # One selectable answer for ask_user / request_approval. The runtime always guarantees at least one
-# 'approve' and one 'reject' option and rewrites their ids to exactly 'approve' / 'reject'.
+# 'approve' and one 'reject' option, rewrites their ids to exactly 'approve' / 'reject', and appends
+# its own free-text choice (id 'other') unless the model already emitted one.
 DECISION_OPTION = {'type': 'object', 'properties': {
     'id': STRING,
     'label': STRING,
+    # The UI opens a text box for this option, so picking it requires a non-empty note.
+    'allowFreeText': {'type': 'boolean'},
     'kind': {'type': 'string', 'enum': ['approve', 'reject', 'alternative']}}, 'required': ['label']}
 DECISION_OPTIONS = {'type': 'array', 'items': DECISION_OPTION}
 SCHEMAS = [
@@ -241,10 +244,10 @@ SCHEMAS = [
                         'description': 'Who the child must hand its result to when it finishes (roles or '
                                        'session ids, e.g. ["main", "review"]). Empty = the parent only.'}},
          ['role', 'goal']),
-    tool('ask_user', 'Ask the user a question and BLOCK this turn until they answer. Give 2-5 options; the runtime always adds the approve/reject pair when you omit it. If nobody answers before the deadline (default 300 s) the answer is a rejection, so ask only when the answer changes what you do next. When the question is about a plan you wrote, pass planIdentity and planVersion: the answer then lands in the plan review ledger, so the Plan tab stops disagreeing with what the owner decided.',
+    tool('ask_user', 'Ask the user a question and BLOCK this turn until they answer. Give 2-5 options; the runtime always adds the approve/reject pair when you omit it, plus a free-text "Khác (tự nhập)" choice. If nobody answers before the deadline (default 300 s) the answer is a rejection, so ask only when the answer changes what you do next. When the question is about a plan you wrote, pass planIdentity and planVersion: the answer then lands in the plan review ledger, so the Plan tab stops disagreeing with what the owner decided.',
          {'question': STRING, 'options': DECISION_OPTIONS, 'deadlineSeconds': {'type': 'integer'},
           'planIdentity': STRING, 'planVersion': {'type': 'integer'}}, ['question', 'options']),
-    tool('request_approval', 'Ask the user to approve ONE concrete risky action (delete, overwrite, command outside the allowlist) BEFORE you run it, and BLOCK this turn until they answer. Default deadline 600 s; no answer means rejected, so never assume approval. When the thing you are asking about is a plan you just wrote, pass planIdentity (the plan group write_plan reported) and planVersion: the answer then lands in the plan review ledger as a real approval or a request for changes, instead of only being a chat message. Approving a plan needs a passing independent critique first: delegate `plan-review`, then record its verdict with `plan_verify`; without that the harness refuses this call with PLAN_APPROVAL_UNVERIFIED.',
+    tool('request_approval', 'Ask the user to approve ONE concrete risky action (delete, overwrite, command outside the allowlist) BEFORE you run it, and BLOCK this turn until they answer. Default deadline 600 s; no answer means rejected, so never assume approval. When the thing you are asking about is a plan you just wrote, pass planIdentity (the plan group write_plan reported) and planVersion: the answer then lands in the plan review ledger as a real approval or a request for changes, instead of only being a chat message. The runtime always adds a free-text "Khác (tự nhập)" choice; mark your own option allowFreeText to get a text box for it too. Approving a plan needs a passing independent critique first: delegate `plan-review`, then record its verdict with `plan_verify`; without that the harness refuses this call with PLAN_APPROVAL_UNVERIFIED.',
          {'action': STRING, 'reason': STRING, 'options': DECISION_OPTIONS, 'deadlineSeconds': {'type': 'integer'},
           'planIdentity': STRING, 'planVersion': {'type': 'integer'}}, ['action', 'reason']),
     tool('write_plan',

@@ -1,7 +1,7 @@
 /**
  * Sinh id ngắn, đủ duy nhất trong một phiên (counter cục bộ + timestamp).
- * KHÔNG dùng cho id seed trong `createInitialScene` — id seed phải ổn định
- * để connector/test tham chiếu được.
+ * Id nào cần ỔN ĐỊNH (seed/fixture, để connector và bài kiểm tham chiếu được)
+ * thì do người viết tự đặt, không dùng hàm này.
  */
 let counter = 0
 

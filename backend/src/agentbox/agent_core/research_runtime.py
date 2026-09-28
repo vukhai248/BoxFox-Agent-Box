@@ -25,8 +25,9 @@ from . import limits
 from . import research_evidence, research_facets, research_report, research_review
 from .limits import (
     CHILD_DEADLINE_SECONDS, CHILD_MAX_STEPS, DOSSIER_DIR_MISMATCH_CODE, DOSSIER_MAX_BYTES, DOSSIER_ROOM,
-    DOSSIER_VERSION_ATTEMPTS_MAX,
-    FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX, RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
+    DOSSIER_VERSION_ATTEMPTS_MAX, BTW_ASK_PREFIX, BTW_PENDING_NOTICE_CODE,
+    FANOUT_PER_PARENT_MAX, OWNER_STEER_PREFIX,
+    RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_ENV,
     RESEARCH_BRIEF_MISSING_CODE, RESEARCH_BRIEF_MODES, RESEARCH_BRIEF_MODE_UNKNOWN_CODE,
     RESEARCH_BRIEF_TAKEN_CODE, RESEARCH_CRITIQUE_LABEL, RESEARCH_CRITIQUE_MISSING_CODE,
     RESEARCH_GATE_NOTE_CODE, RESEARCH_LEVEL_INVALID_CODE, RESEARCH_MAX_ROWS_PER_DOSSIER,
@@ -2301,8 +2302,13 @@ async def cancel_child(rt, session, args):
 # --------------------------------------------------------------- chỉ thị giữa lượt (đợt 7)
 
 
-async def queue_owner_steer(rt, sid, text, turn=None):
-    """Xếp một chỉ thị giữa lượt — trả `(answer, notice)` cho route, hoặc `None` khi công tắc tắt."""
+async def queue_owner_steer(rt, sid, text, turn=None, kind='steer'):
+    """Xếp một chỉ thị giữa lượt — trả `(answer, notice)` cho route, hoặc `None` khi công tắc tắt.
+
+    `kind='btw'` (P5): `/btw <câu hỏi>` dùng ĐÚNG hàng đợi này — lượt đang chạy không bị cắt —
+    nhưng hàng mang nhãn `btw` nên khối bơm mở đầu bằng `BTW_ASK_PREFIX` và hàng transcript hiện
+    như một câu hỏi phụ, không phải một chỉ thị giữa lượt.
+    """
     mode, unknown = steer_mode()
     if unknown is not None:
         mode_notice(rt, sid, STEER_MODE_UNKNOWN_CODE, STEER_ENV, unknown, STEER_DEFAULT_MODE)
@@ -2317,13 +2323,23 @@ async def queue_owner_steer(rt, sid, text, turn=None):
         raise ValueError(f'STEER_QUEUE_FULL: đã có {STEER_MAX_PENDING} chỉ thị đang chờ bơm vào lượt này — '
                          f'chờ lượt bơm bớt rồi gửi tiếp')
     turn_no = int(turn if turn is not None else (rt.active_turn.get(sid) or 0))
-    record = rt.store.queue_steer(sid, body, turn_no)
-    rt.store.emit(sid, 'user', {'text': f'{OWNER_STEER_PREFIX} {body}', 'control': True,
-                                'steer': True, 'steerId': record['id'], 'turn': turn_no})
+    label = 'btw' if kind == 'btw' else 'steer'
+    is_btw = label == 'btw'
+    record = rt.store.queue_steer(sid, body, turn_no, kind=label)
+    # Hàng `btw` hiện nguyên câu hỏi (nhãn do chip "btw" đảm nhiệm); hàng `steer` giữ tiền tố
+    # trong chính văn bản như trước để người đọc thấy đây là chỉ thị giữa lượt.
+    event = {'text': body if is_btw else f'{OWNER_STEER_PREFIX} {body}', 'control': True,
+             'steer': True, 'steerId': record['id'], 'turn': turn_no}
+    if is_btw:
+        event['btw'] = True
+    rt.store.emit(sid, 'user', event)
+    title = 'câu hỏi phụ (btw)' if is_btw else 'chỉ thị giữa lượt'
     try:
         await session_journal.append(
-            rt.executor, rt.store, sid, 'decision', f'chỉ thị giữa lượt: {body[:120]}',
-            data={'kind': 'owner-steer', 'steerId': record['id'], 'chars': len(body)},
+            rt.executor, rt.store, sid, 'decision',
+            f'{title}: {body[:120]}',
+            data={'kind': 'btw-ask' if is_btw else 'owner-steer', 'steerId': record['id'],
+                  'chars': len(body)},
             turn=turn_no)
     except Exception:  # pragma: no cover - ghi sổ hỏng ⇒ log + đi tiếp
         system_log.write('steer.journal_failed', level='warn', session_id=sid, code='JOURNAL_FAILED')
@@ -2334,11 +2350,59 @@ async def queue_owner_steer(rt, sid, text, turn=None):
 
 
 def steer_block(records) -> str:
-    """Khối văn bản bơm vào transcript: mỗi chỉ thị một mục, giữ nguyên văn của chủ nhà."""
+    """Khối văn bản bơm vào transcript: mỗi hàng một mục, giữ nguyên văn của chủ nhà.
+
+    Tiền tố theo NHÃN hàng: hàng `btw` phải nói rõ luật trả lời ngắn + KHÔNG đổi việc đang làm,
+    còn hàng `steer` giữ nguyên tiền tố chỉ thị. Một khối có thể trộn cả hai nhãn.
+    """
     lines = []
     for record in records:
-        lines.append(f'{OWNER_STEER_PREFIX} {str(record.get("text") or "").strip()}')
+        prefix = BTW_ASK_PREFIX if str(record.get('kind') or 'steer') == 'btw' else OWNER_STEER_PREFIX
+        lines.append(f'{prefix} {str(record.get("text") or "").strip()}')
     return '\n\n'.join(lines)
+
+
+def btw_question_prompt(question) -> str:
+    """Khung CÂU HỎI PHỤ cho lượt RẢNH (P5): `/btw` ngoài lượt đang chạy mở một lượt thật.
+
+    Lượt rảnh không có đường steer để bơm vào, nên `/btw <câu hỏi>` mở lượt bình thường với prompt
+    mang `BTW_ASK_PREFIX` — model biết đây là câu hỏi phụ và trả lời ngắn, không biến nó thành một
+    việc mới. Hàng transcript vẫn hiện nguyên câu hỏi kèm nhãn btw (`btw: true` trên event `user`).
+    """
+    body = str(question or '').strip()
+    if not body:
+        raise ValueError('BTW_EMPTY: câu hỏi trống — gõ `/btw <câu hỏi>`')
+    # P5 — MỘT luật độ dài duy nhất: cổng lệnh (`skills/commands.resolve`) TỪ CHỐI câu hỏi
+    # dài quá `BTW_QUESTION_MAX_CHARS` bằng mã `BTW_QUESTION_TOO_LONG`. Hàm dựng khung này KHÔNG
+    # cắt im lặng (bản trước có một nhánh cắt chết: chỉ đường lệnh tới đây và nó đã từ chối từ
+    # trước) — câu hỏi đi nguyên vẹn, người hỏi thấy đúng lệnh của mình thay vì bị xén lặng lẽ.
+    return f'{BTW_ASK_PREFIX} {body}'
+
+
+def notice_pending_btw(rt, sid) -> int:
+    """Lượt vừa đóng mà câu hỏi phụ `/btw` chưa vào được bước nào ⇒ NÓI RA, đừng im lặng.
+
+    Hàng đợi chỉ được bơm ở ranh giới BƯỚC (`drain_steers`), nên một câu hỏi gửi khi lượt đã ở
+    bước chót sẽ nằm im tới lượt kế. Vòng kiểm thử đầu-cuối vòng 3 bắt được đúng khuôn ấy: phiên
+    `d378b42b` để lại hàng `pending` sau khi lượt `completed`, không hàng nào nói vì sao câu hỏi
+    chưa được trả lời. Hàm này trả số hàng còn chờ (0 khi không có gì để nói).
+
+    Chỉ soi hàng `kind='btw'`: chỉ thị giữa lượt (`steer`) vốn là "áp ở ranh giới bước" — hàng
+    của nó chờ lượt sau là đúng luật đã công bố, không cần báo thêm.
+    """
+    stranded = rt.store.pending_steers(sid, kind='btw')
+    if not stranded:
+        return 0
+    steer_ids = [int(row['id']) for row in stranded]
+    rt.store.emit(sid, 'notice', {
+        'code': BTW_PENDING_NOTICE_CODE, 'partial': False, 'count': len(stranded),
+        'steerIds': steer_ids,
+        'message': (f'{BTW_PENDING_NOTICE_CODE}: lượt vừa xong không còn bước nào để bơm '
+                    f'{len(stranded)} câu hỏi phụ — câu hỏi sẽ được trả lời ở lượt kế tiếp '
+                    '(gửi một câu bất kỳ để mở lượt).')})
+    system_log.write('steer.btw_pending', level='info', session_id=sid, code=BTW_PENDING_NOTICE_CODE,
+                     count=len(stranded), steerIds=steer_ids)
+    return len(stranded)
 
 
 def drain_steers(rt, sid, messages) -> int:

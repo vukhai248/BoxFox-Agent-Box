@@ -328,8 +328,14 @@ def review_payload(state):
             'summary': str(review.get('summary') or '')}
 
 
-def design_run_payload(job):
-    """Bản camelCase của một hàng `design_jobs` cho API (hợp đồng §5, §6)."""
+def design_run_payload(job, with_canvas=False):
+    """Bản camelCase của một hàng `design_jobs` cho API (hợp đồng §5, §6).
+
+    `with_canvas=True` (chỉ tuyến CHI TIẾT) mang thêm `canvasScene` + `canvasSeq`: tải lại trang là
+    thấy đúng cảnh đang có, không phụ thuộc việc phát lại sự kiện `design_canvas`. Danh sách run cố ý
+    KHÔNG mang cảnh — nó bị gọi lại mỗi vòng đồng bộ, và một cảnh vài chục node nhân mỗi vòng là lãng
+    phí không đổi lại được gì.
+    """
     state = job.get('state') if isinstance(job.get('state'), dict) else {}
     touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else None
     batch = batch_payload(state)
@@ -344,7 +350,12 @@ def design_run_payload(job):
             'touchList': touch_list, 'prompts': state.get('prompts') or [],
             'phaseHistory': state.get('phaseHistory') or [], 'actions': state.get('actions') or [],
             'touchListRevision': int((touch_list or {}).get('revision') or 0),
-            'batch': batch, 'review': review_payload(state)}
+            'batch': batch, 'review': review_payload(state),
+            **({'canvasScene': _canvas_scene(state.get('canvasScene')),
+                'canvasSeq': int(state.get('canvasSeq') or 0),
+                # Hàng cũ (ghi trước khi có khoá này) đọc ra `'agent'`: mọi đường gieo/vẽ đều đi
+                # qua `canvas_draw`, nên đó là chủ nhân ĐÚNG của một cảnh đã có sẵn.
+                'canvasActor': str(state.get('canvasActor') or 'agent')} if with_canvas else {})}
 
 
 def set_phase(rt, session_id, job, phase, reason, *, force=False):
@@ -741,9 +752,17 @@ def design_touch_list_approve(rt, session_id, job, revision, answers=None):
                                        revision=job.get('revision'))
     rt.store.emit(session_id, 'design_scope',
                   {'designId': job['design_id'], 'revision': updated['revision']})
+    # P1: canvas phải có nghĩa NGAY lúc bắt đầu vẽ. Duyệt danh sách chạm là thời điểm đầu tiên run có
+    # đủ dữ liệu thật (brief + các mục sẽ chạm), nên cảnh khởi đầu được gieo ở đây — vẫn là op của
+    # `actor:'agent'`, vẫn đi qua `canvas_draw`, không có đường vẽ tắt nào.
+    seeded = canvas_seed_from_run(rt, session_id, updated)
     set_phase(rt, session_id, updated, 'drawing', 'touch-list-approved')
-    return {'designId': job['design_id'], 'revision': touch_list['revision'],
-            'approved': approved, 'approvedAt': touch_list['approvedAt']}
+    result = {'designId': job['design_id'], 'revision': touch_list['revision'],
+              'approved': approved, 'approvedAt': touch_list['approvedAt']}
+    if seeded is not None:
+        result['canvasOps'] = seeded.get('applied')
+        result['canvasRejected'] = seeded.get('rejected')
+    return result
 
 
 # ── Đường ghi có gác (§6.5) ─────────────────────────────────────────────────
@@ -1177,11 +1196,26 @@ def canvas_draw(rt, session_id, job, action=None, actions=None):
     seq = int(state.get('canvasSeq') or 0) + 1
     state['canvasSeq'] = seq
     state['canvasScene'] = scene
+    # Ai vừa ghi cảnh: hàng `design_jobs` là nguồn duy nhất còn lại khi cửa sổ sự kiện đã trôi
+    # (tải lại trang), nên tuyến chi tiết phải nói được cảnh ấy của AGENT hay của CHỦ NHÀ.
+    state['canvasActor'] = 'agent'
     rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'agent', 'ops': applied,
                    'scene': scene, 'sceneVersion': seq})
     return {'applied': len(applied), 'rejected': rejected, 'sceneVersion': seq}
+
+
+def canvas_scene_has_nodes(job):
+    """Cảnh canvas trong hàng run đã có node nào chưa.
+
+    Tuyến duyệt danh sách chạm dùng hàm này để quyết định ghim ảnh chụp: cảnh ĐÃ có nội dung thì ảnh
+    chụp phải được ghi kể cả khi lượt duyệt này không thêm op nào (một lần ghi hỏng trước đó không
+    được để ảnh chụp mất hẳn — cơ sở dữ liệu đã giữ cảnh, tệp chỉ là bản soi).
+    """
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    scene = state.get('canvasScene') if isinstance(state.get('canvasScene'), dict) else {}
+    return any(isinstance(raw, dict) for raw in (scene.get('nodes') or []))
 
 
 async def persist_design_canvas(rt, session_id, job):
@@ -1212,11 +1246,105 @@ def canvas_store_scene(rt, session_id, job, scene):
     stored = _canvas_scene(scene)
     state['canvasSeq'] = seq
     state['canvasScene'] = stored
+    state['canvasActor'] = 'user'
     updated = rt.store.design_job_save(job['design_id'], session_id, state, revision=job.get('revision'))
     rt.store.emit(session_id, 'design_canvas',
                   {'designId': job['design_id'], 'seq': seq, 'actor': 'user', 'ops': [],
                    'scene': stored, 'sceneVersion': seq})
     return updated
+
+
+#: Trần số mục danh sách chạm gieo lên canvas — canvas để ĐỌC, không phải bảng dữ liệu.
+CANVAS_SEED_ITEMS_MAX = 8
+
+#: Id ổn định của hai node khung, để lần gieo sau (và agent) cập nhật đúng node thay vì tạo trùng.
+CANVAS_SEED_WORKSPACE_ID = 'seed-workspace'
+CANVAS_SEED_SCREEN_ID = 'seed-screen'
+
+
+def _brief_text(brief, key):
+    """Chữ của một mục brief — nhận cả dạng chuỗi, dạng `{'text': ...}` (câu trả lời §7.2) lẫn mảng."""
+    value = (brief or {}).get(key)
+    if isinstance(value, dict):
+        return str(value.get('text') or value.get('value') or '').strip()
+    if isinstance(value, list):
+        return '; '.join(str(item).strip() for item in value if str(item).strip())
+    return str(value or '').strip()
+
+
+def _seed_card(node_id, x, y, width, height, card, title, body):
+    """Một node `card` của cảnh gieo — màu lấy đúng bảng màu của canvas (`index.css`)."""
+    return {'id': node_id, 'kind': 'card', 'shape': None, 'card': card, 'x': x, 'y': y,
+            'width': width, 'height': height, 'title': title, 'body': body, 'url': None,
+            'style': {'fill': '#121212', 'stroke': '#262626', 'strokeWidth': 1, 'radius': 12}}
+
+
+def _seed_link(from_node_id, to_node_id):
+    """Một nét nối của cảnh gieo — cùng kiểu nét với mọi mũi tên khác trên canvas."""
+    return {'type': 'CONNECT_NODES', 'connector': {'fromNodeId': from_node_id, 'toNodeId': to_node_id,
+                                                   'fromAnchor': 'right', 'toAnchor': 'left',
+                                                   'stroke': '#3b82f6', 'strokeWidth': 2}}
+
+
+def canvas_seed_ops(job):
+    """Op gieo cảnh canvas từ brief + danh sách chạm ĐÃ DUYỆT (P1: canvas không được để trống).
+
+    Vì sao cần: canvas chỉ có nội dung khi MÔ HÌNH tự nhớ gọi `canvas_draw`, nên một dự án thật vẫn
+    cho ra canvas trống — chủ nhà không có gì để nhìn, để bấm, hay để bảo sửa. Ở đây run tự dựng một
+    bản đồ tối thiểu từ dữ liệu ĐÃ CÓ (brief + danh sách chạm vừa được duyệt): khối dự án → màn hình
+    đích → từng mục sẽ chạm, kèm lý do/rủi ro và mũi tên nối.
+
+    Hàm THUẦN (không đụng store, không phát sự kiện) và KHÔNG ghi đè: cảnh đã có NEO GIEO
+    (`seed-workspace`) ⇒ `[]`. Điều kiện chỉ hỏi "cảnh có node nào chưa" là quá rộng: agent vẽ một
+    node trong lúc hỏi brief là cả run mất luôn bản đồ — trong khi mẻ gieo chỉ THÊM node, không sửa
+    node của ai.
+    """
+    state = job.get('state') if isinstance(job.get('state'), dict) else {}
+    scene = _canvas_scene(state.get('canvasScene'))
+    if any(node.get('id') == CANVAS_SEED_WORKSPACE_ID for node in scene['nodes']):
+        return []
+    brief = state.get('brief') if isinstance(state.get('brief'), dict) else {}
+    touch_list = state.get('touchList') if isinstance(state.get('touchList'), dict) else {}
+    items = [row for row in (touch_list.get('items') or []) if isinstance(row, dict)]
+    scope = _brief_text(brief, 'mode') or 'chưa rõ'
+    target = _brief_text(brief, 'screen') or 'màn hình đích'
+    project = _brief_text(brief, 'project') or _brief_text(brief, 'path') or ''
+    goal = _brief_text(brief, 'goal')
+    ops = [
+        {'type': 'CREATE_NODE', 'node': _seed_card(
+            CANVAS_SEED_WORKSPACE_ID, 40, 40, 380, 180, 'ui-mockup',
+            (f'Dự án: {project}' if project else 'Dự án đang mở'),
+            'Bản đồ khởi đầu do run tự dựng từ brief và danh sách chạm đã duyệt. '
+            + (f'Mục tiêu: {goal}' if goal else ''))},
+        {'type': 'CREATE_NODE', 'node': _seed_card(
+            CANVAS_SEED_SCREEN_ID, 520, 40, 380, 180, 'ui-mockup',
+            f'Màn hình đích: {target}',
+            f'Phạm vi: {scope} · Nền tảng: {_brief_text(brief, "platform") or "chưa rõ"}')},
+        _seed_link(CANVAS_SEED_WORKSPACE_ID, CANVAS_SEED_SCREEN_ID),
+    ]
+    for index, item in enumerate(items[:CANVAS_SEED_ITEMS_MAX]):
+        node_id = f'seed-touch-{index + 1}'
+        path = str(item.get('path') or '').strip() or f'(mục {index + 1})'
+        body = ' · '.join(part for part in (str(item.get('kind') or 'new'),
+                                            str(item.get('reason') or '').strip(),
+                                            f"rủi ro: {item.get('risk') or 'low'}") if part)
+        ops.append({'type': 'CREATE_NODE', 'node': _seed_card(
+            node_id, 960, 40 + 160 * index, 380, 130, 'directive-annotation', path, body)})
+        ops.append(_seed_link(CANVAS_SEED_SCREEN_ID, node_id))
+    return ops
+
+
+def canvas_seed_from_run(rt, session_id, job):
+    """Gieo cảnh canvas cho một run rồi phát ĐÚNG MỘT `design_canvas` (qua `canvas_draw`).
+
+    Dùng chung đường phát sự kiện với mọi lần vẽ khác: nhờ vậy bộ đếm `canvasSeq`, ảnh chụp
+    `.design/<slug>/canvas.v1.json` và luật "chỉ op ĐÃ ÁP mới vào sự kiện" không bị lệch.
+    Trả `None` khi không có gì để gieo (cảnh đã có nội dung).
+    """
+    ops = canvas_seed_ops(job)
+    if not ops:
+        return None
+    return canvas_draw(rt, session_id, job, actions=ops)
 
 
 def canvas_queue_directive(rt, session_id, job, target_node_id, target_node_title, instruction):

@@ -1334,11 +1334,13 @@ function DecisionRow({
     ? t('decisions.status.expired')
     : status === 'approved'
       ? t('decisions.status.approved')
-      : status === 'rejected'
-        ? t('decisions.status.rejected')
-        : status === 'cancelled'
-          ? t('decisions.status.cancelled')
-          : t('decisions.status.pending')
+      : status === 'answered'
+        ? t('decisions.status.answered')
+        : status === 'rejected'
+          ? t('decisions.status.rejected')
+          : status === 'cancelled'
+            ? t('decisions.status.cancelled')
+            : t('decisions.status.pending')
 
   return (
     <div
@@ -1800,6 +1802,15 @@ function TurnBlock({
       {/* 1. User Prompt Bubble — Căn phải, chiếm tối đa 2/3 khung chat */}
       {turn.userEvent && (
         <div className="flex flex-col items-end gap-1.5 ml-auto max-w-[68%]">
+          {/* P5 — lượt rảnh của `/btw` là lượt thật, nhưng vẫn phải đọc ra được là câu hỏi phụ. */}
+          {turn.userEvent.data?.btw === true && (
+            <span
+              data-testid="user-btw-label"
+              className="mr-1 inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/5 px-1.5 py-0.5 text-[10px] font-medium text-sky-400 select-none"
+            >
+              {t('chat.btwLabel')}
+            </span>
+          )}
           <div className="w-fit rounded-2xl bg-panel2 border border-line px-4 py-3 text-xs leading-relaxed text-fg shadow-xs">
             {userImages.map((src, index) => (
               <div
@@ -2139,16 +2150,21 @@ function TurnBlock({
 function OwnerSteerRow({ event }: { event: HarnessEvent }) {
   const t = useT()
   const text = String(event.data?.text ?? '')
+  // P5 — hàng `btw` là CÂU HỎI PHỤ giữa lượt, không phải một chỉ thị: cùng chỗ đứng, khác nhãn,
+  // và văn bản là nguyên câu hỏi (không mang tiền tố chỉ thị).
+  const btw = event.data?.btw === true
   if (!text) return null
   return (
-    <div className="flex flex-col items-end gap-1" data-timeline="owner-steer">
+    <div className="flex flex-col items-end gap-1" data-timeline="owner-steer" data-btw={btw ? 'true' : undefined}>
       <div className="flex items-center gap-1.5 pr-1 text-[10px] text-muted select-none">
         <span
-          data-testid="owner-steer-label"
-          className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand/5 px-1.5 py-0.5 font-medium text-brand"
+          data-testid={btw ? 'owner-btw-label' : 'owner-steer-label'}
+          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-medium ${
+            btw ? 'border-sky-400/40 bg-sky-400/5 text-sky-400' : 'border-brand/30 bg-brand/5 text-brand'
+          }`}
         >
           <Crosshair className="size-2.5" />
-          {t('chat.steerLabel')}
+          {t(btw ? 'chat.btwLabel' : 'chat.steerLabel')}
         </span>
         <span className="font-mono">{formatTime(event.created)}</span>
       </div>

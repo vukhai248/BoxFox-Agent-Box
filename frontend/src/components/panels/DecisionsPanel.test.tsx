@@ -76,6 +76,12 @@ function click(el: Element | null) {
   })
 }
 
+function typeInto(textarea: HTMLTextAreaElement, text: string) {
+  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+  nativeSetter.call(textarea, text)
+  textarea.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 beforeEach(() => {
   localStorage.clear()
   useAgentStore.setState({ activeSessionId: CHAT_ID })
@@ -187,6 +193,29 @@ describe('DecisionsPanel — quyết định thật', () => {
     expect(host.textContent).not.toContain('10:00')
   })
 
+  it('hàng trả lời tự nhập hiện trung tính: không "đã duyệt", không "bị từ chối"', () => {
+    seedDecisions([
+      entry({
+        status: 'answered',
+        choice: 'in-harness',
+        note: 'Không đồng ý, sửa lại phần X',
+        resolvedReason: 'user',
+        resolvedAt: 1_758_300_200,
+      }),
+    ])
+    const host = render(<DecisionsPanel />)
+
+    click(host.querySelector('[data-testid="decisions-filter-resolved"]'))
+    expect(host.textContent).toContain('Answered')
+    expect(host.textContent).not.toContain('Approved')
+    expect(host.textContent).not.toContain('Rejected')
+    expect(host.textContent).toContain('Không đồng ý, sửa lại phần X')
+    // Biểu tượng trung tính: hàng tự nhập không mang dấu X đỏ của "bị từ chối".
+    const row = host.querySelector('[data-decision-id="d1"]')
+    expect(row?.querySelector('svg.lucide-message-square')).not.toBeNull()
+    expect(row?.querySelector('svg.lucide-circle-x')).toBeNull()
+  })
+
   it('bộ đếm hạn lấy từ `deadline` của server', () => {
     seedDecisions([entry({ deadline: Date.now() / 1000 + 125 })])
     const host = render(<DecisionsPanel />)
@@ -207,6 +236,58 @@ describe('DecisionsPanel — quyết định thật', () => {
     click(host.querySelector('[data-testid="decisions-filter-all"]'))
     expect(host.textContent).toContain('Chỉ mục phiên nên nằm ở đâu?')
     expect(host.textContent).toContain('Approved')
+  })
+
+  it('lựa chọn tự nhập (`other`) khoá nút khi rỗng và gửi kèm chữ đã gõ', async () => {
+    // P4 — runtime luôn thêm lựa chọn tự nhập; chọn nó MÀ BỎ TRỐNG là vô nghĩa (route trả
+    // `DECISION_NOTE_REQUIRED`), nên nút gửi bị khoá cho tới khi có chữ.
+    agentApiMock.mockImplementation(async () => ({
+      status: 'resolved',
+      decisionId: 'd1',
+      choice: 'other',
+      outcome: 'approved',
+    }))
+    seedDecisions([
+      entry({
+        options: [
+          { id: 'in-harness', label: 'Giữ trong harness', kind: 'approve' },
+          { id: 'reject', label: 'Không chọn gì', kind: 'reject' },
+          { id: 'other', label: 'Khác (tự nhập)', kind: 'alternative', allowFreeText: true },
+        ],
+      }),
+    ])
+    const host = render(<DecisionsPanel />)
+
+    const open = Array.from(host.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Khác (tự nhập)'),
+    )
+    expect(open).toBeTruthy()
+    expect(host.querySelector('[data-testid="decision-free-text-input"]')).toBeNull()
+    click(open ?? null)
+
+    const input = host.querySelector('[data-testid="decision-free-text-input"]') as HTMLTextAreaElement | null
+    expect(input).toBeTruthy()
+    const submit = () => host.querySelector('[data-testid="decision-free-text-submit"]') as HTMLButtonElement
+    expect(submit().disabled).toBe(true)
+
+    await act(async () => {
+      typeInto(input!, '   ')
+    })
+    expect(submit().disabled).toBe(true)
+
+    await act(async () => {
+      typeInto(input!, '  Chọn phương án C  ')
+    })
+    expect(submit().disabled).toBe(false)
+
+    await act(async () => {
+      submit().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const decisionCalls = agentApiMock.mock.calls.filter(([path]) => String(path).endsWith('/decisions'))
+    expect(decisionCalls).toHaveLength(1)
+    expect(decisionCalls[0][1]).toEqual({ decisionId: 'd1', choice: 'other', note: 'Chọn phương án C' })
+    expect(useHarnessChatStore.getState().decisions[CHAT_ID][0].note).toBe('Chọn phương án C')
   })
 
   it('đích của ý định mở tab (`requestId`) thì cuộn tới đúng thẻ đó', () => {

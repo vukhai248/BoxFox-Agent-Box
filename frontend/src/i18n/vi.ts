@@ -399,8 +399,13 @@ const vi = {
     rejectCount: '{{count}} op canvas bị bỏ vì sai giao thức',
     exitChoiceTitle: 'Chọn xử lý run Design',
     canvasTitle: 'Canvas thiết kế',
-    canvasDrawing: 'Design Lead đang vẽ · {{count}} thao tác',
-    canvasIdle: 'Canvas chưa có thao tác nào',
+    canvasDrawing: '{{count}} thao tác trên canvas',
+    canvasIdle: 'Canvas trống — chưa có thao tác nào',
+    canvasPlaying: 'Design Lead đang vẽ · {{drawn}}/{{total}}',
+    canvasSkip: 'Bỏ qua hiệu ứng',
+    canvasEmptyHint: 'Đây là bàn vẽ của Design Lead. Bảo nó phác thay đổi, hoặc bắt đầu bằng bản đồ dự án.',
+    canvasDrawMap: 'Vẽ bản đồ dự án lên canvas',
+    canvasCursorLabel: 'Design Lead',
     canvasActorAgent: 'agent vẽ',
     canvasActorUser: 'bạn vẽ',
     canvasDirective: 'Bảo agent sửa component này',
@@ -550,6 +555,8 @@ const vi = {
     // Vòng 27 / C-5 — chủ nhà gõ chỉ thị giữa lúc lượt đang chạy: bong bóng của chỉ thị nằm ĐÚNG
     // chỗ nó được gửi (theo `seq`), mang nhãn nhỏ này để không bị đọc nhầm là một lượt mới.
     steerLabel: 'can thiệp',
+    // P5 — `/btw <câu hỏi>`: câu hỏi phụ giữa lượt mang nhãn riêng để không bị đọc thành chỉ thị.
+    btwLabel: 'btw',
     // Vòng 27 / C-5 — nhánh bị chủ nhà dừng bằng `cancel_child`: sổ con vẫn là `failed`, nhưng câu
     // hiện ra phải nói đúng việc đã xảy ra, không gọi đó là "lỗi".
     childStoppedByOwner: 'chủ nhà dừng',
@@ -1281,6 +1288,7 @@ const vi = {
       pending: 'Đang chờ',
       approved: 'Đã duyệt',
       rejected: 'Đã từ chối',
+      answered: 'Đã trả lời',
       expired: 'Đã quá hạn',
       cancelled: 'Đã huỷ',
     },
@@ -1301,6 +1309,8 @@ const vi = {
     emptyHistory: 'Chưa có quyết định nào được ghi lại.',
     noteLabel: 'Ghi chú',
     sendingAnswer: 'Đang gửi câu trả lời…',
+    freeTextPlaceholder: 'Gõ câu trả lời của bạn…',
+    freeTextSubmit: 'Gửi',
     answerError: 'Không gửi được câu trả lời',
     expiredNote: 'Đã quá hạn — tự động tính là TỪ CHỐI.',
     deadline: 'Hạn chót',

@@ -7,6 +7,8 @@ import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from ..agent_core.roles import ROLES
+from ..agent_core.limits import (BTW_QUESTION_MAX_CHARS, BTW_QUESTION_REQUIRED_CODE,
+                                 BTW_QUESTION_TOO_LONG_CODE)
 from .catalog import DEFAULT_SKILLS
 
 ROLE_COMMANDS = {name: name for name in ROLES} | {'test': 'testing'}
@@ -20,13 +22,16 @@ ROLE_COMMANDS.pop('research', None)
 ROLE_COMMANDS.pop('design', None)
 INFO = {'help', 'skills', 'agents', 'status', 'context'}
 BUILTINS = INFO | set(ROLE_COMMANDS) | {'skill', 'compact', 'stop', 'claude-code', 'claude-design',
-                                       'research', 'design'}
+                                       'research', 'design', 'btw'}
 EXTERNAL = {'claude-code', 'codex', 'opencode'}
-# P1 (§5.2): mô tả cho các lệnh MODE trong `/help`.
-MODE_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
-                                '`/research off` exits, `/research status` shows the run',
-                      'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
-                                '`/design off` exits, `/design status` shows the run'}
+# P1 (§5.2) + P5: mô tả cho `/help` và gợi ý `/` — lệnh MODE nói cách bật/thoát, `/btw` nói luật
+# không cắt lượt. Lệnh nào không có mục ở đây thì `list` suy mô tả từ tên.
+BUILTIN_DESCRIPTIONS = {'research': 'Enable Research mode; `/research <task>` starts it right away, '
+                                   '`/research off` exits, `/research status` shows the run',
+                        'design': 'Enable Design mode; `/design <task>` opens a design run right away, '
+                                  '`/design off` exits, `/design status` shows the run',
+                        'btw': 'Ask the agent a side question WITHOUT interrupting the running turn; '
+                               '`/btw <question>` is answered briefly in the next step'}
 # Default role per CLI command. The role is not tied to the executor: change these entries
 # (or use a custom command with an explicit role) instead of hardcoding a role in the dispatcher.
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
@@ -113,7 +118,7 @@ class CommandRegistry:
 
     def list(self):
         enabled = set(self.settings()['enabled'])
-        rows = [{'slug': key, 'description': MODE_DESCRIPTIONS.get(key) or (('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' ')),
+        rows = [{'slug': key, 'description': BUILTIN_DESCRIPTIONS.get(key) or (('Use ' + ROLE_COMMANDS[key] + ' specialist') if key in ROLE_COMMANDS else key.replace('-', ' ')),
                  'kind': 'builtin', 'enabled': key not in {'claude-code', 'claude-design'} or key in enabled} for key in sorted(BUILTINS)]
         rows += [{'slug': key, 'description': self.catalog.items[sid]['description'], 'kind': 'skill',
                   'enabled': sid in enabled and sid not in {'codex', 'opencode'}, 'skillId': sid,
@@ -189,6 +194,19 @@ class CommandRegistry:
                 if args:
                     raise ValueError('This command takes no arguments')
                 result.kind = 'control'
+                return result
+            if key == 'btw':
+                # P5 — hỏi mà KHÔNG cắt lượt. `/btw <câu hỏi>` đi qua đường lượt/steer như một
+                # lời nhắn thường (`kind='message'`), nhưng mang `reason='btw_command'` để tầng
+                # submit khung nó thành CÂU HỎI PHỤ: lượt rảnh mở lượt mang tiền tố btw, còn lượt
+                # đang chạy thì vào hàng chờ steer với nhãn btw (không mở lượt thứ hai).
+                question = args.strip()
+                if not question:
+                    raise ValueError(f'{BTW_QUESTION_REQUIRED_CODE}: /btw cần một câu hỏi — gõ `/btw <câu hỏi>`')
+                if len(question) > BTW_QUESTION_MAX_CHARS:
+                    raise ValueError(f'{BTW_QUESTION_TOO_LONG_CODE}: câu hỏi dài quá '
+                                     f'{BTW_QUESTION_MAX_CHARS} ký tự — hỏi ngắn hơn')
+                result.kind, result.prompt, result.reason = 'message', question, 'btw_command'
                 return result
             if key in ('research', 'design'):
                 from ..agent_core import runtime as _runtime

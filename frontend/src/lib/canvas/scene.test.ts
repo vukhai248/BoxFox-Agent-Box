@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CanvasNode, CanvasScene } from './types'
-import { createInitialScene, deserialize, removeNode, serialize } from './scene'
+import { deserialize, removeNode, serialize } from './scene'
 
 function node(id: string, kind: CanvasNode['kind'], over: Partial<CanvasNode> = {}): CanvasNode {
   return {
@@ -19,19 +19,6 @@ function node(id: string, kind: CanvasNode['kind'], over: Partial<CanvasNode> = 
     ...over,
   }
 }
-
-describe('createInitialScene', () => {
-  it('seed 3 card (380/340/500) + 1 connector + không stroke', () => {
-    const scene = createInitialScene()
-    expect(scene.version).toBe(1)
-    expect(scene.nodes).toHaveLength(3)
-    expect(scene.nodes.map((n) => n.width)).toEqual([380, 340, 500])
-    expect(scene.nodes.every((n) => n.kind === 'card')).toBe(true)
-    expect(scene.connectors).toHaveLength(1)
-    expect(scene.connectors[0]).toMatchObject({ id: 'conn-1', fromNodeId: 'node-c1', toNodeId: 'node-c2', fromAnchor: 'right', toAnchor: 'left' })
-    expect(scene.strokes).toHaveLength(0)
-  })
-})
 
 describe('serialize / deserialize round-trip', () => {
   it('giữ nguyên từng field cho node/connector/stroke', () => {

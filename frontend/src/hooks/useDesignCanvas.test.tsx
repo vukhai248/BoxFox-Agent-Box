@@ -68,14 +68,18 @@ describe('useDesignCanvas', () => {
 
   it('deleteSelection xóa node đồng thời loại connector trỏ tới node đó', () => {
     const hook = mount()
+    // Canvas bắt đầu TRỐNG (không còn cảnh mẫu cứng): bài kiểm tự dựng hai node rồi nối, thay vì
+    // trông vào node `node-c1` của cảnh mẫu cũ.
     act(() => hook.state.addShape('rect'))
-    const id = lastNodeId(hook.state)
-    act(() => hook.state.addConnector(id, 'node-c1'))
-    expect(hook.state.scene.connectors.some((c) => c.fromNodeId === id)).toBe(true)
-    act(() => hook.state.select(id))
+    act(() => hook.state.addShape('rect'))
+    const [first, id] = hook.state.scene.nodes.map((n) => n.id)
+    act(() => hook.state.addConnector(first, id))
+    expect(hook.state.scene.connectors.some((c) => c.fromNodeId === first && c.toNodeId === id)).toBe(true)
+    act(() => hook.state.select(first))
     act(() => hook.state.deleteSelection())
-    expect(hook.state.scene.nodes.some((n) => n.id === id)).toBe(false)
-    expect(hook.state.scene.connectors.some((c) => c.fromNodeId === id || c.toNodeId === id)).toBe(false)
+    expect(hook.state.scene.nodes.some((n) => n.id === first)).toBe(false)
+    expect(hook.state.scene.connectors.some(
+      (c) => c.fromNodeId === first || c.toNodeId === first)).toBe(false)
     hook.unmount()
   })
 

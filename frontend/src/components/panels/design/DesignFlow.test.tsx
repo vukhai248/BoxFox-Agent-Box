@@ -9,6 +9,7 @@
  * `ResearchFlow.test.tsx` và `ChatInputBar.test.tsx`.
  */
 import { act } from 'react'
+import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../../i18n'
@@ -39,7 +40,14 @@ function render(node: React.ReactNode): HTMLElement {
   const root = createRoot(host)
   roots.push(root)
   act(() => {
-    root.render(<I18nProvider>{node}</I18nProvider>)
+    // Bọc ĐÚNG như `main.tsx`: StrictMode (chỉ ở dev) chạy mount → cleanup → mount lại, nên mọi
+    // hoạt hình phải chịu được việc bị huỷ TRƯỚC khung hình đầu — bọc ở đây để bài kiểm canh đúng
+    // đường chạy chủ nhà dùng, không phải đường "một lượt mount".
+    root.render(
+      <StrictMode>
+        <I18nProvider>{node}</I18nProvider>
+      </StrictMode>,
+    )
   })
   return host
 }
@@ -187,6 +195,7 @@ beforeEach(() => {
     activeRunId: DESIGN_ID,
     scenes: {},
     sceneActor: {},
+    playedOpsSeq: {},
     sceneVersion: 0,
     prompts: [],
     rejectedOps: 0,
@@ -611,34 +620,306 @@ describe('thẻ P5 của chế độ Design', () => {
     act(() => { host.remove() })
   })
 
-  it('canvas panel: hiện trạng thái Design Lead đang vẽ + đếm op bị từ chối', () => {
+  it('canvas panel: đếm op THẬT trên canvas và đếm op bị từ chối (không hô "đang vẽ" khi rảnh)', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          sceneActor: { [DESIGN_ID]: 'agent' },
+          rejectedOps: 2,
+        })
+        useDesignStore.getState().applyEvent({
+          seq: 20,
+          type: 'design_canvas',
+          data: {
+            designId: DESIGN_ID,
+            actor: 'agent',
+            sceneVersion: 1,
+            ops: [
+              { type: 'CREATE_NODE', node: { id: 'n1', kind: 'ui-mockup', x: 0, y: 0, width: 10, height: 10, title: 't', body: '' } },
+            ],
+          },
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+      expect(live).toBeTruthy()
+      // Lô op CHƯA ai diễn ⇒ panel vừa mở ra là diễn (luật 5), rồi mới đứng yên.
+      expect(live?.getAttribute('data-playing')).toBe('true')
+      act(() => {
+        vi.advanceTimersByTime(8000)
+      })
+      // Nhãn TRUNG THỰC: đếm op thật đang có trên canvas; không hô "Design Lead đang vẽ" khi không có
+      // hoạt hình nào chạy (trước đây nhãn ấy bám vào `phase === 'drawing'`, kể cả khi canvas trống).
+      expect(live?.getAttribute('data-playing')).toBe('false')
+      expect(live?.getAttribute('data-drawing')).toBe('true')
+      expect(live?.getAttribute('data-actor')).toBe('agent')
+      expect(live?.textContent).toContain('1 ops on the canvas')
+      expect(live?.textContent).toContain('2')
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('canvas MỞ SAU khi cảnh đã vào store (canvas đóng lúc agent vẽ) ⇒ vẫn vẽ dần từ cảnh nguồn', () => {
+    // Ca thực địa của vòng kiểm thử: chủ nhà duyệt danh sách chạm lúc đang ở tab Brief (canvas chưa
+    // mount). Cảnh đã nằm sẵn trong store kèm lô op suy từ chênh lệch + cảnh nguồn; mở tab Canvas ra
+    // phải thấy ĐANG VẼ (con trỏ, nút Bỏ qua), không phải cảnh vẽ xong đứng im.
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          scenes: {
+            [DESIGN_ID]: {
+              version: 1,
+              nodes: [{
+                id: 'seed-1', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 60, width: 200, height: 120,
+                title: 'Màn hình chat', body: '', url: null,
+                style: { fill: '#111', stroke: '#333', strokeWidth: 1, radius: 12 },
+              }],
+              connectors: [],
+              strokes: [],
+            },
+          },
+          sceneSeq: { [DESIGN_ID]: 5 },
+          sceneActor: { [DESIGN_ID]: 'agent' },
+          lastOps: {
+            [DESIGN_ID]: {
+              actor: 'agent',
+              seq: 5,
+              ops: [{
+                type: 'CREATE_NODE',
+                node: {
+                  id: 'seed-1', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 60, width: 200, height: 120,
+                  title: 'Màn hình chat', body: '', url: null,
+                  style: { fill: '#111', stroke: '#333', strokeWidth: 1, radius: 12 },
+                },
+              }],
+              from: { version: 1, nodes: [], connectors: [], strokes: [] },
+            },
+          },
+          playedOpsSeq: {},
+          rejectedOps: 0,
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      act(() => {
+        vi.advanceTimersByTime(80)
+      })
+      const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+      expect(live?.getAttribute('data-playing')).toBe('true')
+      expect(live?.getAttribute('data-drawing')).toBe('true')
+      expect(live?.textContent).toContain('Design Lead')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeTruthy()
+      expect(host.querySelector('[data-testid="design-canvas-skip"]')).toBeTruthy()
+      act(() => {
+        vi.advanceTimersByTime(8000)
+      })
+      expect(live?.getAttribute('data-playing')).toBe('false')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeNull()
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('canvas trống: mời chủ nhà nhờ agent vẽ bản đồ thay vì bỏ mặc canvas', () => {
+    act(() => {
+      useDesignStore.setState({ runs: [], scenes: {}, sceneSeq: {}, sceneActor: {}, lastOps: {}, rejectedOps: 0 })
+    })
+    const host = render(<DesignCanvasPanel />)
+    const empty = host.querySelector('[data-testid="design-canvas-empty"]')
+    expect(empty).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-canvas-draw-map"]')).toBeTruthy()
+    // Không có hoạt hình thì dải sống KHÔNG được nói "đang vẽ".
+    expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('false')
+    act(() => { host.remove() })
+  })
+
+  it('lô op của agent tới khi panel đang mở ⇒ dải nói ĐANG VẼ N/M, có con trỏ, và nút bỏ qua cắt hiệu ứng', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          scenes: {},
+          sceneSeq: {},
+          sceneActor: {},
+          lastOps: {},
+          rejectedOps: 0,
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      // Hai nhịp `act` riêng: nhịp đầu để React chạy effect (đăng ký khung hình), nhịp sau mới tua
+      // đồng hồ — gộp lại thì `requestAnimationFrame` được đăng ký SAU khi đồng hồ đã tua.
+      act(() => {
+        useDesignStore.getState().applyEvent({
+          seq: 41,
+          type: 'design_canvas',
+          data: {
+            designId: DESIGN_ID,
+            actor: 'agent',
+            sceneVersion: 1,
+            ops: [
+              { type: 'CREATE_NODE', node: { id: 'n-live', kind: 'ui-mockup', x: 40, y: 60, width: 200, height: 120, title: 'Màn hình', body: '' } },
+            ],
+          },
+        })
+      })
+      act(() => {
+        vi.advanceTimersByTime(80)
+      })
+      const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+      expect(live?.getAttribute('data-playing')).toBe('true')
+      expect(live?.textContent).toContain('0/1')
+      expect(live?.textContent).toContain('Design Lead')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeTruthy()
+      // Nút bỏ qua ⇒ nhảy về cảnh thật ngay, không phát nốt hoạt hình.
+      click(host, '[data-testid="design-canvas-skip"]')
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('false')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeNull()
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('chủ nhà chạm xuống canvas giữa lúc agent vẽ ⇒ hoạt hình dừng và cảnh THẬT hiện ra', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          scenes: {},
+          sceneSeq: {},
+          sceneActor: {},
+          lastOps: {},
+          rejectedOps: 0,
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      act(() => {
+        useDesignStore.getState().applyEvent({
+          seq: 51,
+          type: 'design_canvas',
+          data: {
+            designId: DESIGN_ID,
+            actor: 'agent',
+            sceneVersion: 1,
+            ops: [
+              { type: 'CREATE_NODE', node: { id: 'n-takeover', kind: 'ui-mockup', x: 40, y: 60, width: 200, height: 120, title: 'Màn hình', body: '' } },
+            ],
+          },
+        })
+      })
+      act(() => {
+        vi.advanceTimersByTime(80)
+      })
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('true')
+
+      // Chạm xuống nền sân khấu là "tôi cầm lái": cắt hoạt hình NGAY (không phát nốt), con trỏ biến mất,
+      // và cảnh đang bày là cảnh thật trong store — không phải khung hình trung gian.
+      const stage = host.querySelector('[data-testid="design-canvas-stage"]')
+      if (!stage) throw new Error('không thấy design-canvas-stage')
+      act(() => {
+        stage.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 320, clientY: 240 }))
+      })
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('false')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeNull()
+      const drawn = useDesignStore.getState().scenes[DESIGN_ID]
+      expect(drawn?.nodes.map((item) => item.id)).toEqual(['n-takeover'])
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cảnh của agent nhận từ payload (không lô op nào) vẫn nói đúng "agent đã vẽ", không hô canvas trống', () => {
     act(() => {
       useDesignStore.setState({
         runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
-        sceneActor: { [DESIGN_ID]: 'agent' },
-        rejectedOps: 2,
-      })
-      useDesignStore.getState().applyEvent({
-        seq: 20,
-        type: 'design_canvas',
-        data: {
-          designId: DESIGN_ID,
-          actor: 'agent',
-          sceneVersion: 1,
-          ops: [
-            { type: 'CREATE_NODE', node: { id: 'n1', kind: 'ui-mockup', x: 0, y: 0, width: 10, height: 10, title: 't', body: '' } },
-          ],
+        scenes: {
+          [DESIGN_ID]: {
+            version: 1,
+            nodes: [
+              { id: 'seed-workspace', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 40, width: 380, height: 180, title: 'Dự án: BoxFox', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+            ],
+            connectors: [],
+            strokes: [],
+          },
         },
+        sceneSeq: { [DESIGN_ID]: 1 },
+        sceneActor: { [DESIGN_ID]: 'agent' },
+        lastOps: { [DESIGN_ID]: { actor: 'agent', ops: [], seq: 1 } },
+        rejectedOps: 0,
       })
     })
     const host = render(<DesignCanvasPanel />)
+
+    // Vòng kiểm thử bắt được: đúng khuôn này từng cho `data-drawing='false'` suốt pha vẽ và KHÔNG có
+    // chip người vẽ, vì `agentHasDrawn` chỉ hỏi `lastOps`. Cảnh đang giữ là của agent và có nội dung.
     const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
-    expect(live).toBeTruthy()
     expect(live?.getAttribute('data-drawing')).toBe('true')
     expect(live?.getAttribute('data-actor')).toBe('agent')
-    expect(live?.textContent).toContain('Design Lead')
-    expect(live?.textContent).toContain('2')
+    expect(live?.getAttribute('data-playing')).toBe('false')
+    expect(host.querySelector('[data-testid="design-canvas-actor"]')).toBeTruthy()
+    expect(host.querySelector('[data-testid="design-canvas-empty"]')).toBeNull()
     act(() => { host.remove() })
+  })
+
+  it('cảnh tới KHÔNG kèm op (payload chi tiết của run: tải lại trang, cảnh gieo) vẫn được VẼ dần', () => {
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        useDesignStore.setState({
+          runs: [readRun(runRow({ status: 'designing', phase: 'drawing', touchList: null }))!],
+          scenes: {},
+          sceneSeq: {},
+          sceneActor: {},
+          lastOps: {},
+          rejectedOps: 0,
+        })
+      })
+      const host = render(<DesignCanvasPanel />)
+      // Cảnh gieo tới như `refreshDetail` giao nó: có cảnh, KHÔNG có lô op nào, `sceneSeq` đã tăng.
+      act(() => {
+        useDesignStore.setState({
+          scenes: {
+            [DESIGN_ID]: {
+              version: 1,
+              nodes: [
+                { id: 'seed-workspace', kind: 'card', shape: null, card: 'ui-mockup', x: 40, y: 40, width: 380, height: 180, title: 'Dự án: BoxFox', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+                { id: 'seed-screen', kind: 'card', shape: null, card: 'ui-mockup', x: 520, y: 40, width: 380, height: 180, title: 'Màn hình đích: Bảng tin', body: '', url: null, style: { fill: '#121212', stroke: '#262626', strokeWidth: 1, radius: 12 } },
+              ],
+              connectors: [{ id: 'seed-c1', fromNodeId: 'seed-workspace', toNodeId: 'seed-screen', fromAnchor: 'right', toAnchor: 'left', stroke: '#3b82f6', strokeWidth: 2 }],
+              strokes: [],
+            },
+          },
+          sceneSeq: { [DESIGN_ID]: 3 },
+          sceneActor: { [DESIGN_ID]: 'agent' },
+        })
+      })
+      act(() => {
+        vi.advanceTimersByTime(80)
+      })
+      const live = host.querySelector('[data-testid="design-canvas-live-draw"]')
+      expect(live?.getAttribute('data-playing')).toBe('true')
+      expect(live?.textContent).toContain('0/3')
+      expect(host.querySelector('[data-testid="design-canvas-cursor"]')).toBeTruthy()
+      // Cảnh đang vẽ là cảnh TRUNG GIAN: chưa đủ node của cảnh thật ⇒ tải lại trang vẫn thấy agent vẽ.
+      expect(host.querySelectorAll('[data-node-id]').length).toBeLessThan(2)
+      act(() => {
+        vi.advanceTimersByTime(6000)
+      })
+      expect(host.querySelector('[data-testid="design-canvas-live-draw"]')?.getAttribute('data-playing')).toBe('false')
+      expect(host.querySelectorAll('[data-node-id]').length).toBe(2)
+      act(() => { host.remove() })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

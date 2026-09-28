@@ -500,6 +500,31 @@ OWNER_STEER_PREFIX = '[Chỉ thị giữa lượt của chủ nhà]'
 RESEARCH_NUDGE_PREFIX = '[Nhịp tiến độ:'
 STEER_MODE_UNKNOWN_CODE = 'STEER_MODE_UNKNOWN'
 OWNER_STEER_EVENT_CODE = 'OWNER_STEER'
+# P5 — `/btw <câu hỏi>`: câu hỏi phụ của chủ nhà đi ĐÚNG đường steer (không cắt lượt đang chạy),
+# nhưng khối bơm phải nói rõ luật trả lời để model không kéo dài lượt. Tiền tố này mở đầu cả khối
+# bơm giữa lượt lẫn prompt của lượt rảnh, nên `turn_prompt_excerpt` bỏ qua nó như hai tiền tố kia.
+BTW_ASK_PREFIX = ('[Câu hỏi phụ (btw) — trả lời NGẮN trong bước kế tiếp rồi đi tiếp; '
+                  'KHÔNG đổi việc đang làm, KHÔNG mở lượt mới, KHÔNG ghi tệp]')
+BTW_QUESTION_REQUIRED_CODE = 'BTW_QUESTION_REQUIRED'
+BTW_QUESTION_TOO_LONG_CODE = 'BTW_QUESTION_TOO_LONG'
+BTW_QUESTION_MAX_CHARS = 2000
+# P5 (vòng kiểm thử đầu-cuối vòng 3): hàng chứa câu hỏi phụ chưa kịp bơm thì phải NÓI RA lúc
+# đóng lượt — hàng đợi chỉ được bơm ở ranh giới BƯỚC, nên câu hỏi tới khi lượt đã ở bước chót sẽ
+# nằm im tới lượt kế. Im lặng ở đây là chủ nhà tưởng câu hỏi đã biến mất.
+BTW_PENDING_NOTICE_CODE = 'BTW_PENDING'
+
+# P4 — lựa chọn "Khác (tự nhập)" cho ask_user/request_approval: runtime LUÔN thêm lựa chọn này,
+# và nó là lựa chọn free-text. Chọn nó mà không gõ chữ ⇒ 400 (mã dưới), chữ dài quá trần ⇒ 400.
+DECISION_OTHER_OPTION_ID = 'other'
+DECISION_OTHER_LABEL = 'Khác (tự nhập)'
+DECISION_NOTE_REQUIRED_CODE = 'DECISION_NOTE_REQUIRED'
+DECISION_NOTE_TOO_LONG_CODE = 'DECISION_NOTE_TOO_LONG'
+DECISION_NOTE_MAX_CHARS = 2000
+# P4 (vá vòng soát) — kết cục RIÊNG cho câu trả lời tự nhập: chủ nhà GÕ chữ là trả lời, KHÔNG phải
+# một lời duyệt. Đo được trước khi vá: `kind='alternative'` chốt thẳng thành `approved`, nên một cổng
+# `request_approval` mang cặp khoá plan ghi một hàng `approved` vào sổ duyệt dù chủ nhà vứt vào ô tự nhập
+# câu "không đồng ý, sửa lại phần X".
+DECISION_ANSWERED_STATUS = 'answered'
 
 # Phòng hồ sơ trong workspace (.research) — hình dạng khớp `deploy/docker/research_files.py`.
 DOSSIER_ROOM = '.research'

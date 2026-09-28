@@ -13,6 +13,7 @@ import type {
   CanvasStroke,
   CanvasStyle,
   CardKind,
+  CursorState,
   Point,
   ShapeKind,
 } from '../lib/canvas'
@@ -23,7 +24,7 @@ import {
   DEFAULT_SHAPE_STYLE,
   CARD_META,
   cardTitleFallback,
-  createInitialScene,
+  createEmptyScene,
   newId,
   nearestAnchors,
   nodeById,
@@ -34,6 +35,7 @@ import {
 } from '../lib/canvas'
 import { postCanvas } from '../lib/designApi'
 import { selectActiveRun, useDesignStore } from '../store/designStore'
+import { useCanvasPlayback } from './useCanvasPlayback'
 
 export type ToolMode = 'select' | 'hand' | 'pencil' | 'wireframe' | 'text' | 'arrow'
 
@@ -49,6 +51,13 @@ const DEFAULT_WEBVIEW_SIZE = { width: 480, height: 320 }
 /** Chỉ thị mặc định gửi agent khi chuột phải "bảo agent sửa component này". */
 const AGENT_DIRECTIVE_TEXT = 'Sửa đúng component này theo yêu cầu của người dùng.'
 
+/**
+ * Chỉ thị cho canvas TRỐNG — không neo vào node nào (`targetNodeId` rỗng). Dùng khi chủ nhà mở tab
+ * Design mà chưa có gì để bấm vào: canvas trống không được là ngõ cụt.
+ */
+const PROJECT_MAP_INSTRUCTION =
+  'Vẽ bản đồ dự án lên canvas: màn hình/khối chính, luồng giữa chúng, và những chỗ anh định chạm vào.'
+
 /** Patch góc/độ rộng nhỏ nhất có thể resize một node (4 góc + 4 cạnh handle). */
 export type NodeGeometryPatch = Partial<Pick<CanvasNode, 'x' | 'y' | 'width' | 'height'>>
 
@@ -60,6 +69,18 @@ interface History {
 
 export interface DesignCanvas {
   scene: CanvasScene
+  /** Cảnh nên VẼ: cảnh đang vẽ dở khi lớp phát lại chạy, bằng `scene` khi rảnh (xem `useCanvasPlayback`). */
+  displayScene: CanvasScene
+  /** Con trỏ của Design Lead (world-space) khi đang vẽ; `null` khi rảnh. */
+  cursor: CursorState | null
+  activeIds: readonly string[]
+  connectorProgress: Record<string, number>
+  /** Đang phát lại nét vẽ (dải "canvas sống" đọc để nói "đang vẽ N/M"). */
+  playing: boolean
+  drawn: number
+  total: number
+  /** Bỏ hoạt hình, hiện cảnh thật ngay. */
+  skipPlayback(): void
   selection: ReadonlySet<string>
   activeTool: ToolMode
   view: CanvasView
@@ -100,6 +121,8 @@ export interface DesignCanvas {
 
   sendToAgent(): string
   instructAgent(nodeId: string): void
+  /** Xin agent vẽ bản đồ dự án — chỉ thị không neo vào node (canvas đang trống). */
+  requestProjectMap(): void
   undo(): void
   redo(): void
 }
@@ -121,7 +144,10 @@ export function useDesignCanvas(): DesignCanvas {
     const state = useDesignStore.getState()
     const id = selectActiveRun(state)?.designId ?? ''
     const seed = id ? state.scenes[id] : undefined
-    return { present: seed ?? createInitialScene(), past: [], future: [] }
+    // Canvas bắt đầu TRỐNG, không có cảnh mẫu cứng: cảnh mẫu cũ (3 thẻ tiếng Anh) hiện lên y hệt
+    // nhau ở mọi dự án nên nó không nói gì về dự án của chủ nhà, mà lại khiến dải "canvas sống" đếm
+    // 4 thao tác không ai vẽ. Canvas trống + màn hình gợi ý là trạng thái thật.
+    return { present: seed ?? createEmptyScene(), past: [], future: [] }
   })
   // Cảnh đã áp từ store (tránh đẩy lại chính nó thành một bước undo).
   const appliedSceneRef = useRef<CanvasScene | null>(history.present)
@@ -137,6 +163,9 @@ export function useDesignCanvas(): DesignCanvas {
   const gestureBaseRef = useRef<CanvasScene | null>(null)
 
   const scene = history.present
+  // Lớp NHÌN: phát lại lô op agent vừa gửi (store giữ lô op, hook này dựng hoạt hình). Cảnh thật
+  // `scene` là nguồn sự thật duy nhất cho thao tác/kích thước; `displayScene` chỉ để vẽ.
+  const playback = useCanvasPlayback({ scene, designId })
 
   useEffect(() => {
     return () => {
@@ -438,25 +467,32 @@ export function useDesignCanvas(): DesignCanvas {
     })
   }, [])
 
-  const sendToAgent = useCallback((): string => {
-    const message = buildCanvasMessage(scene)
+  /** Ghi lại tin vừa gửi (hộp soạn đọc nó), đẩy lên agent rồi báo "đã đồng bộ". */
+  const pushMessage = useCallback((message: CanvasOutboundMessage) => {
     setLastSentMessage(message)
     postCanvasMessage(message)
     flashSync()
+  }, [flashSync, postCanvasMessage])
+
+  const sendToAgent = useCallback((): string => {
+    pushMessage(buildCanvasMessage(scene))
     return serialize(scene)
-  }, [flashSync, postCanvasMessage, scene])
+  }, [pushMessage, scene])
 
   const instructAgent = useCallback(
     (nodeId: string) => {
       const node = nodeById(scene, nodeId)
       if (!node) return
-      const directive = buildCanvasDirective(node.id, node.title || cardTitleFallback(node.card), AGENT_DIRECTIVE_TEXT)
-      setLastSentMessage(directive)
-      postCanvasMessage(directive)
-      flashSync()
+      pushMessage(buildCanvasDirective(node.id, node.title || cardTitleFallback(node.card), AGENT_DIRECTIVE_TEXT))
     },
-    [flashSync, postCanvasMessage, scene],
+    [pushMessage, scene],
   )
+
+  const requestProjectMap = useCallback(() => {
+    // Chỉ thị KHÔNG neo node: `targetNodeId` rỗng là hợp lệ ở tuyến canvas (nghĩa "cả canvas"), nên
+    // canvas trống vẫn có đường nhờ agent vẽ thay vì bắt chủ nhà tự thêm node trước.
+    pushMessage(buildCanvasDirective('', '', PROJECT_MAP_INSTRUCTION))
+  }, [pushMessage])
 
   const undo = useCallback(() => {
     setHistory((h) => {
@@ -476,6 +512,14 @@ export function useDesignCanvas(): DesignCanvas {
 
   return {
     scene,
+    displayScene: playback.displayScene,
+    cursor: playback.cursor,
+    activeIds: playback.activeIds,
+    connectorProgress: playback.connectorProgress,
+    playing: playback.playing,
+    drawn: playback.drawn,
+    total: playback.total,
+    skipPlayback: playback.skip,
     selection,
     activeTool,
     view,
@@ -511,6 +555,7 @@ export function useDesignCanvas(): DesignCanvas {
     updateNodeUrl,
     sendToAgent,
     instructAgent,
+    requestProjectMap,
     undo,
     redo,
   }

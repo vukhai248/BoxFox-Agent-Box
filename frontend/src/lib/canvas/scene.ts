@@ -1,5 +1,5 @@
 /**
- * Cây scene canvas + helper bất biến (create/seed/serialize/deserialize/upsert/
+ * Cây scene canvas + helper bất biến (create/serialize/deserialize/upsert/
  * remove). Mọi helper trả về scene MỚI, không đổi tham số đầu vào.
  *
  * `serialize`/`deserialize` giúp gửi scene cho agent và tải lại từ JSON ngoài
@@ -41,41 +41,6 @@ export function cardTitleFallback(card: CardKind | null): string {
 
 export function createEmptyScene(): CanvasScene {
   return { version: SCENE_VERSION, nodes: [], connectors: [], strokes: [] }
-}
-
-function card(id: string, x: number, y: number, width: number, height: number, kind: CardKind, title: string, body: string): CanvasNode {
-  return {
-    id,
-    kind: 'card',
-    shape: null,
-    card: kind,
-    x,
-    y,
-    width,
-    height,
-    title,
-    body,
-    url: null,
-    style: { ...DEFAULT_CARD_STYLE },
-  }
-}
-
-/**
- * Seed cảnh khởi đầu tương đương tab cũ: 3 thẻ (UI mockup 380px, reasoning
- * flow 340px, annotation 500px) + 1 connector card1→card2. Id ổn định
- * (`node-c1/c2/c3`, `conn-1`) để connector/test tham chiếu được.
- */
-export function createInitialScene(): CanvasScene {
-  const c1 = card('node-c1', 40, 40, 380, 240, 'ui-mockup', 'Frontend UI Mockup',
-    'Self-hosted AI computer environment with unified sandbox, live browser frame & VS Code integration.')
-  const c2 = card('node-c2', 480, 40, 340, 200, 'agent-reasoning-flow', 'Agent Reasoning Flow',
-    'User Visual Prompt → ReAct Plan Generator → Sandbox Tool Execution')
-  const c3 = card('node-c3', 40, 340, 500, 120, 'directive-annotation', 'Annotation & Directive for Agent',
-    'Agent: when the user edits the wireframe above, convert the UI changes into React components and render them live in the sandbox.')
-  const connectors: CanvasConnector[] = [
-    { id: 'conn-1', fromNodeId: 'node-c1', toNodeId: 'node-c2', fromAnchor: 'right', toAnchor: 'left', stroke: PALETTE.brand, strokeWidth: 2 },
-  ]
-  return { version: SCENE_VERSION, nodes: [c1, c2, c3], connectors, strokes: [] }
 }
 
 export function nodeById(scene: CanvasScene, id: string): CanvasNode | undefined {

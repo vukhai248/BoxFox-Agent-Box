@@ -170,6 +170,7 @@ class SessionStore:
                 turn INTEGER NOT NULL DEFAULT 0,
                 text TEXT NOT NULL,
                 state TEXT NOT NULL DEFAULT 'pending',
+                kind TEXT NOT NULL DEFAULT 'steer',
                 created REAL NOT NULL,
                 injected REAL);
             CREATE INDEX IF NOT EXISTS session_steers_pending ON session_steers(session_id, state, id);
@@ -295,6 +296,9 @@ class SessionStore:
         # Bộ đếm lượt của phiên (T2 đọc nó để mọi event mang `turn`). Cột thêm kiểu cộng thêm:
         # phiên cũ đọc ra `0` rồi lượt kế tiếp bắt đầu từ 1.
         self._add_missing_columns('sessions', {'turn_count': 'INTEGER NOT NULL DEFAULT 0'})
+        # P5 — nhãn hàng chờ: `/btw` vào cùng hàng đợi steer nhưng phải đọc ra được là CÂU HỎI PHỤ
+        # (khối bơm dùng tiền tố khác). Cột thêm kiểu cộng thêm: hàng cũ đọc ra `'steer'`.
+        self._add_missing_columns('session_steers', {'kind': "TEXT NOT NULL DEFAULT 'steer'"})
         self.db.execute("UPDATE sessions SET status='interrupted' WHERE status IN ('running','awaiting_decision')")
         self.db.commit()
 
@@ -1935,14 +1939,19 @@ class SessionStore:
     # ------------------------------------------------------------------
     # Chỉ thị giữa lượt (vòng 27 đợt 7, D-43) — hàng đợi của chủ nhà
 
-    def queue_steer(self, sid, text, turn=0):
-        """Xếp một chỉ thị giữa lượt. Trần `STEER_MAX_PENDING` do tầng gọi giữ, không phải bảng."""
+    def queue_steer(self, sid, text, turn=0, kind='steer'):
+        """Xếp một chỉ thị giữa lượt. Trần `STEER_MAX_PENDING` do tầng gọi giữ, không phải bảng.
+
+        `kind` là NHÃN hàng: `'steer'` (chỉ thị giữa lượt — tiền tố cũ) hay `'btw'` (câu hỏi phụ,
+        P5). Nhãn quyết định tiền tố của khối bơm; đường đi của hàng đợi không đổi.
+        """
         body = str(text or '').strip()
         if not body:
             raise ValueError('steer text must not be empty')
         with self.db:
-            cursor = self.db.execute('INSERT INTO session_steers(session_id,turn,text,state,created)'
-                                     ' VALUES(?,?,?,?,?)', (sid, int(turn or 0), body, 'pending', time.time()))
+            cursor = self.db.execute('INSERT INTO session_steers(session_id,turn,text,state,kind,created)'
+                                     ' VALUES(?,?,?,?,?,?)',
+                                     (sid, int(turn or 0), body, 'pending', str(kind or 'steer'), time.time()))
         return self.steer(cursor.lastrowid)
 
     def steer(self, steer_id):
@@ -1955,6 +1964,20 @@ class SessionStore:
         row = self.db.execute("SELECT COUNT(*) AS total FROM session_steers WHERE session_id=? AND state='pending'",
                               (sid,)).fetchone()
         return int((row['total'] if row else 0) or 0)
+
+    def pending_steers(self, sid, kind=None):
+        """Các hàng còn chờ bơm, lọc theo `kind` khi cần (`'btw'` cho câu hỏi phụ).
+
+        `pending_steer_count` chỉ đếm; đường đóng lượt cần ĐỌC hàng còn chờ để nói ra vì sao
+        câu hỏi phụ chưa được trả lời (P5, vòng kiểm thử vòng 3).
+        """
+        query = "SELECT * FROM session_steers WHERE session_id=? AND state='pending'"
+        params = [sid]
+        if kind is not None:
+            query += ' AND kind=?'
+            params.append(str(kind))
+        rows = self.db.execute(query + ' ORDER BY id', tuple(params)).fetchall()
+        return [dict(row) for row in rows]
 
     def claim_steers(self, sid, limit=3):
         """Giành các chỉ thị `pending` để bơm vào transcript — **một lần**, y như `claim_deliveries`.

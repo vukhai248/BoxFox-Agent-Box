@@ -38,7 +38,10 @@ beforeEach(() => {
     runs: [],
     activeRunId: DESIGN_ID,
     scenes: {},
+    sceneSeq: {},
     sceneActor: {},
+    lastOps: {},
+    playedOpsSeq: {},
     sceneVersion: 0,
     prompts: [],
     rejectedOps: 0,
@@ -87,6 +90,21 @@ describe('designStore — canvas slice (P2)', () => {
   it('records the actor of the last canvas event per run', () => {
     useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1, 'user'))
     expect(useDesignStore.getState().sceneActor[DESIGN_ID]).toBe('user')
+  })
+
+  it('lô op của sự kiện mang CẢNH NGUỒN (cảnh trước khi reduce), không phải cảnh sau khi áp', () => {
+    // Canvas mở SAU khi lô op đã vào store: cảnh đang giữ đã là cảnh cuối, nên tầng phát lại phải
+    // đọc `from` để biết nét vẽ bắt đầu từ đâu (không có nó thì hoạt hình không dựng được).
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1))
+    const batch = useDesignStore.getState().lastOps[DESIGN_ID]
+    expect(batch.from?.nodes ?? []).toHaveLength(0)
+    expect(batch.ops).toHaveLength(1)
+
+    // Lô thứ hai: cảnh nguồn là cảnh SAU lô thứ nhất (một node), không phải cảnh cuối (hai node).
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n2') }], 2))
+    const second = useDesignStore.getState().lastOps[DESIGN_ID]
+    expect(second.from?.nodes.map((item) => item.id)).toEqual(['n1'])
+    expect(second.ops.map((op) => (op.type === 'CREATE_NODE' ? op.node.id : ''))).toEqual(['n2'])
   })
 
   it('sự kiện actor `user` mang `scene`: giữ node chủ nhà, op agent sau đó KHÔNG bị chối oan', () => {
@@ -272,5 +290,82 @@ describe('designStore — thẻ thoát chỉ sống khi chế độ BẬT (BUG-B
     stubRunsWithExit()
     useDesignStore.getState().sync('s-store', { designMode: { on: false } }, [])
     expect(useDesignStore.getState().exitChoice).toBeNull()
+  })
+})
+
+describe('designStore — cảnh canvas có HAI nguồn (P1 v3)', () => {
+  /** Tuyến chi tiết trả cảnh + `canvasSeq` — nguồn dựng lại canvas sau khi tải lại trang. */
+  function stubRunDetail(payload: Record<string, unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ job: payload }) }) as unknown as Response),
+    )
+  }
+
+  it('sự kiện phát LẠI (sceneVersion đã có trong cảnh đang giữ) bị bỏ qua, không đếm là op bị chối', () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 2))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+
+    // Cùng một sự kiện quay lại sau khi cảnh đã bao gồm nó: KHÔNG áp lần hai (CREATE_NODE trùng id sẽ
+    // bị reducer từ chối và badge "N op bị bỏ" nói dối).
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 2))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes).toHaveLength(1)
+  })
+
+  it('lô op nhận từ payload mang `from` của cảnh đang giữ TRƯỚC khi nhận', async () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1))
+    stubRunDetail({
+      designId: DESIGN_ID, status: 'designing', phase: 'drawing', canvasSeq: 2,
+      canvasScene: { version: 1, nodes: [node('n1'), node('n2')], connectors: [], strokes: [] },
+    })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+    const adopted = useDesignStore.getState().lastOps[DESIGN_ID]
+    expect(adopted.seq).toBe(2)
+    expect(adopted.ops.map((op) => (op.type === 'CREATE_NODE' ? op.node.id : ''))).toEqual(['n2'])
+    expect(adopted.from?.nodes.map((item) => item.id)).toEqual(['n1'])
+  })
+
+  it('tuyến chi tiết mang cảnh ⇒ nhận vào store kèm `canvasSeq` (tải lại trang vẫn thấy canvas)', async () => {
+    stubRunDetail({
+      designId: DESIGN_ID, status: 'designing', phase: 'drawing', canvasSeq: 4,
+      canvasScene: { version: 1, nodes: [node('seed-1'), node('seed-2')], connectors: [], strokes: [] },
+    })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['seed-1', 'seed-2'])
+    expect(useDesignStore.getState().sceneSeq[DESIGN_ID]).toBe(4)
+    // Vòng kiểm thử bắt được: cảnh nhận từ payload phải mang theo NGƯỜI VẼ và LÔ OP, nếu không thì
+    // sự kiện `design_canvas` cùng số thứ tự tới sau bị chặn là mất trắng (không chip, không vẽ dần).
+    expect(useDesignStore.getState().sceneActor[DESIGN_ID]).toBe('agent')
+    const adopted = useDesignStore.getState().lastOps[DESIGN_ID]
+    expect(adopted.actor).toBe('agent')
+    expect(adopted.seq).toBe(4)
+    expect(adopted.ops.map((op) => (op.type === 'CREATE_NODE' ? op.node.id : ''))).toEqual(['seed-1', 'seed-2'])
+
+    // Sự kiện phát lại của ĐÚNG cảnh ấy (sceneVersion 4) không được áp lên trên.
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('seed-1') }], 4))
+    expect(useDesignStore.getState().rejectedOps).toBe(0)
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes).toHaveLength(2)
+  })
+
+  it('cảnh dựng từ sự kiện MỚI HƠN payload ⇒ vòng fetch cũ không ghi đè ngược', async () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('agent-1') }], 9))
+    stubRunDetail({
+      designId: DESIGN_ID, status: 'designing', phase: 'drawing', canvasSeq: 3,
+      canvasScene: { version: 1, nodes: [node('seed-1')], connectors: [], strokes: [] },
+    })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['agent-1'])
+    expect(useDesignStore.getState().sceneSeq[DESIGN_ID]).toBe(9)
+  })
+
+  it('payload không có cảnh (tuyến danh sách) ⇒ không đụng vào cảnh đang giữ', async () => {
+    useDesignStore.getState().applyEvent(canvasEvent([{ type: 'CREATE_NODE', node: node('n1') }], 1))
+    stubRunDetail({ designId: DESIGN_ID, status: 'designing', phase: 'drawing' })
+    await useDesignStore.getState().refreshDetail(DESIGN_ID)
+
+    expect(selectScene(DESIGN_ID)(useDesignStore.getState()).nodes.map((item) => item.id)).toEqual(['n1'])
   })
 })
