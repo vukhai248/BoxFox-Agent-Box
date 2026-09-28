@@ -122,18 +122,17 @@ describe('AttachmentPicker — A1: popover không bị cắt (BUG-39)', () => {
     expect(panel!.className).toContain('fixed')
   })
 
-  it('bốn mục menu đều có mặt và bấm được (không mục nào nằm ngoài panel)', () => {
+  it('các mục menu đều có mặt và bấm được (không mục nào nằm ngoài panel)', () => {
     const onAttach = vi.fn()
     const host = renderClipped(<AttachmentPicker onAttach={onAttach} />)
     click(triggerButton(host))
 
     const items = menuItems()
-    expect(items).toHaveLength(4)
-    const labels = items.map((item) => item.textContent ?? '')
-    expect(labels[0]).toContain('Tải lên hình ảnh')
-    expect(labels[1]).toContain('Tải lên tệp tin')
-    expect(labels[2]).toContain('Tải lên thư mục')
-    expect(labels[3]).toContain('Google Drive')
+    expect(items.length).toBeGreaterThanOrEqual(4)
+    const text = menu()?.textContent ?? ''
+    expect(text).toContain('Files & folders')
+    expect(text).toContain('Repositories')
+    expect(text).toContain('Google Drive')
     for (const item of items) {
       // Mỗi mục phải là con của panel đang nằm trên body — tức là điểm bấm rơi
       // vào panel, không rơi vào khung chat như BUG-39.
@@ -172,6 +171,36 @@ describe('AttachmentPicker — A1: popover không bị cắt (BUG-39)', () => {
     mousedownOn(trigger)
     click(trigger)
     expect(menu()).toBeNull()
+  })
+
+  it('khi nằm trong chat-input-bar, menu lấy đúng bề rộng width và left của thanh chat', () => {
+    const host = document.createElement('div')
+    const chatBar = document.createElement('div')
+    chatBar.setAttribute('data-testid', 'chat-input-bar')
+    chatBar.getBoundingClientRect = () => ({
+      left: 200,
+      top: 500,
+      width: 600,
+      height: 100,
+      right: 800,
+      bottom: 600,
+      x: 200,
+      y: 500,
+      toJSON: () => {},
+    })
+    document.body.append(host)
+    host.append(chatBar)
+    const root = createRoot(chatBar)
+    roots.push(root)
+    act(() => {
+      root.render(<AttachmentPicker onAttach={vi.fn()} />)
+    })
+
+    click(triggerButton(host))
+    const panel = menu()
+    expect(panel).not.toBeNull()
+    expect(panel!.style.width).toBe('600px')
+    expect(panel!.style.left).toBe('200px')
   })
 })
 
@@ -230,7 +259,7 @@ describe('AttachmentPicker — A2: giữ File thật + trần phía client', () 
     const onAttach = vi.fn()
     const host = renderClipped(<AttachmentPicker onAttach={onAttach} />)
     click(triggerButton(host))
-    click(menuItems()[1]) // đóng menu như người dùng thật
+    click(host.ownerDocument.querySelector('[data-testid="attach-files-item"]') as HTMLButtonElement) // đóng menu như người dùng thật
     expect(menu()).toBeNull()
 
     const big = new File([new Uint8Array(26 * 1024 * 1024)], 'big.bin')
@@ -306,10 +335,71 @@ describe('AttachmentPicker — E5: chân bảng nói rõ luật gửi tệp', ()
     const host = renderClipped(<AttachmentPicker onAttach={vi.fn()} />)
     click(triggerButton(host))
 
-    // Vẫn đúng bốn mục bấm được như trước, Drive vẫn khoá và vẫn nói thật.
-    expect(menuItems()).toHaveLength(4)
     const drive = menu()?.querySelector('[data-testid="attach-drive-item"]')
     expect(drive?.getAttribute('aria-disabled')).toBe('true')
     expect(drive?.textContent ?? '').toContain('Chưa kết nối')
   })
 })
+
+describe('AttachmentPicker — Action Palette & Repositories View', () => {
+  it('bấm Repositories chuyển sang màn hình tìm kiếm repo và có nút Back quay lại', () => {
+    const host = renderClipped(<AttachmentPicker onAttach={vi.fn()} />)
+    click(triggerButton(host))
+
+    const repoItem = host.ownerDocument.querySelector('[data-testid="attach-repo-item"]') as HTMLButtonElement
+    expect(repoItem).toBeTruthy()
+    click(repoItem)
+
+    // View chuyển sang RepoPickerView: có ô input tìm kiếm và nút Back
+    const searchInput = host.ownerDocument.querySelector('input[placeholder="Search repositories..."]')
+    expect(searchInput).toBeTruthy()
+
+    // Bấm Back quay lại menu chính
+    const backBtn = host.ownerDocument.querySelector('[data-testid="repo-back-btn"]') as HTMLButtonElement
+    expect(backBtn).toBeTruthy()
+    click(backBtn)
+    expect(host.ownerDocument.querySelector('[data-testid="attach-files-item"]')).toBeTruthy()
+  })
+
+  it('bấm các nút mode kích hoạt callback tương ứng và đóng menu', () => {
+    const onToggleAutopilot = vi.fn()
+    const onSelectPlan = vi.fn()
+    const onToggleResearch = vi.fn()
+    const onToggleDesign = vi.fn()
+
+    const host = renderClipped(
+      <AttachmentPicker
+        onAttach={vi.fn()}
+        onToggleAutopilot={onToggleAutopilot}
+        onSelectPlan={onSelectPlan}
+        onToggleResearch={onToggleResearch}
+        onToggleDesign={onToggleDesign}
+      />,
+    )
+
+    // Test Autopilot click
+    click(triggerButton(host))
+    click(host.ownerDocument.querySelector('[data-testid="attach-autopilot-item"]'))
+    expect(onToggleAutopilot).toHaveBeenCalledTimes(1)
+    expect(menu()).toBeNull()
+
+    // Test Plan click
+    click(triggerButton(host))
+    click(host.ownerDocument.querySelector('[data-testid="attach-plan-item"]'))
+    expect(onSelectPlan).toHaveBeenCalledTimes(1)
+    expect(menu()).toBeNull()
+
+    // Test Research click
+    click(triggerButton(host))
+    click(host.ownerDocument.querySelector('[data-testid="attach-research-item"]'))
+    expect(onToggleResearch).toHaveBeenCalledTimes(1)
+    expect(menu()).toBeNull()
+
+    // Test Design click
+    click(triggerButton(host))
+    click(host.ownerDocument.querySelector('[data-testid="attach-design-item"]'))
+    expect(onToggleDesign).toHaveBeenCalledTimes(1)
+    expect(menu()).toBeNull()
+  })
+})
+

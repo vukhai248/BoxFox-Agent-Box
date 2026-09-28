@@ -62,16 +62,12 @@ function render(): void {
 }
 
 /**
- * Ba chỗ phải mang lớp đo: thân cuộn, hộp trong của khu soạn tin (`chat-input-bar`),
- * và hàng `@container` của thanh ngữ cảnh (`context-usage-row` — lớp đo nằm trên
- * chính hàng đó, không phải trên khung `border-b` ngoài, để container query không
- * đổi thứ tự).
+ * Các chỗ trong ChatPanel phải mang lớp đo: thân cuộn và hộp trong của khu soạn tin (`chat-input-bar`).
  */
 function measuredNodes(): (Element | null)[] {
   return [
     host.querySelector('[data-testid="chat-reading-column"]'),
     host.querySelector('[data-testid="chat-input-bar"]'),
-    host.querySelector('[data-testid="context-usage-row"]'),
   ]
 }
 

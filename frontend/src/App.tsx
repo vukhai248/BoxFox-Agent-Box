@@ -14,7 +14,6 @@ import {
   ScrollText,
   GitPullRequest,
   ShieldAlert,
-  ArrowLeft,
   X,
   Plus,
   ChevronDown,
@@ -51,7 +50,7 @@ import { SettingsModal } from './components/settings/SettingsModal'
 import { CompletionEmailNotice } from './components/CompletionEmailNotice'
 import { SearchSessionsModal } from './components/shell/SearchSessionsModal'
 import { useCompletionEmail } from './hooks/useCompletionEmail'
-import { formatTokenCount } from './components/panels/ContextUsageBar'
+import { ContextUsageBar, formatTokenCount } from './components/panels/ContextUsageBar'
 import { formatClock } from './components/panels/research/format'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
@@ -438,9 +437,9 @@ export default function App() {
 }
 
 export function TopBar({
-  title,
-  mode,
-  taskEpoch,
+  title: _title,
+  mode: _mode,
+  taskEpoch: _taskEpoch,
   budget,
   elapsedSeconds,
   context,
@@ -502,29 +501,13 @@ export function TopBar({
 
   return (
     <div className="flex h-10 shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 select-none">
-      {/* Left: Session Title & Badges */}
-      <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
-          title="Back"
-        >
-          <ArrowLeft className="size-3" />
-        </button>
-        <span className="size-1.5 rounded-full bg-emerald-400" />
-        <h1 className="text-xs font-semibold text-fg">{title}</h1>
-        <span
-          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${mode === 'ACT'
-              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-              : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-            }`}
-        >
-          {mode}
-        </span>
-        <span className="text-[11px] font-mono text-muted">epoch #{taskEpoch}</span>
+      {/* Left: Context Window & Usage Controls */}
+      <div className="flex min-w-0 items-center gap-3">
+        <ContextUsageBar variant="topbar" />
         <span
           data-testid="topbar-budget"
-          className="hidden text-[11px] font-mono text-muted lg:inline"
+          className="hidden"
+          aria-hidden="true"
         >
           {budget.costUsd > 0
             ? t(

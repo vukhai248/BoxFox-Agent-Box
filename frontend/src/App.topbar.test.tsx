@@ -70,4 +70,27 @@ describe('thanh trên: token + thời gian, USD chỉ khi route có giá', () =>
     const withoutCap = budgetLine({ steps: 12, tokens: 38_200, costUsd: 0.62, capUsd: 0 }, 45)
     expect(withoutCap).toBe('38.2k tokens · 00:45 · $0.62')
   })
+
+  it('thanh trên: hiển thị ContextUsageBar và không còn chữ New Session mock', () => {
+    const host = render(
+      <TopBar
+        title="New Session"
+        mode="PLAN"
+        taskEpoch={1}
+        budget={{ steps: 0, tokens: 0, costUsd: 0, capUsd: 0 }}
+        elapsedSeconds={0}
+        context={{ integrity_floor: 'khong_tin_duoc', confidentiality_ceiling: 'cong_khai' }}
+        workspaceHidden={false}
+        workspaceToggleDisabled={false}
+        hiddenIntentCount={0}
+        queuedViewLabel=""
+        onToggleWorkspace={() => {}}
+      />,
+    )
+    expect(host.querySelector('[data-testid="context-usage-bar"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="context-usage-row"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="context-usage-compact"]')).not.toBeNull()
+    expect(host.querySelector('h1')).toBeNull()
+    expect(host.textContent).not.toContain('New Session')
+  })
 })

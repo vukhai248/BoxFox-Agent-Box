@@ -248,7 +248,11 @@ export function formatTokenCount(tokens: number): string {
   return `${(tokens / 1000).toFixed(tokens >= 100_000 ? 0 : 1)}k`
 }
 
-export function ContextUsageBar() {
+export interface ContextUsageBarProps {
+  variant?: 'topbar' | 'panel'
+}
+
+export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}) {
   const t = useT()
   const activeSessionId = useAgentStore((s) => s.activeSessionId)
   const harnessRun = useHarnessChatStore((s) => s.sessions[activeSessionId])
@@ -427,41 +431,46 @@ export function ContextUsageBar() {
   const showMangaBubble = percent !== null && percent >= 75 && !dismissed
 
   return (
-    <div className="relative border-b border-line bg-panel px-4 py-2 select-none">
-      {/* Top Header Bar — `@container` đặt trên chính hàng này (NEW-1): biến thể
-          đầy đủ/condensed phải chuyển theo bề rộng khung chat chứa nó, không
-          theo viewport. Media query `sm:` cũ đọc bề rộng cửa sổ nên ở viewport
-          900px (khung chat chỉ ~384px) thanh vẫn bày bản đầy đủ và nút Compact
-          bị `overflow-hidden` cắt cụt. Container query KHÔNG đặt trên wrapper
-          ngoài vì `container-type` sinh layout containment — nó sẽ biến wrapper
-          thành containing block của modal `fixed inset-0` bên dưới. */}
+    <div
+      data-testid="context-usage-bar"
+      className={
+        variant === 'topbar'
+          ? 'relative flex items-center min-w-0 select-none'
+          : 'relative border-b border-line bg-panel px-4 py-2 select-none'
+      }
+    >
       <div
         data-testid="context-usage-row"
-        className={`flex @container items-center justify-between gap-3 overflow-hidden whitespace-nowrap ${readingColumnClass(workspaceHidden)}`}
+        className={
+          variant === 'topbar'
+            ? 'flex items-center gap-2.5 sm:gap-3.5 overflow-hidden whitespace-nowrap min-w-0'
+            : `flex @container items-center justify-between gap-3 overflow-hidden whitespace-nowrap ${readingColumnClass(workspaceHidden)}`
+        }
       >
         {/* Left: Context Window Title & Expand Toggle */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setInspectorModalOpen(true)}
-            className="group flex items-center gap-1.5 text-xs font-bold text-fg hover:text-brand transition cursor-pointer"
+            className="group flex items-center gap-1.5 text-xs font-semibold text-fg hover:text-brand transition cursor-pointer select-none"
             title="Click to open full Context Breakdown & Chunk Inspector modal"
           >
             <Zap className="size-3.5 text-amber-500 fill-amber-500/20" />
-            <span>{t('contextUsage.title')}</span>
+            <span className="font-semibold">{t('contextUsage.title')}</span>
             <Maximize2 className="size-3 text-muted group-hover:text-brand transition ml-0.5" />
           </button>
         </div>
 
-        {/* Center: Progress Bar — ẩn khi khung chat hẹp để nhường chỗ cho số
-            token và nút Compact; `@lg` = container (hàng) ≥ 512px, đo được là
-            ngưỡng an toàn cho bản đầy đủ (cố định ~383px + thanh tiến trình
-            tối thiểu 40px + gap). */}
+        {/* Center: Progress Bar */}
         <div
           data-testid="context-usage-progress"
-          className="hidden flex-1 min-w-[40px] max-w-xs items-center gap-2 @lg:flex"
+          className={
+            variant === 'topbar'
+              ? 'hidden sm:flex items-center w-24 md:w-36 lg:w-44 h-1.5 overflow-hidden rounded-full bg-panel2 border border-line'
+              : 'hidden flex-1 min-w-[40px] max-w-xs items-center gap-2 @lg:flex'
+          }
         >
-          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-panel2 border border-line">
+          <div className={variant === 'topbar' ? 'relative h-full w-full overflow-hidden' : 'relative h-1.5 w-full overflow-hidden rounded-full bg-panel2 border border-line'}>
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 percent === null
@@ -477,10 +486,7 @@ export function ContextUsageBar() {
           </div>
         </div>
 
-        {/* Right: Token count & Actions — nhóm này được phép CO LẠI (`min-w-0`)
-            thay vì đẩy tràn ra ngoài; bên trong, nhãn mới là nút thắt co giãn
-            còn nút Compact giữ nguyên kích thước (`shrink-0`), nên nút không bao
-            giờ bị cắt/truncate ở bất kỳ bề rộng khung nào. */}
+        {/* Right: Token count & Actions */}
         <div data-testid="context-usage-actions" className="flex min-w-0 items-center gap-2">
           <span
             data-testid="context-usage-label"
@@ -492,9 +498,9 @@ export function ContextUsageBar() {
             <span>{limitLabel}</span>
             {percent !== null && <> ({percent}%)</>}
             {contextWindow.estimated ? (
-              // Khung hẹp: nhãn ước lượng bị ẩn để số token + nút Compact còn chỗ;
-              // thông tin "ước lượng" vẫn còn ở `title` và ở màu hổ phách.
-              <span className="ml-1 hidden text-amber-500/90 @lg:inline">{t('contextUsage.estimated')}</span>
+              <span className={variant === 'topbar' ? 'ml-1 hidden xl:inline text-amber-500/90' : 'ml-1 hidden text-amber-500/90 @lg:inline'}>
+                {t('contextUsage.estimated')}
+              </span>
             ) : null}
           </span>
 
@@ -502,24 +508,37 @@ export function ContextUsageBar() {
             type="button"
             onClick={handleCompactAll}
             data-testid="context-usage-compact"
-            className={`shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
-              compactedSuccess
-                ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
-                : percent !== null && percent >= 75
-                  ? 'border border-brand/50 bg-brand/10 text-fg hover:bg-brand/20 shadow-xs'
-                  : 'border border-line bg-panel2 text-muted hover:text-fg hover:bg-panel'
-            }`}
+            className={
+              variant === 'topbar'
+                ? `shrink-0 flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition cursor-pointer ${
+                    compactedSuccess
+                      ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                      : percent !== null && percent >= 75
+                        ? 'border border-brand/50 bg-brand/10 text-fg hover:bg-brand/20 shadow-xs'
+                        : 'border border-line bg-panel2/60 text-muted hover:text-fg hover:bg-panel2'
+                  }`
+                : `shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                    compactedSuccess
+                      ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                      : percent !== null && percent >= 75
+                        ? 'border border-brand/50 bg-brand/10 text-fg hover:bg-brand/20 shadow-xs'
+                        : 'border border-line bg-panel2 text-muted hover:text-fg hover:bg-panel'
+                  }`
+            }
           >
             {compactedSuccess ? (
               <>
                 <Check className="size-3 text-emerald-500" />
-                <span className="hidden @lg:inline">{t('contextUsage.compacted')}</span>
+                <span className={variant === 'topbar' ? 'hidden sm:inline' : 'hidden @lg:inline'}>
+                  {t('contextUsage.compacted')}
+                </span>
               </>
             ) : (
               <>
                 <Sparkles className="size-3 text-brand" />
-                {/* Khung hẹp: chỉ còn biểu tượng, nhờ vậy nút vẫn nằm trong tầm bấm. */}
-                <span className="hidden @lg:inline">{t('contextUsage.compact')}</span>
+                <span className={variant === 'topbar' ? 'hidden sm:inline' : 'hidden @lg:inline'}>
+                  {t('contextUsage.compact')}
+                </span>
               </>
             )}
           </button>

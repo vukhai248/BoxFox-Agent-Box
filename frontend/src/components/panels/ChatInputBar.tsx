@@ -20,7 +20,6 @@ import { useComposerStore } from '../../store/composerStore'
 import { useT } from '../../i18n/context'
 import { useCompactComposer } from '../../hooks/useCompactComposer'
 import { HarnessModelPicker, type RouterSingleModel } from '../chat/HarnessModelPicker'
-import { RepoPicker } from '../chat/RepoPicker'
 import {
   AttachmentPicker,
   formatAttachmentSize,
@@ -143,6 +142,12 @@ export function ChatInputBar({
   const designOn = useDesignStore((s) => s.mode.on)
   const slash = useSlashCompletion(input, setInput, { modeOnly: researchOn || designOn })
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
+  const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([])
+  const toggleRepo = (id: string) => {
+    setSelectedRepoIds((prev) =>
+      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id],
+    )
+  }
   const [uploading, setUploading] = useState(false)
   const [attachError, setAttachError] = useState<string | null>(null)
   /**
@@ -580,11 +585,28 @@ export function ChatInputBar({
             overflow-hidden), nhóm phải giữ nguyên kích thước (shrink-0). */}
         <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-line/40">
           <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            {/* Attachment Button [+] with Popover */}
-            <AttachmentPicker onAttach={(file) => setAttachments((prev) => [...prev, file])} />
-
-            {/* Repo Selector Popover */}
-            <RepoPicker />
+            {/* Attachment & Action Palette Button [+] with Popover */}
+            <AttachmentPicker
+              onAttach={(file) => setAttachments((prev) => [...prev, file])}
+              onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+              autopilotEnabled={autopilotEnabled}
+              onSelectPlan={() => {
+                setInput('/plan ')
+                textareaRef.current?.focus()
+              }}
+              onToggleResearch={() => {
+                const s = useResearchStore.getState()
+                void s.setMode(!s.mode.on, 'toggle')
+              }}
+              researchEnabled={researchOn}
+              onToggleDesign={() => {
+                const s = useDesignStore.getState()
+                void s.setMode(!s.mode.on, 'toggle')
+              }}
+              designEnabled={designOn}
+              selectedRepoIds={selectedRepoIds}
+              onToggleRepo={toggleRepo}
+            />
 
             {/* Shortcuts Popover [ ⌨ ] */}
             <ShortcutsPopover variant="toolbar" />

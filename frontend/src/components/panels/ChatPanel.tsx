@@ -41,7 +41,6 @@ import { useT } from '../../i18n/context'
 import { LabelDot } from '../LabelDot'
 import { ChatInputBar, type RouterComposerAdapter } from './ChatInputBar'
 import type { OutgoingAttachment } from '../../lib/chat/attachmentUpload'
-import { ContextUsageBar } from './ContextUsageBar'
 import { MediaLightboxModal, type LightboxMediaProps } from '../chat/MediaLightboxModal'
 import { Video, Play, BrainCircuit } from 'lucide-react'
 
@@ -558,9 +557,6 @@ export function ChatPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-bg">
-      {/* Top Context Usage Bar */}
-      <ContextUsageBar />
-
       {/* Scrollable conversation stream (+ nút nhảy xuống cuối ở đáy khung) */}
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div

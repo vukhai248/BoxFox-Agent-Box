@@ -23,6 +23,7 @@ import {
   Check,
   ChevronDown,
   X,
+  ArrowLeft,
 } from 'lucide-react'
 
 export interface RepoItem {
@@ -40,7 +41,6 @@ const PANEL_HEIGHT = 320
 
 export function RepoPicker() {
   const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([])
   const [panelPosition, setPanelPosition] = useState<{ left: number; bottom: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -99,21 +99,6 @@ export function RepoPicker() {
     )
   }
 
-  const filteredRepos = useMemo(() => {
-    if (!search.trim()) return INITIAL_REPOS
-    const q = search.toLowerCase()
-    return INITIAL_REPOS.filter((r) => r.fullName.toLowerCase().includes(q))
-  }, [search])
-
-  const configuredRepos = useMemo(
-    () => filteredRepos.filter((r) => r.configured),
-    [filteredRepos],
-  )
-  const unconfiguredRepos = useMemo(
-    () => filteredRepos.filter((r) => !r.configured),
-    [filteredRepos],
-  )
-
   const selectedCount = selectedRepoIds.length
 
   return (
@@ -145,129 +130,171 @@ export function RepoPicker() {
           className="fixed z-50 w-80 sm:w-96 rounded-2xl border border-line bg-panel p-3 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none"
           style={{ left: panelPosition.left, bottom: panelPosition.bottom }}
         >
-          {/* Header Search Bar */}
-          <div className="relative mb-2.5">
-            <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
-            <input
-              type="text"
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search repositories..."
-              className="w-full rounded-xl border border-line bg-panel2 pl-8 pr-7 py-1.5 text-xs text-fg placeholder:text-muted/60 outline-hidden focus:border-brand focus:ring-1 focus:ring-brand/30 transition font-sans select-text"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg transition p-0.5 cursor-pointer"
-              >
-                <X className="size-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Repository Lists */}
-          <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
-            {/* Group 1: Configured */}
-            {configuredRepos.length > 0 && (
-              <div className="space-y-1">
-                <span className="text-[11px] font-semibold text-muted px-2">Configured</span>
-                <div className="space-y-0.5 pt-0.5">
-                  {configuredRepos.map((repo) => {
-                    const isSelected = selectedRepoIds.includes(repo.id)
-                    return (
-                      <button
-                        key={repo.id}
-                        type="button"
-                        onClick={() => toggleRepo(repo.id)}
-                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-panel2 text-fg font-medium'
-                            : 'text-muted hover:bg-panel2/60 hover:text-fg'
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <div
-                          className={`flex size-4 shrink-0 items-center justify-center rounded border transition ${
-                            isSelected
-                              ? 'border-brand bg-brand text-brandfg'
-                              : 'border-line bg-panel'
-                          }`}
-                        >
-                          {isSelected && <Check className="size-3 stroke-[3]" />}
-                        </div>
-
-                        {/* GitFork Icon */}
-                        <GitFork className={`size-3.5 shrink-0 ${isSelected ? 'text-brand' : 'text-muted'}`} />
-
-                        {/* Repo Full Name */}
-                        <span className="truncate font-mono text-[11px] text-fg">{repo.fullName}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Group 2: Not set up */}
-            {unconfiguredRepos.length > 0 && (
-              <div className="space-y-1 pt-1 border-t border-line/50">
-                <span className="text-[11px] font-semibold text-muted px-2">Not set up</span>
-                <div className="space-y-0.5 pt-0.5">
-                  {unconfiguredRepos.map((repo) => {
-                    const isSelected = selectedRepoIds.includes(repo.id)
-                    return (
-                      <button
-                        key={repo.id}
-                        type="button"
-                        onClick={() => toggleRepo(repo.id)}
-                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-panel2 text-fg font-medium'
-                            : 'text-muted hover:bg-panel2/60 hover:text-fg'
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <div
-                          className={`flex size-4 shrink-0 items-center justify-center rounded border transition ${
-                            isSelected
-                              ? 'border-brand bg-brand text-brandfg'
-                              : 'border-line bg-panel'
-                          }`}
-                        >
-                          {isSelected && <Check className="size-3 stroke-[3]" />}
-                        </div>
-
-                        {/* GitFork Icon */}
-                        <GitFork className={`size-3.5 shrink-0 ${isSelected ? 'text-brand' : 'text-muted'}`} />
-
-                        {/* Repo Full Name */}
-                        <span className="truncate font-mono text-[11px] text-fg">{repo.fullName}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {filteredRepos.length === 0 && (
-              <div className="py-8 text-center text-xs text-muted space-y-1">
-                <GitFork className="size-6 text-muted/40 mx-auto mb-1" />
-                <p className="font-semibold text-fg">
-                  {search ? 'No repositories found' : 'No repositories connected'}
-                </p>
-                <p className="text-[11px] text-muted">
-                  {search
-                    ? `No matches for "${search}"`
-                    : 'Connect GitHub or VCS to bind repositories to this session.'}
-                </p>
-              </div>
-            )}
-          </div>
+          <RepoPickerView
+            selectedRepoIds={selectedRepoIds}
+            onToggleRepo={toggleRepo}
+          />
         </div>,
         document.body,
       )}
+    </div>
+  )
+}
+
+export function RepoPickerView({
+  selectedRepoIds,
+  onToggleRepo,
+  onBack,
+}: {
+  selectedRepoIds: string[]
+  onToggleRepo: (id: string) => void
+  onBack?: () => void
+}) {
+  const [search, setSearch] = useState('')
+
+  const filteredRepos = useMemo(() => {
+    if (!search.trim()) return INITIAL_REPOS
+    const q = search.toLowerCase()
+    return INITIAL_REPOS.filter((r) => r.fullName.toLowerCase().includes(q))
+  }, [search])
+
+  const configuredRepos = useMemo(
+    () => filteredRepos.filter((r) => r.configured),
+    [filteredRepos],
+  )
+  const unconfiguredRepos = useMemo(
+    () => filteredRepos.filter((r) => !r.configured),
+    [filteredRepos],
+  )
+
+  return (
+    <div className="space-y-2 select-none">
+      {/* Top Header with Back button if onBack is provided */}
+      {onBack && (
+        <div className="flex items-center gap-2 px-1 pb-1.5 border-b border-line/60">
+          <button
+            type="button"
+            data-testid="repo-back-btn"
+            onClick={onBack}
+            className="flex items-center gap-1 text-xs text-muted hover:text-fg transition rounded-md px-1.5 py-0.5 hover:bg-panel2 cursor-pointer"
+          >
+            <ArrowLeft className="size-3.5" />
+            <span>Back</span>
+          </button>
+          <span className="text-xs font-semibold text-fg">Select Repositories</span>
+        </div>
+      )}
+
+      {/* Header Search Bar */}
+      <div className="relative mb-2">
+        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+        <input
+          type="text"
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search repositories..."
+          className="w-full rounded-xl border border-line bg-panel2 pl-8 pr-7 py-1.5 text-xs text-fg placeholder:text-muted/60 outline-hidden focus:border-brand focus:ring-1 focus:ring-brand/30 transition font-sans select-text"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg transition p-0.5 cursor-pointer"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+      </div>
+
+      {/* Repository Lists */}
+      <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+        {/* Group 1: Configured */}
+        {configuredRepos.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider px-2">Configured</span>
+            <div className="space-y-0.5 pt-0.5">
+              {configuredRepos.map((repo) => {
+                const isSelected = selectedRepoIds.includes(repo.id)
+                return (
+                  <button
+                    key={repo.id}
+                    type="button"
+                    onClick={() => onToggleRepo(repo.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-panel2 text-fg font-medium'
+                        : 'text-muted hover:bg-panel2/60 hover:text-fg'
+                    }`}
+                  >
+                    <div
+                      className={`flex size-4 shrink-0 items-center justify-center rounded border transition ${
+                        isSelected
+                          ? 'border-brand bg-brand text-brandfg'
+                          : 'border-line bg-panel'
+                      }`}
+                    >
+                      {isSelected && <Check className="size-3 stroke-[3]" />}
+                    </div>
+                    <GitFork className={`size-3.5 shrink-0 ${isSelected ? 'text-brand' : 'text-muted'}`} />
+                    <span className="truncate font-mono text-[11px] text-fg">{repo.fullName}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Group 2: Not set up */}
+        {unconfiguredRepos.length > 0 && (
+          <div className="space-y-1 pt-1 border-t border-line/50">
+            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider px-2">Not set up</span>
+            <div className="space-y-0.5 pt-0.5">
+              {unconfiguredRepos.map((repo) => {
+                const isSelected = selectedRepoIds.includes(repo.id)
+                return (
+                  <button
+                    key={repo.id}
+                    type="button"
+                    onClick={() => onToggleRepo(repo.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-panel2 text-fg font-medium'
+                        : 'text-muted hover:bg-panel2/60 hover:text-fg'
+                    }`}
+                  >
+                    <div
+                      className={`flex size-4 shrink-0 items-center justify-center rounded border transition ${
+                        isSelected
+                          ? 'border-brand bg-brand text-brandfg'
+                          : 'border-line bg-panel'
+                      }`}
+                    >
+                      {isSelected && <Check className="size-3 stroke-[3]" />}
+                    </div>
+                    <GitFork className={`size-3.5 shrink-0 ${isSelected ? 'text-brand' : 'text-muted'}`} />
+                    <span className="truncate font-mono text-[11px] text-fg">{repo.fullName}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {filteredRepos.length === 0 && (
+          <div className="py-6 text-center text-xs text-muted space-y-1">
+            <GitFork className="size-5 text-muted/40 mx-auto mb-1" />
+            <p className="font-semibold text-fg">
+              {search ? 'No repositories found' : 'No repositories connected'}
+            </p>
+            <p className="text-[11px] text-muted">
+              {search
+                ? `No matches for "${search}"`
+                : 'Connect GitHub or VCS to bind repositories to this session.'}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

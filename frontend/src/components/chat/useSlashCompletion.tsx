@@ -1,5 +1,41 @@
 import { useEffect, useState, type KeyboardEvent } from 'react'
+import {
+  Lightbulb,
+  Microscope,
+  Palette,
+  Square,
+  MessageSquareQuote,
+  Layers,
+  Zap,
+  Wrench,
+  Terminal,
+} from 'lucide-react'
 import { useCommandsStore } from '../../store/commandsStore'
+
+function getCommandIcon(slug: string) {
+  switch (slug) {
+    case 'plan':
+      return <Lightbulb className="size-3.5 text-amber-400" />
+    case 'research':
+      return <Microscope className="size-3.5 text-blue-400" />
+    case 'design':
+      return <Palette className="size-3.5 text-purple-400" />
+    case 'stop':
+      return <Square className="size-3.5 text-rose-400" />
+    case 'btw':
+      return <MessageSquareQuote className="size-3.5 text-emerald-400" />
+    case 'context':
+      return <Layers className="size-3.5 text-indigo-400" />
+    case 'compact':
+      return <Zap className="size-3.5 text-amber-500" />
+    case 'skills':
+    case 'skill':
+    case 'agents':
+      return <Wrench className="size-3.5 text-teal-400" />
+    default:
+      return <Terminal className="size-3.5 text-muted" />
+  }
+}
 
 /**
  * Lệnh còn dùng được khi chế độ Research đang bật.
@@ -54,10 +90,38 @@ export function useSlashCompletion(input: string, change: (value: string) => voi
     }
     return false
   }
-  const popup = options2.length > 0 && <div id="slash-completions" role="listbox" aria-label="Slash commands" className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-64 overflow-auto rounded-lg border border-line bg-panel p-1 shadow-xl">
-    {options2.map((c, i) => <button id={`slash-option-${i}`} key={c.slug} role="option" aria-selected={i === index} type="button" onMouseDown={e => e.preventDefault()} onClick={() => choose(c.slug)} className={`block w-full rounded p-2 text-left text-xs ${i === index ? 'bg-panel2 text-brand' : 'text-fg'}`}>
-      <span className="font-semibold">/{c.slug}</span><span className="ml-2 text-muted">{c.description}</span>
-    </button>)}
-  </div>
+  const popup = options2.length > 0 && (
+    <div
+      id="slash-completions"
+      role="listbox"
+      aria-label="Slash commands"
+      className="absolute bottom-full -left-[1px] -right-[1px] z-50 mb-2 max-h-80 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none space-y-0.5"
+    >
+      {options2.map((c, i) => (
+        <button
+          id={`slash-option-${i}`}
+          key={c.slug}
+          role="option"
+          aria-selected={i === index}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => choose(c.slug)}
+          className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
+            i === index
+              ? 'bg-panel2 text-brand font-medium shadow-xs'
+              : 'text-fg hover:bg-panel2/60'
+          }`}
+        >
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-panel2/80">
+            {getCommandIcon(c.slug)}
+          </div>
+          <div className="flex min-w-0 flex-1 items-baseline gap-2 truncate">
+            <span className="font-semibold text-fg">/{c.slug}</span>
+            <span className="text-[11px] text-muted truncate">{c.description}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  )
   return { keyDown, popup, expanded: options2.length > 0, activeId: options2.length ? `slash-option-${index}` : undefined }
 }
