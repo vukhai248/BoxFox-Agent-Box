@@ -28,17 +28,14 @@ import {
 } from '../chat/AttachmentPicker'
 import { uploadAttachments, type OutgoingAttachment } from '../../lib/chat/attachmentUpload'
 import { createWorkspaceRepository, type WorkspaceRepository } from '../../lib/workspace'
-import { ShortcutsPopover } from '../chat/ShortcutsPopover'
 import { useSlashCompletion } from '../chat/useSlashCompletion'
 import { LabelDot } from '../LabelDot'
 import { inspectChipLabel } from '../../lib/inspect/format'
 import type { SteerNotice } from '../../store/harnessChatStore'
 import { useResearchStore } from '../../store/researchStore'
 import { ResearchComposerStatus } from './research/ResearchComposerStatus'
-import { ResearchToggle } from './research/ResearchToggle'
 import { useDesignStore } from '../../store/designStore'
 import { DesignComposerStatus } from './design/DesignComposerStatus'
-import { DesignToggle } from './design/DesignToggle'
 
 // Ở chế độ `live` (`VITE_TRANSPORT=live`) chưa có handler backend nào tiêu
 // thụ `elements` (xem `types/transport.ts` chú thích trên `user_message`) —
@@ -608,9 +605,6 @@ export function ChatInputBar({
               onToggleRepo={toggleRepo}
             />
 
-            {/* Shortcuts Popover [ ⌨ ] */}
-            <ShortcutsPopover variant="toolbar" />
-
             {/* Quick Harness & Model Picker Popover */}
             <HarnessModelPicker routerModels={router?.models} activeRouterModelId={router?.activeModelId} onRouterModelChange={router?.onModelChange} />
 
@@ -647,12 +641,6 @@ export function ChatInputBar({
                 }`}
               />
             </button>
-
-            {/* P4 — nút Research trong thanh công cụ (`composer-toggle-toolbar-pill.html`).
-                Chế độ đang tắt mà còn run chạy nền thì bấm vào mở tab Research thay vì bật chế độ. */}
-            <ResearchToggle compact={compact} />
-            {/* P1 — nút Design trong thanh công cụ (cùng ô với Research). */}
-            <DesignToggle compact={compact} />
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
