@@ -334,13 +334,30 @@ export function ChatPanel() {
   // thấy đúng hàng con, không rơi về hàng cha của nhóm provider.
   const selected = findRouteOption(routerOptions, selectionKey(selection))
 
-  // Auto-select default route when provider loads
+  // Auto-select route when provider loads: ưu tiên khôi phục model đã lưu của người dùng (activeModelId trong useHarnessStore)
   useEffect(() => {
     if (!snapshot || selected) return
-    const r = snapshot.defaultRoute
-    const key = r.aliasId ? `alias:${r.aliasId}` : `model:${r.connectionId}:${r.modelId}`
-    const next = findRouteOption(routerOptions, key)?.selection ?? routerOptions[0]?.selection ?? null
-    if (selectionKey(next) !== selectionKey(selection)) setSelection(next)
+
+    // 1. Ưu tiên kiểm tra model người dùng đã lưu trước đó trong harnessStore
+    const savedModelId = useHarnessStore.getState().activeModelId
+    const savedOption = savedModelId
+      ? findRouteOption(routerOptions, savedModelId) ||
+        routerOptions.find((opt) => opt.value.endsWith(`:${savedModelId}`) || opt.value === savedModelId)
+      : null
+
+    let next = savedOption?.selection ?? null
+
+    // 2. Nếu không có model đã lưu hoặc model cũ không tồn tại trong snapshot thì mới dùng defaultRoute
+    if (!next) {
+      const r = snapshot.defaultRoute
+      const key = r.aliasId ? `alias:${r.aliasId}` : `model:${r.connectionId}:${r.modelId}`
+      next = findRouteOption(routerOptions, key)?.selection ?? routerOptions[0]?.selection ?? null
+    }
+
+    if (next && selectionKey(next) !== selectionKey(selection)) {
+      setSelection(next)
+      useHarnessStore.getState().setActiveModel(selectionKey(next))
+    }
   }, [snapshot, routerOptions, selected, selection, setSelection])
 
   // Kiểm tra trạng thái connection của model đang chọn để cảnh báo người dùng nếu ping false
@@ -423,7 +440,12 @@ export function ChatPanel() {
       steerNotice: harnessRun?.steerNotice ?? null,
       connectionWarning,
       onModelChange: (id: string) => {
-        setSelection(findRouteOption(routerOptions, id)?.selection ?? null)
+        const option = findRouteOption(routerOptions, id)
+        const next = option?.selection ?? null
+        setSelection(next)
+        if (next) {
+          useHarnessStore.getState().setActiveModel(id)
+        }
         harnessClearError(chatId)
         setDismissedWarning(null)
       },
