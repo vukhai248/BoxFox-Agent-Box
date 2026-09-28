@@ -13,7 +13,6 @@ import { useT } from '../../../i18n/context'
 import { useResearchStore } from '../../../store/researchStore'
 import { jobIsRunningInBackground, runLabel, stepForPhase, type ResearchJob, type ResearchPrompt } from '../../../lib/researchMode'
 import { OutOfScopeCard } from './OutOfScopeCard'
-import { ResearchModeBanner } from './ResearchComposerStatus'
 import { ResearchPromptCard } from './ResearchPromptCard'
 import { ResearchReportCard } from './ResearchReportCard'
 import { STEP_LABEL_KEY } from './steps'
@@ -130,11 +129,10 @@ export function ResearchConversationCards({
     }
   }
 
-  if (blocks.length === 0 && !suggest && !mode.on && !statusCard) return null
+  if (blocks.length === 0 && !suggest && !statusCard) return null
   return (
     <div className="space-y-2 pb-1" data-testid="research-conversation-cards">
-      <ResearchModeBanner />
-      {/* D-4: thẻ `/research status` đứng ĐẦU, ngay sau dải chế độ — nó là câu trả lời cho lệnh vừa gõ. */}
+      {/* D-4: thẻ `/research status` đứng ĐẦU — nó là câu trả lời cho lệnh vừa gõ. */}
       <ResearchStatusCard />
       {blocks.map((block) => block.node)}
       {suggest && <ResearchSuggestCard reason={suggest.reason} draftGoal={suggest.draftGoal} />}

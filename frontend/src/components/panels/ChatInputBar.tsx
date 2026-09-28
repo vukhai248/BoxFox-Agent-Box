@@ -389,7 +389,9 @@ export function ChatInputBar({
     hasContent ||
     isBusy ||
     Boolean(steerNotice) ||
-    slash.expanded
+    slash.expanded ||
+    researchOn ||
+    designOn
 
   useEffect(() => {
     if (isExpanded && isTextareaFocused && document.activeElement !== textareaRef.current) {
