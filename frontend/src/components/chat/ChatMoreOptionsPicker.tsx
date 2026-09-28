@@ -40,6 +40,13 @@ export function ChatMoreOptionsPicker({
     }
   }
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      onOpenChange?.(false)
+    }
+  }, [onOpenChange])
+
   // Click outside & Escape key
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -93,7 +100,10 @@ export function ChatMoreOptionsPicker({
         ref={triggerRef}
         type="button"
         data-testid="chat-more-options-btn"
-        onClick={() => handleOpen(!open)}
+        onClick={(e) => {
+          e.stopPropagation()
+          handleOpen(!open)
+        }}
         className={`flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel hover:text-fg cursor-pointer select-none ${
           open ? 'bg-panel text-fg border border-line shadow-2xs' : 'border border-transparent'
         }`}

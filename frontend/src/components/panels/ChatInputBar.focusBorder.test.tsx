@@ -94,4 +94,37 @@ describe('ChatInputBar — viền sáng của khung chat', () => {
     expect(bar?.className).not.toContain('border-zinc-500')
     expect(bar?.className).not.toContain('ring-1')
   })
+
+  it('bấm vào nút More options khi thanh chat ở 1 dòng: popup mở ra ngay và thanh chat không bị bung to thành 2 tầng', () => {
+    const host = render(<ChatInputBar />)
+    const bar = host.querySelector<HTMLElement>('[data-testid="chat-input-bar"]')
+    expect(bar).not.toBeNull()
+    // Ban đầu là thanh gộp 1 dòng: flex items-center gap-1.5
+    expect(bar?.className).toContain('flex items-center gap-1.5')
+
+    const moreBtn = host.querySelector<HTMLButtonElement>('[data-testid="chat-more-options-btn"]')
+    expect(moreBtn).not.toBeNull()
+
+    // Bấm nút More options
+    act(() => {
+      moreBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    // 1. Popup portal mở ra ngay lập tức trong DOM
+    const popup = document.body.querySelector('[data-testid="chat-more-menu"]')
+    expect(popup).not.toBeNull()
+
+    // 2. Thanh chatbar VẪN ở trạng thái gộp 1 dòng, không bị ép bung to thành p-2.5
+    expect(bar?.className).toContain('flex items-center gap-1.5')
+    expect(bar?.className).not.toContain('p-2.5')
+
+    // 3. Click ra ngoài để đóng popup
+    act(() => {
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+
+    // Popup đã đóng và chatbar vẫn ở 1 dòng, không bị kẹt
+    expect(document.body.querySelector('[data-testid="chat-more-menu"]')).toBeNull()
+    expect(bar?.className).toContain('flex items-center gap-1.5')
+  })
 })

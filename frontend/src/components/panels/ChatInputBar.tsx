@@ -145,7 +145,6 @@ export function ChatInputBar({
   ])
   const [isFocused, setIsFocused] = useState(false)
   const [isTextareaFocused, setIsTextareaFocused] = useState(false)
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false)
   const toggleRepo = (id: string) => {
     setSelectedRepoIds((prev) =>
       prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id],
@@ -390,8 +389,7 @@ export function ChatInputBar({
     hasContent ||
     isBusy ||
     Boolean(steerNotice) ||
-    slash.expanded ||
-    isMoreMenuOpen
+    slash.expanded
 
   useEffect(() => {
     if (isExpanded && isTextareaFocused && document.activeElement !== textareaRef.current) {
@@ -509,7 +507,6 @@ export function ChatInputBar({
                 onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
                 selectedRepoIds={selectedRepoIds}
                 onToggleRepo={toggleRepo}
-                onOpenChange={setIsMoreMenuOpen}
               />
 
               {/* Mic */}
@@ -796,7 +793,6 @@ export function ChatInputBar({
                   onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
                   selectedRepoIds={selectedRepoIds}
                   onToggleRepo={toggleRepo}
-                  onOpenChange={setIsMoreMenuOpen}
                 />
 
                 <button
