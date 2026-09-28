@@ -975,7 +975,15 @@ def create_app(runtime):
         return web.json_response(result)
 
     async def design_prompt_answer(request):
-        """P1 (§5): `POST /api/agent/design/prompts/{promptId}/answer` — trả lời MỘT lời hỏi."""
+        """P1 (§5): `POST /api/agent/design/prompts/{promptId}/answer` — trả lời MỘT lời hỏi.
+
+        `start=true` phải MỞ LƯỢT TIẾP TỤC (hợp đồng §7.3). `design_runtime.design_prompt_answer` chỉ
+        ghi sổ (`resume: true`); lượt do tuyến này mở, đúng khuôn `research_prompt_answer`. Thiếu nó
+        thì run đứng nguyên ở pha `briefing` với `status='designing'`: không lượt nào chạy tiếp, và
+        `design_continuation_step` không phủ pha ấy (nó chỉ nhận `scaffolding`/`reviewing`) — chủ nhà
+        đã trả lời mà không có gì nhúc nhích (đo sống 2026-09-27, phiên `23d1ee8a…`, lời hỏi
+        `dp-be5d1e19e28c`).
+        """
         prompt_id = request.match_info['prompt_id']
         body = await request.json()
         job = runtime.store.design_job_by_prompt(prompt_id)
@@ -987,6 +995,35 @@ def create_app(runtime):
                                                          start=bool(body.get('start')))
         except ValueError as exc:
             raise _action_error(exc, _DESIGN_CONFLICT_STATUS) from None
+        if result.get('resume'):
+            # Hai điều là hợp đồng của đường này:
+            # - `promptId` nằm trong `invocationId` vì một run có thể có NHIỀU lời hỏi: dùng chung mã
+            #   thì lời hỏi thứ hai trả lại kết quả đã ghi của lời hỏi thứ nhất và lượt KHÔNG mở;
+            # - KHÔNG bỏ qua khi phiên đang chạy: `submit` biến lời dặn thành CHỈ THỊ GIỮA LƯỢT (mặc
+            #   định), còn bỏ qua hẳn thì run ở lại pha `briefing` mà không bơm nào phủ (F1).
+            sid = job['session_id']
+            updated = runtime.store.design_job(job['design_id'])
+            if design_job_pumpable(runtime, updated, runtime.store.get(sid)):
+                try:
+                    await runtime.submit(
+                        sid,
+                        f'Continue design job {job["design_id"]} from design_status after the owner '
+                        'answered the prompt. Apply the confirmed answers, keep the touch list '
+                        'authoritative, write only approved paths, and stop with a qualified partial '
+                        'result if a path is blocked.',
+                        invocation_id=f'design-resume-{job["design_id"]}-{prompt_id}')
+                except ValueError as exc:
+                    # Chỉ tới đây khi phiên ĐANG CHẠY mà chủ nhà đã tắt chỉ thị giữa lượt
+                    # (`BOXFOX_STEER=off`). Câu trả lời đã ghi sổ: ghi nhật ký hệ thống rồi trả kết
+                    # quả bình thường — run có thể đứng ở `briefing` tới lượt sau, và điều đó phải
+                    # đọc được thay vì biến thành lỗi cho giao diện.
+                    if 'SESSION_BUSY' not in str(exc):
+                        raise
+                    system_log.write('design.prompt.resume_busy', level='warn',
+                                     code='DESIGN_RESUME_BUSY',
+                                     message='phiên đang chạy và chế độ chỉ thị giữa lượt đang tắt — '
+                                             'câu trả lời đã ghi sổ, lượt tiếp tục chưa mở',
+                                     session_id=sid, designId=job['design_id'], promptId=prompt_id)
         return web.json_response(result)
 
     async def session_canvas(request):
