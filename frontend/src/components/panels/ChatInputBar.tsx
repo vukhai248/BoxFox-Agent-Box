@@ -20,6 +20,7 @@ import { useComposerStore } from '../../store/composerStore'
 import { useT } from '../../i18n/context'
 import { useCompactComposer } from '../../hooks/useCompactComposer'
 import { HarnessModelPicker, type RouterSingleModel } from '../chat/HarnessModelPicker'
+import { ChatMoreOptionsPicker } from '../chat/ChatMoreOptionsPicker'
 import {
   AttachmentPicker,
   formatAttachmentSize,
@@ -139,7 +140,11 @@ export function ChatInputBar({
   const designOn = useDesignStore((s) => s.mode.on)
   const slash = useSlashCompletion(input, setInput, { modeOnly: researchOn || designOn })
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
-  const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([])
+  const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([
+    'minndty4-pixel/BoxFox-Agent-Box',
+  ])
+  const [isFocused, setIsFocused] = useState(false)
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false)
   const toggleRepo = (id: string) => {
     setSelectedRepoIds((prev) =>
       prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id],
@@ -182,6 +187,23 @@ export function ChatInputBar({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 140)}px`
     }
   }, [input])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (barRef.current?.contains(target)) return
+      if ((target as Element)?.closest?.('[data-portal-menu]')) return
+      if ((target as Element)?.closest?.('[data-testid="repo-menu"]')) return
+      if ((target as Element)?.closest?.('[data-testid="attach-menu"]')) return
+      if ((target as Element)?.closest?.('[data-testid="model-menu"]')) return
+      setIsFocused(false)
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items
@@ -358,313 +380,129 @@ export function ChatInputBar({
   const canSteer = Boolean(router?.canSteer)
   const steerNotice = router?.steerNotice ?? null
   const showSendButton = !isBusy || isControlCommand(input) || canSteer
+  const hasContent = Boolean(input.trim() || attachments.length > 0 || pendingElements.length > 0)
+  const isExpanded =
+    isFocused ||
+    hasContent ||
+    isBusy ||
+    Boolean(steerNotice) ||
+    slash.expanded ||
+    isMoreMenuOpen
 
   return (
-    <div ref={barRef} className="border-t border-line bg-panel p-3 select-none">
-      {/* Hộp soạn tin gom theo cột đọc khi bảng Workspace ẩn; thanh ngoài
-          (`border-t border-line bg-panel p-3`) vẫn chạy hết bề rộng. */}
+    <div ref={barRef} className="px-3 pb-3 pt-1 select-none">
+      {/* Hộp soạn tin gom theo cột đọc khi bảng Workspace ẩn */}
       <div
         data-testid="chat-input-bar"
-        className={`relative rounded-xl border border-line bg-panel2/70 p-2.5 shadow-xs transition-all focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-600/40 ${readingColumnClass(workspaceHidden)}`}
+        className={`relative rounded-2xl border border-line/80 bg-panel shadow-2xs transition-all duration-150 focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-600/40 ${readingColumnClass(workspaceHidden)} ${
+          !isExpanded ? 'flex items-center gap-1.5 px-2.5 py-1.5' : 'p-2.5'
+        }`}
+        onClick={() => {
+          if (!isExpanded) {
+            setIsFocused(true)
+            textareaRef.current?.focus()
+          }
+        }}
       >
         {slash.popup}
-        {/* P4 — dải trạng thái Research: chế độ đang bật, lời hỏi thoát chế độ, hoặc run chạy nền.
-            Khối này thay cho thẻ rời rạc: nó luôn nằm ngay trên ô nhập. */}
-        <ResearchComposerStatus />
-        {/* P1 — dải trạng thái Design: chế độ đang bật, lời hỏi thoát chế độ. Cùng vị trí với
-            Research để hai chế độ không tranh chỗ nhìn của người dùng. */}
-        <DesignComposerStatus />
-        {/* Attached files chips — E5: mỗi chip mang trạng thái tải lên THẬT của nó
-            (`data-attach-state`, đúng tên thuộc tính của mockup `attachments-chip-row`). */}
-        {attachments.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-            {attachments.map((file) => {
-              const upload = uploadStates[file.id]
-              return (
-              <div
-                key={file.id}
-                data-testid="composer-attach-chip"
-                data-attach-state={upload?.status}
-                className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
-              >
-                {file.source === 'drive' ? (
-                  <svg className="size-3 shrink-0" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-                    <path d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A8.9 8.9 0 0 0 0 53h27.5z" fill="#00ac47"/>
-                    <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
-                    <path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-                    <path d="M59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5L72.35 22.75c-.8-1.4-1.95-2.5-3.3-3.3L55.3 43.25z" fill="#2684fc"/>
-                    <path d="m27.5 53 13.75 23.8c1.35-.8 2.5-1.9 3.3-3.3l20.75-35.95c.8-1.4 1.2-2.95 1.2-4.55H27.5z" fill="#ffba00"/>
-                  </svg>
-                ) : (
-                  <Paperclip className="size-3 text-muted shrink-0" />
-                )}
-                <span className="truncate max-w-[140px] font-mono">{file.name}</span>
-                {file.size && <span className="shrink-0 text-muted">{file.size}</span>}
-                {/* Tệp trong thư mục vừa chọn: nói rõ nó nằm ở đâu, không chỉ tên tệp. */}
-                {file.relativePath && (
-                  <span className="shrink-0 text-muted" title={file.relativePath}>
-                    {shortenAttachmentPath(file.relativePath)}
-                  </span>
-                )}
-                {/* Trạng thái thật. Không có phần trăm: nguồn không cho biết số byte đã đi. */}
-                {upload?.status === 'uploading' && (
-                  <span
-                    data-testid="composer-attach-state"
-                    data-attach-state="uploading"
-                    className="inline-flex shrink-0 items-center gap-0.5 text-amber-400"
-                  >
-                    <Loader2 className="size-3 animate-spin" />
-                    đang tải lên {upload.done}/{upload.total} tệp
-                  </span>
-                )}
-                {upload?.status === 'uploaded' && (
-                  <span
-                    data-testid="composer-attach-state"
-                    data-attach-state="uploaded"
-                    className="inline-flex shrink-0 items-center gap-0.5 text-emerald-400"
-                  >
-                    <Check className="size-3" />
-                    đã tải lên
-                  </span>
-                )}
-                {upload?.status === 'failed' && (
-                  <span className="inline-flex shrink-0 items-center gap-1">
-                    <span
-                      data-testid="composer-attach-state"
-                      data-attach-state="failed"
-                      className="text-rose-400"
-                    >
-                      tải lên thất bại
-                    </span>
-                    <button
-                      type="button"
-                      data-testid="composer-attach-retry"
-                      onClick={() => void handleRetryUpload(file)}
-                      title={`Thử lại tải lên ${file.name}`}
-                      className="rounded border border-rose-500/40 px-1 py-0.5 text-rose-300 transition hover:bg-rose-500/10 cursor-pointer"
-                    >
-                      Thử lại
-                    </button>
-                  </span>
-                )}
-                {/* Chỉ hiện khi box ĐÃ nhận tệp: lúc đó mới có đường dẫn thật để mở. */}
-                {upload?.status === 'uploaded' && upload.attachment && (
-                  <button
-                    type="button"
-                    data-testid="composer-attach-open"
-                    onClick={() => selectFile(upload.attachment!.path)}
-                    title={`Mở ${upload.attachment.path} trong tab Files`}
-                    className="inline-flex shrink-0 items-center gap-0.5 text-muted transition hover:text-fg cursor-pointer"
-                  >
-                    <FolderOpen className="size-3" />
-                    Mở trong Files
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachments((prev) => prev.filter((a) => a.id !== file.id))
-                    // Chip bị bỏ thì trạng thái của nó cũng bỏ — không giữ lại đường dẫn cũ.
-                    setUploadStates((prev) => {
-                      const next = { ...prev }
-                      delete next[file.id]
-                      return next
-                    })
-                  }}
-                  className="text-muted hover:text-rose-500 transition ml-0.5 cursor-pointer"
-                  title="Remove attachment"
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* Lỗi upload: chip đỏ + giữ nguyên bản nháp (A6). Nói thẳng tệp nào hỏng thay vì
-            im lặng bỏ tệp — đây là bài học của BUG-40. */}
-        {attachError && (
-          <p
-            data-testid="composer-attach-error"
-            role="alert"
-            className="mb-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-400"
-          >
-            {attachError}
-          </p>
-        )}
-
-        {/* Element context chips (khung ④ Element Selector, plan §8-F12) —
-            viền/nền trung tính giống chip đính kèm ở trên; màu vàng cảnh báo
-            chỉ nằm ở chấm LabelDot, KHÔNG tô nền cả chip (mockup §12.6). */}
-        {pendingElements.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-            {pendingElements.map((el) => (
-              <div
-                key={el.id}
-                className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
-              >
-                <Crosshair className="size-3 text-muted shrink-0" />
-                <span className="truncate max-w-[160px] font-mono">{inspectChipLabel(el.result, t('screen.inspector.chipDesktopFallback'))}</span>
-                <LabelDot integrity="khong_tin_duoc" />
-                <button
-                  type="button"
-                  onClick={() => removePendingElement(el.id)}
-                  className="text-muted hover:text-rose-500 transition ml-0.5 cursor-pointer"
-                  title={t('composer.removeElementContext')}
-                  aria-label={t('composer.removeElementContext')}
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Cảnh báo: hợp đồng truyền tải đã có ở chế độ live nhưng chưa có
-            handler backend nào tiêu thụ `elements` — không được âm thầm
-            nuốt dữ liệu, phải nói thẳng với người dùng (plan §8-F7/F12). */}
-        {pendingElements.length > 0 && isLiveTransport() && (
-          <p className="mb-2 px-1 text-[11px] text-amber-500">{t('composer.elementContextLiveUnsupported')}</p>
-        )}
-
-        {/* Chỉ thị đã xếp hàng cho lượt đang chạy (vòng 27 / C-5): dòng này nằm TRONG hộp soạn
-            tin, ngay trên ô nhập — nó thuộc về câu vừa gõ, không phải một khối quanh câu trả lời.
-            Nguyên văn được giữ lại để chủ nhà thấy đúng thứ mình đã gửi. */}
-        {steerNotice && (
-          <div
-            data-testid="composer-steer-queued"
-            className="mb-2 flex items-start gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-2 py-1.5 text-[11px] text-brand"
-          >
-            <Clock className="mt-0.5 size-3 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {t('composer.steerQueued')}
-                <span className="ml-1.5 font-mono text-[10px] text-muted">
-                  {new Date(steerNotice.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </p>
-              <p className="truncate text-muted" title={steerNotice.text}>
-                “{steerNotice.text}”
-              </p>
+        {!isExpanded ? (
+          /* TRẠNG THÁI GỘP 1 DÒNG (COLLAPSED) KHI USER CHƯA ẤN VÀO */
+          <>
+            {/* Attachment & Action Palette Button [+] */}
+            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <AttachmentPicker
+                onAttach={(file) => {
+                  setAttachments((prev) => [...prev, file])
+                  setIsFocused(true)
+                }}
+                onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                autopilotEnabled={autopilotEnabled}
+                onSelectPlan={() => {
+                  setInput('/plan ')
+                  setIsFocused(true)
+                  textareaRef.current?.focus()
+                }}
+                onToggleResearch={() => {
+                  const s = useResearchStore.getState()
+                  void s.setMode(!s.mode.on, 'toggle')
+                }}
+                researchEnabled={researchOn}
+                onToggleDesign={() => {
+                  const s = useDesignStore.getState()
+                  void s.setMode(!s.mode.on, 'toggle')
+                }}
+                designEnabled={designOn}
+                selectedRepoIds={selectedRepoIds}
+                onToggleRepo={toggleRepo}
+              />
             </div>
-          </div>
-        )}
 
-        <textarea
-          role="combobox"
-          aria-label="Message"
-          aria-autocomplete="list"
-          aria-expanded={slash.expanded}
-          aria-controls={slash.expanded ? 'slash-completions' : undefined}
-          aria-activedescendant={slash.activeId}
-          ref={textareaRef}
-          rows={1}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={t(
-            designOn
-              ? 'design.placeholderRunning'
-              : researchOn
-                ? 'research.placeholderRunning'
-                : compact
-                  ? 'composer.placeholderShort'
-                  : 'composer.placeholder',
-          )}
-          className="w-full resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text"
-        />
-
-        {/* Toolbar below input — bỏ flex-wrap để Mic/Send không bao giờ rớt
-            xuống dòng 2 khi cột chat hẹp; nhóm trái co lại (min-w-0 +
-            overflow-hidden), nhóm phải giữ nguyên kích thước (shrink-0). */}
-        <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-line/40">
-          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-            {/* Attachment & Action Palette Button [+] with Popover */}
-            <AttachmentPicker
-              onAttach={(file) => setAttachments((prev) => [...prev, file])}
-              onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
-              autopilotEnabled={autopilotEnabled}
-              onSelectPlan={() => {
-                setInput('/plan ')
-                textareaRef.current?.focus()
-              }}
-              onToggleResearch={() => {
-                const s = useResearchStore.getState()
-                void s.setMode(!s.mode.on, 'toggle')
-              }}
-              researchEnabled={researchOn}
-              onToggleDesign={() => {
-                const s = useDesignStore.getState()
-                void s.setMode(!s.mode.on, 'toggle')
-              }}
-              designEnabled={designOn}
-              selectedRepoIds={selectedRepoIds}
-              onToggleRepo={toggleRepo}
+            {/* Ô soạn thảo 1 dòng inline */}
+            <textarea
+              role="combobox"
+              aria-label="Message"
+              aria-autocomplete="list"
+              aria-expanded={slash.expanded}
+              aria-controls={slash.expanded ? 'slash-completions' : undefined}
+              aria-activedescendant={slash.activeId}
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onFocus={() => setIsFocused(true)}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={t(
+                designOn
+                  ? 'design.placeholderRunning'
+                  : researchOn
+                    ? 'research.placeholderRunning'
+                    : compact
+                      ? 'composer.placeholderShort'
+                      : 'composer.placeholder',
+              )}
+              className="min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-xs leading-5 text-fg placeholder:text-muted/60 outline-hidden select-text h-7 overflow-hidden"
             />
 
-            {/* Quick Harness & Model Picker Popover */}
-            <HarnessModelPicker routerModels={router?.models} activeRouterModelId={router?.activeModelId} onRouterModelChange={router?.onModelChange} />
-
-            {/* Quick Ask */}
-            <button
-              type="button"
-              title={t('composer.quickAsk')}
-              aria-label={t('composer.quickAsk')}
-              className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
-            >
-              <Zap className="size-3 text-amber-400" />
-              {!compact && <span>{t('composer.quickAsk')}</span>}
-            </button>
-
-            {/* Autopilot Toggle */}
-            <button
-              type="button"
-              onClick={() => setAutopilotEnabled(!autopilotEnabled)}
-              className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-medium transition cursor-pointer ${
-                autopilotEnabled
-                  ? 'bg-panel2 text-fg border border-line'
-                  : 'text-muted hover:bg-panel hover:text-fg border border-transparent'
-              }`}
-              title={t('composer.autopilotHint')}
-              aria-label={t('composer.autopilot')}
-              aria-pressed={autopilotEnabled}
-            >
-              <Zap className="size-3" />
-              {!compact && <span>{t('composer.autopilot')}</span>}
-              {/* Chấm trạng thái giữ inline ở cả hai chế độ — phải luôn nhìn thấy bật/tắt */}
-              <span
-                className={`size-1.5 rounded-full ${
-                  autopilotEnabled ? 'bg-brand shadow-xs' : 'bg-muted/40'
-                }`}
+            {/* Các nút công cụ inline bên phải */}
+            <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <HarnessModelPicker
+                routerModels={router?.models}
+                activeRouterModelId={router?.activeModelId}
+                onRouterModelChange={router?.onModelChange}
               />
-            </button>
-          </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
-            {/* Voice Input Mic */}
-            <button
-              type="button"
-              className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
-              title="Voice dictation"
-            >
-              <Mic className="size-3.5" />
-            </button>
-
-            {/* Dynamic Send / Stop Button in the exact same spot */}
-            {isBusy && (
+              {/* Quick Ask */}
               <button
                 type="button"
-                onClick={handleInterrupt}
-                className="flex size-7 items-center justify-center rounded-lg bg-rose-500 text-white shadow-xs transition hover:bg-rose-600 active:scale-95 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
-                title="Stop / Interrupt agent action (Esc)"
+                title={t('composer.quickAsk')}
+                aria-label={t('composer.quickAsk')}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer border border-transparent"
               >
-                <Square className="size-3 fill-current" />
+                <Zap className="size-3 text-amber-400" />
+                {!compact && <span>{t('composer.quickAsk')}</span>}
               </button>
-            )}
-            {showSendButton && (
+
+              {/* More Options [ ⋮ ] chứa Repositories & Autopilot */}
+              <ChatMoreOptionsPicker
+                autopilotEnabled={autopilotEnabled}
+                onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                selectedRepoIds={selectedRepoIds}
+                onToggleRepo={toggleRepo}
+                onOpenChange={setIsMoreMenuOpen}
+              />
+
+              {/* Mic */}
+              <button
+                type="button"
+                className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+                title="Voice dictation"
+              >
+                <Mic className="size-3.5" />
+              </button>
+
+              {/* Send Button */}
               <button
                 type="button"
                 onClick={handleSend}
@@ -685,13 +523,305 @@ export function ChatInputBar({
               >
                 {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
               </button>
+            </div>
+          </>
+        ) : (
+          /* TRẠNG THÁI MỞ RỘNG (EXPANDED 2 TẦNG) KHI FOCUSED HOẶC CÓ NỘI DUNG */
+          <>
+            {/* P4 — dải trạng thái Research */}
+            <ResearchComposerStatus />
+            {/* P1 — dải trạng thái Design */}
+            <DesignComposerStatus />
+
+            {/* Attached files chips */}
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+                {attachments.map((file) => {
+                  const upload = uploadStates[file.id]
+                  return (
+                    <div
+                      key={file.id}
+                      data-testid="composer-attach-chip"
+                      data-attach-state={upload?.status}
+                      className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
+                    >
+                      {file.source === 'drive' ? (
+                        <svg className="size-3 shrink-0" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                          <path d="M43.65 25 29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A8.9 8.9 0 0 0 0 53h27.5z" fill="#00ac47"/>
+                          <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 10.15z" fill="#ea4335"/>
+                          <path d="M43.65 25 57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                          <path d="M59.8 53h27.5c0-1.55-.4-3.1-1.2-4.5L72.35 22.75c-.8-1.4-1.95-2.5-3.3-3.3L55.3 43.25z" fill="#2684fc"/>
+                          <path d="m27.5 53 13.75 23.8c1.35-.8 2.5-1.9 3.3-3.3l20.75-35.95c.8-1.4 1.2-2.95 1.2-4.55H27.5z" fill="#ffba00"/>
+                        </svg>
+                      ) : (
+                        <Paperclip className="size-3 text-muted shrink-0" />
+                      )}
+                      <span className="truncate max-w-[140px] font-mono">{file.name}</span>
+                      {file.size && <span className="shrink-0 text-muted">{file.size}</span>}
+                      {file.relativePath && (
+                        <span className="shrink-0 text-muted" title={file.relativePath}>
+                          {shortenAttachmentPath(file.relativePath)}
+                        </span>
+                      )}
+                      {upload?.status === 'uploading' && (
+                        <span
+                          data-testid="composer-attach-state"
+                          data-attach-state="uploading"
+                          className="inline-flex shrink-0 items-center gap-0.5 text-amber-400"
+                        >
+                          <Loader2 className="size-3 animate-spin" />
+                          đang tải lên {upload.done}/{upload.total} tệp
+                        </span>
+                      )}
+                      {upload?.status === 'uploaded' && (
+                        <span
+                          data-testid="composer-attach-state"
+                          data-attach-state="uploaded"
+                          className="inline-flex shrink-0 items-center gap-0.5 text-emerald-400"
+                        >
+                          <Check className="size-3" />
+                          đã tải lên
+                        </span>
+                      )}
+                      {upload?.status === 'failed' && (
+                        <span className="inline-flex shrink-0 items-center gap-1">
+                          <span
+                            data-testid="composer-attach-state"
+                            data-attach-state="failed"
+                            className="text-rose-400"
+                          >
+                            tải lên thất bại
+                          </span>
+                          <button
+                            type="button"
+                            data-testid="composer-attach-retry"
+                            onClick={() => void handleRetryUpload(file)}
+                            title={`Thử lại tải lên ${file.name}`}
+                            className="rounded border border-rose-500/40 px-1 py-0.5 text-rose-300 transition hover:bg-rose-500/10 cursor-pointer"
+                          >
+                            Thử lại
+                          </button>
+                        </span>
+                      )}
+                      {upload?.status === 'uploaded' && upload.attachment && (
+                        <button
+                          type="button"
+                          data-testid="composer-attach-open"
+                          onClick={() => selectFile(upload.attachment!.path)}
+                          title={`Mở ${upload.attachment.path} trong tab Files`}
+                          className="inline-flex shrink-0 items-center gap-0.5 text-muted transition hover:text-fg cursor-pointer"
+                        >
+                          <FolderOpen className="size-3" />
+                          Mở trong Files
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachments((prev) => prev.filter((a) => a.id !== file.id))
+                          setUploadStates((prev) => {
+                            const next = { ...prev }
+                            delete next[file.id]
+                            return next
+                          })
+                        }}
+                        className="text-muted hover:text-rose-500 transition ml-0.5 cursor-pointer"
+                        title="Remove attachment"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
-          </div>
-        </div>
+
+            {/* Lỗi upload */}
+            {attachError && (
+              <p
+                data-testid="composer-attach-error"
+                role="alert"
+                className="mb-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-400"
+              >
+                {attachError}
+              </p>
+            )}
+
+            {/* Element context chips */}
+            {pendingElements.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+                {pendingElements.map((el) => (
+                  <div
+                    key={el.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
+                  >
+                    <Crosshair className="size-3 text-muted shrink-0" />
+                    <span className="truncate max-w-[160px] font-mono">{inspectChipLabel(el.result, t('screen.inspector.chipDesktopFallback'))}</span>
+                    <LabelDot integrity="khong_tin_duoc" />
+                    <button
+                      type="button"
+                      onClick={() => removePendingElement(el.id)}
+                      className="text-muted hover:text-rose-500 transition ml-0.5 cursor-pointer"
+                      title={t('composer.removeElementContext')}
+                      aria-label={t('composer.removeElementContext')}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {pendingElements.length > 0 && isLiveTransport() && (
+              <p className="mb-2 px-1 text-[11px] text-amber-500">{t('composer.elementContextLiveUnsupported')}</p>
+            )}
+
+            {/* Chỉ thị đã xếp hàng */}
+            {steerNotice && (
+              <div
+                data-testid="composer-steer-queued"
+                className="mb-2 flex items-start gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-2 py-1.5 text-[11px] text-brand"
+              >
+                <Clock className="mt-0.5 size-3 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    {t('composer.steerQueued')}
+                    <span className="ml-1.5 font-mono text-[10px] text-muted">
+                      {new Date(steerNotice.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </p>
+                  <p className="truncate text-muted" title={steerNotice.text}>
+                    “{steerNotice.text}”
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <textarea
+              role="combobox"
+              aria-label="Message"
+              aria-autocomplete="list"
+              aria-expanded={slash.expanded}
+              aria-controls={slash.expanded ? 'slash-completions' : undefined}
+              aria-activedescendant={slash.activeId}
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onFocus={() => setIsFocused(true)}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={t(
+                designOn
+                  ? 'design.placeholderRunning'
+                  : researchOn
+                    ? 'research.placeholderRunning'
+                    : compact
+                      ? 'composer.placeholderShort'
+                      : 'composer.placeholder',
+              )}
+              className="w-full resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text min-h-[44px]"
+            />
+
+            {/* Toolbar tầng dưới */}
+            <div className="mt-2 flex items-center justify-between gap-2 pt-1.5 border-t border-line/40">
+              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                <AttachmentPicker
+                  onAttach={(file) => setAttachments((prev) => [...prev, file])}
+                  onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                  autopilotEnabled={autopilotEnabled}
+                  onSelectPlan={() => {
+                    setInput('/plan ')
+                    textareaRef.current?.focus()
+                  }}
+                  onToggleResearch={() => {
+                    const s = useResearchStore.getState()
+                    void s.setMode(!s.mode.on, 'toggle')
+                  }}
+                  researchEnabled={researchOn}
+                  onToggleDesign={() => {
+                    const s = useDesignStore.getState()
+                    void s.setMode(!s.mode.on, 'toggle')
+                  }}
+                  designEnabled={designOn}
+                  selectedRepoIds={selectedRepoIds}
+                  onToggleRepo={toggleRepo}
+                />
+
+                <HarnessModelPicker
+                  routerModels={router?.models}
+                  activeRouterModelId={router?.activeModelId}
+                  onRouterModelChange={router?.onModelChange}
+                />
+
+                <button
+                  type="button"
+                  title={t('composer.quickAsk')}
+                  aria-label={t('composer.quickAsk')}
+                  className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
+                >
+                  <Zap className="size-3 text-amber-400" />
+                  {!compact && <span>{t('composer.quickAsk')}</span>}
+                </button>
+
+                {/* More Options [ ⋮ ] chứa Repositories & Autopilot */}
+                <ChatMoreOptionsPicker
+                  autopilotEnabled={autopilotEnabled}
+                  onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                  selectedRepoIds={selectedRepoIds}
+                  onToggleRepo={toggleRepo}
+                  onOpenChange={setIsMoreMenuOpen}
+                />
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel hover:text-fg cursor-pointer"
+                  title="Voice dictation"
+                >
+                  <Mic className="size-3.5" />
+                </button>
+
+                {isBusy && (
+                  <button
+                    type="button"
+                    onClick={handleInterrupt}
+                    className="flex size-7 items-center justify-center rounded-lg bg-rose-500 text-white shadow-xs transition hover:bg-rose-600 active:scale-95 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                    title="Stop / Interrupt agent action (Esc)"
+                  >
+                    <Square className="size-3 fill-current" />
+                  </button>
+                )}
+                {showSendButton && (
+                  <button
+                    type="button"
+                    onClick={handleSend}
+                    disabled={!canSend || uploading}
+                    data-testid="composer-send"
+                    data-uploading={uploading ? 'true' : undefined}
+                    aria-busy={uploading || undefined}
+                    className="flex size-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-900 shadow-xs transition hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                    title={
+                      uploading
+                        ? t('composer.uploadingAttachments')
+                        : isControlCommand(input) && isBusy
+                          ? t('composer.sendControlWhileBusy')
+                          : canSteer
+                            ? t('composer.sendSteer')
+                            : 'Send prompt (Enter)'
+                    }
+                  >
+                    {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Dòng chú thích DƯỚI ô nhập khi lượt đang chạy (vòng 27 / C-5): câu gõ vào không cắt
-          ngang bước đang chạy và không mở lượt mới — nó vào hàng cho lượt này. */}
       {canSteer && (
         <div
           data-testid="composer-steer-hint"
