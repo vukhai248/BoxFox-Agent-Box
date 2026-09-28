@@ -1137,7 +1137,7 @@ function StepBlock({
 
           {/* Thinking Content */}
           {thinkingOpen && (
-            <div className="border-l-2 border-brand/50 pl-3.5 py-1.5 text-xs italic text-muted leading-relaxed animate-in fade-in duration-150 bg-panel2/30 rounded-r-xl">
+            <div className="mt-1.5 rounded-xl border border-line bg-panel2/40 p-3 text-[12.5px] font-light text-zinc-400 leading-relaxed animate-in fade-in duration-150">
               {message.thought}
             </div>
           )}

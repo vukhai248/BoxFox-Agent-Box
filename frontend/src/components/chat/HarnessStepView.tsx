@@ -1958,10 +1958,10 @@ function TurnBlock({
       </div>
 
       {/* 3. MỘT khối hoạt động (R2): văn xuôi suy luận + mọi hàng theo `seq` + chỉ báo bận.
-          Câu trả lời cuối và khối lỗi nằm NGOÀI khối này. */}
+          Được bọc trong box viền ngoài với chữ nhỏ hơn, nét mỏng và màu nhạt hơn câu trả lời cuối. */}
       <div data-activity="true" data-activity-open={activityOpen ? 'true' : 'false'}>
         {activityOpen && (
-          <div className="space-y-3">
+          <div className="mt-2.5 rounded-xl border border-line bg-panel2/40 p-3.5 space-y-3 shadow-2xs text-[12.5px] font-light text-zinc-400 leading-relaxed [&_p]:text-[12.5px] [&_p]:font-light [&_p]:text-zinc-400 [&_p]:leading-relaxed [&_li]:text-[12.5px] [&_li]:font-light [&_li]:text-zinc-400 [&_li]:leading-relaxed [&_h1]:text-xs [&_h1]:font-medium [&_h1]:text-zinc-300 [&_h2]:text-xs [&_h2]:font-medium [&_h2]:text-zinc-300 [&_h3]:text-xs [&_h3]:font-medium [&_h3]:text-zinc-300 [&_strong]:font-normal [&_strong]:text-zinc-300">
             {thoughtText && <ThoughtProse thought={thoughtText} isLive={isTurnBusy} />}
 
             {/* P4 §4.5 — dòng công cụ gom: thay vì để người đọc đếm loạt hàng `Searched …`,
@@ -2175,11 +2175,11 @@ function OwnerSteerRow({ event }: { event: HarnessEvent }) {
   )
 }
 
-/** Văn bản trợ lý giữa lượt (kể cả `final:false`) — hiện đúng vị trí theo `seq`. */
+/** Văn bản trợ lý giữa lượt (kể cả `final:false`) — hiện đúng vị trí theo `seq`, chữ nhỏ và mỏng hơn câu trả lời cuối. */
 function TimelineTextBlock({ text, isLive }: { text: string; isLive: boolean }) {
   if (!text) return null
   return (
-    <div className="max-w-3xl pl-0.5 text-sm text-fg leading-relaxed" data-timeline="assistant-text">
+    <div className="max-w-3xl pl-0.5 text-[12.5px] font-light text-zinc-400 leading-relaxed" data-timeline="assistant-text">
       <ProgressiveMarkdown content={text} isLive={isLive} />
     </div>
   )
@@ -2652,7 +2652,7 @@ function ProgressiveMarkdown({
  */
 function ThoughtProse({ thought, isLive }: { thought: string; isLive?: boolean }) {
   return (
-    <div className="ml-3 pl-3 border-l-2 border-brand/50 py-1.5 text-xs text-zinc-300/95 leading-relaxed bg-panel2/40 rounded-r-xl animate-in fade-in duration-150">
+    <div className="border-l-2 border-brand/40 pl-3 py-1 text-[12.5px] font-light text-zinc-400/90 leading-relaxed bg-panel/30 rounded-r-lg animate-in fade-in duration-150">
       <ProgressiveMarkdown content={thought} isLive={isLive} />
     </div>
   )
