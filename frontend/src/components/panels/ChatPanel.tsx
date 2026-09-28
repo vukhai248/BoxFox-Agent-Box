@@ -567,8 +567,12 @@ export function ChatPanel() {
     }
     setUnseenCount((count) => (count === 0 ? count : 0))
 
-    scrollToLatest('auto')
-  }, [messages.length, routerTurns.length, harnessRun?.events, harnessRun?.status, scrollToLatest, scrollToNewTurn])
+    // Chỉ tự động cuộn khi thật sự có thêm nội dung mới (delta > 0) hoặc agent đang bận streaming.
+    // Tuyệt đối không giật cuộn khi nội dung đứng yên (delta === 0) tránh xung đột với thao tác cuộn của người dùng.
+    if (delta > 0 || harnessBusy || isSending) {
+      scrollToLatest('auto')
+    }
+  }, [messages.length, routerTurns.length, harnessRun?.events?.length, harnessRun?.status, harnessBusy, isSending, scrollToLatest, scrollToNewTurn])
 
   // Đổi phiên: khôi phục đúng vị trí đọc đã nhớ của phiên đó (nếu có), ngược
   // lại thì bám đáy. Chạy sau khi transcript của phiên mới đã dựng.
@@ -698,12 +702,12 @@ export function ChatPanel() {
         )}
 
 
-        <div ref={messagesEndRef} />
         {/* P4 — thẻ Research trong hội thoại: lời hỏi nhiều câu, thẻ ngoài phạm vi, thẻ báo cáo
             (kể cả run chạy nền xong sau khi đã tắt chế độ) và thẻ gợi ý của main. */}
         <ResearchConversationCards suggest={researchSuggest} />
         {/* P1 — thẻ Design trong hội thoại: lời hỏi phỏng vấn, thẻ brief + danh sách chạm, dòng thời gian. */}
         <DesignConversationCards />
+        <div ref={messagesEndRef} />
         </div>
 
       </div>
