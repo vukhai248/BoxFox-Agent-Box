@@ -1459,6 +1459,9 @@ class WorkGraph:
                 return not_shipped('add_failed', 'git add failed; read ship.steps and call work_ship again.')
             committed, commit_out = await sh(f"git -c user.name='BoxFox' -c user.email='boxfox@localhost' "
                                              f"commit -m '{message}' -m 'Work Graph {run['runId']}'")
+            if not committed and 'nothing to commit' not in commit_out:
+                return not_shipped('commit_failed', 'git commit failed (a hook or config?); read ship.steps, '
+                                                    'fix it, and call work_ship again.')
             _, sha = await sh('git rev-parse --short HEAD')
             pushed, pr_url = False, None
             has_remote, _ = await sh('git remote get-url origin')

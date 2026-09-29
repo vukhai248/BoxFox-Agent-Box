@@ -57,6 +57,7 @@ class Model:
 class Executor:
     def __init__(self, git=False):
         self.git = git
+        self.commit_fails = False
         self.calls = []
 
     async def execute(self, name, args, sid, **_identity):
@@ -71,6 +72,8 @@ class Executor:
                         'exit_code': 0 if self.git else 128, 'is_error': not self.git}
             if command.startswith('git remote get-url'):
                 return {'content': 'error: No such remote', 'exit_code': 2, 'is_error': True}
+            if 'commit -m' in command and self.commit_fails:
+                return {'content': 'pre-commit hook failed', 'exit_code': 1, 'is_error': True}
             if command.startswith('git rev-parse --short'):
                 return {'content': 'abc1234\n', 'exit_code': 0, 'is_error': False}
             return {'content': 'ok', 'exit_code': 0, 'is_error': False}
@@ -736,3 +739,19 @@ def test_an_expired_interview_records_agent_answers_in_the_resolved_event(tmp_pa
     assert [item['decidedBy'] for item in record['answers']] == ['agent', 'agent']
     resolved = [event for event in store.events(sid) if event['type'] == 'decision_resolved'][-1]
     assert len(resolved['data']['answers']) == 2
+
+
+def test_a_failed_commit_is_not_recorded_as_shipped(tmp_path):
+    _, runtime, _, executor, sid = build(tmp_path, git=True)
+    executor.commit_fails = True
+    wg.set_autopilot(runtime, sid, True)
+
+    async def run():
+        await approved_run(runtime, sid)()
+        await tool(runtime, sid, 'work_run', {'phase': 'execute'})
+        return await tool(runtime, sid, 'work_ship', {})
+
+    shipped = asyncio.run(run())
+    assert shipped['ship']['status'] == 'commit_failed' and shipped['status'] == 'executed'
+    commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
+    assert not any('git push' in command for command in commands)
