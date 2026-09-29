@@ -43,7 +43,7 @@ const TOOL_GROUP_NOTES: Record<string, string> = {
   peerMesh:
     "a child reads a peer's work stream and waits for the result it delivers; off means children cannot see each other",
   workGraph:
-    'work_graph · work_run · work_ship — main plans, reviews and runs sub-agents as a DAG; off returns to the legacy slash-mode path.',
+    'main plans, reviews and runs sub-agents as a DAG; off returns to the legacy slash-mode path.',
   questionsApprovals:
     'always on. The agent cannot be silenced on the things it must ask you about.',
 }

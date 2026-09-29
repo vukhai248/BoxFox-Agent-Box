@@ -1352,6 +1352,7 @@ const en: SameShape<typeof vi> = {
     findings: 'Reviewer findings',
     knowledge: 'Knowledge requests',
     preview: 'Output (preview)',
+    caveats: 'Accepted at the round cap with open findings',
     wholeReview: 'Whole-plan review',
     documents: 'Written documents',
     approval: 'Execution approval',

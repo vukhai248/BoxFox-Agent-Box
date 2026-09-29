@@ -1348,6 +1348,7 @@ const vi = {
     findings: 'Nhận xét của reviewer',
     knowledge: 'Yêu cầu tri thức',
     preview: 'Kết quả (xem trước)',
+    caveats: 'Nhận ở vòng cuối, còn điểm chưa xử lý',
     wholeReview: 'Review toàn plan',
     documents: 'Tài liệu đã ghi',
     approval: 'Duyệt thực thi',

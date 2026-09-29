@@ -375,6 +375,26 @@ def parse_verdict(text):
     return verdict, findings[:FINDINGS_MAX_CHARS]
 
 
+BLOCKING_RE = re.compile(r'^[\s#*]*Blocking findings\b[\s*]*(.*)$', re.I | re.M)
+SECTION_END_RE = re.compile(r'^[\s#*]*(#{1,4}\s|Non-blocking)', re.I | re.M)
+NONE_WORDS = ('none', 'no blocking findings', 'no blocking finding', 'nothing blocking', 'n/a')
+# Evidence nodes: at the round cap their output is still the best evidence there is. It is accepted with
+# the open findings as caveats, so a fuzzy citation cannot stall the whole plan (live test, space-bunny-free).
+CAVEAT_KINDS = ('explore', 'research')
+
+
+def has_no_blocking_findings(findings):
+    """True when the review's `Blocking findings` section says `none` (a `revise` then counts as `ok`)."""
+    raw = str(findings or '')
+    match = BLOCKING_RE.search(raw)
+    if not match:
+        return False
+    body = raw[match.end():]
+    end = SECTION_END_RE.search(body)
+    text = f'{match.group(1)} {body[:end.start()] if end else body}'
+    return text.strip(' \t\r\n:.-*`_—()').lower() in NONE_WORDS
+
+
 def parse_knowledge_requests(text):
     """`## Knowledge requests` block → [{role, question}] (max 3). `- none` means no request."""
     raw = str(text or '')
@@ -471,11 +491,14 @@ DELIVERABLES = {
 }
 
 REVIEW_RUBRICS = {
-    'explore': 'Check every claim against the repository: open the cited path:line. Reject invented paths, '
-               'missing call sites the goal obviously needs, and claims without a location.',
-    'research': 'Open the cited URLs/paths when you can. Reject facts without a source, a quote that does not '
-                'support the claim, a single source for a decision-critical number, and a recommendation that '
-                'ignores contrary evidence. Mark what you could not verify as UNVERIFIED.',
+    'explore': 'Spot-check the claims a planner will rely on: open at most 6 of the most decision-critical '
+               'cited path:line locations; do not re-explore the whole repository. Block only invented paths or '
+               'symbols, a claim that is wrong in substance, or a call site the goal obviously needs that is '
+               'missing. A line number that is a few lines off in the right file is a non-blocking note.',
+    'research': 'Open the cited URLs/paths for the decision-critical facts (at most 6). Block only a fact '
+                'without any source, a quote that contradicts the claim, or a recommendation that ignores '
+                'clear contrary evidence. Missing extra sources and wording are non-blocking notes; mark what '
+                'you could not verify as UNVERIFIED.',
     'design': 'Check the touch list against the repository, that every state (empty, loading, error, '
               'permission) and flow is defined, that contracts are typed, and that acceptance checks could '
               'prove the design was built.',
@@ -493,7 +516,8 @@ REVIEW_RUBRICS = {
 REVIEW_RUBRICS['debug'] = REVIEW_RUBRICS['build']
 REVIEW_RUBRICS['simplify'] = REVIEW_RUBRICS['build'] + ' Behavior must be unchanged.'
 
-REVIEW_TAIL = """Output (Markdown):
+REVIEW_TAIL = """A finding is BLOCKING only when the next step (a sub-plan, a build or the owner's decision) would go wrong if it used this output as written. Citation precision, style, extra detail and nice-to-haves are NON-BLOCKING notes. If you have no blocking finding, the verdict MUST be `ok`. Stay within your step budget: check, do not redo the work.
+Output (Markdown):
 ## Blocking findings — numbered; each names the acceptance item or section, the evidence (path:line, URL, command output) and the exact fix. Write `none` when there are none.
 ## Non-blocking notes — optional.
 END with exactly one final line: `VERDICT: ok` (acceptable as written) or `VERDICT: revise` (it must change). No text after that line. A review without the VERDICT line is discarded."""
@@ -503,7 +527,7 @@ WORK_NODE_CONTRACT = """
 Result contract (Work Graph node). The harness reviews your answer against the acceptance list; an independent reviewer decides `ok` or `revise`, and on `revise` you are run again with the findings.
 - Put the full deliverable in your final answer; nothing else reaches the reviewer.
 - Every claim needs evidence (path:line, URL with quote, command with real output). Mark unverified items UNVERIFIED.
-- Do not do other nodes' work and do not widen the scope.
+- Do not do other nodes' work and do not widen the scope. Stop exploring once every acceptance item is covered; a focused answer inside your step budget beats an exhaustive one that runs out.
 """ + KNOWLEDGE_CONTRACT
 
 REVIEW_CONTRACT = """
@@ -636,6 +660,7 @@ class WorkGraph:
                 stages[name] = {key: state.get(key) for key in ('status', 'attempts', 'outputChars', 'error',
                                                                  'startedAt', 'finishedAt')}
                 stages[name]['preview'] = bounded(state.get('output'), 1200)
+                stages[name]['caveats'] = bounded(state.get('caveats'), 900) if state.get('caveats') else None
                 stages[name]['rounds'] = [{key: item.get(key) for key in (
                     'attempt', 'producerId', 'reviewerId', 'verdict', 'error', 'at', 'reviewerRole',
                     'producerRole')} | {'findings': bounded(item.get('findings'), 900),
@@ -887,6 +912,9 @@ class WorkGraph:
             if not state.get('output'):
                 continue
             piece = bounded(state['output'], max(1500, room // max(1, len(node['dependsOn']))))
+            if state.get('caveats'):
+                piece += ('\n\nReviewer caveats (open at the round cap; verify before relying on them):\n'
+                          + bounded(state['caveats'], 1500))
             parts.append(f'### Accepted output of {dep} ({target["kind"]}: {target["title"]})\n{piece}')
             room -= len(piece)
         if stage == 'execute' and node['kind'] == PLAN_KIND:
@@ -1011,13 +1039,23 @@ class WorkGraph:
                     verdict, findings = parse_verdict(review_text)
                     if verdict:
                         break
+                if verdict == 'revise' and has_no_blocking_findings(findings):
+                    verdict = 'ok'
+                    entry['adjusted'] = 'revise without blocking findings counts as ok'
                 entry.update({'reviewerId': reviewer_id, 'verdict': verdict or 'unreviewed',
                               'findings': findings, 'at': now()})
                 if verdict == 'ok':
                     state['status'] = 'accepted'
                     state['feedback'] = ''
+                    state.pop('caveats', None)
                     break
                 state['feedback'] = findings or 'The reviewer did not return a verdict; tighten evidence.'
+                if attempt >= max_rounds and stage == 'produce' and node['kind'] in CAVEAT_KINDS and output.strip():
+                    state['status'] = 'accepted'
+                    state['caveats'] = bounded(findings or 'unreviewed', FINDINGS_MAX_CHARS)
+                    entry['acceptedWithCaveats'] = True
+                    self.save(run, 'node_accepted_with_caveats', f'{node["id"]}:{stage}#{attempt}')
+                    break
                 state['status'] = 'revise' if attempt < max_rounds else 'rejected'
                 self.save(run, 'node_revise', f'{node["id"]}:{stage}#{attempt}')
                 if state['status'] == 'rejected':
@@ -1167,7 +1205,8 @@ class WorkGraph:
                            'attempts': node['stages'][stage]['attempts'],
                            'verdicts': [item.get('verdict') for item in node['stages'][stage]['rounds']],
                            'output': bounded(node['stages'][stage]['output'], 3000),
-                           'lastFindings': bounded(node['stages'][stage].get('feedback'), 1200)}
+                           'lastFindings': bounded(node['stages'][stage].get('feedback'), 1200),
+                           'acceptedWithCaveats': bool(node['stages'][stage].get('caveats'))}
                           for node in run['nodes'] if stage in node['stages']
                           and (not only or node['id'] in only)]
         return out
@@ -1508,13 +1547,16 @@ class WorkGraph:
         lines = [MARKER]
         if intent:
             flow = intent.get('flow') or 'mixed'
-            lines.append(f'The owner typed /{intent.get("command") or flow}: this request MUST go through the Work '
+            lines.append(f'The owner typed /{intent.get("command") or flow}: this request goes through the Work '
                          f'Graph (flow `{flow}`). ' + {
                              'plan': 'Explore first, interview only on real ambiguity, then write sub-plans with '
                                      'tests and dependencies, verify, and ask for approval. Do not execute before '
                                      'approval.',
-                             'research': 'Build research nodes (plus explore when the repository matters), run them '
-                                         'with review, verify, and answer with the verified findings.',
+                             'research': 'FAST PATH: when the request is one fact, one version or a yes/no question, '
+                                         'answer it yourself with web_search/web_fetch and cite the sources; do not '
+                                         'create a run. Otherwise build research nodes (plus explore when the '
+                                         'repository matters), run them with review, verify, and answer with the '
+                                         'verified findings.',
                              'design': 'Explore the current UI/code, build design nodes, run them with review, '
                                        'verify, and present the verified design.'}.get(flow, ''))
             lines.append(f'Owner request: {bounded(intent.get("text"), 1500)}')

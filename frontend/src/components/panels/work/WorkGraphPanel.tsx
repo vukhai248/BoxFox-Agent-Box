@@ -522,6 +522,11 @@ function StageView({ name, stage }: { name: string; stage: WorkStage }) {
         )}
       </div>
       {stage.error && <p className="mt-1 text-[11px] text-rose-400">{stage.error}</p>}
+      {stage.caveats && (
+        <p className="mt-1 whitespace-pre-wrap text-[11px] text-amber-400" data-testid="work-caveats">
+          {t('work.caveats')}: {stage.caveats}
+        </p>
+      )}
       {previewOpen && stage.preview && (
         <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-bg p-2 text-[11px] text-muted">
           {stage.preview}

@@ -203,11 +203,12 @@ def test_discover_runs_the_review_loop_until_ok_and_feeds_the_findings_back(tmp_
     assert all(c['work']['runId'] == out['runId'] for c in children)
 
 
-def test_a_node_is_rejected_after_the_round_cap(tmp_path):
+def test_at_the_round_cap_evidence_is_accepted_with_caveats_and_a_sub_plan_is_rejected(tmp_path):
     def script(kind, text):
-        return 'still wrong\nVERDICT: revise' if kind == 'review' else ok_script(kind, text)
+        return ('## Blocking findings\n1. still wrong\nVERDICT: revise' if kind == 'review'
+                else ok_script(kind, text))
 
-    _, runtime, _, _, sid = build(tmp_path, script)
+    _, runtime, model, _, sid = build(tmp_path, script)
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button'})
@@ -215,10 +216,50 @@ def test_a_node_is_rejected_after_the_round_cap(tmp_path):
         return await tool(runtime, sid, 'work_run', {'phase': 'discover', 'maxRounds': 2})
 
     out = asyncio.run(run())
-    assert out['status'] == 'needs_revision'
-    assert out['outputs'][0]['status'] == 'rejected' and out['outputs'][0]['verdicts'] == ['revise', 'revise']
-    assert out['blocked'] == ['P1'], 'P1 cannot start once its dependency is rejected'
-    assert 'were not accepted' in out['next']
+    explore, plan = out['outputs']
+    # The explore output is the best evidence there is: it goes on, with the open findings attached.
+    assert explore['status'] == 'accepted' and explore['acceptedWithCaveats'] is True
+    assert explore['verdicts'] == ['revise', 'revise']
+    plan_prompt = [text for kind, text in model.prompts if kind == 'produce' and 'node P1' in text][0]
+    assert 'Reviewer caveats' in plan_prompt and 'still wrong' in plan_prompt
+    # A sub-plan is a deliverable: it is still rejected at the cap.
+    assert plan['status'] == 'rejected' and plan['acceptedWithCaveats'] is False
+    assert out['status'] == 'needs_revision' and 'were not accepted' in out['next']
+    view = wg.service(runtime).view(wg.service(runtime).get(out['runId']))
+    assert 'still wrong' in view['nodes'][0]['stages']['produce']['caveats']
+
+
+def test_a_revise_without_blocking_findings_counts_as_ok(tmp_path):
+    def script(kind, text):
+        if kind == 'review':
+            return '## Blocking findings\nnone\n## Non-blocking notes\n- line 12 is line 14\nVERDICT: revise'
+        return ok_script(kind, text)
+
+    _, runtime, _, _, sid = build(tmp_path, script)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+
+    out = asyncio.run(run())
+    assert out['outputs'][0]['status'] == 'accepted' and out['outputs'][0]['verdicts'] == ['ok']
+    assert out['outputs'][0]['attempts'] == 1
+
+
+def test_has_no_blocking_findings_reads_the_common_forms():
+    assert wg.has_no_blocking_findings('## Blocking findings\n- none\n\n## Non-blocking notes\n- a')
+    assert wg.has_no_blocking_findings('**Blocking findings:** None.')
+    assert wg.has_no_blocking_findings('## Blocking findings — none')
+    assert not wg.has_no_blocking_findings('## Blocking findings\n1. tests/x.py:3 has a TestCase')
+    assert not wg.has_no_blocking_findings('no section at all')
+
+
+def test_default_sessions_can_open_the_work_graph_skill():
+    from agentbox.skills.catalog import DEFAULT_SKILLS
+    from agentbox.skills.commands import ROLE_SKILLS
+    assert 'work-graph-planning' in DEFAULT_SKILLS
+    assert 'work-graph-planning' in DEFAULT_SKILLS & ROLE_SKILLS['plan']
 
 
 def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):

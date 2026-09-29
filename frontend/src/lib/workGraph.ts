@@ -42,6 +42,8 @@ export interface WorkStage {
   attempts: number
   preview: string
   error: string | null
+  /** Open reviewer findings when an evidence node was accepted at the round cap. */
+  caveats: string | null
   rounds: WorkRound[]
 }
 
@@ -127,6 +129,7 @@ function parseNode(raw: unknown): WorkNode | null {
       attempts: num(stage.attempts) ?? 0,
       preview: str(stage.preview),
       error: strOrNull(stage.error),
+      caveats: strOrNull(stage.caveats),
       rounds: (Array.isArray(stage.rounds) ? stage.rounds : [])
         .map(parseRound)
         .filter((round): round is WorkRound => round !== null),
