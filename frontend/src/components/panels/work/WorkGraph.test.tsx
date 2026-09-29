@@ -267,6 +267,35 @@ describe('thẻ phỏng vấn', () => {
     const calls = agentApiMock.mock.calls.filter(([path]) => String(path).endsWith('/decisions'))
     expect(calls[0][1]).toEqual({ decisionId: 'iv1', choice: 'decide' })
   })
+
+  it('"Khác" để trống chặn gửi; "để agent quyết định" từng câu gửi optionId decide', async () => {
+    useHarnessChatStore.setState({
+      sessions: { [CHAT_ID]: { id: 'sess-w', status: 'awaiting_decision', events: [INTERVIEW_REQUEST], error: null } },
+      decisions: { [CHAT_ID]: parseDecisions([INTERVIEW_REQUEST]) },
+    })
+    agentApiMock.mockImplementation(async () => ({ status: 'resolved', decisionId: 'iv1', choice: 'submit', outcome: 'answered' }))
+    const host = render(<DecisionsPanel />)
+    click(host.querySelector('[data-testid="interview-option-q1-arch"] input'))
+    click(host.querySelector('[data-testid="interview-option-q2-other"] input'))
+    const submit = host.querySelector('[data-testid="interview-submit"]') as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    const decideOne = host.querySelector('[data-testid="interview-decide-q2"]') as HTMLButtonElement
+    click(decideOne)
+    expect(decideOne.getAttribute('aria-pressed')).toBe('true')
+    expect(submit.disabled).toBe(false)
+    await act(async () => {
+      submit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    const calls = agentApiMock.mock.calls.filter(([path]) => String(path).endsWith('/decisions'))
+    expect(calls[0][1]).toEqual({
+      decisionId: 'iv1',
+      choice: 'submit',
+      answers: [
+        { questionId: 'q1', optionId: 'arch' },
+        { questionId: 'q2', optionId: 'decide' },
+      ],
+    })
+  })
 })
 
 describe('Work Graph', () => {
@@ -316,6 +345,11 @@ describe('Work Graph', () => {
     const put = agentApiMock.mock.calls.find(([path]) => String(path).endsWith('/autopilot'))
     expect(put).toEqual(['/sessions/sess-w/autopilot', { on: true }, 'PUT'])
     expect(toggle.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('parseWorkRun đọc documents dạng object {path}', () => {
+    const parsed = parseWorkRun({ ...run(1), documents: [{ path: '.plans/work/plan.md', identity: 'x', version: 1 }, 'a.md', {}] })
+    expect(parsed?.documents).toEqual(['.plans/work/plan.md', 'a.md'])
   })
 
   it('bảng trống khi chưa có lượt nào', async () => {

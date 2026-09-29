@@ -221,7 +221,7 @@ D. Interview only on real ambiguity after exploring: `interview(questions=[{id, 
 E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (file + command + expected) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again writes and reviews the sub-plans.
 F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
 G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Research-only and design-only runs have nothing to execute: answer the owner with the verified findings and the document paths instead.
-H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); each build is verified by a testing child. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
+H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); each build is verified by a testing child. A node that is not accepted leaves the run `execute_failed`: `work_graph(action='retry', nodeIds=[...])` re-runs it with the findings. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
 I. Every tool result carries `next` — follow it. A tool error names the field and the rule: fix that input once, never resend identical arguments. Report honestly what was accepted, rejected or not verified.
 The legacy direct-delegation protocol below still applies to small tasks and to follow-up questions about a finished run.
 
@@ -258,6 +258,19 @@ CORE MULTI-AGENT DELEGATION PROTOCOL:
 4. Final Synthesis & Delivery:
    - The final answer answers the owner in the language you are answering in: the real commands you ran, the real files you changed, no invented output. No filler, no sycophancy.
    - Deliver markdown only: the answer itself carries the text, the images and the links to the evidence files."""
+
+
+WORK_GRAPH_SOP_START = 'WORK GRAPH — THE DEFAULT PATH FOR NON-TRIVIAL WORK'
+WORK_GRAPH_SOP_END = 'CORE MULTI-AGENT DELEGATION PROTOCOL:'
+
+
+def orchestrator_guidance():
+    """The main SOP; `BOXFOX_WORK_GRAPH=off` drops the Work Graph section (legacy path)."""
+    if work_graph.enabled():
+        return ORCHESTRATOR_SOP_GUIDANCE
+    head, _, rest = ORCHESTRATOR_SOP_GUIDANCE.partition(WORK_GRAPH_SOP_START)
+    _, _, tail = rest.partition(WORK_GRAPH_SOP_END)
+    return head + WORK_GRAPH_SOP_END + tail if tail else ORCHESTRATOR_SOP_GUIDANCE
 
 IDENTITY = f'''You are BoxFox, an elite autonomous multi-agent software engineering system operating in a dedicated Docker sandbox.
 You embody ruthless technical precision: match the depth of your reply to the weight of the ask. Plain claims over adjectives; no filler, no sycophancy.
@@ -1197,7 +1210,8 @@ DECISION_TOOLS = frozenset({'ask_user', 'request_approval'})
 DECISION_DEFAULT_SECONDS = {'ask_user': 300.0, 'request_approval': 600.0, 'interview': 900.0}
 # Work Graph tools (main only). `interview` is the multi-question card (Q1..Q5, 2-4 options each,
 # "Other" free text and "let the agent decide"); the other three drive the Work Graph engine.
-WORK_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship', 'interview'})
+WORK_ENGINE_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship'})
+WORK_TOOLS = WORK_ENGINE_TOOLS | {'interview'}
 INTERVIEW_DECIDE = 'decide'
 INTERVIEW_SUBMIT = 'submit'
 DECISION_MAX_SECONDS = 3600.0
@@ -1924,7 +1938,7 @@ class HarnessRuntime(RuntimeCommands):
                             'parallel tool execution inside one step is not part of this round '
                             '(T14), so this flag changes no behaviour yet'),
             })
-        role_instructions = ROLES[role].instructions if role in ROLES else ORCHESTRATOR_SOP_GUIDANCE
+        role_instructions = ROLES[role].instructions if role in ROLES else orchestrator_guidance()
         required_research = {
             'research': ('research-search', 'research-reading', 'research-evidence'),
             'research-review': ('research-critique', 'research-evidence'),
@@ -3218,7 +3232,7 @@ class HarnessRuntime(RuntimeCommands):
         # F2 — không phụ thuộc phán quyết (xem docstring).
         items = note.get('assumptions') or []
         asked = self._decision_seen(sid) or any(
-            str((call or {}).get('name') or '') in DECISION_TOOLS
+            str((call or {}).get('name') or '') in DECISION_TOOLS | {'interview'}
             for call in (turn_calls or []))
         assumption_key = (sid, PLAN_ASSUMPTIONS_UNCONFIRMED_CODE, note['identity'], int(note['version']))
         if items and not asked and assumption_key not in self.plan_notice_keys:
@@ -3650,7 +3664,10 @@ class HarnessRuntime(RuntimeCommands):
                      'delegate branches to it and do NOT open a new tier-3 run while the mode is off.\n'
                      f'{RESEARCH_BACKGROUND_BLOCK_END}')
         tools = list(config.get('tools') or [])
-        if work_graph.enabled() and not session.get('parent_id') and session.get('role') == 'orchestrator':
+        if not work_graph.enabled():
+            # Công tắc giết: model không được thấy công cụ nào chỉ trả `WORK_GRAPH_OFF`.
+            tools = [name for name in tools if name not in WORK_ENGINE_TOOLS]
+        elif not session.get('parent_id') and session.get('role') == 'orchestrator':
             # Phiên tạo TRƯỚC Work Graph không có cờ `workTools` và cũng không có tên công cụ: cấp bổ
             # sung khi phiên còn quyền giao việc. Phiên mới mang cờ này, nên công tắc nhóm của Harness
             # vẫn là người quyết định.
@@ -5431,7 +5448,10 @@ class HarnessRuntime(RuntimeCommands):
         resolved = {'decisionId': record['decisionId'], 'choice': choice, 'status': status, 'note': note,
                     'reason': reason, 'resolvedAt': round(time.time(), 3)}
         if record.get('kind') == 'interview':
-            record['outcome']['answers'] = record.get('answers') or []
+            if not record.get('answers'):
+                # Hết hạn/huỷ/"để agent quyết định": mọi câu về agent TRƯỚC event, để lịch sử có đủ.
+                record['answers'] = [self.interview_answer(q, None) for q in record.get('questions') or []]
+            record['outcome']['answers'] = record['answers']
             resolved['answers'] = record['outcome']['answers']
         self.store.emit(record['sessionId'], 'decision_resolved', resolved)
         if not record['future'].done():
@@ -5695,9 +5715,9 @@ class HarnessRuntime(RuntimeCommands):
         self.store.emit(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': decision_id},
                                           'reason': 'decision_requested'})
         outcome = await self.wait_for_decision(sid, record)
-        answers = record.get('answers') or [self.interview_answer(q, None) for q in questions]
         if not record.get('answers'):
-            record['answers'] = answers
+            record['answers'] = [self.interview_answer(q, None) for q in questions]
+        answers = record['answers']
         delegated = [item['questionId'] for item in answers if item['decidedBy'] == 'agent']
         result = {'decisionId': decision_id, 'status': outcome.get('status'), 'answers': answers,
                   'message': ('The owner answered the interview. Treat each `answer` with decidedBy=user as a '
@@ -5708,7 +5728,7 @@ class HarnessRuntime(RuntimeCommands):
         if run_id:
             try:
                 service = work_graph.service(self)
-                run = service.get(run_id)
+                run = service.current(run_id)
                 run.setdefault('interviews', []).append({'decisionId': decision_id, 'status': result['status'],
                                                          'answers': answers, 'at': round(time.time(), 3)})
                 service.save(run, 'interview', f'{len(answers)} answers')

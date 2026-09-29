@@ -15,6 +15,7 @@ import { useUiStore } from '../../store/uiStore'
 import { useT } from '../../i18n/context'
 import { useNow } from '../../hooks/useNow'
 import { PermissionCard } from '../PermissionCard'
+import { INTERVIEW_DECIDE, INTERVIEW_SUBMIT, interviewAnswerLabel } from '../InterviewCard'
 
 type DecisionsFilter = 'all' | 'pending' | 'resolved'
 
@@ -284,8 +285,12 @@ export function DecisionsPanel() {
                 const choiceLabel =
                   decision.choice === null
                     ? null
-                    : (decision.options.find((option) => option.id === decision.choice)?.label ??
-                      decision.choice)
+                    : decision.kind === 'interview' && decision.choice === INTERVIEW_SUBMIT
+                      ? t('decisions.interview.submit')
+                      : decision.kind === 'interview' && decision.choice === INTERVIEW_DECIDE
+                        ? t('decisions.interview.decide')
+                        : (decision.options.find((option) => option.id === decision.choice)?.label ??
+                          decision.choice)
                 const approved = decision.status === 'approved'
                 // P4 — hàng trả lời tự nhập đã chốt nhưng không phải một lời duyệt: biểu tượng
                 // trung tính, không được đội lốt XCircle (đỏ = "bị từ chối").
@@ -324,11 +329,7 @@ export function DecisionsPanel() {
                             {decision.answers!.map((answer) => (
                               <li key={answer.questionId} className="truncate">
                                 <span className="text-muted">{answer.question ?? answer.questionId}: </span>
-                                {answer.decidedBy === 'agent'
-                                  ? answer.recommended
-                                    ? t('decisions.interview.agentDecidesWith', { option: answer.recommended })
-                                    : t('decisions.interview.agentDecides')
-                                  : answer.answer}
+                                {interviewAnswerLabel(answer, t)}
                               </li>
                             ))}
                           </ul>

@@ -316,7 +316,8 @@ def test_submit_with_autopilot_then_execute_and_ship_without_git(tmp_path):
     assert executed['status'] == 'executed' and executed['outputs'][0]['status'] == 'accepted'
     build_prompt = [text for kind, text in model.prompts if kind == 'produce' and '(plan, execute)' in text][0]
     assert 'The approved sub-plan P1 you must implement' in build_prompt
-    assert shipped['ship']['status'] == 'no_git' and shipped['status'] == 'shipped'
+    # Not a git repo: the PR file is written, and the run stays `executed` so main can ship again.
+    assert shipped['ship']['status'] == 'no_git' and shipped['status'] == 'executed'
     assert shipped['ship']['prFile'].endswith('/pull-request.md')
 
 
@@ -333,6 +334,8 @@ def test_ship_in_a_git_repository_commits_on_a_local_branch(tmp_path):
         await tool(runtime, sid, 'work_run', {'phase': 'execute'})
         with pytest.raises(ValueError, match='WORK_REPO_PATH_INVALID'):
             await tool(runtime, sid, 'work_ship', {'repoPath': '../etc'})
+        with pytest.raises(ValueError, match='WORK_REPO_PATH_INVALID'):
+            await tool(runtime, sid, 'work_ship', {'repoPath': '/etc'})
         return await tool(runtime, sid, 'work_ship', {'repoPath': 'BoxFox-Agent-Box'})
 
     shipped = asyncio.run(run())
@@ -340,7 +343,13 @@ def test_ship_in_a_git_repository_commits_on_a_local_branch(tmp_path):
     assert shipped['ship']['branch'] == 'boxfox/add-an-export-button'
     commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
     assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") for command in commands)
-    assert any("git checkout -B 'boxfox/add-an-export-button'" in command for command in commands)
+    # An existing branch is reused, never reset with `-B`; plan artifacts stay out of the commit.
+    assert any("git checkout 'boxfox/add-an-export-button' || git checkout -b 'boxfox/add-an-export-button'"
+               in command for command in commands)
+    assert not any('checkout -B' in command for command in commands)
+    assert any(":(exclude).plans/work" in command for command in commands)
+    # The PR body file is workspace-relative, and the command runs inside repoPath.
+    assert all("--body-file '../.plans/work/" in command for command in commands if 'gh pr create' in command)
 
 
 def test_execute_needs_approval_without_autopilot(tmp_path):
@@ -599,3 +608,131 @@ def test_work_graph_api_view_is_json_serializable(tmp_path):
     view = runtime.work_graph.view(runtime.work_graph.active(sid))
     assert json.loads(json.dumps(view))['waves'] == [['P1']]
     assert Path(view['nodes'][0]['id']).name == 'E1'
+
+
+# ------------------------------------------------------------------------ failure paths (review)
+
+def approved_run(runtime, sid):
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        await tool(runtime, sid, 'work_graph', {'action': 'verify'})
+        return await tool(runtime, sid, 'work_graph', {'action': 'submit'})
+    return run
+
+
+def test_a_rejected_execution_node_is_execute_failed_and_retry_reopens_it(tmp_path):
+    state = {'fail': True}
+
+    def script(kind, text):
+        if kind == 'review' and '(plan, execute)' in text and state['fail']:
+            return 'Blocking findings:\n- the export test fails\nVERDICT: revise'
+        return ok_script(kind, text)
+
+    _, runtime, _, _, sid = build(tmp_path, script=script)
+    wg.set_autopilot(runtime, sid, True)
+
+    async def run():
+        await approved_run(runtime, sid)()
+        failed = await tool(runtime, sid, 'work_run', {'phase': 'execute', 'maxRounds': 1})
+        with pytest.raises(ValueError, match='WORK_EXECUTE_FAILED'):
+            await tool(runtime, sid, 'work_run', {'phase': 'execute'})
+        state['fail'] = False
+        retried = await tool(runtime, sid, 'work_graph', {'action': 'retry', 'nodeIds': ['P1']})
+        again = await tool(runtime, sid, 'work_run', {'phase': 'execute'})
+        return failed, retried, again
+
+    failed, retried, again = asyncio.run(run())
+    assert failed['status'] == 'execute_failed' and failed['outputs'][0]['status'] == 'rejected'
+    assert 'action=retry' in failed['next']
+    assert retried['status'] == 'approved'
+    assert again['status'] == 'executed'
+
+
+def test_fanout_busy_is_queued_not_a_failed_node(tmp_path, monkeypatch):
+    _, runtime, _, _, sid = build(tmp_path)
+    monkeypatch.setattr(wg, 'FANOUT_RETRY_PAUSE', 0.0)
+    real = runtime.delegate
+    calls = {'n': 0}
+
+    async def flaky(session, args, work=None):
+        calls['n'] += 1
+        if calls['n'] <= 2:
+            raise ValueError('FANOUT_BUSY: the box already runs 8 children at the same time')
+        return await real(session, args, work=work)
+
+    monkeypatch.setattr(runtime, 'delegate', flaky)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+
+    out = asyncio.run(run())
+    assert out['outputs'][0]['status'] == 'accepted' and calls['n'] >= 4
+
+
+def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp_path, monkeypatch):
+    _, runtime, _, _, sid = build(tmp_path)
+    monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 1)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 72)
+        second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        return first, second
+
+    first, second = asyncio.run(run())
+    assert first['budgetExhausted'] is True
+    assert first['outputs'][0]['status'] in ('pending', 'revise') and first['outputs'][0]['attempts'] == 0
+    assert second['outputs'][0]['status'] == 'accepted'
+
+
+def test_a_restart_resets_in_flight_stages_and_a_lost_approval_card_can_be_asked_again(tmp_path):
+    store, runtime, _, _, sid = build(tmp_path)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+    asyncio.run(run())
+    service = wg.service(runtime)
+    stored = service.active(sid)
+    stored['nodes'][0]['stages']['produce']['status'] = 'running'
+    stored['status'] = 'verifying'
+    service.save(stored)
+
+    fresh = wg.WorkGraph(runtime)  # a new process
+    recovered = fresh.get(stored['runId'])
+    assert recovered['nodes'][0]['stages']['produce']['status'] == 'pending'
+    assert recovered['status'] == 'discovering'
+    assert recovered['history'][-1]['event'] == 'recovered'
+
+
+def test_the_off_switch_hides_the_engine_tools_and_the_sop_section(tmp_path, monkeypatch):
+    from agentbox.agent_core import runtime as runtime_module
+    store, runtime, _, _, sid = build(tmp_path)
+    assert 'WORK GRAPH' in runtime_module.orchestrator_guidance()
+    assert 'work_run' in runtime.turn_profile(store.get(sid))['tools']
+    monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
+    tools = runtime.turn_profile(store.get(sid))['tools']
+    assert not {'work_graph', 'work_run', 'work_ship'} & set(tools)
+    guidance = runtime_module.orchestrator_guidance()
+    assert 'WORK GRAPH' not in guidance and 'CORE MULTI-AGENT DELEGATION PROTOCOL' in guidance
+
+
+def test_an_expired_interview_records_agent_answers_in_the_resolved_event(tmp_path):
+    store, runtime, _, _, sid = build(tmp_path)
+    questions = runtime.normalize_interview({'questions': QUESTIONS})
+
+    async def run():
+        record = {'decisionId': 'iv-x', 'sessionId': sid, 'kind': 'interview', 'questions': questions,
+                  'answers': [], 'resolved': False, 'future': asyncio.get_running_loop().create_future()}
+        runtime.settle(record, 'decide', 'expired', 'session_cancelled', None)
+        return record
+    record = asyncio.run(run())
+    assert [item['decidedBy'] for item in record['answers']] == ['agent', 'agent']
+    resolved = [event for event in store.events(sid) if event['type'] == 'decision_resolved'][-1]
+    assert len(resolved['data']['answers']) == 2

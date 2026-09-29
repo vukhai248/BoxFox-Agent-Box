@@ -32,6 +32,7 @@ import {
   statusTone,
   type WorkNode,
   type WorkRound,
+  type WorkRunsResponse,
   type WorkRunView,
   type WorkStage,
 } from '../../../lib/workGraph'
@@ -84,7 +85,6 @@ function StatusIcon({ status }: { status: string | null | undefined }) {
 /** Trạng thái tổng của một nút: giai đoạn đang chạy/cuối cùng quyết định. */
 export function nodeStatus(node: WorkNode): string {
   const stages = Object.values(node.stages)
-  if (stages.length === 0) return 'pending'
   const active = stages.find((stage) => ['running', 'reviewing', 'researching'].includes(stage.status))
   if (active) return active.status
   const bad = stages.find((stage) => ['rejected', 'failed'].includes(stage.status))
@@ -102,7 +102,7 @@ export function WorkGraphPanel() {
   const sessionId = session?.id ?? null
   const events = useMemo(() => session?.events ?? [], [session?.events])
 
-  const [fetched, setFetched] = useState<{ enabled: boolean; autopilot: boolean; runs: WorkRunView[] } | null>(null)
+  const [fetched, setFetched] = useState<WorkRunsResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [autopilotOverride, setAutopilotOverride] = useState<boolean | null>(null)
   const [autopilotBusy, setAutopilotBusy] = useState(false)
@@ -114,6 +114,8 @@ export function WorkGraphPanel() {
     setFetched(null)
     setAutopilotOverride(null)
     setLoadError(null)
+    setSelectedRunId(null)
+    setOpenNode(null)
     if (!sessionId) return
     let cancelled = false
     fetchWorkRuns(sessionId)
@@ -134,6 +136,8 @@ export function WorkGraphPanel() {
   useEffect(() => setAutopilotOverride(null), [eventAutopilot])
 
   const targetRunId = typeof target?.runId === 'string' ? target.runId : null
+  // A new tab intent (a new run, or a run that waits for approval) wins over an earlier manual pick.
+  useEffect(() => setSelectedRunId(null), [target])
   const run = runs.find((item) => item.runId === (selectedRunId ?? targetRunId)) ?? runs[0] ?? null
 
   const toggleAutopilot = useCallback(async () => {

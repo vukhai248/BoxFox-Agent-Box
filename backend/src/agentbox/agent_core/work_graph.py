@@ -51,7 +51,6 @@ EXECUTE_ROLE = {'plan': 'build', 'build': 'build', 'debug': 'debug', 'testing': 
                 'simplify': 'simplify'}
 EXECUTE_REVIEWER = {'plan': 'testing', 'build': 'testing', 'debug': 'testing', 'simplify': 'testing',
                     'testing': 'review'}
-KNOWLEDGE_ROLES = ('research', 'explore')
 FLOW_REVIEWER = {'research': 'research-review'}
 
 MAX_NODES = 24
@@ -66,9 +65,14 @@ CONTEXT_MAX_CHARS = 15000
 FINDINGS_MAX_CHARS = 3000
 HISTORY_MAX = 120
 
-ACTIVE_STATUSES = ('drafting', 'discovering', 'needs_revision', 'verifying', 'verified',
-                   'awaiting_approval', 'approved', 'executing', 'executed')
 TERMINAL_STATUSES = ('shipped', 'cancelled', 'rejected')
+IN_FLIGHT_STAGE = ('running', 'reviewing', 'researching')
+FANOUT_RETRY_SECONDS = 900.0
+FANOUT_RETRY_PAUSE = 5.0
+
+
+class WorkBudgetExhausted(ValueError):
+    """The per-call child budget ran out: the node waits for the next `work_run`, it did not fail."""
 
 VERDICT_RE = re.compile(r'^\s*\**\s*VERDICT\s*\**\s*:\s*\**\s*(ok|revise)\b', re.I | re.M)
 LEGACY_VERDICT_RE = re.compile(r'\[(APPROVED|CHANGES REQUESTED)\]', re.I)
@@ -126,6 +130,7 @@ def set_autopilot(rt, sid, on):
         work = service(rt)
         run = work.active(sid)
         if run is not None:
+            run = work.current(run['runId'])
             run['autopilot'] = bool(on)
             work.save(run, 'autopilot', 'on' if on else 'off')
             result['runId'] = run['runId']
@@ -239,6 +244,12 @@ def graph_issues(nodes):
     return issues
 
 
+def check_graph(nodes):
+    issues = graph_issues(nodes)
+    if issues:
+        raise ValueError('WORK_GRAPH_INVALID: ' + '; '.join(issues))
+
+
 def find_cycle(nodes):
     by_id = {node['id']: node for node in nodes}
     state = {}
@@ -291,15 +302,19 @@ def stage_done(node, stage):
     return bool(state) and state['status'] == 'accepted'
 
 
+def gate_stage(node, dep, stage):
+    """Which stage of `dep` gates `node`'s `stage` (None: the edge does not gate it)."""
+    if stage == 'execute':
+        return 'execute' if 'execute' in dep['stages'] else 'produce'
+    if node['kind'] == PLAN_KIND and dep['kind'] == PLAN_KIND:
+        return None  # plan→plan orders execution; sub-plans are written in parallel
+    return 'produce'
+
+
 def dependency_satisfied(node, dep, stage):
     """Is `dep` far enough along for `node`'s `stage` to start?"""
-    if stage == 'produce':
-        if node['kind'] == PLAN_KIND and dep['kind'] == PLAN_KIND:
-            return True  # plan→plan orders execution; sub-plans are written in parallel
-        return stage_done(dep, 'produce')
-    if 'execute' in dep['stages']:
-        return stage_done(dep, 'execute')
-    return stage_done(dep, 'produce')
+    gate = gate_stage(node, dep, stage)
+    return gate is None or stage_done(dep, gate)
 
 
 def ready_nodes(run, stage, only=None):
@@ -336,11 +351,8 @@ def blocked_nodes(run, stage):
                     target = by_id.get(dep)
                     if target is None:
                         continue
-                    dep_stage = stage if (stage in target['stages'] and not (
-                        stage == 'produce' and node['kind'] == PLAN_KIND and target['kind'] == PLAN_KIND)) else None
-                    if stage == 'execute' and 'execute' not in target['stages']:
-                        dep_stage = 'produce'
-                    if dep_stage is None:
+                    dep_stage = gate_stage(node, target, stage)
+                    if dep_stage is None or dep_stage not in target['stages']:
                         continue
                     if dep in dead or target['stages'][dep_stage]['status'] in ('rejected', 'failed'):
                         dead.add(node['id'])
@@ -519,12 +531,46 @@ class WorkGraph:
         self.db = rt.store.db
         self.locks = {}
         self.child_budget = {}
+        self.live = {}  # runId -> the dict `work_run` is mutating; other writers must edit THAT copy
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS work_runs (
                 id TEXT PRIMARY KEY, session_id TEXT NOT NULL, status TEXT NOT NULL,
                 revision INTEGER NOT NULL, doc TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS work_runs_session ON work_runs(session_id, updated);
         ''')
+        self.recover()
+
+    def recover(self):
+        """A new process owns no child: reset in-flight stages so the next `work_run` re-runs them."""
+        rows = self.db.execute('SELECT id FROM work_runs WHERE status NOT IN (%s)'
+                               % ','.join('?' * len(TERMINAL_STATUSES)), TERMINAL_STATUSES).fetchall()
+        for row in rows:
+            try:
+                run = self.get(row['id'])
+            except (ValueError, json.JSONDecodeError):
+                continue
+            changed = False
+            for node in run['nodes']:
+                for state in node['stages'].values():
+                    if state['status'] in IN_FLIGHT_STAGE:
+                        state['status'] = 'revise' if state.get('rounds') else 'pending'
+                        state['attempts'] = max(0, int(state.get('attempts') or 0) - 1)
+                        state['error'] = 'interrupted by a restart'
+                        changed = True
+            status = {'executing': 'approved', 'verifying': 'discovering'}.get(run['status'])
+            if status:
+                run['status'] = status
+                changed = True
+            if changed:
+                self.save(run, 'recovered', 'in-flight work was reset after a restart')
+
+    def current(self, run_id):
+        """The live copy while `work_run` holds the run, else the stored one (no lost updates)."""
+        return self.live.get(run_id) or self.get(run_id)
+
+    def busy(self, run):
+        lock = self.locks.get(run['runId'])
+        return lock is not None and lock.locked()
 
     # ---- storage --------------------------------------------------------------------------- #
 
@@ -627,7 +673,7 @@ class WorkGraph:
         if flow not in FLOWS:
             raise ValueError(f'WORK_FLOW_INVALID: flow must be one of {list(FLOWS)}')
         current = self.active(sid)
-        if current is not None and current['status'] not in ('executed',):
+        if current is not None and current['status'] != 'executed':
             current['status'] = 'cancelled'
             self.save(current, 'superseded', 'a new run was created')
         run = {'runId': 'w-' + uuid.uuid4().hex[:10], 'sessionId': sid, 'goal': goal[:4000],
@@ -650,6 +696,7 @@ class WorkGraph:
         if not isinstance(raw_nodes, list) or not raw_nodes:
             raise ValueError('WORK_NODE_INVALID: `nodes` must be a non-empty list')
         by_id = {node['id']: node for node in run['nodes']}
+        changed_any = not replace
         for raw in raw_nodes:
             node_id = str((raw or {}).get('id') or '').strip() if isinstance(raw, dict) else ''
             existing = by_id.get(node_id)
@@ -661,6 +708,7 @@ class WorkGraph:
             if existing is not None:
                 changed = any(existing[key] != node[key] for key in ('goal', 'acceptance', 'tests', 'dependsOn'))
                 if changed:
+                    changed_any = True
                     for name, state in node['stages'].items():
                         if state['status'] in ('accepted', 'rejected', 'failed'):
                             node['stages'][name] = new_stage() | {'feedback': 'Node definition changed by main.'}
@@ -668,14 +716,14 @@ class WorkGraph:
         nodes = list(by_id.values())
         if len(nodes) > MAX_NODES:
             raise ValueError(f'WORK_GRAPH_TOO_LARGE: at most {MAX_NODES} nodes; merge related work')
-        issues = graph_issues(nodes)
-        if issues:
-            raise ValueError('WORK_GRAPH_INVALID: ' + '; '.join(issues))
+        check_graph(nodes)
         run['nodes'] = nodes
-        if run['status'] in ('verified', 'awaiting_approval', 'approved'):
+        if changed_any:
+            # A changed graph earns fresh whole-plan reviews; the old rounds judged another plan.
+            run['review'] = {'status': None, 'rounds': []}
+        if run['status'] in ('verified', 'awaiting_approval', 'approved', 'execute_failed') and changed_any:
             run['status'] = 'drafting'
             run['approval'] = None
-            run['review'] = {'status': None, 'rounds': (run.get('review') or {}).get('rounds', [])}
 
     def graph(self, session, args):
         action = str(args.get('action') or 'status').strip().lower()
@@ -687,9 +735,9 @@ class WorkGraph:
             return self.result(run)
         if run['status'] in TERMINAL_STATUSES:
             raise ValueError(f'WORK_RUN_CLOSED: run {run["runId"]} is {run["status"]}; create a new run')
+        if action in ('add', 'update', 'remove', 'retry', 'cancel') and self.busy(run):
+            raise ValueError('WORK_RUN_BUSY: work_run is running for this run; wait for it to return')
         if action in ('add', 'update'):
-            if run['status'] in ('executing',):
-                raise ValueError('WORK_RUN_BUSY: the run is executing; wait for work_run to return')
             self.apply_nodes(run, args.get('nodes'), replace=action == 'update')
             return self.result(self.save(run, action, ','.join(str((n or {}).get('id')) for n in args['nodes']
                                                                 if isinstance(n, dict))))
@@ -703,12 +751,35 @@ class WorkGraph:
                                  'nodes; update their dependsOn first')
             run['nodes'] = [node for node in run['nodes'] if node['id'] not in ids]
             return self.result(self.save(run, 'remove', ','.join(sorted(ids))))
+        if action == 'retry':
+            return self.result(self.retry(run, set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))))
         if action == 'validate':
             return self.result(run) | {'valid': not graph_issues(run['nodes'])}
         if action == 'cancel':
             run['status'] = 'cancelled'
             return self.result(self.save(run, 'cancelled'))
         raise ValueError(f'WORK_ACTION_INVALID: action {action!r} is not supported here')
+
+    def retry(self, run, ids):
+        """Re-open rejected/failed stages (all, or `ids`) with their last findings as feedback."""
+        reset = []
+        for node in run['nodes']:
+            if ids and node['id'] not in ids:
+                continue
+            for name, state in node['stages'].items():
+                if state['status'] in ('rejected', 'failed'):
+                    feedback = state.get('feedback') or state.get('error') or ''
+                    node['stages'][name] = new_stage() | {'feedback': ('Retry after: ' + feedback)[:FINDINGS_MAX_CHARS],
+                                                          'rounds': state.get('rounds') or []}
+                    reset.append(f'{node["id"]}:{name}')
+        if not reset:
+            raise ValueError('WORK_NOTHING_TO_RETRY: no rejected or failed stage'
+                             + (' among ' + ', '.join(sorted(ids)) if ids else ''))
+        if run['status'] == 'execute_failed':
+            run['status'] = 'approved'
+        elif run['status'] == 'needs_revision':
+            run['status'] = 'discovering'
+        return self.save(run, 'retry', ','.join(reset))
 
     def result(self, run, message=None):
         view = self.view(run)
@@ -748,6 +819,12 @@ class WorkGraph:
             return 'Answer the owner with the verified result and the document paths.'
         if status == 'awaiting_approval':
             return 'Wait for the owner decision.'
+        if status == 'execute_failed':
+            bad = [node['id'] for node in run['nodes'] if node['stages'].get('execute', {}).get('status')
+                   in ('rejected', 'failed')]
+            return (f'Execution nodes {", ".join(bad) or "?"} were not accepted (read lastFindings). Call '
+                    'work_graph action=retry nodeIds=[...] to run them again with the findings, or '
+                    'action=update to change the plan (then verify and approval again), or report to the owner.')
         if status in ('approved', 'executing'):
             return 'Call work_run phase=execute.'
         if status == 'executed':
@@ -757,26 +834,41 @@ class WorkGraph:
     # ---- child plumbing ---------------------------------------------------------------------- #
 
     def child_answer(self, child_id):
-        try:
-            events = self.store.events(child_id)
-        except KeyError:
+        """The child's LAST final answer (not bounded by the 500-event window of `store.events`)."""
+        if not child_id:
             return ''
-        answers = [event['data'].get('text') or '' for event in events
-                   if event['type'] == 'assistant' and event['data'].get('final')]
-        return answers[-1] if answers else ''
+        rows = self.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='assistant' "
+                               'ORDER BY seq DESC LIMIT 50', (child_id,)).fetchall()
+        for row in rows:
+            try:
+                data = json.loads(row['payload'])
+            except (TypeError, ValueError):
+                continue
+            if data.get('final'):
+                return data.get('text') or ''
+        return ''
 
     async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt):
         """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer."""
         budget = self.child_budget.get(run['runId'])
         if budget is not None:
             if budget[0] <= 0:
-                raise ValueError('WORK_CHILD_BUDGET: this work_run call already started '
-                                 f'{WORK_CHILDREN_PER_RUN_CALL} children; call work_run again')
+                raise WorkBudgetExhausted('WORK_CHILD_BUDGET: this work_run call already started '
+                                          f'{WORK_CHILDREN_PER_RUN_CALL} children; call work_run again')
             budget[0] -= 1
         work = {'runId': run['runId'], 'nodeId': node['id'] if node else None, 'stage': stage,
                 'purpose': purpose, 'attempt': attempt}
-        result = await self.rt.delegate(session, {'role': role, 'goal': goal, 'context': bounded(context, 16000),
-                                                  'expect': expect}, work=work)
+        args = {'role': role, 'goal': goal, 'context': bounded(context, 16000), 'expect': expect}
+        waited = time.monotonic()
+        while True:
+            try:
+                result = await self.rt.delegate(session, dict(args), work=work)
+                break
+            except ValueError as exc:
+                # Parallel nodes and their knowledge requests share the fan-out slots: queue, do not fail.
+                if not str(exc).startswith('FANOUT_BUSY') or time.monotonic() - waited > FANOUT_RETRY_SECONDS:
+                    raise
+                await asyncio.sleep(FANOUT_RETRY_PAUSE)
         answer = self.child_answer(result.get('sessionId')) or str(result.get('summary') or '')
         return result, answer
 
@@ -790,7 +882,7 @@ class WorkGraph:
             target = by_id.get(dep)
             if target is None:
                 continue
-            chosen = 'execute' if stage == 'execute' and 'execute' in target['stages'] else 'produce'
+            chosen = gate_stage(node, target, stage) or 'produce'
             state = target['stages'].get(chosen) or {}
             if not state.get('output'):
                 continue
@@ -938,6 +1030,13 @@ class WorkGraph:
             state['error'] = 'cancelled'
             self.save(run, 'node_cancelled', node['id'])
             raise
+        except WorkBudgetExhausted as exc:
+            # This attempt never finished: give it back and wait for the next work_run call.
+            if state['rounds'] and not state['rounds'][-1].get('verdict'):
+                state['rounds'].pop()
+            state['attempts'] = max(0, state['attempts'] - 1)
+            state['status'] = 'revise' if state['rounds'] else 'pending'
+            state['error'] = str(exc)[:500]
         except Exception as exc:
             state['status'] = 'failed'
             state['error'] = str(exc)[:500]
@@ -954,19 +1053,19 @@ class WorkGraph:
         stage = 'produce' if phase == 'discover' else 'execute'
         if run['status'] in TERMINAL_STATUSES:
             raise ValueError(f'WORK_RUN_CLOSED: run {run["runId"]} is {run["status"]}')
-        issues = graph_issues(run['nodes'])
-        if issues:
-            raise ValueError('WORK_GRAPH_INVALID: ' + '; '.join(issues))
+        check_graph(run['nodes'])
         if stage == 'execute':
+            if run['status'] == 'execute_failed':
+                raise ValueError('WORK_EXECUTE_FAILED: some execution nodes were not accepted; call work_graph '
+                                 'action=retry (or update) first')
             if run['status'] not in ('approved', 'executing', 'executed'):
                 if autopilot_on(self.store.get(sid)) and run['status'] == 'verified':
-                    run['approval'] = {'status': 'approved', 'by': 'autopilot', 'at': now()}
-                    run['status'] = 'approved'
+                    self.approve_by_autopilot(run)
                 else:
                     raise ValueError('WORK_APPROVAL_REQUIRED: execution needs owner approval — call work_graph '
                                      'action=verify then action=submit (Autopilot skips the wait)')
             run['status'] = 'executing'
-        elif run['status'] in ('approved', 'executing', 'executed'):
+        elif run['status'] in ('approved', 'executing', 'executed', 'execute_failed'):
             raise ValueError('WORK_PHASE_INVALID: the plan is approved; run phase=execute, or update nodes to re-plan')
         else:
             run['status'] = 'discovering'
@@ -976,12 +1075,20 @@ class WorkGraph:
         if lock.locked():
             raise ValueError('WORK_RUN_BUSY: work_run is already running for this run')
         async with lock:
+            self.live[run['runId']] = run
             self.save(run, 'run_started', phase)
             self.child_budget[run['runId']] = [WORK_CHILDREN_PER_RUN_CALL]
             limit = max(1, int(self.rt.fanout_limit(session.get('config'))))
-            outcome = await self.schedule(session, run, stage, max_rounds, only, limit)
-            self.child_budget.pop(run['runId'], None)
-        return outcome
+            try:
+                with self.budget_paused(sid):
+                    return await self.schedule_nodes(session, run, stage, max_rounds, only, limit)
+            finally:
+                self.child_budget.pop(run['runId'], None)
+                self.live.pop(run['runId'], None)
+
+    def approve_by_autopilot(self, run):
+        run['approval'] = {'status': 'approved', 'by': 'autopilot', 'at': now()}
+        run['status'] = 'approved'
 
     @contextlib.contextmanager
     def budget_paused(self, sid):
@@ -1003,30 +1110,32 @@ class WorkGraph:
                 except RuntimeError:
                     pass
 
-    async def schedule(self, session, run, stage, max_rounds, only, limit):
-        with self.budget_paused(session['id']):
-            return await self.schedule_nodes(session, run, stage, max_rounds, only, limit)
-
     async def schedule_nodes(self, session, run, stage, max_rounds, only, limit):
         started = time.monotonic()
         running = {}
         timed_out = False
         try:
             while True:
-                if time.monotonic() - started > WORK_RUN_MAX_SECONDS:
+                remaining = WORK_RUN_MAX_SECONDS - (time.monotonic() - started)
+                if remaining <= 0:
                     timed_out = True
                     break
-                for node in ready_nodes(run, stage, only or None):
-                    if node['id'] in running or len(running) >= limit:
-                        continue
-                    running[node['id']] = asyncio.ensure_future(
-                        self.run_stage(session, run, node, stage, max_rounds))
+                budget = self.child_budget.get(run['runId'])
+                if budget is None or budget[0] > 0:
+                    for node in ready_nodes(run, stage, only or None):
+                        if node['id'] in running or len(running) >= limit:
+                            continue
+                        running[node['id']] = asyncio.ensure_future(
+                            self.run_stage(session, run, node, stage, max_rounds))
                 if not running:
                     break
-                done, _ = await asyncio.wait(list(running.values()), return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait(list(running.values()), timeout=remaining,
+                                             return_when=asyncio.FIRST_COMPLETED)
                 for node_id in [key for key, task in running.items() if task in done]:
                     task = running.pop(node_id)
-                    if task.exception() is not None and not isinstance(task.exception(), asyncio.CancelledError):
+                    if task.cancelled():
+                        continue
+                    if task.exception() is not None:
                         node = next(item for item in run['nodes'] if item['id'] == node_id)
                         node['stages'][stage].update({'status': 'failed', 'error': str(task.exception())[:500]})
         finally:
@@ -1039,16 +1148,21 @@ class WorkGraph:
         if stage == 'execute':
             if all(value == 'accepted' for value in statuses.values()):
                 run['status'] = 'executed'
+            elif any(value in ('rejected', 'failed') for value in statuses.values()):
+                run['status'] = 'execute_failed'
             else:
-                run['status'] = 'executing'
+                run['status'] = 'approved'  # timed out or out of budget: work_run phase=execute continues
         else:
             run['status'] = 'needs_revision' if any(value in ('rejected', 'failed') for value in statuses.values()) \
                 else 'discovering'
+        run['autopilot'] = autopilot_on(self.store.get(session['id']))  # the switch may move mid-run
         self.save(run, 'run_finished', json.dumps(statuses)[:300])
         out = self.result(run)
         out['phase'] = 'discover' if stage == 'produce' else 'execute'
         out['timedOut'] = timed_out
         out['blocked'] = blocked
+        budget = self.child_budget.get(run['runId'])
+        out['budgetExhausted'] = bool(budget is not None and budget[0] <= 0)
         out['outputs'] = [{'id': node['id'], 'kind': node['kind'], 'status': node['stages'][stage]['status'],
                            'attempts': node['stages'][stage]['attempts'],
                            'verdicts': [item.get('verdict') for item in node['stages'][stage]['rounds']],
@@ -1139,7 +1253,7 @@ class WorkGraph:
     async def verify(self, session, args):
         sid = session['id']
         run = self.resolve(sid, args.get('runId'))
-        if run['status'] in ('approved', 'executing', 'executed') + TERMINAL_STATUSES:
+        if run['status'] in ('approved', 'executing', 'executed', 'execute_failed') + TERMINAL_STATUSES:
             raise ValueError(f'WORK_PHASE_INVALID: run is {run["status"]}; verify happens before approval')
         produce = [node for node in run['nodes'] if 'produce' in node['stages']]
         if not produce:
@@ -1172,7 +1286,6 @@ class WorkGraph:
             'For each sub-plan that must change write a line `REVISE <nodeId>: <what to fix>`. Structural problems '
             '(a missing sub-plan, a wrong dependency) go under Blocking findings.', '', REVIEW_TAIL])
         context = f'### Master document\n{bounded(master, 7000)}\n\n### Sub-plans / outputs\n{bodies}'
-        verdict, findings, child_id, error = None, '', None, None
         self.child_budget[run['runId']] = [4]
         try:
             with self.budget_paused(sid):
@@ -1180,7 +1293,9 @@ class WorkGraph:
                                                                               len(review['rounds']) + 1)
         finally:
             self.child_budget.pop(run['runId'], None)
-        self.after_verify(run, review, verdict, findings, child_id, error)
+        review['rounds'].append({'childId': child_id, 'verdict': verdict or 'unreviewed', 'findings': findings,
+                                 'at': now(), 'error': error})
+        review['status'] = verdict
         return await self.finish_verify(sid, run, review, produce, verdict, findings)
 
     async def verify_review(self, session, run, reviewer, goal, context, attempt):
@@ -1198,12 +1313,6 @@ class WorkGraph:
             if verdict:
                 break
         return verdict, findings, child_id, error
-
-    @staticmethod
-    def after_verify(run, review, verdict, findings, child_id, error):
-        review['rounds'].append({'childId': child_id, 'verdict': verdict or 'unreviewed', 'findings': findings,
-                                 'at': now(), 'error': error})
-        review['status'] = verdict
 
     async def finish_verify(self, sid, run, review, produce, verdict, findings):
         targets = parse_revise_targets(findings, {node['id'] for node in run['nodes']}) if verdict == 'revise' else {}
@@ -1242,8 +1351,11 @@ class WorkGraph:
     async def submit(self, session, args, call_id=None):
         sid = session['id']
         run = self.resolve(sid, args.get('runId'))
-        if graph_issues(run['nodes']):
-            raise ValueError('WORK_GRAPH_INVALID: ' + '; '.join(graph_issues(run['nodes'])))
+        check_graph(run['nodes'])
+        if run['status'] == 'awaiting_approval':
+            if any(record.get('workRunId') == run['runId'] for record in self.rt.pending_for(sid)):
+                raise ValueError('WORK_RUN_BUSY: the approval card is already waiting for the owner')
+            run['status'] = 'verified'  # the card was lost (restart): ask again
         has_produce = any('produce' in node['stages'] for node in run['nodes'])
         if has_produce and run['status'] != 'verified':
             raise ValueError('WORK_NOT_VERIFIED: call work_graph action=verify first; only a verified plan is '
@@ -1255,11 +1367,9 @@ class WorkGraph:
         waves = execution_waves(run['nodes'])
         wave_text = ' → '.join('[' + ' ‖ '.join(wave) + ']' for wave in waves)
         if autopilot_on(self.store.get(sid)):
-            run['approval'] = {'status': 'approved', 'by': 'autopilot', 'at': now()}
-            run['status'] = 'approved'
+            self.approve_by_autopilot(run)
             self.save(run, 'approved', 'autopilot')
-            out = self.result(run, 'Autopilot is on: execution approved without waiting. Call work_run phase=execute.')
-            return out
+            return self.result(run, 'Autopilot is on: execution approved without waiting. Call work_run phase=execute.')
         run['status'] = 'awaiting_approval'
         self.save(run, 'approval_requested')
         docs = ', '.join(item['path'] for item in run.get('documents') or []) or 'no document'
@@ -1271,24 +1381,25 @@ class WorkGraph:
                         {'id': 'revise', 'label': 'Cần sửa kế hoạch', 'kind': 'alternative', 'allowFreeText': True}],
             'deadlineSeconds': int(args.get('deadlineSeconds') or 1800), 'workRunId': run['runId']}, call_id)
         run = self.get(run['runId'])
-        decision = (outcome or {}).get('decision')
-        choice = (outcome or {}).get('choice')
+        outcome = outcome or {}
+        decision = outcome.get('decision')
+        choice = outcome.get('choice')
         if decision == 'approved' and choice != 'revise':
             run['approval'] = {'status': 'approved', 'by': 'owner', 'at': now(),
-                               'decisionId': (outcome or {}).get('decisionId')}
+                               'decisionId': outcome.get('decisionId')}
             run['status'] = 'approved'
             self.save(run, 'approved', 'owner')
             message = 'The owner approved. Call work_run phase=execute.'
         else:
-            run['approval'] = {'status': 'changes_requested' if (outcome or {}).get('note') else 'rejected',
-                               'by': 'owner', 'at': now(), 'note': (outcome or {}).get('note'),
-                               'decisionId': (outcome or {}).get('decisionId')}
-            run['status'] = 'needs_revision' if (outcome or {}).get('note') else 'verified'
+            run['approval'] = {'status': 'changes_requested' if outcome.get('note') else 'rejected',
+                               'by': 'owner', 'at': now(), 'note': outcome.get('note'),
+                               'decisionId': outcome.get('decisionId')}
+            run['status'] = 'needs_revision' if outcome.get('note') else 'verified'
             self.save(run, 'approval_' + run['approval']['status'])
             message = ('The owner did not approve. Read `note`, update the nodes, run and verify again.'
-                       if (outcome or {}).get('note') else 'The owner did not approve execution. Do not execute.')
+                       if outcome.get('note') else 'The owner did not approve execution. Do not execute.')
         out = self.result(run, message)
-        out['decision'] = {key: (outcome or {}).get(key) for key in ('decision', 'choice', 'status', 'note')}
+        out['decision'] = {key: outcome.get(key) for key in ('decision', 'choice', 'status', 'note')}
         return out
 
     # ---- ship ---------------------------------------------------------------------------------- #
@@ -1306,10 +1417,14 @@ class WorkGraph:
         body = str(args.get('body') or '').strip() or self.pr_body(run)
         doc = await self.write_document(sid, run, 'pull-request', f'# {title}\n\n{body}\n', f'PR — {title}')
         message = title.replace("'", "'\\''")
-        repo = str(args.get('repoPath') or '').strip()
-        if repo and (not re.fullmatch(r'[A-Za-z0-9._/ -]{1,200}', repo) or '..' in repo.split('/')):
-            raise ValueError('WORK_REPO_PATH_INVALID: repoPath must be a plain directory inside the workspace')
+        repo = str(args.get('repoPath') or '').strip().strip('/') if args.get('repoPath') else ''
+        if args.get('repoPath') and (str(args['repoPath']).strip().startswith('/') or not repo
+                                     or not re.fullmatch(r'[A-Za-z0-9._/ -]{1,200}', repo)
+                                     or '..' in repo.split('/')):
+            raise ValueError('WORK_REPO_PATH_INVALID: repoPath must be a relative directory inside the workspace')
         prefix = f"cd '{repo}' && " if repo else ''
+        # The PR file path is workspace-relative; commands run inside repoPath.
+        body_file = '../' * len([part for part in repo.split('/') if part not in ('', '.')]) + doc['path']
         steps = []
 
         async def sh(command, timeout=120):
@@ -1321,16 +1436,27 @@ class WorkGraph:
             steps.append({'command': command.split(' && ')[0][:160], 'ok': not failed, 'output': text[-600:]})
             return not failed, text
 
+        def not_shipped(status, message):
+            # The run stays `executed`: main can fix the input (repoPath, branch) and ship again.
+            run['ship'] = {'status': status, 'branch': branch, 'prFile': doc['path'], 'steps': steps, 'at': now()}
+            self.save(run, 'ship_' + status)
+            return self.result(run, message) | {'ship': run['ship']}
+
         async with self.rt.writer_lock:
             ok, _ = await sh('git rev-parse --is-inside-work-tree')
             if not ok:
-                run['ship'] = {'status': 'no_git', 'branch': None, 'prFile': doc['path'], 'steps': steps, 'at': now()}
-                run['status'] = 'shipped'
-                self.save(run, 'shipped', 'no_git')
-                return self.result(run, 'The workspace is not a git repository; the PR description file was written.') \
-                    | {'ship': run['ship']}
-            await sh(f"git checkout -B '{branch}'")
-            await sh('git add -A')
+                return not_shipped('no_git', f'{repo or "The workspace"} is not a git repository (or does not '
+                                             'exist). Call work_ship with repoPath=<the repository directory inside '
+                                             'the workspace>, or report the PR description file to the owner.')
+            # Reuse an existing branch instead of resetting it (`-B` would orphan its commits).
+            ok, _ = await sh(f"git rev-parse --verify --quiet 'refs/heads/{branch}' >/dev/null "
+                             f"&& git checkout '{branch}' || git checkout -b '{branch}'")
+            if not ok:
+                return not_shipped('checkout_failed', f'git could not switch to branch {branch}; read ship.steps, '
+                                                      'fix the working tree, and call work_ship again.')
+            ok, _ = await sh("git add -A -- . ':(exclude).plans/work'")
+            if not ok:
+                return not_shipped('add_failed', 'git add failed; read ship.steps and call work_ship again.')
             committed, commit_out = await sh(f"git -c user.name='BoxFox' -c user.email='boxfox@localhost' "
                                              f"commit -m '{message}' -m 'Work Graph {run['runId']}'")
             _, sha = await sh('git rev-parse --short HEAD')
@@ -1342,7 +1468,7 @@ class WorkGraph:
                     has_gh, _ = await sh('command -v gh && gh auth status')
                     if has_gh:
                         created, out = await sh(f"gh pr create --draft --title '{message}' --body-file "
-                                                f"'{doc['path']}' --head '{branch}'", timeout=180)
+                                                f"'{body_file}' --head '{branch}'", timeout=180)
                         match = re.search(r'https://\S+/pull/\d+', out)
                         pr_url = match.group(0) if created and match else None
         run['ship'] = {'status': 'pr_opened' if pr_url else ('pushed' if pushed else 'local'),

@@ -630,9 +630,10 @@ SCHEMAS = [
          'edit nodes (each node: id, kind, title, goal, dependsOn, acceptance, tests, files); status reads '
          'the run; validate checks the DAG; verify runs the whole-plan review (coverage, dependencies, '
          'order) and writes the verified plan documents; submit asks the owner to approve execution '
-         '(skipped when Autopilot is on); cancel closes the run. Only main calls this.',
+         '(skipped when Autopilot is on); retry re-opens rejected/failed nodes (nodeIds, default all) with '
+         'their findings; cancel closes the run. Only main calls this.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
-                                                'verify', 'submit', 'cancel']},
+                                                'verify', 'submit', 'retry', 'cancel']},
           'runId': STRING, 'goal': STRING, 'title': STRING,
           'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
                    'description': 'what the owner asked for; plan+research/design is `mixed`'},

@@ -170,7 +170,9 @@ export function parseWorkRun(raw: unknown): WorkRunView | null {
         .filter((r): r is Record<string, unknown> => r !== null)
         .map((r) => ({ childId: strOrNull(r.childId), verdict: strOrNull(r.verdict), findings: str(r.findings) })),
     },
-    documents: strList(item.documents),
+    documents: (Array.isArray(item.documents) ? item.documents : [])
+      .map((doc) => (typeof doc === 'string' ? doc : str(record(doc)?.path)))
+      .filter((path) => path.length > 0),
     approval: record(item.approval),
     ship: record(item.ship),
     history: (Array.isArray(item.history) ? item.history : [])

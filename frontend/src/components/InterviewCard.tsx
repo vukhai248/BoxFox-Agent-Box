@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, CircleHelp, LoaderCircle, Sparkles } from 'lucide-react'
 import { useT } from '../i18n/context'
-import type { DecisionEntry, InterviewQuestion, InterviewReply } from '../store/harnessChatStore'
+import type { DecisionEntry, InterviewAnswer, InterviewQuestion, InterviewReply } from '../store/harnessChatStore'
 
 /** Mã lựa chọn mà harness hiểu (runtime.INTERVIEW_SUBMIT / INTERVIEW_DECIDE / DECISION_OTHER_OPTION_ID). */
 export const INTERVIEW_SUBMIT = 'submit'
@@ -24,25 +24,32 @@ export interface InterviewCardProps {
   busy?: boolean
 }
 
+function draftDone(draft: Draft | undefined): draft is Draft {
+  if (!draft) return false
+  return draft.optionId !== INTERVIEW_OTHER || draft.text.trim().length > 0
+}
+
 /** Bản nháp → câu trả lời gửi đi; câu chưa chọn thì không gửi (agent quyết định). */
 export function interviewReplies(questions: InterviewQuestion[], drafts: Record<string, Draft>): InterviewReply[] {
   const replies: InterviewReply[] = []
   for (const question of questions) {
     const draft = drafts[question.id]
-    if (!draft) continue
-    if (draft.optionId === INTERVIEW_OTHER) {
-      const text = draft.text.trim()
-      if (text) replies.push({ questionId: question.id, optionId: INTERVIEW_OTHER, text })
-      continue
-    }
-    replies.push({ questionId: question.id, optionId: draft.optionId })
+    if (!draftDone(draft)) continue
+    replies.push(
+      draft.optionId === INTERVIEW_OTHER
+        ? { questionId: question.id, optionId: INTERVIEW_OTHER, text: draft.text.trim() }
+        : { questionId: question.id, optionId: draft.optionId },
+    )
   }
   return replies
 }
 
-function draftDone(draft: Draft | undefined): boolean {
-  if (!draft) return false
-  return draft.optionId !== INTERVIEW_OTHER || draft.text.trim().length > 0
+/** Nhãn một câu trả lời đã chốt — dùng chung cho thẻ và lịch sử quyết định. */
+export function interviewAnswerLabel(answer: InterviewAnswer, t: ReturnType<typeof useT>): string {
+  if (answer.decidedBy !== 'agent') return answer.answer ?? ''
+  return answer.recommended
+    ? t('decisions.interview.agentDecidesWith', { option: answer.recommended })
+    : t('decisions.interview.agentDecides')
 }
 
 export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCardProps) {
@@ -52,6 +59,11 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
   const [open, setOpen] = useState(0)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const done = questions.filter((question) => draftDone(drafts[question.id])).length
+  // "Khác" đã chọn mà để trống thì chặn gửi, để câu đó không lặng lẽ rơi về agent.
+  const emptyOther = questions.some((question) => {
+    const draft = drafts[question.id]
+    return draft?.optionId === INTERVIEW_OTHER && !draftDone(draft)
+  })
   const disabled = busy || !pending || !onAnswer
 
   const answersById = useMemo(
@@ -67,15 +79,13 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
     }))
     // Chọn xong một lựa chọn thường thì mở câu kế tiếp chưa trả lời, như mẫu.
     if (optionId !== INTERVIEW_OTHER) {
-      const next = questions.findIndex((item, position) => position > index && !draftDone(drafts[item.id]))
-      if (next >= 0) setOpen(next)
+      const order = [...questions.keys()].map((step) => (index + 1 + step) % questions.length)
+      const next = order.find((position) => position !== index && !draftDone(drafts[questions[position].id]))
+      if (next !== undefined) setOpen(next)
     }
   }
 
-  const submit = () => {
-    if (!onAnswer) return
-    onAnswer(INTERVIEW_SUBMIT, undefined, interviewReplies(questions, drafts))
-  }
+  const submit = () => onAnswer?.(INTERVIEW_SUBMIT, undefined, interviewReplies(questions, drafts))
 
   return (
     <div
@@ -98,6 +108,8 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
         const expanded = pending ? open === index : true
         const draft = drafts[question.id]
         const resolved = answersById.get(question.id)
+        const bodyId = `${decision.id}-${question.id}-body`
+        const whyId = `${decision.id}-${question.id}-why`
         return (
           <section
             key={question.id}
@@ -110,6 +122,7 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
               className="flex w-full items-center gap-3 px-4 py-3 text-left"
               onClick={() => setOpen(index)}
               aria-expanded={expanded}
+              aria-controls={pending && expanded ? bodyId : undefined}
             >
               <span
                 className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
@@ -120,7 +133,7 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
               </span>
               <span className={`flex-1 text-[13px] ${expanded ? 'text-fg' : 'text-muted'}`}>{question.question}</span>
               {question.rationale && expanded ? (
-                <span title={`${t('decisions.interview.why')}: ${question.rationale}`} className="text-muted">
+                <span title={`${t('decisions.interview.why')}: ${question.rationale}`} className="text-muted" aria-hidden>
                   <CircleHelp className="size-4" />
                 </span>
               ) : (
@@ -133,15 +146,22 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
             </button>
             {!pending && resolved && (
               <p className="px-4 pb-3 pl-14 text-[12px] text-fg" data-testid="interview-answer">
-                {resolved.decidedBy === 'agent'
-                  ? resolved.recommended
-                    ? t('decisions.interview.agentDecidesWith', { option: resolved.recommended })
-                    : t('decisions.interview.agentDecides')
-                  : resolved.answer}
+                {interviewAnswerLabel(resolved, t)}
+              </p>
+            )}
+            {pending && expanded && question.rationale && (
+              <p id={whyId} className="px-4 pb-2 pl-14 text-[11px] text-muted" data-testid="interview-rationale">
+                {t('decisions.interview.why')}: {question.rationale}
               </p>
             )}
             {pending && expanded && (
-              <div className="flex flex-col gap-2 px-4 pb-3" role="radiogroup" aria-label={question.question}>
+              <div
+                id={bodyId}
+                className="flex flex-col gap-2 px-4 pb-3"
+                role="radiogroup"
+                aria-label={question.question}
+                aria-describedby={question.rationale ? whyId : undefined}
+              >
                 {question.options.map((option) => (
                   <InterviewOptionRow
                     key={option.id}
@@ -186,6 +206,7 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
                     type="button"
                     disabled={disabled}
                     data-testid={`interview-decide-${question.id}`}
+                    aria-pressed={draft?.optionId === INTERVIEW_DECIDE}
                     onClick={() => choose(index, INTERVIEW_DECIDE)}
                     className={`text-[12px] font-semibold transition hover:text-brand disabled:opacity-50 ${
                       draft?.optionId === INTERVIEW_DECIDE ? 'text-brand' : 'text-fg'
@@ -218,7 +239,8 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
           </button>
           <button
             type="button"
-            disabled={disabled || done === 0}
+            disabled={disabled || done === 0 || emptyOther}
+            title={emptyOther ? t('decisions.interview.otherPlaceholder') : undefined}
             data-testid="interview-submit"
             onClick={submit}
             className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
