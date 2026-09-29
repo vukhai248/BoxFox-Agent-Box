@@ -39,7 +39,7 @@ Only the main agent delegates or asks the owner.
 7. `work_graph(action='submit')`: an approval card for the owner, or immediate approval with Autopilot.
 8. `work_run(phase='execute')`: plan nodes run as build children in DAG waves, in parallel inside a wave;
    each result goes to a testing reviewer that runs the real tests.
-   If a node is not accepted, the run becomes `execute_failed`. Call `work_graph(action='retry',
+   If a node is not accepted, the run status becomes "execute_failed". Call `work_graph(action='retry',
    nodeIds=[...])` to run it again with the findings, or `action='update'` to change the plan.
 9. `work_ship(repoPath=...)`: a local branch, a commit, and a PR description file. Push only when a
    remote and credentials exist.
