@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow
+from . import plan_workflow, work_graph
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -65,7 +65,7 @@ from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX
                      DECISION_NOTE_TOO_LONG_CODE, DECISION_OTHER_LABEL, DECISION_OTHER_OPTION_ID,
                      OWNER_STEER_PREFIX, PLAN_VERDICT_NUDGE_PREFIX, RESEARCH_NUDGE_PREFIX)
 from . import evidence_gate, journal, plan_eval, plan_header, plan_registry, session_journal
-from .tool_contracts import schemas_for
+from .tool_contracts import schemas_for, reflection_hint
 from .tool_groups import TOOL_GROUPS
 from .web import WebTools
 from ..skills.catalog import SkillCatalog, DEFAULT_SKILLS
@@ -211,6 +211,19 @@ When you need several independent pieces of information (e.g. reading multiple f
 ORCHESTRATOR_SOP_GUIDANCE = """You are the Supreme Orchestrator Brain of BoxFox.
 When a prompt section named "ACTIVE MODE: RESEARCH" is present, THAT section wins over this SOP: follow the research persona and its rules for that turn.
 Your primary responsibility is to analyze user requests, break down complex engineering objectives, and coordinate your 10 specialist subagents to achieve verified, production-grade results.
+
+WORK GRAPH — THE DEFAULT PATH FOR NON-TRIVIAL WORK (you are the brain; only you delegate):
+The skill `work-graph-planning` (open it with `skill_view`) holds the full procedure and the sub-plan quality bar (context, goal/non-goals, design, changes, tests, dependencies, risks/rollout, acceptance).
+A. Triage: a quick fact, one command or one file you answer yourself. A feature, bug, refactor, research question, design or any "/plan", "/research", "/design" request goes through the Work Graph — the harness then runs every specialist output through an independent reviewer until it says `VERDICT: ok`.
+B. Create: `work_graph(action='create', goal=<owner words>, flow=plan|research|design|fix|mixed)`.
+C. Discover: add nodes with `work_graph(action='add', nodes=[...])` — explore E1..En first (each a precise repository question), research R1..Rn for external facts, design D1 for UI/API shape. Each node: id, kind, title, goal (>= 20 chars, concrete), dependsOn, acceptance (checkable items). Then `work_run(phase='discover')`: independent nodes run in parallel, each is reviewed, rejected output is re-run with the findings, and a specialist's `## Knowledge requests` are answered by research/explore children for it.
+D. Interview only on real ambiguity after exploring: `interview(questions=[{id, question, rationale, options:[{label, description, recommended}]}])` — 1-5 questions, 2-4 options each; the card adds "Other" and "let the agent decide". Never ask what the repository already answers.
+E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (file + command + expected) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again writes and reviews the sub-plans.
+F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
+G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Research-only and design-only runs have nothing to execute: answer the owner with the verified findings and the document paths instead.
+H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); each build is verified by a testing child. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
+I. Every tool result carries `next` — follow it. A tool error names the field and the rule: fix that input once, never resend identical arguments. Report honestly what was accepted, rejected or not verified.
+The legacy direct-delegation protocol below still applies to small tasks and to follow-up questions about a finished run.
 
 CORE MULTI-AGENT DELEGATION PROTOCOL:
 1. Triage & Scope Assessment:
@@ -1181,7 +1194,12 @@ def resolve_thinking_level(requested, metadata=None):
 
 
 DECISION_TOOLS = frozenset({'ask_user', 'request_approval'})
-DECISION_DEFAULT_SECONDS = {'ask_user': 300.0, 'request_approval': 600.0}
+DECISION_DEFAULT_SECONDS = {'ask_user': 300.0, 'request_approval': 600.0, 'interview': 900.0}
+# Work Graph tools (main only). `interview` is the multi-question card (Q1..Q5, 2-4 options each,
+# "Other" free text and "let the agent decide"); the other three drive the Work Graph engine.
+WORK_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship', 'interview'})
+INTERVIEW_DECIDE = 'decide'
+INTERVIEW_SUBMIT = 'submit'
 DECISION_MAX_SECONDS = 3600.0
 DECISION_OPTION_KINDS = frozenset({'approve', 'reject', 'alternative'})
 # The contract's default pair (docs/plan/next-batch-contract.md §1). Ids are fixed so the route
@@ -1824,6 +1842,8 @@ class HarnessRuntime(RuntimeCommands):
                   # Cắt bằng hằng số dùng chung: phía giao diện đọc đúng con số này từ
                   # `limits.py` (qua `runtime-info`), không chép tay lại lần thứ hai.
                   'instructions': str(values.get('instructions', ''))[:INSTRUCTIONS_MAX_CHARS]}
+        if role == 'orchestrator':
+            config['workTools'] = True
         if single_model:
             config['singleModel'] = single_model
             config['isSingleModel'] = True
@@ -3629,7 +3649,17 @@ class HarnessRuntime(RuntimeCommands):
                      'call `research_status` and `research_update` (pause/cancel) for it, but do NOT '
                      'delegate branches to it and do NOT open a new tier-3 run while the mode is off.\n'
                      f'{RESEARCH_BACKGROUND_BLOCK_END}')
-        return {'mode': 'main', 'tools': list(config.get('tools') or []), 'promptBlock': block}
+        tools = list(config.get('tools') or [])
+        if work_graph.enabled() and not session.get('parent_id') and session.get('role') == 'orchestrator':
+            # Phiên tạo TRƯỚC Work Graph không có cờ `workTools` và cũng không có tên công cụ: cấp bổ
+            # sung khi phiên còn quyền giao việc. Phiên mới mang cờ này, nên công tắc nhóm của Harness
+            # vẫn là người quyết định.
+            if not config.get('workTools') and 'delegate_task' in tools:
+                tools += [name for name in sorted(WORK_TOOLS) if name not in tools]
+            work_block = work_graph.service(self).prompt_block(session)
+            if work_block:
+                block = f'{block}\n{work_block}' if block else work_block
+        return {'mode': 'main', 'tools': tools, 'promptBlock': block}
 
     def named_handoff_run(self, session, prompt):
         """Mã run được NÓI RÕ trong lượt (`''` khi lượt không nhắc tên run nào).
@@ -4557,7 +4587,7 @@ class HarnessRuntime(RuntimeCommands):
                                          durationMs=(time.time() - tool_started) * 1000)
                         safe = {k: v for k, v in result.items() if k not in {'image', 'base64'}}
                         if safe.get('is_error'):
-                            safe['reflection_hint'] = 'AUTONOMOUS_DIAGNOSIS: The previous action returned an error. Inspect the message, avoid repeating identical inputs, and pivot strategy or invoke debug specialist if necessary.'
+                            safe['reflection_hint'] = reflection_hint(name, safe.get('errorCode'))
                         if loop_guard.check_and_record(name, args if isinstance(args, dict) else {}, bool(safe.get('is_error'))):
                             safe['warning'] = 'CRITICAL_LOOP_GUARD: This exact tool call has repeatedly failed 3 times. You MUST halt this approach immediately, analyze why it is failing, change parameters, or delegate to a specialist.'
                         text_result = json.dumps(safe, ensure_ascii=False)
@@ -4743,6 +4773,8 @@ class HarnessRuntime(RuntimeCommands):
             return await self.await_children(session, args)
         if name == 'delegate_task':
             return await self.delegate(session, args)
+        if name in WORK_TOOLS:
+            return await self.work_tool(session, name, args, call_id)
         if name in {'web_search', 'web_fetch', 'read_source', 'paper_citations'}:
             self.web_switch_notices(sid)
             return await self.web.run(name, args, sid, scope_id=self.root_session_id(sid))
@@ -5343,13 +5375,16 @@ class HarnessRuntime(RuntimeCommands):
         if plan_id:
             record['planIdentity'] = plan_id
             record['planVersion'] = plan_version
+        work_run_id = str(args.get('workRunId') or '').strip()
+        if work_run_id:
+            record['workRunId'] = work_run_id
         self.pending[decision_id] = record
         self.prune_pending()
         self.store.save(sid, self.active_messages.get(sid, session['messages']), 'awaiting_decision')
         self.store.emit(sid, 'decision_requested', {
             'decisionId': decision_id, 'kind': kind, 'question': question, 'action': action, 'reason': reason,
             'options': options, 'deadline': record['deadline'], 'defaultChoice': record['defaultChoice'],
-            'toolCallId': call_id})
+            'toolCallId': call_id, **({'workRunId': work_run_id} if work_run_id else {})})
         self.store.emit(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': decision_id},
                                           'reason': 'decision_requested'})
         return await self.wait_for_decision(sid, record)
@@ -5393,9 +5428,12 @@ class HarnessRuntime(RuntimeCommands):
         # §4.1: quyết định về một kế hoạch vào sổ duyệt TRƯỚC `decision_resolved`, để ai đọc sổ ngay
         # sau sự kiện đó cũng thấy đúng trạng thái. Ghi hỏng không được làm hỏng lượt trả lời.
         self.record_plan_decision(record, status, note)
-        self.store.emit(record['sessionId'], 'decision_resolved', {
-            'decisionId': record['decisionId'], 'choice': choice, 'status': status, 'note': note,
-            'reason': reason, 'resolvedAt': round(time.time(), 3)})
+        resolved = {'decisionId': record['decisionId'], 'choice': choice, 'status': status, 'note': note,
+                    'reason': reason, 'resolvedAt': round(time.time(), 3)}
+        if record.get('kind') == 'interview':
+            record['outcome']['answers'] = record.get('answers') or []
+            resolved['answers'] = record['outcome']['answers']
+        self.store.emit(record['sessionId'], 'decision_resolved', resolved)
         if not record['future'].done():
             record['future'].set_result(record['outcome'])
         if reason != 'session_cancelled':
@@ -5517,8 +5555,11 @@ class HarnessRuntime(RuntimeCommands):
         for key in settled[:-keep]:
             self.pending.pop(key, None)
 
-    def resolve_decision(self, sid, decision_id, choice, note=None):
+    def resolve_decision(self, sid, decision_id, choice, note=None, answers=None):
         """Answer a pending decision; raises DecisionError with the contract's status codes."""
+        record = self.pending.get(decision_id) if isinstance(decision_id, str) else None
+        if record is not None and record.get('kind') == 'interview' and record['sessionId'] == sid:
+            return self.resolve_interview(record, choice, note, answers)
         if not isinstance(decision_id, str) or not decision_id:
             raise DecisionError('DECISION_INVALID', 'decisionId is required', 400)
         if not isinstance(choice, str) or not choice:
@@ -5556,6 +5597,170 @@ class HarnessRuntime(RuntimeCommands):
             status = 'approved' if option['kind'] in {'approve', 'alternative'} else 'rejected'
         self.settle(record, choice, status, 'user', written or None)
         return {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': status}
+
+    # ---- Work Graph + interview ------------------------------------------------------------ #
+
+    async def work_tool(self, session, name, args, call_id=None):
+        """Route the four Work Graph tools. Only the root orchestrator may drive the engine."""
+        if session.get('parent_id') or session['role'] != 'orchestrator':
+            raise PermissionError('WORK_ROOT_ONLY: only main drives the Work Graph; return findings '
+                                  'or a `## Knowledge requests` block to main instead')
+        if name == 'interview':
+            return await self.interview(session, args, call_id)
+        if not work_graph.enabled():
+            raise PermissionError(f'WORK_GRAPH_OFF: {work_graph.WORK_GRAPH_ENV}=off disables the Work Graph')
+        service = work_graph.service(self)
+        current = self.store.get(session['id'])
+        if name == 'work_run':
+            return await service.run(current, args)
+        if name == 'work_ship':
+            return await service.ship(current, args)
+        action = str(args.get('action') or 'status').strip().lower()
+        if action == 'verify':
+            return await service.verify(current, args)
+        if action == 'submit':
+            return await service.submit(current, args, call_id)
+        return service.graph(current, args)
+
+    @staticmethod
+    def normalize_interview(args):
+        """Validate the interview card: 1-5 questions, each with 2-4 options {id,label,description}."""
+        raw = args.get('questions')
+        if not isinstance(raw, list) or not 1 <= len(raw) <= 5:
+            raise ValueError('INTERVIEW_INVALID: `questions` must be a list of 1-5 objects '
+                             '{id, question, rationale, options:[{label, description, recommended}]}')
+        questions, seen = [], set()
+        for index, item in enumerate(raw, 1):
+            if isinstance(item, str):
+                raise ValueError(f'INTERVIEW_INVALID: questions[{index}] is a string; pass an object with '
+                                 'question and 2-4 options')
+            if not isinstance(item, dict):
+                raise ValueError(f'INTERVIEW_INVALID: questions[{index}] must be an object')
+            text = str(item.get('question') or item.get('text') or '').strip()
+            if not text:
+                raise ValueError(f'INTERVIEW_INVALID: questions[{index}].question is empty')
+            qid = re.sub(r'[^A-Za-z0-9_-]+', '-', str(item.get('id') or f'q{index}')).strip('-')[:32] or f'q{index}'
+            while qid in seen:
+                qid = f'{qid}-{index}'
+            seen.add(qid)
+            options, option_ids = [], set()
+            for position, option in enumerate(item.get('options') or [], 1):
+                if isinstance(option, str):
+                    option = {'label': option}
+                if not isinstance(option, dict) or not str(option.get('label') or '').strip():
+                    raise ValueError(f'INTERVIEW_INVALID: questions[{index}].options[{position}] needs a label')
+                label = str(option['label']).strip()[:120]
+                oid = re.sub(r'[^a-z0-9]+', '-', str(option.get('id') or label).lower()).strip('-')[:40] \
+                    or f'o{position}'
+                if oid in (INTERVIEW_DECIDE, DECISION_OTHER_OPTION_ID) or oid in option_ids:
+                    oid = f'o{position}'
+                option_ids.add(oid)
+                options.append({'id': oid, 'label': label,
+                                'description': str(option.get('description') or '').strip()[:300],
+                                'recommended': option.get('recommended') is True})
+            if not 2 <= len(options) <= 4:
+                raise ValueError(f'INTERVIEW_INVALID: questions[{index}] needs 2-4 options (got {len(options)}); '
+                                 '"Other" and "let the agent decide" are added by the harness')
+            questions.append({'id': qid, 'question': text[:400],
+                              'rationale': str(item.get('rationale') or '').strip()[:400], 'options': options})
+        return questions
+
+    async def interview(self, session, args, call_id=None):
+        """Multi-question interview card; blocks until the owner submits, delegates, or it expires."""
+        sid = session['id']
+        if session.get('parent_id'):
+            raise ValueError('DECISION_UNAVAILABLE: a delegated session cannot ask the user; '
+                             'decide from your own evidence')
+        questions = self.normalize_interview(args)
+        run_id = str(args.get('runId') or '').strip() or None
+        if run_id is None and work_graph.enabled():
+            active = work_graph.service(self).active(sid)
+            run_id = active['runId'] if active else None
+        decision_id = uuid.uuid4().hex[:16]
+        options = [{'id': INTERVIEW_SUBMIT, 'label': 'Gửi câu trả lời', 'kind': 'approve'},
+                   {'id': INTERVIEW_DECIDE, 'label': 'Để agent quyết định', 'kind': 'alternative'}]
+        title = str(args.get('title') or '').strip()[:160] or 'Câu hỏi làm rõ'
+        record = {'decisionId': decision_id, 'sessionId': sid, 'kind': 'interview', 'options': options,
+                  'questions': questions, 'title': title, 'runId': run_id,
+                  'deadline': decision_deadline(args, 'interview'), 'defaultChoice': INTERVIEW_DECIDE,
+                  'toolCallId': call_id, 'resolved': False, 'outcome': None, 'answers': [],
+                  'future': asyncio.get_running_loop().create_future()}
+        self.pending[decision_id] = record
+        self.prune_pending()
+        self.store.save(sid, self.active_messages.get(sid, session['messages']), 'awaiting_decision')
+        self.store.emit(sid, 'decision_requested', {
+            'decisionId': decision_id, 'kind': 'interview', 'question': title, 'title': title,
+            'questions': questions, 'options': options, 'deadline': record['deadline'],
+            'defaultChoice': record['defaultChoice'], 'toolCallId': call_id, 'runId': run_id})
+        self.store.emit(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': decision_id},
+                                          'reason': 'decision_requested'})
+        outcome = await self.wait_for_decision(sid, record)
+        answers = record.get('answers') or [self.interview_answer(q, None) for q in questions]
+        if not record.get('answers'):
+            record['answers'] = answers
+        delegated = [item['questionId'] for item in answers if item['decidedBy'] == 'agent']
+        result = {'decisionId': decision_id, 'status': outcome.get('status'), 'answers': answers,
+                  'message': ('The owner answered the interview. Treat each `answer` with decidedBy=user as a '
+                              'confirmed requirement (source kind user).' if not delegated else
+                              'The owner answered some questions and left ' + ', '.join(delegated) +
+                              ' to you: choose the recommended option (or your best one), state it as an '
+                              'assumption with its reason, and continue without asking again.')}
+        if run_id:
+            try:
+                service = work_graph.service(self)
+                run = service.get(run_id)
+                run.setdefault('interviews', []).append({'decisionId': decision_id, 'status': result['status'],
+                                                         'answers': answers, 'at': round(time.time(), 3)})
+                service.save(run, 'interview', f'{len(answers)} answers')
+            except Exception as exc:  # the answer must reach the model even if the run is gone
+                system_log.write('work.interview.store_failed', level='warn', session_id=sid,
+                                 message=str(exc)[:300])
+        return result
+
+    @staticmethod
+    def interview_answer(question, raw):
+        """One normalized answer; `raw=None` (or choice `decide`) means the agent decides."""
+        base = {'questionId': question['id'], 'question': question['question']}
+        recommended = next((o for o in question['options'] if o.get('recommended')), question['options'][0])
+        option_id = str((raw or {}).get('optionId') or '').strip()
+        text = str((raw or {}).get('text') or '').strip()
+        if raw is None or option_id == INTERVIEW_DECIDE or (not option_id and not text):
+            return base | {'optionId': INTERVIEW_DECIDE, 'answer': None, 'decidedBy': 'agent',
+                           'recommended': recommended['label']}
+        if option_id in ('', DECISION_OTHER_OPTION_ID):
+            if not text:
+                raise DecisionError(DECISION_NOTE_REQUIRED_CODE,
+                                    f'question {question["id"]}: "Other" needs the typed answer', 400)
+            return base | {'optionId': DECISION_OTHER_OPTION_ID, 'answer': text[:DECISION_NOTE_MAX_CHARS],
+                           'decidedBy': 'user'}
+        option = next((o for o in question['options'] if o['id'] == option_id), None)
+        if option is None:
+            raise DecisionError('DECISION_INVALID', f'question {question["id"]}: unknown option {option_id}', 400)
+        return base | {'optionId': option_id, 'answer': option['label'], 'decidedBy': 'user',
+                       **({'note': text[:DECISION_NOTE_MAX_CHARS]} if text else {})}
+
+    def resolve_interview(self, record, choice, note, answers):
+        if record['resolved']:
+            raise DecisionError('DECISION_ALREADY_RESOLVED', 'decision ' + record['decisionId'] +
+                                ' was already answered', 409)
+        if choice not in (INTERVIEW_SUBMIT, INTERVIEW_DECIDE):
+            raise DecisionError('DECISION_INVALID', 'interview choice must be submit or decide', 400)
+        by_id = {}
+        if choice == INTERVIEW_SUBMIT:
+            if not isinstance(answers, list):
+                raise DecisionError('DECISION_INVALID', 'submit needs `answers`: [{questionId, optionId|text}]', 400)
+            for item in answers:
+                if not isinstance(item, dict) or not isinstance(item.get('questionId'), str):
+                    raise DecisionError('DECISION_INVALID', 'each answer needs a questionId', 400)
+                by_id[item['questionId']] = item
+            unknown = set(by_id) - {q['id'] for q in record['questions']}
+            if unknown:
+                raise DecisionError('DECISION_INVALID', 'unknown questionId ' + ', '.join(sorted(unknown)), 400)
+        record['answers'] = [self.interview_answer(q, by_id.get(q['id'])) for q in record['questions']]
+        written = (note or '').strip() if isinstance(note, str) else ''
+        self.settle(record, choice, DECISION_ANSWERED_STATUS, 'user', written[:DECISION_NOTE_MAX_CHARS] or None)
+        return {'status': 'resolved', 'decisionId': record['decisionId'], 'choice': choice,
+                'outcome': DECISION_ANSWERED_STATUS, 'answers': record['answers']}
 
     async def registration_or_refuse(self, session, sid, slug, args, declared):
         """MỘT đường đăng ký kế hoạch: từ chối ở đâu cũng để lại dòng nhật ký hệ thống + vé.
@@ -6393,11 +6598,15 @@ class HarnessRuntime(RuntimeCommands):
                          children=[row['child_id'] for row in claimed])
         return len(claimed)
 
-    async def delegate(self, session, args):
+    async def delegate(self, session, args, work=None):
+        """Spawn one specialist child. `work` is set only by the Work Graph engine (never by the model):
+        such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
+        bindings and per-turn child cap do not apply — the engine owns its own budget."""
         if session['role'] != 'orchestrator':
             raise PermissionError('Leaf agents cannot delegate')
         role = args.get('role')
-        planning_run = plan_workflow.bound_run(self, self.store.get(session['id']))
+        work = dict(work) if isinstance(work, dict) else None
+        planning_run = None if work else plan_workflow.bound_run(self, self.store.get(session['id']))
         if planning_run is not None and role not in plan_workflow.ROLES:
             raise PermissionError('PLAN_DELEGATE_BLOCKED: Plan chỉ giao khảo sát/thiết kế/phản biện')
         if planning_run and not planning_run.get('modeOnly') and role == 'plan-review':
@@ -6421,7 +6630,7 @@ class HarnessRuntime(RuntimeCommands):
         # F9 (§5.2): trong mode `delegate_task` chỉ được giao cho `RESEARCH_MODE_DELEGATE_ROLES`.
         # Mode không có công cụ ghi, nên một nhánh `build`/`debug`/`plan` được giao từ đây là một
         # nhánh không thể làm việc — từ chối sớm thay vì để con chết giữa đường.
-        if research_mode(session)['on'] and role not in RESEARCH_MODE_DELEGATE_ROLES:
+        if not work and research_mode(session)['on'] and role not in RESEARCH_MODE_DELEGATE_ROLES:
             raise PermissionError('RESEARCH_MODE_DELEGATE_ROLE: trong chế độ Research chỉ được giao cho '
                                   + ', '.join(sorted(RESEARCH_MODE_DELEGATE_ROLES))
                                   + f' — vai {role!r} cần công cụ ghi mà mode đã bỏ')
@@ -6430,7 +6639,7 @@ class HarnessRuntime(RuntimeCommands):
             raise ValueError('Child goal required')
         # P1 (D-05, §7.7): giao cho vai `design` từ NGOÀI mode vẫn mở một run thiết kế với
         # `origin='delegate'` — run là sổ của cuộc thiết kế, không phụ thuộc việc ai bấm nút.
-        if role == 'design' and design_mode_available() and planning_run is None:
+        if role == 'design' and design_mode_available() and planning_run is None and not work:
             mode = design_mode(session)
             current = str(mode.get('activeRunId') or '')
             active = self.store.design_job(current) if current else None
@@ -6449,7 +6658,7 @@ class HarnessRuntime(RuntimeCommands):
         facet_id = str(args.get('facetId') or '').strip()
         research_question_id = None
         research_cfg = research_runtime.research_config(session)
-        if role == 'research' and research_cfg.get('jobMode') == 'v2':
+        if role == 'research' and research_cfg.get('jobMode') == 'v2' and not work:
             research_question_id = str(args.get('questionId') or '').strip()
             research_job = self.store.research_job(research_cfg['researchId'])
             if not research_job or research_question_id not in {
@@ -6458,7 +6667,9 @@ class HarnessRuntime(RuntimeCommands):
             if research_job['status'] in {'paused', 'cancelled', 'completed', 'partial', 'needs_user'}:
                 raise ValueError('RESEARCH_JOB_INACTIVE: resume the job before delegating another branch')
         review_target = None
-        if role == 'research-review':
+        if work:
+            pass
+        elif role == 'research-review':
             requested = args.get('reviewTarget') or {}
             if requested.get('kind') != 'research' or not requested.get('researchId') \
                     or isinstance(requested.get('version'), bool) \
@@ -6473,7 +6684,9 @@ class HarnessRuntime(RuntimeCommands):
                              'mode': requested.get('mode') or 'critique'}
             if review_target['mode'] not in research_review.REVIEW_MODES:
                 raise ValueError('RESEARCH_REVIEW_MODE_INVALID')
-        if role == 'plan-review' and (args.get('reviewTarget') or {}).get('kind') == 'design':
+        if work:
+            pass
+        elif role == 'plan-review' and (args.get('reviewTarget') or {}).get('kind') == 'design':
             # P4 (§7.9, Q2): CÙNG vai `plan-review`, đích là một BẢN THIẾT KẾ. Runtime ghim đường
             # dẫn bản nháp của đúng `(designId, version)`; `design_review` chỉ nhận kết luận từ con
             # mang chính `reviewTarget` này.
@@ -6508,19 +6721,20 @@ class HarnessRuntime(RuntimeCommands):
         turn = self.active_turn.get(parent_id) or 0
         step = self.active_step.get(parent_id) or 0
         spawned = len(self.store.children_of(parent_id, turn=turn)) if turn else 0
-        if spawned >= CHILDREN_PER_TURN_MAX:
+        if spawned >= CHILDREN_PER_TURN_MAX and not work:
             raise ValueError(f'{CHILDREN_PER_TURN_CODE}: this turn already spawned {spawned} children'
                              f' (limit {CHILDREN_PER_TURN_MAX}) — finish or await them first')
         # Slot mua TRƯỚC khi sinh phiên con: hết chỗ thì chỉ có một lỗi tool, không có hàng
         # `sessions` mồ côi nằm ở `idle` mà không ai chạy.
         # Vòng 27 (đợt 5, D-40/D-41): cổng mềm thiếu brief + trần nhánh theo mức, rồi hai hệ số
         # của con research (bước, giây). Chưa có brief ⇒ cả ba đều là no-op, hành vi y như trước.
-        research_runtime.missing_brief_gate(self, session, role)
-        research_runtime.branch_limit_check(self, session, role)
-        tier = int(research_runtime.research_config(session).get('tier') or 0)
+        if not work:
+            research_runtime.missing_brief_gate(self, session, role)
+            research_runtime.branch_limit_check(self, session, role)
+        tier = 0 if work else int(research_runtime.research_config(session).get('tier') or 0)
         child_steps = min(CHILD_MAX_STEPS, config['maxSteps'])
         child_deadline = min(CHILD_DEADLINE_SECONDS, config['deadlineSeconds'])
-        if role == 'research' and not tier:
+        if role == 'research' and not tier and not work:
             # P1 (cửa 2, M-07): ngoài mode, nhánh research ĐẦU TIÊN không brief là tra cứu nhanh ⇒
             # kẹp vào trần mức 1 (20 bước/180 s). `missing_brief_gate` đã từ chối nhánh thứ hai.
             quick = research_runtime.quick_lookup_clamp(self, session, role)
@@ -6552,6 +6766,8 @@ class HarnessRuntime(RuntimeCommands):
             if research_question_id:
                 child['config']['researchQuestionId'] = research_question_id
             child['config']['taskKind'] = task_kind
+            if work:
+                child['config']['workBinding'] = work
             if facet_id:
                 child['config']['facetId'] = facet_id
             self.store.update_config(child['id'], child['config'])
@@ -6594,7 +6810,8 @@ class HarnessRuntime(RuntimeCommands):
                                 if role == 'plan-review' else 'Planning snapshot (data):\n'
                                 + json.dumps(planning_run, ensure_ascii=False)
                                 + '\nReturn proposals/questions to root; never ask the owner or write implementation.')
-        child_prompt = '\n'.join(prompt_parts) + CHILD_RESULT_CONTRACT
+        contract = work_graph.work_child_contract(work.get('purpose')) if work else None
+        child_prompt = '\n'.join(prompt_parts) + (contract or CHILD_RESULT_CONTRACT)
         echo_goal, echo_context, echo_prompt = (bound_child_text(goal, CHILD_ECHO_MAX_CHARS)[0],
                                                 bound_child_text(context_data, CHILD_ECHO_MAX_CHARS)[0],
                                                 bound_child_text(child_prompt, CHILD_ECHO_MAX_CHARS)[0])
@@ -6632,6 +6849,7 @@ class HarnessRuntime(RuntimeCommands):
             'context': echo_context,
             'prompt': echo_prompt,
             'taskKind': task_kind,
+            **({'work': work} if work else {}),
         })
         try:
             # T3 — `wallMs` đo đúng thời gian CON chạy, không tính lúc xếp hàng chờ slot.
@@ -6697,6 +6915,8 @@ class HarnessRuntime(RuntimeCommands):
                   'goal': echo_goal, 'context': echo_context, 'prompt': echo_prompt,
                   'summary': summary + diag, 'answerChars': len(answer_text), 'truncated': truncated,
                   'is_error': status != 'completed', 'last_error': last_error, 'tools_run': tools_run}
+        if work:
+            result['work'] = work
         if status == 'partial':
             # Lý do ĐÚNG MÃ cho cha: cắt ở trần output của nhà cung cấp, hết trần bước, hay hết
             # hạn chót là ba ca khác nhau — cha cần biết ca nào để xử lý.

@@ -31,6 +31,7 @@ const TOOL_GROUP_LABELS: Record<string, string> = {
   webResearch: 'Web research',
   delegationPlans: 'Delegation & plans',
   peerMesh: 'Peer mesh',
+  workGraph: 'Work Graph',
   questionsApprovals: 'Questions & approvals',
 }
 
@@ -41,6 +42,8 @@ const TOOL_GROUP_NOTES: Record<string, string> = {
     'web_search · web_fetch run on the host and see the real Internet; the sandbox has none, so browser_use only reaches box-local pages.',
   peerMesh:
     "a child reads a peer's work stream and waits for the result it delivers; off means children cannot see each other",
+  workGraph:
+    'work_graph · work_run · work_ship — main plans, reviews and runs sub-agents as a DAG; off returns to the legacy slash-mode path.',
   questionsApprovals:
     'always on. The agent cannot be silenced on the things it must ask you about.',
 }

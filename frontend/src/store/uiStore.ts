@@ -25,6 +25,8 @@ export interface CompletionEmail {
 
 export type PanelTabId =
   | 'plan'
+  /** Work Graph: đồ thị việc của agent chính (nút, vòng review, DAG, duyệt, ship). */
+  | 'work'
   | 'research'
   | 'sandbox'
   | 'subagents'
@@ -41,6 +43,7 @@ export type PanelTabId =
 
 export const ALL_PANEL_TABS: PanelTabId[] = [
   'plan',
+  'work',
   'research',
   'sandbox',
   'subagents',

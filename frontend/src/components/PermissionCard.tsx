@@ -26,7 +26,8 @@ import type { PermissionRequest } from '../types/agent'
 import type { PermissionButtonId } from '../lib/permissions'
 import { getPermissionButtons } from '../lib/permissions'
 import type { DiffLine } from '../types/agent'
-import type { DecisionEntry, DecisionOption } from '../store/harnessChatStore'
+import type { DecisionEntry, DecisionOption, InterviewReply } from '../store/harnessChatStore'
+import { InterviewCard } from './InterviewCard'
 
 export interface PermissionCardProps {
   /** Thẻ của transport mock (đường demo) — giữ nguyên hành vi cũ. */
@@ -37,7 +38,7 @@ export interface PermissionCardProps {
    * Trả lời quyết định thật; `choice` là `id` trong `decision.options`.
    * P4 — lựa chọn tự nhập (`allowFreeText`) gửi kèm `note` là chữ chủ nhà đã gõ.
    */
-  onAnswer?: (choice: string, note?: string) => void
+  onAnswer?: (choice: string, note?: string, answers?: InterviewReply[]) => void
   /** Đang gửi câu trả lời → hàng này tạm khoá. */
   busy?: boolean
 }
@@ -47,6 +48,7 @@ export interface PermissionCardProps {
  * và quyết định thật của harness (cùng bố cục, cùng lớp CSS, dữ liệu thật).
  */
 export function PermissionCard({ request, decision, onAnswer, busy = false }: PermissionCardProps) {
+  if (decision?.kind === 'interview') return <InterviewCard decision={decision} onAnswer={onAnswer} busy={busy} />
   if (decision) return <DecisionCard decision={decision} onAnswer={onAnswer} busy={busy} />
   if (!request) return null
   return <TransportPermissionCard request={request} />

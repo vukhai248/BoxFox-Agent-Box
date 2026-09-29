@@ -21,6 +21,7 @@ import {
   MoreHorizontal,
   Power,
   Wifi,
+  Workflow,
 } from 'lucide-react'
 import { useT } from './i18n/context'
 import { useAgentStore } from './store/agentStore'
@@ -32,6 +33,7 @@ import { ChatPanel } from './components/panels/ChatPanel'
 import { PlanPanel } from './components/panels/PlanPanel'
 import { ResearchPanel } from './components/panels/ResearchPanel'
 import { DecisionsPanel } from './components/panels/DecisionsPanel'
+import { WorkGraphPanel } from './components/panels/work/WorkGraphPanel'
 import { TerminalPanel } from './components/panels/TerminalPanel'
 import { SandboxScreenPanel } from './components/panels/SandboxScreenPanel'
 import { SubagentInspectorPanel } from './components/panels/SubagentInspectorPanel'
@@ -53,6 +55,7 @@ import { formatClock } from './components/panels/research/format'
 
 const TAB_LABEL_KEY: Record<PanelTabId, string> = {
   plan: 'tabs.plan',
+  work: 'tabs.work',
   // P4: tab Research có nhãn riêng — trước đây dùng nhờ `tabs.plan`.
   research: 'tabs.research',
   sandbox: 'tabs.sandbox',
@@ -70,6 +73,7 @@ const TAB_LABEL_KEY: Record<PanelTabId, string> = {
 
 export const TAB_ICON: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
   plan: FileText,
+  work: Workflow,
   research: Microscope,
   sandbox: Monitor,
   subagents: BrainCircuit,
@@ -111,6 +115,7 @@ function useEpochElapsedSeconds(taskEpoch: number, running: boolean): number {
 // nên đổi icon chỉ phải đổi ở một chỗ (#6108).
 const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'plan', label: 'Plan Document', desc: 'Architecture blueprint & step review', icon: TAB_ICON.plan },
+  { id: 'work', label: 'Work Graph', desc: 'Nodes, review loops, DAG waves, approval & ship', icon: TAB_ICON.work },
   { id: 'research', label: 'Research', desc: 'Questions, evidence gaps & budget', icon: TAB_ICON.research },
   { id: 'sandbox', label: 'Sandbox Machine', desc: 'Live container vision & browser frame', icon: TAB_ICON.sandbox },
   { id: 'subagents', label: 'Sub-agents Console', desc: 'Autonomous specialists activity & thinking', icon: TAB_ICON.subagents },
@@ -224,6 +229,8 @@ export default function App() {
     switch (activeTab) {
       case 'plan':
         return <PlanPanel />
+      case 'work':
+        return <WorkGraphPanel />
       case 'research':
         return <ResearchPanel />
       case 'sandbox':

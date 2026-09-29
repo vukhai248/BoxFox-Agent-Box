@@ -34,17 +34,89 @@ DECISION_OPTION = {'type': 'object', 'properties': {
     'allowFreeText': {'type': 'boolean'},
     'kind': {'type': 'string', 'enum': ['approve', 'reject', 'alternative']}}, 'required': ['label']}
 DECISION_OPTIONS = {'type': 'array', 'items': DECISION_OPTION}
+# Bug `PLAN_BRIEF_INVALID` (đo sống): `brief` từng là `{'type': 'object'}` trần, nên model không biết
+# mỗi trường phải là `{text, source}` và gửi chuỗi. Lược đồ lồng dưới đây NÓI hình dạng; runtime vẫn
+# chấp nhận chuỗi trần (thành đề xuất cần xác nhận) để một model yếu không chết vì hình dạng.
+PLAN_BRIEF_FIELDS = ('goal', 'users', 'workflow', 'scope', 'data', 'constraints', 'success')
+PLAN_SOURCE = {'type': 'object', 'properties': {
+    'kind': {'type': 'string', 'enum': ['user', 'observed', 'proposed']},
+    'quote': {'type': 'string', 'description': 'kind=user: verbatim substring of what the owner wrote'},
+    'ref': {'type': 'string', 'description': 'kind=observed: a path or URL you already read'}},
+    'required': ['kind']}
+PLAN_BRIEF_ITEM = {'type': 'object', 'properties': {
+    'text': STRING, 'source': PLAN_SOURCE,
+    'reason': {'type': 'string', 'description': 'required when source.kind=proposed: why + tradeoff'},
+    'alternatives': {'type': 'array', 'items': STRING}}, 'required': ['text', 'source']}
+PLAN_DECISION_ITEM = {'type': 'object', 'properties': {
+    'id': STRING, 'text': STRING, 'source': PLAN_SOURCE, 'reason': STRING,
+    'status': {'type': 'string', 'enum': ['unresolved', 'resolved']}, 'blocking': {'type': 'boolean'},
+    'alternatives': {'type': 'array', 'items': STRING}}, 'required': ['id', 'text']}
+PLAN_QUESTION_ITEM = {'type': 'object', 'properties': {
+    'id': STRING, 'field': STRING, 'text': STRING, 'why': STRING,
+    'options': {'type': 'array', 'maxItems': 5, 'items': {'type': 'object', 'properties': {
+        'id': STRING, 'label': STRING}, 'required': ['id', 'label']}}},
+    'required': ['id', 'field', 'text']}
+
+# --- Work Graph (lớp điều phối mới) ------------------------------------------------------------
+WORK_NODE_KINDS = ['explore', 'research', 'design', 'plan', 'build', 'debug', 'testing', 'simplify']
+WORK_NODE = {'type': 'object', 'properties': {
+    'id': {'type': 'string', 'description': 'short id such as E1, R1, D1, P1, B1 (letters, digits, - or _)'},
+    'kind': {'type': 'string', 'enum': WORK_NODE_KINDS},
+    'title': STRING,
+    'goal': {'type': 'string', 'description': 'the complete, self-contained assignment for the specialist'},
+    'dependsOn': {'type': 'array', 'items': STRING,
+                  'description': 'ids this node needs first; plan->plan edges order EXECUTION (P3 after P1)'},
+    'acceptance': {'type': 'array', 'items': STRING,
+                   'description': 'observable checks the reviewer verifies, one per item'},
+    'tests': {'type': 'array', 'items': STRING,
+              'description': 'plan/build nodes: the exact test cases or commands that prove the node'},
+    'files': {'type': 'array', 'items': STRING, 'description': 'expected touch list (paths)'}},
+    'required': ['id', 'kind', 'title', 'goal']}
+INTERVIEW_QUESTION = {'type': 'object', 'properties': {
+    'id': STRING,
+    'question': STRING,
+    'rationale': {'type': 'string', 'description': 'why the answer changes the work'},
+    'options': {'type': 'array', 'minItems': 2, 'maxItems': 4, 'items': {'type': 'object', 'properties': {
+        'id': STRING, 'label': STRING, 'description': STRING, 'recommended': {'type': 'boolean'}},
+        'required': ['label']}}},
+    'required': ['question', 'options']}
+
+
+def reflection_hint(name, code=None):
+    """Lời nhắc SAU một lỗi công cụ: nói đúng công cụ, đúng mã, và hình dạng đối số mong đợi.
+
+    Bản cũ là một câu chung (`AUTONOMOUS_DIAGNOSIS: ... invoke debug specialist`) cho MỌI lỗi, kể cả lỗi
+    hình dạng đối số — model đọc nó như lời mời gọi `debug` thay vì sửa đúng một trường.
+    """
+    schema = next((item['function'] for item in SCHEMAS if item['function']['name'] == name), None)
+    base = (f'AUTONOMOUS_DIAGNOSIS: `{name}` failed with {code or "an error"}. Read `error`: it names the '
+            'field and the rule. Fix only that input and call again once; never resend identical arguments.')
+    if schema is None:
+        return base
+    params = schema['parameters']
+    required = params.get('required') or []
+    shape = ', '.join(f'{key}:{(value or {}).get("type", "any")}' for key, value in
+                      list((params.get('properties') or {}).items())[:12])
+    return base + f' Expected arguments: required={required}; fields={{{shape}}}.'
+
+
 SCHEMAS = [
     tool('plan_scope',
          'Root-owned durable planning: status, update brief/decisions, ask 1–3 questions, confirm brief, '
-         'or switch project. Questions end computation and wait persistently. Use current revision for mutations.',
+         'or switch project. Questions end computation and wait persistently. Use current revision for mutations. '
+         'Every brief field is an object {text, source}; source.kind is user (with a verbatim quote of the '
+         'owner), observed (with ref = a path/URL you already read) or proposed (with a reason).',
          {'action': {'type': 'string', 'enum': ['status', 'update', 'ask', 'confirm', 'switch', 'answer']},
           'runId': STRING, 'revision': {'type': 'integer'},
           'profile': {'type': 'string', 'enum': ['task', 'software', 'ai']},
-          'brief': {'type': 'object'}, 'decisions': {'type': 'array', 'items': {'type': 'object'}},
+          'brief': {'type': 'object', 'properties': {key: PLAN_BRIEF_ITEM for key in PLAN_BRIEF_FIELDS},
+                    'additionalProperties': False},
+          'decisions': {'type': 'array', 'items': PLAN_DECISION_ITEM},
           'evidence': {'type': 'array', 'items': STRING}, 'goal': STRING,
-          'questions': {'type': 'array', 'minItems': 1, 'maxItems': 3, 'items': {'type': 'object'}},
-          'answers': {'type': 'array', 'items': {'type': 'object'}}}, ['action']),
+          'questions': {'type': 'array', 'minItems': 1, 'maxItems': 3, 'items': PLAN_QUESTION_ITEM},
+          'answers': {'type': 'array', 'items': {'type': 'object', 'properties': {
+              'questionId': STRING, 'optionId': STRING, 'text': STRING}, 'required': ['questionId']}}},
+         ['action']),
     tool('file_read',
          'Read a UTF-8 file inside the sandbox workspace. A file longer than the answer can be read '
          'in slices: pass `offset` (character index to start at) and `limit` (how many characters '
@@ -552,6 +624,50 @@ SCHEMAS = [
           'verdict': {'type': 'string', 'enum': ['ok', 'revise']},
           'issues': {'type': 'array', 'items': {'type': 'object'}}, 'summary': STRING},
          ['designId', 'version', 'verdict']),
+    tool('work_graph',
+         'Build and inspect the Work Graph: the durable DAG main uses to plan, research, design and '
+         'execute with harness-run review loops. action=create opens a run (goal, flow); add/update/remove '
+         'edit nodes (each node: id, kind, title, goal, dependsOn, acceptance, tests, files); status reads '
+         'the run; validate checks the DAG; verify runs the whole-plan review (coverage, dependencies, '
+         'order) and writes the verified plan documents; submit asks the owner to approve execution '
+         '(skipped when Autopilot is on); cancel closes the run. Only main calls this.',
+         {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
+                                                'verify', 'submit', 'cancel']},
+          'runId': STRING, 'goal': STRING, 'title': STRING,
+          'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
+                   'description': 'what the owner asked for; plan+research/design is `mixed`'},
+          'nodes': {'type': 'array', 'maxItems': 24, 'items': WORK_NODE},
+          'nodeIds': {'type': 'array', 'items': STRING},
+          'summary': {'type': 'string', 'description': 'submit: what the owner approves, in their language'}},
+         ['action']),
+    tool('work_run',
+         'Run the ready nodes of the Work Graph in parallel (dependencies respected). The harness runs '
+         'each node with its specialist, answers the specialist knowledge requests through research or '
+         'explore, then has an independent reviewer judge it (VERDICT ok|revise) and re-runs the node '
+         'with the findings until ok or the round limit. Returns each node verdict and accepted output. '
+         'phase=discover runs explore/research/design/plan nodes; phase=execute runs the approved plan '
+         '(build per sub-plan, verified by testing) and needs owner approval or Autopilot.',
+         {'runId': STRING, 'phase': {'type': 'string', 'enum': ['discover', 'execute']},
+          'nodeIds': {'type': 'array', 'items': STRING,
+                      'description': 'limit to these nodes (their dependencies must already be accepted)'},
+          'maxRounds': {'type': 'integer', 'description': 'review rounds per node, 1-4 (default 3)'}},
+         ['phase']),
+    tool('work_ship',
+         'After execution: create a local git branch, commit the workspace changes, and write the PR '
+         'description file. Pushes and opens a draft PR only when a remote and credentials exist; '
+         'otherwise it reports that honestly.',
+         {'runId': STRING, 'branch': STRING, 'title': STRING, 'body': STRING,
+          'repoPath': {'type': 'string', 'description': 'git repository directory inside the workspace '
+                                                        '(default: the workspace root)'},
+          'push': {'type': 'boolean', 'description': 'try to push when a remote exists (default true)'}},
+         []),
+    tool('interview',
+         'Ask the owner 1-5 structured questions in ONE card and BLOCK until they answer (default 900 s). '
+         'Each question has a rationale and 2-4 options with short descriptions; mark at most one option '
+         'recommended. The card always offers free text and "let the agent decide". Ask only questions '
+         'whose answer changes scope, architecture or acceptance; never ask what the repository answers.',
+         {'title': STRING, 'questions': {'type': 'array', 'minItems': 1, 'maxItems': 5, 'items': INTERVIEW_QUESTION},
+          'runId': STRING, 'deadlineSeconds': {'type': 'integer'}}, ['questions']),
     tool('design_report',
          'Phát thẻ báo cáo thiết kế và khối bàn giao cho lượt main kế tiếp: tóm tắt, nhãn (labels) và '
          'việc còn lại cho agent xây dựng. Bàn giao chỉ được khi bản thiết kế đã có kết luận soát độc '

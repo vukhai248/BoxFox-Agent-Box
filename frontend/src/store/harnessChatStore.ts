@@ -96,7 +96,7 @@ export interface SavedSessionRow {
 
 // ── Quyết định thật của agent (hợp đồng §1 `decision_requested`/`decision_resolved`)
 
-export type DecisionKind = 'question' | 'approval'
+export type DecisionKind = 'question' | 'approval' | 'interview'
 export type DecisionOptionKind = 'approve' | 'reject' | 'alternative'
 // P4 (vá vòng soát) — `answered`: chủ nhà GÕ câu trả lời vào ô tự nhập. Đó là một hàng ĐÃ CHỐT
 // nhưng trung tính: không phải "đã duyệt" và cũng không phải "bị từ chối".
@@ -135,6 +135,45 @@ export interface DecisionEntry {
   resolvedAt: number | null
   /** `created` của event `decision_requested` (ms) — chỉ để hiện thứ tự. */
   requestedAt: number
+  /** Thẻ phỏng vấn (`interview`): tiêu đề chung của cả thẻ. */
+  title?: string | null
+  /** Thẻ phỏng vấn: 1–5 câu hỏi, mỗi câu 2–4 lựa chọn (server đã chuẩn hoá). */
+  questions?: InterviewQuestion[]
+  /** Thẻ phỏng vấn đã chốt: câu trả lời theo từng câu hỏi (`decision_resolved.answers`). */
+  answers?: InterviewAnswer[]
+  /** Quyết định thuộc một lượt Work Graph (thẻ duyệt kế hoạch). */
+  workRunId?: string | null
+}
+
+export interface InterviewOption {
+  id: string
+  label: string
+  description: string
+  recommended: boolean
+}
+
+export interface InterviewQuestion {
+  id: string
+  question: string
+  rationale: string
+  options: InterviewOption[]
+}
+
+/** Một câu trả lời gửi đi: chọn `optionId`, hoặc `optionId='other'` kèm `text`, hoặc `decide`. */
+export interface InterviewReply {
+  questionId: string
+  optionId?: string
+  text?: string
+}
+
+/** Câu trả lời đã chuẩn hoá do harness trả về. `decidedBy='agent'` là câu để agent tự quyết. */
+export interface InterviewAnswer {
+  questionId: string
+  question: string | null
+  optionId: string | null
+  answer: string | null
+  decidedBy: 'user' | 'agent'
+  recommended?: string | null
 }
 
 interface State {
@@ -158,7 +197,13 @@ interface State {
   refresh: (chatId: string) => Promise<void>
   stop: (chatId: string) => Promise<void>
   /** Trả lời một quyết định qua harness; cập nhật ngay tại chỗ khi thành công. */
-  answerDecision: (chatId: string, decisionId: string, choice: string, note?: string) => Promise<void>
+  answerDecision: (
+    chatId: string,
+    decisionId: string,
+    choice: string,
+    note?: string,
+    answers?: InterviewReply[],
+  ) => Promise<void>
   clearError: (chatId: string) => void
 }
 
@@ -204,6 +249,57 @@ export function decisionReasonFrom(value: unknown): DecisionResolveReason | null
   return value === 'user' || value === 'timeout' || value === 'session_cancelled' ? value : null
 }
 
+/** Câu hỏi của thẻ phỏng vấn; mục méo bị bỏ, không bịa thêm. */
+export function parseInterviewQuestions(value: unknown): InterviewQuestion[] {
+  if (!Array.isArray(value)) return []
+  const questions: InterviewQuestion[] = []
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue
+    const item = raw as Record<string, unknown>
+    const id = asString(item.id)
+    const question = asString(item.question)
+    if (!id || !question) continue
+    const options: InterviewOption[] = []
+    for (const rawOption of Array.isArray(item.options) ? item.options : []) {
+      if (!rawOption || typeof rawOption !== 'object') continue
+      const option = rawOption as Record<string, unknown>
+      const optionId = asString(option.id)
+      const label = asString(option.label)
+      if (!optionId || !label) continue
+      options.push({
+        id: optionId,
+        label,
+        description: asString(option.description) ?? '',
+        recommended: option.recommended === true,
+      })
+    }
+    if (options.length === 0) continue
+    questions.push({ id, question, rationale: asString(item.rationale) ?? '', options })
+  }
+  return questions
+}
+
+/** Câu trả lời đã chuẩn hoá của thẻ phỏng vấn (`decision_resolved.answers` hoặc kết quả route). */
+export function parseInterviewAnswers(value: unknown): InterviewAnswer[] {
+  if (!Array.isArray(value)) return []
+  const answers: InterviewAnswer[] = []
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue
+    const item = raw as Record<string, unknown>
+    const questionId = asString(item.questionId)
+    if (!questionId) continue
+    answers.push({
+      questionId,
+      question: asString(item.question),
+      optionId: asString(item.optionId),
+      answer: asString(item.answer),
+      decidedBy: item.decidedBy === 'agent' ? 'agent' : 'user',
+      recommended: asString(item.recommended),
+    })
+  }
+  return answers
+}
+
 /**
  * Dựng danh sách quyết định từ `events[]`. Hàm THUẦN để test được.
  * `decision_resolved` tới trước `decision_requested` (dữ liệu cũ, phân trang)
@@ -217,7 +313,7 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
       if (!id || byId.has(id)) continue
       byId.set(id, {
         id,
-        kind: event.data.kind === 'approval' ? 'approval' : 'question',
+        kind: event.data.kind === 'approval' ? 'approval' : event.data.kind === 'interview' ? 'interview' : 'question',
         question: asString(event.data.question),
         action: asString(event.data.action),
         reason: asString(event.data.reason),
@@ -230,6 +326,10 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
         resolvedReason: null,
         resolvedAt: null,
         requestedAt: event.created,
+        ...(event.data.kind === 'interview'
+          ? { title: asString(event.data.title), questions: parseInterviewQuestions(event.data.questions) }
+          : {}),
+        workRunId: asString(event.data.workRunId) ?? asString(event.data.runId),
       })
       continue
     }
@@ -259,6 +359,7 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
         note: asString(event.data.note),
         resolvedReason: decisionReasonFrom(event.data.reason),
         resolvedAt: asNumber(event.data.resolvedAt),
+        ...(Array.isArray(event.data.answers) ? { answers: parseInterviewAnswers(event.data.answers) } : {}),
       })
     }
   }
@@ -323,12 +424,28 @@ export function dispatchTabIntents(params: {
       }
       continue
     }
+    // Work Graph: lần đầu một lượt xuất hiện (hoặc lượt chuyển sang chờ duyệt) thì mở tab Work
+    // Graph — không mở lại cho mỗi ảnh chụp, vì mỗi vòng review đều phát một `work_graph`.
+    if (event.type === 'work_graph') {
+      if (firstHydration) continue
+      const runId = asString(event.data.runId)
+      if (!runId) continue
+      const status = asString(event.data.status)
+      const earlier = allEvents.filter(
+        (other) => other.type === 'work_graph' && other.seq < event.seq && other.data.runId === runId,
+      )
+      const statusIsNew = !earlier.some((other) => other.data.status === status)
+      if (earlier.length === 0 || (statusIsNew && status === 'awaiting_approval')) {
+        request('work', { runId }, 'work_graph')
+      }
+      continue
+    }
     // `ui_intent` là gợi ý của harness (hợp đồng §1/§3): UI vẫn tự quyết theo luật
     // auto-open, và những ý định không có event gốc đi kèm (ví dụ tab Files) cũng
     // được tôn trọng. Tab lạ thì bỏ qua.
     if (event.type === 'ui_intent') {
       const tab = asString(event.data.tab)
-      if (tab !== 'plan' && tab !== 'decisions' && tab !== 'files' && tab !== 'subagents' && tab !== 'research' && tab !== 'design') continue
+      if (tab !== 'plan' && tab !== 'work' && tab !== 'decisions' && tab !== 'files' && tab !== 'subagents' && tab !== 'research' && tab !== 'design') continue
       if (firstHydration && (tab === 'plan' || tab === 'decisions')) continue
       const rawTarget = event.data.target
       request(
@@ -802,7 +919,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
     catch (error) { set((state) => ({ sessions: { ...state.sessions, [chatId]: { ...state.sessions[chatId], error: String(error) } } })) }
   },
 
-  answerDecision: async (chatId, decisionId, choice, note) => {
+  answerDecision: async (chatId, decisionId, choice, note, answers) => {
     const current = get().sessions[chatId] ?? empty()
     const id = current.id ?? (isHexId(chatId) ? chatId : localStorage.getItem(storageKey(chatId)))
     if (!id) {
@@ -815,10 +932,18 @@ export const useHarnessChatStore = create<State>((set, get) => ({
       return
     }
     try {
-      const result = await agentApi<{ status: string; decisionId: string; choice: string; outcome: string }>(
-        `/sessions/${id}/decisions`,
-        note ? { decisionId, choice, note } : { decisionId, choice },
-      )
+      const result = await agentApi<{
+        status: string
+        decisionId: string
+        choice: string
+        outcome: string
+        answers?: unknown
+      }>(`/sessions/${id}/decisions`, {
+        decisionId,
+        choice,
+        ...(note ? { note } : {}),
+        ...(answers ? { answers } : {}),
+      })
       set((state) => {
         const list = state.decisions[chatId] ?? parseDecisions(current.events)
         const decisions = list.map((entry) => {
@@ -832,6 +957,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
             note: note ?? null,
             resolvedReason: 'user' as DecisionResolveReason,
             resolvedAt: Date.now() / 1000,
+            ...(Array.isArray(result?.answers) ? { answers: parseInterviewAnswers(result.answers) } : {}),
           }
         })
         return { decisions: { ...state.decisions, [chatId]: decisions } }

@@ -5,7 +5,7 @@ import json
 import time
 import uuid
 from ..agent_core import research_runtime
-from ..agent_core import plan_workflow
+from ..agent_core import plan_workflow, work_graph
 from ..agent_core.limits import (STEER_MAX_PENDING, RESEARCH_MODE_BLOCK_MARKER,
                                  RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
                                  RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
@@ -194,7 +194,15 @@ class RuntimeCommands:
         elif resolved.kind == 'mode':
             # P1 (§5.2, cửa 3): lệnh mode KHÔNG đi qua đường lượt thường. `/research` (rỗng)
             # và `/research status` không mở lượt; `/research <text>` bật mode rồi nộp lượt.
-            if resolved.command == 'plan':
+            work_arg = (resolved.prompt or '').strip()
+            if (resolved.command in work_graph.SLASH_FLOWS and work_graph.enabled() and work_arg
+                    and work_arg.lower() not in ('off', 'status', 'on')):
+                # Lớp điều phối mới: `/plan|/research|/design <yêu cầu>` là LỐI TẮT — không khoá mode,
+                # chỉ ghi ý định vào phiên rồi nộp một lượt main thường. Main đọc khối WORK GRAPH và
+                # dựng đồ thị việc với đúng luồng ấy. `/plan off|status` và công tắc
+                # `BOXFOX_WORK_GRAPH=off` giữ nguyên đường cũ.
+                outcome = self._work_intent_command(sid, session, resolved.command, work_arg)
+            elif resolved.command == 'plan':
                 arg = (resolved.prompt or '').strip()
                 workflow = plan_workflow.service(self)
                 if arg.lower() == 'status':
@@ -312,6 +320,7 @@ class RuntimeCommands:
         # Gỡ cả ba khối đã chèn ở lượt trước: khối mode, dòng nhắc run nền, và khối bàn giao.
         for marker, end_marker in ((RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END),
                                    (plan_workflow.MARKER, plan_workflow.END_MARKER),
+                                   (work_graph.MARKER, work_graph.END_MARKER),
                                    (RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END),
                                    (RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END),
                                    # P1 (§4): cùng luật cho hai khối của chế độ Design — mỗi khối
@@ -415,6 +424,28 @@ class RuntimeCommands:
                 'message': (f'{job["research_id"]} · {job["status"]}'
                             f' · pha {state.get("phase") or "—"}'
                             f'{" · chạy nền" if state.get("background") else ""}')}
+
+    def _work_intent_command(self, sid, session, command, text):
+        """Ghi `config.workIntent` (Work Graph) và tắt các mode cũ đang khoá lượt main."""
+        from ..agent_core.runtime import research_mode, design_mode
+        if plan_workflow.mode(session)['on']:
+            plan_workflow.service(self).set_mode(self, sid, False)
+            session = self.store.get(sid)
+        if research_mode(session)['on'] and self._active_mode_job(sid) is None:
+            self._set_mode(sid, session, False, 'command')
+            session = self.store.get(sid)
+        if design_mode(session)['on']:
+            from ..agent_core import design_runtime
+            try:
+                design_runtime.apply_design_mode(self, sid, False, 'command')
+            except ValueError:
+                pass
+            session = self.store.get(sid)
+        intent = work_graph.set_intent(self, session, command, text)
+        labels = {'plan': 'lập kế hoạch', 'research': 'nghiên cứu', 'design': 'thiết kế'}
+        return {'result': {'output': f'Work Graph: main sẽ {labels.get(command, command)} theo đồ thị việc '
+                                     '(khám phá → phản biện → kế hoạch con → duyệt → chạy DAG).',
+                           'workIntent': intent}, 'submit': True}
 
     def _mode_command(self, sid, session, resolved):
         """Xử lý `Resolution.kind='mode'` (§5.2, cửa 3).

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ShieldAlert, CheckCircle2, XCircle, MessageSquare } from 'lucide-react'
 import { useAgentStore } from '../../store/agentStore'
 import { pendingDecisions, useHarnessChatStore } from '../../store/harnessChatStore'
-import type { DecisionEntry, DecisionStatus } from '../../store/harnessChatStore'
+import type { DecisionEntry, DecisionStatus, InterviewReply } from '../../store/harnessChatStore'
 import { useUiStore } from '../../store/uiStore'
 import { useT } from '../../i18n/context'
 import { useNow } from '../../hooks/useNow'
@@ -77,12 +77,12 @@ export function DecisionsPanel() {
   }, [targetRequestId, totalPending])
 
   const handleAnswer = useCallback(
-    async (decision: DecisionEntry, choice: string, note?: string) => {
+    async (decision: DecisionEntry, choice: string, note?: string, answers?: InterviewReply[]) => {
       setSendingId(decision.id)
       setAnswerError(null)
       try {
         // P4 — lựa chọn tự nhập gửi kèm chữ đã gõ; các lựa chọn khác vẫn đi đường cũ (`note` rỗng).
-        await answerDecision(chatId, decision.id, choice, note)
+        await answerDecision(chatId, decision.id, choice, note, answers)
         // `answerDecision` không ném: nó ghi lỗi thật của route vào store. Hàng
         // chỉ quay về "đang chờ" khi lần trả lời thất bại, nên lỗi chỉ hiện khi
         // đúng hàng đó vẫn còn chờ.
@@ -221,9 +221,7 @@ export function DecisionsPanel() {
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted">
                     {t('decisions.awaitingUser')} — {totalPending} ×{' '}
-                    {pendingList[0]?.kind === 'approval'
-                      ? t('decisions.kind.approval')
-                      : t('decisions.kind.question')}
+                    {t(`decisions.kind.${pendingList[0]?.kind ?? 'question'}` as 'decisions.kind.question')}
                   </p>
                 </div>
                 {remainingSec !== null && (
@@ -253,7 +251,7 @@ export function DecisionsPanel() {
                 <PermissionCard
                   decision={decision}
                   busy={sendingId === decision.id}
-                  onAnswer={(choice, note) => void handleAnswer(decision, choice, note)}
+                  onAnswer={(choice, note, answers) => void handleAnswer(decision, choice, note, answers)}
                 />
               </div>
             ))}
@@ -317,12 +315,24 @@ export function DecisionsPanel() {
                           </span>
                         </div>
                         <p className="text-[11px] text-muted truncate">
-                          {decision.kind === 'approval'
-                            ? t('decisions.kind.approval')
-                            : t('decisions.kind.question')}
+                          {t(`decisions.kind.${decision.kind}` as 'decisions.kind.question')}
                           {choiceLabel ? ` · ${choiceLabel}` : ''} · {reasonLabel(decision)}
                           {decision.note ? ` · ${decision.note}` : ''}
                         </p>
+                        {decision.kind === 'interview' && (decision.answers?.length ?? 0) > 0 && (
+                          <ul className="mt-1 space-y-0.5 text-[11px] text-zinc-300" data-testid="interview-history-answers">
+                            {decision.answers!.map((answer) => (
+                              <li key={answer.questionId} className="truncate">
+                                <span className="text-muted">{answer.question ?? answer.questionId}: </span>
+                                {answer.decidedBy === 'agent'
+                                  ? answer.recommended
+                                    ? t('decisions.interview.agentDecidesWith', { option: answer.recommended })
+                                    : t('decisions.interview.agentDecides')
+                                  : answer.answer}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
                     <span

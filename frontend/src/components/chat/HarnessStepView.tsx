@@ -1383,7 +1383,7 @@ function DecisionRow({
         <span>
           {status === 'pending'
             ? t('chat.decisionWaiting')
-            : `${kind === 'approval' ? t('decisions.kind.approval') : t('decisions.kind.question')} · ${statusLabel}`}
+            : `${kind === 'approval' ? t('decisions.kind.approval') : kind === 'interview' ? t('decisions.kind.interview') : t('decisions.kind.question')} · ${statusLabel}`}
         </span>
       </div>
       {question && <p className="mt-1 text-xs leading-relaxed text-fg select-text">{question}</p>}
