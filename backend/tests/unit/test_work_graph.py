@@ -796,3 +796,36 @@ def test_a_failed_commit_is_not_recorded_as_shipped(tmp_path):
     assert shipped['ship']['status'] == 'commit_failed' and shipped['status'] == 'executed'
     commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
     assert not any('git push' in command for command in commands)
+
+
+def test_reviewers_get_a_hard_step_cap_and_a_verdict_wrap_up(tmp_path):
+    store, runtime, _, _, sid = build(tmp_path)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+
+    out = asyncio.run(run())
+    children = [store.get(child['session_id']) for child in store.children_of(sid)]
+    reviewers = [c for c in children if c['config']['workBinding']['purpose'] == 'review']
+    producers = [c for c in children if c['config']['workBinding']['purpose'] == 'produce']
+    assert out['outputs'][0]['status'] == 'accepted'
+    assert reviewers and all(c['config']['maxSteps'] <= wg.REVIEW_MAX_STEPS for c in reviewers)
+    assert producers and all(c['config']['maxSteps'] > wg.REVIEW_MAX_STEPS for c in producers)
+    assert 'VERDICT' in wg.wrap_up_note(reviewers[0]) and wg.wrap_up_note(producers[0]) == ''
+
+
+def test_a_session_with_old_saved_skills_can_still_open_the_work_graph_skill(tmp_path, monkeypatch):
+    store, runtime, _, _, sid = build(tmp_path)
+    session = store.get(sid)
+    session['config']['skills'] = ['planning']  # settings saved before the skill existed
+    store.update_config(sid, session['config'])
+
+    async def run():
+        return await runtime.dispatch(store.get(sid), 'skill_view', {'id': wg.WORK_SKILL}, 'call-1')
+    result = asyncio.run(run())
+    assert 'Work Graph' in str(result.get('content') or result)
+    assert wg.WORK_SKILL in store.get(sid)['config']['skills']
+    monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
+    assert not wg.grants_skill(store.get(sid))

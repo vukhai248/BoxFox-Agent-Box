@@ -4268,7 +4268,8 @@ class HarnessRuntime(RuntimeCommands):
                             request_messages = messages
                             if step >= wrap_up_at:
                                 request_messages = messages + [{'role': 'user', 'content': diagnosis_prompt(
-                                    STEP_BUDGET_NOTICE_CODE, config['maxSteps'] - step)}]
+                                    STEP_BUDGET_NOTICE_CODE, config['maxSteps'] - step)
+                                    + work_graph.wrap_up_note(session)}]
                             # P1.5 — bản nhắc việc của LƯỢT: chỉ phiên chính, chỉ đi kèm YÊU CẦU
                             # của bước (không vào `messages`, nên transcript không phình và nó
                             # không bao giờ đứng như một message của chủ nhà), và chỉ khi lượt đã
@@ -4772,6 +4773,11 @@ class HarnessRuntime(RuntimeCommands):
         if name == 'skills_list':
             return {'skills': [s for s in self.catalog.list(config['skills']) if s['enabled']]}
         if name == 'skill_view':
+            if args.get('id') == work_graph.WORK_SKILL and work_graph.grants_skill(session) \
+                    and work_graph.WORK_SKILL not in config['skills']:
+                # The SOP names this skill; settings saved before it existed must not hide it (live test).
+                config['skills'] = sorted(set(config['skills']) | {work_graph.WORK_SKILL})
+                self.store.update_config(sid, config)
             if args.get('id') not in config['skills']:
                 raise PermissionError('Skill is not enabled for this session')
             if args['id'] in EXTERNAL:
@@ -6754,6 +6760,10 @@ class HarnessRuntime(RuntimeCommands):
         tier = 0 if work else int(research_runtime.research_config(session).get('tier') or 0)
         child_steps = min(CHILD_MAX_STEPS, config['maxSteps'])
         child_deadline = min(CHILD_DEADLINE_SECONDS, config['deadlineSeconds'])
+        if work and work.get('purpose') == 'review':
+            # A reviewer checks, it does not redo the work: a hard cap keeps it from running out
+            # of budget before its VERDICT line (live test: 38-step reviews with no verdict).
+            child_steps = min(child_steps, work_graph.REVIEW_MAX_STEPS)
         if role == 'research' and not tier and not work:
             # P1 (cửa 2, M-07): ngoài mode, nhánh research ĐẦU TIÊN không brief là tra cứu nhanh ⇒
             # kẹp vào trần mức 1 (20 bước/180 s). `missing_brief_gate` đã từ chối nhánh thứ hai.

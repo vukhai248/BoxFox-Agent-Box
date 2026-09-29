@@ -64,6 +64,8 @@ OUTPUT_MAX_CHARS = 20000
 CONTEXT_MAX_CHARS = 15000
 FINDINGS_MAX_CHARS = 3000
 HISTORY_MAX = 120
+WORK_SKILL = 'work-graph-planning'
+REVIEW_MAX_STEPS = 14
 
 TERMINAL_STATUSES = ('shipped', 'cancelled', 'rejected')
 IN_FLIGHT_STAGE = ('running', 'reviewing', 'researching')
@@ -106,6 +108,20 @@ def slugify(text, limit=40):
 
 
 SLASH_FLOWS = ('plan', 'research', 'design')
+
+
+def grants_skill(session):
+    """The root orchestrator always may open the Work Graph skill while the engine is on."""
+    return enabled() and not session.get('parent_id') and session.get('role') == 'orchestrator'
+
+
+def wrap_up_note(session):
+    """Extra wrap-up line for a Work Graph reviewer: out of steps means `verdict now`, not a diagnosis."""
+    work = (session.get('config') or {}).get('workBinding') or {}
+    if work.get('purpose') != 'review':
+        return ''
+    return (' You are a Work Graph reviewer: write your review NOW from what you already checked — '
+            '`## Blocking findings` (or `none`), then the final `VERDICT: ok` or `VERDICT: revise` line.')
 
 
 def set_intent(rt, session, command, text):
@@ -965,7 +981,9 @@ class WorkGraph:
             lines += ['Acceptance to check one by one:'] + [f'- {item}' for item in node['acceptance']]
         if node['tests']:
             lines += ['Required tests:'] + [f'- {item}' for item in node['tests']]
-        lines += ['', 'Rubric: ' + REVIEW_RUBRICS.get(kind, REVIEW_RUBRICS['plan']),
+        lines += ['', f'Budget: you have {REVIEW_MAX_STEPS} tool steps. Batch your checks and keep the last '
+                  'steps for writing the review.',
+                  '', 'Rubric: ' + REVIEW_RUBRICS.get(kind, REVIEW_RUBRICS['plan']),
                   '', 'The output to review is in the context below.', '', REVIEW_TAIL]
         return '\n'.join(lines), f'### Output of {node["id"]} to review\n{bounded(output, 14000)}'
 
