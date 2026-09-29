@@ -829,6 +829,18 @@ export class ProviderService {
     return this.#ringView(c);
   }
   /**
+   * Đọc và giải mã API key / access token của một khoá trong ring để phục vụ
+   * chức năng xem (reveal) và sao chép (copy) của người dùng ở Settings.
+   */
+  revealKey(id, keyId) {
+    const c = this.connection(id);
+    const keys = this.#keyList(c);
+    const key = keys.find(entry => entry.id === keyId) || (c.id === keyId ? { id: c.id } : null);
+    assert(key, 'This key is not on the connection.', 'NOT_FOUND', 404);
+    const blob = this.store.credentials(key.id) || {};
+    return { id: key.id, key: blob.apiKey || blob.accessToken || '' };
+  }
+  /**
    * Chuyển TOÀN BỘ khoá của một connection khác vào CUỐI ring này, giữ nguyên thứ
    * tự. Không dedupe, không mã hoá lại: mỗi entry `{ id, label, prefix, createdAt }`
    * được bê nguyên sang (nên ciphertext trong DB không đổi một byte), và nguồn ở

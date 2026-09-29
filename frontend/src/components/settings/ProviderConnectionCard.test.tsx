@@ -119,12 +119,9 @@ function setValue(input: HTMLInputElement, value: string) {
 const patches = (fetchMock: ReturnType<typeof vi.fn>, url: string) => fetchMock.mock.calls.filter(call => call[0] === url && (call[1] as RequestInit | undefined)?.method === 'PATCH')
 
 describe('Provider connection card', () => {
-  it('keeps the collapsed card compact and hides the edit fields until Edit is pressed', async () => {
+  it('keeps the collapsed card compact without orphan edit inputs', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(snapshot)))
     await render()
-    expect(host.textContent).toContain('auth ready')
-    expect(host.textContent).toContain('models ready')
-    expect(host.textContent).toContain('8 models · Data: live · Last sync')
     expect(host.textContent).toContain('7 / 8 active')
     expect(host.textContent).toContain('2 verified ready')
     expect(host.textContent).toContain('gpt-5-mini · 958ms')
@@ -135,12 +132,7 @@ describe('Provider connection card', () => {
     expect(host.textContent).not.toContain('Replace API key')
     // A snapshot the router did not decorate with `keys` keeps today's single-key card.
     expect(host.textContent).not.toContain('Keys on this connection')
-    const edit = [...host.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === 'Edit')!
-    expect(edit.getAttribute('aria-expanded')).toBe('false')
-    act(() => edit.click())
-    expect(edit.getAttribute('aria-expanded')).toBe('true')
-    expect(host.textContent).toContain('Replace API key')
-    expect([...host.querySelectorAll<HTMLInputElement>('input')].some(input => input.value === 'OpenRouter key')).toBe(true)
+    expect([...host.querySelectorAll<HTMLButtonElement>('button')].some(button => button.textContent?.trim() === 'Edit')).toBe(false)
   })
 
   it('sends exactly one probe request and leaves the other buttons usable while it runs', async () => {
@@ -181,7 +173,6 @@ describe('Provider connection card', () => {
     await act(async () => undefined)
     expect(host.textContent).toContain(AUTH_MESSAGE)
     expect(host.textContent).toContain('Key saved on host; the provider refused it (auth expired).')
-    expect(host.textContent).toContain('Refresh models to retry, or replace the key in Edit.')
   })
 
   it('sends the full enabled id set from a row checkbox and an empty set from Disable all', async () => {
@@ -255,7 +246,6 @@ describe('Provider connection card', () => {
     expect(host.textContent).toContain('Last attempt:')
     expect(buttonIn(host, 'Retry')).toBeTruthy()
     expect(buttonIn(host, 'Add model by hand')).toBeTruthy()
-    expect(buttonIn(host, 'Edit endpoint & key')).toBeTruthy()
     expect(host.textContent).toContain('1 model(s) added by hand — tested one by one.')
   })
 
@@ -301,19 +291,6 @@ describe('Provider connection card', () => {
     expect(cell('gemini-2.5-pro', '398 ms').title).toBe('Failed · failed · HTTP 403 · 398 ms · Provider rejected the probe.')
     expect(cell('gpt-5-mini', '958 ms').title).toBe('Passed · ready · HTTP 200 · 958 ms')
     expect(cell('qwen3-max', 'Untested').title).toBe('Not tested yet — Test probes this model once')
-  })
-
-  it('focuses the Base URL from Edit endpoint & key without clearing it', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => json(customFailedSnapshot)))
-    await render()
-    act(() => selectProvider('custom'))
-    await act(async () => undefined)
-    act(() => buttonIn(host, 'Edit endpoint & key').click())
-    await act(async () => undefined)
-
-    const base = [...host.querySelectorAll<HTMLInputElement>('input')].find(input => input.value === 'https://tokenharbor.ai/v1')!
-    expect(document.activeElement).toBe(base)
-    expect(host.textContent).toContain('Usually ends with /v1. The router calls https://tokenharbor.ai/v1/models and https://tokenharbor.ai/v1/chat/completions.')
   })
 
   it('derives the endpoint hint from what is being typed in the add form', async () => {
@@ -398,21 +375,17 @@ describe('Provider connection card', () => {
     expect(JSON.parse(String((importCall![1] as RequestInit).body))).toEqual({ fromConnectionId: 'openrouter-key' })
     // Nothing is deleted behind the owner's back: the source card says so and stays.
     expect(fetchMock.mock.calls.some(call => (call[1] as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
-    expect(cards[0].textContent).toContain('1 key moved to "OpenCode Free (key 2)". Delete this connection if you no longer need it.')
+    expect(cards[0].textContent).toContain('1 key moved to "OpenCode Free (key 2)".')
     expect(cards[0].textContent).toContain('No key on this connection yet.')
-    act(() => buttonIn(cards[0], 'Edit').click())
-    expect(buttonIn(cards[0], 'Delete').disabled).toBe(false)
   })
 
-  it('refuses to delete a connection that still holds keys before the router has to', async () => {
+  it('confirms the card does not expose an orphan Delete button', async () => {
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit = {}) => json(ringSnapshot))
     vi.stubGlobal('fetch', fetchMock)
     useProviderStore.setState({ snapshot: ringSnapshot })
     await render()
 
-    act(() => buttonIn(host, 'Edit').click())
-    expect(buttonIn(host, 'Delete').disabled).toBe(true)
-    expect(host.textContent).toContain('Remove the 1 key on this connection first — delete would drop it.')
+    expect([...host.querySelectorAll<HTMLButtonElement>('button')].some(b => b.textContent?.trim() === 'Delete')).toBe(false)
     expect(fetchMock.mock.calls.some(call => (call[1] as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
   })
 })

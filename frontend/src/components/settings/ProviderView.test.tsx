@@ -207,7 +207,6 @@ describe('Provider UI', () => {
     expect(headings[0].textContent).toContain('1')
     expect(headings[1].textContent).toContain('API keys')
     expect(headings[1].textContent).toContain('4')
-    expect(railRows()[0].textContent).toContain('0 models')
     expect(railRows()[0].textContent).toContain('No connection · needs key')
   })
   it('narrows the rail to the searched provider and follows the selection in the pane header', async () => {
@@ -226,7 +225,7 @@ describe('Provider UI', () => {
     useProviderStore.setState({ snapshot: twoProviderSnapshot, error: null, busy: false, loading: false })
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(twoProviderSnapshot), { headers: { 'content-type': 'application/json' } })))
     await render('api')
-    expect(host.querySelector('[data-provider-row="openrouter"]')!.textContent).toContain('3 models')
+    expect(host.querySelector('[data-provider-row="openrouter"]')!.textContent).toContain('1 connection ready')
     expect(host.querySelector('[data-provider-row="openai"]')!.textContent).toContain('1 connection ready')
     expect(host.textContent).toContain('2 connected')
     expect(host.textContent).toContain('OpenRouter key')
@@ -242,7 +241,7 @@ describe('Provider UI', () => {
     act(() => railRows()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })))
     expect(selectedRows()).toEqual(['custom'])
   })
-  it('caps a group at four rows behind a disclosure that shows the rest and folds back', async () => {
+  it('displays all providers in groups without disclosure buttons', async () => {
     const wide: ProviderSnapshot = {
       ...snapshot,
       providers: [
@@ -255,15 +254,9 @@ describe('Provider UI', () => {
     useProviderStore.setState({ snapshot: wide, error: null, busy: false, loading: false })
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(wide), { headers: { 'content-type': 'application/json' } })))
     await render('api')
-    expect(railRows()).toHaveLength(5)
-    const more = [...host.querySelectorAll<HTMLButtonElement>('button[aria-controls]')].find(button => button.textContent?.includes('Show 2 more API keys'))!
-    expect(more.getAttribute('aria-expanded')).toBe('false')
-    act(() => more.click())
     expect(railRows()).toHaveLength(7)
-    const fewer = [...host.querySelectorAll<HTMLButtonElement>('button[aria-controls]')].find(button => button.textContent?.includes('Show fewer API keys'))!
-    expect(fewer.getAttribute('aria-expanded')).toBe('true')
-    act(() => fewer.click())
-    expect(railRows()).toHaveLength(5)
+    const more = [...host.querySelectorAll<HTMLButtonElement>('button[aria-controls]')].find(button => button.textContent?.includes('Show'))
+    expect(more).toBeUndefined()
   })
   it('lists the router providers in the same rail, marks the selection and counts each group', async () => {
     await render('router')

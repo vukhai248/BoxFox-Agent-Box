@@ -9,14 +9,6 @@ export interface ProviderRailGroup {
   providers: ProviderDefinition[]
 }
 
-/**
- * Providers are picked from a self-scrolling rail instead of a full-width grid, so
- * expanding a group never pushes the detail column down. A group shows at most
- * four two-line rows and then a disclosure row — that cap hides nothing
- * permanently, because the disclosure row is always there.
- */
-const ROW_LIMIT = 4
-
 function providerConnections(connections: ProviderConnection[], providerId: string) {
   return connections.filter((connection) => connection.providerId === providerId)
 }
@@ -54,7 +46,6 @@ export function ProviderRail({
 }) {
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [showAll, setShowAll] = useState<Record<string, boolean>>({})
   const [mobileOpen, setMobileOpen] = useState(false)
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([])
   const baseId = useId()
@@ -74,9 +65,8 @@ export function ProviderRail({
     .map((group) => {
       const matched = searching ? group.providers.filter(matches) : group.providers
       const isCollapsed = Boolean(collapsed[group.id]) && !searching
-      const expanded = Boolean(showAll[group.id]) || searching
-      const shown = isCollapsed ? [] : expanded ? matched : matched.slice(0, ROW_LIMIT)
-      return { ...group, matched, shown, hidden: Math.max(matched.length - ROW_LIMIT, 0), collapsed: isCollapsed, expanded }
+      const shown = isCollapsed ? [] : matched
+      return { ...group, matched, shown, collapsed: isCollapsed }
     })
     .filter((group) => group.providers.length > 0 && (!searching || group.matched.length > 0))
   const rows = visibleGroups.flatMap((group) => group.shown.map((provider) => ({ group, provider })))
@@ -156,22 +146,10 @@ export function ProviderRail({
                   </button>
                 )
               })}
-              {group.hidden > 0 && !group.collapsed && !searching && (
-                <button
-                  type="button"
-                  aria-expanded={Boolean(showAll[group.id])}
-                  aria-controls={groupBodyId}
-                  onClick={() => setShowAll((current) => ({ ...current, [group.id]: !current[group.id] }))}
-                  className="w-full rounded-md px-2 py-1 text-left text-[10px] text-muted transition hover:text-brand"
-                >
-                  {showAll[group.id] ? `Show fewer ${group.label} providers` : `Show ${group.hidden} more ${group.label} providers`}
-                </button>
-              )}
             </div>
           </div>
         )
       })}
-      <p className="mt-2 px-1 text-[10px] leading-4 text-muted">Groups collapse when they hold more than four providers. Counts are live usable models.</p>
     </>
   )
 

@@ -190,3 +190,12 @@ test('the key routes stay behind the local administration header', async t => {
   }
   assert.equal(f.service.connection(f.c.id).keys.length, 1, 'and nothing was written');
 });
+
+test('reveal endpoint returns the decrypted secret for inspection/copying', async t => {
+  const f = await fixture(t);
+  const res = await f.send(`/api/router/connections/${f.c.id}/keys/${f.c.id}/reveal`, { method: 'GET' });
+  assert.equal(res.status, 200);
+  assert.equal(res.data.id, f.c.id);
+  assert.equal(res.data.key, 'FIRST-SECRET');
+});
+

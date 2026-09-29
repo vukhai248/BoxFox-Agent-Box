@@ -26,3 +26,7 @@ export const connectionKeyTryPath = (connectionId: string, keyId: string) => `${
 
 /** Move every key of another connection of the same provider to the end of this ring. */
 export const connectionKeysImportPath = (connectionId: string) => `${connectionKeysPath(connectionId)}/import`
+
+/** Reveal the decrypted API key / token so the user can inspect or copy it. */
+export const connectionKeyRevealPath = (connectionId: string, keyId: string) => `${connectionKeyPath(connectionId, keyId)}/reveal`
+

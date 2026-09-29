@@ -10,11 +10,12 @@
 // `ModelToggleList` (one connection per list) lives here too: the Router tab's legacy
 // inventory still renders per connection and both variants share the same row body.
 import { useEffect, useId, useRef, useState } from 'react'
-import { Copy, Plus, SlidersHorizontal, X } from 'lucide-react'
+import { Activity, ChevronDown, ChevronRight, Copy, Plus, RefreshCw, SlidersHorizontal, X } from 'lucide-react'
 import { run, useProviderStore, type ModelProbeResult } from '../../store/providerStore'
 import type { ProviderConnection, ProviderModel } from '../../types/provider'
 import { CustomModelForm } from './CustomModelForm'
 import { ModelManagerModal } from './ModelManagerModal'
+import { InferenceTest } from '../providers/InferenceTest'
 
 export interface ProviderModelRow {
   /** The row's model, taken from the first serving connection — every serving connection
@@ -65,12 +66,28 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
   const [selectedModelForModal, setSelectedModelForModal] = useState<string | undefined>(undefined)
   const [managerConnection, setManagerConnection] = useState<ProviderConnection | undefined>(undefined)
   const [addModelOpen, setAddModelOpen] = useState(false)
+  const [inferenceOpen, setInferenceOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [probing, setProbing] = useState<string[]>([])
   const [probeResults, setProbeResults] = useState<Record<string, ModelProbeResult>>({})
   const [partialFailure, setPartialFailure] = useState<{ modelId: string; message: string } | null>(null)
   const addModelId = useId()
+  const inferenceId = useId()
   const controllers = useRef<Set<AbortController>>(new Set())
   const checkboxes = useRef<Map<string, HTMLInputElement | null>>(new Map())
+
+  const refreshAll = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all(
+        connections.map((c) =>
+          request(`/api/router/connections/${encodeURIComponent(c.id)}/test`, 'POST').catch(() => undefined),
+        ),
+      )
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   // A probe can outlive the card (the state reload can unmount it), so every probe
   // owns an AbortController that is aborted when this list goes away.
@@ -167,6 +184,15 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
           {verified.length > 0 && <span className="hidden items-center gap-1 font-mono text-[10px] text-emerald-400 sm:flex"><span className="size-1.5 rounded-full bg-emerald-400" />{verified.length} verified ready</span>}<span className="hidden items-center gap-1 font-mono text-[10px] text-muted sm:flex" title="Models that carry a price — reported by the provider, published in its model list, or set by you. Manage models sets the rest.">Prices {priced} / {rows.length} models</span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            disabled={busy || refreshing || !connections.some((c) => c.credentialPresent)}
+            onClick={() => void refreshAll()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] font-medium text-fg transition hover:bg-panel2 disabled:opacity-50"
+          >
+            <RefreshCw className={`size-3 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh models
+          </button>
           {enabledCount > 0 && <button type="button" disabled={busy} onClick={() => void disableAll()} className="rounded px-2 py-1 text-[11px] text-muted transition hover:text-rose-400 disabled:opacity-50">Disable all</button>}
           <button type="button" aria-expanded={addModelOpen} aria-controls={addModelId} onClick={() => setAddModelOpen((current) => !current)} className="inline-flex items-center gap-1 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] font-medium text-fg transition hover:bg-panel2"><Plus className="size-3" />Add model</button>
           <button type="button" onClick={() => openManager(connections[0])} className="inline-flex items-center gap-1.5 rounded-lg border border-brand/40 bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand transition hover:bg-brand/25"><SlidersHorizontal className="size-3.5" />Manage models</button>
@@ -203,7 +229,7 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
                   <span className={`ml-auto shrink-0 font-mono text-[10px] ${modelLatencyTone(row.model)}`} title={latencyTitle(row.model)}>{isProbing ? 'Testing…' : row.model.lastProbe ? `${row.model.lastProbe.latencyMs} ms` : 'Untested'}</span>
                   <button type="button" aria-busy={isProbing} disabled={busy || isProbing} onClick={() => void testModel(row)} className="shrink-0 rounded border border-line bg-panel px-1.5 py-0.5 text-[10px] font-medium text-fg transition hover:bg-panel2 hover:text-brand disabled:opacity-50">{isProbing ? 'Testing…' : 'Test'}</button>
                   <button type="button" aria-label={`Copy ${row.model.id}`} title="Copy model ID" onClick={() => run(copyModel(row.model.id))} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-fg"><Copy className="size-3" /></button>
-                  <button type="button" aria-label={`Manage ${row.model.id}`} title="Manage this model" onClick={() => openManager(row.serving[0], row.model.id)} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-fg"><SlidersHorizontal className="size-3" /></button>
+                  <button type="button" aria-label={`Manage ${row.model.id}`} title="Manage this model" onClick={() => openManager(row.serving[0], row.model.id)} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-fg"><SlidersHorizontal className="size-3.5" /></button>
                   <button type="button" title="Remove from active models" onClick={() => void disable(row)} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-rose-400"><X className="size-3" /></button>
                 </div>
                 {result && (
@@ -219,6 +245,33 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
         </div>
       )}
       {partialFailure && partialFailure.modelId === '' && <p className="px-1 pt-1 text-[10px] text-rose-400">{partialFailure.message}</p>}
+
+      {/* Inference verification: under the ping table */}
+      {connections.some((c) => c.credentialPresent && c.authState === 'ready') && (
+        <div className="mt-3 border-t border-line/60 pt-2">
+          <button
+            type="button"
+            aria-expanded={inferenceOpen}
+            aria-controls={inferenceId}
+            onClick={() => setInferenceOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left text-[11px] font-semibold text-muted transition hover:text-fg"
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="size-3.5 text-brand" />
+              <span>Test inference</span>
+            </div>
+            <span className="flex items-center gap-1.5 font-mono text-[10px] font-normal normal-case">
+              {connections[0]?.inferenceState}
+              {inferenceOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+            </span>
+          </button>
+          {inferenceOpen && connections[0] && (
+            <div id={inferenceId} className="mt-1">
+              <InferenceTest key={connections[0].revision} connection={connections[0]} />
+            </div>
+          )}
+        </div>
+      )}
 
       {showManagerModal && managerConnection && (
         <ModelManagerModal

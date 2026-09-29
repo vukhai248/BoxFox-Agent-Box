@@ -4,7 +4,6 @@ import {
   ArrowUp,
   BarChart3,
   Check,
-  ChevronDown,
   ChevronRight,
   Copy,
   Database,
@@ -43,6 +42,9 @@ import { ModelManagerModal } from './ModelManagerModal'
 import { ConnectionKeyRing, deleteBlockedReason, keyRingSize } from './ConnectionKeyRing'
 import { ModelToggleList, ProviderModelList } from './ProviderModelList'
 import { ProviderRail, type ProviderRailGroup } from './ProviderRail'
+import { ApiProviderCatalogTable } from './ApiProviderCatalogTable'
+import { ConnectedKeysPanel } from './ConnectedKeysPanel'
+import { AddConnectionModal } from './AddConnectionModal'
 
 type ProviderTab = 'api' | 'router'
 type RouterSection = 'accounts' | 'models' | 'routing' | 'quota' | 'usage' | 'access'
@@ -166,12 +168,28 @@ export function ProviderView({ initialTab = 'router' }: { initialTab?: ProviderT
   )
 }
 
-function AddConnectionForm({ chosen }: { chosen?: ProviderDefinition }) {
+
+function DefaultProviderCard({
+  chosen,
+  busy,
+  onAddKey,
+}: {
+  chosen?: ProviderDefinition
+  busy: boolean
+  onAddKey?: () => void
+}) {
   const request = useProviderStore((state) => state.request)
-  const busy = useProviderStore((state) => state.busy)
+  const [formOpen, setFormOpen] = useState(chosen?.id === 'custom')
   const [name, setName] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [endpoint, setEndpoint] = useState('')
+  const formId = useId()
+
+  useEffect(() => {
+    setFormOpen(chosen?.id === 'custom')
+  }, [chosen?.id])
+
+  const providerName = chosen?.name ?? 'API provider'
 
   const create = async () => {
     if (!chosen || !apiKey.trim()) return
@@ -184,116 +202,251 @@ function AddConnectionForm({ chosen }: { chosen?: ProviderDefinition }) {
     setApiKey('')
     setName('')
     setEndpoint('')
+    setFormOpen(false)
   }
 
-  // Field order follows the mockup for `custom`: name, endpoint, key. The payload
-  // and the disabled rule are exactly the ones this form already used.
   const canSubmit = Boolean(chosen) && Boolean(apiKey.trim()) && (chosen?.id !== 'custom' || Boolean(endpoint.trim()))
-  // The hint is derived from what is being typed, so it names the two paths the
-  // router will actually call on this gateway.
   const base = endpoint.trim().replace(/\/+$/, '') || '{base}'
 
   return (
-    <div className="rounded-lg border border-line bg-panel2/30 p-3">
-      <div className="grid gap-3 md:grid-cols-3">
-        <label className="text-xs font-semibold">Connection name<input value={name} onChange={(event) => setName(event.target.value)} placeholder={chosen ? `My ${chosen.name}` : 'Provider'} className={`${field} mt-1.5`} /></label>
-        {chosen?.id === 'custom' && (
-          <label className="text-xs font-semibold">Endpoint URL
-            <input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="http://127.0.0.1:8000/v1" className={`${field} mt-1.5 font-mono`} />
-            <span className="mt-1 block font-mono text-[10px] font-normal leading-4 text-muted">Usually ends with /v1. The router calls {base}/models and {base}/chat/completions.</span>
-          </label>
+    <article className="rounded-xl border border-line bg-panel p-3 sm:p-4 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-fg">No connection configured</p>
+          <p className="text-[11px] text-muted">Add an API key to connect this provider and load models.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {onAddKey && (
+            <button
+              type="button"
+              onClick={onAddKey}
+              className={primary}
+            >
+              <Plus className="size-3.5" />
+              Add API key
+            </button>
+          )}
+        </div>
+      </div>
+
+      {chosen && !isProviderRunnableV2(chosen) && (
+        <p className="mt-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
+          {chosen.name} has no runnable adapter in this build yet ({chosen.implementationStatus ?? chosen.availability ?? 'planned'}). A connection can be saved, but probing and routing stay unavailable until the adapter ships.
+        </p>
+      )}
+
+      {formOpen && (
+        <div id={formId} className="mt-2.5 rounded-xl border border-line/80 bg-panel2/40 p-3.5 sm:p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between border-b border-line/40 pb-2">
+            <span className="text-xs font-semibold text-fg">New connection</span>
+            <button
+              type="button"
+              onClick={() => setFormOpen(false)}
+              className="rounded-md px-2 py-0.5 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-xs font-semibold">
+              Connection name
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={`My ${providerName}`}
+                className={`${field} mt-1.5`}
+              />
+            </label>
+            {chosen?.id === 'custom' && (
+              <label className="text-xs font-semibold">
+                Endpoint URL
+                <input
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                  placeholder="http://127.0.0.1:8000/v1"
+                  className={`${field} mt-1.5 font-mono`}
+                />
+                <span className="mt-1 block font-mono text-[10px] font-normal leading-4 text-muted">
+                  Usually ends with /v1. The router calls {base}/models and {base}/chat/completions.
+                </span>
+              </label>
+            )}
+            <label className="text-xs font-semibold">
+              API key
+              <input
+                type="password"
+                autoComplete="off"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Paste key"
+                className={`${field} mt-1.5 font-mono`}
+              />
+            </label>
+            {chosen?.id !== 'custom' && (
+              <div className="flex items-end">
+                <p className="pb-2 text-[11px] text-muted">Uses the provider&apos;s official endpoint.</p>
+              </div>
+            )}
+          </div>
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-line/40 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={busy || !canSubmit}
+                onClick={() => run(create())}
+                className={primary}
+              >
+                <Plus className="size-3.5" />
+                Add connection
+              </button>
+              <button type="button" onClick={() => setFormOpen(false)} className={secondary}>
+                Cancel
+              </button>
+            </div>
+            <p className="text-[11px] leading-4 text-muted">
+              Saving probes the endpoint once. Model names are used exactly as the endpoint reports them.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 rounded-lg border border-line/60 bg-panel2/30 p-3 sm:p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-muted">
+            Keys on this connection <span className="ml-1.5 rounded-full border border-line bg-panel px-1.5 py-0.2 text-[10px] font-normal normal-case text-muted">0 keys</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => (onAddKey ? onAddKey() : setFormOpen(true))}
+            className={`${secondary} py-1 text-[11px]`}
+          >
+            <Plus className="size-3" />
+            Add key
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-muted">Rotates automatically when a key runs out of quota.</p>
+        <span className="sr-only">No API connection configured yet.</span>
+
+        {!formOpen && (
+          <div className="mt-3 flex flex-col items-center justify-center rounded-lg border border-dashed border-line/80 bg-panel/40 py-7 text-center">
+            <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-panel2 text-muted/50">
+              <KeyRound className="size-5" />
+            </div>
+            <p className="text-xs font-medium text-fg">No key on this connection yet.</p>
+            <p className="mt-0.5 text-[11px] text-muted">
+              Add an API key to probe models and start routing.
+            </p>
+            <button
+              type="button"
+              onClick={() => (onAddKey ? onAddKey() : setFormOpen(true))}
+              className={`${primary} mt-3.5 text-xs`}
+            >
+              <Plus className="size-3.5" />
+              Add key
+            </button>
+          </div>
         )}
-        <label className="text-xs font-semibold">API key<input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste key" className={`${field} mt-1.5 font-mono`} /></label>
-        {chosen?.id !== 'custom' && <div className="flex items-end"><p className="pb-2 text-[11px] text-muted">Uses the provider&apos;s official endpoint.</p></div>}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy || !canSubmit} onClick={() => run(create())} className={primary}><Plus className="size-3.5" />Add connection</button>
-        <p className="text-[11px] leading-4 text-muted">Saving probes the endpoint once. Model names are used exactly as the endpoint reports them.</p>
-      </div>
-    </div>
+
+      <p className="mt-2.5 text-[11px] text-muted">
+        0 models · Data: live · Last sync never
+      </p>
+      <p className="mt-1 text-[10px] text-muted">
+        Models synced: Never synced · Quota updated: No data · No quota data available
+      </p>
+    </article>
   )
 }
 
 function ApiPanel({ snapshot, busy }: { snapshot: ProviderSnapshot; busy: boolean }) {
   const request = useProviderStore((state) => state.request)
   const definitions = snapshot.providers.filter((provider) => provider.authMethod === 'api_key')
-  const [providerId, setProviderId] = useState(definitions[0]?.id ?? 'openai')
-  const [formOpen, setFormOpen] = useState<boolean | null>(null)
-  const formId = useId()
+  const [providerId, setProviderId] = useState(definitions[0]?.id ?? 'openrouter')
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [selectedProviderIdForAdd, setSelectedProviderIdForAdd] = useState<string | undefined>()
 
   const chosen = definitions.find((provider) => provider.id === providerId) ?? definitions[0]
-  const connections = snapshot.connections.filter((connection) => connection.providerId === chosen?.id)
-  // The provider level model list speaks for the connections the router can reach — see
-  // `modelListConnections` for why `discoveryState === 'ready'` alone is too narrow.
-  const listedConnections = modelListConnections(connections)
-  const groups: ProviderRailGroup[] = [
-    { id: 'free', label: 'Free Tier', providers: definitions.filter((provider) => providerCategoryValueV2(provider) === 'free') },
-    { id: 'api-keys', label: 'API keys', providers: definitions.filter((provider) => providerCategoryValueV2(provider) !== 'free') },
-  ]
-  // The form opens itself for a provider that has no connection yet; otherwise it
-  // stays behind the `Add connection` button.
-  const formVisible = formOpen ?? connections.length === 0
-  const refreshableConnections = connections.filter((connection) => connection.credentialPresent)
+  const connections = snapshot.connections.filter((c) => c.providerId === chosen?.id)
 
-  const refreshModels = () => run(Promise.all(refreshableConnections.map((connection) => request(`/api/router/connections/${encodeURIComponent(connection.id)}/models/refresh`, 'POST'))))
+  const handleOpenAddModal = (id?: string) => {
+    setSelectedProviderIdForAdd(id ?? chosen?.id)
+    setAddModalOpen(true)
+  }
+
+  const handleToggleProviderEnabled = async (toggledProviderId: string, enabled: boolean) => {
+    const providerConnections = snapshot.connections.filter((c) => c.providerId === toggledProviderId)
+    if (providerConnections.length === 0) return
+    await Promise.all(
+      providerConnections.map((c) =>
+        request(`/api/router/connections/${encodeURIComponent(c.id)}`, 'PATCH', { enabled })
+      )
+    )
+  }
+
+  const totalKeys = connections.reduce(
+    (acc, conn) => acc + (conn.keys?.length ?? (conn.credentialPresent ? 1 : 0)),
+    0,
+  )
 
   return (
-    <div className="space-y-3">
-      <p className="text-[11px] leading-4 text-muted">Keys are sent directly to the BoxFox host router and are never returned to this page after save. Saving a key automatically probes the provider&apos;s live model inventory.</p>
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <ProviderRail label="API providers" groups={groups} connections={snapshot.connections} selectedId={chosen?.id ?? ''} onSelect={setProviderId} />
-        <div className="min-w-0 space-y-3">
-          <section className="rounded-xl border border-line bg-panel p-3 sm:p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-2">
-                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md border border-line bg-panel2 text-[9px] font-bold uppercase text-muted">{chosen ? chosen.name.slice(0, 2) : '··'}</span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-sm font-semibold">{chosen?.name ?? 'API provider'}</h2>
-                    {chosen && isProviderRunnableV2(chosen) && <Pill value="ready">ready</Pill>}
-                  </div>
-                  {chosen && <p className="mt-1 text-[11px] text-muted">{chosen.id} · {chosen.discoveryClass ?? 'static-only'} · {chosen.authMethod === 'oauth' ? 'OAuth' : 'API key'} · {chosen.defaultEndpoint ?? 'official endpoint'}</p>}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" aria-expanded={formVisible} aria-controls={formId} onClick={() => setFormOpen(!formVisible)} className={secondary}><Plus className="size-3.5" />Add connection</button>
-                <button type="button" disabled={busy || refreshableConnections.length === 0} onClick={refreshModels} className={secondary}><RefreshCw className="size-3.5" />Refresh models</button>
-              </div>
-            </div>
-            {chosen && !isProviderRunnableV2(chosen) && (
-              <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
-                {chosen.name} has no runnable adapter in this build yet ({chosen.implementationStatus ?? chosen.availability ?? 'planned'}). A connection can be saved, but probing and routing stay unavailable until the adapter ships.
-              </p>
-            )}
-            {formVisible && <div id={formId} className="mt-3"><AddConnectionForm chosen={chosen} /></div>}
-          </section>
+    <div className="space-y-4">
+      <p className="text-[11px] leading-4 text-muted">
+        Keys are sent directly to the BoxFox host router and are never returned to this page after save. Saving a key automatically probes the provider&apos;s live model inventory.
+      </p>
 
-          <section className="space-y-3">
-            {connections.length === 0 ? <Empty text="No API connection configured yet." /> : connections.map((connection) => <ConnectionCard key={connection.id} snapshot={snapshot} connection={connection} />)}
-            {/* One row per model for the whole provider: two keys of the same provider must
-                not show the same model twice (round 29). */}
-            <ProviderModelList connections={listedConnections} />
-          </section>
+      {/* 2-column layout: Left = Providers Catalog, Right = Selected Provider Details & Keys */}
+      <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)] items-start">
+        {/* Left Column: API Providers Catalog Table */}
+        <div className="min-w-0 h-[calc(100vh-210px)] min-h-[560px] max-h-[780px] flex flex-col sticky top-20">
+          <ApiProviderCatalogTable
+            providers={definitions}
+            connections={snapshot.connections}
+            selectedId={chosen?.id ?? ''}
+            onSelect={(id) => setProviderId(id)}
+            onToggleEnabled={handleToggleProviderEnabled}
+          />
+        </div>
+
+        {/* Right Column: Selected Provider Connected Keys & Models */}
+        <div className="min-w-0">
+          <ConnectedKeysPanel
+            selectedProvider={chosen}
+            connectionsCount={connections.length}
+            keysCount={totalKeys}
+          >
+            {connections.length === 0 ? (
+              <DefaultProviderCard
+                chosen={chosen}
+                busy={busy}
+                onAddKey={() => handleOpenAddModal(chosen?.id)}
+              />
+            ) : (
+              <div className="space-y-4">
+                {connections.map((connection) => (
+                  <ConnectionCard
+                    key={connection.id}
+                    snapshot={snapshot}
+                    connection={connection}
+                  />
+                ))}
+                <ProviderModelList connections={modelListConnections(connections)} />
+              </div>
+            )}
+          </ConnectedKeysPanel>
         </div>
       </div>
+
+      {/* Add Connection / API Key Modal Popup */}
+      <AddConnectionModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        initialProviderId={selectedProviderIdForAdd}
+        providers={definitions}
+      />
     </div>
   )
 }
 
-function connectionDataSource(connection: ProviderConnection) {
-  if (connection.discoveryState === 'failed') return 'failed'
-  const sources = connection.models.map((model) => model.source ?? 'static')
-  if (sources.some((source) => source === 'live' || source === 'probe')) return 'live'
-  if (sources.some((source) => source === 'registry')) return 'registry'
-  if (connection.models.length === 0 && connection.discoveryState === 'ready') return 'live'
-  return 'static'
-}
-
-function shortTimestamp(value?: string | null) {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
-}
 
 /** `lastDiscoveryAttemptAt` is epoch ms; discovery failures are shown with local time. */
 function shortEpoch(value?: number | null) {
@@ -302,180 +455,65 @@ function shortEpoch(value?: number | null) {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 
-function connectionFooter(connection: ProviderConnection) {
-  const synced = shortTimestamp(connection.lastModelSyncAt)
-  const quotaUpdated = shortTimestamp(connection.quota?.updatedAt)
-  return [
-    `Models synced: ${synced ?? 'Never synced'}`,
-    `Quota updated: ${quotaUpdated ?? 'No data'}`,
-    connection.quota?.plan ? `Plan: ${connection.quota.plan}` : 'No quota data available',
-  ].join(' · ')
-}
-
-function ConnectionCard({ snapshot, connection }: { snapshot: ProviderSnapshot; connection: ProviderConnection }) {
+function ConnectionCard({
+  snapshot,
+  connection,
+}: {
+  snapshot: ProviderSnapshot
+  connection: ProviderConnection
+}) {
   const request = useProviderStore((state) => state.request)
   const busy = useProviderStore((state) => state.busy)
-  const provider = providerFor(snapshot, connection.providerId)
-  // Defensive read, in one place: `keys` absent means the router has not decorated this
-  // connection, and the card keeps the legacy single-key behaviour it had before round 29.
   const keyRing = Array.isArray(connection.keys) ? connection.keys : null
-  const [name, setName] = useState(connection.name)
-  const [endpoint, setEndpoint] = useState(connection.endpoint ?? '')
-  const [key, setKey] = useState('')
-  const [editOpen, setEditOpen] = useState(false)
-  const [inferenceOpen, setInferenceOpen] = useState(false)
   const [managerOpen, setManagerOpen] = useState(false)
-  const [focusRequest, setFocusRequest] = useState(0)
-  const keyRef = useRef<HTMLInputElement>(null)
-  const endpointRef = useRef<HTMLInputElement>(null)
-  const editId = useId()
-  const inferenceId = useId()
-
-  useEffect(() => { setName(connection.name); setEndpoint(connection.endpoint ?? ''); setKey('') }, [connection.id, connection.revision, connection.name, connection.endpoint])
-
-  // `Edit endpoint & key` only puts the caret in the field that can fix the listing
-  // (the Base URL for a custom endpoint, the API key everywhere else) and removes nothing.
-  useEffect(() => {
-    if (!editOpen || focusRequest === 0) return
-    ;(connection.providerId === 'custom' ? endpointRef.current : keyRef.current)?.focus()
-  }, [editOpen, focusRequest, connection.providerId])
-
-  const save = async () => {
-    const patch: Record<string, unknown> = { name: name.trim() || connection.name }
-    if (connection.providerId === 'custom' && endpoint.trim() !== connection.endpoint) patch.endpoint = endpoint.trim()
-    if (key.trim()) patch.apiKey = key.trim()
-    await request(`/api/router/connections/${encodeURIComponent(connection.id)}`, 'PATCH', patch)
-    setKey('')
-  }
-  // `POST …/test` and `POST …/models/refresh` are the same router handler
-  // (`router/src/server.mjs:280` -> `service.discover`), so this button keeps the
-  // exact call it always made and only changes its label to `Refresh models`.
-  const refresh = () => request(`/api/router/connections/${encodeURIComponent(connection.id)}/test`, 'POST')
-  const remove = () => request(`/api/router/connections/${encodeURIComponent(connection.id)}`, 'DELETE')
-
-  const verified = connection.models.filter((model) => model.health === 'ready')
+  const siblingConnections = snapshot.connections.filter((c) => c.providerId === connection.providerId)
   const handTyped = connection.models.filter((model) => model.source === 'custom')
-  const accountLabel = connection.email ?? connection.accountLabel
-  const base = endpoint.trim().replace(/\/+$/, '') || '{base}'
 
   return (
     <article className="rounded-xl border border-line bg-panel p-3 sm:p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <ProviderIcon providerId={connection.providerId} name={provider?.name} className="size-5" />
-          <div className="min-w-0">
-            <h3 className="truncate text-xs font-semibold">{connection.name}</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <Pill value={connection.authState}>auth {connection.authState}</Pill>
-              <Pill value={connection.projectState}>project {connection.projectState}</Pill>
-              <Pill value={connection.discoveryState}>models {connection.discoveryState}</Pill>
-              <Pill value={connection.inferenceState}>inference {connection.inferenceState}</Pill>
-              <span className="text-[10px] text-muted">{accountLabel ?? (connection.credentialPresent ? 'Key saved on host' : 'Not signed in')}</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={connection.enabled} onChange={(event) => run(request(`/api/router/connections/${encodeURIComponent(connection.id)}`, 'PATCH', { enabled: event.target.checked }))} />Enabled</label>
-          <button type="button" aria-expanded={editOpen} aria-controls={editId} onClick={() => setEditOpen((current) => !current)} className={secondary}>{editOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}Edit</button>
-          <button type="button" disabled={busy || !connection.credentialPresent} onClick={() => run(refresh())} className={secondary}><RefreshCw className="size-3.5" />Refresh models</button>
-        </div>
-      </div>
-
-      {/* A listing failure is its own state, not one red sentence: the router's own
-          message, when it was last tried, and the three ways out of it. The gate is
-          the state — `failed`, or `degraded` when a scan failed but kept the older
-          rows — not `error`: a per-model Test that passes clears the error line, and
-          the way out of a listing that never worked must not vanish with it. An error
-          that is not a listing failure (a credential refresh, a key the provider
-          refuses) gets its own line instead, so the card never claims the list failed
-          to load while its models are listed. */}
       {['failed', 'degraded'].includes(connection.discoveryState) ? (
-        <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-2 text-[11px] leading-4">
-          <p className="font-semibold text-red-600 dark:text-red-300">Models could not be listed</p>
+        <div className="mb-3 rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-[11px] leading-4">
+          <p className="font-semibold text-rose-600 dark:text-rose-400">Models could not be listed</p>
           {connection.error ? (
-            <p className="mt-0.5 font-mono text-red-600 dark:text-red-300">{connection.error}</p>
+            <p className="mt-1 font-mono text-rose-700 dark:text-rose-300 break-all">{connection.error}</p>
           ) : (
-            <p className="mt-0.5 text-muted">The endpoint did not return a model list. Retry, or add each model id by hand.</p>
+            <p className="mt-1 text-muted">The endpoint did not return a model list. Retry, or add each model id by hand.</p>
           )}
           {shortEpoch(connection.lastDiscoveryAttemptAt) && (
-            <p className="mt-0.5 text-muted">Last attempt: {shortEpoch(connection.lastDiscoveryAttemptAt)}</p>
+            <p className="mt-1 text-muted">Last attempt: {shortEpoch(connection.lastDiscoveryAttemptAt)}</p>
           )}
           {connection.providerId === 'custom' && (
             <p className="mt-1 text-muted">Some gateways require a verified account before /models or /chat/completions works. The message above is the provider&apos;s own.</p>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" disabled={busy || !connection.credentialPresent} onClick={() => run(refresh())} className={secondary}><RefreshCw className="size-3.5" />Retry</button>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={busy || !connection.credentialPresent} onClick={() => run(request(`/api/router/connections/${encodeURIComponent(connection.id)}/test`, 'POST'))} className={secondary}><RefreshCw className="size-3.5" />Retry</button>
             <button type="button" onClick={() => setManagerOpen(true)} className={secondary}><Plus className="size-3.5" />Add model by hand</button>
-            <button type="button" onClick={() => { setEditOpen(true); setFocusRequest((current) => current + 1) }} className={secondary}><KeyRound className="size-3.5" />{keyRing ? 'Edit name & endpoint' : 'Edit endpoint & key'}</button>
           </div>
         </div>
       ) : connection.error ? (
-        <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-2 font-mono text-[11px] leading-4 text-red-600 dark:text-red-300">{connection.error}</p>
+        <p className="mb-3 rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 font-mono text-[11px] leading-4 text-rose-600 dark:text-rose-300 break-all">{connection.error}</p>
       ) : null}
 
       {['failed', 'degraded'].includes(connection.discoveryState) && handTyped.length > 0 && (
         <p className="mt-1.5 text-[11px] text-muted">{handTyped.length} model(s) added by hand — tested one by one.</p>
       )}
 
+      {siblingConnections.length > 1 ? (
+        <div className="mb-2">
+          <span className="font-semibold text-xs text-fg">{connection.name}</span>
+        </div>
+      ) : (
+        <span className="sr-only">{connection.name}</span>
+      )}
+
       {keyRing ? (
         <ConnectionKeyRing connection={connection} />
       ) : !connection.credentialPresent ? (
-        <p className="mt-2 text-[11px] leading-4 text-muted">No API key saved on this connection. Add one in Edit, then Refresh models.</p>
+        <p className="mt-2 text-[11px] leading-4 text-muted">No API key saved on this connection.</p>
       ) : connection.authState !== 'ready' ? (
-        <p className="mt-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">Key saved on host; the provider refused it (auth {connection.authState}). Refresh models to retry, or replace the key in Edit.</p>
+        <p className="mt-2 text-[11px] leading-4 text-amber-700 dark:text-amber-300">Key saved on host; the provider refused it (auth {connection.authState}).</p>
       ) : null}
 
-      <p className="mt-2 text-[11px] text-muted">{connection.models.length} models · Data: {connectionDataSource(connection)} · Last sync {shortTimestamp(connection.lastModelSyncAt) ?? 'never'}</p>
-      {verified.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-300">{verified.length} verified ready</span>
-          {verified.slice(0, 3).map((model) => <span key={model.id} className="max-w-[16rem] truncate rounded-full border border-line bg-panel2 px-2 py-0.5 font-mono text-muted">{model.id} · {model.lastProbe?.latencyMs ?? 0}ms</span>)}
-          {verified.length > 3 && <span className="font-mono text-muted">+{verified.length - 3}</span>}
-        </div>
-      )}
-
-      {editOpen && (
-        <div id={editId} className="mt-2 rounded-lg border border-line bg-panel2/40 p-3">
-          <p className="text-[10px] font-mono uppercase text-muted">Connection</p>
-          <div className={`mt-2 grid gap-3 ${keyRing ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
-            <label className="text-xs font-semibold">Name<input value={name} onChange={(event) => setName(event.target.value)} className={`${field} mt-1.5`} /></label>
-            {/* With a key ring the key input is not here at all: keys are added, replaced and
-                removed in the ring block at the top of the card. */}
-            {!keyRing && <label className="text-xs font-semibold">Replace API key<input ref={keyRef} type="password" autoComplete="off" value={key} onChange={(event) => setKey(event.target.value)} placeholder={connection.credentialPresent ? 'Saved on host' : 'Paste key'} className={`${field} mt-1.5 font-mono`} /></label>}
-            {connection.providerId === 'custom' ? (
-              <label className="text-xs font-semibold">Base URL
-                <input ref={endpointRef} value={endpoint} onChange={(event) => setEndpoint(event.target.value)} className={`${field} mt-1.5 font-mono`} />
-                <span className="mt-1 block font-mono text-[10px] font-normal leading-4 text-muted">Usually ends with /v1. The router calls {base}/models and {base}/chat/completions.</span>
-              </label>
-            ) : <div />}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" disabled={busy} onClick={() => run(save())} className={secondary}><Save className="size-3.5" />Save</button>
-            {/* Two layers say the same thing: this disabled button and the router's own
-                `409 KEYS_PRESENT` for anyone calling the API directly. */}
-            <button type="button" disabled={busy || keyRingSize(connection) > 0} onClick={() => run(remove())} className={`${secondary} text-red-600 dark:text-red-300`}><Trash2 className="size-3.5" />Delete</button>
-            {deleteBlockedReason(connection) && <p className="text-[10px] leading-4 text-muted">{deleteBlockedReason(connection)}</p>}
-          </div>
-        </div>
-      )}
-
-      {/* The inference sandbox stays gated on a saved key the provider accepted; the model
-          list itself is one provider-level block, not one list per connection. */}
-      {connection.credentialPresent && connection.authState === 'ready' && (
-        <>
-          <div className="mt-2 border-t border-line/60 pt-2">
-            <button type="button" aria-expanded={inferenceOpen} aria-controls={inferenceId} onClick={() => setInferenceOpen((current) => !current)} className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left text-[11px] font-semibold text-muted transition hover:text-fg">
-              <span>Test inference</span>
-              <span className="flex items-center gap-1.5 font-mono text-[10px] font-normal normal-case">{connection.inferenceState}{inferenceOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</span>
-            </button>
-            {inferenceOpen && <div id={inferenceId} className="mt-1"><InferenceTest key={connection.revision} connection={connection} /></div>}
-          </div>
-        </>
-      )}
-
-      <p className="mt-2 text-[10px] text-muted">{connectionFooter(connection)}</p>
-
-      {/* Opened by the `Add model by hand` button on a failed listing, with the form already out. */}
       {managerOpen && <ModelManagerModal connection={connection} initialShowCustomForm onClose={() => setManagerOpen(false)} />}
     </article>
   )
