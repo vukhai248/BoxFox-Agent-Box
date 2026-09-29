@@ -366,6 +366,193 @@ function SubagentToolItem({ tool }: { tool: ParsedToolCall }) {
   )
 }
 
+function SubagentThinkingItem({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text.trim()) return null
+  return (
+    <div className="rounded-xl border border-line bg-panel2/40 overflow-hidden text-xs">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2 text-muted hover:text-fg transition cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-3.5 text-brand" />
+          <span className="font-medium text-[11px] text-fg">
+            Thinking & Internal Reasoning
+          </span>
+        </div>
+        <ChevronDown
+          className={`size-3 text-muted transition ${expanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 text-fg/80 font-mono text-[11px] leading-relaxed whitespace-pre-wrap border-t border-line/30 pt-2 bg-panel/50 max-h-60 overflow-y-auto">
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubagentToolGroupItem({ tools }: { tools: ParsedToolCall[] }) {
+  if (!tools || tools.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[11px] font-semibold text-muted flex items-center gap-1.5">
+        <Terminal className="size-3 text-brand" />
+        <span>Tools Executed ({tools.length})</span>
+      </div>
+      <div className="space-y-1">
+        {tools.map((tool) => (
+          <SubagentToolItem key={tool.id} tool={tool} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SubagentTextItem({ text, isFinal }: { text: string; isFinal?: boolean }) {
+  if (!text.trim()) return null
+  if (isFinal) {
+    return (
+      <div className="rounded-xl border border-line bg-panel2/40 p-4 text-xs leading-relaxed text-fg">
+        <MarkdownRenderer content={text} />
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-lg border border-line/40 bg-panel2/25 px-3.5 py-2.5 text-xs leading-relaxed text-fg">
+      <MarkdownRenderer content={text} />
+    </div>
+  )
+}
+
+export interface SubagentTimelineItem {
+  id: string
+  kind: 'thought' | 'text' | 'tool_group'
+  thoughtText?: string
+  text?: string
+  isFinal?: boolean
+  tools?: ParsedToolCall[]
+}
+
+export function buildSubagentTimeline(events: readonly HarnessEvent[]): SubagentTimelineItem[] {
+  const items: SubagentTimelineItem[] = []
+  const toolMap = new Map<string, ParsedToolCall>()
+
+  for (const ev of events) {
+    if (ev.type === 'notice' && ev.data.reset) {
+      items.length = 0
+      toolMap.clear()
+      continue
+    }
+
+    if (ev.type === 'thought') {
+      const raw = String(ev.data.thought ?? ev.data.text ?? '')
+      if (!raw) continue
+
+      const last = items[items.length - 1]
+      if (last && last.kind === 'thought') {
+        last.thoughtText = appendStreamText(last.thoughtText ?? '', raw)
+      } else {
+        items.push({
+          id: `thought_${ev.seq || items.length}`,
+          kind: 'thought',
+          thoughtText: raw,
+        })
+      }
+      continue
+    }
+
+    if (ev.type === 'assistant_delta' || ev.type === 'assistant') {
+      const raw = String(ev.data.text ?? '')
+      if (!raw) continue
+
+      const last = items[items.length - 1]
+      if (last && last.kind === 'text') {
+        last.text = appendStreamText(last.text ?? '', raw)
+      } else {
+        items.push({
+          id: `text_${ev.seq || items.length}`,
+          kind: 'text',
+          text: raw,
+        })
+      }
+      continue
+    }
+
+    if (ev.type === 'tool_start') {
+      const name = String(ev.data.name ?? 'tool')
+      const args = typeof ev.data.args === 'object' && ev.data.args !== null ? (ev.data.args as Record<string, unknown>) : null
+      const callId = String(ev.data.id ?? ev.data.tool_call_id ?? `${name}-${toolMap.size}`)
+
+      const toolCall: ParsedToolCall = {
+        id: callId,
+        name,
+        args,
+        isRunning: true,
+      }
+      toolMap.set(callId, toolCall)
+
+      const last = items[items.length - 1]
+      if (last && last.kind === 'tool_group' && last.tools) {
+        last.tools.push(toolCall)
+      } else {
+        items.push({
+          id: `tools_${callId}`,
+          kind: 'tool_group',
+          tools: [toolCall],
+        })
+      }
+      continue
+    }
+
+    if (ev.type === 'tool_end') {
+      const callId = String(ev.data.id ?? ev.data.tool_call_id ?? '')
+      const res = ev.data.result ? (typeof ev.data.result === 'object' ? JSON.stringify(ev.data.result, null, 2) : String(ev.data.result)) : null
+      const isError = Boolean(ev.data.is_error ?? (ev.data.result as Record<string, unknown> | null)?.is_error)
+
+      let targetTool = callId ? toolMap.get(callId) : null
+      if (!targetTool) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i]
+          if (it.kind === 'tool_group' && it.tools) {
+            for (let j = it.tools.length - 1; j >= 0; j--) {
+              if (it.tools[j].isRunning) {
+                targetTool = it.tools[j]
+                break
+              }
+            }
+            if (targetTool) break
+          }
+        }
+      }
+
+      if (targetTool) {
+        targetTool.result = res
+        targetTool.isError = isError
+        targetTool.isRunning = false
+      }
+      continue
+    }
+  }
+
+  // Đánh dấu item text cuối cùng là isFinal nếu nó đứng sau mọi tool calls
+  let lastTextIndex = -1
+  let lastToolIndex = -1
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].kind === 'text') lastTextIndex = i
+    if (items[i].kind === 'tool_group') lastToolIndex = i
+  }
+
+  if (lastTextIndex !== -1 && lastTextIndex > lastToolIndex) {
+    items[lastTextIndex].isFinal = true
+  }
+
+  return items
+}
+
 export function SubagentInspectorPanel() {
   const t = useT()
   const activeChatId = useAgentStore((s) => s.activeSessionId)
@@ -383,7 +570,7 @@ export function SubagentInspectorPanel() {
   const roleOfSession = (sessionId: string): string | null => rolesBySession.get(sessionId) ?? null
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
-  const [thinkingExpanded, setThinkingExpanded] = useState(false)
+
   const [childEvents, setChildEvents] = useState<HarnessEvent[]>([])
   const [copied, setCopied] = useState(false)
   const [sidCopied, setSidCopied] = useState(false)
@@ -503,56 +690,8 @@ export function SubagentInspectorPanel() {
     }
   }, [activeChild?.sessionId, activeChild?.status])
 
-  // Phân tách luồng suy nghĩ (thought), tool calls và assistant output từ child events
-  const { thoughtText, toolCalls, assistantOutput } = useMemo(() => {
-    let thought = ''
-    const tools: ParsedToolCall[] = []
-    let output = ''
-
-    const toolStarts = new Map<string, { name: string; args: Record<string, unknown> | null }>()
-
-    for (const ev of childEvents) {
-      if (ev.type === 'notice' && ev.data.reset) {
-        // Harness thử lại yêu cầu model: phần văn bản của lần thử trước bị bỏ, nên bộ đệm
-        // phải xoá trước khi ghép câu trả lời mới (nếu không sẽ dán hai câu vào nhau).
-        thought = ''
-        output = ''
-      } else if (ev.type === 'thought') {
-        // `thought` có thể là tích luỹ (harness cũ) hoặc mảnh rời: dùng chung một hàm ghép.
-        thought = appendStreamText(thought, String(ev.data.thought ?? ev.data.text ?? ''))
-      } else if (ev.type === 'tool_start') {
-        const name = String(ev.data.name ?? 'tool')
-        const args = typeof ev.data.args === 'object' && ev.data.args !== null ? (ev.data.args as Record<string, unknown>) : null
-        // Harness phát `id` cho tool_start/tool_end; `tool_call_id` là tên cũ ở một số adapter.
-        const callId = String(ev.data.id ?? ev.data.tool_call_id ?? `${name}-${tools.length}`)
-        toolStarts.set(callId, { name, args })
-        tools.push({
-          id: callId,
-          name,
-          args,
-          isRunning: true,
-        })
-      } else if (ev.type === 'tool_end') {
-        const callId = String(ev.data.id ?? ev.data.tool_call_id ?? '')
-        const res = ev.data.result ? (typeof ev.data.result === 'object' ? JSON.stringify(ev.data.result, null, 2) : String(ev.data.result)) : null
-        const isError = Boolean(ev.data.is_error ?? (ev.data.result as Record<string, unknown> | null)?.is_error)
-        const item = tools.find((t) => t.id === callId)
-        if (item) {
-          item.result = res
-          item.isError = isError
-          item.isRunning = false
-        }
-      } else if (ev.type === 'assistant_delta' || ev.type === 'assistant') {
-        output = appendStreamText(output, String(ev.data.text ?? ''))
-      }
-    }
-
-    return {
-      thoughtText: thought.trim(),
-      toolCalls: tools,
-      assistantOutput: output.trim(),
-    }
-  }, [childEvents])
+  // Dựng dòng thời gian tuần tự của sub-agent (thinking, text, tools) theo đúng thứ tự thời gian
+  const timelineItems = useMemo(() => buildSubagentTimeline(childEvents), [childEvents])
 
   // T15 — đường ống peer của em ĐANG XEM, đọc từ chính luồng của em đó (poll ở trên).
   // Đây là nguồn SỐNG duy nhất: hàng sổ con của cha không mang `waiting_for` trong event nào.
@@ -675,11 +814,17 @@ export function SubagentInspectorPanel() {
 
   const roleDescription = activeChild ? (ROLE_DESCRIPTIONS[activeChild.role] ?? 'Specialized subagent execution.') : ''
 
-  const finalResponseText = assistantOutput || activeChild?.summary || ''
+  const allTextForCopy = useMemo(() => {
+    const texts = timelineItems
+      .filter((it) => it.kind === 'text')
+      .map((it) => it.text)
+      .filter(Boolean) as string[]
+    return texts.join('\n\n') || activeChild?.summary || ''
+  }, [timelineItems, activeChild?.summary])
 
   const handleCopy = () => {
-    if (!finalResponseText) return
-    void navigator.clipboard.writeText(finalResponseText)
+    if (!allTextForCopy) return
+    void navigator.clipboard.writeText(allTextForCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -1061,7 +1206,7 @@ export function SubagentInspectorPanel() {
                         {activeChild.role} Specialist Output
                       </span>
                     </div>
-                    {finalResponseText && (
+                    {allTextForCopy && (
                       <button
                         type="button"
                         onClick={handleCopy}
@@ -1083,59 +1228,42 @@ export function SubagentInspectorPanel() {
                     )}
                   </div>
 
-                  {/* Thinking Accordion */}
-                  {thoughtText && (
-                    <div className="rounded-xl border border-line bg-panel2/40 overflow-hidden text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setThinkingExpanded(!thinkingExpanded)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-muted hover:text-fg transition cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="size-3.5 text-brand" />
-                          <span className="font-medium text-[11px] text-fg">
-                            Thinking & Internal Reasoning
-                          </span>
-                        </div>
-                        <ChevronDown
-                          className={`size-3 text-muted transition ${thinkingExpanded ? 'rotate-180' : ''}`}
-                        />
-                      </button>
-                      {thinkingExpanded && (
-                        <div className="px-3 pb-3 text-fg/80 font-mono text-[11px] leading-relaxed whitespace-pre-wrap border-t border-line/30 pt-2 bg-panel/50 max-h-60 overflow-y-auto">
-                          {thoughtText}
-                        </div>
-                      )}
+                  {/* Dòng thời gian tuần tự (Sequential Timeline Stream): Thinking -> Text -> Tools */}
+                  {timelineItems.length > 0 ? (
+                    timelineItems.map((item) => {
+                      if (item.kind === 'thought') {
+                        return <SubagentThinkingItem key={item.id} text={item.thoughtText || ''} />
+                      }
+                      if (item.kind === 'tool_group' && item.tools) {
+                        return <SubagentToolGroupItem key={item.id} tools={item.tools} />
+                      }
+                      if (item.kind === 'text') {
+                        return <SubagentTextItem key={item.id} text={item.text || ''} isFinal={item.isFinal} />
+                      }
+                      return null
+                    })
+                  ) : activeChild.summary ? (
+                    <div className="rounded-xl border border-line bg-panel2/40 p-4 text-xs leading-relaxed text-fg">
+                      <MarkdownRenderer content={activeChild.summary} />
                     </div>
-                  )}
-
-                  {/* Tools Executed Accordion List */}
-                  {toolCalls.length > 0 && (
-                    <div className="space-y-1.5">
-                      <div className="text-[11px] font-semibold text-muted flex items-center gap-1.5">
-                        <Terminal className="size-3 text-brand" />
-                        <span>Tools Executed ({toolCalls.length})</span>
-                      </div>
-                      <div className="space-y-1">
-                        {toolCalls.map((tool) => (
-                          <SubagentToolItem key={tool.id} tool={tool} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Final Markdown Report */}
-                  <div className="rounded-xl border border-line bg-panel2/40 p-4 text-xs leading-relaxed text-fg">
-                    {finalResponseText ? (
-                      <MarkdownRenderer content={finalResponseText} />
-                    ) : (
+                  ) : (
+                    <div className="rounded-xl border border-line bg-panel2/40 p-4 text-xs leading-relaxed text-fg">
                       <div className="text-muted italic py-2">
                         {activeChild.status === 'running'
                           ? 'Specialist is processing instructions autonomously in the sandbox...'
                           : 'No synthesis text returned from sub-agent.'}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Fallback Summary nếu timeline chưa có text cuối cùng mà summary có nội dung */}
+                  {activeChild.summary &&
+                    timelineItems.length > 0 &&
+                    !timelineItems.some((it) => it.kind === 'text' && it.isFinal) && (
+                      <div className="rounded-xl border border-line bg-panel2/40 p-4 text-xs leading-relaxed text-fg">
+                        <MarkdownRenderer content={activeChild.summary} />
+                      </div>
                     )}
-                  </div>
 
                   {/* Error Box if any */}
                   {activeChild.lastError && (

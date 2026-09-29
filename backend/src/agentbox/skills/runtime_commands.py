@@ -1,9 +1,11 @@
 """Command admission and lifecycle integration, separate from the model loop."""
 import asyncio
+import hashlib
 import json
 import time
 import uuid
 from ..agent_core import research_runtime
+from ..agent_core import plan_workflow
 from ..agent_core.limits import (STEER_MAX_PENDING, RESEARCH_MODE_BLOCK_MARKER,
                                  RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
                                  RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
@@ -58,14 +60,25 @@ class RuntimeCommands:
         settings = self.commands.settings()
         enabled = settings['enabled'] if settings['initialized'] else session['config']['skills']
         resolved = self.commands.resolve(prompt, enabled, session['config']['subagents'])
+        if plan_workflow.bound_run(self, session) is not None and resolved.kind == 'task':
+            raise ValueError('PLAN_EXECUTION_BLOCKED: trong Plan dùng phiên chính để lập kế hoạch; '
+                             'chọn Triển khai sau khi duyệt để chạy executor/specialist ghi mã')
         busy = session['status'] in {'running', 'awaiting_decision'}
+        plan_control = resolved.kind == 'mode' and resolved.command == 'plan' and resolved.prompt.lower() in {'off', 'status'}
+        if busy and resolved.kind == 'mode' and resolved.command == 'plan':
+            if resolved.prompt.lower() == 'off':
+                await self.stop(sid)
+                session = self.store.get(sid)
+                busy = False
+            elif not plan_control:
+                raise ValueError('SESSION_BUSY: chờ lượt hiện tại trước khi mở Plan')
         # P5 — `/btw <câu hỏi>`: câu hỏi là `resolved.prompt` (phần sau lệnh), KHÔNG phải cả dòng
         # `/btw …`. Mọi đường đi tiếp (hàng chờ steer, hàng `user`, prompt gửi model) dùng câu hỏi
         # sạch, nếu không model đọc được cả chữ `/btw` và transcript hiện sai thứ chủ nhà đã gõ.
         is_btw = resolved.reason == 'btw_command'
         steer_text = resolved.prompt if is_btw else prompt
         steered = False
-        if busy and not (resolved.kind == 'control' and resolved.command in INFO | {'stop'}):
+        if busy and not plan_control and not (resolved.kind == 'control' and resolved.command in INFO | {'stop'}):
             # Vòng 27 (đợt 7, D-43): lượt của PHIÊN GỐC đang chạy thì lời nhắn của chủ nhà không bị
             # trả 409 nữa — nó thành một CHỈ THỊ giữa lượt, bơm vào transcript ở ranh giới bước.
             # Phiên CON giữ nguyên `SESSION_BUSY` (con không nói chuyện với chủ nhà, #5961), và
@@ -181,7 +194,23 @@ class RuntimeCommands:
         elif resolved.kind == 'mode':
             # P1 (§5.2, cửa 3): lệnh mode KHÔNG đi qua đường lượt thường. `/research` (rỗng)
             # và `/research status` không mở lượt; `/research <text>` bật mode rồi nộp lượt.
-            outcome = self._mode_command(sid, session, resolved)
+            if resolved.command == 'plan':
+                arg = (resolved.prompt or '').strip()
+                workflow = plan_workflow.service(self)
+                if arg.lower() == 'status':
+                    outcome = {'result': {'output': 'Trạng thái Plan', 'runs': workflow.runs(sid)}}
+                else:
+                    value = workflow.set_mode(self, sid, arg.lower() != 'off',
+                                              goal=arg if arg.lower() != 'off' else None,
+                                              by='command', attachments=checked_attachments)
+                    outcome = {'result': value | {'output': 'Đã bật Plan.' if arg.lower() != 'off' else 'Đã tạm dừng Plan.'},
+                               'submit': bool(arg and arg.lower() != 'off')}
+                    if outcome['submit'] and value['run']['originalGoal'] != arg:
+                        workflow.note_user(value['run'], arg)
+            else:
+                if plan_workflow.mode(session)['on']:
+                    plan_workflow.service(self).set_mode(self, sid, False)
+                outcome = self._mode_command(sid, session, resolved)
             result.update(outcome['result'])
             if not outcome.get('submit'):
                 result['status'] = self.store.get(sid)['status']
@@ -192,6 +221,31 @@ class RuntimeCommands:
                            await self.route_metadata(session, route), images=images,
                            attachments=attachments, invocation_id=invocation_id)
         elif resolved.kind == 'message':
+            if plan_workflow.mode(session)['on'] and not str(invocation_id).startswith('plan-resume-') and not is_btw:
+                workflow = plan_workflow.service(self)
+                state = plan_workflow.mode(session)
+                if not state['activeRunId']:
+                    workflow.set_mode(self, sid, True, goal=steer_text, attachments=checked_attachments)
+                else:
+                    run = workflow.get(state['activeRunId'])
+                    if workflow.pending_questions(run):
+                        if len(workflow.pending_questions(run)) == 1 and not (
+                                workflow.pending_questions(run)[0]['field'].startswith('__') and
+                                plan_workflow.explanation_only(steer_text)):
+                            question = workflow.pending_questions(run)[0]
+                            answer_invocation = 'answer-' + hashlib.sha256(invocation_id.encode()).hexdigest()[:40]
+                            workflow.answers(run['runId'], {'revision': run['revision'],
+                                'invocationId': answer_invocation,
+                                'answers': [{'questionId': question['id'], 'text': steer_text}]})
+                            # The current turn already carries this answer; do not enqueue a duplicate.
+                            with workflow.db:
+                                workflow.db.execute("UPDATE plan_continuations SET state='admitted' WHERE id=?",
+                                                    ('plan-resume-' + answer_invocation,))
+                        else:
+                            workflow.note_user(run, steer_text)
+                    else:
+                        workflow.note_user(run, steer_text)
+                session = self.store.get(sid)
             self._next_turn_skills(session, enabled, invocation_id, steer_text)
             # Route của lượt có thể đổi model; tra metadata của CHÍNH model đó (cùng
             # nguồn như lúc tạo phiên) để `start()` vẫn đối chiếu được `thinkingLevel`
@@ -257,6 +311,7 @@ class RuntimeCommands:
         current = messages[0].get('content') or ''
         # Gỡ cả ba khối đã chèn ở lượt trước: khối mode, dòng nhắc run nền, và khối bàn giao.
         for marker, end_marker in ((RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END),
+                                   (plan_workflow.MARKER, plan_workflow.END_MARKER),
                                    (RESEARCH_BACKGROUND_BLOCK_MARKER, RESEARCH_BACKGROUND_BLOCK_END),
                                    (RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END),
                                    # P1 (§4): cùng luật cho hai khối của chế độ Design — mỗi khối
@@ -484,6 +539,8 @@ class RuntimeCommands:
         from ..agent_core.runtime import design_mode
         if design_mode(session)['on']:
             enabled = sorted(set(enabled) | (set(DESIGN_SKILLS) & set(self.catalog.items)))
+        if plan_workflow.mode(session)['on']:
+            enabled = sorted(set(enabled) | ({'planning', 'codebase-inspection'} & set(self.catalog.items)))
         session['config']['skills'] = list(enabled)
         self.store.update_config(session['id'], session['config'])
         messages = session['messages']

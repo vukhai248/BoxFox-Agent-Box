@@ -49,7 +49,7 @@ def test_role_commands_never_expand_capabilities(registry, key, role):
         registry.resolve('/' + key + ' inspect', subagents=[])
 
 
-@pytest.mark.parametrize('bad', ['/.plan hi', '/unknown hi', '/plan', '/help extra', '/plan /build hi', '/skill', '/skill missing hi'])
+@pytest.mark.parametrize('bad', ['/.plan hi', '/unknown hi', '/help extra', '/plan /build hi', '/skill', '/skill missing hi'])
 def test_invalid_commands_are_not_sent_to_model(registry, bad):
     with pytest.raises(ValueError):
         registry.resolve(bad)
@@ -113,23 +113,22 @@ class Model:
         return {'choices': [{'message': {'content': 'verified fixture result'}, 'finish_reason': 'stop'}]}
 
 
-def test_command_child_plan_idempotency_and_skill_snapshot(registry):
+def test_root_plan_idempotency_and_skill_snapshot(registry):
     async def run():
         model = Model()
         runtime = HarnessRuntime(registry.store, Executor(), model, registry.catalog)
         parent = runtime.create({'skills': []})
         first = await runtime.submit(parent['id'], '/plan Inspect the system', invocation_id='invocation-1')
-        same = await runtime.submit(parent['id'], '/plan Inspect the system', invocation_id='invocation-1')
-        assert first == same
+        assert await runtime.submit(parent['id'], '/plan Inspect the system', invocation_id='invocation-1') == first
         await runtime.tasks[parent['id']]
-        children = registry.store.db.execute('SELECT id FROM sessions WHERE parent_id=?', (parent['id'],)).fetchall()
-        assert len(children) == 1
-        child = registry.store.get(children[0]['id'])
-        assert child['role'] == 'plan'
-        assert 'file_write' not in child['config']['tools']
-        assert child['status'] == 'completed'
+        assert not registry.store.children_of(parent['id'])
+        from agentbox.agent_core import plan_workflow
+        run = plan_workflow.service(runtime).runs(parent['id'])[0]
+        assert run['originalGoal'] == 'Inspect the system'
+        assert 'ACTIVE MODE: PLAN' in json.dumps(model.requests)
+        assert 'planning' in registry.store.get(parent['id'])['config']['skills']
         with pytest.raises(ValueError, match='INVOCATION_CONFLICT'):
-            await runtime.submit(parent['id'], '/build change scope', invocation_id='invocation-1')
+            await runtime.submit(parent['id'], '/plan change scope', invocation_id='invocation-1')
     asyncio.run(run())
 
 
@@ -265,7 +264,7 @@ def test_command_child_receives_the_attachment_block(registry):
         model = Model()
         runtime = HarnessRuntime(registry.store, Executor(), model, registry.catalog)
         parent = runtime.create({'skills': []})
-        await runtime.submit(parent['id'], '/plan Inspect the system',
+        await runtime.submit(parent['id'], '/explore Inspect the system',
                              attachments=[ATTACHMENT_ROW], invocation_id='invocation-a7')
         await runtime.tasks[parent['id']]
         children = registry.store.db.execute('SELECT id FROM sessions WHERE parent_id=?',
@@ -310,7 +309,7 @@ def test_command_child_inherits_the_session_time_budget(registry):
         runtime = HarnessRuntime(registry.store, Executor(), Model(), registry.catalog)
         # Phiên chốt trần 600 giây (create_session), nên so với chính giá trị đã lưu của phiên.
         parent = runtime.create({'skills': [], 'deadlineSeconds': 600})
-        await runtime.submit(parent['id'], '/plan Inspect the system', invocation_id='invocation-2')
+        await runtime.submit(parent['id'], '/explore Inspect the system', invocation_id='invocation-2')
         await runtime.tasks[parent['id']]
         children = registry.store.db.execute('SELECT id FROM sessions WHERE parent_id=?', (parent['id'],)).fetchall()
         child = registry.store.get(children[0]['id'])
@@ -330,7 +329,7 @@ def test_command_child_never_gets_more_steps_than_the_session(registry):
     async def run():
         runtime = HarnessRuntime(registry.store, Executor(), Model(), registry.catalog)
         parent = runtime.create({'skills': [], 'maxSteps': 12, 'deadlineSeconds': 600})
-        await runtime.submit(parent['id'], '/plan Inspect the system', invocation_id='invocation-4')
+        await runtime.submit(parent['id'], '/explore Inspect the system', invocation_id='invocation-4')
         await runtime.tasks[parent['id']]
         children = registry.store.db.execute('SELECT id FROM sessions WHERE parent_id=?', (parent['id'],)).fetchall()
         assert len(children) == 1

@@ -54,6 +54,8 @@ import { useResearchSync } from '../../hooks/useResearchSync'
 import { ResearchConversationCards } from './research/ResearchConversationCards'
 import { DesignConversationCards } from './design/DesignConversationCards'
 import { useDesignSync } from '../../hooks/useDesignSync'
+import { usePlanSync } from '../../hooks/usePlanSync'
+import { PlanWorkflowView } from './plan/PlanWorkflowView'
 import { resolveThinkingLevel } from '../../lib/harnessThinking'
 import { composerModels, findRouteOption, routerChatOptions, routable, selectionKey } from '../../lib/routeOptions'
 
@@ -212,6 +214,7 @@ export function ChatPanel() {
   useResearchSync()
   // P1 — chế độ Design: cùng cầu nối, cùng luồng sự kiện phiên (một vòng 1200 ms, không thêm vòng nào).
   useDesignSync()
+  usePlanSync()
   const researchSuggest = useMemo<{ reason: string; draftGoal: string } | null>(() => {
     const latest = [...(harnessRun?.events ?? [])].reverse().find((event) => event.type === 'research_suggested')
     if (!latest) return null
@@ -334,13 +337,30 @@ export function ChatPanel() {
   // thấy đúng hàng con, không rơi về hàng cha của nhóm provider.
   const selected = findRouteOption(routerOptions, selectionKey(selection))
 
-  // Auto-select default route when provider loads
+  // Auto-select route when provider loads: ưu tiên khôi phục model đã lưu của người dùng (activeModelId trong useHarnessStore)
   useEffect(() => {
     if (!snapshot || selected) return
-    const r = snapshot.defaultRoute
-    const key = r.aliasId ? `alias:${r.aliasId}` : `model:${r.connectionId}:${r.modelId}`
-    const next = findRouteOption(routerOptions, key)?.selection ?? routerOptions[0]?.selection ?? null
-    if (selectionKey(next) !== selectionKey(selection)) setSelection(next)
+
+    // 1. Ưu tiên kiểm tra model người dùng đã lưu trước đó trong harnessStore
+    const savedModelId = useHarnessStore.getState().activeModelId
+    const savedOption = savedModelId
+      ? findRouteOption(routerOptions, savedModelId) ||
+        routerOptions.find((opt) => opt.value.endsWith(`:${savedModelId}`) || opt.value === savedModelId)
+      : null
+
+    let next = savedOption?.selection ?? null
+
+    // 2. Nếu không có model đã lưu hoặc model cũ không tồn tại trong snapshot thì mới dùng defaultRoute
+    if (!next) {
+      const r = snapshot.defaultRoute
+      const key = r.aliasId ? `alias:${r.aliasId}` : `model:${r.connectionId}:${r.modelId}`
+      next = findRouteOption(routerOptions, key)?.selection ?? routerOptions[0]?.selection ?? null
+    }
+
+    if (next && selectionKey(next) !== selectionKey(selection)) {
+      setSelection(next)
+      useHarnessStore.getState().setActiveModel(selectionKey(next))
+    }
   }, [snapshot, routerOptions, selected, selection, setSelection])
 
   // Kiểm tra trạng thái connection của model đang chọn để cảnh báo người dùng nếu ping false
@@ -423,7 +443,12 @@ export function ChatPanel() {
       steerNotice: harnessRun?.steerNotice ?? null,
       connectionWarning,
       onModelChange: (id: string) => {
-        setSelection(findRouteOption(routerOptions, id)?.selection ?? null)
+        const option = findRouteOption(routerOptions, id)
+        const next = option?.selection ?? null
+        setSelection(next)
+        if (next) {
+          useHarnessStore.getState().setActiveModel(id)
+        }
         harnessClearError(chatId)
         setDismissedWarning(null)
       },
@@ -545,8 +570,12 @@ export function ChatPanel() {
     }
     setUnseenCount((count) => (count === 0 ? count : 0))
 
-    scrollToLatest('auto')
-  }, [messages.length, routerTurns.length, harnessRun?.events, harnessRun?.status, scrollToLatest, scrollToNewTurn])
+    // Chỉ tự động cuộn khi thật sự có thêm nội dung mới (delta > 0) hoặc agent đang bận streaming.
+    // Tuyệt đối không giật cuộn khi nội dung đứng yên (delta === 0) tránh xung đột với thao tác cuộn của người dùng.
+    if (delta > 0 || harnessBusy || isSending) {
+      scrollToLatest('auto')
+    }
+  }, [messages.length, routerTurns.length, harnessRun?.events?.length, harnessRun?.status, harnessBusy, isSending, scrollToLatest, scrollToNewTurn])
 
   // Đổi phiên: khôi phục đúng vị trí đọc đã nhớ của phiên đó (nếu có), ngược
   // lại thì bám đáy. Chạy sau khi transcript của phiên mới đã dựng.
@@ -676,12 +705,13 @@ export function ChatPanel() {
         )}
 
 
-        <div ref={messagesEndRef} />
         {/* P4 — thẻ Research trong hội thoại: lời hỏi nhiều câu, thẻ ngoài phạm vi, thẻ báo cáo
             (kể cả run chạy nền xong sau khi đã tắt chế độ) và thẻ gợi ý của main. */}
         <ResearchConversationCards suggest={researchSuggest} />
         {/* P1 — thẻ Design trong hội thoại: lời hỏi phỏng vấn, thẻ brief + danh sách chạm, dòng thời gian. */}
         <DesignConversationCards />
+        <PlanWorkflowView />
+        <div ref={messagesEndRef} />
         </div>
 
       </div>

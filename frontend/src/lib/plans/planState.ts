@@ -235,6 +235,7 @@ export interface PlanStatusClient {
     version: number,
     decision: PlanDecision,
     note: string,
+    workflow?: { revision: number; invocationId: string; contentHash: string },
   ): Promise<PlanReviewOutcome>
 }
 
@@ -456,10 +457,11 @@ export class HarnessPlanStatusClient implements PlanStatusClient {
     version: number,
     decision: PlanDecision,
     note: string,
+    workflow?: { revision: number; invocationId: string; contentHash: string },
   ): Promise<PlanReviewOutcome> {
     let payload: unknown
     try {
-      payload = await agentApi<unknown>('/plans/review', { identity, version, decision, note })
+      payload = await agentApi<unknown>('/plans/review', { identity, version, decision, note, ...workflow })
     } catch (error) {
       throw toPlanReviewError(error)
     }

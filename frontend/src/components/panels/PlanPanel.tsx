@@ -3,6 +3,8 @@
  * Cập nhật: Thay toàn bộ native select bằng Custom Dark Dropdown Popover, nút Approve tone trắng xám sang trọng.
  */
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { PlanWorkflowView } from './plan/PlanWorkflowView'
+import { usePlanStore } from '../../store/planStore'
 import {
   Link,
   Copy,
@@ -94,6 +96,9 @@ export function PlanPanel() {
 
   /** Nguồn plan duy nhất: thư mục .plans của sandbox (không còn danh sách version giả). */
   const planFiles = usePlanFiles()
+  const workflowRun = usePlanStore(s => s.runs.find(r =>
+    (r.document?.identity === planFiles.selection?.identity && r.document?.version === planFiles.selection?.version) ||
+    r.documents?.some(d => d.identity === planFiles.selection?.identity && d.version === planFiles.selection?.version)))
   const selectedPlan = planFiles.manifest?.plans.find((p) => p.identity === planFiles.selection?.identity)
   const selectedFileVersion = selectedPlan?.versions.find((v) => v.version === planFiles.selection?.version)
 
@@ -173,7 +178,12 @@ export function PlanPanel() {
       : verification.state === 'revise'
         ? t('plan.verify.reviseLocked', { version: versionLabel, critic: t('plan.verify.critic') })
         : t('plan.verify.locked', { version: versionLabel })
-  const approveLocked = planFiles.approvalLocked
+  const semanticReady = workflowRun?.review?.verdict === 'ok' &&
+    workflowRun.review.briefRevision === workflowRun.briefRevision &&
+    workflowRun.document?.version === planFiles.selection?.version &&
+    !workflowRun.questions.some(q => q.status === 'open' && q.field !== '__approval__') &&
+    ['active', 'needs_user'].includes(workflowRun.status)
+  const approveLocked = planFiles.approvalLocked || (!!workflowRun && !semanticReady)
 
   /**
    * Dòng kết quả quyết định. Harness trả kèm `wake.{state,code,message}` — câu chữ của CHÍNH NÓ về
@@ -397,6 +407,7 @@ export function PlanPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-panel select-text">
+      <div className="max-h-72 overflow-y-auto shrink-0"><PlanWorkflowView document={planFiles.selection} /></div>
       {/* Sub-Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-panel px-4 py-2">
         <div className="flex items-center gap-2.5">
@@ -594,21 +605,21 @@ export function PlanPanel() {
               onClick={handleApprove}
               // Khoá khi: đang ở Act, đang ghi, hoặc bản này CHƯA qua phiên phản biện
               // (`verification.state === 'none'`). Harness cũ không khai mặt phản biện thì KHÔNG khoá.
-              disabled={mode === 'ACT' || planFiles.reviewStatus === 'saving' || approveLocked}
+              disabled={(mode === 'ACT' && !workflowRun) || planFiles.reviewStatus === 'saving' || approveLocked}
               data-disabled-reason={approveLocked ? 'plan-not-reviewed' : undefined}
               aria-label={approveLocked ? t('plan.verify.lockedAria') : undefined}
               aria-describedby={approveLocked ? APPROVE_BLOCKED_ID : undefined}
               className={`flex items-center gap-1.5 rounded-md px-3.5 py-1 text-xs font-semibold transition shadow-xs cursor-pointer disabled:cursor-not-allowed ${
                 approveLocked
                   ? 'bg-panel2 text-muted border border-line opacity-60'
-                  : mode === 'ACT' || approvedInForce
+                  : (mode === 'ACT' && !workflowRun) || approvedInForce
                     ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                     : 'bg-zinc-100 text-zinc-900 hover:bg-white active:scale-98'
               }`}
             >
               <Check className="size-3.5" />
               <span>
-                {mode === 'ACT'
+                {mode === 'ACT' && !workflowRun
                   ? 'Approved (ACT)'
                   : approvedInForce
                     ? t('plan.approvedStored')
@@ -624,7 +635,7 @@ export function PlanPanel() {
                 title={t('plan.decisions.chevronTitle')}
                 aria-label={t('plan.decisions.chevronTitle')}
                 aria-expanded={approveNoteOpen}
-                disabled={mode === 'ACT' || planFiles.reviewStatus === 'saving' || approveLocked}
+                disabled={(mode === 'ACT' && !workflowRun) || planFiles.reviewStatus === 'saving' || approveLocked}
                 onClick={() => setApproveNoteOpen((open) => !open)}
                 className="ml-0.5 rounded-md border border-line px-1 py-1 text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >

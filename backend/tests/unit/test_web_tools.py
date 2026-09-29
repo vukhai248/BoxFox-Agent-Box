@@ -383,6 +383,8 @@ def test_the_dispatcher_sends_web_tools_to_the_host_not_the_box():
     runtime.web = FixtureWeb()
     runtime.root_session_id = lambda sid: sid
     session = {'id': 's1', 'role': 'orchestrator', 'config': {'tools': {'web_search'}}}
+    from types import SimpleNamespace
+    runtime.store = SimpleNamespace(get=lambda sid: session)
     result = asyncio.run(HarnessRuntime.dispatch(runtime, session, 'web_search', {'query': 'x'}))
     assert result == {'content': 'host-side'}
     assert sent == {'name': 'web_search', 'args': {'query': 'x'}, 'sid': 's1', 'scope_id': 's1'}

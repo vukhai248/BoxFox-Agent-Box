@@ -154,8 +154,7 @@ def test_a_decision_survives_a_dead_box(tmp_path, monkeypatch):
     entries = log.read() or read_entries([log.previous_path()])
     # Hai dòng, hai sự thật khác nhau: box tắt nên không chuyển tiếp được, và kế hoạch này chưa có
     # chủ sở hữu nào đã ghi (`plan_owners` trống) nên không có phiên nào để đánh thức (vòng 25).
-    assert [entry['code'] for entry in entries if entry.get('code')] == ['PLAN_REVIEW_FORWARD_FAILED',
-                                                                        'PLAN_WAKE_NO_OWNER']
+    assert [entry['code'] for entry in entries if entry.get('code')] == ['PLAN_REVIEW_FORWARD_FAILED']
 
 
 def test_a_dead_index_still_records_the_decision(tmp_path):
@@ -474,27 +473,19 @@ def test_a_change_request_from_the_plan_tab_opens_a_real_turn(tmp_path):
     assert row['session_id'] == seen['owner']
 
 
-def test_an_approval_from_the_plan_tab_opens_a_construction_turn(tmp_path):
-    """Duyệt ở tab Plan: lượt mới nói THI CÔNG theo milestones, và điều kiện kèm theo có mặt."""
+def test_an_approval_from_the_plan_tab_only_records_acceptance(tmp_path):
     seen = plan_tab_click(tmp_path, {'identity': IDENTITY, 'version': 3, 'decision': 'approved',
-                                     'note': 'chỉ sửa backend'}, verified=3)
-
-    assert seen['status'] == 200 and seen['payload']['resumed'] is True, seen['payload']
-    opened = tab_prompt(seen)
-    assert len(opened) == 1, seen['userRows']
-    assert 'thi công theo đúng các milestone' in opened[0]
-    assert 'Điều kiện kèm theo của chủ nhà: chỉ sửa backend' in opened[0]
-    assert seen['rows'][-1]['resumed'] == 1
+                                   'note': 'chỉ sửa backend'}, verified=3)
+    assert seen['status'] == 200 and seen['payload']['resumed'] is False
+    assert seen['payload']['wake']['state'] == 'accepted'
+    assert tab_prompt(seen) == [] and seen['turnCount'] == seen['before']
+    assert seen['rows'][-1]['resumed'] == 0 and seen['rows'][-1]['note'] == 'chỉ sửa backend'
 
 
-def test_an_approval_without_a_note_says_so_instead_of_inventing_one(tmp_path):
-    """Không kèm ghi chú thì prompt nói thẳng "Không kèm ghi chú" — không bịa một điều kiện nào."""
-    seen = plan_tab_click(tmp_path, {'identity': IDENTITY, 'version': 3, 'decision': 'approved'},
-                          verified=3)
-
-    assert seen['status'] == 200 and seen['payload']['resumed'] is True, seen['payload']
-    opened = tab_prompt(seen)
-    assert len(opened) == 1 and opened[0].endswith('Không kèm ghi chú.'), opened
+def test_an_approval_without_note_does_not_start_a_turn(tmp_path):
+    seen = plan_tab_click(tmp_path, {'identity': IDENTITY, 'version': 3, 'decision': 'approved'}, verified=3)
+    assert seen['status'] == 200 and seen['payload']['resumed'] is False
+    assert tab_prompt(seen) == [] and seen['rows'][-1]['note'] == ''
 
 
 def test_a_busy_session_records_the_decision_and_says_the_turn_was_not_opened(tmp_path):

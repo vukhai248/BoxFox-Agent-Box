@@ -57,6 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
+from . import plan_workflow
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -3054,6 +3055,9 @@ class HarnessRuntime(RuntimeCommands):
         Một hàm, hai chỗ gọi (chat qua `decision()` và route tab Plan): chép câu này hai lần là
         cách chắc chắn nhất để hai đường nói hai chuyện khác nhau.
         """
+        blocked = plan_workflow.service(self).approval_blocked(identity, version)
+        if blocked:
+            return blocked
         dependencies = self.store.plan_research_dependencies(identity, version)
         stale = [item for item in dependencies if item['stale']]
         if stale:
@@ -3587,6 +3591,13 @@ class HarnessRuntime(RuntimeCommands):
         trừ các công cụ ghi (§5.2). `invocation_id` mặc định `None` để chỗ gọi chỉ cần biết mode có
         bật hay không (khối lời dặn theo lượt).
         """
+        plan_tools = plan_workflow.allowed_tools(self, session)
+        if plan_tools is not None:
+            names = [name for name in session['config'].get('tools', []) if name in plan_tools]
+            if not session.get('parent_id'):
+                names += [name for name in ('plan_scope',) if name not in names]
+            return {'mode': 'plan', 'tools': names,
+                    'promptBlock': plan_workflow.prompt_block(self, session)}
         mode = research_mode(session)
         resume = bool(invocation_id) and str(invocation_id).startswith('research-resume-')
         config = session.get('config') if isinstance(session, dict) else {}
@@ -3834,6 +3845,9 @@ class HarnessRuntime(RuntimeCommands):
         # P1 (§5.2): bộ công cụ theo LƯỢT đọc từ `turn_profile` — ở mode, công cụ ghi bị bỏ;
         # lượt bơm `research-resume-*` dùng hồ sơ research kể cả khi mode đã tắt.
         profile = self.turn_profile(session, self.turn_invocations.get(sid))
+        if profile['mode'] == 'plan':
+            self._sync_mode_block(session, self.turn_invocations.get(sid))
+            messages[0] = session['messages'][0]
         allowed_tools = set(profile['tools'])
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
@@ -4407,6 +4421,15 @@ class HarnessRuntime(RuntimeCommands):
                         verdict_note = self.plan_verdict_nudge(
                             sid, turn_no, steps_used, wrap_up_at,
                             can_delegate='delegate_task' in (config.get('tools') or []))
+                        if verdict_note is None:
+                            planning = plan_workflow.service(self).finish_intent(self, session)
+                            if planning and not planning.get('modeOnly') and not session.get('parent_id'):
+                                if planning['status'] == 'needs_user':
+                                    text = ('Cần câu trả lời của bạn để chốt yêu cầu. Câu hỏi đã lưu bên dưới; có thể quay lại sau.'
+                                            if planning['language'] == 'vi' else
+                                            'Your answers are needed before decisions are finalized. The questions below are saved; you can return later.')
+                                elif planning['status'] == 'blocked':
+                                    text = planning.get('blocker') or 'Plan chưa hoàn tất; tiếp tục từ checkpoint.'
                         text, answer_partial = await self.enforce_answer_length(sid, text, steps_used)
                         # Đợt 3 (P3.1) — cổng chạy SAU cổng độ dài và TRƯỚC khi câu trả lời được
                         # phát: bằng chứng đi KÈM văn (`assistant.evidence`), không nhét vào văn.
@@ -4553,6 +4576,13 @@ class HarnessRuntime(RuntimeCommands):
                         turn_calls.append({'id': call['id'], 'name': name, 'args': args,
                                            'result': safe, 'step': step + 1,
                                            'toolCallId': call['id']})
+                    planning_run = plan_workflow.bound_run(self, self.store.get(sid))
+                    if not session.get('parent_id') and planning_run and planning_run.get('status') == 'needs_user':
+                        close_turn('needs_user', 'plan_interview', len(calls), response.get('usage'))
+                        self.store.save(sid, messages, 'completed')
+                        self.store.emit(sid, 'finish', {'status': 'completed', 'needsUser': True,
+                                                      'runId': planning_run['runId'], 'turn': turn_no})
+                        return 'Plan đang chờ câu trả lời của bạn.'
                     # N6 — đóng bước SAU khi mọi kết quả tool đã vào transcript, nên
                     # `contextEstimate` của `turn_end` là ngữ cảnh mà bước kế tiếp thật sự gửi đi.
                     # B3 — ở bước CUỐI của trần bước, cặp `turn_start`/`turn_end` được để MỞ: đường
@@ -4626,6 +4656,8 @@ class HarnessRuntime(RuntimeCommands):
                              **self.peer_turn_cost(sid, turn_no))
             return None
         finally:
+            plan_workflow.service(self).checkpoint(self, session,
+                'Lượt tính toán kết thúc trước khi hoàn tất. Brief, câu hỏi và bản nháp đã lưu; tiếp tục để xử lý phần còn thiếu.')
             self.run_budget.pop(sid, None)
             self.turn_started_at.pop(sid, None)
             self.turn_extensions.pop(sid, None)
@@ -4662,6 +4694,25 @@ class HarnessRuntime(RuntimeCommands):
 
     async def dispatch(self, session, name, args, call_id=None):
         sid, config = session['id'], session['config']
+        current = self.store.get(sid)
+        plan_tools = plan_workflow.allowed_tools(self, current)
+        if plan_tools is not None and name not in plan_tools:
+            raise PermissionError('PLAN_EXECUTION_BLOCKED: công cụ này không được chạy trong Plan: ' + name)
+        if name == 'plan_scope':
+            return plan_workflow.service(self).scope(self, current, args)
+        if plan_tools is not None and name == 'ask_user' and not session.get('parent_id'):
+            state = plan_workflow.mode(current)
+            run = plan_workflow.service(self).get(state['activeRunId'])
+            return plan_workflow.service(self).scope(self, current, {'action': 'ask', 'revision': run['revision'],
+                'questions': [{'text': args.get('question', ''), 'field': 'decision',
+                               'options': args.get('options') or []}]})
+        if plan_tools is not None and name == 'request_approval' and not session.get('parent_id'):
+            workflow = plan_workflow.service(self)
+            run = workflow.get(plan_workflow.mode(current)['activeRunId'])
+            identity, version = plan_approval_target(args, name)
+            if identity != (run.get('document') or {}).get('identity') or version != (run.get('document') or {}).get('version'):
+                raise ValueError('PLAN_APPROVAL_TARGET_REQUIRED: chỉ duyệt đúng bản hiện tại')
+            return workflow.scope(self, current, {'action': 'approval', 'revision': run['revision']})
         # P1 (design-interfaces §4): công cụ của gia đình design chỉ sống TRONG mode. Gọi ngoài mode
         # ⇒ `DESIGN_MODE_REQUIRED`, kể cả khi phiên còn giữ tên công cụ từ một lượt design trước —
         # nếu không, một phiên từng bật mode sẽ mang công cụ ghi được vào lượt main.
@@ -5615,6 +5666,8 @@ class HarnessRuntime(RuntimeCommands):
            tên file trùng (`PLAN_VERSION_TAKEN`) được thử lại **một** lần với chỉ mục vừa đọc lại.
         """
         sid = session['id']
+        workflow = plan_workflow.service(self)
+        planning_run = workflow.validate_write(self, self.store.get(sid), args)
         slug = plan_slug(args.get('slug'))
         markdown = args.get('markdown')
         if not isinstance(markdown, str) or not markdown.strip():
@@ -5729,6 +5782,11 @@ class HarnessRuntime(RuntimeCommands):
         self.plan_turn_notes[sid] = {'turn': self.active_turn.get(sid), 'identity': identity,
                                      'version': version,
                                      'assumptions': plan_quality.assumption_items(markdown)}
+        if planning_run is not None:
+            payload['runId'] = planning_run['runId']
+            payload['briefRevision'] = planning_run['briefRevision']
+            payload['languageSignal'] = plan_workflow.language_signal(markdown, planning_run['language'])
+            workflow.written(planning_run, payload, args['traceability'])
         self.store.emit(sid, 'plan_written', payload)
         # Vòng 25 (D-36) — SỔ SỞ HỮU: đường từ nhóm kế hoạch về phiên GỐC. Đo vòng 25: tab Plan ghi
         # được hàng duyệt nhưng `session_id` toàn `NULL`, nên cú bấm không mở được lượt nào. Ghi
@@ -5896,6 +5954,23 @@ class HarnessRuntime(RuntimeCommands):
         sid = session['id']
         identity, version, verdict, issues, summary = self.plan_verify_args(args)
         critic, critic_verdict, answer_chars = self.plan_critique(sid, identity, version)
+        workflow = plan_workflow.service(self)
+        planning_run = workflow.for_document(identity, version)
+        semantic_report = None
+        if planning_run:
+            document = planning_run.get('document') or {}
+            if (document.get('identity'), document.get('version')) != (identity, version):
+                raise ValueError('PLAN_REVIEW_STALE: bản bị thay thế không nhận phản biện cho run hiện tại')
+            child = self.store.get(critic['session_id'])
+            binding = child['config'].get('planBinding') or {}
+            if binding.get('runId') != planning_run['runId'] or binding.get('briefRevision') != planning_run['briefRevision']:
+                raise ValueError('PLAN_REVIEW_STALE: phản biện không thuộc brief hiện tại')
+            answers = [event['data'].get('text', '') for event in self.store.events_tail(child['id'])
+                       if event['type'] == 'assistant' and event['data'].get('text')]
+            answer_text = answers[-1] if answers else ''
+            semantic_report = workflow.parse_review(answer_text, planning_run, verdict)
+            if verdict == 'ok' and any(i['severity'] in {'high', 'medium'} for i in issues):
+                raise ValueError('PLAN_SEMANTIC_VERDICT_MISMATCH: còn finding ảnh hưởng triển khai')
         if critic_verdict != verdict:
             raise ValueError(f'{PLAN_VERIFY_VERDICT_MISMATCH_CODE}: the critique says {critic_verdict!r} but '
                              f'you recorded {verdict!r} — record what it actually said, or ask it to '
@@ -5903,6 +5978,8 @@ class HarnessRuntime(RuntimeCommands):
         self.store.record_plan_verification(identity, version, verdict, issues=issues, summary=summary,
                                            critic_session_id=critic['session_id'],
                                            critic_answer_chars=answer_chars, critic_verdict=critic_verdict)
+        if semantic_report is not None:
+            workflow.reviewed(planning_run, semantic_report, verdict, critic['session_id'])
         self.store.emit(sid, 'plan_verified', {'identity': identity, 'version': version, 'verdict': verdict,
                                                'issues': issues, 'summary': summary,
                                                'criticSessionId': critic['session_id'],
@@ -6320,6 +6397,24 @@ class HarnessRuntime(RuntimeCommands):
         if session['role'] != 'orchestrator':
             raise PermissionError('Leaf agents cannot delegate')
         role = args.get('role')
+        planning_run = plan_workflow.bound_run(self, self.store.get(session['id']))
+        if planning_run is not None and role not in plan_workflow.ROLES:
+            raise PermissionError('PLAN_DELEGATE_BLOCKED: Plan chỉ giao khảo sát/thiết kế/phản biện')
+        if planning_run and not planning_run.get('modeOnly') and role == 'plan-review':
+            doc = planning_run.get('document') or {}
+            failures = []
+            for row in self.store.children_of(session['id']):
+                if row['role'] != 'plan-review' or row['status'] not in {'failed', 'cancelled'}:
+                    continue
+                child_config = self.store.get(row['session_id'])['config']
+                target = child_config.get('reviewTarget') or {}
+                if target.get('contentHash') == doc.get('contentHash') and target.get('version') == doc.get('version'):
+                    failures.append(row)
+            if len(failures) > 1:
+                raise ValueError('PLAN_REVIEW_RETRY_EXHAUSTED: hai critic đã lỗi; chưa đánh giá, lưu checkpoint')
+            if failures and not any(token in str(failures[0].get('reason') or '').upper() for token in
+                                    ('UPSTREAM', 'PROVIDER', 'HTTP_', 'RATE_LIMIT', 'CONNECTION', 'TIMEOUT')):
+                raise ValueError('PLAN_REVIEW_UNEVALUATED: critic lỗi ngoài provider; cần xử lý nguyên nhân trước')
         configured = next((r for r in session['config']['subagents'] if r['id'] == role and r.get('enabled', True)), None)
         if not configured:
             raise PermissionError('Specialist is disabled or unknown')
@@ -6335,7 +6430,7 @@ class HarnessRuntime(RuntimeCommands):
             raise ValueError('Child goal required')
         # P1 (D-05, §7.7): giao cho vai `design` từ NGOÀI mode vẫn mở một run thiết kế với
         # `origin='delegate'` — run là sổ của cuộc thiết kế, không phụ thuộc việc ai bấm nút.
-        if role == 'design' and design_mode_available():
+        if role == 'design' and design_mode_available() and planning_run is None:
             mode = design_mode(session)
             current = str(mode.get('activeRunId') or '')
             active = self.store.design_job(current) if current else None
@@ -6491,6 +6586,14 @@ class HarnessRuntime(RuntimeCommands):
             prompt_parts.append(f'Parent-supplied context (data):\n{context_data}')
         if expectation:
             prompt_parts.append(f'Parent-required deliverable and evidence (result shape):\n{expectation}')
+        if planning_run and not planning_run.get('modeOnly'):
+            child['config']['planBinding'] = {'runId': planning_run['runId'],
+                                             'briefRevision': planning_run['briefRevision']}
+            self.store.update_config(child['id'], child['config'])
+            prompt_parts.append(plan_workflow.service(self).reviewer_prompt(planning_run)
+                                if role == 'plan-review' else 'Planning snapshot (data):\n'
+                                + json.dumps(planning_run, ensure_ascii=False)
+                                + '\nReturn proposals/questions to root; never ask the owner or write implementation.')
         child_prompt = '\n'.join(prompt_parts) + CHILD_RESULT_CONTRACT
         echo_goal, echo_context, echo_prompt = (bound_child_text(goal, CHILD_ECHO_MAX_CHARS)[0],
                                                 bound_child_text(context_data, CHILD_ECHO_MAX_CHARS)[0],

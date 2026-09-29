@@ -1,0 +1,57 @@
+
+> agent-box-frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 D:/create/BoxFox-Agent-Box/frontend
+
+ ❯ src/components/panels/SubagentInspectorPanel.stream.test.tsx (6 tests | 2 failed) 595ms
+     × event từng mảnh rời được ghép lại đầy đủ 105ms
+     × bản ghi chuẩn `assistant` sau các delta không in câu trả lời lần hai 42ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/panels/SubagentInspectorPanel.stream.test.tsx > SubagentInspectorPanel — văn bản streaming > event từng mảnh rời được ghép lại đầy đủ
+AssertionError: expected 'Specialists Pipeline? · 1tất cả lượtL…' to contain 'Kế hoạch chi tiết cho agent'
+
+Expected: "Kế hoạch chi tiết cho agent"
+Received: "Specialists Pipeline? · 1tất cả lượtLượt ? · 1 conResearch SpecialistAutonomous runAssigned Task & Context (Orchestrator)việc của researchResearch Specialist OutputCopyKế hoạch chitiết choagentRead-only sub-agent stream · Delegated by Main Agent · Sandbox protectedrunning"
+
+ ❯ src/components/panels/SubagentInspectorPanel.stream.test.tsx:103:36
+    101|       { seq: 3, type: 'assistant_delta', data: { text: ' agent' }, cre…
+    102|     ])
+    103|     expect(host.textContent ?? '').toContain('Kế hoạch chi tiết cho ag…
+       |                                    ^
+    104|   })
+    105|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/panels/SubagentInspectorPanel.stream.test.tsx > SubagentInspectorPanel — văn bản streaming > bản ghi chuẩn `assistant` sau các delta không in câu trả lời lần hai
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/components/panels/SubagentInspectorPanel.stream.test.tsx:130:51
+    128|     ])
+    129|     const text = host.textContent ?? ''
+    130|     expect(text.split('Kế hoạch chi').length - 1).toBe(1)
+       |                                                   ^
+    131|   })
+    132|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 145 passed (146)
+      Tests  2 failed | 1430 passed (1432)
+   Start at  05:00:24
+   Duration  60.40s (transform 30.46s, setup 0ms, import 99.09s, tests 81.46s, environment 375.63s)

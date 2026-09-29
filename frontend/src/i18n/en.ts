@@ -1099,11 +1099,22 @@ const en: SameShape<typeof vi> = {
     reviewStoredNote: 'The decision is stored in the harness review book.',
     statusError: 'Could not read the harness review book',
     notForwarded: 'The decision is in the harness review book but was NOT forwarded to the sandbox.',
+    workflow: {
+      statusActive: 'In progress', statusNeedsUser: 'Waiting for your answer', statusPaused: 'Paused', statusBlocked: 'Needs attention', statusCancelled: 'Cancelled', statusExecuting: 'Implementing', sourceUser: 'From your input', sourceObserved: 'Verified evidence', sourceProposed: 'Recommendation', sourceUnresolved: 'Undecided',
+      phaseScoping: 'Scoping', phaseInvestigating: 'Investigating', phaseInterviewing: 'Interviewing', phaseDrafting: 'Drafting', phaseReviewing: 'Reviewing', phaseReady: 'Ready for approval', phaseApproved: 'Approved',
+      fieldGoal: 'Goal', fieldUsers: 'Users', fieldWorkflow: 'Workflow', fieldScope: 'Scope', fieldData: 'Data', fieldConstraints: 'Constraints', fieldSuccess: 'Acceptance',
+      active: 'Plan mode', waitGoal: 'Waiting for a request', pause: 'Pause',
+      interview: 'Clarify the plan', freeText: 'Your answer, or ask for a recommendation',
+      saving: 'Saving…', savePartial: 'Save these answers', continue: 'Continue',
+      durableWait: 'Answers are saved. You can return after reloading or restarting.',
+      brief: 'Brief and decisions', execute: 'Implement', executionQueued: 'Implementation requested',
+      review: 'Independent review · SWE-AI/1',
+    },
     eval: {
-      title: 'Plan evaluation',
+      title: 'Structure / proxy checks (P1–P8)',
       titleOf: 'Evaluation of write v{{version}}',
       rubric:
-        'Each dimension scores 0–2: ≥13 pass · 9–12 pass with conditions · ≤8 fail. A hard gate at 0 means the plan is not written.',
+        'Structural proxy only; not a SWE/AI judgment. Each dimension scores 0–2: ≥13 pass · 9–12 pass with conditions · ≤8 fail. A hard gate at 0 means the plan is not written.',
       rubricRejected:
         'A hard gate at 0 means the plan is not written. This write was rejected, so the file in .plans is unchanged.',
       scoreUnknown: 'score unreadable',

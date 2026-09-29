@@ -1,0 +1,26 @@
+
+> agent-box-frontend@0.1.0 lint
+> eslint .
+
+
+D:\create\BoxFox-Agent-Box\frontend\src\components\settings\HarnessFlowVisualizer.tsx
+  748:19  error  The value assigned to 'pathData' is not used in subsequent statements  no-useless-assignment
+
+D:\create\BoxFox-Agent-Box\frontend\src\components\settings\ModelManagerModal.tsx
+  200:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  208:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  532:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  885:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  892:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\create\BoxFox-Agent-Box\frontend\src\components\ui.tsx
+  51:7  error  The value assigned to 'btnClasses' is not used in subsequent statements  no-useless-assignment
+
+D:\create\BoxFox-Agent-Box\frontend\src\store\harnessChatStore.retry.test.ts
+  11:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\create\BoxFox-Agent-Box\frontend\src\store\routerChatStore.test.ts
+  40:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 10 problems (10 errors, 0 warnings)

@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from aiohttp import web
 from ..agent_core import design_runtime, plan_registry, research_runtime
+from ..agent_core import plan_workflow
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
 from ..agent_core.runtime import HarnessRuntime, DecisionError
@@ -386,11 +387,16 @@ def create_app(runtime):
 
     async def research_continuations(_app):
         """Resume only new durable jobs, using stored progress and the original budget."""
+        plan_workflow.service(runtime).recover()
         async def pump():
             while True:
                 await asyncio.sleep(15)
                 await research_continuation_step(runtime)
                 await design_continuation_step(runtime)
+                try:
+                    await plan_workflow.pump(runtime)
+                except Exception:
+                    logger.exception('plan continuation deferred; durable admission will retry')
         _app[RESEARCH_PUMP_KEY] = asyncio.create_task(pump())
 
     async def stop_research_continuations(_app):
@@ -759,6 +765,10 @@ def create_app(runtime):
                            'Research mode is switched off in this build (BOXFOX_RESEARCH_MODE=off) — '
                            'turn the switch on before using it', 409)
         try:
+            if body.get('on') is True and plan_workflow.mode(session)['on']:
+                await runtime.stop(sid)
+                plan_workflow.service(runtime).set_mode(runtime, sid, False, by='research')
+                session = known_session(sid)
             result = research_runtime.apply_research_mode(runtime, session, body)
         except ValueError as exc:
             payload = getattr(exc, 'payload', None)
@@ -858,6 +868,9 @@ def create_app(runtime):
                            'Design mode is switched off in this build (BOXFOX_DESIGN_MODE=off) — '
                            'turn the switch on before using it', 409)
         try:
+            if body.get('on') is True and plan_workflow.mode(known_session(sid))['on']:
+                await runtime.stop(sid)
+                plan_workflow.service(runtime).set_mode(runtime, sid, False, by='design')
             result = design_runtime.apply_design_mode(runtime, sid, body.get('on'),
                                                       str(body.get('by') or 'toggle'),
                                                       body.get('activeRun'))
@@ -1349,6 +1362,9 @@ def create_app(runtime):
         # Plan sẽ nói "đã duyệt" cho một bản chưa ai phản biện). Cùng câu từ chối với đường chat.
         approval_warning = None
         if decision == 'approved':
+            semantic_block = plan_workflow.service(runtime).approval_blocked(identity, version)
+            if semantic_block:
+                raise ApiError('PLAN_NOT_READY', semantic_block, 409)
             blocked = runtime.plan_approval_blocked(identity, version)
             if blocked:
                 mode = runtime.plan_verify_mode()[0]
@@ -1368,11 +1384,20 @@ def create_app(runtime):
         # toàn `NULL`, nên quyết định không nói được nó thuộc về phiên nào (BUG-2).
         owned = runtime.plan_ownership_view(identity)['sessionId']
         try:
-            row = runtime.store.record_plan_review(
-                identity, version, decision, note=note, source='plan-tab', session_id=owned,
-                content_size=None if entry is None else entry.size_bytes,
-                content_modified_at=None if entry is None else entry.modified_at)
+            workflow = plan_workflow.service(runtime)
+            planning_run = workflow.for_document(identity, version)
+            if planning_run:
+                workflow_result = workflow.action(planning_run['runId'], body | {
+                    'action': 'approve' if decision == 'approved' else 'request_changes'})
+                row = runtime.store.plan_review(identity, version)
+            else:
+                row = runtime.store.record_plan_review(
+                    identity, version, decision, note=note, source='plan-tab', session_id=owned,
+                    content_size=None if entry is None else entry.size_bytes,
+                    content_modified_at=None if entry is None else entry.modified_at)
         except ValueError as exc:
+            if planning_run:
+                raise
             raise ApiError('PLAN_REVIEW_INVALID', str(exc), 400) from None
 
         forwarded = True
@@ -1388,7 +1413,13 @@ def create_app(runtime):
                              reason=f'{type(exc).__name__}: {exc}')
         # M6 (D-35/Q3/Q4) — quyết định đã vào sổ, giờ mở MỘT LƯỢT THẬT trong phiên gốc. Cú bấm cũ
         # chỉ ghi sổ rồi im lặng (đo vòng 25: 3/3 lần bấm, 55-60 s không có gì xảy ra).
-        if not owned:
+        if decision == 'approved':
+            wake = {'resumed': False, 'wake': {'state': 'accepted',
+                    'message': f'Đã duyệt v{version}. Chọn Triển khai để bắt đầu thi công.'}}
+        elif planning_run:
+            await plan_workflow.pump(runtime)
+            wake = {'resumed': workflow_result['queued'], 'wake': {'state': 'opened', 'sessionId': planning_run['sessionId']}}
+        elif not owned:
             wake = plan_wake_missing(identity, version, 'plan.review.wake_failed', decision=decision)
         else:
             wake = await plan_wake(owned, identity, version, relative_path, decision, note)
@@ -1447,6 +1478,11 @@ def create_app(runtime):
         # ĐÚNG số đã phân giải ở trên, không đọc lại chỉ mục lần thứ hai.
         asked = payload['version']
         payload['verification'] = runtime.plan_verification_view(identity, asked or 0)
+        payload['workflow'] = plan_workflow.service(runtime).for_document(identity, asked or 0)
+        semantic_block = plan_workflow.service(runtime).approval_blocked(identity, asked or 0)
+        payload['semanticBlocked'] = semantic_block
+        if payload['workflow'] and semantic_block and payload.get('state') == 'approved':
+            payload['reviewStale'] = True
         payload['ownership'] = runtime.plan_ownership_view(identity)
         # Vòng 25 (hậu kiểm soát mã, F1/F5): công tắc của cổng duyệt đi KÈM trạng thái để tab Plan
         # đọc được cùng một sự thật với harness. Không có khoá này, giao diện chỉ biết "bản này
@@ -1532,6 +1568,96 @@ def create_app(runtime):
             'commit': repo_commit(),
         })
 
+    async def plan_mode_set(request):
+        sid = request.match_info['sid']
+        session = runtime.store.get(sid)
+        body = await request.json()
+        if not isinstance(body, dict) or not isinstance(body.get('on'), bool):
+            raise ValueError('PLAN_MODE_INVALID: on phải boolean')
+        if session['status'] in {'running', 'awaiting_decision'}:
+            if body['on']:
+                raise ValueError('SESSION_BUSY: chờ lượt hiện tại trước khi chuyển mode')
+            await runtime.stop(sid)
+        result = plan_workflow.service(runtime).set_mode(runtime, sid, body['on'], by='toggle')
+        return web.json_response(result)
+
+    async def plan_runs(request):
+        workflow = plan_workflow.service(runtime)
+        rid = request.match_info.get('runId')
+        if rid:
+            return web.json_response(workflow.get(rid))
+        sid = request.query.get('sessionId')
+        runtime.store.get(sid)
+        return web.json_response({'runs': workflow.runs(sid)})
+
+    async def plan_run_mutate(request):
+        workflow = plan_workflow.service(runtime)
+        rid = request.match_info['runId']
+        run = workflow.get(rid)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError('PLAN_BODY_INVALID')
+        if request.path.endswith('/answers'):
+            result = workflow.answers(rid, body)
+        else:
+            # Commit the owner action before cancellation. stop() checkpoints active work;
+            # stopping first would increment the revision and reject this valid action.
+            result = workflow.action(rid, body)
+            if body.get('action') in {'pause', 'cancel'} and run['sessionId'] in runtime.tasks:
+                await runtime.stop(run['sessionId'])
+            if body.get('action') in {'resume', 'new', 'current'}:
+                config = runtime.store.get(run['sessionId'])['config']
+                config['planMode'] = dict(config.get('planMode') or {}) | {'activeRunId': result['run']['runId']}
+                runtime.store.update_config(run['sessionId'], config)
+                workflow.set_mode(runtime, run['sessionId'], True)
+        # Answers and continuation are already committed; pump failure must not lose them.
+        try:
+            await plan_workflow.pump(runtime)
+        except Exception:
+            logger.exception('plan resume deferred')
+        return web.json_response(result)
+
+    async def plan_execute(request):
+        workflow = plan_workflow.service(runtime)
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError('PLAN_BODY_INVALID')
+        run = workflow.for_document(body.get('identity'), body.get('version'))
+        if run is None:
+            raise ValueError('PLAN_LEGACY_ADOPTION_REQUIRED: mở /plan với đường dẫn bản cũ để khảo sát, '
+                             'xác nhận brief và phản biện theo chuẩn mới trước khi triển khai')
+        session = runtime.store.get(run['sessionId'])
+        if session['status'] in {'running', 'awaiting_decision'} and run['status'] != 'executing':
+            raise ValueError('SESSION_BUSY')
+        doc = run['document']
+        if (doc['identity'], doc['version'], doc['contentHash']) != (body.get('identity'), body.get('version'), body.get('contentHash')):
+            raise ValueError('PLAN_EXECUTE_STALE: bản/hash yêu cầu không phải bản hiện tại')
+        # Read every slice and compare actual bytes, not filesystem size/mtime or a UI assertion.
+        chunks, offset = [], 0
+        for _ in range(60):
+            result = await runtime.executor.execute('file_read', {'path': doc['relativePath'],
+                                                   'offset': offset, 'limit': 30000}, session['id'])
+            if result.get('is_error') or not isinstance(result.get('content'), str):
+                raise ValueError('PLAN_EXECUTE_UNREADABLE: chưa đọc được bản đã duyệt')
+            chunks.append(result['content'])
+            next_offset = result.get('nextOffset')
+            if next_offset is None:
+                break
+            if not isinstance(next_offset, int) or next_offset <= offset:
+                raise ValueError('PLAN_EXECUTE_UNREADABLE')
+            offset = next_offset
+        else:
+            raise ValueError('PLAN_EXECUTE_UNREADABLE')
+        digest = hashlib.sha256(''.join(chunks).encode('utf-8')).hexdigest()
+        if digest != doc['contentHash']:
+            raise ValueError('PLAN_EXECUTE_STALE: nội dung trên đĩa đã đổi; phải phản biện và duyệt lại')
+        result = workflow.execute(run, body)
+        try:
+            await plan_workflow.pump(runtime)
+        except Exception:
+            logger.exception('plan execution admitted durably but not started')
+        return web.json_response(result)
+
     async def close(app):
         watchdog = getattr(runtime, 'watchdog', None)
         if watchdog is not None:
@@ -1591,6 +1717,12 @@ def create_app(runtime):
     app.router.add_post('/api/agent/plans/review', plan_review)
     app.router.add_get('/api/agent/plans/status', plan_status)
     app.router.add_post('/api/agent/plans/verify', plan_verify_route)
+    app.router.add_put('/api/agent/sessions/{sid}/plan-mode', plan_mode_set)
+    app.router.add_get('/api/agent/plans/runs', plan_runs)
+    app.router.add_get('/api/agent/plans/runs/{runId}', plan_runs)
+    app.router.add_post('/api/agent/plans/runs/{runId}/answers', plan_run_mutate)
+    app.router.add_post('/api/agent/plans/runs/{runId}/actions', plan_run_mutate)
+    app.router.add_post('/api/agent/plans/execute', plan_execute)
     # DEV-only surface: the system log is host-only and read-only. There is deliberately
     # no write route and no route of the box that reaches it (plan §3.1 + §3.2).
     app.router.add_get('/api/agent/system-log', system_log_view)

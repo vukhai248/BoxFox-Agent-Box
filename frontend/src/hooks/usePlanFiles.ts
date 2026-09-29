@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { agentApi } from '../lib/agentApi'
+import { usePlanStore } from '../store/planStore'
 import {
   DEFAULT_PLAN_GATE,
   PlanRepositoryHttpError,
@@ -195,6 +196,9 @@ export function usePlanFiles(
   // `plan_written` của agent làm số này tăng → manifest được tải lại; lần nạp
   // khi mount vẫn giữ nguyên.
   const planRevision = useUiStore((s) => s.planRevision)
+  const workflowRevision = usePlanStore(s => s.runs.find(r =>
+    (r.document?.identity === selection?.identity && r.document?.version === selection?.version) ||
+    r.documents?.some(d => d.identity === selection?.identity && d.version === selection?.version))?.revision ?? 0)
   const generationRef = useRef(0)
   // Lượt đọc trạng thái có bộ đếm riêng: tải manifest không được vô hiệu hoá một lượt đọc sổ duyệt
   // đang bay, và ngược lại.
@@ -383,6 +387,9 @@ export function usePlanFiles(
       statusGenerationRef.current += 1
     }
   }, [refresh, planRevision])
+  useEffect(() => {
+    if (selectionRef.current && workflowRevision) void loadStatus(selectionRef.current)
+  }, [workflowRevision, loadStatus])
 
   const selectIdentity = useCallback(
     (identity: string, version?: number) => {
@@ -445,12 +452,15 @@ export function usePlanFiles(
       try {
         // Ghi vào SỔ DUYỆT của harness (kèm số version, để duyệt v1 không làm v2 thành đã duyệt);
         // harness tự chuyển tiếp sang box và trả `forwarded`.
-        const outcome = await activeStatusClient.submitReview(
+        const workflow = usePlanStore.getState().runs.find(r => r.document?.identity === current.identity && r.document?.version === current.version)
+        const reviewArgs: Parameters<PlanStatusClient['submitReview']> = [
           current.identity,
           current.version,
           decision,
           note,
-        )
+        ]
+        if (workflow?.document) reviewArgs[4] = { revision: workflow.revision, contentHash: workflow.document.contentHash, invocationId: crypto.randomUUID() }
+        const outcome = await activeStatusClient.submitReview(...reviewArgs)
         setReviewForwarded(outcome.forwarded)
         setReviewResult({
           decision,
@@ -465,6 +475,7 @@ export function usePlanFiles(
           approvalWarning: outcome.approvalWarning ?? null,
         })
         await refresh()
+        await usePlanStore.getState().refresh()
         setReviewStatus('idle')
       } catch (cause) {
         if (cause instanceof PlanReviewBlockedError) {

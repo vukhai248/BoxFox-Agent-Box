@@ -37,6 +37,8 @@ import { useResearchStore } from '../../store/researchStore'
 import { ResearchComposerStatus } from './research/ResearchComposerStatus'
 import { useDesignStore } from '../../store/designStore'
 import { DesignComposerStatus } from './design/DesignComposerStatus'
+import { PlanComposerStatus } from './plan/PlanWorkflowView'
+import { usePlanStore } from '../../store/planStore'
 
 // Ở chế độ `live` (`VITE_TRANSPORT=live`) chưa có handler backend nào tiêu
 // thụ `elements` (xem `types/transport.ts` chú thích trên `user_message`) —
@@ -138,7 +140,8 @@ export function ChatInputBar({
   // Chế độ Design (P1): cùng luật với Research — đồng bộ qua luồng sự kiện phiên đã hỏi sẵn, không
   // mở thêm vòng hỏi thứ hai; placeholder và danh sách lệnh gợi ý theo chế độ đang bật.
   const designOn = useDesignStore((s) => s.mode.on)
-  const slash = useSlashCompletion(input, setInput, { modeOnly: researchOn || designOn })
+  const planOn = usePlanStore(s => s.mode.on)
+  const slash = useSlashCompletion(input, setInput, { modeOnly: researchOn || designOn || planOn })
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([
     'minndty4-pixel/BoxFox-Agent-Box',
@@ -389,7 +392,9 @@ export function ChatInputBar({
     hasContent ||
     isBusy ||
     Boolean(steerNotice) ||
-    slash.expanded
+    slash.expanded ||
+    researchOn ||
+    designOn
 
   useEffect(() => {
     if (isExpanded && isTextareaFocused && document.activeElement !== textareaRef.current) {
@@ -432,7 +437,7 @@ export function ChatInputBar({
                 onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
                 autopilotEnabled={autopilotEnabled}
                 onSelectPlan={() => {
-                  setInput('/plan ')
+                  void usePlanStore.getState().toggle(!planOn)
                   setIsFocused(true)
                   textareaRef.current?.focus()
                 }}
@@ -548,6 +553,7 @@ export function ChatInputBar({
             <ResearchComposerStatus />
             {/* P1 — dải trạng thái Design */}
             <DesignComposerStatus />
+            <PlanComposerStatus />
 
             {/* Attached files chips */}
             {attachments.length > 0 && (
@@ -752,7 +758,7 @@ export function ChatInputBar({
                   onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
                   autopilotEnabled={autopilotEnabled}
                   onSelectPlan={() => {
-                    setInput('/plan ')
+                    void usePlanStore.getState().toggle(!planOn)
                     textareaRef.current?.focus()
                   }}
                   onToggleResearch={() => {

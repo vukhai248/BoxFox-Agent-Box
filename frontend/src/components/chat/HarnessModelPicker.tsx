@@ -445,7 +445,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                       // phải nhận ra hàng đang chạy để không bày dấu tích sai chỗ.
                       const pinned = pins.find((pin) => pin.id === activeRouterId) ?? null
                       const isSelected = activeType === 'model'
-                        && (activeRouterId === model.id || activeModelId === model.id || Boolean(pinned))
+                        && (activeRouterId === model.id || Boolean(pinned))
                       const rowHasThinking = Boolean(model.thinkingLevels && model.thinkingLevels.length > 1)
                       // Hàng đang ghim: mức hiện trên hàng phải là mức của CONNECTION đang chạy, không
                       // phải giao của cả nhóm — mức nào gửi đi phải khớp đúng thứ đang thấy.

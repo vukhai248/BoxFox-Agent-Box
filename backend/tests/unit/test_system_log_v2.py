@@ -44,9 +44,13 @@ def _append(path, **entry):
         handle.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 
-class FixtureStore:
-    def close(self):
-        pass
+from agentbox.memory.session_store import SessionStore
+
+
+class FixtureStore(SessionStore):
+    def __init__(self):
+        from pathlib import Path
+        super().__init__(Path(':memory:'))
 
 
 class FixtureRuntime:
