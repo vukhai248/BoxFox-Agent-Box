@@ -214,6 +214,8 @@ export function normalizeFinishReason(value) {
   if (value === 'tool_use' || value === 'tool_calls') return 'tool_calls';
   if (value === 'max_tokens' || value === 'length') return 'length';
   if (value === 'content_filter') return 'content_filter';
+  if (value === 'refusal') return 'content_filter';
+  if (value === 'stream_incomplete' || value === 'stream_interrupted') return 'stream_incomplete';
   return 'stop';
 }
 

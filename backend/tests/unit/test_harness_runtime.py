@@ -310,8 +310,8 @@ def test_an_empty_provider_stream_keeps_the_router_verdict_and_stays_retryable()
     asyncio.run(run())
 
 
-def test_a_stream_cut_before_its_finish_chunk_is_reported_as_truncated():
-    """Nhà cung cấp cắt stream giữa câu mà KHÔNG gửi chunk `finish_reason` ⇒ `length`, không `stop`.
+def test_a_stream_cut_before_its_finish_chunk_is_reported_as_interrupted():
+    """EOF without finish_reason is stream_incomplete, not proof of a token limit.
 
     Đo sống 2026-09-26 (`muse-spark-1.3-contributor-free`): một lượt soát trả lời cụt giữa câu, không
     `usage`, và router ghi `finishReason: stop` — chỉ vì bên gọi mặc định `stop` khi không ai nói gì.
@@ -343,7 +343,7 @@ def test_a_stream_cut_before_its_finish_chunk_is_reported_as_truncated():
         async with server(cut) as cut_server:
             client = RouterClient(str(cut_server.make_url('')).rstrip('/'))
             severed = await client.complete([{'role': 'user', 'content': 'soát'}], [], {'model': 'x'})
-        assert severed['choices'][0]['finish_reason'] == 'length'
+        assert severed['choices'][0]['finish_reason'] == 'stream_incomplete'
         assert severed['choices'][0]['message']['content'] == 'câu bị cắt giữa'
         async with server(healthy) as healthy_server:
             client = RouterClient(str(healthy_server.make_url('')).rstrip('/'))
@@ -351,3 +351,82 @@ def test_a_stream_cut_before_its_finish_chunk_is_reported_as_truncated():
         assert whole['choices'][0]['finish_reason'] == 'stop'
 
     asyncio.run(run())
+
+
+def test_sse_socket_failure_preserves_partial_without_a_second_post(monkeypatch):
+    import httpx
+    import agentbox.agent_core.runtime as module
+    seen = []
+    original = httpx.AsyncClient
+
+    class BrokenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"choices":[{"delta":{"content":"https://example.org/partial"}}]}\n\n'
+            raise httpx.ReadError('fixture socket failure')
+
+    async def post(request):
+        seen.append(request)
+        return httpx.Response(200, stream=BrokenStream())
+
+    monkeypatch.setattr(module.httpx, 'AsyncClient', lambda **kw: original(
+        **kw, transport=httpx.MockTransport(post)))
+    result = asyncio.run(module.RouterClient('http://fixture').complete(
+        [{'role':'user','content':'fixture'}], [], {}))
+    assert len(seen) == 1
+    assert result['choices'][0]['finish_reason'] == 'stream_incomplete'
+    assert result['choices'][0]['message']['content'] == 'https://example.org/partial'
+    assert result['usage'] is None
+
+
+def test_sse_reasoning_and_refusal_are_not_treated_as_empty(monkeypatch):
+    import httpx
+    import agentbox.agent_core.runtime as module
+    original = httpx.AsyncClient
+    for delta, finish in [({'reasoning_content':'fixture thinking'},'stop'), ({'refusal':'fixture refusal'},'content_filter')]:
+        seen = []
+        async def post(request):
+            seen.append(request)
+            body = 'data: ' + json.dumps({'choices':[{'delta':delta}]}) + '\n\n'
+            body += 'data: ' + json.dumps({'choices':[{'delta':{},'finish_reason':finish}]}) + '\n\n'
+            return httpx.Response(200, text=body)
+        monkeypatch.setattr(module.httpx, 'AsyncClient', lambda **kw: original(
+            **kw, transport=httpx.MockTransport(post)))
+        result = asyncio.run(module.RouterClient('http://fixture').complete(
+            [{'role':'user','content':'fixture'}], [], {}))
+        assert len(seen) == 1
+        assert result['choices'][0]['finish_reason'] == finish
+        assert result['choices'][0]['message'][next(iter(delta))] == next(iter(delta.values()))
+
+
+def test_in_band_stream_error_is_retained_outside_partial_text(monkeypatch):
+    import httpx
+    import agentbox.agent_core.runtime as module
+    original = httpx.AsyncClient
+    async def post(request):
+        body = 'data: ' + json.dumps({'choices':[{'delta':{'content':'https://example.org/a'}}]}) + '\n\n'
+        body += 'data: ' + json.dumps({'error':{'code':'TIMEOUT','message':'fixture deadline'}}) + '\n\n'
+        return httpx.Response(200, text=body)
+    monkeypatch.setattr(module.httpx, 'AsyncClient', lambda **kw: original(
+        **kw, transport=httpx.MockTransport(post)))
+    result = asyncio.run(module.RouterClient('http://fixture').complete(
+        [{'role':'user','content':'fixture'}], [], {}))
+    assert result['choices'][0]['message']['content'] == 'https://example.org/a'
+    assert result['choices'][0]['finish_reason'] == 'stream_incomplete'
+    assert result['stream_error'] == {'code':'TIMEOUT','message':'fixture deadline'}
+
+
+def test_socket_failure_after_a_real_terminal_keeps_terminal_reason(monkeypatch):
+    import httpx
+    import agentbox.agent_core.runtime as module
+    original = httpx.AsyncClient
+    class AfterTerminal(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}\n\n'
+            raise httpx.ReadError('fixture disconnect after terminal')
+    async def post(request):
+        return httpx.Response(200, stream=AfterTerminal())
+    monkeypatch.setattr(module.httpx, 'AsyncClient', lambda **kw: original(
+        **kw, transport=httpx.MockTransport(post)))
+    result = asyncio.run(module.RouterClient('http://fixture').complete(
+        [{'role':'user','content':'fixture'}], [], {}))
+    assert result['choices'][0]['finish_reason'] == 'stop'

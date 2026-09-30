@@ -65,6 +65,74 @@ def test_model_cannot_forge_user_or_observed_sources(env):
         with pytest.raises(ValueError, match=code):
             scope(rt, flow, run, 'update', brief={'scope': {'text': 'offline', 'source': source}})
 
+
+def test_nested_proposal_reason_is_accepted_without_changing_provenance(env):
+    rt, flow, run = env
+    updated = scope(rt, flow, run, 'update', brief={'data': {
+        'text': 'Dữ liệu synthetic để thử pipeline',
+        'source': {'kind': 'proposal', 'reason': 'Đo được độ đúng; chưa đại diện dữ liệu thật.'}}})
+    assert updated['brief']['data']['reason'] == 'Đo được độ đúng; chưa đại diện dữ liệu thật.'
+    assert updated['brief']['data']['status'] == 'proposed'
+    assert updated['confirmedBriefRevision'] is None
+
+
+@pytest.mark.parametrize('value,code', [
+    ([], 'PLAN_BRIEF_INVALID'),
+    ({'text': ''}, 'PLAN_BRIEF_INVALID'),
+    ({'text': 'x', 'source': {'kind': 'invented'}}, 'PLAN_SOURCE_INVALID'),
+    ({'text': 'x', 'source': {'kind': 'proposed'}}, 'PLAN_PROPOSAL_REASON_REQUIRED'),
+])
+def test_invalid_brief_names_field_and_does_not_mutate_run(env, value, code):
+    rt, flow, run = env
+    before = flow.get(run['runId'])
+    with pytest.raises(ValueError, match=code + ": trường 'data'"):
+        scope(rt, flow, run, 'update', brief={'data': value})
+    assert flow.get(run['runId']) == before
+
+
+def test_evidence_notes_are_rejected_but_exact_read_path_is_accepted(env):
+    rt, flow, run = env
+    rt.store.emit(run['sessionId'], 'tool_end', {'name': 'file_read',
+        'args': {'path': '.plans/v1-old.md'}, 'result': {'content': 'đã đọc'}})
+    before = flow.get(run['runId'])
+    with pytest.raises(ValueError, match='PLAN_EVIDENCE_REQUIRED'):
+        scope(rt, flow, run, 'update', evidence=['.plans/v1-old.md (đọc 3500 ký tự đầu)'])
+    assert flow.get(run['runId']) == before
+    assert scope(rt, flow, run, 'update', evidence=['.plans/v1-old.md'])['evidence'] == ['.plans/v1-old.md']
+
+
+def test_stale_mutation_stays_conflict_and_status_then_retry_preserves_lock(env):
+    rt, flow, run = env
+    args = {'action': 'update', 'revision': run['revision'], 'brief': {'scope': 'Chỉ tổng hợp'}}
+    updated = flow.scope(rt, rt.store.get(run['sessionId']), args)
+    saved = flow.get(run['runId'])
+    with pytest.raises(ValueError, match=f'PLAN_REVISION_CONFLICT: gửi revision={updated["revision"]}'):
+        flow.scope(rt, rt.store.get(run['sessionId']), args)
+    assert flow.get(run['runId']) == saved
+    current = flow.scope(rt, rt.store.get(run['sessionId']), {'action': 'status'})
+    retried = flow.scope(rt, rt.store.get(run['sessionId']), {**args, 'revision': current['revision']})
+    assert retried['revision'] == current['revision'] + 1
+
+
+def test_three_questions_keep_option_tradeoffs(env):
+    rt, flow, run = env
+    questions = [{'id': field, 'field': field, 'text': 'Chốt ' + field + '?',
+                  'options': [{'id': 'suggest', 'label': 'Hãy đề xuất', 'tradeoff': 'Cần khảo sát thêm.'}]}
+                 for field in ('users', 'data', 'constraints')]
+    updated = scope(rt, flow, run, 'ask', questions=questions)
+    assert len(updated['questions']) == 3
+    assert all(q['options'][0]['tradeoff'] == 'Cần khảo sát thêm.' for q in updated['questions'])
+
+
+def test_invalid_option_shape_has_an_actionable_error_without_half_saved_round(env):
+    rt, flow, run = env
+    before = flow.get(run['runId'])
+    with pytest.raises(ValueError, match='PLAN_OPTIONS_INVALID: questions.*options'):
+        scope(rt, flow, run, 'ask', questions=[
+            {'id': 'users', 'field': 'users', 'text': 'Ai dùng?'},
+            {'id': 'data', 'field': 'data', 'text': 'Dữ liệu nào?', 'options': ['synthetic']}])
+    assert flow.get(run['runId']) == before
+
 def test_confirmation_is_user_action_and_traceability_required(env):
     rt, flow, run = env
     run = fill(rt, flow, run)

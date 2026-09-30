@@ -489,7 +489,12 @@ class PlanWorkflow:
                     raise ValueError('PLAN_QUESTION_FIELD_INVALID')
                 options = q.get('options') or []
                 if not isinstance(options, list) or len(options) > 5:
-                    raise ValueError('PLAN_OPTIONS_INVALID')
+                    raise ValueError(f'PLAN_OPTIONS_INVALID: questions[{qid!r}].options '
+                                     'cần array tối đa 5 object {id, label, tradeoff?}')
+                for i, option in enumerate(options):
+                    if not isinstance(option, dict) or not isinstance(option.get('label'), str) or not option['label'].strip():
+                        raise ValueError(f'PLAN_OPTIONS_INVALID: questions[{qid!r}].options[{i}] '
+                                         'cần object {id, label, tradeoff?} với label không rỗng')
                 options = [{'id': str(o.get('id') or i), 'label': str(o.get('label') or ''),
                             'tradeoff': str(o.get('tradeoff') or '')} for i, o in enumerate(options)]
                 run['questions'].append({'id': qid, 'field': field, 'text': q['text'],

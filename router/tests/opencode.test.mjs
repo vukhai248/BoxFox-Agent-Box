@@ -88,7 +88,7 @@ test('the versioned user agent is what the free tier checks', () => {
   assert.equal(hasValidOpencodeVersion('curl/8'), false);
 });
 
-test('a chat stream folded for a non-streaming caller reports `length` when it was cut', async () => {
+test('a chat stream folded for a non-streaming caller reports interruption at EOF', async () => {
   // The harness falls back to a non-streaming POST when the SSE channel breaks; the router folds
   // the provider stream with `aggregate`, and its `stop` default used to turn a severed answer into
   // a clean finish (measured live 2026-09-26, `muse-spark-1.3-contributor-free` review turn).
@@ -97,7 +97,7 @@ test('a chat stream folded for a non-streaming caller reports `length` when it w
     connection, credentials: {}, body: { model: "deepseek-v4-flash-free", messages, stream: false },
   }));
   const cutFinish = severed.filter(event => event.type === 'finish').at(-1);
-  assert.equal(cutFinish.finishReason, 'length', 'a stream with no finish chunk was cut');
+  assert.equal(cutFinish.finishReason, 'stream_incomplete', 'EOF is not a measured output limit');
   assert.equal(severed.filter(event => event.type === 'delta').at(-1).delta.content, 'Xin chào',
                'the severed text is still delivered, only its honesty changes');
   const healthy = recorder(() => sse(chatFrames()));
@@ -334,7 +334,7 @@ test('helpers keep their shape on odd input', () => {
   assert.deepEqual(responsesTools([{ type: 'function', function: { name: '' } }]), []);
   assert.deepEqual(responsesTools([{ name: 'x', parameters: { type: 'object' } }])[0].parameters, { type: 'object', properties: {} });
 });
-test('a stream cut before its completion event reports `length`, not a clean stop', async () => {
+test('a stream cut before its completion event reports interruption, not a clean stop', async () => {
   // Measured live 2026-09-26: a muse-spark-1.3 review turn was severed mid-sentence, the
   // provider sent no `response.completed` and no usage, and the adapter's default made the
   // harness call the severed answer a finished one. The missing terminal event is the signal.
@@ -344,10 +344,55 @@ test('a stream cut before its completion event reports `length`, not a clean sto
   const adapter = createProviders({ fetchImpl }).opencode;
   const events = await collect(adapter.generate({ connection, credentials: {}, body: { model: 'muse-spark-1.3-contributor-free', messages, stream: false } }));
   assert.equal(events.at(-1).type, 'finish');
-  assert.equal(events.at(-1).finishReason, 'length', 'a severed answer is not a completed one');
+  assert.equal(events.at(-1).finishReason, 'stream_incomplete', 'a severed answer is not a completed one');
   assert.equal(events.some(event => event.type === 'usage'), false, 'and it carries no usage to pretend with');
 
   const healthy = recorder(() => sse(responsesEvent(responsesFrames())));
   const whole = await collect(createProviders({ fetchImpl: healthy.fetchImpl }).opencode.generate({ connection, credentials: {}, body: { model: 'muse-spark-1.3-contributor-free', messages, stream: false } }));
   assert.equal(whole.at(-1).finishReason, 'tool_calls', 'a stream that does complete keeps its own reason');
+});
+
+test('Responses incomplete tool arguments cannot become a successful tool_calls finish', async () => {
+  const frames = responsesFrames().filter(f => f !== '[DONE]' && f.type !== 'response.completed');
+  frames.push({ type: 'response.incomplete', response: { status: 'incomplete',
+    incomplete_details: { reason: 'max_output_tokens' }, usage: {
+      input_tokens: 100, output_tokens: 16000, output_tokens_details: { reasoning_tokens: 12000 } } } });
+  const adapter = createProviders({ fetchImpl: async () => sse(responsesEvent(frames)) }).opencode;
+  const events = await collect(adapter.generate({ connection, credentials: {}, body: {
+    model: 'muse-spark-1.3-contributor-free', messages, stream: false } }));
+  assert.equal(events.at(-1).finishReason, 'length');
+  assert.deepEqual(events.find(e => e.type === 'usage').usage,
+    { prompt_tokens: 100, completion_tokens: 16000, total_tokens: 16100, reasoning_tokens: 12000 });
+});
+
+test('Responses unknown incomplete reason and missing usage stay unknown', async () => {
+  const frames = [{ type: 'response.output_text.delta', delta: 'partial' },
+    { type: 'response.incomplete', response: { status: 'incomplete', usage: { input_tokens: 10 } } }];
+  const adapter = createProviders({ fetchImpl: async () => sse(responsesEvent(frames)) }).opencode;
+  const events = await collect(adapter.generate({ connection, credentials: {}, body: {
+    model: 'muse-spark-1.3-contributor-free', messages, stream: true } }));
+  assert.equal(events.at(-1).finishReason, 'stream_incomplete');
+  assert.deepEqual(events.find(e => e.type === 'usage').usage, { prompt_tokens: 10 });
+});
+
+for (const stream of [true, false]) {
+  test(`Chat refusal delta retains refusal classification (stream=${stream})`, async () => {
+    const frames = [{ choices: [{ delta: { refusal: 'fixture refusal' }, finish_reason: null }] },
+      { choices: [{ delta: {}, finish_reason: 'stop' }] }];
+    const adapter = createProviders({ fetchImpl: async () => sse(frames) }).opencode;
+    const events = await collect(adapter.generate({ connection, credentials: {}, body: {
+      model: 'space-bunny-free', messages, stream } }));
+    assert.equal(events.at(-1).finishReason, 'content_filter');
+    assert.equal(events.find(e => e.type === 'delta').delta.content, 'fixture refusal');
+  });
+}
+
+test('Responses refusal delta retains refusal classification', async () => {
+  const adapter = createProviders({ fetchImpl: async () => sse([
+    { type: 'response.refusal.delta', delta: 'fixture refusal' },
+    { type: 'response.completed', response: { status: 'completed' } }]) }).opencode;
+  const events = await collect(adapter.generate({ connection, credentials: {}, body: {
+    model: 'muse-spark-1.3-contributor-free', messages, stream: true } }));
+  assert.equal(events.at(-1).finishReason, 'content_filter');
+  assert.equal(events.find(e => e.type === 'delta').delta.refusal, 'fixture refusal');
 });

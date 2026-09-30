@@ -88,6 +88,7 @@ def test_budget_exhausted_child_returns_diagnosis(tmp_path):
     assert child['reason'] == STEP_BUDGET_NOTICE_CODE
     assert child['diagnosis'] is True and child['stuckReason'] == STEP_BUDGET_NOTICE_CODE
     assert child['answerChars'] > 0 and CHILD_DIAGNOSIS in child['summary']
+    assert child['summary'] == CHILD_DIAGNOSIS, 'chẩn đoán do model viết giữ nguyên, không thêm metadata'
     assert child['is_error'] is False, 'chẩn đoán là kết quả DÙNG ĐƯỢC, không phải lỗi'
     # Bốn phần, đúng bốn nhãn mà câu chỉ dẫn yêu cầu (câu chỉ dẫn nói tiếng Anh, câu trả lời
     # của con theo tiếng của phiên — cùng bốn phần, không phải cùng ngôn ngữ).
@@ -131,5 +132,6 @@ def test_a_really_failing_child_stays_failed(tmp_path):
 
     assert child['status'] == 'failed'
     assert child['is_error'] is True and child['answerChars'] == 0
+    assert child['summary'] == '', 'lỗi thật chỉ ở metadata; không tạo báo cáo diagnostic giả'
     assert 'diagnosis' not in child
     store.close()

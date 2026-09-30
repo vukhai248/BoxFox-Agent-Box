@@ -413,10 +413,15 @@ export function normalizeOpencodeReasoning(model, body = {}) {
 
 function usageFrom(input) {
   if (!input) return null;
+  const known = value => Number.isInteger(value) && value >= 0;
+  const total = known(input.total_tokens) ? input.total_tokens
+    : known(input.input_tokens) && known(input.output_tokens) ? input.input_tokens + input.output_tokens : null;
   return {
-    prompt_tokens: input.input_tokens || 0,
-    completion_tokens: input.output_tokens || 0,
-    total_tokens: input.total_tokens || ((input.input_tokens || 0) + (input.output_tokens || 0)),
+    ...(known(input.input_tokens) ? { prompt_tokens: input.input_tokens } : {}),
+    ...(known(input.output_tokens) ? { completion_tokens: input.output_tokens } : {}),
+    ...(total !== null ? { total_tokens: total } : {}),
+    ...(Number.isInteger(input.output_tokens_details?.reasoning_tokens)
+      ? { reasoning_tokens: input.output_tokens_details.reasoning_tokens } : {}),
   };
 }
 
@@ -432,6 +437,7 @@ async function* translateResponsesStream(response) {
   let nextToolIndex = 0;
   let sawToolCall = false;
   let finishReason = null;
+  let refused = false;
 
   const toolIndexOf = outputIndex => {
     if (toolIndexByOutput.has(outputIndex)) return toolIndexByOutput.get(outputIndex);
@@ -448,6 +454,11 @@ async function* translateResponsesStream(response) {
 
     if (data.type === 'response.output_text.delta' && data.delta) {
       yield { type: 'delta', delta: { content: data.delta } };
+      continue;
+    }
+    if (data.type === 'response.refusal.delta' && data.delta) {
+      refused = true;
+      yield { type: 'delta', delta: { content: data.delta, refusal: data.delta } };
       continue;
     }
     if (typeof data.type === 'string' && /^response\.(reasoning|reasoning_summary|thought)/.test(data.type) && data.delta) {
@@ -496,20 +507,19 @@ async function* translateResponsesStream(response) {
       const detail = data.response?.error?.message || data.error?.message || data.message || 'OpenCode Free stream failed.';
       throw new RouterError('UNAVAILABLE', `OpenCode Free stream failed: ${String(detail).slice(0, 300)}`, 502, true);
     }
-    if (data.type === 'response.completed' || data.type === 'response.done') {
+    if (data.type === 'response.completed' || data.type === 'response.done' || data.type === 'response.incomplete') {
       const usage = usageFrom(data.response?.usage);
       if (usage) yield { type: 'usage', usage };
-      finishReason = sawToolCall ? 'tool_calls' : normalizeFinishReason(data.response?.status === 'incomplete' ? 'length' : 'stop');
+      const incomplete = data.type === 'response.incomplete' || data.response?.status === 'incomplete';
+      const reason = data.response?.incomplete_details?.reason;
+      finishReason = refused || reason === 'content_filter' ? 'content_filter'
+        : incomplete ? (reason === 'max_output_tokens' ? 'length' : 'stream_incomplete')
+          : sawToolCall ? 'tool_calls' : 'stop';
       continue;
     }
   }
-  // A `response.completed`/`response.done` event is the ONLY thing that sets `finishReason`
-  // above, but the `finish` line is synthesised by US - so a stream cut mid-answer (no
-  // terminal event, hence no `finishReason`) must not be reported as a clean stop.
-  // Measured live 2026-09-26 on a `muse-spark-1.3-contributor-free` review turn: the
-  // severed answer looked complete, so a critique without its required final `VERDICT:`
-  // line passed as a finished critique. `length` is the honest reason.
-  yield { type: 'finish', finishReason: finishReason || 'length' };
+  // EOF proves a missing terminal event, not that the output budget was exhausted.
+  yield { type: 'finish', finishReason: finishReason || 'stream_incomplete' };
 }
 
 async function* aggregate(events) {
@@ -518,13 +528,7 @@ async function* aggregate(events) {
   const calls = new Map();
   let usage = null;
   let finishReason = 'stop';
-  // A `finish` event is the provider SAYING it finished. `aggregate` folds a provider stream into
-  // ONE response, so a stream that ended without that event was cut: the aggregated `stop` default
-  // would hand the caller a severed answer that looks complete (measured live 2026-09-26 on a
-  // `muse-spark-1.3-contributor-free` review turn - a critique without its required final
-  // `VERDICT:` line passed as a finished critique). The harness reads this field on its
-  // non-streaming fallback after a broken SSE channel, so `length` is the honest reason and it wins
-  // over the tool-call guess below.
+  // Missing terminal events remain distinct from a provider-reported output limit.
   let sawFinish = false;
   for await (const event of events) {
     if (event.type === 'delta') {
@@ -553,7 +557,7 @@ async function* aggregate(events) {
   }
   if (Object.keys(delta).length) yield { type: 'delta', delta };
   if (usage) yield { type: 'usage', usage };
-  if (!sawFinish) finishReason = 'length';
+  if (!sawFinish) finishReason = 'stream_incomplete';
   else if (calls.size && finishReason === 'stop') finishReason = 'tool_calls';
   yield { type: 'finish', finishReason };
 }
@@ -734,6 +738,8 @@ export function createOpenCodeAdapter({ fetchImpl }) {
 
 /** The chat-completions branch, used by every non-`muse-spark` id. */
 async function* translateChatStream(response) {
+  let sawFinish = false;
+  let refused = false;
   for await (const event of sseEvents(response)) {
     if (!event.data || event.data === '[DONE]') continue;
     const data = parseJson(event.data);
@@ -741,10 +747,17 @@ async function* translateChatStream(response) {
     if (data.error) throw providerError(data?.error?.status || 502, true, data?.error?.message || null);
     const choice = data.choices?.[0];
     const reasoning = choice?.delta?.reasoning_content || choice?.delta?.reasoning || choice?.delta?.thought;
-    if (choice?.delta && (choice.delta.content || choice.delta.tool_calls?.length || reasoning)) {
-      yield { type: 'delta', delta: { ...choice.delta, ...(reasoning ? { reasoning_content: reasoning } : {}) } };
+    if (choice?.delta?.refusal) refused = true;
+    if (choice?.delta && (choice.delta.content || choice.delta.tool_calls?.length || reasoning || choice.delta.refusal)) {
+      yield { type: 'delta', delta: { ...choice.delta,
+        ...(choice.delta.refusal && !choice.delta.content ? { content: choice.delta.refusal } : {}),
+        ...(reasoning ? { reasoning_content: reasoning } : {}) } };
     }
     if (data.usage) yield { type: 'usage', usage: data.usage };
-    if (choice?.finish_reason) yield { type: 'finish', finishReason: normalizeFinishReason(choice.finish_reason) };
+    if (choice?.finish_reason) {
+      sawFinish = true;
+      yield { type: 'finish', finishReason: refused ? 'content_filter' : normalizeFinishReason(choice.finish_reason) };
+    }
   }
+  if (!sawFinish) yield { type: 'finish', finishReason: 'stream_incomplete' };
 }

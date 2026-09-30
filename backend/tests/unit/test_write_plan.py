@@ -231,6 +231,24 @@ def test_write_plan_rejects_an_unusable_slug(tmp_path):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize('value', [None, '', '   ', 42, True, {'name': 'plan'}, ['plan']])
+def test_plan_slug_requires_nonempty_string(value):
+    with pytest.raises(ValueError, match='PLAN_SLUG_INVALID: slug.*non-empty string'):
+        plan_slug(value)
+
+
+@pytest.mark.parametrize('args,code', [
+    ({'markdown': PLAN_MARKDOWN}, 'PLAN_SLUG_INVALID'),
+    ({'slug': 42, 'markdown': PLAN_MARKDOWN}, 'PLAN_SLUG_INVALID'),
+    ({'slug': 'valid-plan'}, 'PLAN_INVALID'),
+])
+def test_worker_plan_argument_errors_are_coded_and_write_nothing(tmp_path, monkeypatch, args, code):
+    monkeypatch.setattr(worker, 'ROOT', tmp_path.resolve())
+    with pytest.raises(ValueError, match=code):
+        worker.write_plan(args)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_write_plan_refuses_a_lying_sandbox(tmp_path):
     """plan_written is never emitted unless the sandbox confirms a real plan path."""
 

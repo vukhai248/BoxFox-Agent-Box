@@ -48,7 +48,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      PLAN_VERIFY_MAX_ISSUES, PLAN_VERIFY_MODES, PLAN_VERIFY_REVISE_MAX,
                      PLAN_VERIFY_SUMMARY_CHARS,
                      ROUTER_BODY_BUDGET, STEP_BUDGET_NOTICE_CODE, STEPS_CLAMP_NOTICE_CODE,
-                     TRUNCATED_OUTPUT_MAX_TOKENS, TRUNCATED_OUTPUT_NOTICE_CODE, TURN_INDEX_DRIFT_CODE,
+                     TRUNCATED_OUTPUT_NOTICE_CODE, TURN_INDEX_DRIFT_CODE,
                      READ_STORE_MAX_ENTRIES, WEB_READER_DEFAULT_MODE, WEB_READER_ENV,
                      WEB_READER_MODES, WEB_READER_MODE_UNKNOWN_CODE,
                      WEB_READ_STORE_DEFAULT_MODE, WEB_READ_STORE_ENV, WEB_READ_STORE_MODES,
@@ -64,7 +64,7 @@ from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX
                      DECISION_NOTE_REQUIRED_CODE,
                      DECISION_NOTE_TOO_LONG_CODE, DECISION_OTHER_LABEL, DECISION_OTHER_OPTION_ID,
                      OWNER_STEER_PREFIX, PLAN_VERDICT_NUDGE_PREFIX, RESEARCH_NUDGE_PREFIX)
-from . import evidence_gate, journal, plan_eval, plan_header, plan_registry, session_journal
+from . import evidence_gate, journal, output_policy, plan_eval, plan_header, plan_registry, session_journal
 from .tool_contracts import schemas_for, reflection_hint
 from .tool_groups import TOOL_GROUPS
 from .web import WebTools
@@ -700,6 +700,9 @@ def aggregate_model_metadata(rows):
         aggregate['contextWindowSource'] = context_source
     if shared:
         aggregate['thinkingLevels'] = shared
+    ceilings = [output_policy.model_output_ceiling(row) for row in usable]
+    if all(value is not None for value in ceilings):
+        aggregate['maxOutputTokens'] = min(ceilings)
     return aggregate
 
 
@@ -805,6 +808,27 @@ class RouterClient:
             system_log.write('model.request_trimmed', level='warn', session_id=route.get('sessionId'),
                              chars=freed, phase=phase, budgetBytes=ROUTER_BODY_BUDGET)
         async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
+            content = ''
+            reasoning_content = ''
+            refusal = ''
+            tool_calls = {}
+            finish_reason = 'stream_incomplete'
+            saw_finish = False
+            req_id = 'resp_' + uuid.uuid4().hex[:12]
+            usage = None
+            boxfox_meta = None
+            stream_error = None
+
+            def assembled():
+                return {'id': req_id, 'choices': [{'index': 0, 'message': {
+                    'role': 'assistant', 'content': content or None,
+                    'reasoning_content': reasoning_content or None,
+                    **({'refusal': refusal} if refusal else {}),
+                    'tool_calls': list(tool_calls.values())},
+                    'finish_reason': finish_reason if saw_finish else 'stream_incomplete'}],
+                    'usage': usage, 'boxfox': boxfox_meta,
+                    **({'stream_error': stream_error} if stream_error else {})}
+
             try:
                 async with client.stream(
                     'POST',
@@ -814,17 +838,6 @@ class RouterClient:
                 ) as response:
                     if response.is_error:
                         raise router_refusal(response.status_code, await response.aread())
-
-                    content = ''
-                    reasoning_content = ''
-                    tool_calls = {}
-                    finish_reason = 'stop'
-                    # A cut stream SAYS NOTHING: an OpenAI-compatible stream ends with a chunk
-                    # carrying `finish_reason`, so its absence is the truncation signal.
-                    saw_finish = False
-                    req_id = 'resp_' + uuid.uuid4().hex[:12]
-                    usage = None
-                    boxfox_meta = None
 
                     async for line in response.aiter_lines():
                         if not line or not line.startswith('data:'):
@@ -842,6 +855,8 @@ class RouterClient:
                             boxfox_meta = chunk['boxfox']
                         if chunk.get('usage'):
                             usage = chunk['usage']
+                        if isinstance(chunk.get('error'), dict):
+                            stream_error = {k: chunk['error'][k] for k in ('code', 'message', 'type') if k in chunk['error']}
                         choices = chunk.get('choices') or []
                         if not choices:
                             continue
@@ -850,6 +865,8 @@ class RouterClient:
                             finish_reason = choice['finish_reason']
                             saw_finish = True
                         delta = choice.get('delta') or {}
+                        if delta.get('refusal'):
+                            refusal += delta['refusal']
                         if delta.get('content'):
                             content += delta['content']
                             if on_content and callable(on_content):
@@ -882,32 +899,9 @@ class RouterClient:
                                 old['thought_signature'] = sig
                                 old['thoughtSignature'] = sig
 
-                    if not saw_finish:
-                        # Measured live 2026-09-26 on a `muse-spark-1.3-contributor-free` review turn:
-                        # the provider cut the answer mid-sentence, sent no usage and no final chunk, and
-                        # the default `stop` above made that severed answer look complete - so a review
-                        # without its required final `VERDICT:` line passed as a finished review and the
-                        # parent burned 40 tool calls chasing a line that never arrived. `length` is the
-                        # honest reason here: it is the one the C2 branch already turns into
-                        # PROVIDER_OUTPUT_TRUNCATED (status `partial`), instead of a clean stop.
-                        finish_reason = 'length'
-                    if not content and not tool_calls:
+                    if not content and not tool_calls and not reasoning_content and not refusal and not saw_finish:
                         raise ValueError('Upstream did not return any SSE completion content')
-                    return {
-                        'id': req_id,
-                        'choices': [{
-                            'index': 0,
-                            'message': {
-                                'role': 'assistant',
-                                'content': content or None,
-                                'reasoning_content': reasoning_content or None,
-                                'tool_calls': list(tool_calls.values()) if tool_calls else []
-                            },
-                            'finish_reason': finish_reason
-                        }],
-                        'usage': usage,
-                        'boxfox': boxfox_meta
-                    }
+                    return assembled()
             except Exception as exc:
                 # The router already gave a verdict (a rate limit, an auth failure, an unknown
                 # model, an unreachable provider): repeating the same call without the stream
@@ -918,6 +912,10 @@ class RouterClient:
                 verdict = getattr(exc, 'router_status', None)
                 if verdict is not None:
                     raise
+                # Preserve already streamed work. Reposting after a dropped socket can
+                # duplicate a paid request and replace useful partial text/tool arguments.
+                if content or tool_calls or reasoning_content or refusal:
+                    return assembled()
                 res = await client.post(self.url + '/api/router/chat',
                     headers={'x-boxfox-admin': '1'}, json={**route, 'messages': messages,
                         'tools': tools, 'stream': False, 'max_tokens': max_tokens})
@@ -1263,7 +1261,9 @@ class DecisionError(Exception):
 
 def plan_slug(value):
     """Normalize a plan slug to the filename rule enforced by plan_files.py, or refuse it."""
-    text = re.sub(r'[^a-z0-9]+', '-', str(value or '').strip().lower()).strip('-')[:PLAN_MAX_SLUG].rstrip('-')
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('PLAN_SLUG_INVALID: slug is required and must be a non-empty string, e.g. workspace-plan')
+    text = re.sub(r'[^a-z0-9]+', '-', value.strip().lower()).strip('-')[:PLAN_MAX_SLUG].rstrip('-')
     if not text or not PLAN_SLUG_RE.fullmatch(text):
         raise ValueError('PLAN_SLUG_INVALID: slug must be lowercase words separated by single dashes, e.g. workspace-plan')
     return text
@@ -1856,6 +1856,9 @@ class HarnessRuntime(RuntimeCommands):
                   # Cắt bằng hằng số dùng chung: phía giao diện đọc đúng con số này từ
                   # `limits.py` (qua `runtime-info`), không chép tay lại lần thứ hai.
                   'instructions': str(values.get('instructions', ''))[:INSTRUCTIONS_MAX_CHARS]}
+        for field in ('maxTokens', 'outputTokenCeiling'):
+            if field in values:
+                config[field] = output_policy.positive_budget(values[field], field)
         if role == 'orchestrator':
             config['workTools'] = True
         if single_model:
@@ -2623,7 +2626,7 @@ class HarnessRuntime(RuntimeCommands):
         ngân sách" vì hai ca cần hai cách xử lý khác nhau.
         """
         for code in (TRUNCATED_OUTPUT_NOTICE_CODE, STEP_BUDGET_NOTICE_CODE, DEADLINE_NOTICE_CODE,
-                     ANSWER_TOO_LONG_CODE):
+                     ANSWER_TOO_LONG_CODE, output_policy.STREAM_INTERRUPTED_CODE, output_policy.REASONING_ONLY_CODE):
             if self._notice_seen(sid, code):
                 return code
         return None
@@ -2735,7 +2738,9 @@ class HarnessRuntime(RuntimeCommands):
                         # provider cho cả đường hạn chót.
                         for _ in range(WRAP_UP_READ_TOOL_CALLS):
                             response = await self.client.complete(request, read_schemas, config['route'],
-                                                                  max_tokens=WRAP_UP_MAX_TOKENS)
+                                max_tokens=output_policy.request_budget({**config, 'maxTokens': WRAP_UP_MAX_TOKENS}))
+                            if output_policy.completion_reason(response) != 'complete':
+                                break  # A partial tool argument is never admitted to execution.
                             message = (response.get('choices') or [{}])[0].get('message') or {}
                             text = (message.get('content') or '').strip()
                             calls = list(message.get('tool_calls') or [])
@@ -2780,7 +2785,7 @@ class HarnessRuntime(RuntimeCommands):
                                                 'content': json.dumps(safe, ensure_ascii=False)[:8000]})
                 # Câu trả lời cuối: KHÔNG tool. Model phải nói ra bốn phần chẩn đoán bằng chữ.
                 response = await self.client.complete(list(messages) + [{'role': 'user', 'content': prompt}],
-                                                      [], config['route'], max_tokens=WRAP_UP_MAX_TOKENS)
+                    [], config['route'], max_tokens=output_policy.request_budget({**config, 'maxTokens': WRAP_UP_MAX_TOKENS}))
                 message = (response.get('choices') or [{}])[0].get('message') or {}
                 return (message.get('content') or '').strip(), read_calls
         except Exception as exc:
@@ -3355,7 +3360,9 @@ class HarnessRuntime(RuntimeCommands):
         try:
             async with asyncio.timeout(limit):
                 response = await self.client.complete(list(messages) + [prompt], [], config['route'],
-                                                      max_tokens=EVIDENCE_REPAIR_MAX_TOKENS)
+                    max_tokens=output_policy.request_budget({**config, 'maxTokens': EVIDENCE_REPAIR_MAX_TOKENS}))
+                if output_policy.completion_reason(response) != 'complete':
+                    return None
         except Exception as exc:
             system_log.write('evidence.repair_failed', level='warn', session_id=sid,
                              code=EVIDENCE_GATE_FAILED_CODE, message=str(exc)[:200])
@@ -3991,7 +3998,36 @@ class HarnessRuntime(RuntimeCommands):
                 output_tokens = (usage or {}).get('output_tokens') if isinstance(usage, dict) else None
             if isinstance(output_tokens, int) and not isinstance(output_tokens, bool):
                 payload['outputTokens'] = output_tokens
+            if model_attempts:
+                payload['completionAttempts'] = len(model_attempts)
+                counts = [a['outputTokens'] for a in model_attempts]
+                payload['completionUsageComplete'] = all(v is not None for v in counts)
+                if payload['completionUsageComplete']:
+                    payload['outputTokens'] = sum(counts)
+                else:
+                    payload.pop('outputTokens', None)
+                    payload['knownOutputTokens'] = sum(v for v in counts if v is not None)
             self.store.emit(sid, 'turn_end', payload)
+
+        model_attempts = []
+
+        def record_completion(response, tokens, recovery=None):
+            choice = (response.get('choices') or [{}])[0]
+            message = choice.get('message') or {}
+            reason = output_policy.completion_reason(response)
+            payload = {'turn': turn_no, 'step': steps_used, 'attempt': len(model_attempts) + 1,
+                       'requestedMaxTokens': tokens, 'finishReason': choice.get('finish_reason'),
+                       'reason': reason, 'recovery': recovery, **output_policy.usage_counts(response.get('usage'))}
+            if response.get('stream_error'):
+                payload['streamError'] = response['stream_error']
+            if reason != 'complete':
+                payload['partialText'] = message.get('content') or ''
+                payload['reasoningChars'] = len(message.get('reasoning_content') or message.get('thought') or '')
+                if message.get('tool_calls'):
+                    payload['unexecutedToolCalls'] = copy.deepcopy(message['tool_calls'])
+            model_attempts.append(payload)
+            self.store.emit(sid, 'completion_attempt', payload)
+            return reason
 
         async def evidence_block(text, step_no=None):
             """Cổng bằng chứng (P3.1–P3.4) — chèn giữa câu trả lời cuối và lúc phát nó.
@@ -4156,8 +4192,13 @@ class HarnessRuntime(RuntimeCommands):
             async with asyncio.timeout(turn_budget) as budget:
                 self.run_budget[sid] = budget
                 for step in range(config['maxSteps']):
+                    model_attempts.clear()
                     async def summarize(history, max_tokens=None):
-                        return await self.client.complete(history, [], config['route'], max_tokens=max_tokens or 2048)
+                        response = await self.client.complete(history, [], config['route'], max_tokens=
+                            output_policy.request_budget({**config, 'maxTokens': max_tokens or 2048}))
+                        if output_policy.completion_reason(response) != 'complete':
+                            raise ValueError('PROVIDER_SUMMARY_INCOMPLETE: context summary did not finish')
+                        return response
                     compressor = self.compressors.get(sid)
                     if compressor is None or compressor.context_window != config['contextWindow']:
                         compressor = self.compressors[sid] = ContextCompressor(config['contextWindow'])
@@ -4282,8 +4323,9 @@ class HarnessRuntime(RuntimeCommands):
                                 if recap:
                                     request_messages = list(request_messages) + [
                                         {'role': 'user', 'content': recap}]
+                            request_tokens = output_policy.request_budget(config, estimate_tokens(request_messages, tools))
                             response = await self.client.complete(request_messages, tools, config['route'], on_thought=handle_thought, on_content=handle_content,
-                                                                  max_tokens=config.get('maxTokens') or 4096)
+                                                                  max_tokens=request_tokens)
                             break
                         except Exception as exc:
                             code, message = classify_failure(exc)
@@ -4369,61 +4411,22 @@ class HarnessRuntime(RuntimeCommands):
                     if reading:
                         self.last_usage[sid] = reading
                     choice = response['choices'][0]
-                    # C2 — nhà cung cấp cắt ở trần output: `finishReason: length`, 0 tool call.
-                    # Đo sống 2026-09-21: phiên con `6bd868ad…` trả `outputTokens: 4096`,
-                    # `toolCalls: 0` → `TURN_EMPTY_RESPONSE`, KHÔNG thử lại lần nào, và phiên
-                    # cha đọc kết quả đó thành con `failed` — trong khi đây là lỗi TẠM THỜI của
-                    # nhà cung cấp: cùng câu hỏi, xin ít token hơn, là có câu trả lời. Thử lại
-                    # ĐÚNG MỘT lần với `TRUNCATED_OUTPUT_MAX_TOKENS` và KHÔNG gửi tool schema
-                    # (chính bộ tool là thứ vừa ngốn hết trần). Đây không phải lượt thử lại của
-                    # `retry_advice` (bộ đó lo lỗi mạng/429), nên không đụng vào nó.
-                    truncated_retry = False
+                    # W3: keep useful partial text/calls instead of replaying a long history.
+                    # Only an empty answer gets one bounded recovery request, without halving output.
+                    completion = record_completion(response, request_tokens)
                     truncated_partial = False
-                    if not (choice['message'].get('tool_calls') or []) and choice.get('finish_reason') == 'length':
-                        _reset_stream()
-                        response = await self.client.complete(request_messages, [], config['route'],
-                                                              on_thought=handle_thought,
-                                                              on_content=handle_content,
-                                                              max_tokens=max(TRUNCATED_OUTPUT_MAX_TOKENS,
-                                                                             (config.get('maxTokens') or 0) // 2))
-                        reading = usage_reading(response.get('usage'), len(messages))
-                        if reading:
-                            self.last_usage[sid] = reading
-                        choice = response['choices'][0]
-                        truncated_retry = True
                     message = choice['message']
                     text, calls = message.get('content') or '', message.get('tool_calls') or []
                     thought = message.get('reasoning_content') or message.get('thought') or choice.get('reasoning_content') or ''
-                    if truncated_retry and not calls and (choice.get('finish_reason') == 'length' or not text.strip()):
-                        # Vẫn bị cắt sau khi đã xin ít token hơn: đây là SỰ THẬT của lượt này,
-                        # không phải lỗi hạ tầng. Nói ra bằng một notice BỀN — đó là bản ghi duy
-                        # nhất sống sót qua `store.save`, nên `delegate` đọc nó (xem
-                        # `truncated_turn`) để không báo với cha rằng con đã xong. Cờ
-                        # `truncated_partial` chỉ đổi ĐÚNG hai chỗ ở dưới: bỏ qua phép kiểm
-                        # "câu trả lời phải trọn vẹn" và ghi ranh giới lượt là `partial`. Hàng
-                        # `sessions` vẫn `completed` (giữ nguyên từ vựng trạng thái cũ); không
-                        # đường nào ở đây ghi `completed` cho một câu trả lời trọn vẹn.
-                        self.store.emit(sid, 'notice', {
-                            'code': TRUNCATED_OUTPUT_NOTICE_CODE,
-                            'partial': True,
-                            'outputTokens': (response.get('usage') or {}).get('completion_tokens'),
-                            'message': (f'{TRUNCATED_OUTPUT_NOTICE_CODE}: the provider ended the answer '
-                                        f'before its terminal chunk twice (an output cap OR a severed '
-                                        f'stream) — this turn only produced a partial answer'),
-                        })
-                        truncated_partial = True
-                    if not calls and not truncated_partial and (choice.get('finish_reason') not in {'stop', 'end_turn'} or not text.strip()):
-                        # B8 — `TURN_EMPTY_RESPONSE`: model đã suy nghĩ (thought delta đã phát)
-                        # nhưng không trả chữ nào và không gọi công cụ. Đo sống vòng 21 (BUG-41):
-                        # lượt như vậy đóng thẳng bằng lỗi, KHÔNG thử lại lần nào, dù cùng câu
-                        # hỏi hỏi lại là có câu trả lời. Thử ĐÚNG MỘT lần, hai cách khác nhau:
-                        #   - route KHÔNG có `thinkingLevel` ⇒ `tool_choice: 'required'` trong
-                        #     bản SAO của route (một request, không lưu vào config) — model buộc
-                        #     phải hành động;
-                        #   - route CÓ `thinkingLevel` ⇒ bỏ tool và xin câu trả lời bằng chữ, vì
-                        #     nhà cung cấp từ chối `required` khi bật thinking (400).
-                        empty_retry = {'reset': True}
-                        if (config['route'] or {}).get('thinkingLevel'):
+                    if completion == 'provider_refusal':
+                        raise ValueError('UPSTREAM_REFUSAL: ' + str(message.get('refusal') or text or 'provider refused the completion')[:500])
+                    if completion == 'provider_error':
+                        raise ValueError('PROVIDER_COMPLETION_FAILED: ' + str(text or 'provider reported a failed completion')[:500])
+                    recovery_size = len(json.dumps(request_messages, ensure_ascii=False))
+                    if not text.strip() and not calls and completion != 'complete' and recovery_size <= output_policy.RECOVERY_INPUT_MAX_CHARS:
+                        # Preserve B8's action retry for an empty normal response. Output/stream
+                        # exhaustion uses plain-text finalization; route/thinking settings stay intact.
+                        if completion in {'output_limit', 'stream_interrupted'} or (config['route'] or {}).get('thinkingLevel'):
                             empty_how = 'plain-text'
                             retry_messages = request_messages + [{'role': 'user', 'content': EMPTY_ANSWER_INSTRUCTION}]
                             retry_tools, retry_route = [], config['route']
@@ -4431,11 +4434,13 @@ class HarnessRuntime(RuntimeCommands):
                             empty_how = 'tool-choice-required'
                             retry_messages, retry_tools = request_messages, tools
                             retry_route = {**config['route'], 'tool_choice': 'required'}
+                        recovery_tokens = min(request_tokens, output_policy.request_budget(config, estimate_tokens(retry_messages, retry_tools)))
                         _reset_stream()
                         response = await self.client.complete(retry_messages, retry_tools, retry_route,
                                                               on_thought=handle_thought,
                                                               on_content=handle_content,
-                                                              max_tokens=config.get('maxTokens') or 4096)
+                                                              max_tokens=recovery_tokens)
+                        completion = record_completion(response, recovery_tokens, empty_how)
                         reading = usage_reading(response.get('usage'), len(messages))
                         if reading:
                             self.last_usage[sid] = reading
@@ -4443,16 +4448,27 @@ class HarnessRuntime(RuntimeCommands):
                         message = choice['message']
                         text, calls = message.get('content') or '', message.get('tool_calls') or []
                         thought = message.get('reasoning_content') or message.get('thought') or choice.get('reasoning_content') or ''
-                        empty_retry.update({'attempt': 1, 'how': empty_how,
-                                            'code': 'TURN_EMPTY_RESPONSE_RETRY',
-                                            'message': (f'TURN_EMPTY_RESPONSE_RETRY: the model returned '
-                                                        f'nothing twice; retried once with {empty_how}')})
-                        self.store.emit(sid, 'notice', empty_retry)
+                        self.store.emit(sid, 'notice', {'reset': True, 'attempt': 1, 'how': empty_how,
+                            'code': 'TURN_EMPTY_RESPONSE_RETRY', 'message': f'Retried an empty completion once with {empty_how} at {recovery_tokens} output tokens.'})
                         system_log.write('turn.retry', level='warn', session_id=sid, turn_id=steps_used,
                                          turn=turn_no, step=steps_used,
                                          reason='empty_response', how=empty_how)
-                        if not calls and (choice.get('finish_reason') not in {'stop', 'end_turn'} or not text.strip()):
-                            raise ValueError('Model did not produce a complete non-empty final response')
+                    if completion == 'provider_refusal':
+                        raise ValueError('UPSTREAM_REFUSAL: ' + str(message.get('refusal') or text or 'provider refused the completion')[:500])
+                    if completion == 'provider_error':
+                        raise ValueError('PROVIDER_COMPLETION_FAILED: ' + str(text or 'provider reported a failed completion')[:500])
+                    if completion == 'empty':
+                        raise ValueError('Model did not produce a complete non-empty final response')
+                    if completion != 'complete':
+                        code = {'output_limit': TRUNCATED_OUTPUT_NOTICE_CODE,
+                                'stream_interrupted': output_policy.STREAM_INTERRUPTED_CODE,
+                                'reasoning_only': output_policy.REASONING_ONLY_CODE}[completion]
+                        self.store.emit(sid, 'notice', {'code': code, 'partial': True,
+                            'reason': completion, 'blockedToolCalls': len(calls),
+                            'outputTokens': output_policy.usage_counts(response.get('usage'))['outputTokens'],
+                            'message': f'{code}: completion is incomplete ({completion}); partial output preserved, unfinished tool calls were not executed.'})
+                        calls = []
+                        truncated_partial = True
                     # B3 chặng 1 — text trả về NGAY TRONG cửa sổ giữ chỗ là câu chốt bốn phần:
                     # model đã được yêu cầu chẩn đoán và đã trả lời, nên lượt đóng là `partial`
                     # kèm notice, y như chặng 2. Ngắn hơn `DIAGNOSIS_MIN_CHARS` thì không tính là
@@ -6784,6 +6800,7 @@ class HarnessRuntime(RuntimeCommands):
                                int(self.current_turn_seconds(parent_id)))
             child_deadline = min(CHILD_DEADLINE_SECONDS, live_ceiling,
                                  tier_limits['childSeconds'])
+        output_budget = output_policy.child_budget(role, work, task_kind)
         await self.acquire_child_slot(parent_id)
         try:
             child_route = route_for(configured.get('model')) or config['route']
@@ -6800,11 +6817,14 @@ class HarnessRuntime(RuntimeCommands):
             if research_question_id:
                 child['config']['researchQuestionId'] = research_question_id
             child['config']['taskKind'] = task_kind
+            if child_route == config['route'] and isinstance(config.get('modelMetadata'), dict):
+                child['config']['modelMetadata'] = config['modelMetadata']
+            if config.get('outputTokenCeiling') is not None:
+                child['config']['outputTokenCeiling'] = config['outputTokenCeiling']
+            if output_budget is not None:
+                child['config']['maxTokens'] = output_budget
             if work:
                 child['config']['workBinding'] = work
-                if work_graph.writes_document(work, role):
-                    # A full sub-plan or design plus thinking does not fit in 4096 output tokens.
-                    child['config']['maxTokens'] = work_graph.DOCUMENT_MAX_TOKENS
             if facet_id:
                 child['config']['facetId'] = facet_id
             self.store.update_config(child['id'], child['config'])
@@ -6946,11 +6966,12 @@ class HarnessRuntime(RuntimeCommands):
         # itself (events and the parent's tool result share this dict) and report the truth about it.
         answer_text = answer or ''
         summary, truncated = bound_child_text(answer_text, CHILD_ANSWER_MAX_CHARS)
-        diag = f"\n[Diagnostic: status={status}; error={last_error or 'none'}; tools_run={tools_run}]" if status != 'completed' else ""
         result = {'sessionId': child['id'], 'role': role, 'status': status,
                   'turn': turn, 'step': step, 'deliverTo': deliver_to,
                   'goal': echo_goal, 'context': echo_context, 'prompt': echo_prompt,
-                  'summary': summary + diag, 'answerChars': len(answer_text), 'truncated': truncated,
+                  # A report may end in a source URL or a Markdown table. Harness diagnostics
+                  # belong in the existing metadata fields, never in the report body.
+                  'summary': summary, 'answerChars': len(answer_text), 'truncated': truncated,
                   'is_error': status != 'completed', 'last_error': last_error, 'tools_run': tools_run}
         if work:
             result['work'] = work

@@ -54,7 +54,9 @@ PLAN_DECISION_ITEM = {'type': 'object', 'properties': {
 PLAN_QUESTION_ITEM = {'type': 'object', 'properties': {
     'id': STRING, 'field': STRING, 'text': STRING, 'why': STRING,
     'options': {'type': 'array', 'maxItems': 5, 'items': {'type': 'object', 'properties': {
-        'id': STRING, 'label': STRING}, 'required': ['id', 'label']}}},
+        'id': STRING, 'label': STRING,
+        'tradeoff': {'type': 'string', 'description': 'Short impact or tradeoff of this option.'}},
+        'required': ['id', 'label']}}},
     'required': ['id', 'field', 'text']}
 
 # --- Work Graph (lớp điều phối mới) ------------------------------------------------------------
@@ -88,8 +90,30 @@ def reflection_hint(name, code=None):
     Bản cũ là một câu chung (`AUTONOMOUS_DIAGNOSIS: ... invoke debug specialist`) cho MỌI lỗi, kể cả lỗi
     hình dạng đối số — model đọc nó như lời mời gọi `debug` thay vì sửa đúng một trường.
     """
+    prefix = f'AUTONOMOUS_DIAGNOSIS: `{name}` failed with {code or "an error"}. '
+    # Capability/transport failures and optimistic-lock conflicts are not schema errors.
+    # Keep the real error in the tool envelope; advise recovery without an automatic replay.
+    if code == 'WEB_SEARCH_UNAVAILABLE':
+        return prefix + ('Read `error` for missing provider configuration, HTTP refusals, or empty results. '
+                         'Changing query syntax cannot fix missing keys or provider access. Use another '
+                         'available source or web_fetch with a known public URL; otherwise report the '
+                         'capability gap. Do not retry identical arguments repeatedly.')
+    if code == 'WEB_FETCH_FAILED':
+        return prefix + ('Read `error` for the HTTP status or transport failure. Verify the source URL '
+                         'or try another accessible source; do not assume the argument schema is wrong '
+                         'and do not retry identical arguments repeatedly.')
+    if name == 'delegate_task' and not code:
+        return prefix + ('Read status, last_error, and reason in the result metadata, and use summary '
+                         'or the child transcript to locate unfinished work. A partial or failed child '
+                         'is not evidence of invalid delegation arguments; do not blindly repeat '
+                         'the same assignment.')
+    if name == 'plan_scope' and code == 'PLAN_REVISION_CONFLICT':
+        return prefix + ('Call plan_scope(action="status") to read the latest run and revision. Compare '
+                         'the pending change with that state, then retry once with its current revision '
+                         'only if the change still applies. Never guess a revision or blindly replay '
+                         'a stale mutation.')
     schema = next((item['function'] for item in SCHEMAS if item['function']['name'] == name), None)
-    base = (f'AUTONOMOUS_DIAGNOSIS: `{name}` failed with {code or "an error"}. Read `error`: it names the '
+    base = (prefix + 'Read `error`: it names the '
             'field and the rule. Fix only that input and call again once; never resend identical arguments.')
     if schema is None:
         return base
@@ -129,7 +153,9 @@ SCHEMAS = [
          ['path']),
     tool('file_write', 'Write a file inside the sandbox workspace.', {'path': STRING, 'content': STRING}, ['path', 'content']),
     tool('file_edit_block', 'Replace one exact block after reading the file.', {'path': STRING, 'old_text': STRING, 'new_text': STRING}, ['path', 'old_text', 'new_text']),
-    tool('codebase_glob', 'List workspace files matching a relative glob.', {'pattern': STRING}),
+    tool('codebase_glob',
+         'List workspace files matching a relative glob (default **/*). Brace expansion is unsupported: '
+         'use separate calls such as **/*.py and **/*.ts, not **/*.{py,ts}.', {'pattern': STRING}),
     tool('codebase_grep', 'Find literal text in workspace files.', {'query': STRING, 'path': STRING}, ['query']),
     tool('terminal_exec', 'Run Bash inside the sandbox, never on the host. Returns exit code and output.', {'command': STRING, 'timeout': {'type': 'integer'}}, ['command']),
     tool('computer_screen_capture',

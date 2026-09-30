@@ -220,8 +220,8 @@ def test_deadline_without_diagnosis_still_fails(tmp_path):
 
 def test_empty_response_is_retried_once_with_forced_tool_choice(tmp_path):
     # `length` KHÔNG phải ca này: đó là C2 (nhà cung cấp cắt ở trần output) và có đường riêng.
-    # Đây là lượt rỗng thật: không chữ, không tool, `finish_reason` không phải `stop`/`end_turn`.
-    client = FixtureModel([answer('', finish='content_filter'), answer('câu trả lời thật')])
+    # Empty success terminal is distinct from provider content_filter/refusal (which must not retry).
+    client = FixtureModel([answer('', finish='stop'), answer('câu trả lời thật')])
     store, _runtime, session = run_turn(tmp_path, client, prompt='đếm 1 tới 3')
     sid = session['id']
 
@@ -236,7 +236,7 @@ def test_empty_response_is_retried_once_with_forced_tool_choice(tmp_path):
 
 
 def test_empty_response_with_thinking_retries_without_tools(tmp_path):
-    client = FixtureModel([answer('', finish='content_filter'), answer('câu trả lời thật')])
+    client = FixtureModel([answer('', finish='stop'), answer('câu trả lời thật')])
     store, _runtime, session = run_turn(tmp_path, client, values={'thinkingLevel': 'high'})
     sid = session['id']
 

@@ -93,7 +93,9 @@ def test_every_step_opens_and_closes_a_turn(tmp_path):
     # `deadlineUsedMs`. Chúng có mặt ở MỌI lần đóng (mỗi bước một lần), nên lần đóng CUỐI là
     # con số của cả lượt.
     assert set(ends[0]) == {'turn', 'step', 'status', 'finishReason', 'toolCalls', 'contextEstimate',
-                            'outputTokens', 'stepsUsed', 'toolsRun', 'deadlineUsedMs'}
+                            'outputTokens', 'stepsUsed', 'toolsRun', 'deadlineUsedMs',
+                            'completionAttempts', 'completionUsageComplete'}
+    assert ends[0]['completionAttempts'] == 1 and ends[0]['completionUsageComplete'] is True
     assert [t['turn'] for t in ends] == [1, 1] and [t['step'] for t in ends] == [1, 2], \
         '`turn` là lượt (1), `step` là bước trong lượt (1 rồi 2)'
     assert starts[0]['modelId'] == 'deepseek-v4-flash'

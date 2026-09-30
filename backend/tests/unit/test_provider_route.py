@@ -122,6 +122,12 @@ MODEL_B = 'gpt-5.4'
 PROVIDER = 'opencode'
 
 
+def test_aggregate_output_ceiling_requires_every_target_to_publish_it():
+    rows = [model_row(maxOutputTokens=16000), model_row(maxOutputTokens=8000)]
+    assert aggregate_model_metadata(rows)['maxOutputTokens'] == 8000
+    assert 'maxOutputTokens' not in aggregate_model_metadata(rows + [model_row()])
+
+
 def test_aggregate_takes_the_smallest_context_window():
     """Hai connection cùng model, số công bố lệch nhau: lấy số NHỎ, nguồn đi theo hàng đó.
 

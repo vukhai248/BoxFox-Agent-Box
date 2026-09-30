@@ -1,0 +1,2123 @@
+{
+  "schema": "boxfox-w3-eval/1",
+  "measurementDate": "2026-10-01",
+  "branch": "B",
+  "model": "opencode/space-bunny-free",
+  "clinicalSemanticReview": false,
+  "harnessDAGLiveTest": false,
+  "notes": [
+    "Raw model reports/logs stay in gitignored .tmp/. No real patient data or production Harness session was used.",
+    "Production relay stays at 90 seconds. Isolated relay uses B adapter and a 240-second evaluation deadline.",
+    "V2 coverage accepts nested Markdown headings; original results remain intact. Both are structural proxies.",
+    "Unknown output ceiling remains unknown. Accepted max_tokens is not proof of model capability.",
+    "Concurrent independent measurement processes share the selected provider. Latency is not a controlled throughput benchmark.",
+    "No 32k measurement: documentation failures are stream/time interruptions, not demonstrated 16k token exhaustion."
+  ],
+  "records": [
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 4096,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 4096,
+        "total_tokens": 5413,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3273
+        }
+      },
+      "chars": 1580,
+      "missingSections": [
+        "Chỉ số",
+        "Bộ dữ liệu",
+        "Baseline",
+        "Bác sĩ chấm",
+        "Ngưỡng",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 39.214,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-evaluation-4096-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Chỉ số",
+          "Bộ dữ liệu",
+          "Baseline",
+          "Bác sĩ chấm",
+          "Ngưỡng",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "72173d176d9f1d41aec69419ada066efaf0318b4c8ed49714ce3920a040b50db",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 4096,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 4096,
+        "total_tokens": 5413,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3603
+        }
+      },
+      "chars": 962,
+      "missingSections": [
+        "Chỉ số",
+        "Bộ dữ liệu",
+        "Baseline",
+        "Bác sĩ chấm",
+        "Ngưỡng",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 41.135,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-evaluation-4096-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Chỉ số",
+          "Bộ dữ liệu",
+          "Baseline",
+          "Bác sĩ chấm",
+          "Ngưỡng",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "31c1a258d04536473d5cda7b250b16e02799f37884801d0c74083c6c2b375c0b",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 4096,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 4096,
+        "total_tokens": 5405,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2081
+        }
+      },
+      "chars": 3827,
+      "missingSections": [
+        "Phương án",
+        "Dữ liệu",
+        "Chi phí",
+        "Đánh giá",
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 42.17,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-options-4096-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Dữ liệu",
+          "Chi phí",
+          "Đánh giá",
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "6343f5b304d2c1202e6fa229b2e578a5dd1a59344caffb9910ad77b9933f970b",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 4096,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 4096,
+        "total_tokens": 5405,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3246
+        }
+      },
+      "chars": 1694,
+      "missingSections": [
+        "Dữ liệu",
+        "Chi phí",
+        "Đánh giá",
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 36.216,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-options-4096-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Dữ liệu",
+          "Chi phí",
+          "Đánh giá",
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "51f7574e351f3c1269ee4c56c54a2eb2a6a5f7b485d6315bd34ca37e9ebdf6c0",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 8192,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 8192,
+        "total_tokens": 9509,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2746
+        }
+      },
+      "chars": 10704,
+      "missingSections": [
+        "Ngưỡng",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 85.594,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-evaluation-8192-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Ngưỡng",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "612af6cd1901c3c555ec55fa0a60c648419879fb4e5a56878e5f4fb8a235f1b2",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 8192,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 8192,
+        "total_tokens": 9509,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 4221
+        }
+      },
+      "chars": 8514,
+      "missingSections": [
+        "Bác sĩ chấm",
+        "Ngưỡng",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 8,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 85.141,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-evaluation-8192-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Bác sĩ chấm",
+          "Ngưỡng",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 8,
+        "contracts": 0
+      },
+      "reportSha256": "b55ebc0cb41e7813058e81f94b6a59cb822a69dc7f9a9dd45191c533dd64eee5",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 8192,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 8192,
+        "total_tokens": 9501,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3695
+        }
+      },
+      "chars": 8962,
+      "missingSections": [
+        "Đánh giá",
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 76.304,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-options-8192-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Đánh giá",
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "2c1827a8bfdd6ea04db9d99e2063500f2d62dc7df1d50c27955de747aef391d3",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 8192,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 8192,
+        "total_tokens": 9501,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        }
+      },
+      "chars": 16067,
+      "missingSections": [
+        "Phương án"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 74.28,
+      "group": "research-initial",
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "branch": "B",
+        "runtimeSha256": "afa004190d08e1d990c750e9c500ade89f2e879d882594dd9b0158ab54397d96",
+        "routerRelay": "http://127.0.0.1:3101",
+        "note": "existing local router relay; no config/session changes; unknown model output ceiling"
+      },
+      "reportPath": ".tmp/output-budget/research-initial/research-research-options-8192-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "ea0dcb9045be3d4fd6df0e0997d2974b481194e2b23a7b54376022878761a94e",
+      "coveragePassV2": true,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 17070,
+      "missingSections": [
+        "Chỉ số"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.059,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-evaluation-12288-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "ec810639e53c482544d2594638b37237432c443973483344db36087a0eabec45",
+      "coveragePassV2": true,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 16883,
+      "missingSections": [
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.048,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-evaluation-12288-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "a271be9c81a49ae9b4c538d83acf6539fb44d03c8c092c46bc189ef0f6441d68",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 7704,
+        "total_tokens": 9013,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1283
+        }
+      },
+      "chars": 12797,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 83.186,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-options-12288-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "caf6d4fe08a439c638f7f675eece1ad6a0635a4998446a6fd639bfa5b0352ce9",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 5309,
+      "missingSections": [
+        "Chi phí",
+        "Đánh giá",
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 32.3,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-options-12288-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Chi phí",
+          "Đánh giá",
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "5d588b70b326e47164ba8feb3612c881a874ea29027af433d2c07c273bee9b86",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 17530,
+      "missingSections": [],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": true,
+      "latencySeconds": 90.034,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-evaluation-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "ead8e2022bd72706c66547196f526de0cb2387a272e36d1c5c7ece45f3e2873e",
+      "coveragePassV2": true,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 15366,
+      "missingSections": [],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": true,
+      "latencySeconds": 90.035,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-evaluation-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "5a8c858d8bb81b9e0b1452d021583be657e8056a0b1b0be5f79669d2adbff101",
+      "coveragePassV2": true,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 8636,
+        "total_tokens": 9945,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2300
+        }
+      },
+      "chars": 12614,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 78.12,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-options-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "7e797e7ecbb314e6f4c26e9b04b60d5895bf84450cb406f04bb95c7b400bffe2",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 12771,
+      "missingSections": [
+        "Phương án",
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.031,
+      "group": "research-expanded",
+      "reportPath": ".tmp/output-budget/research-expanded/research-research-options-16000-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "a782cd429c734f7ac0128e7f11c2e60fc0b0c9091e8dcd8486890e89618f7198",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "plan-medical",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "adc3eb4b206b9f25f2f4e6d4d0fe6c9ae0d65ec79a4cfc85642dbb452940e609",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 601,
+      "missingSections": [
+        "Kiến trúc",
+        "Dữ liệu",
+        "API",
+        "AI",
+        "Vận hành",
+        "Milestone",
+        "Nghiệm thu"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.023,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/plan-plan-medical-16000-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Kiến trúc",
+          "Dữ liệu",
+          "API",
+          "AI",
+          "Vận hành",
+          "Milestone",
+          "Nghiệm thu"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "d132b90c4589abab5a89c102872ae4421caf7c4993b89101567724e2f9afef80",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "plan-medical",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "adc3eb4b206b9f25f2f4e6d4d0fe6c9ae0d65ec79a4cfc85642dbb452940e609",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1291,
+        "completion_tokens": 9417,
+        "total_tokens": 10708,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1576
+        }
+      },
+      "chars": 17904,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 8,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 89.59,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/plan-plan-medical-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 8,
+        "contracts": 0
+      },
+      "reportSha256": "6453695c8386bdf7c1b6c1f7dd1a8561169ee099f2534e0d507122d0bcf3350f",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "plan-tooling",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "9b26d628be5add0ea6844e131a89c81d105002811909102174f7e3ed2aff2adc",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 10217,
+      "missingSections": [
+        "Rủi ro",
+        "Milestone",
+        "Nghiệm thu"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.037,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/plan-plan-tooling-16000-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Rủi ro",
+          "Milestone",
+          "Nghiệm thu"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "a3cf6fce67a5fa3c738dec41428879bbb8decf7168c8b13b88664c83ec7d42b7",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "plan-tooling",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "9b26d628be5add0ea6844e131a89c81d105002811909102174f7e3ed2aff2adc",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "length",
+      "usage": null,
+      "chars": 2736,
+      "missingSections": [
+        "Hợp đồng",
+        "Thay đổi",
+        "Rủi ro",
+        "Milestone",
+        "Nghiệm thu"
+      ],
+      "endMarker": false,
+      "milestones": 1,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 90.038,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/plan-plan-tooling-16000-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Hợp đồng",
+          "Thay đổi",
+          "Rủi ro",
+          "Milestone",
+          "Nghiệm thu"
+        ],
+        "endMarker": false,
+        "milestones": 1,
+        "contracts": 0
+      },
+      "reportSha256": "b3ed485490381519d94191d76dc0fc7f32f430267db9b58f14f877f62b35be5c",
+      "coveragePassV2": false,
+      "finishInterpretation": "old_parser_cannot_distinguish_output_limit_from_stream_EOF"
+    },
+    {
+      "case": "design-pipeline",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "421c499dfbeea13268c394a64bf5372d3c3849fa2a1b6cd3f0bb74f258d4e103",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1302,
+        "completion_tokens": 7626,
+        "total_tokens": 8928,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        }
+      },
+      "chars": 16841,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 62.698,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/design-design-pipeline-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "bb10ce49a009c60cc41a969d97f7cea197cb6d5bf110376e116c6e23b0dc1cb6",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-pipeline",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "421c499dfbeea13268c394a64bf5372d3c3849fa2a1b6cd3f0bb74f258d4e103",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1302,
+        "completion_tokens": 7267,
+        "total_tokens": 8569,
+        "prompt_tokens_details": {
+          "cached_tokens": 1300
+        }
+      },
+      "chars": 16223,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 60.768,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/design-design-pipeline-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "f21d578ead8152e17a05ff23b74e1b4cfb54d9cc69994ec35eeb0b407a8f0c4e",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-evaluation",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "54765a811410f4729e81d66abca891bf38c28988c4fecb5f785f7ad5f9b0bf39",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1273,
+        "completion_tokens": 10492,
+        "total_tokens": 11765,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2014
+        }
+      },
+      "chars": 18535,
+      "missingSections": [
+        "Vận hành"
+      ],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": false,
+      "latencySeconds": 88.228,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/design-design-evaluation-16000-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Vận hành"
+        ],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "191df97c5b356eb61ba5018c1be161cef87766d7fe30576b5f5fdce084a00990",
+      "coveragePassV2": false,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-evaluation",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "54765a811410f4729e81d66abca891bf38c28988c4fecb5f785f7ad5f9b0bf39",
+      "branch": "B",
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "beca7203e425f35872e50f90465657fbd60c988bb0ad03917df55656e70cdfd1",
+        "evaluatorSha256": "26565c1040fc82bcd5e37c92edd627f6ffb5e629c8387e8e83a08e8c216ee107",
+        "routerRelay": "http://127.0.0.1:3101",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "B RouterClient via existing router relay; no harness workflow or semantic review"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1273,
+        "completion_tokens": 8623,
+        "total_tokens": 9896,
+        "prompt_tokens_details": {
+          "cached_tokens": 1271
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2523
+        }
+      },
+      "chars": 14444,
+      "missingSections": [
+        "Thành phần"
+      ],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": false,
+      "latencySeconds": 64.269,
+      "group": "documents-16k",
+      "reportPath": ".tmp/output-budget/documents-16k/design-design-evaluation-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "c40131b43e9525295931ed1116024b0df830b22e5ce162f3bea3e6e02fe4b456",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 9109,
+        "total_tokens": 10426,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        }
+      },
+      "chars": 18102,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 99.683,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-evaluation-12288-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "6d17b3a20f4c037fa2a0e87514deeb8a16ed228a757e3e155d60a53cc58f2e4a",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 9254,
+        "total_tokens": 10571,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        }
+      },
+      "chars": 17597,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 93.462,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-evaluation-12288-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "44cf53349319a19f2e7bb205bc885c539a2578765eb3cbc61ba43173ec788345",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 11944,
+        "total_tokens": 13253,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 5398
+        }
+      },
+      "chars": 13105,
+      "missingSections": [
+        "Phương án"
+      ],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": false,
+      "latencySeconds": 103.572,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-options-12288-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "5de096e4125e8e77d5022a17be9d298e39adea9249d51a4ef1eb0e9b5186675c",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 12288,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 12288,
+        "total_tokens": 13597,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 6948
+        }
+      },
+      "chars": 10224,
+      "missingSections": [
+        "Khuyến nghị",
+        "Giới hạn"
+      ],
+      "endMarker": false,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 107.674,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-options-12288-2.md",
+      "coverageV2": {
+        "missingSections": [
+          "Khuyến nghị",
+          "Giới hạn"
+        ],
+        "endMarker": false,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "8c9f59a4717127f1f5ef35e381e8abb68585d5f15b0b87aa8b1db28138e87a3c",
+      "coveragePassV2": false,
+      "finishInterpretation": "explicit_output_limit_with_reported_usage"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 8833,
+        "total_tokens": 10150,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        }
+      },
+      "chars": 17316,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 89.828,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-evaluation-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "287ad7f98c399d8407dd2aaf25606834a9dcadbecc9e053190f3e23eb783ebc7",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-evaluation",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "4455a1ed4b057386142d67372a37cd1bbe45b83142054a0a10ea4bfb29c1a268",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1317,
+        "completion_tokens": 12094,
+        "total_tokens": 13411,
+        "prompt_tokens_details": {
+          "cached_tokens": 1315
+        }
+      },
+      "chars": 24133,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 139.197,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-evaluation-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "3cf98784dedb1ef33291f5170365f693d55dda742f4528fa0424ff10c8fdc48b",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 5594,
+        "total_tokens": 6903,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        }
+      },
+      "chars": 10908,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 48.502,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-options-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "a79d4895fb04c6d5c5527a240983f91d290b88b8ff5b449c42542a76ca0edb79",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "research-options",
+      "role": "research",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "268bc86b7a5658f8fb55080d36d585829ebf490699f80ee1ad558029545d2790",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1309,
+        "completion_tokens": 10659,
+        "total_tokens": 11968,
+        "prompt_tokens_details": {
+          "cached_tokens": 1307
+        }
+      },
+      "chars": 20448,
+      "missingSections": [
+        "Phương án"
+      ],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": false,
+      "latencySeconds": 89.471,
+      "group": "isolated-research",
+      "reportPath": ".tmp/output-budget/isolated-research/research-research-options-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 0
+      },
+      "reportSha256": "f44fe24007d8b15ef6c24fa69ceeaf7124a8c915015beed67eb71fffcbd25059",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "plan-medical",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "adc3eb4b206b9f25f2f4e6d4d0fe6c9ae0d65ec79a4cfc85642dbb452940e609",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1291,
+        "completion_tokens": 9473,
+        "total_tokens": 10764,
+        "prompt_tokens_details": {
+          "cached_tokens": 1289
+        }
+      },
+      "chars": 21759,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 8,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 77.343,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/plan-plan-medical-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 8,
+        "contracts": 0
+      },
+      "reportSha256": "21d0be0db2547d2ba2def71cef25a9d9d625cab5ff998fadcaae814e05f93954",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "plan-medical",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "adc3eb4b206b9f25f2f4e6d4d0fe6c9ae0d65ec79a4cfc85642dbb452940e609",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1027,
+        "completion_tokens": 7399,
+        "total_tokens": 8426,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 268
+        }
+      },
+      "chars": 16852,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 8,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 145.694,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/plan-plan-medical-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 8,
+        "contracts": 0
+      },
+      "reportSha256": "bf4e37497a844223f783358eb08933e14543916386038d3f6a10ae68bbc05c3d",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "plan-tooling",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "9b26d628be5add0ea6844e131a89c81d105002811909102174f7e3ed2aff2adc",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stream_incomplete",
+      "usage": null,
+      "chars": 11891,
+      "missingSections": [
+        "Nghiệm thu"
+      ],
+      "endMarker": false,
+      "milestones": 4,
+      "contracts": 0,
+      "completionPass": false,
+      "coveragePass": false,
+      "latencySeconds": 240.018,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/plan-plan-tooling-16000-1.md",
+      "coverageV2": {
+        "missingSections": [
+          "Nghiệm thu"
+        ],
+        "endMarker": false,
+        "milestones": 4,
+        "contracts": 0
+      },
+      "reportSha256": "ad8e38d03e5822421ac12f1e89dee3007438c8094e7e7d6781d9af227d247dc3",
+      "coveragePassV2": false,
+      "finishInterpretation": "stream_interrupted"
+    },
+    {
+      "case": "plan-tooling",
+      "role": "plan",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "9b26d628be5add0ea6844e131a89c81d105002811909102174f7e3ed2aff2adc",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1034,
+        "completion_tokens": 11344,
+        "total_tokens": 12378,
+        "prompt_tokens_details": {
+          "cached_tokens": 1033
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 3462
+        }
+      },
+      "chars": 17322,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 7,
+      "contracts": 0,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 211.047,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/plan-plan-tooling-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 7,
+        "contracts": 0
+      },
+      "reportSha256": "9e2d0e76cc398f61ce0023409f295e57039968a3c61054f41750df832d8f0007",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-pipeline",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "421c499dfbeea13268c394a64bf5372d3c3849fa2a1b6cd3f0bb74f258d4e103",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1302,
+        "completion_tokens": 7963,
+        "total_tokens": 9265,
+        "prompt_tokens_details": {
+          "cached_tokens": 1300
+        }
+      },
+      "chars": 17338,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 65.288,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/design-design-pipeline-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "36181ecc31189629feb5d81f0a8837f841d52eef5622f7801e6af5a044936642",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-pipeline",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "421c499dfbeea13268c394a64bf5372d3c3849fa2a1b6cd3f0bb74f258d4e103",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1302,
+        "completion_tokens": 10929,
+        "total_tokens": 12231,
+        "prompt_tokens_details": {
+          "cached_tokens": 1300
+        }
+      },
+      "chars": 24821,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 84.254,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/design-design-pipeline-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "9bacb0d4fdee5989f7c4192ab5d69c3e888f778189dc35e76248110b1ae28adb",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-evaluation",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 1,
+      "promptHash": "54765a811410f4729e81d66abca891bf38c28988c4fecb5f785f7ad5f9b0bf39",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1273,
+        "completion_tokens": 5981,
+        "total_tokens": 7254,
+        "prompt_tokens_details": {
+          "cached_tokens": 138
+        }
+      },
+      "chars": 13355,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 7,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 49.227,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/design-design-evaluation-16000-1.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 7,
+        "contracts": 6
+      },
+      "reportSha256": "ddd566c46552b4e7a7eb1c1364cc27e58dd2827a57efdb43afc29ff3fbea1ad1",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    },
+    {
+      "case": "design-evaluation",
+      "role": "design",
+      "requestedMaxTokens": 16000,
+      "repeat": 2,
+      "promptHash": "54765a811410f4729e81d66abca891bf38c28988c4fecb5f785f7ad5f9b0bf39",
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "live": true,
+      "source": {
+        "commit": "3694305642fc9bf922389dc04329fbc7ede4ef59",
+        "runtimeSha256": "feb73477792faac30b6cc89559bfd9157677d2c83b34c97407fec2fbdbce44d3",
+        "evaluatorSha256": "d7673677f87f7b17b2d12d792a9d4547c443a49b8671332c8ce7b699ca0ccece",
+        "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "routerRelay": "http://127.0.0.1:64621",
+        "outputCeiling": "unknown for space-bunny-free",
+        "scope": "Isolated B OpenCode adapter; 240s evaluation deadline; production router unchanged"
+      },
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1273,
+        "completion_tokens": 8003,
+        "total_tokens": 9276,
+        "prompt_tokens_details": {
+          "cached_tokens": 1271
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1119
+        }
+      },
+      "chars": 15589,
+      "missingSections": [],
+      "endMarker": true,
+      "milestones": 0,
+      "contracts": 6,
+      "completionPass": true,
+      "coveragePass": true,
+      "latencySeconds": 65.915,
+      "group": "isolated-documents",
+      "reportPath": ".tmp/output-budget/isolated-documents/design-design-evaluation-16000-2.md",
+      "coverageV2": {
+        "missingSections": [],
+        "endMarker": true,
+        "milestones": 0,
+        "contracts": 6
+      },
+      "reportSha256": "0d566ea3ea0836f26ce377038103501546ec0865e157bcbf81daaa087d4f5b9f",
+      "coveragePassV2": true,
+      "finishInterpretation": "stop"
+    }
+  ]
+}

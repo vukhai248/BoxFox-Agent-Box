@@ -528,12 +528,15 @@ def write_plan(args):
     mầm của lỗi "v5 rồi v6 cho hai chủ đề mới" ở vòng 20). Không truyền `version`
     (harness không đọc được chỉ mục) thì giữ nguyên hành vi cũ: lấy số trống kế tiếp.
     """
-    slug = str(args.get('slug') or '').strip()
+    slug = args.get('slug')
+    if not isinstance(slug, str) or not slug.strip():
+        raise ValueError('PLAN_SLUG_INVALID: slug is required and must be a non-empty string, e.g. workspace-plan')
+    slug = slug.strip()
     if not PLAN_SLUG.fullmatch(slug):
-        raise ValueError('Plan slug must be lowercase words separated by single dashes (e.g. workspace-plan)')
+        raise ValueError('PLAN_SLUG_INVALID: slug must be lowercase words separated by single dashes, e.g. workspace-plan')
     content = args.get('markdown')
     if not isinstance(content, str) or not content.strip():
-        raise ValueError('Plan markdown must not be empty')
+        raise ValueError('PLAN_INVALID: markdown must be a non-empty string')
     size = len(content.encode('utf-8'))
     if size > PLAN_MAX_BYTES:
         raise ValueError('Plan exceeds the 1 MiB plan-file limit')
@@ -1163,6 +1166,14 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None):
         return {'content': 'Updated ' + target.relative_to(ROOT).as_posix(), **evidence}
     if name == 'codebase_glob':
         pattern = args.get('pattern', '**/*')
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise ValueError('GLOB_PATTERN_INVALID: pattern must be a non-empty relative glob string, e.g. **/*.py')
+        # pathlib does not expand shell braces. Do not return an empty match as evidence
+        # that the workspace has no code. Character classes can still quote literal braces.
+        unquoted = re.sub(r'\[[^]]*\]', '', pattern)
+        if re.search(r'\{[^{}]*(?:,|\.\.)[^{}]*\}', unquoted):
+            raise ValueError('GLOB_PATTERN_INVALID: pattern uses unsupported brace expansion; '
+                             'make separate codebase_glob calls, e.g. **/*.py and **/*.ts')
         path(pattern)
         found = []
         for item in ROOT.glob(pattern):
