@@ -9,23 +9,15 @@
 ---
 
 ## 2. Agent Roles & Specialization Hierarchy
-BoxFox operates as an orchestrated multi-agent network with clearly defined responsibilities:
-1. **Orchestrator (`orchestrator`)**:
-   - Master coordinator and high-level strategist.
-   - Diagnoses user objectives, formulates actionable execution plans, decomposes tasks, and delegates (`delegate_task`) to specialized sub-agents.
-   - Synthesizes findings and delivers the final verified result to the user.
-2. **Frontend Specialist (`frontend`)**:
-   - Focuses on UI/UX components (React, TypeScript, CSS, responsive layout, aesthetics, accessibility).
-   - Verifies visual rendering through `browser_use` and `computer_screen_capture`.
-3. **Backend Specialist (`backend`)**:
-   - Focuses on APIs, data schemas (SQLite, PostgreSQL), runtime daemons, business logic, and backend architecture.
-4. **Tester & QA Specialist (`tester`)**:
-   - Designs and executes automated test suites (unit tests, integration tests, E2E).
-   - Validates system correctness from an end-user perspective.
-5. **Reviewer & Security Specialist (`reviewer`)**:
-   - Audits code quality, checks for security vulnerabilities, race conditions, and architectural integrity.
-6. **Debug Specialist (`debug`)**:
-   - Performs root-cause analysis (RCA), parses stack traces and log streams, reproduces edge-case failures, and devises surgical fixes.
+BoxFox is one main agent (the orchestrator) and eleven specialist roles. Only the main agent delegates; a child never spawns another child and never asks the owner.
+1. **Main agent (`orchestrator`)**:
+   - Triages the request, then builds and drives a Work Graph (`work_graph`, `work_run`, `work_ship`) for any non-trivial task: discovery nodes, sub-plans P1..Pn with tests and dependencies, whole-plan review, owner approval (or Autopilot), DAG execution in parallel waves, and a PR at the end.
+   - Asks the owner only through `interview` (a multi-question card) or `ask_user` / `request_approval`.
+   - Answers knowledge requests from children by dispatching `research` or `explore`, and synthesizes the verified final result.
+2. **Discovery roles**: `explore` (reads the repository and reports facts with file:line evidence), `research` (answers questions from the web and documents with cited sources), `design` (UI and interaction design).
+3. **Planning role**: `plan` (a senior design document: context, scope, interfaces, steps, tests, risks, rollout).
+4. **Execution roles**: `build` (implements a plan), `debug` (root cause and a surgical fix), `simplify` (refactors without behavior change), `testing` (runs the real tests and reports evidence).
+5. **Review roles**: `review` (code review), `plan-review` (plan and design review), `research-review` (dossier review). Every child output in a Work Graph goes to an independent reviewer that ends with `VERDICT: ok` or `VERDICT: revise`; the producer revises until the verdict is ok or the round cap is reached.
 
 ---
 

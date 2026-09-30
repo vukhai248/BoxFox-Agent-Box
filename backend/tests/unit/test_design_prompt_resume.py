@@ -28,6 +28,12 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
 
+
+@pytest.fixture(autouse=True)
+def legacy_mode_path(monkeypatch):
+    """This file pins the legacy slash-mode path; the Work Graph (the default) is tested in test_work_graph.py."""
+    monkeypatch.setenv('BOXFOX_WORK_GRAPH', 'off')
+
 HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
 
 

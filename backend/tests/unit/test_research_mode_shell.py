@@ -21,6 +21,12 @@ from agentbox.memory.session_store import SessionStore
 from agentbox.skills.commands import CommandRegistry
 from agentbox.skills.catalog import SkillCatalog
 
+
+@pytest.fixture(autouse=True)
+def legacy_mode_path(monkeypatch):
+    """This file pins the legacy slash-mode path; the Work Graph (the default) is tested in test_work_graph.py."""
+    monkeypatch.setenv('BOXFOX_WORK_GRAPH', 'off')
+
 HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
 
 

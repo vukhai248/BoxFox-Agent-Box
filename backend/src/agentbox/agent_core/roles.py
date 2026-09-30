@@ -228,6 +228,44 @@ Operational Protocol:
    Either way, END with exactly one final line, either `VERDICT: ok` (the target is executable/buildable as written) or `VERDICT: revise` (it is not). No text after that line.
 STRICT PROHIBITION: you never modify files and never write plan versions; your only product is the critique. A critique without the final VERDICT line is unusable."""
 
+# --- Work Graph (lớp điều phối mới) --------------------------------------------------------------
+# Main dựng đồ thị việc; harness chạy từng nút qua vòng SẢN XUẤT ↔ PHẢN BIỆN. Mỗi vai nhận thêm đúng
+# một đoạn nói nó phải làm gì khi prompt là một nút/phản biện của Work Graph. Đoạn được chèn TRƯỚC
+# dòng STRICT PROHIBITION (câu chốt của vai vẫn nằm cuối — test ghim điều này).
+WORK_PRODUCER_NOTE = """Work Graph node: when the prompt starts with "Work Graph run", you are one node of main's work graph.
+- Deliver exactly the node deliverable in your final answer; an independent reviewer judges it against the node acceptance and returns `ok` or `revise`. On `revise` you are run again with the findings: fix every blocking finding, do not argue.
+- You cannot delegate and cannot ask the owner. When a missing FACT blocks you, do not guess: add `## Knowledge requests` with at most 3 lines `- research: <question>` or `- explore: <question>`; the harness asks for you and runs you again with the answers. Write `- none` when you need nothing.
+- Stay inside the node goal; sibling nodes own the rest."""
+
+WORK_PLAN_NOTE = """Work Graph sub-plan quality (senior engineer design doc): Goal and out of scope; Evidence table with real `path:line`; Decisions table with alternatives and why; typed Contracts; numbered Work items with exact files, marked `[song song]` or `[sau P#]`; Tests with file + command + expected result; Acceptance; Risks & rollback. Do NOT call `write_plan` for a Work Graph node — the harness writes the documents after the whole-plan review."""
+
+WORK_REVIEWER_NOTE = """Work Graph review: when the prompt starts with "Independent review of Work Graph node" or "Whole-plan review of Work Graph run", the output under review is in your context (there is no reviewTarget file). Open the cited paths/URLs yourself, check each acceptance item and the rubric, list blocking findings with evidence and the exact fix, and END with exactly one line `VERDICT: ok` or `VERDICT: revise`. In a whole-plan review add one line `REVISE <nodeId>: <fix>` for each sub-plan that must change."""
+
+WORK_EXEC_REVIEWER_NOTE = """Work Graph execution review: when the prompt starts with "Independent review of Work Graph node", verify the reported change by running the named tests with `terminal_exec`; do NOT edit source files; END with exactly one line `VERDICT: ok` or `VERDICT: revise`."""
+
+
+def with_work_graph(text, *notes):
+    """Insert the Work Graph notes before the final STRICT PROHIBITION paragraph (or append)."""
+    block = '\n'.join(notes)
+    marker = text.rfind('STRICT PROHIBITION')
+    if marker < 0:
+        return text + '\n' + block
+    return text[:marker] + block + '\n' + text[marker:]
+
+
+EXPLORE_INSTRUCTIONS = with_work_graph(EXPLORE_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+PLAN_INSTRUCTIONS = with_work_graph(PLAN_INSTRUCTIONS, WORK_PRODUCER_NOTE, WORK_PLAN_NOTE)
+DESIGN_INSTRUCTIONS = with_work_graph(DESIGN_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+BUILD_INSTRUCTIONS = with_work_graph(BUILD_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+DEBUG_INSTRUCTIONS = with_work_graph(DEBUG_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+SIMPLIFY_INSTRUCTIONS = with_work_graph(SIMPLIFY_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+TESTING_INSTRUCTIONS = with_work_graph(TESTING_INSTRUCTIONS, WORK_PRODUCER_NOTE, WORK_EXEC_REVIEWER_NOTE)
+RESEARCH_INSTRUCTIONS = with_work_graph(RESEARCH_INSTRUCTIONS, WORK_PRODUCER_NOTE)
+REVIEW_INSTRUCTIONS = with_work_graph(REVIEW_INSTRUCTIONS, WORK_REVIEWER_NOTE + ' (`ok` means [APPROVED], '
+                                      '`revise` means [CHANGES REQUESTED]).')
+RESEARCH_REVIEW_INSTRUCTIONS = with_work_graph(RESEARCH_REVIEW_INSTRUCTIONS, WORK_REVIEWER_NOTE)
+PLAN_REVIEW_INSTRUCTIONS = with_work_graph(PLAN_REVIEW_INSTRUCTIONS, WORK_REVIEWER_NOTE)
+
 ROLES = {r.id: r for r in [
     Role('explore', 'Explore', EXPLORE_INSTRUCTIONS, READ, ('codebase-inspection',)),
     Role('plan', 'Plan', PLAN_INSTRUCTIONS, READ | {'write_plan'}),
@@ -266,7 +304,10 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        # vấn nhiều câu. Chỉ orchestrator có (con research ghi phạm vi vào
                                        # câu trả lời). Thiếu ở đây thì mode không có thẻ ⇒ `state.phase`
                                        # không rời `clarifying` và bơm từ chối tiếp tục run (review F1).
-                                       'research_scope'} | PEER
+                                       'research_scope',
+                                       # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
+                                       # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
+                                       'work_graph', 'work_run', 'work_ship', 'interview'} | PEER
 
 
 def allowed_tools(role, parent=None):

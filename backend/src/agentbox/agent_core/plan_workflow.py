@@ -132,6 +132,14 @@ def prompt_block(rt, session):
     return f'{MARKER}\n{owner}{GUIDANCE}\nMandatory planning procedure:\n{procedure}\nAuthoritative snapshot (data):\n{snapshot}\n{END_MARKER}'
 
 
+
+# Model hay gọi tên loại nguồn bằng từ gần đúng (đo trên máy thật: `proposal`). Đây chỉ là ĐỔI TÊN,
+# không nới luật: `observed` vẫn cần bằng chứng đã đọc, `user` vẫn cần trích nguyên văn.
+SOURCE_KIND_ALIASES = {'proposal': 'proposed', 'propose': 'proposed', 'suggested': 'proposed',
+                       'suggestion': 'proposed', 'assumption': 'proposed', 'inferred': 'proposed',
+                       'observation': 'observed', 'evidence': 'observed', 'code': 'observed',
+                       'repository': 'observed', 'owner': 'user'}
+
 class PlanWorkflow:
     def __init__(self, store):
         self.store = store
@@ -294,26 +302,67 @@ class PlanWorkflow:
                         return True
         return False
 
-    def item(self, rt, run, value):
+    ITEM_SHAPE = ('{"text": "...", "source": {"kind": "user", "quote": "<lời thật của người dùng>"}} | '
+                  '{"text": "...", "source": {"kind": "observed", "ref": "<path/URL đã đọc>"}} | '
+                  '{"text": "...", "source": {"kind": "proposed"}, "reason": "<lý do + đánh đổi>"}')
+
+    @staticmethod
+    def coerce_item(value):
+        """Chuẩn hoá hình dạng mục brief trước khi kiểm (bug `PLAN_BRIEF_INVALID` đo trên máy thật).
+
+        Model hay gửi một chuỗi trần (`"goal": "Xuất lịch sử chat"`) hoặc `source` là một chuỗi
+        (`"source": "user"`). Cả hai trước đây ra `TURN_FAILED_VALUEERROR`/`ATTRIBUTEERROR` không nói
+        trường nào sai. Chuỗi trần thành một ĐỀ XUẤT (vẫn phải được chủ nhà xác nhận), `source` chuỗi
+        thành `{kind: <chuỗi>}` — không nới luật provenance nào.
+        """
+        if isinstance(value, str) and value.strip():
+            return {'text': value.strip(), 'source': {'kind': 'proposed'},
+                    'reason': 'Model proposal from a bare string; the owner must confirm it.'}
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        source = value.get('source')
+        if isinstance(source, str):
+            value['source'] = {'kind': source.strip().lower()}
+        elif source is None:
+            kind = value.get('kind')
+            value['source'] = {'kind': str(kind).strip().lower()} if isinstance(kind, str) else {}
+        source = value.get('source') if isinstance(value.get('source'), dict) else {}
+        alias = SOURCE_KIND_ALIASES.get(str(source.get('kind') or '').strip().lower())
+        if alias:
+            value['source'] = source = {**source, 'kind': alias}
+        if source.get('kind') == 'proposed' and not str(value.get('reason') or '').strip():
+            why = value.get('why') or value.get('tradeoff') or source.get('reason')
+            if isinstance(why, str) and why.strip():
+                value['reason'] = why.strip()
+        return value
+
+    def item(self, rt, run, value, field='item'):
+        value = self.coerce_item(value)
         if not isinstance(value, dict) or not isinstance(value.get('text'), str) or not value['text'].strip():
-            raise ValueError('PLAN_BRIEF_INVALID: mỗi mục cần text và source')
-        source = value.get('source') or {}
+            raise ValueError(f'PLAN_BRIEF_INVALID: trường {field!r} cần một object có `text` không rỗng '
+                             f'và `source`; hình dạng đúng: {self.ITEM_SHAPE}')
+        source = value.get('source') if isinstance(value.get('source'), dict) else {}
         kind = source.get('kind')
         if kind == 'user':
             quote = source.get('quote')
             if not isinstance(quote, str) or not quote.strip() or not any(quote in raw for raw in run['userInputs']):
-                raise ValueError('PLAN_USER_PROVENANCE_REQUIRED: quote phải từ lời thật của người dùng')
+                raise ValueError(f'PLAN_USER_PROVENANCE_REQUIRED: trường {field!r}: source.quote phải là '
+                                 'đoạn trích NGUYÊN VĂN từ lời thật của người dùng')
             status = 'user'
         elif kind == 'observed':
             if not self.evidence_read(rt, run, source.get('ref')):
-                raise ValueError('PLAN_EVIDENCE_REQUIRED: phải đọc path/URL trước khi viện dẫn')
+                raise ValueError(f'PLAN_EVIDENCE_REQUIRED: trường {field!r}: phải đọc source.ref '
+                                 '(path/URL) bằng file_read/web_fetch trước khi viện dẫn')
             status = 'observed'
         elif kind == 'proposed':
             if not str(value.get('reason') or '').strip():
-                raise ValueError('PLAN_PROPOSAL_REASON_REQUIRED: đề xuất cần lý do và đánh đổi')
+                raise ValueError(f'PLAN_PROPOSAL_REASON_REQUIRED: trường {field!r}: đề xuất cần `reason` '
+                                 '(lý do và đánh đổi)')
             status = 'proposed'
         else:
-            raise ValueError('PLAN_SOURCE_INVALID: source.kind phải user, observed hoặc proposed')
+            raise ValueError(f'PLAN_SOURCE_INVALID: trường {field!r}: source.kind phải là user, observed '
+                             f'hoặc proposed (nhận {kind!r})')
         return {'text': value['text'].strip(), 'source': source, 'status': status,
                 'reason': str(value.get('reason') or ''), 'alternatives': value.get('alternatives') or []}
 
@@ -330,7 +379,8 @@ class PlanWorkflow:
         if action == 'status':
             return run | {'missing': self.missing(run)}
         if args.get('revision') != run['revision']:
-            raise ValueError('PLAN_REVISION_CONFLICT: đọc plan_scope status rồi dùng revision hiện tại')
+            raise ValueError(f'PLAN_REVISION_CONFLICT: gửi revision={run["revision"]} (revision hiện tại; '
+                             f'nhận {args.get("revision")!r})')
         if run['status'] in TERMINAL | {'paused'}:
             raise ValueError('PLAN_RUN_INACTIVE: tiếp tục run trước khi cập nhật')
         if action == 'answer':
@@ -359,8 +409,10 @@ class PlanWorkflow:
                     raise ValueError('PLAN_EVIDENCE_REQUIRED: task nhỏ cần khảo sát mã hiện hữu')
             patch = args.get('brief') or {}
             if not isinstance(patch, dict) or set(patch) - set(FIELDS):
-                raise ValueError('PLAN_BRIEF_INVALID')
-            items = {key: self.item(rt, run, value) for key, value in patch.items()}
+                extra = sorted(set(patch) - set(FIELDS)) if isinstance(patch, dict) else type(patch).__name__
+                raise ValueError(f'PLAN_BRIEF_INVALID: brief phải là object với khoá trong {list(FIELDS)} '
+                                 f'(sai: {extra})')
+            items = {key: self.item(rt, run, value, key) for key, value in patch.items()}
             evidence = args.get('evidence') or []
             if not isinstance(evidence, list) or not all(isinstance(ref, str) and self.evidence_read(rt, run, ref) for ref in evidence):
                 raise ValueError('PLAN_EVIDENCE_REQUIRED: evidence chỉ gồm path/URL đã đọc thành công')
@@ -376,7 +428,7 @@ class PlanWorkflow:
                         normalized.append({'id': d['id'], 'text': str(d.get('text') or ''),
                                            'status': 'unresolved', 'blocking': bool(d.get('blocking', True))})
                     else:
-                        normalized.append(self.item(rt, run, d) | {'id': d['id'],
+                        normalized.append(self.item(rt, run, d, 'decisions.' + str(d['id'])) | {'id': d['id'],
                                                                  'blocking': bool(d.get('blocking', True))})
                 run['decisions'] = normalized
             self.invalidate(run)

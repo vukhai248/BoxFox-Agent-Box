@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from aiohttp import web
 from ..agent_core import design_runtime, plan_registry, research_runtime
-from ..agent_core import plan_workflow
+from ..agent_core import plan_workflow, work_graph
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
 from ..agent_core.runtime import HarnessRuntime, DecisionError
@@ -1142,7 +1142,8 @@ def create_app(runtime):
             return web.json_response({'error': 'DECISION_INVALID: a JSON body with decisionId and choice is required'}, status=400)
         sid = request.match_info['sid']
         try:
-            result = runtime.resolve_decision(sid, body.get('decisionId'), body.get('choice'), body.get('note'))
+            result = runtime.resolve_decision(sid, body.get('decisionId'), body.get('choice'), body.get('note'),
+                                              body.get('answers'))
         except DecisionError as exc:
             return web.json_response({'error': str(exc)}, status=exc.status)
         # A7 (đợt 20): quyết định của người dùng được ghim vào nhật ký phiên — bản ghi `D:` giữ cả
@@ -1581,6 +1582,24 @@ def create_app(runtime):
         result = plan_workflow.service(runtime).set_mode(runtime, sid, body['on'], by='toggle')
         return web.json_response(result)
 
+    async def work_runs(request):
+        """`GET /api/agent/sessions/{sid}/work` — Work Graph runs of one session (newest first)."""
+        sid = request.match_info['sid']
+        session = known_session(sid)
+        service = work_graph.service(runtime)
+        return web.json_response({'enabled': work_graph.enabled(),
+                                  'autopilot': work_graph.autopilot_on(session),
+                                  'runs': [service.view(run) for run in service.runs(sid)]})
+
+    async def autopilot_set(request):
+        """`PUT /api/agent/sessions/{sid}/autopilot {on}` — skip the owner approval gate of the Work Graph."""
+        sid = request.match_info['sid']
+        known_session(sid)
+        body = await request.json()
+        if not isinstance(body, dict) or not isinstance(body.get('on'), bool):
+            raise ValueError('AUTOPILOT_INVALID: on phải boolean')
+        return web.json_response(work_graph.set_autopilot(runtime, sid, body['on']))
+
     async def plan_runs(request):
         workflow = plan_workflow.service(runtime)
         rid = request.match_info.get('runId')
@@ -1718,6 +1737,8 @@ def create_app(runtime):
     app.router.add_get('/api/agent/plans/status', plan_status)
     app.router.add_post('/api/agent/plans/verify', plan_verify_route)
     app.router.add_put('/api/agent/sessions/{sid}/plan-mode', plan_mode_set)
+    app.router.add_get('/api/agent/sessions/{sid}/work', work_runs)
+    app.router.add_put('/api/agent/sessions/{sid}/autopilot', autopilot_set)
     app.router.add_get('/api/agent/plans/runs', plan_runs)
     app.router.add_get('/api/agent/plans/runs/{runId}', plan_runs)
     app.router.add_post('/api/agent/plans/runs/{runId}/answers', plan_run_mutate)

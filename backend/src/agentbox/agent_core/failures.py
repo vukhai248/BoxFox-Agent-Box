@@ -73,7 +73,16 @@ KNOWN_PREFIXES = (
     # Vòng soát hộp thật: chối của đường thiết kế phải ra ĐÚNG mã hợp đồng `DESIGN_*`
     # (khuôn `WEB_`) chứ không phải `TURN_FAILED_VALUEERROR`, để giao diện có mã mà ánh xạ.
     'DESIGN_',
+    # Lớp Work Graph + phỏng vấn nhiều câu (lớp điều phối mới).
+    'WORK_',
+    'INTERVIEW_',
 )
+
+# Bug `PLAN_BRIEF_INVALID` → `TURN_FAILED_VALUEERROR` (đo sống): 48 mã `PLAN_*` và nhiều họ mã khác
+# được ném dạng `ValueError('MÃ_HOA: câu')` mà không nằm trong danh sách trên, nên model mất tên mã.
+# Luật chung: một lỗi dữ liệu mở đầu bằng MÃ_VIẾT_HOA (có ít nhất một dấu gạch dưới) rồi `:` giữ
+# nguyên mã ấy. Danh sách trên vẫn là nguồn cho các mã không có gạch dưới và cho thứ tự ưu tiên.
+CODE_PREFIX_RE = re.compile(r'^([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+):(?:\s|$)')
 
 # Exceptions that mean "the upstream endpoint is gone"; their ``str()`` is often
 # empty, which is exactly the case this module exists for.
@@ -161,6 +170,10 @@ def classify_failure(exc: BaseException) -> tuple[str, str]:
         if reason.startswith(prefix):
             code = reason.split(':', 1)[0].strip() or prefix
             return code, reason
+
+    match = CODE_PREFIX_RE.match(reason)
+    if match and isinstance(exc, (ValueError, LookupError, RuntimeError)):
+        return match.group(1), reason
 
     if isinstance(exc, ValueError) and reason.startswith('Upstream did not return any SSE completion content'):
         return 'TURN_EMPTY_STREAM', 'TURN_EMPTY_STREAM: the provider stream ended without any content or tool call'
