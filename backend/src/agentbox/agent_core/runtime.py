@@ -4275,12 +4275,15 @@ class HarnessRuntime(RuntimeCommands):
                             # không bao giờ đứng như một message của chủ nhà), và chỉ khi lượt đã
                             # có việc để nhắc — lượt chỉ đọc không tốn một dòng nào. Nhờ vậy bước
                             # nào là bước tổng kết thì bước đó đã có sẵn danh sách việc đã làm.
-                            if session['role'] == 'orchestrator':
+                            # A Work Graph run that main still drives gets no recap: its "write the answer"
+                            # close made the model end the turn right after discovery (live test).
+                            if session['role'] == 'orchestrator' and not work_graph.driving(self, session):
                                 recap = turn_recap(turn_calls, turn_prompt_excerpt(messages))
                                 if recap:
                                     request_messages = list(request_messages) + [
                                         {'role': 'user', 'content': recap}]
-                            response = await self.client.complete(request_messages, tools, config['route'], on_thought=handle_thought, on_content=handle_content)
+                            response = await self.client.complete(request_messages, tools, config['route'], on_thought=handle_thought, on_content=handle_content,
+                                                                  max_tokens=config.get('maxTokens') or 4096)
                             break
                         except Exception as exc:
                             code, message = classify_failure(exc)
@@ -4381,7 +4384,8 @@ class HarnessRuntime(RuntimeCommands):
                         response = await self.client.complete(request_messages, [], config['route'],
                                                               on_thought=handle_thought,
                                                               on_content=handle_content,
-                                                              max_tokens=TRUNCATED_OUTPUT_MAX_TOKENS)
+                                                              max_tokens=max(TRUNCATED_OUTPUT_MAX_TOKENS,
+                                                                             (config.get('maxTokens') or 0) // 2))
                         reading = usage_reading(response.get('usage'), len(messages))
                         if reading:
                             self.last_usage[sid] = reading
@@ -6798,6 +6802,9 @@ class HarnessRuntime(RuntimeCommands):
             child['config']['taskKind'] = task_kind
             if work:
                 child['config']['workBinding'] = work
+                if work_graph.writes_document(work, role):
+                    # A full sub-plan or design plus thinking does not fit in 4096 output tokens.
+                    child['config']['maxTokens'] = work_graph.DOCUMENT_MAX_TOKENS
             if facet_id:
                 child['config']['facetId'] = facet_id
             self.store.update_config(child['id'], child['config'])

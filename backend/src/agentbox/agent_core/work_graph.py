@@ -66,6 +66,10 @@ FINDINGS_MAX_CHARS = 3000
 HISTORY_MAX = 120
 WORK_SKILL = 'work-graph-planning'
 REVIEW_MAX_STEPS = 14
+DOCUMENT_MAX_TOKENS = 16000
+# Run statuses where main still has a tool call to make before it may end the turn.
+DRIVING_STATUSES = ('drafting', 'discovering', 'verifying', 'needs_revision', 'approved', 'executing',
+                    'execute_failed')
 
 TERMINAL_STATUSES = ('shipped', 'cancelled', 'rejected')
 IN_FLIGHT_STAGE = ('running', 'reviewing', 'researching')
@@ -113,6 +117,22 @@ SLASH_FLOWS = ('plan', 'research', 'design')
 def grants_skill(session):
     """The root orchestrator always may open the Work Graph skill while the engine is on."""
     return enabled() and not session.get('parent_id') and session.get('role') == 'orchestrator'
+
+
+def writes_document(work, role):
+    """A plan/design producer writes a long document in its final answer."""
+    return work.get('purpose') == 'produce' and work.get('stage') == 'produce' and role in ('plan', 'design')
+
+
+def driving(rt, session):
+    """True while the root session's active run still needs main's next tool call."""
+    if not grants_skill(session):
+        return False
+    try:
+        run = service(rt).active(session['id'])
+    except Exception:  # the recap must never fail a turn
+        return False
+    return run is not None and run['status'] in DRIVING_STATUSES
 
 
 def wrap_up_note(session):
@@ -1587,6 +1607,9 @@ class WorkGraph:
                          f'nodes={len(run["nodes"])} stages={json.dumps(counts, ensure_ascii=False)} '
                          f'autopilot={"on" if autopilot_on(session) else "off"}.')
             lines.append('Next: ' + self.next_step(run))
+            if run['status'] in DRIVING_STATUSES:
+                lines.append('Keep this turn going: make the next tool call now. End the turn only for an '
+                             'interview, the approval card, or the final answer.')
         if len(lines) == 1:
             return ''
         lines.append(END_MARKER)

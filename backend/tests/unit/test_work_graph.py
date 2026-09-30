@@ -36,6 +36,7 @@ class Model:
         self.script = script
         self.delay = delay
         self.prompts = []
+        self.tokens = []
         self.active = 0
         self.peak = 0
 
@@ -44,6 +45,7 @@ class Model:
         kind = next((name for name, head in (('whole', WHOLE), ('review', REVIEW), ('knowledge', KNOW),
                                              ('produce', PRODUCE)) if head in first), 'main')
         self.prompts.append((kind, first))
+        self.tokens.append((kind, first, max_tokens))
         self.active += 1
         self.peak = max(self.peak, self.active)
         try:
@@ -829,3 +831,40 @@ def test_a_session_with_old_saved_skills_can_still_open_the_work_graph_skill(tmp
     assert wg.WORK_SKILL in store.get(sid)['config']['skills']
     monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
     assert not wg.grants_skill(store.get(sid))
+
+
+def test_plan_writers_get_a_document_sized_output_budget(tmp_path):
+    store, runtime, model, _, sid = build(tmp_path)
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+
+    asyncio.run(run())
+    children = [store.get(child['session_id']) for child in store.children_of(sid)]
+    by_role = {}
+    for child in children:
+        binding = child['config']['workBinding']
+        by_role.setdefault((binding['purpose'], child['role']), []).append(child['config'].get('maxTokens'))
+    assert set(by_role[('produce', 'plan')]) == {wg.DOCUMENT_MAX_TOKENS}
+    assert set(by_role[('produce', 'explore')]) == {None}
+    assert all(value is None for key, values in by_role.items() if key[0] == 'review' for value in values)
+    sent = {tokens for kind, text, tokens in model.tokens if kind == 'produce' and 'node P1' in text}
+    assert sent == {wg.DOCUMENT_MAX_TOKENS}
+    assert {tokens for kind, _, tokens in model.tokens if kind == 'review'} == {4096}
+
+
+def test_main_keeps_driving_an_active_run_without_the_turn_recap(tmp_path, monkeypatch):
+    store, runtime, _, _, sid = build(tmp_path)
+    assert not wg.driving(runtime, store.get(sid)), 'no run yet'
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button'})
+    asyncio.run(run())
+    session = store.get(sid)
+    assert wg.driving(runtime, session)
+    assert 'Keep this turn going' in wg.service(runtime).prompt_block(session)
+    assert not wg.driving(runtime, dict(session, parent_id='parent'))
+    monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
+    assert not wg.driving(runtime, session)
