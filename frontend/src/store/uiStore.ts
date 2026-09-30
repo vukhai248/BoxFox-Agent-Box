@@ -286,10 +286,6 @@ interface UiState {
   showFeedbackBanner: boolean
   setShowFeedbackBanner: (show: boolean) => void
 
-  // Autopilot toggle in chat bar
-  autopilotEnabled: boolean
-  setAutopilotEnabled: (enabled: boolean) => void
-
   // Command palette / Quick search
   searchOpen: boolean
   openSearch: () => void
@@ -641,10 +637,6 @@ export const useUiStore = create<UiState>((set, get) => ({
     applyDomTheme(theme)
     set({ theme })
   },
-
-  // Autopilot
-  autopilotEnabled: true,
-  setAutopilotEnabled: (enabled) => set({ autopilotEnabled: enabled }),
 
   // Search modal
   searchOpen: false,

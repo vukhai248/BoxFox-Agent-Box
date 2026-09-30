@@ -66,6 +66,7 @@ interface RunView { id: string | null; status: string; events: HarnessEvent[]; e
    */
   designMode?: unknown
   planMode?: unknown
+  autopilot?: boolean
   /** Nhật ký bền của phiên (khối `journal` đã gộp qua các vòng poll). */
   journal?: HarnessJournal | null
   /**
@@ -658,6 +659,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               researchMode: session.config?.researchMode,
               designMode: session.config?.designMode,
               planMode: session.config?.planMode,
+              autopilot: session.config?.autopilot === true,
               // Lời xác nhận "đã xếp hàng" chỉ sống trong lúc lượt còn đang chạy: lượt đã đóng thì
               // nó là thông tin cũ, và bong bóng "can thiệp" trong transcript đã là biên nhận thật.
               steerNotice: session.status === 'running' || session.status === 'awaiting_decision'
@@ -825,7 +827,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         // đầu tiên. Cùng một phản hồi `/sessions`, không thêm lời gọi mạng nào.
         if (session.config) {
           set(state => ({ sessions: { ...state.sessions,
-            [chatId]: { ...(state.sessions[chatId] ?? current), ...sessionContextWindow(session.config) } } }))
+            [chatId]: { ...(state.sessions[chatId] ?? current), ...sessionContextWindow(session.config), autopilot: session.config?.autopilot === true } } }))
         }
         return session.id
       }

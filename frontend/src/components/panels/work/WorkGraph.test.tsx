@@ -14,6 +14,7 @@ import { useAgentStore } from '../../../store/agentStore'
 import type { HarnessEvent } from '../../../store/harnessChatStore'
 import { dispatchTabIntents, parseDecisions, useHarnessChatStore } from '../../../store/harnessChatStore'
 import { useUiStore } from '../../../store/uiStore'
+import { useAutopilotStore } from '../../../store/autopilotStore'
 import { collectWorkRuns, parseWorkRun } from '../../../lib/workGraph'
 import { interviewReplies } from '../../InterviewCard'
 import { DecisionsPanel } from '../DecisionsPanel'
@@ -164,6 +165,7 @@ beforeEach(() => {
   useAgentStore.setState({ activeSessionId: CHAT_ID })
   useHarnessChatStore.setState({ sessions: {}, decisions: {}, intentSeq: {} })
   useUiStore.setState({ tabIntentTargets: {}, pendingIntents: [] })
+  useAutopilotStore.setState({ overrides: {}, busy: false, error: null })
   agentApiMock.mockReset()
 })
 
@@ -337,14 +339,15 @@ describe('Work Graph', () => {
     expect(rounds[0].getAttribute('data-verdict')).toBe('revise')
     expect(rounds[0].textContent).toContain('Missing line numbers')
 
-    const toggle = host.querySelector('[data-testid="work-autopilot-toggle"]') as HTMLButtonElement
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    const stateEl = host.querySelector('[data-testid="work-autopilot-state"]')
+    expect(stateEl?.textContent).toContain('Off — a verified plan waits for your approval')
+
     await act(async () => {
-      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await useAutopilotStore.getState().toggleAutopilot('sess-w', false)
     })
     const put = agentApiMock.mock.calls.find(([path]) => String(path).endsWith('/autopilot'))
     expect(put).toEqual(['/sessions/sess-w/autopilot', { on: true }, 'PUT'])
-    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(host.querySelector('[data-testid="work-autopilot-state"]')?.textContent).toContain('On — a verified plan runs at once, without an approval')
   })
 
   it('parseWorkRun đọc documents dạng object {path}', () => {

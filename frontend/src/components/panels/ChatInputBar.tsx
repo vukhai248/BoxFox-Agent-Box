@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import {
-  Zap,
-  Mic,
+  Sparkles,
   ArrowUp,
   Square,
   Paperclip,
@@ -39,6 +38,7 @@ import { useDesignStore } from '../../store/designStore'
 import { DesignComposerStatus } from './design/DesignComposerStatus'
 import { PlanComposerStatus } from './plan/PlanWorkflowView'
 import { usePlanStore } from '../../store/planStore'
+import { useSessionAutopilot } from '../../hooks/useSessionAutopilot'
 
 // Ở chế độ `live` (`VITE_TRANSPORT=live`) chưa có handler backend nào tiêu
 // thụ `elements` (xem `types/transport.ts` chú thích trên `user_message`) —
@@ -180,8 +180,7 @@ export function ChatInputBar({
   const isReadingColumn = workspaceHidden || openTabs.length === 0
   // E5 — chip "Mở trong Files" của tệp ĐÃ lên box dùng đúng hành động có sẵn của app.
   const selectFile = useUiStore((s) => s.selectFile)
-  const autopilotEnabled = useUiStore((s) => s.autopilotEnabled)
-  const setAutopilotEnabled = useUiStore((s) => s.setAutopilotEnabled)
+  const { autopilot, toggleAutopilot } = useSessionAutopilot()
   const pendingElements = useComposerStore((s) => s.pendingElements)
   const removePendingElement = useComposerStore((s) => s.removePendingElement)
   const clearPendingElements = useComposerStore((s) => s.clearPendingElements)
@@ -434,8 +433,8 @@ export function ChatInputBar({
                   setAttachments((prev) => [...prev, file])
                   setIsFocused(true)
                 }}
-                onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
-                autopilotEnabled={autopilotEnabled}
+                onToggleAutopilot={toggleAutopilot}
+                autopilotEnabled={autopilot}
                 onSelectPlan={() => {
                   void usePlanStore.getState().toggle(!planOn)
                   setIsFocused(true)
@@ -498,30 +497,22 @@ export function ChatInputBar({
               {/* Quick Ask */}
               <button
                 type="button"
+                onClick={() => textareaRef.current?.focus()}
                 title={t('composer.quickAsk')}
                 aria-label={t('composer.quickAsk')}
                 className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer border border-transparent"
               >
-                <Zap className="size-3 text-amber-400" />
+                <Sparkles className="size-3 text-amber-400" />
                 {!compact && <span>{t('composer.quickAsk')}</span>}
               </button>
 
               {/* More Options [ ⋮ ] chứa Repositories & Autopilot */}
               <ChatMoreOptionsPicker
-                autopilotEnabled={autopilotEnabled}
-                onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                autopilotEnabled={autopilot}
+                onToggleAutopilot={toggleAutopilot}
                 selectedRepoIds={selectedRepoIds}
                 onToggleRepo={toggleRepo}
               />
-
-              {/* Mic */}
-              <button
-                type="button"
-                className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
-                title="Voice dictation"
-              >
-                <Mic className="size-3.5" />
-              </button>
 
               {/* Send Button */}
               <button
@@ -755,8 +746,8 @@ export function ChatInputBar({
               <div className="flex shrink-0 items-center gap-1.5">
                 <AttachmentPicker
                   onAttach={(file) => setAttachments((prev) => [...prev, file])}
-                  onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
-                  autopilotEnabled={autopilotEnabled}
+                  onToggleAutopilot={toggleAutopilot}
+                  autopilotEnabled={autopilot}
                   onSelectPlan={() => {
                     void usePlanStore.getState().toggle(!planOn)
                     textareaRef.current?.focus()
@@ -785,29 +776,22 @@ export function ChatInputBar({
 
                 <button
                   type="button"
+                  onClick={() => textareaRef.current?.focus()}
                   title={t('composer.quickAsk')}
                   aria-label={t('composer.quickAsk')}
                   className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer border border-transparent"
                 >
-                  <Zap className="size-3 text-amber-400" />
+                  <Sparkles className="size-3 text-amber-400" />
                   {!compact && <span>{t('composer.quickAsk')}</span>}
                 </button>
 
                 {/* More Options [ ⋮ ] chứa Repositories & Autopilot */}
                 <ChatMoreOptionsPicker
-                  autopilotEnabled={autopilotEnabled}
-                  onToggleAutopilot={() => setAutopilotEnabled(!autopilotEnabled)}
+                  autopilotEnabled={autopilot}
+                  onToggleAutopilot={toggleAutopilot}
                   selectedRepoIds={selectedRepoIds}
                   onToggleRepo={toggleRepo}
                 />
-
-                <button
-                  type="button"
-                  className="flex size-7 items-center justify-center rounded-lg text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
-                  title="Voice dictation"
-                >
-                  <Mic className="size-3.5" />
-                </button>
 
                 {isBusy && (
                   <button

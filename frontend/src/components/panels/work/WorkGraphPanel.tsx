@@ -6,7 +6,7 @@
  * produce ↔ review kèm verdict và nhận xét, yêu cầu tri thức, review toàn plan, tài liệu
  * đã ghi, thẻ duyệt và kết quả ship. Công tắc Autopilot gọi `PUT /autopilot`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
   ChevronDown,
@@ -24,11 +24,10 @@ import { useT } from '../../../i18n/context'
 import { useAgentStore } from '../../../store/agentStore'
 import { useHarnessChatStore } from '../../../store/harnessChatStore'
 import { useUiStore } from '../../../store/uiStore'
+import { useSessionAutopilot } from '../../../hooks/useSessionAutopilot'
 import {
-  autopilotFrom,
   collectWorkRuns,
   fetchWorkRuns,
-  setAutopilot,
   statusTone,
   type WorkNode,
   type WorkRound,
@@ -104,15 +103,11 @@ export function WorkGraphPanel() {
 
   const [fetched, setFetched] = useState<WorkRunsResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [autopilotOverride, setAutopilotOverride] = useState<boolean | null>(null)
-  const [autopilotBusy, setAutopilotBusy] = useState(false)
-  const [autopilotError, setAutopilotError] = useState<string | null>(null)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [openNode, setOpenNode] = useState<string | null>(null)
 
   useEffect(() => {
     setFetched(null)
-    setAutopilotOverride(null)
     setLoadError(null)
     setSelectedRunId(null)
     setOpenNode(null)
@@ -130,29 +125,13 @@ export function WorkGraphPanel() {
     }
   }, [sessionId])
 
+  const { autopilot, error: autopilotError } = useSessionAutopilot({ fallback: fetched?.autopilot })
   const runs = useMemo(() => collectWorkRuns(events, fetched?.runs ?? []), [events, fetched?.runs])
-  const eventAutopilot = autopilotFrom(events, fetched?.autopilot ?? false)
-  const autopilot = autopilotOverride ?? eventAutopilot
-  useEffect(() => setAutopilotOverride(null), [eventAutopilot])
 
   const targetRunId = typeof target?.runId === 'string' ? target.runId : null
   // A new tab intent (a new run, or a run that waits for approval) wins over an earlier manual pick.
   useEffect(() => setSelectedRunId(null), [target])
   const run = runs.find((item) => item.runId === (selectedRunId ?? targetRunId)) ?? runs[0] ?? null
-
-  const toggleAutopilot = useCallback(async () => {
-    if (!sessionId) return
-    setAutopilotBusy(true)
-    setAutopilotError(null)
-    try {
-      const result = await setAutopilot(sessionId, !autopilot)
-      setAutopilotOverride(result.on)
-    } catch (error) {
-      setAutopilotError(String(error))
-    } finally {
-      setAutopilotBusy(false)
-    }
-  }, [autopilot, sessionId])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg text-fg" data-testid="work-graph-panel">
@@ -162,27 +141,6 @@ export function WorkGraphPanel() {
           <h2 className="text-[13px] font-semibold">{t('work.title')}</h2>
           <p className="truncate text-[11px] text-muted">{t('work.subtitle')}</p>
         </div>
-        <label
-          className="flex cursor-pointer items-center gap-2 text-[12px]"
-          title={autopilot ? t('work.autopilotOn') : t('work.autopilotOff')}
-        >
-          <span className="font-medium">{t('work.autopilot')}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={autopilot}
-            data-testid="work-autopilot-toggle"
-            disabled={!sessionId || autopilotBusy}
-            onClick={() => void toggleAutopilot()}
-            className={`relative h-5 w-9 rounded-full transition disabled:opacity-50 ${
-              autopilot ? 'bg-brand' : 'bg-zinc-600'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 size-4 rounded-full bg-white transition ${autopilot ? 'left-[18px]' : 'left-0.5'}`}
-            />
-          </button>
-        </label>
       </header>
       {autopilotError && (
         <p className="border-b border-line px-4 py-2 text-[11px] text-rose-400" data-testid="work-autopilot-error">
