@@ -1088,8 +1088,10 @@ Checklist này theo dõi implementation/verification, độc lập với việc 
 | W2 diagnostic metadata | [x] | [x] | Summary sạch; status/reason/error/tools_run và transcript giữ riêng; mục 13. |
 | W2 UI/inspector/badges | [ ] | [ ] | Không sửa UI/UX theo yêu cầu lượt này; cần test/CUA ở lượt được duyệt. |
 | W3 output/finish | [x] | [x] | Mục 14: 2543 backend tests passed, 18 Linux-only skipped; 250 router tests passed; 40 lượt live Space Bunny. Timeout production còn ở mục 14.5. |
-| W4 prompts/skills | [ ] | [ ] | Schema/template tests, representative artifacts và rubric findings. |
-| W5 artifacts/identity | [ ] | [ ] | File paths/manifests/hash, migration/restart/isolation/crash tests. |
+| W4 prompt hiện có: sửa bug | [x] | [x] | Mục 15: contract/mock/regression đã đạt; live 7/8 completion, còn finding nội dung. Không coi output là semantic-ready. |
+| W4 phần mở rộng skill/gate | [ ] | [ ] | Chưa thêm skill loader, tool, cổng chất lượng hoặc cơ chế chọn check mới. Cần thống nhất scope riêng. |
+| W5 đường tài liệu hiện có: sửa bug | [x] | [x] | Mục 15: writer sai kiểu, path/version thực, UTF-8/hash; full regression 2584 passed. Không thêm artifact store. |
+| W5 artifact store/identity mới | [ ] | [ ] | Để thảo luận: session/turn namespace, registry, immutable snapshots, migration và reviewer đọc file thay inline. |
 | W6 flexible checks | [ ] | [ ] | Policy/check traces, acceptance coverage, no bypass/recursive check cases. |
 | W7 interview/resume | [ ] | [ ] | Request/answer/invocation, same child/folder và independent branches. |
 | W8 DAG/execution | [ ] | [ ] | Dependency/resource-lock traces, branch/change set và integration results. |
@@ -1290,3 +1292,102 @@ node --import ./tests/isolate-logs.mjs --test tests/*.test.mjs
 Nếu agent khác kiểm CUA: chọn một child Research dài và một Plan/Design. Expected: request budget 16k trừ khi bị cap rõ ràng; completed chỉ khi completion terminal hợp lệ; lỗi EOF/time phải partial và có code riêng; URL/report không có tool-list diagnostic; không gọi tool từ arguments dở; không mất output đã stream. Kiểm switch giữa child, copy/render/export theo mục 13.5; vấn đề badge/render còn lại ghi vào W9, không sửa UI tự phát.
 
 Đối chiếu checkout cuối: B và main vẫn ở HEAD nền trên; W3 chỉ có trong working tree B, chưa commit/push/merge. Main hiện có các thay đổi riêng (frontend HarnessFlowVisualizer, tài liệu v21/v22/logs bị xóa và plan cũ untracked); chỉ quan sát, không phục hồi hay sửa chúng. Relay thử riêng đã dừng, không restart router/app đang dùng. Không có file frontend/UI hoặc `work_graph.py` được chỉnh trong W3.
+
+
+## 15. Checkpoint W4 và phần sửa bug W5 — 01/10/2026
+
+### 15.1 Neo khôi phục và phạm vi đã duyệt
+
+- Commit neo **`4da6388d`** trên **B**: `fix: stabilize planning tools and specialist completions (W0-W3)`. Đã commit 24 file W0–W3/docs/evidence theo danh sách cụ thể; không push/merge.
+- Checkout duy nhất được sửa: `D:/create/BoxFox-Agent-Box-B`. `D:/create/BoxFox-Agent-Box` thuộc main, có thay đổi riêng của chủ dự án và chỉ được quan sát.
+- Lượt này chỉ sửa lỗi prompt/contract và đường lưu tài liệu đang có. Không thêm feature, thay UI/UX, scheduler/DAG, quyền tool, approval/autopilot, vòng review, cơ chế interview/resume, schema SQLite hoặc provider/model.
+- W4 đầy đủ và W5 đầy đủ không được tự đánh dấu xong vì phần mở rộng cần thảo luận riêng. Các việc mới ở 15.4 giữ unchecked.
+
+### 15.2 Lỗi có căn cứ và thay đổi giới hạn
+
+| ID | Hiện trạng/nguyên nhân trước sửa | Hệ quả | Sửa trong lượt này | Oracle |
+|---|---|---|---|---|
+| W4-B01 | Producer/reviewer/knowledge/whole-plan wrapper, expectation và result contract viết tiếng Anh dù goal người dùng tiếng Việt. | Prompt giao việc và tài liệu trộn ngôn ngữ; role instructions và output template có thể lệch nhau. | Tách các template hiện có vào `work_prompts.py`; chọn tiếng Việt/Anh từ goal gốc, không từ tên model hoặc nội dung dependency. Wrapper/context/template/rubric của Work Graph cùng ngôn ngữ. Giữ identifier, nguồn trích và marker máy đọc. | Lượt mock 2 producer + 2 reviewer + 1 whole review vẫn chạy; câu dẫn tiếng Việt; marker `Knowledge requests`, `research`, `explore`, `VERDICT`, `REVISE` còn parse được. |
+| W4-B02 | Contract yêu cầu mọi khẳng định có nguồn mà không tách dữ kiện, suy luận, đề xuất và quyết định còn mở. Template Plan thiếu chỉ dẫn cụ thể cho data/AI/ops/milestone/truy vết. | Đề xuất có thể được trình như dữ kiện; có tiêu đề nhưng người triển khai vẫn phải tự đoán thiết kế. | Chỉnh hợp đồng đầu ra hiện có: dữ kiện cần nguồn thực; đề xuất/suy luận/unknown phải ghi nhãn. Plan theo quy mô có kiến trúc/stack/data/API/AI/ops/M1…Mn/output/test/expected/truy vết. Ngưỡng chưa đo là đề xuất cần hiệu chỉnh. | Template không bị cắt ở `CHILD_EXPECT_MAX_CHARS=2000`; không bắt test trong plan phải đã chạy pass. Live artifact được đọc để đánh giá, không coi số heading là chất lượng SWE. |
+| W4-B03 | Design và rubric áp empty/loading/screen states cho cả nhiệm vụ API/kiến trúc; Debug bắt có Fix/Proof ngay cả khi chỉ chẩn đoán. | Mở rộng scope hoặc sửa mã ngoài nhiệm vụ. | Chỉ dẫn theo loại thiết kế và scope đang được giao; API không tự thêm màn hình; diagnosis-only không cho phép patch. | Test contract và live ca API-only/diagnosis-only; không thêm UI/scaffold/patch hoặc bịa test pass. |
+| W4-B04 | Build review rubric quảng cáo `terminal_exec` dù role Review chỉ có READ; Research chưa phân biệt không tìm thấy với không tồn tại. | Reviewer gọi tool không được cấp hoặc kết luận vượt bằng chứng. | Prompt yêu cầu chỉ chạy khi tool/scope cho phép, nếu không ghi NOT RUN/gap. Research ghi phạm vi/phương pháp/trái chiều/giới hạn, không tự tạo plan ngoài yêu cầu. Không mở thêm quyền hoặc thay loại checker. | Tool permissions giữ nguyên; nguồn không đọc được UNVERIFIED; command dự kiến không là command đã chạy. |
+| W4-B05 | Parser `has_no_blocking_findings` chỉ nhận header tiếng Anh. | Sau bản địa hóa, cùng một báo cáo rỗng có thể bị xử lý khác bản cũ. | Thêm tương đương tiếng Việt cho header/none trong parser hiện có; báo cáo có finding vẫn không được coi là rỗng. Không đổi quy tắc verdict/retry/round cap. | Ca tiếng Việt/Anh rỗng có cùng kết quả; finding chặn thực vẫn false; báo cáo không có section không tự coi là đạt. |
+| W5-B01 | Error formatter của `write_document` dùng `.get` trên phản hồi writer bất kỳ; phản hồi chuỗi/list khác rỗng gây AttributeError. | Lỗi lưu tài liệu bị che bởi lỗi định dạng, mất recovery code. | Định dạng theo kiểu phản hồi, giữ WORK_DOCUMENT_FAILED; không emit plan_written khi chưa có metadata thành công. | Phản hồi malformed không AttributeError; phản hồi hợp lệ còn bytes/hash/UTF-8/path. |
+| W5-B02 | Master document chỉ ghi slug sub-plan, thiếu path/version file thực đã lưu. | Main/người đọc không xác định chính xác bản cần mở. | Dùng metadata của các sub-plan vừa được writer xác nhận để ghi tham chiếu bản thực trong master; draft trước ghi nói chưa lưu, không dùng metadata run cũ. Không đổi thời điểm lưu hoặc review. | Master trỏ bản writer vừa trả về; không suy đoán v1 hay tái dùng đường dẫn cũ. Điều hướng UI còn cần kiểm riêng và không được tuyên bố đã đạt. |
+
+Các sự kiện `plan_written` giữ nguyên schema/hash tính trên payload UTF-8. Chưa xác nhận lỗi writer bỏ dấu hoặc tự thêm header trên đường Work Graph: worker ghi nguyên payload. Không tạo patch cho giả thuyết chưa được chứng minh.
+
+### 15.3 Kiểm chứng đang thực hiện
+
+- [x] Baseline trước sửa: 80 passed cho Work Graph/delegation/write_plan, 18,45 giây.
+- [x] Regression mới cuối: 41 passed; prompt/role/scope/parser/writer/reference/UTF-8 và full mock pipeline giữ 5 child như cũ. Bộ mục tiêu tổng: **121 passed**, 21,63 giây.
+- [x] Bộ mục tiêu trước bổ sung 5 ca parser: 115 passed; chưa dùng con số này thay kết quả full suite cuối.
+- [x] Router: 250 passed với BOXFOX_SYSTEM_LOG_DIR trỏ folder thử riêng. Lần đầu 249 passed / 1 failed: test bridge tìm router.jsonl ở tmpdir cũ trong khi logger mặc định dùng user-home. Không sửa router hoặc test để che lỗi; chỉ cấu hình log dir tường minh cho lần chạy lại.
+- [x] Full backend unit lần đầu: 2583 passed / 18 Linux-only skipped, 416,01 giây. Sau chỉnh tham chiếu thành path copyable và thêm ca writer list khác rỗng, chạy lại trên source cố định: **2584 passed / 18 skipped / 0 fail hoặc error**, 412,36 giây. Evidence cuối: `.tmp/work-prompts/full-unit-final.xml`, `.tmp/work-prompts-full-unit-final.log`.
+- [x] Live: 4 role Research/Plan/Design/Debug x 2 lượt trên OpenCode space-bunny-free: **7/8 completion**, 1 Debug finish=length tại 4096 token; giữ cả lượt lỗi. Kết quả/adjudication `.tmp/work-prompts/live/results.json`; bản metadata/quotes/hash có Git: `docs/plan/W4-W5-bugfix-evidence.json`. Output `.md` trong `.tmp/work-prompts/live/` là artifact local, không có Git; có thể rerun bằng script.
+- [x] Đọc các báo cáo live và ghi adjudication/giới hạn mục 15.6; không bản nào được đánh dấu semantic-ready. Đây là đánh giá của agent thực hiện, không phải một vòng specialist review độc lập hoặc bác sĩ kiểm chứng.
+- [x] AST đối chiếu 12 hàm cốt lõi DAG/create/run/submit/autopilot/ship với neo 4da6388d: giống nhau; toàn bộ bộ test scheduler/retry/delegation hiện có còn pass. Đối chiếu main: HEAD 36943056 và danh sách thay đổi riêng giữ nguyên; không sửa frontend/UI.
+- [x] Kiểm cuối: source hash và output hash khớp evidence, source/docs UTF-8 không có U+FFFD, 22 fence markers cân bằng, diff whitespace sạch. XML cuối: 2602 ca tổng, 2584 pass, 18 skip, 0 failure/error. Relay/evaluator/full test đã kết thúc.
+- [x] Checkpoint commit W4/W5 bug-only dùng message `fix: align specialist prompts and plan document references (W4-W5)`; commit tách khỏi neo 4da6388d, chỉ trên B. Tra commit bằng Git log theo message này; không push/merge. Source đã freeze trước full suite cuối.
+
+Live dùng text-only probe gọi prompt/role thực với dữ liệu synthetic, không mở session/DB/workspace production, không có browse/file/terminal tools. Vì vậy chỉ đánh giá output/scope/language/evidence honesty của prompt, không chứng minh research đã tra nguồn thật hoặc whole Harness hoàn tất. Relay B riêng có deadline thử 240s để tách khỏi timeout production 90s; không sửa timeout production. Plan/Design/Research 16k, Debug 4k theo scope; không nâng 32k hoặc đổi provider. Dừng relay sau thử.
+
+### 15.4 Việc bỏ qua để thảo luận feature/workflow
+
+- [x] Đã khoanh vùng và để lại các mục dưới đây; không tick implementation của feature chưa làm.
+- [ ] W5-F01: namespace mới theo root session/origin turn/run/attempt, registry SQLite, manifest/index/export và chính sách truy cập.
+- [ ] W5-F02: artifact immutable version/hash, dedicated writer/reader, crash reconciliation và migration plan cũ.
+- [ ] W5-F03: lưu sub-plan trước review, main/reviewer nhận file refs, đọc đủ nội dung thay inline prompt; bounded recovery tiếp tục từ artifact.
+- [ ] W6: main chọn checks linh hoạt theo loại/rủi ro, check bindings/invalidation, gate đối với partial/reviewer error/caveats; thay review cố định sau mọi sub-agent.
+- [ ] W7: child cần định hướng trả request về main, interview bền vững và resume cùng child sau answer.
+- [ ] W8: DAG dependencies/execution/resource locks/branch ownership. Không đổi scheduler trong lượt sửa bug.
+- [ ] W9: badges, inspector, điều hướng file, lịch sử câu hỏi và mode UI; không sửa UI/UX.
+- [ ] Timeout router production 90s; cần thống nhất riêng với owner/child budgets.
+
+Các giới hạn còn tồn tại: Work Graph đọc full final của child từ SQLite nhưng vẫn bound output/context/reviewer inline ở các mức hiện có (20k/14k và từng nhánh); round-cap caveat acceptance, loại reviewer cố định và whole review theo prefix không được thay trong lượt này. W4 prompt tốt hơn không chứng minh các gate đó đủ an toàn cho production.
+
+### 15.5 Checklist cho agent kiểm CUA sau
+
+Chỉ chạy khi có lượt nghiệm thu UI/live Harness được giao; dùng B, DB/session/workspace thử riêng và OpenCode space-bunny-free.
+
+1. Tạo yêu cầu tiếng Việt: mở assigned task của producer, reviewer, knowledge child và whole-plan reviewer. Expected: prose/expectation/rubric tiếng Việt; marker/identifier/quote giữ nguyên; thinking có thể tiếng Anh. Không đánh giá quality chỉ vì prompt đã dịch.
+2. Yêu cầu Research-only và API Design-only. Expected: output giữ scope, dữ kiện có nguồn thực hoặc UNVERIFIED, không tự tạo Build/UI/scaffold. Thiếu quyết định người dùng được nêu rõ; durable callback/resume chưa triển khai ở lượt này.
+3. Diagnosis-only Debug. Expected: nguyên nhân, bằng chứng và giới hạn; không sửa mã hoặc bịa lệnh đã chạy. Nếu sau đó giao patch, chỉ lúc ấy mới có thay đổi và bằng chứng test.
+4. Sau whole review lưu hai version: mở master và đọc path/version của sub-plan. Expected: đúng file writer vừa xác nhận; copy path mở được trong workspace; draft trước lưu không trình path đoán. Nếu link click trong Plan panel chưa mở Files đúng, ghi W9 và không đổi UI tự phát.
+5. Đổi child, copy/render/export. Expected: không có tools_run diagnostic trong Markdown/URL, tiếng Việt giữ dấu, không hiển thị report child cũ. Badge hiện có không được gọi là semantic verified khi mới completed.
+6. Bơm writer error. Expected: WORK_DOCUMENT_FAILED, không plan_written giả; run giữ cơ chế retry/recovery hiện có, không auto-approve/execute.
+
+Agent tiếp nối bắt đầu từ 15.3, đọc evidence thật và phần deferred 15.4. Chỉ tick xong các ca đã chạy; không mở W5–W9 feature từ việc chủ dự án duyệt sửa bug.
+
+### 15.6 Kết quả live, finding còn lại và cách chạy lại
+
+| Role | Completion | Kiểm scope/ngôn ngữ | Finding còn lại; không được coi là ready |
+|---|---|---|---|
+| Research | 2/2 | Tiếng Việt; không tạo milestone triển khai; ghi không browse/test và UNVERIFIED. | Vẫn hỏi lại ràng buộc F5 đã cho; một quote đổi chữ; lý luận định lượng chưa được đối chiếu nguồn. |
+| Plan | 2/2 | Có M1–M4, kiến trúc/data/API/AI/ops/test/expected/truy vết; path chủ yếu planned; test dự kiến ghi chưa chạy. | Plan 1 khẳng định extraction grounding tuyệt đối, thiếu định nghĩa đầy đủ metric/rollback. Plan 2 nới citation thành 95%, dùng lexical overlap làm cổng căn cứ, PK/revision thiếu thống nhất, gọi fixture path là tồn tại. |
+| Design | 2/2 | API-only, không thêm UI/scaffold; có payload/state/error/idempotency/checks. | Bản 1 dùng EXPIRED chưa có trong enum, catalogue lỗi thiếu mã. Bản 2 có field/type/fence thiếu hoặc dính dòng. Cả hai chưa chứng minh nghĩa câu được nguồn hỗ trợ chỉ bằng kiểm span/quote. |
+| Debug | 1/2 | Cả hai giữ diagnosis-only, không patch, không bịa test pass; bản hoàn chỉnh có NOT RUN/NOT REPRODUCED. | Bản 1 cắt tại 4k; bản 2 vẫn có suy luận dựa vào dữ liệu synthetic của nhiệm vụ khác. Không tăng quota Debug ngoài scope W3 đã chốt. |
+
+Tất cả 8 output dùng tiếng Việt; không có tools_run diagnostic spam. Plan 1 có một ký tự U+FFFD trong text nhận từ client; file giữ đúng hash của text, chưa cô lập được nguyên nhân upstream nên chỉ ghi finding độ rõ ràng, không quy lỗi cho writer. **7/8 completion = 87,5%**, không phải tỉ lệ đạt nội dung. Không bỏ Debug lỗi khỏi mẫu hoặc rerun tới khi đẹp. Nguồn fixture không thể dùng làm căn cứ y tế/pháp lý ngoài bài thử.
+
+Các finding trên được giữ để thiết kế checks W6/đánh giá W10: bảo toàn ràng buộc cứng, claim-source entailment, schema/state/error consistency, fixture-versus-existing path và quote integrity. Chưa thêm gate/scheduler mới trong lượt này. Prompt tốt hơn vẫn không đủ bảo đảm tất cả output đúng.
+
+**Giới hạn lưu/đọc đã đo:** Design bản 2 dài **28.122 ký tự**, provider báo stop tại 15.814 completion token. Nếu đi qua Work Graph hiện tại, state.output 20k và context reviewer 14k sẽ bound nội dung; whole review còn bound từng nhánh. Cần thảo luận W5 artifact/file-reference và W6 binding trước khi tuyên bố reviewer đã đọc đủ bản. Không tăng output lên 32k để che vấn đề này.
+
+**Thời gian:** Design 202,62 và 238,43 giây trên relay thử 240s. Đây không chứng minh router production 90s sẽ hoàn thành. Relay thử đã dừng; không restart app/router production, không tạo session/DB/workspace Harness thật, không dùng CUA.
+
+**Tham chiếu tài liệu:** master chỉ ghi version và path workspace copyable từ writer; không tạo link bấm. `PlanPanel.tsx` hiện dùng MarkdownRenderer không có onOpenFile callback, nên basename link có thể mở sai vị trí. Điều hướng Files/Plan panel để W9.
+
+Chạy lại từ checkout B:
+
+~~~powershell
+$env:PYTHONPATH='backend/src'
+python -m pytest backend/tests/unit/test_work_prompt_contracts.py backend/tests/unit/test_work_graph.py backend/tests/unit/test_delegation_contract.py backend/tests/unit/test_write_plan.py -q
+python -m pytest backend/tests/unit -q --junitxml=.tmp/work-prompts/full-unit-rerun.xml
+node scripts/eval/output_budget_relay.mjs
+# Lấy URL loopback relay in ra, dùng folder output mới để không resume mẫu cũ:
+python scripts/eval/work_prompt_eval.py --router <URL> --output .tmp/work-prompts/rerun --repeats 2
+# Dừng đúng process relay thử sau khi chạy. Không đổi router production.
+~~~
+
+Live prompt hash khớp prompt tái tạo bằng source cuối. Hash work_graph.py ở đầu live có trước chỉnh path copyable của writer; phần producer/reviewer prompts không thay đổi bởi chỉnh đó. Full suite cuối đã kiểm source sau chỉnh writer. Hash source cuối, usage/latency/output/quotes và adjudication nằm trong evidence JSON; không coi source-hash khác là cùng snapshot toàn file.

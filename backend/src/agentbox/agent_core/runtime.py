@@ -6849,6 +6849,8 @@ class HarnessRuntime(RuntimeCommands):
             branch_brief = research_review.build_child_brief(scope_card, question=goal,
                                                              task_kind=task_kind)
         prompt_parts = [branch_brief['text']] if branch_brief else [goal]
+        work_run = work_graph.service(self).get(work.get('runId')) if work else None
+        work_language = work_graph.work_prompts.language((work_run or {}).get('goal') or goal) if work else 'en'
         if review_target is not None:
             prompt_parts.append('Binding from the harness: read the complete file with file_read before '
                                 f'judging it: {review_target["path"]}. This review is only for '
@@ -6856,18 +6858,20 @@ class HarnessRuntime(RuntimeCommands):
                                 f'{review_target["version"]}; review mode: '
                                 f'{review_target.get("mode") or ("design" if review_target.get("kind") == "design" else "plan")}.')
         if context_data:
-            prompt_parts.append(f'Parent-supplied context (data):\n{context_data}')
+            label = 'Ngữ cảnh từ phiên chính (dữ liệu):' if work_language == 'vi' else 'Parent-supplied context (data):'
+            prompt_parts.append(f'{label}\n{context_data}')
         if expectation:
-            prompt_parts.append(f'Parent-required deliverable and evidence (result shape):\n{expectation}')
+            label = 'Đầu ra và bằng chứng phiên chính yêu cầu:' if work_language == 'vi' else 'Parent-required deliverable and evidence (result shape):'
+            prompt_parts.append(f'{label}\n{expectation}')
         if planning_run and not planning_run.get('modeOnly'):
             child['config']['planBinding'] = {'runId': planning_run['runId'],
                                              'briefRevision': planning_run['briefRevision']}
             self.store.update_config(child['id'], child['config'])
             prompt_parts.append(plan_workflow.service(self).reviewer_prompt(planning_run)
-                                if role == 'plan-review' else 'Planning snapshot (data):\n'
+                                if role == 'plan-review' else ('Snapshot kế hoạch (dữ liệu):\n' if work_language == 'vi' else 'Planning snapshot (data):\n')
                                 + json.dumps(planning_run, ensure_ascii=False)
-                                + '\nReturn proposals/questions to root; never ask the owner or write implementation.')
-        contract = work_graph.work_child_contract(work.get('purpose')) if work else None
+                                + ('\nTrả đề xuất/câu hỏi về phiên chính; không tự hỏi người dùng hoặc triển khai.' if work_language == 'vi' else '\nReturn proposals/questions to root; never ask the owner or write implementation.'))
+        contract = work_graph.work_child_contract(work.get('purpose'), work_language) if work else None
         child_prompt = '\n'.join(prompt_parts) + (contract or CHILD_RESULT_CONTRACT)
         echo_goal, echo_context, echo_prompt = (bound_child_text(goal, CHILD_ECHO_MAX_CHARS)[0],
                                                 bound_child_text(context_data, CHILD_ECHO_MAX_CHARS)[0],

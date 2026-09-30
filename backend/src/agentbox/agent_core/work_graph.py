@@ -30,6 +30,8 @@ import unicodedata
 import uuid
 from copy import deepcopy
 
+from . import work_prompts
+
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
 END_MARKER = '=== END WORK GRAPH ==='
@@ -411,9 +413,10 @@ def parse_verdict(text):
     return verdict, findings[:FINDINGS_MAX_CHARS]
 
 
-BLOCKING_RE = re.compile(r'^[\s#*]*Blocking findings\b[\s*]*(.*)$', re.I | re.M)
-SECTION_END_RE = re.compile(r'^[\s#*]*(#{1,4}\s|Non-blocking)', re.I | re.M)
-NONE_WORDS = ('none', 'no blocking findings', 'no blocking finding', 'nothing blocking', 'n/a')
+BLOCKING_RE = re.compile(r'^[\s#*]*(?:Blocking findings|Vấn đề chặn)\b[\s*]*(.*)$', re.I | re.M)
+SECTION_END_RE = re.compile(r'^[\s#*]*(#{1,4}\s|Non-blocking|Ghi chú không chặn)', re.I | re.M)
+NONE_WORDS = ('none', 'no blocking findings', 'no blocking finding', 'nothing blocking', 'n/a',
+              'không', 'không có', 'không có vấn đề chặn')
 # Evidence nodes: at the round cap their output is still the best evidence there is. It is accepted with
 # the open findings as caveats, so a fuzzy citation cannot stall the whole plan (live test, space-bunny-free).
 CAVEAT_KINDS = ('explore', 'research')
@@ -473,111 +476,17 @@ def bounded(text, limit):
 # Prompts: deliverable templates per node kind and review rubrics
 # --------------------------------------------------------------------------- #
 
-KNOWLEDGE_CONTRACT = """## Knowledge requests — only when a missing FACT blocks you. One line each, max 3:
-- research: <external question, for example a library API, a standard, a version>
-- explore: <repository question, for example where X is defined or who calls Y>
-Write `- none` when you need nothing. You cannot delegate; the harness asks for you and runs you again with the answers."""
-
-DELIVERABLES = {
-    'explore': """Deliverable (Markdown, in the owner's language):
-## Findings — what exists today, most important first, each with `path:line`.
-## Evidence table — | Claim | path:line | quoted line |.
-## Contracts & call sites — functions, data shapes, routes, events the work will touch.
-## Risks & unknowns — what you could not confirm.""",
-    'research': """Deliverable (Markdown, in the owner's language):
-## Answer — the direct answer to the question, 3-8 sentences.
-## Verified facts — each fact with the exact URL or path you opened and a short verbatim quote.
-## Options compared — a table when there is a choice to make (option, pros, cons, cost, fit).
-## Contrary evidence & gaps — what disagrees, what you could not open (mark UNVERIFIED).
-## Recommendation — one choice and why.""",
-    'design': """Deliverable (Markdown, in the owner's language):
-## Design goal & users — what the screen/API/flow must let the user do.
-## Structure — components or modules and their responsibility; data contracts as TypeScript/Python types.
-## States & flows — normal, empty, loading, error, permission states; step-by-step interaction.
-## Touch list — the exact files to add or change, grounded in files you read.
-## Alternatives & tradeoffs — at least one alternative and why it lost.
-## Acceptance — observable checks that prove the design was built.""",
-    'plan': """Deliverable: ONE sub-plan in Markdown (the owner's language), at the level of a senior engineer's design doc:
-## Mục tiêu / Goal — the outcome of this sub-plan and what is explicitly out of scope.
-## Evidence — table | Fact | path:line or URL | what it means for the change |; only facts you or a dependency verified.
-## Decisions — table | # | Decision | Chosen | Alternatives | Why |.
-## Contracts — data shapes, function signatures, API/route payloads, events, migrations, with types.
-## Work items — numbered, each with the exact files and the edit; mark `[song song]` or `[sau P#]` dependencies.
-## Tests — each test case with its file, the command to run it, and the expected result (unit + integration/UI).
-## Acceptance — observable checks, one per line.
-## Risks & rollback — failure modes, their detection, and how to undo.
-## Out of scope / do not do — explicit non-goals.""",
-    'build': """Deliverable (Markdown):
-## Changes — every file changed and what changed.
-## Test run — the exact commands you ran and the real observed output (pass/fail counts).
-## Deviations — anything you did differently from the sub-plan and why.
-## Remaining risk — what is not verified yet.""",
-    'debug': """Deliverable (Markdown):
-## Reproduction — command and observed failure before the fix.
-## Root cause — path:line and why.
-## Fix — files changed.
-## Proof — the same command after the fix, with output; regression tests run.""",
-    'testing': """Deliverable (Markdown):
-## Test matrix — each case, how it was run, result.
-## Evidence — commands and real output, screenshots when UI.
-## Failures — raw error output for every failure.""",
-    'simplify': """Deliverable (Markdown):
-## Simplifications — files and patterns simplified.
-## Behavior proof — the test commands you ran before and after, with output.""",
-}
-
-REVIEW_RUBRICS = {
-    'explore': 'Spot-check the claims a planner will rely on: open at most 6 of the most decision-critical '
-               'cited path:line locations; do not re-explore the whole repository. Block only invented paths or '
-               'symbols, a claim that is wrong in substance, or a call site the goal obviously needs that is '
-               'missing. A line number that is a few lines off in the right file is a non-blocking note.',
-    'research': 'Open the cited URLs/paths for the decision-critical facts (at most 6). Block only a fact '
-                'without any source, a quote that contradicts the claim, or a recommendation that ignores '
-                'clear contrary evidence. Missing extra sources and wording are non-blocking notes; mark what '
-                'you could not verify as UNVERIFIED.',
-    'design': 'Check the touch list against the repository, that every state (empty, loading, error, '
-              'permission) and flow is defined, that contracts are typed, and that acceptance checks could '
-              'prove the design was built.',
-    'plan': 'Judge the sub-plan as a senior engineer would before approving a design doc: evidence with real '
-            'path:line (open them), decisions with alternatives, typed contracts, work items with exact files, '
-            'tests that are concrete (file + command + expected result) and cover the acceptance, dependencies '
-            'that are right (it must not need a sibling it does not declare), risks with rollback, and no scope '
-            'creep beyond the goal.',
-    'build': 'Verify the change: read the changed files, run the tests the sub-plan names with terminal_exec, '
-             'and check each acceptance item. Do NOT edit source files. Reject when a test fails, a required '
-             'test is missing, or an acceptance item is not met.',
-    'testing': 'Check that the reported test results are real (commands and output present), cover the '
-               'acceptance and include edge cases.',
-}
-REVIEW_RUBRICS['debug'] = REVIEW_RUBRICS['build']
-REVIEW_RUBRICS['simplify'] = REVIEW_RUBRICS['build'] + ' Behavior must be unchanged.'
-
-REVIEW_TAIL = """A finding is BLOCKING only when the next step (a sub-plan, a build or the owner's decision) would go wrong if it used this output as written. Citation precision, style, extra detail and nice-to-haves are NON-BLOCKING notes. If you have no blocking finding, the verdict MUST be `ok`. Stay within your step budget: check, do not redo the work.
-Output (Markdown):
-## Blocking findings — numbered; each names the acceptance item or section, the evidence (path:line, URL, command output) and the exact fix. Write `none` when there are none.
-## Non-blocking notes — optional.
-END with exactly one final line: `VERDICT: ok` (acceptable as written) or `VERDICT: revise` (it must change). No text after that line. A review without the VERDICT line is discarded."""
-
-WORK_NODE_CONTRACT = """
-
-Result contract (Work Graph node). The harness reviews your answer against the acceptance list; an independent reviewer decides `ok` or `revise`, and on `revise` you are run again with the findings.
-- Put the full deliverable in your final answer; nothing else reaches the reviewer.
-- Every claim needs evidence (path:line, URL with quote, command with real output). Mark unverified items UNVERIFIED.
-- Do not do other nodes' work and do not widen the scope. Stop exploring once every acceptance item is covered; a focused answer inside your step budget beats an exhaustive one that runs out.
-""" + KNOWLEDGE_CONTRACT
-
-REVIEW_CONTRACT = """
-
-Result contract (Work Graph review). You are the independent reviewer; you did not produce this output. Read the evidence yourself before judging. Your answer must end with the single VERDICT line."""
+# English aliases preserve callers inspecting the existing prompt constants.
+KNOWLEDGE_CONTRACT = work_prompts.KNOWLEDGE['en']
+DELIVERABLES = work_prompts.DELIVERABLES_EN
+REVIEW_RUBRICS = work_prompts.RUBRICS_EN
+REVIEW_TAIL = work_prompts.REVIEW_TAIL_EN
+WORK_NODE_CONTRACT = work_prompts.child_contract('produce')
+REVIEW_CONTRACT = work_prompts.child_contract('review')
 
 
-def work_child_contract(purpose):
-    """Contract appended to a Work Graph child prompt; `None` keeps the generic child contract."""
-    if purpose == 'review':
-        return REVIEW_CONTRACT
-    if purpose == 'produce':
-        return WORK_NODE_CONTRACT
-    return None
+def work_child_contract(purpose, language='en'):
+    return work_prompts.child_contract(purpose, language)
 
 
 # --------------------------------------------------------------------------- #
@@ -936,6 +845,7 @@ class WorkGraph:
     # ---- node execution with the review loop ------------------------------------------------- #
 
     def dependency_context(self, run, node, stage):
+        lang = work_prompts.language(run['goal'])
         by_id = {item['id']: item for item in run['nodes']}
         parts = []
         room = CONTEXT_MAX_CHARS
@@ -949,13 +859,17 @@ class WorkGraph:
                 continue
             piece = bounded(state['output'], max(1500, room // max(1, len(node['dependsOn']))))
             if state.get('caveats'):
-                piece += ('\n\nReviewer caveats (open at the round cap; verify before relying on them):\n'
+                piece += (work_prompts.choose(lang, '\n\nReviewer caveats (open at the round cap; verify before relying on them):\n',
+                                             '\n\nLưu ý reviewer còn mở tại giới hạn vòng; cần xác minh trước khi sử dụng:\n')
                           + bounded(state['caveats'], 1500))
-            parts.append(f'### Accepted output of {dep} ({target["kind"]}: {target["title"]})\n{piece}')
+            heading = work_prompts.choose(lang, 'Accepted output of', 'Kết quả được chấp nhận của')
+            parts.append(f'### {heading} {dep} ({target["kind"]}: {target["title"]})\n{piece}')
             room -= len(piece)
         if stage == 'execute' and node['kind'] == PLAN_KIND:
             own = node['stages']['produce'].get('output') or ''
-            parts.insert(0, f'### The approved sub-plan {node["id"]} you must implement\n{bounded(own, 9000)}')
+            heading = work_prompts.choose(lang, f'The approved sub-plan {node["id"]} you must implement',
+                                         f'Sub-plan {node["id"]} đã được duyệt cần thực hiện')
+            parts.insert(0, f'### {heading}\n{bounded(own, 9000)}')
         return '\n\n'.join(parts)
 
     def interview_context(self, run):
@@ -963,58 +877,73 @@ class WorkGraph:
         for item in run.get('interviews') or []:
             for answer in item.get('answers') or []:
                 lines.append(f'- {answer.get("question")}: {answer.get("answer")}')
-        return ('Owner decisions from the interview:\n' + '\n'.join(lines)) if lines else ''
+        heading = work_prompts.choose(work_prompts.language(run['goal']), 'Owner decisions from the interview:',
+                                     'Quyết định của người dùng qua phỏng vấn:')
+        return (heading + '\n' + '\n'.join(lines)) if lines else ''
 
     def producer_goal(self, run, node, stage, feedback, knowledge):
+        lang = work_prompts.language(run['goal'])
+        pick = lambda en, vi: work_prompts.choose(lang, en, vi)
         role = node['kind'] if stage == 'produce' else EXECUTE_ROLE[node['kind']]
-        lines = [f'Work Graph run "{run["title"]}" — node {node["id"]} ({node["kind"]}, {stage}).',
-                 f'Overall owner goal: {run["goal"]}', '', f'Your assignment: {node["goal"]}']
+        lines = [pick(f'Work Graph run "{run["title"]}" — node {node["id"]} ({node["kind"]}, {stage}).',
+                      f'Work Graph "{run["title"]}" — nút {node["id"]} ({node["kind"]}, {stage}).'),
+                 pick('Overall owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], '',
+                 pick('Your assignment: ', 'Nhiệm vụ của bạn: ') + node['goal']]
         if node['acceptance']:
-            lines += ['', 'Acceptance (the reviewer checks each item):'] + [f'- {item}' for item in node['acceptance']]
+            lines += ['', pick('Acceptance (the reviewer checks each item):', 'Nghiệm thu (reviewer kiểm từng mục):')] + [f'- {item}' for item in node['acceptance']]
         if node['tests']:
-            lines += ['', 'Tests that must exist and pass:'] + [f'- {item}' for item in node['tests']]
+            lines += ['', pick('Required tests (planned checks in produce; actual results in execute):',
+                               'Kiểm thử bắt buộc (dự kiến khi produce; kết quả thực khi execute):')] + [f'- {item}' for item in node['tests']]
         if node['files']:
-            lines += ['', 'Expected touch list: ' + ', '.join(node['files'])]
+            lines += ['', pick('Expected touch list: ', 'Vị trí dự kiến tác động: ') + ', '.join(node['files'])]
         if node['dependsOn']:
-            lines += ['', 'Depends on: ' + ', '.join(node['dependsOn'])]
+            lines += ['', pick('Depends on: ', 'Phụ thuộc: ') + ', '.join(node['dependsOn'])]
         if stage == 'execute' and role == 'build':
-            lines += ['', 'Implement the sub-plan completely, write the tests it names, run them, and report the '
-                          'real output. Do not start other sub-plans.']
+            lines += ['', pick('Implement the sub-plan completely, write the tests it names, run them, and report the real output. Do not start other sub-plans.',
+                               'Thực hiện đầy đủ sub-plan, viết test được nêu, chạy và báo output thực. Không làm sub-plan khác.')]
         if feedback:
-            lines += ['', 'The previous attempt was REJECTED by the reviewer. Fix every blocking finding:', feedback]
+            lines += ['', pick('The previous attempt was REJECTED by the reviewer. Fix every blocking finding:',
+                               'Lượt trước bị reviewer yêu cầu sửa. Xử lý từng vấn đề chặn:'), feedback]
         if knowledge:
-            lines += ['', 'Answers to your knowledge requests (from the harness):']
+            lines += ['', pick('Answers to your knowledge requests (from the harness):', 'Dữ kiện trả lời yêu cầu tra cứu (từ harness):')]
             for item in knowledge:
                 lines.append(f'- [{item["role"]}] {item["question"]}\n  {bounded(item.get("answer"), 2500)}')
         if stage == 'produce' and node['kind'] == PLAN_KIND:
             siblings = [f'{item["id"]}: {item["title"]}' for item in run['nodes']
                         if item['kind'] == PLAN_KIND and item['id'] != node['id']]
             if siblings:
-                lines += ['', 'Sibling sub-plans (do not duplicate their scope): ' + '; '.join(siblings)]
+                lines += ['', pick('Sibling sub-plans (do not duplicate their scope): ', 'Sub-plan cùng cấp (không trùng phạm vi): ') + '; '.join(siblings)]
         return role, '\n'.join(lines)
 
     def reviewer_goal(self, run, node, stage, output):
+        lang = work_prompts.language(run['goal'])
+        pick = lambda en, vi: work_prompts.choose(lang, en, vi)
         kind = node['kind'] if stage == 'produce' else ('build' if node['kind'] == PLAN_KIND else node['kind'])
-        lines = [f'Independent review of Work Graph node {node["id"]} ({node["kind"]}, {stage}) in run '
-                 f'"{run["title"]}".', f'Owner goal: {run["goal"]}', f'Node assignment: {node["goal"]}']
+        lines = [pick(f'Independent review of Work Graph node {node["id"]} ({node["kind"]}, {stage}) in run "{run["title"]}".',
+                      f'Phản biện độc lập nút Work Graph {node["id"]} ({node["kind"]}, {stage}) trong "{run["title"]}".'),
+                 pick('Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'],
+                 pick('Node assignment: ', 'Nhiệm vụ của nút: ') + node['goal']]
         if node['acceptance']:
-            lines += ['Acceptance to check one by one:'] + [f'- {item}' for item in node['acceptance']]
+            lines += [pick('Acceptance to check one by one:', 'Nghiệm thu cần kiểm từng mục:')] + [f'- {item}' for item in node['acceptance']]
         if node['tests']:
-            lines += ['Required tests:'] + [f'- {item}' for item in node['tests']]
-        lines += ['', f'Budget: you have {REVIEW_MAX_STEPS} tool steps. Batch your checks and keep the last '
-                  'steps for writing the review.',
-                  '', 'Rubric: ' + REVIEW_RUBRICS.get(kind, REVIEW_RUBRICS['plan']),
-                  '', 'The output to review is in the context below.', '', REVIEW_TAIL]
-        return '\n'.join(lines), f'### Output of {node["id"]} to review\n{bounded(output, 14000)}'
+            lines += [pick('Required tests:', 'Kiểm thử bắt buộc:')] + [f'- {item}' for item in node['tests']]
+        lines += ['', pick(f'Budget: {REVIEW_MAX_STEPS} tool steps; batch checks and reserve steps to write the review.',
+                           f'Ngân sách: {REVIEW_MAX_STEPS} bước tool; gom kiểm tra và dành bước cuối viết phản biện.'),
+                  '', pick('Rubric: ', 'Tiêu chí phản biện: ') + work_prompts.rubric(kind, lang),
+                  '', pick('The output to review is in the context below.', 'Đầu ra cần phản biện nằm trong ngữ cảnh bên dưới.'),
+                  '', work_prompts.review_tail(lang)]
+        heading = pick(f'Output of {node["id"]} to review', f'Đầu ra {node["id"]} cần phản biện')
+        return '\n'.join(lines), f'### {heading}\n{bounded(output, 14000)}'
 
     async def answer_knowledge(self, session, run, node, stage, requests, attempt):
         async def one(item):
-            goal = (f'Knowledge request from Work Graph node {node["id"]} ({node["kind"]}) in run '
-                    f'"{run["title"]}". Answer precisely with evidence (path:line or URL + quote): '
-                    f'{item["question"]}')
+            lang = work_prompts.language(run['goal'])
+            goal = work_prompts.choose(lang,
+                    f'Knowledge request from Work Graph node {node["id"]} ({node["kind"]}) in run "{run["title"]}". Answer precisely with evidence (path:line or URL + quote): ',
+                    f'Yêu cầu tra cứu từ nút Work Graph {node["id"]} ({node["kind"]}) trong "{run["title"]}". Trả lời đúng câu hỏi với bằng chứng (path:line hoặc URL + trích ngắn): ') + item['question']
             try:
                 result, answer = await self.spawn(session, run, node, stage, 'knowledge', item['role'], goal,
-                                                  f'Owner goal: {run["goal"]}', None, attempt)
+                                                  work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt)
                 return item | {'childId': result.get('sessionId'), 'status': result.get('status'),
                                'answer': bounded(answer, 4000)}
             except Exception as exc:
@@ -1035,7 +964,8 @@ class WorkGraph:
                 role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
                 context = '\n\n'.join(part for part in (self.interview_context(run),
                                                         self.dependency_context(run, node, stage)) if part)
-                expect = DELIVERABLES.get(node['kind'] if stage == 'produce' else role)
+                expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role,
+                                                 work_prompts.language(run['goal']))
                 entry = {'attempt': attempt, 'producerRole': role, 'reviewerRole': reviewer_role, 'at': now(),
                          'knowledge': []}
                 state['rounds'].append(entry)
@@ -1051,8 +981,9 @@ class WorkGraph:
                     state['knowledge'] = (state.get('knowledge') or []) + answers
                     state['status'] = 'running'
                     role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
-                    goal += ('\n\nYou already asked your knowledge requests; the answers are above. Deliver the '
-                             'full result now and write `- none` under Knowledge requests.')
+                    goal += work_prompts.choose(work_prompts.language(run['goal']),
+                             '\n\nYou already asked your knowledge requests; the answers are above. Deliver the full result now and write `- none` under Knowledge requests.',
+                             '\n\nBạn đã yêu cầu tra cứu; câu trả lời ở trên. Hoàn thành báo cáo và ghi `- none` trong Knowledge requests.')
                     produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context,
                                                         expect, attempt)
                     entry['producerId'] = produced.get('sessionId')
@@ -1062,7 +993,9 @@ class WorkGraph:
                     if attempt >= max_rounds:
                         state['status'] = 'failed'
                         break
-                    state['feedback'] = f'The previous attempt failed ({entry["error"]}). Finish within budget.'
+                    state['feedback'] = work_prompts.choose(work_prompts.language(run['goal']),
+                                            f'The previous attempt failed ({entry["error"]}). Finish within budget.',
+                                            f'Lượt trước lỗi ({entry["error"]}). Hoàn thành trong ngân sách.')
                     continue
                 state['output'] = bounded(output, OUTPUT_MAX_CHARS)
                 state['outputChars'] = len(output)
@@ -1087,7 +1020,9 @@ class WorkGraph:
                     state['feedback'] = ''
                     state.pop('caveats', None)
                     break
-                state['feedback'] = findings or 'The reviewer did not return a verdict; tighten evidence.'
+                state['feedback'] = findings or work_prompts.choose(work_prompts.language(run['goal']),
+                                            'The reviewer did not return a verdict; tighten evidence.',
+                                            'Reviewer chưa trả verdict; cần làm rõ bằng chứng.')
                 if attempt >= max_rounds and stage == 'produce' and node['kind'] in CAVEAT_KINDS and output.strip():
                     state['status'] = 'accepted'
                     state['caveats'] = bounded(findings or 'unreviewed', FINDINGS_MAX_CHARS)
@@ -1251,51 +1186,65 @@ class WorkGraph:
 
     # ---- whole-plan review, documents, approval --------------------------------------------- #
 
-    def master_document(self, run):
+    def master_document(self, run, documents=None):
+        # Only freshly confirmed writer results can supply file references. No path is guessed.
+        documents = documents or []
+        lang = work_prompts.language(run['goal'])
+        pick = lambda en, vi: work_prompts.choose(lang, en, vi)
         lines = [f'# {run["title"]}', '', f'> Work Graph `{run["runId"]}` · flow `{run["flow"]}` · '
-                 f'generated {time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())}', '',
-                 '## Mục tiêu / Goal', '', run['goal'], '']
+                 + pick('generated ', 'tạo lúc ') + time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime()), '',
+                 pick('## Goal', '## Mục tiêu'), '', run['goal'], '']
         interview = self.interview_context(run)
         if interview:
-            lines += ['## Quyết định của chủ nhà / Owner decisions', '', interview.split('\n', 1)[-1], '']
+            lines += [pick('## Owner decisions', '## Quyết định của người dùng'), '', interview.split('\n', 1)[-1], '']
         discovery = [node for node in run['nodes'] if node['kind'] in DISCOVERY_KINDS]
         if discovery:
-            lines += ['## Khảo sát / Discovery (accepted after review)', '']
+            lines += [pick('## Discovery (accepted after review)', '## Khảo sát (được chấp nhận sau phản biện)'), '']
             for node in discovery:
                 state = node['stages']['produce']
                 lines += [f'### {node["id"]} · {node["kind"]} · {node["title"]}', '',
-                          f'Status: `{state["status"]}` after {state["attempts"]} round(s).', '',
+                          pick(f'Status: `{state["status"]}` after {state["attempts"]} round(s).',
+                               f'Trạng thái: `{state["status"]}` sau {state["attempts"]} vòng.'), '',
                           bounded(state.get('output'), 6000), '']
         plans = [node for node in run['nodes'] if node['kind'] == PLAN_KIND]
         execs = [node for node in run['nodes'] if node['kind'] in EXECUTION_KINDS]
         if plans or execs:
-            lines += ['## Đồ thị việc / Work DAG', '', '| Node | Kind | Title | Depends on | Tests | Review |',
+            lines += [pick('## Work DAG', '## Đồ thị công việc'), '', pick('| Node | Kind | Title | Depends on | Tests | Review |',
+                         '| Nút | Loại | Tiêu đề | Phụ thuộc | Kiểm thử | Phản biện |'),
                       '|---|---|---|---|---|---|']
             for node in plans + execs:
                 state = node['stages'].get('produce') or node['stages'].get('execute')
-                verdicts = ' → '.join(item.get('verdict') or '?' for item in state['rounds']) or 'not run'
+                verdicts = ' → '.join(item.get('verdict') or '?' for item in state['rounds']) or pick('not run', 'chưa chạy')
                 lines.append(f'| {node["id"]} | {node["kind"]} | {node["title"]} | '
                              f'{", ".join(node["dependsOn"]) or "—"} | {len(node["tests"])} | {verdicts} |')
             waves = execution_waves(run['nodes'])
             if waves:
-                lines += ['', '### Thứ tự thực thi / Execution waves', '']
-                lines += [f'{index + 1}. ' + ' ‖ '.join(wave) + (' (song song)' if len(wave) > 1 else '')
+                lines += ['', pick('### Execution waves', '### Thứ tự thực thi'), '']
+                lines += [f'{index + 1}. ' + ' ‖ '.join(wave) + (pick(' (parallel)', ' (song song)') if len(wave) > 1 else '')
                           for index, wave in enumerate(waves)]
             lines.append('')
         for node in plans:
+            identity = f'work/{run["slug"]}/{self.subplan_name(node)}'
+            saved = next((item for item in documents if item.get('identity') == identity), None)
+            reference = pick('not saved yet', 'chưa lưu file')
+            if saved:
+                # BoxFox paths are workspace-relative, not relative to this Markdown document.
+                # The Plan panel has no file-link callback: publish a copyable path, not a broken link.
+                reference = f'v{saved["version"]} · `{saved["path"]}`'
             lines += [f'## Sub-plan {node["id"]} — {node["title"]}', '',
-                      f'Depends on: {", ".join(node["dependsOn"]) or "none"} · file: `{self.subplan_name(node)}`',
-                      '', '**Acceptance**', ''] + [f'- {item}' for item in node['acceptance']] + \
-                     ['', '**Tests**', ''] + [f'- {item}' for item in node['tests']] + ['']
+                      pick('Depends on: ', 'Phụ thuộc: ') + (', '.join(node['dependsOn']) or '—') + f' · file: {reference}',
+                      '', pick('**Acceptance**', '**Nghiệm thu**'), ''] + [f'- {item}' for item in node['acceptance']] + \
+                     ['', pick('**Tests**', '**Kiểm thử**'), ''] + [f'- {item}' for item in node['tests']] + ['']
         review = run.get('review') or {}
         if review.get('rounds'):
-            lines += ['## Review record', '']
+            lines += [pick('## Review record', '## Lịch sử phản biện'), '']
             for index, item in enumerate(review['rounds']):
-                lines.append(f'- Whole-plan review {index + 1}: `{item.get("verdict")}`')
+                label = pick('Whole-plan review', 'Phản biện toàn kế hoạch')
+                lines.append(f'- {label} {index + 1}: `{item.get("verdict")}`')
             for node in run['nodes']:
                 for name, state in node['stages'].items():
                     for item in state['rounds']:
-                        lines.append(f'- {node["id"]}/{name} round {item["attempt"]}: {item.get("producerRole")} → '
+                        lines.append(f'- {node["id"]}/{name} ' + pick('round ', 'vòng ') + f'{item["attempt"]}: {item.get("producerRole")} → '
                                      f'{item.get("reviewerRole")} `{item.get("verdict")}`')
             lines.append('')
         return '\n'.join(lines).strip() + '\n'
@@ -1305,11 +1254,14 @@ class WorkGraph:
 
     def subplan_document(self, run, node):
         state = node['stages']['produce']
+        lang = work_prompts.language(run['goal'])
         header = [f'# {node["id"]} — {node["title"]}', '',
-                  f'> Sub-plan of `{run["title"]}` (Work Graph `{run["runId"]}`) · depends on '
-                  f'{", ".join(node["dependsOn"]) or "none"} · review `'
-                  f'{(state["rounds"][-1].get("verdict") if state["rounds"] else "not run")}` after '
-                  f'{state["attempts"]} round(s)', '']
+                  work_prompts.choose(lang, f'> Sub-plan of `{run["title"]}` (Work Graph `{run["runId"]}`) · depends on ',
+                                      f'> Sub-plan thuộc `{run["title"]}` (Work Graph `{run["runId"]}`) · phụ thuộc ')
+                  + (', '.join(node['dependsOn']) or '—') + work_prompts.choose(lang, ' · review `', ' · phản biện `')
+                  + (state['rounds'][-1].get('verdict') if state['rounds'] else work_prompts.choose(lang, 'not run', 'chưa chạy'))
+                  + '` ' + work_prompts.choose(lang, 'after ', 'sau ') + str(state['attempts'])
+                  + work_prompts.choose(lang, ' round(s)', ' vòng'), '']
         return '\n'.join(header) + '\n' + (state.get('output') or '').strip() + '\n'
 
     async def write_document(self, sid, run, slug, markdown, title):
@@ -1317,8 +1269,9 @@ class WorkGraph:
         async with self.rt.writer_lock:
             written = await self.rt.executor.execute('write_plan', args, sid)
         if not isinstance(written, dict) or written.get('is_error') or not written.get('relativePath'):
+            detail = (written.get('error') or written) if isinstance(written, dict) else written
             raise ValueError('WORK_DOCUMENT_FAILED: the sandbox did not write '
-                             f'{slug}: {str((written or {}).get("error") or written)[:300]}')
+                             f'{slug}: {str(detail)[:300]}')
         relative = written['relativePath']
         identity = f'work/{run["slug"]}/{slug}'
         payload = {'identity': identity, 'version': written.get('version'), 'slug': slug,
@@ -1351,18 +1304,11 @@ class WorkGraph:
             f'=== {node["id"]} ({node["kind"]}) ===\n{bounded(node["stages"]["produce"]["output"], 6000)}'
             for node in produce)
         reviewer = FLOW_REVIEWER.get(run['flow'], 'plan-review')
-        goal = '\n'.join([
-            f'Whole-plan review of Work Graph run "{run["title"]}" before the owner approves it.',
-            f'Owner goal: {run["goal"]}', '',
-            'Check, as a senior engineer would: (1) COVERAGE — every part of the owner goal and every owner '
-            'decision is covered by some node; nothing is out of scope; (2) DEPENDENCIES — each sub-plan declares '
-            'the siblings it really needs, there is no hidden coupling, and contracts agree across sub-plans; '
-            '(3) ORDER — the execution waves are safe (a wave never needs output from a later wave); (4) TESTS — '
-            'every sub-plan has concrete tests and the union proves the goal; (5) RISK — rollout and rollback are '
-            'defined for risky parts.',
-            'For each sub-plan that must change write a line `REVISE <nodeId>: <what to fix>`. Structural problems '
-            '(a missing sub-plan, a wrong dependency) go under Blocking findings.', '', REVIEW_TAIL])
-        context = f'### Master document\n{bounded(master, 7000)}\n\n### Sub-plans / outputs\n{bodies}'
+        lang = work_prompts.language(run['goal'])
+        goal = work_prompts.whole_review_goal(run['title'], run['goal'], lang)
+        master_heading = work_prompts.choose(lang, 'Master document', 'Tài liệu tổng hợp')
+        outputs_heading = work_prompts.choose(lang, 'Sub-plans / outputs', 'Sub-plan / kết quả')
+        context = f'### {master_heading}\n{bounded(master, 7000)}\n\n### {outputs_heading}\n{bodies}'
         self.child_budget[run['runId']] = [4]
         try:
             with self.budget_paused(sid):
@@ -1401,7 +1347,7 @@ class WorkGraph:
                         documents.append(await self.write_document(sid, run, self.subplan_name(node),
                                                                    self.subplan_document(run, node),
                                                                    f'{node["id"]} — {node["title"]}'))
-                documents.insert(0, await self.write_document(sid, run, 'plan', self.master_document(run),
+                documents.insert(0, await self.write_document(sid, run, 'plan', self.master_document(run, documents),
                                                               run['title']))
             except Exception as exc:
                 run['documents'] = documents

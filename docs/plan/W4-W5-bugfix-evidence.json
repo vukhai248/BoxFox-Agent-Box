@@ -1,0 +1,606 @@
+{
+  "schema": "W4-W5-bugfix-eval/1",
+  "anchor": "4da6388d",
+  "branch": "B",
+  "model": "opencode/space-bunny-free",
+  "scope": "Isolated text-only role prompts, synthetic fixture, no production Harness DB/session, no external source tools; output findings are not clinical guidance.",
+  "currentSourceHashes": {
+    "backend/src/agentbox/agent_core/work_graph.py": "c3980756306c6bdf72a56113a99e476c1e4afad6bd70abdc4b8c4bbb04c9ba02",
+    "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+    "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+    "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+    "backend/tests/unit/test_work_prompt_contracts.py": "12bacfbcb65e05d4f905f0c957de592137b6e77e1143c76c0b3994ac6432af82",
+    "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a"
+  },
+  "liveSourceNote": "Live work_graph.py hash predates the final copyable-path writer correction. All actual live prompt hashes match final source; final full suite covers the writer correction.",
+  "summary": {
+    "attempts": 8,
+    "completionPass": 7,
+    "allVietnamese": true,
+    "diagnosticSpam": 0,
+    "semanticReadyCount": 0,
+    "productionDeadlineChanged": false,
+    "probeDeadlineSeconds": 240,
+    "relayStopped": true
+  },
+  "rows": [
+    {
+      "role": "research",
+      "repeat": 1,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "84cee1f89090522a2374e20d5911a32aa4f4345cc5771bcd5bb4d5d1d9c4ac7e",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 3183,
+        "completion_tokens": 7419,
+        "total_tokens": 10602,
+        "prompt_tokens_details": {
+          "cached_tokens": 141
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1357
+        }
+      },
+      "chars": 11967,
+      "output": ".tmp/work-prompts/live/research-1.md",
+      "outputHash": "8828d3ed08b27337d6ccb9c8bf530722de3498dfb080067d749595e3f34674fe",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "Treats F5 as negotiable; a source quote changes the supplied wording. Separates no-tool evidence and proposals, but cannot certify source accuracy.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 37,
+              "text": "| F5 | \"Mỗi câu đầu ra phải gắn document_id/revision/đoạn nguồn; thiếu nguồn không kết luốn.\" | Như trên | Dữ kiện fixture |"
+            },
+            {
+              "line": 90,
+              "text": "- Khi phát sinh câu không bám nguồn, ưu tiên **loại bỏ câu** hay **cho phép câu không nguồn kèm cảnh báo**? (Ảnh hưởng trực tiếp tới hành vi của cả hai phương án.)"
+            }
+          ]
+        }
+      },
+      "latencySeconds": 70.81,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": false
+    },
+    {
+      "role": "research",
+      "repeat": 2,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "84cee1f89090522a2374e20d5911a32aa4f4345cc5771bcd5bb4d5d1d9c4ac7e",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 3183,
+        "completion_tokens": 9368,
+        "total_tokens": 12551,
+        "prompt_tokens_details": {
+          "cached_tokens": 3181
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2898
+        }
+      },
+      "chars": 12416,
+      "output": ".tmp/work-prompts/live/research-2.md",
+      "outputHash": "30170a552d63f73dabdd2143b2d23b4c8217fdff30f5a177a601f083215e9e1f",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "Reopens a fixed F5 constraint and introduces quantitative reasoning without verified sources. No unsolicited implementation milestones.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 42,
+              "text": "- **[TÍNH TOÁN, không phải số đo]** Với n = 300 encounter, khoảng tin cậy 95% cho một tỉ lệ quanh 0.5 có bề rộng nửa ≈ 1.96·√(0.25/300) ≈ **±5.7 điểm phần trăm**. Hệ quả: khác biệt dưới ~6 điểm phần trăm giữa hai phương án gần như không kết luận được từ bộ này nếu đo độc lập. Đây là phép tính xác suất trên giả định mẫu ngẫu nhiên đơn giản, **không** phải kết quả đo trên dữ liệu thật."
+            },
+            {
+              "line": 80,
+              "text": "3. Ưu tiên khi đánh đổi là gì: **tính truy vết tuyệt đối** (F5) hay **độ bao phủ/recall** trên văn bản tự do? Câu trả lời này chính là chọn giữa A và C."
+            },
+            {
+              "line": 86,
+              "text": "- **[ĐỀ XUẤT]** Với 300 mẫu, **đừng kết luận thắng/thua theo điểm số đơn thuộc**; báo cáo khoảng tin cậy và kiểm định ghép. Lý do: bề rộng CI ≈ ±5.7 điểm phần trăm."
+            }
+          ]
+        }
+      },
+      "latencySeconds": 78.723,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": false
+    },
+    {
+      "role": "plan",
+      "repeat": 1,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "e4acfeafdc285e02c7c8cb5a4662d6bf28cdcd892058b827b72d86be8faccea9",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 3092,
+        "completion_tokens": 6964,
+        "total_tokens": 10056,
+        "prompt_tokens_details": {
+          "cached_tokens": 141
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 1835
+        }
+      },
+      "chars": 11644,
+      "output": ".tmp/work-prompts/live/plan-1.md",
+      "outputHash": "4be9c3dc42f4785a6970a0e2dd8bd1a5784dabbc852afb544d11fe5fc99012c6",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": [
+          "M1",
+          "M2",
+          "M3",
+          "M4"
+        ],
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "Claims absolute grounding for extraction, underdefines omission/refusal metrics, and assumes append-only migration rollback preserves audit. Cannot certify implementation readiness.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 34,
+              "text": "**Phương án thay thế & đánh đổi:** (a) chỉ extractive — grounding tuyệt đối vì câu là trích nguyên văn, không rủi ro license, nhưng không tổng hợp nhiều tài liệu; (b) LLM abstractive — mạch văn tốt hơn nhưng phải có binder + bộ lọc, độ trễ/chi phí cao hơn, cần xác minh license của model cụ thể (**UNVERIFIED — chưa có nguồn**); (c) thư viện tóm tắt có sẵn — nhanh nhưng khó ép ràng buộc trích dẫn theo `document_id`/`revision`. Đề xuất: (a) là mặc định M2, (b) chỉ bật ở M4 sau khi đo."
+            },
+            {
+              "line": 46,
+              "text": "**Bất biến & validation:** (I1) mọi `citation.document_id` phải thuộc encounter và `revision` phải khớp revision đã khoá; (I2) `quote` phải là tiền tố con của `Segment.text` sau chuẩn hoá khoảng trắng; (I3) `statement.status != SUPPORTED` thì phải kèm `reason` (`NO_EVIDENCE` | `AMBIGUOUS` | `CONFLICT`); (I4) thiếu nguồn ⇒ `summary.status = REFUSED`, không sinh câu suy diễn (F5). **Vòng đời:** `RECEIVED → VALIDATED → LOCKED(revision) → SUMMARIZED → REVIEWED/REJECTED`; chỉ append, không sửa văn bản đã khoá. **Migration:** `0001_init.sql` có `down` script; dữ liệu chỉ append nên rollback không mất lịch sử."
+            },
+            {
+              "line": 58,
+              "text": "**Đơn vị đo & mẫu số:** tính theo *câu* (statement) và theo *ca*. Ba lớp lỗi: **đúng** (SUPPORTED và khớp nhãn), **thiếu** (bác sĩ gán có nhưng hệ thống không sinh) → đo bằng *omission recall*, **không có căn cứ** (câu không đỡ được bởi đoạn nguồn) → *unsupported rate*; cộng *refusal precision* (đúng khi từ chối lúc thật sự thiếu) và *quote integrity* (tỷ lệ quote khớp nguyên văn)."
+            },
+            {
+              "line": 60,
+              "text": "**Ngưỡng đề xuất, CẦN HIỆU CHỈNH sau khi có nhãn vàng:** quote integrity ≥ 99%; unsupported rate ≤ 1%; omission recall ≥ 0,80; refusal precision ≥ 0,95. Quy trình hiệu chỉnh: chạy trên 75 ca calibration, bác sĩ review 20% mẫu ngẫu nhiên, điều chỉnh ngưỡng có ghi nhận ký phiên bản."
+            },
+            {
+              "line": 66,
+              "text": "Triển khai `deploy/docker-compose.yml` (api, db, worker) trên host nội bộ; cấu hình qua file `config/app.yaml`; **không cần API key ngoài** ở chế độ extractive — nếu bật LLM thì chỉ endpoint nội bộ qua biến môi trường, không ghi vào repo. Quan sát: log JSON có `summary_id`/`encounter_id`/`mode`/độ trễ; metric: `unsupported_rate`, `refused_total`, `fallback_total`. Retry: tối đa 3 lần, backoff 1/5/30 s cho lỗi tạm thời; job nạp lại là idempotent. Backup: `pg_dump` hằng ngày, giữ 30 bản; kiểm thử khôi phục 1 lần/quý. Rollback: gắn image tag phiên bản, dừng compose phiên bản cũ, chạy `alembic downgrade -1`; vì chỉ append nên không mất audit. **Rủi ro:** dữ liệu thật lệch fixture (chặn bởi I1–I4, phát hiện ở M1); bác sĩ đọc tóm tắt như kết luận (chặn bằng nhãn \"chỉ để đối chiếu\" + bắt duyệt M4); overfit vào synthetic (chặn bằng holdout + ca thật); nguồn pháp lý/license: **không có nguồn nào được mở, mọi khẳng định pháp lý là UNVERIFIED** — cần thư pháp trước M4."
+            },
+            {
+              "line": 83,
+              "text": "- Đầu ra: báo cáo quote integrity / unsupported / omission recall / refusal precision trên 3 split + bản ghi hiệu chỉnh ngưỡng."
+            }
+          ]
+        }
+      },
+      "latencySeconds": 57.502,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": false
+    },
+    {
+      "role": "plan",
+      "repeat": 2,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "e4acfeafdc285e02c7c8cb5a4662d6bf28cdcd892058b827b72d86be8faccea9",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 3092,
+        "completion_tokens": 6836,
+        "total_tokens": 9928,
+        "prompt_tokens_details": {
+          "cached_tokens": 3090
+        }
+      },
+      "chars": 14294,
+      "output": ".tmp/work-prompts/live/plan-2.md",
+      "outputHash": "9a81dd29598cb6e883c2c874f06eb69ab8da324e0a7c74b306103410c2097cb1",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": [
+          "M1",
+          "M2",
+          "M3",
+          "M4"
+        ],
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "95% citation threshold contradicts F5; lexical overlap is used as a grounding gate; Document PK/revision contract is inconsistent; fixture path called existing.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 27,
+              "text": "**Path tồn tại**: `src/tools.py:10` được nhắc trong D1 (bối cảnh bug giả lập, thuộc phạm vi nút khác — chỉ tham chiếu, **không** sửa hay lập kế hoạch ở đây)."
+            },
+            {
+              "line": 58,
+              "text": "Document:    document_id (str, PK), encounter_id (str, FK), revision (int, >=1), text (str, non-empty)"
+            },
+            {
+              "line": 92,
+              "text": "**Grounding**: sinh tóm tắt kèm `segment_id` bắt buộc (JSON schema ép buộc); `grounding_gate` kiểm tra (i) `segment_id` tồn tại và thuộc đúng `encounter_id`, (ii) `document_id`/`revision` khớp, (iii) mỗi mệnh đề có từ khóa bám nguồn — đề xuất đo bằng **tỉ lệ từ của câu có trong vùng nguồn được trích**. Ngưỡng **0.6 — đề xuất, cần hiệu chỉnh trên tập thử nghiệm**."
+            },
+            {
+              "line": 106,
+              "text": "- Trích dẫn đầy đủ (mọi câu có `document_id`+`revision`+segment): **≥ 95%**."
+            }
+          ]
+        }
+      },
+      "latencySeconds": 49.889,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": true
+    },
+    {
+      "role": "design",
+      "repeat": 1,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "ef4b6c8307763a4597cd0bd9e7a162e1949ee9c43adf66e99c92487e2633961c",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 2018,
+        "completion_tokens": 10580,
+        "total_tokens": 12598,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "chars": 18564,
+      "output": ".tmp/work-prompts/live/design-1.md",
+      "outputHash": "f49a069d2f0247f282ecebfb2ec2c9d635a2ce3e73710def2dd3f10f74e29f8f",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "EXPIRED absent from JobState yet used in transitions; closed error catalogue omits WORKER_LEASE_EXPIRED; source-span integrity alone does not prove claim meaning. API-only scope preserved.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 66,
+              "text": "type JobState ="
+            },
+            {
+              "line": 186,
+              "text": "| `PENDING` | lease hết hạn, `attempt = 3` | — | `FAILED` (`WORKER_LEASE_EXPIRED`) |"
+            },
+            {
+              "line": 195,
+              "text": "| mọi trạng thái | quá `retention_days` | — | `EXPIRED` ⇒ `410` khi đọc |"
+            },
+            {
+              "line": 215,
+              "text": "| 410 | `JOB_EXPIRED`, `RESULT_EXPIRED` | Quá retention | Ingest lại |"
+            },
+            {
+              "line": 290,
+              "text": "| V12 | Job quá retention | `410 JOB_EXPIRED` |"
+            }
+          ]
+        }
+      },
+      "latencySeconds": 202.622,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": true
+    },
+    {
+      "role": "design",
+      "repeat": 2,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "ef4b6c8307763a4597cd0bd9e7a162e1949ee9c43adf66e99c92487e2633961c",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 2018,
+        "completion_tokens": 15814,
+        "total_tokens": 17832,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 4084
+        }
+      },
+      "chars": 28122,
+      "output": ".tmp/work-prompts/live/design-2.md",
+      "outputHash": "9bd46cb4b631bdf6f7f32df976cf4e3084f10fdc25d34c5e5c6a9199592ec2df",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "revise",
+          "note": "Merged fields/malformed fences in typed examples, missing referenced types, and provenance verification defined only structurally. Full output exceeds existing stored/reviewer bounds. API-only scope preserved.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 86,
+              "text": "    counts: Counts    status_url: str                # /v1/jobs/{job_id}"
+            },
+            {
+              "line": 99,
+              "text": "    stage: Stage    attempt: int                     # số lần chạy lại của stage hiện tại (<=5 đề xuất)"
+            },
+            {
+              "line": 194,
+              "text": "### 5. Máy trạng thái job```"
+            },
+            {
+              "line": 282,
+              "text": "1. Mỗi `Sentence` trong `sections[]` (phần kết luận) **bắt buộc** có `provenance_status=\"verified\"` và ≥1 `Provenance` hợp lệ."
+            }
+          ]
+        }
+      },
+      "latencySeconds": 238.43,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": true,
+      "wouldExceedInlineReviewerBound": true
+    },
+    {
+      "role": "debug",
+      "repeat": 1,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 4096,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "9be9d4447046a1cf50771af4a4a610c4fa22ce90258c157329c2da347663b736",
+      "finishReason": "length",
+      "usage": {
+        "prompt_tokens": 1904,
+        "completion_tokens": 4096,
+        "total_tokens": 6000,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "chars": 4837,
+      "output": ".tmp/work-prompts/live/debug-1.md",
+      "outputHash": "fcbd9885b8fc5474067c79ddc9bdd90aa87148193d13f21db6c2b2b10cae97d3",
+      "completionPass": false,
+      "checks": {
+        "knowledgeMarker": false,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "partial",
+          "note": "Token cap reached before protocol footer; no patch or fabricated test execution, but not a complete deliverable.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 3,
+              "text": "**Trạng thái: NOT REPRODUCED.** Phiên này không có công cụ đọc file hay chạy lệnh (F6), nên tôi **không** tự chạy lại lỗi, không mở `src/tools.py`, không đọc output thật. Dưới đây chỉ là phân tích tĩnh trên fixture D1."
+            },
+            {
+              "line": 29,
+              "text": "**Không sửa file nào.** D2 giới hạn nhiệm vụ ở mức chẩn đoán; tôi không có patch nào được áp dụng và không có file nào bị thay đổi."
+            }
+          ]
+        }
+      },
+      "latencySeconds": 91.368,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": false
+    },
+    {
+      "role": "debug",
+      "repeat": 2,
+      "branch": "B",
+      "route": {
+        "connectionId": "w3-isolated-opencode",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 4096,
+      "source": {
+        "backend/src/agentbox/agent_core/work_graph.py": "4c47018e189f7c08a11826130b79a2584b7b0dd386bf64628b80309f150ac538",
+        "backend/src/agentbox/agent_core/work_prompts.py": "f2efd9461637e623e4940a0383414f061a07f2f19dbdb9ccf304649486b760ce",
+        "backend/src/agentbox/agent_core/runtime.py": "d69809cefaebc847ad25883f9f1ab9032be20e134a846f4182895b0302cd3398",
+        "backend/src/agentbox/agent_core/roles.py": "171b23ad5f4d9c51407402e4668063f5cc1a0935a5f7294e86b39c7c276b9824",
+        "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+        "scripts/eval/work_prompt_eval.py": "a5124757a5cce2c9284e9695f6ccf95e067e675a3ad34fcbf4cc169544ccf04a",
+        "anchorCommit": "4da6388d6a611ae2a2ef99d8cf978c69704be12b"
+      },
+      "scope": "Isolated B adapter text-only role prompts; no Harness workflow or source/tool verification",
+      "promptHash": "9be9d4447046a1cf50771af4a4a610c4fa22ce90258c157329c2da347663b736",
+      "finishReason": "stop",
+      "usage": {
+        "prompt_tokens": 1904,
+        "completion_tokens": 4071,
+        "total_tokens": 5975,
+        "prompt_tokens_details": {
+          "cached_tokens": 128
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 976
+        }
+      },
+      "chars": 6378,
+      "output": ".tmp/work-prompts/live/debug-2.md",
+      "outputHash": "4a19f61086df6fcb114b9f9a65754f0d998708d321cc275a7160d9f27c5e7c37",
+      "completionPass": true,
+      "checks": {
+        "knowledgeMarker": true,
+        "noKnowledgeLookup": true,
+        "milestones": null,
+        "hasVietnamese": true,
+        "hasDiagnosticSpam": false,
+        "humanAdjudication": {
+          "verdict": "scope_pass_only",
+          "note": "Completes diagnosis with no patch/no claimed test pass. Discusses unrelated medical synthetic data as hypothetical slug evidence; not an independent root-cause verification.",
+          "scope": "Root manual inspection of synthetic output; no independent specialist/clinical/source verification",
+          "findingsEvidence": [
+            {
+              "line": 18,
+              "text": "**Trạng thái tái hiện: `NOT REPRODUCED`.**"
+            },
+            {
+              "line": 46,
+              "text": "**Đã sửa file: KHÔNG.** D2 giới hạn nhiệm vụ ở mức chẩn đoán; ngoài ra chưa có file thật để sửa (F3). Dưới đây là **đề xuất chỉnh sửa để trình chủ/người dùng quyết định**, chưa áp dụng:"
+            }
+          ]
+        }
+      },
+      "latencySeconds": 63.676,
+      "finalPromptHashMatches": true,
+      "wouldExceedStoredOutputBound": false,
+      "wouldExceedInlineReviewerBound": false
+    }
+  ],
+  "regression": {
+    "baselineTargetedPass": 80,
+    "finalTargetedPass": 121,
+    "newRegressionCases": 41,
+    "backendPass": 2584,
+    "backendSkipped": 18,
+    "backendFailures": 0,
+    "backendErrors": 0,
+    "backendSeconds": 412.36,
+    "routerPass": 250,
+    "routerInitialFailure": "Default log-path disagreement in bridge test; rerun with explicit isolated BOXFOX_SYSTEM_LOG_DIR passed. No router source or tests changed.",
+    "xml": ".tmp/work-prompts/full-unit-final.xml"
+  },
+  "claritySignal": {
+    "role": "plan",
+    "repeat": 1,
+    "replacementCharacters": 1,
+    "origin": "Unisolated upstream/client text; file bytes match response text hash, not a confirmed writer encoding bug."
+  }
+}
