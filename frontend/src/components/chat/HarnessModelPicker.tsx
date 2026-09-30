@@ -358,7 +358,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                   type="button"
                   onClick={() => setActiveTab('harness')}
                   className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-[11px] font-medium transition cursor-pointer ${activeTab === 'harness'
-                      ? 'bg-[#1e222d] text-white shadow-xs font-semibold'
+                      ? 'bg-panel2 text-fg shadow-xs font-semibold'
                       : 'text-muted hover:text-fg'
                     }`}
                 >
@@ -369,7 +369,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                   type="button"
                   onClick={() => setActiveTab('model')}
                   className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-[11px] font-medium transition cursor-pointer ${activeTab === 'model'
-                      ? 'bg-[#1e222d] text-white shadow-xs font-semibold'
+                      ? 'bg-panel2 text-fg shadow-xs font-semibold'
                       : 'text-muted hover:text-fg'
                     }`}
                 >
@@ -398,8 +398,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                           setOpen(false)
                         }}
                         className={`flex w-full items-start justify-between rounded-lg p-2 text-left transition cursor-pointer ${isSelected
-                            ? 'bg-[#1c212c] text-white'
-                            : 'hover:bg-panel2/60 text-zinc-300'
+                            ? 'bg-brand/10 text-fg ring-1 ring-brand/30 dark:bg-brand/15'
+                            : 'hover:bg-panel2/60 text-muted hover:text-fg'
                           }`}
                       >
                         <div className="min-w-0 flex-1 space-y-0.5">
@@ -474,8 +474,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                           }}
                           className={`flex flex-col rounded-lg p-2 text-left transition cursor-pointer select-none ${
                             isSelected
-                              ? 'bg-[#1c212c] text-white ring-1 ring-brand/30'
-                              : 'hover:bg-panel2/60 text-zinc-300'
+                              ? 'bg-brand/10 text-fg ring-1 ring-brand/30 dark:bg-brand/15'
+                              : 'hover:bg-panel2/60 text-muted hover:text-fg'
                           }`}
                         >
                           <div className="flex w-full items-center justify-between">
@@ -570,7 +570,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                             >
                               <div className="flex select-none items-center gap-1.5 px-1.5 pb-1 pt-0.5">
                                 <Pin className="size-2.5 text-brand" />
-                                <span className="text-[10px] font-semibold text-zinc-200">Pin this connection</span>
+                                <span className="text-[10px] font-semibold text-fg">Pin this connection</span>
                                 <span className="min-w-0 flex-1" />
                                 {pinned ? (
                                   <button
@@ -619,7 +619,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                     {isPinned
                                       ? <Pin className="size-2.5 shrink-0 text-brand" />
                                       : <span className={`size-1.5 shrink-0 rounded-full inline-block ${state?.tone === 'failed' ? 'bg-rose-500' : 'bg-zinc-600'}`} />}
-                                    <span className="min-w-0 flex-1 truncate text-[11.5px] text-zinc-200">{pin.name}</span>
+                                    <span className="min-w-0 flex-1 truncate text-[11.5px] text-fg">{pin.name}</span>
                                     {state && (
                                       <span className={`shrink-0 font-mono text-[9.5px] ${state.tone === 'ready' ? 'text-emerald-400' : state.tone === 'failed' ? 'text-amber-400' : 'text-zinc-500'}`}>
                                         {state.label}
@@ -638,7 +638,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                               className="mt-2 pt-1.5 border-t border-line/40 flex items-center justify-between"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-1">
+                              <span className="text-[10px] text-muted font-medium flex items-center gap-1">
                                 <Brain className="size-3 text-brand" />
                                 <span>Thinking:</span>
                               </span>
@@ -655,8 +655,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                       }}
                                       className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer capitalize ${
                                         isActive
-                                          ? 'bg-brand text-brand-fg font-semibold shadow-xs'
-                                          : 'text-zinc-400 hover:text-white hover:bg-panel2'
+                                          ? 'bg-brand text-brandfg font-semibold shadow-xs'
+                                          : 'text-muted hover:text-fg hover:bg-panel2'
                                       }`}
                                     >
                                       {lvl}
@@ -695,8 +695,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                           }}
                           className={`flex flex-col rounded-lg p-2 text-left transition cursor-pointer select-none ${
                             isSelected
-                              ? 'bg-[#1c212c] text-white ring-1 ring-brand/30'
-                              : 'hover:bg-panel2/60 text-zinc-300'
+                              ? 'bg-brand/10 text-fg ring-1 ring-brand/30 dark:bg-brand/15'
+                              : 'hover:bg-panel2/60 text-muted hover:text-fg'
                           }`}
                         >
                           <div className="flex w-full items-center justify-between">
@@ -727,7 +727,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                               className="mt-2 pt-1.5 border-t border-line/40 flex items-center justify-between"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-1">
+                              <span className="text-[10px] text-muted font-medium flex items-center gap-1">
                                 <Brain className="size-3 text-brand" />
                                 <span>Thinking:</span>
                               </span>
@@ -744,8 +744,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                       }}
                                       className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer capitalize ${
                                         isActive
-                                          ? 'bg-brand text-brand-fg font-semibold shadow-xs'
-                                          : 'text-zinc-400 hover:text-white hover:bg-panel2'
+                                          ? 'bg-brand text-brandfg font-semibold shadow-xs'
+                                          : 'text-muted hover:text-fg hover:bg-panel2'
                                       }`}
                                     >
                                       {lvl}
@@ -773,14 +773,14 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
             )}
 
             {/* Footer Actions (Manage & Create) */}
-            <div className="flex items-center justify-between border-t border-line/70 bg-[#141720] px-3 py-2 text-xs">
+            <div className="flex items-center justify-between border-t border-line/70 bg-panel2/60 px-3 py-2 text-xs">
               <button
                 type="button"
                 onClick={() => {
                   openSettings('harness')
                   setOpen(false)
                 }}
-                className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition cursor-pointer"
+                className="flex items-center gap-1.5 text-muted hover:text-fg transition cursor-pointer"
               >
                 <Settings className="size-3.5" />
                 <span className="text-[11px] font-medium">Manage Harnesses</span>

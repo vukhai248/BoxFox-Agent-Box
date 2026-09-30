@@ -77,7 +77,11 @@ if ($DockerRunning) {
             Write-Host "  -> Starting Sandbox container (syncing latest config layers)..." -ForegroundColor Cyan
         }
         
-        docker compose up -d --build
+        if ($ImageExists -and -not $Rebuild) {
+            docker compose up -d
+        } else {
+            docker compose up -d --build
+        }
         $WorkerSrc = Join-Path $RootDir "backend\src\agentbox\sandbox\worker.py"
         if (Test-Path $WorkerSrc) {
             docker cp $WorkerSrc agentbox-box:/tmp/boxfox-worker.py 2>$null
@@ -190,6 +194,10 @@ try {
 
 Push-Location $FrontendDir
 try {
+    Start-Job -ScriptBlock {
+        Start-Sleep -Seconds 2
+        Start-Process "http://localhost:3100/"
+    } | Out-Null
     npm.cmd run dev
 } finally {
     Pop-Location

@@ -862,7 +862,13 @@ class PlanWorkflow:
         """Checkpoint interrupted admitted turns; resume unadmitted requests, never replay side effects."""
         for row in self.db.execute('SELECT id FROM plan_runs').fetchall():
             run = self.get(row['id'])
-            if self.store.get(run['sessionId'])['status'] != 'interrupted':
+            if not run or not run.get('sessionId'):
+                continue
+            try:
+                session = self.store.get(run['sessionId'])
+            except KeyError:
+                continue
+            if session.get('status') != 'interrupted':
                 continue
             pending = self.db.execute("SELECT id FROM plan_continuations WHERE run_id=? AND state='pending'",
                                       (run['runId'],)).fetchall()

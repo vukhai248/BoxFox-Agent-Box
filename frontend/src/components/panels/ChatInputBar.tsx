@@ -531,7 +531,7 @@ export function ChatInputBar({
                 data-testid="composer-send"
                 data-uploading={uploading ? 'true' : undefined}
                 aria-busy={uploading || undefined}
-                className="flex size-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-900 shadow-xs transition hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                className="flex size-7 items-center justify-center rounded-lg bg-zinc-900 text-white shadow-xs transition hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
                 title={
                   uploading
                     ? t('composer.uploadingAttachments')
@@ -827,7 +827,7 @@ export function ChatInputBar({
                     data-testid="composer-send"
                     data-uploading={uploading ? 'true' : undefined}
                     aria-busy={uploading || undefined}
-                    className="flex size-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-900 shadow-xs transition hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                    className="flex size-7 items-center justify-center rounded-lg bg-zinc-900 text-white shadow-xs transition hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
                     title={
                       uploading
                         ? t('composer.uploadingAttachments')

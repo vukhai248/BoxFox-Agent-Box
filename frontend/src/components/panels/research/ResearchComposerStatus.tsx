@@ -85,7 +85,7 @@ function ExitPrompt() {
       aria-label={t('research.exitTitle')}
       className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]"
     >
-      <p className="font-medium text-amber-300">{t('research.exitTitle')}</p>
+      <p className="font-medium text-amber-700 dark:text-amber-300">{t('research.exitTitle')}</p>
       {job ? (
         <p className="mt-0.5 text-muted">
           {t('research.exitBody', {

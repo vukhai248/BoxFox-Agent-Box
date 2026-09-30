@@ -122,7 +122,7 @@ export function DecisionsPanel() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-panel select-text">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-[#13151b] px-5 py-3 select-none">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel2/70 px-5 py-3 select-none">
         <div className="flex items-center gap-2.5">
           <div className="flex size-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30">
             <ShieldAlert className="size-4" />
@@ -142,12 +142,12 @@ export function DecisionsPanel() {
               onClick={() => setActiveFilter('pending')}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
                 activeFilter === 'pending'
-                  ? 'bg-panel text-white shadow-xs font-semibold'
+                  ? 'bg-panel text-fg shadow-xs font-semibold'
                   : 'text-muted hover:text-fg'
               }`}
             >
               <span>{t('decisions.filterPending')}</span>
-              <span className="flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[10px] font-bold text-amber-300">
+              <span className="flex size-4 items-center justify-center rounded-full bg-amber-500/15 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
                 {totalPending}
               </span>
             </button>
@@ -158,7 +158,7 @@ export function DecisionsPanel() {
               onClick={() => setActiveFilter('resolved')}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
                 activeFilter === 'resolved'
-                  ? 'bg-panel text-white shadow-xs font-semibold'
+                  ? 'bg-panel text-fg shadow-xs font-semibold'
                   : 'text-muted hover:text-fg'
               }`}
             >
@@ -173,7 +173,7 @@ export function DecisionsPanel() {
               onClick={() => setActiveFilter('all')}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
                 activeFilter === 'all'
-                  ? 'bg-panel text-white shadow-xs font-semibold'
+                  ? 'bg-panel text-fg shadow-xs font-semibold'
                   : 'text-muted hover:text-fg'
               }`}
             >
@@ -260,7 +260,7 @@ export function DecisionsPanel() {
             {totalPending === 0 && (
               <div
                 data-testid="decisions-empty-pending"
-                className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-line/60 bg-[#12141a]"
+                className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-line bg-panel2/40"
               >
                 <CheckCircle2 className="size-8 text-emerald-400 mb-2" />
                 <h4 className="text-xs font-semibold text-fg">{t('decisions.emptyTitle')}</h4>
@@ -306,16 +306,16 @@ export function DecisionsPanel() {
                       {approved ? (
                         <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
                       ) : answered ? (
-                        <MessageSquare className="size-4 text-zinc-400 shrink-0" />
+                        <MessageSquare className="size-4 text-muted shrink-0" />
                       ) : (
                         <XCircle className="size-4 text-rose-400 shrink-0" />
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-zinc-300">
+                          <span className="font-mono font-bold text-muted">
                             #{decision.id}
                           </span>
-                          <span className="truncate text-zinc-200 font-medium">
+                          <span className="truncate text-fg font-medium">
                             {decision.question ?? decision.action ?? ''}
                           </span>
                         </div>
@@ -325,7 +325,7 @@ export function DecisionsPanel() {
                           {decision.note ? ` · ${decision.note}` : ''}
                         </p>
                         {decision.kind === 'interview' && (decision.answers?.length ?? 0) > 0 && (
-                          <ul className="mt-1 space-y-0.5 text-[11px] text-zinc-300" data-testid="interview-history-answers">
+                          <ul className="mt-1 space-y-0.5 text-[11px] text-fg" data-testid="interview-history-answers">
                             {decision.answers!.map((answer) => (
                               <li key={answer.questionId} className="truncate">
                                 <span className="text-muted">{answer.question ?? answer.questionId}: </span>
