@@ -44,6 +44,7 @@ def test_isolated_executor_really_writes_utf8_and_refuses_implementation(tmp_pat
     asyncio.run(check())
 
 def test_scripted_no_plan_stays_blocked_and_exports_artifacts(tmp_path,monkeypatch):
+    monkeypatch.setenv('BOXFOX_WORK_GRAPH','off')  # the eval pack measures the legacy plan-mode path
     from agentbox.agent_core.runtime import RouterClient
     async def fixture(self,*args,**kwargs):
         return {'choices':[{'message':{'content':'Fixture turn.'},'finish_reason':'stop'}]}

@@ -113,7 +113,9 @@ class Model:
         return {'choices': [{'message': {'content': 'verified fixture result'}, 'finish_reason': 'stop'}]}
 
 
-def test_root_plan_idempotency_and_skill_snapshot(registry):
+def test_root_plan_idempotency_and_skill_snapshot(registry, monkeypatch):
+    # Pins the legacy plan-mode path; with the Work Graph on, `/plan <text>` is a work intent instead.
+    monkeypatch.setenv('BOXFOX_WORK_GRAPH', 'off')
     async def run():
         model = Model()
         runtime = HarnessRuntime(registry.store, Executor(), model, registry.catalog)

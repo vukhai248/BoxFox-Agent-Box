@@ -12,6 +12,8 @@ DEFAULT_SKILLS = {'codebase-inspection', 'systematic-debugging', 'requesting-cod
                   # Vòng 25 (D-33): vòng lặp kế hoạch (nghiên cứu → ghi → phản biện → ghi nhận
                   # verdict → duyệt). Nhận mặc định vì lượt lập kế hoạch nào cũng cần nó.
                   'planning',
+                  # Work Graph: main opens this procedure with `skill_view` on every non-trivial request.
+                  'work-graph-planning',
                   # Vòng 27 (A7/C-1): ba mức + bốn pha + sổ nguồn + hình dạng hồ sơ. Nhận mặc
                   # định vì mọi lượt nghiên cứu đều phải mở đầu bằng `research_brief`.
                   'research-team', 'research-scoping', 'research-search', 'research-reading',

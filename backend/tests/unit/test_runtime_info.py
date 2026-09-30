@@ -144,29 +144,29 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
     assert sorted(full) == sorted(ORCHESTRATOR_TOOLS), 'thiếu trường thì lượt vẫn thấy đủ 38 công cụ'
 
 
-def test_the_eleven_groups_cover_the_orchestrator_exactly():
+def test_the_twelve_groups_cover_the_orchestrator_exactly():
     groups = tool_groups_module.TOOL_GROUPS
     assert [g['key'] for g in groups] == ['repositoryReading', 'skills', 'filesTerminal',
                                           'screenBrowser', 'webResearch', 'delegationPlans',
                                           'researchLedger', 'researchDossiers', 'peerMesh',
-                                          'questionsApprovals'], \
+                                          'workGraph', 'questionsApprovals'], \
         'đúng thứ tự bảng Nút vặn của runtime (vòng 27 đợt 3–8 chèn hai nhóm research NGAY SAU delegationPlans)'
     assert all(set(g) == {'key', 'tools', 'alwaysOn'} for g in groups)
     assert all(g['tools'] for g in groups)
     union = [tool for g in groups for tool in g['tools']]
-    assert len(union) == len(set(union)) == 39, 'mười nhóm không chồng nhau'
+    assert len(union) == len(set(union)) == 43, 'mười hai nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
     assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
     questions = next(g for g in groups if g['key'] == 'questionsApprovals')
-    assert set(questions['tools']) == {'ask_user', 'request_approval'}
+    assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
 
-def test_the_route_answers_the_same_eleven_groups(tmp_path):
+def test_the_route_answers_the_same_twelve_groups(tmp_path):
     info = runtime_info(tmp_path)
     assert info['toolGroups'] == tool_groups_module.tool_groups()
     assert info['tools'] == sorted(ORCHESTRATOR_TOOLS)
-    assert len(info['tools']) == 39
+    assert len(info['tools']) == 43
 
 
 def test_every_role_row_equals_the_roles_definition(tmp_path):

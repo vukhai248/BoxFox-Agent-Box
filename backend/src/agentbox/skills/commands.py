@@ -39,7 +39,7 @@ BUILTIN_DESCRIPTIONS = {'plan': 'Enable root Plan workflow; `/plan <task>` scope
 CLI_DEFAULT_ROLES = {'claude-code': 'build', 'claude-design': 'orchestrator'}
 ROLE_SKILLS = {
     'explore': {'codebase-inspection', 'ast-grep'},
-    'plan': {'codebase-inspection', 'planning', 'grill-me'},
+    'plan': {'codebase-inspection', 'planning', 'grill-me', 'work-graph-planning'},
     # Vòng 25 (D-33): người phản biện kế hoạch — vai read-only nên chỉ cần kỹ năng soi mã.
     'plan-review': {'codebase-inspection'},
     'design': {'design-md', 'claude-design', 'popular-web-designs', 'architecture-diagram'},
@@ -221,6 +221,11 @@ class CommandRegistry:
                 # `/x status` là hai từ khoá điều khiển — chỉ khi công tắc của mode đó đang bật.
                 available = (_runtime.research_mode_available() if key == 'research'
                              else _runtime.design_mode_available())
+                from ..agent_core import work_graph as _work_graph
+                # Work Graph: `/research|/design <yêu cầu>` luôn là lối tắt vào lớp điều phối mới,
+                # kể cả khi mode cũ đã bị tắt bằng công tắc của nó.
+                if _work_graph.enabled() and args.strip() and args.strip().lower() not in ('off', 'status', 'on'):
+                    available = True
                 if available:
                     result.kind, result.command, result.reason = 'mode', key, 'mode_command'
                     low = args.strip().lower()
