@@ -1754,7 +1754,7 @@ Neo W6.5: **7285d950** trên B. Các thay đổi dưới đây giữ UI/UX, DAG 
 4. Policy **work-checks/5** khiến check cũ không tự được công nhận theo luật mới. Sau neo `1aadf4bf`, bổ sung chặn `codebase_grep` chỉ trả match trong chính artifact: kiểm đường dẫn match thực, không dùng thư mục được yêu cầu làm bằng chứng nguồn độc lập.
 5. Feedback có provenance: chỉ kết quả check yêu cầu sửa mới được gọi là reviewer từ chối. Đổi assignment/dependency hoặc retry lỗi provider dùng lời nhắc trung tính, không tự gán chúng thành finding chuyên môn.
 
-- [x] 37 test trong `test_work_checks_remaining.py`: grades/legacy/fallback, evidence gate thật, ID/range/empty/cross-owner/wrong reader/check/reopen, prompt contract, provenance Anh/Việt và grep tự chứng minh. Bộ mục tiêu sau sửa grep đạt 137/137; bản cuối full regression đang được ghi riêng theo snapshot.
+- [x] 37 test trong `test_work_checks_remaining.py`: grades/legacy/fallback, evidence gate thật, ID/range/empty/cross-owner/wrong reader/check/reopen, prompt contract, provenance Anh/Việt và grep tự chứng minh. Bộ mục tiêu sau sửa grep đạt 137/137; bản cuối full regression ở dòng riêng bên dưới.
 - [x] Full backend **2707 passed, 18 skipped, 0 failed**, 437,34s; `.tmp/work-checks/w61-remaining-unit.xml`, exit 0. Skips vẫn là chưa chạy Linux.
 - [x] Full backend snapshot policy 5 sau provenance/grep: **2716 passed, 18 skipped, 0 failed**, 585,96s; `.tmp/work-checks/w61-policy5-final.xml`, exit 0. Giữ kết quả policy 4 ở dòng trước, không đổi nhãn snapshot cũ.
 - [x] Live source/scope: **6/6** đúng oracle, hai lần mỗi ca false-impossibility/honest-limit/Research không CSV rows; `.tmp/work-checks/w61-source-scope-final`.
@@ -1795,6 +1795,7 @@ Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics ho�
 - [x] CSV-limit probe 2/2 đúng oracle; receipt/source hashes được giữ riêng theo snapshot.
 - [x] Research-1 đi hết vòng main → producer → revise → bản mới → whole → main final; đánh giá từng output có phạm vi ghi rõ. Lỗi đơn vị và trộn phiên bản vẫn còn, không tick chất lượng chuyên môn đạt.
 - [ ] C4 còn các lượt Research/Plan/Design khác; process đang chạy, không coi thời gian chờ là kết quả.
+- [ ] Probe bổ sung policy 5: `false_csv_byte_unit`, `version_limited_null_312`, `false_modern_null_313`, hai lượt mỗi ca. Dùng native reviewer thật, nguồn đúng phiên bản và Space Bunny; raw tại `.tmp/work-checks/w61-units-version-policy5`. Không đổi prompt production hoặc nâng profile để ép kết quả. Đang chạy, chưa tính đạt.
 - [ ] **W6.1.1:** tiền đề kỹ thuật sai trong acceptance, đơn vị/version/default/configurable, counterexample cho reviewer, claim mới ở final main chưa được bound vào whole review; checklist chi tiết ở report. Chưa code các việc này.
 - [ ] **W6.5.1:** các tầng live dài/Docker/watchdog/throughput chưa đo ở 19.5; mạng mất không được dùng suy ra cần nâng timeout.
 - [ ] **W7:** triển khai durable request/answer/outbox và resume cùng child; kiến trúc đã khảo sát ở 20.3, chưa bật tính năng.

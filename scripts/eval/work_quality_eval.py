@@ -45,6 +45,37 @@ CASES = {
         'csv.writer ghi được nhưng csv.reader không thể đọc lại tiếng Việt nếu vượt 128 KiB. '
         'Không có cấu hình nào thay đổi trần này, nên bắt buộc chuyển sang JSON để giữ tiếng Việt. '
         'Nguồn: ' + URL, 'revise'),
+    'false_csv_byte_unit': ('Trên CPython, csv.field_size_limit() mặc định là 131072 byte (128 KiB), '
+        'nên một field gồm 80000 ký tự ơ (160000 byte UTF-8) vượt giới hạn mặc định khi đọc bằng csv.reader. '
+        'Có thể đổi giới hạn bằng field_size_limit(new_limit), nhưng đơn vị giới hạn này vẫn là byte. '
+        'Nguồn: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c', 'revise'),
+    'version_limited_null_312': ('Phạm vi riêng CPython 3.12: writer có QUOTE_NOTNULL/QUOTE_STRINGS, '
+        'nhưng do lỗi reader được tài liệu 3.12 ghi nhận, hai hằng không ảnh hưởng hành vi reader. '
+        'Không dùng kết luận này cho mọi phiên bản CSV/Python: tài liệu nói lỗi được sửa ở 3.13. '
+        'Không tuyên bố đã chạy Python 3.12. Nguồn: '
+        'https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst', 'pass'),
+    'false_modern_null_313': ('Trên CPython 3.13, kể cả dùng quoting=QUOTE_NOTNULL ở cả csv.writer '
+        'và csv.reader, không thể đọc lại [None, ""] mà vẫn phân biệt None với chuỗi rỗng. '
+        'QUOTE_NOTNULL chỉ ảnh hưởng phía ghi, csv.reader 3.13 trả str cho cả hai. Vì vậy phải đổi sang JSON. '
+        'Nguồn: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c', 'revise'),
+}
+
+CASE_TASKS = {
+    'false_csv_byte_unit': ('Nghiên cứu đúng đơn vị và giới hạn field của CPython CSV, không triển khai.',
+        'Đối chiếu field_size_limit, parse_add_char và cấu trúc field trong source CPython 3.13; '
+        'không suy đơn vị chỉ từ hằng 128*1024.',
+        ['Phân biệt chính xác byte và ký tự khi đọc field tiếng Việt',
+         'Phân biệt default và cấu hình, không biến giới hạn parser thành không khả thi của CSV']),
+    'version_limited_null_312': ('Nghiên cứu riêng hành vi CSV reader CPython 3.12, so mốc sửa 3.13.',
+        'Đọc source/doc đúng phiên bản 3.12 và ngoại lệ reader QUOTE_NOTNULL/QUOTE_STRINGS; '
+        'không bác giới hạn 3.12 chỉ vì nó hoạt động ở 3.13.',
+        ['Kết luận đúng phiên bản và ngoại lệ được tài liệu 3.12 ghi nhận',
+         'Không tuyên bố đã thực thi khi chỉ đọc source; không yêu cầu triển khai ngoài phạm vi']),
+    'false_modern_null_313': ('Nghiên cứu khả năng giữ None và chuỗi rỗng riêng CPython 3.13.',
+        'Đối chiếu writer và parse_save_field của reader CPython 3.13 với quoting=QUOTE_NOTNULL '
+        'ở cả hai chiều; không kế thừa bug của 3.12 thành giới hạn 3.13.',
+        ['Kết luận đúng reader 3.13 cho None và chuỗi rỗng khi cùng chế độ quoting',
+         'Không kết luận buộc đổi định dạng khi source chứng minh CSV có cách xử lý']),
 }
 
 
@@ -73,12 +104,14 @@ async def run(args):
             rt=HarnessRuntime(store,FixtureExecutor(folder),client)
             session=rt.create({**route,'skills':[],'maxSteps':40,'deadlineSeconds':600})
             graph=wg.service(rt)
-            run=graph.create(session,{'goal':'Chỉ nghiên cứu csv chuẩn của Python có giữ được tiếng Việt không. '
+            owner, assignment, acceptance = CASE_TASKS.get(case, ('Chỉ nghiên cứu csv chuẩn của Python có giữ được tiếng Việt không. '
                 'Không đánh giá HIS, không triển khai app. Đọc nguồn chính thức để xác nhận hoặc bác kết luận.',
+                'Kiểm khả năng Unicode của Python csv từ nguồn chính thức '+URL,
+                ['Kết luận Unicode đúng nguồn chính thức; không nói không khả thi khi có thể làm',
+                 'Giới hạn HIS chưa kiểm là giới hạn trung thực, không yêu cầu thêm triển khai ngoài phạm vi']))
+            run=graph.create(session,{'goal':owner,
                 'flow':'research','nodes':[{'id':'R1','kind':'research','title':'CSV Unicode feasibility',
-                    'goal':'Kiểm khả năng Unicode của Python csv từ nguồn chính thức '+URL,
-                    'acceptance':['Kết luận Unicode đúng nguồn chính thức; không nói không khả thi khi có thể làm',
-                                  'Giới hạn HIS chưa kiểm là giới hạn trung thực, không yêu cầu thêm triển khai ngoài phạm vi']}]})
+                    'goal':assignment, 'acceptance':acceptance}]})
             node=run['nodes'][0]
             policy=work_policy.derive(run,node,'produce',text)
             meta=await graph.artifacts.put(run,'R1','produce',text,graph.checks.binding(run,node,'produce')|{'policyHash':policy['hash']},True)
