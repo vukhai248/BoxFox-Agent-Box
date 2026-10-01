@@ -1,0 +1,168 @@
+{
+  "schema": "boxfox-w7-foundation-native-audit/1",
+  "scope": "Native bound child, manual service opens root card; synthetic owner answer, disposable workspace. Does not certify A direct grants/controller, full main, or UI.",
+  "method": "Read each visible final + saved request/answer. workflow oracle differs from content compliance; no failing row excluded.",
+  "rows": [
+    {
+      "repeat": 1,
+      "route": {
+        "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+        "modelId": "space-bunny-free"
+      },
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+        "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "db1320026be5cd67bb0e0c9abd6f94b3e51e1513c8071b750cc5b9a1b563bbe0",
+        "backend\\src\\agentbox\\agent_core\\work_feedback.py": "8d17356d14a03c25b6e6ff03d605d908d742ab8361b68914d46d59b83e2d2553",
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "e6cea29fcd79f6f1acdf76a1a298a844f49d32652c15a664df964f499c6db3b8",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "71ff6b2a5b1cb28ffd477909ff89eba1798ef0d8ca828ff8cf6e38593b206351",
+        "backend\\src\\agentbox\\agent_core\\roles.py": "6ca264a839d9d4567731f31298fe10be712f06be186925e348493e3d57d02049"
+      },
+      "childId": "8b8fecb63a8a4c52bb9cb9b49d1948a9",
+      "status": "needs_user",
+      "oracle": false,
+      "output": "",
+      "telemetry": [
+        5,
+        2271
+      ],
+      "questionCount": null,
+      "finalRequestCount": null,
+      "activeSlotsAfterYield": null,
+      "activeSlotsAfterCompletion": null,
+      "latencySeconds": 48.03,
+      "error": null,
+      "version": "v2",
+      "rawPath": ".tmp\\work-checks\\w7-native-feedback-v2\\results.json",
+      "rawHash": "990f689a3f0310f67bafa65d7905b6755440892f7cbab784ae73a49063ff405c",
+      "lengthOracle": false,
+      "wordsWhitespace": 0
+    },
+    {
+      "repeat": 2,
+      "route": {
+        "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+        "modelId": "space-bunny-free"
+      },
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+        "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "db1320026be5cd67bb0e0c9abd6f94b3e51e1513c8071b750cc5b9a1b563bbe0",
+        "backend\\src\\agentbox\\agent_core\\work_feedback.py": "8d17356d14a03c25b6e6ff03d605d908d742ab8361b68914d46d59b83e2d2553",
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "e6cea29fcd79f6f1acdf76a1a298a844f49d32652c15a664df964f499c6db3b8",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "71ff6b2a5b1cb28ffd477909ff89eba1798ef0d8ca828ff8cf6e38593b206351",
+        "backend\\src\\agentbox\\agent_core\\roles.py": "6ca264a839d9d4567731f31298fe10be712f06be186925e348493e3d57d02049"
+      },
+      "childId": "56e706cd4f1f45a588ce4d74a303d480",
+      "status": "accepted",
+      "oracle": true,
+      "output": "## Trả lời\n\nNgười dùng đã trả lời: exporter dành cho **Điều dưỡng** (ghi nhận / chăm sóc / theo dõi hằng ngày) — nguồn: quyết định người dùng, requestId `wr-aa4e459506ed40a997b0897affdf5f4f`, `optionId=dieu-duong`, `source=user_action`. Bản mô tả nên viết theo góc nhìn chăm sóc: dữ liệu dùng để ghi nhận diễn biến và theo dõi hằng ngày, không theo góc nhìn chẩn đoán hay ký kết quả.\n\n## Phạm vi và phương pháp\n\nĐọc `docs/source.md`; ledger `source_list` rỗng nên không mở nguồn ngoài. Không khảo sát lại định dạng theo chỉ dẫn nguồn.\n\n## Dữ kiện đã xác minh\n\n- `docs/source.md:1` (row `r1`): \"exporter dùng CSV, giữ Unicode\" — lời nguồn. Cùng dòng: \"Người dùng mục tiêu chưa chốt\" — trạng thái tại thời điểm đọc, đã được người dùng thay bằng quyết định ở trên.\n- Chọn vai trò Điều dưỡng là quyết định người dùng, không phải dữ kiện từ nguồn.\n\n## So sánh phương án\n\nBa lựa chọn đã hỏi: Bác sĩ, Điều dưỡng, Cả hai. Người dùng chọn Điều dưỡng.\n\n## Bằng chứng trái chiều và khoảng trống\n\nKhông có nguồn trái chiều. Chưa xác minh: danh sách cột cụ thể, quy mô file, chính sách ký số (UNVERIFIED) — chưa tìm thấy không đồng nghĩa không tồn tại.\n\n## Khuyến nghị\n\nViết mô tả hướng đến Điều dưỡng, giữ CSV + Unicode. Không mở phạm vi triển khai.\n\n## Knowledge requests\n\n- none",
+      "telemetry": [
+        4,
+        2467
+      ],
+      "questionCount": null,
+      "finalRequestCount": null,
+      "activeSlotsAfterYield": null,
+      "activeSlotsAfterCompletion": null,
+      "latencySeconds": 46.596,
+      "error": null,
+      "version": "v2",
+      "rawPath": ".tmp\\work-checks\\w7-native-feedback-v2\\results.json",
+      "rawHash": "990f689a3f0310f67bafa65d7905b6755440892f7cbab784ae73a49063ff405c",
+      "lengthOracle": false,
+      "wordsWhitespace": 237
+    },
+    {
+      "repeat": 1,
+      "route": {
+        "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+        "modelId": "space-bunny-free"
+      },
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+        "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "db1320026be5cd67bb0e0c9abd6f94b3e51e1513c8071b750cc5b9a1b563bbe0",
+        "backend\\src\\agentbox\\agent_core\\work_feedback.py": "c2607210366efb0c41b19598ca4c83dfea9b6f06b7f25351b58253ee6f420e19",
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "e6cea29fcd79f6f1acdf76a1a298a844f49d32652c15a664df964f499c6db3b8",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "71ff6b2a5b1cb28ffd477909ff89eba1798ef0d8ca828ff8cf6e38593b206351",
+        "backend\\src\\agentbox\\agent_core\\roles.py": "fd703f91bbbfe823f094c9d7a9b54713b355959a22fb0024d291044628123570"
+      },
+      "childId": "42adccbe825a44cb8042154c298e7029",
+      "status": "accepted",
+      "oracle": true,
+      "output": "Đã nhận câu trả lời của người dùng, tiếp tục từ checkpoint (không hỏi lại, không khảo sát lại định dạng).\n\n## Trả lời\nNgười dùng đã chốt: **Điều dưỡng** là người dùng chính của báo cáo CSV mà exporter xuất ra (quyết định ghi bởi `user`, `requestRevision` 1, request `wr-305aeb13abf24936b1239efffce3ce9a`). Dữ kiện đã xác minh từ trước được giữ nguyên, không mở rộng phạm vi. Vì nhiệm vụ chỉ báo cáo và đã đủ dữ kiện, tôi không chạy thêm tìm kiếm và không mở nhánh triển khai.\n\n## Phạm vi và phương pháp\nĐọc `docs/source.md` trong workspace. Không có nguồn ngoài nào được mở; không có `web_search`/`web_fetch`, ledger rỗng. Không có mốc thời gian hay phạm vi địa lý nào áp dụng.\n\n## Dữ kiện đã xác minh\n- `docs/source.md:1` — \"Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\" (lời nguồn).\n- Quyết định người dùng: **Điều dưỡng** (lời người dùng qua main, không phải lời nguồn).\n- Suy luận của tôi: vì CSV giữ Unicode, tên cột tiếng Việt có dấu khả dụng cho cả hai vai trò; nhu cầu lịch ca/giờ và trạng thái y lệnh của điều dưỡng **chưa** có bằng chứng nguồn.\n\n## So sánh phương án\nChốt Điều dưỡng; phương án Bác sĩ bị loại. Chưa đánh giá chi phí vì ngoài phạm vi.\n\n## Bằng chứng trái chiều và khoảng trống\nKhông có nguồn trái chiều. UNVERIFIED: mọi yêu cầu nghiệp vụ riêng của điều dưỡng (ca, giờ, trạng thái) chưa được nguồn nào xác nhận.\n\n## Khuyến nghị\nGiữ nguyên kết luận; mở rộng chỉ khi chủ yêu cầu thêm khảo sát nghiệp vụ.\n\n## Knowledge requests\n- none",
+      "telemetry": [
+        3,
+        2348
+      ],
+      "questionCount": 1,
+      "finalRequestCount": 1,
+      "activeSlotsAfterYield": [],
+      "activeSlotsAfterCompletion": [],
+      "latencySeconds": 33.88,
+      "error": null,
+      "version": "v3",
+      "rawPath": ".tmp\\work-checks\\w7-native-feedback-v3\\results.json",
+      "rawHash": "b388ba7a8dcacd5949edb871b66619d4d24c68041ca957d810452071311a5587",
+      "lengthOracle": false,
+      "wordsWhitespace": 292
+    },
+    {
+      "repeat": 2,
+      "route": {
+        "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+        "modelId": "space-bunny-free"
+      },
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+        "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "db1320026be5cd67bb0e0c9abd6f94b3e51e1513c8071b750cc5b9a1b563bbe0",
+        "backend\\src\\agentbox\\agent_core\\work_feedback.py": "c2607210366efb0c41b19598ca4c83dfea9b6f06b7f25351b58253ee6f420e19",
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "e6cea29fcd79f6f1acdf76a1a298a844f49d32652c15a664df964f499c6db3b8",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "71ff6b2a5b1cb28ffd477909ff89eba1798ef0d8ca828ff8cf6e38593b206351",
+        "backend\\src\\agentbox\\agent_core\\roles.py": "fd703f91bbbfe823f094c9d7a9b54713b355959a22fb0024d291044628123570"
+      },
+      "childId": "e1651a7e476d435396d31ee6e646d61b",
+      "status": "accepted",
+      "oracle": true,
+      "output": "## Trả lời\nNgười dùng đã chốt: **CSV exporter dành cho Điều dưỡng** (quyết định người dùng, `optionId: dieu-duong`, `decidedBy: user`, request `wr-3e4396b30504461cbfaf74615d66c0d5`). Vì vậy mô tả hướng cột và bố cục theo nhu cầu theo dõi/bàn giao chăm sóc. Định dạng đã chốt sẵn: CSV, giữ Unicode — không khảo sát lại. Chỉ báo cáo, không triển khai.\n\n## Phạm vi và phương pháp\nCâu hỏi: exporter CSV phục vụ ai và dữ kiện nền nào đã biết. Nguồn: `docs/source.md` (file duy nhất trong workspace, `codebase_glob \"**/*\"` → 1 kết quả). Mốc: lượt hiện tại. Không có tìm kiếm ngoài — ledger chỉ có `r1` (host-doc).\n\n## Dữ kiện đã xác minh\n- `docs/source.md:1` (r1, verbatim): \"Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\" → CSV; giữ Unicode; *người dùng chưa chốt trong tài liệu*.\n- Lựa chọn \"Điều dưỡng\" đến từ quyết định người dùng, **không** từ tài liệu (suy luận của tôi về tập cột là giả định).\n\n## So sánh phương án\nBác sĩ / Điều dưỡng / Cả ba: người dùng đã loại hai phương án còn lại khi chọn Điều dưỡng. Không cần so phí.\n\n## Bằng chứng trái chiều và khoảng trống\nKhông có nguồn nào trái chiều. UNVERIFIED: tập cột cụ thể, quy mô bản ghi, BOM/dấu phân cách — tài liệu không nêu.\n\n## Khuyến nghị\nGiữ phạm vi chỉ-báo-cáo. Tập cột theo Điều dưỡng là **đề xuất**, chờ main/người dùng duyệt trước khi mở bất kỳ việc triển khai nào.\n\n## Knowledge requests\n- none",
+      "telemetry": [
+        5,
+        3269
+      ],
+      "questionCount": 1,
+      "finalRequestCount": 1,
+      "activeSlotsAfterYield": [],
+      "activeSlotsAfterCompletion": [],
+      "latencySeconds": 70.166,
+      "error": null,
+      "version": "v3",
+      "rawPath": ".tmp\\work-checks\\w7-native-feedback-v3\\results.json",
+      "rawHash": "b388ba7a8dcacd5949edb871b66619d4d24c68041ca957d810452071311a5587",
+      "lengthOracle": false,
+      "wordsWhitespace": 269
+    }
+  ],
+  "adjudication": [
+    "v2 repeat1: same child kept user answer; child incorrectly checkpointed completed report. No accepted deliverable. Guard did not lose answer.",
+    "v2 repeat2: same-child workflow accepted; final 237 words versus <200 assignment. Not complete content compliance.",
+    "v3: 2/2 same-child accepted, one request each, no active slot after yield or completion; 292/269 words versus <200 assignment.",
+    "v3 repeat2 says choosing Nurses excluded two other options and proposes nurse-oriented columns. Exclusion phrasing is overstatement, proposal must remain unconfirmed; not a backend-confirmed business requirement.",
+    "v3 changed both report guidance and fixture glob inventory. It cannot prove the guidance alone caused improvement.",
+    "Persisted cards/answers/events were checked in SQLite. Frontend rendering after reload/copy is not verified; no CUA used."
+  ],
+  "followup": [
+    "A2/A3 direct grant, notification and run-owned continuation tests",
+    "W6.2 producer output-length/proposal phrasing symptom; no prompt tune yet",
+    "Read-only CUA later: root card + resolved answers retained in chat and Decisions with no UX redesign"
+  ]
+}

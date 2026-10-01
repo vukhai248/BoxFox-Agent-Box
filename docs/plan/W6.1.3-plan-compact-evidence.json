@@ -1,0 +1,393 @@
+{
+  "schema": "boxfox-visible-corpus-audit/1",
+  "scope": "Old policy9 live outputs; not current W7 or policy10 certification",
+  "rawPath": ".tmp\\work-checks\\w612-scope9-compact-flow\\results.json",
+  "rawHash": "66d5479997e86ee587e0e30bc5ed973ceec4dc246c4eb7ea5f10d4e44b445167",
+  "route": {
+    "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+    "modelId": "space-bunny-free"
+  },
+  "recordedCommit": "1be035fb8bc3c1beb08df77d65fd7d7891cf22dc",
+  "sourceHashes": {
+    "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend\\src\\agentbox\\agent_core\\work_checks.py": "91ba0109d7a367640a652d7371b62c6405d899dc65febc0e7547e5556039a74d",
+    "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+    "backend\\src\\agentbox\\agent_core\\work_policy.py": "e2c457a2ba021471987c1860f7f8056d8af812dd4153a771ee01f794c1b987da",
+    "backend\\src\\agentbox\\agent_core\\work_prompts.py": "17a14afac5c28fb74b681455fb75a8066af5a5d0afc616306c81cad970172a42",
+    "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend\\src\\agentbox\\agent_core\\roles.py": "5cabb2907da1be9c44239c8cceea8a8d536c80c7765cd13f791ee5c12b932da1",
+    "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+    "scripts\\eval\\work_integration_eval.py": "a5c4c54d248f032e66f6722d5b69165ff1af118ad2a3754a7b845eeed2876cbe"
+  },
+  "main": {
+    "sessionId": "e3bdd63239f545e3a8883ab29b95321f",
+    "status": "completed",
+    "mainExecutionStatus": "partial",
+    "mainPartialReason": "PROVIDER_STREAM_INTERRUPTED",
+    "latencySeconds": 4699.511,
+    "oracle": false,
+    "mainAnswer": "Artifact v6 có hai lỗi thật tôi tự phát hiện khi đọc toàn văn: M1 dùng lệnh `python -c \"import src.export\"` nhưng lại kèm kết quả \"1 passed\" (lệnh đó không in ra số test, và fixture chỉ cho phép `python -m pytest -q`), và M2 ghi \"không phụ thuộc M1\" trong khi chạy ngay sau M1. Sửa trước rồi review một lần cuối."
+  },
+  "mainCommandReceipts": [
+    {
+      "id": "call_01a0f7b96d3f721c82190bef",
+      "name": "terminal_exec",
+      "args": {
+        "command": "ls -la; echo '---'; find . -type f -not -path './.git/*' | head -100"
+      },
+      "result": {
+        "is_error": true,
+        "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+      }
+    },
+    {
+      "id": "call_01a0f7b97e1c74c3937e47ce",
+      "name": "terminal_exec",
+      "args": {
+        "command": "python -m pytest -q"
+      },
+      "result": {
+        "content": "F                                                                        [100%]\r\n================================== FAILURES ===================================\r\n________________________________ test_unicode _________________________________\r\n\r\n    def test_unicode():\r\n>       assert next(csv.reader(io.StringIO(export('H\\u1ed3 s\\u01a1')))) == ['H\\u1ed3 s\\u01a1']\r\nE       AssertionError: assert ['H s'] == ['H\\u1ed3 s\\u01a1']\r\nE         \r\nE         At index 0 diff: 'H s' != 'H\\u1ed3 s\\u01a1'\r\nE         Use -v to get more diff\r\n\r\ntests\\test_export.py:4: AssertionError\r\n=========================== short test summary info ===========================\r\nFAILED tests\\test_export.py::test_unicode - AssertionError: assert ['H s'] ==...\r\n1 failed in 0.14s\r\n",
+        "exit_code": 1,
+        "is_error": true,
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+      }
+    }
+  ],
+  "children": [
+    {
+      "index": 1,
+      "childId": "328342211a824b64912a7bd665be48ff",
+      "role": "plan",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc trực tiếp 3 file trong workspace; nội dung khớp với dữ kiệu phiên chính cung cấp.\n\n---\n\n# Sub-plan P1 — Sửa mất dấu tiếng Việt trong `src/export.py` (giữ nguyên CSV)\n\n> **Đây là PLAN. Chưa có thay đổi nào được thực thi.** Không file nào bị sửa, không test nào được chạy lại bởi tôi. Các số \"passed\" dưới đây là **kỳ vọng**, không phải kết quả đo.\n\n## 1. Bằng chứng và hiện trạng (đã mở file)\n\n- `src/export.py` — 6 dòng. Dòng 3: `value = value.encode('ascii', errors='ignore').decode()`.\n- `tests/test_export.py:4` — `test_unicode` assert `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n- `docs/source.md:1` — chốt: chỉ CSV (không JSON), input một chuỗi, output một dòng CSV hợp lệ, trường chứa phẩy/newline phải đọc lại đúng bằng `csv.reader`.\n- Baseline do phiên chính đo: `python -m pytest -q` → **`1 failed in 0.14s`**, `AssertionError: assert ['H s'] == ['Hồ sơ']`.\n- Khoảng trống: chỉ còn lỗi mất ký tự; chưa có test cho giá trị chứa phẩy/newline.\n\n## 2. Nguyên nhân gốc và quyết định kiến trúc\n\n`encode('ascii', errors='ignore')` loại mọi byte >127, nên `ồ`, `ơ` biến thành chuỗi rỗng → `'Hồ sơ'` thành `'H s'`. Vấn đề nằm ở **tiền xử lý đầu vào**, không nằm ở `csv.writer` (dòng 5 vốn đã đúng).\n\nQuyết định: giữ `csv` module chuẩn của Python thay vì tự nối chuỗi. `csv.writer` đã xử lý quoting, dấu phẩy, newline nhúng và kết thúc record CRLF; `io.StringIO(newline='')` ngăn Python dịch `\\r\\n`. Viết tay escape sẽ phải tự lặp lại đúng những quy tắc này → đây là lý do loại bỏ phương án đó. Phương án thay thế bị loại: chuẩn hoá Unicode (NFC) — không cần, `csv`/`str` đã giữ nguyên chuỗi.\n\n## 3. Mục tiêu và ngoài phạm vi\n\n- **Goal**: `export('Hồ sơ')` trả về CSV đọc lại được bằng `csv.reader` với giá trị nguyên vẹn.\n- **Non-goals**: không đổi sang JSON; không thêm CLI/GUI; không thêm dependency; không refactor ngoài phạm vi một hàm; không đổi tên/tham số hàm.\n\n## 4. Hợp đồng CSV\n\n| | Nội dung |\n|---|---|\n| Input | `value: str` — một dòng logic (có thể chứa `,` `\\n` `\"` dấu tiếng Việt) |\n| Output | `str` — đúng **1 record** do `csv.writer` sinh, kết thúc `\\r\\n` |\n| Bất biến | `next(csv.reader(io.StringIO(out))) == [value]` cho **mọi** value trên; không mất/không đổi byte nào ngoài quoting bắt buộc |\n| Chữ ký | `export(value: str) -> str` — giữ nguyên tên và tham số |\n| Lỗi | Không thêm nhánh lỗi mới; ngoại lệ của `csv`/`io` giữ nguyên hành vi |\n\n## 5. Milestones\n\n**M1 — Xóa tiền xử lý ASCII** (role: build; phụ thuộc: không)\n- `src/export.py`: xóa **đúng dòng 3**. Giữ `import csv, io` (dòng 1), `io.StringIO(newline='')` (dòng 4), `csv.writer(s).writerow([value])` (dòng 5). Không thêm import, không thêm dòng.\n- **Expected**: `python -m pytest -q` chuyển từ baseline `1 failed` → `1 passed` (kỳ vọng, chưa đo).\n\n**M2 — Xanh test hiện có** (role: testing; phụ thuộc M1)\n- Chạy lại `tests/test_export.py` **không sửa nội dung, không đổi tên, không xoá**.\n- **Expected**: `python -m pytest -q` → `1 passed`, `test_unicode` xanh (kỳ vọng).\n\n**M3 — Bổ sung round-trip tối đa 2 test** (role: testing; phụ thuộc M2)\n- Thêm vào `tests/test_export.py`, theo đúng khung assert sẵn có: một test cho `'Hồ, sơ'` (dấu phẩy), một test cho `'Hồ\\nsơ'` (newline). Phía đọc dùng `io.StringIO(export(...))`.\n- **Expected**: `python -m pytest -q` → `3 passed`; không test nào bị xoá/đổi tên (kỳ vọng).\n\n## 6. File sửa dự kiến\n\n- `src/export.py` (tồn tại) — M1, xóa 1 dòng.\n- `tests/test_export.py` (tồn tại) — M3, thêm ≤2 test.\n- Không file nào khác.\n\n## 7. Rủi ro và rollback\n\n- **Đổi byte output** (CRLF, quoting) nếu ai đó thay `csv.writer` bằng tự nối chuỗi → phải giữ nguyên `csv.writer` + `newline=''`.\n- **Test mới phụ thuộc `io.StringIO(newline='')` ở phía đọc**; nếu thiếu, ký tự `\\r\\n` bị dịch và assert dễ vỡ — dùng đúng khung `csv.reader(io.StringIO(...))` sẵn có.\n- **Test trên máy khác**: `PYTHONIOENCODING`/locale có thể ảnh hưởng hiển thị, không ảnh hưởng assert byte trong `str`.\n- **Rollback**: diff nhỏ, cô lập → `git revert <commit>` một lần là đủ; không cần migration dữ liệu.\n\n## 8. Truy vết và nghiệm thu\n\nYêu cầu `docs/source.md` (giữ tiếng Việt) → quyết định \"xoá dòng 3\" → M1 → `python -m pytest -q` = 1 passed. Yêu cầu (phẩy/newline đọc lại đúng) → hợp đồng §4 → M3 → 3 passed. Yêu cầu (chỉ CSV, không JSON) → non-goal §3 → không file nào khác bị đụng.\n\n**Quyết định còn mở cho owner**: có chấp nhận giữ `\\r\\n` theo mặc định `csv.writer` (RFC 4180) hay bắt buộc `\\n`? Plan này giữ mặc định.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 799,
+      "finalHash": "6bddbbcda51b46633f540776f8d89048e87fcd7ea66deef3f70213f88f5a8eaa",
+      "adjudication": "Plan khá cụ thể về CSV, paths, M1–M3 và expected chưa chạy; 799 từ vượt ngưỡng 700. Không kết luận mọi rủi ro newline đúng."
+    },
+    {
+      "index": 2,
+      "childId": "3089159611354cf09ad7e5d4a3e0b246",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 7,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Đã kiểm\n\n- Artifact `a-6adc430d5f14491489d753a37fb46968` (P1/produce/v1, 4473 chars): đọc hết, `allAssignedArtifactsRead: true`.\n- Nguồn gốc mở trực tiếp: `src/export.py`, `tests/test_export.py`, `docs/source.md` (không sửa gì).\n- Tài liệu chính thức: `docs.python.org/3/library/csv.html` (`Dialect.lineterminator` mặc định `'\\r\\n'`; reader nhận cả `\\r`/`\\n`), `docs.python.org/3/library/io.html` (`StringIO(newline=…)` \"works like that of TextIOWrapper\"; ghi với `newline=''` → \"no translation takes place\"), `raw.githubusercontent.com/python/cpython/3.14/Lib/csv.py` (class `excel`: `lineterminator = '\\r\\n'`; `DictReader.__next__` có `while row == []` → dòng trống trả `[]`).\n- **Lệnh bắt buộc `python -m pytest -q`: NOT RUN** — sandbox này không có công cụ thực thi (`bash`/`read` bị vô hiệu). Tôi không bịa pass. Baseline `1 failed in 0.14s` do artifact ghi là *đo bởi phiên chính*; tôi chỉ suy ra nhất quán từ code: `'Hồ sơ'.encode('ascii','ignore')` → `'H s'` → `csv.reader` trả `['H s']` ≠ `['Hồ sơ']`.\n\n## Vấn đề chặn\n\n`none`\n\n## Ghi chú không chặn\n\n1. **A1 — ngưỡng \"dưới 700 từ\" chưa kiểm chứng (UNVERIFIED, sát ngưỡng).** Cả 8 phần đều có và đúng thứ tự yêu cầu: blockquote \"PLAN, chưa thực thi\", §1 bằng chứng, §2 context + lý do giữ `csv` chuẩn (loại phương án tự escape tay), §3 goal + 4 non-goal, §4 bảng hợp đồng, §5 M1–M3 kèm expected, §6 file sửa, §7 rủi ro/rollback, §8 truy vết. Nhưng 4473 ký tự ước lượng ~745–813 từ (5,5–6 ký tự/từ), tức có thể vượt 700. Main nên đếm lại; nếu vượt, cắt gọn nhất là bullet thứ 3 của §7 (locale/PYTHONIOENCODING) và §8 — không cắt §4 hay §5.\n2. **Bất biến §4 đọc quá rộng ở `value=''` (di sản của chính yêu cầu A4, không phải lỗi riêng của producer).** `csv.writer.writerow([''])` cho ra `\\r\\n`; `csv.reader` trả `[]` cho dòng trống — xác nhận từ `Lib/csv.py` (`while row == []` trong `DictReader`). Nên \"cho **mọi** value\" đúng với value khác rỗng, sai với `''`. Không chặn: M3 dùng `'Hồ, sơ'`/`'Hồ\\nsơ'` nên các expected vẫn đúng. Main có thể siết câu chữ ở review toàn plan.\n3. **§2 và §4 đúng, đã có nguồn:** `\\r\\n` là `lineterminator` mặc định của dialect `excel`; `io.StringIO(newline='')` chặn dịch `\\n`→`os.linesep`; `lineterminator='\\r\\n'` khớp RFC 4180 mà docs dẫn chiếu.\n4. **§7 (rủi ro `StringIO(newline='')` ở phía đọc) hơi nặng nhưng không sai:** `csv` khuyến nghị `newline=''` cho file object, dù reader hard-code nhận cả `\\r`/`\\n` nên rủi ro thực tế thấp; hướng dẫn \"dùng đúng khung assert sẵn có\" là đúng và khớp fixture.\n5. **Rollback §7 cần một câu ràng buộc nhỏ:** nói rõ gom M1–M3 vào *một* commit để `git revert <commit>` một lần là đúng như kế hoạch giả định.\n\n```json\n{\"coverage\":[\n{\"id\":\"A1\",\"status\":\"unverified\",\"target\":\"artifact\",\"evidence\":\"8/8 phần hiện diện và đúng nội dung (blockquote 'PLAN, chưa thực thi', §2 lý do csv chuẩn, §3 goal+4 non-goal, §4 bảng hợp đồng, §5 M1–M3, §6 file sửa, §7 rủi ro/rollback, §8 truy vết). Điều kiện '<700 từ' chưa kiểm chứng: 4473 chars ước ~745–813 từ, sát/qua ngưỡng; bash unavailable nên không đếm được. Xem ghi chú 1.\"},\n{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"src/export.py:3 đúng nguyên văn `value = value.encode('ascii', errors='ignore').decode()`; số dòng 1/3/4/5 khớp file thật. Baseline '1 failed in 0.14s' được ghi là đo bởi phiên chính, tôi suy ra nhất quán từ code ('Hồ sơ'→'H s'). Lệnh `python -m pytest -q` NOT RUN (không có tool thực thi), không bịa pass.\"},\n{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"M1 §5 chỉ xóa dòng 3, giữ dòng 1 `import csv, io`, dòng 4 `io.StringIO(newline='')`, dòng 5 `csv.writer(s).writerow([value])` — tất cả khớp src/export.py; không thêm import/dòng; non-goal §3 cấm JSON, CLI/GUI, dependency, đổi tên/tham số.\"},\n{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§4 nêu input str 1 dòng logic, output đúng 1 record kết thúc `\\\\r\\\\n`, chữ ký `export(value: str) -> str`, bất biến `next(csv.reader(io.StringIO(out))) == [value]` kể cả `,` `\\\\n` `\\\"` dấu Việt. `\\\\r\\\\n` xác nhận từ docs csv (Dialect.lineterminator default) + Lib/csv.py class excel. Lưu ý không chặn: 'mọi value' sai với value='' (ghi chú 2).\"},\n{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§5: M1 expected 'python -m pytest -q' 1 failed→1 passed; M2 expected 1 passed, test_unicode không sửa/đổi tên/xoá; M3 expected 3 passed sau ≤2 test thêm. Cả ba đều gắn số pass với đúng lệnh và đều ghi '(kỳ vọng, chưa đo)'.\"},\n{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§6 chỉ liệt kê src/export.py và tests/test_export.py + câu 'Không file nào khác'; docs/source.md chỉ xuất hiện ở §1 dưới dạng bằng chứng đã đọc, không nằm trong danh sách sửa.\"},\n{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§7 có rủi ro đổi byte output (CRLF/quoting) nếu tự nối chuỗi, rủi ro phụ thuộc `io.StringIO(newline='')` ở phía đọc, và rollback `git revert <commit>` một lần do diff nhỏ, cô lập.\"},\n{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Blockquote đầu bài: 'Đây là PLAN. Chưa có thay đổi nào được thực thi... Các số \\\"passed\\\" dưới đây là kỳ vọng, không phải kết quả đo'; lặp lại '(kỳ vọng, chưa đo)' ở từng milestone; §8 giữ dạng truy vết yêu cầu→quyết định→milestone→kỳ vọng.\"},\n{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Kiến trúc có lý do (giữ csv chuẩn, loại escape tay, loại NFC) và nêu phương án bị loại; hợp đồng dạng bảng; M1–M3 có role + phụ thuộc (M1: không, M2←M1, M3←M2); mọi claim thực tế đã đối chiếu src/export.py, tests/test_export.py:4, docs/source.md:1 và đều khớp; câu hỏi mở `\\\\r\\\\n` vs `\\\\n` được nêu là quyết định chờ owner, không tự bịa quyết định người dùng.\"}\n]}\n```\n\nVERDICT: ok",
+      "finalWordCountWhitespace": 852,
+      "finalHash": "91419ff01a583c4f6044b6d4fc4a02b2f0685944bafafb48ce778c41320ba006",
+      "adjudication": "Reviewer mở source nhưng nhầm writer một field rỗng với record rỗng/DictReader skip: kết luận empty -> [] sai. A1 ghi unverified; không phải đã xác minh độ dài."
+    },
+    {
+      "index": 3,
+      "childId": "17f887fc8d4c45a8872e168fd8604f58",
+      "role": "plan",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "# Sub-plan P1 — Sửa `src/export.py` để giữ tiếng Việt (CSV)\n\n> **ĐÂY LÀ PLAN — CHƯA THỰC THI.** Tôi chưa sửa dòng code nào, chưa chạy lại test. Baseline dưới đây là kết quả **đã đo** ở phiên chính. Mọi con số \"passed\" nêu sau đây là **kỳ vọng chưa đo**, chỉ đúng khi M1–M3 được thực thi và `python -m pytest -q` chạy xanh.\n\n## 1. Context và nguyên nhân gốc\n\n- `src/export.py:3` (đã đọc): `value = value.encode('ascii', errors='ignore').decode()` — đây là **nguyên nhân gốc**. `errors='ignore'` âm thầm xóa mọi ký tự ngoài ASCII, nên `'Hồ sơ'` → `'H s'`.\n- Baseline **đã đo**: `python -m pytest -q` → `1 failed in 0.14s`, `AssertionError: assert ['H s'] == ['Hồ sơ']`.\n- `docs/source.md` (đã đọc): chỉ CSV, không JSON; input một chuỗi; output một dòng CSV hợp lệ; trường chứa phẩy/newline phải đọc lại đúng bằng `csv.reader`.\n- `tests/test_export.py` (đã đọc): đúng 1 test `test_unicode`, khung assert `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n\n**Vì sao dùng `csv` chuẩn của Python thay vì tự nối chuỗi:** `csv.writer`/`csv.reader` đã xử lý sẵn quoting, dấu phẩy, newline nhúng và kết thúc record CRLF theo RFC 4180; `io.StringIO(newline='')` ngăn dịch `\\r\\n`. Tự nối chuỗi sẽ phải tự viết escape và dễ sai byte. Không cần thêm dependency.\n\n## 2. Goal và Non-goals\n\n**Goal:** `export()` trả về CSV mà `csv.reader` đọc lại ra đúng chuỗi gốc, kể cả khi chứa dấu phẩy và newline.\n\n**Non-goals:** không JSON; không CLI/GUI; không thêm dependency; không refactor ngoài thân hàm `export`; không đổi tên hàm hay tên tham số.\n\n## 3. Hợp đồng CSV\n\n| Mặt | Hợp đồng |\n|---|---|\n| Input | `value: str`, một dòng logic (có thể chứa `,` và `\\n` bên trong) |\n| Output | `str` chứa **đúng 1 record** do `csv.writer` ghi, kết thúc `\\r\\n` |\n| Chữ ký | `export(value) -> str` — giữ nguyên |\n| Bất biến | Với `value` **khác rỗng**: `next(csv.reader(io.StringIO(out))) == [value]` |\n\nBất biến **chỉ áp dụng cho `value` khác rỗng**: `value=''` sinh record rỗng và `csv.reader` trả về `[]`, không phải `['']`. Không phát biểu invariant cho mọi `value`.\n\n## 4. Milestones\n\n- **M1 — xóa dòng lỗi** (build; phụ thuộc: không). Xóa **đúng một** dòng `src/export.py:3`. Giữ nguyên `import csv, io`, `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`. Không thêm import/dòng nào. → *Expected:* `python -m pytest -q` từ `1 failed` → **1 passed** (kỳ vọng).\n- **M2 — xác nhận không hồi quy** (testing; phụ thuộc: M1). Chạy lại test hiện có, **không sửa/đổi tên/xoá**. → *Expected:* vẫn xanh, **1 passed** (kỳ vọng).\n- **M3 — test biên** (testing; phụ thuộc: M1, M2). Thêm **tối đa 2** test vào `tests/test_export.py` theo đúng khung assert sẵn có: một test `'Hồ, sơ'`, một test `'Hồ\\nsơ'`. → *Expected:* **3 passed**, không xoá test nào (kỳ vọng).\n\nLệnh kiểm tra dùng chung cho cả 3 mốc: `python -m pytest -q`.\n\n## 5. File dự kiến sửa\n\n- `src/export.py` — xóa 1 dòng (M1).\n- `tests/test_export.py` — thêm ≤ 2 test (M3).\n\n**Không file nào khác.** Không thêm file, không đổi `docs/source.md`.\n\n## 6. Rủi ro và rollback\n\n- **Rủi ro 1:** ai đó tự nối chuỗi thay `csv.writer` → byte output sai với giá trị chứa phẩy/newline. Giới hạn bằng M3.\n- **Rủi ro 2:** assert vỡ nếu phía đọc thiếu khung `csv.reader(io.StringIO(...))`. Với `'Hồ\\nsơ'`, tài liệu `csv` khuyến nghị `newline=''` cả khi đọc; test M3 dùng đúng khung cũ nên đây là điểm **UNVERIFIED** — nếu đỏ thì sửa khung assert, không sửa writer.\n- **Rollback:** gom M1–M3 vào **MỘT** commit → `git revert <commit>` một lần là đủ; không cần revert lặp lại.\n\n## 7. Truy vết\n\n`giữ tiếng Việt` → bỏ `encode('ascii')`, giữ `csv` chuẩn → M1 → `1 passed`; `phẩy/newline đọc lại đúng` → 2 test biên → M3 → `3 passed`.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 641,
+      "finalHash": "71b6c28e9df0eafcde3e9ede0b4dfb0e371186ad3724a0fca1445164b9d85e1c",
+      "adjudication": "Plan kế thừa empty -> [] do main đưa finding reviewer vào acceptance; 641 từ vượt mục tiêu cứng 620 (dù dưới 700). Lỗi nguồn bắt đầu từ reviewer, không tự quy mọi sai sót cho producer."
+    },
+    {
+      "index": 4,
+      "childId": "523deeb43c614289aa3d7827c6e5dd2d",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 12,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc đủ snapshot (`allAssignedArtifactsRead: true`, `nextOffset: null`), đối chiếu 3 file repo và mở nguồn chính thức CPython. Báo cáo:\n\n## Vấn đề chặn\n\n`none`\n\nCác nội dung tôi đã kiểm thực sự (không chỉ đọc artifact):\n\n- **A4 — bất biến & phạm vi**: xác nhận bằng nguồn chính thức. `lineterminator` mặc định `'\\r\\n'` ([docs.python.org/3/library/csv.html](https://docs.python.org/3/library/csv.html), mục `Dialect.lineterminator`) và `class excel(Dialect)` đặt `lineterminator = '\\r\\n'` ([Lib/csv.py 3.14](https://raw.githubusercontent.com/python/cpython/3.14/Lib/csv.py)) → mặt Output của bảng hợp đồng đúng. Về `value=''`: `csv.writer(...).writerow([''])` ghi record rỗng, và reader cơ bản trả `[]` — có bằng chứng trực tiếp trong chính source: `DictReader.__next__` có `while row == []: row = next(self.reader)` kèm bình luận *\"unlike the basic reader, we prefer not to return blanks\"* (`Lib/csv.py`). Artifact đã phát biểu đúng phạm vi \"chỉ áp dụng cho value khác rỗng\" và cấm \"mọi value\" → đúng yêu cầu A4.\n- **A2 — nguyên nhân gốc**: `src/export.py:3` trên đĩa khớp từng ký tự với trích dẫn trong plan; cơ chế `'Hồ sơ'.encode('ascii', errors='ignore').decode()` → `'H s'` là xác định, khớp với `AssertionError: assert ['H s'] == ['Hồ sơ']` mà artifact nêu. Baseline \"đã đo\" là tiền đề phiên chính, tôi **không chạy lại** (không có công cụ shell) → xem ghi chú.\n- **M3 `'Hồ\\nsơ'`**: khung đọc `io.StringIO(out)` (mặc định `newline='\\n'`) vẫn cho round-trip đúng — reader cắt dòng ở `\\n` nhưng state `IN_QUOTED_FIELD` nối lại field, nên `3 passed` là kỳ vọng có cơ sở, không phải bịa. Artifact tự ghi nhãn **UNVERIFIED** cho điểm này → trung thực.\n- **Lệnh kiểm tra**: repo chỉ có 3 file, không có `pytest.ini`/`pyproject.toml`, `tests/` không có `__init__.py`. Vì vậy `python -m pytest -q` (có `sys.path[0]` = CWD) mới làm cho `from src.export import export` resolve được; gọi `pytest -q` trần sẽ hỏng. Plan bắt buộc đúng hình thức lệnh này ở cả 3 mốc → đúng và có tải trọng thật.\n\n## Ghi chú không chặn\n\n- **A1 — ngưỡng 620 từ là ranh giới mỏng.** Tôi đếm tay theo kiểu `wc -w` (kể cả `|`, `>`, `#`, `-` và các mảnh code) được khoảng **620–625 token**; số từ văn xuôc thấp hơn nhiều. Cổng nghiệm thu `< 700` vẫn đạt thoáng (vài chục token), nhưng mục tiêu cứng `≤ 620` thì ngang ngựa. Nếu main muốn chắc chắn, cắt 1 câu ở mục 6 (ví dụ \"không cần revert lặp lại\") là đủ. Tôi **không chạy được** `wc -w` (không có shell) nên con số này là ước tính thủ công, không phải output lệnh.\n- **\"baseline 1 failed in 0.14s\"**: chuỗi `0.14s` là thời gian thực thi, tôi không thể tái tạo hay xác nhận độc lập; chỉ chuỗi `1 failed` và giá trị `['H s']` là suy ra được từ code. Main nên giữ nhãn \"đã đo ở phiên chính\" như hiện tại.\n- **M2 không sinh tín hiệu mới**: M1 đã chạy toàn bộ suite, M2 chạy lại mà không thay đổi gì nên expected trùng M1. Không phải lỗi (M2 là hạng mục bắt buộc của nhiệm vụ), nhưng có thể ghi \"tái chạy không sửa test\" để đọc ra giá trị của nó.\n- **Diễn đạt RFC 4180 hơi rộng**: tài liệu nói csv có trước RFC 4180, và *\"The reader is hard-coded to recognise either '\\r' or '\\n' as end-of-line, and ignores lineterminator\"*. Nên CRLF là hành vi của **writer** dialect `excel`, không phải của reader. Không ảnh hưởng mặt Output của hợp đồng.\n- **Rủi ro 2 trong plan là thật và đã được tự gắn nhãn**: tài liệu `csv` yêu cầu `newline=''` cho cả reader lẫn writer khi csvfile là file object. Giữ nguyên, không cần sửa.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đủ 8 phần: blockquote PLAN (L3), context+nguyên nhân+lý do csv chuẩn (§1), Goal/Non-goals (§2), bảng hợp đồng (§3), M1–M3 kèm phụ thuộc và lệnh chung (§4), file sửa (§5), rủi ro/rollback (§6), truy vết (§7). Tiếng Việt, không phần trộn lạc. Đếm tay ~620–625 token wc -w → dưới 700; xem ghi chú về ngưỡng 620.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§1 trích `src/export.py:3` khớp từng ký tự với file đọc trực tiếp; cơ chế errors='ignore' → 'H s' khớp AssertionError được nêu. Test chạy lại: NOT RUN (không có công cụ shell) — baseline lấy theo tiền đề phiên chính.\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"M1: xóa đúng 1 dòng, giữ `import csv, io`/`io.StringIO(newline='')`/`csv.writer(s).writerow([value])`, không thêm import; Non-goals §2 cấm JSON, CLI/GUI, dependency, refactor ngoài hàm, đổi tên/tham số.\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng §3 nêu input str 1 dòng logic, output đúng 1 record kết thúc \\\\r\\\\n, `export(value) -> str` giữ nguyên, bất biến giới hạn 'value khác rỗng' kèm giải thích value='' → [] và câu 'Không phát biểu invariant cho mọi value'. Đã xác minh bằng docs.python.org csv (lineterminator mặc định '\\\\r\\\\n') và Lib/csv.py (DictReader bỏ qua row == [], chứng minh reader trả []).\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"M1→1 passed, M2→1 passed không sửa test, M3→3 passed sau ≤2 test; cả ba gắn với `python -m pytest -q` qua câu 'Lệnh kiểm tra dùng chung cho cả 3 mốc'.\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§5 chỉ liệt kê src/export.py và tests/test_export.py, kèm '**Không file nào khác.** Không thêm file, không đổi docs/source.md'.\"},{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§6 Rollback: gom M1–M3 vào MỘT commit → `git revert <commit>` một lần là đủ; rủi ro byte output và rủi ro khung assert đều nêu.\"},{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Blockquote L3 nêu rõ chưa sửa dòng nào/chưa chạy lại test và mọi số passed là kỳ vọng chưa đo; mỗi milestone gắn '(kỳ vọng)'; Risk 2 tự gắn UNVERIFIED. Không có câu nào tuyên bố đã sửa/đã pass.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Plan cụ thể theo file:line, hợp đồng CSV có điều kiện phạm vi, milestone kèm phụ thuộc và lệnh kiểm tra, rủi ro có nhãn UNVERIFIED; không bịa quyết định người dùng — các ràng buộc lấy đúng từ docs/source.md đã đọc.\"}]}\n```\n\nLệnh kiểm tra bắt buộc `python -m pytest -q`: **NOT RUN** — phiên review không có công cụ thực thi lệnh (`bash`/`read` bị vô hiệu hóa). Mọi kết luận kỹ thuật ở trên dựa trên đọc file trong workspace và mở nguồn chính thức CPython 3.14.\n\nVERDICT: ok",
+      "finalWordCountWhitespace": 991,
+      "finalHash": "c315f16d4f3923aea1f5707de788144f5292072f566916681bdb47f4e624791e",
+      "adjudication": "Reviewer lặp claim empty sai, ước lượng độ dài sai; không tự đo được số từ. Milestones/paths/phạm vi khác có đối chiếu."
+    },
+    {
+      "index": 5,
+      "childId": "f66fa76094e943b5b7b93e35aad057a6",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 10,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0,
+        "partial": true,
+        "code": "PROVIDER_STREAM_INTERRUPTED"
+      },
+      "finalText": "",
+      "finalWordCountWhitespace": 0,
+      "finalHash": null,
+      "adjudication": "Không có final. Finish partial PROVIDER_STREAM_INTERRUPTED dù session completed; không có review hợp lệ."
+    },
+    {
+      "index": 6,
+      "childId": "d1181017f0404860a880a57b19dae617",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 9,
+        "partial": true,
+        "code": "DEADLINE_EXCEEDED",
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "**Đã xong:** Đọc đủ 2 artifact được giao (`allAssignedArtifactsRead: true`, `coverageComplete: true` ở cả hai; lần đầu phải bỏ `runId` vì `WORK_RUN_UNKNOWN` — lỗi ở trường, không phải ở artifact). Đã mở repo: `src/export.py:3` đúng là `value = value.encode('ascii', errors='ignore').decode()`; `tests/test_export.py` đúng 1 test `test_unicode`; `docs/source.md` đúng là chỉ-CSV. Đã mở nguồn chính thức `https://docs.python.org/3/library/csv.html` và `https://raw.githubusercontent.com/python/cpython/3.14/Lib/csv.py` để kiểm chứng `lineterminator='\\r\\n'` của dialect `excel`.\n\n**Đang kẹt:** Không chạy được lệnh test — phiên này không có `terminal_exec`, nên `python -m pytest -q` **NOT RUN**. Baseline \"1 failed\" trong P1 phải xem là khẳng định của main, không phải bằng chứng tôi tự đo. Tôi cũng chưa xác minh được bằng counterexample thật cho hai claim đáng ngờ: (a) `value=''` → `csv.reader` trả `[]` chứ không `[]`/`['']`; (b) `csv.reader(io.StringIO(out))` (thiếu `newline=''`) với `'Hồ\\nsơ'` — P1 tự đánh dấu UNVERIFIED ở đúng chỗ này (Rủi ro 2), và tôi cũng chưa chốt được.\n\n**Còn lại:** Viết report cuối cùng. Đánh giá sơ bộ (đủ để kết luận): P1 đápứng A1–A8 — 8 phần đủ, tiếng Việt, dưới ngưỡng từ, đúng nguyên nhân gốc và baseline, M1 giới hạn đúng một dòng, bất biến được giới hạn đúng \"value khác rỗng\" (A4 chính xác, không viết \"mọi value\"), M1→1 passed / M2 xanh / M3→3 passed gắn lệnh cụ thể, đúng 2 file, rollback gom một commit, và câu \"CHƯA THỰC THI\" + mọi con số passed gắn nhãn kỳ vọng chưa đo. G2/G3 không có mâu thuẫn vì chỉ một nút, dependency rỗng `{}`, không liên kết ngầm. Điểm cần nói rõ trong report: hai claim hành viở trên là **UNVERIFIED** do không chạy được code, không phải lỗi đã xác nhận — nên theo luật \"nghi ngờ chưa có bằng chứng giữ UNVERIFIED\", chúng không chặn.\n\n**Nên làm tiếp:** Nếu có `terminal_exec`, chạy `python -m pytest -q` cho baseline và một snippet tối thiểu kiểm `export('')` và `io.StringIO` không `newline=''` với `'Hồ\\nsơ'` để đóng A4/Rủi ro 2 bằng đo thật; nếu không có, xuất report với hai mục đó ở mục \"Ghi chú không chặn\" kèm dòng NOT RUN, và kết thúc bằng `VERDICT: ok` nếu không phát hiện sai lệch chặn nào.",
+      "finalWordCountWhitespace": 362,
+      "finalHash": "e274142ae64a16b229f991ad86b5057811dd1f74bd10831b3ff03bd078d49967",
+      "adjudication": "Đọc assigned refs, khai uncertainty/NOT RUN, nhưng thiếu coverage + VERDICT cuối; không đủ report để pass. Finish deadline partial."
+    },
+    {
+      "index": 7,
+      "childId": "f12e0797aefd42b8a753152cb9e1e359",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 10,
+        "partial": true,
+        "code": "DEADLINE_EXCEEDED",
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Trạng thái cuối\n\n**Đã làm xong (kiểm chứng):**\n- Đọc đầy đủ cả 2 artifact được giao: `v4-a-ad9d33a5ad0240c18e59ad4054f6bcb1.md` (whole/verify, 2142 chars) và `v2-a-f4c9a4690e614fcf991e02fa85093313.md` (P1/produce, 3689 chars). `allAssignedArtifactsRead=true`.\n- Đọc gốc: `src/export.py:3` = `value = value.encode('ascii', errors='ignore').decode()` (khớp A2); `tests/test_export.py` đúng 1 test `test_unicode`; `docs/source.md` chỉ CSV, không JSON. Repo chỉ có 3 file → danh sách file sửa của P1 khớp (A6).\n- Mở nguồn chính thức để kiểm chứng tiền đề khó nhất (A4, A5-M3):\n  - `Modules/_csv.c` → `join_append`: nhánh `field_len == 0` chỉ vào khi `dialect->delimiter == ' '`; với `excel` (delimiter `,`) `''` cho `rec_len == 0` ⇒ output `'\\r\\n'`. Trên reader, `START_RECORD` với `EOL` → *\"empty line - return []\"*. **Xác nhận tiền đề A4 đúng** (`value=''` → `[]`, nên phải giới hạn \"khác rỗng\").\n  - `docs.python.org/3/library/csv.html`: `Dialect.lineterminator` mặc định `'\\r\\n'` ✔ (hợp đồng output đúng); và \"reader is hard-coded to recognise either `'\\r'` or `'\\n'` as end-of-line\".\n\n**Đang vướng / điểm chưa kịp viết ra:**\nPhát hiện quan trọng nhất vừa có, chưa kịp đưa vào báo cáo: với `'Hồ\\nsơ'`, `csv.writer` ghi `\"Hồ\\nsơ\"\\r\\n`. Reader đọc `io.StringIO(out)` (test hiện tại **không** truyền `newline=''`). `io.StringIO` mặc định `newline='\\n'` nên trên `readline` có universal-newline: dòng đầu `'Hồ\\n'` → báo lỗi ở `EAT_CRNL` (`\"new-line character seen in unquoted field - do you need to open the file with newline=''?\"`) hoặc tách record sai. Nghĩa là **expected \"3 passed\" của M3 là rủi ro thật**, không phải \"UNVERIFIED\" nhẹ như P1 §6 nói; và lệnh bắt buộc `python -m pytest -q` **chưa chạy** (không có terminal tool) → phải ghi NOT RUN, không bịa pass.\n\n**Còn lại:** viết 4 phần báo cáo cuối + object `coverage` (G1–G3, P1.A1–A8) + `REVISE <nodeId>` + dòng `VERDICT`.\n\n**Kế tiếp:** phát hành ngay bản báo cáo với kết luận: `REVISE P1:` — M3 phải định nghĩa rõ khung assert đọc (`io.StringIO(export(...), newline='')`) và tách expected \"3 passed\" thành kỳ vọng có điều kiện, vì bằng chứng `_csv.c` + `docs.python.org` cho thấy khung cũ có thể đỏ với giá trị chứa `\\n`; A1/A2/A3/A4/A6/A7/A8 pass, A5 revise; `VERDICT: revise`.",
+      "finalWordCountWhitespace": 344,
+      "finalHash": "9ec6ede5d71c614d7328427ecfcdb727ac73ad3e12c0cfd73dab9804a1391223",
+      "adjudication": "Đọc C source chưa đủ nhánh, bỏ nhánh quote single empty field; empty claim sai. Newline embedded cũng đoán sai (counterexample default StringIO round-trip được). Finish deadline partial, chưa có verdict hợp lệ."
+    },
+    {
+      "index": 8,
+      "childId": "7cb8f8ad4f514a9b9bb9ff9381a1ac2a",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 5,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "# Phản biện toàn kế hoạch — Work Graph `w-75f34d46f9`\n\n## Đã kiểm (bằng chứng gốc đã mở)\n\n- Đọc HẾT 2/2 snapshot: `whole/verify/v4-a-ad9d33a5ad0240c18e59ad4054f6bcb1.md` (2142 chars) và `P1/produce/v2-a-f4c9a4690e614fcf991e02fa85093313.md` (3689 chars) → `allAssignedArtifactsRead: true`.\n- Mở nguồn gốc: `src/export.py` (6 dòng), `tests/test_export.py` (4 dòng), `docs/source.md`.\n- Đối chiếu từng tiêu chí A1–A8 với nội dung P1, không dựa vào lịch sử \"ok\" ghi sẵn trong snapshot whole.\n- **Không chạy `python -m pytest -q`**: đây là phiên review (chỉ đọc), nên số liệu test của P1 giữ nguyên mức **UNVERIFIED** — không coi là đã đo. `terminal_exec` không nằm trong bộ công cụ được cấp ở lượt này.\n\n## Vấn đề chặn\n\n### 1. [high] M3 dự kiến `3 passed` nhưng lặp lại đúng nội dung của `test_unicode` đang có — không chứng minh được mục tiêu viền\n\n- **Yêu cầu**: G3 \"test/expected chứng minh mục tiêu\"; A5 \"M3 → 3 passed sau khi thêm tối đa 2 test\".\n- **Bằng chứng**: `tests/test_export.py:3-4` chỉ có `test_unicode`, assert trên `'Hồ sơ'` — không phải `'Hồ, sơ'`, không phải `'Hồ\\nsơ'`. P1 §4 M3 nêu rõ: *\"thêm tối đa 2 test ... một test `'Hồ, sơ'`, một test `'Hồ\\nsơ'`\"*. Vậy 3 passed là **2 test cũ + 2 test mới = 4 test**, không phải 3.\n- **Bằng chứng phản bác đã xét**: (a) tôi đã mở `tests/test_export.py` để loại khả năng có sẵn test biên ở dạng parametrize/collection mà glob bỏ sót — file chỉ có 4 dòng, không có. (b) tôi đã xét khả năng `test_unicode` được sửa lại thành 2 case: A5 và A6 cấm sửa/xoá test hiện có (\"không sửa/đổi tên/xoá\" ở P1 §4 M2), nên phương án này bị chính P1 loại trừ. Không còn cách nào để \"3 passed\" khớp với \"thêm 2 test\" mà không vi phạm tiêu chí.\n- **Hệ quả cụ thể**: Khi dev thực thi đúng M3, `python -m pytest -q` ra **4 passed**, không phải 3 → milestone fail dù code đúng, hoặc dev bỏ 1 test để \"cho khớp\" và mất đúng case biên cần giữ. Đây là output làm bước sau quyết định sai.\n- **Sửa tối thiểu**: chọn một trong hai và ghi rõ trong §4/§7: (i) M3 = thêm **1** test gộp `'Hồ, sơ'` + `'Hồ\\nsơ'` → expected **2 passed**; hoặc (ii) M3 = thêm **2** test như P1 đã viết → sửa expected thành **4 passed** và sửa §7 \"Truy vết\". Giữ nguyên trạng thái \"kỳ vọng chưa đo\".\n\n### 2. [high] A2 đòi nêu baseline `1 failed` nhưng P1 tự nó đánh dấu là **đã đo** ở nơi không có bằng chứng trong artifact\n\n- **Yêu cầu**: A2 \"baseline đã đo: `python -m pytest -q` → 1 failed\"; A8 \"không tuyên bố code đã sửa hoặc đã pass\".\n- **Bằng chứng**: P1 dòng đầu: *\"Baseline dưới đây là kết quả **đã đo** ở phiên chính\"*; §1: *\"Baseline **đã đo**: `python -m pytest -q` → `1 failed in 0.14s`\"`. Artifact không kèm output pytest, không có log, không có commit hash hay mốc thời gian lưu kết quả đó. Trong snapshot `whole`, \"Kiểm thử: `python -m pytest -q`\" là lệnh của node, không phải output.\n- **Bằng chứng phản bác đã xét**: (a) tôi đã mở `src/export.py:3` và tự suy ra hành vi: với `'Hồ sơ'`, `encode('ascii', errors='ignore')` → `b'H  s'`... thực ra từng ký tự: `H`, `ồ`, ` `, `s`, `ơ` → non-ASCII `ồ`,`ơ` bị xoá → `'H s'`; `csv.reader` trả `['H s']` ≠ `['Hồ sơ']` → **đúng 1 test fail**. Về mặt logic kết luận \"1 failed\" là hợp lý. (b) Nhưng `1 failed in 0.14s` là số **thời gian đo** — con số này không suy ra được từ đọc code, chỉ chạy mới có. Không có terminal trong lượt này để tái tạo.\n- **Hệ quả cụ thể**: A8 cấm tuyên bố số đo mà không bằng chứng; P1 vừa giữ \"đã đo\" vừa không có output kèm theo. Main không thể xác nhận nền tảng so sánh cho M1/M2/M3 mà không chạy lại, và phần `in 0.14s` là chi tiết không kiểm chứng được — nếu ai đó đối chiếu sẽ thấy kết luận dựa trên số không truy nguyên được.\n- **Sửa tối thiểu**: sửa câu đầu và §1 thành: baseline *kỳ vọng từ đọc code* là 1 test fail (`test_unicode`, do `src/export.py:3` xoá ký tự), kèm lệnh để tái đo; bỏ `in 0.14s` nếu chưa có log, hoặc dán output thật vào artifact.\n\n### 3. [medium] `newline=''` ở phía **đọc** trong test M3 — plan gọi là UNVERIFIED nhưng đây là điều kiện tiên quyết đã biết, không phải ngỏ\n\n- **Yêu cầu**: G3 \"test chứng minh mục tiêu\"; A4 (hợp đồng CSV chính xác).\n- **Bằng chứng**: `tests/test_export.py:4` dùng `io.StringIO(export('Hồ sơ'))` — **không** có `newline=''`. P1 §6 Rủi ro 2 tự nhận: *\"test M3 dùng đúng khung cũ nên đây là điểm UNVERIFIED — nếu đỏ thì sửa khung assert, không sửa writer\"*.\n- **Bằng chứng phản bác đã xét**: tôi đã xét khả năng đây chỉ là \"cẩn thận thái quá\". Với `'Hồ, sơ'` không có newline nhúng → `csv.reader` vẫn đúng, và với `'Hồ\\nsơ'` writer sẽ quote thành `\"Hồ\\nsơ\"`. Ở chế độ **read**, `io.StringIO` mặc định `newline='\\n'` có thể làm hỏng `\\r\\n` nội bộ record trong một số đường đọc; đây chính là lý do tài liệu `csv` khuyến nghị `newline=''` cho cả hai chiều. Vì không chạy được, mức đúng chỉ là UNVERIFIED — nhưng hậu quả thì đã biết: nếu đỏ, \"sửa khung assert\" là **sửa test để xanh**, đúng thứ A5/A6 cấm.\n- **Hệ quả cụ thể**: Đường lùi được mô tả trong plan vi phạm chính tiêu chí nghiệm thu của nó.\n- **Sửa tối thiểu**: thay \"nếu đỏ thì sửa khung assert\" bằng: nếu `'Hồ\\nsơ'` đỏ do `newline`, đó là lỗi **test harness**, phải sửa khung đọc theo tài liệu `csv` (`io.StringIO(out, newline='')`) và ghi rõ là ngoài phạm vi \"không sửa test hiện có\" vì test mới; nếu đỏ vì lý do khác thì dừng và báo, không tự sửa.\n\n## Điểm đã đạt (không phải finding)\n\n- A3: P1 §4 M1 giới hạn đúng \"xóa **đúng một** dòng `src/export.py:3`\", giữ `import csv, io`, `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`, không đổi tên/tham số, không import mới, không JSON/CLI/GUI. Khớp 100% với `src/export.py` thật.\n- A4: §3 nêu bất biến `next(csv.reader(io.StringIO(out))) == [value]` **chỉ cho value khác rỗng**, kèm giải thích `value=''` → `[]`, và nói rõ \"Không phát biểu invariant cho mọi value\". Đúng như yêu cầu.\n- A6: §5 chỉ liệt kê `src/export.py` và `tests/test_export.py`, kèm \"**Không file nào khác.**\"\n- A7: §6 \"gom M1–M3 vào **MỘT** commit → `git revert <commit>` một lần là đủ\".\n- A1: đủ 8 phần, có câu \"**ĐÂY LÀ PLAN — CHƯA THỰC THI.**\" ở đầu; ngữ lực tiếng Việt đúng. **Lưu ý**: độ dài 3689 chars khoảng ~600 từ — sát ngưỡng 620, nên khi sửa M3/§7 phải cắt chỗ khác để không vượt 700.\n- G1/G2: goal khớp `docs/source.md` (\"chỉ xuất CSV, không JSON; giữ nguyên tiếng Việt; các trường chứa phẩy/newline phải được csv.reader đọc lại đúng\"). Đồ thị chỉ có P1, không phụ thuộc ẩn (`dependencies: {}`), thứ tự M1→M2→M3 khai báo rõ.\n- Baseline hợp lý về **hành vi**: `encode('ascii', errors='ignore')` xoá `ồ`/`ơ` → `'H s'`, khớp `assert ['H s'] == ['Hồ sơ']` mà P1 trích.\n\n## Ghi chú không chặn\n\n- Nguồn là **fixture synthetic** (`fixture: true` cả 3 file); `docs/source.md` tự nói \"không xác nhận code đã đạt nếu chưa chạy test\". Không phải lỗi — nhiệm vụ dùng đúng fixture này làm nguồn.\n- `git revert` giả định repo có git và working tree sạch; chưa kiểm được vì không terminal. Nếu repo không phải git, rollback cần phương án khác.\n- M2 là re-run không đổi gì — hợp lý làm checkpoint, nhưng expected \"1 passed\" trùng M1 nên không phân biệt được; cân nhắc gộp M1+M2 để dành chỗ cho M3.\n- Thiếu `pyproject.toml`/`pytest.ini` trong repo → `python -m pytest -q` dựa vào rootdir mặc định và import `src.export` kiểu namespace package. Với fixture 4 dòng này chạy được, nhưng M3 thêm test mới là lúc rủi ro cấu hình lộ ra; nên ghi một dòng \"chạy từ thư mục gốc repo\".\n\n## REVISE\n- `REVISE P1: Sửa expected M3 — thêm 2 test thì `python -m pytest -q` ra 4 passed (test_unicode + 2 test biên), không phải 3; hoặc giảm M3 còn 1 test gộp và đổi expected thành 2 passed. Sửa cả §7 \"Truy vết\" cho khớp và giữ câu \"kỳ vọng chưa đo\".`\n- `REVISE P1: Baseline \"đã đo\" (kèm `1 failed in 0.14s`) không có output/log trong artifact → ghi rõ đây là kết luận suy từ đọc `src/export.py:3`, bỏ số thời gian hoặc dán output thật; nếu không, vi phạm A8.`\n- `REVISE P1: Rủi ro 2 nói \"nếu đỏ thì sửa khung assert\" — đường lùi đó là sửa test để xanh, trái A5/A6; thay bằng quy tắc dừng-báo và ghi rõ khung đọc đúng theo tài liệu csv cho test mới.`\n\n```json\n{\"coverage\":[{\"id\":\"G1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"P1 §2 Goal khớp docs/source.md (CSV, không JSON, giữ tiếng Việt, phẩy/newline đọc lại đúng bằng csv.reader); §2 Non-goals phủ đúng phạm vi; không thừa nhận giả định cũ.\"},{\"id\":\"G2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"whole/verify §Đồ thị: chỉ P1, phụ thuộc '—'; P1 binding dependencies:{}; M1→M2→M3 khai báo phụ thuộc rõ (M2: M1; M3: M1, M2); hợp đồng CSV §3 khớp hàm thật src/export.py:1-6.\"},{\"id\":\"G3\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"M3 'thêm 2 test' nhưng expected '3 passed' — tests/test_export.py chỉ có 1 test_unicode nên thực tế là 4; thêm nữa Rủi ro 2 mô tả đường lùi 'sửa khung assert' trái A5/A6.\"},{\"id\":\"P1.A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"P1 đủ 8 phần §1-§7 + header 'ĐÂY LÀ PLAN — CHƯA THỰC THI'; tiếng Việt đúng dấu; 3689 chars ~600 từ dưới ngưỡng 620 (cần cắt chỗ khác khi sửa M3).\"},{\"id\":\"P1.A2\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Root cause src/export.py:3 đúng và suy ra được 1 failed, nhưng '1 failed in 0.14s' được gắn nhãn 'đã đo' không có output/log trong artifact, và không chạy được terminal ở lượt review.\"},{\"id\":\"P1.A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§4 M1: xóa đúng 1 dòng src/export.py:3, giữ import csv, io / io.StringIO(newline='') / csv.writer(s).writerow([value]), không đổi tên hàm/tham số, không import mới, không JSON/CLI/GUI.\"},{\"id\":\"P1.A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§3 phát biểu bất biến chỉ cho value khác rỗng, giải thích value='' → csv.reader trả [], và ghi rõ 'Không phát biểu invariant cho mọi value'.\"},{\"id\":\"P1.A5\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"M1 1 passed và M2 không sửa test là nhất quán; nhưng M3 'thêm tối đa 2 test' → expected '3 passed' mâu thuẫn với tests/test_export.py hiện chỉ có test_unicode (sẽ là 4 passed).\"},{\"id\":\"P1.A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§5 chỉ liệt kê src/export.py và tests/test_export.py kèm dòng '**Không file nào khác.** Không thêm file, không đổi docs/source.md'.\"},{\"id\":\"P1.A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§6 Rollback: gom M1–M3 vào MỘT commit, `git revert <commit>` một lần là đủ, không cần revert lặp (điều kiện working tree sạch ghi ở ghi chú không chặn).\"},{\"id\":\"P1.A8\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Không tuyên bố code đã sửa (header nói rõ chưa thực thi) và M1–M3 đều gắn '(kỳ vọng)'; nhưng §1 tuyên bố baseline 'đã đo' với số thời gian không kèm bằng chứng.\"}]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 1829,
+      "finalHash": "7777bea99db0aada0156533bf8cbd74cb734df8ac3ae34deb2dd9da037b911c6",
+      "adjudication": "Reviewer tính 1+2=4 sai, làm main đổi acceptance và Plan kế thừa. Finding baseline thiếu artifact log có lý về truy vết nhưng thời gian 0.14s có output pytest thật ở main; không phải bằng chứng main bịa. Finding reader default newline gây hỏng cũng thiếu counterexample và sai trong ca đã thử."
+    },
+    {
+      "index": 9,
+      "childId": "0f1482f3d34c4cce9ecb7d298a8251b6",
+      "role": "plan",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 2,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "> **Đây là PLAN, chưa thực thi.** Chưa sửa dòng nào trong repo. Mọi dòng \"expected … passed\" dưới đây là **kỳ vọng chưa đo**; chỉ xác nhận được khi chạy `python -m pytest -q`.\n\n## 1. Bối cảnh và nguyên nhân gốc (đã đọc file)\n\n`src/export.py` (6 dòng) xuất CSV một trường. Dòng 3 là `value = value.encode('ascii', errors='ignore').decode()`: ép ASCII với `errors='ignore'` nên **xoá âm thầm** mọi ký tự ngoài ASCII — `'Hồ sơ'` → `'H s'`. `docs/source.md` chốt: chỉ CSV không JSON, giữ tiếng Việt, một chuỗi vào / một dòng CSV hợp lệ ra, trường chứa phẩy hoặc newline phải đọc lại đúng bằng `csv.reader`.\n\n**Baseline (kỳ vọng suy ra từ đọc code, chưa đo trong artifact):** `python -m pytest -q` → **1 failed** (`test_unicode`, `tests/test_export.py:4`) do dòng 3. Lệnh trên là cách tái đo.\n\n**Lý do giữ csv chuẩn thay vì tự nối chuỗi:** `csv.writer` đã lo quoting, phân tách phẩy, escape newline nhúng và kết thúc record bằng `\\r\\n` (dialect `excel` mặc định); `io.StringIO(newline='')` ngăn dịch `\\r\\n` khi ghi; không cần escape tay, không thêm dependency.\n\n## 2. Mục tiêu / ngoài phạm vi\n\n**Goal:** `export()` giữ nguyên ký tự Unicode của input và vẫn phát CSV đọc lại được bằng `csv.reader`.\n**Non-goals:** không JSON; không CLI/GUI; không thêm dependency; không refactor ngoài thân hàm; không đổi tên hàm hay tham số.\n\n## 3. Hợp đồng CSV\n\n| Hạng mục | Giá trị |\n|---|---|\n| input | `value: str`, một trường logic |\n| output | đúng 1 record của `csv.writer`, kết thúc `\\r\\n` |\n| chữ ký | `export(value) -> str` (giữ nguyên) |\n| bất biến | `next(csv.reader(io.StringIO(out))) == [value]` — **chỉ áp dụng khi `value` khác rỗng** |\n| ngoại lệ của bất biến | `value == ''` → record rỗng, `csv.reader` trả `[]`; **không phát biểu bất biến cho mọi `value`** |\n\n## 4. Milestone M1–M3 (lệnh kiểm tra chung: `python -m pytest -q`)\n\n**M1 — role build, không phụ thuộc.** Sửa `src/export.py`: xoá **đúng dòng 3**, giữ nguyên 3 dòng còn lại (`import csv, io`; `io.StringIO(newline='')`; `csv.writer(s).writerow([value])`), không thêm import/dòng. Check: expected **1 passed** (kỳ vọng).\n\n**M2 — role testing, sau M1.** Tái chạy `tests/test_export.py` **không sửa, không đổi tên, không xoá** test hiện có. Giá trị riêng của M2: chứng minh bản thân việc xoá dòng 3 đã làm `test_unicode` xanh mà không cần hỗ trợ từ phía test — đây là bước chống hồi quy tách riêng, không gộp vào M1. Check: expected **1 passed** (kỳ vọng).\n\n**M3 — role testing, sau M2.** Thêm **2 test riêng biệt** theo **đúng khung assert sẵn có**: `'Hồ, sơ'` (phẩy nhúng) và `'Hồ\\nsơ'` (newline nhúng); không đụng `test_unicode`. Check: expected **4 passed** = 1 có sẵn + 2 mới (kỳ vọng).\n\n## 5. File sửa dự kiến\n\n- `src/export.py` *(tồn tại)* — xoá 1 dòng.\n- `tests/test_export.py` *(tồn tại)* — thêm 2 hàm test.\n- **Không file nào khác**; `docs/source.md` không đổi.\n\n## 6. Vận hành và rủi ro\n\n- **Rủi ro:** ai đó thay `csv.writer` bằng tự nối chuỗi → đổi byte output, mất quoting, hỏng round-trip.\n- **Điều kiện đã biết (không phải rủi ro chưa xác minh):** tài liệu csv khuyến nghị `newline=''` khi csvfile là *file object*, nhưng `csv.reader` hard-code nhận cả `\\r` và `\\n` làm kết thúc dòng, nên khung assert hiện tại `csv.reader(io.StringIO(out))` vẫn round-trip đúng và **không cần `newline=''` ở phía đọc**.\n- **Rollback:** gom M1–M3 vào **một** commit, `git revert <commit>` một lần là đủ.\n\n## 7. Truy vết\n\n\"Giữ tiếng Việt\" (`docs/source.md`) → xoá ép ASCII dòng 3, giữ `csv.writer` → **M1** → `pytest -q` = 1 passed. \"Phẩy/newline phải đọc lại đúng\" → 2 test biên theo khung assert sẵn có → **M3** → 4 passed.\n\n## 8. AI và đánh giá\n\nKhông áp dụng (sửa 1 dòng, không model/grounding/dataset). Tiêu chí nghiệm thu: số test của `python -m pytest -q` khớp cột expected ở M1–M3.\n**Câu hỏi mở:** không có. Đề xuất chưa cần người dùng quyết: chưa thêm assert `\\r\\n` riêng (M3 đã đủ bắt lỗi round-trip).\n\n## Knowledge requests\n- none",
+      "finalWordCountWhitespace": 685,
+      "finalHash": "ab4508da97334970c29fe16906b7a819a856181cc5007291eda98d181352fe44",
+      "adjudication": "Producer theo acceptance main đã sửa sai 1+2=4; lỗi propagated review -> main -> producer. Empty claim cũng kế thừa. 685 từ dưới 700, vượt mục tiêu 640; mô tả còn 3 dòng trong file 6 dòng là sai."
+    },
+    {
+      "index": 10,
+      "childId": "b16dc6b316dc42bcab05d5a4703aa860",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 6,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Đã kiểm\n\n- Đọc đủ artifact được giao: `.plans/.../P1/produce/v5-a-0723b7aafdfa4198bf45e7d4ac045832.md`, `coverageComplete: true`, `allAssignedArtifactsRead: true`, 3891 ký tự.\n- Đọc nguồn gốc: `src/export.py` (6 dòng, dòng 3 đúng là `value = value.encode('ascii', errors='ignore').decode()`), `tests/test_export.py` (**đúng 1 hàm test**: `test_unicode`, dòng 3–4; không có `conftest.py`/`pytest.ini` — glob toàn repo chỉ có 3 file), `docs/source.md`.\n- Mở nguồn chính thức: https://docs.python.org/3/library/csv.html — \"The reader is hard-coded to recognise either '\\r' or '\\n' as end-of-line, and ignores lineterminator\"; `Dialect.lineterminator` \"defaults to '\\r\\n'\"; \"If csvfile is a file object, it should be opened with newline=''\". Và https://docs.python.org/3/library/io.html — `io.StringIO(initial_value='', newline='\\n')`, \"The newline argument works like that of TextIOWrapper\".\n- **NOT RUN**: `python -m pytest -q` — phiên review không có công cụ shell (`bash` bị khai báo unavailable). Tôi không bịa kết quả chạy; mọi nhận định dưới đây suy ra từ source + tài liệu, đã ghi rõ.\n\n## Vấn đề chặn\n\n**F1 — Số expected của M3 sai số học; tiền đề của chính tiêu chí A1 bị bác bỏ (1 + 2 ≠ 4).**\n- Yêu cầu bị vi phạm: A1 (không để \"thêm 2 test\" và \"3 passed\" cùng tồn tại — artifact đã sửa đúng nhãn \"3 passed\" thành \"4 passed\", nhưng số mới vẫn sai) và yêu cầu \"KHÔNG bịa số passed sau sửa\".\n- Bằng chứng quan sát: artifact §4 M3 ghi \"Thêm **2 test riêng biệt** … expected **4 passed** = 1 có sẵn + 2 mới\"; §7 truy vết lặp lại \"M3 → 4 passed\". `tests/test_export.py` chỉ chứa **một** hàm `test_unicode`; repo không có file test nào khác (glob trả về đúng 3 file). Suy ra tổng = 1 + 2 = **3 test**, tức `3 passed`, không phải 4.\n- Bằng chứng phản bác đã xét: (a) đếm lại `def test_` trong `tests/test_export.py` — chỉ 1; (b) glob toàn repo để chặn giả định \"còn test ở file khác\"; (c) nếu hiểu \"1 có sẵn + 2 mới\" là 3 thì con số 4 là đơn vị/số học sai, không phải khác cách tính — phương án \"gộp 1 test → 2 passed\" cũng không khớp vì artifact chọn nhánh 2 test.\n- Hệ quả cụ thể: người đọc chạy `python -m pytest -q` sau M3 sẽ thấy `3 passed` ≠ expected `4 passed`, tưởng hỏng; tiêu chí nghiệm thu \"số test khớp cột expected\" (§8) tự mâu thuẫn, và node sau có thể dừng vì \"sai số\".\n- Sửa tối thiểu: đổi đúng một số trong §4 M3 và §7 thành **3 passed** (= 1 có sẵn + 2 mới), giữ nguyên nhánh \"thêm 2 test\" và nhãn \"(kỳ vọng)\". Với main: tiêu chí A1 nên viết lại thành \"thêm 2 test → **3 passed**; gộp 1 test → 2 passed\"; nhãn \"4 passed\" trong chính tiêu chí cũng cần sửa.\n\n## Ghi chú không chặn\n\n- **M1 mô tả \"giữ nguyên 3 dòng còn lại\"** nhưng `src/export.py` có 6 dòng; xoá đúng dòng 3 thì còn **5 dòng** (`import csv, io`; `def export(value):`; `s = io.StringIO(newline='')`; `csv.writer(s).writerow([value])`; `return s.getvalue()`). Danh sách trong M1 bỏ sót `def export(value):` và `return s.getvalue()`. Không chặn (không dẫn tới xoá nhầm `def`/`return`) nhưng nên sửa câu thành \"giữ nguyên phần còn lại của hàm\". Đây cũng là điểm tôi đã cân nhắc rồi bác bỏ như rủi ro chặn.\n- **Bổ sung củng cố A3** (không cần sửa): `io.StringIO` mặc định `newline='\\n'` không dịch ký tự, nên `io.StringIO(out)` giữ nguyên `\\r\\n`; cộng với câu \"reader is hard-coded to recognise '\\r' or '\\n'\" thì khung assert hiện tại round-trip đúng ở cả hai phía — khẳng định của artifact có căn cứ tài liệu, không phải suy đoán.\n- Baseline \"1 failed\" là suy luận đúng từ `src/export.py:3` + 1 test duy nhất; artifact đã gắn nhãn \"(chưa đo trong artifact)\" và không còn `in 0.14s` → đúng A2.\n- Đếm từ: tôi không có công cụ đếm (no shell); ước lượng thủ công ≈ 600–640 từ, dưới ngưỡng 700 của A5 nhưng **chưa đo chính xác**.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"Tiền đề tiêu chí bị bác: tests/test_export.py chỉ có 1 test (test_unicode) → 1+2=3, không phải '4 passed (1 có sẵn + 2 mới)'. Artifact §4 M3 và §7 đã copy số sai này. Main sửa A1 thành 'thêm 2 test → 3 passed' và sửa số 4 trong artifact.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§1: 'Baseline (kỳ vọng suy ra từ đọc code, chưa đo trong artifact): python -m pytest -q → 1 failed (test_unicode, tests/test_export.py:4) … Lệnh trên là cách tái đo'; không còn 'in 0.14s'.\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§6 ghi 'Điều kiện đã biết (không phải rủi ro chưa xác minh)' + khẳng định reader hard-code nhận '\\\\r'/'\\\\n' nên không cần newline='' ở phía đọc; đúng https://docs.python.org/3/library/csv.html.\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§4 M2: 'Giá trị riêng của M2: chứng minh … mà không cần hỗ trợ từ phía test — đây là bước chống hồi quy tách riêng'.\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đủ 8 phần (blockquote PLAN chưa thực thi, §1–§8) bằng tiếng Việt; ước lượng ≈600–640 từ — chưa đo chính xác vì không có shell (ghi chú, không chặn).\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§4 M1 chỉ xoá dòng 3, giữ 'import csv, io', 'io.StringIO(newline='')', 'csv.writer(s).writerow([value])'; Non-goals: không JSON/CLI/GUI/dependency, không đổi tên hàm hay tham số.\"},{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§3 bảng: bất biến 'chỉ áp dụng khi value khác rỗng', 'value == \\\"\\\" → record rỗng, csv.reader trả []; không phát biểu bất biến cho mọi value'.\"},{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§5 chỉ src/export.py + tests/test_export.py, 'Không file nào khác; docs/source.md không đổi'; §6 'gom M1–M3 vào một commit, git revert <commit> một lần'.\"},{\"id\":\"C1\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Số liệu bịa sai ở §4 M3/§7: '4 passed = 1 có sẵn + 2 mới' trong khi tests/test_export.py có đúng 1 test → phải là 3 passed; các phần khác (kiến trúc csv.writer vs tự nối chuỗi, hợp đồng, milestone, phụ thuộc, truy vết) có căn cứ.\"}]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 954,
+      "finalHash": "66f8af256282269c2c886f3cbd515aab78e25a919072b215b9e467e30ff4f0e6",
+      "adjudication": "Reviewer bác đúng tiền đề criterion 1+2=4, hướng sửa hẹp hợp lý, baseline là kỳ vọng có nhãn đã đúng. Vẫn pass empty -> [] sai; word count chỉ ước lượng."
+    },
+    {
+      "index": 11,
+      "childId": "e490d24919714f72a2496009cc334bfb",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0,
+        "partial": true,
+        "code": "PROVIDER_STREAM_INTERRUPTED"
+      },
+      "finalText": "**Đã đọc:** artifact `a-0723b7aafdfa4198bf45e7d4ac045832` (v5, path `.plans/work/912a7dd6cabe967ccfe5/w-75f34d46f9/P1/produce/v5-a-0723b7aafdfa4198bf45e7d4ac045832.md`, 3891 ký tự, `coverageComplete=true`), `src/export.py`, `tests/test_export.py`. **NOT RUN:** `python -m pytest -q` chưa chạy trong lượt review này; mọi kết luận về baseline/số test dựa trên đọc mã nguồn.\n\n## Vấn đề chặn\n\n**B1 (high, target=criterion A1 + artifact) — Tiền đề \"4 passed\" bị phép đếm bác bỏ; tiền đề của chính tiêu chí A1 sai, artifact thừa hưởng lỗi đó.**\nYêu cầu: expected của M3 phải khớp số test thật. Bằng chứng quan sát: `tests/test_export.py` đúng 4 dòng, chứa đúng **một** hàm test (`test_unicode`). M3 thêm 2 test riêng biệt → tổng 1 + 2 = **3** test → expected phải là `3 passed`, không phải `4 passed`. Bằng chứng phản bác đã xét: có thể có test ở file khác — đã kiểm `codebase_glob **/*.py` trả về đúng hai file (`src/export.py`, `tests/test_export.py`), không có test nào khác; cũng không có parametrization sinh test (file chỉ 4 dòng). Hệ quả: dòng §4 M3 của artifact viết `expected **4 passed** = 1 có sẵn + 2 mới` — tự mâu thuẫn số học ngay trong artifact; ai thực thi rồi đối chiếu sẽ kết luận M3 \"fail\" dù đúng. Sửa tối thiểu: (a) **main sửa tiêu chí A1** — thay \"expected là 4 passed (1 có sẵn + 2 mới)\" bằng \"expected là 3 passed (1 có sẵn + 2 mới)\"; và đừng cấm tuyệt đối chuỗi \"3 passed\" (câu cấm đáng lẽ là cặp *số lượng test không xác định* như \"thêm tối đa 2 test\" đi kèm một số cố định); (b) producer sửa artifact: M3 → `expected 3 passed`, §7 → `→ 3 passed`.\n\n**B2 (medium, target=artifact §4 M1) — \"giữ nguyên 3 dòng còn lại\" mâu thuẫn với chính file 6 dòng.**\nBằng chứng: `src/export.py` có 6 dòng (`import csv, io` / `def export(value):` / dòng 3 `value = value.encode('ascii', errors='ignore').decode()` / `s = io.StringIO(newline='')` / `csv.writer(s).writerow([value])` / `return s.getvalue()`); xoá dòng 3 còn **5** dòng, artifact chỉ liệt kê 3 dòng và bỏ sót `def export(value):` lẫn `return s.getvalue()`. Hệ quả: người thực thi hiểu \"3 dòng còn lại\" theo nghĩa đen có thể xoá nhầm `def`/`return`, phá vỡ module. Sửa tối thiểu: đổi thành \"xoá đúng dòng 3; 5 dòng còn lại giữ nguyên (3 dòng thân hàm: `import csv, io`… `csv.writer(s).writerow([value])`, không đổi tên/tham số)\".\n\n## Đã kiểm và đạt\n- **A2**: §1 ghi \"**Baseline (kỳ vọng suy ra từ đọc code, chưa đo trong artifact):** `python -m pytest -q` → **1 failed** (`test_unicode`, `tests/test_export.py:4`)… Lệnh trên là cách tái đo\"; không có \"đã đo\", không có `in 0.14s`. Cơ chế fail suy ra đúng: dòng 3 biến `'Hồ sơ'` → `'H s'` → reader trả `['H s']` ≠ `['Hồ sơ']`.\n- **A3**: §6 ghi đúng — docs khuyến nghị `newline=''` cho *file object*, nhưng `csv.reader` hard-code nhận `\\r` và `\\n`, nên `csv.reader(io.StringIO(out))` round-trip đúng, không cần `newline=''`; ghi là \"điều kiện đã biết\", đã bỏ nhãn UNVERIFIED. (Suy luận từ ngữ nghĩa `io.StringIO`: dịch newline diễn ra khi *ghi*, không phải khi đọc — NOT RUN counterexample.)\n- **A4**: M2 nêu rõ \"Giá trị riêng của M2: chứng minh bản thân việc xoá dòng 3 đã làm `test_unicode` xanh mà không cần hỗ trợ từ phía test — bước chống hồi quy tách riêng\".\n- **A5**: đủ 8 phần `## 1..8` + blockquote mở đầu, toàn tiếng Việt.\n- **A6**: M1 xoá đúng dòng 3, giữ `import csv, io`, `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`, không thêm dòng/import; Non-goals cấm JSON, CLI/GUI.\n- **A7**: bảng hợp đồng giới hạn bất biến \"chỉ áp dụng khi `value` khác rỗng\" và giải thích `value == ''` → `[]` (đúng: `writerow([''])` ra `\"\\r\\n\"`, reader trả list r",
+      "finalWordCountWhitespace": 616,
+      "finalHash": "10e6d6344e9139c7ed17a86d1f6f13166705a76afb0ad64c3a161223048e8e4a",
+      "adjudication": "Reviewer bác số học đúng và chỉ ra line count sai; sửa gợi ý còn mô tả import là thân hàm không đúng. Vẫn empty claim sai. Output provider interrupted, chưa verdict/coverage đầy đủ."
+    },
+    {
+      "index": 12,
+      "childId": "02bcbb3e97b042039726219d14d979c8",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "# Phản biện độc lập — Work Graph node P1 (produce, v5)\n\n**Đã đọc**: snapshot `a-0723b7aafdfa4198bf45e7d4ac045832` (v5, 3891 ký tự, `coverageComplete=true`) bằng `work_artifact_read`; gốc: `src/export.py` (6 dòng), `tests/test_export.py` (4 dòng), `docs/source.md`. Lệnh bắt buộc `python -m pytest -q` **NOT RUN** (vai trò read-only, không có tool chạy lệnh trong phiên này) — không suy đoán kết quả.\n\n## Vấn đề chặn\n\n**1. Số `expected` của M3 vẫn lệch với số test thật (A1, high, `## 4. Milestone M1–M3`)** — Yêu cầu: \"chọn M3 = thêm 2 test … thì expected là 4 passed (1 có sẵn + 2 mới)\". Artifact viết đúng \"Thêm **2 test riêng biệt**\" nhưng expected lại là **4 passed**, tức 1 + 2 = 3 test. Người nghe sẽ tưởng thiếu 1 test hoặc cần chạy 4 test. Bằng chứng phản bác đã xét: `tests/test_export.py` xác nhận đúng 1 test (`test_unicode`), nên \"1 có sẵn + 2 mới\" = 3, không phải 4. Cặp \"2 test\" + \"4 passed\" mâu thuẫn nội tại, tương tự lỗi \"3 passed\" mà producer định sửa. Sửa tối thiểu: gộp thành **1 test** biên (dùng `pytest.mark.parametrize` không cần — chỉ cần 1 hàm test khẳng định cả hai giá trị) và ghi expected **2 passed**, HOẶC giữ 2 test và ghi expected **3 passed**. Phải khớp, không được để cả hai cùng tồn tại. Đây là finding chặn vì nó là con số người dùng dùng để nghiệm thu (\"số test thật\") — sai thì nghiệm thu hỏng.\n\n**2. Baseline vẫn gắn nhãn \"đã đọc file\" nhưng mục `## 1` mở đầu bằng \"**Bối cảnh và nguyên nhân gốc (đã đọc file)**\" bao trùm cả khối baseline (A2, medium, `## 1`)** — Yêu cầu: không ghi baseline là \"đã đo\". Nội dung baseline đã đúng (ghi \"kỳ vọng suy ra từ đọc code, chưa đo trong artifact\", nêu `1 failed`, nêu lệnh tái đo, và `in 0.14s` đã bị bỏ hẳn). Nhưng nhãn \"(đã đo file)\" đặt trên tiêu đề chung khiến khối kế bên dễ bị đọc là đã xác nhận; và tiêu đề hụt mất từ \"kỳ vọng\". Sửa tối thiểu: đổi tiêu đề thành \"Bối cảnh và nguyên nhân gốc (đọc file; baseline chỉ là kỳ vọng)\". Ghi chú: nội dung cốt lõi A2 đã thoả — đây là siết nhãn, xếp medium.\n\n## Ghi chú không chặn\n\n- **A3 đạt**: `## 6` đã phát biểu đúng — docs khuyến nghị `newline=''` cho *file object*, `csv.reader` hard-code nhận `\\r` và `\\n`, khung assert hiện tại không cần `newline=''` phía đọc, ghi là \"điều kiện đã biết (không phải rủi ro chưa xác minh)\". Đúng như yêu cầu.\n- **A4 đạt**: M2 nêu rõ giá trị tách riêng: \"chứng minh bản thân việc xoá dòng 3 đã làm `test_unicode` xanh mà không cần hỗ trợ từ phía test\".\n- **A6 đạt**: M1 xoá đúng dòng 3, giữ `import csv, io`, `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`, không đổi tên/tham số, không JSON/CLI/GUI (khớp `src/export.py:1-6` đã đọc).\n- **A7 đạt**: bảng hợp đồng giới hạn bất biến ở `value` khác rỗng và giải thích `value == ''` → `csv.reader` trả `[]`; đúng với hành vi thực tế của `csv.reader` trên record rỗng.\n- **A8 đạt**: `## 5` chỉ liệt kê `src/export.py` + `tests/test_export.py`, nói rõ \"Không file nào khác; `docs/source.md` không đổi\"; rollback gom M1–M3 vào một commit rồi `git revert` một lần.\n- **A9 đạt**: blockquote đầu ghi rõ PLAN chưa thực thi, chưa sửa dòng nào, mọi \"expected … passed\" là kỳ vọng chưa đo; M1/M2/M3 đều gắn \"(kỳ vọng)\". `## 7` dùng \"pytest -q = 1 passed / 4 passed\" ở dạng truy vết — chấp nhất được vì ngữ cảnh đã ghim \"kỳ vọng\", nhưng nên viết \"kỳ vọng 1 passed\" cho nhất quán.\n- **A5**: 8 phần bắt buộc đủ (1 bối cảnh, 2 mục tiêu/ngoài phạm vi, 3 hợp đồng, 4 M1–M3, 5 file sửa, 6 vận hành/rủi ro, 7 truy vết, 8 AI/đánh giá), tiếng Việt, 3891 ký tự — dưới ngân sách. Đếm từ chưa chạy công cụ đếm: ước lượng ~500 từ tiếng Việt theo khoảng trắng, dưới 640; cần main xác nhận bằng công cụ đếm nếu nghiệm thu là điều kiện cứng.\n- **C1**: plan cụ thể về hợp đồng/milestone/test, không bịa dữ kiện hay quyết định người dùng; `## 8` nói \"không áp dụng (sửa 1 dòng)\" và không tự ý thêm assert `\\r\\n`.\n- `## 1` nói `csv.writer` \"escape newline nhúng\" — thực chất là quote trường chứa newline, không phải escape; ghi chú văn phong, không chặn.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"## 4 M3: 'Thêm 2 test riêng biệt' nhưng expected '4 passed = 1 có sẵn + 2 mới' (=3). tests/test_export.py xác nhận đúng 1 test sẵn nên 1+2=3; số expected sai so với số test thật. Sửa: 1 test biên + expected 2 passed, HOẶC 2 test + expected 3 passed.\"}, {\"id\": \"A2\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Nội dung baseline đúng (kỳ vọng suy ra từ đọc code, 1 failed, nêu python -m pytest -q tái đo, đã bỏ 'in 0.14s'), nhưng tiêu đề '## 1. Bối cảnh và nguyên nhân gốc (đã đọc file)' bao trùm khối baseline, dễ bị đọc là đã đo. Sửa tối thiểu: tiêu đề ghi rõ baseline chỉ là kỳ vọng.\"}, {\"id\": \"A3\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"## 6: docs khuyến nghị newline='' cho file object, csv.reader hard-code nhận cả \\\\r và \\\\n, khung assert io.StringIO(out) không cần newline='' phía đọc, ghi là 'điều kiện đã biết', không còn nhãn UNVERIFIED.\"}, {\"id\": \"A4\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"M2: 'Giá trị riêng của M2: chứng minh bản thân việc xoá dòng 3 đã làm test_unicode xanh mà không cần hỗ trợ từ phía test — bước chống hồi quy tách riêng, không gộp vào M1.'\"}, {\"id\": \"A5\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đủ 8 phần bắt buộc, tiếng Việt; artifact 3891 ký tự, ước lượng ~500 từ (<640). Số từ chưa đo bằng công cụ — xem ghi chú.\"}, {\"id\": \"A6\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"M1 xoá đúng dòng 3, giữ nguyên 3 dòng còn lại; đối chiếu src/export.py đọc được: import csv, io / io.StringIO(newline='') / csv.writer(s).writerow([value]); không JSON, không CLI/GUI (## 2 Non-goals).\"}, {\"id\": \"A7\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"## 3 bảng hợp đồng: bất biến 'chỉ áp dụng khi value khác rỗng' + hàng ngoại lệ 'value == \\\"\\\" -> csv.reader trả []; không phát biểu bất biến cho mọi value'.\"}, {\"id\": \"A8\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"## 5 chỉ src/export.py và tests/test_export.py, 'Không file nào khác; docs/source.md không đổi'; §6 rollback: gom M1–M3 vào một commit, git revert một lần.\"}, {\"id\": \"A9\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Blockquote đầu: 'Đây là PLAN, chưa thực thi. Chưa sửa dòng nào... Mọi dòng expected … passed là kỳ vọng chưa đo'; M1/M2/M3 đều gắn '(kỳ vọng)'; không tuyên bố đã pass.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Plan cụ thể: §3 hợp đồng CSV, §4 M1–M3 có phụ thuộc và lệnh chung python -m pytest -q, §6 rủi ro/rollback, §7 truy vết; dữ kiện khớp docs/source.md và src/export.py đã đọc; không bịa quyết định người dùng.\"}]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 1201,
+      "finalHash": "fe7ea475d1f4c5201a6969b3ae9e61a502927eeaa13dc69832426aaac0348ed2",
+      "adjudication": "Reviewer bác số học đúng nhưng chặn vì tiêu đề đã đọc file dù baseline ghi rõ kỳ vọng là overblock. Lặp empty claim sai. 685 từ producer vượt mục tiêu 640 nên estimate ~500 sai; criterion <700 thì đạt. Không dùng điểm tốt để bù false finding."
+    },
+    {
+      "index": 13,
+      "childId": "4c6ab4b0fe8245459fae204ed56140c2",
+      "role": "plan",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc và xác minh cả ba file. Dưới đây là sub-plan.\n\n> **Đây là PLAN, chưa thực thi.** Chưa sửa dòng nào trong repo; mọi con số `passed` dưới đây là **kỳ vọng chưa đo**. Lệnh tái đo duy nhất: `python -m pytest -q`.\n\n## 1. Mục tiêu và phạm vi\n\n- Người dùng: người đọc dữ liệu tiếng Việt, cần CSV một dòng giữ nguyên dấu (đã chốt tại `docs/source.md:1`).\n- Kết quả: `export()` trả CSV chuẩn, `csv.reader` đọc lại khớp; thêm test phủ dấu phẩy và newline.\n- Thành công: `python -m pytest -q` xanh (kỳ vọng).\n- Ngoài phạm vi: JSON, CLI/GUI, đổi tên hàm/tham số, thêm thư viện, refactor khác.\n- Đề xuất: giữ nguyên hành vi biên `value=''`. Câu hỏi mở: có gộp `newline=''` phía đọc ở một lần sửa sau không — lần này không làm.\n\n## 2. Bằng chứng và hiện trạng: nguyên nhân gốc và baseline (đọc file; baseline chỉ là kỳ vọng)\n\n- `src/export.py:1` `import csv, io`; `:2` `def export(value):`; `:3` `value = value.encode('ascii', errors='ignore').decode()`; `:4` `s = io.StringIO(newline='')`; `:5` `csv.writer(s).writerow([value])`; `:6` `return s.getvalue()`.\n- `tests/test_export.py:3` định nghĩa **đúng 1 test** `test_unicode`; `:4` là khung assert `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n- `docs/source.md:1`: chỉ CSV, giữ tiếng Việt, trường chứa phẩy/newline phải đọc lại đúng; và không xác nhận đạt khi chưa chạy test.\n- Nguyên nhân gốc (suy ra từ đọc code): `:3` ép ascii `errors='ignore'` nên `'Hồ sơ'` → `'H s'` (rơi `ồ`, `ơ`).\n- Baseline (**kỳ vọng**): kỳ vọng 1 test fail (`test_unicode`), vì assert so `'Hồ sơ'` còn nhận `'H s'`. Tái đo: `python -m pytest -q`.\n- Khoảng trống: chưa test nào phủ phẩy/newline; `io.StringIO(...)` ở `tests/test_export.py:4` thiếu `newline=''` (điều kiện đã biết, xem §4).\n\n## 3. Kiến trúc và quyết định\n\n- Thành phần: `export(value) -> str` giữ nguyên chữ ký; `csv.writer` của stdlib là lớp định dạng.\n- Quyết định: xoá dòng ép ascii, không thay bằng chuỗi `.encode/decode` khác.\n- Luồng: `value` → `csv.writer` (chế độ `QUOTE_MINIMAL` **BỌC QUOTES** trường chứa `,` hoặc `\\n` hoặc `\"`) → `getvalue()`.\n- Lỗi: không thêm `try/except` — hàm thuần, không có lỗi nghiệp vụ cần che.\n- Phương án thay thế bị loại: chuẩn hoá Unicode NFC — thêm `unicodedata`, không sửa nguyên nhân.\n- Đánh đổi: bỏ ràng buộc ký tự; input có ký tự điều khiển vẫn đi qua như trước (ngoài phạm vi).\n\n## 4. Dữ liệu và hợp đồng CSV\n\n- Input `value: str` → output `str`: một bản ghi CSV, kết thúc `\\r\\n` theo mặc định `csv.writer`.\n- Bất biến: **với `value` khác rỗng**, `next(csv.reader(io.StringIO(export(value)))) == [value]`.\n- Biên: `value=''` → writer xuất dòng rỗng, `csv.reader` trả `[]` (không phải `['']`). Vì vậy bất biến chỉ áp dụng khi value khác rỗng.\n- Phía đọc: `csv.reader` hard-code nhận cả `\\r` và `\\n`, nên khung assert hiện tại **không cần** `newline=''`. `docs/source.md:1` khuyến nghị `newline=''` cho **file object** — điều kiện đã biết, không ép thay đổi.\n- Migration: không có; API và hành vi không đổi.\n\n## 5. AI và đánh giá\n\nKhông áp dụng: thuần xử lý chuỗi, không model, không dataset, không chi phí/độ trễ. Đơn vị đánh giá là assert của pytest.\n\n## 6. Vận hành và rủi ro\n\n- R1: hiểu sai `csv.writer` — `QUOTE_MINIMAL` **BỌC QUOTES** trường chứa newline; M3 là bằng chứng.\n- R2: xoá nhầm dòng 1 mất `csv, io` → M1 giữ nguyên dòng 1.\n- R3: kỳ vọng lệch thực tế → M2 bắt buộc chạy test thật trước M3.\n- Triển khai: gom M1–M3 vào **một** commit; rollback bằng `git revert <sha>` **một lần** là đủ.\n- Cấu hình, bí mật, backup, retry: không có.\n\n## 7. Milestone\n\n**M1** — role build, path tồn tại `src/export.py`, không phụ thuộc: xoá **đúng dòng 3**. Giữ nguyên `import csv, io`, `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`; file còn 3 dòng; không thêm import, không đổi tên hàm/tham số. Kiểm: `python -c \"import src.export\"` → kỳ vọng1 passed.\n\n**M2** — role testing, không phụ thuộc M1 về code, là **bước chống hồi quy tách riêng**: chạy `python -m pytest -q` ngay sau M1 và ghi output thật vào ticket, thay cho mọi kỳ vọng. Kỳ vọng 1 passed; lệch thì dừng, không sang M3.\n\n**M3** — role build + testing, path `tests/test_export.py`, phụ thuộc M2 đạt: thêm **2 test** `test_comma` (`'Hồ, sơ'`) và `test_newline` (`'Hồ\\nsơ'`), dùng đúng khung assert sẵn có ở `tests/test_export.py:4`. Tổng = **1 có sẵn (`test_unicode`) + 2 mới = 3 test** → kỳ vọng **3 passed**. Không thêm test thứ tư.\n\n## 8. Truy vết và nghiệm thu\n\n- Giữ tiếng Việt → bỏ ép ascii (M1) → `test_unicode` → kỳ vọng 1 passed sau M1.\n- Trường chứa phẩy → BỌC QUOTES của `csv.writer` → M3 `test_comma` → kỳ vọng 3 passed cuối.\n- Trường chứa newline → BỌC QUOTES + `csv.reader` nhận `\\n` → M3 `test_newline` → kỳ vọng 3 passed cuối.\n- File sửa: **chỉ** `src/export.py` và `tests/test_export.py`.\n- Câu hỏi còn mở: có gộp `newline=''` phía đọc ở lần sửa sau không — ngoài phạm vi, không tự quyết.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 855,
+      "finalHash": "abbfc87b32b9add3f60ed1851a53c27beddef9618516a2793db539755abbecd0",
+      "adjudication": "Producer sửa số học đúng; vẫn 855 từ vượt 700, empty -> [] sai, còn 3 dòng sai; M1 import command không sinh 1 passed, M2 tuy chạy sau M1 nhưng ghi không phụ thuộc mâu thuẫn. Main tự bắt hai lỗi cuối, chưa whole review/final plan đạt."
+    }
+  ],
+  "localCounterexamples": {
+    "python": "3.13.9",
+    "examples": [
+      {
+        "input": "",
+        "writerOutput": "\"\"\r\n",
+        "readerDefaultStringIO": [
+          [
+            ""
+          ]
+        ]
+      },
+      {
+        "input": "Hồ\nsơ",
+        "writerOutput": "\"Hồ\nsơ\"\r\n",
+        "readerDefaultStringIO": [
+          [
+            "Hồ\nsơ"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ\rsơ",
+        "writerOutput": "\"Hồ\rsơ\"\r\n",
+        "readerDefaultStringIO": [
+          [
+            "Hồ\rsơ"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ\r\nsơ",
+        "writerOutput": "\"Hồ\r\nsơ\"\r\n",
+        "readerDefaultStringIO": [
+          [
+            "Hồ\r\nsơ"
+          ]
+        ]
+      }
+    ],
+    "arithmetic": {
+      "existingTests": 1,
+      "newTests": 2,
+      "total": 3
+    }
+  },
+  "followup": [
+    "W6.1.3 reviewer counterexamples: full C branch, exact count, finding proportionality, provenance",
+    "W6.2 main/producer symptoms: record inherited versus independent errors; no unauthorized producer tuning",
+    "W7/W8 real helper proofs, criterion-conflict route, current-admission receipt; no certificate from completed badge"
+  ]
+}

@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow, work_graph
+from . import plan_workflow, work_graph, work_feedback
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -1213,7 +1213,7 @@ DECISION_TOOLS = frozenset({'ask_user', 'request_approval'})
 DECISION_DEFAULT_SECONDS = {'ask_user': 300.0, 'request_approval': 600.0, 'interview': 900.0}
 # Work Graph tools (main only). `interview` is the multi-question card (Q1..Q5, 2-4 options each,
 # "Other" free text and "let the agent decide"); the other three drive the Work Graph engine.
-WORK_ENGINE_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship', 'work_check'})
+WORK_ENGINE_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report'})
 WORK_TOOLS = WORK_ENGINE_TOOLS | {'interview'}
 INTERVIEW_DECIDE = 'decide'
 INTERVIEW_SUBMIT = 'submit'
@@ -2104,6 +2104,8 @@ class HarnessRuntime(RuntimeCommands):
             turn = counted
         self.active_turn[sid] = turn
         event = {'text': prompt, 'turn': turn}
+        if invocation_id:
+            event['invocationId'] = invocation_id
         if btw:
             event['btw'] = True
         if checked_attachments:
@@ -2116,6 +2118,8 @@ class HarnessRuntime(RuntimeCommands):
         return task
 
     async def stop(self, sid):
+        if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
+            self.work_graph.feedback.cancel(sid)
         children = self.store.db.execute("SELECT id FROM sessions WHERE parent_id=? AND status IN ('running','awaiting_decision')", (sid,)).fetchall()
         for child in children:
             await self.stop(child['id'])
@@ -3900,6 +3904,10 @@ class HarnessRuntime(RuntimeCommands):
     async def _run(self, sid):
         session = self.store.get(sid)
         config, messages = session['config'], session['messages']
+        remaining = config.get('workRemaining')
+        if session.get('parent_id') and remaining:
+            config = dict(config, **remaining)
+            session = dict(session, config=config)
         self.active_messages[sid] = messages
         # P1 (§5.2): bộ công cụ theo LƯỢT đọc từ `turn_profile` — ở mode, công cụ ghi bị bỏ;
         # lượt bơm `research-resume-*` dùng hồ sơ research kể cả khi mode đã tắt.
@@ -4658,6 +4666,15 @@ class HarnessRuntime(RuntimeCommands):
                         turn_calls.append({'id': call['id'], 'name': name, 'args': args,
                                            'result': safe, 'step': step + 1,
                                            'toolCallId': call['id']})
+                    feedback = getattr(self, 'work_graph', None)
+                    checkpoint = feedback.feedback.yielded(sid) if feedback and session.get('parent_id') else None
+                    cards = feedback.feedback.pending(sid) if feedback and not session.get('parent_id') else []
+                    if checkpoint or cards:
+                        close_turn('needs_user', 'work_checkpoint', len(calls), response.get('usage'))
+                        self.store.save(sid, messages, 'completed')
+                        self.store.emit(sid, 'finish', {'status': 'completed', 'needsUser': True,
+                            'turn': turn_no, 'workRequestId': checkpoint['requestId'] if checkpoint else cards[0]['workRequestId']})
+                        return 'Checkpoint saved; main owns continuation.'
                     planning_run = plan_workflow.bound_run(self, self.store.get(sid))
                     if not session.get('parent_id') and planning_run and planning_run.get('status') == 'needs_user':
                         close_turn('needs_user', 'plan_interview', len(calls), response.get('usage'))
@@ -4750,7 +4767,8 @@ class HarnessRuntime(RuntimeCommands):
             self.plan_verdict_nudges.pop(sid, None)
             # The turn ended (completed, failed or cancelled) while a decision was still open.
             for record in self.pending_for(sid):
-                self.settle(record, record['defaultChoice'], 'cancelled', 'session_cancelled', None)
+                if not record.get('durable'):
+                    self.settle(record, record['defaultChoice'], 'cancelled', 'session_cancelled', None)
             self.active_messages.pop(sid, None)
             self.active_step.pop(sid, None)
             self.progress_state.pop(sid, None)
@@ -4777,11 +4795,18 @@ class HarnessRuntime(RuntimeCommands):
     async def dispatch(self, session, name, args, call_id=None):
         sid, config = session['id'], session['config']
         current = self.store.get(sid)
+        graph = getattr(self, 'work_graph', None)
+        if current.get('parent_id') and graph and graph.feedback.yielded(sid):
+            raise PermissionError('WORK_CHECKPOINT_YIELDED: wait for main before running more tools')
         plan_tools = plan_workflow.allowed_tools(self, current)
         if plan_tools is not None and name not in plan_tools:
             raise PermissionError('PLAN_EXECUTION_BLOCKED: công cụ này không được chạy trong Plan: ' + name)
         if name == 'work_artifact_read':
             return work_graph.service(self).artifacts.read(current, args)
+        if name == 'work_report':
+            if not work_graph.enabled():
+                raise PermissionError('WORK_GRAPH_OFF')
+            return await work_graph.service(self).feedback.report(current, args, call_id)
         binding = (current.get('config') or {}).get('workBinding') or {}
         if binding.get('checkId') and name in ('file_write', 'file_edit_block', 'write_plan', 'delegate_task'):
             raise PermissionError('WORK_CHECK_READ_ONLY: checker cannot modify source or delegate')
@@ -5375,7 +5400,9 @@ class HarnessRuntime(RuntimeCommands):
 
     def pending_for(self, sid):
         """Unresolved decisions of one session, in request order."""
-        return [record for record in self.pending.values() if record['sessionId'] == sid and not record['resolved']]
+        records = [record for record in self.pending.values() if record['sessionId'] == sid and not record['resolved']]
+        graph = getattr(self, 'work_graph', None)
+        return records + (graph.feedback.pending(sid) if graph else [])
 
     async def decision(self, session, name, args, call_id=None):
         """ask_user / request_approval: emit decision_requested, block, return the honest outcome."""
@@ -5624,6 +5651,11 @@ class HarnessRuntime(RuntimeCommands):
 
     def resolve_decision(self, sid, decision_id, choice, note=None, answers=None):
         """Answer a pending decision; raises DecisionError with the contract's status codes."""
+        if isinstance(decision_id, str) and decision_id.startswith('wr-'):
+            try:
+                return work_graph.service(self).feedback.answer(sid, decision_id, choice, answers)
+            except work_feedback.FeedbackError as exc:
+                raise DecisionError(exc.code, str(exc), exc.status) from exc
         record = self.pending.get(decision_id) if isinstance(decision_id, str) else None
         if record is not None and record.get('kind') == 'interview' and record['sessionId'] == sid:
             return self.resolve_interview(record, choice, note, answers)
@@ -5740,6 +5772,8 @@ class HarnessRuntime(RuntimeCommands):
         if session.get('parent_id'):
             raise ValueError('DECISION_UNAVAILABLE: a delegated session cannot ask the user; '
                              'decide from your own evidence')
+        if args.get('workRequestId'):
+            return work_graph.service(self).feedback.open_interview(session, args, call_id)
         questions = self.normalize_interview(args)
         run_id = str(args.get('runId') or '').strip() or None
         if run_id is None and work_graph.enabled():
@@ -6847,8 +6881,9 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['maxTokens'] = output_budget
             if work:
                 child['config']['workBinding'] = work
+                work['admissionSeq'] = self.store.db.execute('SELECT COALESCE(MAX(seq),0) FROM events WHERE session_id=?', (child['id'],)).fetchone()[0]
                 child['config']['workBudget'] = work_budget.applied(budget_request, child['config'])
-                child['config']['tools'] = sorted(set(child['config']['tools']) | {'work_artifact_read'})
+                child['config']['tools'] = sorted(set(child['config']['tools']) | {'work_artifact_read', 'work_report'})
                 if work.get('checkId') or work.get('diagnosticOnly'):
                     child['config']['tools'] = [n for n in child['config']['tools'] if n not in ('file_write','file_edit_block','write_plan')]
                 if work.get('checkId'):
@@ -6982,6 +7017,9 @@ class HarnessRuntime(RuntimeCommands):
             raise
         child_rec = self.store.get(child['id'])
         status = child_rec['status']
+        checkpoint = work_graph.service(self).feedback.yielded(child['id']) if work else None
+        if checkpoint:
+            status = 'needs_user'
         child_events = self.store.execution_events(child['id'])
         last_error = next((e['data'].get('message') for e in reversed(child_events) if e['type'] == 'error'), None)
         # C2 + B5 — con trả về câu trả lời DỞ vì một trong ba trần (output của nhà cung cấp, ngân
@@ -7009,6 +7047,9 @@ class HarnessRuntime(RuntimeCommands):
         if work:
             result['work'] = work
             result['budget'] = child_rec['config']['workBudget']
+            if checkpoint:
+                result['request'] = checkpoint
+                result['is_error'] = False
         if status == 'partial':
             # Lý do ĐÚNG MÃ cho cha: cắt ở trần output của nhà cung cấp, hết trần bước, hay hết
             # hạn chót là ba ca khác nhau — cha cần biết ca nào để xử lý.

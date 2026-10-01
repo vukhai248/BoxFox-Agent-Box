@@ -1,6 +1,6 @@
 # Sửa độ tin cậy của Work Graph: điều phối linh hoạt, kiểm chứng theo nhiệm vụ và phỏng vấn có thể tiếp tục
 
-> Bản cập nhật v2 — 01/10/2026. Trạng thái: đã triển khai các sửa nhỏ W0/W1 và phần diagnostic của W2 trên nhánh B; checklist và kiểm thử tại mục 13. W1 preflight và W2 UI chưa triển khai.
+> Bản cập nhật v2 — 02/10/2026. Trạng thái mới nhất: nền B `68765ba2`; W7 foundation A1 đã kiểm chứng tại mục 30, đang tạo neo riêng; W7/A2 và W8 chưa thi công. Chủ dự án đã duyệt lựa chọn A ở mục 29. Các checkpoint trước đó là lịch sử của đúng snapshot được ghi, không chứng nhận patch hiện tại.
 >
 > Quyết định mới của chủ dự án thay thế yêu cầu “mọi sub-agent đều có một lượt review giống nhau”: main chọn specialist và cách kiểm chứng phù hợp; backend bảo đảm các kiểm tra bắt buộc theo đầu ra, phạm vi thay đổi và rủi ro. Phần 6–9 cụ thể hóa chính sách này, chuẩn đầu ra và prompt cho coding agent.
 
@@ -8,14 +8,14 @@
 
 ### Phạm vi và trạng thái hiện tại
 
-Giữ luồng hiện có:
+Giữ main là chủ điều phối; chọn công việc và kiểm chứng theo yêu cầu:
 
-**Main làm rõ yêu cầu → Explore/Research/Design → các sub-plan → review toàn bản → duyệt → thực thi theo DAG → kiểm chứng → bàn giao.**
+**Main giao nhiệm vụ và điều kiện chuyển tiếp → các nhánh phù hợp chạy theo dependency → lưu artifact/checkpoint và báo tiến độ → kiểm chứng theo policy → bàn giao trong phạm vi được yêu cầu.** Đây không là pipeline bắt mọi role đi qua Explore/Plan/Build/Testing/Debug/Review. “Về main” mặc định là thông báo; chỉ quyết định mới mới cần main suy luận. Xem luồng có điều kiện tại mục 6.2 và hợp đồng tại mục 29.
 
 Hai yêu cầu bạn đã chốt:
 
 - **Kiểm chứng bắt buộc được xác định theo nhiệm vụ**, không gắn một reviewer giống nhau vào mọi sub-agent. Khi một kiểm tra đã được xác định là bắt buộc, không được bỏ qua vì thiếu role, hết ngân sách hoặc bật Autopilot. Plan và thiết kế làm căn cứ triển khai cần phản biện độc lập; code cần kiểm thử; debug định tuyến có thể không cần semantic review riêng. Xem ma trận tại mục 6.
-- Khi một nhánh cần người dùng định hướng, **nhánh đó gửi yêu cầu về main; main phỏng vấn rồi gửi câu trả lời về đúng agent đó**. Các nhánh độc lập tiếp tục chạy.
+- Khi một nhánh cần người dùng quyết định, **sub tự soạn bảng hỏi 1–3 câu và lưu checkpoint**. Main có thể mở nguyên bảng hỏi bằng ref; đề xuất quyền được giao trước để backend xuất bản trong phiên chính và tiếp tục đúng child nằm tại mục 29, chưa triển khai. Các nhánh độc lập tiếp tục chạy.
 
 Khảo sát trước ngày 01/10/2026 đã đọc code, SQLite của phiên thử nghiệm, hai tài liệu đính kèm và kiểm tra UI bằng CUA. Đợt W0–W2 ngày 01/10/2026 sửa validation/schema/hướng dẫn recovery và tách diagnostic qua code paths hiện có, chạy kiểm thử bằng fixture trên checkout B. Không mở phiên model/live CUA mới trong đợt này. Kết quả fixture kiểm chứng hành vi code, không chứng minh chất lượng plan do model thật sinh ra.
 
@@ -130,7 +130,7 @@ flowchart TD
     KR -->|"Đạt"| P
 
     Q -->|"Cần quyết định người dùng"| C["Lưu checkpoint, báo main"]
-    C --> I["Main hỏi người dùng"]
+    C --> I["Mở bảng hỏi sub bằng ref; theo quyền main giao"]
     I --> A["Lưu câu trả lời và nguồn xác nhận"]
     A --> S["Tiếp tục đúng child session"]
     S --> P
@@ -143,14 +143,15 @@ flowchart TD
     SR -->|"Cần sửa"| SP
     SR -->|"Đạt"| W["Review toàn bản: phạm vi, hợp đồng, phụ thuộc, nghiệm thu"]
     W -->|"Cần sửa"| SP
-    W -->|"Đạt"| O["Duyệt theo cơ chế hiện có"]
-    O --> E["Build / Debug / các node thực thi theo DAG"]
+    W -->|"Đạt"| O{"Có yêu cầu và quyền thực thi?"}
+    O -->|"Không"| DOC["Bàn giao bản kế hoạch đã kiểm"]
+    O -->|"Có; duyệt đúng bản"| E["Các node thực thi được giao theo DAG"]
     E --> V["Kiểm chứng độc lập"]
     V -->|"Chưa đạt"| E
     V -->|"Đạt"| H["Bàn giao / Ship"]
 ```
 
-Sơ đồ trên minh họa luồng đầy đủ cho một nhiệm vụ lập kế hoạch có nghiên cứu. Nhánh debug, testing, knowledge đơn giản và các điểm kiểm chứng linh hoạt được định nghĩa tại mục 6; không dùng sơ đồ này làm chuỗi review cố định cho mọi vai trò. Giữ cách main phân rã công việc, fan-out và thứ tự thực thi hiện tại.
+Sơ đồ trên là một ví dụ cho nhiệm vụ Plan có nghiên cứu và checks đã giao, không là pipeline chung. Luồng có điều kiện chính thức ở mục 6.2; thông báo main không chặn handoff. Nhánh debug, testing, knowledge đơn giản và kiểm chứng linh hoạt được định nghĩa tại mục 6/29. Yêu cầu chỉ lập kế hoạch kết thúc ở tài liệu đã kiểm, không tự thi công. Giữ cách main phân rã công việc và fan-out.
 
 Đặc biệt, **không đổi ngữ nghĩa cạnh Plan → Plan hiện có**. Nếu nhiều sub-plan cần một hợp đồng chung, tạo đầu ra Design/Research dùng chung làm dependency; whole-plan reviewer kiểm tra các hợp đồng thống nhất.
 
@@ -169,12 +170,11 @@ Bổ sung một giao thức kết quả dùng chung cho producer, knowledge help
 
 Backend tự lấy danh tính session và binding; model không được tự khai mình là reviewer độc lập hoặc tự gán một đề xuất thành quyết định người dùng.
 
-**Công cụ mới `work_report`:**
+**Đối chiếu giao thức `work_report` với draft W7:**
 
-- `checkpoint`: lưu những phần đã hoàn thành và phần còn thiếu.
-- `needs_user`: trả internal feedback, câu hỏi đề xuất, lựa chọn và tác động.
-- `finalize`: chốt deliverable đầy đủ để đưa vào review.
-- `review`: ghi kết quả theo từng acceptance cùng findings có bằng chứng.
+- Child dùng `checkpoint`, `needs_user` hoặc `needs_evidence` để lưu phần đã làm và lý do đang chặn; `needs_user` mang nguyên bảng hỏi do sub soạn.
+- Main dùng `status`/`resume` hoặc mở `interview` bằng request ref. Auto publish/resume có grant là thiết kế mục 29, chưa có.
+- Child hoàn tất vẫn trả final theo hợp đồng hiện hành; harness chốt artifact và check service ghi review/coverage. Các action `finalize`/`review` từng đề xuất ở bản trước **không có trong schema W7 hiện tại**; không tự bổ sung tool/quyền này trong đợt đang làm.
 
 Các thao tác dùng part/invocation ID để gửi lại an toàn. Backend lưu kết quả trước khi xác nhận thành công. UI dựng báo cáo từ artifact đã lưu; không buộc model sinh lại toàn bộ tài liệu dài trong một câu trả lời cuối.
 
@@ -416,7 +416,7 @@ Ghi model, commit B, cấu hình, từng attempt, budget, token/latency nếu c�
 
 **Giới hạn đã chốt:** sửa các lỗi về độ tin cậy, kiểm chứng theo nhiệm vụ, provenance, completion, interview và UI trong DAG hiện có; ứng dụng y tế là ca đánh giá harness. Việc triển khai và lưu tài liệu phải diễn ra trên nhánh B.
 
-## 6. Điều phối linh hoạt: main nhận kết quả rồi chọn bước tiếp theo
+## 6. Điều phối linh hoạt: main giao bước tiếp; quyết định lại khi cần
 
 ### 6.1 Quyết định kiến trúc
 
@@ -428,45 +428,41 @@ Không giữ ba bộ điều phối cạnh tranh cho Plan/Design/Research của 
 
 Không thay framework/model/provider để giải quyết đợt này. Tách các phần mới ra module nhỏ cạnh work_graph.py; runtime.py chỉ là adapter vào tool dispatch, session, provider và executor. Tên file mới tại mục 8 là dự kiến, không khẳng định đã tồn tại.
 
-### 6.2 Luồng do chủ dự án bổ sung
+### 6.2 Luồng do chủ dự án bổ sung — thông báo và bàn giao độc lập
 
 ~~~mermaid
 flowchart TD
-    U["Người dùng: yêu cầu / ticket / lỗi"] --> M["Main: brief, mục tiêu, quyền và tiêu chí"]
-    M --> W["Giao Explore / Research / Design / Plan phù hợp"]
-    W --> A["Lưu artifact hoặc checkpoint; thông báo main"]
-    A --> N{"Main quyết định bước tiếp"}
-    N -->|"Thiếu dữ kiện"| K["Explore / Research bổ sung"]
-    K --> A
-    N -->|"Thiếu quyết định người dùng"| Q["Main interview; lưu câu trả lời; resume cùng child"]
-    Q --> W
-    N -->|"Đủ nháp, cần phản biện"| R["Reviewer nhận yêu cầu và đúng artifact"]
-    N -->|"Cần kiểm tra hành vi / patch"| T["Testing thực hiện checks trên snapshot"]
-    N -->|"Chỉ là diagnostic / lookup đơn giản"| C["Kiểm nguồn, tái hiện hoặc kiểm ở consumer"]
-    R --> G{"Các check bắt buộc đạt?"}
-    T --> G
-    C --> G
-    G -->|"Chưa đạt"| M
-    G -->|"Đạt"| D["Main tổng hợp phần đã có căn cứ"]
-    D --> P{"Đầu ra cần giao"}
-    P -->|"Research / Design riêng"| O["Đăng ký tài liệu và trả kết quả"]
-    P -->|"Kế hoạch triển khai"| S["Plan agents hoàn thiện sub-plan nếu cần"]
-    S --> V["Review sub-plan và toàn bản theo artifact"]
-    V -->|"Cần sửa"| M
-    V -->|"Đạt"| AP["Ready; duyệt bản/hash"]
-    AP --> EX["Thực thi khi được yêu cầu; theo execution dependencies"]
-    EX --> TS["Testing"]
-    TS -->|"Lỗi"| DB["Debug: tái hiện, nguyên nhân, đề xuất hoặc sửa"]
-    DB --> EX
-    TS -->|"Đạt; các check bổ sung đạt"| SH["Bàn giao / PR khi thuộc phạm vi yêu cầu"]
+    U["Người dùng: yêu cầu / ticket / lỗi"] --> M["Main: brief, phạm vi, chọn nhánh và quyền chuyển tiếp"]
+    M --> W["Sub phù hợp chạy theo dependency và quyền"]
+    W --> A["Backend lưu artifact hoặc checkpoint; binding và hash"]
+    A -. "a: báo tiến độ/ref, không bắt mở lượt main" .-> N["Main biết tiến độ; có thể can thiệp"]
+    A --> G{"Bước tiếp đã được main giao và đủ điều kiện?"}
+    G -->|"Có"| H["b: backend claim bàn giao đúng snapshot một lần"]
+    H --> S["Testing / kiểm nguồn / Review / bước khác đã giao"]
+    S --> A
+    G -->|"Thiếu quyết định, mâu thuẫn hoặc chưa giao"| D["c: yêu cầu main quyết định; giữ checkpoint"]
+    D --> M
+    G -->|"Cần người dùng quyết định"| Q["Sub soạn 1–3 câu; lưu request và checkpoint"]
+    Q --> P{"Có quyền xuất bản bảng hỏi phù hợp?"}
+    P -->|"Có"| C["d: backend mở thẻ ở phiên chính; báo main"]
+    P -->|"Không / trùng / mâu thuẫn"| R["Main xem request; mở bằng ref hoặc điều chỉnh"]
+    R --> C
+    C --> V["User trả lời; SQLite ghi answer và continuation"]
+    V --> B{"Binding còn đúng, đủ câu trả lời và có quyền resume?"}
+    B -->|"Có"| X["Backend tiếp tục cùng child/context/folder; báo main"]
+    X --> W
+    B -->|"Không"| D
+    G -->|"Đầu ra cuối đủ checks và đúng phạm vi"| O["Bàn giao; chỉ Build/PR khi có yêu cầu và quyền"]
+    M --> I["Nhánh độc lập"]
+    I --> A
 ~~~
 
-Sơ đồ thể hiện các nhánh lựa chọn, không bắt mọi nhiệm vụ đi hết tất cả ô. Main có thể gọi Research/Design trong lúc Plan đang soạn và gọi tiếp sau một finding. Các nhánh độc lập tiếp tục theo giới hạn fan-out hiện có.
+Đây là luồng mục tiêu theo yêu cầu làm rõ, **chưa phải khả năng đã nghiệm thu của code**. Main giao các bước phù hợp; backend thực hiện điều kiện đã giao, không tự chọn bước mới từ tên role. Thông báo cho main và bàn giao không phụ thuộc vào việc main đã mở/đọc thông báo. Main có thể gọi Research/Design trong lúc Plan đang soạn và đổi phương án sau một finding. Các nhánh độc lập tiếp tục theo giới hạn fan-out hiện có. Test đỏ không mặc định Debug: giao Build sửa khi lỗi rõ và đã được phép; cần điều tra thì mới Debug; chưa có phương án được giao thì yêu cầu main quyết định.
 
 Với ví dụ Research nhả về kết quả và sub-plan:
 
 1. Research lưu báo cáo, nguồn, hạn chế và plan candidate; main nhận thông báo cùng các artifact reference.
-2. Main đọc tóm tắt và phần cần thiết, kiểm tiêu chí của yêu cầu gốc, chọn evidence review/critique/plan review hoặc research bổ sung.
+2. Nếu main đã giao evidence review/critique/plan review cho đúng đầu ra và đủ điều kiện, backend chuyển ref trực tiếp cho checker và báo main. Nếu có lựa chọn mới hoặc thiếu sót ngoài chính sách đã giao, main đọc phần cần thiết rồi chọn hướng; không bắt main gọi lại cùng mệnh lệnh chỉ để chuyển tiếp.
 3. Reviewer nhận nguyên yêu cầu, brief, câu trả lời có provenance, acceptance, artifact ID/version/hash và manifest nguồn. Main không viết lại bản nháp để che cảnh báo của producer.
 4. Nếu Research chỉ trả findings nhưng thiếu kế hoạch thực thi, main giao Plan agent xây phần còn thiếu từ những kết luận đã được kiểm chứng.
 5. Nếu Research đã được giao cả plan candidate và đầu ra đủ chuẩn, có thể kiểm trực tiếp theo rubric Plan; không cần tạo thêm Plan child chỉ để chép lại cùng nội dung.
@@ -533,9 +529,9 @@ Check record gồm check ID/kind, checker identity hoặc deterministic executor
 - work_checks.py: dispatch/check records, acceptance gate, coverage, reviewer/test binding.
 - work_requests.py: user/knowledge/environment requests, durable continuation và outbox.
 
-Work Graph giữ scheduler và dependency ordering; main ra quyết định thông qua tools. Khi producer kết thúc, scheduler lưu artifact và phát artifact_ready/needs_checks; không tự gắn cùng một reviewer cho mọi role. Main gọi work_check để thực hiện những checks đã chọn; backend từ chối những thao tác dùng policy thấp hơn mức tối thiểu. Các automatic checks không cần quyết định mới có thể chạy trong scheduler.
+Work Graph giữ scheduler và dependency ordering; main ra quyết định thông qua tools. Khi producer kết thúc, backend lưu artifact rồi thông báo artifact_ready/needs_checks. Checks và bước tiếp đã được main giao có thể được backend dispatch từ binding hiện hành, độc lập với thông báo main; không tự gắn cùng một reviewer cho mọi role. Thiếu assignment/quyền hoặc có quyết định mới thì main gọi work_check/chọn hướng. Backend từ chối policy thấp hơn mức tối thiểu. Cơ chế quyền, admission và checkpoint được đề xuất ở mục 29; code hiện tại vẫn yêu cầu lời gọi work_check của main.
 
-Tool work_check dự kiến hỗ trợ status/start với runId, nodeId, artifact reference, checkIds và invocationId. Chỉ main được start; backend chọn role và binding theo policy, không nhận verdict tự khai từ main. Check xong trả pass/revise/unverified/error cùng next action cụ thể. Test failures trả danh sách command, symptom và snapshot để main giao Debug.
+Tool work_check hỗ trợ status/start với runId, nodeId, artifact reference, checkIds và invocationId. Model main cấp assignment/quyền; backend có thể start theo quyền cụ thể đã giao, child không được tự gọi/delegate tùy ý. Backend chọn binding theo policy, không nhận verdict tự khai từ main. Check xong trả pass/revise/unverified/error cùng next action cụ thể. Test failures trả command, symptom và snapshot: Build sửa khi rõ; Debug điều tra khi cần; việc chọn hướng mới cần main, không biến mọi test đỏ thành Debug.
 
 work_report dùng checkpoint/needs_user/finalize/review như mục 3.2; thêm completion report cho diagnostic/test artifacts. Không đánh đồng finalized với accepted.
 
@@ -916,7 +912,10 @@ Thứ tự thi công là workflow W0–W10 ở mục 12; M0–M6 là các gói �
 Sửa các bug độc lập trước, dựng nền artifact/checks/interview rồi mới thay đổi scheduler DAG.
 Trước khi sửa, kiểm tra branch, status, applicable AGENTS.md và những thay đổi đang có.
 Không sửa checkout main hoặc thay đổi ngoài phạm vi; hiện có checkout B riêng.
-Đọc toàn bộ plan, đặc biệt quyết định mới tại mục 6–9. Không dựng lại một kiến trúc khác chỉ từ prompt này.
+Đọc toàn bộ plan, đặc biệt mục 6–9 và 27–29. Đối chiếu phạm vi goal đã duyệt;
+không dựng lại một kiến trúc khác chỉ từ prompt này. Chủ dự án đã chọn A cho auto
+handoff/publish/resume ở mục 29; thi công theo A1–A4 và điều kiện kiểm chứng, không
+lấy việc tài liệu đã ghi làm quyền mở rộng sang một kiến trúc hoặc phạm vi khác.
 
 Mục tiêu:
 Main luôn là điều phối chính. Slash /plan, /research, /design và yêu cầu tự nhiên
@@ -926,6 +925,9 @@ Design, Plan, Build, Debug, Testing và các reviewer phù hợp trong cùng wor
 Yêu cầu chỉ viết plan/research/design không tự cho phép Build, kể cả khi Autopilot bật.
 
 Main nhận draft/checkpoint của child để điều phối; không coi draft là kết luận đã kiểm chứng.
+"Về main" là báo tiến độ/ref, không mặc định thêm lượt suy luận model main.
+Backend có thể bàn giao bước đã được main giao khi đủ quyền/binding/readiness, đồng thời
+thông báo main. Chỉ quyết định mới/mâu thuẫn/đổi phạm vi mới cần main quyết định lại.
 Research có thể trả report và plan candidate. Main chọn evidence check, critique,
 plan review hoặc nghiên cứu bổ sung dựa trên mục đích/rủi ro. Plan candidate phải đạt
 cùng chuẩn Plan trước khi dùng làm kế hoạch triển khai. Plan agent hoàn thiện phần còn thiếu;
@@ -952,16 +954,24 @@ không nhét toàn văn plan vào context. Reader phải đọc được full ta
 Draft/finalized/accepted/check-pass là các trạng thái riêng; SQLite là nguồn trạng thái thật.
 
 Interview:
-Child gửi needs_user có checkpoint và quyết định đang chặn. Main hỏi 1–3 câu liên quan;
+Child gửi needs_user có checkpoint và tự soạn 1–3 câu/lựa chọn/lý do/ảnh hưởng.
+Main mở thẻ bằng ref khi phù hợp; quyền publish/resume đã giao trước theo mục 29
+cho backend hiển thị trong phiên chính và báo main, không bắt main chép lại bảng hỏi.
 không hỏi lại thông tin còn hiệu lực hoặc việc repo tự trả lời được.
 Lưu câu hỏi/câu trả lời và continuation trong transaction; resume đúng child ID,
 giữ history/sources/folder. Nhánh độc lập tiếp tục, user wait không tiêu compute budget.
+Input mới hợp lệ cho budget admission mới kẹp theo profile/cha; tổng usage/lỗi vẫn giữ.
+Cùng đầu vào/checkpoint prose không reset; ba lượt không tiến triển dừng nhánh báo main.
 Không timeout rồi tự xem im lặng là giao quyền. “Hãy đề xuất” vẫn là proposed cho tới
 hành động xác nhận phù hợp của user.
 
 DAG:
 Phân biệt produce dependencies và execution dependencies; giữ compatibility cho run cũ.
 Execution waves theo dependency accepted; touch-set conflicts có lock/isolation.
+Phân biệt artifact/code đã tạo với checks đã đạt; tester nhận snapshot trước khi test pass.
+Test đỏ không tự Debug: Build sửa khi rõ và được giao, Debug khi cần điều tra,
+main chọn lại nếu chưa có phương án. Sau bản sửa retest cùng Testing child/context;
+chỉ proof admission/hash mới được dùng. Không pipeline cố định theo role.
 Plan toàn bản phải kiểm coverage và hợp đồng xuyên sub-plan. Sau merge chạy integration
 checks trên snapshot hợp nhất. Chuẩn bị PR chỉ khi thuộc deliverable/quyền đã cho.
 Xác nhận branch trước Build; ship chỉ gom changes thuộc run.
@@ -1100,8 +1110,9 @@ Checklist này theo dõi implementation/verification, độc lập với việc 
 | W6 flexible checks | [x] | [ ] | Implementation đã commit 3f01a4b3; backend tests đã đạt nhưng nghiệm thu tổng thể chưa hoàn tất. Phần còn mở theo dõi riêng tại W6.1, mục 16.8. |
 | W6.1 hoàn tất checks | [x] | [ ] | Bản sửa đã commit 814736f5; C1–C3 và retest mục tiêu đã đạt. C4 tích hợp, C5 báo cáo/evidence và chốt nghiệm thu còn mở; xem mục 16.8 và 18. Không tăng timeout/steps/tool budget. |
 | W6.5 steps/tool/time budgets | [x] | [ ] | Đã đo baseline/candidate và có bản sửa profiles/request/metadata; mục 19. Đang full regression/replay, chưa chốt nghiệm thu hoặc commit W6.5. |
-| W7 interview/resume | [ ] | [ ] | Request/answer/invocation, same child/folder và independent branches. |
-| W8 DAG/execution | [ ] | [ ] | Dependency/resource-lock traces, branch/change set và integration results. |
+| W7 foundation request/answer | [x] | [ ] | Draft chưa commit: 10/10 mock W7; native Space Bunny 1/2 hoàn tất; full sweep dừng ở 3 oracle tool-count cũ, không green. Mục 28/29. |
+| W7 interview/resume đầy đủ | [ ] | [ ] | Còn quyền xuất bản/ref, direct resume đã giao, guards và kiểm chứng toàn đường; mục 29. Không tick từ foundation. |
+| W8 DAG/execution | [ ] | [ ] | Chưa thi công; thêm bàn giao được main giao trước, notifications riêng, typed readiness/admission/retest theo mục 29; không áp pipeline role. |
 | W9 UI/API/rollout | [ ] | [ ] | Panel/version/API compatibility/CUA, pilot and rollback evidence. |
 | W10 final evaluation | [ ] | [ ] | Full report, 24 runs và bổ sung V/folder cases, outstanding failures. |
 
@@ -1941,21 +1952,21 @@ Compact Plan policy 9 lượt 1: **1488,094s**, error **DEADLINE_EXCEEDED**, 7 c
 
 ## 27. Phương án W7/W8 để chủ dự án duyệt trước thay đổi kiến trúc
 
-Yêu cầu mới: hoàn thiện W6.1/W6.5/W7/W8 theo checkpoint riêng, đánh giá output trước W8; hỏi chủ dự án duyệt **phương án kiến trúc mới**. **Chủ dự án đã duyệt mục 27**, bổ sung giữ sub Testing cũ khi retest sau Debug/sửa lỗi. W7/W8 chưa code tại thời điểm ghi nhận; không tick implementation từ việc được duyệt. Giữ giao diện hiện tại, model OpenCode Space Bunny, chỉ nhánh B.
+Yêu cầu mới: hoàn thiện W6.1/W6.5/W7/W8 theo checkpoint riêng, đánh giá output trước W8; hỏi chủ dự án duyệt **phương án kiến trúc mới**. **Chủ dự án đã duyệt mục 27**, bổ sung giữ sub Testing cũ khi retest sau Debug/sửa lỗi. W7/W8 chưa code tại thời điểm ghi nhận ban đầu; trạng thái mới tại mục 28/29. Chủ dự án làm rõ “về main” là báo cáo/ref, không mặc định một chặng chặn; nội dung dưới đã sửa theo ý này. Quyền chuyển tiếp tự động và xuất bản bảng hỏi ở mục 29 cần trình trước khi nối code. Giữ giao diện hiện tại, model OpenCode Space Bunny, chỉ nhánh B.
 
 ### W7 — giữ main điều phối, chờ và tiếp tục đúng child
 
 1. Child có binding báo checkpoint hoặc thiếu quyết định người dùng bằng `work_report`; lưu request/artifact nháp, nhả compute/slot. Checkpoint không là sản phẩm accepted.
-2. Main nhận request, xem yêu cầu gốc và gộp **1–3 câu** cần người dùng chốt vào thẻ phỏng vấn hiện có. Không tự suy câu trả lời từ timeout; backend ghi nguồn xác nhận từ hành động user.
+2. Sub tự soạn **1–3 câu**, lựa chọn, lý do và ảnh hưởng. Main mở nguyên bảng hỏi bằng ref khi phù hợp; chỉ sửa/gộp khi cần. Đề xuất quyền được main giao trước cho backend xuất bản trong phiên chính và báo main ở mục 29; không buộc thêm lượt main chỉ để xuất bản. Không suy câu trả lời từ timeout; backend ghi nguồn xác nhận từ hành động user.
 3. SQLite lưu session/run/node/stage/child/origin-turn, request revision, question/answer IDs và outbox. Transaction answer + resume; invocation chống double-click; reject stale/cross-owner. Câu trả lời từng phần giữ phần còn mở và lịch sử.
-4. Khi đủ quyết định, tiếp tục **cùng child ID, context, folder**; cộng usage, không reset budget, thời gian user nghĩ không tính compute. Restart xử lý outbox lại được mà không mở hai lượt.
-5. Child viết artifact version mới; main đọc ref và chọn checks cần thiết. Chỉ invalidation node chịu tác động và downstream, giữ check nhánh độc lập. Test identity/restart/duplicate/stale/partial-answer/budget trước khi nối scheduler W8.
+4. Khi đủ quyết định và binding/quyền resume còn đúng, backend tiếp tục **cùng child ID, context, folder** từ answer/checkpoint ref và báo main. Chỉ cần main quyết định lại khi có thay đổi phạm vi, mâu thuẫn hoặc thiếu quyền. Giữ tổng usage; cấp ngân sách mới khi có thông tin/bản sửa mới theo quyết định bổ sung của chủ dự án; thời gian user nghĩ không tính compute. Restart xử lý admission được mà không mở hai lượt; không replay tool có side effect khi receipt chưa rõ.
+5. Child viết artifact version mới; main nhận ref. Checker đã được giao có thể chạy ngay từ snapshot mới; khi cần check/hướng mới thì main chọn. Chỉ invalidation node chịu tác động và downstream, giữ check nhánh độc lập. Test identity/restart/duplicate/stale/partial-answer/budget trước khi nối scheduler W8.
 
 ### W8 — dependency có pha, kiểm theo nhu cầu, quyền thực thi rõ
 
 1. Chuẩn hóa cạnh cần **artifact produce được kiểm** hoặc **execute/tests đã đạt**; giữ adapter dependsOn cũ. Kiểm cycle, hợp đồng và input refs trước admission. Snapshot dependency được giao làm nguồn đọc, không tự biến mọi dependency thành đầu ra phải review lại.
-2. Main nhận draft/check/result và điều phối bước kế tiếp. Policy chỉ yêu cầu chứng cứ tối thiểu theo loại artifact/rủi ro; main chọn thêm Testing, Debug, Research hoặc Review theo finding. **Không thêm Debug cho mọi Build**, không thêm Review cho mọi lookup.
-3. Ví dụ patch có test đỏ: **Build → main → Testing → main → Debug (khi cần tìm nguyên nhân) → sửa → tiếp tục chính sub Testing cũ**; Review kiểm patch đã sửa khi policy/rủi ro yêu cầu. Testing giữ child ID/context, test matrix và finding cũ; nhận ref/hash mới, đọc thay đổi và **chạy lại** test trên snapshot mới. Kết quả/command của lần trước không được dùng để pass lần retest; proof phải thuộc admission/turn và code hash mới. Usage cộng dồn, không reset budget. Nếu không còn child/budget hoặc phạm vi đã đổi lớn, main báo lý do và checkpoint trước khi thay tester, không âm thầm mở con mới. Reviewer thiếu fact thực thi trả yêu cầu kiểm chứng cho main, không tự bịa expected hoặc mở quyền của mình. Thứ tự linh hoạt nhưng không bỏ gate bắt buộc.
+2. Main nhận draft/check/result để biết tiến độ và điều phối khi cần. **Thông báo, bàn giao, main quyết định và user quyết định là bốn loại riêng**. Backend chuyển tiếp bước đã giao khi đủ binding/quyền/điều kiện, không bắt main suy luận để lặp lại lệnh. Policy chỉ yêu cầu chứng cứ tối thiểu theo artifact/rủi ro; main chọn thêm Testing, Debug, Research hoặc Review khi có quyết định mới. Không thêm Debug cho mọi Build, không thêm Review cho mọi lookup.
+3. Ví dụ đã giao Testing sau Build: **Build lưu patch/snapshot → đồng thời báo main và bàn giao Testing**. Nếu test đỏ: lỗi rõ có thể Build sửa trực tiếp theo quyền đã giao; cần điều tra thì Debug; chưa giao hướng xử lý thì yêu cầu main quyết định. Sau bản sửa, tiếp tục **chính sub Testing cũ** và báo main; Review kiểm patch khi policy/rủi ro yêu cầu. Testing giữ child ID/context, test matrix và finding cũ; nhận ref/hash mới, đọc thay đổi và chạy lại test trên snapshot mới. Command/kết quả lần trước không pass retest; proof thuộc admission/turn và code hash mới. Usage cộng dồn để đo; lượt tiếp tục reset ngân sách khi có thông tin/bản sửa mới, vẫn kẹp theo cha. Child bị xóa, phạm vi đổi lớn hoặc không thể tiếp tục thì main ghi lý do/checkpoint trước khi thay; cạn budget lượt cũ không tự biến thành lý do bỏ context khi đã có input mới hợp lệ. Reviewer thiếu fact thực thi trả yêu cầu kiểm chứng, không bịa expected hoặc mở quyền. Thứ tự linh hoạt, không bỏ gate bắt buộc.
 4. Scheduler chỉ mở node khi cạnh đúng pha đã đạt, không còn needs_user/check thiếu và không xung đột touch set. Nhánh độc lập song song; quyền ghi/branch/snapshot được kiểm trước Build. Dừng/resume không tạo orphan hoặc double execution.
 5. Run-owned integration/ship chỉ từ đúng code/artifact/hash đã kiểm và có yêu cầu thực thi. Artifact-only không Build/PR. Số lần admission/repair theo run/node giữ lịch sử qua update; không âm thầm bỏ giới hạn bằng đổi definition. Giá trị ngân sách mới phải đo/chốt riêng W6.5.2, chưa tự chọn một trần mới.
 
@@ -1963,4 +1974,196 @@ Yêu cầu mới: hoàn thiện W6.1/W6.5/W7/W8 theo checkpoint riêng, đánh g
 
 **Neo W6 → W7 storage/report → W7 answer/resume → W7 tích hợp → neo W7 → W8 cạnh/admission → W8 isolation/checks → W8 integration/ship → neo W8.** Mỗi phần có regression/fault tests, chạy native ở điểm nối; lưu cả failure. Chưa đạt phải có W con kèm nguyên nhân/bằng chứng và output cần đạt, không tick nhờ một bộ unit xanh. Không sửa đồng loạt toàn workflow rồi mới thử.
 
-Test bổ sung W8 đã chốt: test đỏ → Debug/sửa → retest cùng tester ID/context; command cũ pass không đóng cổng mới; đổi hash trước/during retest bị từ chối; restart/duplicate chỉ mở một lượt; budget cũ hết không tự reset hoặc đổi child.
+Test bổ sung W8 đã chốt: test đỏ → Build sửa trực tiếp hoặc Debug khi cần → retest cùng tester ID/context; command cũ pass không đóng cổng mới; đổi hash trước/during retest bị từ chối; restart/duplicate chỉ mở một lượt; không reset hoặc đổi child chỉ để né cùng lỗi. Input mới hợp lệ cho ngân sách lượt mới theo mục 28, vẫn giữ tổng usage.
+
+
+## 28. W7 — checkpoint đang thi công, quyết định reset ngân sách (01/10/2026)
+
+Chủ dự án bổ sung: **reset bước/thời gian khi có thông tin/bản sửa mới**, giữ child/context và lịch sử usage/lỗi; không reset với cùng đầu vào để né chống lặp. Đây thay thế quy tắc ngân sách tích lũy ở mục 27. Khi cùng lỗi/kết luận không tiến triển qua ba lượt: dừng nhánh, báo main chọn cách khác; main được dùng checkpoint làm nguồn chưa xác minh, không coi accepted. Ví dụ NN→RNN chỉ là minh họa, không là workflow bắt buộc. Child xin user quyết định là lớp bảo vệ hiếm; thiếu fact kỹ thuật phải báo main kiểm nguồn/test trước.
+
+- [x] Code foundation SQLite request/card/answers/outbox; checkpoint artifact bất biến, backend nhận user action; schema work_report và đường interview hiện có, không sửa frontend.
+- [x] Test mục tiêu ban đầu **217 passed**, 74,94s, `.tmp/work-checks/w7-target.xml`; sau đó bổ sung restart/cancel/root-yield/proof guards: **10/10 W7**, 4,60s. Chưa gọi đây là full suite sau mọi patch cuối.
+- [x] Native Plan policy 10 đã hoàn tất 4/4 verdict oracle: correct 2 pass, flat-shape sai 2 revise; 5 attempt (correct-2 có retry), 267,303 / 923,905 / 227,162 / 228,461s. Đã đọc final từng child. Finding phụ false-flat-2 sai: nói ASCII-loss của `Hồ sơ` ra field rỗng; thực `H s`. W6.1.3 vẫn mở, không chứng nhận mọi prose.
+- [x] Đã đọc cả 2 kết quả native W7 Space Bunny ở `.tmp/work-checks/w7-native-feedback-v2`: **1/2 hoàn tất oracle**. Lượt 1 (48,030s) giữ đúng child và câu trả lời, nhưng model lại gửi `checkpoint` khi báo cáo đã đủ, không final; vẫn draft/waiting_main. Lượt 2 (46,596s) cùng child hoàn tất, đúng câu trả lời/nguồn; oracle identity/resume không chứng nhận mọi câu văn hoặc giới hạn từ. Câu trả lời user là synthetic, runtime/store/model thật; chưa full main/CUA. Fixture v1 truyền route sai shape gây 503 trước model: giữ 2 failure, phân loại evaluator setup, không gọi lỗi provider thực.
+- [ ] Full suite W7 **chưa đạt**: `.tmp/work-checks/w7-full.xml` / `.log` / `.exit`, **1733 passed, 21 skipped, 3 failed**, 386,61s; `--maxfail=3` dừng sweep nên phần sau chưa chạy. Ba failure ở `test_journal_tools.py` và `test_runtime_info.py` vẫn expect 45 tool, foundation thêm `work_report` thành 46. Đây là oracle inventory cần cập nhật và rerun; không tuyên bố patch green hay chỉ còn ba lỗi toàn suite. Chưa có neo W7. W8 chưa thi công.
+- [ ] W7.1: interview main tự mở trước khi có child request vẫn theo đường legacy; phép đo W7 ở đây chỉ chứng nhận feedback child→main. Không tự gán đường legacy thành durable.
+- [ ] W7.2: crash sau admission có thể đã chạy tool: giữ interrupted receipt/checkpoint và yêu cầu main kiểm trước tiếp tục; không tự replay side effect. Đo riêng khả năng hồi phục cuối.
+
+## 29. Đối chiếu W7/W8: báo main, bàn giao và quyết định là các việc riêng (01/10/2026)
+
+### 29.1 Phạm vi và kết luận
+
+Chủ dự án làm rõ mục 27: `main → Build → main → Testing → main → Debug → main` là ví dụ trao đổi thông tin, **không phải chuỗi chờ model main ở mọi mũi tên**. Khi main đã giao Testing sau Build, Build lưu kết quả rồi backend có thể **đồng thời báo main và bàn giao đúng snapshot cho Testing**. Main vẫn sở hữu mục tiêu, assignment, quyền và quyết định đổi hướng.
+
+Đề xuất phù hợp nền BoxFox: giữ Work Graph và policy hiện có, bổ sung assignment chuyển tiếp có quyền cụ thể và admission bền vững; không dựng pipeline theo role. Quy tắc “mọi sub đều Review” trong prompt cloud gốc đã được thay bằng policy theo đầu ra/rủi ro. Goal hiện hành vẫn là hoàn thiện W6.1/W6.5/W7/W8 theo neo, đánh giá output và trình kiến trúc mới trước code. Không mở rộng sang UI/UX, model/provider hoặc quyền triển khai ngoài yêu cầu.
+
+**Lượt đối chiếu chỉ sửa tài liệu trong checkout B.** Sau đó chủ dự án trả lời **A**, duyệt bàn giao/continuation trực tiếp và interview tự xuất bản khi main đã cấp quyền cụ thể. Đây là authorization cho kiến trúc mục 29; không là nghiệm thu implementation. Thi công theo A1→A2→A3→A4, giữ neo/test riêng. Phép đo compact policy 9 ở workspace/SQLite thử riêng vẫn đang chạy tại lúc đối chiếu; không dùng kết quả đó chứng nhận W7/W8, không đổi cấu hình của phép đo ấy. Không dùng CUA trong lượt đối chiếu.
+
+### 29.2 Code đã có, code đang dở và phần cần kiến trúc mới
+
+Các line dưới thuộc snapshot đang đọc trên B, neo `68765ba2` + patch W7 chưa commit; line có thể đổi sau patch tiếp theo.
+
+| Khả năng | Hiện trạng và bằng chứng code | Kết luận cho W7/W8 |
+|---|---|---|
+| Báo main và peer không chặn người gửi | `runtime.py:6601` lưu receipt, thông báo main/peer; `session_store.py:662` dedup receipt và claim transaction. | Có nền notification/delivery. Không đồng nghĩa đã có dispatcher khởi chạy Testing. |
+| Giao cho Testing chưa chạy | `runtime.py:6573` chỉ resolve sibling hiện có; child không còn sống bị skipped tại `6636`. `drain_peer_deliveries` tại `6668` đọc final transcript rồi đưa bản giới hạn vào context. | Không dùng `deliverTo` như lời hứa tự spawn Testing hoặc bàn giao immutable artifact. W8 cần admission riêng theo assignment. |
+| Bản nháp và checks | `work_graph.py:1068` tạo một draft; `1131` đặt `needs_checks`; `869` yêu cầu main gọi `work_check`. | Hiện có điểm chờ main/tool call. Cho backend chạy check đã giao trước là thay đổi kiến trúc, chưa làm. |
+| Kiểm chứng linh hoạt | `work_policy.py:35` phân loại artifact/risk; patch cần tests, Plan cần plan review, research cần evidence, lookup/diagnostic bình thường không blanket review; consequential thêm critique/check phù hợp. | Giữ policy tối thiểu. Số checker không phải tiêu chí chất lượng; không thêm Debug hay Review vào mọi role. |
+| Artifact và folder riêng | `work_artifacts.py:28` lưu `.plans/work/{hash-owner}/{runId}/{nodeId}/{stage}/v{version}-{artifactId}.md`; SQLite lưu content/hash/binding/producer và `originTurn`. Reader tại `60` kiểm owner và assigned refs. | Ref/version/hash có nền. Folder hiện chưa có tầng origin-turn như thiết kế mục 7; W7 mới không sửa path. Giữ folder của run/child; không gán đã hoàn tất yêu cầu namespace theo lượt. |
+| Dependency và song song | `work_graph.py:351` yêu cầu accepted + finalized; `356` suy pha theo kind; `1268` chạy ready nodes song song và chờ FIRST_COMPLETED. | Đã có song song và gate; chưa có predicate rõ output-created/checks-passed cho từng handoff. Không phải scheduler bắt mọi role chạy tuần tự. |
+| Sub tự soạn bảng hỏi | Draft `work_feedback.py:76` nhận checkpoint + questions; `169` cho main mở bằng request ID, mặc định dùng nguyên câu hỏi sub. | Cách “sub soạn → main mở bằng ref” đã có code draft và mock; chưa toàn đường nghiệm thu. |
+| Sub request → backend mở thẻ | `report` tại `114` chỉ đặt `waiting_main`, emit feedback; chỉ `open_interview` từ root tạo card. Chưa có grant cho publish. | Cách này chưa có. Cần quyền được main giao trước, kiểm trùng/mâu thuẫn và root ownership; không mở ask/delegate tự do cho child. |
+| Answer bền vững / cùng child | Draft `answer` tại `205` giữ ID/revision/source user action, answer + outbox cùng transaction; `resume_child` tại `320` giữ child/context và tổng usage. | Mock 10/10; native 1/2 hoàn tất. Chưa kết luận toàn app/restart/scheduler đúng. |
+| Answer → child không qua main LLM | `work_feedback.py:251` ghi prompt cho root; `pump` tại `292` gọi `rt.start(root)` để main dùng work_run/work_check. | Chưa đáp ứng đường trực tiếp. Cần outbox action có binding tới đúng continuation, notification main là việc riêng. |
+| Retest cùng tester | `work_checks.py:339` bình thường spawn checker; chưa lưu pointer tester để reuse sau patch. `observations` tại `60` đọc tool events toàn đời child. | W8 phải reuse đúng tester và chỉ nhận proof của admission/snapshot mới. Có `admissionSeq` trong resume không tự sửa được query proof cũ. |
+| Restart/admission | Draft feedback giữ interrupted khi crash; graph `recover` tại `525` vẫn reset nhiều stage khác về pending/revise. | Chưa có admission toàn run cho auto dispatch. Không được suy “SQLite có outbox” thành exactly-once mọi tool/side effect. |
+
+### 29.3 Bốn loại sự kiện và khi nào cần main model
+
+Tên trường/sự kiện bên dưới là hợp đồng đề xuất, chưa phải API/tool đã có.
+
+| Loại | Nội dung và người sở hữu | Backend xử lý | Có mở lượt main LLM? |
+|---|---|---|---|
+| **a — progress notification** | Trạng thái, summary ngắn, artifact/check refs và hạn chế; root sở hữu lịch sử. | Persist receipt, emit event, gom ref vào context ở ranh giới an toàn của lượt main tiếp theo. | Không tự mở. Main có thể đang chạy/báo cáo hoặc được user hỏi tiến độ. |
+| **b — handoff** | Chuyển output/snapshot tới assignment đã được main xác định. | Kiểm quyền/binding/readiness, claim action, start/resume child một lần, đồng thời phát a. | Không nếu đủ điều kiện đã giao. Thiếu điều kiện giữ pending; quyết định mới chuyển c. |
+| **c — main decision required** | Phạm vi thay đổi, assignment chưa có, contract/criteria mâu thuẫn, thiếu capability, repair chưa được giao, admission có side effect chưa rõ. | Lưu checkpoint/finding, chỉ chặn nhánh bị ảnh hưởng; mở/queue lượt main khi có việc cần quyết định. | Có; không gọi lại chỉ để chuyển tiếp ref. Main có thể chọn Build sửa trực tiếp, Debug điều tra hoặc đổi cách kiểm. |
+| **d — user decision required** | Ý định/ràng buộc của user cần chốt; sub soạn 1–3 câu/lựa chọn/lý do/tác động. | Publish thẻ root khi có grant phù hợp; không có grant hoặc mâu thuẫn thì chuyển c để main xem. | Không cần thêm main chỉ để publish/resume đã giao; có khi cần giải quyết xung đột/đổi phạm vi. |
+
+Một sự kiện có thể tạo cả a và b, nhưng **receipt thông báo đã đọc không là dependency của handoff**. Gửi thông báo không chứng nhận output. Main có thể tạm dừng/revoke/chọn lại assignment; dispatcher kiểm hiệu lực ngay trước admission. Tiến độ nhiều node được gom, không spam một lượt main cho mỗi tool/end event.
+
+### 29.4 Assignment chuyển tiếp và cổng đầu ra
+
+Main giao target/tiêu chí/policy và **quyền chuyển tiếp hữu hạn theo nhiệm vụ**, không cấp quyền theo role chung. Một transition record dự kiến gồm:
+
+- `transitionId`, `ownerId`, `runId`, source `nodeId/stage`, target assignment hoặc check IDs, assignment revision và policy hash.
+- Predicate đầu vào, artifact/check refs bất biến, dependency binding, code snapshot khi liên quan; backend điền danh tính và hash từ registry, không tin hash model tự khai.
+- `resumeChildId` khi cần reuse tester/producer, mục tiêu và quyền tool tương ứng; quyền execute/branch/touch set riêng khi được phép sửa mã.
+- Khi áp dụng grant, backend ghi binding cụ thể của bản vừa tạo vào action; main có thể giao “Testing cho mỗi bản sửa hợp lệ của node này” trong cùng scope. Mỗi hash mới có action riêng, lịch sử cũ giữ nguyên; không reset counter theo title/version cho phép loop vô hạn.
+- Không có transition tương ứng thì trả c. Check tối thiểu vẫn chặn readiness; nếu checker chưa được giao/không có capability thì giữ needs_checks, không auto-pass hoặc tự cấp role/quyền.
+
+Tích hợp dự kiến qua service Work Graph và assignment/check records hiện có, schema bổ sung được backend xác thực; không tạo API/tool tưởng tượng trong prompt trước khi code. Run cũ không được tự gán grant: giữ manual/adaptor cho tới khi main giao rõ. Không thêm một setting/panel mới trong phạm vi UI/UX đang giữ.
+
+**Readiness cần phân biệt:**
+
+| Predicate | Đầu ra nào đủ điều kiện | Ví dụ |
+|---|---|---|
+| `artifact_finalized` | Model hoàn tất deliverable; artifact đã lưu/hash hợp lệ; chưa có nghĩa findings/required checks đã đạt. | Reviewer đọc đúng bản Plan; không cho Build dựa vào Plan chưa đạt. |
+| `code_snapshot_ready` | Patch/handoff đã tạo, code snapshot có thật và đủ ổn định/lock để kiểm. | Testing chạy sau Build. **Không đợi tests pass mới cho chính tester chạy**. |
+| `required_checks_passed` | Các check IDs bắt buộc đạt, proof đúng binding/version/hash hiện hành. | Downstream dùng kết luận đã kiểm; triển khai bước phụ thuộc execute đã nghiệm thu. |
+| `user_answers_ready` | Các câu cần cho continuation đã trả lời qua hành động user, revision/binding còn đúng; “đề xuất giúp” giữ provenance proposed. | Cùng Research child tiếp tục từ checkpoint/answer ref. |
+
+Đọc partial để khảo sát là input có nhãn chưa xác minh, không thỏa predicate accepted. Duyệt Plan không cấp Build nếu run artifact-only. Transition không bypass `require_execution`, review/approval hiện hành, policy tối thiểu, branch B hoặc quyền tool. Khi code/contract/dependency thay đổi, các proof liên quan hết hiệu lực; giữ check nhánh độc lập không chịu tác động.
+
+Ví dụ cụ thể: main đã giao `Build B1 → Testing T1 khi code_snapshot_ready`. B1 xong thì Testing nhận ref/snapshot và chạy; main nhận tiến độ cùng lúc. T1 đỏ: nếu đã giao phép sửa hẹp và lỗi nằm trong điều kiện đó, Build sửa; nếu cần quyết định nguyên nhân/phạm vi thì chuyển main, main mới chọn Debug khi cần. Sau sửa, T1 cũ retest với admission mới. Review chỉ theo policy/rủi ro/assignment, không xen một bước bắt buộc giữa mọi cặp.
+
+### 29.5 Hai cách xuất bản interview
+
+| Cách | Ưu điểm | Chi phí/giới hạn | Đề xuất |
+|---|---|---|---|
+| Sub soạn → main mở thẻ bằng ref | Main xem và gộp các quyết định; dùng draft đang có; không cần chép bảng hỏi vào prompt. | Nếu mọi bảng hỏi đều cần lượt main để publish thì có độ trễ/thêm token; main đang bận work_run có thể nhận event nhưng chưa mở thẻ. | Giữ làm fallback khi thiếu quyền hoặc câu hỏi có vấn đề. |
+| Main giao quyền → sub request → backend publish root + notify | Không thêm lượt main chỉ để xuất bản; hỏi sớm trong khi nhánh khác chạy. | Cần grant/revision/dedup/conflict, lifecycle run-owned, quyền revoke và direct continuation; không chỉ sửa prompt. | Đề xuất cho câu hỏi thuộc phạm vi được giao, sau khi các cổng dưới được kiểm. |
+
+Grant dự kiến gắn owner/run/node/assignment và nhóm quyết định được phép hỏi (`decisionKey`), cùng quyền publish/resume trong scope. Backend dùng nguyên questions sub, gắn root card/request ID; child không có quyền delegate hay hỏi ngoài binding. Main xem/sửa/hủy qua cơ chế hiện có; thay câu hỏi/lựa chọn làm tăng request revision và vô hiệu submission cũ.
+
+Trước publish: kiểm 1–3 câu, cấu trúc/options/free text, request chưa trả lời, grant còn hiệu lực, không trùng decisionKey còn mở/đã trả lời, không xung đột với quyết định còn hiệu lực. Hai node hỏi cùng quyết định dùng cùng request hoặc routing cho main để gộp; options/constraint mâu thuẫn thì cần c, không hiện hai thẻ ngược nhau. Không dựa duy nhất vào chuỗi câu hỏi giống nhau. Backend kiểm cấu trúc/ID/quyền; không tuyên bố tự hiểu ngữ nghĩa mọi câu hỏi. Câu ngoài nhóm được giao hoặc dấu hiệu mâu thuẫn chưa xác định được gửi main.
+
+Thiếu fact kỹ thuật dùng khảo sát/kiểm nguồn/test trước; không biến câu hỏi “library làm được không?” thành yêu cầu user quyết định. Interview là lớp bảo vệ hiếm khi cần ý định/quyền/ràng buộc, không một pha bắt buộc cho mọi child. Giữ UI/UX hiện có; không tạo panel, kiểu card, thao tác hoặc cơ chế timeout ngầm mới trong W7/W8.
+
+### 29.6 Continuation, ngân sách và chống trùng
+
+1. Answer cùng outbox action được lưu trong transaction, gồm request/question IDs, revision và user-action receipt; partial answer giữ phần còn thiếu. Không lấy timeout/mất mạng làm đáp án.
+2. Worker nhận action **tiếp tục child cụ thể**, không nhận prompt “main hãy tiếp tục hộ”. Child đọc checkpoint/answers ref; main nhận summary/ref, không viết lại toàn bộ câu trả lời. Đủ thông tin, grant còn hiệu lực, cùng assignment thì resume; đổi phạm vi/mâu thuẫn/interrupted effect thì yêu cầu main quyết định.
+3. Giữ child/context/work folder và tổng usage; **budget từng admission mới** khi có input mới hợp lệ vẫn `min(profile, parent ceiling)`. User wait và queue wait tách khỏi compute; thời gian provider/tool thực tính vào phần phù hợp. Không nâng output/steps/time đã chốt trong lượt đối chiếu này.
+4. “Input mới” gồm answer có receipt mới, source/code/dependency hash thực hoặc phần nguồn mới đã đọc. Đổi invocation ID, title, lời nhắc, checkpoint prose của chính child hoặc đọc lại cùng body không tự cấp budget mới. Không tính artifact checkpoint do chính child sinh là thông tin mới để mở lượt vô hạn.
+5. Giữ usage/failures/progress signatures qua restart/update. Ba lượt cùng lỗi/kết luận không có tiến triển: dừng nhánh, báo main chọn cách khác; main có thể dùng checkpoint như nguồn chưa xác minh, không accepted. Deterministic guard kiểm hash/error/finding IDs; đánh giá “kết luận đã tiến triển chưa” có thể cần main, không giả vờ hash chứng minh hiểu đúng nội dung.
+6. Admission có `workKey` chuẩn hóa từ owner/run, source node/stage và binding/hash, target assignment/check kind, policy và request revision liên quan. Manual và auto ánh xạ về **cùng logical assignment/key**; transition/event/invocation IDs là trace, không dùng ID ngẫu nhiên riêng của mỗi đường để né dedup. Global run revision do nhánh khác cập nhật không tự biến cùng việc thành admission mới. Persist state change và action/outbox cùng transaction; claim có lease và CAS. Replay event, double-click, main gọi work_check đồng thời auto dispatch dùng cùng admission service: chỉ một lượt cho cùng việc.
+7. Worker retry crash **trước admission** được; crash **sau khi có thể đã thực thi tool** giữ interrupted/receipt để kiểm. Idempotency admission không bảo đảm mọi shell/external side effect exactly-once. Không khởi lại Build/ship từ sự kiện “không thấy kết quả”.
+
+### 29.7 Rủi ro thực trong foundation cần sửa trước khi nghiệm thu
+
+Các mục dưới là kết quả đọc code/test, không mở rộng patch main/sub W6.2 hoặc tự sửa DAG:
+
+- **W7.3 — checkpoint/final và semantics:** native v2 lượt 1 dùng `work_report checkpoint` cho báo cáo đã đủ, nên branch tiếp tục chờ. A1 đã sửa chỉ dẫn dùng report chỉ khi bị chặn, hoàn tất trả final; native v3 2/2 kết thúc final, không sinh checkpoint dư. Không auto-convert checkpoint thành accepted. Draft vẫn dùng stage `needs_user` cho cả needs_evidence/checkpoint; cần routing theo request kind ở A2, không suy mọi checkpoint cần hỏi user.
+- **W7.4 — input/proof chống reset giả:** A1 loại self-checkpoint khỏi freshness, chặn cả file_read bằng path tuyệt đối của artifact tự viết; hash body/range của nguồn đã đọc, không dùng event ID hoặc thời điểm làm proof mới; chặn body đã biết, nguồn lỗi/quality không dùng được. Đã có test retry/duplicate, reread cùng body và parent ceiling mới. **Chưa có receipt của helper đã giao**; A2/W8 phải hỗ trợ ref đó, không ép main tự mở lại nguồn chỉ để chuyển tiếp.
+- **W7.5 — restart/claim/guard:** A1 thêm invocation receipt riêng cho resume, sửa prompt về budget theo input mới, test kill switch; hủy resume đóng child ledger và giữ request interrupted. Outbox hiện vẫn wake main và chờ root bận; **chưa là direct continuation của lựa chọn A**. Chưa đủ trace ba lượt không tiến triển; paused/revoke, admission crash và parent-turn cleanup phải kiểm ở controller A2/A3. Không chỉ thêm timer gọi child ngoài lifecycle.
+- **W8.1 — tester proof:** query tool events/final transcript toàn đời child có thể lấy lượt cũ khi reuse; sửa proof và final retrieval theo admission/current code snapshot. Test code mới đỏ trong khi child có lịch sử test xanh phải giữ fail/unverified.
+- **W8.2 — lifecycle/state concurrency:** `work_run`/`work_check` hiện giữ run lock; root turn cuối có child cleanup. Auto dispatch từ worker phải dùng controller/admission cùng nguồn trạng thái run, không gọi lồng work_run để tranh lock hoặc tạo root turn giả nhằm giữ child. Request một nhánh không dừng nhánh độc lập; user có thể trả lời khi nhánh kia còn chạy.
+
+**Thay đổi kiến trúc đã được chủ dự án duyệt bằng lựa chọn A:** assignment/grant + dispatcher run-owned + bốn loại sự kiện; direct publish/resume và admission thống nhất manual/auto. Đánh đổi: ít token/độ trễ main cho việc chuyển tiếp, nhưng thêm state/concurrency/recovery phải kiểm chứng. Giữ đường manual-by-ref khi thiếu grant; không duy trì hai state machines cùng ghi một run. Bản sửa schema/guards của foundation được tách neo trước khi nối phần tự chuyển tiếp.
+
+### 29.8 Workflow từ ít rủi ro đến thay đổi scheduler
+
+| Checkpoint | Làm gì | Điều kiện hoàn tất | Trạng thái |
+|---|---|---|---|
+| **A0 — đối chiếu ý định/code** | Sửa sơ đồ và thuật ngữ “về main”, đọc goal/patch/tests, phân biệt draft/đã nghiệm thu. | Mục 6.2/27/28/29 nhất quán, có evidence và phần chưa làm rõ. | [x] Tài liệu; chưa triển khai kiến trúc mới. |
+| **A1 — ổn định W7 foundation** | Sửa inventory oracle 45→46 theo schema thực; checkpoint/final guidance; freshness/body proof/duplicate/restart guards; giữ W6.2 ngoài scope. | Targeted + full suite source cố định; native Space Bunny đọc final và từng lỗi, không chỉ badge; neo W7 foundation. | [x] Foundation code/tests tại mục 30; không tính là toàn W7 đạt. Neo riêng sau checkpoint này. |
+| **A2 — W7 grant/card/resume** | Root-owned grant, publish bằng ref hoặc direct khi hợp lệ; continuation bền vững cùng child không relay main. | WG01–WG06/WG10/WG11; nhánh độc lập và root bận không làm mất câu hỏi/answer. | [ ] Kiến trúc đã duyệt A; implementation sau neo A1. |
+| **A3 — W8 handoff/admission** | Typed predicates, notification tách dispatch, manual/auto cùng admission, run-owned lifecycle và cycle/compatibility. | WG01/WG07–WG12, restart/fault traces; legacy không tự mở Build. | [ ] Kiến trúc đã duyệt A; sau A1/A2, chưa thi công. |
+| **A4 — W8 repair/retest/integration** | Build sửa trực tiếp hoặc Debug khi cần theo assignment; retest tester cũ; input refs tối thiểu, lock/touch set và integration/ship. | WG03/WG07–WG09/WG12 + tests integration đúng snapshot; branch/scope/current approval giữ. | [ ] Không blanket Debug/Review; neo riêng. |
+
+### 29.9 Checkpoint kiểm chứng và output đúng
+
+Ưu tiên unit/integration với model stub, clocks/queue fault injection và trace SQLite; model live chỉ các điểm cần xem hành vi model, giữ **OpenCode space-bunny-free**. CUA chỉ nếu API/data không đủ kiểm lỗi render; ghi cho agent khác kiểm card hiện có, không sửa UI/UX.
+
+| ID | Kịch bản | Output bắt buộc để nghiệm thu |
+|---|---|---|
+| **WG01** | Main đã giao Testing; Build hoàn tất; main model đang bận hoặc mock main bị cấm gọi. | Artifact/code snapshot lưu trước; một notification receipt logic cho main và một Testing admission đúng hash; **0 lượt main LLM chỉ để relay**. SSE replay không tạo công việc mới. Main không phải đã đọc thông báo. |
+| **WG02** | Chỉ research/plan/design hoặc lookup; không có executionRequested. | Checks theo artifact/risk; không Build, install, PR hoặc pipeline đầy đủ ngoài yêu cầu. |
+| **WG03** | Test đỏ rõ nguyên nhân / nguyên nhân chưa rõ / chưa giao repair. | Ba nhánh riêng: Build sửa được giao; Debug khi cần điều tra; c khi cần main chọn hướng. Không cứ test đỏ là Debug. |
+| **WG04** | Sub soạn 2–3 câu; main mở thẻ bằng request ID. | Nội dung/options/lý do giữ nguyên khi không sửa; không phải nhét bảng hỏi vào prompt main. Questions/answers còn trong SQLite và chat/Decisions sau submit/reload. |
+| **WG05** | Grant publish/resume hợp lệ, không có lượt main mới. | Backend mở đúng card của root, báo main; answer → cùng child tiếp tục từ ref; số main model relay = 0. |
+| **WG06** | Hai child hỏi trùng hoặc mâu thuẫn; một answer cũ/cross-owner; partial answer. | Không hai bảng hỏi trái nhau; đã trả lời còn hiệu lực không hỏi lại; conflict/stale/403 hoặc 404 rõ; unanswered không tự coi consent; chỉ nhánh liên quan chờ. |
+| **WG07** | Duplicate event/outbox; main manual check cùng lúc auto check; crash trước/sau admission. | Một admission/action đúng binding; crash chưa start khôi phục; crash có thể side effect giữ interrupted/checkpoint, không replay execution. |
+| **WG08** | Sửa code rồi retest, tester có command xanh từ lượt trước. | Cùng tester ID/context/folder; phải chạy lại command trong admission mới trên hash mới. Command cũ không pass. Đổi hash trong check → superseded; producer/consumer đọc đúng version. |
+| **WG09** | Độc lập P1/P2; downstream cần output-created hoặc execute+checks-passed. | Trace đúng predicate; tester không deadlock vì đợi chính test của nó pass; downstream yêu cầu checks không chạy chỉ vì file đã tồn tại. |
+| **WG10** | Chờ user lâu/restart; owner stop/paused/revoke; user trả lời khi nhánh độc lập còn chạy. | Không timeout thành answer; compute wait không tăng usage; đúng child resume khi hợp lệ; revoke/stop không mở admission mới; nhánh độc lập không bị pause theo bảng hỏi khác. |
+| **WG11** | New answer/code/proof; cùng body khác invocation/title/checkpoint; ba lượt không tiến triển. | Input mới cấp budget lượt theo profile/cha, tổng usage giữ; checkpoint tự sinh/đọc lại không reset; ba lượt lặp dừng nhánh và báo main, không accepted. |
+| **WG12** | Run cũ, scope/criteria/dependency đổi, partial/provider lỗi, code snapshot hợp nhất. | Adapter legacy rõ; action stale không chạy; partial/unverified không pass; checks nhánh độc lập giữ khi binding không đổi; integration/ship chỉ đúng snapshot/phạm vi đã duyệt. |
+
+Receipt mỗi ca ghi commit + source hashes, route, session/run/node/stage/child/admission/transition IDs, artifact/check hashes, expected/actual ordering, model turns và tool side effects thực; không lấy completion badge làm bằng chứng chất lượng. Live failures lưu riêng setup/provider/model/product và tính vào mẫu. A0 là đối chiếu/tài liệu; các WG chưa chạy không được tick từ sơ đồ hoặc 10 mock foundation trước đó.
+
+## 30. Neo W7 foundation A1 và đánh giá corpus — 02/10/2026
+
+**Phạm vi checkpoint:** SQLite request/question/answer, root card bằng ref, cùng child tiếp tục; schema/tool permission và guard budget/proof. Chưa là dispatcher/direct interview của A. Không sửa frontend, không chạy CUA, không đổi model/provider, không thi công Build/PR của run chỉ yêu cầu artifact.
+
+### 30.1 Thay đổi và bằng chứng
+
+- [x] `work_report` lưu checkpoint artifact có owner/run/node/stage; checkpoint partial không accepted. Child kết thúc lượt, nhả slot khi chờ, không dùng timeout làm câu trả lời.
+- [x] Interview root dùng nguyên câu hỏi sub bằng request ref; answer có revision, user-action provenance, partial answer và invocation dedup. Answer + continuation outbox cùng transaction; restart khôi phục card/answer từ SQLite.
+- [x] Continuation giữ child/context/folder; mỗi input mới hợp lệ áp `min(requested profile, parent ceiling hiện tại)`, usage cộng dồn giữ qua các lượt. Không coi checkpoint tự viết, event ID/thời điểm hoặc đọc lại cùng body là dữ kiện mới.
+- [x] Evidence hash body/range, loại nguồn lỗi/quality không dùng được và self-artifact kể cả path tuyệt đối; resume invocation lặp trả receipt cũ, payload khác trả conflict.
+- [x] Hủy resume không vỡ vì thiếu import `asyncio`; đóng child ledger, nhả slot và giữ request interrupted. Kill switch không bơm outbox.
+- [x] Inventory tests 45→46 tương ứng tool mới thực sự; giữ kiểm exact sets/schema/role boundaries, không xóa assertions để làm xanh.
+- [ ] Outbox hiện vẫn wake main cho đường manual; grant/direct continuation, helper evidence ref, ba lượt không tiến triển và controller-owned lifecycle làm tiếp ở A2/A3. `read_source(ref=...)` cần resolve URL từ reader receipt; không buộc model đưa URL nếu công cụ thật dùng ref.
+
+Kiểm thử:
+
+| Snapshot | Lệnh/phạm vi | Kết quả thực |
+|---|---|---|
+| A1 trước bổ sung cancel/absolute-path/source-grade | Full `python -X utf8 -m pytest backend/tests -q --disable-warnings --maxfail=3` | **2777 passed, 21 skipped / 898.08s**; `.tmp/work-checks/w7-a1-full.xml`. Không chứng nhận ba guard thêm sau đó. |
+| A1 cuối | `python -X utf8 -m pytest backend/tests/unit/test_work_feedback_w7.py -q --disable-warnings --maxfail=1` | **19 passed / 9.65s**. |
+| A1 cuối, freeze 13 production files | Full backend như trên, XML `w7-a1-final-full.xml` | **2780 passed, 21 skipped / 1055.85s**, exit **0**; source hashes `.tmp/work-checks/w7-a1-final-source.json`, không thay source khi sweep chạy. |
+| Native v3, OpenCode `space-bunny-free` | `scripts/eval/work_feedback_eval.py`, 2 repeats, parent 16 steps/300s, disposable DB/workspace, câu trả lời synthetic | **2/2 workflow accepted**, cùng child, một request/lượt, không active slot sau yield/completion; **33.880s / 70.166s**. Đã đọc cả hai final. Không có main LLM, full DAG hay render CUA trong probe. |
+
+[Bằng chứng native W7](W7-foundation-evidence.json) lưu route/source hashes, output, receipt và các lượt v2 thất bại, không loại khỏi mẫu. **Không đạt toàn bộ nội dung:** v3 final **292/269 từ** vượt giới hạn 200; v2 final đạt workflow cũng **237 từ**. v3 lượt 2 nói chọn Điều dưỡng loại hai phương án khác là diễn đạt quá mức, và đề xuất cột theo điều dưỡng chưa phải requirement được xác nhận. Ghi dấu hiệu vào W6.2, không sửa prompt producer/main trong A1. Cải thiện checkpoint/final chỉ được quan sát, chưa chứng minh nguyên nhân riêng vì fixture glob cũng đã được sửa.
+
+### 30.2 Đánh giá từng output cũ; không dùng badge để nghiệm thu
+
+[Plan compact: 13 child + main](W6.1.3-plan-compact-evidence.json) và [Design compact: 12 child + main](W6.1.3-design-compact-evidence.json) lưu final hiển thị đầy đủ, hash/word count/finish receipt và adjudication từng child. Đây là **policy9/source cũ**, không phải chứng nhận A1 hoặc policy10. Không lưu hidden reasoning.
+
+- Reviewer mở source vẫn có thể đọc thiếu nhánh C: stock `csv.writer.writerow([''])` ra `""\r\n`, reader trả `['']`; reader của dòng trống trần trả `[]`, không `None`. Reviewer sai đã khiến main biến lỗi thành acceptance mới, producer kế thừa. Design reviewer sau đó tìm đúng nhánh writer và test gốc, nhưng vẫn đề nghị special-case để thỏa criterion sai; phải bác criterion bằng bằng chứng thay vì ép code đổi hành vi.
+- Reviewer Plan tính **1 + 2 = 4** sai, main đổi acceptance theo finding này, Plan kế thừa. Reviewer sau bác criterion đúng; còn finding chặn vì tiêu đề “đã đọc file” dù baseline ghi rõ “kỳ vọng” là quá mức. Không gắn tất cả sai sót vào producer hoặc cho rằng mọi lần revise đều công tâm.
+- Baseline `1 failed in 0.14s` (Plan) có command output pytest thật ở main; reviewer không thấy log trong artifact nên có **khoảng trống truy vết**, không đủ kết luận main bịa số đo. Cần helper/command receipt qua ref trong W7/W8, tránh main bê toàn bộ log/plan vào prompt.
+- Một số lỗi độc lập của producer: vượt word limit, giữ ký tự `ơ` trong minh họa sau ASCII-ignore, nhập nhằng quotes của writer với output reader, lệnh import kèm expected “1 passed”, M2 ghi không phụ thuộc M1 dù phải test bản sửa M1. Main tự bắt hai lỗi cuối nhưng chưa sửa và whole-review đạt.
+- Local counterexamples **Python 3.13.9** trong các JSON xác nhận empty/newline/ASCII CR/comma/quote; không coi trích nguồn CPython một phiên bản khác là đã chạy interpreter cục bộ.
+- Plan compact repeat2 root **completed nhưng partial `PROVIDER_STREAM_INTERRUPTED`**, chưa document/whole review đạt. Design compact repeat1 root **failed `DEADLINE_EXCEEDED`**, 12 child và chưa whole review. Giữ những lần này trong thống kê; không quy timeout thành mất mạng nếu chưa có bằng chứng transport.
+
+**Theo dõi:** W6.1.3 bổ sung counterexamples/proportional findings/provenance; W6.2 ghi sai sót main/sub sau phân biệt lỗi review và lỗi kế thừa; A2/A3 bổ sung proof ref và readiness/current-admission gates. Chưa tinh chỉnh producer/main hoặc giảm bài eval để lấy tỷ lệ pass đẹp.
+
+### 30.3 Điểm bắt đầu tiếp theo
+
+1. Tạo commit nền W7 A1 trên B và ghi hash làm điểm neo. Giữ goal W6.1/W6.5/W7/W8 active.
+2. A2: root cấp grant gắn assignment/decision keys, sub tự soạn card, root publish bằng ref hoặc backend publish khi có grant; child đọc answer/checkpoint bằng ref và direct resume cùng context. Legacy không có grant giữ manual.
+3. Controller phải giữ công việc ngoài lượt model main: root kết thúc turn không được reap nhầm child do worker sở hữu; root stop/revoke vẫn chặn admission. Answer đến khi nhánh khác đang chạy phải được scheduler nhận, không đợi main LLM relay; chỉ một nguồn live run và một đường admission.
+4. A3/A4 nối handoff predicates và cùng tester retest; không lấy `artifact_finalized` làm accepted, không dựng pipeline role cố định. Test WG01–WG12 theo điều kiện thực, rồi native Space Bunny ở các điểm model quyết định.
+5. CUA dành agent kiểm sau: root card có câu hỏi/options như sub; submit/reload vẫn thấy câu trả lời trong chat/Decisions; không sửa UI/UX trong patch này. SQLite/events xanh chưa chứng minh render xanh.

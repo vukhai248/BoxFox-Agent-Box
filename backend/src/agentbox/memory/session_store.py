@@ -541,16 +541,17 @@ class SessionStore:
         `stepsUsed` trong `turn_end` là số luỹ kế của lượt ⇒ lấy `max`; `outputTokens` là của từng
         bước ⇒ cộng.
         """
-        steps = tokens = 0
+        steps_by_turn, tokens = {}, 0
         for row in self.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='turn_end'",
                                    (child_id,)):
             try:
                 data = json.loads(row['payload'])
             except ValueError:
                 continue
-            steps = max(steps, int(data.get('stepsUsed') or 0))
+            turn = data.get('turn', 0)
+            steps_by_turn[turn] = max(steps_by_turn.get(turn, 0), int(data.get('stepsUsed') or 0))
             tokens += int(data.get('outputTokens') or 0)
-        return steps, tokens
+        return sum(steps_by_turn.values()), tokens
 
     def child_close_once(self, child_id, status, reason=None, steps_used=None, output_tokens=None):
         """Đóng hàng sổ con và CHỈ trả hàng khi chính NGƯỜI GỌI NÀY vừa đóng nó.

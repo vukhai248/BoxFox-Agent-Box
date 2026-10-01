@@ -1,0 +1,455 @@
+{
+  "schema": "boxfox-visible-corpus-audit/1",
+  "scope": "Old policy9 native model design_compact repeat1; not a W7 or policy10 certificate. Source/fixture branches and exact final hashes retained.",
+  "rawPath": ".tmp\\work-checks\\w612-scope9-compact-flow\\results.json",
+  "rawHash": "00c1a06eba9c8575b5b53cb4199857858bf0adb1e66f6d460fefd3b99f2af02f",
+  "route": {
+    "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+    "modelId": "space-bunny-free"
+  },
+  "recordedCommit": "1be035fb8bc3c1beb08df77d65fd7d7891cf22dc",
+  "sourceHashes": {
+    "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend\\src\\agentbox\\agent_core\\work_checks.py": "91ba0109d7a367640a652d7371b62c6405d899dc65febc0e7547e5556039a74d",
+    "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+    "backend\\src\\agentbox\\agent_core\\work_policy.py": "e2c457a2ba021471987c1860f7f8056d8af812dd4153a771ee01f794c1b987da",
+    "backend\\src\\agentbox\\agent_core\\work_prompts.py": "17a14afac5c28fb74b681455fb75a8066af5a5d0afc616306c81cad970172a42",
+    "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend\\src\\agentbox\\agent_core\\roles.py": "5cabb2907da1be9c44239c8cceea8a8d536c80c7765cd13f791ee5c12b932da1",
+    "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+    "scripts\\eval\\work_integration_eval.py": "a5c4c54d248f032e66f6722d5b69165ff1af118ad2a3754a7b845eeed2876cbe"
+  },
+  "main": {
+    "sessionId": "505bae62b6ed4479962960b1dd44cf59",
+    "status": "failed",
+    "mainExecutionStatus": "error",
+    "mainPartialReason": null,
+    "latencySeconds": 2998.519,
+    "oracle": false,
+    "mainAnswer": "v6 đọc đủ, bảng đối chiếu giờ đánh dấu đúng (chỉ 1, 7, 8 đổi). Giao check vòng 6:"
+  },
+  "mainErrors": [
+    {
+      "message": "DEADLINE_EXCEEDED: the turn ran out of time before an answer was produced",
+      "code": "DEADLINE_EXCEEDED"
+    }
+  ],
+  "mainCommandReceipts": [
+    {
+      "id": "call_iBsLLHeLk1ReJ0kqvYoRdIA9",
+      "name": "terminal_exec",
+      "args": {
+        "command": "cd /workspace 2>/dev/null || cd ~; pwd; ls -la; python -m pytest -q 2>&1 | tail -30"
+      },
+      "result": {
+        "is_error": true,
+        "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+      }
+    },
+    {
+      "id": "call_rjpvUkMmSNZg9dsWw7lDRoKh",
+      "name": "terminal_exec",
+      "args": {
+        "command": "python -m pytest -q"
+      },
+      "result": {
+        "content": "F                                                                        [100%]\r\n================================== FAILURES ===================================\r\n________________________________ test_unicode _________________________________\r\n\r\n    def test_unicode():\r\n>       assert next(csv.reader(io.StringIO(export('H\\u1ed3 s\\u01a1')))) == ['H\\u1ed3 s\\u01a1']\r\nE       AssertionError: assert ['H s'] == ['H\\u1ed3 s\\u01a1']\r\nE         \r\nE         At index 0 diff: 'H s' != 'H\\u1ed3 s\\u01a1'\r\nE         Use -v to get more diff\r\n\r\ntests\\test_export.py:4: AssertionError\r\n=========================== short test summary info ===========================\r\nFAILED tests\\test_export.py::test_unicode - AssertionError: assert ['H s'] ==...\r\n1 failed in 0.15s\r\n",
+        "exit_code": 1,
+        "is_error": true,
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+      }
+    },
+    {
+      "id": "call_BrG9SSZ8NmmTIS1FdSApBva5",
+      "name": "terminal_exec",
+      "args": {
+        "command": "wc -w .plans/work/8f52253a1d76503d3ea0/w-f6b3ccd1b6/D1/produce/v4-a-aa645a2578f4434f9213ee980593b3aa.md"
+      },
+      "result": {
+        "is_error": true,
+        "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+      }
+    }
+  ],
+  "children": [
+    {
+      "index": 1,
+      "childId": "3d6232ce744a440e826212bceeeafbf7",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Mục tiêu và phạm vi\n\nThiết kế hợp đồng `export(value) -> str` cho **đúng một trường CSV**, khớp `docs/source.md` (chỉ CSV, giữ tiếng Việt, đầu vào một chuỗi, đầu ra một dòng CSV hợp lệ). Chỉ thiết kế: không sửa `src/export.py`, không sửa `tests/test_export.py`, không UI/API/file ngoài phạm vi.\n\n**Hiện trạng (đã đọc, có trích dẫn):**\n- `src/export.py:3` — `value.encode('ascii', errors='ignore').decode()`: mọi code point > U+007F bị loại, lỗi tiếng Việt mất ngay tại đây.\n- `src/export.py:4` — `io.StringIO(newline='')`; `src/export.py:5` — `csv.writer(s).writerow([value])` (dialect mặc định `excel`); `src/export.py:6` — trả `s.getvalue()`.\n- Baseline `python -m pytest -q`: **1 failed in 0.15s**, `test_unicode: assert ['H s'] != ['Hồ sơ']`, khớp `tests/test_export.py:4`. *(Số liệu do phiên chính quan sát; node này không có terminal nên không tự chạy lại, và không khẳng định bất kỳ test nào sẽ pass.)*\n\n## Cấu trúc — hợp đồng dữ liệu\n\n```python\ndef export(value: str) -> str: ...   # luôn trả str, luôn kết thúc \"\\r\\n\"\n```\n\n- **Input miền:** `str` Unicode, bất biến, không chuẩn hoá (không NFC/NFD), không cắt khoảng trắng, không `strip`. Nhận cả subclass của `str` (kiểm bằng `isinstance`). Hai dạng bắt buộc phải hỗ trợ: (a) chuỗi thuần, kể cả tiếng Việt có dấu và ngoài BMP; (b) chuỗi đã chứa ký tự CSV đặc biệt: `,` `\"` `\\n` `\\r`.\n- **Output:** `str` đúng một dòng logic, dialect `excel` (`delimiter=','`, `quotechar='\"'`, `doublequote=True`, `quoting=QUOTE_MINIMAL`, `lineterminator='\\r\\n'`).\n- **Lỗi:** `value` không phải `str` → ném `TypeError(\"export() expects str, got <type>\")`. **Không** tự ép kiểu (`int`, `float`, `bytes`, `None` đều là lỗi, không `str()`).\n- **Bất biến kiểm chứng (mọi ca):** `export(v).endswith(\"\\r\\n\")` và `len(list(csv.reader(io.StringIO(export(v), newline=\"\")))) == 1`.\n\n| Quy tắc | Kết quả bắt buộc |\n|---|---|\n| Unicode | Không encode ascii, giữ nguyên 100% code point; round-trip khứ hồi bằng `==` |\n| Escaping | `,` `\"` `\\r` `\\n` trong giá trị → field được bọc `\"`; nháy kép bên trong nhân đôi (`\"\"`), không backslash |\n| Newline kết thúc | Luôn `\\r\\n` (lineterminator dialect) |\n| Newline nhúng | Vẫn là **một** dòng logic: field quote, `\\n`/`\\r` giữ nguyên bên trong |\n| Chuỗi rỗng | Trả `\"\\r\\n\"`; `next(csv.reader(...))` → `['']` |\n\n## Luồng và lỗi — ma trận ca (mỗi ca một test, `python -m pytest -q`)\n\n| # | Input | CSV kỳ vọng | `next(csv.reader(io.StringIO(export(v), newline=\"\")))` |\n|---|---|---|---|\n| 1 | `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` |\n| 2 | `'Nguyễn Đình Chiểu'` | `'Nguyễn Đình Chiểu\\r\\n'` | `['Nguyễn Đình Chiểu']` |\n| 3 | `'🙂 漢'` | `'🙂 漢\\r\\n'` | `['🙂 漢']` |\n| 4 | `'a,b'` | `'\"a,b\"\\r\\n'` | `['a,b']` |\n| 5 | `'a\"b'` | `'\"a\"\"b\"\\r\\n'` | `['a\"b']` |\n| 6 | `'a\\nb'` | `'\"a\\nb\"\\r\\n'` | `['a\\nb']` |\n| 7 | `'a\\r\\nb'` | `'\"a\\r\\nb\"\\r\\n'` | `['a\\r\\nb']` |\n| 8 | `'a\\rb'` | `'\"a\\rb\"\\r\\n'` | `['a\\rb']` |\n| 9 | `''` | `'\\r\\n'` | `['']` |\n| 10 | `' a '` | `' a \\r\\n'` | `[' a ']` (không quote, không trim) |\n| 11 | `'a,\"b\"\\nc'` | `'\"a,\"\"b\"\"\\nc\"\\r\\n'` | `['a,\"b\"\\nc']` |\n| 12 | `'5'` (str) | `'5\\r\\n'` | `['5']` |\n\nThêm: 1 test bất biến (áp dụng lên toàn bộ 12 ca) và 1 test lỗi `pytest.raises(TypeError, match=r\"export\\(\\) expects str\")` cho `5, 1.0, None, b'ab'` — phân biệt rõ `'5'` (hợp lệ) với `5` (lỗi).\n\n## Hiện tại vs. sau khi áp dụng hợp đồng\n\n| Ca | Hiện tại | Sau hợp đồng | Đổi? | Vì sao |\n|---|---|---|---|---|\n| `'Hồ sơ'` | `['H s']` | `['Hồ sơ']` | **Có** | bỏ ascii-ignore ở `src/export.py:3` |\n| `'🙂 漢'` | `['']` | `['🙂 漢']` | **Có** | mất toàn bộ code point >127 |\n| `'a,b'` / `'a\"b'` / `'a\\nb'` / `''` / `' a '` | khớp | khớp | Không | ký tự ASCII, không bị `src/export.py:3` đụng |\n| `5`, `None`, `b'ab'` | `AttributeError` tại `src/export.py:3` | `TypeError` có thông điệp | **Có** | `.encode` không tồn tại; contract chặn ép kiểu |\n| `'a\\r\\nb'` | khớp | khớp | Không | quote bao CRLF đã đúng |\n\nChỉ ca có ký tự không ASCII và ca sai kiểu là đổi; escaping/newline/rỗng **đã đúng** và hợp đồng giữ nguyên.\n\n## Vị trí tác động\n\n- Đã đọc, tồn tại: `docs/source.md`, `src/export.py`, `tests/test_export.py`.\n- Dự kiến cho node triển khai: sửa `src/export.py:3` (bỏ encode) + chặn `isinstance`; mở rộng `tests/test_export.py` bằng ma trận trên (cần thêm `import pytest` nếu dùng `parametrize`).\n\n## Phương án và đánh đổi\n\n1. **Giữ `csv.writer(s)` dialect mặc định** (khuyến nghị) — ngắn, ổn định; test đã ghim hành vi. Phương án thay: truyền tường minh `lineterminator=\"\\r\\n\", quoting=csv.QUOTE_MINIMAL` — tự tài liệu hoá nhưng dài dòng và trùng mặc định.\n2. **`parametrize` (khuyến nghị)** cho 12 ca — ID tiếng Việt OK, diff dễ đọc; phương án thay: một test vòng `for` gộp — ít import nhưng khó chẩn đoán ca lỗi.\n3. Kiểm `isinstance(value, str)` (chấp nhận subclass) thay vì `type(...) is str` — rộng hơn; phương án thay: chỉ nhận `str` thuần, chặt hơn nhưng vỡ với `StrEnum`.\n4. `newline=''` ở cả `StringIO` ghi (`src/export.py:4`) và đọc trong test — tránh dịch newline theo nền tảng.\n\n## Nghiệm thu và điều chưa rõ\n\n- **Nghiệm thu (thiết kế):** ma trận 12 ca + test bất biến + test lỗi, tất cả chạy bằng `python -m pytest -q`; mỗi ca xác minh khứ hồi bằng `csv.reader` trả đúng 1 phần tử bằng input.\n- **Rủi ro:** ma trận chỉ là thiết kế; chưa chạy, chưa xác nhận test nào pass. Baseline vẫn là **1 failed**.\n- **Chờ người dùng quyết:** (a) `'\\x00'` và ký tự điều khiển — cho phép xuất nguyên văn hay từ chối `ValueError`? Thiết kế hiện chọn **cho phép** (không lọc, khớp \"giữ nguyên mọi ký tự\"). (b) Có chấp nhận output `\"\\r\\n\"` trên mọi nền tảng không, hay chuẩn hoá sang `\"\\n\"`? Thiết kế giữ `\\r\\n` theo dialect. (c) Có cần BOM khi người gọi encode ra file không? Ngoài phạm vi `str`, để người gọi quyết.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 1017,
+      "finalHash": "d78000f3584847b90803fdac1e5957a75f217ebfa46efa105a3f90286092661d",
+      "adjudication": "Thiết kế có contract/ma trận/paths/rủi ro cụ thể, baseline do main chạy thật. Writer empty được ghi hai kiểu mâu thuẫn: text thiếu quotes, table trần CRLF nhưng reader [empty]. Đây là lỗi producer có trước reviewer."
+    },
+    {
+      "index": 2,
+      "childId": "00a1ce9029d241e09fd97a9f955e89e6",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 6,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Đã kiểm\n\n- **Artifact D1/produce** `a-a59b4835618b475a8b0a8ffce164c8cc` đọc **đầy đủ**: `nextOffset: null`, `coverageComplete: true`, `allAssignedArtifactsRead: true` (5721 ký tự, v1-finalized).\n- **Nguồn gốc trong fixture**: `src/export.py:1-6`, `tests/test_export.py:1-4`, `docs/source.md:1`.\n- **Nguồn chính thức**: `docs.python.org/3/library/csv.html` (3.14.8) và mã nguồn `Lib/csv.py` (CPython 3.14) — dùng để kiểm chéo tiền đề kỹ thuật.\n- **Test: NOT RUN.** Phiên review không có terminal; tôi không chạy lại `python -m pytest -q` và không khẳng định bất kỳ test nào pass. Mọi kết luận dưới đây suy từ source fixture + tài liệu chính thức.\n\n## Vấn đề chặn\n\n`none`\n\n## Bằng chứng đã xác minh (tiền đề bị bác bỏ mạnh nhất)\n\n1. **Tiền đề \"dialect mặc định = `excel`\" — ĐÚNG.** `Lib/csv.py` (CPython 3.14): `class excel(Dialect)` khai báo đúng `delimiter=','`, `quotechar='\"'`, `doublequote=True`, `skipinitialspace=False`, `lineterminator='\\r\\n'`, `quoting=QUOTE_MINIMAL`. Artifact liệt kê khớp từng tham số.\n2. **Tiền đề \"escaping CR/LF/newline/quote\" — ĐÚNG.** Docs: `QUOTE_MINIMAL` chỉ quote \"fields which contain special characters such as delimiter, quotechar, '\\r', '\\n' or any of the characters in lineterminator\"; `doublequote=True` ⇒ \"each quote character embedded in the data is written as two quotes\". Khớp ca 4-8, 11.\n3. **Bất biến `len(list(csv.reader(...))) == 1` cho ca 7/8/11 — tôi đã nghi ngờ đây là lỗi chặn** (`'a\\r\\nb'` cho ra ≥2 dòng) nhưng bác bỏ: chính docs CSV nói file object nên mở `newline=''` để tránh dịch newline, và writer chỉ quote newline *chính để* reader coi nó là dữ liệu chứ không phải terminator. Xem như đúng, đã ghi rõ nguồn.\n4. **Hiện trạng `src/export.py:3`** `value.encode('ascii', errors='ignore').decode()` loại mọi code point > U+007F ⇒ `'Hồ sơ'` → `'H s'`, khớp `tests/test_export.py:4` ⇒ đúng 1 test fail. Artifact không gắn nhãn \"đã chạy\" cho con số này mà quy đúng nguồn về phiên chính — đúng yêu cầu A7.\n5. **Bảng so sánh**: `'🙂 漢'` → hiện tại `['']` (mất trắn, còn lại `\\r\\n`), `5/None/b'ab'` → `AttributeError` tại `src/export.py:3` vì `.encode` không tồn tại trên non-`str`. Cả hai suy luận đúng. Escaping/rỗng/spacing \"không đổi\" — đúng vì ASCII.\n\n## Ghi chú không chặn\n\n- Ma trận thiếu ca **non-ASCII kèm ký tự đặc biệt** (vd `'Hồ, sơ'`) nên tương tác giữa bản sửa Unicode và quoting chưa được ghim trực tiếp; thêm 1 ca là rẻ. Không chặn vì invariant + round-trip vẫn bao phủ về mặt cấu trúc.\n- Chính sách `'\\x00'`/ký tự điều khiển: artifact để ngỏ và tự chọn \"cho phép\", nhưng đây là suy luận chưa chạy (NOT RUN) — không nên coi là đã kiểm chứng khi implement.\n- Độ dài: ước tính thô ~650-750 từ nếu tính cả ô bảng (con số không đo chính xác). Nếu main cần chắc dưới 700, nên cắt phần \"Phương án và đánh đổi\" — nội dung này không thuộc 9 mục bắt buộc.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact dẫn src/export.py:3 (ascii errors='ignore') và tests/test_export.py:4; tôi đọc trực tiếp 2 file này và xác nhận cơ chế mất ký tự. Số '1 failed in 0.15s' được artifact ghi rõ là quan sát của phiên chính, tôi NOT RUN nên không kiểm lại thời gian.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Input miền' + ca 1-3 (str thuần, có ngoài BMP) và ca 4-8, 11 (, \\\" \\\\n \\\\r) trong ma trận.\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng quy tắc nêu kết quả cụ thể cho Unicode/escaping/newline/rỗng; đối chiếu Lib/csv.py excel dialect và docs QUOTE_MINIMAL + doublequote — khớp từng tham số.\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Lỗi' (TypeError, không ép kiểu) + cột 'next(csv.reader(...))' của ma trận và bất biến 1 dòng; khớp yêu cầu (1)(2)(7)(8).\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng 'Hiện tại vs. sau khi áp dụng hợp đồng' chỉ ra đúng 3 nhóm ca đổi; cơ chế .encode và AttributeError đã kiểm từ src/export.py:3.\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"'Vị trí tác động' chỉ gồm src/export.py và tests/test_export.py; docs/source.md chỉ ghi là đã đọc; không có UI/API/endpoint nào.\"},{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact ghi rõ 'chưa chạy, chưa xác nhận test nào pass. Baseline vẫn là 1 failed' và chú thích nút không có terminal.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đúng loại thiết kế hợp đồng hàm; hợp đồng/trạng thái/lỗi/phạm vi nhất quán, không mâu thuẫn giữa các mục; khớp ràng buộc người dùng trong docs/source.md:1 (chỉ CSV, giữ tiếng Việt, 1 chuỗi -> 1 dòng).\"}]}\n```\n\nVERDICT: ok",
+      "finalWordCountWhitespace": 677,
+      "finalHash": "a4cf845a9870c204defca6732657842ea950018d607e83489ff3f9b4ff7662dd",
+      "adjudication": "Reviewer pass tất cả, bỏ sót empty writer sai (trộn record trống với one empty field) và so sánh emoji+space sai; chưa đo từ. Có mở source, nhưng mở Lib/csv.py chưa kiểm nhánh writer C."
+    },
+    {
+      "index": 3,
+      "childId": "ee3b4681686346e2a9310d56493dfe77",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Mục tiêu và phạm vi\n\nThiết kế hợp đồng hàm `export(value) -> str` cho `src/export.py`. Không sửa mã, không thêm UI/API/endpoint, không tạo file ngoài `src/export.py` + `tests/test_export.py`.\n\n## Hiện trạng (đã đọc, đã quan sát)\n\n- `docs/source.md:1` — chỉ CSV, giữ tiếng Việt, một chuỗi vào / một dòng CSV ra, trường chứa phẩy/newline phải đọc lại đúng.\n- `src/export.py:3` — `value.encode('ascii', errors='ignore').decode()` xóa mọi code point > U+007F: `'Hồ sơ'` → `'H s'`. Đây là nguyên nhân fail.\n- `src/export.py:4`–`6` — `io.StringIO(newline='')`, `csv.writer(s).writerow([value])`, `return s.getvalue()`: phần đóng gói CSV đã dùng dialect mặc định.\n- `tests/test_export.py:4` — khứ hồi bằng `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n- Baseline **đã chạy** (quan sát từ main, không phải node này): `python -m pytest -q` → `1 failed in 0.15s`, `assert ['H s'] != ['Hồ sơ']`.\n\n## 1) Kiểu và miền input\n\n`export(value: str) -> str`. Nhận `str` Unicode. Ba dạng bắt buộc: chuỗi thuần có dấu (`'Hồ sơ'`); chuỗi 1 trường chứa ký tự CSV đặc biệt (`,` `\"` `\\n` `\\r` `\\r\\n`); chuỗi rỗng `''`. Dấu tiếng Việt đi cùng ký tự đặc biệt cũng hợp lệ (`'Hồ, sơ'`). Không nhận `bytes`/`int`/`None`, không tự ép kiểu.\n\n## 2) Output\n\n`str` chứa đúng 1 record CSV, 1 field. Bất biến nghiệm thu: `next(csv.reader(io.StringIO(export(v)))) == [v]` cho mọi `v: str` trong miền.\n\n## 3) Chính sách Unicode\n\nKhông `encode`/`decode`; không ascii, không transliterate, không normalize NFC/NFD. Mọi code point giữ nguyên, kể cả dấu phân rã và ký tự điều khiển. `utf-8` chỉ là bước ghi file, ngoài phạm vi.\n\n## 4) Chính sách escaping\n\n`csv.writer` dialect `excel` mặc định: `delimiter=','`, `quotechar='\"'`, `doublequote=True`, `quoting=QUOTE_MINIMAL`, `escapechar=None`, `lineterminator='\\r\\n'`. Field chứa `,` `\"` `\\r` `\\n` → bọc `\"`; `\"` bên trong → nhân đôi `\"\"`. Field không chứa ký tự nào trên → không quote.\n\n## 5) Newline\n\nMỗi lời gọi kết thúc bằng đúng `\\r\\n`. `\\n`/`\\r` nhúng trong input được quote và giữ nguyên (`io.StringIO(newline='')` tại `src/export.py:4` tắt dịch newline), nên chuỗi trả về có thể chứa LF/CR trong dấu nháy — đúng RFC 4180, `csv.reader` vẫn đọc thành 1 field.\n\n## 6) Chuỗi rỗng\n\n`export('')` → `'\\r\\n'` (1 field rỗng, không quote); `csv.reader` → `['']`.\n\n## 7) Lỗi\n\n`value` không phải `str` → `TypeError(\"export() expects str, got <type>\")`. Thiết kế dự kiến (chưa chạy): `src/export.py:3` hiện sinh `AttributeError` vì `int`/`bytes` không có `.encode`. Không fallback `str()`, không `bytes.decode()`.\n\n## 8) Ma trận ca kiểm chứng\n\nMỗi dòng là một ca của `@pytest.parametrize` trong `tests/test_export.py`, assert đúng cột2 và cột 3; chạy `python -m pytest -q`.\n\n| # | input | CSV kỳ vọng | `next(csv.reader(...))` |\n|---|---|---|---|\n| 1 | `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` |\n| 2 | `'Hồ, sơ'` | `'\"Hồ, sơ\"\\r\\n'` | `['Hồ, sơ']` |\n| 3 | `'Sơ \"đồ\"'` | `'\"Sơ \"\"đồ\"\"\"\\r\\n'` | `['Sơ \"đồ\"']` |\n| 4 | `'a,b'` | `'\"a,b\"\\r\\n'` | `['a,b']` |\n| 5 | `'a\"b'` | `'\"a\"\"b\"\\r\\n'` | `['a\"b']` |\n| 6 | `'a\\nb'` | `'\"a\\nb\"\\r\\n'` | `['a\\nb']` |\n| 7 | `'a\\r\\nb'` | `'\"a\\r\\nb\"\\r\\n'` | `['a\\r\\nb']` |\n| 8 | `''` | `'\\r\\n'` | `['']` |\n| 9 | `'a\\x00b'` | `'a\\x00b\\r\\n'` | `['a\\x00b']` |\n\nToàn bộ chuỗi kỳ vọng ở cột 2 là **thiết kế dự kiến, chưa chạy** ở node này (node không có terminal); riêng baselineở trên là quan sát đã chạy. Ca 9: `\\x00` không thuộc tập ký tự kích hoạt quoting nên thiết kế dự kiến không quote — **chưa chạy, cần xác nhận bằng test**.\n\n## 9) So sánh hiện trạng vs sau hợp đồng\n\n| Ca | Hiện trạng (`src/export.py:3`) | Sau hợp đồng | Đổi? |\n|---|---|---|---|\n| 1, 2, 3 | `'H s\\r\\n'` → `['H s']` | cột 2 bảng trên | **ĐỔI** — bỏ `ascii/ignore` làm mất dấu |\n| 4–8 | đã khớp dialect mặc định | không đổi | không — logic CSV tại `src/export.py:4`–`6` đã đúng |\n| 9 | `'a\\x00b\\r\\n'` | không đổi | không *(chưa chạy)* |\n| `export(123)` | `AttributeError` *(chưa chạy)* | `TypeError` | **ĐỔI** — thêm guard tại `src/export.py:3` |\n\nNguyên nhân duy nhất của mọi thay đổi là xóa dòng `encode('ascii', errors='ignore')` và thay bằng guard `isinstance`.\n\n## Vị trí tác động\n\nĐã đọc: `docs/source.md:1`, `src/export.py:1`–`6`, `tests/test_export.py:1`–`4`. Dự kiến sửa: `src/export.py:3`, và bổ sung ca kiểm chứng vào `tests/test_export.py`. Không tạo path mới.\n\n## Nghiệm thu và điều chưa rõ\n\nCách kiểm chứng khứ hồi duy nhất: `python -m pytest -q` với các ca ở mục 8. Không khẳng định test sẽ pass sau sửa — node này chưa chạy lại. Rủi ro chưa kiểm chứng: ký tự điều khiển/`\\x00`, surrogate lẻ, và hành vi `TypeError` cho `bytes`. Quyết định chờ người dùng: (a) có chấp nhận đổi `AttributeError` → `TypeError` không; (b) có chuẩn hoá Unicode NFC không — thiết kế chọn **không** chuẩn hoá.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 809,
+      "finalHash": "ea4f21ea1f59d5b098b85045390036a3a3e136d36aa6e32db0894c7376e675b7",
+      "adjudication": "Producer lặp empty CSV trần CRLF và reader [empty], dùng pytest.parametrize sai API chuẩn (pytest.mark.parametrize); gộp baseline ASCII cho ca comma/quote sai. Không có thực thi mã."
+    },
+    {
+      "index": 4,
+      "childId": "b265fa1613a949239fdd98b47dd074bb",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 18,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc đủ artifact (`allAssignedArtifactsRead=true`, `chars=4747`) và cả ba file fixture. Không có terminal trong phiên này (`bash`/`read` không khả dụng) nên **không chạy** `python -m pytest -q`; mọi kết luận dưới đây dựa trên fixture + nguồn chính thức CPython đã mở.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\n**B1 — A4 (tiền đề bị nguồn chính thức bác bỏ, target=criterion): bất biến \"đọc lại bằng csv.reader trả về [input]\" SAI với chuỗi rỗng.**\n- Yêu cầu: item (2) \"next(reader) trả về danh sách đúng 1 phần tử bằng chính input\" và item (6) \"chuỗi rỗng … csv.reader đọc lại thành ['']\".\n- Bằng chứng quan sát: `Modules/_csv.c` (CPython 3.13) `parse_process_char`: ở `START_RECORD`, `c=='\\r'` → `EAT_CRNL`; ở `EAT_CRNL`, `c==EOL` → chỉ đặt `state = START_RECORD`, **không** gọi `parse_save_field`. `Reader_iternext` khi đó trả `self->fields` do `parse_reset` tạo bằng `PyList_New(0)` ⇒ `[]`. `Lib/csv.py` `DictReader.__next__` xác nhận: `while row == []: row = next(self.reader)` — \"unlike the basic reader, we prefer not to return blanks\".\n- Bằng chứng phản bác đã xét: `csv.writer` không quote field rỗng (`join_append_data` chỉ quote khi gặp delimiter/escapechar/quotechar/`\\n`/`\\r`/ký tự lineterminator) ⇒ output `'\\r\\n'`, không có ký tự nào để reader lưu field. Cách duy nhất để ra `['']` là ghi `\"\"\\r\\n`, trái §6 \"không quote\".\n- Hệ quả: §2 (\"== `[v]` cho mọi v trong miền\") và dòng 8 ma trận (`['']`) mâu thuẫn nội tại; test viết đúng theo thiết kế sẽ fail, hoặc buộc đổi §6.\n- Sửa tối thiểu cho main: sửa item (2)/(6) thành bất biến áp cho `v != ''`; `export('') == '\\r\\n'` và reader trả `[]`; nếu chủ thực sự cần `['']` thì phải chấp nhận `\"\"\\r\\n` — câu hỏi cần hỏi chủ.\n\n**B2 — A3 (target=artifact): §6 và dòng 8 trình bày kết quả sai như đã xác nhận.**\nNhãn \"thiết kế dự kiến, chưa chạy\" ở §8 không cứu được: đây là hành vi reader đã biết từ nguồn, viết ở §6 dưới dạng kết luận (\"csv.reader → `['']`\"). Sửa: đổi `['']` → `[]` (hoặc theo lựa chọn của chủ ở B1) và ghi nguồn `_csv.c` `START_RECORD`/`EAT_CRNL` cạnh câu đó.\n\n**B3 — A10 (target=artifact): bảng §9 cột \"Hiện trạng\" chứa giá trị suy luận chưa chạy, 2/3 giá trị sai.**\n`src/export.py:3` chỉ xoá code point > U+007F, giữ ASCII. Nên ca 2 `'Hồ, sơ'` → `'H, s'` → `'\"H, s\"\\r\\n'` (dấu phẩy còn), ca 3 `'Sơ \"đồ\"'` → `'S \"o\"'` → `'\"S \"\"o\"\"\"\\r\\n'`. Bảng ghi `'H s\\r\\n'` cho cả ca 1, 2, 3; nhãn \"(chưa chạy)\" chỉ đặt ở ca 9 và `export(123)`, không phủ dòng này. Hệ quả: người dùng đọc sai hiện trạng 2/3 ca khi quyết định. Sửa: đổi 2 giá trị theo trên, hoặc gắn \"(chưa chạy)\" vào tiêu đề cột.\n\n## Ghi chú không chặn\n\n- **N1**: nên dùng `io.StringIO(export(v), newline='')` trong công thức §2. Đã kiểm: với record một field, `StringIO` mặc định (`newline='\\n'`) vẫn đúng cho ca 6/7 vì `IN_QUOTED_FIELD` nuốt EOL; nhưng docs `csv.reader` yêu cầu `newline=''` và `src/export.py:4` đang dùng vậy. Không phải lỗi.\n- **N2**: ca 9 `\\x00` \"không quote\" là **đúng** theo `join_append_data`; giữ nhãn \"chưa chạy\" là phù hợp.\n- **N3 (A9)**: đã xác nhận phần \"Phương án và đánh đổi\" không còn. Về `<700 từ`: artifact dài 4747 ký tự, ước lượng ~800–950 từ — **UNVERIFIED**, tôi không chạy được `wc -w`; main nên chạy `wc -w .plans/work/8f52253a1d76503d3ea0/w-f6b3ccd1b6/D1/produce/v2-a-d183097a85a6415c8f3198a069ad65d2.md`.\n- **N4**: dialect `excel` (`,` / `\"` / `doublequote=True` / `QUOTE_MINIMAL` / `lineterminator='\\r\\n'`) đã đối chiếu `Lib/csv.py` 3.13 và docs 3.14; fixture không pin phiên bản Python.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"src/export.py:3 encode('ascii','ignore'), tests/test_export.py:4, docs/source.md:1 đã mở và khớp; baseline được ghi là quan sát của main, không phải claim của node\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§1 định nghĩa str thuần / 1 field chứa , \\\" \\\\n \\\\r \\\\r\\\\n / rỗng; ma trận ca 1–8 phủ cả hai dạng\"},{\"id\":\"A3\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"B2: §6 + dòng 8 khẳng định [''], _csv.c START_RECORD/EAT_CRNL trả []\"},{\"id\":\"A4\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"B1: nguồn chính thức bác bỏ tiền đề khứ hồi [input] cho chuỗi rỗng; main sửa item (2)/(6) hoặc A4, không viết lại artifact đúng dữ kiện\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§9 nêu đúng ca 1,2,3 và export(123) là ĐỔI, 4–8 không đổi; lỗi giá trị minh họa xử lý ở B3\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục tiêu + Vị trí tác động: chỉ src/export.py:3 và tests/test_export.py, 'không tạo path mới'\"},{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§8 và §Nghiệm thu: 'không khẳng định test sẽ pass', baseline 1 failed ghi là quan sát đã chạy từ main\"},{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Dòng 2 ma trận: 'Hồ, sơ' -> '\\\"Hồ, sơ\\\"\\\\r\\\\n' -> ['Hồ, sơ'] đúng như yêu cầu REVISION 2\"},{\"id\":\"A9\",\"status\":\"unverified\",\"target\":\"artifact\",\"evidence\":\"Đã xác minh phần 'Phương án và đánh đổi' bị bỏ; đếm <700 từ chưa máy kiểm được (không terminal), ước lượng 4747 ký tự ~800–950 từ, cần `wc -w`\"},{\"id\":\"A10\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"B3: §9 cột 'Hiện trạng' ca 2/3 sai ('H s\\\\r\\\\n' thay vì '\\\"H, s\\\\r\\\\n\\\"' và '\\\"S \\\"\\\"o\\\"\\\"\\\\r\\\\n\\\"') và không gắn nhãn chưa chạy\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đúng loại thiết kế hợp đồng hàm thuần, không UI/API; hợp đồng/lỗi/phạm vi thống nhất, trừ mâu thuẫn nội tại ở ca chuỗi rỗng đã tính ở A3/A4\"}]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 829,
+      "finalHash": "707eaed8309b6d690dcac33959ec2ecf847eb8ff9e5115eda2de30266aa5d2b1",
+      "adjudication": "Reviewer đúng về before-output comma/quote khác baseline; sai khi bỏ nhánh writer single-empty forcequote và biến finding thành criterion exclude empty. Word length unverified nên gate không được pass."
+    },
+    {
+      "index": 5,
+      "childId": "b388465666204e8e880b844678d60869",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "# HỢP ĐỒNG `export(value) -> str` (CSV một dòng, một trường)\n\n## Mục tiêu và phạm vi\n\nChỉ thiết kế, **không sửa code**. Ranh giới: `docs/source.md`, `src/export.py`, `tests/test_export.py` (3 file duy nhất trong workspace — `codebase_glob **/*`). Không UI, không API, không endpoint, không file mới.\n\n**Hiện trạng (đã đọc):** `src/export.py:3` chạy `value.encode('ascii', errors='ignore').decode()` → mọi ký tự > U+007F bị **xoá vĩnh viễn**, vi phạm `docs/source.md:1` (\"giữ nguyên tiếng Việt\"). Baseline đã chạy: `python -m pytest -q` → **1 failed in 0.15s**, `test_unicode` (`tests/test_export.py:4`): `['H s'] != ['Hồ sơ']`. Không phát đoạn nào khác pass.\n\n## Cấu trúc — hợp đồng dữ liệu\n\n`export(value: str) -> str`\n\n1. **Input**: `str` Unicode, 1 trường logic, bất kỳ ký tự nào (kể cả `,` `\"` `\\n` `\\r\\n`). Miền con trừ: **không** nhận `bytes`/`None`/số.\n2. **Output**: chuỗi `str` của **đúng 1 dòng CSV, 1 trường**, dialect `excel` mặc định (`csv.writer`, `delimiter=','`, `quotechar='\"'`, `lineterminator='\\r\\n'`), **luôn kết thúc `'\\r\\n'`**, **không BOM, không `str.encode` ở đâu cả**.\n3. **Lỗi**: `value` không phải `str` → `TypeError` với thông điệp nêu rõ `export() expects str, got <type>`. **Không tự ép kiểu.**\n4. **Khứ hồi (bất biến kiểm chứng)**: đọc lại bằng `csv.reader(io.StringIO(export(v), newline=''))`.\n   - `v != ''` → `next(csv.reader(io.StringIO(export(v), newline=''))) == [v]` (đúng 1 phần tử, **bằng chính `v`**).\n   - `v == ''` → `next(csv.reader(io.StringIO(export(v), newline='')), None) is None`. **KHÔNG dùng `['']`** (mục 6).\n5. **Unicode**: không `ascii`-encode; giữ nguyên mọi ký tự.\n6. **Escaping**: để `csv.writer` mặc định quyết định — chỉ quote khi field chứa delimiter, `quotechar`, `\\r` hoặc `\\n`; nháy kép bên trong nhân đôi.\n\n## Luồng và lỗi\n\n**Chuỗi rỗng:** `export('') == '\\r\\n'`, **không quote**. Lý do kỹ thuật: `Modules/_csv.c` — `parse_process_char` ở `START_RECORD` với `c=='\\r'` chuyển `EAT_CRNL`; ở `EAT_CRNL` với `c==EOL` chỉ set `state=START_RECORD` mà **không** gọi `parse_save_field`; `Reader_iternext` trả list rỗng từ `parse_reset`. `Lib/csv.py` `DictReader.__next__` có `while row == []` để bỏ dòng trắng. Vì vậy bất biến khứ hồi chỉ áp dụng cho `v != ''`; test cho `v == ''` phải dùng `next(..., None) is None`.\n\n**Newline nhúng trong input:** `'\\n'`/`'\\r\\n'` trong `v` bị quote, **giữ nguyên byte-for-byte** trong chuỗi CSV; dòng vật lý nhiều dòng nhưng `csv.reader` vẫn trả đúng 1 record.\n\n**Ma trận ca kiểm chứng** (mỗi dòng = 1 test khứ hồi, chạy `python -m pytest -q`):\n\n| # | `v` | `export(v)` | Khứ hồi |\n|---|---|---|---|\n| 1 | `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `== ['Hồ sơ']` |\n| 2 | `'Hồ, sơ'` | `'\"Hồ, sơ\"\\r\\n'` | `== ['Hồ, sơ']` |\n| 3 | `'Sơ \"đồ\"'` | `'\"Sơ \"\"đồ\"\"\"\\r\\n'` | `== ['Sơ \"đồ\"']` |\n| 4 | `''` | `'\\r\\n'` | `next(..., None) is None` |\n| 5 | `'a\\nb'` | `'\"a\\nb\"\\r\\n'` | `== ['a\\nb']` |\n| 6 | `'a\\r\\nb'` | `'\"a\\r\\nb\"\\r\\n'` | `== ['a\\r\\nb']` |\n| 7 | `'a\"b,c'` | `'\"a\"\"b,c\"\\r\\n'` | `== ['a\"b,c']` |\n| 8 | `123` | — | `pytest.raises(TypeError)` |\n\n**So sánh hiện trạng (suy luận, chưa chạy)** — do `src/export.py:3`:\n\n| # | `v` | `export(v)` hiện trạng | Đổi? |\n|---|---|---|---|\n| 1 | `'Hồ sơ'` | `'H s\\r\\n'` → `['H s']` | **Đổi** — mất dấu, đây là test fail |\n| 2 | `'Hồ, sơ'` | `'\"H, s\"\\r\\n'` → `['H, s']` | **Đổi** — dấu phẩy ASCII còn, dấu mất |\n| 3 | `'Sơ \"đồ\"'` | `'\"S \"\"o\"\"\\r\\n\"'` → `['S \"o\"']` | **Đổi** — quote vẫn đúng, dấu mất |\n| 4 | `''` | `'\\r\\n'` | Không |\n| 5–7 | ASCII | như hợp đồng | Không |\n| 8 | `123` | `AttributeError` (hiện tại) | **Đổi** → `TypeError` |\n\nChỉ ca 1, 2, 3, 8 đổi; nguyên nhân duy nhất của 1–3 là `errors='ignore'`, của 8 là thiếu chốt kiểu.\n\n## Vị trí tác động\n\n- `docs/source.md:1` — đã đọc, giữ nguyên (nó là nguồn yêu cầu, không sai).\n- `src/export.py:3` — dự kiến sửa (bỏ dòng `encode/decode`, thêm chốt `TypeError`). **Chưa đọc bytecode CPython nào trong phiên này** → các trích dẫn `Modules/_csv.c`/`Lib/csv.py` là dữ kiện tham chiếu đã đối chiếu từ yêu cầu, **chưa chạy trong sandbox**.\n- `tests/test_export.py:4` — giữ `test_unicode`, bổ sung ca 2–8.\n- Không tạo file nào ngoài 3 file trên.\n\n## Phương án và đánh đổi\n\n- **`'\"\"\\r\\n'` cho chuỗi rỗng — KHÔNG chọn**: lệch dialect mặc định (`csv.writer` không quote field rỗng) và phá vỡ bất biến 1 trường cho mọi `v`.\n- **`lineterminator='\\n'` — KHÔNG chọn**: lệch dialect `excel`; giữ `\\r\\n`.\n- **Chuẩn hóa `\\r\\n`→`\\n` trong input — KHÔNG chọn**: vi phạm \"khứ hồi bằng chính `v`\".\n- **Ép `str(value)` — KHÔNG chọn**: che lỗi kiểu, thay bằng `TypeError`.\n\n## Nghiệm thu và điều chưa rõ\n\n- Kiểm chứng: 8 test trong bảng; chạy `python -m pytest -q`. **Tôi không chạy pytest** (không terminal) — baseline `1 failed` là quan sát đã cung cấp; **không khẳng định test nào pass**, mọi kết quả trong bảng là hợp đồng thiết kế.\n- Rủi ro: xung đột giữa `type(value) is not str` và `str` subclass — chấp nhận `isinstance`.\n- **Quyết định chờ người dùng**: (1) chữ ký `TypeError` cứng hay theo PEP hơn; (2) có giữ `\\r\\n` khi `v` chứa `\\r` lẻ hay chuẩn hóa — tôi đề xuất giữ nguyên theo `csv.writer`.\n\n## Knowledge requests\n- none",
+      "finalWordCountWhitespace": 877,
+      "finalHash": "3b0507dc1e0dcfb3c6f1d64a103bd32cd053adf44493f8171f3e90ee35e70e56",
+      "adjudication": "Producer theo criterion mới sai, còn tự biến reader blank [] thành next(..., None) is None sai; baseline quote string ca3 malformed. Declares C references not opened by self. Lỗi partial inherited, partial independent."
+    },
+    {
+      "index": 6,
+      "childId": "b8741a254911455eabc46ad561f80096",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 5,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Đã kiểm\n\n- Đọc **toàn bộ** snapshot D1 produce v3 (`a-8b01f161f42141319e1d2ac780a5cb92`, 5084 ký tự, `coverageComplete=true`, `nextOffset=null`).\n- Đọc gốc fixture: `src/export.py:3` = `value.encode('ascii', errors='ignore').decode()`; `tests/test_export.py:4` = assert `['Hồ sơ']`; `docs/source.md:1` = \"giữ nguyên tiếng Việt\". `codebase_glob **/*` → đúng 3 file, đúng như artifact nêu.\n- Mở nguồn chính thức: `Lib/csv.py` và `Modules/_csv.c` (CPython 3.12, raw.githubusercontent.com/python/cpython/3.12). Xác nhận: `excel` dialect `delimiter=','`, `quotechar='\"'`, `doublequote=True`, `lineterminator='\\r\\n'`, `quoting=QUOTE_MINIMAL`; `parse_process_char` START_RECORD: `else if (c == '\\n' || c == '\\r') { self->state = EAT_CRNL; break; }`; EAT_CRNL: `else if (c == EOL) self->state = START_RECORD;` (không gọi `parse_save_field`); `DictReader.__next__` có `while row == []:`; `join_append` chỉ quote field rỗng khi `delimiter == ' ' && skipinitialspace` → `export('')=='\\r\\n'` đúng.\n- **NOT RUN**: phiên review không có terminal, không chạy `pytest` và không đếm được từ. Các kết luận dưới đây suy từ source CPython đã mở + fixture đã đọc.\n\n## Vấn đề chặn\n\n**B1 (high) — Bất biến khứ hồi cho `v == ''` trong §4/§6 và ma trận dòng 4 là SAI; test viết theo đó sẽ đỏ.**\n\n- Yêu cầu: A4 (và item (2)/(6)) bắt buộc `next(csv.reader(io.StringIO(export(''), newline='')), None) is None`.\n- Bằng chứng quan sát: `Modules/_csv.c` `Reader_iternext` gọi `parse_reset` (`PyList_New(0)`) ở đầu **mỗi** lần gọi, vòng `do {...} while (self->state != START_RECORD)` kết thúc ngay với input `'\\r\\n'`, rồi `fields = self->fields; self->fields = NULL; return fields;` — tức `next()` **đầu tiên** trả `[]`, không ném StopIteration. `next(reader, None)` vì thế trả `[]`, mà `[] is None` là False.\n- Bằng chứng phản bác đã xét: (i) Nếu blank line bị coi là hết record thì `DictReader.__next__` (`Lib/csv.py`: `row = next(self.reader)` rồi `while row == []: row = next(self.reader)`) sẽ thừa hoặc lỗi `zip(fieldnames, None)` — vòng lặp đó chỉ có nghĩa khi reader trả `[]` cho dòng trắng và chỉ StopIteration khi hết input; (ii) StopIteration chỉ xảy ra ở nhánh `PyIter_Next(...) == NULL` (hết input). Cả hai đều bác bỏ cách hiểu \"trả None\".\n- Hệ quả cụ thể: người triển khai làm đúng §4 sẽ viết `assert next(csv.reader(io.StringIO(export(''), newline='')), None) is None` → FAIL, dù `export('')=='\\r\\n'` đúng; lúc đó dễ quy nhầm nguyên nhân về `src/export.py` và phá vỡ yêu cầu \"luôn kết thúc `'\\r\\n'`\". Thiết kế hiện không build được như một test màu xanh cho ca 4.\n- Sửa tối thiểu: đổi cột khứ hồi dòng 4 (và §4, §6) thành `next(csv.reader(io.StringIO(export(''), newline=''))) == []` (tương đương `list(csv.reader(...)) == [[]]`); giữ nguyên `export('') == '\\r\\n'`, giữ `KHÔNG dùng ['']`, giữ lý do `START_RECORD/EAT_CRNL` + `DictReader`. `next(..., None) is None` chỉ đúng nếu `export('') == ''` — không được chọn. **Đây là lỗi của tiêu chí A4 (tiền đề kỹ thuật bị nguồn chính thức bác), main cần sửa A4 chứ không bắt producer nhắc lại.**\n\n## Ghi chú không chặn\n\n1. **Độ dài (A10)**: không có word counter trong phiên review; ước lượng theo tỉ lệ ký tự/từ của chính văn bản dao động ~680–1000 từ cho 5084 ký tự (v2 = 4747 ký tự đã được ước 800–950 từ). Chưa đủ bằng chứng để kết luận vượt 700 từ → main nên đếm bằng công cụ rồi cắt nếu cần.\n2. `tests/test_export.py:4` hiện dùng `io.StringIO(export(...))` **không** có `newline=''`, khác quy tắc hợp đồng; khi thêm ca 6/7 (`'a\\r\\nb'`, `'a\"b,c'`) phải theo `newline=''` — artifact đã nêu quy tắc, chỉ nhắc để implementer không copy nguyên dòng test cũ.\n3. §Nghiệm thu liệt kê \"chữ ký TypeError cứng hay theo PEP\" là quyết định chờ user, trong khi §Cấu trúc đã chốt cứng `export() expects str, got <type>`. Ma trận dòng 8 chỉ assert `pytest.raises(TypeError)` nên không vỡ, nhưng nên thống nhất một câu chữ.\n4. Bảng §9 tính đúng từng ca (ca 2 `'\"H, s\"\\r\\n'`, ca 3 `'\"S \"\"o\"\"\\r\\n\"'`) và ca 8 `AttributeError` (vì `123.encode` không tồn tại) — đã đối chiếu `src/export.py:3`; nhãn \"(suy luận, chưa chạy)\" đã cóở tiêu đề cột.\n\n```json\n{\"coverage\": [\n {\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Artifact §Mục tiêu: src/export.py:3 encode('ascii', errors='ignore').decode() và baseline '1 failed in 0.15s' — đã đối chiếu trực tiếp file fixture; docs/source.md:1 và tests/test_export.py:4 khớp số dòng.\"},\n {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Ma trận ca 1-2 (str thuần, dấu phẩy), ca 3/7 (nháy kép), ca 5/6 (newline nhúng) phủ đủ 2 dạng đầu vào; khớp yêu cầu (1).\"},\n {\"id\": \"A3\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§Cấu trúc mục 5/6 + §Luồng: Unicode không encode, quote khi có delimiter/quotechar/CR/LF, luôn kết thúc '\\\\r\\\\n', export('')=='\\\\r\\\\n' — đều nêu kết quả mong đợi cụ thể, đối chiếu excel dialect trong Lib/csv.py và join_append trong _csv.c.\"},\n {\"id\": \"A4\", \"status\": \"revise\", \"target\": \"criterion\", \"evidence\": \"Tiền đề kỹ thuật của A4 bị nguồn chính thức bác: Modules/_csv.c Reader_iternext trả list rỗng từ parse_reset ngay ở next() đầu cho input '\\\\r\\\\n' (StopIteration chỉ khi PyIter_Next hết input), và Lib/csv.py DictReader.__next__ có 'while row == []' chứng minh dòng trắng trả []. Vì vậy next(reader, None) is None là False. Main sửa A4 thành next(csv.reader(io.StringIO(export(''), newline=''))) == []; phần 'trả về []' và 'KHÔNG dùng [\\\\'\\\\']' của A4 giữ nguyên, artifact đúng dữ kiện.\"},\n {\"id\": \"A5\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§So sánh hiện trạng: ca 1/2/3 đổi do errors='ignore', ca 8 đổi AttributeError→TypeError, ca 4/5-7 không đổi — khớp yêu cầu (9).\"},\n {\"id\": \"A6\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§Vị trí tác động chỉ nêu docs/source.md, src/export.py, tests/test_export.py và 'Không tạo file nào ngoài 3 file trên'; không có UI/API/endpoint.\"},\n {\"id\": \"A7\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§Nghiệm thu: 'Tôi không chạy pytest (không terminal) ... không khẳng định test nào pass'.\"},\n {\"id\": \"A8\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§Luồng nêu export('')=='\\\\r\\\\n' không quote, cơ chế START_RECORD/EAT_CRNL + DictReader (đã mở _csv.c và Lib/csv.py xác nhận), và phương án '\\\"\\\"\\\\r\\\\n' bị loại kèm lý do.\"},\n {\"id\": \"A9\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Tiêu đề cột 'export(v) hiện trạng (suy luận, chưa chạy)'; ca 2 -> '\\\"H, s\\\"\\\\r\\\\n', ca 3 -> '\\\"S \\\"\\\"o\\\"\\\"\\\\r\\\\n\\\"' khớp yêu cầu (b).\"},\n {\"id\": \"A10\", \"status\": \"unverified\", \"target\": \"artifact\", \"evidence\": \"Phiên review không có terminal nên không đếm được từ; ước lượng 680–1000 từ cho 5084 ký tự (v2 4747 ký tự đã được ước 800–950), chưa đủ bằng chứng kết luận vượt 700 từ — main cần đếm bằng công cụ.\"},\n {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đúng loại thiết kế hợp đồng hàm, thống nhất input/output/lỗi/phạm vi người dùng, không dựng luồng UI/API; mâu thuẫn duy nhất về ca rỗng đã quy cho tiêu chí A4 (xem finding B1).\"}\n]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 1083,
+      "finalHash": "109c3cdb46b2fcffad98e90cb37be268541d1179a6a52b723e2a9b884f2a83a8",
+      "adjudication": "Reviewer bác next(..., None) đúng cho blank CSV nhưng vẫn giữ writer empty sai; pass before quoted baseline malformed. Finding TypeError question/code conflict có lý về sự thống nhất, không chứng minh tất cả nội dung đúng."
+    },
+    {
+      "index": 7,
+      "childId": "183b6d9241154307a56bdcd96b44c01e",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc đủ 3 file. Dưới đây là thiết kế hợp đồng (revision 4).\n\n## Mục tiêu và phạm vi\n\nThiết kế hợp đồng `export(value) -> str` đúng theo `docs/source.md:1`: chỉ CSV, giữ tiếng Việt, một chuỗi vào – một dòng CSV hợp lệ ra. Chỉ thiết kế, không sửa code, không UI/API.\n\nHiện trạng: `src/export.py:3` chạy `value.encode('ascii', errors='ignore').decode()` nên `'Hồ sơ'` → `'H s'`. Baseline do main quan sát: `python -m pytest -q` → **1 failed in 0.15s**, `tests/test_export.py:4` báo `['H s'] != ['Hồ sơ']`. Tôi không tự chạy lệnh được (sandbox không có terminal), không khẳng định test nào pass.\n\n## Cấu trúc\n\nChữ ký đề xuất: `def export(value: str) -> str`.\n\n1. **Miền input**: mọi `str` Unicode, kể cả chuỗi đã chứa ký tự CSV đặc biệt `,` `\"` `\\n` `\\r`. Không nhận số/list.\n2. **Output**: đúng một dòng CSV một trường, luôn kết thúc `\\r\\n` (dialect `excel` mặc định: `delimiter=','`, `quotechar='\"'`, `doublequote=True`, `quoting=QUOTE_MINIMAL`).\n3. **Unicode**: bỏ hẳn `encode/decode` ascii; đưa thẳng `str` vào `csv.writer`, không mã hoá, không bỏ ký tự nào.\n4. **Escaping**: để `csv.writer` tự quote; dấu phẩy/nháy kép/newline kích hoạt quote, nháy kép bên trong nhân đôi; `escapechar=None`.\n5. **Newline**: `\\n`/`\\r` nhúng trong input vẫn hợp lệ, không tách thành nhiềi bản ghi logic — reader trả lại đúng 1 trường.\n6. **Chuỗi rỗng**: `export('') == '\\r\\n'`, không quote. Đọc lại: `next(csv.reader(io.StringIO(export(''), newline=''))) == []` (danh sách rỗng, **không phải** `['']`, **không phải** None, **không dùng** `next(..., None) is None`).\n7. **Lỗi**: `value` không phải `str` → `TypeError(\"export() expects str, got {type(value).__name__}\")`, không tự ép kiểu.\n\n## Luồng và lỗi\n\n- `v` khác rỗng: `next(csv.reader(io.StringIO(export(v), newline=''))) == [v]`.\n- `v == ''`: `next(csv.reader(io.StringIO(export(''), newline=''))) == []` — tương đương `list(csv.reader(...)) == [[]]`.\n- **Lý do kỹ thuật ca rỗng**: `writerow([''])` không phát ký tự (QUOTE_MINIMAL) nên chỉ còn lineterminator. Khi đọc, `Modules/_csv.c` `Reader_iternext` gọi `parse_reset` (`PyList_New(0)`) ở đầu mỗi lần; `'\\r'` ở START_RECORD chuyển EAT_CRNL, gặp EOL chỉ set `state=START_RECORD` nên **không** gọi `parse_save_field`; hàm trả `self->fields` tức `[]`. StopIteration chỉ xảy ra ở nhánh `PyIter_Next` trả NULL (hết input). `Lib/csv.py` `DictReader.__next__` có `while row == []` để bỏ dòng trắng.\n\n**Ma trận kiểm chứng** (mỗi dòng = một test hồi quy, chạy `python -m pytest -q`):\n\n| # | input | CSV kỳ vọng | `csv.reader` |\n|---|-------|-------------|--------------|\n| 1 | `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` |\n| 2 | `'Hồ sơ, 2024'` | `'\"Hồ sơ, 2024\"\\r\\n'` | `['Hồ sơ, 2024']` |\n| 3 | `'Hồ \"sơ\"'` | `'\"Hồ \"\"sơ\"\"\"\\r\\n'` | `['Hồ \"sơ\"']` |\n| 4 | `''` | `'\\r\\n'` | `[]` |\n| 5 | `'dòng 1\\ndòng 2'` | `'\"dòng 1\\ndòng 2\"\\r\\n'` | `['dòng 1\\ndòng 2']` |\n| 6 | `'a\\rb'` | `'\"a\\rb\"\\r\\n'` | `['a\\rb']` |\n| 7 | `'Hồ sơ\\n'` | `'\"Hồ sơ\\n\"\\r\\n'` | `['Hồ sơ\\n']` |\n| 8 | `123` | — | `pytest.raises(TypeError, match=r\"export\\(\\) expects str, got int\")` |\n\n**Lưu ý cho implementer**: mọi test phải mở `io.StringIO(..., newline='')`. Dòng cũ `tests/test_export.py:4` thiếu `newline=''` — không copy nguyên văn khi thêm ca 5/6/7.\n\n**Đối chiếu hiện trạng ↔ sau hợp đồng**:\n\n| Ca | Hiện tại (`src/export.py:3`) | Sau hợp đồng | Lý do |\n|----|---------------------------|---------------|-------|\n| 1, 5, 7 | Fail (mất dấu: `'H s'`) | Đạt | bỏ ascii-ignore |\n| 2, 3, 6 | Fail (mất dấu trong trường) | Đạt | giữ Unicode + quote của writer |\n| 4 | `'\\r\\n'` → `[]` | không đổi | đã khớp lý do START_RECORD/EAT_CRNL |\n| 8 | `AttributeError` từ `bytes` | `TypeError` chuẩn hoá | chốt messageở mục 7 |\n\n## Vị trí tác động\n\nĐã đọc, tồn tại: `docs/source.md`, `src/export.py`, `tests/test_export.py`. Dự kiến sửa: `src/export.py` (bỏ dòng 3) và `tests/test_export.py` (thêm ca 1–8). Không tạo file mới.\n\n## Phương án và đánh đổi\n\nPhương án thay thế **không chọn**: ghi `'\"\"\\r\\n'` cho chuỗi rỗng để reader trả `['']`; bị loại vì `docs/source.md:1` yêu cầu dòng hợp lệ và sẽ phá `DictReader` (bỏ dòng trắng).\n\n## Nghiệm thu và điều chưa rõ\n\nNghiệm thu: chạy `python -m pytest -q`, kỳ vọng 8 ca trên xanh sau khi áp dụng hợp đồng — hiện **chưa** xác nhận. Rủi ro: khác biệt `csv` giữa các bản CPython ở edge case `\\r` đơn lẻ; ca 6 chốt hành vi mong muốn, không phải hành vi đã chạy.\n\n## Knowledge requests\n- none",
+      "finalWordCountWhitespace": 728,
+      "finalHash": "87cba35bbfb98da8c7f8b700240e6a0d8c5bee2804891763de8c3a9b4ad7c8ba",
+      "adjudication": "Producer đổi [] theo main, vẫn empty writer sai; falsely says ASCII CR drops and current int error from bytes; technical alternative claims empty quotes break DictReader wrong."
+    },
+    {
+      "index": 8,
+      "childId": "2503183d9c834c1185cb719022f1a9cd",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 6,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc đủ snapshot (`allAssignedArtifactsRead=true`, `coverageComplete=true`) và đối chiếu 3 file fixture + nguồn CPython chính thức.\n\n## Vấn đề chặn\n\n### B1 — `export('') == '\\r\\n'` \"không quote\" KHÔNG phải hành vi của `csv.writer`; ma trận dòng 4 và bảng so sánh sai ca hiện trạng\n\n- **Yêu cầu bị vi phạm**: A3 (quy tắc chuỗi rỗng nêu rõ, không mơ hồ), A5 (khác biệt source lỗi ↔ hành vi sau hợp đồng), C1 (thống nhất hợp đồng với phạm vi triển khai), và yêu cầu nhiệm vụ (8)/(9).\n- **Bằng chứng quan sát**: artifact §Cấu trúc mục 6 khẳng định `export('') == '\\r\\n'` \"không quote\", lý do \"`writerow([''])` không phát ký tự (QUOTE_MINIMAL)\"; ma trận dòng 4 để CSV kỳ vọng `'\\r\\n'`; bảng đối chiếu dòng ca 4 ghi hiện tại `'\\r\\n'` → `[]`, \"không đổi\"; §Vị trí tác động nói chỉ \"bỏ dòng 3\" của `src/export.py`.\n- **Bằng chứng bác bỏ đã kiểm**: `Lib/test/test_csv.py` (CPython main, đã mở https://raw.githubusercontent.com/python/cpython/main/Lib/test/test_csv.py): `test_write_empty_fields` có `self._write_test([''], '\"\"')` và `self._write_test((), '')`; `_write_test` assert `fileobj.read() == expect + writer.dialect.lineterminator`. ⇒ `writerow([''])` = `'\"\"\\r\\n'`; chỉ `writerow([])` mới = `'\\r\\n'`. Cơ chế trong `Modules/_csv.c` `csv_writerow_lock_held`: `if (self->num_fields > 0 && self->rec_len == 0) { ... self->num_fields--; if (!join_append(self, NULL, 1)) return NULL; }` — `quoted=1` nên phát `\"\"` dù `QUOTE_MINIMAL`.\n- **Bằng chứng phản bác đã cân**: phía **reader** thì artifact ĐÚNG — tôi đã mở `Modules/_csv.c` xác nhận `parse_reset` (`PyList_New(0)`), `START_RECORD` gặp `\\r` → `EAT_CRNL`, `EAT_CRNL` gặp EOL chỉ `state=START_RECORD` (không `parse_save_field`), vòng `do/while` thoát ngay rồi `return self->fields` = `[]`; `test_read_oddinputs`: `_read_test([''], [[]])`; `Lib/csv.py` `DictReader.__next__` có `while row == []`. Nhưng điều đó chỉ đúng **nếu** writer phát `'\\r\\n'`; mà writer mặc định phát `'\"\"\\r\\n'`, và `'\"\"\\r\\n'` đọc lại cho `['']`. Hai phần mâu thuẫn trong chính artifact.\n- **Hệ quả cụ thể**: implementer làm đúng \"chỉ bỏ dòng 3\" sẽ nhận `'\"\"\\r\\n'`; test ma trận dòng 4 FAIL ngay. Nếu họ tự thêm special-case thì đó là quyết định thiết kế **chưa có trong hợp đồng**. Ngoài ra bảng đối chiếu đánh dấu nhầm ca 4 là ca **không đổi**, trong khi đây chính là ca duy nhất buộc phải đổi; và §Phương án gọi `'\"\"\\r\\n'` là phương án \"trái\" trong khi đó mới là output stock của `csv.writer`.\n- **Sửa tối thiểu**: giữ nguyên assert `next(csv.reader(io.StringIO(export(''), newline=''))) == []` (đúng, A4/A8 không đổi), nhưng (i) thêm vào §Cấu trúc mục 6/§Luồng: với `value == ''` phải ghi **bản ghi rỗng** (`csv.writer(s).writerow([])`) chứ không phải `writerow([''])`, nêu đúng nhánh `num_fields>0 && rec_len==0` re-quote; (ii) đổi ma trận dòng 4: hiện trạng `'\"\"\\r\\n'` → `['']`, sau hợp đồng `'\\r\\n'` → `[]`, lý do = special-case bản ghi rỗng; (iii) sửa dòng ca 4 trong bảng đối chiếu thành **\"đổi\"**; (iv) viết lại §Phương án: `'\"\"\\r\\n'` là hành vi mặc định của writer, không phải phương án tự chế.\n\n*(Lưu ý phiên bản: tôi chỉ đối chiếu được nhánh `main` của CPython; sandbox không có tool chạy lệnh nên không xác nhận phiên bản interpreter cục bộ — đây là giới hạn đã khai, không phải finding.)*\n\n## Ghi chú không chặn\n\n1. Bảng đối chiếu dòng ca 8 ghi \"`AttributeError` từ `bytes`\" — với `src/export.py:3` và `value=123`, lỗi thật là `AttributeError: 'int' object has no attribute 'encode'`; mô tả sai lệch nhỏ, không ảnh hưởng hợp đồng.\n2. Ca 6 (`'a\\rb'`) được xếp nhóm \"mất dấu trong trường\"; hiện trạng thực tế là mất ký tự `\\r` (`'a\\rb'` → `'ab'`, `src/export.py:3`). Cột \"Lý do\" nên nói rõ.\n3. Ma trận dòng 1, 2, 3, 5, 6, 7 tôi đã kiểm lại từ `join_append_data`/`parse_process_char` và đều đúng về byte-ký-tự; §Lưu ý `tests/test_export.py:4` thiếu `newline=''` cũng đúng với file thật.\n\n```json\n{\"coverage\": [\n{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"src/export.py:3 đúng là value.encode('ascii',errors='ignore').decode(); 'Hồ sơ'->'H s'; artifact tự ghi baseline là quan sát của main và không khẳng định pass. Baseline 1 failed: NOT RUNở sandbox (không có terminal), giữ UNVERIFIED-by-me nhưng không mâu thuẫn.\"},\n{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§Cấu trúc mục 1 nêu str Unicode + ký tự , \\\" \\\\n \\\\r; ma trận dòng 2,3,5,6,7 phủ cả hai dạng.\"},\n{\"id\":\"A3\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"B1: quy tắc chuỗi rỗng nêu export('')=='\\\\r\\\\n' 'không quote' với lý do sai, không thể hiện thực bằng csv.writer mặc định.\"},\n{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§6 và §Luồng dùng đúng next(csv.reader(io.StringIO(export(''),newline=''))) == []; cấm [''], None, next(...,None) is None. Đã xác minh parse_reset/START_RECORD/EAT_CRNL trong Modules/_csv.c và _read_test([''],[[]]) trong test_csv.py.\"},\n{\"id\":\"A5\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"B1: dòng ca 4 của bảng đối chiếu ghi hiện trạng '\\\\r\\\\n'->[] và 'không đổi', sai; hiện trạng là '\\\"\\\"\\\\r\\\\n'->[''] theo test_write_empty_fields _write_test([''],'\\\"\\\"').\"},\n{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§Vị trí tác động chỉ nêu src/export.py và tests/test_export.py, 'Không tạo file mới'; không có UI/API/endpoint.\"},\n{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact nói rõ không tự chạy được lệnh, 'không khẳng định test nào pass', nghiệm thu ghi 'hiện chưa xác nhận'.\"},\n{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đúng yêu cầu REVISION 4 về dạng assert và lý do EAT_CRNL (đã mở _csv.c xác minh); lỗi cột 'CSV kỳ vọng' dòng 4 được tính ở A3/A5, không tính lại.\"},\n{\"id\":\"A9\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 7 chốt cứng 'export() expects str, got {type(value).__name__}' và ma trận dòng 8 dùng pytest.raises(TypeError, match=r'export\\\\(\\\\) expects str, got int'); §Nghiệm thu và điều chưa rõ không còn mục mở về chữ ký TypeError.\"},\n{\"id\":\"A10\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"§Lưu ý cho implementer yêu cầu io.StringIO(...,newline='') mọi test và cảnh báo không copy tests/test_export.py:4; đã mở file xác nhận dòng 4 thiếu newline=''.\"},\n{\"id\":\"A11\",\"status\":\"unverified\",\"target\":\"artifact\",\"evidence\":\"Không có word counter trong sandbox; ước tính thủ công ~690-710 từ, không chứng minh được 'chắc chắn dưới 700'. Phần có thể xác minh: đủ 9 mục bắt buộc và đúng 8 ca ma trận; chars giảm 5084 (v3) -> 4369 (v4).\"},\n{\"id\":\"C1\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"B1: loại thiết kế đúng và không có UI/API, nhưng hợp đồng (writer phát bản ghi rỗng) chưa thống nhất với phạm vi sửa được nêu (chỉ bỏ dòng 3 của src/export.py).\"}\n]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 950,
+      "finalHash": "52b8771abc81c7a46b2e5c0ef8508cd79390f5589116a3ef8da0b0332c470bbe",
+      "adjudication": "Reviewer mở full C writer branch + test_write_empty_fields, xác nhận stock empty quotes đúng. Nhưng đề nghị special-case [] để giữ criterion sai thay vì bác criterion; auxiliary claim ASCII CR drops sai. Review tốt một finding không bù lỗi khác."
+    },
+    {
+      "index": 9,
+      "childId": "48771f5d38a248b6a195d07a20e2f132",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "Đã đọc xong 3 file fixture (workspace chỉ có đúng 3 file: `src/export.py`, `docs/source.md`, `tests/test_export.py` — `codebase_glob` xác nhận; `codebase_grep \"_write_test\"` không có kết quả nên **không** đọc được `Lib/test/test_csv.py` hay `Modules/_csv.c` trong sandbox này).\n\n## Mục tiêu và phạm vi\n\nĐặc tả hợp đồng hàm thuần `export(value: str) -> str`. Không UI, không API server, không file ngoài `src/export.py` + `tests/test_export.py`.\n\n**Hiện trạng đã đọc (mọi khẳng định kèm file:line):**\n- `docs/source.md:2` — chỉ CSV, giữ nguyên tiếng Việt, input một chuỗi, output một dòng hợp lệ, trường có phẩy/newline phải đọc lại đúng bằng `csv.reader`.\n- `src/export.py:3` — `value.encode('ascii', errors='ignore').decode()` **xoá mọi ký tự ngoài ASCII**.\n- `src/export.py:4-6` — `io.StringIO(newline='')` + `csv.writer(s).writerow([value])`, dialect `excel` mặc định, trả `s.getvalue()`.\n- `tests/test_export.py:4` — khứ hồi duy nhất: `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n- Baseline `1 failed in 0.15s` là **quan sát của main được chủ nộp**; node này không có terminal nên không tự chạy lại, cũng **không** khẳng định test sẽ pass.\n\n## Cấu trúc — hợp đồng dữ liệu\n\n```python\ndef export(value: str) -> str   # 1 trường, 1 dòng CSV\n```\n\n1. **Miền input**: mọi `str` Unicode; bao gồm chuỗi 1 trường chứa `,`, `\"`, `\\n`, `\\r`, chuỗi rỗng.\n2. **Output**: đúng một bản ghi CSV một trường, dialect `excel` mặc định (`delimiter=','`, `quotechar='\"'`), **luôn kết thúc `'\\r\\n'`**.\n3. **Unicode**: không encode/decode; giữ nguyên mọi ký tự.\n4. **Escaping**: `QUOTE_MINIMAL` của `csv.writer`; `,`/`\"`/`\\r`/`\\n` kích hoạt quote, `\"` bên trong escape bằng nhân đôi.\n5. **Bất biến khứ hồi ĐỒNG NHẤT cho MỌI `v`, kể cả rỗng** — không dùng `next(..., None) is None`:\n   `next(csv.reader(io.StringIO(export(v), newline=''))) == [v]`\n6. **Chuỗi rỗng**: `export('') == '\"\"\\r\\n'`, đọc lại ra `['']`. Đây là hành vi mặc định của writer (`writerow([''])` phát bản ghi rỗng `\"\"`), **không phải phương án tự chọn**, không cần special-case.\n7. **Lỗi**: `TypeError` với thông điệp rõ khi `value` không phải `str`; không tự ép kiểu.\n\n*Dữ kiện (6) do chủ nộp ở vòng này, tôi không mở được nguồn CPython trong sandbox.* Nếu ai đó cố ghi **dòng trống trần**, `csv.reader` trả `[]` — nằm ngoài hợp đồng này.\n\n## Luồng và lỗi — ma trận kiểm chứng (mỗi ca = 1 test khứ hồi, chạy `python -m pytest -q`)\n\n| # | input `v` | `export(v)` kỳ vọng | `csv.reader` | test |\n|---|---|---|---|---|\n| 1 | `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` | test_unicode |\n| 2 | `'a,b'` | `'\"a,b\"\\r\\n'` | `['a,b']` | test_comma |\n| 3 | `'a\"b'` | `'\"a\"\"b\"\\r\\n'` | `['a\"b']` | test_quote |\n| 4 | `''` | `'\"\"\\r\\n'` | `['']` | test_empty |\n| 5 | `'a\\nb'` | `'\"a\\nb\"\\r\\n'` | `['a\\nb']` | test_newline |\n| 6 | `'a\\rb'` | `'\"a\\rb\"\\r\\n'` | `['a\\rb']` | test_cr |\n| 7 | `'Hồ, \"sơ\"\\n'` | `'\"Hồ, \"\"sơ\"\"\\n\"\\r\\n'` | giống `v` | test_combo |\n| 8 | `123` | ném `TypeError` | — | test_type_error |\n\n## Đối chiếu hiện trạng ↔ sau hợp đồng\n\n| # | hiện trạng (`src/export.py:3`) | sau hợp đồng | đổi? |\n|---|---|---|---|\n| 1 | `'Hs\\r\\n'` → `['Hs']` ✗ | `'Hồ sơ\\r\\n'` → `['Hồ sơ']` | **Đổi** (mất dấu tiếng Việt) |\n| 2-3 | `'a,b\\r\\n'` → `['a','b']` ✗ | `'\"a,b\"\\r\\n'` → 1 trường | **Đổi** (tách nhầm trường) |\n| 4 | `'\"\"\\r\\n'` → `['']` ✓ | không đổi | **KHÔNG đổi** |\n| 5 | `\"'a\\nb\\r\\n'\"` → `['a','b']` ✗ | 1 trường có `\\n` | **Đổi** |\n| 6 | `'a\\rb'` → `'ab\\r\\n'` (không quote) ✗ | `'\"a\\rb\"\\r\\n'` | **Đổi** (mất `\\r`) |\n| 7 | `encode(ignore)` làm hỏng, nhiều trường ✗ | khứ hồi đúng | **Đổi** |\n| 8 | `AttributeError: 'int' object has no attribute 'encode'` | `TypeError` | **Đổi** (loại lỗi) |\n\n## Vị trí tác động\n\n- `src/export.py:3` — **bỏ** dòng `encode/decode`; thêm chốt `isinstance` trước khi ghi. Không cần nhánh chuỗi rỗng.\n- `tests/test_export.py` — giữ ca 1, thêm ca 2-8.\n- `docs/source.md` — đã đúng yêu cầu, không cần sửa.\n\n## Phương án và đánh đổi\n\nGiữ nguyên `csv.writer` mặc định là lựa chọn duy nhất hợp lệ: tự viết escape sẽ lệch với `csv.reader` và vỡ bất biến khứ hồi.\n\n## Nghiệm thu và điều chưa rõ\n\nChạy `python -m pytest -q`, kỳ vọng **8/8 xanh**; hiện tại 1 ca đỏ. Chưa chạy, chưa xác nhận. Quyết định cần chủ: giữ nguyên tên `test_unicode` hay đổi khi thêm ca mới.\n\n## Knowledge requests\n\n- none",
+      "finalWordCountWhitespace": 740,
+      "finalHash": "474426384bf99da1a25846eefa8307f740fbf2e6281e99d0329b770f4449ca76",
+      "adjudication": "Main đã sửa empty back to stock và producer đúng phần đó. Before-table còn nói ASCII comma/quote/LF/CR hỏng, bỏ space của H s; overstates main evidence as submitted by owner. Cần provenance chính xác."
+    },
+    {
+      "index": 10,
+      "childId": "bb6fbbafa8e94bedb317112a549eeb1b",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 11,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Đã thực sự kiểm\n\n- Đọc đầy đủ snapshot `a-272e08af5c1845fda7b17234e11e6ede` (v5, 4273 ký tự, `nextOffset=null`, `coverageComplete=true`, `allAssignedArtifactsRead=true`).\n- Đọc gốc: `src/export.py` (6 dòng), `docs/source.md`, `tests/test_export.py` (4 dòng). `codebase_glob` xác nhận workspace chỉ có 3 file.\n- Mở nguồn chính thức: `Lib/csv.py` (dialect `excel`: `delimiter=','`, `quotechar='\"'`, `doublequote=True`, `lineterminator='\\r\\n'`, `QUOTE_MINIMAL`), `Lib/test/test_csv.py` và `Modules/_csv.c` (CPython 3.12, raw.githubusercontent.com).\n- `python -m pytest -q`: **NOT RUN** — phiên này không có công cụ terminal. Mọi kết luận dưới đây suy từ source, không suy từ output test.\n\nĐã kiểm chứng và **xác nhận đúng**: `export('') == '\"\"\\r\\n'` và khứ hồi `['']`. `_csv.c` `csv_writerow` có nhánh `if (self->num_fields > 0 && self->rec_len == 0) { ... self->num_fields--; if (!join_append(self, NULL, 1)) ... }` với `quoted=1`; `test_write_empty_fields` có `_write_test([''], '\"\"')` và `_write_test((), '')`; `_write_test` assert `fileobj.read() == expect + writer.dialect.lineterminator`. Artifact đã sửa đúng B1/A8.\n\n## Vấn đề chặn\n\n**B1 (high, target=artifact) — Bảng đối chiếu (deliverable (9)) sai 4/8 dòng; `src/export.py:3` chỉ loại các codepoint KHÔNG phải ASCII.**\n\nBằng chứng quan sát: `src/export.py:3` là `value.encode('ascii', errors='ignore').decode()`; ASCII-include-only nên giữ nguyên `,` (U+002C), `\"` (U+0022), `\\n` (U+000A), `\\r` (U+000D). Nguồn chính thức xác nhận writer vẫn quote và reader vẫn trả 1 trường: `test_write_quoting`: `self._write_test(['a',1,'p,q'], 'a,1,\"p,q\"')`; `test_write_lineterminator`: `f'\"\\r\",\"\\n\"{lineterminator}'`; `Modules/_csv.c` `join_append_data` quote khi `c == delimiter || c == '\\n' || c == '\\r'` rồi `*quoted = 1`.\n\nBằng chứng phản bác đã cân: tôi đã thử tìm cách `a\\rb` mất `\\r` — không có; và chính tiền đề của tiêu chí A9 khẳng định \"hiện trạng mất `\\r` thành `ab`\" là sai, nên tôi gắn finding này vào **target=criterion** (A9) chứ không đổi nghĩa tiêu chí rồi ghi pass.\n\nHệ quả cụ thể: đúng thực tế chỉ ca **1, 7, 8** đổi; artifact đánh dấu Đổi cho **1, 2-3, 5, 6, 7, 8**. Chủ sẽ đếm 6 lỗi thay vì 3, và hiểu sai bản chất lỗi (lỗi chỉ nằm ở mất ký tự không-ASCII và ở kiểu đầu vào, không nằm ở escaping). Ngoài ra dòng 1 ghi `'Hs\\r\\n'` → `['Hs']`, tự mâu thuẫn với baseline chính artifact dẫn (`['H s'] != ['Hồ sơ']`, `tests/test_export.py:4`) — `'Hồ sơ'` mất `ồ` và `ơ` nhưng **giữ** khoảng trắng.\n\nSửa tối thiểu: dòng 2-3, 5, 6 → hiện trạng bằng đúng giá trị sau hợp đồng, đánh dấu **KHÔNG đổi**; dòng 1 hiện trạng = `'H s\\r\\n'` → `['H s']`. Main sửa tiền đề A9 về ca 6.\n\n## Ghi chú không chặn\n\n- Dòng 7 ghi \"nhiều trường ✗\" chung chung; có thể ghi chuỗi hiện trạng cụ thể, không chặn.\n- `tests/test_export.py:4` gọi `io.StringIO(export(...))` **không có `newline=''`**, còn hợp đồng mục 5 bắt buộc `newline=''`. Thiết kế chưa nhắc; với ca 1 vẫn xanh nên không sai, nhưng nên nêu để test mới nhất quán.\n- A11: **NOT RUN** (không có word counter). Ước lượng ~6,5 ký tự/từ → ~650–700 từ; sát ngưỡng, chưa xác nhận được.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"src/export.py:3 đúng là encode('ascii', errors='ignore'); artifact ghi rõ baseline 1 failed là quan sát của main, không tự chạy — đúng A7; tôi đọc trực tiếp docs/source.md và src/export.py xác nhận\"}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục 1 'Miền input' + ma trận ca 2,3,5,6,7 phủ str thuần và ký tự CSV đặc biệt\"}, {\"id\": \"A3\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục 2,3,4,6 nêu kết quả mong đợi; khớp Modules/_csv.c join_append_data quote khi delimiter/'\\\\n'/'\\\\r' và dialect excel lineterminator '\\\\r\\\\n' (Lib/csv.py)\"}, {\"id\": \"A4\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục 5 bất biến đồng nhất cho MỌI v kể cả rỗng, không dùng next(...,None); tôi xác minh bằng _csv.c csv_writerow nhánh num_fields>0 && rec_len==0 gọi join_append(NULL,1) và test_write_empty_fields _write_test([''],'\\\"\\\"')\"}, {\"id\": \"A5\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Bảng 'Đối chiếu hiện trạng ↔ sau hợp đồng' sai dòng 1, 2-3, 5, 6; xem B1\"}, {\"id\": \"A6\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục tiêu ghi rõ không UI/API, chỉ src/export.py + tests/test_export.py; nhắc docs/source.md là không cần sửa, không đề xuất tạo file\"}, {\"id\": \"A7\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục nghiệm thu: 'Chưa chạy, chưa xác nhận', kỳ vọng 8/8 — không khẳng định pass\"}, {\"id\": \"A8\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục 6 nêu export('')=='\\\"\\\"\\\\r\\\\n' và [''] là hành vi mặc định của writer, không phải phương án bị loại; luận giải EAT_CRNL rút còn 1 dòng; mục 'Phương án và đánh đổi' còn 1 dòng và không nêu '\\\"\\\"\\\\r\\\\n' là phương án KHÔNG chọn — đúng yêu cầu (b)(d); tôi xác minh bằng nguồn CPython\"}, {\"id\": \"A9\", \"status\": \"revise\", \"target\": \"criterion\", \"evidence\": \"Tiền đề 'ca 6 a\\\\rb hiện trạng mất \\\\r thành ab' bị nguồn bác bỏ: \\\\r là ASCII nên encode('ascii','ignore') giữ nguyên; test_write_lineterminator assert '\\\"\\\\r\\\",\\\"\\\\n\\\"' và join_append_data quote khi c=='\\\\r'. Main sửa tiêu chí A9 về ca 6 (hiện trạng đã đúng, KHÔNG đổi); artifact sửa theo. Ca 4 và ca 8 trong tiêu chí đúng\"}, {\"id\": \"A10\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Mục 'Vị trí tác động': bỏ dòng encode/decode tại src/export.py:3 + chốt isinstance, không cần nhánh chuỗi rỗng — khớp hợp đồng\"}, {\"id\": \"A11\", \"status\": \"unverified\", \"target\": \"artifact\", \"evidence\": \"NOT RUN: không có word counter trong phiên này; 4273 ký tự ước ~650–700 từ, chưa xác nhận dưới 700; vẫn đủ 9 mục và 8 ca\"}, {\"id\": \"C1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Đúng loại thiết kế (đặc tả hợp đồng, không UI), phạm vi và lỗi TypeError nhất quán; nhưng artifact tự mâu thuẫn nội bộ: mục 6 (chuỗi rỗng không đổi) và dòng 4 bảng đối chiếu nói không đổi trong khi dòng 2-3,5,6 nói các ca thuần ASCII hỏng — xem B1\"}]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 934,
+      "finalHash": "d052b9dfe9fdfa5ba383fe68d886adde07cb53884a79acee02a872fb96557897",
+      "adjudication": "Reviewer bác các ASCII-before facts đúng và target criterion cho CR đúng; chưa đo từ, còn không nhận một số wording dễ hiểu nhầm. Final revise có finding cụ thể hợp lệ cho lỗi đang xét."
+    },
+    {
+      "index": 11,
+      "childId": "cd6f94f0951a44a0bf311a66fd028410",
+      "role": "design",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 3,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "# Hợp đồng `export(value) -> str` (CSV một trường)\n\n## 1. Hiện trạng đã đọc (dữ kiện)\n- `docs/source.md:1`: chỉ CSV, giữ nguyên tiếng Việt, input một chuỗi, output một dòng CSV hợp lệ, đọc lại bằng `csv.reader` phải đúng.\n- `src/export.py:3`: `value.encode('ascii', errors='ignore').decode()` → **chỉ loại code point > U+007F**; mọi ký tự ASCII (`,` `;` `\"` `\\n` `\\r`) đều sống.\n- `src/export.py:4-6`: `StringIO(newline='')` + `csv.writer(...).writerow([value])` → dialect `excel` mặc định, `lineterminator='\\r\\n'`.\n- Baseline đã quan sát: `python -m pytest -q` cho **1 failed** (`tests/test_export.py:4`, `['H s'] != ['Hồ sơ']`). Không khẳng định test đã pass.\n- Phạm vi: chỉ `src/export.py` + `tests/test_export.py`. Không UI, API, endpoint, file mới.\n\n## 2. Kiểu & miền input\n`export(value: str) -> str`. Miền: **mọi `str` Unicode**, kể cả rỗng, kể cả chuỗi 1 trường đã chứa ký tự CSV đặc biệt `,` `;` `\"` `\\n` `\\r`. Không nhận `bytes`/`int`/`None`, không tự `str()`.\n\n## 3. Output & bất biến khứ hồi\nĐúng 1 dòng CSV, 1 trường, dialect mặc định `csv.writer` (`delimiter=','`, `quotechar='\"'`, `lineterminator='\\r\\n'`), luôn kết thúc `'\\r\\n'`.\n\n**Bất biến (duy nhất để kiểm chứng), mọi `v: str`:**\n```\nnext(csv.reader(io.StringIO(export(v), newline=''))) == [v]\n```\nBọc `next(...)` — **không** dùng `next(..., None) is None`, vì `['']` vẫn là kết quả hợp lệ.\n\n## 4-6. Chính sách Unicode / escaping / newline / rỗng\n- **Unicode:** không `.encode(...)`; giữ nguyên mọi code point.\n- **Escaping:** để `csv.writer` mặc định quyết định — trường chứa `,` `\"` `\\n` `\\r` được bọc `\"`, `\"` bên trong nhân đôi (quy ước chuẩn của `csv.excel`, hiện đang dùng tại `src/export.py:5`). Không tự viết hàm escape.\n- **Newline nhúng:** `\\n`/`\\r` trong input khiến cả trường được quote và đọc lại nguyên vẹn; `lineterminator` vẫn là `\\r\\n`.\n- **Chuỗi rỗng:** `export('') == '\"\"\\r\\n'`, đọc lại `['']` — hành vi mặc định của writer, không phải phương án tự chọn.\n\n## 7. Lỗi\n`value` không phải `str` → ném `TypeError` với thông điệp nêu rõ `value` phải là `str`. Không bắt lỗi, không ép kiểu.\n\n## 8. Ma trận ca kiểm chứng (8 test, `python -m pytest -q`)\n| # | input | CSV kỳ vọng | `csv.reader` |\n|---|-------|-------------|--------------|\n|1|`'Hồ sơ'`|`'Hồ sơ\\r\\n'`|`['Hồ sơ']`|\n|2|`'a,b'`|`'\"a,b\"\\r\\n'`|`['a,b']`|\n|3|`'a\"b'`|`'\"a\"\"b\"\\r\\n'`|`['a\"b']`|\n|4|`''`|`'\"\"\\r\\n'`|`['']`|\n|5|`'a\\nb'`|`'\"a\\nb\"\\r\\n'`|`['a\\nb']`|\n|6|`'a\\rb'`|`'\"a\\rb\"\\r\\n'`|`['a\\rb']`|\n|7|`'Hồ, \"sơ\"\\n'`|`'\"Hồ, \"\"sơ\"\"\\n\"\\r\\n'`|`['Hồ, \"sơ\"\\n']`|\n|8|`123`|`TypeError`|`—`|\n\n## 9. Đối chiếu hiện trạng ↔ sau hợp đồng\n| # | input | Hiện trạng (`src/export.py`) | Sau hợp đồng | Đổi? |\n|---|-------|------------------------------|-------------|------|\n|1|`'Hồ sơ'`|`'H s\\r\\n'` → `['H s']` (mất ồ, ơ; **giữ khoảng trắng** — khớp `tests/test_export.py:4`)|`'Hồ sơ\\r\\n'` → `['Hồ sơ']`|**ĐỔI**|\n|2|`'a,b'`|`'\"a,b\"\\r\\n'` → `['a,b']`|như cột trái|**KHÔNG**|\n|3|`'a\"b'`|`'\"a\"\"b\"\\r\\n'` → `['a\"b']`|như cột trái|**KHÔNG**|\n|4|`''`|`'\"\"\\r\\n'` → `['']`|như cột trái|**KHÔNG**|\n|5|`'a\\nb'`|`'\"a\\nb\"\\r\\n'` → `['a\\nb']`|như cột trái|**KHÔNG**|\n|6|`'a\\rb'`|`'\"a\\rb\"\\r\\n'` → `['a\\rb']` (`\\r` là ASCII nên `src/export.py:3` giữ, writer vẫn quote)|như cột trái|**KHÔNG**|\n|7|`'Hồ, \"sơ\"\\n'`|`'H, \"\"sơ\"\"\\n'` bị mất dấu → quote thành `'\"H, \"\"sơ\"\"\\n\"\\r\\n'` → `['H, \"\"sơ\"\"\\n']` (đóng dấu nhưng **sai dấu**)|`'Hồ, \"\"sơ\"\"\\n'` đúng dấu|**ĐỔI**|\n|8|`123`|`AttributeError: 'int' object has no attribute 'encode'` tại `src/export.py:3`|`TypeError`|**ĐỔI**|\n\n**Kết luận:** lỗi hiện trạng **chỉ** nằm ở mất ký tự không-ASCII và ở kiểu đầu vào — **không** nằm ở escaping. Toàn bộ escaping của `csv.writer` tại `src/export.py:5` đã đúng sẵn.\n\n## 10. Nhắc implementer, nghiệm thu, rủi ro\n- Mọi test **phải** mở `io.StringIO(..., newline='')`; dòng cũ `tests/test_export.py:4` đang thiếu đối số này.\n- Kiểm chứng: sau khi implementer sửa, `python -m pytest -q` phải xanh đủ 8 ca. Tôi không chạy được lệnh này; ngoài baseline 1 failed không có bằng chứng nào khác.\n- Rủi ro: hành vi escape phụ thuộc dialect mặc định của `csv` — giữ nguyên, không tự định nghĩa lại.\n- Câu hỏi mở: không có; yêu cầu đã chốt ở `docs/source.md:1`. Không đề xuất ngoài 2 file nêu trên.\n\n## Knowledge requests\n- none",
+      "finalWordCountWhitespace": 615,
+      "finalHash": "d580c90d7e46e7880de1744a2ea109ee8f79fc93f7c4e54a9c3ac6d286a2455f",
+      "adjudication": "Producer sửa bảng đánh dấu only1/7/8 thay đổi đúng. Ô ca7 vẫn giữ ơ dù encode removes và reader có doubled quotes sai; promised error message chưa ghim. Không phải deliverable hoàn chỉnh đã đạt."
+    },
+    {
+      "index": 12,
+      "childId": "4e29395bf1574c78855e8882593d34c9",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "finish": {
+        "status": "completed",
+        "turn": 1,
+        "steps": 6,
+        "waitedMs": 0,
+        "extensionMs": 0,
+        "childCount": 0,
+        "childSteps": 0,
+        "childTokens": 0,
+        "childDeliveries": 0
+      },
+      "finalText": "## Phản biện độc lập — Work Graph node D1 (design, produce), snapshot v6\n\n**Đã đọc:** artifact `a-e56a5bc90c144e5db4d747da2d54a977` (v6, 4205 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`).\n**Kiểm chứng gốc:** đọc `src/export.py` (6 dòng), `docs/source.md` (1 dòng), `tests/test_export.py` (4 dòng) trong fixture; đọc `https://docs.python.org/3/library/csv.html` (3.14.8) cho mặc định dialect.\n**Chưa chạy được:** `python -m pytest -q` — phiên review không có công cụ terminal; mọi kết luận dưới đây suy từ source + tài liệu, trừ dữ kiện baseline do main cung cấp (đã khớp logic `encode('ascii', errors='ignore')`).\n\n### Vấn đề chặn\n\n**F1 — §9, dòng ca 7: chuỗi \"hiện trạng\" sai dấu và tự mâu thuẫn trong chính một ô.**\nYêu cầu: deliverable (9) là bảng so sánh hiện trạng ↔ sau hợp đồng, \"chỉ ra ca nào đổi và vì sao\"; nghiệm thu A5/A8/A9 đòi dữ kiện đúng.\nQuan sát: ô hiện trạng ca 7 viết `'H, \"\"sơ\"\"\\n'` → quote thành `'\"H, \"\"sơ\"\"\\n\"\\r\\n'` → `['H, \"\"sơ\"\"\\n']`, rồi tự ghi chú \"(đóng dấu nhưng **sai dấu**)\".\nBằng chứng bác bỏ: `src/export.py:3` là `value.encode('ascii', errors='ignore').decode()`; `errors='ignore'` chỉ loại code point > U+007F, nên với `'Hồ, \"sơ\"\\n'` kết quả là `H, \"s\"\\n` — **mất cả `ồ` và `ơ`, không nhân đôi dấu nháy kép**. Ô này vẫn giữ `ơ` và tự nhân đôi `\"\"`, tức nó mô tả một chuỗi mà hàm hiện tại không thể tạo ra. Đúng theo `QUOTE_MINIMAL` + `doublequote=True` (docs.python.org/3/library/csv.html), writer cho `\"H, \"\"s\"\"\\n\"\\r\\n` và `csv.reader` trả về `['H, \"s\"\\n']` — `csv.reader` **không** trả `\"\"` đã nhân đôi.\nHệ quả cụ thể: ô này trông như một lỗi escaping (`\"\"` lọt ra ngoài), mâu thuẫn trực tiếp với kết luận cuối §9 \"không nằm ở escaping\"; nếu ai đó viết test hồi quy hoặc ghi chú review từ ô này thì một bản sửa **đúng** sẽ bị hiểu là có thay đổi escaping.\nSửa tối thiểu: thay toàn bộ ô ca 7 bằng `H, \"s\"\\n` → `\"H, \"\"s\"\"\\n\"\\r\\n` → `['H, \"s\"\\n']`, giữ nhãn **ĐỔI**; đồng thời viết cột \"sau hợp đồng\" đầy đủ là `'\"Hồ, \"\"sơ\"\"\\n\"\\r\\n'` (hiện viết thiếu vỏ `\"\\r\\n\"`).\n\nCác nội dung khác của v6 tôi đã đối chiếu và **không** thấy sai: `src/export.py:3` giữ ASCII (nên `\\r` U+000D của ca 6 sống → `\"a\\rb\"\\r\\n` → `['a\\rb']`, KHÔNG đổi); `src/export.py:5` `csv.writer(s).writerow([value])`; `tests/test_export.py:4` đúng là assert và **thiếu** `newline=''`; ca 1 `'H s\\r\\n'` → `['H s']` khớp baseline; ca 8 `AttributeError: 'int' object has no attribute 'encode'`; dialect mặc định `,` / `\"` / `\\r\\n` / `QUOTE_MINIMAL` / `doublequote=True` khớp tài liệu chính thức. Bất biến §3, chuỗi rỗng §4-6 và ma trận 8 ca §8 đúng dữ kiện.\n\n### Ghi chú không chặn\n\n1. §1 và §2 liệt kê `;` là \"ký tự CSV đặc biệt\". Với dialect `excel` mặc định, `;` **không** kích hoạt quote (delimiter là `,`, quotechar là `\"`) — tài liệu: \"A one-character string used to separate fields. It defaults to ','\". Vì thiết kế không đưa ra chuỗi kỳ vọng cho `;` nên rủi ro thấp, nhưng nên ghi \"`;` sống sót qua `src/export.py:3` nhưng **không** bị quote\".\n2. A11 (dưới 700 từ): **chưa kiểm chứng được** — sandbox không cho chạy word counter (không có terminal). Ước lượng thủ công theo từng dòng và bảng ở mức ~700 từ, tức ngay ngưỡng; v6 chỉ ngắn hơn v5 68 ký tự. Không đủ bằng chứng để kết luận `revise` hay `pass`.\n3. §3 nói \"1 dòng CSV\" trong khi ca 5/6/7 sinh bản ghi trải nhiều dòng vật lý; §4-6 đã nêu rõ nên chỉ là lệch cách diễn đạt, không cần sửa.\n\n```json\n{\"coverage\": [\n {\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§1: `src/export.py:3` đúng `value.encode('ascii', errors='ignore').decode()`; baseline 1 failed tại `tests/test_export.py:4` khớp logic mất ký tự >U+007F. Không tự chạy pytest (không có terminal) → dựa source, không phải chạy lệnh.\"},\n {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§2 nêu miền mọi `str` Unicode kể cả rỗng và chuỗi chứa `,` `\\\"` `\\\\n` `\\\\r`; khớp yêu cầu 2 dạng đầu vào.\"},\n {\"id\": \"A3\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§4-6: không `.encode`, quote khi có `,`/quotechar/`\\\\n`/`\\\\r`, `lineterminator='\\\\r\\\\n'`, `export('')=='\\\"\\\"\\\\r\\\\n'`; đối chiếu docs.python.org/3/library/csv.html (delimiter ',', quotechar '\\\"', lineterminator '\\\\r\\\\n', QUOTE_MINIMAL, doublequote True) — khớp.\"},\n {\"id\": \"A4\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§3 đúng `next(csv.reader(io.StringIO(export(v), newline=''))) == [v]` cho mọi v gồm rỗng, và nêu rõ không dùng `next(..., None) is None`; §4-6 khẳng định `export('')=='\\\"\\\"\\\\r\\\\n'` → `['']` là hành vi mặc định của writer.\"},\n {\"id\": \"A5\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"F1: §9 dòng ca 7 mô tả hiện trạng là `H, \\\"\\\"sơ\\\"\\\"\\\\n` → `['H, \\\"\\\"sơ\\\"\\\"\\\\n']`, giữ `ơ` và nhân đôi `\\\"\\\"` — trái `src/export.py:3` (chỉ loại >U+007F, không nhân đôi) và trái hành vi `csv.reader`. Sửa: `H, \\\"s\\\"\\\\n` → `\\\"H, \\\"\\\"s\\\"\\\"\\\\n\\\"\\\\r\\\\n` → `['H, \\\"s\\\"\\\\n']`.\"},\n {\"id\": \"A6\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§1 và §10 chốt phạm vi chỉ `src/export.py` + `tests/test_export.py`, không UI/API/endpoint/file mới; trong artifact không xuất hiện đề xuất ngoài phạm vi.\"},\n {\"id\": \"A7\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§10: \\\"Tôi không chạy được lệnh này; ngoài baseline 1 failed không có bằng chứng nào khác\\\" — không có khẳng định nào test đã pass.\"},\n {\"id\": \"A8\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§9 đánh dấu KHÔNG đổi cho 2,3,4,5,6 và ĐỔI cho 1,7,8; dòng 1 ghi đúng `'H s\\\\r\\\\n'` → `['H s']` (giữ khoảng trắng), khớp `tests/test_export.py:4`; `;`/`,`/`\\\"`/`\\\\n`/`\\\\r` đều ≤U+007F nên `src/export.py:3` giữ nguyên.\"},\n {\"id\": \"A9\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đúng ba ý của A9: chỉ ca 1,7,8 ghi ĐỔI; ca 6 giải thích \\\"`\\\\r` là ASCII nên `src/export.py:3` giữ, writer vẫn quote\\\"; ca 8 ghi `AttributeError: 'int' object has no attribute 'encode'`. Lỗi nội dung ô ca 7 đã gắn vào A5, không gắn vào tiêu chí này.\"},\n {\"id\": \"A10\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"§10 nhắc mọi test phải mở `io.StringIO(..., newline='')`; đã mở `tests/test_export.py:4` và xác nhận dòng này gọi `io.StringIO(export('Hồ sơ'))` không có `newline=''`.\"},\n {\"id\": \"A11\", \"status\": \"unverified\", \"target\": \"artifact\", \"evidence\": \"NOT RUN: sandbox không có terminal nên không đo được số từ. Ước lượng thủ công ~700 từ (ngay ngưỡng) trên 4205 ký tự; v6 chỉ ngắn hơn v5 68 ký tự. Cần main đếm bằng công cụ ngoài sandbox.\"},\n {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đúng loại thiết kế (hợp đồng hàm + ma trận ca, không UI); hợp đồng input/output/lỗi thống nhất giữa §2, §3, §4-6, §7 và §8; phạm vi người dùng giữ đúng docs/source.md:1. Lỗi dữ kiện đã tính ở A5.\"}\n]}\n```\n\nVERDICT: revise",
+      "finalWordCountWhitespace": 1065,
+      "finalHash": "5996c15896c1309c3ef7e4b726fbbc8d51d98703c8a23879a4208ce95dc1c3ec",
+      "adjudication": "Reviewer bắt đúng ô7 và hướng sửa hẹp, notes semicolon không kích quote đúng dialect. Length unverified; refine detail không thành pass toàn thiết kế. Main deadline trước khi sửa/whole verification."
+    }
+  ],
+  "localCounterexamples": {
+    "python": "3.13.9",
+    "examples": [
+      {
+        "input": "",
+        "asciiIntermediate": "",
+        "beforeCSV": "\"\"\r\n",
+        "beforeReader": [
+          [
+            ""
+          ]
+        ],
+        "afterCSV": "\"\"\r\n",
+        "afterReader": [
+          [
+            ""
+          ]
+        ]
+      },
+      {
+        "input": "🙂 漢",
+        "asciiIntermediate": " ",
+        "beforeCSV": " \r\n",
+        "beforeReader": [
+          [
+            " "
+          ]
+        ],
+        "afterCSV": "🙂 漢\r\n",
+        "afterReader": [
+          [
+            "🙂 漢"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ sơ",
+        "asciiIntermediate": "H s",
+        "beforeCSV": "H s\r\n",
+        "beforeReader": [
+          [
+            "H s"
+          ]
+        ],
+        "afterCSV": "Hồ sơ\r\n",
+        "afterReader": [
+          [
+            "Hồ sơ"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ, sơ",
+        "asciiIntermediate": "H, s",
+        "beforeCSV": "\"H, s\"\r\n",
+        "beforeReader": [
+          [
+            "H, s"
+          ]
+        ],
+        "afterCSV": "\"Hồ, sơ\"\r\n",
+        "afterReader": [
+          [
+            "Hồ, sơ"
+          ]
+        ]
+      },
+      {
+        "input": "Sơ \"đồ\"",
+        "asciiIntermediate": "S \"\"",
+        "beforeCSV": "\"S \"\"\"\"\"\r\n",
+        "beforeReader": [
+          [
+            "S \"\""
+          ]
+        ],
+        "afterCSV": "\"Sơ \"\"đồ\"\"\"\r\n",
+        "afterReader": [
+          [
+            "Sơ \"đồ\""
+          ]
+        ]
+      },
+      {
+        "input": "a\rb",
+        "asciiIntermediate": "a\rb",
+        "beforeCSV": "\"a\rb\"\r\n",
+        "beforeReader": [
+          [
+            "a\rb"
+          ]
+        ],
+        "afterCSV": "\"a\rb\"\r\n",
+        "afterReader": [
+          [
+            "a\rb"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ, \"sơ\"\n",
+        "asciiIntermediate": "H, \"s\"\n",
+        "beforeCSV": "\"H, \"\"s\"\"\n\"\r\n",
+        "beforeReader": [
+          [
+            "H, \"s\"\n"
+          ]
+        ],
+        "afterCSV": "\"Hồ, \"\"sơ\"\"\n\"\r\n",
+        "afterReader": [
+          [
+            "Hồ, \"sơ\"\n"
+          ]
+        ]
+      }
+    ],
+    "bareBlankNext": [],
+    "bareBlankNextIsNone": false
+  },
+  "followup": [
+    "W6.1.3 review full C branch and counterexamples; reject false criterion instead of changing stock behavior to satisfy it",
+    "W6.2 producer own inaccuracies versus inherited reviewer/main criteria; no immediate prompt changes",
+    "W7 proof helpers by ref, W8 source-stage/recheck binding, proportional blocker and honest incomplete state"
+  ]
+}

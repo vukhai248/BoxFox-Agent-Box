@@ -249,6 +249,12 @@ class Checks:
                 dependencies[dep_id] = {'definition': work_policy.definition(dep), 'artifact': state.get('artifact', {}).get('artifactId')}
         binding = {'nodeDefinition': work_policy.definition(node), 'dependencies': dependencies,
                    'owner': work_policy.digest({'goal': run['goal'], 'interviews': run.get('interviews', [])})}
+        if hasattr(self.graph, 'feedback'):
+            decisions = [d['answers'] for d in self.graph.feedback.records(run['runId'])
+                         if d['binding'].get('nodeId') == node['id'] and d['answers'] and
+                         d['status'] not in ('stale', 'cancelled')]
+            if decisions:
+                binding['feedbackDecisions'] = work_policy.digest(decisions)
         if stage == 'execute' and node['kind'] == 'plan':
             binding['ownPlan'] = node['stages']['produce'].get('artifact', {}).get('artifactId')
         return binding
@@ -334,6 +340,10 @@ class Checks:
                                             spec['executorRole'], attempt_goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
                                                            'checkKind': spec['id'], 'budgetHints': hints})
+            if result.get('request'):
+                doc.update(childId=result['sessionId'], status='needs_user', requestId=result['request']['requestId'],
+                           error='Saved checkpoint: main must resolve request before continuing this checker.')
+                break
             child_id = result.get('sessionId')
             status, coverage, findings = parse_report(text, criteria, require_target=True)
             doc.pop('error', None)

@@ -50,7 +50,7 @@ TOOL_GROUPS = [
      'alwaysOn': False},
     # Work Graph — main dựng đồ thị việc, harness chạy vòng phản biện, duyệt rồi chạy DAG.
     {'key': 'workGraph',
-     'tools': ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_artifact_read'],
+     'tools': ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read'],
      'alwaysOn': False},
     {'key': 'questionsApprovals',
      'tools': ['ask_user', 'request_approval', 'interview'],

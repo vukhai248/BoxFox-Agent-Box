@@ -628,7 +628,7 @@ def test_interview_answers_are_recorded_on_the_active_run(tmp_path):
 def test_orchestrator_holds_the_work_tools_and_the_groups_cover_them():
     assert set(WORK_TOOLS) <= ORCHESTRATOR_TOOLS
     groups = {group['key']: group['tools'] for group in tool_groups.TOOL_GROUPS}
-    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_artifact_read']
+    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read']
     assert 'interview' in groups['questionsApprovals']
     names = {schema['function']['name'] for schema in SCHEMAS}
     assert set(WORK_TOOLS) <= names

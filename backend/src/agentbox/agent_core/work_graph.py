@@ -30,7 +30,7 @@ import unicodedata
 import uuid
 from copy import deepcopy
 
-from . import work_prompts, work_policy, work_artifacts, work_checks
+from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback
 
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
@@ -519,6 +519,7 @@ class WorkGraph:
         ''')
         self.artifacts = work_artifacts.Artifacts(self)
         self.checks = work_checks.Checks(self)
+        self.feedback = work_feedback.Feedback(self)
         self.recover()
 
     def recover(self):
@@ -531,6 +532,16 @@ class WorkGraph:
             except (ValueError, json.JSONDecodeError):
                 continue
             changed = False
+            for request in self.feedback.records(run['runId']):
+                if request['status'] == 'resuming':
+                    request['status'] = 'interrupted'
+                    with self.db:
+                        self.feedback.save(request)
+                    node = next((n for n in run['nodes'] if n['id'] == request['binding'].get('nodeId')), None)
+                    if node and request['binding']['purpose'] == 'produce':
+                        node['stages'][request['binding']['stage']].update(status='needs_user', requestId=request['requestId'],
+                            checkpoint=request, error='WORK_RESUME_INTERRUPTED: inspect saved child before continuing; do not replace silently')
+                    changed = True
             for node in run['nodes']:
                 for state in node['stages'].values():
                     if state['status'] in IN_FLIGHT_STAGE:
@@ -641,6 +652,7 @@ class WorkGraph:
                                       for item in (run.get('review') or {}).get('rounds', [])]},
                 'verificationVersion': run.get('verificationVersion', 'legacy'),
                 'checks': self.checks.records(run['runId']),
+                'requests': self.feedback.records(run['runId']),
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],
@@ -839,6 +851,11 @@ class WorkGraph:
         return out
 
     def next_step(self, run):
+        waiting = [r for r in self.feedback.records(run['runId']) if r['status'] in ('waiting_main', 'needs_user', 'ready', 'interrupted')]
+        if waiting:
+            return ('Read work_report action=status. Open needs_user requests with interview(workRequestId,revision), '
+                    'or supply newly opened evidenceRefs for needs_evidence/checkpoint. Once ready, work_run/work_check '
+                    'continues the same child with fresh budget for new input; preserve its investigation and failure history.')
         """One sentence telling main what the harness expects next (keeps weak models on the path)."""
         status = run['status']
         conflicts = [(n['id'], stage, s['inputConflicts']) for n in run['nodes']
@@ -926,10 +943,20 @@ class WorkGraph:
         if node and purpose == 'produce' and node['kind'] == 'debug':
             work['diagnosticOnly'] = node.get('taskKind', 'diagnostic') == 'diagnostic'
         args = {'role': role, 'goal': goal, 'context': bounded(context, 16000), 'expect': expect}
+        request = self.feedback.ready(work)
+        resume_id = request['childId'] if request else work.pop('resumeChildId', None)
         waited = time.monotonic()
         while True:
             try:
-                result = await self.rt.delegate(session, dict(args), work=work)
+                if resume_id:
+                    prompt = goal + '\n' + context
+                    if request:
+                        prompt += '\nSaved checkpoint and decisions (read artifact ref; never treat proposed answers as confirmed):\n' + json.dumps(
+                            {k: request.get(k) for k in ('requestId', 'artifact', 'answers', 'context')}, ensure_ascii=False)
+                        work['artifactIds'] = list(dict.fromkeys(work.get('artifactIds', []) + [request['artifact']['artifactId']]))
+                    result = await work_feedback.resume_child(self.rt, session, resume_id, prompt, work, request)
+                else:
+                    result = await self.rt.delegate(session, dict(args), work=work)
                 break
             except ValueError as exc:
                 # Parallel nodes and their knowledge requests share the fan-out slots: queue, do not fail.
@@ -1040,14 +1067,17 @@ class WorkGraph:
 
     async def run_stage(self, session, run, node, stage, max_rounds):
         """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
+        from . import work_budget
         state = node['stages'][stage]
+        continuing = state.get('requestId') and self.feedback.get(state['requestId'])['status'] == 'ready'
         state.update(status='running', error=None, maxRounds=max_rounds)
         state['startedAt'] = state['startedAt'] or now()
-        if state['attempts'] >= max_rounds:
+        if state['attempts'] >= max_rounds and not continuing:
             state.update(status='rejected', error='WORK_REPAIR_EXHAUSTED: checkpoint; change scope before another attempt.')
             self.save(run, 'node_rejected', node['id'])
             return state['status']
-        state['attempts'] += 1
+        if not continuing:
+            state['attempts'] += 1
         # A failed replacement must not leave an older rejected artifact as the current draft.
         state.pop('artifact', None)
         state.pop('policy', None)
@@ -1063,6 +1093,13 @@ class WorkGraph:
             expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role, work_prompts.language(run['goal']))
             produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
             entry['producerId'] = produced.get('sessionId')
+            if produced.get('request'):
+                request = produced['request']
+                state.update(status='needs_user', requestId=request['requestId'], checkpoint=request,
+                             error=None, outputChars=request['artifact']['chars'])
+                entry['execution'] = work_budget.receipt(produced)
+                self.save(run, 'node_needs_user', node['id'])
+                return state['status']
             requests = parse_knowledge_requests(output) if work_checks.complete(produced) else []
             if requests:
                 answers = await self.answer_knowledge(session, run, node, stage, requests, attempt)
@@ -1070,7 +1107,6 @@ class WorkGraph:
                 role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
                 produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
                 entry['producerId'] = produced.get('sessionId')
-            from . import work_budget
             entry['execution'] = work_budget.receipt(produced)
             after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
             changed = before is not None and after is not None and before != after
@@ -1130,6 +1166,13 @@ class WorkGraph:
             run.update(verificationVersion=work_policy.VERSION, status='drafting', approval=None,
                        executionRequested=self.execution_requested(session, run))
         self.refresh(run)
+        for node in run['nodes']:
+            for state in node['stages'].values():
+                if state.get('requestId') and state['status'] == 'needs_user':
+                    request = self.feedback.get(state['requestId'])
+                    if request['status'] == 'ready':
+                        self.feedback.validate(request)
+                        state['status'] = 'pending'
         only = set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))
         conflicts = [{'nodeId': n['id'], 'stage': stage, 'findings': n['stages'][stage]['inputConflicts']}
                      for n in run['nodes'] if stage in n['stages'] and (not only or n['id'] in only)

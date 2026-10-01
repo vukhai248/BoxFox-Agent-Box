@@ -395,6 +395,8 @@ def create_app(runtime):
                 await design_continuation_step(runtime)
                 try:
                     await plan_workflow.pump(runtime)
+                    from ..agent_core import work_feedback
+                    await work_feedback.pump(runtime)
                 except Exception:
                     logger.exception('plan continuation deferred; durable admission will retry')
         _app[RESEARCH_PUMP_KEY] = asyncio.create_task(pump())

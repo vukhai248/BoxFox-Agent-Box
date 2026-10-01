@@ -246,7 +246,7 @@ WORK_EXEC_REVIEWER_NOTE = """Work Graph execution review: for "Independent revie
 
 def with_work_graph(text, *notes):
     """Insert the Work Graph notes before the final STRICT PROHIBITION paragraph (or append)."""
-    block = '\n'.join(notes)
+    block = '\n'.join(notes) + '\nBound Work Graph child: work_report is a safety fallback, not a mandatory step. Use needs_user only for a consequential owner decision unavailable in the request/repository; missing technical facts use needs_evidence for main to research/test. Save the investigation checkpoint and release the turn only when blocked. When the assignment is complete, return the full deliverable in your final answer; do not call work_report merely to announce completion. Main interviews or routes proof work, then continues this same child. New input admits fresh owner-clamped budget; usage and failure history remain. Do not restart from zero or invent the owner answer.'
     marker = text.rfind('STRICT PROHIBITION')
     if marker < 0:
         return text + '\n' + block
@@ -307,7 +307,7 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        'research_scope',
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
-                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_artifact_read', 'interview'} | PEER
+                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview'} | PEER
 
 
 def allowed_tools(role, parent=None):
@@ -343,4 +343,5 @@ def work_check_tools(role, parent):
     tools = set(allowed_tools(role, parent))
     tools |= set(parent) & {'web_search', 'web_fetch', 'read_source'}
     tools.add('work_artifact_read')
+    tools.add('work_report')
     return tools - {'file_write', 'file_edit_block', 'write_plan'}

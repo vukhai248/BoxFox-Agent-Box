@@ -686,6 +686,15 @@ SCHEMAS = [
          {'action': {'type': 'string', 'enum': ['status','start']}, 'runId': STRING, 'nodeId': STRING,
           'stage': {'type': 'string', 'enum': ['produce','execute']}, 'artifactId': STRING,
           'checkIds': {'type': 'array', 'items': STRING}, 'invocationId': STRING}, ['action']),
+    tool('work_report',
+         'Bound child: save checkpoint and release this turn with action=needs_user, needs_evidence or checkpoint. '
+         'needs_user has 1-3 questions with 2-4 options; main owns the interview. A checkpoint is never accepted. '
+         'Main: action=status reads durable requests; resume read-only/evidence checkpoints with requestId, revision and context. '
+         'For user questions call interview(workRequestId, revision), then work_run/work_check after answers. Continue the same child.',
+         {'action': {'type': 'string', 'enum': ['needs_user','needs_evidence','checkpoint','status','resume']},
+          'checkpoint': STRING, 'reason': STRING, 'questions': {'type':'array','maxItems':3,'items':INTERVIEW_QUESTION},
+          'runId': STRING, 'requestId': STRING, 'revision': {'type':'integer'}, 'context': STRING,
+          'evidenceRefs': {'type':'array','items':STRING}, 'invocationId': STRING}, ['action']),
     tool('work_artifact_read',
          'Read an immutable, session-owned Work Graph snapshot. Follow nextOffset until null for full coverage. '
          'A child can read only refs assigned by the harness; a file path or preview is not review coverage.',
@@ -706,7 +715,8 @@ SCHEMAS = [
          'recommended. The card always offers free text and "let the agent decide". Ask only questions '
          'whose answer changes scope, architecture or acceptance; never ask what the repository answers.',
          {'title': STRING, 'questions': {'type': 'array', 'minItems': 1, 'maxItems': 5, 'items': INTERVIEW_QUESTION},
-          'runId': STRING, 'deadlineSeconds': {'type': 'integer'}}, ['questions']),
+          'runId': STRING, 'workRequestId': STRING, 'revision': {'type': 'integer'},
+          'deadlineSeconds': {'type': 'integer'}}, []),
     tool('design_report',
          'Phát thẻ báo cáo thiết kế và khối bàn giao cho lượt main kế tiếp: tóm tắt, nhãn (labels) và '
          'việc còn lại cho agent xây dựng. Bàn giao chỉ được khi bản thiết kế đã có kết luận soát độc '
