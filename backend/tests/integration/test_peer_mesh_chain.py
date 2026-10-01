@@ -84,7 +84,7 @@ class FixtureExecutor:
         self.slow = set(slow)
         self.seconds = seconds
 
-    async def execute(self, name, args, sid):
+    async def execute(self, name, args, sid, **_identity):
         if name in self.slow:
             await asyncio.sleep(self.seconds)
         return {'content': 'observed fixture result'}
@@ -183,6 +183,8 @@ def test_chuoi_main_testing_review_mot_luot_that(tmp_path):
     assert rows['testing']['status'] == 'completed' and rows['review']['status'] == 'completed'
     assert events_of(store, sid, 'error') == []
     assert events_of(store, testing, 'error') == [] and events_of(store, review, 'error') == []
+    assert not any(result.get('is_error') for child in (testing, review)
+                   for result in tool_results(store, child))
     assert elapsed < 60, f'chuỗi bốn vai chạy mất {elapsed:.1f}s'
 
     # (b) hai cặp event `child`, mỗi hàng mang `turn` của lượt sinh.
@@ -284,6 +286,8 @@ def test_chuoi_voi_han_nguoi_goi_thi_luot_van_xong(tmp_path):
     assert store.get(sid)['status'] == 'completed'
     assert rows['testing']['status'] == 'completed'
     assert events_of(store, sid, 'error') == []
+    assert not any(result.get('is_error') for child in rows.values()
+                   for result in tool_results(store, child['session_id']))
 
     wait_ends = events_of(store, testing, 'peer_wait_end')
     assert len(wait_ends) == 1, wait_ends

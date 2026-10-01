@@ -58,9 +58,30 @@ CASES = {
         'và csv.reader, không thể đọc lại [None, ""] mà vẫn phân biệt None với chuỗi rỗng. '
         'QUOTE_NOTNULL chỉ ảnh hưởng phía ghi, csv.reader 3.13 trả str cho cả hai. Vì vậy phải đổi sang JSON. '
         'Nguồn: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c', 'revise'),
+    'correct_csv_char_unit': ('Phạm vi CPython 3.13: source _csv.c lưu field bằng Py_UCS4 và '
+        'parse_add_char so field_len với field_limit, nên field_size_limit giới hạn ký tự Unicode, '
+        'không phải số byte UTF-8. Giá trị mặc định 128*1024 là 131072 ký tự; có thể cấu hình bằng '
+        'field_size_limit(new_limit). 80000 ký tự ơ cần 160000 byte UTF-8 nhưng không vượt '
+        '131072 ký tự. Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS. '
+        'Nguồn: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c', 'pass'),
+    'false_assignment_premise': ('CPython 3.13 dùng Py_UCS4 cho field và so field_len với '
+        'field_limit trong parse_add_char; giới hạn là ký tự Unicode, không phải byte UTF-8. '
+        'field_size_limit cho phép đổi giới hạn. Do đó tiền đề main yêu cầu xác nhận giới hạn '
+        'bất biến 128 KiB và buộc đổi sang JSON mâu thuẫn source; cần sửa tiêu chí đó thay vì '
+        'nhắc lại nó như dữ kiện. Không mở rộng phạm vi hoặc tuyên bố đã chạy test. '
+        'Nguồn: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c', 'revise'),
 }
 
 CASE_TASKS = {
+    'correct_csv_char_unit': ('Nghiên cứu đúng đơn vị và khả năng cấu hình giới hạn CSV trên CPython 3.13.',
+        'Đối chiếu _csv.c đúng phiên bản; chỉ nghiên cứu source, không thực thi hoặc khảo sát HIS.',
+        ['Phân biệt ký tự và byte UTF-8 với ví dụ field tiếng Việt',
+         'Kết luận đúng default/cấu hình, giữ giới hạn chưa chạy test trung thực']),
+    'false_assignment_premise': ('Nghiên cứu khả năng giữ tiếng Việt của CSV trên CPython 3.13; chỉ nghiên cứu.',
+        'Main cho rằng CSV có giới hạn bất biến 128 KiB theo byte và phải chuyển JSON. '
+        'Kiểm cả tiền đề main, báo tiêu chí mâu thuẫn nếu source bác bỏ nó.',
+        ['Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON',
+         'Đọc source CPython 3.13, phân biệt bằng chứng và đề xuất; không triển khai']),
     'false_csv_byte_unit': ('Nghiên cứu đúng đơn vị và giới hạn field của CPython CSV, không triển khai.',
         'Đối chiếu field_size_limit, parse_add_char và cấu trúc field trong source CPython 3.13; '
         'không suy đơn vị chỉ từ hằng 128*1024.',

@@ -857,7 +857,9 @@ class WorkGraph:
             has_exec = any('execute' in node['stages'] for node in run['nodes'])
             if has_exec and run.get('executionRequested'):
                 return 'Call work_graph action=submit so the owner approves execution (Autopilot approves itself).'
-            return 'Answer the owner with the verified result and the document paths.'
+            return ('Answer the owner with the document paths and a short summary of the checked artifacts. '
+                    'The review covers those snapshots only; do not add new technical claims or imply '
+                    'that proposed tests were executed. New consequential conclusions need a revised artifact and check.')
         if status == 'awaiting_approval':
             return 'Wait for the owner decision.'
         if status == 'execute_failed':

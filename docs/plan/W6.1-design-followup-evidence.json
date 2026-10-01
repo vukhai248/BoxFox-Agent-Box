@@ -1,0 +1,386 @@
+{
+  "schema": "work61-old-design-audit/1",
+  "snapshot": {
+    "path": ".tmp/work-checks/w611-old-design-audit/snapshot.db",
+    "sha256": "3242863467b6261b47ada0d37c6940d37d3566577f05c5d4854fa115d4601a69"
+  },
+  "policyAtRun": "work-checks/3",
+  "completion": "incomplete; original driver no longer running; no terminal reason established",
+  "design2": "never started",
+  "rows": [
+    {
+      "sessionId": "e6b8027b964d4d2e80079cb1818131b5",
+      "role": "orchestrator",
+      "legacySessionStatus": "running",
+      "executionStatus": "tool_calls",
+      "finishReason": "tool_calls",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/e6b8027b964d4d2e80079cb1818131b5.md",
+      "answerHash": "66f1c7059c0ab24d86125c24cc9fffe4f5ac04b66d8406056e1755a668207ee4",
+      "assessment": "Main chưa có final/whole review. Có tiếp nhận sửa nhánh rỗng; vẫn xếp reader-limit là ghi chú. Driver hiện không tồn tại, không xác định nguyên nhân kết thúc.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "0066a6092e56440f8488a34d0f5a13f6",
+      "role": "explore",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "length",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/0066a6092e56440f8488a34d0f5a13f6.md",
+      "answerHash": "67c94fda5eefb3d3438c4d406b47a350f83a11695c3ff88d967c00ac5913b01b",
+      "assessment": "Partial length 4k; đúng dòng encode ASCII, sai minh họa H s có space cuối và codepoint; không dùng làm hoàn tất.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "4a19f8ccf15b4df29870a657f1d56213",
+      "role": "explore",
+      "legacySessionStatus": "failed",
+      "executionStatus": "error",
+      "finishReason": null,
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/4a19f8ccf15b4df29870a657f1d56213.md",
+      "answerHash": "2fbdea3939c3c3b5bb95b7d324a135054ef7c5a39e7612945e12ac150a2eaf37",
+      "assessment": "Error; không có deliverable, yêu cầu thực thi giao cho role không có terminal.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "7cbef26817f14115b7b8e2646e0a2941",
+      "role": "explore",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "length",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/7cbef26817f14115b7b8e2646e0a2941.md",
+      "answerHash": "e1ed5ac14d98f20b030b8635ebc93f47a3e759a3df70b530536d6a49b22a6df9",
+      "assessment": "Partial length 4k; có đọc source, báo cáo dở; không certify đủ tiêu chí.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "fd258337b1b046dda740f23dcb16d4e6",
+      "role": "explore",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/fd258337b1b046dda740f23dcb16d4e6.md",
+      "answerHash": "73717939356d54afb22a4cf008bd0b379eb23b76e7129972c97a089f95cd6066",
+      "assessment": "Completed prose nhưng pytest NOT RUN, dự đoán sai chuỗi rỗng. Lookup accepted không chứng minh tiêu chí thực thi đạt.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "8cb9418016d14ef1bc852d2f07bc9ab3",
+      "role": "explore",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/8cb9418016d14ef1bc852d2f07bc9ab3.md",
+      "answerHash": "cab136d4077b70da5443ad59c848b88c5f520cd1278706cc2ca209fa7bf8dfff",
+      "assessment": "Bảng nguồn/encode/coverage có căn cứ; extra Knowledge requests dù main chỉ định format gọn. Không chạy test, đã nêu giới hạn.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "80b7cd61b2c942a7884c88a361356e85",
+      "role": "design",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/80b7cd61b2c942a7884c88a361356e85.md",
+      "answerHash": "41d7cc5c872bbf11e1f9cced39d28b5cf10e3580181ce6b43a4acbebc1a55470",
+      "assessment": "D1 đầu có Q2 count CRLF và Q5 cấm prefix JSON sai; tự thêm chuẩn hóa/control restrictions; chưa thống nhất nhánh rỗng.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "7769606c16764646a63eb5de188413c5",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/7769606c16764646a63eb5de188413c5.md",
+      "answerHash": "20f5f425acd40add99596eab45813c2515e10ca469402e294312dfdd2a666722",
+      "assessment": "Bắt đúng Q2/Q5, nhưng xác nhận sai nhánh rỗng và StringIO default; so source thiếu đường writer/default newline.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "8c4d7a24bed049d99c28cdb911f57bdb",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/8c4d7a24bed049d99c28cdb911f57bdb.md",
+      "answerHash": "1cc79da4ed6910bc1096c148b119c0f6002eebe03baaebaf14f655bd1552563e",
+      "assessment": "Receipt completed nhưng chỉ là tiến độ, thiếu VERDICT/coverage; gate không nhận. Vẫn sai nhánh rỗng.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "fdc775d065114a60bddb58284cb0702d",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/fdc775d065114a60bddb58284cb0702d.md",
+      "answerHash": "9d734a774099738b275561352f36ad42c953b491158a7026831ded07e30d341d",
+      "assessment": "Partial; bắt đúng Q2/Q5. Có giới hạn tools, không nhận làm review hoàn tất.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "83d71ea5557f4b10a16c0eeaed2d0c42",
+      "role": "design",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/83d71ea5557f4b10a16c0eeaed2d0c42.md",
+      "answerHash": "fcb0137ebc5d0ceadd6085764a09535d0219d2960d7f39577452b77417740f18",
+      "assessment": "Partial; đặc tả dở, có guard/control proposal chưa kết thúc. Không certify acceptance.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "4b33b7dd6fab4d969cfb9fcec4318723",
+      "role": "design",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/4b33b7dd6fab4d969cfb9fcec4318723.md",
+      "answerHash": "f89f53e1b8f781d9181cd96743e6d5fccb44227a1c7850a30a3be7c512158959",
+      "assessment": "Partial; sửa Q2/Q5 nhưng kế thừa tiền đề sai nhánh rỗng và StringIO; chưa hoàn tất.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "7c9b011fa3164dbcba58808bb6db9ad2",
+      "role": "design",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/7c9b011fa3164dbcba58808bb6db9ad2.md",
+      "answerHash": "aaed9188e93af20f0cfad1624cdc5bf1edbf9f7518063392e0f311ea6d093354",
+      "assessment": "D1 rút gọn completed nhưng nhánh rỗng/reader sai; tạo mẫu lỗi NUL ngoài yêu cầu. Knowledge boilerplate/size conflict.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "f4f5a72ea64344f9bee7d26ae7aedc8a",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/f4f5a72ea64344f9bee7d26ae7aedc8a.md",
+      "answerHash": "9c3b8b6e50325971c7e70a31f3fbb963102fe30d9c66f1948931b0f236ea5d9b",
+      "assessment": "Đúng thiếu guard touch và size/trailer theo main, nhưng xác nhận sai nhánh rỗng/StringIO. Verdict revise không chứng minh mọi finding đúng.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "3dfee5a2ee2d467f9ca37fe8b5db154c",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/3dfee5a2ee2d467f9ca37fe8b5db154c.md",
+      "answerHash": "63c894da9cff634f63014324f7d86382415d3ce19242c945925d04526cd21ce6",
+      "assessment": "Đối chiếu writer/default đúng, sửa empty/type guard/newline reasoning. Còn phạm vi import/format phụ và coverage headline chưa nhất quán.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "c23b7a918dd9446ca1ef3710630b899a",
+      "role": "design",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/c23b7a918dd9446ca1ef3710630b899a.md",
+      "answerHash": "0ff3f225ff2cc703fc6343fba288fabccb3f8a644685a364cda1f12e90ce79ae",
+      "assessment": "D1 cuối sửa empty/guard, phân loại static/test. B3 mọi chuỗi quá rộng với reader default; got int chỉ là mẫu, đề xuất chưa thi công.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "f15d490c2c584ebd94c79294e1645cdc",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/f15d490c2c584ebd94c79294e1645cdc.md",
+      "answerHash": "dbd274beb01d5d7e1498cabe05d9ef98163170d4f4e6b32ef59f120de2692547",
+      "assessment": "Partial source verification, không có final verdict.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "ae01d805f9ca486ebfeb0bb78b3ef352",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/ae01d805f9ca486ebfeb0bb78b3ef352.md",
+      "answerHash": "f4914116a450311e33942c2154bd5d52b9400d96f9ad6d964ab7d14f0f37d6a2",
+      "assessment": "Partial; chặn ellipsis do lệnh main tự đặt. Không chứng nhận mọi finding/độ nghiêm trọng.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "b5644480b97f4b529322ccfa9fdcd26d",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "partial",
+      "finishReason": "stream_incomplete",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/b5644480b97f4b529322ccfa9fdcd26d.md",
+      "answerHash": "3fe4e5e9c32baefd494ed53f58211d72acc3bc8b5d3a6f5ef91b5ec50a892c1c",
+      "assessment": "Partial; tìm đúng reader-limit nhưng gọi 128 KiB sai đơn vị. Không có final verdict.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "24e54e10a56f4b709831cb634d38abba",
+      "role": "plan-review",
+      "legacySessionStatus": "completed",
+      "executionStatus": "completed",
+      "finishReason": "stop",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/24e54e10a56f4b709831cb634d38abba.md",
+      "answerHash": "75786c549283c276d864acc4159004f74a258b326aba4199e7fa9724c5aec434",
+      "assessment": "Critique pass; sửa đúng empty/guard, nhưng B3 mọi chuỗi sai chỉ xếp note. Ghi test không tự chạy, đúng giới hạn.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    },
+    {
+      "sessionId": "016c992ca5e14aab88707be7cc0a31fa",
+      "role": "plan-review",
+      "legacySessionStatus": "running",
+      "executionStatus": "tool_calls",
+      "finishReason": "tool_calls",
+      "answerPath": ".tmp/work-checks/w611-old-design-audit/016c992ca5e14aab88707be7cc0a31fa.md",
+      "answerHash": "15ae3aff1b754be7100b8de8e78c38a3319d58591457521cf3996224dc8bbf92",
+      "assessment": "Đang có tool/thought khi driver bị dừng; không có verdict/final. Chưa hoàn tất, không gọi timeout/provider failure khi thiếu receipt.",
+      "scope": "Available last nonempty assistant message; not assumed finalized or exhaustive semantic certification."
+    }
+  ],
+  "counterexamples": {
+    "path": ".tmp/work-checks/w611-design-counterexamples.json",
+    "sha256": "39d892c051844acbd53ac4b6dc3784d0d13bdc405fd5daaf97fd9a9f768878fb",
+    "data": {
+      "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:09:58) [MSC v.1929 64 bit (AMD64)]",
+      "scope": "local standard library probes, not execution by the original reviewers",
+      "rows": [
+        {
+          "input": "",
+          "out": "\"\"\r\n",
+          "defaultReader": [
+            [
+              ""
+            ]
+          ],
+          "noneReader": [
+            [
+              ""
+            ]
+          ],
+          "emptyReader": [
+            [
+              ""
+            ]
+          ]
+        },
+        {
+          "input": "a\rb",
+          "out": "\"a\rb\"\r\n",
+          "defaultReader": [
+            [
+              "a\rb"
+            ]
+          ],
+          "noneReader": [
+            [
+              "a\nb"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "a\rb"
+            ]
+          ]
+        },
+        {
+          "input": "a\r\nb",
+          "out": "\"a\r\nb\"\r\n",
+          "defaultReader": [
+            [
+              "a\r\nb"
+            ]
+          ],
+          "noneReader": [
+            [
+              "a\nb"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "a\r\nb"
+            ]
+          ]
+        },
+        {
+          "input": "{",
+          "out": "{\r\n",
+          "defaultReader": [
+            [
+              "{"
+            ]
+          ],
+          "noneReader": [
+            [
+              "{"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "{"
+            ]
+          ]
+        },
+        {
+          "input": "[a]",
+          "out": "[a]\r\n",
+          "defaultReader": [
+            [
+              "[a]"
+            ]
+          ],
+          "noneReader": [
+            [
+              "[a]"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "[a]"
+            ]
+          ]
+        },
+        {
+          "input": "a\u0000b",
+          "out": "a\u0000b\r\n",
+          "defaultReader": [
+            [
+              "a\u0000b"
+            ]
+          ],
+          "noneReader": [
+            [
+              "a\u0000b"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "a\u0000b"
+            ]
+          ]
+        },
+        {
+          "input": "Hồ sơ",
+          "out": "Hồ sơ\r\n",
+          "defaultReader": [
+            [
+              "Hồ sơ"
+            ]
+          ],
+          "noneReader": [
+            [
+              "Hồ sơ"
+            ]
+          ],
+          "emptyReader": [
+            [
+              "Hồ sơ"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

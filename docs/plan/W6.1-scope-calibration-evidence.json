@@ -1,0 +1,435 @@
+{
+  "schema": "work61-scope-calibration/1",
+  "policy": "work-checks/6",
+  "branch": "B",
+  "route": "opencode/space-bunny-free",
+  "sourceHashes": {
+    "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend\\src\\agentbox\\agent_core\\work_checks.py": "d345905815ff84e1fc630db91d3c0f05441a26c089e24c50b458432eb8a78f5d",
+    "backend\\src\\agentbox\\agent_core\\work_graph.py": "9dbe1c73e7c07cee2c0fc7e9a483650655ea00bf9186653d1d2916729ec4c5cd",
+    "backend\\src\\agentbox\\agent_core\\work_policy.py": "005045c3509b4f2ffdebfb9c0653c4105155d4d55178e6e7b52a3a9ff8dac7a0",
+    "backend\\src\\agentbox\\agent_core\\work_prompts.py": "ebf525e757ceaa95d5228d62e9f3554aaaea3e4e19ef54e5dcea4e9781c87642",
+    "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend\\tests\\unit\\test_work_review_scope_w611.py": "80bb926e56469ce6ece5bf18bda4389c91d387d632df3c98fd016ccb1d95d9af",
+    "backend\\tests\\integration\\test_peer_mesh_chain.py": "2f8fa1187a7dc3cfff984853faff24342d84aa0f51bcc557cf40f9641f90f66a",
+    "scripts\\eval\\work_quality_eval.py": "ada2eec5c621499f291b784ccc8777a870134d939e5f8f62f26fa380fb19ac92"
+  },
+  "raw": {
+    "path": ".tmp/work-checks/w611-quality-native/results.json",
+    "sha256": "d09b8230921c9797c92348330a8ffccc8eb0c24b552aaf3b865dff72553aaf3b"
+  },
+  "oracleCount": {
+    "passed": 3,
+    "total": 6
+  },
+  "rows": [
+    {
+      "case": "correct_csv_char_unit",
+      "repeat": 1,
+      "expected": "pass",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 351.035,
+      "assessment": "Critical unit/default facts correct; minor reviewer wording errors remain.",
+      "childId": "9922621bd1314255bafc67d4846c1bb1",
+      "answer": "Đã đọc hết artifact (`allAssignedArtifactsRead: true`, 480 ký tự) và tự mở nguồn gốc được trích.\n\n**Đã kiểm thực tế (không dựa vào artifact):**\n\n| Trích dẫn trong artifact | Kết quả mở nguồn | Vị trí trong `_csv.c` |\n|---|---|---|\n| `Py_UCS4 *field` | **khớp** | `ReaderObj`: `Py_UCS4 *field; /* temporary buffer */` |\n| `parse_add_char so field_len với field_limit` | **khớp nguyên văn** | `if (self->field_len >= field_limit) {...}` rồi `self->field[self->field_len++] = c;` |\n| mặc định `128*1024` | **khớp** | `csv_exec`: `module_state->field_limit = 128 * 1024;` |\n| cấu hình qua `field_size_limit(new_limit)` | **khớp** | `_csv_field_size_limit_impl` → `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, …)` |\n\nNguồn: `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, 42476 ký tự) và `https://docs.python.org/3.13/library/csv.html` (HTTP 200, bản 3.13.16).\n\nBằng chứng phản bác đã xét: tài liệu 3.13 chỉ ghi \"Returns the current maximum field size allowed by the parser\" — **im lặng** về đơn vị, không mâu thuẫn. Trong toàn bộ file chỉ có hai chỗ dùng `field_limit` (khai báo struct + `parse_add_char`), không tồn tại đường byte nào; `field_len` đếm code point, nên kết luận \"ký tự, không phải byte\" đúng. Biên đích chính xác là 131072 (kiểm tra `>=` trước khi nối thêm), đúng như artifact. Số học ví dụ A1 đúng: \"ơ\" (U+01B0/U+01A1) = 2 byte UTF-8 → 80000 × 2 = 160000 byte, còn 80000 ≤ 131072.\n\n## Vấn đề chặn\n\nnone\n\nCả ba mục nghiệm thu đều có căn cứ ở nguồn gốc tôi tự mở; không có khẳng định nào trong artifact bị nguồn chính thức bác bỏ, và giới hạn \"chưa chạy test\" được nêu trung thực đúng như yêu cầu A2.\n\n## Ghi chú không chặn\n\n1. **Đơn vị chính xác là code point (Py_UCS4), không phải ký tự nhìn thấy.** Nếu dữ liệu HIS ở dạng phân rã (NFD), một \"ế\" = 3 code point. Kết luận byte-vs-ký tự không đổi, nên không chặn; nên nói thẳng \"code point\" ở node kế tiếp.\n2. **Giới hạn chỉ có tác dụng khi đọc (parse).** `parse_add_char` thuộc `ReaderObj`; nhánh ghi không kiểm tra `field_limit`. Nếu sản phẩm chỉ xuất CSV, cấu hình này không ràng buộc bước ghi — cần nêu ở node thiết kế, nằm ngoài phạm vi R1 (\"đối chiếu đúng phiên bản\").\n3. **Phạm vi thay đổi toàn module, không theo từng reader/dialect** (`module_state->field_limit`), và mặc định nằm trong `Py_mod_exec`.\n4. **URL dùng nhánh `3.13` (nhánh động, nay ~3.13.16), không có commit pin.** Theo tiêu chí, nhánh có phiên bản xác định được vẫn là phiên bản; chỉ nên ghi rõ để tái lập.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Tự mở _csv.c (3.13): ReaderObj lưu Py_UCS4 *field, parse_add_char đếm field_len (code point) và so với field_limit; ví dụ 80000 ký tự 'ơ' = 160000 byte UTF-8 (U+01B0 2 byte/ký tự) vẫn ≤ 131072 là đúng số học và đúng đơn vị.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"csv_exec đặt module_state->field_limit = 128 * 1024 (=131072, biên đích chính xác vì so sánh '>=' trước khi nối ký tự); _csv_field_size_limit_impl cho phép field_size_limit(new_limit). Artifact tự ghi 'suy luận từ source, chưa chạy counterexample hoặc test HIS' — trung thực. Ghi chú chưa nói rõ chỉ áp dụng khi đọc, nhưng không làm sai kết luận.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở được cả hai nguồn chính thức (raw.githubusercontent.com/cpython/3.13/Modules/_csv.c HTTP 200; docs.python.org/3.13/library/csv.html HTTP 200). Nguồn hỗ trợ nguyên văn mọi trích dẫn; tài liệu 3.13 im lặng về đơn vị nên không có bằng chứng trái chiều. Toàn file chỉ có 2 chỗ dùng field_limit, không có đường đếm byte. Không suy rộng sang phiên bản khác.\"}]}\n```\n\nVERDICT: ok",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Tự mở _csv.c (3.13): ReaderObj lưu Py_UCS4 *field, parse_add_char đếm field_len (code point) và so với field_limit; ví dụ 80000 ký tự 'ơ' = 160000 byte UTF-8 (U+01B0 2 byte/ký tự) vẫn ≤ 131072 là đúng số học và đúng đơn vị."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "csv_exec đặt module_state->field_limit = 128 * 1024 (=131072, biên đích chính xác vì so sánh '>=' trước khi nối ký tự); _csv_field_size_limit_impl cho phép field_size_limit(new_limit). Artifact tự ghi 'suy luận từ source, chưa chạy counterexample hoặc test HIS' — trung thực. Ghi chú chưa nói rõ chỉ áp dụng khi đọc, nhưng không làm sai kết luận."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Mở được cả hai nguồn chính thức (raw.githubusercontent.com/cpython/3.13/Modules/_csv.c HTTP 200; docs.python.org/3.13/library/csv.html HTTP 200). Nguồn hỗ trợ nguyên văn mọi trích dẫn; tài liệu 3.13 im lặng về đơn vị nên không có bằng chứng trái chiều. Toàn file chỉ có 2 chỗ dùng field_limit, không có đường đếm byte. Không suy rộng sang phiên bản khác."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "9d2864d9e42740599cdfc02385be891d",
+          "status": "pass",
+          "completed": false,
+          "execution": {
+            "status": "partial",
+            "reason": "STEP_BUDGET_EXHAUSTED",
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 12,
+            "outputTokens": 10227,
+            "wallMs": 192872,
+            "toolCalls": 14
+          }
+        },
+        {
+          "childId": "9922621bd1314255bafc67d4846c1bb1",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 6,
+            "outputTokens": 10000,
+            "wallMs": 158141,
+            "toolCalls": 8
+          }
+        }
+      ]
+    },
+    {
+      "case": "correct_csv_char_unit",
+      "repeat": 2,
+      "expected": "pass",
+      "status": "revise",
+      "oracle": false,
+      "latencySeconds": 149.959,
+      "assessment": "False severity/scope: reviewer invents HIS export goal despite read-source-only assignment.",
+      "childId": "21d800f202e84cb789bd431b7f2fcd64",
+      "answer": "Đã đọc toàn bộ snapshot (480 ký tự, `allAssignedArtifactsRead=true`) và mở nguồn gốc: `Modules/_csv.c` (raw, nhánh `3.13`), `Lib/csv.py`, và `docs.python.org/3.13/library/csv.html`.\n\n## Kiểm chứng các mục nghiệm thu\n\n**A1 — ký tự vs byte UTF-8 (PASS).** `parse_add_char()` nhận `Py_UCS4 c` và tăng `self->field_len` đúng 1 mỗi code point, so sánh `self->field_len >= field_limit`. Ví dụ \"80000 ký tự `ơ` = 160000 byte UTF-8 nhưng không vượt 131072 ký tự\" đúng số học: `ơ` = U+01A1, 2 byte UTF-8.\n\n**A2 — default/cấu hình + trung thực giới hạn (PASS về con số).** `csv_exec` đặt `field_limit = 128 * 1024`; `_csv_field_size_limit_impl` ghi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, ...)`; `Lib/csv.py` re-export `from _csv import field_size_limit`. Dòng \"suy luận từ source, chưa chạy counterexample hoặc test HIS\" trung thực — NOT RUN đúng với phạm vi node.\n\n**C1 — bằng chứng (một finding chặn, xem dưới).** Các khẳng định cơ chế đều truy được tới đúng dòng source; con số `131072` hiện chỉ có một chỗ (`csv_exec`), nhưng đó *là* chỗ định nghĩa duy nhất, và tài liệu 3.13 cũng không nêu giá trị mặc định — nên một nguồn chính thức ở đây là đủ.\n\n## Vấn đề chặn\n\n**B1 [high] — Thiếu ranh giới phạm vi: `field_size_limit` chỉ áp dụng cho reader, không áp dụng cho writer.**\n- Yêuầu: nhiệm vụ là nghiên cứu \"khả năng cấu hình giới hạn CSV\" phục vụ mục tiêu chép xuất CSV của HIS (chiều ghi).\n- Bằng chứng quan sát: artifact viết chung \"field_size_limit giới hạn ký tự Unicode\" mà không nói giới hạn này chỉ có tác dụng khi **đọc**. Tài liệu 3.13 nói rõ: \"Returns the current maximum field size allowed by **the parser**\". Trong source, đường ghi đi qua `join_append_data(WriterObj *self, ...)` — chỉ kiểm `rec_len == PY_SSIZE_T_MAX` (overflow), hoàn toàn **không** tham chiếu `field_limit`/`parse_add_char`. Writer dùng `Py_UCS4 *rec` và `PyUnicode_READ` — cũng không giới hạn theo field.\n- Bằng chứng phản bác đã xét: tôi đã tìm trong toàn bộ 42.476 ký tự của `_csv.c`; `field_limit` chỉ xuất hiện ở `_csvstate` (khai báo + `csv_exec` + `parse_add_char` + `field_size_limit_impl`), không xuất hiện trong bất kỳ hàm `WriterObj` nào. Vì vậy nhận định \"chỉ reader\" là chắc chắn, và thiếu sót của artifact là khoảng trống phạm vi chứ không phải lỗi phát biểu.\n- Hệ quả cụ thể: nếu node kế tiếp lập kế hoạch chép xuất và coi `field_size_limit` là chốt chặn cho chiều ghi, kế hoạch sẽ thêm biện pháp vô ích, hoặc tệ hơn — quy một lỗi `field larger than field limit` khi đọc lại thành nguyên nhân lỗi chép xuất, dẫn tới chẩn đoán sai.\n- Sửa tối thiểu: thêm một câu phạm vi vào artifact, ví dụ: \"Giới hạn chỉ áp dụng cho chiều đọc (`csv.reader`/`DictReader`, qua `parse_add_char`); chiều ghi (`csv.writer`/`DictWriter`, `join_append_data`) không kiểm `field_limit`, chỉ có chặn tràn `PY_SSIZE_T_MAX`. Với luồng chép xuất CSV, `field_size_limit` không phải tham số cần cấu hình.\"\n\n## Ghi chú không chặn\n\n- Đơn vị chính xác là **code point** (`Py_UCS4`), không phải \"ký tự\" theo nghĩa user-perceived. Với NFD, `ơ` tách thành `o` + U+031B (2 code point/ký tự nhìn thấy). Không làm sai kết luận A1, nhưng nên ghi \"code point\" thay \"ký tự\" nếu có chỗ.\n- `parse_grow_buff` cấp phát `2 * field_size` mỗi lần → bộ nhớ ~4 byte/code point; không thuộc nghiệm thu.\n- Thiếu commit pin cho nhánh `3.13` không phải lỗi đúng/sai; nguồn đã mở đúng nhánh 3.13 như yêu cầu.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Mở Modules/_csv.c (3.13): parse_add_char() nhận Py_UCS4 c, self->field_len++ mỗi code point, so sánh field_len >= field_limit; ví dụ 80000 ký tự 'ơ' (U+01A1) = 160000 byte UTF-8 < trần ký tự 131072 là đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"csv_exec đặt field_limit = 128 * 1024 (=131072); _csv_field_size_limit_impl lưu giá trị mới; Lib/csv.py re-export field_size_limit. Artifact tự ghi 'suy luận từ source, chưa chạy counterexample hoặc test HIS' — trung thực, NOT RUN đúng phạm vi node.\"},{\"id\":\"C1\",\"status\":\"revise\",\"evidence\":\"Finding chặn B1: artifact khẳng định field_size_limit giới hạn ký tự mà không nêu rõ chỉ áp dụng cho reader. Tài liệu 3.13: 'maximum field size allowed by the parser'; _csv.c: join_append_data(WriterObj*) chỉ kiểm rec_len == PY_SSIZE_T_MAX, không tham chiếu field_limit. Thiếu ranh giới đọc/ghi có thể làm kế hoạch chép xuất chẩn đoán sai nguyên nhân lỗi.\"}]}\n```\n\nVERDICT: revise",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Mở Modules/_csv.c (3.13): parse_add_char() nhận Py_UCS4 c, self->field_len++ mỗi code point, so sánh field_len >= field_limit; ví dụ 80000 ký tự 'ơ' (U+01A1) = 160000 byte UTF-8 < trần ký tự 131072 là đúng."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "csv_exec đặt field_limit = 128 * 1024 (=131072); _csv_field_size_limit_impl lưu giá trị mới; Lib/csv.py re-export field_size_limit. Artifact tự ghi 'suy luận từ source, chưa chạy counterexample hoặc test HIS' — trung thực, NOT RUN đúng phạm vi node."
+        },
+        {
+          "id": "C1",
+          "status": "revise",
+          "evidence": "Finding chặn B1: artifact khẳng định field_size_limit giới hạn ký tự mà không nêu rõ chỉ áp dụng cho reader. Tài liệu 3.13: 'maximum field size allowed by the parser'; _csv.c: join_append_data(WriterObj*) chỉ kiểm rec_len == PY_SSIZE_T_MAX, không tham chiếu field_limit. Thiếu ranh giới đọc/ghi có thể làm kế hoạch chép xuất chẩn đoán sai nguyên nhân lỗi."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "21d800f202e84cb789bd431b7f2fcd64",
+          "status": "revise",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 9,
+            "outputTokens": 10322,
+            "wallMs": 149947,
+            "toolCalls": 15
+          }
+        }
+      ]
+    },
+    {
+      "case": "false_assignment_premise",
+      "repeat": 1,
+      "expected": "revise",
+      "status": "pass",
+      "oracle": false,
+      "latencySeconds": 200.679,
+      "assessment": "Correct factual refutation, but A1 silently reinterpreted and passed instead of reporting criterion conflict.",
+      "childId": "b46b58d9ff2347359d6b0d4e80d5a64b",
+      "answer": "Đã đọc đủ artifact (`allAssignedArtifactsRead: true`) và tự mở nguồn gốc. Bằng chứng thu thập:\n\n**Nguồn 1 — `Modules/_csv.c` (nhánh 3.13, HTTP 200, mở trực tiếp):**\n- `ReaderObj`: `Py_UCS4 *field;` + `Py_ssize_t field_len;` → buffer 4 byte/ký tự, bộ đếm đếm *ký tự*, không phải byte.\n- `parse_add_char`: `if (self->field_len >= field_limit) → \"field larger than field limit (%zd)\"` — so sánh với `field_limit`.\n- `csv_exec`: `module_state->field_limit = 128 * 1024;` → con số 128 KiB **có thật**, nhưng là *mặc định*, tính bằng số ký tự Unicode.\n- `_csv_field_size_limit_impl`: `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` → giới hạn **đổi được**.\n- `Reader_iternext`: `c = PyUnicode_READ(kind, data, pos)` rồi `parse_process_char(...)` → mỗi vòng lặp nhét đúng 1 `Py_UCS4`. Không tồn tại bước nào quy đổi ra byte ở toàn bộ đường đọc.\n\n**Nguồn 2 — `docs.python.org/3.13/library/csv.html` (mở, tiêu đề \"Python 3.13.16\"):** `csv.field_size_limit(new_limit)` — *\"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\"*\n\n## Vấn đề chặn\n`none`\n\nTôi đã cố bác bỏ chính finding của producer bằng bằng chứng mạnh nhất: con số `128 * 1024` **thực sự tồn tại** trong `csv_exec`, nên về mặt chữ nghĩa có thể tranh rằng \"128 KiB\" không sai. Nhưng tiền đề gộp ba mệnh đề: *bất biến*, *theo byte*, *bắt buộc chuyển JSON*. Mệnh đề thứ nhất bị bác bởi `_csv_field_size_limit_impl`; mệnh đề thứ hai bị bác bỏ bởi `Py_UCS4` + `PyUnicode_READ`. Không còn mệnh đề nào đứng vững. Kết luận của artifact là chính xác và cản đúng quyết định sai (bỏ CSV vì một giới hạn không tồn tại).\n\n## Ghi chú không chặn\n\n1. **`A1` thiếu phần tiền đề *đúng*.** Artifact chỉ nói tiền đề sai, không nói `128 * 1024` **là mặc định có thật** (`csv_exec`). Người đọc có thể hiểu là CPython không hề có ngưỡng 131072. Sửa tối thiểu: viết lại tiêu chí thành *\"mặc định 131072 ký tự **mỗi field** (đếm theo code point), chỉnh được qua `csv.field_size_limit()`; không có giới hạn theo byte và không có trần cho số field/kích thước file\"*. Đây là thiếu sót về độ chính xác, không làm đảo quyết định định dạng.\n2. **Chưa nói phạm vi của giới hạn.** `field_len` reset trong `parse_save_field`/`parse_reset` ⇒ giới hạn là *per field*, không phải per record hay per file. CSV nhiều dòng với field ngắn hoàn toàn không vướng.\n3. **Kênh rủi ro thật cho tiếng Việt chưa được nhắc** (trong đúng trang docs đã mở): `csv` không tự quyết định encoding; docs ghi file \"will by default be decoded into unicode using the system default encoding (`locale.getencoding()`)\" và yêu cầu `newline=''`. Với dữ liệu tiếng Việt đây mới là rủi ro thực tế. Không chặn vì nó trung lập với lựa chọn CSV/JSON (JSON cũng cần encoding tương tự).\n4. **Không pin commit.** URL trỏ nhánh `3.13` đang chạy (docs hiện 3.13.16). Theo tiêu chí review, thiếu commit pin không phải lỗi đúng/sai; chỉ ghi nhận.\n5. **Counterexample runtime: NOT RUN.** `bash` và `read` không khả dụng trong phiên này, nên tôi không chạy được phép thử parse field tiếng Việt 200.000 ký tự. Kết luận trên là **suy luận từ source**, đã đối chiếu trực tiếp từng dòng mã.\n\n## Ghi chú hình thức\nSnapshot 460 ký tự là ghi chú nghiên cứu cô đọng, không có mục lục Research Markdown đầy đủ; nhưng nhiệm vụ là *phản biện tiền đề* chứ không phải xuất bản dossier, nên không tính là lỗi.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Tiền đề bị source bác bỏ đúng như yêu cầu: _csv.c parse_add_char so field_len(Py_ssize_t, buffer Py_UCS4*) với field_limit; Reader_iternext dùng PyUnicode_READ nên 1 ký tự = 1 bước đếm; _csv_field_size_limit_impl cho phép ghi đè. Không còn căn cứ buộc chuyển JSON.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Đã tự mở https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c (HTTP 200) và docs.python.org/3.13/library/csv.html; artifact tách rõ dữ kiện (Py_UCS4/field_limit/field_size_limit) khỏi đề xuất (sửa tiêu chí) và không tuyên bố đã chạy test.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Nguồn quyết định đã mở và trích đúng đoạn; đã tìm bằng chứng trái chiều mạnh nhất (mặc định 128*1024 trong csv_exec tồn tại) nhưng không đủ bác bỏ vì tính chỉnh được và đơn vị ký tự. Không tìm thấy bằng chứng nào ủng hộ giới hạn byte bất biến.\"}]}\n```\n\nVERDICT: ok",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Tiền đề bị source bác bỏ đúng như yêu cầu: _csv.c parse_add_char so field_len(Py_ssize_t, buffer Py_UCS4*) với field_limit; Reader_iternext dùng PyUnicode_READ nên 1 ký tự = 1 bước đếm; _csv_field_size_limit_impl cho phép ghi đè. Không còn căn cứ buộc chuyển JSON."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Đã tự mở https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c (HTTP 200) và docs.python.org/3.13/library/csv.html; artifact tách rõ dữ kiện (Py_UCS4/field_limit/field_size_limit) khỏi đề xuất (sửa tiêu chí) và không tuyên bố đã chạy test."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Nguồn quyết định đã mở và trích đúng đoạn; đã tìm bằng chứng trái chiều mạnh nhất (mặc định 128*1024 trong csv_exec tồn tại) nhưng không đủ bác bỏ vì tính chỉnh được và đơn vị ký tự. Không tìm thấy bằng chứng nào ủng hộ giới hạn byte bất biến."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "b46b58d9ff2347359d6b0d4e80d5a64b",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 8,
+            "outputTokens": 9948,
+            "wallMs": 200667,
+            "toolCalls": 9
+          }
+        }
+      ]
+    },
+    {
+      "case": "false_assignment_premise",
+      "repeat": 2,
+      "expected": "revise",
+      "status": "pass",
+      "oracle": false,
+      "latencySeconds": 275.55,
+      "assessment": "Correct factual refutation, but A1 silently reinterpreted and passed instead of reporting criterion conflict.",
+      "childId": "ce39f4afc8394245b92bfaa5ca83b5c2",
+      "answer": "## Phản biện độc lập — Work Graph node R1 (research/produce), artifact `a-d2b3e0ee62a04598bb1b54bb35955a34` v1\n\n**Đã đọc:** snapshot đầy đủ (460 ký tự, `allAssignedArtifactsRead=true`).\n\n**Nguồn đã mở (3, đều truy cập thành công, không có truy cập thất bại):**\n1. `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (42.476 ký tự, status 200) — nguồn mà artifact trích.\n2. `https://docs.python.org/3.13/library/csv.html` (bản 3.13.16, status 200).\n3. `https://raw.githubusercontent.com/python/cpython/3.13/Lib/csv.py` (status 200).\n\n**Đối chiếu từng khẳng định của artifact với nguồn gốc:**\n\n| Khẳng định artifact | Bằng chứng tôi đọc được | Kết luận |\n|---|---|---|\n| \"dùng `Py_UCS4` cho field\" | `ReaderObj { Py_UCS4 *field; Py_ssize_t field_size; Py_ssize_t field_len; }` | Đúng |\n| \"so `field_len` với `field_limit` trong `parse_add_char`\" | `parse_add_char()`: `if (self->field_len >= field_limit) { … \"field larger than field limit (%zd)\" }` | Đúng |\n| \"giới hạn là ký tự Unicode, không phải byte UTF-8\" | `parse_process_char()` tăng `field_len` **một lần mỗi `Py_UCS4`**, tức mỗi code point; không có phép tính byte nào trên đường này | Đúng (chính xác hơn: đếm **code point**, không phải grapheme) |\n| \"`field_size_limit` cho phép đổi giới hạn\" | Đuôi hàm setter: `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value); return PyLong_FromSsize_t(old_limit);`; `Lib/csv.py` re-export `field_size_limit`; docs: \"If new_limit is given, this becomes the new limit.\" | Đúng |\n| \"tiền đề 128 KiB bất biến theo byte **mâu thuẫn source**\" | Không tìm thấy bất kỳ giới hạn byte nào; `csv_exec()` đặt `field_limit = 128 * 1024` (mặc định, tính theo ký tự) và setter ghi đè được | Đúng — tiền đề bị bác bỏ |\n\n**Bằng chứng phản bác đã xét (mạnh nhất có thể bác bỏ chính finding của tôi):** chính `_csv.c` có chứa `128 * 1024`, nên câu \"mâu thuẫn source\" hơi tuyệt đối hoá — con số 128 Ki **có thật**, chỉ là (a) đơn vị là code point chứ không phải byte và (b) là giá trị khởi tạo có thể đổi. Người đọc nghiêm túc vẫn đến cùng kết luận (CSV không bị buộc phải đổi JSON), nên độ lệch này làm nhãn \"mâu thuẫn\" quá mạnh chứ không đảo ngược kết luận. Tôi đã thử tìm một chiều ngược lại: không có nguồn chính thức nào cho thấy giới hạn tính theo byte hay bất biến. Chạy counterexample runtime: **NOT RUN** (không có terminal tool trong phiên này; kết luận dựa trên đọc source, đủ để bác tiền đề vì đường đếm không có phép tính byte).\n\n**Quyết định người dùng vs tiền đề:** tiền đề của main đã bị source chính thức bác bỏ; artifact nêu đúng tiêu chí mâu thuẫn (\"đơn vị sai + có thể đổi\") và đưa ra sửa tối thiểu đúng (\"cần sửa tiêu chí đó thay vì nhắc lại nó như dữ kiện\") — không bắt producer nhắc lại tiền đề sai, không yêu cầu kế hoạch triển khai ngoài phạm vi. Đúng nhiệm vụ \"chỉ nghiên cứu\".\n\n## Vấn đề chặn\n\n`none`\n\n## Ghi chú không chặn\n\n1. **Thiếu giá trị mặc định `128 * 1024` code point.** Artifact nói giới hạn \"có thể đổi\" nhưng không nói mặc định là bao nhiêu, trong khi `csv_exec()` đặt `module_state->field_limit = 128 * 1024;`. Rủi ro sử dụng sai ở bước sau: đọc artifact này rồi kết luận \"CSV không có trần\" và bỏ lời gọi `csv.field_size_limit()`, thì một field >131072 code point vẫn ném `_csv.Error: field larger than field limit (131072)`. Sửa tối thiểu: thêm một mệnh đề \"mặc định 131072 code point, đổi được bằng `csv.field_size_limit()`\". Không chặn vì artifact đã nêu đúng cơ chế đổi và kết luận đúng hướng.\n2. **Phạm vi giới hạn chỉ ở đường đọc.** `parse_add_char` thuộc reader; writer dùng `rec`/`rec_len` không có so với `field_limit`. Với sản phẩm chỉ ghi CSV, nhánh này không áp dụng. Không chặn (nhiệm vụ nghiên cứu, không yêu cầu kế hoạch).\n3. **\"ký tự Unicode\" nên là \"code point\".** Với tiếng Việt NFC không ảnh hưởng; với NFD (dấu tách rời) số \"ký tự\" không đồng nghĩa. Chỉ độ chính xác từ ngữ.\n4. **Có thể thêm nguồn thứ hai cho câu \"giới hạn là ký tự\".** `docs.python.org/3.13/library/csv.html` nói \"maximum field size allowed by the parser\" (không nói byte) — tôi đã mở và nó nhất quán, nhưng artifact chỉ dẫn một URL C. Không chặn.\n5. Branch `3.13` chưa pin commit; theo tiêu chí, nhánh có phiên bản xác định được phiên bản → không phải lỗi.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"evidence\": \"Tiền đề main bị bác bỏ bằng nguồn gốc artifact trích: Modules/_csv.c (3.13) parse_add_char so field_len (mỗi Py_UCS4) với field_limit, không có phép tính byte; csv_field_size_limit ghi đè module_state->field_limit. Không có nguồn trái chiều. Ghi chú không chặn: artifact thiếu giá trị mặc định 128*1024 code point.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Đã mở nguồn CPython 3.13 chính thức (_csv.c, Lib/csv.py, docs 3.13.16); dữ kiện (hành vi parser) tách khỏi đề xuất ('cần sửa tiêu chí đó'); artifact tự khai 'không tuyên bố đã chạy test', không triển khai.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"evidence\": \"Mở 3 nguồn, trong đó nguồn trích dẫn xác nhận cả 4 khẳng định; đã xét chiều ngược mạnh nhất (sự tồn tại của hằng 128*1024 trong csv_exec) và thấy chỉ làm nhãn 'mâu thuẫn' quá tuyệt đối, không đảo kết luận; counterexample runtime NOT RUN — không có terminal tool, kết luận dựa trên source.\"}]}\n```\n\nVERDICT: ok",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Tiền đề main bị bác bỏ bằng nguồn gốc artifact trích: Modules/_csv.c (3.13) parse_add_char so field_len (mỗi Py_UCS4) với field_limit, không có phép tính byte; csv_field_size_limit ghi đè module_state->field_limit. Không có nguồn trái chiều. Ghi chú không chặn: artifact thiếu giá trị mặc định 128*1024 code point."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Đã mở nguồn CPython 3.13 chính thức (_csv.c, Lib/csv.py, docs 3.13.16); dữ kiện (hành vi parser) tách khỏi đề xuất ('cần sửa tiêu chí đó'); artifact tự khai 'không tuyên bố đã chạy test', không triển khai."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Mở 3 nguồn, trong đó nguồn trích dẫn xác nhận cả 4 khẳng định; đã xét chiều ngược mạnh nhất (sự tồn tại của hằng 128*1024 trong csv_exec) và thấy chỉ làm nhãn 'mâu thuẫn' quá tuyệt đối, không đảo kết luận; counterexample runtime NOT RUN — không có terminal tool, kết luận dựa trên source."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "ce39f4afc8394245b92bfaa5ca83b5c2",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 5,
+            "outputTokens": 9580,
+            "wallMs": 275538,
+            "toolCalls": 7
+          }
+        }
+      ]
+    },
+    {
+      "case": "version_limited_null_312",
+      "repeat": 1,
+      "expected": "pass",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 152.363,
+      "assessment": "Correct version-specific 3.12 limitation accepted; not generalized to 3.13.",
+      "childId": "fb4c2d4fd9ea4d0191710ee46f2d69b0",
+      "answer": "## Phản biện độc lập — nút R1 (produce v1)\n\nĐã đọc HẾT artifact `a-0a62d7b8147642a1b4f023d96103dbde` (`allAssignedArtifactsRead=true`, 361 ký tự), sau đó tự mở 4 nguồn gốc:\n\n1. `https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst` — HTTP 200, đúng nhánh `3.12`.\n2. `https://raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst` — HTTP 200.\n3. `https://raw.githubusercontent.com/python/cpython/3.12/Lib/csv.py` — HTTP 200.\n4. `https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c` và `.../3.13/Modules/_csv.c` — HTTP 200.\n\n**Kiểm chứng A1.** Nguồn 1 chứa nguyên văn, đúng vị trí `.. _csv-constants:`:\n\n> `Due to a bug, constants :data:`QUOTE_NOTNULL` and :data:`QUOTE_STRINGS` do not affect behaviour of :class:`reader` objects. This bug is fixed in Python 3.13.`\n\nCả hai hằng đều mang `.. versionadded:: 3.12`, và mô tả writer (quote mọi field khác `None`; `None` → chuỗi rỗng không quote) đúng như artifact nói. Nguồn 2 xác nhận chiều \"sửa ở 3.13\": note đã bị gỡ ở `3.13/Doc/library/csv.rst`, và `Modules/_csv.c` 3.13 thay `int numeric_field` bằng `bool unquoted_field` trong `ReaderObj` — tức reader 3.13 thực sự xử lý hai style này, không chỉ xoá ghi chú. URL mà artifact trích là URL nguồn 1, chính xác, không trỏ sai phiên bản.\n\n**Bằng chứng phản bác tôi đã xét trước khi kết luận.** Giả thuyết mạnh nhất có thể bác bỏ finding: 3.12 reader *ném lỗi* khi gặp `QUOTE_NOTNULL`/`QUOTE_STRINGS` (khi đó \"không ảnh hưởng hành vi\" là sai nghĩa). Đọc `3.12/Modules/_csv.c` bác bỏ giả thuyết này và **củng cố** artifact: `dialect_check_quoting()` duyệt `quote_styles[]` vốn chứa `{ QUOTE_STRINGS, ... }` và `{ QUOTE_NOTNULL, ... }` → không `TypeError: bad \"quoting\" value`; `numeric_field` chỉ được bật khi `dialect->quoting == QUOTE_NONNUMERIC`; `parse_save_field()` chỉ ép `float` khi `numeric_field` và không bao giờ sinh `None`. Nghĩa là reader 3.12 **nhận hằng và âm thầm rơi về hành vi mặc định** — đúng với note của tài liệu. Không tìm thấy dấu hiệu phủ định nào.\n\n**A2.** Artifact ghi rõ \"Không tuyên bố đã chạy Python 3.12\", không đòi triển khai, không kèm lệnh hay fixture. Phân biệt dữ kiện/suy luận rõ: mệnh đề đầu là dữ kiện tài liệu, mệnh đề \"tài liệu nói lỗi được sửa ở 3.13\" được gắn đúng nguồn, và ranh giới phiên bản được nêu (\"Không dùng kết luận này cho mọi phiên bản CSV/Python\") — không rơi vào cả bẫy loại bỏ 3.12 vì nó \"chạy được ở 3.13\", lẫn suy rộng ngược từ 3.13 sang 3.12.\n\n**Chạy test:** NOT RUN. Vai trò review không có terminal/interpreter; mọi kết luận ở đây dựa trên văn bản tài liệu và mã nguồn, không phải thực thi. Không truy cập thất bại nào.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\nnone\n\n## Ghi chú không chặn\n\n- **Cơ chế chưa nêu (mức thấp).** \"Không ảnh hưởng hành vi reader\" đúng, nhưng chưa nói *bằng chứng thể hiện ra* là gì. Theo `3.12/Modules/_csv.c`, gọi `csv.reader(..., quoting=csv.QUOTE_NOTNULL)` **không** ném `TypeError` mà âm thầm không đổi hành vi; field rỗng không quote vẫn là `\"\"` chứ không phải `None`. Một câu bổ sung giúp bước sau không giả định sai rằng 3.12 \"chặn\" hai hằng này. Không chặn vì artifact không hề tuyên bố ngược lại.\n- **Chỉ một nguồn tài liệu (mức thấp).** Mệnh đề \"sửa ở 3.13\" hiện dựa vào câu trong tài liệu 3.12. Tôi đã xác nhận độc lập bằng tài liệu 3.13 và `3.13/Modules/_csv.c`, nên căn cứ là đủ; ghi nhận thêm nguồn chỉ là nâng độ chắc, không phải điều kiện.\n- URL ghim theo nhánh, không theo commit — chấp nhận được, không sai.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"3.12/Doc/library/csv.rst mở trực tiếp (HTTP 200) chứa nguyên văn note 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13' cùng versionadded 3.12; 3.13/Doc/library/csv.rst đã gỡ note và 3.13/Modules/_csv.c dùng ReaderObj.unquoted_field — kết luận đúng phiên bản, ngoại lệ đúng nguồn.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Artifact ghi 'Không tuyên bố đã chạy Python 3.12', không đòi triển khai/test/fixture ngoài phạm vi; ranh giới phiên bản được nêu rõ. Test: NOT RUN (review không có interpreter).\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở 4 nguồn gốc (3.12 csv.rst, 3.13 csv.rst, 3.12 Lib/csv.py, 3.12/3.13 Modules/_csv.c). Phản chứng đã xét và bác bỏ: 3.12 Modules/_csv.c dialect_check_quoting chấp nhận QUOTE_STRINGS/QUOTE_NOTNULL (không TypeError), numeric_field chỉ bật cho QUOTE_NONNUMERIC, parse_save_field không sinh None — nguồn C củng cố chứ không phủ định khẳng định của tài liệu.\"}]}\n```\n\nVERDICT: ok",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "3.12/Doc/library/csv.rst mở trực tiếp (HTTP 200) chứa nguyên văn note 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13' cùng versionadded 3.12; 3.13/Doc/library/csv.rst đã gỡ note và 3.13/Modules/_csv.c dùng ReaderObj.unquoted_field — kết luận đúng phiên bản, ngoại lệ đúng nguồn."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Artifact ghi 'Không tuyên bố đã chạy Python 3.12', không đòi triển khai/test/fixture ngoài phạm vi; ranh giới phiên bản được nêu rõ. Test: NOT RUN (review không có interpreter)."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Mở 4 nguồn gốc (3.12 csv.rst, 3.13 csv.rst, 3.12 Lib/csv.py, 3.12/3.13 Modules/_csv.c). Phản chứng đã xét và bác bỏ: 3.12 Modules/_csv.c dialect_check_quoting chấp nhận QUOTE_STRINGS/QUOTE_NOTNULL (không TypeError), numeric_field chỉ bật cho QUOTE_NONNUMERIC, parse_save_field không sinh None — nguồn C củng cố chứ không phủ định khẳng định của tài liệu."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "fb4c2d4fd9ea4d0191710ee46f2d69b0",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 6,
+            "outputTokens": 7871,
+            "wallMs": 152350,
+            "toolCalls": 7
+          }
+        }
+      ]
+    },
+    {
+      "case": "version_limited_null_312",
+      "repeat": 2,
+      "expected": "pass",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 66.007,
+      "assessment": "Correct version-specific 3.12 limitation accepted; not generalized to 3.13.",
+      "childId": "7e0f4a9bc8cf4dd6b15e6282ca793510",
+      "answer": "Đã đọc đủ 1/1 snapshot (`coverageComplete: true`, `allAssignedArtifactsRead: true`, `nextOffset: null`), 361 ký tự, runId thực là `w-267c31b23e` (lần đầu `d37f62a0161d43f8f259` bị từ chối `WORK_RUN_UNKNOWN` — sửa đúng field `runId`, gọi lại một lần).\n\n## Vấn đề chặn\n`none`\n\n## Ghi chú không chặn\n\n**Đã thực sự kiểm (2 nguồn gốc, mở trực tiếp, status 200):**\n\n1. `https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst` (nhánh 3.12 hiện hành) — tại `offset 12903` có nguyên văn:\n   > `.. note::` / `Due to a bug, constants :data:`QUOTE_NOTNULL` and :data:`QUOTE_STRINGS`` / `do not affect behaviour of :class:`reader` objects.` / `This bug is fixed in Python 3.13.`\n   \n   Cùng chỗ xác nhận phần writer: `QUOTE_NOTNULL` — \"Instructs writer objects to quote all fields which are not None… if a field value is None an empty (unquoted) string is written\"; `QUOTE_STRINGS` — \"Instructs writer objects to always place quotes around fields which are strings\"; cả hai mang `.. versionadded:: 3.12`. Ba mệnh đề trong artifact đều khớp từng vế.\n\n2. `https://raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst` — mục `QUOTE_STRINGS` kết thúc rồi đi thẳng vào `The :mod:`csv` module defines the following exception:`; **không còn note lỗi**. Đây là chỗ thứ hai độc lập xác nhận mốc \"sửa ở 3.13\" (không chỉ dựa vào câu tự nhận trong note 3.12).\n\n**Bằng chứng phản bác đã cân nhắc trước khi cho `pass`:**\n- *Sợ nhầm lẫn 3.12.0 với nhánh 3.12*: tôi cố tình đọc **nhánh** `3.12` (đầu mũi hiện hành, tức bản vá 3.12.x mới nhất), không phải tag `v3.12.0`; note lỗi vẫn còn nguyên → không có bản vá 3.12.x nào tài liệu hoá việc sửa. Điều này **củng cố** kết luận artifact thay vì bác bỏ.\n- *Mở rộng quá mức sang 3.13*: artifact tự giới hạn (\"Không dùng kết luận này cho mọi phiên bản\"), và nguồn 3.13 xác nhận giới hạn đó có thật.\n- *Không trộn byte/ký tự, không suy rộng dialect mặc định*: artifact không đưa ra kết luận nào về `quoting` mặc định hay fixture cụ thể nên không có điểm nào sai đơn vị.\n\n**Không chặn (ghi chú):**\n- `medium`: artifact không trích `.. versionadded:: 3.12` cho hai hằng, nên \"3.12\" trong câu đầu đang dựa vào ngữ cảnh nhiệm vụ hơn là vào marker của tài liệu. Bổ sung một mệnh đề \"cả hai hằng `versionadded:: 3.12`\" sẽ tự chứa hơn — không chặn vì kết luận đúng và có nguồn.\n- `low`: chỉ ghi một URL 3.12 trong khi mốc \"sửa ở 3.13\" nên có thêm URL 3.13 làm đối chiếu; tôi đã tự mở 3.13 và nó đúng, nên thiếu này là độ mạnh bằng chứng, không phải sai.\n- `low`: thiếu ledger dòng/đối chiếu bản sửa đổi (`gh-110518`-dạng sự kiện); nhiệm vụ chỉ yêu cầu mức \"tài liệu 3.12 ghi nhận\", mà mức đó đã đạt.\n- *Không chạy counterexample*: `bash`/`terminal_exec` không khả dụng trong phiên này (NOT RUN). Kết luận rút ra từ source/doc, không từ thực thi — trùng với chính điều artifact tự khai.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"evidence\": \"Đã mở https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst (200, offset 12903): note nguyên văn 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13.' Phần writer ('quote all fields which are not None' / 'always place quotes around fields which are strings', versionadded 3.12) cũng khớp. Mốc 3.13 xác nhận độc lập: bản 3.13 đã bỏ note lỗi. Không suy rộng sang phiên bản khác.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Artifact tường minh 'Không tuyên bố đã chạy Python 3.12', không có câu nào mô tả kết quả thực thi, và không yêu cầu triển khai/kiểm thử ngoài phạm vi nghiên cứu.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"evidence\": \"Đã mở 2 nguồn gốc (nhánh 3.12 và 3.13 của Doc/library/csv.rst). Trích dẫn khớp nguyên văn; phân biệt được dữ kiện (note tài liệu 3.12) với suy luận của producer (cảnh báo phạm vi); đã cân nhắc phản bác phiên bản (đọc nhánh 3.12 đầu mũi thay vì v3.12.0) và nó củng cố kết luận. Counterexample runtime: NOT RUN do thiếu công cụ terminal, đã ghi rõ.\"}]}\n```\n\nVERDICT: ok",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Đã mở https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst (200, offset 12903): note nguyên văn 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13.' Phần writer ('quote all fields which are not None' / 'always place quotes around fields which are strings', versionadded 3.12) cũng khớp. Mốc 3.13 xác nhận độc lập: bản 3.13 đã bỏ note lỗi. Không suy rộng sang phiên bản khác."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Artifact tường minh 'Không tuyên bố đã chạy Python 3.12', không có câu nào mô tả kết quả thực thi, và không yêu cầu triển khai/kiểm thử ngoài phạm vi nghiên cứu."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Đã mở 2 nguồn gốc (nhánh 3.12 và 3.13 của Doc/library/csv.rst). Trích dẫn khớp nguyên văn; phân biệt được dữ kiện (note tài liệu 3.12) với suy luận của producer (cảnh báo phạm vi); đã cân nhắc phản bác phiên bản (đọc nhánh 3.12 đầu mũi thay vì v3.12.0) và nó củng cố kết luận. Counterexample runtime: NOT RUN do thiếu công cụ terminal, đã ghi rõ."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "7e0f4a9bc8cf4dd6b15e6282ca793510",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 5,
+            "outputTokens": 4046,
+            "wallMs": 65995,
+            "toolCalls": 6
+          }
+        }
+      ]
+    }
+  ],
+  "tests": {
+    "w611-scope-target": {
+      "path": ".tmp/work-checks/w611-scope-target.xml",
+      "sha256": "e2bd7fae42f2069de36b936f7db4f6390bb3d6c0e635220ba25778e63fbdfd88",
+      "result": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "159",
+        "time": "45.162",
+        "timestamp": "2026-10-01T18:26:11.289216+07:00",
+        "hostname": "Admin-PC"
+      }
+    },
+    "w611-peer-fixture-target": {
+      "path": ".tmp/work-checks/w611-peer-fixture-target.xml",
+      "sha256": "eb5b0a2816de115f21587433a7c6acd7b6c6182efd59f4ca16a12be9e09197f6",
+      "result": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "1",
+        "tests": "3",
+        "time": "4.551",
+        "timestamp": "2026-10-01T18:41:16.926439+07:00",
+        "hostname": "Admin-PC"
+      }
+    },
+    "w611-full": {
+      "path": ".tmp/work-checks/w611-full.xml",
+      "sha256": "ab3f161824f5d8e51ee739d44ddd837d46b80f1a8ac288839920ba995ea98e5e",
+      "result": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "2",
+        "skipped": "21",
+        "tests": "2758",
+        "time": "489.786",
+        "timestamp": "2026-10-01T18:28:51.684112+07:00",
+        "hostname": "Admin-PC"
+      }
+    },
+    "w611-final-full": {
+      "path": ".tmp/work-checks/w611-final-full.xml",
+      "sha256": "f7e9889efde7913986a75c398e46f5f11383e54c2d243355917c90d836a8fbf4",
+      "result": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "21",
+        "tests": "2758",
+        "time": "467.580",
+        "timestamp": "2026-10-01T18:41:57.191875+07:00",
+        "hostname": "Admin-PC"
+      }
+    }
+  },
+  "scope": "Read-only native reviewer with immutable scripted artifacts and actual opened web sources; not full main/DAG or general semantic certification.",
+  "remaining": [
+    "Typed input/criterion conflict must reach main without telling producer to repeat false facts.",
+    "Reviewer false scope/severity still observed.",
+    "Current-source main Plan/Design integration in progress; no completed result yet.",
+    "W7 not implemented."
+  ],
+  "fixtureFailureProof": [
+    {
+      "id": "b1",
+      "name": "file_read",
+      "args": {
+        "path": "xem diff"
+      },
+      "result": {
+        "is_error": true,
+        "error": "TURN_FAILED_TYPEERROR: TypeError: FixtureExecutor.execute() got an unexpected keyword argument 'turn'",
+        "errorCode": "TURN_FAILED_TYPEERROR",
+        "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `file_read` failed with TURN_FAILED_TYPEERROR. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['path']; fields={path:string, offset:integer, limit:integer}."
+      }
+    }
+  ]
+}

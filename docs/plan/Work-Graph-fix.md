@@ -1761,7 +1761,7 @@ Neo W6.5: **7285d950** trên B. Các thay đổi dưới đây giữ UI/UX, DAG 
 - [x] Live source/scope: **6/6** đúng oracle, hai lần mỗi ca false-impossibility/honest-limit/Research không CSV rows; `.tmp/work-checks/w61-source-scope-final`.
 - [x] Whole-review tám hash khác nhau sau patch: **2/2** đọc đủ, R1–R7 revise/R8 pass; `.tmp/work-checks/w61-whole-scope-final`.
 - [x] Ca mới từ R3: **2/2 revise đúng oracle** cho khẳng định CSV có trần byte bất biến; 254,036s và 131,412s tại `.tmp/work-checks/w61-csv-limit-final`. Một lượt có retry sau reviewer partial, không bỏ lượt lỗi khỏi receipt. Snapshot trước sửa provenance/grep; không gọi là live policy 5.
-- [ ] C4 main/producer/repair/whole: `.tmp/work-checks/w61-integration-budget-final`. Research-1 đã hoàn tất, 17 child, 5.485,054s, main 25 bước; đạt giao thức nhưng chưa đạt kiểm nội dung toàn bộ (mục 21). Process đã nạp snapshot trước `work-checks/4`; chỉ dùng để đánh giá hành vi snapshot đó, không chứng nhận patch mới từ process cũ. Các lượt còn lại vẫn đang chạy, chưa tính đạt.
+- [ ] C4 main/producer/repair/whole: `.tmp/work-checks/w61-integration-budget-final`. Research-1 đã hoàn tất, 17 child, 5.485,054s, main 25 bước; đạt giao thức nhưng chưa đạt kiểm nội dung toàn bộ (mục 21). Snapshot trước `work-checks/4`; không chứng nhận patch mới. Driver cũ hiện không tồn tại; Research-2/Plan-1/2 không đạt, Design-1 chưa final/whole, Design-2 chưa khởi chạy. Raw giữ nguyên, chưa xác định nguyên nhân driver kết thúc.
 
 ### 20.2 Finding nội dung và hiệu quả đang kiểm
 
@@ -1795,7 +1795,7 @@ Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics ho�
 - [x] Sửa và regression policy 5 cho provenance feedback/grep tự chứng minh; full backend 2716/18/0.
 - [x] CSV-limit probe 2/2 đúng oracle; receipt/source hashes được giữ riêng theo snapshot.
 - [x] Research-1 đi hết vòng main → producer → revise → bản mới → whole → main final; đánh giá từng output có phạm vi ghi rõ. Lỗi đơn vị và trộn phiên bản vẫn còn, không tick chất lượng chuyên môn đạt.
-- [ ] C4 còn các lượt Research/Plan/Design khác; process đang chạy, không coi thời gian chờ là kết quả.
+- [ ] C4: baseline cũ đã có bốn lượt ghi kết quả và Design-1 dở; driver không còn chạy. Đang đo lại Plan/Design trên policy 6 tại `.tmp/work-checks/w611-integration-current`; chưa có final thì không tính đạt.
 - [x] Probe bổ sung policy 5: `false_csv_byte_unit`, `version_limited_null_312`, `false_modern_null_313`, hai lượt mỗi ca: **6/6 final verdict đúng**, 9 attempt/3 incomplete được giữ. Native reviewer thật/Space Bunny, raw `.tmp/work-checks/w61-units-version-policy5`; finding vượt phạm vi vẫn ghi riêng, không gọi mọi finding đúng. Báo cáo ở mục 22.
 - [ ] **W6.1.1:** tiền đề kỹ thuật sai trong acceptance, đơn vị/version/default/configurable, counterexample cho reviewer, claim mới ở final main chưa được bound vào whole review; checklist chi tiết ở report. Chưa code các việc này.
 - [x] **W6.5.1:** các tầng worker/child deadline/watchdog/Linux và pilot throughput ở 19.5 đã đo; phạm vi/giới hạn từng phép thử được giữ. Mạng mất không dùng suy ra cần nâng timeout; không đổi trần cha, UI/UX hoặc DAG.
@@ -1815,7 +1815,7 @@ Evidence/báo cáo đã lưu:
 - [x] Regression recovery cuối: **8/8** riêng; sáu ca Plan/Research/Design × output/stream, một ca ngoài graph và một ca reasoning-only phục hồi bằng tool vẫn thực thi. Runner đầu test viết sai asyncio (không có running loop), đã sửa fixture, giữ log thất bại; đây không phải lỗi sản phẩm.
 - [x] Full backend cuối sau patch recovery: **2724 passed, 18 skipped, 0 failed/errors**, 450,07s; `.tmp/work-checks/w61-recovery-final-full.xml/.log/.exit`, hash nguồn trước/sau khớp. Sweep trước 2723/18/0 và 531,74s được giữ riêng, trước regression reasoning-only. 18 Linux tests đo riêng, không đổi Windows skips thành pass.
 - [x] Native recovery Space Bunny **2/2**: inject graph rỗng + empty length/stream, sau đó recap model thật; giữ đúng partial/error code, graph còn drafting. Không phải phép thử main tự hoàn tất plan/DAG hoặc tỷ lệ lỗi provider. Raw `.tmp/work-checks/w61-main-recovery-native`, evidence `W6.1-recovery-evidence.json`.
-- [ ] Live C4 còn Design; Research-2 và Plan-1/2 đã có kết quả không đạt, không xóa lượt lỗi hoặc gọi plan hoàn chỉnh. Process nạp snapshot trước policy 4/5 và patch recovery; không chứng nhận source mới.
+- [ ] Live C4: baseline Design-1 dở, driver không còn chạy; Research-2 và Plan-1/2 không đạt. Không xóa lượt lỗi hoặc gọi plan hoàn chỉnh. Baseline nạp trước policy 4/5 và patch recovery, không chứng nhận source mới. Đợt policy 6 mới đo riêng.
 - [ ] W6.1.1 chất lượng/main-final còn mở; các phép đo W6.5.1 đã có kết quả tại 19.5. **W7 chưa code**, phải giữ cùng child ID/context và không reset ngân sách sau interview khi thực hiện.
 
 Neo phép đo W6.5.1: **01c44458**. Bản sửa recovery và báo cáo reviewer được commit riêng sau full suite; tra message Git tương ứng. Eval main bổ sung `mainExecutionStatus/mainPartialReason` và oracle không nhận partial: vocabulary `sessions.status=completed` cũ không được hiểu là graph hoặc deliverable đã xong. Raw cũ không bị ghi lại theo script mới.
@@ -1823,3 +1823,32 @@ Neo phép đo W6.5.1: **01c44458**. Bản sửa recovery và báo cáo reviewer 
 Watchdog boundary 1200s hoàn tất tại `.tmp/work-checks/w65-real-watchdog-boundary`: **1201,387s**, registry lifetime 1201,074s, `failed/WATCHDOG_TIMEOUT`, task cancelled, marker/leader sạch, parentRunning=0/không giữ child slot, đúng một event đóng. Mười lệnh 110s hoàn thành, lệnh tiếp đang chạy khi bị cắt. Đây là fault injection task treo bỏ qua normal child deadline, **không gọi model**, dùng watchdog/registry/slots/Docker worker thật. Evidence `W6.5-watchdog-boundary-evidence.json`; driver neo `b37554db`. Hai container fixture không network/mount đã được dọn; container sản phẩm không bị động.
 
 Throughput/peak concurrency: pilot native Space Bunny `fanoutPerParent=1/3`, ba lookup độc lập, hai lượt mỗi mức, trần cha 40 bước/120s: **4/4 đạt**, 12/12 child có đúng file_read gốc/body/giá trị. Fanout 1: 66,180/64,473s, peak 1; fanout 3: 24,545/23,540s, peak 3. Raw `.tmp/work-checks/w65-concurrency-pilot`, evidence `W6.5-concurrency-evidence.json` có hash và audit từng child. Main/evaluator và local fixture, không phải Docker/full app; có tải provider dùng chung nên không suy speedup production. Không chỉnh scheduler/fanout/queue.
+
+## 23. W6.1.1 — calibration phạm vi và tiền đề, chưa hoàn tất
+
+Neo W6.5.1 đã lưu **cedf58aa**. Quyết định “cho bằng cha” vẫn là `min(profile, owner)` cho bước/deadline, không cấp mọi reviewer 60 bước. Cha 40 kẹp deliverable 60 còn 40; review 14/24 cũng bị kẹp theo cha. Không đổi UI/UX, trần fanout hoặc DAG.
+
+### Đã sửa và kiểm chứng
+
+- [x] Prompt review tách quyết định user/tiền đề main; kiểm phiên bản, dialect, default/cấu hình, byte/code point và biểu diễn/giá trị. Không đòi hai nguồn hoặc commit pin tùy ý. Policy **work-checks/6** buộc check mới cho run cũ.
+- [x] `next` sau verify yêu cầu main trả đường dẫn và tóm tắt artifact đã kiểm, không thêm claim hoặc bịa test. Đây là hướng dẫn, **chưa phải cơ chế chứng nhận mọi câu chat cuối**.
+- [x] Regression mục tiêu **159 passed**, 45,17s. Bài peer riêng **2 passed/1 skipped**, 4,62s.
+- [x] Quét thật `backend/tests` sau sửa fixture: **2737 passed, 21 skipped, 0 failed/errors**, 467,79s. Hash nguồn trước/sau khớp; evidence `W6.1-scope-calibration-evidence.json`.
+
+Đính chính phạm vi các sweep lịch sử: XML `w61-recovery-final-full` 2724/18 không chứa integration; đó là toàn bộ **unit**, trước đây ghi nhãn “full backend” quá rộng. Lượt quét cả backend đầu tiên ở đợt này 2735/21/2; hai failure đều từ mock peer `execute()` thiếu kwargs `turn`, khiến tool lỗi ngay và không chạy sleep. Chỉ sửa fixture theo interface executor thật, thêm assertion tool không lỗi; không sửa production peer hoặc làm đẹp log thất bại.
+
+### Live và phần chưa đạt
+
+[Evidence calibration](W6.1-scope-calibration-evidence.json): sáu lượt reviewer Space Bunny, cùng source snapshot policy 6, artifact fixture bất biến và web source thật. Oracle giao thức/nhiệm vụ **3/6**, không bỏ ba lượt không đạt:
+
+- Đơn vị CSV đúng: một pass; một revise sai độ nghiêm trọng/phạm vi vì tự thêm mục tiêu xuất CSV cho HIS vào bài chỉ nghiên cứu parser. Con số của reviewer đúng, lý do chặn không đúng phạm vi.
+- Tiền đề main sai: hai reviewer bác đúng tiền đề nhưng **âm thầm đổi nghĩa A1 rồi trả pass**. Artifact đúng không đồng nghĩa tiêu chí sai đã được giải quyết. Cần trả conflict cho main sửa tiêu chí, không bắt producer nhắc lại dữ kiện sai.
+- Giới hạn riêng Python 3.12: hai pass đúng, không dùng hành vi 3.13 để bác giới hạn 3.12.
+
+[Audit Design cũ](W6.1-design-followup-evidence.json) ghi từng 20 child và main theo output/checkpoint thực, không tuyên bố chứng nhận mọi claim. Counterexample local phân biệt StringIO default/None/empty và chuỗi rỗng: default `newline='\n'` giữ CR/CRLF; `None` dịch sang LF; writer một field rỗng ra `""\r\n`. Có reviewer bắt đúng lỗi rồi cũng đưa finding sai; nhiều output dở vẫn bị gate từ chối. Một lookup accepted dù tự ghi pytest NOT RUN, cho thấy evidence đọc file chưa chứng minh mọi acceptance thực thi đạt. Design chưa whole/final; không phải plan được duyệt.
+
+- [ ] Bổ sung contract/metadata conflict tiêu chí: tiêu chí A* có tiền đề sai phải trả cho main; artifact đúng được giữ, tránh vòng producer sửa theo tiền đề sai. Không silently pass tiêu chí khác nghĩa.
+- [ ] Chặn false scope/severity dựa trên miền được nhắc như giới hạn, không phải yêu cầu user. Đo lại native sau sửa, giữ mọi attempt/failure.
+- [ ] Hoàn tất và đánh giá từng child/main của `.tmp/work-checks/w611-integration-current` (Plan/Design, hai lượt mỗi ca, cha 40/600). Tiến trình đang đo, chưa tính đạt từ status trung gian.
+- [ ] Main-final binding vẫn chưa chứng nhận claim mới; instruction không thay cho kiểm bản chính thức.
+- [ ] W7 durable feedback/interview/same-child chưa code; chỉ chuyển sang sau khi W6.1 được nghiệm thu. CUA vẫn giữ runbook bàn giao riêng.
