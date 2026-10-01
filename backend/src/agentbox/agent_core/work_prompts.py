@@ -222,8 +222,15 @@ def review_tail(lang='en'):
 
 def child_contract(purpose, lang='en'):
     if purpose == 'review':
-        return choose(lang, '\n\nIndependent Work Graph review: read evidence yourself. End with the single VERDICT line.',
-                      '\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời cuối tiếng Việt có dấu, giữ identifier và trích dẫn. Kết thúc bằng một dòng VERDICT.')
+        return choose(lang,
+            '\n\nIndependent Work Graph review: read evidence yourself. In the FINAL answer include findings, '
+            'a fenced json coverage object with each assigned criterion id/status/target/evidence exactly once, '
+            'then the single final line VERDICT: ok or VERDICT: revise. Prose alone is incomplete. '
+            'Check this format before sending; do not leave coverage or verdict only in reasoning. ',
+            '\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời CUỐI tiếng Việt có dấu, giữ identifier và trích dẫn. '
+            'Gồm finding, object coverage trong fenced json với mỗi criterion id/status/target/evidence đúng một lần, '
+            'rồi đúng một dòng cuối VERDICT: ok hoặc VERDICT: revise. Chỉ prose là chưa hoàn tất. '
+            'Kiểm định dạng trước khi gửi; không để coverage hoặc verdict chỉ trong suy nghĩ. ')
     if purpose == 'knowledge' and lang == 'vi':
         return '\n\nTrả lời tra cứu bằng tiếng Việt có dấu: dữ kiện liên quan, bằng chứng đã đọc, kiểm chứng thực hiện và giới hạn. Giữ nguyên path/URL/identifier/trích dẫn. Không bịa nguồn hoặc quyết định của người dùng.'
     if purpose != 'produce':

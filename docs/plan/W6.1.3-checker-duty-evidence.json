@@ -1,0 +1,2178 @@
+{
+  "scope": "W6.1.3 checker duty / strict final contract; B; OpenCode Space Bunny; no UI/UX changes",
+  "measuredProseCounterexamples": {
+    "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:09:58) [MSC v.1929 64 bit (AMD64)]",
+    "asciiOutput": "H s",
+    "asciiChars": 3,
+    "sourceChars": 25,
+    "NFC": "Hồ sơ",
+    "NFD": "Hồ sơ",
+    "NFCChars": 5,
+    "NFDChars": 8,
+    "NFCEqNFD": false
+  },
+  "previousAnchor": "16ccab07",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+    "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend/src/agentbox/agent_core/work_checks.py": "5b26c7ec8b00c4df1fee8dbb82b888a612b4f19651f8b212bc622eb23c368858",
+    "backend/src/agentbox/agent_core/work_continuations.py": "6d68a2741f028e9e1847b94350c7dc89dd38b86b406a359d81117091025c0d42",
+    "backend/src/agentbox/agent_core/work_feedback.py": "2d1867ee24035d789e193e8d8bf9b90adaffbcb80f6071474ab0556769a8d63c",
+    "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+    "backend/src/agentbox/agent_core/work_graph.py": "039b1dba0897d6daa93237b8fe4e9a215c539627ca57b6caee298659dd45f75f",
+    "backend/src/agentbox/agent_core/work_handoffs.py": "ccafbaa20903bb4b32b25a19be254382fac63728547752ede7bb53d2caff2adf",
+    "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+    "backend/src/agentbox/agent_core/work_prompts.py": "883c3a7593d33f73509f776574f503864ea88cade2c3bf130b035ff3a29034cf",
+    "backend/tests/unit/test_work_reviewer_fairness.py": "22288e679a2ce1343c79a1ad55dcb0e7372c8819652ffa512c3eabc02eb0cc24"
+  },
+  "tests": [
+    {
+      "path": ".tmp/work-checks/w613-duty-target-v1.xml",
+      "stats": {
+        "tests": 103.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 0.0,
+        "time": 21.586
+      },
+      "exit": 0
+    },
+    {
+      "path": ".tmp/work-checks/w613-duty-final-target.xml",
+      "stats": {
+        "tests": 268.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 0.0,
+        "time": 81.446
+      },
+      "exit": 0
+    },
+    {
+      "path": ".tmp/work-checks/w613-duty-full.xml",
+      "stats": {
+        "tests": 2874.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 21.0,
+        "time": 553.398
+      },
+      "exit": 0
+    }
+  ],
+  "liveCases": [
+    {
+      "case": "patch_failing_test",
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 104,
+      "artifactHash": "51a3e8be2cb3e63d323af9b0b8e16c354095e3e6a9dd87a52c9cc6d69fd0fb0d",
+      "expected": [
+        "revise"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "revise",
+      "check": {
+        "checkId": "c-269f6ee0077347a1843056c6cc0f71ea",
+        "runId": "w-6bcb349bd2",
+        "nodeId": "N1",
+        "stage": "execute",
+        "artifactId": "a-182e6cd4a7bb4dbd977495d75b6936a6",
+        "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+        "kind": "tests",
+        "status": "revise",
+        "binding": {
+          "nodeDefinition": "a6c44511e3f3715271531d141db54d50c8b5a05cb5c21722262318f6e28efca1",
+          "dependencies": {},
+          "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+          "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+          "codeSnapshot": {
+            "schema": "work-code/1",
+            "hash": "f427ec2d89bb2342f5a256829ee4adc358d6d8b41e6ce97300105f007d1d2044",
+            "head": "72ca2c40c3499693958d8188230493e6d4aef2ff",
+            "criticalChanges": false
+          }
+        },
+        "workKey": "6d5decf9c440714249f99912545b1bd9e6685d002d208b40752d4e6c0170f3d2",
+        "requestedRecheck": false,
+        "startedAt": 1790885224.2378678,
+        "attempts": [
+          {
+            "childId": "69abce219ef043f6a71e8aceed7e925f",
+            "status": "revise",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 3035,
+              "wallMs": 54087,
+              "toolCalls": 8
+            }
+          }
+        ],
+        "childId": "69abce219ef043f6a71e8aceed7e925f",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "revise",
+            "target": "artifact",
+            "evidence": "python -m pytest -q exit 1: AssertionError assert ['H s'] != ['Hồ sơ']; src/export.py:3 còn encode('ascii', errors='ignore') làm mất dấu — xem B1"
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên cây mã binding và báo trung thực 1 failed, exit_code 1, không bịa pass"
+          }
+        ],
+        "findings": "## Đã kiểm\n\n**Artifact N1/execute/v1** (`a-182e6cd4a7bb4dbd977495d75b6936a6`, 104 ký tự, `coverageComplete: true`, `allAssignedArtifactsRead: true`) — đọc hết, nội dung:\n\n```\n# Handoff fixture\nSửa src/export.py; cần chạy python -m pytest -q.\nChưa chạy test, không tuyên bố pass.\n```\n\n**Bằng chứng gốc trên cây mã được binding:** `src/export.py:3` vẫn còn đúng dòng gây mất dấu:\n\n```python\nvalue = value.encode('ascii', errors='ignore').decode()\n```\n\n`tests/test_export.py:4` khẳng định round-trip `export('Hồ sơ') == ['Hồ sơ']`. `docs/source.md` xác nhận phạm vi chỉ CSV.\n\n**Lệnh bắt buộc đã chạy** (`terminal_exec`, không lệnh shell nào khác — sandbox từ chối `find/git/python --version` với `Fixture permits exactly python -m pytest -q`):\n\n```\npython -m pytest -q\n→ F [100%] ... 1 failed in 0.19s   (exit_code 1)\nE   AssertionError: assert ['H s'] == ['Hồ sơ']\nE     At index 0 diff: 'H s' != 'Hồ sơ'\nFAILED tests/test_export.py::test_unicode\n```\n\n## Vấn đề chặn\n\n**B1 — A1 chưa đạt: exporter vẫn xoá dấu tiếng Việt.**\n- *Yêu cầu được giao:* \"Giữ dấu trong dữ liệu xuất, đối chiếu test thật\".\n- *Bằng chứng quan sát:* `python -m pytest -q` exit 1, `AssertionError: assert ['H s'] != ['Hồ sơ']`. Byte/ký tự: `'Hồ sơ'` (H, ồ, space, s, ơ) qua `encode('ascii', errors='ignore').decode()` thành `'H s'` — đúng 4 ký tự ASCII còn lại sau khi mọi ký tự không phải ASCII bị loại.\n- *Bằng chứng phản bác đã xét:* (a) Test pass nếu lỗi ở test chứ không ở code? Không — test chỉ làm round-trip, lỗi nằm ở dòng strip trong `export`. (b) Artifact có tuyên bố sai không? Không — nó ghi trung thực \"Chưa chạy test, không tuyên bố pass\", nên đây là thiếu hành vi, không phải claim sai. (c) Có nhánh nào khác giữ dấu không? `src/export.py` là toàn bộ đường xuất trong cây (chỉ 3 file), không có fallback.\n- *Hệ quả cụ thể:* Xuất CSV làm mất toàn bộ dấu tiếng Việt; tiêu chí nghiệm thu A1 không thành công, và bước tiếp theo sẽ chốt nhầm rằng lỗi dấu đã xử lý.\n- *Sửa tối thiểu:* xoá dòng `value = value.encode('ascii', errors='ignore').decode()` (`src/export.py:3`). `csv.writer` ghi thẳng `str` vào `io.StringIO(newline='')` đã giữ Unicode, nên dòng này là thủ phạm duy nhất. Khi xuất ra file thật phải mở file với `encoding='utf-8', newline=''`; `docs/source.md` ràng buộc chỉ CSV, không thêm JSON.\n\n## Ghi chú không chặn\n\n- **Khoảng trống đối chiếu snapshot (UNVERIFIED):** binding ghi `codeSnapshot.hash=f427ec2d…`, `head=72ca2c40…`, `criticalChanges=false`. Tôi không chạy được `git`/`sha` để chứng minh working tree khớp hash — nhưng test tôi chạy thực thi trên chính cây đó và thất bại, nên finding không mất căn cứ.\n- **C1 không thuộc lỗi của producer:** handoff ghi \"Chưa chạy test\" là trung thực, không phải C1 (C1 là trách nhiệm checker — tôi đã chạy đúng lệnh bắt buộc và báo đúng assertion đỏ).\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"python -m pytest -q exit 1: AssertionError assert ['H s'] != ['Hồ sơ']; src/export.py:3 còn encode('ascii', errors='ignore') làm mất dấu — xem B1\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên cây mã binding và báo trung thực 1 failed, exit_code 1, không bịa pass\"}]}\n```\n\nVERDICT: revise",
+        "inputConflicts": [],
+        "finishedAt": 1790885278.8230429
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "codebase_glob",
+        "work_artifact_read",
+        "file_read",
+        "file_read",
+        "file_read",
+        "terminal_exec",
+        "terminal_exec"
+      ],
+      "latencySeconds": 54.592,
+      "visibleOutputs": [
+        {
+          "childId": "69abce219ef043f6a71e8aceed7e925f",
+          "attempt": {
+            "childId": "69abce219ef043f6a71e8aceed7e925f",
+            "status": "revise",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 3035,
+              "wallMs": 54087,
+              "toolCalls": 8
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "## Đã kiểm\n\n**Artifact N1/execute/v1** (`a-182e6cd4a7bb4dbd977495d75b6936a6`, 104 ký tự, `coverageComplete: true`, `allAssignedArtifactsRead: true`) — đọc hết, nội dung:\n\n```\n# Handoff fixture\nSửa src/export.py; cần chạy python -m pytest -q.\nChưa chạy test, không tuyên bố pass.\n```\n\n**Bằng chứng gốc trên cây mã được binding:** `src/export.py:3` vẫn còn đúng dòng gây mất dấu:\n\n```python\nvalue = value.encode('ascii', errors='ignore').decode()\n```\n\n`tests/test_export.py:4` khẳng định round-trip `export('Hồ sơ') == ['Hồ sơ']`. `docs/source.md` xác nhận phạm vi chỉ CSV.\n\n**Lệnh bắt buộc đã chạy** (`terminal_exec`, không lệnh shell nào khác — sandbox từ chối `find/git/python --version` với `Fixture permits exactly python -m pytest -q`):\n\n```\npython -m pytest -q\n→ F [100%] ... 1 failed in 0.19s   (exit_code 1)\nE   AssertionError: assert ['H s'] == ['Hồ sơ']\nE     At index 0 diff: 'H s' != 'Hồ sơ'\nFAILED tests/test_export.py::test_unicode\n```\n\n## Vấn đề chặn\n\n**B1 — A1 chưa đạt: exporter vẫn xoá dấu tiếng Việt.**\n- *Yêu cầu được giao:* \"Giữ dấu trong dữ liệu xuất, đối chiếu test thật\".\n- *Bằng chứng quan sát:* `python -m pytest -q` exit 1, `AssertionError: assert ['H s'] != ['Hồ sơ']`. Byte/ký tự: `'Hồ sơ'` (H, ồ, space, s, ơ) qua `encode('ascii', errors='ignore').decode()` thành `'H s'` — đúng 4 ký tự ASCII còn lại sau khi mọi ký tự không phải ASCII bị loại.\n- *Bằng chứng phản bác đã xét:* (a) Test pass nếu lỗi ở test chứ không ở code? Không — test chỉ làm round-trip, lỗi nằm ở dòng strip trong `export`. (b) Artifact có tuyên bố sai không? Không — nó ghi trung thực \"Chưa chạy test, không tuyên bố pass\", nên đây là thiếu hành vi, không phải claim sai. (c) Có nhánh nào khác giữ dấu không? `src/export.py` là toàn bộ đường xuất trong cây (chỉ 3 file), không có fallback.\n- *Hệ quả cụ thể:* Xuất CSV làm mất toàn bộ dấu tiếng Việt; tiêu chí nghiệm thu A1 không thành công, và bước tiếp theo sẽ chốt nhầm rằng lỗi dấu đã xử lý.\n- *Sửa tối thiểu:* xoá dòng `value = value.encode('ascii', errors='ignore').decode()` (`src/export.py:3`). `csv.writer` ghi thẳng `str` vào `io.StringIO(newline='')` đã giữ Unicode, nên dòng này là thủ phạm duy nhất. Khi xuất ra file thật phải mở file với `encoding='utf-8', newline=''`; `docs/source.md` ràng buộc chỉ CSV, không thêm JSON.\n\n## Ghi chú không chặn\n\n- **Khoảng trống đối chiếu snapshot (UNVERIFIED):** binding ghi `codeSnapshot.hash=f427ec2d…`, `head=72ca2c40…`, `criticalChanges=false`. Tôi không chạy được `git`/`sha` để chứng minh working tree khớp hash — nhưng test tôi chạy thực thi trên chính cây đó và thất bại, nên finding không mất căn cứ.\n- **C1 không thuộc lỗi của producer:** handoff ghi \"Chưa chạy test\" là trung thực, không phải C1 (C1 là trách nhiệm checker — tôi đã chạy đúng lệnh bắt buộc và báo đúng assertion đỏ).\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"python -m pytest -q exit 1: AssertionError assert ['H s'] != ['Hồ sơ']; src/export.py:3 còn encode('ascii', errors='ignore') làm mất dấu — xem B1\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên cây mã binding và báo trung thực 1 failed, exit_code 1, không bịa pass\"}]}\n```\n\nVERDICT: revise",
+          "totalWords": 535,
+          "proseWordsExcludingCoverage": 470,
+          "tools": [
+            {
+              "id": "call_FRwJ8lPw4D80jPQzyGdCtMJq",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-182e6cd4a7bb4dbd977495d75b6936a6",
+                "runId": "920f9996e8f094c986c9"
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run '920f9996e8f094c986c9'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_Z48VGCQy3w7CMacyIwBq9boz",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*"
+              },
+              "result": {
+                "content": "src/export.py\ndocs/source.md\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_MGG52kCVMp13Gu2rUjq8Xicn",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-182e6cd4a7bb4dbd977495d75b6936a6"
+              },
+              "result": {
+                "artifactId": "a-182e6cd4a7bb4dbd977495d75b6936a6",
+                "runId": "w-6bcb349bd2",
+                "nodeId": "N1",
+                "stage": "execute",
+                "version": 1,
+                "path": ".plans/work/920f9996e8f094c986c9/w-6bcb349bd2/N1/execute/v1-a-182e6cd4a7bb4dbd977495d75b6936a6.md",
+                "chars": 104,
+                "contentHash": "51a3e8be2cb3e63d323af9b0b8e16c354095e3e6a9dd87a52c9cc6d69fd0fb0d",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885224.2349145,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "a6c44511e3f3715271531d141db54d50c8b5a05cb5c21722262318f6e28efca1",
+                  "dependencies": {},
+                  "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+                  "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+                  "codeSnapshot": {
+                    "schema": "work-code/1",
+                    "hash": "f427ec2d89bb2342f5a256829ee4adc358d6d8b41e6ce97300105f007d1d2044",
+                    "head": "72ca2c40c3499693958d8188230493e6d4aef2ff",
+                    "criticalChanges": false
+                  }
+                },
+                "offset": 0,
+                "content": "# Handoff fixture\nSửa src/export.py; cần chạy python -m pytest -q.\nChưa chạy test, không tuyên bố pass.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_SCAF6Ejwjphhw9Lbu1s7PZi1",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    value = value.encode('ascii', errors='ignore').decode()\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_wuqizqkGOfvEEaTQYciLfsLX",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_8zjwPQE6oLXfjEsf7QYG95cw",
+              "name": "file_read",
+              "args": {
+                "path": "docs/source.md"
+              },
+              "result": {
+                "content": "Chỉ xuất CSV; không JSON.\n",
+                "path": "docs/source.md",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_rr35yj9POL3tDKNPsO6ki49X",
+              "name": "terminal_exec",
+              "args": {
+                "command": "cd \"$(dirname \"$(find . -name export.py -path '*src*' | head -1)\")/..\" 2>/dev/null; pwd; echo \"--- git ---\"; git log --oneline -3 2>&1 | head -5; echo \"--- python ---\"; python --version 2>&1; python3 --version 2>&1; echo \"--- pytest run ---\"; python -m pytest -q 2>&1 | tail -40"
+              },
+              "result": {
+                "is_error": true,
+                "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            },
+            {
+              "id": "call_zPMZsUwBNwcM7u6Y6fzxiCqN",
+              "name": "terminal_exec",
+              "args": {
+                "command": "python -m pytest -q"
+              },
+              "result": {
+                "content": "F                                                                        [100%]\r\n================================== FAILURES ===================================\r\n________________________________ test_unicode _________________________________\r\n\r\n    def test_unicode():\r\n>       assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\r\nE       AssertionError: assert ['H s'] == ['Hồ sơ']\r\nE         \r\nE         At index 0 diff: 'H s' != 'Hồ sơ'\r\nE         Use -v to get more diff\r\n\r\ntests\\test_export.py:4: AssertionError\r\n=========================== short test summary info ===========================\r\nFAILED tests\\test_export.py::test_unicode - AssertionError: assert ['H s'] ==...\r\n1 failed in 0.19s\r\n",
+                "exit_code": 1,
+                "is_error": true,
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 12487,
+              "stepsUsed": 1,
+              "toolsRun": 2,
+              "deadlineUsedMs": 3955,
+              "outputTokens": 120,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 4,
+              "contextEstimate": 13579,
+              "stepsUsed": 2,
+              "toolsRun": 6,
+              "deadlineUsedMs": 7853,
+              "outputTokens": 165,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 14190,
+              "stepsUsed": 3,
+              "toolsRun": 7,
+              "deadlineUsedMs": 14041,
+              "outputTokens": 326,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 14701,
+              "stepsUsed": 4,
+              "toolsRun": 8,
+              "deadlineUsedMs": 17195,
+              "outputTokens": 46,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 17337,
+              "stepsUsed": 5,
+              "toolsRun": 8,
+              "deadlineUsedMs": 54077,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 4,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 4,
+              "outputTokens": 2378,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    value = value.encode('ascii', errors='ignore').decode()\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    },
+    {
+      "case": "patch_failing_test",
+      "repeat": 2,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 104,
+      "artifactHash": "51a3e8be2cb3e63d323af9b0b8e16c354095e3e6a9dd87a52c9cc6d69fd0fb0d",
+      "expected": [
+        "revise"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "revise",
+      "check": {
+        "checkId": "c-718a77f0ff46425482a8c889e6df519b",
+        "runId": "w-ac683b8b21",
+        "nodeId": "N1",
+        "stage": "execute",
+        "artifactId": "a-8ea209aa20f94d319401bbc241e5276e",
+        "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+        "kind": "tests",
+        "status": "revise",
+        "binding": {
+          "nodeDefinition": "a6c44511e3f3715271531d141db54d50c8b5a05cb5c21722262318f6e28efca1",
+          "dependencies": {},
+          "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+          "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+          "codeSnapshot": {
+            "schema": "work-code/1",
+            "hash": "f427ec2d89bb2342f5a256829ee4adc358d6d8b41e6ce97300105f007d1d2044",
+            "head": "6ccb68d5d9fe8fddc8eb25d71b46c1fd45263dbc",
+            "criticalChanges": false
+          }
+        },
+        "workKey": "a59ede8ded2810b919dddd5246d03daaf680c4983956437e3226215315d7212b",
+        "requestedRecheck": false,
+        "startedAt": 1790885279.5775876,
+        "attempts": [
+          {
+            "childId": "4a64c559b68e4949aa9c0e5ed32ef476",
+            "status": "revise",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 3494,
+              "wallMs": 60851,
+              "toolCalls": 7
+            }
+          }
+        ],
+        "childId": "4a64c559b68e4949aa9c0e5ed32ef476",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "revise",
+            "target": "artifact",
+            "evidence": "F1: python -m pytest -q exit 1, AssertionError assert ['H s'] == ['Hồ sơ'] tại tests/test_export.py:4; src/export.py dòng 3 còn value.encode('ascii', errors='ignore').decode() nên mất dấu trước khi csv.writer ghi. Sửa tối thiểu: bỏ dòng đó (chưa chạy xác nhận lại, NOT RUN)."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã tự chạy đúng lệnh bắt buộc python -m pytest -q trên cây mã hiện tại; kết quả thật exit code 1, 1 failed in 0.10s, báo cáo trung thực, không bịa pass. Lệnh shell khác bị fixture chặn và đã ghi nhận là giới hạn."
+          }
+        ],
+        "findings": "## Phản biện độc lập — nút N1 (build, execute)\n\n**Yêu cầu được giao:** \"Sửa exporter để giữ dấu tiếng Việt\"; nghiệm thu A1 = \"Giữ dấu trong dữ liệu xuất, đối chiếu test thật\"; kiểm thử bắt buộc `python -m pytest -q`.\n\n### Bằng chứng tôi đã kiểm (tự chạy, không dùng lại output của producer)\n\n- Đã đọc hết artifact được giao `a-8ea209aa20f94d319401bbc241e5276e` (`allAssignedArtifactsRead=true`, `coverageComplete=true`, 104 ký tự, `status=finalized`, producerId=null). Nội dung: *\"Sửa src/export.py; cần chạy python -m pytest -q. Chưa chạy test, không tuyên bố pass.\"* — đây là handoff fixture, **không** tuyên bố đã sửa hay đã pass.\n- Đọc mã nguồn trên cây được bind: `src/export.py` dòng 3 vẫn còn `value = value.encode('ascii', errors='ignore').decode()`; `tests/test_export.py` có `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Fixture này dùng đúng dữ liệu đó, nên tôi không bác nó là \"chỉ là fixture\".\n- Chạy đúng lệnh bắt buộc `python -m pytest -q` → **exit code 1**, `1 failed in 0.10s`:\n  `AssertionError: assert ['H s'] == ['Hồ sơ']` tại `tests\\test_export.py:4`.\n- Cố chạy `pwd; ls -la` bị fixture chặn (`Fixture permits exactly python -m pytest -q; no shell commands`) — ghi nhận là giới hạn truy cập, không phải lỗi; lệnh bắt buộc vẫn chạy được.\n\n### Vấn đề chặn\n\n**F1 — A1 chưa đạt: exporter vẫn xoá dấu trong dữ liệu xuất.**\n\n- *Yêu cầu bị vi phạm:* A1 \"Giữ dấu trong dữ liệu xuất\".\n- *Bằng chứng quan sát:* test thật trả về `['H s']` cho đầu vào `'Hồ sơ'` — mất cả `ồ` và `ơ`. Nguyên nhân đúng với mã đọc được: `value.encode('ascii', errors='ignore').decode()` loại bỏ mọi code point > U+007F trước khi `csv.writer` ghi ra `StringIO`, nên dấu không bao giờ tới tầng xuất.\n- *Bằng chứng phản bác đã xét:* (1) Có thể đã sửa ở module khác? `codebase_glob **/*.py` chỉ trả về `src/export.py` và `tests/test_export.py`, và test import đúng `from src.export import export`. (2) Đây chỉ là artifact \"chưa chạy test\" nên không đủ để kết luận? Đúng — tôi không dùng lời thừa nhận của producer làm căn cứ; kết luận dựa vào đọc mã và chạy test trên cây hiện tại. (3) Test yếu/giả? Assertion so sánh đúng chuỗi có dấu sau khi đọc ngược qua `csv.reader`; nó đỏ, không phải xanh bịa.\n- *Hệ quả cụ thể:* nếu main coi node N1 là xong, exporter vẫn phát ra dữ liệu mất dấu (CSV `H s`), tức mục tiêu người dùng chưa được đạt và tiêu chí nghiệm thu đỏ.\n- *Sửa tối thiểu:* bỏ đúng một dòng `value = value.encode('ascii', errors='ignore').decode()` trong `src/export.py`; `csv.writer` trên `StringIO` sẽ ghi nguyên chuỗi `str`, assertion kỳ vọng đã có sẵn trong repo. (Đây là suy luận từ source — tôi không sửa file và fixture chỉ cho phép chạy pytest, nên chưa chạy xác nhận lại sau khi sửa: NOT RUN.)\n\n### Ghi chú không chặn\n\n- C1 đạt: tôi đã chạy đủ `python -m pytest -q` và báo trung thực assertion đỏ (exit 1, 1 failed), không bịa pass.\n- `binding.codeSnapshot.head = 6ccb68d5d9fe8fddc8eb25d71b46c1fd45263dbc`, `criticalChanges=false`, `codeSnapshot.hash=f427ec2d…`. Fixture không cho lệnh shell nên tôi **không** tính được hash để đối chiếu cây mã; điều duy nhất xác minh được là: cây hiện tại vẫn chứa dòng ascii-ignore và test đỏ trên chính cây này.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"F1: python -m pytest -q exit 1, AssertionError assert ['H s'] == ['Hồ sơ'] tại tests/test_export.py:4; src/export.py dòng 3 còn value.encode('ascii', errors='ignore').decode() nên mất dấu trước khi csv.writer ghi. Sửa tối thiểu: bỏ dòng đó (chưa chạy xác nhận lại, NOT RUN).\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự chạy đúng lệnh bắt buộc python -m pytest -q trên cây mã hiện tại; kết quả thật exit code 1, 1 failed in 0.10s, báo cáo trung thực, không bịa pass. Lệnh shell khác bị fixture chặn và đã ghi nhận là giới hạn.\"}]}\n```\nVERDICT: revise",
+        "inputConflicts": [],
+        "finishedAt": 1790885340.9184396
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "terminal_exec",
+        "work_artifact_read",
+        "codebase_glob",
+        "file_read",
+        "file_read",
+        "terminal_exec"
+      ],
+      "latencySeconds": 61.348,
+      "visibleOutputs": [
+        {
+          "childId": "4a64c559b68e4949aa9c0e5ed32ef476",
+          "attempt": {
+            "childId": "4a64c559b68e4949aa9c0e5ed32ef476",
+            "status": "revise",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 3494,
+              "wallMs": 60851,
+              "toolCalls": 7
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "## Phản biện độc lập — nút N1 (build, execute)\n\n**Yêu cầu được giao:** \"Sửa exporter để giữ dấu tiếng Việt\"; nghiệm thu A1 = \"Giữ dấu trong dữ liệu xuất, đối chiếu test thật\"; kiểm thử bắt buộc `python -m pytest -q`.\n\n### Bằng chứng tôi đã kiểm (tự chạy, không dùng lại output của producer)\n\n- Đã đọc hết artifact được giao `a-8ea209aa20f94d319401bbc241e5276e` (`allAssignedArtifactsRead=true`, `coverageComplete=true`, 104 ký tự, `status=finalized`, producerId=null). Nội dung: *\"Sửa src/export.py; cần chạy python -m pytest -q. Chưa chạy test, không tuyên bố pass.\"* — đây là handoff fixture, **không** tuyên bố đã sửa hay đã pass.\n- Đọc mã nguồn trên cây được bind: `src/export.py` dòng 3 vẫn còn `value = value.encode('ascii', errors='ignore').decode()`; `tests/test_export.py` có `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Fixture này dùng đúng dữ liệu đó, nên tôi không bác nó là \"chỉ là fixture\".\n- Chạy đúng lệnh bắt buộc `python -m pytest -q` → **exit code 1**, `1 failed in 0.10s`:\n  `AssertionError: assert ['H s'] == ['Hồ sơ']` tại `tests\\test_export.py:4`.\n- Cố chạy `pwd; ls -la` bị fixture chặn (`Fixture permits exactly python -m pytest -q; no shell commands`) — ghi nhận là giới hạn truy cập, không phải lỗi; lệnh bắt buộc vẫn chạy được.\n\n### Vấn đề chặn\n\n**F1 — A1 chưa đạt: exporter vẫn xoá dấu trong dữ liệu xuất.**\n\n- *Yêu cầu bị vi phạm:* A1 \"Giữ dấu trong dữ liệu xuất\".\n- *Bằng chứng quan sát:* test thật trả về `['H s']` cho đầu vào `'Hồ sơ'` — mất cả `ồ` và `ơ`. Nguyên nhân đúng với mã đọc được: `value.encode('ascii', errors='ignore').decode()` loại bỏ mọi code point > U+007F trước khi `csv.writer` ghi ra `StringIO`, nên dấu không bao giờ tới tầng xuất.\n- *Bằng chứng phản bác đã xét:* (1) Có thể đã sửa ở module khác? `codebase_glob **/*.py` chỉ trả về `src/export.py` và `tests/test_export.py`, và test import đúng `from src.export import export`. (2) Đây chỉ là artifact \"chưa chạy test\" nên không đủ để kết luận? Đúng — tôi không dùng lời thừa nhận của producer làm căn cứ; kết luận dựa vào đọc mã và chạy test trên cây hiện tại. (3) Test yếu/giả? Assertion so sánh đúng chuỗi có dấu sau khi đọc ngược qua `csv.reader`; nó đỏ, không phải xanh bịa.\n- *Hệ quả cụ thể:* nếu main coi node N1 là xong, exporter vẫn phát ra dữ liệu mất dấu (CSV `H s`), tức mục tiêu người dùng chưa được đạt và tiêu chí nghiệm thu đỏ.\n- *Sửa tối thiểu:* bỏ đúng một dòng `value = value.encode('ascii', errors='ignore').decode()` trong `src/export.py`; `csv.writer` trên `StringIO` sẽ ghi nguyên chuỗi `str`, assertion kỳ vọng đã có sẵn trong repo. (Đây là suy luận từ source — tôi không sửa file và fixture chỉ cho phép chạy pytest, nên chưa chạy xác nhận lại sau khi sửa: NOT RUN.)\n\n### Ghi chú không chặn\n\n- C1 đạt: tôi đã chạy đủ `python -m pytest -q` và báo trung thực assertion đỏ (exit 1, 1 failed), không bịa pass.\n- `binding.codeSnapshot.head = 6ccb68d5d9fe8fddc8eb25d71b46c1fd45263dbc`, `criticalChanges=false`, `codeSnapshot.hash=f427ec2d…`. Fixture không cho lệnh shell nên tôi **không** tính được hash để đối chiếu cây mã; điều duy nhất xác minh được là: cây hiện tại vẫn chứa dòng ascii-ignore và test đỏ trên chính cây này.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"F1: python -m pytest -q exit 1, AssertionError assert ['H s'] == ['Hồ sơ'] tại tests/test_export.py:4; src/export.py dòng 3 còn value.encode('ascii', errors='ignore').decode() nên mất dấu trước khi csv.writer ghi. Sửa tối thiểu: bỏ dòng đó (chưa chạy xác nhận lại, NOT RUN).\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự chạy đúng lệnh bắt buộc python -m pytest -q trên cây mã hiện tại; kết quả thật exit code 1, 1 failed in 0.10s, báo cáo trung thực, không bịa pass. Lệnh shell khác bị fixture chặn và đã ghi nhận là giới hạn.\"}]}\n```\nVERDICT: revise",
+          "totalWords": 640,
+          "proseWordsExcludingCoverage": 551,
+          "tools": [
+            {
+              "id": "call_67WUTAHhZBZuwkHPWE6QJb3K",
+              "name": "work_artifact_read",
+              "args": {
+                "runId": "a6b91e9ce6ffc95df8a8",
+                "artifactId": "a-8ea209aa20f94d319401bbc241e5276e"
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run 'a6b91e9ce6ffc95df8a8'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_iYxcyNJy2vLn59vOvvXFWad1",
+              "name": "terminal_exec",
+              "args": {
+                "command": "pwd; ls -la"
+              },
+              "result": {
+                "is_error": true,
+                "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            },
+            {
+              "id": "call_WjHExtmOOMsTfI2zWM1FBfPd",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-8ea209aa20f94d319401bbc241e5276e"
+              },
+              "result": {
+                "artifactId": "a-8ea209aa20f94d319401bbc241e5276e",
+                "runId": "w-ac683b8b21",
+                "nodeId": "N1",
+                "stage": "execute",
+                "version": 1,
+                "path": ".plans/work/a6b91e9ce6ffc95df8a8/w-ac683b8b21/N1/execute/v1-a-8ea209aa20f94d319401bbc241e5276e.md",
+                "chars": 104,
+                "contentHash": "51a3e8be2cb3e63d323af9b0b8e16c354095e3e6a9dd87a52c9cc6d69fd0fb0d",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885279.574844,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "a6c44511e3f3715271531d141db54d50c8b5a05cb5c21722262318f6e28efca1",
+                  "dependencies": {},
+                  "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+                  "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+                  "codeSnapshot": {
+                    "schema": "work-code/1",
+                    "hash": "f427ec2d89bb2342f5a256829ee4adc358d6d8b41e6ce97300105f007d1d2044",
+                    "head": "6ccb68d5d9fe8fddc8eb25d71b46c1fd45263dbc",
+                    "criticalChanges": false
+                  }
+                },
+                "offset": 0,
+                "content": "# Handoff fixture\nSửa src/export.py; cần chạy python -m pytest -q.\nChưa chạy test, không tuyên bố pass.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_xEYTIQaX185LkAPlsqQGtpI6",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*.py"
+              },
+              "result": {
+                "content": "src/export.py\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_ypfIH4sKNrVQP7QufdFUWHmQ",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    value = value.encode('ascii', errors='ignore').decode()\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_llaly8KMXDKJExajZtwBVNoS",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_4sRf8YUw74YVRF1wCqHtaodm",
+              "name": "terminal_exec",
+              "args": {
+                "command": "python -m pytest -q"
+              },
+              "result": {
+                "content": "F                                                                        [100%]\r\n================================== FAILURES ===================================\r\n________________________________ test_unicode _________________________________\r\n\r\n    def test_unicode():\r\n>       assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\r\nE       AssertionError: assert ['H s'] == ['Hồ sơ']\r\nE         \r\nE         At index 0 diff: 'H s' != 'Hồ sơ'\r\nE         Use -v to get more diff\r\n\r\ntests\\test_export.py:4: AssertionError\r\n=========================== short test summary info ===========================\r\nFAILED tests\\test_export.py::test_unicode - AssertionError: assert ['H s'] ==...\r\n1 failed in 0.10s\r\n",
+                "exit_code": 1,
+                "is_error": true,
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 12568,
+              "stepsUsed": 1,
+              "toolsRun": 2,
+              "deadlineUsedMs": 3639,
+              "outputTokens": 109,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 13207,
+              "stepsUsed": 2,
+              "toolsRun": 3,
+              "deadlineUsedMs": 6611,
+              "outputTokens": 88,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 13597,
+              "stepsUsed": 3,
+              "toolsRun": 5,
+              "deadlineUsedMs": 10181,
+              "outputTokens": 116,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 14383,
+              "stepsUsed": 4,
+              "toolsRun": 7,
+              "deadlineUsedMs": 15486,
+              "outputTokens": 151,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 17784,
+              "stepsUsed": 5,
+              "toolsRun": 7,
+              "deadlineUsedMs": 60840,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 3,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 3,
+              "outputTokens": 3030,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    value = value.encode('ascii', errors='ignore').decode()\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    },
+    {
+      "case": "research_valid",
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 635,
+      "artifactHash": "0e64be41d385e919255fce43a3b9a0fd90d0fcf40318da5b14ca8fa70c2e5323",
+      "expected": [
+        "pass"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "check": {
+        "checkId": "c-767be9e2db5c40af94f81b3dc8e2450b",
+        "runId": "w-4751a6ffa2",
+        "nodeId": "N1",
+        "stage": "produce",
+        "artifactId": "a-fa9988bc7ae1496baf0a4954263bf98b",
+        "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a",
+        "kind": "evidence",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "9843e1ad024ecf138d86e4973640165ccf451abe675cfc49f32409f19a402044",
+          "dependencies": {},
+          "owner": "5233f884e96a688277a5dcbebee599143de5def807c34a618695f2e3b262eb5b",
+          "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a"
+        },
+        "workKey": "5cd1207fbb22208d709622b620aacc77b12e08a58ab090b5fe2c942ee4a7e4a4",
+        "requestedRecheck": false,
+        "startedAt": 1790885341.418111,
+        "attempts": [
+          {
+            "childId": "2ee58aac40a54eeeaac22e4bd72ee054",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 6,
+              "outputTokens": 3656,
+              "wallMs": 48430,
+              "toolCalls": 8
+            }
+          }
+        ],
+        "childId": "2ee58aac40a54eeeaac22e4bd72ee054",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Artifact giữ phạm vi CSV, loại JSON ('JSON bị loại vì vượt phạm vi'); nguồn gốc docs/source.md đã mở, dòng 1 = 'Chỉ xuất CSV; không JSON.' khớp nguyên văn; codebase_grep 'JSON' chỉ trả docs/source.md:1 nên không có bằng chứng trái chiều trong src/ hay tests/."
+          },
+          {
+            "id": "A2",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Trích dẫn đúng kèm vị trí 'docs/source.md:1'; mục Giới hạn nêu rõ đây là ghi chú phạm vi fixture, không phải chứng nhận chất lượng mã, và chủ động chặn suy rộng 'Không kết luận exporter đã triển khai đúng hay test đã pass'. Đã thử bác bỏ bằng cách đọc src/export.py và tests/test_export.py: không có nội dung nào mâu thuẫn ghi chú."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã mở nguồn gốc docs/source.md (16 ký tự, một dòng) và xác nhận hỗ trợ khẳng định; các giới hạn nêu (không quy định delimiter, encoding, header) đúng với nội dung nguồn — codebase_grep 'delimiter' rỗng và src/export.py không truyền delimiter, nên mặc định ',' của csv.writer không bị gán nhầm cho nguồn; artifact tách dữ kiện/suy luận/đề xuất và nói rõ chưa có bằng chứng web hay pháp lý; codebase_glob cho thấy chỉ 3 file fixture nên không có nguồn ngoài nào bỏ sót. Test NOT RUN do phiên không có terminal_exec."
+          }
+        ],
+        "findings": "## Phản biện độc lập nút Work Graph N1 (produce)\n\n**Đã kiểm:** đọc đầy đủ snapshot `a-fa9988bc7ae1496baf0a4954263bf98b` v1 (`contentHash 0e64be41…`, `chars 635`, `nextOffset=null`, `allAssignedArtifactsRead=true`); mở nguồn gốc `docs/source.md`, `src/export.py`, `tests/test_export.py`; chạy `codebase_grep` cho `JSON` và `delimiter`. Không có công cụ `bash`/`terminal_exec` trong phiên này nên **test KHÔNG chạy (NOT RUN)** — không suy ra kết quả test từ đọc mã.\n\n### Vấn đề chặn — none\n\nCác điểm kiểm tra tiêu chí:\n\n- **A1 (Giữ phạm vi chỉ CSV):** Artifact giữ đúng phạm vi: \"Phạm vi theo ghi chú cung cấp là CSV; không thêm JSON\" và \"JSON bị loại vì vượt phạm vi.\" Trích dẫn `docs/source.md:1` — \"Chỉ xuất CSV; không JSON.\" — được mở và khớp nguyên văn dòng 1 (16 ký tự nội dung, đúng một dòng). Không có chỗ nào trong artifact đề xuất thêm JSON. Pass.\n- **A2 (Trích đúng đoạn nguồn và nêu giới hạn fixture):** Trích dẫn chính xác kèm định vị dòng. Mục \"Giới hạn\" nêu rõ đây là \"ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã\" và chặn suy rộng: \"Không kết luận exporter đã triển khai đúng hay test đã pass\". Đây là ranh giới thực, không phải khiêm tốn hình thức. Tôi đã thử bác bỏ bằng cách kiểm code fixture có mâu thuẫn với ghi chú không: `codebase_grep \"JSON\"` chỉ trả về `docs/source.md:1`, tức exporter và test không sinh JSON, nên phạm vi CSV là nhất quán, không có bằng chứng trái chiều. Pass.\n- **C1 (Mở nguồn gốc quan trọng; kiểm hỗ trợ khẳng định, phạm vi, trái chiều, giới hạn):** Nguồn gốc duy nhất mà artifact dựa vào là `docs/source.md`, tôi đã mở trực tiếp và nội dung hỗ trợ đúng khẳng định. Các giới hạn artifact nêu (\"không quy định delimiter, encoding hay header\") là đúng: `docs/source.md` chỉ có 16 ký tự, không chứa ba khái niệm này; `codebase_grep \"delimiter\"` rỗng và `src/export.py` không truyền `delimiter` nên mặc định là `,` của `csv.writer`, nhưng đó là mặc định thư viện, **không** phải quy định của nguồn — artifact đã phân biệt đúng và không gán mặc định đó cho nguồn. Artifact cũng tách rõ dữ kiện (dòng nguồn) / suy luận (loại JSON vì vượt phạm vi) / đề xuất (\"Đề xuất giữ phạm vi CSV\"), và nêu \"chưa có bằng chứng web hoặc pháp lý\" — không có nguồn ngoài fixture nào tồn tại trong workspace để mở (`codebase_glob` chỉ trả 3 file), nên nhãn giới hạn là chính xác chứ không phải né tránh. Pass.\n\n### Ghi chú không chặn\n\n- Bằng chứng mà nút này nêu là **fixture trong workspace** (`docs/source.md`, `src/export.py`, `tests/test_export.py` đều mang cờ `fixture: true`). Nhiệm vụ dùng đúng dữ liệu đó nên không bác; nhưng nếu câu chốt phạm vi ở node sau phụ thuộc ngoài fixture (víết spec/changelog/API công khai), cần một nguồn ngoài workspace cho phạm vi đó. Ghi chú cho main, không chặn node này.\n- `src/export.py` chỉ xuất đúng một cột, không có `header`; `tests/test_export.py` chỉ kiểm một giá trị unicode qua `csv.reader`. Nếu nghiệm thu sau dựa vào \"test đã pass\" thì test này không đủ bao phủ delimiter/header/quoting — nhưng artifact đã chủ động không kết luận test pass, nên không phải finding chặn của N1.\n- Test bắt buộc ghi \"Dự kiến, chưa chạy\" là đúng với bản chất node nghiên cứu; không đòi producer chạy testở pha produce.\n\n**Kết luận:** cả ba tiêu chí đều có bằng chứng gốc đã mở hỗ trợ, trích dẫn chính xác, ranh giới thực chất thể hiện trong nội dung, và không phát sinh hệ quả sai cho bước kế tiếp. Không còn vấn đề chặn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact giữ phạm vi CSV, loại JSON ('JSON bị loại vì vượt phạm vi'); nguồn gốc docs/source.md đã mở, dòng 1 = 'Chỉ xuất CSV; không JSON.' khớp nguyên văn; codebase_grep 'JSON' chỉ trả docs/source.md:1 nên không có bằng chứng trái chiều trong src/ hay tests/.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích dẫn đúng kèm vị trí 'docs/source.md:1'; mục Giới hạn nêu rõ đây là ghi chú phạm vi fixture, không phải chứng nhận chất lượng mã, và chủ động chặn suy rộng 'Không kết luận exporter đã triển khai đúng hay test đã pass'. Đã thử bác bỏ bằng cách đọc src/export.py và tests/test_export.py: không có nội dung nào mâu thuẫn ghi chú.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc docs/source.md (16 ký tự, một dòng) và xác nhận hỗ trợ khẳng định; các giới hạn nêu (không quy định delimiter, encoding, header) đúng với nội dung nguồn — codebase_grep 'delimiter' rỗng và src/export.py không truyền delimiter, nên mặc định ',' của csv.writer không bị gán nhầm cho nguồn; artifact tách dữ kiện/suy luận/đề xuất và nói rõ chưa có bằng chứng web hay pháp lý; codebase_glob cho thấy chỉ 3 file fixture nên không có nguồn ngoài nào bỏ sót. Test NOT RUN do phiên không có terminal_exec.\"}]}\n```\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790885389.8599243
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "work_artifact_read",
+        "file_read",
+        "codebase_glob",
+        "file_read",
+        "file_read",
+        "codebase_grep",
+        "codebase_grep"
+      ],
+      "latencySeconds": 48.447,
+      "visibleOutputs": [
+        {
+          "childId": "2ee58aac40a54eeeaac22e4bd72ee054",
+          "attempt": {
+            "childId": "2ee58aac40a54eeeaac22e4bd72ee054",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 6,
+              "outputTokens": 3656,
+              "wallMs": 48430,
+              "toolCalls": 8
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "## Phản biện độc lập nút Work Graph N1 (produce)\n\n**Đã kiểm:** đọc đầy đủ snapshot `a-fa9988bc7ae1496baf0a4954263bf98b` v1 (`contentHash 0e64be41…`, `chars 635`, `nextOffset=null`, `allAssignedArtifactsRead=true`); mở nguồn gốc `docs/source.md`, `src/export.py`, `tests/test_export.py`; chạy `codebase_grep` cho `JSON` và `delimiter`. Không có công cụ `bash`/`terminal_exec` trong phiên này nên **test KHÔNG chạy (NOT RUN)** — không suy ra kết quả test từ đọc mã.\n\n### Vấn đề chặn — none\n\nCác điểm kiểm tra tiêu chí:\n\n- **A1 (Giữ phạm vi chỉ CSV):** Artifact giữ đúng phạm vi: \"Phạm vi theo ghi chú cung cấp là CSV; không thêm JSON\" và \"JSON bị loại vì vượt phạm vi.\" Trích dẫn `docs/source.md:1` — \"Chỉ xuất CSV; không JSON.\" — được mở và khớp nguyên văn dòng 1 (16 ký tự nội dung, đúng một dòng). Không có chỗ nào trong artifact đề xuất thêm JSON. Pass.\n- **A2 (Trích đúng đoạn nguồn và nêu giới hạn fixture):** Trích dẫn chính xác kèm định vị dòng. Mục \"Giới hạn\" nêu rõ đây là \"ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã\" và chặn suy rộng: \"Không kết luận exporter đã triển khai đúng hay test đã pass\". Đây là ranh giới thực, không phải khiêm tốn hình thức. Tôi đã thử bác bỏ bằng cách kiểm code fixture có mâu thuẫn với ghi chú không: `codebase_grep \"JSON\"` chỉ trả về `docs/source.md:1`, tức exporter và test không sinh JSON, nên phạm vi CSV là nhất quán, không có bằng chứng trái chiều. Pass.\n- **C1 (Mở nguồn gốc quan trọng; kiểm hỗ trợ khẳng định, phạm vi, trái chiều, giới hạn):** Nguồn gốc duy nhất mà artifact dựa vào là `docs/source.md`, tôi đã mở trực tiếp và nội dung hỗ trợ đúng khẳng định. Các giới hạn artifact nêu (\"không quy định delimiter, encoding hay header\") là đúng: `docs/source.md` chỉ có 16 ký tự, không chứa ba khái niệm này; `codebase_grep \"delimiter\"` rỗng và `src/export.py` không truyền `delimiter` nên mặc định là `,` của `csv.writer`, nhưng đó là mặc định thư viện, **không** phải quy định của nguồn — artifact đã phân biệt đúng và không gán mặc định đó cho nguồn. Artifact cũng tách rõ dữ kiện (dòng nguồn) / suy luận (loại JSON vì vượt phạm vi) / đề xuất (\"Đề xuất giữ phạm vi CSV\"), và nêu \"chưa có bằng chứng web hoặc pháp lý\" — không có nguồn ngoài fixture nào tồn tại trong workspace để mở (`codebase_glob` chỉ trả 3 file), nên nhãn giới hạn là chính xác chứ không phải né tránh. Pass.\n\n### Ghi chú không chặn\n\n- Bằng chứng mà nút này nêu là **fixture trong workspace** (`docs/source.md`, `src/export.py`, `tests/test_export.py` đều mang cờ `fixture: true`). Nhiệm vụ dùng đúng dữ liệu đó nên không bác; nhưng nếu câu chốt phạm vi ở node sau phụ thuộc ngoài fixture (víết spec/changelog/API công khai), cần một nguồn ngoài workspace cho phạm vi đó. Ghi chú cho main, không chặn node này.\n- `src/export.py` chỉ xuất đúng một cột, không có `header`; `tests/test_export.py` chỉ kiểm một giá trị unicode qua `csv.reader`. Nếu nghiệm thu sau dựa vào \"test đã pass\" thì test này không đủ bao phủ delimiter/header/quoting — nhưng artifact đã chủ động không kết luận test pass, nên không phải finding chặn của N1.\n- Test bắt buộc ghi \"Dự kiến, chưa chạy\" là đúng với bản chất node nghiên cứu; không đòi producer chạy testở pha produce.\n\n**Kết luận:** cả ba tiêu chí đều có bằng chứng gốc đã mở hỗ trợ, trích dẫn chính xác, ranh giới thực chất thể hiện trong nội dung, và không phát sinh hệ quả sai cho bước kế tiếp. Không còn vấn đề chặn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact giữ phạm vi CSV, loại JSON ('JSON bị loại vì vượt phạm vi'); nguồn gốc docs/source.md đã mở, dòng 1 = 'Chỉ xuất CSV; không JSON.' khớp nguyên văn; codebase_grep 'JSON' chỉ trả docs/source.md:1 nên không có bằng chứng trái chiều trong src/ hay tests/.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích dẫn đúng kèm vị trí 'docs/source.md:1'; mục Giới hạn nêu rõ đây là ghi chú phạm vi fixture, không phải chứng nhận chất lượng mã, và chủ động chặn suy rộng 'Không kết luận exporter đã triển khai đúng hay test đã pass'. Đã thử bác bỏ bằng cách đọc src/export.py và tests/test_export.py: không có nội dung nào mâu thuẫn ghi chú.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc docs/source.md (16 ký tự, một dòng) và xác nhận hỗ trợ khẳng định; các giới hạn nêu (không quy định delimiter, encoding, header) đúng với nội dung nguồn — codebase_grep 'delimiter' rỗng và src/export.py không truyền delimiter, nên mặc định ',' của csv.writer không bị gán nhầm cho nguồn; artifact tách dữ kiện/suy luận/đề xuất và nói rõ chưa có bằng chứng web hay pháp lý; codebase_glob cho thấy chỉ 3 file fixture nên không có nguồn ngoài nào bỏ sót. Test NOT RUN do phiên không có terminal_exec.\"}]}\n```\nVERDICT: ok",
+          "totalWords": 821,
+          "proseWordsExcludingCoverage": 619,
+          "tools": [
+            {
+              "id": "call_function_jhx3duelhn4r_1",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-fa9988bc7ae1496baf0a4954263bf98b",
+                "runId": "ab455879d10b2d85e1a7",
+                "limit": 8000
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run 'ab455879d10b2d85e1a7'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_01a0f915c62c7079a06366b0",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-fa9988bc7ae1496baf0a4954263bf98b",
+                "limit": 8000
+              },
+              "result": {
+                "artifactId": "a-fa9988bc7ae1496baf0a4954263bf98b",
+                "runId": "w-4751a6ffa2",
+                "nodeId": "N1",
+                "stage": "produce",
+                "version": 1,
+                "path": ".plans/work/ab455879d10b2d85e1a7/w-4751a6ffa2/N1/produce/v1-a-fa9988bc7ae1496baf0a4954263bf98b.md",
+                "chars": 635,
+                "contentHash": "0e64be41d385e919255fce43a3b9a0fd90d0fcf40318da5b14ca8fa70c2e5323",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885341.415493,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "9843e1ad024ecf138d86e4973640165ccf451abe675cfc49f32409f19a402044",
+                  "dependencies": {},
+                  "owner": "5233f884e96a688277a5dcbebee599143de5def807c34a618695f2e3b262eb5b",
+                  "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a"
+                },
+                "offset": 0,
+                "content": "# Nghiên cứu phạm vi fixture\n## Câu trả lời\nPhạm vi theo ghi chú cung cấp là CSV; không thêm JSON.\n## Dữ kiện\nNguồn docs/source.md:1: “Chỉ xuất CSV; không JSON.” Đây chỉ là ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã.\n## Phương án\nGiữ CSV phù hợp ghi chú. JSON bị loại vì vượt phạm vi.\n## Giới hạn\nGhi chú không quy định delimiter, encoding hay header; chưa có bằng chứng web hoặc pháp lý. Không kết luận exporter đã triển khai đúng hay test đã pass; các việc đó cần kiểm chứng riêng.\n## Khuyến nghị\nĐề xuất giữ phạm vi CSV theo ghi chú; không suy ra hợp đồng API hoặc chất lượng implementation từ một dòng nguồn.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_01a0f915cdb775da8c715533",
+              "name": "file_read",
+              "args": {
+                "path": "docs/source.md"
+              },
+              "result": {
+                "content": "Chỉ xuất CSV; không JSON.\n",
+                "path": "docs/source.md",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f915cdb775da8c715534",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*"
+              },
+              "result": {
+                "content": "src/export.py\ndocs/source.md\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f915d69876de9aeb8685",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f915d69876de9aeb8686",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f916160a7677997181fd",
+              "name": "codebase_grep",
+              "args": {
+                "query": "JSON"
+              },
+              "result": {
+                "content": "docs/source.md:1: Chỉ xuất CSV; không JSON.",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f916160a7677997181fe",
+              "name": "codebase_grep",
+              "args": {
+                "query": "delimiter"
+              },
+              "result": {
+                "content": "",
+                "fixture": true
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 13986,
+              "stepsUsed": 1,
+              "toolsRun": 1,
+              "deadlineUsedMs": 2971,
+              "outputTokens": 88,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 14735,
+              "stepsUsed": 2,
+              "toolsRun": 2,
+              "deadlineUsedMs": 7405,
+              "outputTokens": 65,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 15046,
+              "stepsUsed": 3,
+              "toolsRun": 4,
+              "deadlineUsedMs": 9414,
+              "outputTokens": 112,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 15409,
+              "stepsUsed": 4,
+              "toolsRun": 6,
+              "deadlineUsedMs": 11642,
+              "outputTokens": 94,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 17213,
+              "stepsUsed": 5,
+              "toolsRun": 8,
+              "deadlineUsedMs": 27893,
+              "outputTokens": 1221,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 6,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 19160,
+              "stepsUsed": 6,
+              "toolsRun": 8,
+              "deadlineUsedMs": 48422,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 2,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 2,
+              "outputTokens": 2076,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    },
+    {
+      "case": "research_valid",
+      "repeat": 2,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 635,
+      "artifactHash": "0e64be41d385e919255fce43a3b9a0fd90d0fcf40318da5b14ca8fa70c2e5323",
+      "expected": [
+        "pass"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "check": {
+        "checkId": "c-b5933fc5f74c428e8cd0c0760fceeee8",
+        "runId": "w-c430587729",
+        "nodeId": "N1",
+        "stage": "produce",
+        "artifactId": "a-f3b72da6a20b48d6a46135aea52bf0cb",
+        "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a",
+        "kind": "evidence",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "9843e1ad024ecf138d86e4973640165ccf451abe675cfc49f32409f19a402044",
+          "dependencies": {},
+          "owner": "5233f884e96a688277a5dcbebee599143de5def807c34a618695f2e3b262eb5b",
+          "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a"
+        },
+        "workKey": "5607ab2017fc54c02666f8ea4352042bc5d2d36432fd28b01b02398e95ded0da",
+        "requestedRecheck": false,
+        "startedAt": 1790885390.4093893,
+        "attempts": [
+          {
+            "childId": "17f38e973cd6418c8ef2e968047698fe",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 6,
+              "outputTokens": 3634,
+              "wallMs": 46819,
+              "toolCalls": 8
+            }
+          }
+        ],
+        "childId": "17f38e973cd6418c8ef2e968047698fe",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Mở trực tiếp docs/source.md: nội dung thật 'Chỉ xuất CSV; không JSON.' khớp từng ký tự; artifact giữ phạm vi CSV và loại JSON đúng bằng chứng nguồn; src/export.py + tests/test_export.py không có lối xuất JSON nên không có bằng chứng trái chiều."
+          },
+          {
+            "id": "A2",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Trích dẫn 'docs/source.md:1' nguyên văn, đúng số dòng; mục Giới hạn khớp nội dung thật (file một dòng, không nêu delimiter/encoding/header, không có nguồn web/pháp lý) và artifact chủ động không kết luận exporter đúng hay test pass — đúng với test NOT RUN."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Nguồn gốc quan trọng duy nhất (docs/source.md) đã mở và hỗ trợ khẳng định; phạm vi hẹp, giới hạn nêu đúng, không tìm thấy bằng chứng trái chiều trong repo; không có nguồn ngoài nào được cung cấp và artifact ghi rõ chưa có chứng cứ web/pháp lý."
+          }
+        ],
+        "findings": "Đã đọc hết snapshot N1/produce (`a-f3b72da6a20b48d6a46135aea52bf0cb`, 635 ký tự, `allAssignedArtifactsRead=true`) và tự mở bằng chứng gốc trong workspace (`docs/source.md`, `src/export.py`, `tests/test_export.py`). Không sửa source. Test bắt buộc vốnở trạng thái \"Dự kiến, chưa chạy\" và tôi không có terminal trong vai trò này → **NOT RUN**, không suy diễn pass.\n\n## Vấn đề chặn\n\n`none`\n\nKiểm bác từng hướng:\n\n- **A1 — Giữ phạm vi chỉ CSV**: tôi đã mở `docs/source.md` (fixture do nhiệm vụ cung cấp, không bác vì là fixture). Nội dung thật đúng một dòng: `Chỉ xuất CSV; không JSON.` Khớp từng ký tự với trích dẫn trong artifact. Artifact giữ CSV và loại JSON đúng bằng chứng nguồn, không mở rộng phạm vi. Hướng ngược lại cũng thử: `src/export.py` và `tests/test_export.py` không chứa bất kỳ lối xuất JSON nào → không có bằng chứng trái chiều nào trong repo.\n- **A2 — Trích đúng đoạn nguồn và nêu giới hạn fixture**: trích dẫn `docs/source.md:1` là nguyên văn và đúng dòng. Mục \"Giới hạn\" nêu ghi chú không quy định delimiter/encoding/header — kiểm trực tiếp file: đúng là không có các từ khóa đó, chỉ có một dòng. Mục \"Không kết luận exporter đã triển khai đúng hay test đã pass\" là đúng thực tế (`tests/test_export.py` có tồn tại nhưng **chưa chạy**, khớp trạng thái NOT RUN), nên artifact không vượt bằng chứng.\n- **C1 — Mở nguồn gốc, kiểm hỗ trợ/trái chiều/phạm vi/giới hạn**: nguồn gốc duy nhất có liên quan là `docs/source.md`, tôi đã mở trực tiếp; nó **hỗ trợ** đúng khẳng định và giới hạn được nêu khớp nội dung thật của file. Không có nguồn web/pháp lý nào trong repo và artifact nói thẳng là chưa có (`chưa có bằng chứng web hoặc pháp lý`), không giả định im lặng. Rubric cho phép một nguồn chính thức là đủ.\n\nHệ quả: không có finding nào làm bước sau hoặc quyết định người dùng sai.\n\n## Ghi chú không chặn\n\n- Artifact không nhắc rằng `src/export.py` đã tồn tại và dùng `csv.writer(stream).writerow([value])` trên `io.StringIO(newline='')` — tức dialect mặc định (excel), một cột, terminator `\\r\\n`, mã hóa văn bản Unicode. Đây là dữ kiện phạm vi lấy được ngay trong workspace và có thể là \"chỗ thứ hai\" cho nhận định \"không có exporter JSON\". Không chặn: nó chỉ bổ sung, không làm đổi bất kỳ kết luận nghiệm thu nào của N1, và việc này thuộc node khác nếu có.\n- Dạng báo cáo không có các mục \"Mâu thuẫn còn lại / Việc chưa làm / Phản biện\" theo mẫu dossier chuẩn, nhưng rubric của nút là tiêu chí A1/A2/C1 và phần \"Giới hạn\" đã phục vụ đúng vai trò \"việc chưa làm\". Không coi là chặn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mở trực tiếp docs/source.md: nội dung thật 'Chỉ xuất CSV; không JSON.' khớp từng ký tự; artifact giữ phạm vi CSV và loại JSON đúng bằng chứng nguồn; src/export.py + tests/test_export.py không có lối xuất JSON nên không có bằng chứng trái chiều.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích dẫn 'docs/source.md:1' nguyên văn, đúng số dòng; mục Giới hạn khớp nội dung thật (file một dòng, không nêu delimiter/encoding/header, không có nguồn web/pháp lý) và artifact chủ động không kết luận exporter đúng hay test pass — đúng với test NOT RUN.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Nguồn gốc quan trọng duy nhất (docs/source.md) đã mở và hỗ trợ khẳng định; phạm vi hẹp, giới hạn nêu đúng, không tìm thấy bằng chứng trái chiều trong repo; không có nguồn ngoài nào được cung cấp và artifact ghi rõ chưa có chứng cứ web/pháp lý.\"}]}\n```\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790885437.2371871
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "work_artifact_read",
+        "codebase_glob",
+        "codebase_grep",
+        "file_read",
+        "codebase_glob",
+        "file_read",
+        "file_read"
+      ],
+      "latencySeconds": 46.832,
+      "visibleOutputs": [
+        {
+          "childId": "17f38e973cd6418c8ef2e968047698fe",
+          "attempt": {
+            "childId": "17f38e973cd6418c8ef2e968047698fe",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 6,
+              "outputTokens": 3634,
+              "wallMs": 46819,
+              "toolCalls": 8
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "Đã đọc hết snapshot N1/produce (`a-f3b72da6a20b48d6a46135aea52bf0cb`, 635 ký tự, `allAssignedArtifactsRead=true`) và tự mở bằng chứng gốc trong workspace (`docs/source.md`, `src/export.py`, `tests/test_export.py`). Không sửa source. Test bắt buộc vốnở trạng thái \"Dự kiến, chưa chạy\" và tôi không có terminal trong vai trò này → **NOT RUN**, không suy diễn pass.\n\n## Vấn đề chặn\n\n`none`\n\nKiểm bác từng hướng:\n\n- **A1 — Giữ phạm vi chỉ CSV**: tôi đã mở `docs/source.md` (fixture do nhiệm vụ cung cấp, không bác vì là fixture). Nội dung thật đúng một dòng: `Chỉ xuất CSV; không JSON.` Khớp từng ký tự với trích dẫn trong artifact. Artifact giữ CSV và loại JSON đúng bằng chứng nguồn, không mở rộng phạm vi. Hướng ngược lại cũng thử: `src/export.py` và `tests/test_export.py` không chứa bất kỳ lối xuất JSON nào → không có bằng chứng trái chiều nào trong repo.\n- **A2 — Trích đúng đoạn nguồn và nêu giới hạn fixture**: trích dẫn `docs/source.md:1` là nguyên văn và đúng dòng. Mục \"Giới hạn\" nêu ghi chú không quy định delimiter/encoding/header — kiểm trực tiếp file: đúng là không có các từ khóa đó, chỉ có một dòng. Mục \"Không kết luận exporter đã triển khai đúng hay test đã pass\" là đúng thực tế (`tests/test_export.py` có tồn tại nhưng **chưa chạy**, khớp trạng thái NOT RUN), nên artifact không vượt bằng chứng.\n- **C1 — Mở nguồn gốc, kiểm hỗ trợ/trái chiều/phạm vi/giới hạn**: nguồn gốc duy nhất có liên quan là `docs/source.md`, tôi đã mở trực tiếp; nó **hỗ trợ** đúng khẳng định và giới hạn được nêu khớp nội dung thật của file. Không có nguồn web/pháp lý nào trong repo và artifact nói thẳng là chưa có (`chưa có bằng chứng web hoặc pháp lý`), không giả định im lặng. Rubric cho phép một nguồn chính thức là đủ.\n\nHệ quả: không có finding nào làm bước sau hoặc quyết định người dùng sai.\n\n## Ghi chú không chặn\n\n- Artifact không nhắc rằng `src/export.py` đã tồn tại và dùng `csv.writer(stream).writerow([value])` trên `io.StringIO(newline='')` — tức dialect mặc định (excel), một cột, terminator `\\r\\n`, mã hóa văn bản Unicode. Đây là dữ kiện phạm vi lấy được ngay trong workspace và có thể là \"chỗ thứ hai\" cho nhận định \"không có exporter JSON\". Không chặn: nó chỉ bổ sung, không làm đổi bất kỳ kết luận nghiệm thu nào của N1, và việc này thuộc node khác nếu có.\n- Dạng báo cáo không có các mục \"Mâu thuẫn còn lại / Việc chưa làm / Phản biện\" theo mẫu dossier chuẩn, nhưng rubric của nút là tiêu chí A1/A2/C1 và phần \"Giới hạn\" đã phục vụ đúng vai trò \"việc chưa làm\". Không coi là chặn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mở trực tiếp docs/source.md: nội dung thật 'Chỉ xuất CSV; không JSON.' khớp từng ký tự; artifact giữ phạm vi CSV và loại JSON đúng bằng chứng nguồn; src/export.py + tests/test_export.py không có lối xuất JSON nên không có bằng chứng trái chiều.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích dẫn 'docs/source.md:1' nguyên văn, đúng số dòng; mục Giới hạn khớp nội dung thật (file một dòng, không nêu delimiter/encoding/header, không có nguồn web/pháp lý) và artifact chủ động không kết luận exporter đúng hay test pass — đúng với test NOT RUN.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Nguồn gốc quan trọng duy nhất (docs/source.md) đã mở và hỗ trợ khẳng định; phạm vi hẹp, giới hạn nêu đúng, không tìm thấy bằng chứng trái chiều trong repo; không có nguồn ngoài nào được cung cấp và artifact ghi rõ chưa có chứng cứ web/pháp lý.\"}]}\n```\nVERDICT: ok",
+          "totalWords": 591,
+          "proseWordsExcludingCoverage": 456,
+          "tools": [
+            {
+              "id": "call_01a0f9166f0976c3ad1fb5e2",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-f3b72da6a20b48d6a46135aea52bf0cb",
+                "runId": "5d06789eebf46183bd6a"
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run '5d06789eebf46183bd6a'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_01a0f91676c57608980dbc9a",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-f3b72da6a20b48d6a46135aea52bf0cb",
+                "offset": 0,
+                "limit": 8000
+              },
+              "result": {
+                "artifactId": "a-f3b72da6a20b48d6a46135aea52bf0cb",
+                "runId": "w-c430587729",
+                "nodeId": "N1",
+                "stage": "produce",
+                "version": 1,
+                "path": ".plans/work/5d06789eebf46183bd6a/w-c430587729/N1/produce/v1-a-f3b72da6a20b48d6a46135aea52bf0cb.md",
+                "chars": 635,
+                "contentHash": "0e64be41d385e919255fce43a3b9a0fd90d0fcf40318da5b14ca8fa70c2e5323",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885390.4069061,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "9843e1ad024ecf138d86e4973640165ccf451abe675cfc49f32409f19a402044",
+                  "dependencies": {},
+                  "owner": "5233f884e96a688277a5dcbebee599143de5def807c34a618695f2e3b262eb5b",
+                  "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a"
+                },
+                "offset": 0,
+                "content": "# Nghiên cứu phạm vi fixture\n## Câu trả lời\nPhạm vi theo ghi chú cung cấp là CSV; không thêm JSON.\n## Dữ kiện\nNguồn docs/source.md:1: “Chỉ xuất CSV; không JSON.” Đây chỉ là ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã.\n## Phương án\nGiữ CSV phù hợp ghi chú. JSON bị loại vì vượt phạm vi.\n## Giới hạn\nGhi chú không quy định delimiter, encoding hay header; chưa có bằng chứng web hoặc pháp lý. Không kết luận exporter đã triển khai đúng hay test đã pass; các việc đó cần kiểm chứng riêng.\n## Khuyến nghị\nĐề xuất giữ phạm vi CSV theo ghi chú; không suy ra hợp đồng API hoặc chất lượng implementation từ một dòng nguồn.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_01a0f9167fcd7618b9153296",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "docs/**/*"
+              },
+              "result": {
+                "content": "",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f9167fcd7618b9153297",
+              "name": "codebase_grep",
+              "args": {
+                "query": "CSV"
+              },
+              "result": {
+                "content": "docs/source.md:1: Chỉ xuất CSV; không JSON.",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f91694ae70dc87edc8b4",
+              "name": "file_read",
+              "args": {
+                "path": "docs/source.md"
+              },
+              "result": {
+                "content": "Chỉ xuất CSV; không JSON.\n",
+                "path": "docs/source.md",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f91694ae70dc87edc8b5",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*"
+              },
+              "result": {
+                "content": "src/export.py\ndocs/source.md\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f916a5d6726495f34c05",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0f916a5d6726495f34c06",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 13985,
+              "stepsUsed": 1,
+              "toolsRun": 1,
+              "deadlineUsedMs": 2524,
+              "outputTokens": 83,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 14738,
+              "stepsUsed": 2,
+              "toolsRun": 2,
+              "deadlineUsedMs": 4438,
+              "outputTokens": 76,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 15063,
+              "stepsUsed": 3,
+              "toolsRun": 4,
+              "deadlineUsedMs": 6683,
+              "outputTokens": 122,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 15309,
+              "stepsUsed": 4,
+              "toolsRun": 6,
+              "deadlineUsedMs": 12013,
+              "outputTokens": 53,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 15941,
+              "stepsUsed": 5,
+              "toolsRun": 8,
+              "deadlineUsedMs": 16419,
+              "outputTokens": 257,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 6,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 19349,
+              "stepsUsed": 6,
+              "toolsRun": 8,
+              "deadlineUsedMs": 46811,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 2,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 2,
+              "outputTokens": 3043,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    },
+    {
+      "case": "patch_passing_test",
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 131,
+      "artifactHash": "36017b601be5a5a22b70227dd9b0bea26328a42e2d8c0731456a14ac7cdb91d9",
+      "expected": [
+        "pass"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "check": {
+        "checkId": "c-eba75c6745b340e38d789fa644abe8e1",
+        "runId": "w-e4df8bc145",
+        "nodeId": "N1",
+        "stage": "execute",
+        "artifactId": "a-810dbe5532fa4b6995b2c4483526ef80",
+        "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+        "kind": "tests",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "acdeb6dca38d5585809fcdd023b63e41b872d29740e7bb4cbf815ba66941b05e",
+          "dependencies": {},
+          "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+          "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+          "codeSnapshot": {
+            "schema": "work-code/1",
+            "hash": "ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2",
+            "head": "36660f9038d6c0d03dffd4cd11f1019ae351bc8e",
+            "criticalChanges": false
+          }
+        },
+        "workKey": "1d8ae944fbe36b26796d53ac38d40847d079804261d891ffa32b4008dabe28ce",
+        "requestedRecheck": false,
+        "startedAt": 1790885437.9582105,
+        "attempts": [
+          {
+            "childId": "3e6a7b8c58f745289b51e0018c7a20dd",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 4699,
+              "wallMs": 69120,
+              "toolCalls": 8
+            }
+          }
+        ],
+        "childId": "3e6a7b8c58f745289b51e0018c7a20dd",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Claim 'src/export.py giữ nguyên chuỗi đầu vào' được đối chiếu trực tiếp: src/export.py:2-5 trả str qua csv.writer trên io.StringIO (không có bước encode byte); tests/test_export.py:4 assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] với cả input và kỳ vọng đều có dấu (ồ, ơ) đọc từ nội dung ký tự trên đĩa. Tôi tự chạy `python -m pytest -q` trên cây được binding: 1 passed, exit_code=0."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã chạy đúng lệnh bắt buộc `python -m pytest -q` một lần trên snapshot mã được binding (codeSnapshot.hash=ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2): output '.  [100%] / 1 passed in 0.07s', exit_code=0, is_error=false. Không có lệnh bắt buộc nào khác; không báo cáo pass nào không tự chạy. Artifact tự khai 'chưa tuyên bố test đã chạy' không phải lỗi C1."
+          }
+        ],
+        "findings": "Đã đọc hết snapshot được giao (`allAssignedArtifactsRead: true`, `coverageComplete: true`) và tự chạy lệnh bắt buộc.\n\n## Kiểm chứng đã thực hiện\n\n**Artifact** `a-810dbe5532fa4b6995b2c4483526ef80` (N1/execute/v1, 131 ký tự, `status: finalized`) nêu đúng một claim: \"Hàm src/export.py giữ nguyên chuỗi đầu vào\" và tự khai \"chưa tuyên bố test đã chạy\". Binding: `codeSnapshot.hash=ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2`, `head=36660f9038d6c0d03dffd4cd11f1019ae351bc8e`, `criticalChanges=false`.\n\n**Lệnh bắt buộc (C1)** — đã chạy, không bịa pass:\n```\n$ python -m pytest -q\n.                                                                        [100%]\n1 passed in 0.07s\nexit_code = 0\n```\n\n**Đối chiếu mã nguồn** (`src/export.py`, `tests/test_export.py`):\n- `export()` dùng `io.StringIO(newline='')` + `csv.writer(...).writerow([value])` và trả `stream.getvalue()` — một `str`. Không có bước encode/decode byte nào, nên không có ranh giới byte nào có thể làm hỏng dấu.\n- Assertion thật: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Cả input lẫn giá trị kỳ vọng đều chứa dấu (`ồ`, `ơ`) — tôi đã đọc nội dung ký tự trên đĩa, không phải suy ra từ tên. Vì vậy test không rỗng: nó thật sự so dấu.\n\n## Vấn đề chặn\n\n`none`\n\nXét ngược mạnh nhất để bác bỏ chính kết luận \"A1 đạt\": nếu test chỉ so sánh một chuỗi `str` thì liệu có bảo chứng \"giữ dấu trong **dữ liệu xuất**\" không? Trong đúng phạm vi được giao, có: hàm xuất trả `str`, dấu hiện diện trong `str` đó, và tôi đã tự chạy test trên cây được binding để xác nhận. `criticalChanges=false` không chứng minh cây mã chưa đổi nên tôi không suy ra ngược lại là \"chưa sửa\"; nhiều hơn nữa artifact không tuyên bố thay đổi file cụ thể nên không có claim nào sai để bác bỏ. Việc thiếu test ở tầng byte là giới hạn chưa kiểm của một luồng không tồn tại trong exporter hiện tại, không phải lỗi đã xác nhận.\n\n## Ghi chú không chặn\n\n- Test hiện chỉ phủ vòng khép kín `str` (`StringIO → str`); chưa có đường ghi file/byte (`open(..., encoding=...)`) để đối chiếu. Đường đó không tồn tại trong `src/export.py` hiện tại nên ngoài phạm vi N1; chỉ nên siết nếu thay đổi sau này đưa byte vào exporter.\n- Fixture terminal chỉ cho phép đúng `python -m pytest -q` (lệnh `ls` bị chặn: \"Fixture permits exactly python -m pytest -q; no shell commands\"), nên tôi không tính lại được `codeSnapshot.hash` độc lập; sự khớp hash↔cây mã do harness binding xác nhận. Điều này không làm mất căn cứ kết luận vì claim của khớp đúng nội dung file tôi đã đọc.\n- Câu lệnh kiểm thử bắt buộc chỉ gồm `python -m pytest -q`; không có lệnh nào khác bị bỏ sót.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Claim 'src/export.py giữ nguyên chuỗi đầu vào' được đối chiếu trực tiếp: src/export.py:2-5 trả str qua csv.writer trên io.StringIO (không có bước encode byte); tests/test_export.py:4 assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] với cả input và kỳ vọng đều có dấu (ồ, ơ) đọc từ nội dung ký tự trên đĩa. Tôi tự chạy `python -m pytest -q` trên cây được binding: 1 passed, exit_code=0.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` một lần trên snapshot mã được binding (codeSnapshot.hash=ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2): output '.  [100%] / 1 passed in 0.07s', exit_code=0, is_error=false. Không có lệnh bắt buộc nào khác; không báo cáo pass nào không tự chạy. Artifact tự khai 'chưa tuyên bố test đã chạy' không phải lỗi C1.\"}]}\n```\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790885507.5592499
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "terminal_exec",
+        "work_artifact_read",
+        "terminal_exec",
+        "codebase_glob",
+        "codebase_grep",
+        "file_read",
+        "file_read"
+      ],
+      "latencySeconds": 69.605,
+      "visibleOutputs": [
+        {
+          "childId": "3e6a7b8c58f745289b51e0018c7a20dd",
+          "attempt": {
+            "childId": "3e6a7b8c58f745289b51e0018c7a20dd",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 4699,
+              "wallMs": 69120,
+              "toolCalls": 8
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "Đã đọc hết snapshot được giao (`allAssignedArtifactsRead: true`, `coverageComplete: true`) và tự chạy lệnh bắt buộc.\n\n## Kiểm chứng đã thực hiện\n\n**Artifact** `a-810dbe5532fa4b6995b2c4483526ef80` (N1/execute/v1, 131 ký tự, `status: finalized`) nêu đúng một claim: \"Hàm src/export.py giữ nguyên chuỗi đầu vào\" và tự khai \"chưa tuyên bố test đã chạy\". Binding: `codeSnapshot.hash=ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2`, `head=36660f9038d6c0d03dffd4cd11f1019ae351bc8e`, `criticalChanges=false`.\n\n**Lệnh bắt buộc (C1)** — đã chạy, không bịa pass:\n```\n$ python -m pytest -q\n.                                                                        [100%]\n1 passed in 0.07s\nexit_code = 0\n```\n\n**Đối chiếu mã nguồn** (`src/export.py`, `tests/test_export.py`):\n- `export()` dùng `io.StringIO(newline='')` + `csv.writer(...).writerow([value])` và trả `stream.getvalue()` — một `str`. Không có bước encode/decode byte nào, nên không có ranh giới byte nào có thể làm hỏng dấu.\n- Assertion thật: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Cả input lẫn giá trị kỳ vọng đều chứa dấu (`ồ`, `ơ`) — tôi đã đọc nội dung ký tự trên đĩa, không phải suy ra từ tên. Vì vậy test không rỗng: nó thật sự so dấu.\n\n## Vấn đề chặn\n\n`none`\n\nXét ngược mạnh nhất để bác bỏ chính kết luận \"A1 đạt\": nếu test chỉ so sánh một chuỗi `str` thì liệu có bảo chứng \"giữ dấu trong **dữ liệu xuất**\" không? Trong đúng phạm vi được giao, có: hàm xuất trả `str`, dấu hiện diện trong `str` đó, và tôi đã tự chạy test trên cây được binding để xác nhận. `criticalChanges=false` không chứng minh cây mã chưa đổi nên tôi không suy ra ngược lại là \"chưa sửa\"; nhiều hơn nữa artifact không tuyên bố thay đổi file cụ thể nên không có claim nào sai để bác bỏ. Việc thiếu test ở tầng byte là giới hạn chưa kiểm của một luồng không tồn tại trong exporter hiện tại, không phải lỗi đã xác nhận.\n\n## Ghi chú không chặn\n\n- Test hiện chỉ phủ vòng khép kín `str` (`StringIO → str`); chưa có đường ghi file/byte (`open(..., encoding=...)`) để đối chiếu. Đường đó không tồn tại trong `src/export.py` hiện tại nên ngoài phạm vi N1; chỉ nên siết nếu thay đổi sau này đưa byte vào exporter.\n- Fixture terminal chỉ cho phép đúng `python -m pytest -q` (lệnh `ls` bị chặn: \"Fixture permits exactly python -m pytest -q; no shell commands\"), nên tôi không tính lại được `codeSnapshot.hash` độc lập; sự khớp hash↔cây mã do harness binding xác nhận. Điều này không làm mất căn cứ kết luận vì claim của khớp đúng nội dung file tôi đã đọc.\n- Câu lệnh kiểm thử bắt buộc chỉ gồm `python -m pytest -q`; không có lệnh nào khác bị bỏ sót.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Claim 'src/export.py giữ nguyên chuỗi đầu vào' được đối chiếu trực tiếp: src/export.py:2-5 trả str qua csv.writer trên io.StringIO (không có bước encode byte); tests/test_export.py:4 assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] với cả input và kỳ vọng đều có dấu (ồ, ơ) đọc từ nội dung ký tự trên đĩa. Tôi tự chạy `python -m pytest -q` trên cây được binding: 1 passed, exit_code=0.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` một lần trên snapshot mã được binding (codeSnapshot.hash=ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2): output '.  [100%] / 1 passed in 0.07s', exit_code=0, is_error=false. Không có lệnh bắt buộc nào khác; không báo cáo pass nào không tự chạy. Artifact tự khai 'chưa tuyên bố test đã chạy' không phải lỗi C1.\"}]}\n```\nVERDICT: ok",
+          "totalWords": 572,
+          "proseWordsExcludingCoverage": 435,
+          "tools": [
+            {
+              "id": "call_function_8boiub0cxv9m_1",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-810dbe5532fa4b6995b2c4483526ef80",
+                "runId": "860bf3fd04fba70bba97"
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run '860bf3fd04fba70bba97'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_function_8boiub0cxv9m_2",
+              "name": "terminal_exec",
+              "args": {
+                "command": "pwd && ls -la"
+              },
+              "result": {
+                "is_error": true,
+                "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            },
+            {
+              "id": "call_function_z5fqjeb7ijtn_1",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-810dbe5532fa4b6995b2c4483526ef80"
+              },
+              "result": {
+                "artifactId": "a-810dbe5532fa4b6995b2c4483526ef80",
+                "runId": "w-e4df8bc145",
+                "nodeId": "N1",
+                "stage": "execute",
+                "version": 1,
+                "path": ".plans/work/860bf3fd04fba70bba97/w-e4df8bc145/N1/execute/v1-a-810dbe5532fa4b6995b2c4483526ef80.md",
+                "chars": 131,
+                "contentHash": "36017b601be5a5a22b70227dd9b0bea26328a42e2d8c0731456a14ac7cdb91d9",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885437.9556515,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "acdeb6dca38d5585809fcdd023b63e41b872d29740e7bb4cbf815ba66941b05e",
+                  "dependencies": {},
+                  "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+                  "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+                  "codeSnapshot": {
+                    "schema": "work-code/1",
+                    "hash": "ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2",
+                    "head": "36660f9038d6c0d03dffd4cd11f1019ae351bc8e",
+                    "criticalChanges": false
+                  }
+                },
+                "offset": 0,
+                "content": "# Handoff fixture\nHàm src/export.py giữ nguyên chuỗi đầu vào.\nCần kiểm chứng bằng python -m pytest -q; chưa tuyên bố test đã chạy.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_function_z5fqjeb7ijtn_2",
+              "name": "terminal_exec",
+              "args": {
+                "command": "python -m pytest -q"
+              },
+              "result": {
+                "content": ".                                                                        [100%]\r\n1 passed in 0.07s\r\n",
+                "exit_code": 0,
+                "is_error": false
+              }
+            },
+            {
+              "id": "call_function_hu2ykzvdjcfn_1",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*.py"
+              },
+              "result": {
+                "content": "src/export.py\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_hu2ykzvdjcfn_2",
+              "name": "codebase_grep",
+              "args": {
+                "query": "export"
+              },
+              "result": {
+                "content": "src/export.py:2: def export(value):\ntests/test_export.py:2: from src.export import export\ntests/test_export.py:4:     assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_49bn1qvqt2fs_1",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_49bn1qvqt2fs_2",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 12577,
+              "stepsUsed": 1,
+              "toolsRun": 2,
+              "deadlineUsedMs": 4168,
+              "outputTokens": 114,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 13393,
+              "stepsUsed": 2,
+              "toolsRun": 4,
+              "deadlineUsedMs": 7488,
+              "outputTokens": 124,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 13850,
+              "stepsUsed": 3,
+              "toolsRun": 6,
+              "deadlineUsedMs": 10786,
+              "outputTokens": 179,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 14247,
+              "stepsUsed": 4,
+              "toolsRun": 8,
+              "deadlineUsedMs": 13023,
+              "outputTokens": 93,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 19336,
+              "stepsUsed": 5,
+              "toolsRun": 8,
+              "deadlineUsedMs": 69113,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 3,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 3,
+              "outputTokens": 4189,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    },
+    {
+      "case": "patch_passing_test",
+      "repeat": 2,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "requestedProfile": "work-checks/10",
+      "artifactChars": 131,
+      "artifactHash": "36017b601be5a5a22b70227dd9b0bea26328a42e2d8c0731456a14ac7cdb91d9",
+      "expected": [
+        "pass"
+      ],
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "check": {
+        "checkId": "c-d0d2398126024bad94bccb5180369801",
+        "runId": "w-ee3762b4eb",
+        "nodeId": "N1",
+        "stage": "execute",
+        "artifactId": "a-e9ba1ff997b84e28b416c4cf9a83603b",
+        "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+        "kind": "tests",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "acdeb6dca38d5585809fcdd023b63e41b872d29740e7bb4cbf815ba66941b05e",
+          "dependencies": {},
+          "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+          "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+          "codeSnapshot": {
+            "schema": "work-code/1",
+            "hash": "ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2",
+            "head": "79c4bf6ef239174de900eed6c37f1547bf8a29cc",
+            "criticalChanges": false
+          }
+        },
+        "workKey": "d6778d6f7ab59dd77bad84b6be3c8f61c9e6440ed1ea82187a43c45c2056af6c",
+        "requestedRecheck": false,
+        "startedAt": 1790885508.240575,
+        "attempts": [
+          {
+            "childId": "254e3925aedd4a5c9174bd23c980ed2f",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 6026,
+              "wallMs": 79316,
+              "toolCalls": 8
+            }
+          }
+        ],
+        "childId": "254e3925aedd4a5c9174bd23c980ed2f",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đọc src/export.py:2-6 (không có encode/normalize nào, csv.writer trả str qua StringIO) và tests/test_export.py:4 (assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] — chuỗi có dấu ồ, ơ, so khớp theo code point). Tự chạy `python -m pytest -q` trên codeSnapshot ca8d9012: '1 passed in 0.06s', exit_code=0, 1 test collect (không skip). Dữ liệu xuất giữ dấu và đã đối chiếu bằng test thật."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên đúng cây mã được bind (hash ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2, head 79c4bf6e). Output thật: '. [100%] 1 passed in 0.06s', exit_code=0. Không có assertion đỏ, không có lệnh bắt buộc nào bị bỏ sót, không bịa kết quả."
+          }
+        ],
+        "findings": "Đã đọc hết snapshot (131/131 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`) và tự chạy lệnh bắt buộc.\n\n## Bằng chứng thu được\n\n**Artifact** `a-e9ba1ff997b84e28b416c4cf9a83603b` (N1, stage `execute`, `status: finalized`, `codeSnapshot.hash=ca8d9012…f3fae45d2`, `head=79c4bf6e`, `criticalChanges=false`) nêu đúng ba ý: `src/export.py` giữ nguyên chuỗi đầu vào; cần kiểm chứng bằng `python -m pytest -q`; và tường minh \"chưa tuyên bố test đã chạy\".\n\n**Lệnh bắt buộc** — chạy trên đúng cây mã đã bind, terminal chỉ cho phép đúng lệnh này:\n\n```\n$ python -m pytest -q\n.                                                                        [100%]\n1 passed in 0.06s\nexit_code: 0\n```\n\nMột dấu `.` = 1 test thực sự được collect và chạy (không phải skip: nếu skip sẽ in `1 skipped`; nếu không có test sẽ in `no tests ran` với exit code 5). `codebase_glob **/*.py` trả về đúng hai file — `src/export.py`, `tests/test_export.py` — không có `conftest.py`, khớp với con số 1 test.\n\n**Đối chiếu source** (đọc trực tiếp, không suy diễn):\n- `src/export.py:2-6` — `def export(value)` tạo `io.StringIO(newline='')`, `csv.writer(stream).writerow([value])`, rồi `return stream.getvalue()`. Không có bước biến đổi chuỗi nào: không `unicodedata`, không `.encode()`, không `open(..., encoding=...)`. Claim \"giữ nguyên chuỗi đầu vào\" của artifact là đúng với code thật.\n- `tests/test_export.py:4` — `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Chuỗi vào và chuỗi kỳ vọng đều chứa dấu (`ồ`, `ơ`); phép so khớp là so sánh `str` theo code point, nên nếu dấu bị mất ở bước export thì assert đỏ.\n\n**Đánh giá A1:** dữ liệu trả về từ `export` giữ nguyên dấu tiếng Việt, và tôi đã tự đối chiếu bằng test thật (1 passed, exit 0). Đây là bằng chứng thực thi của tôi, không phải trích lại output của producer.\n\n**Phân biệt byte với ký tự:** test assert trên `str` sau khi `csv.reader` parse lại, không assert byte UTF-8 trên đĩa. Với code hiện tại điều đó là đủ cho A1, vì `export` không hề có bước encode nào để mất dấu — `StringIO` giữ `str`. Tôi chưa chạy counterexample (vá `export` để ASCII-fold rồi xem assert đỏ) vì bị cấm sửa file; đây là *suy luận từ source*, không phải kết quả đã thực thi.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\nnone\n\n## Ghi chú không chặn\n\n- **Tiền đề \"cần sửa\" của main không được code xác nhận.** Nhiệm vụ giao là \"Sửa exporter để giữ dấu tiếng Việt\", nhưng `src/export.py` không có bước encode/decode nào để tổn hại dấu. Điều này **không làm A1 hỏng** (A1 hỏi về kết quả hành vi, và kết quả đó đúng + đã test), nên tôi không nâng thành finding chặn và không sửa nghĩa tiêu chí. Main nên biết: nếu ý định thật là xuất ra **file** với encoding UTF-8 tường minh, thì phạm vi đó không tồn tại trong cây mã của node này — thuộc whole review, không phải N1.\n- **Test tự so sánh chuỗi với chính nó.** Hai literal `'Hồ sơ'` nằm cùng một file nên nếu form chuẩn hoá (NFC/NFD) có lệch nhau thì vẫn xanh; assert này chứng minh round-trip giữ dấu, không chứng minh chuẩn hoá NFC. A1 không yêu cầu một form chuẩn hoá cụ thể, nên đây là ghi chú tùy chọn, không phải yêu cầu thêm.\n- **Artifact trung thực:** nó nói rõ \"chưa tuyên bố test đã chạy\" và không nhúng output giả — không có mâu thuẫn giữa claim và bằng chứng thực thi.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đọc src/export.py:2-6 (không có encode/normalize nào, csv.writer trả str qua StringIO) và tests/test_export.py:4 (assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] — chuỗi có dấu ồ, ơ, so khớp theo code point). Tự chạy `python -m pytest -q` trên codeSnapshot ca8d9012: '1 passed in 0.06s', exit_code=0, 1 test collect (không skip). Dữ liệu xuất giữ dấu và đã đối chiếu bằng test thật.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên đúng cây mã được bind (hash ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2, head 79c4bf6e). Output thật: '. [100%] 1 passed in 0.06s', exit_code=0. Không có assertion đỏ, không có lệnh bắt buộc nào bị bỏ sót, không bịa kết quả.\"}]}\n```\n\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790885588.0401373
+      },
+      "oracle": true,
+      "toolNames": [
+        "work_artifact_read",
+        "terminal_exec",
+        "work_artifact_read",
+        "terminal_exec",
+        "codebase_glob",
+        "codebase_grep",
+        "file_read",
+        "file_read"
+      ],
+      "latencySeconds": 79.804,
+      "visibleOutputs": [
+        {
+          "childId": "254e3925aedd4a5c9174bd23c980ed2f",
+          "attempt": {
+            "childId": "254e3925aedd4a5c9174bd23c980ed2f",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 5,
+              "outputTokens": 6026,
+              "wallMs": 79316,
+              "toolCalls": 8
+            }
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "visibleFinal": "Đã đọc hết snapshot (131/131 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`) và tự chạy lệnh bắt buộc.\n\n## Bằng chứng thu được\n\n**Artifact** `a-e9ba1ff997b84e28b416c4cf9a83603b` (N1, stage `execute`, `status: finalized`, `codeSnapshot.hash=ca8d9012…f3fae45d2`, `head=79c4bf6e`, `criticalChanges=false`) nêu đúng ba ý: `src/export.py` giữ nguyên chuỗi đầu vào; cần kiểm chứng bằng `python -m pytest -q`; và tường minh \"chưa tuyên bố test đã chạy\".\n\n**Lệnh bắt buộc** — chạy trên đúng cây mã đã bind, terminal chỉ cho phép đúng lệnh này:\n\n```\n$ python -m pytest -q\n.                                                                        [100%]\n1 passed in 0.06s\nexit_code: 0\n```\n\nMột dấu `.` = 1 test thực sự được collect và chạy (không phải skip: nếu skip sẽ in `1 skipped`; nếu không có test sẽ in `no tests ran` với exit code 5). `codebase_glob **/*.py` trả về đúng hai file — `src/export.py`, `tests/test_export.py` — không có `conftest.py`, khớp với con số 1 test.\n\n**Đối chiếu source** (đọc trực tiếp, không suy diễn):\n- `src/export.py:2-6` — `def export(value)` tạo `io.StringIO(newline='')`, `csv.writer(stream).writerow([value])`, rồi `return stream.getvalue()`. Không có bước biến đổi chuỗi nào: không `unicodedata`, không `.encode()`, không `open(..., encoding=...)`. Claim \"giữ nguyên chuỗi đầu vào\" của artifact là đúng với code thật.\n- `tests/test_export.py:4` — `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Chuỗi vào và chuỗi kỳ vọng đều chứa dấu (`ồ`, `ơ`); phép so khớp là so sánh `str` theo code point, nên nếu dấu bị mất ở bước export thì assert đỏ.\n\n**Đánh giá A1:** dữ liệu trả về từ `export` giữ nguyên dấu tiếng Việt, và tôi đã tự đối chiếu bằng test thật (1 passed, exit 0). Đây là bằng chứng thực thi của tôi, không phải trích lại output của producer.\n\n**Phân biệt byte với ký tự:** test assert trên `str` sau khi `csv.reader` parse lại, không assert byte UTF-8 trên đĩa. Với code hiện tại điều đó là đủ cho A1, vì `export` không hề có bước encode nào để mất dấu — `StringIO` giữ `str`. Tôi chưa chạy counterexample (vá `export` để ASCII-fold rồi xem assert đỏ) vì bị cấm sửa file; đây là *suy luận từ source*, không phải kết quả đã thực thi.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\nnone\n\n## Ghi chú không chặn\n\n- **Tiền đề \"cần sửa\" của main không được code xác nhận.** Nhiệm vụ giao là \"Sửa exporter để giữ dấu tiếng Việt\", nhưng `src/export.py` không có bước encode/decode nào để tổn hại dấu. Điều này **không làm A1 hỏng** (A1 hỏi về kết quả hành vi, và kết quả đó đúng + đã test), nên tôi không nâng thành finding chặn và không sửa nghĩa tiêu chí. Main nên biết: nếu ý định thật là xuất ra **file** với encoding UTF-8 tường minh, thì phạm vi đó không tồn tại trong cây mã của node này — thuộc whole review, không phải N1.\n- **Test tự so sánh chuỗi với chính nó.** Hai literal `'Hồ sơ'` nằm cùng một file nên nếu form chuẩn hoá (NFC/NFD) có lệch nhau thì vẫn xanh; assert này chứng minh round-trip giữ dấu, không chứng minh chuẩn hoá NFC. A1 không yêu cầu một form chuẩn hoá cụ thể, nên đây là ghi chú tùy chọn, không phải yêu cầu thêm.\n- **Artifact trung thực:** nó nói rõ \"chưa tuyên bố test đã chạy\" và không nhúng output giả — không có mâu thuẫn giữa claim và bằng chứng thực thi.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đọc src/export.py:2-6 (không có encode/normalize nào, csv.writer trả str qua StringIO) và tests/test_export.py:4 (assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ'] — chuỗi có dấu ồ, ơ, so khớp theo code point). Tự chạy `python -m pytest -q` trên codeSnapshot ca8d9012: '1 passed in 0.06s', exit_code=0, 1 test collect (không skip). Dữ liệu xuất giữ dấu và đã đối chiếu bằng test thật.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Đã chạy đúng lệnh bắt buộc `python -m pytest -q` trên đúng cây mã được bind (hash ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2, head 79c4bf6e). Output thật: '. [100%] 1 passed in 0.06s', exit_code=0. Không có assertion đỏ, không có lệnh bắt buộc nào bị bỏ sót, không bịa kết quả.\"}]}\n```\n\nVERDICT: ok",
+          "totalWords": 693,
+          "proseWordsExcludingCoverage": 569,
+          "tools": [
+            {
+              "id": "call_function_akbd1baey7ls_1",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-e9ba1ff997b84e28b416c4cf9a83603b",
+                "runId": "3b402cc1d72f6ebbab33"
+              },
+              "result": {
+                "is_error": true,
+                "error": "WORK_RUN_UNKNOWN: no Work Graph run '3b402cc1d72f6ebbab33'",
+                "errorCode": "WORK_RUN_UNKNOWN",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `work_artifact_read` failed with WORK_RUN_UNKNOWN. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['artifactId']; fields={runId:string, artifactId:string, offset:integer, limit:integer}."
+              }
+            },
+            {
+              "id": "call_function_akbd1baey7ls_2",
+              "name": "terminal_exec",
+              "args": {
+                "command": "pwd && ls -la"
+              },
+              "result": {
+                "is_error": true,
+                "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+                "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+              }
+            },
+            {
+              "id": "call_function_i38c9nevuaxz_1",
+              "name": "work_artifact_read",
+              "args": {
+                "artifactId": "a-e9ba1ff997b84e28b416c4cf9a83603b"
+              },
+              "result": {
+                "artifactId": "a-e9ba1ff997b84e28b416c4cf9a83603b",
+                "runId": "w-ee3762b4eb",
+                "nodeId": "N1",
+                "stage": "execute",
+                "version": 1,
+                "path": ".plans/work/3b402cc1d72f6ebbab33/w-ee3762b4eb/N1/execute/v1-a-e9ba1ff997b84e28b416c4cf9a83603b.md",
+                "chars": 131,
+                "contentHash": "36017b601be5a5a22b70227dd9b0bea26328a42e2d8c0731456a14ac7cdb91d9",
+                "status": "finalized",
+                "producerId": null,
+                "createdAt": 1790885508.237866,
+                "originTurn": null,
+                "binding": {
+                  "nodeDefinition": "acdeb6dca38d5585809fcdd023b63e41b872d29740e7bb4cbf815ba66941b05e",
+                  "dependencies": {},
+                  "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+                  "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+                  "codeSnapshot": {
+                    "schema": "work-code/1",
+                    "hash": "ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2",
+                    "head": "79c4bf6ef239174de900eed6c37f1547bf8a29cc",
+                    "criticalChanges": false
+                  }
+                },
+                "offset": 0,
+                "content": "# Handoff fixture\nHàm src/export.py giữ nguyên chuỗi đầu vào.\nCần kiểm chứng bằng python -m pytest -q; chưa tuyên bố test đã chạy.\n",
+                "nextOffset": null,
+                "unreadOffset": null,
+                "coverageComplete": true,
+                "unreadArtifacts": [],
+                "allAssignedArtifactsRead": true,
+                "readingInstruction": "Read unreadOffset next, even if nextOffset is null. Every assigned range is required."
+              }
+            },
+            {
+              "id": "call_function_i38c9nevuaxz_2",
+              "name": "terminal_exec",
+              "args": {
+                "command": "python -m pytest -q"
+              },
+              "result": {
+                "content": ".                                                                        [100%]\r\n1 passed in 0.06s\r\n",
+                "exit_code": 0,
+                "is_error": false
+              }
+            },
+            {
+              "id": "call_function_ghdxyspxklk8_1",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*.py"
+              },
+              "result": {
+                "content": "src/export.py\ntests/test_export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_ghdxyspxklk8_2",
+              "name": "codebase_grep",
+              "args": {
+                "query": "export"
+              },
+              "result": {
+                "content": "src/export.py:2: def export(value):\ntests/test_export.py:2: from src.export import export\ntests/test_export.py:4:     assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_sku87wjogn1b_1",
+              "name": "file_read",
+              "args": {
+                "path": "src/export.py"
+              },
+              "result": {
+                "content": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+                "path": "src/export.py",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_function_sku87wjogn1b_2",
+              "name": "file_read",
+              "args": {
+                "path": "tests/test_export.py"
+              },
+              "result": {
+                "content": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n",
+                "path": "tests/test_export.py",
+                "fixture": true
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 12561,
+              "stepsUsed": 1,
+              "toolsRun": 2,
+              "deadlineUsedMs": 2849,
+              "outputTokens": 106,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 13378,
+              "stepsUsed": 2,
+              "toolsRun": 4,
+              "deadlineUsedMs": 5839,
+              "outputTokens": 127,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 3,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 14201,
+              "stepsUsed": 3,
+              "toolsRun": 6,
+              "deadlineUsedMs": 12815,
+              "outputTokens": 456,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 4,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 14560,
+              "stepsUsed": 4,
+              "toolsRun": 8,
+              "deadlineUsedMs": 15135,
+              "outputTokens": 72,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 5,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 20788,
+              "stepsUsed": 5,
+              "toolsRun": 8,
+              "deadlineUsedMs": 79308,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 3,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 3,
+              "outputTokens": 5265,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "fixtureSources": {
+        "docs/source.md": "Chỉ xuất CSV; không JSON.\n",
+        "src/export.py": "import csv, io\ndef export(value):\n    stream = io.StringIO(newline='')\n    csv.writer(stream).writerow([value])\n    return stream.getvalue()\n",
+        "tests/test_export.py": "import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n"
+      },
+      "mainModelAttempts": 0
+    }
+  ],
+  "audit": [
+    "All six original status oracles pass on the final source. Each check completed in one attempt with visible coverage and VERDICT. No main model output: fixture root is idle and producers/artifacts/code are synthetic. This is not a full medical/plan/design/DAG benchmark.",
+    "Both failing-code testers correctly revise A1 and pass C1 after executing the exact required command and reporting exit 1. Red behavior remains blocking. Backend does not rewrite model judgments or waive actual successful test proof.",
+    "Both passing-code testers execute actual pytest (exit 0); both source-scoped Research checks open the original note and accept its explicit limitations. All visible finals are Vietnamese.",
+    "Residual reviewer factual errors: failing-code repeat 1 calls ASCII output H s four characters; it is three. Research repeat 1 repeatedly calls the supplied source sixteen characters; its stripped length is twenty-five. These do not change the fixture gates, but prevent a blanket reviewer-quality acceptance.",
+    "Passing-code repeat 2 incorrectly says differing NFC/NFD forms between the two literals still pass. Python string equality would reject differing code points. The test checks actual literal round-trip; it does not prove normalization. Record W6.1.3; do not alter producer/main or criteria to match this prose.",
+    "Research repeat 1 has 619 prose words excluding coverage, above the prompt limit 600. Totals including duplicated machine coverage are reported separately. Other five prose counts are below 600. The harness does not silently truncate a correct final to enforce style.",
+    "Tester attempts to issue extra shell commands were rejected by the disposable fixture allowlist, then each ran the permitted pytest command. These are fixture limitations, not proof of production terminal failure.",
+    "Initial local audit command used the default Windows cp1252 stdout and failed to print Vietnamese; rerun with PYTHONUTF8=1. A read-only SQL status-column probe also failed because status is stored in the check doc. Neither changed product data, source, evaluator results or fixtures."
+  ]
+}

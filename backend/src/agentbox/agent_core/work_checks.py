@@ -205,6 +205,12 @@ def contract(lang, criteria):
     return head + work_prompts.choose(lang,
         '\nKeep findings under 600 words. Do not rewrite the deliverable or add scope. Snapshot hashes are checked by the backend; do not spend steps recomputing them. ',
         '\nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. ') + work_prompts.choose(lang,
+        '\ncodeSnapshot.hash identifies working-tree contents; head identifies a Git commit, and criticalChanges is a risk signal. '
+        'A matching head or criticalChanges=false does not prove the working tree is unchanged. '
+        'A test proves only its exercised assertions/inputs; do not infer untested quoting/encoding/empty-field behavior. ',
+        '\ncodeSnapshot.hash nhận diện nội dung cây mã; head nhận diện commit Git, criticalChanges là tín hiệu rủi ro. '
+        'Head trùng hoặc criticalChanges=false không chứng minh cây mã chưa đổi. '
+        'Test chỉ chứng minh assertion/input thực đã chạy; không suy ra quoting/encoding/field rỗng chưa kiểm. ') + work_prompts.choose(lang,
         '\nJudge the EXACT wording of each criterion. When an A criterion contains a disproved technical premise, '
         'use status=revise, target=criterion and evidence naming the conflict and correction for main. '
         'Keep a factually correct artifact intact; do not silently replace the criterion and mark it pass. '
@@ -389,6 +395,19 @@ class Checks:
                 'the producer need not embed your later test output in its immutable handoff. ',
                 '\nBạn là tester: tự chạy lệnh bắt buộc. Tool events và báo cáo check của bạn là bằng chứng test; '
                 'producer không phải nhúng output test mà bạn chạy sau đó vào handoff bất biến. ')
+            goal += work_prompts.choose(lang,
+                '\nC1 is the assigned checker duty: execute every required command on the bound code and report its real result. '
+                'Judge execution/reporting separately from whether the tested behavior passes. If you ran every command and honestly '
+                'reported a failing assertion, that satisfies this C1 duty; mark the violated A criterion revise and keep VERDICT: revise. '
+                'Missing/unrun commands or invented results do not satisfy C1. Producer saying "tests not run" is not your C1 failure, '
+                'nor proof that code was not changed. If an A criterion explicitly requires producer-run tests, judge that A separately; '
+                'do not invent that requirement. Do not require producer to embed your later output or commit evidence not assigned. ',
+                '\nC1 là trách nhiệm checker: chạy từng lệnh bắt buộc trên mã được binding và báo kết quả thật. '
+                'Kiểm việc chạy/báo cáo riêng với việc hành vi đạt test. Bạn đã chạy đủ lệnh và báo trung thực assertion đỏ thì '
+                'trách nhiệm C1 này đạt; tiêu chí A về hành vi bị vi phạm ghi revise và giữ VERDICT: revise. '
+                'Lệnh thiếu/chưa chạy hoặc kết quả bịa không đạt C1. Producer nói "chưa chạy test" không là lỗi C1 của bạn, '
+                'cũng không chứng minh mã chưa sửa. Nếu tiêu chí A yêu cầu rõ producer tự chạy test thì kiểm A đó riêng; '
+                'không tự thêm yêu cầu này. Không bắt producer nhúng output bạn chạy sau hoặc bằng chứng commit chưa được giao. ')
         context = json.dumps({'snapshots': [{k: meta[k] for k in ('artifactId', 'version', 'contentHash', 'path', 'chars')}
                                              for meta in metas], 'check': spec}, ensure_ascii=False)
         source = metas[0]['binding'].get('codeSnapshot')
@@ -415,7 +434,8 @@ class Checks:
             status, coverage, findings = parse_report(text, criteria, require_target=True)
             doc.pop('error', None)
             doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
-                'completed': complete(result), 'execution': work_budget.receipt(result)})
+                'completed': complete(result), 'execution': work_budget.receipt(result),
+                **({'contractError': findings} if status == 'error' else {})})
             doc.update(childId=child_id, coverage=coverage, findings=findings, status=status)
             if not complete(result):
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
