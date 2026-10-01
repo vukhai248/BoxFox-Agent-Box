@@ -1,0 +1,258 @@
+{
+  "schema": "boxfox-w65-boundary-evidence/1",
+  "branch": "B",
+  "ownerDecision": "Effective child steps <= owner maxSteps; profiles still apply. No timeout increase from network outage.",
+  "worker": {
+    "schema": "boxfox-w65-real-worker/1",
+    "branch": "B",
+    "modelCalls": 0,
+    "container": "boxfox-eval-w65-tools",
+    "commit": "1cfa3a459fabdaa8c82fef1140a32bc8ed481fc6",
+    "sourceHashes": {
+      "backend/src/agentbox/sandbox/worker.py": "c4d0bd3c9326dc1ac27c0f0d89a11ea8ebdccabcd9d2637002d0ea579cc59d38",
+      "backend/src/agentbox/sandbox/executor.py": "2f22e10436a6ba0001732a34a08b50ed2f5d9dfa6413f361d0740d76352fd943"
+    },
+    "rows": [
+      {
+        "sessionId": "w65-long95",
+        "sleepSeconds": 95,
+        "requestedToolSeconds": 100,
+        "elapsedSeconds": 95.457,
+        "result": {
+          "content": "start\nfinished\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        },
+        "originalProcess": {
+          "pid": 95,
+          "start": "839231"
+        },
+        "markerRemoved": true,
+        "leaderAlive": false,
+        "oracle": true
+      },
+      {
+        "sessionId": "w65-cap125",
+        "sleepSeconds": 125,
+        "requestedToolSeconds": 130,
+        "elapsedSeconds": 120.535,
+        "result": {
+          "is_error": true,
+          "error": "Command timed out; process group stopped"
+        },
+        "originalProcess": {
+          "pid": 94,
+          "start": "839231"
+        },
+        "markerRemoved": true,
+        "leaderAlive": false,
+        "oracle": true
+      },
+      {
+        "sessionId": "w65-cancel110",
+        "sleepSeconds": 110,
+        "requestedToolSeconds": 120,
+        "elapsedSeconds": 3.048,
+        "result": {
+          "cancelled": true
+        },
+        "originalProcess": {
+          "pid": 98,
+          "start": "839232"
+        },
+        "markerRemoved": true,
+        "leaderAlive": false,
+        "oracle": true
+      }
+    ],
+    "scope": "Actual worker and Docker transport; offline disposable Linux container, no desktop/model/child/watchdog benchmark.",
+    "raw": {
+      "path": ".tmp/work-checks/w65-real-worker/results.json",
+      "sha256": "c74caa7220c1cd1c8bb7ec5d715d09e46590358270f2f47340b808e6562a40dc"
+    }
+  },
+  "child900": {
+    "schema": "boxfox-w65-real-child-deadline/1",
+    "branch": "B",
+    "route": {
+      "connectionId": "07a63353-908c-4ba7-9296-d8bf4364294e",
+      "modelId": "space-bunny-free"
+    },
+    "parentId": "aeb81d5354a54616aabdc2d14c4ece1c",
+    "commit": "1cfa3a459fabdaa8c82fef1140a32bc8ed481fc6",
+    "sourceHashes": {
+      "backend/src/agentbox/agent_core/runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+      "backend/src/agentbox/agent_core/peer_watchdog.py": "3b77afdc13da70ba7b48fcadb44f40a8df87306435001c666693af5e1039febb",
+      "backend/src/agentbox/sandbox/executor.py": "2f22e10436a6ba0001732a34a08b50ed2f5d9dfa6413f361d0740d76352fd943",
+      "backend/src/agentbox/sandbox/worker.py": "c4d0bd3c9326dc1ac27c0f0d89a11ea8ebdccabcd9d2637002d0ea579cc59d38"
+    },
+    "commands": [
+      "python3 -c \"import time; time.sleep(100); print('probe-1-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-2-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-3-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-4-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-5-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-6-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-7-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-8-completed')\"",
+      "python3 -c \"import time; time.sleep(100); print('probe-9-completed')\""
+    ],
+    "watchdogWallSeconds": 1200,
+    "watchdogTickSeconds": 10,
+    "elapsedSeconds": 916.45,
+    "markerRemoved": true,
+    "observedLeadersAlive": [],
+    "scope": "Actual delegated child, model and Docker worker; evaluator supplies live parent, not full main/DAG.",
+    "execution": {
+      "sessionId": "e5932c1b87ed4aa18a71b5bab98006e1",
+      "status": "partial",
+      "reason": "DEADLINE_EXCEEDED",
+      "stepsUsed": 9,
+      "outputTokens": 1084,
+      "wallMs": 913907,
+      "budget": {
+        "profile": "lookup_or_execution",
+        "requestedMaxSteps": 40,
+        "effectiveMaxSteps": 40,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+      },
+      "last_error": "DEADLINE_EXCEEDED"
+    },
+    "raw": {
+      "path": ".tmp/work-checks/w65-real-child-deadline/results.json",
+      "sha256": "999854710285d020fd143ef267a3b3ac2b095faa2e3c8c9eecba73dd724f86ab"
+    },
+    "registry": {
+      "status": "partial",
+      "reason": "DEADLINE_EXCEEDED",
+      "started": 1790845994.1395288,
+      "finished": 1790846908.0471158,
+      "steps_used": 9,
+      "output_tokens": 1084
+    },
+    "completedCommands": 8,
+    "completedCommandEvents": [
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-1-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-1-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-2-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-2-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-3-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-3-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-4-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-4-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-5-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-5-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-6-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-6-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-7-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-7-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      },
+      {
+        "command": "python3 -c \"import time; time.sleep(100); print('probe-8-completed')\"",
+        "timeout": 110,
+        "result": {
+          "content": "probe-8-completed\n",
+          "exit_code": 0,
+          "is_error": false,
+          "artifact": null
+        }
+      }
+    ],
+    "toolStarts": 9,
+    "samplingLast": {
+      "elapsed": 900.45,
+      "childId": "e5932c1b87ed4aa18a71b5bab98006e1",
+      "registryStatus": "started",
+      "sessionStatus": "running",
+      "lastEvent": "tool_start",
+      "liveShell": true
+    },
+    "accountingCorrection": "Original script used execution_events summary, which omits tool_end and reported zero completed commands. Raw retained unchanged. Audit uses persisted tool_end ledger: eight completed, ninth interrupted. Script corrected after the live measurement; no rerun or replacement of startup source hashes.",
+    "oracle": true
+  },
+  "linux18": {
+    "raw": {
+      "path": ".tmp/work-checks/w65-linux/claude-worker-v2.xml",
+      "sha256": "c6e9bffa88d19fb4e65a156b260b37455f9706ed2bd3f43b6062e101ff7f5dc6"
+    },
+    "log": {
+      "path": ".tmp/work-checks/w65-linux/claude-worker-v2.log",
+      "sha256": "c68056547714c6d95c38636843923b7f87081ca775a83087564e923f0292991a"
+    },
+    "python": "3.11.16",
+    "pytest": "9.1.1",
+    "image": "p-066-backend",
+    "network": "none",
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": "2.307",
+    "scope": "Fake Claude CLI/router stubs; actual Linux process/config tests, no external provider/model. Windows full suite skips stay historical. First runner attempt omitted bundled PYTHONPATH and failed before tests; corrected runner adds /opt/python/lib/python3.11/site-packages."
+  },
+  "limits": [
+    "Disposable p-066-backend Linux fixture runs the actual B SandboxExecutor/worker, not the full desktop image. No production workspace mount/ports/network.",
+    "Process markers and observed original leaders checked; no proof of cleanup of every arbitrary descendant from these fixtures.",
+    "Child 900s observed; watchdog did not terminate it early. Actual 1200s watchdog timeout boundary not observed.",
+    "No controlled throughput or peak-concurrency comparison; concurrent eval jobs cannot certify it.",
+    "No CUA; existing UI/history/export acceptance remains pending."
+  ]
+}
