@@ -1591,6 +1591,15 @@ def create_app(runtime):
                                   'autopilot': work_graph.autopilot_on(session),
                                   'runs': [service.view(run) for run in service.runs(sid)]})
 
+    async def work_artifact_get(request):
+        sid = request.match_info['sid']
+        session = known_session(sid)
+        service = work_graph.service(runtime)
+        result = service.artifacts.read(session, {'runId': request.match_info['runId'],
+            'artifactId': request.match_info['artifactId'], 'offset': request.query.get('offset', 0),
+            'limit': request.query.get('limit', 8000)})
+        return web.json_response(result)
+
     async def autopilot_set(request):
         """`PUT /api/agent/sessions/{sid}/autopilot {on}` — skip the owner approval gate of the Work Graph."""
         sid = request.match_info['sid']
@@ -1738,6 +1747,7 @@ def create_app(runtime):
     app.router.add_post('/api/agent/plans/verify', plan_verify_route)
     app.router.add_put('/api/agent/sessions/{sid}/plan-mode', plan_mode_set)
     app.router.add_get('/api/agent/sessions/{sid}/work', work_runs)
+    app.router.add_get('/api/agent/sessions/{sid}/work/runs/{runId}/artifacts/{artifactId}', work_artifact_get)
     app.router.add_put('/api/agent/sessions/{sid}/autopilot', autopilot_set)
     app.router.add_get('/api/agent/plans/runs', plan_runs)
     app.router.add_get('/api/agent/plans/runs/{runId}', plan_runs)

@@ -7,11 +7,13 @@ thức và người phản biện toàn kế hoạch có đầu câu khác nhau.
 """
 import asyncio
 import json
+import re
+import uuid
 from pathlib import Path
 
 import pytest
 
-from agentbox.agent_core import plan_workflow, tool_groups, work_graph as wg
+from agentbox.agent_core import plan_workflow, tool_groups, work_graph as wg, work_checks
 from agentbox.agent_core.failures import classify_failure
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
 from agentbox.agent_core.runtime import DecisionError, HarnessRuntime, WORK_TOOLS
@@ -44,6 +46,34 @@ class Model:
         first = next((str(m.get('content') or '') for m in messages if m.get('role') == 'user'), '')
         kind = next((name for name, head in (('whole', WHOLE), ('review', REVIEW), ('knowledge', KNOW),
                                              ('produce', PRODUCE)) if head in first), 'main')
+        if first.startswith('Phản biện toàn kế hoạch'):
+            kind='whole'
+        elif first.startswith('Phản biện độc lập'):
+            kind='review'
+        elif first.startswith('Yêu cầu tra cứu'):
+            kind='knowledge'
+        elif first.startswith('Work Graph "'):
+            kind='produce'
+        tool_messages = [m for m in messages if m.get('role') == 'tool']
+        calls = []
+        if not tool_messages:
+            calls.append({'id': 'source', 'type': 'function', 'function': {'name': 'file_read', 'arguments': json.dumps({'path':'src/a.py'})}})
+        match = re.search(r'\{"snapshots":', first)
+        refs = json.JSONDecoder().raw_decode(first[match.start():])[0]['snapshots'] if match else []
+        reads = {}
+        for m in tool_messages:
+            if m.get('name') == 'work_artifact_read':
+                data=json.loads(m['content'])
+                if 'artifactId' in data:
+                    reads[data['artifactId']]=data.get('nextOffset')
+        for meta in refs:
+            aid=meta['artifactId']
+            if aid not in reads or reads[aid] is not None:
+                calls.append({'id':aid+str(reads.get(aid,0)), 'type':'function', 'function': {'name':'work_artifact_read', 'arguments':json.dumps({'artifactId':aid,'offset':reads.get(aid,0) or 0})}})
+        if kind == 'review' and '"id": "tests"' in first and not any(m.get('name')=='terminal_exec' for m in tool_messages):
+            calls.append({'id':'tests','type':'function','function':{'name':'terminal_exec','arguments':json.dumps({'command':'vitest ChatHeader.test.tsx'})}})
+        if calls:
+            return {'choices':[{'message':{'tool_calls':calls},'finish_reason':'tool_calls'}]}
         self.prompts.append((kind, first))
         self.tokens.append((kind, first, max_tokens))
         self.active += 1
@@ -51,7 +81,14 @@ class Model:
         try:
             if self.delay:
                 await asyncio.sleep(self.delay)
-            return answer(self.script(kind, first))
+            text = self.script(kind, first)
+            if kind in ('review','whole'):
+                match=re.search(r'\{"(?:A1|C1|G1)"', first)
+                criteria=json.JSONDecoder().raw_decode(first[match.start():])[0] if match else {'C1':'contract'}
+                verdict=wg.parse_verdict(text)[0]
+                coverage=[{'id':key,'status':'pass' if verdict=='ok' else 'revise','evidence':'Fixture assertion: '+str(value)} for key,value in criteria.items()]
+                text=wg.VERDICT_RE.sub('',text).strip()+'\n```json\n'+json.dumps({'coverage':coverage})+'\n```\nVERDICT: '+(verdict or 'revise')
+            return answer(text)
         finally:
             self.active -= 1
 
@@ -67,6 +104,8 @@ class Executor:
         if name == 'write_plan':
             return {'relativePath': f".plans/{args['directory']}/{args['slug']}.md", 'version': 1}
         if name == 'terminal_exec':
+            if args['command'] == work_checks.SNAPSHOT_COMMAND:
+                return {'content':json.dumps({'schema':'work-code/1','hash':'a'*64,'head':'fixture'}), 'exit_code':0}
             command = args['command'].split(' && ', 1)[1] if args['command'].startswith('cd ') \
                 else args['command']
             if command.startswith('git rev-parse --is-inside-work-tree'):
@@ -102,8 +141,32 @@ def build(tmp_path, script=ok_script, delay=0.0, git=False, values=None):
     return store, runtime, model, executor, sid
 
 
-async def tool(runtime, sid, name, args):
+async def raw_tool(runtime, sid, name, args):
     return await runtime.work_tool(runtime.store.get(sid), name, args)
+
+
+async def tool(runtime, sid, name, args):
+    """Simulated main for legacy orchestration tests, explicitly drives new check calls."""
+    result=await raw_tool(runtime,sid,name,args)
+    if name != 'work_run':
+        return result
+    stage='produce' if args['phase']=='discover' else 'execute'
+    for _ in range(8):
+        run=wg.service(runtime).get(result['runId'])
+        needs=[n for n in run['nodes'] if n['stages'].get(stage,{}).get('status')=='needs_checks']
+        for node in needs:
+            await raw_tool(runtime,sid,'work_check',{'action':'start','nodeId':node['id'],'stage':stage,
+                'artifactId':node['stages'][stage]['artifact']['artifactId'],'invocationId':uuid.uuid4().hex})
+        run=wg.service(runtime).get(result['runId'])
+        if not wg.ready_nodes(run,stage) or result.get('budgetExhausted'):
+            break
+        result=await raw_tool(runtime,sid,name,args)
+    run=wg.service(runtime).get(result['runId'])
+    for item in result['outputs']:
+        state=next(n for n in run['nodes'] if n['id']==item['id'])['stages'][stage]
+        item.update(status=state['status'],attempts=state['attempts'],verdicts=[r.get('verdict') for r in state['rounds']],
+                    artifact=state.get('artifact'),policy=state.get('policy'),acceptedWithCaveats=False)
+    return result | wg.service(runtime).result(run)
 
 
 EXPLORE = {'id': 'E1', 'kind': 'explore', 'title': 'Explore chat', 'goal': 'Find the chat header and its store'}
@@ -192,7 +255,7 @@ def test_discover_runs_the_review_loop_until_ok_and_feeds_the_findings_back(tmp_
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button', 'flow': 'plan'})
-        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE | {'risk':'consequential'}]})
         return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
 
     out = asyncio.run(run())
@@ -205,33 +268,21 @@ def test_discover_runs_the_review_loop_until_ok_and_feeds_the_findings_back(tmp_
     assert all(c['work']['runId'] == out['runId'] for c in children)
 
 
-def test_at_the_round_cap_evidence_is_accepted_with_caveats_and_a_sub_plan_is_rejected(tmp_path):
-    def script(kind, text):
-        return ('## Blocking findings\n1. still wrong\nVERDICT: revise' if kind == 'review'
-                else ok_script(kind, text))
-
-    _, runtime, model, _, sid = build(tmp_path, script)
-
+def test_at_the_round_cap_evidence_is_rejected_without_caveat_auto_accept(tmp_path):
+    def script(kind,text):
+        return 'Still wrong\nVERDICT: revise' if kind=='review' else ok_script(kind,text)
+    _,runtime,_,_,sid=build(tmp_path,script)
     async def run():
-        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button'})
-        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
-        return await tool(runtime, sid, 'work_run', {'phase': 'discover', 'maxRounds': 2})
-
-    out = asyncio.run(run())
-    explore, plan = out['outputs']
-    # The explore output is the best evidence there is: it goes on, with the open findings attached.
-    assert explore['status'] == 'accepted' and explore['acceptedWithCaveats'] is True
-    assert explore['verdicts'] == ['revise', 'revise']
-    plan_prompt = [text for kind, text in model.prompts if kind == 'produce' and 'node P1' in text][0]
-    assert 'Reviewer caveats' in plan_prompt and 'still wrong' in plan_prompt
-    # A sub-plan is a deliverable: it is still rejected at the cap.
-    assert plan['status'] == 'rejected' and plan['acceptedWithCaveats'] is False
-    assert out['status'] == 'needs_revision' and 'were not accepted' in out['next']
-    view = wg.service(runtime).view(wg.service(runtime).get(out['runId']))
-    assert 'still wrong' in view['nodes'][0]['stages']['produce']['caveats']
+        await tool(runtime,sid,'work_graph',{'action':'create','goal':'Survey the architecture'})
+        await tool(runtime,sid,'work_graph',{'action':'add','nodes':[EXPLORE | {'risk':'consequential'},PLAN]})
+        return await tool(runtime,sid,'work_run',{'phase':'discover','maxRounds':2})
+    result=asyncio.run(run())
+    assert result['outputs'][0]['status']=='rejected'
+    assert not result['outputs'][0]['acceptedWithCaveats']
+    assert result['outputs'][1]['status']=='pending'
 
 
-def test_a_revise_without_blocking_findings_counts_as_ok(tmp_path):
+def test_a_revise_without_blocking_findings_does_not_auto_pass(tmp_path):
     def script(kind, text):
         if kind == 'review':
             return '## Blocking findings\nnone\n## Non-blocking notes\n- line 12 is line 14\nVERDICT: revise'
@@ -241,12 +292,12 @@ def test_a_revise_without_blocking_findings_counts_as_ok(tmp_path):
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
-        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE | {'risk':'consequential'}]})
         return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
 
     out = asyncio.run(run())
-    assert out['outputs'][0]['status'] == 'accepted' and out['outputs'][0]['verdicts'] == ['ok']
-    assert out['outputs'][0]['attempts'] == 1
+    assert out['outputs'][0]['status'] == 'rejected'
+    assert out['outputs'][0]['attempts'] == 3
 
 
 def test_has_no_blocking_findings_reads_the_common_forms():
@@ -285,7 +336,7 @@ def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):
     out = asyncio.run(run())
     assert out['outputs'][0]['status'] == 'accepted'
     kinds = [kind for kind, _ in model.prompts]
-    assert kinds == ['produce', 'knowledge', 'produce', 'review']
+    assert kinds == ['produce', 'knowledge', 'produce']
     rerun = [text for kind, text in model.prompts if kind == 'produce'][1]
     assert 'Answers to your knowledge requests' in rerun and 'The answer is 42' in rerun
     run_doc = runtime.work_graph.get(out['runId'])
@@ -361,7 +412,7 @@ def test_submit_with_autopilot_then_execute_and_ship_without_git(tmp_path):
     assert submitted['status'] == 'approved'
     assert executed['status'] == 'executed' and executed['outputs'][0]['status'] == 'accepted'
     build_prompt = [text for kind, text in model.prompts if kind == 'produce' and '(plan, execute)' in text][0]
-    assert 'The approved sub-plan P1 you must implement' in build_prompt
+    assert 'acceptedDependencySnapshots' in build_prompt and 'artifactId' in build_prompt
     # Not a git repo: the PR file is written, and the run stays `executed` so main can ship again.
     assert shipped['ship']['status'] == 'no_git' and shipped['status'] == 'executed'
     assert shipped['ship']['prFile'].endswith('/pull-request.md')
@@ -388,7 +439,7 @@ def test_ship_in_a_git_repository_commits_on_a_local_branch(tmp_path):
     assert shipped['ship']['status'] == 'local' and shipped['ship']['commit'] == 'abc1234'
     assert shipped['ship']['branch'] == 'boxfox/add-an-export-button'
     commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
-    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") for command in commands)
+    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") for command in commands if 'git ' in command)
     # An existing branch is reused, never reset with `-B`; plan artifacts stay out of the commit.
     assert any("git checkout 'boxfox/add-an-export-button' || git checkout -b 'boxfox/add-an-export-button'"
                in command for command in commands)
@@ -468,7 +519,7 @@ def test_research_only_run_has_nothing_to_execute(tmp_path):
         await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [node]})
         await tool(runtime, sid, 'work_run', {'phase': 'discover'})
         verified = await tool(runtime, sid, 'work_graph', {'action': 'verify'})
-        with pytest.raises(ValueError, match='WORK_NOTHING_TO_EXECUTE'):
+        with pytest.raises(ValueError, match='WORK_REQUIREMENTS_ONLY'):
             await tool(runtime, sid, 'work_graph', {'action': 'submit'})
         return verified
 
@@ -577,7 +628,7 @@ def test_interview_answers_are_recorded_on_the_active_run(tmp_path):
 def test_orchestrator_holds_the_work_tools_and_the_groups_cover_them():
     assert set(WORK_TOOLS) <= ORCHESTRATOR_TOOLS
     groups = {group['key']: group['tools'] for group in tool_groups.TOOL_GROUPS}
-    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship']
+    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_artifact_read']
     assert 'interview' in groups['questionsApprovals']
     names = {schema['function']['name'] for schema in SCHEMAS}
     assert set(WORK_TOOLS) <= names
@@ -716,11 +767,11 @@ def test_fanout_busy_is_queued_not_a_failed_node(tmp_path, monkeypatch):
         return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
 
     out = asyncio.run(run())
-    assert out['outputs'][0]['status'] == 'accepted' and calls['n'] >= 4
+    assert out['outputs'][0]['status'] == 'accepted' and calls['n'] >= 3
 
 
 def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp_path, monkeypatch):
-    _, runtime, _, _, sid = build(tmp_path)
+    _, runtime, model, _, sid = build(tmp_path)
     monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 1)
 
     async def run():
@@ -733,7 +784,8 @@ def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp
 
     first, second = asyncio.run(run())
     assert first['budgetExhausted'] is True
-    assert first['outputs'][0]['status'] in ('pending', 'revise') and first['outputs'][0]['attempts'] == 0
+    assert first['outputs'][0]['status'] == 'accepted' and first['outputs'][0]['attempts'] == 1
+    assert len([p for k,p in model.prompts if k=='produce']) == 1
     assert second['outputs'][0]['status'] == 'accepted'
 
 
@@ -805,7 +857,7 @@ def test_reviewers_get_a_hard_step_cap_and_a_verdict_wrap_up(tmp_path):
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
-        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE | {'risk':'consequential'}]})
         return await tool(runtime, sid, 'work_run', {'phase': 'discover'})
 
     out = asyncio.run(run())
@@ -849,10 +901,10 @@ def test_plan_writers_get_a_document_sized_output_budget(tmp_path):
         by_role.setdefault((binding['purpose'], child['role']), []).append(child['config'].get('maxTokens'))
     assert set(by_role[('produce', 'plan')]) == {wg.DOCUMENT_MAX_TOKENS}
     assert set(by_role[('produce', 'explore')]) == {None}
-    assert all(value is None for key, values in by_role.items() if key[0] == 'review' for value in values)
+    assert all(value == 16000 for key, values in by_role.items() if key[0] == 'review' for value in values)
     sent = {tokens for kind, text, tokens in model.tokens if kind == 'produce' and 'node P1' in text}
     assert sent == {wg.DOCUMENT_MAX_TOKENS}
-    assert {tokens for kind, _, tokens in model.tokens if kind == 'review'} == {4096}
+    assert {tokens for kind, _, tokens in model.tokens if kind == 'review'} == {16000}
 
 
 def test_main_keeps_driving_an_active_run_without_the_turn_recap(tmp_path, monkeypatch):

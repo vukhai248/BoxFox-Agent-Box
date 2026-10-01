@@ -185,7 +185,7 @@ def review_tail(lang='en'):
 def child_contract(purpose, lang='en'):
     if purpose == 'review':
         return choose(lang, '\n\nIndependent Work Graph review: read evidence yourself. End with the single VERDICT line.',
-                      '\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Kết thúc bằng một dòng VERDICT.')
+                      '\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời cuối tiếng Việt có dấu, giữ identifier và trích dẫn. Kết thúc bằng một dòng VERDICT.')
     if purpose == 'knowledge' and lang == 'vi':
         return '\n\nTrả lời tra cứu bằng tiếng Việt có dấu: dữ kiện liên quan, bằng chứng đã đọc, kiểm chứng thực hiện và giới hạn. Giữ nguyên path/URL/identifier/trích dẫn. Không bịa nguồn hoặc quyết định của người dùng.'
     if purpose != 'produce':
@@ -195,7 +195,19 @@ def child_contract(purpose, lang='en'):
 """) + KNOWLEDGE[lang if lang == 'vi' else 'en']
 
 
-def whole_review_goal(title, goal, lang='en'):
+def whole_review_goal(title, goal, lang='en', research_only=False):
+    if research_only:
+        return choose(lang, f'''Whole-plan review of Work Graph run "{title}" — research deliverable.
+Owner goal: {goal}
+Check research coverage, claim/source entailment, consistency across nodes, owner scope, uncertainty and limitations.
+This is research, not an implementation contract. Do not require an app plan, API/schema/defaults, rollout/rollback or executed tests unless the owner requested them. Keep optional implementation detail non-blocking.
+For each research node that must change write `REVISE <nodeId>: <what to fix>`.
+''', f'''Phản biện toàn kế hoạch Work Graph "{title}" — sản phẩm nghiên cứu.
+Mục tiêu của người dùng: {goal}
+Kiểm bao phủ câu hỏi nghiên cứu, nguồn hỗ trợ khẳng định, thống nhất giữa các nút, phạm vi người dùng, độ bất định và giới hạn.
+Đây là nghiên cứu, chưa phải hợp đồng triển khai. Không đòi plan app, API/schema/default, rollout/rollback hay test đã chạy nếu người dùng chưa yêu cầu. Chi tiết triển khai tùy chọn là ghi chú không chặn.
+Với từng nút nghiên cứu cần sửa ghi `REVISE <nodeId>: <nội dung cần sửa>`. Giữ nguyên marker REVISE.
+''') + review_tail(lang)
     return choose(lang, f'''Whole-plan review of Work Graph run "{title}" before the owner approves it.
 Owner goal: {goal}
 Check goal/owner-decision COVERAGE, DEPENDENCIES (declared needs, no hidden coupling, consistent contracts), ORDER (safe execution waves), TESTS (concrete checks that prove the goal) and RISK (rollout/rollback).

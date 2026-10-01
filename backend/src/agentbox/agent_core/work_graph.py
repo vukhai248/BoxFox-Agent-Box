@@ -10,9 +10,9 @@ Invariants of this module (each one has a unit test):
 * Only main delegates. A specialist that lacks knowledge writes a `## Knowledge requests` block;
   the HARNESS (not the specialist) asks `research`/`explore` and re-runs the specialist with the
   answers. Delegation depth stays 1.
-* Every specialist output is judged by an independent reviewer child that ends with
-  `VERDICT: ok|revise`. On `revise` the harness re-runs the same node with the findings, up to
-  `maxRounds`. Main only sees an output as `accepted` after `ok`.
+* Producers return immutable draft references. Main dispatches minimum task/risk checks.
+  Only completed, fully read snapshots with current required checks become accepted; repair
+  is bounded and controlled by main. Simple evidence lookups/diagnoses need no default reviewer.
 * A node runs only when its dependencies are accepted; independent nodes run in parallel, capped by
   the session fan-out limit. Plan→plan edges order EXECUTION, so sub-plans are written in parallel.
 * Execution never starts without owner approval, unless the session Autopilot switch is on.
@@ -30,7 +30,7 @@ import unicodedata
 import uuid
 from copy import deepcopy
 
-from . import work_prompts
+from . import work_prompts, work_policy, work_artifacts, work_checks
 
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
@@ -240,11 +240,18 @@ def normalize_node(raw, existing=None):
     if len(goal) < 20:
         raise ValueError(f'WORK_NODE_INVALID: node {node_id}: `goal` must be a complete, self-contained '
                          'assignment (at least 20 characters)')
+    for field, choices in (('taskKind', work_policy.TASKS), ('artifactKind', work_policy.ARTIFACTS), ('risk', work_policy.RISKS)):
+        value = raw.get(field, base.get(field))
+        if value is not None and value not in choices:
+            raise ValueError(f'WORK_NODE_INVALID: {field} must be one of {choices}')
     node = {'id': node_id, 'kind': kind, 'title': title, 'goal': goal,
             'dependsOn': clean_list(raw.get('dependsOn', base.get('dependsOn')), 'dependsOn', 16, 32),
             'acceptance': clean_list(raw.get('acceptance', base.get('acceptance')), 'acceptance'),
             'tests': clean_list(raw.get('tests', base.get('tests')), 'tests'),
             'files': clean_list(raw.get('files', base.get('files')), 'files', 40, 300)}
+    for field in ('taskKind', 'artifactKind', 'risk'):
+        if raw.get(field, base.get(field)) is not None:
+            node[field] = raw.get(field, base.get(field))
     if node_id in node['dependsOn']:
         raise ValueError(f'WORK_NODE_INVALID: node {node_id} cannot depend on itself')
     if kind == PLAN_KIND and not node['acceptance']:
@@ -337,7 +344,7 @@ def execution_waves(nodes):
 
 def stage_done(node, stage):
     state = node['stages'].get(stage)
-    return bool(state) and state['status'] == 'accepted'
+    return bool(state) and state['status'] == 'accepted' and state.get('artifact', {}).get('status') == 'finalized'
 
 
 def gate_stage(node, dep, stage):
@@ -417,9 +424,6 @@ BLOCKING_RE = re.compile(r'^[\s#*]*(?:Blocking findings|Vấn đề chặn)\b[\s
 SECTION_END_RE = re.compile(r'^[\s#*]*(#{1,4}\s|Non-blocking|Ghi chú không chặn)', re.I | re.M)
 NONE_WORDS = ('none', 'no blocking findings', 'no blocking finding', 'nothing blocking', 'n/a',
               'không', 'không có', 'không có vấn đề chặn')
-# Evidence nodes: at the round cap their output is still the best evidence there is. It is accepted with
-# the open findings as caveats, so a fuzzy citation cannot stall the whole plan (live test, space-bunny-free).
-CAVEAT_KINDS = ('explore', 'research')
 
 
 def has_no_blocking_findings(findings):
@@ -507,6 +511,8 @@ class WorkGraph:
                 revision INTEGER NOT NULL, doc TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL);
             CREATE INDEX IF NOT EXISTS work_runs_session ON work_runs(session_id, updated);
         ''')
+        self.artifacts = work_artifacts.Artifacts(self)
+        self.checks = work_checks.Checks(self)
         self.recover()
 
     def recover(self):
@@ -604,6 +610,8 @@ class WorkGraph:
             for name, state in node['stages'].items():
                 stages[name] = {key: state.get(key) for key in ('status', 'attempts', 'outputChars', 'error',
                                                                  'startedAt', 'finishedAt')}
+                stages[name]['artifact'] = state.get('artifact')
+                stages[name]['policy'] = state.get('policy')
                 stages[name]['preview'] = bounded(state.get('output'), 1200)
                 stages[name]['caveats'] = bounded(state.get('caveats'), 900) if state.get('caveats') else None
                 stages[name]['rounds'] = [{key: item.get(key) for key in (
@@ -624,6 +632,8 @@ class WorkGraph:
                            'rounds': [{key: item.get(key) for key in ('childId', 'verdict', 'at', 'error')}
                                       | {'findings': bounded(item.get('findings'), 1500)}
                                       for item in (run.get('review') or {}).get('rounds', [])]},
+                'verificationVersion': run.get('verificationVersion', 'legacy'),
+                'checks': self.checks.records(run['runId']),
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],
@@ -643,6 +653,8 @@ class WorkGraph:
         if flow not in FLOWS:
             raise ValueError(f'WORK_FLOW_INVALID: flow must be one of {list(FLOWS)}')
         current = self.active(sid)
+        if current is not None and self.busy(current):
+            raise ValueError('WORK_RUN_BUSY: wait for the active run/check before creating another run')
         if current is not None and current['status'] != 'executed':
             current['status'] = 'cancelled'
             self.save(current, 'superseded', 'a new run was created')
@@ -651,11 +663,23 @@ class WorkGraph:
                'slug': slugify(args.get('title') or goal), 'autopilot': autopilot_on(session),
                'createdAt': now(), 'nodes': [], 'review': {'status': None, 'rounds': []}, 'documents': [],
                'approval': None, 'interviews': [], 'ship': None, 'history': [], 'revision': 0,
-               'intent': intent or None}
+               'originTurn': self.rt.active_turn.get(sid),
+               'intent': intent or None, 'verificationVersion': work_policy.VERSION,
+               'executionRequested': flow in ('fix', 'mixed') and intent.get('command') not in SLASH_FLOWS}
+        run['executionRequested'] = self.execution_requested(session, run)
         if args.get('nodes'):
             self.apply_nodes(run, args['nodes'], replace=False)
         self.clear_intent(session)
         return self.save(run, 'created', f'flow={flow}')
+
+    def execution_requested(self, session, run):
+        if run['flow'] not in ('fix', 'mixed') or (run.get('intent') or {}).get('command') in SLASH_FLOWS:
+            return False
+        owner_text = next((m.get('content') for m in reversed(session.get('messages', [])) if m.get('role') == 'user' and isinstance(m.get('content'), str)), run['goal'])
+        folded = unicodedata.normalize('NFKD', owner_text.replace('đ','d')).encode('ascii','ignore').decode().lower()
+        artifact_request = re.search(r'\b(plan|research|design|ke hoach|nghien cuu|thiet ke)\b', folded)
+        explicit_execute = re.search(r'^\s*(?:(?:ok|please|help me|giup toi|hay)[,. ]*)?(?:implement|build|fix|ship|thuc hien|code|sua|trien khai)\b', folded)
+        return not artifact_request or bool(explicit_execute)
 
     def clear_intent(self, session):
         config = session.get('config') or {}
@@ -676,20 +700,28 @@ class WorkGraph:
                 raise ValueError(f'WORK_NODE_UNKNOWN: node {node_id} does not exist — use action=add')
             node = normalize_node(raw, existing)
             if existing is not None:
-                changed = any(existing[key] != node[key] for key in ('goal', 'acceptance', 'tests', 'dependsOn'))
+                changed = work_policy.definition(existing) != work_policy.definition(node)
                 if changed:
                     changed_any = True
                     for name, state in node['stages'].items():
-                        if state['status'] in ('accepted', 'rejected', 'failed'):
-                            node['stages'][name] = new_stage() | {'feedback': 'Node definition changed by main.'}
+                        if state['status'] not in IN_FLIGHT_STAGE:
+                            for record in self.checks.records(run['runId']):
+                                if record.get('artifactId') == state.get('artifact', {}).get('artifactId'):
+                                    record.update(previousStatus=record['status'], status='superseded')
+                                    self.checks.save(record)
+                            node['stages'][name] = new_stage() | {'feedback': 'Node definition changed by main.',
+                                                                 'rounds': state.get('rounds', [])}
             by_id[node_id] = node
         nodes = list(by_id.values())
         if len(nodes) > MAX_NODES:
             raise ValueError(f'WORK_GRAPH_TOO_LARGE: at most {MAX_NODES} nodes; merge related work')
         check_graph(nodes)
         run['nodes'] = nodes
+        self.refresh(run)
         if changed_any:
             # A changed graph earns fresh whole-plan reviews; the old rounds judged another plan.
+            if run.get('review', {}).get('rounds'):
+                run.setdefault('reviewHistory', []).append(run['review'])
             run['review'] = {'status': None, 'rounds': []}
         if run['status'] in ('verified', 'awaiting_approval', 'approved', 'execute_failed') and changed_any:
             run['status'] = 'drafting'
@@ -720,6 +752,7 @@ class WorkGraph:
                 raise ValueError('WORK_GRAPH_INVALID: nodes ' + ', '.join(users) + ' still depend on the removed '
                                  'nodes; update their dependsOn first')
             run['nodes'] = [node for node in run['nodes'] if node['id'] not in ids]
+            self.refresh(run)
             return self.result(self.save(run, 'remove', ','.join(sorted(ids))))
         if action == 'retry':
             return self.result(self.retry(run, set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))))
@@ -751,11 +784,38 @@ class WorkGraph:
             run['status'] = 'discovering'
         return self.save(run, 'retry', ','.join(reset))
 
+    def refresh(self, run):
+        """Invalidate consumed snapshots transitively without deleting historical checks."""
+        changed = True
+        while changed:
+            changed = False
+            for node in run['nodes']:
+                for stage, state in node['stages'].items():
+                    if state.get('artifact') and state['status'] in ('accepted', 'needs_checks', 'revise'):
+                        binding = self.checks.binding(run, node, stage)
+                        if any(state['artifact']['binding'].get(k) != v for k, v in binding.items()):
+                            node['stages'][stage] = new_stage() | {'rounds': state['rounds'], 'feedback': 'Consumed snapshot changed.'}
+                            for record in self.checks.records(run['runId']):
+                                if record.get('artifactId') == state['artifact']['artifactId']:
+                                    record.update(previousStatus=record['status'], status='superseded')
+                                    self.checks.save(record)
+                            changed = True
+        review = run.get('review') or {}
+        if review.get('binding') and review['binding'] != self.whole_binding(run):
+            run.setdefault('reviewHistory', []).append(review)
+            run['review'] = {'status': None, 'rounds': []}
+            run['approval'] = None
+            if run['status'] in ('verified', 'awaiting_approval', 'approved', 'executing', 'executed', 'execute_failed'):
+                run['status'] = 'drafting'
+        return run
+
     def result(self, run, message=None):
         view = self.view(run)
         summary = [{'id': node['id'], 'kind': node['kind'], 'title': node['title'], 'dependsOn': node['dependsOn'],
-                    'stages': {name: state['status'] for name, state in node['stages'].items()}}
-                   for node in view['nodes']]
+                    'stages': {name: state['status'] for name, state in node['stages'].items()},
+                    'artifacts': {name: run['nodes'][i]['stages'][name].get('artifact') for name in node['stages']},
+                    'policies': {name: run['nodes'][i]['stages'][name].get('policy') for name in node['stages']}}
+                   for i, node in enumerate(view['nodes'])]
         out = {'runId': run['runId'], 'status': run['status'], 'flow': run['flow'], 'revision': run['revision'],
                'autopilot': view['autopilot'], 'nodes': summary, 'waves': view['waves'], 'issues': view['issues'],
                'documents': view['documents'], 'next': self.next_step(run)}
@@ -766,6 +826,9 @@ class WorkGraph:
     def next_step(self, run):
         """One sentence telling main what the harness expects next (keeps weak models on the path)."""
         status = run['status']
+        needs = [(n['id'], stage, s['artifact']['artifactId']) for n in run['nodes'] for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
+        if needs:
+            return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
         if not run['nodes']:
             return 'Add nodes with work_graph action=add (explore first, then research/design when needed, then plan sub-plans).'
         blocked = set(blocked_nodes(run, 'produce'))
@@ -784,7 +847,7 @@ class WorkGraph:
             return 'Call work_graph action=submit to ask the owner to approve execution.'
         if status == 'verified':
             has_exec = any('execute' in node['stages'] for node in run['nodes'])
-            if has_exec:
+            if has_exec and run.get('executionRequested'):
                 return 'Call work_graph action=submit so the owner approves execution (Autopilot approves itself).'
             return 'Answer the owner with the verified result and the document paths.'
         if status == 'awaiting_approval':
@@ -818,7 +881,7 @@ class WorkGraph:
                 return data.get('text') or ''
         return ''
 
-    async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt):
+    async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt, extra_binding=None):
         """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer."""
         budget = self.child_budget.get(run['runId'])
         if budget is not None:
@@ -828,6 +891,15 @@ class WorkGraph:
             budget[0] -= 1
         work = {'runId': run['runId'], 'nodeId': node['id'] if node else None, 'stage': stage,
                 'purpose': purpose, 'attempt': attempt}
+        refs = []
+        if node:
+            refs = [n['stages'].get(gate_stage(node, n, stage) or 'produce', {}).get('artifact', {}).get('artifactId') for n in run['nodes'] if n['id'] in node['dependsOn']]
+            if stage == 'execute' and node['kind'] == PLAN_KIND:
+                refs.append(node['stages']['produce'].get('artifact', {}).get('artifactId'))
+        work['artifactIds'] = [ref for ref in refs if ref]
+        work.update(extra_binding or {})
+        if node and purpose == 'produce' and node['kind'] == 'debug':
+            work['diagnosticOnly'] = node.get('taskKind', 'diagnostic') == 'diagnostic'
         args = {'role': role, 'goal': goal, 'context': bounded(context, 16000), 'expect': expect}
         waited = time.monotonic()
         while True:
@@ -845,32 +917,18 @@ class WorkGraph:
     # ---- node execution with the review loop ------------------------------------------------- #
 
     def dependency_context(self, run, node, stage):
-        lang = work_prompts.language(run['goal'])
-        by_id = {item['id']: item for item in run['nodes']}
-        parts = []
-        room = CONTEXT_MAX_CHARS
-        for dep in node['dependsOn']:
-            target = by_id.get(dep)
-            if target is None:
-                continue
-            chosen = gate_stage(node, target, stage) or 'produce'
-            state = target['stages'].get(chosen) or {}
-            if not state.get('output'):
-                continue
-            piece = bounded(state['output'], max(1500, room // max(1, len(node['dependsOn']))))
-            if state.get('caveats'):
-                piece += (work_prompts.choose(lang, '\n\nReviewer caveats (open at the round cap; verify before relying on them):\n',
-                                             '\n\nLưu ý reviewer còn mở tại giới hạn vòng; cần xác minh trước khi sử dụng:\n')
-                          + bounded(state['caveats'], 1500))
-            heading = work_prompts.choose(lang, 'Accepted output of', 'Kết quả được chấp nhận của')
-            parts.append(f'### {heading} {dep} ({target["kind"]}: {target["title"]})\n{piece}')
-            room -= len(piece)
+        refs = []
+        for dep_id in node['dependsOn']:
+            dep = next(n for n in run['nodes'] if n['id'] == dep_id)
+            chosen = gate_stage(node, dep, stage) or 'produce'
+            meta = dep['stages'].get(chosen, {}).get('artifact')
+            if meta:
+                refs.append({k: meta[k] for k in ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path', 'chars', 'status')})
         if stage == 'execute' and node['kind'] == PLAN_KIND:
-            own = node['stages']['produce'].get('output') or ''
-            heading = work_prompts.choose(lang, f'The approved sub-plan {node["id"]} you must implement',
-                                         f'Sub-plan {node["id"]} đã được duyệt cần thực hiện')
-            parts.insert(0, f'### {heading}\n{bounded(own, 9000)}')
-        return '\n\n'.join(parts)
+            meta = node['stages']['produce'].get('artifact')
+            if meta:
+                refs.insert(0, {k: meta[k] for k in ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path', 'chars', 'status')})
+        return json.dumps({'runId': run['runId'], 'acceptedDependencySnapshots': refs}, ensure_ascii=False)
 
     def interview_context(self, run):
         lines = []
@@ -944,115 +1002,79 @@ class WorkGraph:
             try:
                 result, answer = await self.spawn(session, run, node, stage, 'knowledge', item['role'], goal,
                                                   work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt)
-                return item | {'childId': result.get('sessionId'), 'status': result.get('status'),
-                               'answer': bounded(answer, 4000)}
+                verified = work_checks.complete(result) and bool(work_checks.good_reads(self, result.get('sessionId')))
+                return item | {'childId': result.get('sessionId'), 'status': result.get('status') if verified else 'unverified',
+                               'answer': bounded(answer, 4000) if verified else 'UNVERIFIED: incomplete lookup or no opened evidence; do not rely on it'}
             except Exception as exc:
                 return item | {'childId': None, 'status': 'failed', 'answer': f'UNAVAILABLE: {exc}'[:500]}
         return list(await asyncio.gather(*(one(item) for item in requests)))
 
     async def run_stage(self, session, run, node, stage, max_rounds):
+        """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
         state = node['stages'][stage]
-        state['status'] = 'running'
+        state.update(status='running', error=None, maxRounds=max_rounds)
         state['startedAt'] = state['startedAt'] or now()
-        state['error'] = None
+        if state['attempts'] >= max_rounds:
+            state.update(status='rejected', error='WORK_REPAIR_EXHAUSTED: checkpoint; change scope before another attempt.')
+            self.save(run, 'node_rejected', node['id'])
+            return state['status']
+        state['attempts'] += 1
+        # A failed replacement must not leave an older rejected artifact as the current draft.
+        state.pop('artifact', None)
+        state.pop('policy', None)
+        attempt = state['attempts']
+        entry = {'attempt': attempt, 'producerRole': node['kind'], 'at': now(), 'knowledge': []}
+        state['rounds'].append(entry)
         self.save(run, 'node_started', f'{node["id"]}:{stage}')
-        reviewer_role = PRODUCE_REVIEWER[node['kind']] if stage == 'produce' else EXECUTE_REVIEWER[node['kind']]
         try:
-            while state['attempts'] < max_rounds:
-                state['attempts'] += 1
-                attempt = state['attempts']
-                role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
-                context = '\n\n'.join(part for part in (self.interview_context(run),
-                                                        self.dependency_context(run, node, stage)) if part)
-                expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role,
-                                                 work_prompts.language(run['goal']))
-                entry = {'attempt': attempt, 'producerRole': role, 'reviewerRole': reviewer_role, 'at': now(),
-                         'knowledge': []}
-                state['rounds'].append(entry)
-                produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context,
-                                                    expect, attempt)
+            before = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
+            role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
+            context = '\n\n'.join(p for p in (self.interview_context(run), self.dependency_context(run, node, stage)) if p)
+            expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role, work_prompts.language(run['goal']))
+            produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
+            entry['producerId'] = produced.get('sessionId')
+            requests = parse_knowledge_requests(output) if work_checks.complete(produced) else []
+            if requests:
+                answers = await self.answer_knowledge(session, run, node, stage, requests, attempt)
+                entry['knowledge'] = answers
+                role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
+                produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
                 entry['producerId'] = produced.get('sessionId')
-                requests = parse_knowledge_requests(output)
-                if requests:
-                    state['status'] = 'researching'
-                    self.save(run, 'knowledge_requested', f'{node["id"]}: {len(requests)}')
-                    answers = await self.answer_knowledge(session, run, node, stage, requests, attempt)
-                    entry['knowledge'] = answers
-                    state['knowledge'] = (state.get('knowledge') or []) + answers
-                    state['status'] = 'running'
-                    role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
-                    goal += work_prompts.choose(work_prompts.language(run['goal']),
-                             '\n\nYou already asked your knowledge requests; the answers are above. Deliver the full result now and write `- none` under Knowledge requests.',
-                             '\n\nBạn đã yêu cầu tra cứu; câu trả lời ở trên. Hoàn thành báo cáo và ghi `- none` trong Knowledge requests.')
-                    produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context,
-                                                        expect, attempt)
-                    entry['producerId'] = produced.get('sessionId')
-                if produced.get('is_error') and not output.strip():
-                    entry['error'] = str(produced.get('last_error') or produced.get('status'))[:400]
-                    state['error'] = entry['error']
-                    if attempt >= max_rounds:
-                        state['status'] = 'failed'
-                        break
-                    state['feedback'] = work_prompts.choose(work_prompts.language(run['goal']),
-                                            f'The previous attempt failed ({entry["error"]}). Finish within budget.',
-                                            f'Lượt trước lỗi ({entry["error"]}). Hoàn thành trong ngân sách.')
-                    continue
-                state['output'] = bounded(output, OUTPUT_MAX_CHARS)
-                state['outputChars'] = len(output)
-                state['status'] = 'reviewing'
-                self.save(run, 'node_reviewing', f'{node["id"]}:{stage}#{attempt}')
-                review_goal, review_context = self.reviewer_goal(run, node, stage, output)
-                verdict, findings, reviewer_id = None, '', None
-                for _ in range(2):  # one retry when the reviewer forgets the VERDICT line or fails
-                    reviewed, review_text = await self.spawn(session, run, node, stage, 'review', reviewer_role,
-                                                             review_goal, review_context, None, attempt)
-                    reviewer_id = reviewed.get('sessionId')
-                    verdict, findings = parse_verdict(review_text)
-                    if verdict:
-                        break
-                if verdict == 'revise' and has_no_blocking_findings(findings):
-                    verdict = 'ok'
-                    entry['adjusted'] = 'revise without blocking findings counts as ok'
-                entry.update({'reviewerId': reviewer_id, 'verdict': verdict or 'unreviewed',
-                              'findings': findings, 'at': now()})
-                if verdict == 'ok':
-                    state['status'] = 'accepted'
-                    state['feedback'] = ''
-                    state.pop('caveats', None)
-                    break
-                state['feedback'] = findings or work_prompts.choose(work_prompts.language(run['goal']),
-                                            'The reviewer did not return a verdict; tighten evidence.',
-                                            'Reviewer chưa trả verdict; cần làm rõ bằng chứng.')
-                if attempt >= max_rounds and stage == 'produce' and node['kind'] in CAVEAT_KINDS and output.strip():
-                    state['status'] = 'accepted'
-                    state['caveats'] = bounded(findings or 'unreviewed', FINDINGS_MAX_CHARS)
-                    entry['acceptedWithCaveats'] = True
-                    self.save(run, 'node_accepted_with_caveats', f'{node["id"]}:{stage}#{attempt}')
-                    break
-                state['status'] = 'revise' if attempt < max_rounds else 'rejected'
-                self.save(run, 'node_revise', f'{node["id"]}:{stage}#{attempt}')
-                if state['status'] == 'rejected':
-                    break
-                state['status'] = 'running'
+            after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
+            changed = before is not None and after is not None and before != after
+            declared_sensitive = any(re.search(r'api|schema|auth|migration|contract|concurr|lock', path, re.I) for path in node['files'])
+            policy = work_policy.derive(run, node, stage, output, changed,
+                                       code_risk=stage == 'execute' and bool((after or {}).get('criticalChanges') or declared_sensitive))
+            state['policy'] = policy
+            binding = self.checks.binding(run, node, stage) | {'policyHash': policy['hash']}
+            if stage == 'execute':
+                binding['codeSnapshot'] = after
+            finalized = work_checks.complete(produced) and bool(output.strip()) and not parse_knowledge_requests(output)
+            meta = await self.artifacts.put(run, node['id'], stage, output, binding, finalized, entry['producerId'])
+            state.update(artifact=meta, output=output, outputChars=len(output))
+            if not finalized:
+                state.update(status='failed', error='WORK_PRODUCER_INCOMPLETE: partial retained; retry/update before checks.')
+            elif stage == 'execute' and (before is None or after is None):
+                state.update(status='failed', error='WORK_CODE_SNAPSHOT_REQUIRED: could not verify source changes.')
+            elif policy['required']:
+                state['status'] = 'needs_checks'
+            elif node['kind'] == 'testing' and not work_checks.test_proof(self, entry['producerId'], node['tests']):
+                state.update(status='failed', error='WORK_TEST_EVIDENCE_REQUIRED: actual successful command events missing.')
+            elif not work_checks.good_reads(self, entry['producerId']):
+                state.update(status='failed', error='WORK_EVIDENCE_REQUIRED: lookup/diagnosis needs actual opened evidence.')
             else:
-                state['status'] = 'rejected'
-        except asyncio.CancelledError:
-            state['status'] = 'pending'
-            state['error'] = 'cancelled'
-            self.save(run, 'node_cancelled', node['id'])
-            raise
+                state.update(status='accepted', feedback='')
         except WorkBudgetExhausted as exc:
-            # This attempt never finished: give it back and wait for the next work_run call.
-            if state['rounds'] and not state['rounds'][-1].get('verdict'):
-                state['rounds'].pop()
+            state.update(status='pending', error=str(exc))
             state['attempts'] = max(0, state['attempts'] - 1)
-            state['status'] = 'revise' if state['rounds'] else 'pending'
-            state['error'] = str(exc)[:500]
+        except asyncio.CancelledError:
+            state.update(status='pending', error='interrupted')
+            self.save(run, 'node_interrupted', node['id'])
+            raise
         except Exception as exc:
-            state['status'] = 'failed'
-            state['error'] = str(exc)[:500]
+            state.update(status='failed', error=str(exc)[:500])
         state['finishedAt'] = now()
-        self.save(run, 'node_' + state['status'], f'{node["id"]}:{stage}')
+        self.save(run, 'artifact_ready' if state['status'] == 'needs_checks' else 'node_' + state['status'], node['id'])
         return state['status']
 
     async def run(self, session, args):
@@ -1065,7 +1087,18 @@ class WorkGraph:
         if run['status'] in TERMINAL_STATUSES:
             raise ValueError(f'WORK_RUN_CLOSED: run {run["runId"]} is {run["status"]}')
         check_graph(run['nodes'])
+        if run.get('verificationVersion') != work_policy.VERSION:
+            run['legacyReview'] = run.get('review')
+            run['review'] = {'status': None, 'rounds': []}
+            for n in run['nodes']:
+                n['stages'] = {k: new_stage() | {'rounds': v.get('rounds', []), 'feedback': 'Legacy review is not current verification.'} for k,v in n['stages'].items()}
+            run.update(verificationVersion=work_policy.VERSION, status='drafting', approval=None,
+                       executionRequested=self.execution_requested(session, run))
+        self.refresh(run)
         if stage == 'execute':
+            self.require_execution(run)
+            self.require_planning_current(run)
+            await self.require_code_current(run)
             if run['status'] == 'execute_failed':
                 raise ValueError('WORK_EXECUTE_FAILED: some execution nodes were not accepted; call work_graph '
                                  'action=retry (or update) first')
@@ -1097,7 +1130,35 @@ class WorkGraph:
                 self.child_budget.pop(run['runId'], None)
                 self.live.pop(run['runId'], None)
 
+    def require_execution(self, run):
+        if not run.get('executionRequested'):
+            raise ValueError('WORK_REQUIREMENTS_ONLY: owner requested an artifact, not code execution; Autopilot cannot expand scope.')
+
+    def require_planning_current(self, run):
+        producers = [n for n in run['nodes'] if 'produce' in n['stages']]
+        if producers and (any(n['stages']['produce']['status'] != 'accepted'
+                              or not self.checks.valid(run, n, 'produce') for n in producers)
+                          or (run.get('review') or {}).get('binding') != self.whole_binding(run)
+                          or (run.get('review') or {}).get('status') != 'ok'):
+            raise ValueError('WORK_NOT_VERIFIED: owner decisions, artifacts or graph checks are stale/missing')
+
+    async def require_code_current(self, run):
+        current = None
+        for node in run['nodes']:
+            state = node['stages'].get('execute', {})
+            if state.get('status') == 'accepted':
+                if current is None:
+                    current = await work_checks.snapshot(self, run['sessionId'])
+                expected = state.get('artifact', {}).get('binding', {}).get('codeSnapshot')
+                if not current or expected != current or not self.checks.valid(run, node, 'execute'):
+                    state.update(status='revise', feedback='Integrated source changed: preserve valid changes, inspect current code and produce a fresh handoff for testing.',
+                                 error='WORK_CODE_STALE: re-produce/re-test the current integrated snapshot.')
+                    run['status'] = 'approved'
+                    self.save(run, 'code_checks_stale', node['id'])
+                    raise ValueError('WORK_CODE_STALE: code or required checks changed; no execute/ship until rechecked.')
+
     def approve_by_autopilot(self, run):
+        self.require_execution(run)
         run['approval'] = {'status': 'approved', 'by': 'autopilot', 'at': now()}
         run['status'] = 'approved'
 
@@ -1182,6 +1243,10 @@ class WorkGraph:
                            'acceptedWithCaveats': bool(node['stages'][stage].get('caveats'))}
                           for node in run['nodes'] if stage in node['stages']
                           and (not only or node['id'] in only)]
+        for item in out['outputs']:
+            state = next(n for n in run['nodes'] if n['id'] == item['id'])['stages'][stage]
+            item['artifact'] = state.get('artifact')
+            item['policy'] = state.get('policy')
         return out
 
     # ---- whole-plan review, documents, approval --------------------------------------------- #
@@ -1205,7 +1270,8 @@ class WorkGraph:
                 lines += [f'### {node["id"]} · {node["kind"]} · {node["title"]}', '',
                           pick(f'Status: `{state["status"]}` after {state["attempts"]} round(s).',
                                f'Trạng thái: `{state["status"]}` sau {state["attempts"]} vòng.'), '',
-                          bounded(state.get('output'), 6000), '']
+                          'Full snapshot: `' + (state.get('artifact') or {}).get('path', 'legacy') + '`',
+                          state.get('output') or '', '']
         plans = [node for node in run['nodes'] if node['kind'] == PLAN_KIND]
         execs = [node for node in run['nodes'] if node['kind'] in EXECUTION_KINDS]
         if plans or execs:
@@ -1283,62 +1349,89 @@ class WorkGraph:
     async def verify(self, session, args):
         sid = session['id']
         run = self.resolve(sid, args.get('runId'))
+        if run.get('verificationVersion') != work_policy.VERSION:
+            raise ValueError('WORK_LEGACY_CHECKS_REQUIRED: old documents remain readable; call work_run to import/recheck')
+        self.refresh(run)
+        if self.busy(run):
+            raise ValueError('WORK_RUN_BUSY: another run/check operation is active')
         if run['status'] in ('approved', 'executing', 'executed', 'execute_failed') + TERMINAL_STATUSES:
             raise ValueError(f'WORK_PHASE_INVALID: run is {run["status"]}; verify happens before approval')
-        produce = [node for node in run['nodes'] if 'produce' in node['stages']]
+        produce = [n for n in run['nodes'] if 'produce' in n['stages']]
         if not produce:
-            raise ValueError('WORK_NOT_READY: the graph has no explore/research/design/plan node to verify')
-        unfinished = [node['id'] for node in produce if node['stages']['produce']['status'] != 'accepted']
+            raise ValueError('WORK_NOT_READY: no producer node to verify')
+        unfinished = [n['id'] for n in produce if n['stages']['produce']['status'] != 'accepted'
+                      or not self.checks.valid(run, n, 'produce')]
         if unfinished:
-            raise ValueError('WORK_NOT_READY: nodes not accepted yet: ' + ', '.join(unfinished)
-                             + ' — run work_run phase=discover or update/remove them')
+            raise ValueError('WORK_NOT_READY: required checks not passed: ' + ', '.join(unfinished))
         review = run.setdefault('review', {'status': None, 'rounds': []})
         if len(review['rounds']) >= MAX_GRAPH_REVIEWS and review.get('status') != 'ok':
-            raise ValueError(f'WORK_REVIEW_EXHAUSTED: {MAX_GRAPH_REVIEWS} whole-plan reviews did not pass; '
-                             'report the findings to the owner and ask how to proceed')
-        run['status'] = 'verifying'
-        self.save(run, 'verify_started')
-        master = self.master_document(run)
-        bodies = '\n\n'.join(f'=== {node["id"]} ({node["kind"]}) ===\n{bounded(node["stages"]["produce"]["output"], 5000)}'
-                             for node in produce if node['kind'] == PLAN_KIND) or '\n\n'.join(
-            f'=== {node["id"]} ({node["kind"]}) ===\n{bounded(node["stages"]["produce"]["output"], 6000)}'
-            for node in produce)
-        reviewer = FLOW_REVIEWER.get(run['flow'], 'plan-review')
-        lang = work_prompts.language(run['goal'])
-        goal = work_prompts.whole_review_goal(run['title'], run['goal'], lang)
-        master_heading = work_prompts.choose(lang, 'Master document', 'Tài liệu tổng hợp')
-        outputs_heading = work_prompts.choose(lang, 'Sub-plans / outputs', 'Sub-plan / kết quả')
-        context = f'### {master_heading}\n{bounded(master, 7000)}\n\n### {outputs_heading}\n{bodies}'
-        self.child_budget[run['runId']] = [4]
-        try:
-            with self.budget_paused(sid):
-                verdict, findings, child_id, error = await self.verify_review(session, run, reviewer, goal, context,
-                                                                              len(review['rounds']) + 1)
-        finally:
-            self.child_budget.pop(run['runId'], None)
-        review['rounds'].append({'childId': child_id, 'verdict': verdict or 'unreviewed', 'findings': findings,
-                                 'at': now(), 'error': error})
-        review['status'] = verdict
-        return await self.finish_verify(sid, run, review, produce, verdict, findings)
-
-    async def verify_review(self, session, run, reviewer, goal, context, attempt):
-        """Whole-plan reviewer child; one retry when it fails or forgets the VERDICT line."""
-        verdict, findings, child_id, error = None, '', None, None
-        for _ in range(2):
+            raise ValueError('WORK_REVIEW_EXHAUSTED: checkpoint with unresolved findings; change scope before retry')
+        lock = self.locks.setdefault(run['runId'], asyncio.Lock())
+        async with lock:
+            run['status'] = 'verifying'
+            self.save(run, 'verify_started')
+            whole_binding = self.whole_binding(run)
             try:
-                result, text = await self.spawn(session, run, None, 'verify', 'review', reviewer, goal, context,
-                                                None, attempt)
-            except Exception as exc:
-                error = str(exc)[:400]
-                continue
-            child_id = result.get('sessionId')
-            verdict, findings = parse_verdict(text)
-            if verdict:
-                break
-        return verdict, findings, child_id, error
+                master = await self.artifacts.put(run, 'whole', 'verify', self.master_document(run),
+                                                  {'graphHash': whole_binding}, True)
+            except BaseException:
+                run['status'] = 'needs_revision'
+                self.save(run, 'verify_artifact_failed')
+                raise
+            metas = [master] + [n['stages']['produce']['artifact'] for n in produce]
+            spec = {'id': 'whole', 'executorRole': FLOW_REVIEWER.get(run['flow'], 'plan-review')}
+            criteria = {'G1': 'Owner scope/decisions fully covered; no imported old assumptions.',
+                        'G2': 'Cross-node contracts/dependencies/order agree.',
+                        'G3': 'Acceptance/tests prove the owner goal; risks/rollback proportional.'}
+            if work_prompts.language(run['goal']) == 'vi':
+                criteria = {'G1': 'Bao phủ mục tiêu/quyết định người dùng; không kế thừa giả định cũ.',
+                            'G2': 'Hợp đồng, phụ thuộc và thứ tự giữa các nút thống nhất.',
+                            'G3': 'Nghiệm thu/test chứng minh mục tiêu; rủi ro/rollback tương xứng.'}
+            if work_policy.research_only(run):
+                criteria['G3'] = work_prompts.choose(work_prompts.language(run['goal']),
+                    'Sources support the research conclusions; uncertainty, contrary evidence and limitations are honest. '
+                    'No implementation, API contract, rollout or executed tests required unless the owner requested them.',
+                    'Nguồn hỗ trợ kết luận nghiên cứu; ghi trung thực độ bất định, trái chiều và giới hạn. '
+                    'Không đòi triển khai, hợp đồng API, rollout hoặc test đã chạy nếu người dùng chưa yêu cầu.')
+            criteria.update({f'{n["id"]}.A{i+1}': item for n in produce for i,item in enumerate(n['acceptance'])})
+            doc = {'checkId': 'c-' + uuid.uuid4().hex, 'runId': run['runId'], 'nodeId': 'whole',
+                   'stage': 'verify', 'artifactId': master['artifactId'], 'policyHash': work_policy.VERSION,
+                   'kind': 'whole', 'status': 'running', 'binding': {'graphHash': whole_binding}, 'startedAt': now()}
+            with self.db:
+                self.db.execute('INSERT INTO work_checks VALUES(?,?,?,?,?)',
+                                (doc['checkId'], run['runId'], doc['checkId'], whole_binding, json.dumps(doc)))
+            self.child_budget[run['runId']] = [2]
+            try:
+                with self.budget_paused(sid):
+                    doc = await self.checks.judge(session, run, None, 'verify', spec, metas, criteria, doc, whole=True)
+            except BaseException as exc:
+                doc.update(status='error', error=str(exc)[:500])
+                self.checks.save(doc)
+                run['status'] = 'needs_revision'
+                self.save(run, 'verify_error')
+                raise
+            finally:
+                self.child_budget.pop(run['runId'], None)
+            self.checks.save(doc)
+            verdict = 'ok' if doc['status'] == 'pass' else 'revise' if doc['status'] == 'revise' else None
+            findings = doc.get('findings', '')
+            review['rounds'].append({'childId': doc.get('childId'), 'checkId': doc['checkId'],
+                'verdict': verdict or 'unreviewed', 'findings': findings, 'at': now(), 'error': doc.get('error')})
+            review.update(status=verdict, binding=whole_binding)
+            return await self.finish_verify(sid, run, review, produce, verdict, findings, doc.get('coverage', []))
 
-    async def finish_verify(self, sid, run, review, produce, verdict, findings):
+    def whole_binding(self, run):
+        return work_policy.digest({'goal': run['goal'], 'interviews': run.get('interviews'),
+            'nodes': [{k: v for k,v in n.items() if k != 'stages'} for n in run['nodes']],
+            'artifacts': [n['stages']['produce'].get('artifact', {}).get('artifactId') for n in run['nodes'] if 'produce' in n['stages']]})
+
+    async def finish_verify(self, sid, run, review, produce, verdict, findings, coverage=()):
         targets = parse_revise_targets(findings, {node['id'] for node in run['nodes']}) if verdict == 'revise' else {}
+        if verdict == 'revise':
+            for item in coverage:
+                match = re.fullmatch(r'(.+)\.A\d+', item['id'])
+                if match and item['status'] == 'revise' and match[1] in {n['id'] for n in produce}:
+                    targets.setdefault(match[1], item['evidence'])
         if verdict == 'ok':
             documents = []
             try:
@@ -1375,6 +1468,9 @@ class WorkGraph:
         sid = session['id']
         run = self.resolve(sid, args.get('runId'))
         check_graph(run['nodes'])
+        self.require_execution(run)
+        self.refresh(run)
+        self.require_planning_current(run)
         if run['status'] == 'awaiting_approval':
             if any(record.get('workRunId') == run['runId'] for record in self.rt.pending_for(sid)):
                 raise ValueError('WORK_RUN_BUSY: the approval card is already waiting for the owner')
@@ -1430,6 +1526,10 @@ class WorkGraph:
     async def ship(self, session, args):
         sid = session['id']
         run = self.resolve(sid, args.get('runId'))
+        self.require_execution(run)
+        self.refresh(run)
+        self.require_planning_current(run)
+        await self.require_code_current(run)
         if run['status'] != 'executed':
             raise ValueError(f'WORK_NOT_EXECUTED: run is {run["status"]}; ship only after every execution node '
                              'is accepted')

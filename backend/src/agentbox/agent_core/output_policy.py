@@ -4,6 +4,8 @@ import os
 DEFAULT_OUTPUT_TOKENS = 4096
 RESEARCH_OUTPUT_TOKENS = 16000  # 8k/12k hit the cap in the Space Bunny long-report fixtures.
 DOCUMENT_OUTPUT_TOKENS = 16000
+REVIEW_OUTPUT_TOKENS = 16000  # W6: user requested measured 8k/16k reviewer comparison.
+WORK_CHECK_OUTPUT_TOKENS = REVIEW_OUTPUT_TOKENS
 MAX_OUTPUT_TOKENS = 64000  # Existing router request limit, not a model capability.
 RECOVERY_INPUT_MAX_CHARS = 64000
 STREAM_INTERRUPTED_CODE = 'PROVIDER_STREAM_INTERRUPTED'
@@ -27,6 +29,10 @@ def configured_budget(name, default, choices):
 
 def child_budget(role, work=None, task_kind=None):
     work = work or {}
+    if work.get('purpose') == 'review' and work.get('checkId'):
+        return configured_budget('BOXFOX_WORK_CHECK_OUTPUT_TOKENS', WORK_CHECK_OUTPUT_TOKENS, {4096, 8192, 16000})
+    if role in {'review', 'plan-review', 'research-review'}:
+        return configured_budget('BOXFOX_REVIEW_OUTPUT_TOKENS', REVIEW_OUTPUT_TOKENS, {8192, 16000})
     if work and (work.get('purpose') != 'produce' or work.get('stage') != 'produce'):
         return None
     if role in {'plan', 'design'}:

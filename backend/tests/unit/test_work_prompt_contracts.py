@@ -46,6 +46,13 @@ def test_roles_do_not_force_unrequested_scope_or_fake_evidence():
         assert word in wp.deliverable('plan')
 
 
+def test_research_whole_review_keeps_research_scope_and_vietnamese_final():
+    prompt = wp.whole_review_goal('CSV scope', 'Chỉ nghiên cứu phạm vi CSV', 'vi', research_only=True)
+    assert 'Không đòi plan app' in prompt and 'nguồn hỗ trợ khẳng định' in prompt
+    assert 'REVISE <nodeId>:' in prompt
+    assert 'tiếng Việt có dấu' in wp.child_contract('review', 'vi')
+
+
 @pytest.mark.parametrize('lang', ['vi', 'en'])
 def test_protocol_markers_remain_parseable(lang):
     assert '## Knowledge requests' in wp.child_contract('produce', lang)
@@ -87,7 +94,7 @@ def test_vietnamese_full_child_prompts_and_review_cycle_keep_existing_graph(tmp_
     assert verified['status'] == 'verified'
     assert [c for c in executor.calls if c[0] == 'write_plan']
     prompts = [text for _, text in model.prompts]
-    assert len(prompts) == 5  # 2 producers, 2 independent reviews, 1 whole-plan review; no policy change
+    assert len(prompts) == 4  # simple Explore consumes an opened source; Plan check and whole check remain independent
     for text in prompts:
         for old_label in ('Overall owner goal:', 'Your assignment:', 'Parent-supplied context',
                           'Parent-required deliverable', 'Deliverable (Markdown', 'Every claim needs evidence'):

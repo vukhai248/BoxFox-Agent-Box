@@ -307,7 +307,7 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        'research_scope',
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
-                                       'work_graph', 'work_run', 'work_ship', 'interview'} | PEER
+                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_artifact_read', 'interview'} | PEER
 
 
 def allowed_tools(role, parent=None):

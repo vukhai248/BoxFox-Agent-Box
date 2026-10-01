@@ -64,6 +64,9 @@ WORK_NODE_KINDS = ['explore', 'research', 'design', 'plan', 'build', 'debug', 't
 WORK_NODE = {'type': 'object', 'properties': {
     'id': {'type': 'string', 'description': 'short id such as E1, R1, D1, P1, B1 (letters, digits, - or _)'},
     'kind': {'type': 'string', 'enum': WORK_NODE_KINDS},
+    'taskKind': {'type': 'string', 'enum': ['lookup','diagnostic','deliverable','implementation']},
+    'artifactKind': {'type': 'string', 'enum': ['knowledge','diagnostic','research','design','plan','patch','test_report']},
+    'risk': {'type': 'string', 'enum': ['normal','consequential']},
     'title': STRING,
     'goal': {'type': 'string', 'description': 'the complete, self-contained assignment for the specialist'},
     'dependsOn': {'type': 'array', 'items': STRING,
@@ -71,7 +74,7 @@ WORK_NODE = {'type': 'object', 'properties': {
     'acceptance': {'type': 'array', 'items': STRING,
                    'description': 'observable checks the reviewer verifies, one per item'},
     'tests': {'type': 'array', 'items': STRING,
-              'description': 'plan/build nodes: the exact test cases or commands that prove the node'},
+              'description': 'plan/build nodes: exact runnable commands; expected results/test names belong in acceptance and the document'},
     'files': {'type': 'array', 'items': STRING, 'description': 'expected touch list (paths)'}},
     'required': ['id', 'kind', 'title', 'goal']}
 INTERVIEW_QUESTION = {'type': 'object', 'properties': {
@@ -668,17 +671,26 @@ SCHEMAS = [
           'summary': {'type': 'string', 'description': 'submit: what the owner approves, in their language'}},
          ['action']),
     tool('work_run',
-         'Run the ready nodes of the Work Graph in parallel (dependencies respected). The harness runs '
-         'each node with its specialist, answers the specialist knowledge requests through research or '
-         'explore, then has an independent reviewer judge it (VERDICT ok|revise) and re-runs the node '
-         'with the findings until ok or the round limit. Returns each node verdict and accepted output. '
-         'phase=discover runs explore/research/design/plan nodes; phase=execute runs the approved plan '
-         '(build per sub-plan, verified by testing) and needs owner approval or Autopilot.',
-         {'runId': STRING, 'phase': {'type': 'string', 'enum': ['discover', 'execute']},
-          'nodeIds': {'type': 'array', 'items': STRING,
-                      'description': 'limit to these nodes (their dependencies must already be accepted)'},
-          'maxRounds': {'type': 'integer', 'description': 'review rounds per node, 1-4 (default 3)'}},
-         ['phase']),
+         'Produce ready nodes in parallel with existing dependency rules. Returns full saved artifact refs and minimum policies; '
+         'main inspects drafts and explicitly calls work_check for required checks. No fixed automatic reviewer chain. '
+         'On revise, route findings and call work_run for a new artifact, bounded by maxRounds. '
+         'phase=execute requires execution scope plus owner approval or Autopilot; artifact-only requests cannot execute.',
+         {'runId': STRING, 'phase': {'type': 'string', 'enum': ['discover','execute']},
+          'nodeIds': {'type': 'array', 'items': STRING},
+          'maxRounds': {'type': 'integer', 'minimum': 1, 'maximum': 4}}, ['phase']),
+    tool('work_check',
+         'Main inspects draft artifact refs, then starts minimum checks (evidence/critique/plan/design/tests/code review). '
+         'Backend binds completion and acceptance coverage to the exact artifact, policy, dependencies and code. '
+         'Partial, unread ranges, provider errors and missing checks never pass. Repeated invocationId is idempotent. '
+         'On revise, route findings to producer or Debug, then work_run and check the NEW artifact.',
+         {'action': {'type': 'string', 'enum': ['status','start']}, 'runId': STRING, 'nodeId': STRING,
+          'stage': {'type': 'string', 'enum': ['produce','execute']}, 'artifactId': STRING,
+          'checkIds': {'type': 'array', 'items': STRING}, 'invocationId': STRING}, ['action']),
+    tool('work_artifact_read',
+         'Read an immutable, session-owned Work Graph snapshot. Follow nextOffset until null for full coverage. '
+         'A child can read only refs assigned by the harness; a file path or preview is not review coverage.',
+         {'runId': STRING, 'artifactId': STRING, 'offset': {'type': 'integer'},
+          'limit': {'type': 'integer', 'minimum': 1, 'maximum': 8000}}, ['artifactId']),
     tool('work_ship',
          'After execution: create a local git branch, commit the workspace changes, and write the PR '
          'description file. Pushes and opens a draft PR only when a remote and credentials exist; '

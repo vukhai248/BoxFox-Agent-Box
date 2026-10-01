@@ -5,7 +5,7 @@ from agentbox.agent_core import output_policy as policy
 
 
 @pytest.mark.parametrize('role,expected', [('research',16000), ('plan',16000), ('design',16000),
-                                         ('explore',None), ('review',None), ('debug',None)])
+                                         ('explore',None), ('debug',None)])
 def test_producer_profiles(role, expected, monkeypatch):
     monkeypatch.delenv('BOXFOX_RESEARCH_OUTPUT_TOKENS', raising=False)
     monkeypatch.delenv('BOXFOX_DOCUMENT_OUTPUT_TOKENS', raising=False)
@@ -61,3 +61,17 @@ def test_usage_does_not_invent_missing_counts():
     assert policy.usage_counts({'output_tokens':10,'output_tokens_details':{'reasoning_tokens':7}}) == {
         'inputTokens':None,'outputTokens':10,'reasoningTokens':7}
     assert policy.usage_counts({'completion_tokens':True,'prompt_tokens':-1})['outputTokens'] is None
+
+
+@pytest.mark.parametrize('role', ['review', 'plan-review', 'research-review'])
+def test_review_profiles_inside_and_outside_graph(role, monkeypatch):
+    monkeypatch.delenv('BOXFOX_REVIEW_OUTPUT_TOKENS', raising=False)
+    monkeypatch.delenv('BOXFOX_WORK_CHECK_OUTPUT_TOKENS', raising=False)
+    assert policy.child_budget(role) == 16000
+    assert policy.child_budget(role, {'purpose': 'review', 'stage': 'produce'}) == 16000
+    assert policy.child_budget(role, {'purpose': 'review', 'checkId': 'c-bound'}) == 16000
+    monkeypatch.setenv('BOXFOX_REVIEW_OUTPUT_TOKENS', '8192')
+    assert policy.child_budget(role) == 8192
+    monkeypatch.setenv('BOXFOX_WORK_CHECK_OUTPUT_TOKENS', '8192')
+    assert policy.child_budget(role, {'purpose': 'review', 'checkId': 'c-bound'}) == 8192
+    assert policy.request_budget({'maxTokens': 16000, 'outputTokenCeiling': 4096}) == 4096

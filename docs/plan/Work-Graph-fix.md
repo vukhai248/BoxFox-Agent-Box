@@ -1014,7 +1014,8 @@ flowchart LR
     W3 --> W4["W4: prompt/skill và chuẩn đầu ra"]
     W4 --> W5["W5: artifact theo session/lượt"]
     W5 --> W6["W6: main giao checks linh hoạt"]
-    W6 --> W7["W7: interview/resume bền vững"]
+    W6 --> W65["W6.5: kiểm chứng steps/tool/time budgets"]
+    W65 --> W7["W7: interview/resume bền vững"]
     W7 --> W8["W8: DAG dependencies và execution"]
     W8 --> W9["W9: ghép toàn luồng và rollout"]
     W9 --> W10["W10: đánh giá/test/CUA cuối"]
@@ -1035,6 +1036,7 @@ Không cần giải quyết DAG để sửa slug, source shape, diagnostic spam 
 | **W4 — Prompt/skill và chất lượng nội dung** | Vừa; phần M5.1 | Đồng bộ schema/examples; localize wrapper/purpose; rubric theo artifact; Plan có milestone/data/API/tests; Research có sources/limits; Design theo subtype; Debug/Testing đúng nhiệm vụ. | Snapshot/contract tests cho prompts; không trộn English templates với owner tiếng Việt; không bắt Debug viết plan hoặc Research-only tạo implementation scope. Prompt gọi tool mới chỉ bật khi tool đó đã khả dụng ở W5/W6. |
 | **W5 — Nền artifact/version/identity** | Vừa–khó; M1.1, M1.3–M1.4 | Stable session/turn/run IDs; SQLite records; bounded writer/read; manifests; immutable versions/hash; namespace/index/export; crash reconciliation; migration legacy. | Sub-plan lưu trước review; main/reviewer nhận refs và đọc full file; không mất identity qua resume/restart; cross-session access bị chặn; draft không tự tạo ready. |
 | **W6 — Main điều phối kiểm chứng** | Khó; M1.2 policy, M3.1–M3.2, phần M5.1 | work_check + result bindings; main nhận draft; policy tối thiểu; Testing/Debug/Evidence/Critique/Plan Review; acceptance coverage; partial/review-error gates; node/artifact invalidation. | Các ca V01–V14 đúng. Debug diagnostic không bị thêm review thừa; Debug patch vẫn test; plan candidate qua cổng Plan; missing check không auto-pass. Policy/snapshot hết hiệu lực chặn next step. |
+| **W6.5 — Kiểm chứng và điều chỉnh ngân sách sub-agent** | Vừa; nối W3/W6, trước W7 | Đo model steps/tool calls, thời gian child/request/tool/queue/watchdog/work_run; kiểm clamp theo cha; thử mức tăng có kiểm soát theo quy mô; giữ output 16k để cô lập phép đo. | Có baseline/candidate cùng Space Bunny, dữ liệu đủ và nguyên nhân partial đúng; không timeout tầng thấp hơn phủ nhận budget cao hơn, không tăng vô hạn hoặc nới checks. Plan chi tiết mục 17; chưa code. |
 | **W7 — Interview và same-child continuation** | Khó; M4.1–M4.2 | Durable needs_user/request/answer/outbox; callback/yield về main; gom 1–3 câu; history UI; answer transaction; invocation dedup; resume đúng child và origin folder. | Restart/duplicate/stale answer có oracle đúng; independent branches vẫn chạy; user wait không tốn compute; main không tự suy ra câu trả lời từ timeout. |
 | **W8 — Thay đổi DAG/execution** | Khó nhất về implementation; phần M1 state/dependencies và M3.2–M3.3 | Typed produce/execute dependencies; compatibility; cycle/hidden coupling; scheduler cho artifact/check/wait state; touch-set conflict; branch trước Build; integration snapshot; run-owned ship. | Scheduling trace đúng thứ tự với cùng đầu vào; P1/P2 song song khi độc lập; P3/P4 chờ dependency execute/check tương ứng; không chạy từ plan dở hoặc branch sai; test từng nhánh và integration đều có evidence. |
 | **W9 — Ghép UI/API và rollout** | Tích hợp; phần còn lại M5 và mục 9.4 | Sync session/chat/Decisions/Work Graph/Plan/Research/Design; full links; policy badges; version/check history; compatibility client; feature capability và pilot. | Không có hai state machines cùng ghi một run; click/copy/export đúng version; lỗi/handoff hiển thị trung thực; rollback không biến failed thành pass. |
@@ -1071,6 +1073,7 @@ Test W3 tối thiểu:
 - W1–W4 có thể sửa qua code paths hiện có. Không cần đợi migration lớn để có quick fixes, nhưng vẫn cần test và bảo toàn legacy.
 - W5 phải xong trước khi bật workflow “review chỉ nhận file refs”; nếu reader chưa có, không gửi reviewer một đường dẫn nó không đọc được.
 - W6 dựa vào artifact/hash/binding W5. Preflight W1 chỉ là kiểm capability ban đầu; flexible check scheduling đầy đủ ở W6.
+- W6.5 đo và sửa ngân sách sau khi W6 có read/check traces. Không phụ thuộc same-child continuation chưa có ở W7; nếu cần cơ chế đó, ghi dependency thay vì dựng tạm hoặc giả lập pass.
 - W7 dựa vào identity/outbox W5 và task/check states W6. Không mở câu hỏi durable bằng RAM future cũ rồi gọi là restart-safe.
 - W8 cần W5–W7 ổn để định nghĩa readiness, waiting và invalidation. Không đổi scheduler trước rồi nới gates để hệ thống chạy được.
 - UI cải thiện nhỏ ở W2; UI các state/policy/artifact mới tích hợp W9. Schema/API đi cùng feature capability để client không tưởng backend đã hỗ trợ.
@@ -1091,8 +1094,9 @@ Checklist này theo dõi implementation/verification, độc lập với việc 
 | W4 prompt hiện có: sửa bug | [x] | [x] | Mục 15: contract/mock/regression đã đạt; live 7/8 completion, còn finding nội dung. Không coi output là semantic-ready. |
 | W4 phần mở rộng skill/gate | [ ] | [ ] | Chưa thêm skill loader, tool, cổng chất lượng hoặc cơ chế chọn check mới. Cần thống nhất scope riêng. |
 | W5 đường tài liệu hiện có: sửa bug | [x] | [x] | Mục 15: writer sai kiểu, path/version thực, UTF-8/hash; full regression 2584 passed. Không thêm artifact store. |
-| W5 artifact store/identity mới | [ ] | [ ] | Để thảo luận: session/turn namespace, registry, immutable snapshots, migration và reviewer đọc file thay inline. |
-| W6 flexible checks | [ ] | [ ] | Policy/check traces, acceptance coverage, no bypass/recursive check cases. |
+| W5 artifact store/identity mới | [ ] | [ ] | Nền SQLite/snapshot/reader/session-run namespace cần cho W6 đã làm ở mục 16; origin-turn folder/manifest/export/crash reconciliation và migration đầy đủ còn mở. |
+| W6 flexible checks | [x] | [x] | Backend contracts V01–V14, 192 targeted, 2643 unit pass; live reviewer trên Space Bunny. Semantic false positive và CUA/full DAG còn mở, xem mục 16. |
+| W6.5 steps/tool/time budgets | [ ] | [ ] | Theo yêu cầu bổ sung: đo và chọn mức tăng hợp lý, kiểm mọi tầng timeout/clamp; mục 17. Chỉ lập kế hoạch, chưa đổi runtime. |
 | W7 interview/resume | [ ] | [ ] | Request/answer/invocation, same child/folder và independent branches. |
 | W8 DAG/execution | [ ] | [ ] | Dependency/resource-lock traces, branch/change set và integration results. |
 | W9 UI/API/rollout | [ ] | [ ] | Panel/version/API compatibility/CUA, pilot and rollback evidence. |
@@ -1338,7 +1342,7 @@ Live dùng text-only probe gọi prompt/role thực với dữ liệu synthetic,
 - [ ] W5-F01: namespace mới theo root session/origin turn/run/attempt, registry SQLite, manifest/index/export và chính sách truy cập.
 - [ ] W5-F02: artifact immutable version/hash, dedicated writer/reader, crash reconciliation và migration plan cũ.
 - [ ] W5-F03: lưu sub-plan trước review, main/reviewer nhận file refs, đọc đủ nội dung thay inline prompt; bounded recovery tiếp tục từ artifact.
-- [ ] W6: main chọn checks linh hoạt theo loại/rủi ro, check bindings/invalidation, gate đối với partial/reviewer error/caveats; thay review cố định sau mọi sub-agent.
+- [x] W6: đã triển khai và kiểm backend/checker loop theo ủy quyền sau đó; xem mục 16. CUA/full workflow và semantic evaluation chưa hoàn tất.
 - [ ] W7: child cần định hướng trả request về main, interview bền vững và resume cùng child sau answer.
 - [ ] W8: DAG dependencies/execution/resource locks/branch ownership. Không đổi scheduler trong lượt sửa bug.
 - [ ] W9: badges, inspector, điều hướng file, lịch sử câu hỏi và mode UI; không sửa UI/UX.
@@ -1391,3 +1395,225 @@ python scripts/eval/work_prompt_eval.py --router <URL> --output .tmp/work-prompt
 ~~~
 
 Live prompt hash khớp prompt tái tạo bằng source cuối. Hash work_graph.py ở đầu live có trước chỉnh path copyable của writer; phần producer/reviewer prompts không thay đổi bởi chỉnh đó. Full suite cuối đã kiểm source sau chỉnh writer. Hash source cuối, usage/latency/output/quotes và adjudication nằm trong evidence JSON; không coi source-hash khác là cùng snapshot toàn file.
+
+## 16. Checkpoint W6 — main điều phối checks và đo reviewer (01/10/2026)
+
+**Ủy quyền:** người dùng duyệt thực hiện W6, chạy kiểm thử Space Bunny, commit neo; W7 còn thảo luận, không triển khai. Giữ UI/UX. Nhánh duy nhất sửa là **B**, worktree `D:/create/BoxFox-Agent-Box-B`. Commit neo trước sửa: **72d4a6b**; nền W4/W5: **d354634d**.
+
+### 16.1 Phạm vi và tiến độ
+
+- [x] Main nhận artifact draft; `work_run` không tự gắn cùng một reviewer sau mọi producer.
+- [x] `work_check(status/start)` chọn checks từ policy tối thiểu; kết quả do backend ghi, main không tự khai pass.
+- [x] Policy theo task/artifact/risk: lookup/diagnosis có bằng chứng; Research evidence; consequential thêm critique; Plan/Design có check chuyên môn; patch phải Testing, code consequential thêm review.
+- [x] Bổ sung nền W5 cần trực tiếp cho W6: SQLite giữ bản đầy đủ bất biến, file UTF-8 trong namespace session/run/node/stage/version; hash, paginated reader, ownership và read coverage. Đây là hỗ trợ mới, không giả định W5 registry đã có.
+- [x] Contract coverage từng tiêu chí, một final verdict, completion thực, đọc đủ ranges, nguồn gốc/test command events; partial/error/unverified không auto-pass và bỏ accept-with-caveats ở round cap.
+- [x] Lịch sử checks và ràng buộc artifact/node/owner/dependency; test invalidation cơ bản đã qua.
+- [x] Rà cuối stale-code/whole-plan approval, duplicate/newer-finding, restart và failed writer.
+- [x] Bộ V01–V14 và các regression bổ sung; ownership API; full backend trên source cuối.
+- [x] Space Bunny tool-enabled fixtures và đo 8k/16k; giữ cả lượt lỗi, không thay provider.
+- [x] Commit neo W6 chứa mục này, evidence và kế hoạch W6.5; chỉ nhánh B. SHA được báo ở kết quả cuối và tra theo message `feat: add task-specific work checks and measured review budgets (W6)`.
+- [ ] **W7 chưa làm:** durable needs_user/interview/outbox/same-child resume.
+- [ ] **W8 chưa làm:** typed dependency edges, touch/resource locks và kiến trúc execution/ship mới.
+
+### 16.2 Thay đổi đã triển khai và giới hạn
+
+| Phần | Hành vi W6 | File chính |
+|---|---|---|
+| Main dispatch | `work_run` trả draft refs + policy; main gọi `work_check(start)` đúng artifact, stage, check IDs và invocation riêng. Backend ghi verdict; model không tự khai pass. | runtime.py, work_graph.py, tool_contracts.py |
+| Minimum policy | Lookup/diagnosis cần đọc bằng chứng thực; không thêm reviewer mặc định. Research có evidence; consequential thêm critique. Plan candidate kể cả do Research viết phải qua plan_review. Design kiểm đúng subtype. Patch phải Testing; consequential code thêm code_review. | work_policy.py |
+| Artifact | SQLite là bản canonical bất biến; file UTF-8 là bản handoff. Đường `.plans/work/<hash-session>/<run>/<node>/<stage>/vN-<artifactId>.md`. Có hash, producer, originTurn và policy/dependency binding. Prompt mang refs, không nhét toàn văn deliverable. | work_artifacts.py |
+| Full read | Tool reader chia tối đa 8.000 ký tự/trang, có nextOffset/unreadOffset/coverageComplete. Checker phải đọc đủ mọi range trên đúng child/check. Đọc đầu và cuối mà bỏ giữa vẫn unverified. | work_artifacts.py, work_checks.py |
+| Result contract | Một VERDICT cuối; JSON coverage có từng criterion ID, status và evidence/finding. Runtime child phải completed; partial/provider lỗi/thiếu đọc/thiếu nguồn hoặc test events không được pass. Không accept-with-caveats để vượt round cap. | work_checks.py |
+| Code/tests | Test commands là chuỗi lệnh chạy thật, không trộn expected vào command. Snapshot Git + source trước/sau phát hiện sửa source qua terminal của tester; cache hợp lệ được loại. Chỉ actual exit 0 + output + đúng lệnh mới chứng minh đã chạy. | work_checks.py, work_graph.py |
+| Invalidation | Thay goal/criteria/files/owner answers/dependency artifact làm kết luận cũ mất hiệu lực. Whole review và approval phải đúng graph/artifacts hiện tại; source thay đổi cần handoff/test mới trước execute/ship. | work_graph.py |
+| History/recovery | Invocation trùng không chạy thêm checker; invocation dùng lại khác request trả conflict. Check đang running khi restart thành error, không tự pass. Failed writer không được để artifact/version cũ dùng như draft mới. | work_checks.py, work_artifacts.py |
+| Prompt/skill | Skill Work Graph cập nhật flow draft → main chọn check → repair/check lại → whole review. Research-only whole review không đòi app/API/rollout ngoài yêu cầu; tester được dùng output test chính mình chạy thay vì bắt producer đã nhúng trước. Final tiếng Việt có dấu được nhắc rõ. | work_prompts.py, work-graph-planning/SKILL.md |
+| API | GET `/api/agent/sessions/{sid}/work/runs/{runId}/artifacts/{artifactId}?offset&limit`; ownership trước khi trả nội dung. GET work hiện có trả check records và refs. | api/server.py |
+
+Hai lỗi trạng thái tìm được khi rà W6 đã thêm regression:
+
+1. Evidence báo revise, rồi một lời gọi Critique riêng báo pass: trạng thái phải giữ revise và feedback của Evidence. W6 chọn bản check mới nhất của **từng loại check bắt buộc**, không chỉ nhìn records của lời gọi vừa xong. Pass mới cùng loại mới thay finding cũ.
+2. Whole review có `N1.A2: revise` trong JSON nhưng quên marker REVISE: backend vẫn trả N1 cho producer sửa từ criterion ID/evidence, không lặp whole review trên cùng bản chưa sửa. Finding chỉ ở cấp graph vẫn giữ checkpoint structural để main điều phối.
+
+Dependency refs chỉ giữ ID/version/hash/path/length/status; không đưa binding dài của mọi nhánh vào context 16k. Tra cứu nội bộ completed nhưng không mở nguồn vẫn UNVERIFIED. Các điều chỉnh này không thay thứ tự dependency hoặc waves của DAG.
+
+**Không coi W6 là bảo đảm chất lượng chuyên môn tuyệt đối:** read coverage chứng minh nội dung đã được trả cho checker, không chứng minh model hiểu đúng; policy risk/plan detection là heuristic bảo thủ; claim/source entailment vẫn do model đánh giá. Code snapshot cần Git, không phải môi trường hermetic: dependency/cache và nội dung sau symlink không được chứng nhận. Thay đổi ở nhánh cùng workspace có thể làm check stale và cần retest; resource isolation/locks thuộc W8.
+
+Nền W5 trong W6 chưa có đủ origin-turn folder, manifest/export, outbox/reconciliation hay migration toàn bộ. `originTurn` hiện là metadata; official Plan files vẫn xuất bản qua writer/path slug cũ để giữ compatibility. Plan cũ đọc được, nhưng tiếp tục cần checks mới; không gán ngược chuẩn W6 cho lịch sử. Generic direct delegation giữ hợp đồng riêng; nâng reviewer output không tự gắn W6 check policy cho đường đó.
+
+### 16.3 Output token, bước và số tool — đối chiếu theo yêu cầu người dùng
+
+W3 nâng **producer** Research/Plan/Design lên 16.000; Work Graph reviewer trước W6 vẫn mặc định 4.096. Vì vậy hai lượt Plan-review đầu W6 thật sự có `finish_reason=length`, output 4.096, một lượt dùng 2.507 reasoning token. Đây là đường reviewer riêng, không phải producer tự hạ 16k xuống 4k.
+
+W6 hiện đặt default 16.000 cho `review`, `plan-review`, `research-review`, cả ngoài Work Graph. Work Graph check child, bao gồm Testing, dùng profile 16.000. Generic Testing/Debug/Explore giữ profile cũ. Cap của owner/provider/context còn áp dụng, không tuyên bố Space Bunny hỗ trợ vô hạn.
+
+- `BOXFOX_REVIEW_OUTPUT_TOKENS`: 8192 hoặc 16000, default 16000.
+- `BOXFOX_WORK_CHECK_OUTPUT_TOKENS`: 4096/8192/16000, default 16000; 4096 giữ cho phép đo/calibration có chủ ý.
+- 16k là trần mỗi completion, gồm reasoning nếu provider tính vào output; không phải tổng ngân sách cả workflow.
+
+Các trần **không đổi trong W6**:
+
+| Loại | Hiện tại | Ý nghĩa |
+|---|---:|---|
+| Sub model steps | tối đa 40 | Còn bị kẹp theo maxSteps phiên cha. Một step có thể gọi nhiều tool. |
+| Work Graph reviewer steps | tối đa 14 | Còn bị kẹp theo cha; không đồng nghĩa 14 tool calls. |
+| Wrap-up | 3 bước cuối | Dành nhắc tổng kết/chẩn đoán khi gần hết ngân sách, không nên coi mọi bước đều chỉ khảo sát. |
+| Child deadline | tối đa 900 giây | Thường kẹp theo deadline cha; mặc định cha 600 giây. Research tier ngoài Work Graph có clamp riêng. |
+| Work run children | 72 mỗi work_run | Hết budget thì checkpoint/chờ lời gọi tiếp; không phải tổng child của cả session. |
+| Check children | 8 mỗi work_check, 2 cho whole check | Bao gồm retry có giới hạn; không phải số lần gọi tool. |
+| Ordinary delegation | 18 child mỗi parent turn | Không áp cùng cơ chế này cho child do Work Graph quản lý. |
+| Tool inventory main | 45 loại ở cấu hình nhóm được bật | Số loại tool được cấp, không phải quota số tool calls. |
+
+Ví dụ một completion gọi 5 file_read là một step với 5 tool calls. Tăng output từ 4k lên 16k không tăng steps hoặc deadline. Hết steps/time vẫn có thể partial. Không tự nâng trần hoặc làm same-child continuation khi chủ dự án mới yêu cầu giải thích.
+
+- [ ] **W6.5, mục 17:** kiểm chứng ngân sách theo độ lớn tác vụ; lookup/review ngắn khác multi-artifact review; đo steps/tool calls/time/output riêng. Checkpoint và tiêu chí tiếp tục/đổi nhiệm vụ khi hết budget được phân biệt với W7; chưa triển khai.
+- [ ] `clean_list` hiện giữ tối đa 20 acceptance items và cắt phần dư: bug/hạn chế có sẵn cần xử lý rõ trong lượt schema sau. Fixture plan nhiều finding gửi 24 item nhưng gate thực chỉ kiểm 20 A IDs + C1; không tuyên bố đã kiểm 24 tiêu chí.
+
+### 16.4 Kiểm thử xác định và hồi quy
+
+| Bộ | Kết quả cuối | Evidence |
+|---|---|---|
+| Work checks/graph/prompts/output/journal/runtime info | **192 passed** | `.tmp/work-checks/target-final.xml` |
+| Toàn bộ backend unit trên source đóng băng | **2643 passed, 18 skipped, 0 failed/errors**, 436,37 giây | `.tmp/work-checks/full-unit-final-3.xml`, full-final-3.log/exit.json |
+| Router | **250 passed, 0 failed**, 5,32 giây | `.tmp/work-checks-router.log` |
+| Eval scripts | py_compile Python, node --check relay đã qua | scripts/eval/work_check*.py và .mjs |
+
+18 skipped là claude_worker daemon Linux cần /proc/POSIX permissions, không được tính thành pass trên Windows. Regression gồm V01–V14 theo backend contracts: direct-write/delegation guard, terminal source side effect, Unicode/full-range reader, incomplete provider, failed required test, missing checker JSON, stale/binding/history, invocation dedup/conflict, restart, API ownership, artifact-only Autopilot và writer failure. Source cuối giữ nguyên trong full sweep; không lấy process đang chạy để ghi pass.
+
+Lịch sử lỗi kiểm thử không bị bỏ: full sweep trước đó có 2629 passed/18 skipped/3 failed do ba assertion tool inventory vẫn ghim 43 sau khi thêm hai tool; cập nhật fixture thành 45 rồi full sweep 2638 passed/18 skipped. Sau regression/prompt fixes bổ sung, final sweep là 2643/18. Một sweep sớm bị ngắt chưa có kết luận pass. Không bỏ những lần này để làm thống kê đẹp.
+
+Chạy lại trên B:
+
+~~~powershell
+Set-Location D:\create\BoxFox-Agent-Box-B
+$env:PYTHONPATH='backend/src'
+python -m pytest backend/tests/unit -q --tb=short
+Set-Location D:\create\BoxFox-Agent-Box-B\router
+node --import ./tests/isolate-logs.mjs --test tests/*.test.mjs
+~~~
+
+### 16.5 Phép đo Space Bunny và quyết định reviewer 16k
+
+Evidence có Git: `docs/plan/W6-check-evidence.json`. Raw JSON/output/SQLite dưới `.tmp/work-checks/` đã gitignore. Database/workspace disposable, không dùng dữ liệu bệnh án thật hoặc production session. Relay dùng **B OpenCode adapter + space-bunny-free**, deadline thử 240 giây; không đổi router production 90 giây. Actual reviewer/tool loop dùng HarnessRuntime; producer artifact được seed để cô lập phép thử, không phải full live DAG/main/producer. Publication write_plan là fixture local, chưa thay thế test Docker writer end-to-end.
+
+7 case x2 mỗi budget, chạy tuần tự 8192 rồi 16000 với cùng fixtures/source: Research vượt scope; Plan thiếu hợp đồng; Design >20k có mâu thuẫn cuối; patch test Unicode fail thật; Research hợp lệ; patch test pass thật; Plan có nhiều finding. Node oracle kiểm kết quả check; combined oracle thêm whole review cho Research hợp lệ.
+
+| Profile | Node đúng oracle | Combined đúng oracle | Output-limit attempts | Completion output lớn nhất | Output token biết được toàn nhóm | Median case |
+|---|---:|---:|---:|---:|---:|---:|
+| 8192 | 14/14 | 13/14 | 0 | 4140 | 51653 | 53,70s |
+| 16000 | 13/14 | 13/14 | 0 | 3876 | 54992 | 53,79s |
+
+Tổng token bao gồm mọi completion attempt được ghi, kể cả tool/reasoning và whole reviews; cả hai nhóm có usage đầy đủ. Latency có cả whole review ở hai case nên không diễn giải thành throughput. Mẫu nhỏ chưa chứng minh 16k nhanh/chậm hay chất lượng tốt hơn 8k.
+
+Finding thật: 8k có whole Research đòi thêm CSV defaults ngoài phạm vi; 16k có Testing chạy test pass nhưng đòi output phải nằm sẵn trong handoff producer. Đã sửa chỉ dẫn scope/role và test riêng sau phép so sánh; không gộp hai snapshot prompt thành cùng phép đo. **Giữ 16k theo yêu cầu chủ dự án để có headroom**, không tuyên bố dữ liệu này chứng minh 8k thiếu hay tăng token chữa semantic review.
+
+Calibration cũng được giữ: 4k đầu có 1/4 đúng oracle (Plan length hai lần, Design bỏ giữa, Testing thiếu C1); 8k trước chỉnh fixture có 9/12 đúng (một relay fallback lỗi, một Research over-review, một positive fixture exporter chưa rõ). Generic-review probe đầu phát hiện mâu thuẫn nhưng viết thêm REVISE sau VERDICT; plan/research target thiếu khiến script dừng, hai role đó chưa chạy. Probe đúng target sau đó: **3/3 role completed, revise đúng, requestedMaxTokens=16000 thực**, completion lớn nhất lần lượt 1861/2146/2613. Không tính run chưa chạy thành pass.
+
+Đợt retest cuối sau scope/role fixes: **6/6 node checks đúng oracle**, **5/6 combined** khi thêm whole review. Design dài hai lượt đọc đủ và trả revise; patch test pass hai lượt được Testing xác nhận pass thật; Research evidence pass hai lượt, whole một pass/một revise. Whole Research còn over-review fixture và đòi phỏng vấn ngoài phạm vi; giữ needs_revision và finding thay vì ép pass. Không có output_limit, nhưng ba completion attempt thiếu usage: chỉ ghi known subtotal 28.049, không gọi đó là tổng thật. Đây là giới hạn semantic còn lại để đánh giá ở W10.
+
+Để đo lại: chạy `node scripts/eval/work_check_relay.mjs`, lấy URL loopback được in, rồi từ B dùng `python scripts/eval/work_check_eval.py --router <URL> --output .tmp/work-checks/<folder-moi> --repeats 2 --budget 16000 --whole`. Thêm `--cases` để chọn fixture; dùng folder mới để không resume kết quả cũ. `work_check_direct_eval.py <URL> <folder-output>` kiểm budget ba reviewer ngoài Work Graph. Dừng đúng process relay thử sau phép đo, không restart app/router đang dùng.
+
+### 16.6 Phần còn mở và thứ tự tiếp tục
+
+- [ ] Semantic review: whole Research vẫn có false positive ở fixture; không lấy citation/read receipt/JSON coverage làm bằng chứng kết luận model đúng. Cần bộ W10 theo yêu cầu thực và adjudication độc lập, giữ model/provider failures riêng.
+- [ ] Role/tool preflight ở W1 chưa làm trọn: role bị owner tắt vẫn có thể khiến check không chạy; báo error, không tự bật role để che lỗi.
+- [ ] Trần steps/time và acceptance truncation tại 16.3 cần thảo luận; không tự nới trong lượt này.
+- [ ] W5 namespace origin-turn, manifest/export, recovery/migration đầy đủ.
+- [ ] W7 durable needs_user/interview/outbox/resume **cùng child**: chưa được duyệt, chưa triển khai. Knowledge requests hiện chỉ là lookup nội bộ, không đồng nghĩa child có thể phỏng vấn rồi tiếp tục giữ context qua restart.
+- [ ] W8 typed edges, resource isolation, source integration/ship redesign: chưa làm. Waves/dependency ordering giữ như baseline.
+- [ ] W9 UI/check badges/panels/navigation và W10 full live DAG/24-scenario benchmark: chưa chạy/không tự sửa UI. Backend thêm API refs để bàn giao, chưa chứng minh frontend hiểu mọi status mới.
+
+### 16.7 CUA bàn giao cho agent kiểm giao diện
+
+Không đổi UI và chưa dùng CUA lượt này. Sau khi chạy backend B, agent CUA dùng model **OpenCode Space Bunny** kiểm:
+
+1. Research/Plan/Design draft hiện trong Sub-agents/Work Graph theo event hiện có; chưa hoàn tất checks thì không xuất bản verified hoặc mở Build.
+2. Sau check pass, các nhánh phụ thuộc mới chạy; check `revise`, `unverified`, provider lỗi phải còn vấn đề cụ thể, không badge thành công giả.
+3. Plan dài và tiếng Việt: file/API/copy giữ đủ phần cuối và dấu; Plan tab vẫn dùng các control/UI hiện có.
+4. User chỉ xin artifact và bật Autopilot: kết quả là tài liệu; không phát child Build, checkout/commit/PR.
+5. Các session/document cũ vẫn mở đọc được; khi tiếp tục phải recheck, không tự dán nhãn chuẩn W6.
+
+6. Research/Testing bị revise dù đã mở đủ file/chạy test phải hiển thị finding thật, không đổi thành pass vì token budget cao; tool diagnostic không bị chèn thành nguồn trong Markdown.
+7. Artifact dài >20k: đối chiếu hash/length và phần cuối qua API với file copy; đổi child nhanh phải đổi content/loading đúng ID. Không thấy phần giữa hoặc UI cắt thì báo lỗi riêng W9.
+
+Kết quả CUA phải ghi session/run/model/commit, ảnh và event oracle. **NOT RUN** trong lượt W6 này; không suy UI đúng chỉ từ backend tests. Commit chứa mục 16 này là neo W6 sau kiểm thử; không push/merge. Main checkout giữ nguyên các thay đổi riêng của chủ dự án.
+
+## 17. W6.5 — kiểm chứng và điều chỉnh steps, tool calls và thời gian sub-agent
+
+**Yêu cầu bổ sung của chủ dự án:** kiểm chứng việc tăng số lượt làm việc/gọi tool và thời gian sub-agent hoạt động, cùng các tầng thời gian liên quan. Đặt bước này **sau W6, trước W7**. Trạng thái: **chỉ bổ sung plan; chưa thay giới hạn code/cấu hình production**. Thi công sau khi chủ dự án chốt phương án dựa trên dữ liệu.
+
+### 17.1 Mục tiêu và cách đo
+
+Tác vụ dài có đủ ngân sách khảo sát/đọc artifact/test và kết thúc bằng output hợp lệ hoặc checkpoint trung thực. Không để cấu hình child cao nhưng bị parent/router/HTTP/worker/watchdog kẹp thấp hơn mà không báo. Không gọi mọi trường hợp partial là thiếu token.
+
+Phân biệt và ghi riêng:
+
+- Model steps: số vòng model → tool results → model; một vòng có thể gọi nhiều tool.
+- Tool calls: tổng số, tên tool, success/error, thời gian, số retry và gọi trùng. Không tự tạo quota maxtool mới khi code chỉ có step budget.
+- Output token: requested/effective/usage/reasoning. Giữ 16k đã chốt trong phép đo steps/time; không đồng thời đổi model/thinking/output để che nguyên nhân.
+- Thời gian: compute của child, thời gian chờ tool/provider/queue; deadline từng tầng; thời gian tổng run. Phân biệt một lượt active và vòng đời session/checkpoint đã lưu.
+- Kết quả: completed/partial/failed, finish reason, lỗi trần nào, full artifact read coverage, test/JSON/verdict hợp lệ và semantic oracle. Dài hơn hoặc nhiều tool hơn chưa chứng minh chất lượng tốt hơn.
+
+### 17.2 Baseline các giới hạn đã thấy và việc cần đối chiếu
+
+| Tầng | Baseline đã đọc | Rủi ro/việc phải kiểm |
+|---|---|---|
+| Session steps | default 40, engine max 60; child max 40 | Tăng child mà không xét create()/parent clamp có thể không có hiệu lực. Review Work Graph còn trần 14 riêng. |
+| Wrap-up | 3 bước cuối | Đo phần bước thực dùng khảo sát và phần tổng kết, không bịa quota tool calls. |
+| Parent deadline | default 600s, engine max 1200s | Phân biệt cấu hình và live turn extension; parent timer có pause khi chờ Work Graph nhưng config clamp của child còn áp dụng. |
+| Child deadline | max 900s, thường min với config cha | Thiết lập cao phải xuất hiện trong effective child config và event thực, không chỉ trong UI. Research tier/quick lookup ngoài Work Graph có clamp riêng. |
+| Router request | engine default 90s | Một completion có thể bị ngắt trước child deadline; relay W6 240s chưa chứng minh production đã sửa. |
+| HTTP client/SSE | Đọc cả streaming và fallback POST timeout | Timeout client thấp hơn router mới có thể vẫn cắt request. Kiểm idle/no-frame, timeout tổng và abort propagation, không suy mọi EOF là timeout. |
+| Tool/worker | Đọc từng command/worker/browser timeout và hard cap hiện có | Lệnh test dài không được chết vì trần tool thấp hơn assignment; vẫn có giới hạn và cancellation thật. |
+| Fan-out/queue | default 3 child/cha, max 6, global 8; queue wait 30s | Chờ slot không nên bị hiểu là model chậm. Không tăng parallelism để thay việc tăng ngân sách một child. |
+| Watchdog | wall max 1200s, tick 10s | Nếu child ceiling tăng, watchdog phải có quan hệ rõ với active deadline/overhead; không giết child đang hợp lệ hoặc để child mồ côi vô hạn. |
+| Work Graph call | work_run wall ceiling 3600s, 72 child mỗi call | Tăng child time không tự tăng run ceiling; hết call budget phải báo đúng checkpoint và phần còn lại. Check call có budget child riêng 8/2. |
+| Interview/decision | Vẫn dùng cơ chế hiện tại | Không kéo deadline RAM future để giả lập chờ user bền vững. User-wait/same-child resume thuộc W7, cần dependency riêng. |
+
+Nguồn chính: `agent_core/limits.py`, `runtime.py` (create/delegate/clamp/turn budget/RouterClient), `work_graph.py` (review/run/fanout/pause), `router/src/engine.mjs`, các executor/worker thực được gọi. Cần inventory đủ code paths trước đề xuất patch; không đổi tất cả timeout bằng tìm-thay số.
+
+### 17.3 Workflow từ dễ đến khó và checkpoint
+
+| Mốc | Công việc | Đầu ra / expected |
+|---|---|---|
+| B0 — Inventory | Nhánh B, giữ neo W6; lập map từng limit, nơi cấu hình, nơi clamp, requested/effective và ai hủy ai. Lấy baseline các fixture đã có. | Sơ đồ thời gian và bảng runtime/router/worker đầy đủ; phân biệt giả thuyết với trần đã đo. |
+| B1 — Đo bước/tool | Fixture reading nhiều trang, research nhiều nguồn có giới hạn, plan/design dài, review nhiều artifact, debug/test dài. Ghi per-step tool calls, errors/retries và read coverage. | Có bằng chứng task hết steps thay vì output/time; quick task không bị bắt chạy dài hơn. |
+| B2 — Thử tăng steps | Reviewer thử 14 → 24 → 40; producer dài thử 40 → 60 trong môi trường riêng. Giữ fan-out/output/model/thinking. Kiểm parent maxSteps/current engine max trước thử. | Request/effective budget khớp; ca nhiều file thực sự đọc đủ và có verdict; không tăng global mặc định khi chỉ một nhóm cần. Những mức này là ứng viên, chưa được chọn. |
+| B3 — Thử thời gian | Thử router 90 → 180 → 240s; child active 600/900 → 1200s khi hợp lệ và được duyệt. Kiểm parent/request/client/tool/watchdog/run ceiling đồng bộ. Thử từng tầng để tìm nút thắt. | Không còn timeout tầng thấp hơn phủ nhận budget đã hứa; cancel/abort vẫn kết thúc provider/tool/child; không dùng timeout vô hạn. |
+| B4 — Chốt profile | Chọn mức theo task size và loại check: lookup ngắn, deliverable dài, review nhiều snapshot, test dài; owner ceiling vẫn có hiệu lực. Nếu cần thay inheritance semantics, trình diff/phương án cụ thể trước code. | Bảng requested/effective và lý do chọn; profile tối thiểu đủ hoàn thành; dữ liệu chi phí/latency/partial cho các mức còn lại. |
+| B5 — Patch và regression | Khi được duyệt, sửa tập trung nguồn cấu hình/clamp/notice cần thiết; deterministic fault injection, full backend/router và replay fixture trên Space Bunny. Giữ UI/UX và scheduler/edges hiện tại. | Defaults/migration/restart/legacy route đúng; reviewer/producer không mất output hoặc gọi tool dở; mọi minimum check W6 còn áp dụng. |
+| B6 — Checkpoint/handoff | Hết trần phải lưu draft/refs/used budget/remaining và reason chính xác. Ghi giới hạn continuation hiện có; cùng child durable resume chỉ làm ở W7. Cập nhật plan/evidence rồi commit B. | Người tiếp nối hiểu phần đã làm/chưa làm; không reset budget vô hạn hoặc auto-pass do hết thời gian. |
+
+Không cần thử ngay 80/100 steps hay 1800/3600 giây cho mọi child. Chỉ mở mức ngoài engine ceiling sau khi mức trong ceiling vẫn thất bại vì đúng trần đó, có quyết định phạm vi riêng và kiểm watchdog/cost. Các con số B2/B3 là **mức thử đề xuất**, không phải cam kết sẽ nâng production lên mức cao nhất.
+
+### 17.4 Bộ đo và tiêu chí nghiệm thu
+
+Chỉ dùng OpenCode `space-bunny-free`; session/database/workspace riêng. Ưu tiên CLI, CUA chỉ khi cần đối chiếu setting hiển thị so với effective config; không đổi UI trong W6.5. So baseline/candidate cùng fixture, giới hạn tool và thinking; xen kẽ thứ tự profile hoặc ghi rõ thứ tự để tránh quy chênh provider thành hiệu quả budget.
+
+Tối thiểu 6 nhóm × 2 lần/profile: lookup ngắn; Research dài với nguồn đã mở; Plan/Design dài; reviewer một artifact lớn; reviewer nhiều artifact; Debug/Testing với command chạy dài. Proxy fixture được đánh dấu, không bịa nguồn bên ngoài. Những case có provider lỗi hoặc thiếu usage vẫn giữ trong mẫu; pilot nhỏ chưa đủ để chốt khi kết quả dao động, tăng số lần cho đúng nhóm gặp giới hạn.
+
+Acceptance:
+
+1. Test xác định chứng minh các trần requested/effective và quan hệ cha/con; invalid settings trả field/range rõ. Output cap 16k độc lập với steps/time.
+2. Batching 5 tool calls trong một completion được ghi đúng 1 step/5 calls; retry/fallback không bị mất khỏi số đo hoặc coi là user work mới.
+3. Fixture dài đã chạm trần cũ hoàn tất trong budget mới **hoặc** có checkpoint/reason trung thực; semantic oracle/full read/test pass phải được xét riêng, không chỉ nhìn completed.
+4. Reviewer nhiều file không pass khi thiếu range/criterion; tăng steps/time không hạ policy, nới verdict parser hoặc accepted-with-caveats.
+5. Provider EOF/token cap/request timeout/tool timeout/deadline/step limit/queue wait/watchdog/cancel có bằng chứng phân biệt; unknown giữ unknown.
+6. Client/router/tool/watchdog không có trần thấp hơn làm cấu hình mới mất hiệu lực; yêu cầu owner ceiling thấp vẫn được tôn trọng và báo clamp.
+7. Cancellation dừng đúng công việc; restart không tự khởi hai checker; không orphan/unbounded retry. Khoảng chờ user chưa triển khai W7 không được nhận là durable.
+8. Quick task không tăng bước/tool không cần thiết. Đo latency P50/P95, token known subtotal/unknown, tool-error/duplicate rate và peak concurrency; ngưỡng regression cụ thể được chốt **sau baseline**, không tự bịa 90/95% thành kết quả đo.
+9. Giữ đầy đủ kết quả thất bại và báo riêng lỗi sản phẩm/model/provider/fixture. Chỉ chọn profile khi cải thiện đúng nút thắt và không làm regression kiểm chứng/chi phí/latency vượt mức đã chốt.
+
+### 17.5 File, rollback và tracking
+
+- Các file dự kiến: limits.py/output_policy.py nếu cần profile, runtime.py (clamp/config/notice/client cancellation), work_graph.py (review/run budget), router/src/engine.mjs và client/worker timeout thật được inventory. Không mặc định sửa hết danh sách.
+- Regression mở rộng các test_limits_notice, child/delegation/output/diagnosis/work_checks và router stream-abort/timeout hiện có; eval script/evidence budget mới dùng folder riêng. Tên/path test mới được ghi khi có code thực, không khai chúng đã tồn tại.
+- Rollback: commit riêng B, profile/config có default tương thích và bounds; quay về default cũ hoặc revert patch riêng. Không migrate/xóa transcript hay làm kết luận check cũ thành pass khi rollback.
+- [ ] B0 inventory/baseline.
+- [ ] B1 đo steps/tool calls thật.
+- [ ] B2/B3 so các mức đề xuất trên Space Bunny.
+- [ ] B4 chốt profile và diff phạm vi trước sửa.
+- [ ] B5 code/test regression/live.
+- [ ] B6 checkpoint, evidence, cập nhật plan và commit.
+
+W6.5 mới được bổ sung theo yêu cầu người dùng; **chưa implementation hoặc benchmark mới cho mức tăng steps/time**. W6 output-token comparison tại 16.5 không được gán thành bằng chứng cho W6.5.

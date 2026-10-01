@@ -214,14 +214,14 @@ Your primary responsibility is to analyze user requests, break down complex engi
 
 WORK GRAPH — THE DEFAULT PATH FOR NON-TRIVIAL WORK (you are the brain; only you delegate):
 The skill `work-graph-planning` (open it with `skill_view`) holds the full procedure and the sub-plan quality bar (context, goal/non-goals, design, changes, tests, dependencies, risks/rollout, acceptance).
-A. Triage: a quick fact, one command or one file you answer yourself — this includes a one-fact research question (one version, one yes/no) even when typed as "/research": answer it with web_search/web_fetch and cite the sources. A feature, bug, refactor, research question, design or any "/plan", "/research", "/design" request goes through the Work Graph — the harness then runs every specialist output through an independent reviewer until it says `VERDICT: ok`.
+A. Triage: a quick fact, one command or one file you answer yourself — this includes a one-fact research question (one version, one yes/no) even when typed as "/research": answer it with web_search/web_fetch and cite the sources. A feature, bug, refactor, research question, design or any "/plan", "/research", "/design" request goes through the Work Graph — main receives immutable draft refs and dispatches task-appropriate checks with work_check; partial/error/missing checks never pass.
 B. Create: `work_graph(action='create', goal=<owner words>, flow=plan|research|design|fix|mixed)`.
-C. Discover: add nodes with `work_graph(action='add', nodes=[...])` — explore E1..En first (each a precise repository question), research R1..Rn for external facts, design D1 for UI/API shape. Each node: id, kind, title, goal (>= 20 chars, concrete), dependsOn, acceptance (checkable items). Then `work_run(phase='discover')`: independent nodes run in parallel, each is reviewed, rejected output is re-run with the findings, and a specialist's `## Knowledge requests` are answered by research/explore children for it.
+C. Discover: add nodes with `work_graph(action='add', nodes=[...])` — explore E1..En first (each a precise repository question), research R1..Rn for external facts, design D1 for UI/API shape. Each node: id, kind, title, goal (>= 20 chars, concrete), dependsOn, acceptance (checkable items). Then `work_run(phase='discover')`: independent nodes produce saved drafts. Inspect refs and policy.required; read full artifacts with work_artifact_read. Call work_check(action='start', nodeId, stage, artifactId, checkIds, invocationId). Simple lookup/diagnosis requires actual evidence without an automatic reviewer. On revise, route findings to producer/Debug and work_run for a fresh artifact. Existing knowledge requests remain research/explore lookups.
 D. Interview only on real ambiguity after exploring: `interview(questions=[{id, question, rationale, options:[{label, description, recommended}]}])` — 1-5 questions, 2-4 options each; the card adds "Other" and "let the agent decide". Never ask what the repository already answers.
-E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (file + command + expected) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again writes and reviews the sub-plans.
+E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (each entry is an exact runnable command; describe expected results in acceptance/the document) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again saves sub-plans. Main starts plan_review and any required critique through work_check before whole verification.
 F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
-G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Research-only and design-only runs have nothing to execute: answer the owner with the verified findings and the document paths instead.
-H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); each build is verified by a testing child. A node that is not accepted leaves the run `execute_failed`: `work_graph(action='retry', nodeIds=[...])` re-runs it with the findings. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
+G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead.
+H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); main starts tests and any required code_review using work_check with stage=execute on that exact artifact/code snapshot. Testing failures go to main for Debug/repair/retest; a source edit by a tester invalidates the check. A node that is not accepted leaves the run `execute_failed`: `work_graph(action='retry', nodeIds=[...])` re-runs it with the findings. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
 I. Every tool result carries `next` — follow it. A tool error names the field and the rule: fix that input once, never resend identical arguments. Report honestly what was accepted, rejected or not verified.
 The legacy direct-delegation protocol below still applies to small tasks and to follow-up questions about a finished run.
 
@@ -1208,7 +1208,7 @@ DECISION_TOOLS = frozenset({'ask_user', 'request_approval'})
 DECISION_DEFAULT_SECONDS = {'ask_user': 300.0, 'request_approval': 600.0, 'interview': 900.0}
 # Work Graph tools (main only). `interview` is the multi-question card (Q1..Q5, 2-4 options each,
 # "Other" free text and "let the agent decide"); the other three drive the Work Graph engine.
-WORK_ENGINE_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship'})
+WORK_ENGINE_TOOLS = frozenset({'work_graph', 'work_run', 'work_ship', 'work_check'})
 WORK_TOOLS = WORK_ENGINE_TOOLS | {'interview'}
 INTERVIEW_DECIDE = 'decide'
 INTERVIEW_SUBMIT = 'submit'
@@ -3678,8 +3678,8 @@ class HarnessRuntime(RuntimeCommands):
             # Phiên tạo TRƯỚC Work Graph không có cờ `workTools` và cũng không có tên công cụ: cấp bổ
             # sung khi phiên còn quyền giao việc. Phiên mới mang cờ này, nên công tắc nhóm của Harness
             # vẫn là người quyết định.
-            if not config.get('workTools') and 'delegate_task' in tools:
-                tools += [name for name in sorted(WORK_TOOLS) if name not in tools]
+            if 'delegate_task' in tools and (not config.get('workTools') or 'work_graph' in tools):
+                tools += [name for name in sorted(WORK_TOOLS | {'work_artifact_read'}) if name not in tools]
             work_block = work_graph.service(self).prompt_block(session)
             if work_block:
                 block = f'{block}\n{work_block}' if block else work_block
@@ -4766,6 +4766,13 @@ class HarnessRuntime(RuntimeCommands):
         plan_tools = plan_workflow.allowed_tools(self, current)
         if plan_tools is not None and name not in plan_tools:
             raise PermissionError('PLAN_EXECUTION_BLOCKED: công cụ này không được chạy trong Plan: ' + name)
+        if name == 'work_artifact_read':
+            return work_graph.service(self).artifacts.read(current, args)
+        binding = (current.get('config') or {}).get('workBinding') or {}
+        if binding.get('checkId') and name in ('file_write', 'file_edit_block', 'write_plan', 'delegate_task'):
+            raise PermissionError('WORK_CHECK_READ_ONLY: checker cannot modify source or delegate')
+        if binding.get('diagnosticOnly') and name in ('file_write', 'file_edit_block'):
+            raise PermissionError('WORK_DIAGNOSTIC_READ_ONLY: diagnosis is not authorization to patch')
         if name == 'plan_scope':
             return plan_workflow.service(self).scope(self, current, args)
         if plan_tools is not None and name == 'ask_user' and not session.get('parent_id'):
@@ -5657,6 +5664,8 @@ class HarnessRuntime(RuntimeCommands):
             raise PermissionError(f'WORK_GRAPH_OFF: {work_graph.WORK_GRAPH_ENV}=off disables the Work Graph')
         service = work_graph.service(self)
         current = self.store.get(session['id'])
+        if name == 'work_check':
+            return await service.checks.tool(current, args)
         if name == 'work_run':
             return await service.run(current, args)
         if name == 'work_ship':
@@ -6825,6 +6834,9 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['maxTokens'] = output_budget
             if work:
                 child['config']['workBinding'] = work
+                child['config']['tools'] = sorted(set(child['config']['tools']) | {'work_artifact_read'})
+                if work.get('checkId') or work.get('diagnosticOnly'):
+                    child['config']['tools'] = [n for n in child['config']['tools'] if n not in ('file_write','file_edit_block','write_plan')]
             if facet_id:
                 child['config']['facetId'] = facet_id
             self.store.update_config(child['id'], child['config'])
