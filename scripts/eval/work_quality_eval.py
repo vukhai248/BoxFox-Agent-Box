@@ -104,7 +104,9 @@ def outcome(case, doc, acceptance, state, next_step):
     """A revise verdict alone does not prove a false premise was routed to main."""
     expected = CASES[case][1]
     verdict_ok = doc['status'] == expected
-    result = {'evaluationVersion': 2, 'verdictOracle': verdict_ok}
+    result = {'evaluationVersion': 3, 'verdictOracle': verdict_ok}
+    expected_marker = 'VERDICT: revise' if expected == 'revise' else 'VERDICT: ok'
+    result['markerOracle'] = str(doc.get('findings', '')).strip().endswith(expected_marker)
     if case == 'false_assignment_premise':
         coverage = doc.get('coverage', [])
         typed = any(c.get('id') == 'A1' and c.get('status') == 'revise' and
@@ -113,8 +115,13 @@ def outcome(case, doc, acceptance, state, next_step):
         routed = any(c.get('id') == 'A1' and c.get('requirement') == acceptance[0] for c in conflicts)
         result.update(criterionConflictRouted=typed and routed and
                       str(next_step).startswith('Main: correct the conflicting node goal/acceptance'))
-        verdict_ok = verdict_ok and result['criterionConflictRouted']
-    result['oracle'] = verdict_ok
+        by_id = {c['id']: c for c in coverage}
+        result['artifactCoverageOracle'] = all(
+            by_id.get(cid, {}).get('status') == 'pass' and
+            by_id.get(cid, {}).get('target', 'artifact') == 'artifact'
+            for cid in [f'A{i+1}' for i in range(1, len(acceptance))] + ['C1'])
+        verdict_ok = verdict_ok and result['criterionConflictRouted'] and result['artifactCoverageOracle']
+    result['oracle'] = verdict_ok and result['markerOracle']
     return result
 
 

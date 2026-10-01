@@ -189,7 +189,16 @@ def review_tail(lang='en'):
         '\nA domain or component mentioned only as an untested limitation is not the owner goal. '
         'Blocking impact must follow an actual assigned requirement, not an invented future workflow. ',
         '\nMiền hoặc thành phần chỉ được nhắc như giới hạn chưa kiểm không phải mục tiêu người dùng. '
-        'Hệ quả chặn phải gắn với yêu cầu thực sự được giao, không dựng một luồng tương lai. ')
+        'Hệ quả chặn phải gắn với yêu cầu thực sự được giao, không dựng một luồng tương lai. ') + choose(lang,
+        '\nKeep optional notes relevant to the assignment. Technical claims in notes need the same '
+        'opened original evidence or actual execution as blocking findings. Check numeric examples, '
+        'units and transformations before stating their results; omit unchecked illustrative detours. '
+        'Separate a correct artifact from a conflicting assignment: a coverage item marked revise '
+        '(including target=criterion) requires final VERDICT: revise. ',
+        '\nGhi chú tùy chọn phải liên quan nhiệm vụ. Khẳng định kỹ thuật trong ghi chú cần bằng chứng '
+        'gốc đã mở hoặc lệnh thực đã chạy như finding chặn. Kiểm ví dụ số, đơn vị và phép biến đổi '
+        'trước khi nêu kết quả; bỏ minh họa chưa kiểm ngoài nhiệm vụ. Phân biệt artifact đúng với '
+        'nhiệm vụ mâu thuẫn: coverage có revise (kể cả target=criterion) thì cuối phải VERDICT: revise. ')
 
 
 def child_contract(purpose, lang='en'):

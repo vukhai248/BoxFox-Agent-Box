@@ -1898,3 +1898,19 @@ Chỉ ghi nhận để khảo sát, **chưa code**, chưa kết luận nguyên n
 - [ ] Nhiều lượt producer/reviewer trên fixture rất nhỏ: đo việc main đổi definition, retry provider và sửa nội dung riêng. Không dùng số child để kết luận DAG sai; mọi thay đổi phân rã/lịch chạy phải xét cùng W8.
 
 Receipt/counterexample và triage có phạm vi ở [W6.1-review-triage-report.md](W6.1-review-triage-report.md). Chờ người dùng duyệt W6.2 trước mọi chỉnh sửa main/sub; công việc hiện tại tiếp tục review W6.1.2.
+
+## 25. W6.1.2 — đợt đo review policy 8, còn false positive
+
+Neo hợp đồng policy 7: **3759d34d**. Đợt này chỉ sửa review prompt/policy và oracle đo; **không sửa main/sub**. Ghi chú cũng phải có nguồn/lệnh thực, kiểm ví dụ/đơn vị trước khi nói; coverage revise thì marker cuối revise. Policy 8 không dùng check cũ như check mới.
+
+- [x] Prompt tests hai ngôn ngữ; mục tiêu **160 passed**, 44,14s.
+- [x] Quét backend **2752 passed, 21 skipped, 0 failures/errors**, 566,60s. Runtime bytes giữ nguyên qua sweep; evaluator được bổ sung oracle mạnh hơn riêng, không gọi sweep này là kiểm evaluator mới.
+- [x] Space Bunny bốn lượt, **năm attempt**: ca artifact đúng pass 2/2; ca tiền đề sai routing 2/2. Correct-unit lượt 2 có một partial STEP_BUDGET_EXHAUSTED rồi reviewer mới hoàn tất; không tính partial đầu là pass.
+- [x] Oracle thêm marker nhất quán và A2/C1 của artifact đúng phải pass. Raw version 2 giữ nguyên; audit version 3 cho kết quả thiết yếu **3/4**, không gọi raw “4/4” là mọi finding đúng.
+- [ ] False-premise lượt 2: A1 revise/criterion đúng, nhưng A2 revise/artifact sai phạm vi vì yêu cầu thêm encoding/BOM vào nhiệm vụ kiểm tiền đề parser. Reviewer suy mục tiêu tổng thể thành phần bắt buộc của một node; artifact không hề chốt an toàn toàn bộ pipeline. **Nguyên nhân ở review**, chưa đủ căn cứ sửa producer/main.
+- [ ] False-premise lượt 1 còn dùng nhãn “128 KiB” rồi giải thích tính theo ký tự trong ghi chú; đúng cơ chế nhưng sai đơn vị viết. Không chứng nhận toàn bộ prose từ metric routing.
+- [ ] Tinh chỉnh ranh giới review node với whole review và đo lại. Nhiệm vụ của node và các claim thực là căn cứ; không suy “main có thể dùng sai” thành lỗi artifact khi artifact không khẳng định điều đó.
+
+Evidence: [W6.1-notes-scope-evidence.json](W6.1-notes-scope-evidence.json). Ca nhỏ này chưa chứng minh reviewer công tâm với mọi Plan/Research/Design; W6.1 vẫn mở, W7/W8 chưa thi công. C4 policy 6 vẫn dùng để tìm dấu hiệu, không chứng nhận policy 8.
+
+**W6.5.2 — ghi nhận semantics ngân sách, chờ duyệt cùng W8:** `WORK_CHILDREN_PER_RUN_CALL=72` và 3600s được tạo/đếm theo từng lời gọi work_run/schedule_nodes, không phải trần toàn đời run. C4 có nhiều lời gọi nên tổng thời gian có thể vượt 3600s; không gọi riêng điều này là timeout bug hoặc mất mạng. Khảo sát budget/admission trước W7/W8; chưa sửa bộ đếm, scheduler hay giới hạn đã chốt với cha.

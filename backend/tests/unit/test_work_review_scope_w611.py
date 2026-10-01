@@ -57,4 +57,14 @@ def test_verified_response_limits_main_to_checked_snapshots(tmp_path):
 
 
 def test_contract_change_has_a_new_policy_version():
-    assert work_policy.VERSION == 'work-checks/7'
+    assert work_policy.VERSION == 'work-checks/8'
+
+
+@pytest.mark.parametrize('lang,terms', [
+    ('en', ('optional notes relevant', 'opened original evidence or actual execution',
+            'Check numeric examples', 'omit unchecked', 'requires final VERDICT: revise')),
+    ('vi', ('Ghi chú tùy chọn phải liên quan', 'gốc đã mở hoặc lệnh thực đã chạy',
+            'Kiểm ví dụ số', 'bỏ minh họa chưa kiểm', 'cuối phải VERDICT: revise')),
+])
+def test_notes_and_criterion_conflicts_follow_the_same_evidence_contract(lang, terms):
+    assert all(term in work_prompts.review_tail(lang) for term in terms)
