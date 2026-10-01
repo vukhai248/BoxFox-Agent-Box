@@ -78,8 +78,20 @@ def good_reads(graph, child_id):
         if row:
             paths.append(json.loads(row['metadata'])['path'].replace('\\', '/').removeprefix('./'))
     def original(item):
+        def assigned(path):
+            path = path.replace('\\', '/').removeprefix('./')
+            return any(path == p or path.endswith('/' + p) for p in paths)
         path = str(item.get('args', {}).get('path') or '').replace('\\', '/').removeprefix('./')
-        return not any(path == p or path.endswith('/' + p) for p in paths)
+        if assigned(path):
+            return False
+        if paths and item.get('name') == 'codebase_grep':
+            # The worker searches .plans too. A broad grep can return only the
+            # assigned artifact even when args.path is '.' or empty. Its actual
+            # path:line:content matches, not the requested directory, prove origin.
+            content = item['result'].get('content') or ''
+            matches = re.findall(r'^(.+?):\d+:', content, re.M) if isinstance(content, str) else []
+            return any(not assigned(match) for match in matches)
+        return True
     def usable(item):
         result = item['result']
         if item.get('name') not in ('web_fetch', 'read_source'):
@@ -387,6 +399,7 @@ class Checks:
                 state.update(status='accepted', feedback='', error=None)
             elif any(r['status'] == 'revise' for r in self.latest(run, node, stage).values()):
                 state.update(status='revise' if state['attempts'] < state.get('maxRounds', 3) else 'rejected',
+                             feedbackSource='checks',
                              feedback='\n'.join(r.get('findings', '') for r in self.latest(run, node, stage).values()
                                                 if r['status'] == 'revise'))
             else:

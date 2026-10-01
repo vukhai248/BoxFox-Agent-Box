@@ -1,0 +1,425 @@
+{
+  "schema": "boxfox-w61-integration-assessment/1",
+  "branch": "B",
+  "model": "opencode/space-bunny-free",
+  "unit": {
+    "policy": "work-checks/5",
+    "sourceHashes": {
+      "backend/src/agentbox/agent_core/work_checks.py": "d345905815ff84e1fc630db91d3c0f05441a26c089e24c50b458432eb8a78f5d",
+      "backend/src/agentbox/agent_core/work_graph.py": "0327afcf181944ede10b0a5a73fa58deb4b6f3bf92db2b170bb49cee1f37a5bb",
+      "backend/src/agentbox/agent_core/work_policy.py": "6380440d272daf6ce6b46d637b647830f3f5c0818f2507f39169537b2b8ad039"
+    },
+    "passed": 2716,
+    "skipped": 18,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 585.85,
+    "exit": 0,
+    "xmlSha256": "629a47ab1baf4f6d7d1a320fefe24f9a252807439254daeb493c0060b074d06f"
+  },
+  "live": {
+    "case": "research",
+    "repeat": 1,
+    "sessionId": "8b40289964f148bfbd3597d04cbeab98",
+    "runId": "w-9fe780d2cc",
+    "loadedCommit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+    "loadedSourceHashes": {
+      "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "70efb152eb618a22e54418406c44c00300a32768bfc799266bc1b5b936a32d48",
+      "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+      "backend\\src\\agentbox\\agent_core\\work_checks.py": "1bd6f8ae53a1df0f34bcfc33bf8088b8d1f23a2f9ee86f3fa101aef9a97e23c6",
+      "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+      "backend\\src\\agentbox\\agent_core\\work_policy.py": "df584ade32cd9f54268201194c1e35638d59a6fbe56597f17c3c677b4cb61d67",
+      "backend\\src\\agentbox\\agent_core\\work_prompts.py": "f3c193a4d8e703cdd1b73b372991eaced813e43d1050fd4c4a736f9dcad6b348",
+      "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+      "backend\\src\\agentbox\\agent_core\\roles.py": "5cabb2907da1be9c44239c8cceea8a8d536c80c7765cd13f791ee5c12b932da1",
+      "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+      "scripts\\eval\\work_integration_eval.py": "3ea4a0b16d62078f00b532e6be89c717312d0c7d03d47f1163f51efd0813febb"
+    },
+    "protocolOracle": true,
+    "semanticOracle": "not_passed: wrong unit and unresolved cross-version generalization",
+    "latencySeconds": 5485.054,
+    "mainStatus": "completed",
+    "mainFinalSha256": "6b00f23ac960313e7acfcc03ee9f457408b5f95f7954377112d85f3288b75ded",
+    "mainFinalClaimExcerpts": [
+      "**1. Trần 128 KiB chỉ chặn phía đọc.** Hằng nằm ở `Modules/_csv.c` (`csv_exec()`: `module_state->field_limit = 128 * 1024`), kiểm tra trong `parse_add_char()`, còn đường ghi `join_append_data()` không hề so với nó. Nghĩa là `export()` ghi được chuỗi lớn tuỳ ý rồi mới nổ lúc `csv.reader` đọc lại — đúng vào ràng buộc mà `docs/source.md:1` đòi hỏi. Lưu ý: `Lib/csv.py` **không** chứa hằng này, nó chỉ re-export từ `_csv` (grep `128`/`1024` → 0 match).",
+      "**3. Null vs chuỗi rỗng** — từ Python 3.12 đã có `QUOTE_NOTNULL`/`QUOTE_STRINGS` khôi phục được (tôi đã tự đọc docstring trong `Lib/csv.py`: \"quotes are only placed around fields that are not the Python value None\"). Nên \"CSV không phân biệt null với rỗng\" chỉ đúng với dialect `excel` mặc định."
+    ],
+    "children": [
+      {
+        "id": "035e52ab013a4ff9bbd672c751338dc3",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 15535,
+        "finalSha256": "f1b0e86303e8d061a516521f86c532661e34dd4badedc9618b348a1bfcb8dc06",
+        "toolCalls": 7,
+        "finalExcerpt": "Đã đọc xong ba tệp trong workspace (chỉ có 3 tệp, không có tệp nào khác). Dưới đây là báo cáo.\n\n---\n\n## Trả lời\n\nCSV khớp ràng buộc vì chính `docs/source.md` đã **chốt** định dạng và định nghĩa tiêu chí nghiệm thu bằng chính ngôn ngữ CSV: \"Người dùng chốt chỉ xuất CSV, không JSON\" và \"Các trường chứa dấu phẩy/newline phải được `csv.reader` đọc lại đúng\" — tức cơ chế chấp nhận là đọc ngược bằng `csv.reader`, nên chỉ CSV mới thoả được đúng câu chữ đó; một chuỗi JSON không phải \"một dòng CSV hợp lệ\". Phạm vi bản đầu rất hẹp — \"Đầu vào một chuỗi, đầu ra một dòng CSV hợp lệ\" — nên các tính năng JSON thực sự thừa ở bản đầu là tên khóa, cấu trúc lồng nhau, kiểu dữ liệu (số/boolean/null) và sự phân ",
+        "observedClaimExcerpts": [],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "ade959e4d7734114987c47f7800a94ca",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 26702,
+        "finalSha256": "c4e289ed70621b311c00fdc03898af0c3a38f4aff3d1f67a4d43508101486877",
+        "toolCalls": 35,
+        "finalExcerpt": "## Trả lời\n\n`csv.writer` với dialect `excel` (mặc định) bảo đảm đúng yêu cầu \"trường chứa phẩy/newline phải đọc lại đúng\" **về mặt cú pháp**: bất kỳ ký tự nào thuộc `{delimiter, quotechar, '\\r', '\\n'}` trong một trường sẽ làm **cả trường** được bọc dấu nháy kép, và mỗi `\"` bên trong được nhân đôi thành `\"\"` — đúng nghịch đảo của máy trạng thái `csv.reader` (chỉ chấp nhận `\"` đóng trường khi ký tự kế tiếp là delimiter hoặc EOL, còn `\"\"` được hợp nhất về `\"`). Chuỗi `io.StringIO(newline='')` ở `src/export.py:4` là đúng về nguyên tắc nhưng đặt sai bên: nó chỉ có tác dụng khi đọc, còn ở đây đối tượng đó chỉ được `write()` rồi `getvalue()`, nên về mặt ghi nó là no-op. Yêu cầu tiếng Việt bị phá bở",
+        "observedClaimExcerpts": [
+          "→ Về **giới hạn kích thước trường**: `Modules/_csv.c`, `parse_add_char`: `PyErr_Format(module_state->error_obj, \"field larger than field limit (%zd)\", field_limit);` và API `csv.field_size_limit()` tồn tại. **Giá trị mặc định tôi KHÔNG xác minh được** (xem khoảng trống bên dưới).",
+          "- **`UNVERIFIED`:** giá trị mặc định của `csv.field_size_limit()`. Tôi đã đọc `csv.rst` (\"Returns the current maximum field size allowed by the parser\") và `_csv.c` (có lỗi `\"field larger than field limit (%zd)\"`) nhưng **không tìm thấy hằng số khởi tạo** trong phần đã đọc; tôi **cố ý không** nêu con số."
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "1b18b84a00ae45fa965fdb44359815b2",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "PROVIDER_STREAM_INTERRUPTED"
+        ],
+        "finalChars": 2270,
+        "finalSha256": "2f62eea3717199a02a11a02ed76a40f77354d8ff4615fa91ab5a557dcb8942bc",
+        "toolCalls": 12,
+        "finalExcerpt": "Đã đọc HẾT snapshot (offset 0 → 8000 → `nextOffset: null`) và mở lại cả 3 nguồn gốc để đối chiếu.\n\n**Đối chiếu nguồn gốc (đã kiểm, không chỉ tin artifact):**\n- `docs/source.md` — 1 dòng, đúng 6 mệnh đề ràng buộc mà artifact trích.\n- `src/export.py:3` = `value = value.encode('ascii', errors='ignore').decode()`; `:4` = `s = io.StringIO(newline='')`; `:5` = `csv.writer(s).writerow([value])` — khớp N4/N5.\n- `tests/test_export.py:3-4` — `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']` — đúng N6, không có dấu phẩy/newline.\n- `codebase_glob(\"**/*\")` = đúng 3 tệp; `codebase_grep(\"JSON\")` = đúng 1 hit (`docs/source.md:1`); `codebase_grep(\"header\")` = rỗng. Cả 3 tuyên bố \"tra cứu c",
+        "observedClaimExcerpts": [],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "ab970aeb9dbc4aa9b9b3dceca24bad48",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 4167,
+        "finalSha256": "ab9609542c2294810549f93b9d6dacea3a712e8aa7f9187ab2516b796205ea6b",
+        "toolCalls": 9,
+        "finalExcerpt": "Đã đọc đủ 15.535 ký tự snapshot và mở 4 nguồn gốc. Kết quả kiểm chứng:\n\n- `docs/source.md:1` — khớp **nguyên văn** mọi trích dẫn N1, R1–R6 trong artifact.\n- `src/export.py:3,4,5` — khớp `encode('ascii', errors='ignore')`, `io.StringIO(newline='')`, `writerow([value])` (đúng là 1 phần tử → 1 bản ghi, 1 cột).\n- `tests/test_export.py:3-4` — đúng chỉ có `test_unicode` với `'Hồ sơ'`, không dấu phẩy/newline.\n- `codebase_grep(\"JSON\")` → đúng 1 hit (`docs/source.md:1`); `codebase_grep(\"csv\")` → không có dòng nào về header ⇒ N8, cơ sở \"tài liệu không định nghĩa cơ chế header\" là đúng.\n\nNguồn ngoài tôi mở: **https://docs.python.org/3/library/csv.html** (status 200, đọc đủ phần `csv.reader`/`csv.writer",
+        "observedClaimExcerpts": [
+          "VERDICT: revise"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "857e2f300e60469297c7abaa5a8d8f90",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "STEP_BUDGET_EXHAUSTED"
+        ],
+        "finalChars": 4922,
+        "finalSha256": "e95dd8f1a6e4d9931682f2bff14cf9a3a52f414cbcd73f4ac0074f29d7d70d20",
+        "toolCalls": 22,
+        "finalExcerpt": "## Blocking findings\n\n`none`\n\n## Ghi chú không chặn\n\n**1. Literal `'H s'` phụ thuộc dạng chuẩn hóa Unicode của fixture — chưa kiểm được (không chặn).**\nYêu cầu A2 đòi dẫn chứng FAIL \"với `'H s'`\". Tôi đọc trực tiếp `tests/test_export.py:4`: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Bản render mà `file_read`/`codebase_grep` trả về không phân biệt được NFC với NFD, và node này không có công cụ thực thi. Nếu `'Hồ sơ'` là NFC thì `errors='ignore'` loại `ồ`,`ơ` → `'H s'` (đúng như artifact nêu). Nếu là NFD (`o`+U+0302, `o`+U+031B) thì base `o` là ASCII nên **giữ lại** → `'H oso'`, không phải `'H s'`. Tôi đã xét khả năng bác bỏ finding và nó **không** đảo được kết luận:",
+        "observedClaimExcerpts": [
+          "Yêu cầu A2 đòi dẫn chứng FAIL \"với `'H s'`\". Tôi đọc trực tiếp `tests/test_export.py:4`: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`. Bản render mà `file_read`/`codebase_grep` trả về không phân biệt được NFC với NFD, và node này không có công cụ thực thi. Nếu `'Hồ sơ'` là NFC thì `errors='ignore'` loại `ồ`,`ơ` → `'H s'` (đúng như artifact nêu). Nếu là NFD (`o`+U+0302, `o`+U+031B) thì base `o` là ASCII nên **giữ lại** → `'H oso'`, không phải `'H s'`. Tôi đã xét khả năng bác bỏ finding và nó **không** đảo được kết luận: ở cả hai dạng, `src/export.py:3` vẫn phá hỏng tiếng Việt và `test_unicode` vẫn FAIL; chỉ con số literal trong thông điệp assert là khác. Sửa tối thiểu (tùy chọn): ghi kèm \"với điều kiện fixture ở dạng NFC\" hoặc bỏ chữ literal, chỉ giữ \"FAIL với chuỗi đã mất dấu\". Không cần sửa để quyết định đúng.",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "f12da3dc20b242cc9c9c5e0f2a8a7739",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "STEP_BUDGET_EXHAUSTED"
+        ],
+        "finalChars": 3982,
+        "finalSha256": "aae5c1d820a8162845bc377a86d413673ea85502c888ab1ad467455273130dac",
+        "toolCalls": 16,
+        "finalExcerpt": "Đã đọc HẾT snapshot (`coverageComplete: true`, 26.702 ký tự) và tự mở nguồn gốc. Dưới đây là phản biện.\n\n## Vấn đề chặn\n\n`none`\n\nĐã kiểm chéo từng khẳng định quyết định với bằng chứng gốc:\n\n- **A1 (quoting):** Trích nguyên văn `join_append_data` trong `Modules/_csv.c` khớp; `c == quotechar` với `doublequote=True` ⇒ nhân đôi `\"`, cờ `*quoted` là cờ cả trường nên một ký tự đặc biệt làm bọc toàn bộ trường. Nghịch đảo `parse_process_char` (`IN_QUOTED_FIELD` giữ nguyên mọi ký tự, kể cả `'\\r'`/`'\\n'` thật; `QUOTE_IN_QUOTED_FIELD` chỉ chấp nhận `\"`/delimiter/EOL) khớp với mô tả.\n- **A2 (dòng phá tiếng Việt):** `src/export.py:3` là `value.encode('ascii', errors='ignore').decode()` — đúng dòng. `Doc/",
+        "observedClaimExcerpts": [
+          "3. **`csv.field_size_limit()`** — artifact cố ý không nêu con số. Đúng; không phải thiếu sót.",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "c17f55aa90904aefab1589ef38524fb9",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 5611,
+        "finalSha256": "09ed59716bb5fd1fd7546e3e8b9fedb719909854cbcd91549d333607dec282e4",
+        "toolCalls": 18,
+        "finalExcerpt": "## Phản biện độc lập — Work Graph R2 (research/produce), artifact `a-c76d22ed02344a36a7f0f62eda2f3538` (v2, 26.702 ký tự, đọc hết, `coverageComplete: true`)\n\n**Đã kiểm thực tế:** tôi tự mở lại bằng chứng gốc, không dựa vào artifact:\n- Repo (đọc trực tiếp, cả 3 file — `codebase_glob` xác nhận repo chỉ có đúng 3 file): `src/export.py`, `tests/test_export.py`, `docs/source.md`.\n- Ngoài: `Modules/_csv.c` (200), `Modules/_io/stringio.c` (200), `Doc/library/csv.rst` (200, đọc trọn23.829 ký tự).\n- **Test: NOT RUN.** Node này không có công cụ thực thi (`bash` bị vô hiệu hoá, không có `terminal_exec`) — kể cả trong phiên review này. Tôi không bịa output nào.\n\n## Vấn đề chặn\n\n`none`\n\n## Ghi chú không ",
+        "observedClaimExcerpts": [
+          "**4. Điểm artifact từ chối suy đoán là đúng:** giá trị mặc định `csv.field_size_limit()` được đánh dấu UNVERIFIED thay vì bịa con số.",
+          "{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"evidence\": \"Tự mở Modules/_csv.c (raw.githubusercontent.com/python/cpython/3.14, 200): `join_append_data` trùng nguyên văn artifact — `*quoted` là cờ cả trường, `c == delimiter || escapechar || quotechar || '\\\\n' || '\\\\r' || PyUnicode_FindChar(lineterminator)`, và `if (c == dialect->quotechar) { if (dialect->doublequote) ADDCH(dialect->quotechar); }`, đóng `if (*quoted) ADDCH(dialect->quotechar)`. csv.rst xác nhận `doublequote` mặc định True và `line_num` 'records can span multiple lines'; enum `IN_QUOTED_FIELD`/`QUOTE_IN_QUOTED_FIELD`/`EAT_CRNL` có thật trong nguồn. Nghịch đảo reader được mô tả đúng cấu trúc.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Đọc trực tiếp src/export.py (dòng 3 = `value = value.encode('ascii', errors='ignore').decode()`, dòng 4 = `s = io.StringIO(newline='')`) và tests/test_export.py (dòng 4 assert `['Hồ sơ']`). Cơ chế suy luận đúng và được artifact gắn nhãn 'chưa phải output chạy test'. Test: NOT RUN (không có terminal_exec ở cả node lẫn phiên review) — không bịa pass. Xem ghi chú 2.\"}, {\"id\": \"A3\", \"status",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "568bf1c79d6843caac212cc5b5fe4495",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "PROVIDER_STREAM_INTERRUPTED"
+        ],
+        "finalChars": 17748,
+        "finalSha256": "99794d651898c4a9f93a6b6f3b375d70561fc88c7086dfbfce4ab664f0c28022",
+        "toolCalls": 18,
+        "finalExcerpt": "# So sánh CSV và JSON cho bản đầu — dựa trên `docs/source.md`\n\n## Trả lời\n\nVới phạm vi bản đầu, CSV không phải là lựa chọn bị thua về kỹ thuật mà là lựa chọn đã bị khóa: `docs/source.md:1` ghi thẳng \"Người dùng chốt chỉ xuất CSV, không JSON\", nên JSON bị loại ở tầng yêu cầu chứ không phải ở tầng so sánh định dạng. Trong năm ràng buộc còn lại của tài liệu, CSV thoả trực tiếp bốn ràng buộc và không có ràng buộc nào buộc phải đổi sang JSON. Phát biểu \"CSV không mang tên cột nên không có cách bù\" ở phiên bản trước là **sai và đã bị gỡ**: tài liệu `csv` nói rõ có `DictReader`/`DictWriter`, và RFC 4180 §2.3 công nhận dòng header là tùy chọn hợp lệ — đây là điểm phải nới ràng buộc ở tài liệu, không",
+        "observedClaimExcerpts": [
+          "- **Mất thông tin kiểu khi đọc lại** — bù được một phần bằng tuỳ chọn `QUOTE_NONNUMERIC` (D4) và, từ Python 3.12, `QUOTE_NOTNULL` / `QUOTE_STRINGS` (xem \"Bằng chứng trái chiều\"). Không bù được hoàn toàn.",
+          "   - `QUOTE_NOTNULL` (3.12+) — *\"if a field value is ``None`` an empty (unquoted) string is written\"*; reader *\"interpret an empty (unquoted) field as ``None``\"*. Điều này **trực tiếp phủ nhận D5** ở chế độ tuỳ chọn."
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "2c1620df96f5402380dfaec3dfd77e68",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 20979,
+        "finalSha256": "e889774b8da6334a30401e0237b574855d1b6671eb6ea4bd598e8c90452c7d35",
+        "toolCalls": 14,
+        "finalExcerpt": "Đã thu thập đủ nguồn chính thức. Báo cáo hoàn chỉnh:\n\n---\n\n## Trả lời\n\nVới đúng bốn ràng buộc trong `docs/source.md:1`, CSV là lựa chọn đúng và không có lý do kỹ thuật nào để bàn về JSON trong phạm vi này — nhưng lý do là **quyết định của người dùng và bản chất của ràng buộc**, không phải vì CSV mạnh hơn. CSV thoả ràng buộc \"một dòng CSV hợp lệ\" và đặc biệt thoả rõ ràng ràng buộc `csv.reader` đọc lại đúng trường chứa dấu phẩy/newline, nhờ cơ chế quote của `QUOTE_MINIMAL`; tuy nhiên **ràng buộc \"giữ nguyên tiếng Việt\" hiện đang bị vi phạm bởi code, không phải bởi định dạng**: `src/export.py:3` gọi `value.encode('ascii', errors='ignore').decode()` và output pytest thật do main cung cấp cho thấ",
+        "observedClaimExcerpts": [],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "ca0bab09b50a4113be554256b21bfad6",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 4182,
+        "finalSha256": "8c8d14e13669b70b278f689a09baededec91e04bcb86d921ccde9c15c2ef4933",
+        "toolCalls": 13,
+        "finalExcerpt": "Đã mở 3/6 nguồn: `raw.githubusercontent.com/python/cpython/main/Doc/library/csv.rst` (200), `rfc-editor.org/rfc/rfc4180.txt` (200), `rfc-editor.org/rfc/rfc8259.txt` (200). `docs.python.org/3/library/csv.html` lỗi **503 Service Unavailable** — tái hiện đúng giới hạn mà producer đã khai báo. Test: **NOT RUN** (phiên review không có công cụ thực thi; không bịa pass).\n\n## Vấn đề chặn\n\n`none`\n\nĐã kiểm đích danh 6 ràng buộc, path:line và mọi trích dẫn quyết định; tất cả khớp nguyên văn nguồn gốc:\n- S1: \"Programmers can also read and write data in dictionary form using the DictReader and DictWriter classes\"; \"Each row read from the csv file is returned as a list of strings\"; \"the value `None` is wr",
+        "observedClaimExcerpts": [
+          "1. **(medium, V4 JW2)** \"None không phân biệt được với chuỗi rỗng\" được viết vô điều kiện, nhưng chính S1 ghi `QUOTE_NOTNULL`/`QUOTE_STRINGS` (3.12+): \"Instructs `reader` objects to interpret an empty (unquoted) field as `None`\" — tức `None` vs `\"\"` **có** khôi phục đượcở CPython hiện đại. JW2 vẫn đúng (bool `True` vẫn không phân biệt được với chuỗi `\"True\"`; `QUOTE_NONNUMERIC` chỉ trả float), nên kết luận và khuyến nghị không đổi. Sửa tối thiểu: thêm \"trừ `QUOTE_NOTNULL`/`QUOTE_STRINGS` (Python 3.12+)\".",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "a1b80d50bb6f4a4a8b897b2c1922437c",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "PROVIDER_STREAM_INTERRUPTED"
+        ],
+        "finalChars": 17182,
+        "finalSha256": "8d2833b931ad4eaa3ae2d489f14a775e84104a5ab2c32ed8e32945a1925bb0a4",
+        "toolCalls": 30,
+        "finalExcerpt": "I verified the claims myself rather than relaying R1/R2, and found material neither dependency covered.\n\n---\n\n# R3 — Mặt trái của quyết định chỉ-xuất-CSV\n\n## Trả lời\n\nChọn chỉ-CSV ở bản đầu là hợp lý trong phạm vi `docs/source.md:1`, nhưng nó **đánh đổi 6 thứ thật**, trong đó hai thứ chưa ai nêu ở R1/R2 và một cái đụng thẳng vào ràng buộc cốt lõi R4. Đáng chú ý nhất: **CSV có trần 128 KiB ở phía đọc nhưng không có ở phía ghi** — tôi đã định vị được hằng số trong mã nguồn CPython (`module_state->field_limit = 128 * 1024`), nên `export()` có thể *ghi ra* một chuỗi lớn tùy ý nhưng `csv.reader` **không đọc lại được** ⇒ vi phạm chính R4 mà không đổi định dạng. Thứ hai, định hướng \"cho spreadsheet",
+        "observedClaimExcerpts": [
+          "Chọn chỉ-CSV ở bản đầu là hợp lý trong phạm vi `docs/source.md:1`, nhưng nó **đánh đổi 6 thứ thật**, trong đó hai thứ chưa ai nêu ở R1/R2 và một cái đụng thẳng vào ràng buộc cốt lõi R4. Đáng chú ý nhất: **CSV có trần 128 KiB ở phía đọc nhưng không có ở phía ghi** — tôi đã định vị được hằng số trong mã nguồn CPython (`module_state->field_limit = 128 * 1024`), nên `export()` có thể *ghi ra* một chuỗi lớn tùy ý nhưng `csv.reader` **không đọc lại được** ⇒ vi phạm chính R4 mà không đổi định dạng. Thứ hai, định hướng \"cho spreadsheet\" của CSV đi kèm rủi ro thực thi công thức mà OWASP ghi rõ không có chiến lược sanitize phổ quát. Điều kiện kích hoạt phải thêm JSON **không phải một ngưỡng mà là bốn ngưỡng tách biệt**, và trong đó chỉ hai ngưỡng thực sự bắt buộc JSON — hai ngưỡng còn lại chỉ buộc phải *nới tài liệu*, không buộc đổi định dạng. Chi phí chuyển đổi **rất nhỏ bên trong repo (6 dòng hàm + 4 dòng test) nhưng không đo được bên ngoài**, vì CSV không có content-type negotiation và không có trường phiên bản: một consumer đang đọc `.csv` sẽ không bao giờ biết định dạng đã đổi.",
+          "**Phương pháp:** đọc lại các artifact R1/R2 ở stage produce đã finalize, sau đó **tự mở lại** S1–S7 để không kế thừa claim sai. Hệ quả: tôi phát hiện R2 để ngỏ một `UNVERIFIED` (giá trị mặc định `field_size_limit`) mà thực ra **có thể xác minh được** — tôi đã định vị nó.",
+          "### V2 — ⚠ PHÁT HIỂN MỚI: trần 128 KiB chỉ có ở phía **đọc**, không có ở phía **ghi** → vi phạm R4",
+          "**Lời nguồn — `Doc/library/csv.rst`, `field_size_limit()` (S3):**",
+          "**Tại sao quan trọng với R3:** R4 là điều khoản mà người dùng chọn CSV để bảo vệ. Trần này là cách duy nhất tôi tìm thấy mà **CSV có thể vi phạm R4 ngay trong phạm vi bài thử**, mà không cần đổi định dạng hay đổi yêu cầu: đầu vào vẫn là \"một chuỗi\", chỉ cần chuỗi đó dài hơn 128 KiB."
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "d466acb86af04a7099b261c55ad68af6",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "PROVIDER_STREAM_INTERRUPTED"
+        ],
+        "finalChars": 30775,
+        "finalSha256": "1de171c7e695cef3bdfc02484f20e39c018ffeffe3be4db64acbeeb4d2ed00fa",
+        "toolCalls": 24,
+        "finalExcerpt": "Đã thu đủ nguồn. Báo cáo đầy đủ cho node R3:\n\n---\n\n# R3 — Mặt trái của quyết định \"chỉ xuất CSV\"\n\n> **Lưu ý về ledger:** công cụ ghi ledger (`source_add`) không khả dụng trong lượt này. Tôi tự gán nhãn cục bộ **S1–S4** cho nguồn đã mở và **T1–T7** cho điều kiện kích hoạt; harness có thể ánh xạ lại.\n\n## Trả lời\n\nChọn chỉ-CSV ở bản đầu là đúng theo phạm vi `docs/source.md:1`, nhưng nó **từ bỏ bốn thứ có thật**: (1) tên cột mang nghĩa — CSV chỉ có thứ tự vị trí, `DictWriter` bắt buộc phải có `fieldnames` do người gọi cấp, và dòng header sẽ phá vỡ ràng buộc \"một dòng\"; (2) khả năng phân biệt `None` với `''` — tài liệu CPython gọi thẳng đây là \"not a reversible transformation\"; (3) encoding do đặ",
+        "observedClaimExcerpts": [
+          "Chọn chỉ-CSV ở bản đầu là đúng theo phạm vi `docs/source.md:1`, nhưng nó **từ bỏ bốn thứ có thật**: (1) tên cột mang nghĩa — CSV chỉ có thứ tự vị trí, `DictWriter` bắt buộc phải có `fieldnames` do người gọi cấp, và dòng header sẽ phá vỡ ràng buộc \"một dòng\"; (2) khả năng phân biệt `None` với `''` — tài liệu CPython gọi thẳng đây là \"not a reversible transformation\"; (3) encoding do đặc tả bảo đảm — RFC 4180 chỉ nói \"Common usage of CSV is US-ASCII\" và ABNF `TEXTDATA = %x20-21 / %x23-2B / %x2D-7E` **loại trừ toàn bộ dấu tiếng Việt**, trong khi RFC 8259 §8.1 bắt buộc UTF-8; (4) hợp đồng byte ổn định giữa các hệ thực — RFC 4180 tự nhận \"there is no single *master* specification\". Bên cạnh đó còn một giới hạn vận hành mới tôi xác minh được: `Modules/_csv.c` đặt `module_state->field_limit = 128 * 1024` ⇒ **mọi trường dài hơn 128 KiB không đọc lại được**, JSON không có giới hạn tương đương trong đặc tả. Điều kiện kích hoạt cụ thể để phải thêm JSON là: dữ liệu lồng nhau bất biến diễn đạt bằng bảng phẳng; cần round-trip số/boolean/null phân biệt được với chuỗi; bên nhận là service/API chứ kh",
+          "**Đóng được một khoảng trống của R2:** R2 ghi `UNVERIFIED` cho giá trị mặc định của `csv.field_size_limit()`. Lượt này đã đọc được hằng số khởi tạo — xem **V5**.",
+          "### V5 — Đánh đổi 5 (mới, đóng khoảng trống UNVERIFIED của R2): giới hạn 128 KiB mỗi trường",
+          "R2 đã đọc `Modules/_csv.c` nhưng ghi `UNVERIFIED` cho giá trị mặc định của `csv.field_size_limit()`. Lượt này đã tìm được hằng số khởi tạo.",
+          "**Giá trị mặc định = 131.072 ký tự.** Đây là **giới hạn lúc đọc**, không phải lúc ghi: `export()` vẫn ghi ra một trường 200 KiB bình thường, nhưng `csv.reader` ném `Error: field larger than field limit (131072)` khi đọc lại. Nghĩa là ràng buộc R4 của `docs/source.md:1` — \"Các trường chứa dấu phẩy/newline phải được `csv.reader` đọc lại đúng\" — **có một điều kiện bổ sung mà tài liệu không nêu**: trường phải ≤ 128 KiB.",
+          "Lưu ý công bằng: JSON **cũng** cho phép đặt giới hạn, nhưng **đặc tả không đặt sẵn con số 128 KiB** — đây là hành vi cụ thể của CPython, không phải giới hạn của JSON. **Chi phí phía CSV là bất ngờ và im lặng; chi phí phía JSON là phải chọn có chủ ý.**"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "43b41df472ae4524a4c6767695772cb5",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "PROVIDER_STREAM_INTERRUPTED"
+        ],
+        "finalChars": 25629,
+        "finalSha256": "2c76b735b06ddec9408aea86fe364fb5b6c1a665b355f8fc421f70909dbd7b76",
+        "toolCalls": 31,
+        "finalExcerpt": "Đã thu thập đủ. Dưới đây là báo cáo của nút R3.\n\n---\n\n# R3 — Mặt trái của quyết định chỉ xuất CSV: đánh đổi, rủi ro vận hành, ngưỡng kích hoạt JSON\n\n## Trả lời\n\nLựa chọn chỉ-CSV ở bản đầu bỏ lỡ **bốn thứ thật**: tên cột tự mô tả, tính trung thực kiểu `bool`, encoding do đặc tả quy định, và hợp đồng byte ổn định giữa các hiện thực — nhưng với phạm vi một chuỗi trong `docs/source.md:1` thì **cả bốn đều không kích hoạt**, nên cái giá thực sự của bản đầu gần như bằng không; rủi ro vận hành đáng kể nhất không nằm ở định dạng mà nằm ở một ngưỡng kỹ thuật chưa từng được ghi vào tài liệu: `csv.field_size_limit()` mặc định là `128 * 1024` và **chỉ áp dụng khi đọc**, nên một trường lớn có thể ghi ra t",
+        "observedClaimExcerpts": [
+          "Lựa chọn chỉ-CSV ở bản đầu bỏ lỡ **bốn thứ thật**: tên cột tự mô tả, tính trung thực kiểu `bool`, encoding do đặc tả quy định, và hợp đồng byte ổn định giữa các hiện thực — nhưng với phạm vi một chuỗi trong `docs/source.md:1` thì **cả bốn đều không kích hoạt**, nên cái giá thực sự của bản đầu gần như bằng không; rủi ro vận hành đáng kể nhất không nằm ở định dạng mà nằm ở một ngưỡng kỹ thuật chưa từng được ghi vào tài liệu: `csv.field_size_limit()` mặc định là `128 * 1024` và **chỉ áp dụng khi đọc**, nên một trường lớn có thể ghi ra thành công rồi nổ khi `csv.reader` đọc lại, đúng vào ràng buộc R4 mà `docs/source.md:1` đòi hỏi. Tôi cũng phải đính chính một điểm mà R1 đã nêu quá mạnh: **CSV vẫn giữ được `null` từ Python 3.12** qua `QUOTE_NOTNULL`/`QUOTE_STRINGS`, nên \"mất kiểu\" chỉ đúng với dialect `excel` mặc định và chỉ đúng với `bool` là không cứu được. Ngưỡng kích hoạt JSON thật sự chỉ có **ba** cái — dữ liệu lồng, round-trip `bool`, và hạ tầng tiêu thụ là API — trong khi ba điều kiện thường được nghĩ tới (tên cột, giữ `null`, trường >128 KiB) **không phải** ngưỡng chuyển sang JSON",
+          "### V3 — ⚠ ĐÍNH CHÍNH: CSV **có** giữ được `null` từ Python 3.12 (`QUOTE_NOTNULL` / `QUOTE_STRINGS`)",
+          "> Lời nguồn — N2 (`Doc/library/csv.rst`), mục `QUOTE_NOTNULL`, nguyên văn:",
+          ">  csv.QUOTE_NOTNULL means that quotes are only placed around fields that are not the Python value None.\"",
+          "→ **Phân biệt lời nguồn và suy luận:** Hai đoạn trên *cùng một tài liệu* mô tả **hai chế độ khác nhau**. Đoạn `writer()` nói `None` → chuỗi rỗng là **không khôi phục được** — nhưng đoạn đó nằm trong ngữ cảnh **dialect `excel` mặc định (`QUOTE_MINIMAL`)**. `QUOTE_NOTNULL`/`QUOTE_STRINGS` là **cơ chế đối xứng có chủ đích** ở cả hai chiều ghi và đọc.",
+          "→ **Suy luận của tôi (chưa chạy để xác nhận):** với `quoting=QUOTE_NOTNULL`, `None` → ô trống không quote → reader đọc ô trống không quote thành `None`. Vậy round-trip `null` **có thể giữ được trong CSV**. Claim đúng phải viết lại thành: *\"CSV dialect mặc định không phân biệt `None` với `''`; Python ≥3.12 cung cấp dialect opt-in phân biệt được.\"*"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "5515ab377c5e46fdaf4403c9b1acfed2",
+        "role": "research",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 11031,
+        "finalSha256": "dcb4d476dcb1307475c46396fafcea21adced472871ce964a2dc38134dc18831",
+        "toolCalls": 23,
+        "finalExcerpt": "## Trả lời\n\nChốt CSV-only cho bản đầu là hợp lý: phạm vi đã ghim trong `docs/source.md` là \"một chuỗi → một dòng CSV hợp lệ, đọc lại đúng bằng `csv.reader`\", và CSV đáp ứng trọn vẹn phạm vi đó với chuỗi văn bản, kể cả khi chứa dấu phẩy, dấu nháy kép và newline. JSON chỉ thắng ở những yêu cầu mà tài liệu **không** đặt ra: dữ liệu lồng nhau, tên trường khác nhau giữa các bản ghi, và hệ kiểu (null/số/bool) phải sống sót khi đọc lại. Rủi ro vận hành lớn nhất của lựa chọn này không nằm ở định dạng mà ở **ngưỡng 128 KiB của `csv.reader`**: nó giới hạn phía ĐỌC, không giới hạn phía ghi, nên `src/export.py` vẫn xuất được dòng lớn hơn ngưỡng rồi mới vỡ khi đọc ngược. Chi phí chuyển đổi sang JSON hiện",
+        "observedClaimExcerpts": [
+          "Chốt CSV-only cho bản đầu là hợp lý: phạm vi đã ghim trong `docs/source.md` là \"một chuỗi → một dòng CSV hợp lệ, đọc lại đúng bằng `csv.reader`\", và CSV đáp ứng trọn vẹn phạm vi đó với chuỗi văn bản, kể cả khi chứa dấu phẩy, dấu nháy kép và newline. JSON chỉ thắng ở những yêu cầu mà tài liệu **không** đặt ra: dữ liệu lồng nhau, tên trường khác nhau giữa các bản ghi, và hệ kiểu (null/số/bool) phải sống sót khi đọc lại. Rủi ro vận hành lớn nhất của lựa chọn này không nằm ở định dạng mà ở **ngưỡng 128 KiB của `csv.reader`**: nó giới hạn phía ĐỌC, không giới hạn phía ghi, nên `src/export.py` vẫn xuất được dòng lớn hơn ngưỡng rồi mới vỡ khi đọc ngược. Chi phí chuyển đổi sang JSON hiện tại rất nhỏ về mã (6 + 4 dòng), lớn về tài liệu.",
+          "1. **Ngưỡng field 128 KiB nằm ở phía đọc.** `Modules/_csv.c`, trong `csv_exec()`: `/* Set the field limit */ module_state->field_limit = 128 * 1024;`. Kiểm tra được đặt trong `parse_add_char()` (đường dẫn Reader): `if (self->field_len >= module_state->field_limit) { PyErr_Format(module_state->error_obj, \"field larger than field limit (%ld)\", module_state->field_limit); return -1; }`. Hàm setter tương ứng là `_csv_field_size_limit_impl` với docstring \"Sets an upper limit on parsed fields.\" → chữ \"**parsed**\" xác nhận đây là giới hạn phía ĐỌC.",
+          "3. **Đường dẫn dòng trong `Lib/csv.py`.** `field_size_limit` **không phải hằng số 128 KiB** trong file này — nó là hằng được re-export từ `_csv`: khối `from _csv import Error, __version__, writer, reader, register_dialect, \\` / `unregister_dialect, get_dialect, list_dialects, \\` / **`field_size_limit, \\`** / `QUOTE_MINIMAL, QUOTE_ALL, QUOTE_NONNUMERIC, QUOTE_NONE, \\` / `QUOTE_STRINGS, QUOTE_NOTNULL, \\` (≈ dòng 9; bản raw tôi đọc bị bỏ dòng trống nên số dòng là xấp xỉ, tên hằng là chính xác), và lặp lại trong `__all__` (≈ dòng 20: `\"field_size_limit\", \"reader\", \"writer\",`). Hằng `128 * 1024` chỉ nằm ở `Modules/_csv.c:csv_exec()`.",
+          "4. **Đính chính QUOTE_NOTNULL/QUOTE_STRINGS — CSV vẫn giữ được null.** `quote_styles[]` trong `_csv.c` liệt kê cả `QUOTE_STRINGS` và `QUOTE_NOTNULL`; `csv_writerow()` xử lý `case QUOTE_NOTNULL: quoted = field != Py_None;`, rồi `null_field = (field == Py_None)` → `join_append(self, NULL, quoted)` ghi trường rỗng **không** quote. Docstring module ghi rõ: `csv.QUOTE_NOTNULL means that quotes are only placed around fields that are not the Python value None.` Kết luận: CSV biểu diễn được null bằng trường rỗng không quote; cái CSV **không** làm được là phân biệt lại null với `\"\"` khi đọc — `csv.reader` trả `''` cho cả hai.",
+          "### 3. Ngưỡng field 128 KiB — rủi ro vận hành",
+          "Đây là điểm cần ghi thẳng vào `docs/source.md`: khi giá trị vượt 131072 ký tự, `export()` vẫn trả về một dòng hợp lệ (phía ghi không có ngưỡng — dữ kiện 2), nhưng `csv.reader` ném `csv.Error: field larger than field limit (131072)` khi đọc ngược (dữ kiện 1). Nghĩa là bản đầu có **một đường hỏng âm thầm**: ghi thì thành công, kiểm tra hồi quy bằng `csv.reader` thì nổ. Ba mức xử lý khả dụng — nâng ngưỡng bằng `csv.field_size_limit()` ở phía đọc, hoặc khai trước trần kích thước ô trong tài liệu, hoặc chấp nhận lỗi và ghi nó ra tài liệu. Đây là quyết định của người dùng, không phải suy ra được từ tài liệu hiện có."
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "0df81304e7d24d3f8a1781453c82fe2a",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [
+          "STEP_BUDGET_EXHAUSTED"
+        ],
+        "finalChars": 5826,
+        "finalSha256": "2da9324541f3ade3b606574c33acc26fba3b5c256e99c2718b13e641f930f1b3",
+        "toolCalls": 22,
+        "finalExcerpt": "## Đã kiểm\n\nĐọc **đầy đủ** snapshot `a-463ad254564e4a9b9db6d0c8124a8513` v8 (11031 ký tự, hai lát 0→8000→null). Tự mở bằng chứng gốc: `Lib/csv.py` (3.12), `Modules/_csv.c` (3.12), `rfc-editor.org/rfc/rfc4180.txt`, ba file repo, và thử lại trang `docs.python.org/3/library/csv.html` mà báo cáo khai là không đọc được.\n\n**Xác nhận đúng nguyên văn, không nói quá:**\n- `csv_exec()`: `module_state->field_limit = 128 * 1024;` — đúng.\n- `parse_add_char()`: `if (self->field_len >= module_state->field_limit) { PyErr_Format(..., \"field larger than field limit (%ld)\", ...); return -1; }` — đúng.\n- Docstring `_csv_field_size_limit_impl`: `\"...upper limit on parsed fields.\"` → chữ \"parsed\" đúng là bằng chứn",
+        "observedClaimExcerpts": [
+          "- Docstring `_csv_field_size_limit_impl`: `\"...upper limit on parsed fields.\"` → chữ \"parsed\" đúng là bằng chứng giới hạn phía ĐỌC.",
+          "- Đính chính quan trọng nhất cũng đúng: trong `Lib/csv.py` `field_size_limit` **chỉ là re-export** (khối `from _csv import ...` và `__all__`), không có hằng `128*1024`; hằng chỉ nằm trong `_csv.c`. Việc nêu số dòng \"≈\" kèm lý do lớp trích xuất bỏ dòng trống là trung thực.",
+          "- `quote_styles[]` có cả `QUOTE_STRINGS`/`QUOTE_NOTNULL`; `case QUOTE_NOTNULL: quoted = field != Py_None;` → `join_append(self, NULL, quoted)`; câu docstring trích nguyên văn khớp. Đính chính QUOTE_NOTNULL/QUOTE_STRINGS giữ được null là đúng, và giới hạn thật (đọc lại không phân biệt được null với `\"\"`) được nêu đúng chỗ.",
+          " {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Đã tự xác minh trong `Modules/_csv.c` 3.12: hằng `128 * 1024` ở csv_exec(), ép lỗi ở parse_add_char(), docstring 'upper limit on parsed fields'; phía ghi join_check_rec_size()/join_append_data() không so field_limit. Báo cáo đính chính đúng rằng Lib/csv.py chỉ re-export `field_size_limit` (≈ dòng 9 và `__all__` ≈ dòng 20), số dòng được nêu là xấp xỉ kèm lý do — tôi thấy đúng nguyên nhân (bản raw bị bỏ dòng trống). Nói rõ chặn đọc không chặn ghi: có, và tôi xác nhận độc lập.\"},",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "ab85500098f94ee1b188f277dd08fdda",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 5350,
+        "finalSha256": "72a0bb99e79d322d63faf1511594a5681db61b4d3a4a32aec305cc0a6ac516c7",
+        "toolCalls": 21,
+        "finalExcerpt": "Đã đọc đủ snapshot v8 (11031 ký tự, `coverageComplete: true`) và tự mở lại các nguồn gốc. Dưới đây là kết quả kiểm chứng từng khẳng định quyết định.\n\n## Vấn đề chặn\n\n**none**\n\n## Kiểm chứng bằng chứng gốc (đã thực sự mở)\n\n| Khẳng định trong artifact | Nguồn mở lại | Kết quả |\n|---|---|---|\n| `module_state->field_limit = 128 * 1024;` trong `csv_exec()` | `Modules/_csv.c` (3.12, offset ~41600) | Khớp nguyên văn |\n| Chặn ở `parse_add_char()` (đường dẫn Reader) | `_csv.c` offset ~15443: `field larger than field limit (%ld)` ngay trước `self->field[self->field_len++] = c;` | Khớp; đúng phía đọc |\n| Phía ghi không so với `field_limit` | `join_append_data()`: chỉ có `PY_SSIZE_T_MAX` → `PyErr_NoMemo",
+        "observedClaimExcerpts": [
+          "| `field_size_limit` **không phải** hằng 128 KiB trong `Lib/csv.py` | `Lib/csv.py`: `field_size_limit, \\` trong khối `from _csv import ...`; lặp lại trong `__all__`; **grep `128`/`1024` trên 13141 ký tự → 0 match** | Khớp cả khẳng định dương lẫn phủ định |",
+          "| Đính chính QUOTE_NOTNULL/QUOTE_STRINGS | `quote_styles[]` chứa `{ QUOTE_STRINGS, ... }`, `{ QUOTE_NOTNULL, ... }`; `null_field` tại offset ~28657; `csv.py` re-export cả hai | Phát hiện đúng, giữ nguyên là đúng |",
+          "**Bằng chứng phản bác đã cân:** (1) Tôi tìm cách bác bỏ đính chính \"128 KiB nằm ở `_csv.c` chứ không phải `Lib/csv.py`\" bằng cách grep trực tiếp `Lib/csv.py` — không có match nào, nên phát hiện đúng, không phải lỗi trích dẫn. (2) Tôi tìm nhánh kiểm tra `field_limit` phía ghi trong toàn bộ `join_*` — không có; bất đối xứng là có thật. (3) Tôi đối chiếu `docs/source.md` nguyên văn: \"giữ nguyên tiếng Việt\", \"Đầu vào một chuỗi, đầu ra một dòng CSV hợp lệ\" — phạm vi mà artifact dùng làm mốc đều có thật.",
+          "- Ba mức xử lý ngưỡng 128 KiB và việc nhắc \"phải sửa `src/export.py:3`\" được viết như **tùy chọn để người dùng chọn**, không phải kế hoạch triển khai — vẫn nằm trong A5.",
+          "{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"4 đánh đổi (a) mất kiểu [RFC4180 non-escaped = *TEXTDATA], (b) không khóa từng bản ghi [ABNF file = [header CRLF] record *(CRLF record) + §2 item 4], (c) null vs \\\"\\\" khi đọc [_csv.c parse_save_field/QUOTE_NOTNULL], (d) mập mờ bảng mã [RFC4180 'Common usage of CSV is US-ASCII' + src/export.py:3]\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Lib/csv.py chỉ re-export field_size_limit (from _csv import + __all__), grep 128/1024 = 0 match; hằng nằm ở _csv.c csv_exec(); parse_add_char chặn đọc, join_append_data chỉ có PY_SSIZE_T_MAX → xác nhận chặn đọc không chặn ghi\"},{\"id\":\"A3\",\"status\":\"pass\",\"evidence\":\"3 ngưỡng buộc đổi định dạng J1 (lồng nhau), J2 (khóa khác nhau), J3 (null vs \\\"\\\" không dựa vào quy ước ngoài tệp) — cả 3 dựa trên ABNF RFC 4180 + hành vi reader; tách rõ khỏi D1-D4 chỉ buộc nới docs/source.md\"},{\"id\":\"A4\",\"status\":\"pass\",\"evidence\":\"src/export.py = 6 dòng ~190 ký tự, tests/test_export.py = 4 dòng ~130 ký tự — đã đọc trực tiếp, khớp con số trong artifact\"},{\"id\":\"A5\",\"status\":\"pass\",\"evidence\":\"Artifact kết thúc 'Tôi không",
+          "VERDICT: ok"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      },
+      {
+        "id": "03120ea66d24475b85a4f4061309e2dc",
+        "role": "research-review",
+        "sessionStatus": "completed",
+        "partialCodes": [],
+        "finalChars": 8929,
+        "finalSha256": "bb2a2f3d8c39c2f2bc37dd7232f6200d55a11db04f69168aa55cac6c8cea89fd",
+        "toolCalls": 36,
+        "finalExcerpt": "## Phản biện toàn kế hoạch — Work Graph `w-9fe780d2cc`\n\n**Đã kiểm thực tế:** đọc trọn 4 snapshot qua `work_artifact_read` (đến `nextOffset: null`); đọc trực tiếp 3 file repo (`src/export.py`, `tests/test_export.py`, `docs/source.md`) — nội dung và số dòng khớp đúng như các node dẫn; mở và đối chiếu nguyên văn RFC 4180 (ABNF, §2.3, §2.6/2.7, §3), RFC 8259 (§2 `ws`, §3, §4), `Modules/_csv.c` 3.14 (`csv_exec` đặt `128*1024`; `parse_add_char` ném lỗi; `join_append_data`; `parse_process_char`; `Reader_iternext`), `Lib/csv.py` 3.14 (`excel` dialect, `field_size_limit` re-export), `Modules/_io/stringio.c` (`readuniversal`/`readtranslate`/`writenl`), `Doc/library/csv.rst` (DictReader `fieldnames`, `",
+        "observedClaimExcerpts": [
+          "**Đã kiểm thực tế:** đọc trọn 4 snapshot qua `work_artifact_read` (đến `nextOffset: null`); đọc trực tiếp 3 file repo (`src/export.py`, `tests/test_export.py`, `docs/source.md`) — nội dung và số dòng khớp đúng như các node dẫn; mở và đối chiếu nguyên văn RFC 4180 (ABNF, §2.3, §2.6/2.7, §3), RFC 8259 (§2 `ws`, §3, §4), `Modules/_csv.c` 3.14 (`csv_exec` đặt `128*1024`; `parse_add_char` ném lỗi; `join_append_data`; `parse_process_char`; `Reader_iternext`), `Lib/csv.py` 3.14 (`excel` dialect, `field_size_limit` re-export), `Modules/_io/stringio.c` (`readuniversal`/`readtranslate`/`writenl`), `Doc/library/csv.rst` (DictReader `fieldnames`, `restkey`/`restval`, \"this isn't a reversible transformation\").",
+          "**none.** Tôi đã cố bác bỏ từng điểm nghi ngờ trước khi kết luận: JW1/JW2 của R1 tôi đối chiếu lại ABNF `record = field *(COMMA field)` (không đệ quy) và `value = false / null / true / object / array / number / string` (đệ quy) — cả hai điều kiện JSON thắng đều đứng vững sau khi claim tên cột bị gỡ. Ngưỡng 128 KiB của R3 tôi xác nhận đủ ba vế: hằng ở `csv_exec()`, kiểm tra chỉ trong `parse_add_char`, và `join_append`/`join_append_data`/`join_check_rec_size` không hề so `field_limit`. Kết luận \"dòng 4 không phải thủ phạm\" của R2 tôi kiểm lại bằng `stringio.c`: `writenl` NULLở cả hai cách khởi tạo ⇒ byte giống nhau. Không có finding nào làm sai quyết định của người dùng.",
+          "- **Số dòng xấp xỉ trong `Lib/csv.py` của R3** (~9, ~20). R3 tự ghi là xấp xỉ do bản raw bị bỏ dòng trống — trung thực, nhưng số sai sẽ đưa người đọc sai chỗ. *Đề xuất:* bỏ số dòng, chỉ trích dẫn `from _csv import … field_size_limit` và `csv_exec()`. Tôi **không xác nhận** con số nào là đúng vì bản tôi mở không mang số dòng.",
+          "- **R3 nâng ngưỡng 128 KiB thành \"rủi ro vận hành lớn nhất\"**ở đoạn mở đầu, trong khi lỗi `src/export.py:3` mới là thứ tài liệu đã ghim và test đã chạm. Đây là nhấn mạnh diễn giải, không phải sai sự thật.",
+          "{\"id\":\"G3\",\"status\":\"pass\",\"evidence\":\"Trích dẫn lời nguồn tôi đã mở và xác nhận nguyên văn: RFC 4180 ABNF + §2.3 + §2.6/2.7 + §3; RFC 8259 §3 value và §4 tên trùng; _csv.c join_append_data và parse_process_char; csv.rst DictReader fieldnames và 'not a reversible transformation'. UNVERIFIED được ghi rõ (không đo hiệu năng, không khẳng định field_size_limit mặc định ở R2). Không node nào đòi plan triển khai hay test đã chạy.\"},",
+          "{\"id\":\"R3.A1\",\"status\":\"pass\",\"evidence\":\"Bốn đánh đổi (a) mất kiểu, (b) không có khoá theo từng bản ghi, (c) null ≡ '' khi đọc lại, (d) mập mờ bảng mã khi không khai charset — mỗi cái gắn ABNF RFC 4180 và xử lý QUOTE_NOTNULL trong _csv.c mà tôi đã mở và xác nhận.\"},"
+        ],
+        "assessmentScope": "Selected claims and completion integrity; not exhaustive semantic certification."
+      }
+    ],
+    "rawCheckpointSha256": "763c25ab490f2b725095025a5856ef62b037d65e36c3ef3067a3a4889d9d9998",
+    "remainingRuns": "Not complete at this checkpoint; retain later rows separately."
+  },
+  "csvLimitProbe": {
+    "rawSha256": "df885d4c995c8d980011953f02720e6c4ff9160a71745d5cdb5185a9085de17d",
+    "outcomes": [
+      {
+        "case": "false_fixed_csv_limit",
+        "repeat": 1,
+        "status": "revise",
+        "oracle": true,
+        "latencySeconds": 254.036,
+        "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+          "scripts\\eval\\work_quality_eval.py": "983385981544c6b44d63e0510719861d3ea4ae6395ad76a6b1dc81a6168c4afd"
+        }
+      },
+      {
+        "case": "false_fixed_csv_limit",
+        "repeat": 2,
+        "status": "revise",
+        "oracle": true,
+        "latencySeconds": 131.412,
+        "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+          "scripts\\eval\\work_quality_eval.py": "983385981544c6b44d63e0510719861d3ea4ae6395ad76a6b1dc81a6168c4afd"
+        }
+      }
+    ]
+  },
+  "counterexamples": {
+    "python": "3.13.13 | packaged by Anaconda, Inc. | (main, Apr 14 2026, 06:12:50) [MSC v.1942 64 bit (AMD64)]",
+    "quoting": {
+      "QUOTE_MINIMAL": {
+        "csv": ",\r\n",
+        "read": [
+          "",
+          ""
+        ]
+      },
+      "QUOTE_NOTNULL": {
+        "csv": ",\"\"\r\n",
+        "read": [
+          null,
+          ""
+        ]
+      },
+      "QUOTE_STRINGS": {
+        "csv": ",\"\"\r\n",
+        "read": [
+          null,
+          ""
+        ]
+      }
+    },
+    "fieldLimit": 131072,
+    "multibyte": {
+      "characters": 80000,
+      "utf8Bytes": 160000,
+      "roundTrip": true
+    }
+  },
+  "versionControl": {
+    "3.12Doc": "https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst",
+    "3.12Reader": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c",
+    "3.13Reader": "https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c",
+    "correction": "QUOTE_NOTNULL/QUOTE_STRINGS reader bug documented for 3.12, fixed in 3.13. Local 3.13 experiment is not proof of 3.12 behavior."
+  },
+  "limits": [
+    "No UI/CUA/Docker live certification.",
+    "No global hallucination rate or medical/legal/SWE system quality certification.",
+    "Live integration loaded earlier snapshot, not policy 5.",
+    "18 Linux tests skipped."
+  ]
+}

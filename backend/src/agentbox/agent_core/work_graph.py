@@ -780,6 +780,7 @@ class WorkGraph:
                 if state['status'] in ('rejected', 'failed'):
                     feedback = state.get('feedback') or state.get('error') or ''
                     node['stages'][name] = new_stage() | {'feedback': ('Retry after: ' + feedback)[:FINDINGS_MAX_CHARS],
+                                                          'feedbackSource': state.get('feedbackSource') if state.get('feedback') else 'execution',
                                                           'rounds': state.get('rounds') or []}
                     reset.append(f'{node["id"]}:{name}')
         if not reset:
@@ -969,8 +970,11 @@ class WorkGraph:
             lines += ['', pick('Implement the sub-plan completely, write the tests it names, run them, and report the real output. Do not start other sub-plans.',
                                'Thực hiện đầy đủ sub-plan, viết test được nêu, chạy và báo output thực. Không làm sub-plan khác.')]
         if feedback:
-            lines += ['', pick('The previous attempt was REJECTED by the reviewer. Fix every blocking finding:',
-                               'Lượt trước bị reviewer yêu cầu sửa. Xử lý từng vấn đề chặn:'), feedback]
+            reviewed = node['stages'][stage].get('feedbackSource') == 'checks'
+            lines += ['', pick('The previous attempt was REJECTED by the reviewer. Fix every blocking finding:'
+                               if reviewed else 'Context for the next draft (changed assignment, dependency or execution issue):',
+                               'Lượt trước bị reviewer yêu cầu sửa. Xử lý từng vấn đề chặn:'
+                               if reviewed else 'Ngữ cảnh cho bản tiếp theo (đổi nhiệm vụ, dependency hoặc lỗi thực thi):'), feedback]
         if knowledge:
             lines += ['', pick('Answers to your knowledge requests (from the harness):', 'Dữ kiện trả lời yêu cầu tra cứu (từ harness):')]
             for item in knowledge:
@@ -1473,6 +1477,7 @@ class WorkGraph:
                 state = node['stages'].get('produce')
                 if state is not None:
                     state.update({'status': 'revise', 'feedback': 'Whole-plan review: ' + reason,
+                                  'feedbackSource': 'checks',
                                   'attempts': max(0, state['attempts'] - 1)})
             run['status'] = 'needs_revision'
             self.save(run, 'verify_revise', ','.join(targets) or 'structural')

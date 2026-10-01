@@ -5,7 +5,7 @@ import re
 
 from . import work_prompts
 
-VERSION = 'work-checks/4'
+VERSION = 'work-checks/5'
 TASKS = ('lookup', 'diagnostic', 'deliverable', 'implementation')
 ARTIFACTS = ('knowledge', 'diagnostic', 'research', 'design', 'plan', 'patch', 'test_report')
 RISKS = ('normal', 'consequential')

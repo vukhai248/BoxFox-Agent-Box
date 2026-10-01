@@ -1751,14 +1751,16 @@ Neo W6.5: **7285d950** trên B. Các thay đổi dưới đây giữ UI/UX, DAG 
 1. `good_reads` từng chấp nhận web payload có chữ dù `quality=error-page/wrong-page/junk/empty`. Nay chỉ grade `ok/thin` được tính là body đọc dùng được; grade lạ/sai shape bị loại. Payload legacy không grade còn tương thích nhưng HTTP status lỗi rõ ràng không được tính. Reader fallback cứu thành công vẫn được tính dù status HTTP gốc 0/403. **Đọc được body chưa chứng minh khẳng định đúng.**
 2. `coverageComplete=true` từng chỉ nói về một artifact, khiến reviewer dễ tưởng đã đọc cả tập. Nay tool trả `allAssignedArtifactsRead` và `unreadArtifacts` theo đúng check/reader/ID. Range có lỗ hoặc chưa đọc artifact rỗng vẫn không đủ; gate `covered` dùng cùng phép tính contiguous prefix. Không chấp nhận suy luận “các bản cùng mẫu nên khỏi đọc”.
 3. Reviewer có false positive bắt Research Markdown chứa hàng CSV/code/API. Prompt Anh/Việt phân biệt định dạng báo cáo với ràng buộc sản phẩm; cho phép file/test dự kiến trong plan và không suy nội dung đoạn chưa đọc từ metadata/cấu trúc chung. Chỉ dẫn không bảo đảm model luôn tuân thủ; live vẫn phải đo phản biện sai.
-4. Policy **work-checks/4** khiến check cũ không tự được công nhận theo luật mới.
+4. Policy **work-checks/5** khiến check cũ không tự được công nhận theo luật mới. Sau neo `1aadf4bf`, bổ sung chặn `codebase_grep` chỉ trả match trong chính artifact: kiểm đường dẫn match thực, không dùng thư mục được yêu cầu làm bằng chứng nguồn độc lập.
+5. Feedback có provenance: chỉ kết quả check yêu cầu sửa mới được gọi là reviewer từ chối. Đổi assignment/dependency hoặc retry lỗi provider dùng lời nhắc trung tính, không tự gán chúng thành finding chuyên môn.
 
-- [x] 28 test mới: grades/legacy/fallback, evidence gate thật, ID/range/empty/cross-owner/wrong reader/check/reopen và prompt contract.
+- [x] 37 test trong `test_work_checks_remaining.py`: grades/legacy/fallback, evidence gate thật, ID/range/empty/cross-owner/wrong reader/check/reopen, prompt contract, provenance Anh/Việt và grep tự chứng minh. Bộ mục tiêu sau sửa grep đạt 137/137; bản cuối full regression đang được ghi riêng theo snapshot.
 - [x] Full backend **2707 passed, 18 skipped, 0 failed**, 437,34s; `.tmp/work-checks/w61-remaining-unit.xml`, exit 0. Skips vẫn là chưa chạy Linux.
+- [x] Full backend snapshot policy 5 sau provenance/grep: **2716 passed, 18 skipped, 0 failed**, 585,96s; `.tmp/work-checks/w61-policy5-final.xml`, exit 0. Giữ kết quả policy 4 ở dòng trước, không đổi nhãn snapshot cũ.
 - [x] Live source/scope: **6/6** đúng oracle, hai lần mỗi ca false-impossibility/honest-limit/Research không CSV rows; `.tmp/work-checks/w61-source-scope-final`.
 - [x] Whole-review tám hash khác nhau sau patch: **2/2** đọc đủ, R1–R7 revise/R8 pass; `.tmp/work-checks/w61-whole-scope-final`.
-- [ ] Ca mới từ R3: reviewer bác khẳng định CSV có trần byte bất biến, hai lượt tại `.tmp/work-checks/w61-csv-limit-final`. Chưa tính pass khi chưa có kết quả.
-- [ ] C4 main/producer/repair/whole: `.tmp/work-checks/w61-integration-budget-final`. Process đã nạp snapshot trước `work-checks/4`; chỉ dùng để đánh giá hành vi snapshot đó, không chứng nhận patch mới từ process cũ.
+- [x] Ca mới từ R3: **2/2 revise đúng oracle** cho khẳng định CSV có trần byte bất biến; 254,036s và 131,412s tại `.tmp/work-checks/w61-csv-limit-final`. Một lượt có retry sau reviewer partial, không bỏ lượt lỗi khỏi receipt. Snapshot trước sửa provenance/grep; không gọi là live policy 5.
+- [ ] C4 main/producer/repair/whole: `.tmp/work-checks/w61-integration-budget-final`. Research-1 đã hoàn tất, 17 child, 5.485,054s, main 25 bước; đạt giao thức nhưng chưa đạt kiểm nội dung toàn bộ (mục 21). Process đã nạp snapshot trước `work-checks/4`; chỉ dùng để đánh giá hành vi snapshot đó, không chứng nhận patch mới từ process cũ. Các lượt còn lại vẫn đang chạy, chưa tính đạt.
 
 ### 20.2 Finding nội dung và hiệu quả đang kiểm
 
@@ -1784,3 +1786,17 @@ Chỉ ghi lỗi đã có đoạn output/lệnh đối chiếu; không gán hallu
 - Existing UI gửi subset câu trả lời và tự resolve thẻ trên HTTP 200. Backend phải giữ câu chưa trả lời, không tự coi là “để agent quyết định”; dùng thẻ tiếp theo cho câu còn mở nếu giữ UI/UX code. Cần test history và bàn giao CUA riêng.
 
 Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics hoặc UI trong bước này; chưa có tính năng W7 được bật.
+
+## 21. Đánh giá tích hợp W6.1 và việc chưa đạt
+
+Đã lưu [đánh giá từng child và main](W6.1-integration-assessment.md), gồm Research-1 với 17 child, receipt partial, counterexample thực, phát hiện reviewer có ích và lỗi vẫn qua whole review. `verified`/oracle giao thức không đồng nghĩa oracle nội dung đạt.
+
+- [x] Sửa và regression policy 5 cho provenance feedback/grep tự chứng minh; full backend 2716/18/0.
+- [x] CSV-limit probe 2/2 đúng oracle; receipt/source hashes được giữ riêng theo snapshot.
+- [x] Research-1 đi hết vòng main → producer → revise → bản mới → whole → main final; đánh giá từng output có phạm vi ghi rõ. Lỗi đơn vị và trộn phiên bản vẫn còn, không tick chất lượng chuyên môn đạt.
+- [ ] C4 còn các lượt Research/Plan/Design khác; process đang chạy, không coi thời gian chờ là kết quả.
+- [ ] **W6.1.1:** tiền đề kỹ thuật sai trong acceptance, đơn vị/version/default/configurable, counterexample cho reviewer, claim mới ở final main chưa được bound vào whole review; checklist chi tiết ở report. Chưa code các việc này.
+- [ ] **W6.5.1:** các tầng live dài/Docker/watchdog/throughput chưa đo ở 19.5; mạng mất không được dùng suy ra cần nâng timeout.
+- [ ] **W7:** triển khai durable request/answer/outbox và resume cùng child; kiến trúc đã khảo sát ở 20.3, chưa bật tính năng.
+
+Chủ dự án chốt trần sub-agent **không vượt cha**: cha 40 thì Research/Plan/Design tối đa 40; cha 60 thì profile dài tối đa 60. Reviewer vẫn theo profile 14/24 và kẹp theo cha. Khoảng chờ câu trả lời ở W7 không được tính là active compute hay tự reset ngân sách vô hạn.

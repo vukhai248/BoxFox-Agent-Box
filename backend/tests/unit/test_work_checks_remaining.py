@@ -105,3 +105,69 @@ def test_assignment_progress_tracks_ids_holes_empty_reads_and_restart(tmp_path):
 def test_review_does_not_invent_artifact_format_requirements(lang, terms):
     assert all(term in work_prompts.review_tail(lang) for term in terms)
     assert 'allAssignedArtifactsRead' in work_checks.contract(lang, {'A1': 'scope'})
+
+
+@pytest.mark.parametrize('goal', ['Research the assigned CSV scope', 'Nghiên cứu CSV cho tiếng Việt'])
+def test_main_change_or_execution_failure_is_not_mislabelled_reviewer_rejection(tmp_path, goal):
+    _, rt, _, _, sid = build(tmp_path)
+    async def run():
+        rid, _ = await setup(rt, sid, goal=goal)
+        graph = rt.work_graph
+        graph.graph(rt.store.get(sid), {'action': 'update', 'runId': rid,
+                    'nodes': [{'id': 'R1', 'goal': 'Research changed assignment using the provided sources'}]})
+        work = graph.get(rid)
+        node = work['nodes'][0]
+        state = node['stages']['produce']
+        assert state['feedback'] == 'Node definition changed by main.'
+        prompt = graph.producer_goal(work, node, 'produce', state['feedback'], [])[1]
+        assert 'REJECTED by the reviewer' not in prompt and 'reviewer yêu cầu sửa' not in prompt
+        state.update(status='failed', error='PROVIDER_STREAM_INTERRUPTED', feedback='')
+        graph.retry(work, {'R1'})
+        state = node['stages']['produce']
+        prompt = graph.producer_goal(work, node, 'produce', state['feedback'], [])[1]
+        assert 'REJECTED by the reviewer' not in prompt and 'reviewer yêu cầu sửa' not in prompt
+        assert 'PROVIDER_STREAM_INTERRUPTED' in prompt
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('format,expected', [('relative', False), ('absolute', False), ('windows', False),
+                                          ('no_path', False), ('source', True), ('mixed', True)])
+def test_grep_counts_matched_source_paths_not_only_search_directory(tmp_path, format, expected):
+    store, rt, _, _, sid = build(tmp_path)
+    async def run():
+        rid, draft = await setup(rt, sid)
+        meta = draft['outputs'][0]['artifact']
+        child = rt.create({}, parent_id=sid, role='research-review')
+        child['config']['workBinding'] = {'runId': rid, 'checkId': 'grep-origin', 'artifactIds': [meta['artifactId']]}
+        store.update_config(child['id'], child['config'])
+        path = meta['path']
+        content = {'relative': path + ':1:self-quote', 'absolute': '/workspace/' + path + ':1:self-quote',
+                   'windows': 'D:\\workspace\\' + path.replace('/', '\\') + ':12:self-quote',
+                   'no_path': 'claimed source without a matched path', 'source': 'src/a.py:1:real source',
+                   'mixed': path + ':1:self-quote\nsrc/a.py:2:real source'}[format]
+        store.emit(child['id'], 'tool_end', {'name': 'codebase_grep', 'args': {'query': 'quote', 'path': '.'},
+                                           'result': {'content': content}})
+        assert bool(work_checks.good_reads(rt.work_graph, child['id'])) is expected
+    asyncio.run(run())
+
+
+def test_grep_of_self_artifact_cannot_pass_actual_evidence_check(tmp_path):
+    _, rt, model, executor, sid = build(tmp_path)
+    async def run():
+        rid, draft = await setup(rt, sid)
+        meta = draft['outputs'][0]['artifact']
+        complete, execute = model.complete, executor.execute
+        import json
+        async def redirect(*args, **kw):
+            result = await complete(*args, **kw)
+            for call in result['choices'][0]['message'].get('tool_calls', []):
+                if call['function']['name'] == 'file_read':
+                    call['function'].update(name='codebase_grep', arguments=json.dumps({'query': 'quote', 'path': '.'}))
+            return result
+        async def self_grep(name, args, *rest, **kw):
+            return {'content': meta['path'] + ':1:self-quote'} if name == 'codebase_grep' else await execute(name, args, *rest, **kw)
+        model.complete, executor.execute = redirect, self_grep
+        checked = await start(rt, sid, draft)
+        assert checked['checks'][0]['status'] == 'unverified'
+        assert checked['nodes'][0]['stages']['produce'] == 'needs_checks'
+    asyncio.run(run())
