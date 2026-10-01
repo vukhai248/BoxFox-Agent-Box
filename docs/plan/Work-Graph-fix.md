@@ -1733,15 +1733,15 @@ Raw: `.tmp/work-checks/w65-request-time/results.json` và Markdown/thought từn
 
 **Finding W6.1, chưa bị che bằng tăng budget:** reviewer có thể đòi Research Markdown phải có hàng CSV dù chỉ yêu cầu khảo sát; source receipt hiện có thể đếm error/wrong page; Explore 4k có thể hết output ở reasoning; Research từng suy sai JSON string/csv.reader và Unicode escaping. Reviewer đã sửa tiền đề CSV/JSON ở ca đó, nhưng receipt không chứng minh mọi suy luận đúng. Cần kiểm từng output/main; chưa giải quyết được ghi W6.1.1. Những kết quả fixture cũ khác interface không được gọi là lỗi production.
 
-### 19.5 W6.5.1 — các tầng chưa kiểm chứng live dài
+### 19.5 W6.5.1 — nghiệm thu các tầng ngân sách
 
 - [x] Tool worker/Docker transport: đo lệnh 95s thành công (95,457s), xin 130s bị worker hard cap 120s (120,535s), cancel dọn marker/leader (3,048s). Capture HTTP client 40s không nằm trên terminal path. Chi tiết/giới hạn fixture ở mục 22; không tự nâng trần.
 - [x] Child active 900s: Space Bunny + worker thật chạy tám lệnh 100s, lệnh chín bị cắt; `partial/DEADLINE_EXCEEDED`, toàn phép đo 916,450s, cleanup đạt. Watchdog 1200s không giết sớm; chưa chứng nhận boundary 1200s.
-- [ ] Watchdog boundary 1200s/tick 10s độc lập: unit có; live 900s kết thúc trước nên chưa đo trực tiếp trần này.
-- [ ] Throughput/peak concurrency có kiểm soát: fan-out/queue/run ceilings giữ nguyên; các job eval đồng thời không dùng để suy performance hệ thống.
+- [x] Watchdog boundary 1200s/tick 10s độc lập: fault injection bỏ qua normal deadline, không gọi model; hủy thật sau **1201,387s**, marker/leader được dọn, slot trả, một close event. Evidence `W6.5-watchdog-boundary-evidence.json`; không gán thành normal model run.
+- [x] Pilot throughput/peak concurrency: 4/4 lượt Space Bunny đạt, 12/12 child đọc đúng file gốc và trả đúng giá trị; fanout 1/3 quan sát peak đúng 1/3. Thời gian 66,180/64,473s và 24,545/23,540s. Đây là ba lookup synthetic, main/executor fixture, có tải provider dùng chung; không suy speedup hoặc capacity production. Fan-out/queue/run ceilings giữ nguyên.
 - [x] 18 Linux tests: Docker Linux chạy **18/18 pass**, 2,31s, fake CLI/router stub; Windows skips lịch sử giữ nguyên. CUA chưa chạy, bàn giao theo mục 16.7.
 
-W6.5.1 là phần nghiệm thu chưa chạy, không phải tính năng mới đã thực hiện. W7 giữ trách nhiệm user-wait bền vững; không sửa nó bằng kéo dài timeout.
+Các phép đo ngân sách ở W6.5.1 đã chạy và có evidence riêng, không phải tính năng mới. Không chứng nhận toàn bộ app hoặc mọi descendant chỉ từ các fixture này. CUA/history/export giữ runbook bàn giao riêng; W7 giữ trách nhiệm user-wait bền vững, không sửa nó bằng kéo dài timeout.
 
 ## 20. W6.1 — bổ sung từ phép đo W6.5
 
@@ -1798,7 +1798,7 @@ Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics ho�
 - [ ] C4 còn các lượt Research/Plan/Design khác; process đang chạy, không coi thời gian chờ là kết quả.
 - [x] Probe bổ sung policy 5: `false_csv_byte_unit`, `version_limited_null_312`, `false_modern_null_313`, hai lượt mỗi ca: **6/6 final verdict đúng**, 9 attempt/3 incomplete được giữ. Native reviewer thật/Space Bunny, raw `.tmp/work-checks/w61-units-version-policy5`; finding vượt phạm vi vẫn ghi riêng, không gọi mọi finding đúng. Báo cáo ở mục 22.
 - [ ] **W6.1.1:** tiền đề kỹ thuật sai trong acceptance, đơn vị/version/default/configurable, counterexample cho reviewer, claim mới ở final main chưa được bound vào whole review; checklist chi tiết ở report. Chưa code các việc này.
-- [ ] **W6.5.1:** các tầng live dài/Docker/watchdog/throughput chưa đo ở 19.5; mạng mất không được dùng suy ra cần nâng timeout.
+- [x] **W6.5.1:** các tầng worker/child deadline/watchdog/Linux và pilot throughput ở 19.5 đã đo; phạm vi/giới hạn từng phép thử được giữ. Mạng mất không dùng suy ra cần nâng timeout; không đổi trần cha, UI/UX hoặc DAG.
 - [ ] **W7:** triển khai durable request/answer/outbox và resume cùng child; kiến trúc đã khảo sát ở 20.3, chưa bật tính năng.
 
 Chủ dự án chốt trần sub-agent **không vượt cha**: cha 40 thì Research/Plan/Design tối đa 40; cha 60 thì profile dài tối đa 60. Reviewer vẫn theo profile 14/24 và kẹp theo cha. Khoảng chờ câu trả lời ở W7 không được tính là active compute hay tự reset ngân sách vô hạn.
@@ -1807,7 +1807,7 @@ Chủ dự án chốt trần sub-agent **không vượt cha**: cha 40 thì Resea
 
 Evidence/báo cáo đã lưu:
 
-- [W6.5-boundary-report.md](W6.5-boundary-report.md): worker 3/3, child 900s, Linux 18/18; hashes và correction bộ đếm từ SQLite ở JSON đi kèm. Watchdog 1200s/throughput vẫn chưa tick.
+- [W6.5-boundary-report.md](W6.5-boundary-report.md): worker 3/3, child 900s, watchdog 1200s, Linux 18/18 và pilot concurrency 4/4; hashes và correction bộ đếm từ SQLite ở JSON đi kèm. Giữ giới hạn fixture, không chứng nhận performance production.
 - [W6.1-review-unit-version-report.md](W6.1-review-unit-version-report.md): reviewer final oracle 6/6, riêng 9 attempt và các finding thừa. Không thay cho nghiệm thu main/producer.
 
 **Bug recovery main:** sau một completion rỗng bị cắt output/stream, runtime xin recap plain text và ngừng cấp tool. Recap có finish `stop` được tính completed dù Work Graph còn drafting/discovering. Recap còn có thể tự nói user đã yêu cầu dừng. Patch giữ partial và lý do interruption gốc khi main còn điều phối Work Graph; đường recovery ngoài graph giữ hợp đồng cũ. Không đổi UI/UX hoặc DAG edges.
@@ -1816,8 +1816,10 @@ Evidence/báo cáo đã lưu:
 - [x] Full backend cuối sau patch recovery: **2724 passed, 18 skipped, 0 failed/errors**, 450,07s; `.tmp/work-checks/w61-recovery-final-full.xml/.log/.exit`, hash nguồn trước/sau khớp. Sweep trước 2723/18/0 và 531,74s được giữ riêng, trước regression reasoning-only. 18 Linux tests đo riêng, không đổi Windows skips thành pass.
 - [x] Native recovery Space Bunny **2/2**: inject graph rỗng + empty length/stream, sau đó recap model thật; giữ đúng partial/error code, graph còn drafting. Không phải phép thử main tự hoàn tất plan/DAG hoặc tỷ lệ lỗi provider. Raw `.tmp/work-checks/w61-main-recovery-native`, evidence `W6.1-recovery-evidence.json`.
 - [ ] Live C4 còn Design; Research-2 và Plan-1/2 đã có kết quả không đạt, không xóa lượt lỗi hoặc gọi plan hoàn chỉnh. Process nạp snapshot trước policy 4/5 và patch recovery; không chứng nhận source mới.
-- [ ] W6.1.1 chất lượng/main-final và W6.5.1 throughput/watchdog còn mở. **W7 chưa code**, phải giữ cùng child ID/context và không reset ngân sách sau interview khi thực hiện.
+- [ ] W6.1.1 chất lượng/main-final còn mở; các phép đo W6.5.1 đã có kết quả tại 19.5. **W7 chưa code**, phải giữ cùng child ID/context và không reset ngân sách sau interview khi thực hiện.
 
 Neo phép đo W6.5.1: **01c44458**. Bản sửa recovery và báo cáo reviewer được commit riêng sau full suite; tra message Git tương ứng. Eval main bổ sung `mainExecutionStatus/mainPartialReason` và oracle không nhận partial: vocabulary `sessions.status=completed` cũ không được hiểu là graph hoặc deliverable đã xong. Raw cũ không bị ghi lại theo script mới.
 
-Watchdog boundary 1200s đã bắt đầu tại `.tmp/work-checks/w65-real-watchdog-boundary`, container riêng `boxfox-eval-w65-watchdog`. Đây là fault injection task treo bỏ qua normal child deadline, **không gọi model**, dùng watchdog/registry/slots/Docker worker thật. Mục này vẫn chưa tick khi chưa có kết quả; không gán bài 900s thành đã đo 1200s. Không tác động container/workspace sản phẩm.
+Watchdog boundary 1200s hoàn tất tại `.tmp/work-checks/w65-real-watchdog-boundary`: **1201,387s**, registry lifetime 1201,074s, `failed/WATCHDOG_TIMEOUT`, task cancelled, marker/leader sạch, parentRunning=0/không giữ child slot, đúng một event đóng. Mười lệnh 110s hoàn thành, lệnh tiếp đang chạy khi bị cắt. Đây là fault injection task treo bỏ qua normal child deadline, **không gọi model**, dùng watchdog/registry/slots/Docker worker thật. Evidence `W6.5-watchdog-boundary-evidence.json`; driver neo `b37554db`. Hai container fixture không network/mount đã được dọn; container sản phẩm không bị động.
+
+Throughput/peak concurrency: pilot native Space Bunny `fanoutPerParent=1/3`, ba lookup độc lập, hai lượt mỗi mức, trần cha 40 bước/120s: **4/4 đạt**, 12/12 child có đúng file_read gốc/body/giá trị. Fanout 1: 66,180/64,473s, peak 1; fanout 3: 24,545/23,540s, peak 3. Raw `.tmp/work-checks/w65-concurrency-pilot`, evidence `W6.5-concurrency-evidence.json` có hash và audit từng child. Main/evaluator và local fixture, không phải Docker/full app; có tải provider dùng chung nên không suy speedup production. Không chỉnh scheduler/fanout/queue.

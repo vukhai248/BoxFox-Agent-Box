@@ -1,0 +1,650 @@
+{
+  "schema": "boxfox-w65-watchdog-boundary/1",
+  "branch": "B",
+  "modelCalls": 0,
+  "injection": "Manual runtime task bypasses normal child deadline; no model/delegate loop.",
+  "parentId": "e69c91e5a1ef4d6a8cbbd723637b5734",
+  "childId": "2f2e342bf7f848d58c3f9fc5c1b2d20b",
+  "wallSeconds": 1200,
+  "tickSeconds": 10,
+  "sourceHashesAtStart": {
+    "backend/src/agentbox/agent_core/peer_watchdog.py": "3b77afdc13da70ba7b48fcadb44f40a8df87306435001c666693af5e1039febb",
+    "backend/src/agentbox/agent_core/runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend/src/agentbox/sandbox/executor.py": "2f22e10436a6ba0001732a34a08b50ed2f5d9dfa6413f361d0740d76352fd943",
+    "backend/src/agentbox/sandbox/worker.py": "c4d0bd3c9326dc1ac27c0f0d89a11ea8ebdccabcd9d2637002d0ea579cc59d38"
+  },
+  "commitAtStart": "01c4445851aa463e06070364f4856ea42fa0849d",
+  "elapsedSeconds": 1201.387,
+  "registry": {
+    "session_id": "2f2e342bf7f848d58c3f9fc5c1b2d20b",
+    "parent_id": "e69c91e5a1ef4d6a8cbbd723637b5734",
+    "parent_turn": 1,
+    "spawn_step": 1,
+    "role": "testing",
+    "goal": "Injected hang for watchdog wall measurement",
+    "status": "failed",
+    "reason": "WATCHDOG_TIMEOUT",
+    "deliveries": [],
+    "waiting_for": [],
+    "waiting_since": null,
+    "started": 1790848655.5895448,
+    "finished": 1790849856.663316,
+    "steps_used": 0,
+    "output_tokens": 0,
+    "answer_chars": null
+  },
+  "samples": [
+    {
+      "elapsed": 0.28,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": false
+    },
+    {
+      "elapsed": 15.56,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 30.82,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 46.08,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 61.43,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 76.7,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 91.95,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 107.21,
+      "registry": "started",
+      "completedCommands": 0,
+      "liveShell": true
+    },
+    {
+      "elapsed": 122.51,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 137.79,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 153.04,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 168.31,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 183.58,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 198.85,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 214.1,
+      "registry": "started",
+      "completedCommands": 1,
+      "liveShell": true
+    },
+    {
+      "elapsed": 229.36,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 244.61,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 259.89,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 275.19,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 290.43,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 305.73,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 320.99,
+      "registry": "started",
+      "completedCommands": 2,
+      "liveShell": true
+    },
+    {
+      "elapsed": 336.24,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 351.5,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 366.76,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 382.02,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 397.31,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 412.58,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 427.85,
+      "registry": "started",
+      "completedCommands": 3,
+      "liveShell": true
+    },
+    {
+      "elapsed": 443.11,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 458.42,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 473.67,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 488.92,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 504.17,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 519.42,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 534.68,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 549.94,
+      "registry": "started",
+      "completedCommands": 4,
+      "liveShell": true
+    },
+    {
+      "elapsed": 565.2,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 580.45,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 595.69,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 610.96,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 626.21,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 641.48,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 656.73,
+      "registry": "started",
+      "completedCommands": 5,
+      "liveShell": true
+    },
+    {
+      "elapsed": 672.0,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 687.27,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 702.52,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 717.77,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 733.02,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 748.28,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 763.54,
+      "registry": "started",
+      "completedCommands": 6,
+      "liveShell": true
+    },
+    {
+      "elapsed": 778.8,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 794.05,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 809.31,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 824.56,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 839.82,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 855.08,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 870.34,
+      "registry": "started",
+      "completedCommands": 7,
+      "liveShell": true
+    },
+    {
+      "elapsed": 885.6,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 900.85,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 916.11,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 931.38,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 946.64,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 961.91,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 977.16,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 992.42,
+      "registry": "started",
+      "completedCommands": 8,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1007.68,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1022.95,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1038.21,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1053.47,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1068.74,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1083.99,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1099.25,
+      "registry": "started",
+      "completedCommands": 9,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1114.52,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1129.78,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1145.04,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1160.3,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1175.57,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    },
+    {
+      "elapsed": 1190.82,
+      "registry": "started",
+      "completedCommands": 10,
+      "liveShell": true
+    }
+  ],
+  "completedCommands": [
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-0')\"",
+      "result": {
+        "content": "watchdog-probe-0\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 110.41225242614746
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-1')\"",
+      "result": {
+        "content": "watchdog-probe-1\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 220.76250004768372
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-2')\"",
+      "result": {
+        "content": "watchdog-probe-2\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 331.1029725074768
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-3')\"",
+      "result": {
+        "content": "watchdog-probe-3\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 441.44643235206604
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-4')\"",
+      "result": {
+        "content": "watchdog-probe-4\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 551.8250942230225
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-5')\"",
+      "result": {
+        "content": "watchdog-probe-5\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 662.1724569797516
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-6')\"",
+      "result": {
+        "content": "watchdog-probe-6\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 772.4915001392365
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-7')\"",
+      "result": {
+        "content": "watchdog-probe-7\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 882.8175051212311
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-8')\"",
+      "result": {
+        "content": "watchdog-probe-8\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 993.1405057907104
+    },
+    {
+      "command": "python3 -c \"import time; time.sleep(110); print('watchdog-probe-9')\"",
+      "result": {
+        "content": "watchdog-probe-9\n",
+        "exit_code": 0,
+        "is_error": false,
+        "artifact": null
+      },
+      "elapsed": 1103.4660427570343
+    }
+  ],
+  "taskCancelled": true,
+  "originalMarkerRemoved": true,
+  "observedLeadersAlive": [],
+  "parentSlotsRunning": 0,
+  "childSlotHeld": false,
+  "closeEvents": [
+    {
+      "sessionId": "2f2e342bf7f848d58c3f9fc5c1b2d20b",
+      "role": "testing",
+      "status": "failed",
+      "turn": 1,
+      "step": 1,
+      "goal": "Injected hang for watchdog wall measurement",
+      "reason": "WATCHDOG_TIMEOUT",
+      "watchdog": true,
+      "is_error": true,
+      "answerChars": 0,
+      "stepsUsed": 0,
+      "outputTokens": 0
+    }
+  ],
+  "taskErrors": [
+    "CancelledError"
+  ],
+  "oracle": true,
+  "raw": {
+    "path": ".tmp/work-checks/w65-real-watchdog-boundary/results.json",
+    "sha256": "3bb2e7af563701cb17c2bd6001a79f0eef5c1ace08889f95d19c3355251bd97c"
+  },
+  "limits": [
+    "Injected hung runtime task intentionally bypasses normal 900s model-turn deadline; no model calls or main/DAG success claim.",
+    "Actual watchdog wall clock/tick, registry, idempotent slots and SandboxExecutor/worker. Disposable offline Linux image, not full desktop.",
+    "Marker and observed process-group leaders checked; no exhaustive arbitrary descendant/process audit.",
+    "Source hashes at start retained independently from commit-at-start, which preceded anchoring the pending runtime patch."
+  ],
+  "measuredRegistryLifetimeSeconds": 1201.074
+}

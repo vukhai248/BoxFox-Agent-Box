@@ -1,0 +1,762 @@
+{
+  "schema": "boxfox-w65-concurrency-evidence/1",
+  "branch": "B",
+  "raw": {
+    "path": ".tmp/work-checks/w65-concurrency-pilot/results.json",
+    "sha256": "be01d12ea2d97eb29f9d33a26d38afbe951f137148669b1be79031bab74b22c4"
+  },
+  "route": {
+    "connectionId": "07a63353-908c-4ba7-9296-d8bf4364294e",
+    "modelId": "space-bunny-free"
+  },
+  "sourceHashesAtStart": {
+    "backend/src/agentbox/agent_core/runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend/src/agentbox/agent_core/work_graph.py": "0327afcf181944ede10b0a5a73fa58deb4b6f3bf92db2b170bb49cee1f37a5bb",
+    "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "scripts/eval/work_concurrency_eval.py": "c015c316473fb46546f832023ae6c9635740c2aa3b911bb632542b95252ef5cb"
+  },
+  "scope": "Small native Space Bunny fanout pilot with fixed independent lookup nodes.\n\nThe evaluator supplies main; actual children/slots/scheduler/artifacts are used.\nLocal fixture executor substitutes Docker transport. Shared provider load can\naffect elapsed times; this does not estimate production throughput or redesign\nthe DAG. Failures are retained, with no repeat-until-pass or provider changes.\n",
+  "sharedProviderLoad": "Other isolated main integration job can overlap; do not infer speedup.",
+  "rows": [
+    {
+      "fanout": 1,
+      "repeat": 1,
+      "sessionId": "057d8f6e07b74cdcbe814a918ba3687e",
+      "runId": "w-cba58cd517",
+      "elapsedSeconds": 66.18,
+      "peakChildren": 1,
+      "error": null,
+      "oracle": true,
+      "children": [
+        {
+          "session_id": "b9d585e2fd704ca9b5dbb7ea11dbf3cd",
+          "parent_id": "057d8f6e07b74cdcbe814a918ba3687e",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L1 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L1.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L1.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850321.4480124,
+          "finished": 1790850333.4551163,
+          "steps_used": 2,
+          "output_tokens": 892,
+          "answer_chars": 1173
+        },
+        {
+          "session_id": "3f44ee7b86f84f048baa8bd4b51afc66",
+          "parent_id": "057d8f6e07b74cdcbe814a918ba3687e",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L2 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L2.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L2.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850333.4650316,
+          "finished": 1790850373.0338364,
+          "steps_used": 5,
+          "output_tokens": 1376,
+          "answer_chars": 1812
+        },
+        {
+          "session_id": "72bf3a8d04f84eff9dcc1c4d67c31e24",
+          "parent_id": "057d8f6e07b74cdcbe814a918ba3687e",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L3 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L3.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L3.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850373.042512,
+          "finished": 1790850387.6137757,
+          "steps_used": 3,
+          "output_tokens": 1282,
+          "answer_chars": 1616
+        }
+      ],
+      "artifacts": [
+        {
+          "nodeId": "L1",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-6b5759b355fb450194d35e6fef4d62f8",
+            "runId": "w-cba58cd517",
+            "nodeId": "L1",
+            "stage": "produce",
+            "version": 1,
+            "path": ".plans/work/a7dbba9cd3b9266d5953/w-cba58cd517/L1/produce/v1-a-6b5759b355fb450194d35e6fef4d62f8.md",
+            "chars": 1173,
+            "contentHash": "2395fe3e2b1413e27672607be483811bc8e0de5b17a9df682c04c01af2608f1d",
+            "status": "finalized",
+            "producerId": "b9d585e2fd704ca9b5dbb7ea11dbf3cd",
+            "createdAt": 1790850333.4583478,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "2ae08c0b002ba9ca9469695aa0dd031211131642592b7d5a45e3c26dc37a9bc4",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L1.txt"
+              },
+              "isError": false,
+              "bodyHash": "ad24802d26df700d788a760d677d8532257bf80f74d37d8a12608babff7f8322"
+            }
+          ]
+        },
+        {
+          "nodeId": "L2",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-4aabb086df48434684249e42ea3e2622",
+            "runId": "w-cba58cd517",
+            "nodeId": "L2",
+            "stage": "produce",
+            "version": 2,
+            "path": ".plans/work/a7dbba9cd3b9266d5953/w-cba58cd517/L2/produce/v2-a-4aabb086df48434684249e42ea3e2622.md",
+            "chars": 1812,
+            "contentHash": "aea7c524981c0ee65e68aaea7a83f0fad7a9768ed666093f9049407d327b6d61",
+            "status": "finalized",
+            "producerId": "3f44ee7b86f84f048baa8bd4b51afc66",
+            "createdAt": 1790850373.036296,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "53f26b83e5befbd8b4cc2f545cc3d300a342601a70b17aa7ebd0485c4f7309aa",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L2.txt"
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            },
+            {
+              "args": {
+                "path": "facts/L2.txt",
+                "offset": 0,
+                "limit": 200
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            }
+          ]
+        },
+        {
+          "nodeId": "L3",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-a09ef7605b874621bef00659bdaf146b",
+            "runId": "w-cba58cd517",
+            "nodeId": "L3",
+            "stage": "produce",
+            "version": 3,
+            "path": ".plans/work/a7dbba9cd3b9266d5953/w-cba58cd517/L3/produce/v3-a-a09ef7605b874621bef00659bdaf146b.md",
+            "chars": 1616,
+            "contentHash": "2bf23970a1fc898f91cae3d7ec5bbb6e87f30a3bc4d1fe2dce5afe9924db207b",
+            "status": "finalized",
+            "producerId": "72bf3a8d04f84eff9dcc1c4d67c31e24",
+            "createdAt": 1790850387.6166794,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "159e4522d1d28585f6ce95fc3819f3e3ffe406769ee763b4bd24b9a2b9a8892c",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L3.txt"
+              },
+              "isError": false,
+              "bodyHash": "4690b57656ca16a90eba9886106a4e1044e200cf27cebf0a52ceef995f8addc2"
+            }
+          ]
+        }
+      ],
+      "taskPerSecond": 0.045331,
+      "auditedOracle": true
+    },
+    {
+      "fanout": 1,
+      "repeat": 2,
+      "sessionId": "0675a9da32a1481a9dd8d1f9e85ca3fa",
+      "runId": "w-bc04722e74",
+      "elapsedSeconds": 64.473,
+      "peakChildren": 1,
+      "error": null,
+      "oracle": true,
+      "children": [
+        {
+          "session_id": "478d394c040f4dee8e1fa393e0b866b3",
+          "parent_id": "0675a9da32a1481a9dd8d1f9e85ca3fa",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L1 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L1.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L1.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850388.0228438,
+          "finished": 1790850418.3794951,
+          "steps_used": 4,
+          "output_tokens": 1929,
+          "answer_chars": 1883
+        },
+        {
+          "session_id": "872eb8589ec24ad68cedd56b1c4e0b0e",
+          "parent_id": "0675a9da32a1481a9dd8d1f9e85ca3fa",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L2 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L2.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L2.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850418.3889549,
+          "finished": 1790850440.2856445,
+          "steps_used": 4,
+          "output_tokens": 1039,
+          "answer_chars": 893
+        },
+        {
+          "session_id": "836ae2aeb4f8446ab8ff2d2086247ee1",
+          "parent_id": "0675a9da32a1481a9dd8d1f9e85ca3fa",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L3 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L3.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L3.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850440.295747,
+          "finished": 1790850452.4764946,
+          "steps_used": 2,
+          "output_tokens": 906,
+          "answer_chars": 1284
+        }
+      ],
+      "artifacts": [
+        {
+          "nodeId": "L1",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-51b03c46c0b644fbbef557141512814c",
+            "runId": "w-bc04722e74",
+            "nodeId": "L1",
+            "stage": "produce",
+            "version": 1,
+            "path": ".plans/work/e72ef4103ef387c28bd8/w-bc04722e74/L1/produce/v1-a-51b03c46c0b644fbbef557141512814c.md",
+            "chars": 1883,
+            "contentHash": "a97038c464f302138dfff83f9bef8d25a00c9999438bb6424826c56ed9ca2ded",
+            "status": "finalized",
+            "producerId": "478d394c040f4dee8e1fa393e0b866b3",
+            "createdAt": 1790850418.3827417,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "2ae08c0b002ba9ca9469695aa0dd031211131642592b7d5a45e3c26dc37a9bc4",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L1.txt"
+              },
+              "isError": false,
+              "bodyHash": "ad24802d26df700d788a760d677d8532257bf80f74d37d8a12608babff7f8322"
+            },
+            {
+              "args": {
+                "path": "facts/L1.txt",
+                "offset": 40,
+                "limit": 200
+              },
+              "isError": false,
+              "bodyHash": "ad24802d26df700d788a760d677d8532257bf80f74d37d8a12608babff7f8322"
+            },
+            {
+              "args": {
+                "path": "facts/L2.txt"
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            }
+          ]
+        },
+        {
+          "nodeId": "L2",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-f845e69023ca41bbb316f9cad92d19ab",
+            "runId": "w-bc04722e74",
+            "nodeId": "L2",
+            "stage": "produce",
+            "version": 2,
+            "path": ".plans/work/e72ef4103ef387c28bd8/w-bc04722e74/L2/produce/v2-a-f845e69023ca41bbb316f9cad92d19ab.md",
+            "chars": 893,
+            "contentHash": "4cdb93d41ae12f8b094826d65527e4f5c1eced85c3ddaf9770431bcadc92b73b",
+            "status": "finalized",
+            "producerId": "872eb8589ec24ad68cedd56b1c4e0b0e",
+            "createdAt": 1790850440.288636,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "53f26b83e5befbd8b4cc2f545cc3d300a342601a70b17aa7ebd0485c4f7309aa",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L2.txt"
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            },
+            {
+              "args": {
+                "path": "facts/L2.txt",
+                "offset": 0,
+                "limit": 200
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            }
+          ]
+        },
+        {
+          "nodeId": "L3",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-28701fa1f12245349de5e5e4272834cd",
+            "runId": "w-bc04722e74",
+            "nodeId": "L3",
+            "stage": "produce",
+            "version": 3,
+            "path": ".plans/work/e72ef4103ef387c28bd8/w-bc04722e74/L3/produce/v3-a-28701fa1f12245349de5e5e4272834cd.md",
+            "chars": 1284,
+            "contentHash": "ef38e1e3bb7dae7b289817804b8602b4808050747cc9abfc68da7c5489c72dbb",
+            "status": "finalized",
+            "producerId": "836ae2aeb4f8446ab8ff2d2086247ee1",
+            "createdAt": 1790850452.4793096,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "159e4522d1d28585f6ce95fc3819f3e3ffe406769ee763b4bd24b9a2b9a8892c",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L3.txt"
+              },
+              "isError": false,
+              "bodyHash": "4690b57656ca16a90eba9886106a4e1044e200cf27cebf0a52ceef995f8addc2"
+            }
+          ]
+        }
+      ],
+      "taskPerSecond": 0.046531,
+      "auditedOracle": true
+    },
+    {
+      "fanout": 3,
+      "repeat": 1,
+      "sessionId": "55f35cc3b4c3494e9b25bbe13cb49e75",
+      "runId": "w-9c8f3835ab",
+      "elapsedSeconds": 24.545,
+      "peakChildren": 3,
+      "error": null,
+      "oracle": true,
+      "children": [
+        {
+          "session_id": "69b12014d65c4c36a7f360aad0ffdce1",
+          "parent_id": "55f35cc3b4c3494e9b25bbe13cb49e75",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L1 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L1.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L1.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850452.9616642,
+          "finished": 1790850477.4920807,
+          "steps_used": 2,
+          "output_tokens": 713,
+          "answer_chars": 1069
+        },
+        {
+          "session_id": "298955100572454682382ce9703cf05e",
+          "parent_id": "55f35cc3b4c3494e9b25bbe13cb49e75",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L2 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L2.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L2.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850452.9701076,
+          "finished": 1790850462.2442799,
+          "steps_used": 2,
+          "output_tokens": 609,
+          "answer_chars": 858
+        },
+        {
+          "session_id": "70b15be168d543279f92bda358afca29",
+          "parent_id": "55f35cc3b4c3494e9b25bbe13cb49e75",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L3 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L3.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L3.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850452.975945,
+          "finished": 1790850467.9328067,
+          "steps_used": 4,
+          "output_tokens": 1065,
+          "answer_chars": 1364
+        }
+      ],
+      "artifacts": [
+        {
+          "nodeId": "L1",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-04330094e64d417abd1dda7a11e1cb17",
+            "runId": "w-9c8f3835ab",
+            "nodeId": "L1",
+            "stage": "produce",
+            "version": 3,
+            "path": ".plans/work/756ee97569d431255538/w-9c8f3835ab/L1/produce/v3-a-04330094e64d417abd1dda7a11e1cb17.md",
+            "chars": 1069,
+            "contentHash": "a5a7d4457f793f115cc75c45358f7f347fa40ac95c8d9590244541670c90810e",
+            "status": "finalized",
+            "producerId": "69b12014d65c4c36a7f360aad0ffdce1",
+            "createdAt": 1790850477.4949462,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "2ae08c0b002ba9ca9469695aa0dd031211131642592b7d5a45e3c26dc37a9bc4",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L1.txt"
+              },
+              "isError": false,
+              "bodyHash": "ad24802d26df700d788a760d677d8532257bf80f74d37d8a12608babff7f8322"
+            }
+          ]
+        },
+        {
+          "nodeId": "L2",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-e8ccc4c5dc3e47c2bba137a5200f4be9",
+            "runId": "w-9c8f3835ab",
+            "nodeId": "L2",
+            "stage": "produce",
+            "version": 1,
+            "path": ".plans/work/756ee97569d431255538/w-9c8f3835ab/L2/produce/v1-a-e8ccc4c5dc3e47c2bba137a5200f4be9.md",
+            "chars": 858,
+            "contentHash": "fa54d8d6641aef1d70485334828a0d2bc89d6d71fddf8122fcc4b64211ef2ce9",
+            "status": "finalized",
+            "producerId": "298955100572454682382ce9703cf05e",
+            "createdAt": 1790850462.2479186,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "53f26b83e5befbd8b4cc2f545cc3d300a342601a70b17aa7ebd0485c4f7309aa",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L2.txt"
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            }
+          ]
+        },
+        {
+          "nodeId": "L3",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-01971c762efa4398b7d2650d123295a9",
+            "runId": "w-9c8f3835ab",
+            "nodeId": "L3",
+            "stage": "produce",
+            "version": 2,
+            "path": ".plans/work/756ee97569d431255538/w-9c8f3835ab/L3/produce/v2-a-01971c762efa4398b7d2650d123295a9.md",
+            "chars": 1364,
+            "contentHash": "82247100cfb8ae10ea71ade05764f56cda873e3c39bf288f7677087328a48275",
+            "status": "finalized",
+            "producerId": "70b15be168d543279f92bda358afca29",
+            "createdAt": 1790850467.9359515,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "159e4522d1d28585f6ce95fc3819f3e3ffe406769ee763b4bd24b9a2b9a8892c",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L3.txt"
+              },
+              "isError": false,
+              "bodyHash": "4690b57656ca16a90eba9886106a4e1044e200cf27cebf0a52ceef995f8addc2"
+            }
+          ]
+        }
+      ],
+      "taskPerSecond": 0.122224,
+      "auditedOracle": true
+    },
+    {
+      "fanout": 3,
+      "repeat": 2,
+      "sessionId": "3b62dfd430344b42b1c4be967e640fb6",
+      "runId": "w-3402f5bb37",
+      "elapsedSeconds": 23.54,
+      "peakChildren": 3,
+      "error": null,
+      "oracle": true,
+      "children": [
+        {
+          "session_id": "d339e67cf1f24b7ebfa3cf188d5c0358",
+          "parent_id": "3b62dfd430344b42b1c4be967e640fb6",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L1 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L1.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L1.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850477.9162776,
+          "finished": 1790850491.7208993,
+          "steps_used": 2,
+          "output_tokens": 727,
+          "answer_chars": 1203
+        },
+        {
+          "session_id": "0ca9488c12fa4af29f55415c27f1ade8",
+          "parent_id": "3b62dfd430344b42b1c4be967e640fb6",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L2 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L2.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L2.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850477.9277704,
+          "finished": 1790850498.6427624,
+          "steps_used": 3,
+          "output_tokens": 1230,
+          "answer_chars": 1840
+        },
+        {
+          "session_id": "04d882ab383545c0ad136fa9d2548d25",
+          "parent_id": "3b62dfd430344b42b1c4be967e640fb6",
+          "parent_turn": 1,
+          "spawn_step": 1,
+          "role": "explore",
+          "goal": "Work Graph \"Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\" — nút L3 (explore, produce).\nMục tiêu của người dùng: Đọc ba giá trị synthetic độc lập để đo fanout; không nghiên cứu ngoài hoặc triển khai.\n\nNhiệm vụ của bạn: Đọc facts/L3.txt. Trả giá trị chính xác với path; tối đa 3 câu, không khảo sát ngoài.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Giá trị đúng nội dung file và có nguồn đã đọc.\n\nVị trí dự kiến tác động: facts/L3.txt",
+          "status": "completed",
+          "reason": null,
+          "deliveries": [],
+          "waiting_for": [],
+          "waiting_since": null,
+          "started": 1790850477.9398727,
+          "finished": 1790850501.437883,
+          "steps_used": 3,
+          "output_tokens": 1175,
+          "answer_chars": 1664
+        }
+      ],
+      "artifacts": [
+        {
+          "nodeId": "L1",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-741731b3e449452cb283b1a6fb5b5e46",
+            "runId": "w-3402f5bb37",
+            "nodeId": "L1",
+            "stage": "produce",
+            "version": 1,
+            "path": ".plans/work/38f8460e400e46c46230/w-3402f5bb37/L1/produce/v1-a-741731b3e449452cb283b1a6fb5b5e46.md",
+            "chars": 1203,
+            "contentHash": "33e68e61b007c06b6aa67bfc73a46ba3c3e8184e3b3ac295ffb6625d71d84332",
+            "status": "finalized",
+            "producerId": "d339e67cf1f24b7ebfa3cf188d5c0358",
+            "createdAt": 1790850491.7244678,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "2ae08c0b002ba9ca9469695aa0dd031211131642592b7d5a45e3c26dc37a9bc4",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L1.txt"
+              },
+              "isError": false,
+              "bodyHash": "ad24802d26df700d788a760d677d8532257bf80f74d37d8a12608babff7f8322"
+            }
+          ]
+        },
+        {
+          "nodeId": "L2",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-a115289d424f4fc0950d7ac623b8277d",
+            "runId": "w-3402f5bb37",
+            "nodeId": "L2",
+            "stage": "produce",
+            "version": 2,
+            "path": ".plans/work/38f8460e400e46c46230/w-3402f5bb37/L2/produce/v2-a-a115289d424f4fc0950d7ac623b8277d.md",
+            "chars": 1840,
+            "contentHash": "138ae528eac1f59fdd8a665acce9a2f178f258495ff18b841d1228f613efe191",
+            "status": "finalized",
+            "producerId": "0ca9488c12fa4af29f55415c27f1ade8",
+            "createdAt": 1790850498.6454437,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "53f26b83e5befbd8b4cc2f545cc3d300a342601a70b17aa7ebd0485c4f7309aa",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L2.txt"
+              },
+              "isError": false,
+              "bodyHash": "cbfd9927fa332eeb5edebe9c87a590755e501f0de787ecaaca8f948ffac51653"
+            }
+          ]
+        },
+        {
+          "nodeId": "L3",
+          "stageStatus": "accepted",
+          "artifact": {
+            "artifactId": "a-c75367089bc84111a2fa26a589fbacab",
+            "runId": "w-3402f5bb37",
+            "nodeId": "L3",
+            "stage": "produce",
+            "version": 3,
+            "path": ".plans/work/38f8460e400e46c46230/w-3402f5bb37/L3/produce/v3-a-c75367089bc84111a2fa26a589fbacab.md",
+            "chars": 1664,
+            "contentHash": "2d7a9cd8e498905df95c79bfce1a99aa3190dddf7a44e696ed5f4cbe43bcbdcb",
+            "status": "finalized",
+            "producerId": "04d882ab383545c0ad136fa9d2548d25",
+            "createdAt": 1790850501.4400642,
+            "originTurn": 1,
+            "binding": {
+              "nodeDefinition": "159e4522d1d28585f6ce95fc3819f3e3ffe406769ee763b4bd24b9a2b9a8892c",
+              "dependencies": {},
+              "owner": "b760be2ad5e9270788aad68245d221f94fa5270c53ae602ad3301da58739aa98",
+              "policyHash": "0e16467b4c220d958205c66e5543dd616e8bd8cfac4e94aab1bf043b8b3c00f1"
+            }
+          },
+          "valuePresent": true,
+          "correctOriginalRead": true,
+          "sourceReadCalls": [
+            {
+              "args": {
+                "path": "facts/L3.txt"
+              },
+              "isError": false,
+              "bodyHash": "4690b57656ca16a90eba9886106a4e1044e200cf27cebf0a52ceef995f8addc2"
+            }
+          ]
+        }
+      ],
+      "taskPerSecond": 0.127443,
+      "auditedOracle": true
+    }
+  ],
+  "limits": [
+    "Four fixed native scheduler trials, twelve small lookup children; evaluator supplies main and local file transport. Not full production/medical/SWE plan benchmark.",
+    "Shared provider load can vary; no production speedup or capacity recommendation from these latencies.",
+    "Only fanout 1/3 measured; default/max/global/queue ceilings remain unchanged.",
+    "Output value and actual original file reads audited; no exhaustive semantic confidence from literal-value lookup."
+  ]
+}
