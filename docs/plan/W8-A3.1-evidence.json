@@ -1,0 +1,407 @@
+{
+  "schema": "boxfox-w8-a31-evidence-v1",
+  "baseCommit": "6d332d0f",
+  "branch": "B",
+  "scope": "Shared locked check path and exact-input passed receipt reuse; isolated native Space Bunny checks, no full main/DAG/CUA or automatic handoff.",
+  "sourceSnapshot": {
+    "backend/src/agentbox/agent_core/tool_contracts.py": "965851aa5fbd55117b9d336ba5aee4446998217b99f465f221f1ceb0d834bf10",
+    "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+    "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend/src/agentbox/agent_core/work_checks.py": "b1047e6cab0c94fc784ffd16dae0a33b8f4e192098da5e22e1f64dff5c7d196e",
+    "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+    "backend/src/agentbox/agent_core/work_feedback.py": "d0cc442cb540cc81deba1f68fadccfe44b30e1ec67a307a12c3e94d91bf6d844",
+    "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+    "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+    "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+    "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+    "backend/tests/unit/test_work_admission_w8.py": "2757996ec93cf88e5e8d86cd2879385830197b9cbf1820821d95b03c43e82efb",
+    "backend/tests/unit/test_work_checks.py": "cdc7e24a7f4c3ddfa786292e698a82e91cb9cadfbe40dbc704b6b767af3861f8"
+  },
+  "limits": [
+    "Recheck and corruption/state/budget guards use scripted unit models.",
+    "Native first checks use actual OpenCode space-bunny-free; replay uses stored identical input, so no new model call is expected.",
+    "Technical check pass is not a certificate for every sentence, language or untested behavior.",
+    "A3.2/A3.3/A4 durable action admission, handoff, lifecycle and same-tester repair remain.",
+    "Visible outputs and receipts only; no hidden reasoning."
+  ],
+  "testReceipts": [
+    {
+      "label": "w8-a31-target-v1",
+      "path": ".tmp/work-checks/w8-a31-target-v1.xml",
+      "hash": "40b394379719936ac58886b362308bd81d682b639ae90e45b1af0cb69aa4295a",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "2",
+          "skipped": "0",
+          "tests": "155",
+          "time": "98.628",
+          "timestamp": "2026-10-02T02:01:30.932836+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "1"
+    },
+    {
+      "label": "w8-a31-target-v2",
+      "path": ".tmp/work-checks/w8-a31-target-v2.xml",
+      "hash": "9c7d4d60a6916c74c12f7f86a105b65c6c7b7a2b63324ca73705466519d6f637",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "157",
+          "time": "100.836",
+          "timestamp": "2026-10-02T02:06:58.605222+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    },
+    {
+      "label": "w8-a31-final-target",
+      "path": ".tmp/work-checks/w8-a31-final-target.xml",
+      "hash": "8d3f809b35d1c35e5af242025eb83f148e17294f3539133c4b417e67beecd2a6",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "0",
+          "time": "0.003",
+          "timestamp": "2026-10-02T02:10:18.917960+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "4"
+    },
+    {
+      "label": "w8-a31-final-guards",
+      "path": ".tmp/work-checks/w8-a31-final-guards.xml",
+      "hash": "b778c05616481774b1c287df3af218b65cad70f953da0bf3c488ec57d78c0fdc",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "236",
+          "time": "132.757",
+          "timestamp": "2026-10-02T02:11:57.231181+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    },
+    {
+      "label": "w8-a31-full",
+      "path": ".tmp/work-checks/w8-a31-full.xml",
+      "hash": "2bcf9211ce40ee7edffef420eaf5d6fc99ebdbf776777884554f2f88010953bd",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "21",
+          "tests": "2842",
+          "time": "647.298",
+          "timestamp": "2026-10-02T02:15:12.194484+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    }
+  ],
+  "nativeRecords": [
+    {
+      "case": "research_valid",
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 22.522,
+      "artifactHash": "0e64be41d385e919255fce43a3b9a0fd90d0fcf40318da5b14ca8fa70c2e5323",
+      "artifactChars": 635,
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "b1047e6cab0c94fc784ffd16dae0a33b8f4e192098da5e22e1f64dff5c7d196e",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+        "backend\\src\\agentbox\\agent_core\\output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363"
+      },
+      "error": null,
+      "check": {
+        "checkId": "c-462717bf5ef64b0993a89662f8a79490",
+        "runId": "w-b085dee608",
+        "nodeId": "N1",
+        "stage": "produce",
+        "artifactId": "a-dae57da14de4424497deed79d4b6579c",
+        "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a",
+        "kind": "evidence",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "9843e1ad024ecf138d86e4973640165ccf451abe675cfc49f32409f19a402044",
+          "dependencies": {},
+          "owner": "5233f884e96a688277a5dcbebee599143de5def807c34a618695f2e3b262eb5b",
+          "policyHash": "6751298e4369aa1dda0f89caffe341e217059f9496d6a68899238b22b595d02a"
+        },
+        "workKey": "8a761c986d328366e4e6ee72842e0d4b223c0c7d13b102c88f6f8de40eb99009",
+        "requestedRecheck": false,
+        "startedAt": 1790881944.7642083,
+        "attempts": [
+          {
+            "childId": "8b387c1ef9a3481ebdcfed416ae10083",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 4,
+              "outputTokens": 1201,
+              "wallMs": 22495,
+              "toolCalls": 4
+            }
+          }
+        ],
+        "childId": "8b387c1ef9a3481ebdcfed416ae10083",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Artifact giữ phạm vi chỉ CSV, nêu rõ JSON vượt phạm vi và từ chối suy ra hợp đồng API/chất lượng implementation; nguồn docs/source.md đã mở xác nhận."
+          },
+          {
+            "id": "A2",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Trích nguyên văn 'Chỉ xuất CSV; không JSON.' tại docs/source.md:1 — file mở được chỉ có đúng một dòng đó; mục Giới hạn nêu đúng khoảng trống (không delimiter/encoding/header) và giới hạn fixture."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã mở nguồn gốc docs/source.md (nội dung: 'Chỉ xuất CSV; không JSON.'); trích dẫn khớp nguyên văn, không có nguồn trái chiều trong workspace (glob chỉ trả về file này), và artifact tự tách dữ kiện/suy luận/đề xuất."
+          }
+        ],
+        "findings": "Source opened and verified: single line, exact quote matches, and the artifact's limitation claim (no delimiter/encoding/header) is accurate — the file contains nothing else.\n\n**Verification performed:**\n- Artifact `a-dae57da14de4424497deed79d4b6579c` v1 (hash `0e64be4…`) read in full; `coverageComplete=true`, `unreadArtifacts=[]`, `allAssignedArtifactsRead=true`.\n- Source `docs/source.md` opened directly: content is exactly `Chỉ xuất CSV; không JSON.` — the artifact's quotation `“Chỉ xuất CSV; không JSON.”` with citation `docs/source.md:1` is verbatim and line-accurate. No second line, so \"không quy định delimiter, encoding hay header\" is correct, not overstated.\n- The only other `.md` in the workspace is `docs/source.md` itself, so no stronger contrary source exists to open. External/web/legal evidence would not contradict a fixture scope note and is not needed for this criterion; the artifact correctly declines to claim such evidence.\n\n**Findings:**\n\nBlocking issues — criteria/evidence and fix: none. Each requirement is met: A1 (CSV-only scope) is stated as coming from the scope note, with the artifact explicitly refusing to infer an API contract or implementation quality; A2 quotes the source verbatim at the correct line and names the fixture limitation; C1 is satisfied because the decisive source was opened and its text supports the claim, and no contrary scope note exists in the workspace. The artifact also correctly separates fact (the note's text) from inference (the recommendation to keep CSV scope) and from proposals.\n\nThe one thing I considered as a potential blocker and then dismissed: the artifact says the note is \"chỉ là ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã.\" This does not undercut acceptance — the task explicitly scopes the product to CSV-only and forbids treating fixture data as a defect, and the artifact is not using the fixture as proof of correctness, it is using it as the authoritative statement of scope. The stated limitation (\"Ghi chú không quy định delimiter, encoding hay header\") is an honest declared gap that does not remove the basis for the scope conclusion.\n\nOptional notes:\n- For whole-plan scope (not blocking at N1): delimiter/encoding/header remain unspecified by the only provided source. If a later node needs them, it must be sourced or asked of the owner rather than inferred — flagged so main does not treat the silence as permission to pick a default.\n- No runtime/tool access was granted in this child, so no command was executed; the \"test chưa chạy\" (planned, not run) item is consistent with the artifact, which explicitly declines to assert any test passed.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact giữ phạm vi chỉ CSV, nêu rõ JSON vượt phạm vi và từ chối suy ra hợp đồng API/chất lượng implementation; nguồn docs/source.md đã mở xác nhận.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích nguyên văn 'Chỉ xuất CSV; không JSON.' tại docs/source.md:1 — file mở được chỉ có đúng một dòng đó; mục Giới hạn nêu đúng khoảng trống (không delimiter/encoding/header) và giới hạn fixture.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc docs/source.md (nội dung: 'Chỉ xuất CSV; không JSON.'); trích dẫn khớp nguyên văn, không có nguồn trái chiều trong workspace (glob chỉ trả về file này), và artifact tự tách dữ kiện/suy luận/đề xuất.\"}]}\n```\n\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790881967.2789533
+      },
+      "toolNames": [
+        "work_artifact_read",
+        "codebase_glob",
+        "codebase_grep",
+        "file_read"
+      ],
+      "visibleFinal": "Source opened and verified: single line, exact quote matches, and the artifact's limitation claim (no delimiter/encoding/header) is accurate — the file contains nothing else.\n\n**Verification performed:**\n- Artifact `a-dae57da14de4424497deed79d4b6579c` v1 (hash `0e64be4…`) read in full; `coverageComplete=true`, `unreadArtifacts=[]`, `allAssignedArtifactsRead=true`.\n- Source `docs/source.md` opened directly: content is exactly `Chỉ xuất CSV; không JSON.` — the artifact's quotation `“Chỉ xuất CSV; không JSON.”` with citation `docs/source.md:1` is verbatim and line-accurate. No second line, so \"không quy định delimiter, encoding hay header\" is correct, not overstated.\n- The only other `.md` in the workspace is `docs/source.md` itself, so no stronger contrary source exists to open. External/web/legal evidence would not contradict a fixture scope note and is not needed for this criterion; the artifact correctly declines to claim such evidence.\n\n**Findings:**\n\nBlocking issues — criteria/evidence and fix: none. Each requirement is met: A1 (CSV-only scope) is stated as coming from the scope note, with the artifact explicitly refusing to infer an API contract or implementation quality; A2 quotes the source verbatim at the correct line and names the fixture limitation; C1 is satisfied because the decisive source was opened and its text supports the claim, and no contrary scope note exists in the workspace. The artifact also correctly separates fact (the note's text) from inference (the recommendation to keep CSV scope) and from proposals.\n\nThe one thing I considered as a potential blocker and then dismissed: the artifact says the note is \"chỉ là ghi chú phạm vi của fixture, không phải chứng nhận chất lượng mã.\" This does not undercut acceptance — the task explicitly scopes the product to CSV-only and forbids treating fixture data as a defect, and the artifact is not using the fixture as proof of correctness, it is using it as the authoritative statement of scope. The stated limitation (\"Ghi chú không quy định delimiter, encoding hay header\") is an honest declared gap that does not remove the basis for the scope conclusion.\n\nOptional notes:\n- For whole-plan scope (not blocking at N1): delimiter/encoding/header remain unspecified by the only provided source. If a later node needs them, it must be sourced or asked of the owner rather than inferred — flagged so main does not treat the silence as permission to pick a default.\n- No runtime/tool access was granted in this child, so no command was executed; the \"test chưa chạy\" (planned, not run) item is consistent with the artifact, which explicitly declines to assert any test passed.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact giữ phạm vi chỉ CSV, nêu rõ JSON vượt phạm vi và từ chối suy ra hợp đồng API/chất lượng implementation; nguồn docs/source.md đã mở xác nhận.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Trích nguyên văn 'Chỉ xuất CSV; không JSON.' tại docs/source.md:1 — file mở được chỉ có đúng một dòng đó; mục Giới hạn nêu đúng khoảng trống (không delimiter/encoding/header) và giới hạn fixture.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc docs/source.md (nội dung: 'Chỉ xuất CSV; không JSON.'); trích dẫn khớp nguyên văn, không có nguồn trái chiều trong workspace (glob chỉ trả về file này), và artifact tự tách dữ kiện/suy luận/đề xuất.\"}]}\n```\n\nVERDICT: ok",
+      "outputHash": "ac9aae9b354640aaf30bb4e11308ff2e1423676f24b5fc6b8a398df5d1d3f502",
+      "wordCount": 510,
+      "wordsWithoutJson": 411,
+      "replay": {
+        "case": "research_valid",
+        "sourceOracle": true,
+        "sourceStatus": "pass",
+        "checkId": "c-462717bf5ef64b0993a89662f8a79490",
+        "originalCheckId": "c-462717bf5ef64b0993a89662f8a79490",
+        "addedChildren": 0,
+        "addedModelAttempts": 0,
+        "oracle": true
+      },
+      "commandEvents": [],
+      "ownerGoal": "Nghiên cứu phạm vi xuất CSV theo nguồn được cung cấp, không thêm JSON.",
+      "rootModelAttempts": 0,
+      "aliasRows": [
+        {
+          "invocation": "0d90333766cd469fbc63b3019997946b:evidence",
+          "request_hash": "544cd075142ad1a71c5cb70eedb527d8d65d21c0535abae17f5fdba203969c14",
+          "check_id": "c-462717bf5ef64b0993a89662f8a79490"
+        },
+        {
+          "invocation": "same-input-new-invocation:evidence",
+          "request_hash": "544cd075142ad1a71c5cb70eedb527d8d65d21c0535abae17f5fdba203969c14",
+          "check_id": "c-462717bf5ef64b0993a89662f8a79490"
+        }
+      ],
+      "adjudication": [
+        "Correctly passes CSV scope/source quotation; does not treat fixture uncertainty as blocking missing implementation/legal review.",
+        "Visible prose is English although owner goal is Vietnamese; coverage JSON is Vietnamese. Language failure recorded for W6.1.3, no prompt/model cause claimed.",
+        "No runtime/tool access wording is broad: file tools were used; command capability was not exercised. Do not read it as absence of every tool call."
+      ]
+    },
+    {
+      "case": "patch_passing_test",
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "branch": "B",
+      "scope": "live reviewer/tool loop on synthetic fixture; no production DAG or UI",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 70.327,
+      "artifactHash": "36017b601be5a5a22b70227dd9b0bea26328a42e2d8c0731456a14ac7cdb91d9",
+      "artifactChars": 131,
+      "sourceHashes": {
+        "backend\\src\\agentbox\\agent_core\\work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+        "backend\\src\\agentbox\\agent_core\\work_checks.py": "b1047e6cab0c94fc784ffd16dae0a33b8f4e192098da5e22e1f64dff5c7d196e",
+        "backend\\src\\agentbox\\agent_core\\work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+        "backend\\src\\agentbox\\agent_core\\work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+        "backend\\src\\agentbox\\agent_core\\runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+        "backend\\src\\agentbox\\agent_core\\output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363"
+      },
+      "error": null,
+      "check": {
+        "checkId": "c-909615894448408086a5363ac526d5fd",
+        "runId": "w-6a03abf309",
+        "nodeId": "N1",
+        "stage": "execute",
+        "artifactId": "a-7311f172c79d445ea70262fc1e655161",
+        "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+        "kind": "tests",
+        "status": "pass",
+        "binding": {
+          "nodeDefinition": "acdeb6dca38d5585809fcdd023b63e41b872d29740e7bb4cbf815ba66941b05e",
+          "dependencies": {},
+          "owner": "ecbd2fa818f368e22d64c6f32e91e0c1418cb29864d64126e72a40b1ffe08849",
+          "policyHash": "e016d4efd6588e0b8f32afbc925c4ccd6dc24cc92b71abe6892f826c079a811d",
+          "codeSnapshot": {
+            "schema": "work-code/1",
+            "hash": "ca8d9012dad2c727c8685dba7f9886573aa7f3babe4bcdd7541f079f3fae45d2",
+            "head": "cbc61da66146acf28fcd76b6c05418de5f5eb1b5",
+            "criticalChanges": false
+          }
+        },
+        "workKey": "4053966cfd75053d1a19e1871c833abe7a71e0132a6eab5c15bf49df2fe70c0c",
+        "requestedRecheck": false,
+        "startedAt": 1790881968.506347,
+        "attempts": [
+          {
+            "childId": "2e8a65c888844706ac75a150f2f45f10",
+            "status": "pass",
+            "completed": true,
+            "execution": {
+              "status": "completed",
+              "reason": null,
+              "budget": {
+                "profile": "review_short",
+                "requestedMaxSteps": 14,
+                "effectiveMaxSteps": 14,
+                "requestedDeadlineSeconds": 900,
+                "effectiveDeadlineSeconds": 300,
+                "clamped": true
+              },
+              "stepsUsed": 4,
+              "outputTokens": 4346,
+              "wallMs": 69599,
+              "toolCalls": 6
+            }
+          }
+        ],
+        "childId": "2e8a65c888844706ac75a150f2f45f10",
+        "coverage": [
+          {
+            "id": "A1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Đã tự chạy `python -m pytest -q` -> exit_code 0, output '1 passed in 0.15s'. Đọc src/export.py: export() dùng io.StringIO(newline='')+csv.writer, trả str, không có encode/decode/normalize nên không mất dấu. tests/test_export.py assert round-trip csv.reader(export('Hồ sơ')) == ['Hồ sơ'] — chuỗi literal chứa ký tự tiếng Việt ồ và ơ, assertion này không tautology (exporter làm hỏng chuỗi sẽ đỏ). Tiêu chí 'giữ dấu trong dữ liệu xuất' đúng với hàm được giao."
+          },
+          {
+            "id": "C1",
+            "status": "pass",
+            "target": "artifact",
+            "evidence": "Chạy đúng lệnh bắt buộc `python -m pytest -q` trên workspace hiện tại (trùng nơi đọc src/export.py và tests/test_export.py): exit_code 0, '1 passed in 0.15s'. Không có lỗi để báo trung thực. Handoff artifact nêu đúng thực tế 'chưa tuyên bố test đã chạy' nên không có claim test sai lệch."
+          }
+        ],
+        "findings": "## Phản biện độc lập — nút N1 (build, execute)\n\n### Điều đã kiểm thực tế\n\n**1. Chạy lệnh bắt buộc (NOT GUESSED — đã chạy thật):**\n```\n$ python -m pytest -q\n. [100%]\n1 passed in 0.15s\n```\n`exit_code: 0`. Không có lỗi nào để báo. Đây là bằng chứng test do tôi tự chạy, không phải output do producer nhúng.\n\n**2. Đọc mã nguồn để đối chiếu tiêu chí A1 (không chỉ tin test):**\n- `src/export.py`: `export(value)` ghi vào `io.StringIO(newline='')` qua `csv.writer(...).writerow([value])`, rồi trả `stream.getvalue()` — trả về **`str`**, không có bước `encode`/`decode`/`unicodedata.normalize` nào.\n- `tests/test_export.py`: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n\n**3. Bằng chứng phản bác đã cân nhắc trước khi kết luận pass:**\n- *\"1 passed\" có phải test rỗng/tautology không?* — Không. Assertion so sánh kết quả round-trip qua `csv.writer` + `csv.reader` với chuỗi literal; nếu exporter làm hỏng chuỗi (mất dấu, escape sai, quote sai) thì assertion phải đỏ. Test thật sự có khả năng bắt lỗi.\n- *\"Dấu có thật sự còn không?\"* — Chuỗi literal trong test là `'Hồ sơ'`, chứa đúng hai ký tự tiếng Việt đặc thù `ồ` và `ơ` (dấu huyền trên o, dấu ươi). Giá trị trong file nguồn là ký tự Unicode, không phải dạng thay thế `o` không dấu — tôi đọc trực tiếp nội dung file, thấy nguyên văn dấu.\n- *\"Có mất dấu ở tầng byte/encoding không?\"* — Không có tầng này: exporter làm việc hoàn toàn ở mức `str` (StringIO, không đụng bytes). Không có nguy cơ mất dấu do encode mặc định. Phân biệt byte/ký tự: ở đây chỉ tồn tại ký tự sau giải mã, và nó khớp đúng input.\n- *\"Test có chạy trên đúng snapshot mã không?\"* — Lệnh chạy trên workspace hiện tại, trùng nơi tôi đọc `src/export.py` và `tests/test_export.py`.\n\n**4. Đối chiếu tính trung thực của handoff:**\nArtifact tự nêu: *\"Cần kiểm chứng bằng python -m pytest -q; chưa tuyên bố test đã chạy.\"* — Đây là khai báo trung thực, **không** tuyên bố test đã chạy. Tôi đã chạy và xác nhận pass, nên kết luận của artifact không bị vượt bằng chứng. Hai vế trong handoff đều đúng: mã giữ nguyên chuỗi đầu vào, và việc kiểm chứng test là cần thiết.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\n`none`\n\nCả A1 và C1 đều được chứng minh bằng bằng chứng gốc: mã nguồn đã mở (`src/export.py`, `tests/test_export.py`) và output thực thi của lệnh bắt buộc. Không có tiền đề kỹ thuật nào trong tiêu chí bị nguồn bác bỏ — tiêu chí A1 đòi hỏi giữ dấu trong dữ liệu xuất, và điều đó đúng với hàm `export()` được giao.\n\n## Ghi chú không chặn\n\n- **Phạm vi export chỉ là `str`, chưa ghi file.** `export()` trả `stream.getvalue()` — không có nhánh ghi đĩa, nên chưa có tờ ghi \"dữ liệu xuất\"ở dạng file byte. Với đúng phạm vi được giao (giữ dấu trong dữ liệu xuất của hàm), điều này đạt. Tôi chỉ ghi nhận là ranh giới phạm vi, **không** dựng yêu cầu tương lai.\n- **Một test duy nhất.** `pytest -q` báo `1 passed`, tức chỉ có một test được thu thập. Test này bao phủ round-trip qua `csv` cho chuỗi có dấu; nó **không** chạm các giá trị chứa dấu phẩy, dấu nháy kép hay newline (ký tự mà `csv.writer` phải escape), cũng không chạm chuỗi rỗng. Tôi không chạy các counterexample này vì fixture giới hạn shell đúng một lệnh `python -m pytest -q` — ghi rõ là **chưa kiểm**, không phải đã kiểm và thấy đạt.\n- **Chưa có rủi ro encoding, nhưng đó là quan sát về hiện trạng, không phải khuyến nghị triển khai.** Vì exporter dừng ở `str`, không có nơi nào encode sai. Nếu sau này có bước ghi file, đây sẽ là điểm cần xem lại — ghi nhận như giới hạn chưa kiểm, nằm ngoài phạm vi nút N1.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự chạy `python -m pytest -q` -> exit_code 0, output '1 passed in 0.15s'. Đọc src/export.py: export() dùng io.StringIO(newline='')+csv.writer, trả str, không có encode/decode/normalize nên không mất dấu. tests/test_export.py assert round-trip csv.reader(export('Hồ sơ')) == ['Hồ sơ'] — chuỗi literal chứa ký tự tiếng Việt ồ và ơ, assertion này không tautology (exporter làm hỏng chuỗi sẽ đỏ). Tiêu chí 'giữ dấu trong dữ liệu xuất' đúng với hàm được giao.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Chạy đúng lệnh bắt buộc `python -m pytest -q` trên workspace hiện tại (trùng nơi đọc src/export.py và tests/test_export.py): exit_code 0, '1 passed in 0.15s'. Không có lỗi để báo trung thực. Handoff artifact nêu đúng thực tế 'chưa tuyên bố test đã chạy' nên không có claim test sai lệch.\"}]}\n```\n\nVERDICT: ok",
+        "inputConflicts": [],
+        "finishedAt": 1790882038.812763
+      },
+      "toolNames": [
+        "work_artifact_read",
+        "terminal_exec",
+        "terminal_exec",
+        "codebase_glob",
+        "file_read",
+        "file_read"
+      ],
+      "visibleFinal": "## Phản biện độc lập — nút N1 (build, execute)\n\n### Điều đã kiểm thực tế\n\n**1. Chạy lệnh bắt buộc (NOT GUESSED — đã chạy thật):**\n```\n$ python -m pytest -q\n. [100%]\n1 passed in 0.15s\n```\n`exit_code: 0`. Không có lỗi nào để báo. Đây là bằng chứng test do tôi tự chạy, không phải output do producer nhúng.\n\n**2. Đọc mã nguồn để đối chiếu tiêu chí A1 (không chỉ tin test):**\n- `src/export.py`: `export(value)` ghi vào `io.StringIO(newline='')` qua `csv.writer(...).writerow([value])`, rồi trả `stream.getvalue()` — trả về **`str`**, không có bước `encode`/`decode`/`unicodedata.normalize` nào.\n- `tests/test_export.py`: `assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']`.\n\n**3. Bằng chứng phản bác đã cân nhắc trước khi kết luận pass:**\n- *\"1 passed\" có phải test rỗng/tautology không?* — Không. Assertion so sánh kết quả round-trip qua `csv.writer` + `csv.reader` với chuỗi literal; nếu exporter làm hỏng chuỗi (mất dấu, escape sai, quote sai) thì assertion phải đỏ. Test thật sự có khả năng bắt lỗi.\n- *\"Dấu có thật sự còn không?\"* — Chuỗi literal trong test là `'Hồ sơ'`, chứa đúng hai ký tự tiếng Việt đặc thù `ồ` và `ơ` (dấu huyền trên o, dấu ươi). Giá trị trong file nguồn là ký tự Unicode, không phải dạng thay thế `o` không dấu — tôi đọc trực tiếp nội dung file, thấy nguyên văn dấu.\n- *\"Có mất dấu ở tầng byte/encoding không?\"* — Không có tầng này: exporter làm việc hoàn toàn ở mức `str` (StringIO, không đụng bytes). Không có nguy cơ mất dấu do encode mặc định. Phân biệt byte/ký tự: ở đây chỉ tồn tại ký tự sau giải mã, và nó khớp đúng input.\n- *\"Test có chạy trên đúng snapshot mã không?\"* — Lệnh chạy trên workspace hiện tại, trùng nơi tôi đọc `src/export.py` và `tests/test_export.py`.\n\n**4. Đối chiếu tính trung thực của handoff:**\nArtifact tự nêu: *\"Cần kiểm chứng bằng python -m pytest -q; chưa tuyên bố test đã chạy.\"* — Đây là khai báo trung thực, **không** tuyên bố test đã chạy. Tôi đã chạy và xác nhận pass, nên kết luận của artifact không bị vượt bằng chứng. Hai vế trong handoff đều đúng: mã giữ nguyên chuỗi đầu vào, và việc kiểm chứng test là cần thiết.\n\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể\n\n`none`\n\nCả A1 và C1 đều được chứng minh bằng bằng chứng gốc: mã nguồn đã mở (`src/export.py`, `tests/test_export.py`) và output thực thi của lệnh bắt buộc. Không có tiền đề kỹ thuật nào trong tiêu chí bị nguồn bác bỏ — tiêu chí A1 đòi hỏi giữ dấu trong dữ liệu xuất, và điều đó đúng với hàm `export()` được giao.\n\n## Ghi chú không chặn\n\n- **Phạm vi export chỉ là `str`, chưa ghi file.** `export()` trả `stream.getvalue()` — không có nhánh ghi đĩa, nên chưa có tờ ghi \"dữ liệu xuất\"ở dạng file byte. Với đúng phạm vi được giao (giữ dấu trong dữ liệu xuất của hàm), điều này đạt. Tôi chỉ ghi nhận là ranh giới phạm vi, **không** dựng yêu cầu tương lai.\n- **Một test duy nhất.** `pytest -q` báo `1 passed`, tức chỉ có một test được thu thập. Test này bao phủ round-trip qua `csv` cho chuỗi có dấu; nó **không** chạm các giá trị chứa dấu phẩy, dấu nháy kép hay newline (ký tự mà `csv.writer` phải escape), cũng không chạm chuỗi rỗng. Tôi không chạy các counterexample này vì fixture giới hạn shell đúng một lệnh `python -m pytest -q` — ghi rõ là **chưa kiểm**, không phải đã kiểm và thấy đạt.\n- **Chưa có rủi ro encoding, nhưng đó là quan sát về hiện trạng, không phải khuyến nghị triển khai.** Vì exporter dừng ở `str`, không có nơi nào encode sai. Nếu sau này có bước ghi file, đây sẽ là điểm cần xem lại — ghi nhận như giới hạn chưa kiểm, nằm ngoài phạm vi nút N1.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự chạy `python -m pytest -q` -> exit_code 0, output '1 passed in 0.15s'. Đọc src/export.py: export() dùng io.StringIO(newline='')+csv.writer, trả str, không có encode/decode/normalize nên không mất dấu. tests/test_export.py assert round-trip csv.reader(export('Hồ sơ')) == ['Hồ sơ'] — chuỗi literal chứa ký tự tiếng Việt ồ và ơ, assertion này không tautology (exporter làm hỏng chuỗi sẽ đỏ). Tiêu chí 'giữ dấu trong dữ liệu xuất' đúng với hàm được giao.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Chạy đúng lệnh bắt buộc `python -m pytest -q` trên workspace hiện tại (trùng nơi đọc src/export.py và tests/test_export.py): exit_code 0, '1 passed in 0.15s'. Không có lỗi để báo trung thực. Handoff artifact nêu đúng thực tế 'chưa tuyên bố test đã chạy' nên không có claim test sai lệch.\"}]}\n```\n\nVERDICT: ok",
+      "outputHash": "7b74106448aeebf1657bfba758dc699fa6cc5d5cabefc87503db4db9d6cef4f2",
+      "wordCount": 789,
+      "wordsWithoutJson": 666,
+      "replay": {
+        "case": "patch_passing_test",
+        "sourceOracle": true,
+        "sourceStatus": "pass",
+        "checkId": "c-909615894448408086a5363ac526d5fd",
+        "originalCheckId": "c-909615894448408086a5363ac526d5fd",
+        "addedChildren": 0,
+        "addedModelAttempts": 0,
+        "oracle": true
+      },
+      "commandEvents": [
+        {
+          "args": {
+            "command": "cd /workspace 2>/dev/null || cd ~; pwd; ls -la"
+          },
+          "result": {
+            "is_error": true,
+            "error": "Fixture permits exactly python -m pytest -q; no shell commands",
+            "reflection_hint": "AUTONOMOUS_DIAGNOSIS: `terminal_exec` failed with an error. Read `error`: it names the field and the rule. Fix only that input and call again once; never resend identical arguments. Expected arguments: required=['command']; fields={command:string, timeout:integer}."
+          }
+        },
+        {
+          "args": {
+            "command": "python -m pytest -q"
+          },
+          "result": {
+            "content": ".                                                                        [100%]\r\n1 passed in 0.15s\r\n",
+            "exit_code": 0,
+            "is_error": false
+          }
+        }
+      ],
+      "ownerGoal": "Sửa exporter để giữ dấu tiếng Việt.",
+      "rootModelAttempts": 0,
+      "aliasRows": [
+        {
+          "invocation": "62fe181ed27242699825c121ed5cbfa2:tests",
+          "request_hash": "710b3f5bbdfe6cef53eab94cf67937ee1d9c048efdae78f2d09e310d5ce1ce84",
+          "check_id": "c-909615894448408086a5363ac526d5fd"
+        },
+        {
+          "invocation": "same-input-new-invocation:tests",
+          "request_hash": "710b3f5bbdfe6cef53eab94cf67937ee1d9c048efdae78f2d09e310d5ce1ce84",
+          "check_id": "c-909615894448408086a5363ac526d5fd"
+        }
+      ],
+      "adjudication": [
+        "Tester actually runs required pytest (exit0, 1 passed/0.15s) and opens source/tests/artifact. Verdict fits Unicode-only acceptance.",
+        "An initial arbitrary cwd/list command is rejected by fixture command allowlist; tester recovers. This is a fixture capability restriction, not a provider failure or deployed tool bug.",
+        "Claims malformed quoting/escaping would turn this one assertion red too broadly: the fixture input has no comma/quote/newline. Unrun edge cases are correctly listed as limitations.",
+        "789 words total, 666 excluding JSON: brevity signal above 600; cap wording concerns findings, so do not use word count alone to declare the technical verdict wrong."
+      ]
+    }
+  ]
+}

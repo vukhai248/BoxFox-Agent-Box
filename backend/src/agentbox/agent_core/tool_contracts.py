@@ -690,10 +690,12 @@ SCHEMAS = [
          'Main inspects draft artifact refs, then starts minimum checks (evidence/critique/plan/design/tests/code review). '
          'Backend binds completion and acceptance coverage to the exact artifact, policy, dependencies and code. '
          'Partial, unread ranges, provider errors and missing checks never pass. Repeated invocationId is idempotent. '
+         'A passed check on identical input is reused; recheck=true explicitly requests another judgment, within existing retry limits. '
          'On revise, route findings to producer or Debug, then work_run and check the NEW artifact.',
          {'action': {'type': 'string', 'enum': ['status','start']}, 'runId': STRING, 'nodeId': STRING,
           'stage': {'type': 'string', 'enum': ['produce','execute']}, 'artifactId': STRING,
-          'checkIds': {'type': 'array', 'items': STRING}, 'invocationId': STRING}, ['action']),
+          'checkIds': {'type': 'array', 'items': STRING}, 'invocationId': STRING,
+          'recheck': {'type': 'boolean'}}, ['action']),
     tool('work_report',
          'Bound child: ONLY when blocked save checkpoint and release this turn with action=needs_user, needs_evidence or checkpoint. '
          'needs_user has 1-3 questions with 2-4 options; main owns the interview. A checkpoint is never accepted. '

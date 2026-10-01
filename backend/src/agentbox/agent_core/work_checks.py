@@ -247,6 +247,9 @@ class Checks:
                 id TEXT PRIMARY KEY, run_id TEXT NOT NULL, invocation TEXT NOT NULL,
                 request_hash TEXT NOT NULL, doc TEXT NOT NULL,
                 UNIQUE(run_id, invocation));
+            CREATE TABLE IF NOT EXISTS work_check_invocations (
+                run_id TEXT NOT NULL, invocation TEXT NOT NULL, request_hash TEXT NOT NULL,
+                check_id TEXT NOT NULL, PRIMARY KEY(run_id, invocation));
         ''')
         # A restarted process must not turn an unfinished check into a pass or start it twice.
         for row in self.db.execute('SELECT * FROM work_checks').fetchall():
@@ -260,7 +263,46 @@ class Checks:
             self.db.execute('UPDATE work_checks SET doc=? WHERE id=?', (json.dumps(doc, ensure_ascii=False), doc['checkId']))
 
     def records(self, run_id):
-        return [json.loads(row['doc']) for row in self.db.execute('SELECT doc FROM work_checks WHERE run_id=?', (run_id,))]
+        return [json.loads(row['doc']) for row in self.db.execute('SELECT doc FROM work_checks WHERE run_id=? ORDER BY rowid', (run_id,))]
+
+    def invocation_record(self, run_id, invocation, request_hash):
+        row = self.db.execute('SELECT request_hash,check_id FROM work_check_invocations '
+                              'WHERE run_id=? AND invocation=?', (run_id, invocation)).fetchone()
+        if row:
+            if row['request_hash'] != request_hash:
+                raise ValueError('WORK_CHECK_INVOCATION_CONFLICT: invocation already used for a different request')
+            return json.loads(self.db.execute('SELECT doc FROM work_checks WHERE id=? AND run_id=?',
+                                             (row['check_id'], run_id)).fetchone()['doc'])
+        # Receipts written before the alias table remain readable/idempotent.
+        row = self.db.execute('SELECT request_hash,doc FROM work_checks WHERE run_id=? AND invocation=?',
+                              (run_id, invocation)).fetchone()
+        if row:
+            if row['request_hash'] != request_hash:
+                raise ValueError('WORK_CHECK_INVOCATION_CONFLICT: invocation already used for a different request')
+            return json.loads(row['doc'])
+        return None
+
+    def remember_invocation(self, run_id, invocation, request_hash, check_id):
+        with self.db:
+            self.db.execute('INSERT INTO work_check_invocations VALUES(?,?,?,?)',
+                            (run_id, invocation, request_hash, check_id))
+
+    @staticmethod
+    def input_key(run, node, stage, meta, policy, spec):
+        """Backend input identity; invocation IDs do not create new work."""
+        return work_policy.digest({'owner': run['sessionId'], 'run': run['runId'], 'node': node['id'],
+            'stage': stage, 'artifact': {k: meta[k] for k in ('artifactId', 'version', 'contentHash', 'binding')},
+            'policyHash': policy['hash'], 'check': spec})
+
+    def passed_input(self, run, node, stage, meta, policy, spec, key):
+        # Select the current check first; never fall back to an older green receipt.
+        doc = self.latest(run, node, stage).get(spec['id'])
+        if (doc and doc['status'] == 'pass' and doc['nodeId'] == node['id'] and doc['stage'] == stage
+                and doc['artifactId'] == meta['artifactId'] and doc['policyHash'] == policy['hash']
+                and doc['kind'] == spec['id'] and doc.get('binding') == meta['binding']
+                and doc.get('workKey', key) == key):
+            return doc
+        return None
 
     def binding(self, run, node, stage):
         dependencies = {}
@@ -404,91 +446,129 @@ class Checks:
         if lock.locked():
             raise ValueError('WORK_RUN_BUSY: another run/check operation is active')
         async with lock:
-            node = next((n for n in run['nodes'] if n['id'] == args.get('nodeId')), None)
-            stage = args.get('stage', 'produce')
-            if node is None or stage not in node['stages']:
-                raise ValueError('WORK_NODE_UNKNOWN: node/stage not in run')
-            state = node['stages'][stage]
-            if state['status'] not in ('needs_checks', 'revise', 'accepted'):
-                raise ValueError('WORK_CHECK_NOT_READY: producer must finish the current draft before checks')
-            meta = state.get('artifact')
-            if not meta or meta['status'] != 'finalized':
-                raise ValueError('WORK_CHECK_NOT_READY: finalized artifact required; partial is not verifiable')
-            if args.get('artifactId') != meta['artifactId']:
-                raise ValueError('WORK_CHECK_STALE: use current artifactId from work_graph status')
-            current = self.binding(run, node, stage)
-            if any(meta['binding'].get(k) != v for k, v in current.items()):
-                raise ValueError('WORK_CHECK_STALE: node, owner decisions or dependencies changed')
-            policy = state['policy']
-            ids = args.get('checkIds') or [r['id'] for r in policy['required']]
-            if not isinstance(ids, list) or not ids or len(ids) != len(set(ids)) or not set(ids) <= {r['id'] for r in policy['required']}:
-                raise ValueError('WORK_CHECK_INVALID: select ids from current required checks')
-            for spec in policy['required']:
-                if spec['id'] in ids:
-                    unavailable = preflight(session, spec)
-                    if unavailable:
-                        raise ValueError(unavailable)
-            invocation = str(args.get('invocationId') or '').strip()
-            if not 1 <= len(invocation) <= 120:
-                raise ValueError('WORK_CHECK_INVOCATION: unique invocationId required (1..120 chars)')
-            graph.child_budget[run['runId']] = [8]
-            records = []
+            run = graph.get(run['runId'])
+            graph.live[run['runId']] = run
             try:
-                with graph.budget_paused(session['id']):
-                    for cid in ids:
-                        spec = next(r for r in policy['required'] if r['id'] == cid)
-                        request = work_policy.digest({'node': node['id'], 'stage': stage, 'artifact': meta['artifactId'], 'policy': policy['hash'], 'ids': ids})
-                        key = invocation + ':' + cid
-                        row = self.db.execute('SELECT * FROM work_checks WHERE run_id=? AND invocation=?', (run['runId'], key)).fetchone()
-                        if row:
-                            if row['request_hash'] != request:
-                                raise ValueError('WORK_CHECK_INVOCATION_CONFLICT: invocation already used for a different request')
-                            records.append(json.loads(row['doc']))
-                            continue
-                        if state.get('inputConflicts'):
-                            return graph.result(run) | {'checks': list(self.latest(run, node, stage).values()),
-                                                        'inputConflicts': state['inputConflicts']}
-                        previous = [c for c in self.records(run['runId']) if c.get('artifactId') == meta['artifactId']
-                                    and c['kind'] == cid and c['policyHash'] == policy['hash']]
-                        if len(previous) >= 3:
-                            raise ValueError('WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact')
-                        doc = {'checkId': 'c-' + uuid.uuid4().hex, 'runId': run['runId'], 'nodeId': node['id'],
-                               'stage': stage, 'artifactId': meta['artifactId'], 'policyHash': policy['hash'],
-                               'kind': cid, 'status': 'running', 'binding': meta['binding'], 'startedAt': time.time()}
-                        with self.db:
-                            self.db.execute('INSERT INTO work_checks VALUES(?,?,?,?,?)',
-                                            (doc['checkId'], run['runId'], key, request, json.dumps(doc)))
-                        criteria = {f'A{i+1}': value for i, value in enumerate(node['acceptance'])}
-                        criteria['C1'] = spec['criterion']
-                        try:
-                            doc = await self.judge(session, run, node, stage, spec, [meta], criteria, doc)
-                        except BaseException as exc:
-                            doc.update(status='error', error=str(exc)[:500])
-                            self.save(doc)
-                            raise
-                        self.save(doc)
-                        records.append(doc)
+                return await self.start_locked(session, run, args)
             finally:
+                graph.live.pop(run['runId'], None)
+
+    async def start_locked(self, session, run, args):
+        """Shared admission path; caller owns the canonical run lock/live copy."""
+        graph = self.graph
+        if not graph.busy(run) or graph.live.get(run['runId']) is not run:
+            raise ValueError('WORK_CHECK_LOCK_REQUIRED: caller must hold the canonical run lock')
+        if session.get('parent_id') or session['id'] != run['sessionId']:
+            raise PermissionError('WORK_ROOT_ONLY: only the run owner may admit checks')
+        if run['status'] in ('cancelled', 'shipped', 'rejected', 'paused'):
+            raise ValueError('WORK_RUN_CLOSED: checks cannot start on a closed or paused run')
+        recheck = args.get('recheck', False)
+        if not isinstance(recheck, bool):
+            raise ValueError('WORK_CHECK_INVALID: recheck must be a boolean')
+        node = next((n for n in run['nodes'] if n['id'] == args.get('nodeId')), None)
+        stage = args.get('stage', 'produce')
+        if node is None or stage not in node['stages']:
+            raise ValueError('WORK_NODE_UNKNOWN: node/stage not in run')
+        state = node['stages'][stage]
+        if state['status'] not in ('needs_checks', 'revise', 'accepted'):
+            raise ValueError('WORK_CHECK_NOT_READY: producer must finish the current draft before checks')
+        meta = state.get('artifact')
+        if not meta or meta['status'] != 'finalized':
+            raise ValueError('WORK_CHECK_NOT_READY: finalized artifact required; partial is not verifiable')
+        if args.get('artifactId') != meta['artifactId']:
+            raise ValueError('WORK_CHECK_STALE: use current artifactId from work_graph status')
+        registered, _ = graph.artifacts.get(run['runId'], meta['artifactId'])
+        if registered != meta:
+            raise ValueError('WORK_CHECK_STALE: artifact metadata differs from the immutable registry')
+        current = self.binding(run, node, stage)
+        if any(meta['binding'].get(k) != v for k, v in current.items()):
+            raise ValueError('WORK_CHECK_STALE: node, owner decisions or dependencies changed')
+        policy = state['policy']
+        if (policy.get('version') != work_policy.VERSION
+                or policy.get('hash') != work_policy.digest({k:v for k,v in policy.items() if k!='hash'})
+                or meta['binding'].get('policyHash') != policy.get('hash')):
+            raise ValueError('WORK_CHECK_STALE: check policy or artifact policy binding changed')
+        ids = args.get('checkIds') or [r['id'] for r in policy['required']]
+        if not isinstance(ids, list) or not ids or len(ids) != len(set(ids)) or not set(ids) <= {r['id'] for r in policy['required']}:
+            raise ValueError('WORK_CHECK_INVALID: select ids from current required checks')
+        for spec in policy['required']:
+            if spec['id'] in ids:
+                unavailable = preflight(session, spec)
+                if unavailable:
+                    raise ValueError(unavailable)
+        invocation = str(args.get('invocationId') or '').strip()
+        if not 1 <= len(invocation) <= 120:
+            raise ValueError('WORK_CHECK_INVOCATION: unique invocationId required (1..120 chars)')
+        own_budget = run['runId'] not in graph.child_budget
+        if own_budget:
+            graph.child_budget[run['runId']] = [8]
+        records = []
+        try:
+            with graph.budget_paused(session['id']):
+                for cid in ids:
+                    spec = next(r for r in policy['required'] if r['id'] == cid)
+                    request = work_policy.digest({'node': node['id'], 'stage': stage, 'artifact': meta['artifactId'],
+                                                  'policy': policy['hash'], 'ids': ids, **({'recheck': True} if recheck else {})})
+                    key = invocation + ':' + cid
+                    work_key = self.input_key(run, node, stage, meta, policy, spec)
+                    receipt = self.invocation_record(run['runId'], key, request)
+                    passed = None if receipt or recheck else self.passed_input(run, node, stage, meta, policy, spec, work_key)
+                    if receipt or passed:
+                        source = meta['binding'].get('codeSnapshot')
+                        if source and await snapshot(graph, run['sessionId']) != source:
+                            raise ValueError('WORK_CHECK_STALE: code changed; old check receipt is not current proof')
+                        if passed:
+                            self.remember_invocation(run['runId'], key, request, passed['checkId'])
+                        records.append(receipt or passed)
+                        continue
+                    if state.get('inputConflicts'):
+                        return graph.result(run) | {'checks': list(self.latest(run, node, stage).values()),
+                                                    'inputConflicts': state['inputConflicts']}
+                    previous = [c for c in self.records(run['runId']) if c.get('artifactId') == meta['artifactId']
+                                and c['kind'] == cid and c['policyHash'] == policy['hash']]
+                    if len(previous) >= 3:
+                        raise ValueError('WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact')
+                    doc = {'checkId': 'c-' + uuid.uuid4().hex, 'runId': run['runId'], 'nodeId': node['id'],
+                           'stage': stage, 'artifactId': meta['artifactId'], 'policyHash': policy['hash'],
+                           'kind': cid, 'status': 'running', 'binding': meta['binding'], 'workKey': work_key,
+                           'requestedRecheck': recheck, 'startedAt': time.time()}
+                    with self.db:
+                        self.db.execute('INSERT INTO work_checks VALUES(?,?,?,?,?)',
+                                        (doc['checkId'], run['runId'], key, request, json.dumps(doc)))
+                        self.db.execute('INSERT INTO work_check_invocations VALUES(?,?,?,?)',
+                                        (run['runId'], key, request, doc['checkId']))
+                    criteria = {f'A{i+1}': value for i, value in enumerate(node['acceptance'])}
+                    criteria['C1'] = spec['criterion']
+                    try:
+                        doc = await self.judge(session, run, node, stage, spec, [meta], criteria, doc)
+                    except BaseException as exc:
+                        doc.update(status='error', error=str(exc)[:500])
+                        self.save(doc)
+                        raise
+                    self.save(doc)
+                    records.append(doc)
+        finally:
+            if own_budget:
                 graph.child_budget.pop(run['runId'], None)
-            if self.valid(run, node, stage):
-                state.update(status='accepted', feedback='', error=None)
-            elif any(r['status'] == 'revise' for r in self.latest(run, node, stage).values()):
-                state.update(status='revise' if state['attempts'] < state.get('maxRounds', 3) else 'rejected',
-                             feedbackSource='checks',
-                             feedback='\n'.join(r.get('findings', '') for r in self.latest(run, node, stage).values()
-                                                if r['status'] == 'revise'))
-            else:
-                state['status'] = 'needs_checks'
-            state['inputConflicts'] = [item for record in self.latest(run, node, stage).values()
-                                      for item in record.get('inputConflicts', [])]
-            if records:
-                doc = records[-1]
-                state['rounds'][-1].update(reviewerId=doc.get('childId'),
-                    reviewerRole=next(r['executorRole'] for r in policy['required'] if r['id'] == doc['kind']),
-                    verdict='ok' if state['status'] == 'accepted' else 'revise' if state['status'] in ('revise','rejected') else doc['status'],
-                    findings=state.get('feedback') or doc.get('findings', ''), checkIds=[r['checkId'] for r in records])
-            if stage == 'execute':
-                stages = [n['stages']['execute'] for n in run['nodes'] if 'execute' in n['stages']]
-                run['status'] = 'executed' if all(s['status'] == 'accepted' for s in stages) else ('execute_failed' if state['status'] == 'rejected' else 'approved')
-            graph.save(run, 'checks_finished', f'{node["id"]}:{stage}')
-            return graph.result(run) | {'checks': records}
+        if self.valid(run, node, stage):
+            state.update(status='accepted', feedback='', error=None)
+        elif any(r['status'] == 'revise' for r in self.latest(run, node, stage).values()):
+            state.update(status='revise' if state['attempts'] < state.get('maxRounds', 3) else 'rejected',
+                         feedbackSource='checks',
+                         feedback='\n'.join(r.get('findings', '') for r in self.latest(run, node, stage).values()
+                                            if r['status'] == 'revise'))
+        else:
+            state['status'] = 'needs_checks'
+        state['inputConflicts'] = [item for record in self.latest(run, node, stage).values()
+                                  for item in record.get('inputConflicts', [])]
+        if records:
+            doc = records[-1]
+            state['rounds'][-1].update(reviewerId=doc.get('childId'),
+                reviewerRole=next(r['executorRole'] for r in policy['required'] if r['id'] == doc['kind']),
+                verdict='ok' if state['status'] == 'accepted' else 'revise' if state['status'] in ('revise','rejected') else doc['status'],
+                findings=state.get('feedback') or doc.get('findings', ''), checkIds=[r['checkId'] for r in records])
+        if stage == 'execute':
+            stages = [n['stages']['execute'] for n in run['nodes'] if 'execute' in n['stages']]
+            run['status'] = 'executed' if all(s['status'] == 'accepted' for s in stages) else ('execute_failed' if state['status'] == 'rejected' else 'approved')
+        graph.save(run, 'checks_finished', f'{node["id"]}:{stage}')
+        return graph.result(run) | {'checks': records}

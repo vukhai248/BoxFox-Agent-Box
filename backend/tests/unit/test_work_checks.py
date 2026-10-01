@@ -396,7 +396,7 @@ def test_newer_finding_invalidates_previous_pass(tmp_path):
         _, result = await setup(rt, sid)
         await start(rt, sid, result)
         state['verdict'] = 'revise'
-        checked = await start(rt, sid, result)
+        checked = await start(rt, sid, result, recheck=True)
         assert checked['nodes'][0]['stages']['produce'] == 'revise'
         current = rt.work_graph.active(sid)
         assert not rt.work_graph.checks.valid(current, current['nodes'][0], 'produce')
