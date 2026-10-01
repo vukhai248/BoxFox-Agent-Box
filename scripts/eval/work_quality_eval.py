@@ -5,6 +5,7 @@ real sources (not FixtureExecutor); all opened URLs and access failures are reta
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -46,8 +47,13 @@ async def run(args):
     route = next({'connectionId': c['id'], 'modelId': m['id']} for c in state['connections']
                  if c['providerId'] == 'opencode' and c.get('enabled')
                  for m in c['models'] if m['id'] == 'space-bunny-free' and m.get('enabled'))
+    source_paths = list((ROOT/'backend/src/agentbox/agent_core').glob('work_*.py')) + [
+        ROOT/'backend/src/agentbox/agent_core/runtime.py', Path(__file__).resolve()]
+    source_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths}
+    source_commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     rows = []
-    for case,(text,expected) in CASES.items():
+    for case in args.cases:
+        text, expected = CASES[case]
         for repeat in range(1,args.repeats+1):
             folder=out/f'{case}-{repeat}'
             folder.mkdir()
@@ -78,6 +84,8 @@ async def run(args):
             except Exception as exc:
                 row={'case':case,'repeat':repeat,'status':'error','error':str(exc),'oracle':False}
             rows.append(row)
+            row.update(commit=source_commit, sourceHashes=source_hashes,
+                       scope='native reviewer/tools, disposable DB and workspace, no full main/CUA test')
             (out/'results.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
             print(json.dumps({k:row.get(k) for k in ('case','repeat','status','oracle','latencySeconds')},ensure_ascii=False),flush=True)
             store.db.close()
@@ -88,4 +96,5 @@ if __name__=='__main__':
     p.add_argument('--router',required=True)
     p.add_argument('--output',required=True)
     p.add_argument('--repeats',type=int,default=2)
+    p.add_argument('--cases', nargs='+', choices=list(CASES), default=list(CASES))
     asyncio.run(run(p.parse_args()))

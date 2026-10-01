@@ -42,6 +42,25 @@ test('Stop propagates cancellation and request deadline is bounded, without fall
   const keepAlive = setInterval(() => {}, 1000); t.after(() => clearInterval(keepAlive));
   await assert.rejects(events(f.engine, request(f.c.id)), e => e.code === 'TIMEOUT'); assert.equal(aborted, true); assert.equal(f.store.list('usage')[0].status, 'failed');
 });
+
+test('large request extension still aborts the provider and records TIMEOUT', async t => {
+  let aborted = false;
+  const f = await fixture(t, { async *generate({ signal }) {
+    yield { type: 'delta', delta: { content: 'partial' } };
+    await new Promise((_, reject) => {
+      const cancel = () => { aborted = true; reject(signal.reason); };
+      if (signal.aborted) cancel(); else signal.addEventListener('abort', cancel, { once: true });
+    });
+  } });
+  f.engine.deadlineMs = 10;
+  f.engine.largeDeadlineMs = 60;
+  const keepAlive = setInterval(() => {}, 1000); t.after(() => clearInterval(keepAlive));
+  const started = performance.now();
+  await assert.rejects(events(f.engine, { ...request(f.c.id), max_tokens: 16000 }), e => e.code === 'TIMEOUT');
+  assert.ok(performance.now() - started >= 40, 'large profile rather than the short deadline was applied');
+  assert.equal(aborted, true);
+  assert.equal(f.store.list('usage')[0].status, 'failed');
+});
 test('SQLite persists metadata, encrypted credentials and hash-only gateway keys', async t => {
   const { store, dir, c, service } = await fixture(t);
   const key = store.addKey('client', []);

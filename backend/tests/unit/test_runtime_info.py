@@ -327,9 +327,13 @@ def test_the_limits_are_the_numbers_the_runtime_applies(tmp_path):
     clamped = runtime.create({'skills': [], 'maxSteps': 9999, 'deadlineSeconds': 99999})['config']
     assert (clamped['maxSteps'], clamped['deadlineSeconds']) == \
         (info['limits']['maxStepsMax'], info['limits']['deadlineMaxSeconds'])
-    # Vai trò con bị chặn chặt hơn ở `delegate()`; hai hằng đó là thứ hàm đó dùng.
-    source = inspect.getsource(runtime_module.HarnessRuntime.delegate)
-    assert 'min(CHILD_MAX_STEPS' in source and 'min(CHILD_DEADLINE_SECONDS' in source
+    # Generic limits remain unchanged; Work Graph profiles are reported separately.
+    # Check behavior rather than a particular spelling of min() in delegate's source.
+    from agentbox.agent_core import work_budget
+    generic = work_budget.requested('explore', None, 'branch', limits.CHILD_MAX_STEPS, limits.CHILD_DEADLINE_SECONDS)
+    assert (generic['maxSteps'], generic['deadlineSeconds']) == \
+        (info['limits']['childMaxSteps'], info['limits']['childDeadlineSeconds'])
+    assert info['workGraphBudgets'] == work_budget.profiles()
     store.close()
 
 

@@ -422,6 +422,7 @@ def create_app(runtime):
         ở phía UI được chép tay lại một con số, nếu không hai bên sẽ lệch nhau và khối
         "Tool access" sẽ hứa điều engine từ chối.
         """
+        from ..agent_core import work_budget
         return web.json_response({
             'toolGroups': tool_groups(),
             'tools': sorted(ORCHESTRATOR_TOOLS),
@@ -432,6 +433,7 @@ def create_app(runtime):
                       'rateLimitMaxSeconds': RATE_LIMIT_MAX_SECONDS,
                       'budgetSeconds': RETRY_BUDGET_SECONDS,
                       'jitter': BACKOFF_JITTER},
+            'workGraphBudgets': work_budget.profiles(),
             'limits': {'instructionsChars': INSTRUCTIONS_MAX_CHARS,
                        'maxStepsDefault': MAX_STEPS_DEFAULT,
                        'maxStepsMax': MAX_STEPS_MAX,

@@ -4,9 +4,14 @@ import { normalizeUsage, reportedCost } from './usage.mjs';
 import { costFromUsage } from './pricing.mjs';
 import { RING_EXHAUSTED_MESSAGE } from './keyring.mjs';
 import { logEvent } from './system-log.mjs';
+import { LARGE_OUTPUT_TOKENS } from './request-budget.mjs';
 
 export class RouterEngine {
-  constructor({ service, deadlineMs = 90000 }) { this.service = service; this.store = service.store; this.rotation = new Map(); this.keyRing = service.keyRing; this.deadlineMs = deadlineMs; }
+  constructor({ service, deadlineMs = 90000, largeDeadlineMs = null }) { this.service = service; this.store = service.store; this.rotation = new Map(); this.keyRing = service.keyRing; this.deadlineMs = deadlineMs; this.largeDeadlineMs = largeDeadlineMs; }
+  requestDeadline(body) {
+    return body.max_tokens >= LARGE_OUTPUT_TOKENS && this.largeDeadlineMs !== null
+      ? Math.max(this.deadlineMs, this.largeDeadlineMs) : this.deadlineMs;
+  }
   selection(body, key) {
     let selected;
     if (body.aliasId) selected = { aliasId: body.aliasId };
@@ -64,7 +69,7 @@ export class RouterEngine {
     const selection = this.selection(body, key);
     const requestId = randomUUID(); const began = Date.now();
     const controller = new AbortController();
-    const deadline = AbortSignal.timeout(this.deadlineMs);
+    const deadline = AbortSignal.timeout(this.requestDeadline(body));
     const combined = AbortSignal.any([controller.signal, deadline, ...(signal ? [signal] : [])]);
     const record = { requestId, connectionId: null, modelId: null, keyId: null, keyLabel: null, aliasId: selection.alias?.id || null, clientKeyId: key?.id || null, status: 'failed', latencyMs: 0, inputTokens: null, cachedTokens: null, cacheCreationTokens: null, reasoningTokens: null, outputTokens: null, totalTokens: null, cost: null, costBasis: null, estimated: false, error: null };
     let lastError; let emitted = false; let succeeded = false; let outputBytes = 0; const reactiveRefresh = new Set();

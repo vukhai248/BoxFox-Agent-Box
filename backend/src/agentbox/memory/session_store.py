@@ -383,6 +383,18 @@ class SessionStore:
         return [{'seq': r['seq'], 'type': r['kind'], 'data': json.loads(r['payload']),
                  'created': r['created']} for r in reversed(rows)]
 
+    def execution_events(self, sid):
+        """Internal execution summary, excluding streamed deltas and UI page limits.
+
+        A child may emit thousands of deltas before its final error/verdict.
+        The public events() API stays paginated at 500; metadata must inspect
+        the whole relevant sequence rather than silently dropping the tail.
+        """
+        self.get(sid)
+        return [{'seq': r['seq'], 'type': r['kind'], 'data': json.loads(r['payload']), 'created': r['created']}
+                for r in self.db.execute("SELECT * FROM events WHERE session_id=? AND kind IN "
+                    "('assistant','turn_end','error','notice','tool_start') ORDER BY seq", (sid,))]
+
     def list(self, limit=50):
         rows = self.db.execute(
             'SELECT id, role, config, status, updated FROM sessions WHERE parent_id IS NULL ORDER BY updated DESC LIMIT ?',

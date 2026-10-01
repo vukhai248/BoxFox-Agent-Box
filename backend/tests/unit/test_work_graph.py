@@ -865,7 +865,8 @@ def test_reviewers_get_a_hard_step_cap_and_a_verdict_wrap_up(tmp_path):
     reviewers = [c for c in children if c['config']['workBinding']['purpose'] == 'review']
     producers = [c for c in children if c['config']['workBinding']['purpose'] == 'produce']
     assert out['outputs'][0]['status'] == 'accepted'
-    assert reviewers and all(c['config']['maxSteps'] <= wg.REVIEW_MAX_STEPS for c in reviewers)
+    from agentbox.agent_core import work_budget
+    assert reviewers and all(c['config']['maxSteps'] == work_budget.LONG_REVIEW_STEPS for c in reviewers)
     assert producers and all(c['config']['maxSteps'] > wg.REVIEW_MAX_STEPS for c in producers)
     assert 'VERDICT' in wg.wrap_up_note(reviewers[0]) and wg.wrap_up_note(producers[0]) == ''
 

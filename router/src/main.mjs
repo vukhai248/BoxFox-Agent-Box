@@ -7,6 +7,7 @@ import { createRouterServer, bridgeExposureNote } from './server.mjs';
 import { createSafeFetch } from './network.mjs';
 import { createProviders } from './providers/index.mjs';
 import { ModelSyncScheduler } from './model-sync.mjs';
+import { largeRequestDeadline } from './request-budget.mjs';
 import { logEvent, logFailure, logPath, resetOnShutdown } from './system-log.mjs';
 
 const production = process.argv.includes('--production');
@@ -14,7 +15,7 @@ const port = Number(process.env.BOXFOX_ROUTER_PORT || (production ? 3100 : 3101)
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid router port.');
 const store = new RouterStore();
 const service = new ProviderService({ store, providers: createProviders({ fetchImpl: createSafeFetch() }) });
-const engine = new RouterEngine({ service });
+const engine = new RouterEngine({ service, largeDeadlineMs: largeRequestDeadline() });
 const oauth = new OAuthManager({ service, port: Number(process.env.BOXFOX_OAUTH_PORT || 51121) });
 const modelSync = new ModelSyncScheduler({ service, intervalMs: Number(process.env.BOXFOX_MODEL_SYNC_MS || 6 * 60 * 60 * 1000) });
 // Opt-in: the sandbox reaches the router through the docker bridge gateway, so the

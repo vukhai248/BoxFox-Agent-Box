@@ -233,11 +233,23 @@ class Checks:
         if unavailable:
             return doc | {'status': 'unverified', 'error': unavailable, 'finishedAt': time.time(), 'attempts': []}
         lang = work_prompts.language(run['goal'])
+        from . import work_budget
+        policies = ([s.get('policy') or {} for n in run['nodes'] for s in n['stages'].values()]
+                    if whole else [node['stages'][stage].get('policy') or {}])
+        risk = 'consequential' if any(p.get('risk') == 'consequential' for p in policies) else 'normal'
+        hints = work_budget.review_hints(metas, criteria, risk)
+        request = work_budget.requested(spec['executorRole'],
+            {'purpose': 'review', 'budgetHints': hints}, None, 40, 900)
+        effective_steps = min(request['maxSteps'], session['config']['maxSteps'])
         if whole:
             goal = work_prompts.whole_review_goal(run['title'], run['goal'], lang,
                                                  research_only=work_policy.research_only(run))
         else:
-            goal, _ = graph.reviewer_goal(run, node, stage, '')
+            goal, _ = graph.reviewer_goal(run, node, stage, '', budget_steps=effective_steps)
+        if whole:
+            goal += work_prompts.choose(lang,
+                f'\nBudget: {effective_steps} model steps; batch tools and reserve time for the verdict.',
+                f'\nNgân sách: {effective_steps} vòng model; gom tool và dành thời gian viết kết luận.')
         goal += '\n' + contract(lang, criteria)
         if spec['id'] == 'tests':
             goal += work_prompts.choose(lang,
@@ -256,11 +268,12 @@ class Checks:
             result, text = await graph.spawn(session, run, None if whole else node, stage, 'review',
                                             spec['executorRole'], goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
-                                                           'checkKind': spec['id']})
+                                                           'checkKind': spec['id'], 'budgetHints': hints})
             child_id = result.get('sessionId')
             status, coverage, findings = parse_report(text, criteria)
             doc.pop('error', None)
-            doc.setdefault('attempts', []).append({'childId': child_id, 'status': status, 'completed': complete(result)})
+            doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
+                'completed': complete(result), 'execution': work_budget.receipt(result)})
             doc.update(childId=child_id, coverage=coverage, findings=findings, status=status)
             if not complete(result):
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')

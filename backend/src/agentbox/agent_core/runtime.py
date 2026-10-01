@@ -706,6 +706,11 @@ def aggregate_model_metadata(rows):
     return aggregate
 
 
+def router_http_timeout(max_tokens):
+    """HTTPX read inactivity, not total compute time; covers router's bounded 240s option."""
+    return httpx.Timeout(120, read=270 if max_tokens >= 8000 else 120)
+
+
 class RouterClient:
     def __init__(self, url='http://127.0.0.1:3101'):
         self.url = url.rstrip('/')
@@ -807,7 +812,7 @@ class RouterClient:
         if freed:
             system_log.write('model.request_trimmed', level='warn', session_id=route.get('sessionId'),
                              chars=freed, phase=phase, budgetBytes=ROUTER_BODY_BUDGET)
-        async with httpx.AsyncClient(timeout=120, trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=router_http_timeout(max_tokens), trust_env=False) as client:
             content = ''
             reasoning_content = ''
             refusal = ''
@@ -2144,7 +2149,7 @@ class HarnessRuntime(RuntimeCommands):
             try:
                 session = self.store.get(child_id)
                 status = session['status']
-                events = self.store.events(child_id)
+                events = self.store.execution_events(child_id)
                 end = next((event['data'] for event in reversed(events)
                             if event['type'] == 'turn_end'), {})
                 # T3/T13 — bộ số của con đọc CẢ CHUỖI `turn_end`, không chỉ bước cuối:
@@ -6787,12 +6792,11 @@ class HarnessRuntime(RuntimeCommands):
             research_runtime.missing_brief_gate(self, session, role)
             research_runtime.branch_limit_check(self, session, role)
         tier = 0 if work else int(research_runtime.research_config(session).get('tier') or 0)
-        child_steps = min(CHILD_MAX_STEPS, config['maxSteps'])
-        child_deadline = min(CHILD_DEADLINE_SECONDS, config['deadlineSeconds'])
-        if work and work.get('purpose') == 'review':
-            # A reviewer checks, it does not redo the work: a hard cap keeps it from running out
-            # of budget before its VERDICT line (live test: 38-step reviews with no verdict).
-            child_steps = min(child_steps, work_graph.REVIEW_MAX_STEPS)
+        from . import work_budget
+        budget_request = work_budget.requested(role, work,
+            (work or {}).get('taskKind') or task_kind, CHILD_MAX_STEPS, CHILD_DEADLINE_SECONDS)
+        child_steps = min(budget_request['maxSteps'], config['maxSteps'])
+        child_deadline = min(budget_request['deadlineSeconds'], config['deadlineSeconds'])
         if role == 'research' and not tier and not work:
             # P1 (cửa 2, M-07): ngoài mode, nhánh research ĐẦU TIÊN không brief là tra cứu nhanh ⇒
             # kẹp vào trần mức 1 (20 bước/180 s). `missing_brief_gate` đã từ chối nhánh thứ hai.
@@ -6834,6 +6838,7 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['maxTokens'] = output_budget
             if work:
                 child['config']['workBinding'] = work
+                child['config']['workBudget'] = work_budget.applied(budget_request, child['config'])
                 child['config']['tools'] = sorted(set(child['config']['tools']) | {'work_artifact_read'})
                 if work.get('checkId') or work.get('diagnosticOnly'):
                     child['config']['tools'] = [n for n in child['config']['tools'] if n not in ('file_write','file_edit_block','write_plan')]
@@ -6925,7 +6930,7 @@ class HarnessRuntime(RuntimeCommands):
             'context': echo_context,
             'prompt': echo_prompt,
             'taskKind': task_kind,
-            **({'work': work} if work else {}),
+            **({'work': work, 'budget': child['config']['workBudget']} if work else {}),
         })
         try:
             # T3 — `wallMs` đo đúng thời gian CON chạy, không tính lúc xếp hàng chờ slot.
@@ -6968,7 +6973,7 @@ class HarnessRuntime(RuntimeCommands):
             raise
         child_rec = self.store.get(child['id'])
         status = child_rec['status']
-        child_events = self.store.events(child['id'])
+        child_events = self.store.execution_events(child['id'])
         last_error = next((e['data'].get('message') for e in reversed(child_events) if e['type'] == 'error'), None)
         # C2 + B5 — con trả về câu trả lời DỞ vì một trong ba trần (output của nhà cung cấp, ngân
         # sách bước, hạn chót). `_run` của con đã phát notice BỀN mang ĐÚNG mã lý do, và hàng
@@ -6994,6 +6999,7 @@ class HarnessRuntime(RuntimeCommands):
                   'is_error': status != 'completed', 'last_error': last_error, 'tools_run': tools_run}
         if work:
             result['work'] = work
+            result['budget'] = child_rec['config']['workBudget']
         if status == 'partial':
             # Lý do ĐÚNG MÃ cho cha: cắt ở trần output của nhà cung cấp, hết trần bước, hay hết
             # hạn chót là ba ca khác nhau — cha cần biết ca nào để xử lý.

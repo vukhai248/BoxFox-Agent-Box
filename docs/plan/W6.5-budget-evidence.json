@@ -1,0 +1,2016 @@
+{
+  "schema": "boxfox-w65-evidence/1",
+  "branch": "B",
+  "baselineCommit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+  "provider": "opencode",
+  "model": "space-bunny-free",
+  "sourceHashes": {
+    "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend/src/agentbox/agent_core/runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+    "backend/src/agentbox/agent_core/work_checks.py": "1bd6f8ae53a1df0f34bcfc33bf8088b8d1f23a2f9ee86f3fa101aef9a97e23c6",
+    "backend/src/agentbox/agent_core/work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+    "backend/src/agentbox/memory/session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+    "backend/src/agentbox/api/server.py": "99da74bca5670aaaba2ed1b36513902bbccfa560489b948c64213c2b8fdd1290",
+    "router/src/engine.mjs": "2c5c3216ce7408a175fa10d6b230768915d8dba5f778f407dbdbf024f3b82396",
+    "router/src/main.mjs": "c56bfbfa389318404b5338636121cb9bae67d5a615b08cedb4d16409239c7f1c",
+    "router/src/request-budget.mjs": "5401d961400d1a17143d32d4516b347f7490939611b04662c87dd3bed2c5fa2a"
+  },
+  "ownerPolicy": {
+    "confirmation": "cho bằng cha",
+    "meaning": "requested profile is clamped by owner; not a separate 60-step entitlement",
+    "examples": {
+      "owner40_longProducer": 40,
+      "owner60_longProducer": 60,
+      "owner60_longReviewer": 24
+    }
+  },
+  "profiles": {
+    "deliverableSteps": 60,
+    "shortReviewSteps": 14,
+    "longReviewSteps": 24,
+    "childDeadlineSeconds": 900,
+    "routerLargeDeadlineMs": 180000,
+    "routerSmallDeadlineMs": 90000,
+    "httpxReadIdleSeconds": 270
+  },
+  "unit": {
+    "command": "python -m pytest backend/tests/unit -q --junitxml=.tmp/work-checks/w65-unit-final-v3.xml",
+    "tests": 2697,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 18,
+    "passed": 2679,
+    "exit": 0,
+    "xmlHash": "651ddf93d0e68740e49ae17085f300c1edaad55dce024bca43198b4e0028577d",
+    "logHash": "d58f77f63c66abc4615611eff85ffc74351dafe17fd5d6a66e48730352a09483"
+  },
+  "router": {
+    "command": "npm test (router)",
+    "passed": 252,
+    "failed": 0,
+    "exit": 0,
+    "logHash": "ad215263aca703a4d9470b783a0b336c721d10d40088e386dba5f5f390109012"
+  },
+  "calibrationProfiles": [
+    {
+      "folder": "w65-baseline-steps",
+      "count": 12,
+      "oracles": 5,
+      "latencyP50Seconds": 68.146,
+      "latencyP95Seconds": 149.758,
+      "knownOutputTokens": 43545,
+      "toolCalls": 242,
+      "toolErrors": 27,
+      "exactRepeatCalls": 3,
+      "missingUsageSteps": 0,
+      "rows": [
+        {
+          "case": "short_lookup",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 29.116,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 684,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 2120,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 24.94,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "short_lookup",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 31.337,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 614,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 1853,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 29.429,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 104.883,
+          "readSources": 37,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 403,
+          "stepsUsed": 38,
+          "toolCalls": 37,
+          "toolErrors": 0,
+          "partialReasons": [
+            "STEP_BUDGET_EXHAUSTED"
+          ],
+          "completionAttempts": 38,
+          "knownOutputTokens": 2550,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 12.256,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 83.395,
+          "readSources": 37,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 397,
+          "stepsUsed": 38,
+          "toolCalls": 37,
+          "toolErrors": 0,
+          "partialReasons": [
+            "STEP_BUDGET_EXHAUSTED"
+          ],
+          "completionAttempts": 38,
+          "knownOutputTokens": 2545,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 14.888,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 117.251,
+          "readSources": 37,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 856,
+          "stepsUsed": 38,
+          "toolCalls": 37,
+          "toolErrors": 0,
+          "partialReasons": [
+            "STEP_BUDGET_EXHAUSTED"
+          ],
+          "completionAttempts": 38,
+          "knownOutputTokens": 2382,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 10.291,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 63.826,
+          "readSources": 37,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 293,
+          "stepsUsed": 38,
+          "toolCalls": 37,
+          "toolErrors": 0,
+          "partialReasons": [
+            "STEP_BUDGET_EXHAUSTED"
+          ],
+          "completionAttempts": 38,
+          "knownOutputTokens": 2403,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 6.885,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 149.758,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1241,
+          "stepsUsed": 8,
+          "toolCalls": 19,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 8,
+          "knownOutputTokens": 6562,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 54.023,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 69.9,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1402,
+          "stepsUsed": 6,
+          "toolCalls": 22,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 5897,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 34.853,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 66.392,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 235,
+          "stepsUsed": 8,
+          "toolCalls": 9,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 8,
+          "knownOutputTokens": 6084,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 36.575,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 1
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 83.186,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1679,
+          "stepsUsed": 6,
+          "toolCalls": 9,
+          "toolErrors": 2,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 5932,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 56.801,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 1,
+          "profile": "baseline",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 44.043,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 147,
+          "stepsUsed": 5,
+          "toolCalls": 18,
+          "toolErrors": 13,
+          "partialReasons": [],
+          "completionAttempts": 5,
+          "knownOutputTokens": 2880,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 18.553,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 1
+        },
+        {
+          "case": "long_testing",
+          "repeat": 2,
+          "profile": "baseline",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 41.129,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 140,
+          "stepsUsed": 6,
+          "toolCalls": 15,
+          "toolErrors": 12,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 2337,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 11.457,
+          "rawResultHash": "7503e74e21f3c458a8daa1878ad5124fb5452295c515308faf69f6700d7e0cc0",
+          "duplicateCalls": 1
+        }
+      ]
+    },
+    {
+      "folder": "w65-medium-steps",
+      "count": 12,
+      "oracles": 10,
+      "latencyP50Seconds": 83.616,
+      "latencyP95Seconds": 199.978,
+      "knownOutputTokens": 48472,
+      "toolCalls": 255,
+      "toolErrors": 15,
+      "exactRepeatCalls": 1,
+      "missingUsageSteps": 0,
+      "rows": [
+        {
+          "case": "short_lookup",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 29.483,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 265,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 1499,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 19.467,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "short_lookup",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 15.845,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 90,
+          "stepsUsed": 3,
+          "toolCalls": 3,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 3,
+          "knownOutputTokens": 2073,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 11.846,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 92.03,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 953,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 4050,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 22.358,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 178.809,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1227,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 5099,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 40.405,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 141.184,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1410,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 6171,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 44.467,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 199.978,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 3405,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 5170,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 45.403,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 99.258,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1029,
+          "stepsUsed": 6,
+          "toolCalls": 23,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 6025,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 38.741,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 110.37,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1802,
+          "stepsUsed": 8,
+          "toolCalls": 24,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 8,
+          "knownOutputTokens": 7191,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 45.095,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 46.226,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 981,
+          "stepsUsed": 4,
+          "toolCalls": 8,
+          "toolErrors": 2,
+          "partialReasons": [],
+          "completionAttempts": 4,
+          "knownOutputTokens": 3607,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 34.447,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 69.984,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1312,
+          "stepsUsed": 7,
+          "toolCalls": 11,
+          "toolErrors": 3,
+          "partialReasons": [],
+          "completionAttempts": 7,
+          "knownOutputTokens": 4928,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 44.039,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 1,
+          "profile": "medium",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 75.202,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 348,
+          "stepsUsed": 7,
+          "toolCalls": 11,
+          "toolErrors": 6,
+          "partialReasons": [],
+          "completionAttempts": 7,
+          "knownOutputTokens": 1441,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 15.923,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 1
+        },
+        {
+          "case": "long_testing",
+          "repeat": 2,
+          "profile": "medium",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 20.41,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 84,
+          "stepsUsed": 5,
+          "toolCalls": 6,
+          "toolErrors": 2,
+          "partialReasons": [],
+          "completionAttempts": 5,
+          "knownOutputTokens": 1218,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 5.584,
+          "rawResultHash": "095145506b8cf85f9866f508d2e1b72d2dcc40db62f53fc024286210c8778342",
+          "duplicateCalls": 0
+        }
+      ]
+    },
+    {
+      "folder": "w65-high-steps",
+      "count": 12,
+      "oracles": 10,
+      "latencyP50Seconds": 121.1625,
+      "latencyP95Seconds": 193.227,
+      "knownOutputTokens": 53530,
+      "toolCalls": 251,
+      "toolErrors": 14,
+      "exactRepeatCalls": 0,
+      "missingUsageSteps": 0,
+      "rows": [
+        {
+          "case": "short_lookup",
+          "repeat": 1,
+          "profile": "high",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 46.256,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 368,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 1811,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 43.238,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "short_lookup",
+          "repeat": 2,
+          "profile": "high",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 15.738,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 73,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 1715,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 12.532,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 1,
+          "profile": "high",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 193.227,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1067,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 4327,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 98.079,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 2,
+          "profile": "high",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 142.671,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 455,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 4106,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 23.316,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 1,
+          "profile": "high",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 124.215,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1166,
+          "stepsUsed": 44,
+          "toolCalls": 43,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 44,
+          "knownOutputTokens": 5155,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 29.674,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 2,
+          "profile": "high",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 118.11,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 434,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 7028,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 30.607,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 1,
+          "profile": "high",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 134.14,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1085,
+          "stepsUsed": 6,
+          "toolCalls": 22,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 6261,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 73.949,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 2,
+          "profile": "high",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 168.402,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1254,
+          "stepsUsed": 8,
+          "toolCalls": 26,
+          "toolErrors": 4,
+          "partialReasons": [],
+          "completionAttempts": 8,
+          "knownOutputTokens": 6879,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 56.289,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 1,
+          "profile": "high",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 128.92,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1083,
+          "stepsUsed": 5,
+          "toolCalls": 8,
+          "toolErrors": 2,
+          "partialReasons": [],
+          "completionAttempts": 5,
+          "knownOutputTokens": 5686,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 108.462,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 2,
+          "profile": "high",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 40.971,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 186,
+          "stepsUsed": 5,
+          "toolCalls": 8,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 5,
+          "knownOutputTokens": 5169,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 30.447,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 1,
+          "profile": "high",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 44.715,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 189,
+          "stepsUsed": 5,
+          "toolCalls": 10,
+          "toolErrors": 6,
+          "partialReasons": [],
+          "completionAttempts": 5,
+          "knownOutputTokens": 4195,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 15.251,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 2,
+          "profile": "high",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 28.156,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": null,
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 89,
+          "stepsUsed": 6,
+          "toolCalls": 6,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 1198,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 5.694,
+          "rawResultHash": "52ba38106acf869bdaa99fd6705932dcf7248780f17e41fc8417f10808bb90b1",
+          "duplicateCalls": 0
+        }
+      ]
+    }
+  ],
+  "calibrationWarning": "36 total trials retained. The two multi-artifact trials/profile used a single-node reviewer wrapper with multiple targets, all byte-identical. They do not benchmark production whole-review. Do not use them to diagnose whole-review skip behavior or select its budget.",
+  "nativeReplay": [
+    {
+      "folder": "w65-native-final",
+      "count": 4,
+      "oracles": 4,
+      "latencyP50Seconds": 69.563,
+      "latencyP95Seconds": 164.012,
+      "knownOutputTokens": 13826,
+      "toolCalls": 86,
+      "toolErrors": 0,
+      "exactRepeatCalls": 0,
+      "missingUsageSteps": 0,
+      "rows": [
+        {
+          "case": "short_lookup",
+          "repeat": 1,
+          "profile": "native",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 27.474,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "lookup_or_execution",
+            "requestedMaxSteps": 40,
+            "effectiveMaxSteps": 40,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 85,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 2082,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 24.257,
+          "rawResultHash": "1f2d8265a69ac4302fef721b5b9d1156ce6353f344141c2e36abf069e30d7c26",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "short_lookup",
+          "repeat": 2,
+          "profile": "native",
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 24.094,
+          "readSources": 1,
+          "requiredSources": 1,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "lookup_or_execution",
+            "requestedMaxSteps": 40,
+            "effectiveMaxSteps": 40,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 40,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 82,
+          "stepsUsed": 2,
+          "toolCalls": 1,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 2,
+          "knownOutputTokens": 2006,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 22.199,
+          "rawResultHash": "1f2d8265a69ac4302fef721b5b9d1156ce6353f344141c2e36abf069e30d7c26",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 1,
+          "profile": "native",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 111.652,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "deliverable",
+            "requestedMaxSteps": 60,
+            "effectiveMaxSteps": 60,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1290,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 5783,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 33.024,
+          "rawResultHash": "1f2d8265a69ac4302fef721b5b9d1156ce6353f344141c2e36abf069e30d7c26",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_research",
+          "repeat": 2,
+          "profile": "native",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 164.012,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "deliverable",
+            "requestedMaxSteps": 60,
+            "effectiveMaxSteps": 60,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 666,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 3955,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 34.843,
+          "rawResultHash": "1f2d8265a69ac4302fef721b5b9d1156ce6353f344141c2e36abf069e30d7c26",
+          "duplicateCalls": 0
+        }
+      ]
+    },
+    {
+      "folder": "w65-native-final-remaining",
+      "count": 8,
+      "oracles": 6,
+      "latencyP50Seconds": 66.3185,
+      "latencyP95Seconds": 330.427,
+      "knownOutputTokens": 38810,
+      "toolCalls": 176,
+      "toolErrors": 22,
+      "exactRepeatCalls": 0,
+      "missingUsageSteps": 0,
+      "rows": [
+        {
+          "case": "long_plan_design",
+          "repeat": 1,
+          "profile": "native",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 273.134,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "deliverable",
+            "requestedMaxSteps": 60,
+            "effectiveMaxSteps": 60,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1174,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [],
+          "completionAttempts": 43,
+          "knownOutputTokens": 6815,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 111.328,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_plan_design",
+          "repeat": 2,
+          "profile": "native",
+          "status": "needs_checks",
+          "oracle": true,
+          "latencySeconds": 330.427,
+          "readSources": 42,
+          "requiredSources": 42,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "deliverable",
+            "requestedMaxSteps": 60,
+            "effectiveMaxSteps": 60,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 60,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 881,
+          "stepsUsed": 43,
+          "toolCalls": 42,
+          "toolErrors": 0,
+          "partialReasons": [
+            "UPSTREAM_RETRY"
+          ],
+          "completionAttempts": 43,
+          "knownOutputTokens": 5066,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 92.649,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 1,
+          "profile": "native",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 75.085,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": {
+            "profile": "review_long",
+            "requestedMaxSteps": 24,
+            "effectiveMaxSteps": 24,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1503,
+          "stepsUsed": 8,
+          "toolCalls": 25,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 8,
+          "knownOutputTokens": 6863,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 37.785,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "single_large_review",
+          "repeat": 2,
+          "profile": "native",
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 68.37,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": true,
+          "appliedBudget": {
+            "profile": "review_long",
+            "requestedMaxSteps": 24,
+            "effectiveMaxSteps": 24,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1545,
+          "stepsUsed": 7,
+          "toolCalls": 25,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 7,
+          "knownOutputTokens": 6405,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 38.197,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 1,
+          "profile": "native",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 64.267,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": {
+            "profile": "review_long",
+            "requestedMaxSteps": 24,
+            "effectiveMaxSteps": 24,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 190,
+          "stepsUsed": 7,
+          "toolCalls": 7,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 7,
+          "knownOutputTokens": 4518,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 34.698,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 2,
+          "profile": "native",
+          "status": "unverified",
+          "oracle": false,
+          "latencySeconds": 53.615,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": false,
+          "appliedBudget": {
+            "profile": "review_long",
+            "requestedMaxSteps": 24,
+            "effectiveMaxSteps": 24,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 24,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 1243,
+          "stepsUsed": 7,
+          "toolCalls": 11,
+          "toolErrors": 1,
+          "partialReasons": [],
+          "completionAttempts": 7,
+          "knownOutputTokens": 4920,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 23.428,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 1,
+          "profile": "native",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 27.668,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 194,
+          "stepsUsed": 4,
+          "toolCalls": 7,
+          "toolErrors": 5,
+          "partialReasons": [],
+          "completionAttempts": 4,
+          "knownOutputTokens": 1900,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 8.878,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        },
+        {
+          "case": "long_testing",
+          "repeat": 2,
+          "profile": "native",
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 33.991,
+          "readSources": null,
+          "requiredSources": null,
+          "fullReads": null,
+          "appliedBudget": {
+            "profile": "review_short",
+            "requestedMaxSteps": 14,
+            "effectiveMaxSteps": 14,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 900,
+            "clamped": false
+          },
+          "childConfig": {
+            "maxSteps": 14,
+            "deadlineSeconds": 900
+          },
+          "eventCount": 652,
+          "stepsUsed": 6,
+          "toolCalls": 17,
+          "toolErrors": 13,
+          "partialReasons": [],
+          "completionAttempts": 6,
+          "knownOutputTokens": 2323,
+          "missingUsageSteps": 0,
+          "largestClientCallSeconds": 15.575,
+          "rawResultHash": "230cc636042623a8550b497510febb21ef92351efe2f756fa259432e2c7030fb",
+          "duplicateCalls": 0
+        }
+      ]
+    }
+  ],
+  "nativeWarning": "12 retained trials across startup snapshots, one external interruption; unfinished attempt retained separately and rerun. Exclude two legacy multi-target fixture trials from product whole-review inference. needs_checks only means draft, not verified SWE quality.",
+  "requestComparison": {
+    "results": [
+      {
+        "repeat": 1,
+        "deadlineSeconds": 90,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "status": "error",
+        "error": {
+          "name": "TimeoutError",
+          "code": 23,
+          "message": "The operation was aborted due to timeout"
+        },
+        "seconds": 90.0471488,
+        "firstDeltaMs": 1341.2002,
+        "answerChars": 2246,
+        "reasoningChars": 23975,
+        "words": 450,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      },
+      {
+        "repeat": 1,
+        "deadlineSeconds": 180,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "finishReason": "length",
+        "usage": {
+          "prompt_tokens": 565,
+          "completion_tokens": 16000,
+          "total_tokens": 16565,
+          "prompt_tokens_details": {
+            "cached_tokens": 564
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 4696
+          }
+        },
+        "status": "partial",
+        "seconds": 168.9972103,
+        "firstDeltaMs": 1708.0754000000015,
+        "answerChars": 26552,
+        "reasoningChars": 18178,
+        "words": 4458,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      },
+      {
+        "repeat": 1,
+        "deadlineSeconds": 240,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "finishReason": "length",
+        "usage": {
+          "prompt_tokens": 565,
+          "completion_tokens": 16000,
+          "total_tokens": 16565,
+          "prompt_tokens_details": {
+            "cached_tokens": 564
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 2790
+          }
+        },
+        "status": "partial",
+        "seconds": 161.471178,
+        "firstDeltaMs": 823.7884999999951,
+        "answerChars": 31162,
+        "reasoningChars": 10234,
+        "words": 5214,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      },
+      {
+        "repeat": 2,
+        "deadlineSeconds": 240,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "finishReason": "length",
+        "usage": {
+          "prompt_tokens": 565,
+          "completion_tokens": 16000,
+          "total_tokens": 16565,
+          "prompt_tokens_details": {
+            "cached_tokens": 564
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 5136
+          }
+        },
+        "status": "partial",
+        "seconds": 176.55199319999997,
+        "firstDeltaMs": 1146.662100000016,
+        "answerChars": 25598,
+        "reasoningChars": 20584,
+        "words": 4390,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      },
+      {
+        "repeat": 2,
+        "deadlineSeconds": 180,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "finishReason": "length",
+        "usage": {
+          "prompt_tokens": 565,
+          "completion_tokens": 16000,
+          "total_tokens": 16565,
+          "prompt_tokens_details": {
+            "cached_tokens": 564
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 4410
+          }
+        },
+        "status": "partial",
+        "seconds": 148.20148620000003,
+        "firstDeltaMs": 795.6357000001008,
+        "answerChars": 27634,
+        "reasoningChars": 16626,
+        "words": 4580,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      },
+      {
+        "repeat": 2,
+        "deadlineSeconds": 90,
+        "model": "opencode/space-bunny-free",
+        "maxTokens": 16000,
+        "scope": "direct production OpenCode adapter, no HTTP client/whole child budget comparison",
+        "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+        "status": "error",
+        "error": {
+          "name": "TimeoutError",
+          "code": 23,
+          "message": "The operation was aborted due to timeout"
+        },
+        "seconds": 90.04179499999992,
+        "firstDeltaMs": 811.2033999999985,
+        "answerChars": 18986,
+        "reasoningChars": 4675,
+        "words": 3260,
+        "semanticAdjudication": "pending; stop and word count do not prove professional quality"
+      }
+    ],
+    "scope": "Direct OpenCode adapter; six stress trials, two timeouts and four output-length partials. Not completed plans or normal-workload quality/latency certification."
+  },
+  "networkConfoundedHttp": [
+    {
+      "route": {
+        "connectionId": "07a63353-908c-4ba7-9296-d8bf4364294e",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "scope": "real production client/server/engine, disposable DB, no tool/child/CUA test",
+      "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+      "sourceHashes": {
+        "backend/src/agentbox/agent_core/runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+        "router/src/engine.mjs": "2c5c3216ce7408a175fa10d6b230768915d8dba5f778f407dbdbf024f3b82396",
+        "router/src/request-budget.mjs": "5401d961400d1a17143d32d4516b347f7490939611b04662c87dd3bed2c5fa2a"
+      },
+      "reason": "stream_interrupted",
+      "finishReason": "stream_incomplete",
+      "usage": null,
+      "answerChars": 27759,
+      "transportFinished": false,
+      "semanticPass": false,
+      "seconds": 180.031,
+      "streamError": {
+        "code": "TIMEOUT",
+        "message": "The request deadline was reached."
+      },
+      "requestId": "73bc5bd9-c199-474f-9f5c-b210203951ea",
+      "networkAssessment": {
+        "userReportedNetworkLoss": true,
+        "rootCauseVerified": false,
+        "timeoutTuningEligible": false,
+        "reason": "User confirmed network loss during the live checks. Router logs identify termination, not whether earlier traffic stalled because of local connectivity or provider. Exclude this pair from deadline comparison; keep failure records."
+      }
+    },
+    {
+      "route": {
+        "connectionId": "ebf334e5-4852-408c-a6a2-e1f472d143a0",
+        "modelId": "space-bunny-free"
+      },
+      "maxTokens": 16000,
+      "scope": "real production client/server/engine, disposable DB, no tool/child/CUA test",
+      "commit": "814736f53012551bc2c7fe45c1097db6db7fd5cb",
+      "sourceHashes": {
+        "backend/src/agentbox/agent_core/runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+        "router/src/engine.mjs": "2c5c3216ce7408a175fa10d6b230768915d8dba5f778f407dbdbf024f3b82396",
+        "router/src/request-budget.mjs": "5401d961400d1a17143d32d4516b347f7490939611b04662c87dd3bed2c5fa2a"
+      },
+      "reason": "stream_interrupted",
+      "finishReason": "stream_incomplete",
+      "usage": null,
+      "answerChars": 3283,
+      "transportFinished": false,
+      "semanticPass": false,
+      "seconds": 113.429,
+      "streamError": {
+        "code": "UNAVAILABLE",
+        "message": "Provider is unavailable or returned an invalid response."
+      },
+      "requestId": "028f78c6-c447-49c9-8ded-3b5f32f03d3d",
+      "networkAssessment": {
+        "userReportedNetworkLoss": true,
+        "rootCauseVerified": false,
+        "timeoutTuningEligible": false,
+        "reason": "User confirmed network loss during the live checks. Router logs identify termination, not whether earlier traffic stalled because of local connectivity or provider. Exclude this pair from deadline comparison; keep failure records."
+      }
+    }
+  ],
+  "sourceQualityProbes": {
+    "falseImpossibility": [
+      {
+        "case": "false_impossibility",
+        "repeat": 1,
+        "status": "revise",
+        "expected": "revise",
+        "oracle": true,
+        "latencySeconds": 65.759
+      }
+    ],
+    "honestLimits": [
+      {
+        "case": "honest_limit",
+        "repeat": 1,
+        "status": "pass",
+        "expected": "pass",
+        "oracle": true,
+        "latencySeconds": 181.062
+      },
+      {
+        "case": "honest_limit",
+        "repeat": 2,
+        "status": "pass",
+        "expected": "pass",
+        "oracle": true,
+        "latencySeconds": 64.692
+      }
+    ]
+  },
+  "wholeReviewRetest": {
+    "status": "completed",
+    "shape": "node=None / whole=True / distinct artifact hashes",
+    "summary": [
+      {
+        "profile": "w65-whole-baseline",
+        "completedRows": 2,
+        "oracleRows": 0,
+        "statuses": {
+          "unverified": 2
+        },
+        "rows": [
+          {
+            "case": "multi_artifact_review",
+            "repeat": 1,
+            "profile": "baseline",
+            "status": "unverified",
+            "oracle": false,
+            "latencySeconds": 68.734,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": false,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 14,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 218,
+            "stepsUsed": 7,
+            "toolCalls": 17,
+            "toolErrors": 2,
+            "partialReasons": [],
+            "completionAttempts": 7,
+            "knownOutputTokens": 5358,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 32.992,
+            "rawResultHash": "8aa0389131b0e990c2af1839058df266ae7b716f1032f346e3c384f7cc3e4de1",
+            "duplicateCalls": 0
+          },
+          {
+            "case": "multi_artifact_review",
+            "repeat": 2,
+            "profile": "baseline",
+            "status": "unverified",
+            "oracle": false,
+            "latencySeconds": 92.261,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": false,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 14,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 275,
+            "stepsUsed": 9,
+            "toolCalls": 16,
+            "toolErrors": 2,
+            "partialReasons": [],
+            "completionAttempts": 9,
+            "knownOutputTokens": 7322,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 42.72,
+            "rawResultHash": "8aa0389131b0e990c2af1839058df266ae7b716f1032f346e3c384f7cc3e4de1",
+            "duplicateCalls": 0
+          }
+        ]
+      },
+      {
+        "profile": "w65-whole-medium",
+        "completedRows": 2,
+        "oracleRows": 2,
+        "statuses": {
+          "revise": 2
+        },
+        "rows": [
+          {
+            "case": "multi_artifact_review",
+            "repeat": 1,
+            "profile": "medium",
+            "status": "revise",
+            "oracle": true,
+            "latencySeconds": 91.211,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": true,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 24,
+              "effectiveMaxSteps": 24,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 24,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 310,
+            "stepsUsed": 7,
+            "toolCalls": 33,
+            "toolErrors": 0,
+            "partialReasons": [],
+            "completionAttempts": 7,
+            "knownOutputTokens": 8534,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 48.45,
+            "rawResultHash": "44feed7c57486106c6cdcceed85f50858b33e3d83686939517b39ab6a028e180",
+            "duplicateCalls": 0
+          },
+          {
+            "case": "multi_artifact_review",
+            "repeat": 2,
+            "profile": "medium",
+            "status": "revise",
+            "oracle": true,
+            "latencySeconds": 122.009,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": true,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 24,
+              "effectiveMaxSteps": 24,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 24,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 3049,
+            "stepsUsed": 6,
+            "toolCalls": 39,
+            "toolErrors": 6,
+            "partialReasons": [],
+            "completionAttempts": 6,
+            "knownOutputTokens": 12018,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 64.191,
+            "rawResultHash": "44feed7c57486106c6cdcceed85f50858b33e3d83686939517b39ab6a028e180",
+            "duplicateCalls": 0
+          }
+        ]
+      },
+      {
+        "profile": "w65-whole-high",
+        "completedRows": 2,
+        "oracleRows": 2,
+        "statuses": {
+          "revise": 2
+        },
+        "rows": [
+          {
+            "case": "multi_artifact_review",
+            "repeat": 1,
+            "profile": "high",
+            "status": "revise",
+            "oracle": true,
+            "latencySeconds": 129.151,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": true,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 40,
+              "effectiveMaxSteps": 40,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 40,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 1150,
+            "stepsUsed": 10,
+            "toolCalls": 43,
+            "toolErrors": 4,
+            "partialReasons": [],
+            "completionAttempts": 10,
+            "knownOutputTokens": 14487,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 56.84,
+            "rawResultHash": "db5b2bcadb283ae4fd4b2eeb78f8ba2f62534f5433a40436265d978bd548a023",
+            "duplicateCalls": 0
+          },
+          {
+            "case": "multi_artifact_review",
+            "repeat": 2,
+            "profile": "high",
+            "status": "revise",
+            "oracle": true,
+            "latencySeconds": 69.509,
+            "readSources": null,
+            "requiredSources": null,
+            "fullReads": true,
+            "appliedBudget": {
+              "profile": "review_long",
+              "requestedMaxSteps": 40,
+              "effectiveMaxSteps": 40,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 900,
+              "clamped": false
+            },
+            "childConfig": {
+              "maxSteps": 40,
+              "deadlineSeconds": 900
+            },
+            "eventCount": 1216,
+            "stepsUsed": 13,
+            "toolCalls": 39,
+            "toolErrors": 2,
+            "partialReasons": [],
+            "completionAttempts": 13,
+            "knownOutputTokens": 6431,
+            "missingUsageSteps": 0,
+            "largestClientCallSeconds": 24.055,
+            "rawResultHash": "db5b2bcadb283ae4fd4b2eeb78f8ba2f62534f5433a40436265d978bd548a023",
+            "duplicateCalls": 0
+          }
+        ]
+      }
+    ],
+    "semanticLimits": "Oracle covers assigned CSV conclusion and per-artifact full reads. One medium output includes ambiguous extra filler finding; no general SWE quality guarantee."
+  },
+  "limitations": [
+    "CUA not run; no frontend changes.",
+    "No Docker/live 900-second shell or watchdog-duration test; terminal remains 120s, Docker executor 140s. Fixture pytest delay is five seconds.",
+    "No production throughput/peak-concurrency certification; independent eval jobs overlapped, latencies can be network/provider-load confounded.",
+    "Professional SWE/main output quality is W6.1, not implied by budget completion or a model verdict."
+  ]
+}

@@ -52,6 +52,15 @@ async def run(args):
     route = next({'connectionId': c['id'], 'modelId': m['id']} for c in state['connections']
                  if c['providerId'] == 'opencode' and c.get('enabled')
                  for m in c['models'] if m['id'] == 'space-bunny-free' and m.get('enabled'))
+    source_paths = list((ROOT/'backend/src/agentbox/agent_core').glob('work_*.py')) + [
+        ROOT/'backend/src/agentbox/agent_core/runtime.py', ROOT/'backend/src/agentbox/agent_core/roles.py',
+        ROOT/'backend/src/agentbox/memory/session_store.py', Path(__file__).resolve()]
+    source_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths}
+    source_commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+    def events(store, sid):
+        return [{'seq': e['seq'], 'type': e['kind'], 'data': json.loads(e['payload']), 'created': e['created']}
+                for e in store.db.execute("SELECT * FROM events WHERE session_id=? AND kind NOT IN "
+                    "('thought_delta','assistant_delta') ORDER BY seq", (sid,))]
     rows = []
     for case in args.cases:
         for repeat in range(1, args.repeats + 1):
@@ -66,7 +75,7 @@ async def run(args):
             (folder/'tests/test_export.py').write_text("import csv, io\nfrom src.export import export\ndef test_unicode():\n    assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\n", encoding='utf-8')
             store = SessionStore(folder/'sessions.db')
             rt = HarnessRuntime(store, FixtureExecutor(folder), client)
-            sid = rt.create({**route, 'skills': [], 'maxSteps': 40, 'deadlineSeconds': 900, 'maxTokens': 16000,
+            sid = rt.create({**route, 'skills': [], 'maxSteps': args.steps, 'deadlineSeconds': args.deadline, 'maxTokens': 16000,
                 'instructions': 'Isolated evaluation. Only the local fixture exists. Use Work Graph tools; '
                 'no Build/PR, no production resources. Owner decisions in docs/source.md are synthetic supplied data.'})['id']
             started = time.monotonic()
@@ -82,13 +91,12 @@ async def run(args):
             answer = next((m.get('content') for m in reversed(store.get(sid)['messages'])
                            if m['role'] == 'assistant' and m.get('content')), '')
             record = {'case': case, 'repeat': repeat, 'sessionId': sid, 'route': route,
-                'commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT,text=True).strip(),
-                'sourceHashes': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-                    for p in (ROOT/'backend/src/agentbox/agent_core').glob('work_*.py')},
+                'commit': source_commit, 'sourceHashes': source_hashes,
+                'ownerSteps': args.steps, 'ownerDeadline': args.deadline,
                 'status': store.get(sid)['status'], 'work': work, 'error': error,
                 'latencySeconds': round(time.monotonic()-started, 3), 'mainAnswer': answer,
                 'children': [{'id': c['id'], 'role': c['role'], 'status': c['status'], 'messages': c['messages'],
-                    'events': store.events(c['id'])} for c in children], 'events': store.events(sid),
+                    'events': events(store, c['id'])} for c in children], 'events': events(store, sid),
                 'oracle': bool(work and work['status'] == 'verified' and children
                     and not any(c['role'] in ('build', 'simplify') for c in children)),
                 'semanticAdjudication': 'pending; verified runtime status alone is not semantic proof',
@@ -105,4 +113,6 @@ if __name__ == '__main__':
     p.add_argument('--output', required=True)
     p.add_argument('--cases', nargs='+', choices=list(PROMPTS), default=list(PROMPTS))
     p.add_argument('--repeats', type=int, default=2)
+    p.add_argument('--steps', type=int, default=60)
+    p.add_argument('--deadline', type=int, default=900)
     asyncio.run(run(p.parse_args()))

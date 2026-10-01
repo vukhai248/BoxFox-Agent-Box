@@ -617,12 +617,13 @@ class WorkGraph:
                 stages[name] = {key: state.get(key) for key in ('status', 'attempts', 'outputChars', 'error',
                                                                  'startedAt', 'finishedAt')}
                 stages[name]['artifact'] = state.get('artifact')
+                stages[name]['checkpoint'] = state.get('checkpoint')
                 stages[name]['policy'] = state.get('policy')
                 stages[name]['preview'] = bounded(state.get('output'), 1200)
                 stages[name]['caveats'] = bounded(state.get('caveats'), 900) if state.get('caveats') else None
                 stages[name]['rounds'] = [{key: item.get(key) for key in (
                     'attempt', 'producerId', 'reviewerId', 'verdict', 'error', 'at', 'reviewerRole',
-                    'producerRole')} | {'findings': bounded(item.get('findings'), 900),
+                    'producerRole', 'execution')} | {'findings': bounded(item.get('findings'), 900),
                                         'knowledge': [{'role': k.get('role'), 'question': k.get('question'),
                                                        'childId': k.get('childId'), 'status': k.get('status')}
                                                       for k in item.get('knowledge') or []]}
@@ -897,6 +898,8 @@ class WorkGraph:
             budget[0] -= 1
         work = {'runId': run['runId'], 'nodeId': node['id'] if node else None, 'stage': stage,
                 'purpose': purpose, 'attempt': attempt}
+        if node:
+            work['taskKind'] = node.get('taskKind')
         refs = []
         if node:
             refs = [n['stages'].get(gate_stage(node, n, stage) or 'produce', {}).get('artifact', {}).get('artifactId') for n in run['nodes'] if n['id'] in node['dependsOn']]
@@ -979,7 +982,7 @@ class WorkGraph:
                 lines += ['', pick('Sibling sub-plans (do not duplicate their scope): ', 'Sub-plan cùng cấp (không trùng phạm vi): ') + '; '.join(siblings)]
         return role, '\n'.join(lines)
 
-    def reviewer_goal(self, run, node, stage, output):
+    def reviewer_goal(self, run, node, stage, output, budget_steps=None):
         lang = work_prompts.language(run['goal'])
         pick = lambda en, vi: work_prompts.choose(lang, en, vi)
         kind = node['kind'] if stage == 'produce' else ('build' if node['kind'] == PLAN_KIND else node['kind'])
@@ -991,8 +994,9 @@ class WorkGraph:
             lines += [pick('Acceptance to check one by one:', 'Nghiệm thu cần kiểm từng mục:')] + [f'- {item}' for item in node['acceptance']]
         if node['tests']:
             lines += [pick('Required tests:', 'Kiểm thử bắt buộc:')] + [f'- {item}' for item in node['tests']]
-        lines += ['', pick(f'Budget: {REVIEW_MAX_STEPS} tool steps; batch checks and reserve steps to write the review.',
-                           f'Ngân sách: {REVIEW_MAX_STEPS} bước tool; gom kiểm tra và dành bước cuối viết phản biện.'),
+        budget_steps = REVIEW_MAX_STEPS if budget_steps is None else budget_steps
+        lines += ['', pick(f'Budget: {budget_steps} model steps; batch tools and reserve steps to write the review.',
+                           f'Ngân sách: {budget_steps} vòng model; gom tool và dành bước cuối viết phản biện.'),
                   '', pick('Rubric: ', 'Tiêu chí phản biện: ') + work_prompts.rubric(kind, lang),
                   '', pick('The output to review is in the context below.', 'Đầu ra cần phản biện nằm trong ngữ cảnh bên dưới.'),
                   '', work_prompts.review_tail(lang)]
@@ -1028,6 +1032,7 @@ class WorkGraph:
         # A failed replacement must not leave an older rejected artifact as the current draft.
         state.pop('artifact', None)
         state.pop('policy', None)
+        state.pop('checkpoint', None)
         attempt = state['attempts']
         entry = {'attempt': attempt, 'producerRole': node['kind'], 'at': now(), 'knowledge': []}
         state['rounds'].append(entry)
@@ -1046,6 +1051,8 @@ class WorkGraph:
                 role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
                 produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
                 entry['producerId'] = produced.get('sessionId')
+            from . import work_budget
+            entry['execution'] = work_budget.receipt(produced)
             after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
             changed = before is not None and after is not None and before != after
             declared_sensitive = any(re.search(r'api|schema|auth|migration|contract|concurr|lock', path, re.I) for path in node['files'])
@@ -1060,6 +1067,9 @@ class WorkGraph:
             state.update(artifact=meta, output=output, outputChars=len(output))
             if not finalized:
                 state.update(status='failed', error='WORK_PRODUCER_INCOMPLETE: partial retained; retry/update before checks.')
+                state['checkpoint'] = {'childId': entry['producerId'], 'artifactId': meta['artifactId'],
+                    'execution': entry['execution'], 'remaining': 'Producer incomplete; draft is not verifiable. '
+                    'Inspect reason, owner ceiling and saved draft before retrying; same-child resume is not available yet.'}
             elif stage == 'execute' and (before is None or after is None):
                 state.update(status='failed', error='WORK_CODE_SNAPSHOT_REQUIRED: could not verify source changes.')
             elif policy['required']:
@@ -1253,6 +1263,7 @@ class WorkGraph:
             state = next(n for n in run['nodes'] if n['id'] == item['id'])['stages'][stage]
             item['artifact'] = state.get('artifact')
             item['policy'] = state.get('policy')
+            item['checkpoint'] = state.get('checkpoint')
         return out
 
     # ---- whole-plan review, documents, approval --------------------------------------------- #
