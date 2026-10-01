@@ -1,0 +1,235 @@
+{
+  "schema": "boxfox-w61-source-scope/1",
+  "branch": "B",
+  "baseCommit": "7285d95075678b43f1267932bc72a7b79bd535df",
+  "model": "opencode/space-bunny-free",
+  "policy": "work-checks/4",
+  "sourceHashes": {
+    "backend/src/agentbox/agent_core/work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+    "backend/src/agentbox/agent_core/work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend/src/agentbox/agent_core/work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+    "backend/src/agentbox/agent_core/work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d"
+  },
+  "unit": {
+    "passed": 2707,
+    "skipped": 18,
+    "failed": 0,
+    "exit": 0,
+    "seconds": 437.34,
+    "xmlSha256": "d0dadb928c4609612b400c529531fc2c856a4166bde418b5c8e5459e3bb3eb93"
+  },
+  "live": {
+    "w61-source-scope-final": {
+      "rawSha256": "c042e332153c01f99061b219fece82a4a8624ea08d1998603d89de597bda7854",
+      "rows": 6,
+      "oracleRows": 6,
+      "outcomes": [
+        {
+          "case": "false_impossibility",
+          "repeat": 1,
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 150.837,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        },
+        {
+          "case": "false_impossibility",
+          "repeat": 2,
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 89.507,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        },
+        {
+          "case": "honest_limit",
+          "repeat": 1,
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 67.46,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        },
+        {
+          "case": "honest_limit",
+          "repeat": 2,
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 258.378,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        },
+        {
+          "case": "report_without_csv_rows",
+          "repeat": 1,
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 65.842,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        },
+        {
+          "case": "report_without_csv_rows",
+          "repeat": 2,
+          "status": "pass",
+          "oracle": true,
+          "latencySeconds": 157.814,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "scripts\\eval\\work_quality_eval.py": "a149a6b64fea553237b776b2a4a578b420684aa8067f974f7fbc6639c609188d"
+          },
+          "fullReads": null,
+          "R8": []
+        }
+      ]
+    },
+    "w61-whole-scope-final": {
+      "rawSha256": "2d64265ef8d86ad028d6acaf19c7f5e6af911a9261a189fce9b0e3dc2afa77c2",
+      "rows": 2,
+      "oracleRows": 2,
+      "outcomes": [
+        {
+          "case": "multi_artifact_review",
+          "repeat": 1,
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 193.833,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "backend\\src\\agentbox\\agent_core\\output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363",
+            "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+            "scripts\\eval\\work_budget_eval.py": "a246784b3f96b60f5bc6541ad72c1e58a2aceaf05ab1fb4040eb4c265d0bf384"
+          },
+          "fullReads": true,
+          "R8": [
+            "pass"
+          ]
+        },
+        {
+          "case": "multi_artifact_review",
+          "repeat": 2,
+          "status": "revise",
+          "oracle": true,
+          "latencySeconds": 99.971,
+          "commit": "7285d95075678b43f1267932bc72a7b79bd535df",
+          "sourceHashes": {
+            "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "906875326ca77e99ccb2bf59cef92d13751fb7f822c70e05651006a3db9c0b62",
+            "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend\\src\\agentbox\\agent_core\\work_checks.py": "616413e97697409c8feb6f2aa7431eb2076085dddb5169ac92d2a496ee3847b3",
+            "backend\\src\\agentbox\\agent_core\\work_graph.py": "a871e680dfe8ac59bd1cb16553a1696f5506cae89b3009be1028071e85a03470",
+            "backend\\src\\agentbox\\agent_core\\work_policy.py": "8c1622adbc70df45a1debd32cec3fb1b3c43d8e6d0f3e17ce6916bc68d3af540",
+            "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+            "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+            "backend\\src\\agentbox\\agent_core\\output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363",
+            "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+            "scripts\\eval\\work_budget_eval.py": "a246784b3f96b60f5bc6541ad72c1e58a2aceaf05ab1fb4040eb4c265d0bf384"
+          },
+          "fullReads": true,
+          "R8": [
+            "pass"
+          ]
+        }
+      ]
+    }
+  },
+  "counterexamples": {
+    "python": "3.13.13 | packaged by Anaconda, Inc. | (main, Apr 14 2026, 06:12:50) [MSC v.1942 64 bit (AMD64)]",
+    "scope": "stdlib counterexamples, not harness or medical benchmark",
+    "nfcAsciiIgnore": "H s",
+    "nfdAsciiIgnore": "Ho so",
+    "jsonStringViaCsv": [
+      "Hồ sơ"
+    ],
+    "fieldLimit": {
+      "defaultCharacters": 131072,
+      "unicodeChars": 80000,
+      "unicodeBytes": 160000,
+      "unicodeRoundTrip": true,
+      "oversizeError": "field larger than field limit (131072)",
+      "configuredRoundTrip": true
+    }
+  },
+  "integration": {
+    "status": "running, not accepted as full semantic proof",
+    "path": ".tmp/work-checks/w61-integration-budget-final",
+    "snapshot": "started before work-checks/4 patch; evaluate that snapshot only"
+  },
+  "limits": [
+    "No UI/UX or DAG edits",
+    "No CUA",
+    "Source body receipt is not claim/source entailment proof",
+    "Whole-review oracle is limited to assigned conclusions/read ranges",
+    "Partial outputs are not accepted",
+    "Main and every producer/checker require separate semantic assessment; pending C4/C5"
+  ]
+}

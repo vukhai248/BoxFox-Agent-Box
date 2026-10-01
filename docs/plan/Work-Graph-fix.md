@@ -1657,7 +1657,7 @@ W6.5 đã có phép đo và bản sửa riêng cho steps/tool calls/request time
 - Bound Plan/code reviewer có web_search/web_fetch/read_source khi owner cấp; legacy roles giữ quyền cũ. Không mở ghi mã cho checker.
 - Reviewer phải gắn finding với yêu cầu, đọc nguồn, xét counterevidence, tìm nguồn thay thế khi cần; hạn chế đã khai báo không tự là lỗi.
 - Evidence revise không có nguồn đã đọc giữ unverified; đọc file copy artifact qua file_read cũng không tính nguồn gốc.
-- Policy `work-checks/3` để lịch sử checks cũ không tự đạt cổng mới.
+- Policy implementation đầu là `work-checks/3`; bản sửa nguồn/read coverage tiếp theo dùng `work-checks/4` (mục 20). Lịch sử cũ vẫn đọc được, không tự đạt cổng mới.
 
 ### 18.2 Kết quả hiện có và giới hạn
 
@@ -1741,3 +1741,46 @@ Raw: `.tmp/work-checks/w65-request-time/results.json` và Markdown/thought từn
 - [ ] 18 Linux tests skipped trên Windows: cần môi trường Linux/Docker để chạy; CUA chưa chạy, bàn giao theo mục 16.7.
 
 W6.5.1 là phần nghiệm thu chưa chạy, không phải tính năng mới đã thực hiện. W7 giữ trách nhiệm user-wait bền vững; không sửa nó bằng kéo dài timeout.
+
+## 20. W6.1 — bổ sung từ phép đo W6.5
+
+Neo W6.5: **7285d950** trên B. Các thay đổi dưới đây giữ UI/UX, DAG và quyền của các role; không tăng token hoặc nới gate để ép pass.
+
+### 20.1 Bug đã sửa và test
+
+1. `good_reads` từng chấp nhận web payload có chữ dù `quality=error-page/wrong-page/junk/empty`. Nay chỉ grade `ok/thin` được tính là body đọc dùng được; grade lạ/sai shape bị loại. Payload legacy không grade còn tương thích nhưng HTTP status lỗi rõ ràng không được tính. Reader fallback cứu thành công vẫn được tính dù status HTTP gốc 0/403. **Đọc được body chưa chứng minh khẳng định đúng.**
+2. `coverageComplete=true` từng chỉ nói về một artifact, khiến reviewer dễ tưởng đã đọc cả tập. Nay tool trả `allAssignedArtifactsRead` và `unreadArtifacts` theo đúng check/reader/ID. Range có lỗ hoặc chưa đọc artifact rỗng vẫn không đủ; gate `covered` dùng cùng phép tính contiguous prefix. Không chấp nhận suy luận “các bản cùng mẫu nên khỏi đọc”.
+3. Reviewer có false positive bắt Research Markdown chứa hàng CSV/code/API. Prompt Anh/Việt phân biệt định dạng báo cáo với ràng buộc sản phẩm; cho phép file/test dự kiến trong plan và không suy nội dung đoạn chưa đọc từ metadata/cấu trúc chung. Chỉ dẫn không bảo đảm model luôn tuân thủ; live vẫn phải đo phản biện sai.
+4. Policy **work-checks/4** khiến check cũ không tự được công nhận theo luật mới.
+
+- [x] 28 test mới: grades/legacy/fallback, evidence gate thật, ID/range/empty/cross-owner/wrong reader/check/reopen và prompt contract.
+- [x] Full backend **2707 passed, 18 skipped, 0 failed**, 437,34s; `.tmp/work-checks/w61-remaining-unit.xml`, exit 0. Skips vẫn là chưa chạy Linux.
+- [x] Live source/scope: **6/6** đúng oracle, hai lần mỗi ca false-impossibility/honest-limit/Research không CSV rows; `.tmp/work-checks/w61-source-scope-final`.
+- [x] Whole-review tám hash khác nhau sau patch: **2/2** đọc đủ, R1–R7 revise/R8 pass; `.tmp/work-checks/w61-whole-scope-final`.
+- [ ] Ca mới từ R3: reviewer bác khẳng định CSV có trần byte bất biến, hai lượt tại `.tmp/work-checks/w61-csv-limit-final`. Chưa tính pass khi chưa có kết quả.
+- [ ] C4 main/producer/repair/whole: `.tmp/work-checks/w61-integration-budget-final`. Process đã nạp snapshot trước `work-checks/4`; chỉ dùng để đánh giá hành vi snapshot đó, không chứng nhận patch mới từ process cũ.
+
+### 20.2 Finding nội dung và hiệu quả đang kiểm
+
+- Research từng khẳng định CSV không có cơ chế tên cột. Reviewer mở Python docs, bác bằng DictReader/DictWriter/header; main sửa assignment và producer sửa claim. Đây là vòng phản biện có ích, không chỉ có badge reviewer.
+- Research/Reviewer từng suy sai ví dụ JSON string đưa vào csv.reader; lệnh Python thực xác nhận `json.dumps('Hồ sơ', ensure_ascii=False)` đọc thành `['Hồ sơ']`. Không suy từ escaping rằng Unicode bị mất.
+- Reviewer ghi chú NFD `'Hồ sơ'` sau ASCII-ignore thành `'H oso'`; kiểm Python thực trả `'Ho so'`. Đây là lỗi phụ trong ghi chú không chặn, không đảo kết luận ASCII-ignore phá dấu, nhưng vẫn là lỗi nội dung cần ghi nhận.
+- Một producer khẳng định CPython không dùng `newline=''` trong ví dụ chính thức; reviewer sau chỉ rõ ví dụ file có dùng. Không suy nguồn `_io/stringio.c` sang mọi ví dụ open(file).
+- Research đơn giản cho exporter 6 dòng vẫn tạo báo cáo 15–27 nghìn ký tự và nhiều lượt kiểm tương tự. Đúng nguồn không đồng nghĩa hiệu quả hoặc kế hoạch SWE tốt. Chưa đổi cách main phân rã DAG để sửa chi phí này; cần số đo main hoàn tất và kiểm lại nhiệm vụ bị mở rộng.
+- R3 trả kết luận “128 KiB” cho giới hạn parser CSV mà không phân biệt default/cấu hình và ký tự/byte. Counterexample Python: 80.000 ký tự `ơ` (160.000 byte UTF-8) đọc lại được; 131.073 ký tự vượt default thì lỗi, tăng `csv.field_size_limit` đọc được. Main đang trình nhận định này có điều kiện, chưa có whole-review/final đã kiểm; không gán nó thành kế hoạch đã được duyệt. Raw `.tmp/work-checks/w61-live-counterexamples.json`.
+- Hai lượt R3 dở có `stream_incomplete` với UNAVAILABLE/TIMEOUT, không phải `length`. Không suy tăng output token sẽ chữa chúng; giữ raw provider error và không dùng lúc mạng chưa xác định để chỉnh timeout. Node chưa được accepted, nên gate không tự cho partial qua.
+
+Chỉ ghi lỗi đã có đoạn output/lệnh đối chiếu; không gán hallucination rate cho toàn hệ thống từ vài fixture. Báo cáo theo từng output, nguồn, coverage và phần chưa xác minh phải có trước khi tick C4/C5. Chưa có kết luận quality/feasibility chung cho ứng dụng y tế hay pháp lý.
+
+### 20.3 W7 — điểm tích hợp đã khảo sát, chưa code
+
+Đã được duyệt tiếp tục sau W6.1/W6.5. Không dùng RAM future/900s interview cũ làm durable workflow. Các điểm phải nối và test:
+
+- `work_report(needs_user/checkpoint)` chỉ cho child có binding; main sở hữu câu hỏi và xác nhận người dùng, 1–3 câu/vòng.
+- SQLite request/question revision/answer/outbox; answer cùng yêu cầu resume trong transaction; immutable decision ID, duplicate/stale/cross-owner rõ ràng.
+- Main nhận callback sớm; independent tasks có lifecycle do Work Graph quản lý. Hiện `schedule_nodes.finally` hủy task còn chạy và runtime parent reaper dọn child ở cuối turn: phải kiểm cả hai, tránh parent yield làm chết nhánh khác hoặc tạo orphan.
+- Resume cùng child ID/context/folder; budget vẫn theo trần cha; checkpoint chưa là finalized/accepted. Restart không mở hai lượt, chỉ recheck bản artifact mới.
+- Scope quyết định theo node và downstream: không để một câu trả lời làm mất mọi check ở nhánh độc lập chỉ vì `interviews` global hash đổi.
+- Existing UI gửi subset câu trả lời và tự resolve thẻ trên HTTP 200. Backend phải giữ câu chưa trả lời, không tự coi là “để agent quyết định”; dùng thẻ tiếp theo cho câu còn mở nếu giữ UI/UX code. Cần test history và bàn giao CUA riêng.
+
+Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics hoặc UI trong bước này; chưa có tính năng W7 được bật.

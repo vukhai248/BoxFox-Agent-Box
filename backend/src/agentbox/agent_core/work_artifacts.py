@@ -77,19 +77,23 @@ class Artifacts:
                                 (cid, aid, offset, end, session['id']))
         result = meta | {'offset': offset, 'content': text[offset:end], 'nextOffset': end if end < len(text) else None}
         if cid:
-            prefix = 0
-            rows = self.db.execute('SELECT start,end FROM work_artifact_reads WHERE check_id=? AND artifact_id=? '
-                                   'AND reader_id=? ORDER BY start', (cid, aid, session['id'])).fetchall()
-            for row in rows:
-                if row['start'] > prefix:
-                    break
-                prefix = max(prefix, row['end'])
-            result['unreadOffset'] = prefix if prefix < len(text) else None
-            result['coverageComplete'] = prefix >= len(text)
+            prefix, complete = self.progress(cid, meta, session['id'])
+            result['unreadOffset'] = None if complete else prefix
+            result['coverageComplete'] = complete
+            remaining = []
+            for assigned_id in dict.fromkeys(binding.get('artifactIds', [])):
+                assigned, _ = self.get(run_id, assigned_id)
+                unread, done = self.progress(cid, assigned, session['id'])
+                if not done:
+                    remaining.append({'artifactId': assigned_id, 'nodeId': assigned['nodeId'],
+                                      'unreadOffset': unread, 'chars': assigned['chars']})
+            result['unreadArtifacts'] = remaining
+            result['allAssignedArtifactsRead'] = not remaining
             result['readingInstruction'] = 'Read unreadOffset next, even if nextOffset is null. Every assigned range is required.'
         return result
 
-    def covered(self, check_id, meta, reader_id):
+    def progress(self, check_id, meta, reader_id):
+        """Contiguous audited prefix, scoped to this exact check/artifact/reader."""
         rows = self.db.execute('SELECT start,end FROM work_artifact_reads WHERE check_id=? '
                               'AND artifact_id=? AND reader_id=? ORDER BY start',
                               (check_id, meta['artifactId'], reader_id)).fetchall()
@@ -98,4 +102,7 @@ class Artifacts:
             if row['start'] > end:
                 break
             end = max(end, row['end'])
-        return end >= meta['chars'] and bool(rows)
+        return end, end >= meta['chars'] and bool(rows)
+
+    def covered(self, check_id, meta, reader_id):
+        return self.progress(check_id, meta, reader_id)[1]

@@ -33,6 +33,18 @@ CASES = {
     'honest_limit': ('csv.reader/writer dùng chuỗi; có thể giữ tiếng Việt bằng mở file encoding="utf-8", newline="". '
         'CSV không tự lưu metadata kiểu dữ liệu. Chưa kiểm tương thích với một HIS cụ thể và không tuyên bố đã test nó. '
         'Giới hạn này không đổi kết luận về khả năng xử lý Unicode. Nguồn: ' + URL, 'pass'),
+    'report_without_csv_rows': ('# Báo cáo Markdown: khả năng giữ tiếng Việt trong CSV\n'
+        'Python csv.reader/writer đọc và ghi trường dạng chuỗi. Mở file encoding="utf-8", newline="" '
+        'cho phép giữ tiếng Việt; csv.writer xử lý quoting để csv.reader đọc lại trường chứa dấu phẩy. '
+        'Nguồn chính thức: ' + URL + '\n'
+        'Khuyến nghị dùng csv chuẩn thay vì tự nối dấu phẩy vì cần quoting đúng. Đây là báo cáo nghiên cứu '
+        'khả năng, không phải file dữ liệu CSV; không kèm hàng CSV, code hay API theo phạm vi được giao. '
+        'Chưa chạy test HIS và chưa xác minh một HIS cụ thể. Một bước tiếp theo được đề xuất, chưa thực hiện, '
+        'là round-trip chuỗi có dấu, dấu phẩy và newline; không dùng giới hạn HIS để phủ nhận Unicode.', 'pass'),
+    'false_fixed_csv_limit': ('Python CSV có trần bất biến 128 KiB theo byte ở phía đọc; '
+        'csv.writer ghi được nhưng csv.reader không thể đọc lại tiếng Việt nếu vượt 128 KiB. '
+        'Không có cấu hình nào thay đổi trần này, nên bắt buộc chuyển sang JSON để giữ tiếng Việt. '
+        'Nguồn: ' + URL, 'revise'),
 }
 
 

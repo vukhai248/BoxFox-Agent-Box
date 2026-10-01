@@ -80,10 +80,25 @@ def good_reads(graph, child_id):
     def original(item):
         path = str(item.get('args', {}).get('path') or '').replace('\\', '/').removeprefix('./')
         return not any(path == p or path.endswith('/' + p) for p in paths)
+    def usable(item):
+        result = item['result']
+        if item.get('name') not in ('web_fetch', 'read_source'):
+            return True
+        # Web's grade describes the retained body, including a successful reader
+        # fallback. Original HTTP status can remain 0/403 after that recovery.
+        if 'quality' in result:
+            quality = result['quality']
+            return isinstance(quality, dict) and quality.get('verdict') in ('ok', 'thin')
+        # Legacy payloads without a grade remain readable, but an explicit
+        # failed HTTP response must never count as evidence just because it has text.
+        status = result.get('status')
+        return status is None or (isinstance(status, int) and not isinstance(status, bool) and 200 <= status < 300)
     return [item for item in observations(graph, child_id)
             if item.get('name') in ('file_read', 'web_fetch', 'read_source', 'codebase_grep')
             and isinstance(item.get('result'), dict) and not item['result'].get('is_error')
-            and any(item['result'].get(k) for k in ('content', 'text', 'matches', 'results')) and original(item)]
+            and any((value.strip() if isinstance(value, str) else bool(value))
+                    for k in ('content', 'text', 'matches', 'results') for value in [item['result'].get(k)])
+            and original(item) and usable(item)]
 
 
 def test_proof(graph, child_id, tests):
@@ -124,10 +139,12 @@ def parse_report(text, required):
 
 def contract(lang, criteria):
     head = work_prompts.choose(lang,
-        'Read ALL assigned snapshots with work_artifact_read, following nextOffset until null. '
+        'Read ALL assigned snapshots with work_artifact_read, following nextOffset/unreadOffset until allAssignedArtifactsRead is true; '
+        'coverageComplete is only for the current artifact, not the whole assignment. '
         'Inspect original evidence too; artifact reads alone do not verify facts. Do not edit source. '
         'For tests, execute EXACT required commands; never claim pass without tool output. ',
-        'Đọc HẾT snapshot được giao bằng work_artifact_read, theo nextOffset đến null. '
+        'Đọc HẾT snapshot được giao bằng work_artifact_read theo nextOffset/unreadOffset đến khi allAssignedArtifactsRead=true; '
+        'coverageComplete chỉ áp dụng cho artifact hiện tại, không phải toàn bộ nhiệm vụ. '
         'Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. '
         'Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. ')
     skeleton = {'coverage': [{'id': key, 'status': 'unverified', 'evidence': '<reference or finding>'} for key in criteria]}
