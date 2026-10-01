@@ -1014,7 +1014,8 @@ flowchart LR
     W3 --> W4["W4: prompt/skill và chuẩn đầu ra"]
     W4 --> W5["W5: artifact theo session/lượt"]
     W5 --> W6["W6: main giao checks linh hoạt"]
-    W6 --> W65["W6.5: kiểm chứng steps/tool/time budgets"]
+    W6 --> W61["W6.1: hoàn tất bug và kiểm chứng còn mở"]
+    W61 --> W65["W6.5: kiểm chứng steps/tool/time budgets"]
     W65 --> W7["W7: interview/resume bền vững"]
     W7 --> W8["W8: DAG dependencies và execution"]
     W8 --> W9["W9: ghép toàn luồng và rollout"]
@@ -1036,6 +1037,7 @@ Không cần giải quyết DAG để sửa slug, source shape, diagnostic spam 
 | **W4 — Prompt/skill và chất lượng nội dung** | Vừa; phần M5.1 | Đồng bộ schema/examples; localize wrapper/purpose; rubric theo artifact; Plan có milestone/data/API/tests; Research có sources/limits; Design theo subtype; Debug/Testing đúng nhiệm vụ. | Snapshot/contract tests cho prompts; không trộn English templates với owner tiếng Việt; không bắt Debug viết plan hoặc Research-only tạo implementation scope. Prompt gọi tool mới chỉ bật khi tool đó đã khả dụng ở W5/W6. |
 | **W5 — Nền artifact/version/identity** | Vừa–khó; M1.1, M1.3–M1.4 | Stable session/turn/run IDs; SQLite records; bounded writer/read; manifests; immutable versions/hash; namespace/index/export; crash reconciliation; migration legacy. | Sub-plan lưu trước review; main/reviewer nhận refs và đọc full file; không mất identity qua resume/restart; cross-session access bị chặn; draft không tự tạo ready. |
 | **W6 — Main điều phối kiểm chứng** | Khó; M1.2 policy, M3.1–M3.2, phần M5.1 | work_check + result bindings; main nhận draft; policy tối thiểu; Testing/Debug/Evidence/Critique/Plan Review; acceptance coverage; partial/review-error gates; node/artifact invalidation. | Các ca V01–V14 đúng. Debug diagnostic không bị thêm review thừa; Debug patch vẫn test; plan candidate qua cổng Plan; missing check không auto-pass. Policy/snapshot hết hiệu lực chặn next step. |
+| **W6.1 — Hoàn tất kiểm chứng W6** | Vừa; tiếp nối W6 | Sửa cắt acceptance ở 20 mục; role/tool preflight; reviewer vượt phạm vi; kiểm chứng tích hợp và bàn giao CUA. | Checklist và oracle mục 16.8; không ép pass, không thay UI/UX hay scheduler/DAG. |
 | **W6.5 — Kiểm chứng và điều chỉnh ngân sách sub-agent** | Vừa; nối W3/W6, trước W7 | Đo model steps/tool calls, thời gian child/request/tool/queue/watchdog/work_run; kiểm clamp theo cha; thử mức tăng có kiểm soát theo quy mô; giữ output 16k để cô lập phép đo. | Có baseline/candidate cùng Space Bunny, dữ liệu đủ và nguyên nhân partial đúng; không timeout tầng thấp hơn phủ nhận budget cao hơn, không tăng vô hạn hoặc nới checks. Plan chi tiết mục 17; chưa code. |
 | **W7 — Interview và same-child continuation** | Khó; M4.1–M4.2 | Durable needs_user/request/answer/outbox; callback/yield về main; gom 1–3 câu; history UI; answer transaction; invocation dedup; resume đúng child và origin folder. | Restart/duplicate/stale answer có oracle đúng; independent branches vẫn chạy; user wait không tốn compute; main không tự suy ra câu trả lời từ timeout. |
 | **W8 — Thay đổi DAG/execution** | Khó nhất về implementation; phần M1 state/dependencies và M3.2–M3.3 | Typed produce/execute dependencies; compatibility; cycle/hidden coupling; scheduler cho artifact/check/wait state; touch-set conflict; branch trước Build; integration snapshot; run-owned ship. | Scheduling trace đúng thứ tự với cùng đầu vào; P1/P2 song song khi độc lập; P3/P4 chờ dependency execute/check tương ứng; không chạy từ plan dở hoặc branch sai; test từng nhánh và integration đều có evidence. |
@@ -1095,7 +1097,8 @@ Checklist này theo dõi implementation/verification, độc lập với việc 
 | W4 phần mở rộng skill/gate | [ ] | [ ] | Chưa thêm skill loader, tool, cổng chất lượng hoặc cơ chế chọn check mới. Cần thống nhất scope riêng. |
 | W5 đường tài liệu hiện có: sửa bug | [x] | [x] | Mục 15: writer sai kiểu, path/version thực, UTF-8/hash; full regression 2584 passed. Không thêm artifact store. |
 | W5 artifact store/identity mới | [ ] | [ ] | Nền SQLite/snapshot/reader/session-run namespace cần cho W6 đã làm ở mục 16; origin-turn folder/manifest/export/crash reconciliation và migration đầy đủ còn mở. |
-| W6 flexible checks | [x] | [x] | Backend contracts V01–V14, 192 targeted, 2643 unit pass; live reviewer trên Space Bunny. Semantic false positive và CUA/full DAG còn mở, xem mục 16. |
+| W6 flexible checks | [x] | [ ] | Implementation đã commit 3f01a4b3; backend tests đã đạt nhưng nghiệm thu tổng thể chưa hoàn tất. Phần còn mở theo dõi riêng tại W6.1, mục 16.8. |
+| W6.1 hoàn tất checks | [ ] | [ ] | Sửa acceptance truncation, role/tool preflight; đo và sửa reviewer vượt phạm vi; bổ sung kiểm chứng tích hợp. Không tăng timeout/steps/tool budget. |
 | W6.5 steps/tool/time budgets | [ ] | [ ] | Theo yêu cầu bổ sung: đo và chọn mức tăng hợp lý, kiểm mọi tầng timeout/clamp; mục 17. Chỉ lập kế hoạch, chưa đổi runtime. |
 | W7 interview/resume | [ ] | [ ] | Request/answer/invocation, same child/folder và independent branches. |
 | W8 DAG/execution | [ ] | [ ] | Dependency/resource-lock traces, branch/change set và integration results. |
@@ -1515,9 +1518,11 @@ Calibration cũng được giữ: 4k đầu có 1/4 đúng oracle (Plan length h
 
 ### 16.6 Phần còn mở và thứ tự tiếp tục
 
+**Cập nhật tracking:** W6 đã hoàn tất implementation nhưng chưa hoàn tất nghiệm thu. Các việc trực tiếp còn thiếu chuyển sang **W6.1 (mục 16.8)**. W6.5 chỉ phụ trách ngân sách bước/tool/thời gian; W5/W7/W8/W9/W10 giữ phạm vi riêng.
+
 - [ ] Semantic review: whole Research vẫn có false positive ở fixture; không lấy citation/read receipt/JSON coverage làm bằng chứng kết luận model đúng. Cần bộ W10 theo yêu cầu thực và adjudication độc lập, giữ model/provider failures riêng.
 - [ ] Role/tool preflight ở W1 chưa làm trọn: role bị owner tắt vẫn có thể khiến check không chạy; báo error, không tự bật role để che lỗi.
-- [ ] Trần steps/time và acceptance truncation tại 16.3 cần thảo luận; không tự nới trong lượt này.
+- [ ] Acceptance truncation chuyển W6.1; trần steps/tool/time chuyển W6.5. Không gộp hai loại vấn đề hoặc tự nới giới hạn.
 - [ ] W5 namespace origin-turn, manifest/export, recovery/migration đầy đủ.
 - [ ] W7 durable needs_user/interview/outbox/resume **cùng child**: chưa được duyệt, chưa triển khai. Knowledge requests hiện chỉ là lookup nội bộ, không đồng nghĩa child có thể phỏng vấn rồi tiếp tục giữ context qua restart.
 - [ ] W8 typed edges, resource isolation, source integration/ship redesign: chưa làm. Waves/dependency ordering giữ như baseline.
@@ -1538,9 +1543,29 @@ Không đổi UI và chưa dùng CUA lượt này. Sau khi chạy backend B, age
 
 Kết quả CUA phải ghi session/run/model/commit, ảnh và event oracle. **NOT RUN** trong lượt W6 này; không suy UI đúng chỉ từ backend tests. Commit chứa mục 16 này là neo W6 sau kiểm thử; không push/merge. Main checkout giữ nguyên các thay đổi riêng của chủ dự án.
 
+### 16.8 W6.1 — hoàn tất bug và kiểm chứng còn mở của W6
+
+**Trạng thái: chưa triển khai.** Bổ sung theo yêu cầu chủ dự án; chỉ cập nhật tài liệu trong lượt này. Giữ nguyên commit/evidence W6 và các checkbox implementation đã đạt; nghiệm thu W6 tổng thể vẫn **chưa xong**. Thứ tự: **W6 → W6.1 → W6.5 → W7**.
+
+| Checkpoint | Việc cần làm | Output đúng / nghiệm thu |
+|---|---|---|
+| C1 — Acceptance không bị mất | Đối chiếu schema/clean_list đang cắt 20 tiêu chí; sửa để không âm thầm mất tiêu chí. Nếu cần trần an toàn, trả lỗi rõ trước khi lưu thay vì truncate. | Fixture 24 tiêu chí phải giữ đủ 24 và checker trả coverage đủ; thiếu mục cuối không được pass. Test legacy/duplicate/invalid input. |
+| C2 — Role/tool preflight | Kiểm capability của checker bắt buộc trước khi chạy; phân biệt role bị owner tắt với provider/runtime lỗi. | Báo check nào không khả dụng và cách xử lý; không tự bật role, bỏ gate hoặc đánh verified. Test disabled role, missing tool và retry/idempotency. |
+| C3 — Reviewer đúng phạm vi | Giữ ca whole Research false positive; đối chiếu assignment, artifact và findings. Chỉnh scope/rubric nếu có bằng chứng; đo lặp trên Space Bunny. | Research-only không bị bắt bổ sung implementation hoặc interview ngoài yêu cầu; finding ngoài phạm vi được nhận diện. Các ca lỗi thật vẫn revise. Không dùng tăng token hoặc ép pass để che lỗi semantic. |
+| C4 — Kiểm chứng tích hợp W6 | Kiểm main → producer → artifact → main gọi check → repair/version mới → whole review; stale bindings, restart/error, legacy và artifact-only không tự Build. | Có session/run/commit/model, events và kết quả từng ca; partial/lỗi không thành pass. Phân biệt test tích hợp W6 với benchmark toàn hệ thống W10. |
+| C5 — Bàn giao và chốt | Ghi kết quả từng checkpoint, phần chưa đạt, evidence và commit trên B. Kiểm giao diện theo 16.7 khi thực sự cần, giữ UI/UX. | Chỉ tick nghiệm thu W6 khi các checkpoint bắt buộc đạt; CUA chưa chạy ghi NOT RUN. Không tuyên bố full semantic/full DAG đạt từ unit tests. |
+
+- [x] C1 acceptance truncation: giữ 24/24 tiêu chí; trần 64 trả lỗi rõ, không truncate. Item quá dài/sai kiểu cũng trả lỗi.
+- [x] C2 role/tool preflight: kiểm trước spawn/retry; owner switches giữ nguyên, không tự bật hoặc bỏ gate.
+- [x] C3 hướng dẫn phản biện có nguồn và tự xét counterevidence; thử nguồn Python chính thức: khẳng định không khả thi bị revise, giới hạn trung thực pass. Đây là mẫu nhỏ, không chứng nhận mọi finding đúng.
+- [ ] C4 tích hợp W6; CUA mục 16.7 chưa chạy.
+- [ ] C5 evidence, checkpoint và kết luận nghiệm thu.
+
+**Không chuyển vào W6.1:** W5 origin-turn/manifest/export/recovery; W7 durable interview và same-child resume; W8 resource isolation/typed edges/ship; W9 thay đổi UI; W10 benchmark đầy đủ. Các việc này vẫn chưa xong nhưng có owner/checklist riêng. W6.5 giữ riêng timeout, max steps, tool calls và các tầng ngân sách.
+
 ## 17. W6.5 — kiểm chứng và điều chỉnh steps, tool calls và thời gian sub-agent
 
-**Yêu cầu bổ sung của chủ dự án:** kiểm chứng việc tăng số lượt làm việc/gọi tool và thời gian sub-agent hoạt động, cùng các tầng thời gian liên quan. Đặt bước này **sau W6, trước W7**. Trạng thái: **chỉ bổ sung plan; chưa thay giới hạn code/cấu hình production**. Thi công sau khi chủ dự án chốt phương án dựa trên dữ liệu.
+**Yêu cầu bổ sung của chủ dự án:** kiểm chứng việc tăng số lượt làm việc/gọi tool và thời gian sub-agent hoạt động, cùng các tầng thời gian liên quan. Đặt bước này **sau W6.1, trước W7**; không bao gồm bug/schema hay chất lượng review còn mở của W6. Trạng thái: **chỉ bổ sung plan; chưa thay giới hạn code/cấu hình production**. Thi công sau khi chủ dự án chốt phương án dựa trên dữ liệu.
 
 ### 17.1 Mục tiêu và cách đo
 
@@ -1617,3 +1642,35 @@ Acceptance:
 - [ ] B6 checkpoint, evidence, cập nhật plan và commit.
 
 W6.5 mới được bổ sung theo yêu cầu người dùng; **chưa implementation hoặc benchmark mới cho mức tăng steps/time**. W6 output-token comparison tại 16.5 không được gán thành bằng chứng cho W6.5.
+
+
+## 18. Checkpoint W6.1 — bug/schema và kiểm chứng reviewer (01/10/2026)
+
+**Đang nghiệm thu; chưa đánh dấu W6 tổng thể hoàn tất.** Nhánh B, nền `3f01a4b3`. Chủ dự án đã duyệt thực hiện W6.1/W6.5 rồi W7, yêu cầu commit từng W. Không sửa UI/UX, không làm W8.
+
+### 18.1 Implementation đã làm
+
+- Acceptance giữ nguyên tối đa 64 mục; vượt trần, item quá dài/sai kiểu trả lỗi trước lưu. Các list khác cũng không âm thầm cắt.
+- Preflight role/tools trước check: disabled role hoặc thiếu terminal/read báo WORK_CHECK_UNAVAILABLE, không spawn hay tiêu retry. Whole check giữ unverified khi không khả dụng.
+- Bound Plan/code reviewer có web_search/web_fetch/read_source khi owner cấp; legacy roles giữ quyền cũ. Không mở ghi mã cho checker.
+- Reviewer phải gắn finding với yêu cầu, đọc nguồn, xét counterevidence, tìm nguồn thay thế khi cần; hạn chế đã khai báo không tự là lỗi.
+- Evidence revise không có nguồn đã đọc giữ unverified; đọc file copy artifact qua file_read cũng không tính nguồn gốc.
+- Policy `work-checks/3` để lịch sử checks cũ không tự đạt cổng mới.
+
+### 18.2 Kết quả hiện có và giới hạn
+
+- Bản cuối backend: **2657 passed, 18 skipped**, `.tmp/work-checks/w61-unit-final.xml`; skips Linux worker trên Windows, không tính pass. 14 test W6.1 riêng đạt.
+- Calibration live reviewer: 6 ca × 2 trên Space Bunny, **12/12 oracle**, hai Research hợp lệ qua whole review; Plan nhiều findings giữ đủ 24 acceptance + C1. Sau đó thêm chống self-citation; retest bản cuối đang chạy, không gộp snapshot thành một phép đo.
+- Nguồn thật: 2 ca × 2 calibration + 2 lượt bản cuối, khẳng định CSV không hỗ trợ Unicode bị bác và giới hạn HIS chưa kiểm không bị chặn sai. Native runtime web_fetch/read_source thật, cả nguồn thay thế Python HOWTO/builtins; không lấy trí nhớ model làm oracle.
+- Runner integration calibration đã dừng có chủ ý vì xác nhận sai schema grep và lọc mất web tools. Trace/SQLite giữ trong `.tmp/work-checks/w61-integration-a/interrupted-calibration.json`; không tính là lỗi sản phẩm hay pass. Runner đã sửa; live main/producer/checks bản cuối đang chạy.
+- Một Explore calibration chạm 4096 output (reasoning), khác reviewer 16k. Giữ evidence, phân loại riêng; không suy đây là timeout.
+- CUA **NOT RUN**; Docker writer vẫn dùng executor local trong fixture. Đánh giá nội dung/main từng ca và integration còn phải cập nhật trước chốt nghiệm thu.
+
+### 18.3 Việc đang tiếp tục
+
+- [ ] Retest reviewer sau chống self-citation, lưu evidence theo snapshot.
+- [ ] Hoàn tất integration main/producer/checks; đánh giá từng output và cách main tổng hợp.
+- [ ] Ghi findings còn lại thành W6.1.1 nếu không giải quyết được trong scope; không gộp vào timeout W6.5.
+- [ ] Evidence/report và commit nghiệm thu W6.1.
+
+W6.5 baseline bắt đầu trong runtime disposable, chỉ override constants của tiến trình eval; chưa đổi defaults production. Six-group budget runner thuộc checkpoint W6.5 riêng.

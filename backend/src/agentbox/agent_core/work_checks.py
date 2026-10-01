@@ -66,10 +66,24 @@ def observations(graph, child_id):
 
 
 def good_reads(graph, child_id):
+    # Reading a workspace copy of the assigned artifact is still self-evidence,
+    # even when the model uses file_read rather than work_artifact_read.
+    try:
+        binding = graph.store.get(child_id)['config'].get('workBinding') or {}
+    except KeyError:
+        binding = {}
+    paths = []
+    for aid in binding.get('artifactIds', []):
+        row = graph.db.execute('SELECT metadata FROM work_artifacts WHERE id=?', (aid,)).fetchone()
+        if row:
+            paths.append(json.loads(row['metadata'])['path'].replace('\\', '/').removeprefix('./'))
+    def original(item):
+        path = str(item.get('args', {}).get('path') or '').replace('\\', '/').removeprefix('./')
+        return not any(path == p or path.endswith('/' + p) for p in paths)
     return [item for item in observations(graph, child_id)
             if item.get('name') in ('file_read', 'web_fetch', 'read_source', 'codebase_grep')
             and isinstance(item.get('result'), dict) and not item['result'].get('is_error')
-            and any(item['result'].get(k) for k in ('content', 'text', 'matches', 'results'))]
+            and any(item['result'].get(k) for k in ('content', 'text', 'matches', 'results')) and original(item)]
 
 
 def test_proof(graph, child_id, tests):
@@ -124,6 +138,21 @@ def contract(lang, criteria):
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
         '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
         'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + '\n' + json.dumps(skeleton, ensure_ascii=False)
+
+
+def preflight(session, spec):
+    """Fail before spawning or consuming a retry if required capabilities are off."""
+    from .roles import work_check_tools
+    config = session['config']
+    role = spec['executorRole']
+    if not any(r['id'] == role and r.get('enabled', True) for r in config['subagents']):
+        return f'WORK_CHECK_UNAVAILABLE: required role {role} is disabled or missing; enable it explicitly before retrying'
+    tools = work_check_tools(role, config['tools'])
+    if spec['id'] == 'tests' and 'terminal_exec' not in tools:
+        return 'WORK_CHECK_UNAVAILABLE: tests requires terminal_exec; owner tool setting is respected'
+    if spec['id'] in ('evidence', 'critique', 'whole') and not tools & {'file_read', 'web_fetch', 'read_source', 'codebase_grep'}:
+        return 'WORK_CHECK_UNAVAILABLE: no tool to open original evidence; enable the required read capability explicitly'
+    return None
 
 
 class Checks:
@@ -200,6 +229,9 @@ class Checks:
 
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
+        unavailable = preflight(session, spec)
+        if unavailable:
+            return doc | {'status': 'unverified', 'error': unavailable, 'finishedAt': time.time(), 'attempts': []}
         lang = work_prompts.language(run['goal'])
         if whole:
             goal = work_prompts.whole_review_goal(run['title'], run['goal'], lang,
@@ -234,7 +266,7 @@ class Checks:
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
             elif not all(graph.artifacts.covered(doc['checkId'], meta, child_id) for meta in metas):
                 doc.update(status='unverified', error='Reviewer did not read all assigned artifact ranges.')
-            elif status == 'pass' and spec['id'] == 'evidence' and not good_reads(graph, child_id):
+            elif (spec['id'] == 'evidence' or whole and work_policy.research_only(run)) and not good_reads(graph, child_id):
                 doc.update(status='unverified', error='No successfully opened original evidence.')
             elif status == 'pass' and spec['id'] == 'tests' and not test_proof(graph, child_id, node['tests']):
                 doc.update(status='unverified', error='Missing actual successful required test command events.')
@@ -277,6 +309,11 @@ class Checks:
             ids = args.get('checkIds') or [r['id'] for r in policy['required']]
             if not isinstance(ids, list) or not ids or len(ids) != len(set(ids)) or not set(ids) <= {r['id'] for r in policy['required']}:
                 raise ValueError('WORK_CHECK_INVALID: select ids from current required checks')
+            for spec in policy['required']:
+                if spec['id'] in ids:
+                    unavailable = preflight(session, spec)
+                    if unavailable:
+                        raise ValueError(unavailable)
             invocation = str(args.get('invocationId') or '').strip()
             if not 1 <= len(invocation) <= 120:
                 raise ValueError('WORK_CHECK_INVOCATION: unique invocationId required (1..120 chars)')

@@ -67,10 +67,11 @@ class FixtureExecutor:
             if name == 'codebase_glob':
                 matches = [path for path in files if fnmatch.fnmatch(path, args.get('pattern', '**/*'))]
             else:
-                pattern = args.get('pattern', '')
+                query = args.get('query', '')
                 matches = [f'{path}:{index}: {line}' for path in files
+                           if not args.get('path') or path == args['path'] or path.startswith(args['path'].rstrip('/') + '/')
                            for index, line in enumerate(self.path(path).read_text(encoding='utf-8').splitlines(), 1)
-                           if re.search(pattern, line)]
+                           if query in line]
             return {'content': '\n'.join(matches), 'fixture': True}
         if name == 'terminal_exec':
             command = args['command'].strip()

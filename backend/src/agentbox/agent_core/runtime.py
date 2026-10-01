@@ -6837,6 +6837,9 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['tools'] = sorted(set(child['config']['tools']) | {'work_artifact_read'})
                 if work.get('checkId') or work.get('diagnosticOnly'):
                     child['config']['tools'] = [n for n in child['config']['tools'] if n not in ('file_write','file_edit_block','write_plan')]
+                if work.get('checkId'):
+                    from .roles import work_check_tools
+                    child['config']['tools'] = sorted(work_check_tools(role, config['tools']))
             if facet_id:
                 child['config']['facetId'] = facet_id
             self.store.update_config(child['id'], child['config'])

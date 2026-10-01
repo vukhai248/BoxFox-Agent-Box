@@ -209,11 +209,17 @@ def clean_list(value, field, limit=20, item_limit=600):
         value = [value]
     if not isinstance(value, list):
         raise ValueError(f'WORK_NODE_INVALID: `{field}` must be a list of strings')
+    if len(value) > limit:
+        raise ValueError(f'WORK_NODE_INVALID: `{field}` allows at most {limit} items; split the assignment, do not drop criteria')
     out = []
-    for item in value[:limit]:
-        text = str(item or '').strip()
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f'WORK_NODE_INVALID: `{field}` must contain strings')
+        text = item.strip()
+        if len(text) > item_limit:
+            raise ValueError(f'WORK_NODE_INVALID: `{field}` item exceeds {item_limit} characters; shorten explicitly')
         if text:
-            out.append(text[:item_limit])
+            out.append(text)
     return out
 
 
@@ -246,7 +252,7 @@ def normalize_node(raw, existing=None):
             raise ValueError(f'WORK_NODE_INVALID: {field} must be one of {choices}')
     node = {'id': node_id, 'kind': kind, 'title': title, 'goal': goal,
             'dependsOn': clean_list(raw.get('dependsOn', base.get('dependsOn')), 'dependsOn', 16, 32),
-            'acceptance': clean_list(raw.get('acceptance', base.get('acceptance')), 'acceptance'),
+            'acceptance': clean_list(raw.get('acceptance', base.get('acceptance')), 'acceptance', 64),
             'tests': clean_list(raw.get('tests', base.get('tests')), 'tests'),
             'files': clean_list(raw.get('files', base.get('files')), 'files', 40, 300)}
     for field in ('taskKind', 'artifactKind', 'risk'):

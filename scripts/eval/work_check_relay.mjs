@@ -5,12 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { createProviders } from '../../router/src/providers/index.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+const deadlineMs = Number(process.env.BOXFOX_EVAL_DEADLINE_MS || 240000);
+if (![90000, 180000, 240000].includes(deadlineMs)) throw new Error('Use a measured 90/180/240 second eval deadline');
 if (execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim() !== 'B') {
   throw new Error('W6 eval requires branch B');
 }
 const connection = { id: 'w6-isolated-opencode', providerId: 'opencode', endpoint: 'https://opencode.ai' };
 const provider = createProviders({ fetchImpl: fetch }).opencode;
-const allowed = new Set(['work_artifact_read', 'file_read', 'codebase_grep', 'codebase_glob', 'terminal_exec']);
+const allowed = new Set(['work_artifact_read', 'file_read', 'codebase_grep', 'codebase_glob', 'terminal_exec',
+  'work_graph', 'work_run', 'work_check', 'web_fetch', 'read_source']);
 const server = createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/api/router/state') {
     res.setHeader('Content-Type', 'application/json');
@@ -22,7 +25,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(404); res.end(); return;
   }
   const controller = new AbortController();
-  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(240000)]);
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(deadlineMs)]);
   res.on('close', () => controller.abort());
   try {
     let raw = '';
@@ -79,6 +82,6 @@ const server = createServer(async (req, res) => {
 });
 server.requestTimeout = 250000;
 server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({
-  url: `http://127.0.0.1:${server.address().port}`, model: 'opencode/space-bunny-free', deadlineMs: 240000,
+  url: `http://127.0.0.1:${server.address().port}`, model: 'opencode/space-bunny-free', deadlineMs,
   productionRouterDeadlineChanged: false, tools: [...allowed],
 })));

@@ -332,3 +332,15 @@ def allowed_tools(role, parent=None):
     if not peer_mesh_enabled():
         names = set(names) - PEER
     return frozenset(names)
+
+
+def work_check_tools(role, parent):
+    """Read-only check capabilities, respecting the owner's tool switches.
+
+    Plan/code reviewers also need to verify external claims; this applies only
+    to bound checks, not to the legacy role's general permissions.
+    """
+    tools = set(allowed_tools(role, parent))
+    tools |= set(parent) & {'web_search', 'web_fetch', 'read_source'}
+    tools.add('work_artifact_read')
+    return tools - {'file_write', 'file_edit_block', 'write_plan'}
