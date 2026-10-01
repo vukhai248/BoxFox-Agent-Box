@@ -185,7 +185,11 @@ def rubric(kind, lang='en'):
 
 
 def review_tail(lang='en'):
-    return choose(lang, REVIEW_TAIL_EN, REVIEW_TAIL_VI)
+    return choose(lang, REVIEW_TAIL_EN, REVIEW_TAIL_VI) + choose(lang,
+        '\nA domain or component mentioned only as an untested limitation is not the owner goal. '
+        'Blocking impact must follow an actual assigned requirement, not an invented future workflow. ',
+        '\nMiền hoặc thành phần chỉ được nhắc như giới hạn chưa kiểm không phải mục tiêu người dùng. '
+        'Hệ quả chặn phải gắn với yêu cầu thực sự được giao, không dựng một luồng tương lai. ')
 
 
 def child_contract(purpose, lang='en'):

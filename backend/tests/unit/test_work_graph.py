@@ -86,7 +86,7 @@ class Model:
                 match=re.search(r'\{"(?:A1|C1|G1)"', first)
                 criteria=json.JSONDecoder().raw_decode(first[match.start():])[0] if match else {'C1':'contract'}
                 verdict=wg.parse_verdict(text)[0]
-                coverage=[{'id':key,'status':'pass' if verdict=='ok' else 'revise','evidence':'Fixture assertion: '+str(value)} for key,value in criteria.items()]
+                coverage=[{'id':key,'status':'pass' if verdict=='ok' else 'revise','target':'artifact','evidence':'Fixture assertion: '+str(value)} for key,value in criteria.items()]
                 text=wg.VERDICT_RE.sub('',text).strip()+'\n```json\n'+json.dumps({'coverage':coverage})+'\n```\nVERDICT: '+(verdict or 'revise')
             return answer(text)
         finally:

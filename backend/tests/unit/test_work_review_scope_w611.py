@@ -57,4 +57,4 @@ def test_verified_response_limits_main_to_checked_snapshots(tmp_path):
 
 
 def test_contract_change_has_a_new_policy_version():
-    assert work_policy.VERSION == 'work-checks/6'
+    assert work_policy.VERSION == 'work-checks/7'

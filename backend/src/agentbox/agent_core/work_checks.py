@@ -123,7 +123,7 @@ def test_proof(graph, child_id, tests):
                                  for item in good) for test in tests)
 
 
-def parse_report(text, required):
+def parse_report(text, required, *, require_target=False):
     """Exactly one final verdict and JSON coverage for EVERY assigned criterion."""
     raw = str(text or '').strip()
     lines = re.findall(r'^\s*VERDICT: (ok|revise)\s*$', raw, re.M)
@@ -141,12 +141,29 @@ def parse_report(text, required):
         if any(item.get('status') not in ('pass', 'revise', 'unverified') or
                not isinstance(item.get('evidence'), str) or not item['evidence'].strip() for item in coverage):
             raise ValueError('status/evidence')
+        for item in coverage:
+            if (require_target and item['status'] == 'revise' and
+                    re.fullmatch(r'(?:[^.]+\.)?A[1-9]\d*', item['id']) and 'target' not in item):
+                raise ValueError('revised acceptance needs an explicit finding target')
+            target = item.get('target', 'artifact')
+            if target not in ('artifact', 'criterion'):
+                raise ValueError('finding target')
+            if target == 'criterion' and (item['status'] != 'revise' or
+                    not re.fullmatch(r'(?:[^.]+\.)?A[1-9]\d*', item['id'])):
+                raise ValueError('criterion conflict must revise an assigned A criterion')
     except (IndexError, KeyError, ValueError, TypeError):
-        return 'error', [], 'Invalid JSON coverage; every assigned id needs status and evidence.'
+        return 'error', [], ('Invalid JSON coverage; every assigned id needs status and evidence. '
+                             'Revised A criteria must explicitly set target=artifact or target=criterion.')
     statuses = {item['status'] for item in coverage}
     status = 'revise' if 'revise' in statuses or lines[0] == 'revise' else (
         'unverified' if 'unverified' in statuses else 'pass')
     return status, coverage, raw
+
+
+def input_conflicts(coverage, criteria):
+    """An evidenced conflict in main's assignment, not a request to falsify the artifact."""
+    return [{'id': item['id'], 'requirement': criteria[item['id']], 'evidence': item['evidence']}
+            for item in coverage if item.get('target') == 'criterion' and item['status'] == 'revise']
 
 
 def contract(lang, criteria):
@@ -159,13 +176,26 @@ def contract(lang, criteria):
         'coverageComplete chỉ áp dụng cho artifact hiện tại, không phải toàn bộ nhiệm vụ. '
         'Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. '
         'Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. ')
-    skeleton = {'coverage': [{'id': key, 'status': 'unverified', 'evidence': '<reference or finding>'} for key in criteria]}
+    skeleton = {'coverage': [{'id': key, 'status': 'unverified', 'target': 'artifact',
+                             'evidence': '<reference or finding>'} for key in criteria]}
     return head + work_prompts.choose(lang,
         '\nKeep findings under 600 words. Do not rewrite the deliverable or add scope. Snapshot hashes are checked by the backend; do not spend steps recomputing them. ',
-        '\nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
-        '\nReturn findings and a fenced json object {"coverage":[{"id":"A1","status":"pass|revise|unverified","evidence":"specific reference or finding"}]}. '
+        '\nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. ') + work_prompts.choose(lang,
+        '\nJudge the EXACT wording of each criterion. When an A criterion contains a disproved technical premise, '
+        'use status=revise, target=criterion and evidence naming the conflict and correction for main. '
+        'Keep a factually correct artifact intact; do not silently replace the criterion and mark it pass. '
+        'Every coverage entry explicitly includes target. Other findings use target=artifact; '
+        'target=criterion is not for C/G rubrics. ',
+        '\nKiểm ĐÚNG nội dung từng tiêu chí. Tiêu chí A có tiền đề kỹ thuật bị nguồn bác bỏ phải ghi '
+        'status=revise, target=criterion và evidence nêu mâu thuẫn/sửa tiêu chí cho main. '
+        'Giữ artifact đúng dữ kiện; không âm thầm đổi nghĩa tiêu chí rồi ghi pass. '
+        'Mỗi coverage entry ghi rõ target. Finding khác dùng target=artifact; '
+        'target=criterion không áp dụng rubric C/G. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
+        '\nReturn findings and a fenced json object {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"specific reference or finding"}]}. '
+        'Example for a disproved premise: {"id":"A1","status":"revise","target":"criterion","evidence":"Opened source refutes the premise; main must correct A1, not rewrite the correct artifact."}. '
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
-        '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
+        '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
+        'Ví dụ tiền đề bị bác bỏ: {"id":"A1","status":"revise","target":"criterion","evidence":"Nguồn đã mở bác tiền đề; main sửa A1, không viết lại artifact đúng."}. '
         'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + '\n' + json.dumps(skeleton, ensure_ascii=False)
 
 
@@ -294,12 +324,17 @@ class Checks:
         if source and await snapshot(graph, run['sessionId']) != source:
             return doc | {'status': 'superseded', 'error': 'Code changed before check.'}
         for retry in range(2):
+            attempt_goal = goal
+            if retry and doc.get('status') == 'error':
+                attempt_goal += '\n' + work_prompts.choose(lang,
+                    'Previous review was incomplete or invalid. ' + doc.get('error', doc.get('findings', '')),
+                    'Lượt review trước chưa hoàn tất hoặc sai hợp đồng. ' + doc.get('error', doc.get('findings', '')))
             result, text = await graph.spawn(session, run, None if whole else node, stage, 'review',
-                                            spec['executorRole'], goal, context, None, retry + 1,
+                                            spec['executorRole'], attempt_goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
                                                            'checkKind': spec['id'], 'budgetHints': hints})
             child_id = result.get('sessionId')
-            status, coverage, findings = parse_report(text, criteria)
+            status, coverage, findings = parse_report(text, criteria, require_target=True)
             doc.pop('error', None)
             doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
                 'completed': complete(result), 'execution': work_budget.receipt(result)})
@@ -308,7 +343,8 @@ class Checks:
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
             elif not all(graph.artifacts.covered(doc['checkId'], meta, child_id) for meta in metas):
                 doc.update(status='unverified', error='Reviewer did not read all assigned artifact ranges.')
-            elif (spec['id'] == 'evidence' or whole and work_policy.research_only(run)) and not good_reads(graph, child_id):
+            elif (spec['id'] == 'evidence' or whole and work_policy.research_only(run)
+                  or any(item.get('target') == 'criterion' for item in coverage)) and not good_reads(graph, child_id):
                 doc.update(status='unverified', error='No successfully opened original evidence.')
             elif status == 'pass' and spec['id'] == 'tests' and not test_proof(graph, child_id, node['tests']):
                 doc.update(status='unverified', error='Missing actual successful required test command events.')
@@ -316,6 +352,7 @@ class Checks:
                 break
         if source and await snapshot(graph, run['sessionId']) != source:
             doc.update(status='superseded', error='Source changed during check (including terminal side effects).')
+        doc['inputConflicts'] = input_conflicts(doc.get('coverage', []), criteria) if doc['status'] == 'revise' else []
         doc['finishedAt'] = time.time()
         return doc
 
@@ -373,6 +410,9 @@ class Checks:
                                 raise ValueError('WORK_CHECK_INVOCATION_CONFLICT: invocation already used for a different request')
                             records.append(json.loads(row['doc']))
                             continue
+                        if state.get('inputConflicts'):
+                            return graph.result(run) | {'checks': list(self.latest(run, node, stage).values()),
+                                                        'inputConflicts': state['inputConflicts']}
                         previous = [c for c in self.records(run['runId']) if c.get('artifactId') == meta['artifactId']
                                     and c['kind'] == cid and c['policyHash'] == policy['hash']]
                         if len(previous) >= 3:
@@ -404,6 +444,8 @@ class Checks:
                                                 if r['status'] == 'revise'))
             else:
                 state['status'] = 'needs_checks'
+            state['inputConflicts'] = [item for record in self.latest(run, node, stage).values()
+                                      for item in record.get('inputConflicts', [])]
             if records:
                 doc = records[-1]
                 state['rounds'][-1].update(reviewerId=doc.get('childId'),

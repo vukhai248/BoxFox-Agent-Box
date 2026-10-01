@@ -1,0 +1,1466 @@
+{
+  "recordedAt": 1790859135.9245589,
+  "branch": "B",
+  "commitBeforeCheckpoint": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+  "policy": "work-checks/7",
+  "scope": "review contract/routing only; no UI, main/sub prompt or DAG scheduler changes in this checkpoint",
+  "ownerBudgetDecision": "min(profile, owner); no child above owner ceiling",
+  "tests": [
+    {
+      "path": ".tmp\\work-checks\\w611-input-target.xml",
+      "sha256": "fd01ff62541f8c081885943f21101232c594f10c74be0e3a71f1b00a29ba850d",
+      "tests": 190,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 45.008
+    },
+    {
+      "path": ".tmp\\work-checks\\w611-input-full.xml",
+      "sha256": "573f2ff3e8b34e52d4366a24770a8afd81f075e711fce0a63ab72a7348bef4a4",
+      "tests": 2767,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 21,
+      "seconds": 471.915
+    },
+    {
+      "path": ".tmp\\work-checks\\w611-input-target2.xml",
+      "sha256": "89ed0878ed34cb67c64f2b71df87eb13c9bc57200afa0b2da0b8caa767416589",
+      "tests": 158,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 42.471
+    },
+    {
+      "path": ".tmp\\work-checks\\w611-input2-full.xml",
+      "sha256": "c016311d1204b7052d5ba0dcdbcfe35040f48925af2e9c64860703f41eddd320",
+      "tests": 2771,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 21,
+      "seconds": 506.358
+    }
+  ],
+  "sourceFreeze": {
+    "at": 1790858351.3306868,
+    "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+    "hashes": {
+      "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+      "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+      "backend\\src\\agentbox\\agent_core\\work_checks.py": "a010450449d1dddf166c565c0b96b9e9e88d0c6ab49c1b49ec98ebc9ca932605",
+      "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+      "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+      "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+      "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+      "scripts\\eval\\work_quality_eval.py": "1caf133735a7f37db090ac51aa72673e3a2cdee94ea56ba37752ecdfa162f566"
+    }
+  },
+  "changedSinceFullTestStart": [
+    "scripts\\eval\\work_quality_eval.py"
+  ],
+  "sourceChangeExplanation": "Only evaluator metrics/guard probe changed after test launch; production runtime and all backend test bytes used by this sweep stayed fixed. Native strict stores its own startup hashes.",
+  "permissiveNative": {
+    "rawPath": ".tmp\\work-checks\\w611-input-native7\\results.json",
+    "rawSha256": "178c7d7c0167fb2144e73e90558db1a04a585003e161f43947db9a260cdfbda9",
+    "rows": [
+      {
+        "case": "false_assignment_premise",
+        "repeat": 1,
+        "expected": "revise",
+        "status": "revise",
+        "oracle": true,
+        "latencySeconds": 133.239,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "9d3aad81d769e8fabf53cc2a309a2895749e0a1699a7d82ddb98d5421298f14f",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "ada2eec5c621499f291b784ccc8777a870134d939e5f8f62f26fa380fb19ac92"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-8971ba3001ea498baddcae937832b668",
+          "runId": "w-d5b5e96cfa",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-e5143e019aed4df2a0e0118572bf5a13",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "revise",
+          "binding": {
+            "nodeDefinition": "b2dcce63da7a4dbf9310e5f76e882a1b0d108f994352492ee74b4c30631f7182",
+            "dependencies": {},
+            "owner": "4627d28b9d0c6a02433a78902e73779886bc2dda9c612642035ba29d46de5fd9",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790857597.0587866,
+          "attempts": [
+            {
+              "childId": "456edbbff01640fa9ac415879031d432",
+              "status": "revise",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 7,
+                "outputTokens": 7199,
+                "wallMs": 133224,
+                "toolCalls": 7
+              }
+            }
+          ],
+          "childId": "456edbbff01640fa9ac415879031d432",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "revise",
+              "evidence": "Tiền đề bị nguồn bác bỏ: Modules/_csv.c (nhánh 3.13) csv_exec() đặt field_limit = 128 * 1024 chỉ là mặc định khởi tạo, _csv_field_size_limit_impl() cho phép đổi bằng FT_ATOMIC_STORE_SSIZE_RELAXED, và Reader_iternext() đếm linelen = PyUnicode_GET_LENGTH(lineobj) theo code point sau giải mã chứ không theo byte UTF-8. Sửa A1 thành kiểm đơn vị/tính chất field_size_limit trên CPython 3.13 thay vì yêu cầu xác nhận 128 KiB bất biến."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "evidence": "Artifact cite Modules/_csv.c; tôi tự mở nguồn và xác nhận nguyên văn ReaderObj.Py_UCS4 *field, parse_add_char() so field_len >= field_limit, _csv_field_size_limit_impl. Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí), không triển khai."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "evidence": "Nguồn gốc mở được (HTTP 200) và hỗ trợ khẳng định; đã kiểm cả chiều trái bằng cách tìm INITIAL_FIELD_SIZE (không tồn tại trong 3.13) và chuỗi 131072/128 KiB trong docs 3.13 (không có). Phạm vi đúng bản 3.13; đã nêu giới hạn field_size_limit và ranh giới không chạy test."
+            }
+          ],
+          "findings": "## Vấn đề chặn\n\n**F1 — Tiêu chí A1 (mục nghiệm thu: \"Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON\")**\n\n- **Yêu cầu được giao:** kiểm tiền đề main về giới hạn CSV 128 KiB bất biến theo byte, và báo cáo nếu nguồn bác bỏ.\n- **Bằng chứng quan sát:** tôi đã tự mở nguồn gốc `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, nhánh 3.13) và tìm thấy nguyên văn:\n  - `ReaderObj` khai báo `Py_UCS4 *field;` và `Py_ssize_t field_len;`\n  - `parse_add_char()`: `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { PyErr_Format(... \"field larger than field limit (%zd)\", field_limit); }`\n  - `csv_exec()`: `module_state->field_limit = 128 * 1024;` — đây là **giá trị khởi tạo mặc định**, không phải hằng bất biến.\n  - `_csv_field_size_limit_impl()` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` — cho phép đổi trong runtime.\n  - `Reader_iternext()`: `linelen = PyUnicode_GET_LENGTH(lineobj); ... c = PyUnicode_READ(kind, data, pos);` — vòng lặp đếm **code point sau giải mã**, truyền `Py_UCS4 c` vào `parse_add_char`.\n  - `docs.python.org/3.13/library/csv.html`: \"Returns the current maximum field size allowed by the parser. If `new_limit` is given, this becomes the new limit.\"\n- **Bằng chứng phản bác đã xét:** tôi thử tìm cách cứu tiền đề bằng cách128*1024 là hằng số biên dịch (`INITIAL_FIELD_SIZE` không tồn tại trong 3.13) và bằng tài liệu mô tả \"128 KiB\" — không có; chuỗi `131072`/`128 KiB` không xuất hiện trong trang docs 3.13. Nhánh `3.13` có `csv_exec` và bộ đặt `field_size_limit` riêng, nên cả hai chiều \"bất biến\" và \"theo byte\" đều bị bác bỏ.\n- **Hệ quả cụ thể:** tiêu chí A1 yêu cầu xác nhận một điều không thể xác nhận. Nếu main dùng A1 làm cổng nghiệm thu, nó sẽ chốt kết luận sai (phải bỏ CSV vì giới hạn byte cứng), và đó là quyết định ảnh hưởng trực tiếp lựa chọn định dạng sản phẩm. Đây chính là mâu thuẫn tiêu chí cần báo.\n- **Sửa tối thiểu:** đổi A1 thành câu kiểm đúng đắn, ví dụ: *\"Kiểm chứng đơn vị và tính chất của `csv.field_size_limit` trên CPython 3.13 (mặc định trong `csv_exec`, tính theo code point hay byte, có đổi được runtime không) và kết luận có cần chuyển JSON hay không.\"* Artifact đã nêu đúng nội dung này; cần main sửa tiêu chí, không cần producer viết lại.\n\nKhông có vấn đề chặn nào khác.\n\n## Ghi chú không chặn\n\n- Artifact đúng trên cả ba điểm dữ kiện (`Py_UCS4`, so `field_len` với `field_limit` trong `parse_add_char`, `field_size_limit` đổi được) và phân biệt rõ bằng chứng với đề xuất (\"cần sửa tiêu chí đó thay vì nhắc lại nó như dữ kiện\"). Không triển khai. Pass.\n- Bổ sung nên có (tôi đã tự xác minh, không phải điểm chặn): nên trích thêm hai neo cho khẳng định \"ký tự, không phải byte\" — `csv_exec(): field_limit = 128 * 1024` và vòng `PyUnicode_GET_LENGTH`/`PyUnicode_READ` trong `Reader_iternext`. Hiện artifact chỉ dựa vào kiểu `Py_UCS4`, dễ bị hiểu nhầm thành4 byte/ký tự. Cũng nên diễn đạt \"mặc định 131072 ký tự Unicode\" thay vì \"128 KiB\".\n- **Test: NOT RUN.** Tôi không có công cụ terminal trong phiên review này; kết luận dựa trên đọc trực tiếp mã nguồn. Counterexample nhỏ (một field tiếng Việt >43690 ký tự ≈ 128 KiB byte) không bắt buộc để kết luận, vì bằng chứng ở tầng mã là quyết định. Artifact tuyên bố trung thực \"không tuyên bố đã chạy test\".\n- Truy cập thất bại: không có. Cả `raw.githubusercontent.com/.../3.13/Modules/_csv.c` và `docs.python.org/3.13/library/csv.html` đều trả 200.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"evidence\":\"Tiền đề bị nguồn bác bỏ: Modules/_csv.c (nhánh 3.13) csv_exec() đặt field_limit = 128 * 1024 chỉ là mặc định khởi tạo, _csv_field_size_limit_impl() cho phép đổi bằng FT_ATOMIC_STORE_SSIZE_RELAXED, và Reader_iternext() đếm linelen = PyUnicode_GET_LENGTH(lineobj) theo code point sau giải mã chứ không theo byte UTF-8. Sửa A1 thành kiểm đơn vị/tính chất field_size_limit trên CPython 3.13 thay vì yêu cầu xác nhận 128 KiB bất biến.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Artifact cite Modules/_csv.c; tôi tự mở nguồn và xác nhận nguyên văn ReaderObj.Py_UCS4 *field, parse_add_char() so field_len >= field_limit, _csv_field_size_limit_impl. Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí), không triển khai.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Nguồn gốc mở được (HTTP 200) và hỗ trợ khẳng định; đã kiểm cả chiều trái bằng cách tìm INITIAL_FIELD_SIZE (không tồn tại trong 3.13) và chuỗi 131072/128 KiB trong docs 3.13 (không có). Phạm vi đúng bản 3.13; đã nêu giới hạn field_size_limit và ranh giới không chạy test.\"}]}\n```\n\nVERDICT: revise",
+          "inputConflicts": [],
+          "finishedAt": 1790857730.2935655
+        },
+        "answer": "## Vấn đề chặn\n\n**F1 — Tiêu chí A1 (mục nghiệm thu: \"Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON\")**\n\n- **Yêu cầu được giao:** kiểm tiền đề main về giới hạn CSV 128 KiB bất biến theo byte, và báo cáo nếu nguồn bác bỏ.\n- **Bằng chứng quan sát:** tôi đã tự mở nguồn gốc `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, nhánh 3.13) và tìm thấy nguyên văn:\n  - `ReaderObj` khai báo `Py_UCS4 *field;` và `Py_ssize_t field_len;`\n  - `parse_add_char()`: `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { PyErr_Format(... \"field larger than field limit (%zd)\", field_limit); }`\n  - `csv_exec()`: `module_state->field_limit = 128 * 1024;` — đây là **giá trị khởi tạo mặc định**, không phải hằng bất biến.\n  - `_csv_field_size_limit_impl()` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` — cho phép đổi trong runtime.\n  - `Reader_iternext()`: `linelen = PyUnicode_GET_LENGTH(lineobj); ... c = PyUnicode_READ(kind, data, pos);` — vòng lặp đếm **code point sau giải mã**, truyền `Py_UCS4 c` vào `parse_add_char`.\n  - `docs.python.org/3.13/library/csv.html`: \"Returns the current maximum field size allowed by the parser. If `new_limit` is given, this becomes the new limit.\"\n- **Bằng chứng phản bác đã xét:** tôi thử tìm cách cứu tiền đề bằng cách128*1024 là hằng số biên dịch (`INITIAL_FIELD_SIZE` không tồn tại trong 3.13) và bằng tài liệu mô tả \"128 KiB\" — không có; chuỗi `131072`/`128 KiB` không xuất hiện trong trang docs 3.13. Nhánh `3.13` có `csv_exec` và bộ đặt `field_size_limit` riêng, nên cả hai chiều \"bất biến\" và \"theo byte\" đều bị bác bỏ.\n- **Hệ quả cụ thể:** tiêu chí A1 yêu cầu xác nhận một điều không thể xác nhận. Nếu main dùng A1 làm cổng nghiệm thu, nó sẽ chốt kết luận sai (phải bỏ CSV vì giới hạn byte cứng), và đó là quyết định ảnh hưởng trực tiếp lựa chọn định dạng sản phẩm. Đây chính là mâu thuẫn tiêu chí cần báo.\n- **Sửa tối thiểu:** đổi A1 thành câu kiểm đúng đắn, ví dụ: *\"Kiểm chứng đơn vị và tính chất của `csv.field_size_limit` trên CPython 3.13 (mặc định trong `csv_exec`, tính theo code point hay byte, có đổi được runtime không) và kết luận có cần chuyển JSON hay không.\"* Artifact đã nêu đúng nội dung này; cần main sửa tiêu chí, không cần producer viết lại.\n\nKhông có vấn đề chặn nào khác.\n\n## Ghi chú không chặn\n\n- Artifact đúng trên cả ba điểm dữ kiện (`Py_UCS4`, so `field_len` với `field_limit` trong `parse_add_char`, `field_size_limit` đổi được) và phân biệt rõ bằng chứng với đề xuất (\"cần sửa tiêu chí đó thay vì nhắc lại nó như dữ kiện\"). Không triển khai. Pass.\n- Bổ sung nên có (tôi đã tự xác minh, không phải điểm chặn): nên trích thêm hai neo cho khẳng định \"ký tự, không phải byte\" — `csv_exec(): field_limit = 128 * 1024` và vòng `PyUnicode_GET_LENGTH`/`PyUnicode_READ` trong `Reader_iternext`. Hiện artifact chỉ dựa vào kiểu `Py_UCS4`, dễ bị hiểu nhầm thành4 byte/ký tự. Cũng nên diễn đạt \"mặc định 131072 ký tự Unicode\" thay vì \"128 KiB\".\n- **Test: NOT RUN.** Tôi không có công cụ terminal trong phiên review này; kết luận dựa trên đọc trực tiếp mã nguồn. Counterexample nhỏ (một field tiếng Việt >43690 ký tự ≈ 128 KiB byte) không bắt buộc để kết luận, vì bằng chứng ở tầng mã là quyết định. Artifact tuyên bố trung thực \"không tuyên bố đã chạy test\".\n- Truy cập thất bại: không có. Cả `raw.githubusercontent.com/.../3.13/Modules/_csv.c` và `docs.python.org/3.13/library/csv.html` đều trả 200.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"evidence\":\"Tiền đề bị nguồn bác bỏ: Modules/_csv.c (nhánh 3.13) csv_exec() đặt field_limit = 128 * 1024 chỉ là mặc định khởi tạo, _csv_field_size_limit_impl() cho phép đổi bằng FT_ATOMIC_STORE_SSIZE_RELAXED, và Reader_iternext() đếm linelen = PyUnicode_GET_LENGTH(lineobj) theo code point sau giải mã chứ không theo byte UTF-8. Sửa A1 thành kiểm đơn vị/tính chất field_size_limit trên CPython 3.13 thay vì yêu cầu xác nhận 128 KiB bất biến.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Artifact cite Modules/_csv.c; tôi tự mở nguồn và xác nhận nguyên văn ReaderObj.Py_UCS4 *field, parse_add_char() so field_len >= field_limit, _csv_field_size_limit_impl. Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí), không triển khai.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Nguồn gốc mở được (HTTP 200) và hỗ trợ khẳng định; đã kiểm cả chiều trái bằng cách tìm INITIAL_FIELD_SIZE (không tồn tại trong 3.13) và chuỗi 131072/128 KiB trong docs 3.13 (không có). Phạm vi đúng bản 3.13; đã nêu giới hạn field_size_limit và ranh giới không chạy test.\"}]}\n```\n\nVERDICT: revise",
+        "auditedRoutingOracle": false,
+        "auditReason": "status-only raw oracle, target omitted; inputConflicts empty"
+      },
+      {
+        "case": "false_assignment_premise",
+        "repeat": 2,
+        "expected": "revise",
+        "status": "revise",
+        "oracle": true,
+        "latencySeconds": 317.72,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "9d3aad81d769e8fabf53cc2a309a2895749e0a1699a7d82ddb98d5421298f14f",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "ada2eec5c621499f291b784ccc8777a870134d939e5f8f62f26fa380fb19ac92"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-36a938ab2b5941928226c76265824c31",
+          "runId": "w-881d105713",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-4a9feda203ab44228ee767250e611cde",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "revise",
+          "binding": {
+            "nodeDefinition": "b2dcce63da7a4dbf9310e5f76e882a1b0d108f994352492ee74b4c30631f7182",
+            "dependencies": {},
+            "owner": "4627d28b9d0c6a02433a78902e73779886bc2dda9c612642035ba29d46de5fd9",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790857730.6089442,
+          "attempts": [
+            {
+              "childId": "baefc8d9b06b408b875d53d30afb7144",
+              "status": "error",
+              "completed": false,
+              "execution": {
+                "status": "partial",
+                "reason": "PROVIDER_STREAM_INTERRUPTED",
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 5,
+                "outputTokens": 4181,
+                "wallMs": 185861,
+                "toolCalls": 6
+              }
+            },
+            {
+              "childId": "c15fdb8cd60141fda0a0a0d912a18d46",
+              "status": "revise",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 8,
+                "outputTokens": 7373,
+                "wallMs": 131838,
+                "toolCalls": 11
+              }
+            }
+          ],
+          "childId": "c15fdb8cd60141fda0a0a0d912a18d46",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "revise",
+              "evidence": "Tiền đề main bị nguồn bác bỏ trên cả hai điểm: (1) đơn vị — parse_add_char so field_len với field_limit, còn Reader_iternext cấp char qua PyUnicode_READ theo từng code point nên giới hạn tính theo ký tự, không phải byte UTF-8; (2) tính bất biến — _csv_field_size_limit_impl cho phép ghi field_limit bất kỳ lúc nào (docs 3.13.16: 'If new_limit is given, this becomes the new limit'). Sửa tiêu chí cho main: thay 'giới hạn bất biến 128 KiB theo byte nên bắt buộc chuyển JSON' bằng 'xác minh đơn vị và khả năng cấu hình của csv.field_size_limit trên CPython 3.13'. Artifact báo cáo mâu thuẫn đúng yêu cầu, không nhắc lại tiền đề sai."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "evidence": "Đọc đúng source CPython 3.13: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c — tôi tự mở lại và xác nhận từng đoạn trích khớp nguyên văn (ReaderObj Py_UCS4 *field; parse_add_char; csv_exec field_limit = 128 * 1024). Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí A1); không triển khai, không tuyên bố đã chạy test."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "evidence": "Đã mở nguồn gốc quan trọng và kiểm cả chiều trái chiều: nguồn thứ hai docs.python.org/3.13/library/csv.html (bản 3.13.16) về csv.field_size_limit củng cố kết luận. Quét toàn bộ 42476 ký tự _csv.c đường đọc: không có giới hạn nào tính theo byte; 128*1024 chỉ là mặc định khả đổi, không phải hằng bất biến. Phạm vi và giới hạn được nêu rõ (chỉ branch 3.13, chưa chạy test)."
+            }
+          ],
+          "findings": "Đã đọc HẾT artifact được giao (`a-4a9feda203ab44228ee767250e611cde`, 460 ký tự, `allAssignedArtifactsRead=true`) và tự mở lại nguồn gốc để kiểm chứng độc lập.\n\n## Vấn đề chặn\n\n**none**\n\nĐã kiểm và nêu bằng chứng đối chiếu trực tiếp với source, không chỉ đọc artifact:\n\n| Nội dung artifact | Source CPython 3.13 tôi tự mở | Kết quả |\n|---|---|---|\n| \"Py_UCS4 cho field\" | `ReaderObj`: `Py_UCS4 *field; /* temporary buffer */` | Khớp |\n| \"so field_len với field_limit trong parse_add_char\" | `if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" }` | Khớp chính xác |\n| \"giới hạn là ký tự Unicode, không phải byte UTF-8\" | `Reader_iternext`: `c = PyUnicode_READ(kind, data, pos); linelen = PyUnicode_GET_LENGTH(lineobj);` → `field_len++` **một lần mỗi code point** | Khớp |\n| \"field_size_limit cho phép đổi giới hạn\" | `_csv_field_size_limit_impl`: `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` + docs 3.13.16: *\"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\"* | Khớp |\n\nNguồn thứ hai tôi mở để tìm bằng chứng trái chiều (docs 3.13.16, `csv.field_size_limit`) **củng cố** kết luận artifact, không phản bác. Tôi cũng quét toàn bộ 42476 ký tự của `_csv.c` đường đọc: không tồn tại bất kỳ giới hạn nào tính theo byte; con số `128 * 1024` chỉ xuất hiện đúng một lần tại `csv_exec` và là **mặc định khả năng thay đổi**, không phải hằng bất biến. Artifact đã bác bỏ đúng tiền đề, đúng nghĩa (đơn vị + tính bất biến), và không mở rộng sang đề xuất triển khai.\n\n**Counterexample chưa chạy:** NOT RUN — phiên review này không có công cụ thực thi Python; kết luận suy ra từ source, đã nêu trung thực.\n\n## Ghi chú không chặn\n\n1. **Con số 128 KiB chưa được trích dẫn tại chỗ.** Artifact bác bỏ tiền đề mà không nêu `csv_exec: module_state->field_limit = 128 * 1024;`. Vì tiêu chí A1 mang con số \"128 KiB\", việc chỉ vào đúng hàng khởi tạo sẽ khép kín lập luận hơn. (Không chặn: đơn vị và tính khả đổi mới là phần quyết định.)\n2. **\"ký tự Unicode\" nên hiệu chính là code point.** Với tiếng Việt dựng sẵn (NFC) 1 ký tự = 1 code point nên kết luận đúng; nhưng với dạng NFD một grapheme có thể nhiều code point. Nói \"code point (`Py_UCS4`)\" là chuẩn xác hơn — và nói thêm sẽ **củng cố** lập luận byte-vs-ký tự.\n3. **Hệ quả ngược chiều chưa được nêu.** Vì giới hạn tính theo code point, một field tiếng Việt UTF-8 chiếm ~2–3 byte/ký tự vẫn được chấp nhận tới131071 ký tự (~390 KB trên đĩa). Nói rõ điều này cho thấy mức 128 KiB làm CSV **dễ chịu hơn**, chứ không khắc nghiệt hơn như tiền đề — lập luận chống chuyển JSON mạnh hơn.\n4. **URL chưa pin commit** (`/cpython/3.13/`). Đây là nhánh đúng phiên bản 3.13; theo tiêu chí review, thiếu commit pin không phải lỗi đúng-sai.\n5. **Độ phủ so với mục tiêu người dùng.** Mục tiêu là \"khả năng giữ tiếng Việt của CSV\", nhưng R1 chỉ phủ chiều field-limit và nói rõ \"Không mở rộng phạm vi\" — đúng phạm vi được giao. Các chiều còn lại (encoding `utf-8` vs `utf-8-sig`, `newline=''`, round-trip writer→reader) nên được một nút khác phủ; tôi không yêu cầu nút này làm thay.\n6. Không có yêu cầu hàng CSV, code chạy được hay API nào trong artifact — đúng với báo cáo nghiên cứu chỉ-nghiên-cứu.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"evidence\": \"Tiền đề main bị nguồn bác bỏ trên cả hai điểm: (1) đơn vị — parse_add_char so field_len với field_limit, còn Reader_iternext cấp char qua PyUnicode_READ theo từng code point nên giới hạn tính theo ký tự, không phải byte UTF-8; (2) tính bất biến — _csv_field_size_limit_impl cho phép ghi field_limit bất kỳ lúc nào (docs 3.13.16: 'If new_limit is given, this becomes the new limit'). Sửa tiêu chí cho main: thay 'giới hạn bất biến 128 KiB theo byte nên bắt buộc chuyển JSON' bằng 'xác minh đơn vị và khả năng cấu hình của csv.field_size_limit trên CPython 3.13'. Artifact báo cáo mâu thuẫn đúng yêu cầu, không nhắc lại tiền đề sai.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Đọc đúng source CPython 3.13: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c — tôi tự mở lại và xác nhận từng đoạn trích khớp nguyên văn (ReaderObj Py_UCS4 *field; parse_add_char; csv_exec field_limit = 128 * 1024). Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí A1); không triển khai, không tuyên bố đã chạy test.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"evidence\": \"Đã mở nguồn gốc quan trọng và kiểm cả chiều trái chiều: nguồn thứ hai docs.python.org/3.13/library/csv.html (bản 3.13.16) về csv.field_size_limit củng cố kết luận. Quét toàn bộ 42476 ký tự _csv.c đường đọc: không có giới hạn nào tính theo byte; 128*1024 chỉ là mặc định khả đổi, không phải hằng bất biến. Phạm vi và giới hạn được nêu rõ (chỉ branch 3.13, chưa chạy test).\"}]}\n```\n\nVERDICT: ok",
+          "inputConflicts": [],
+          "finishedAt": 1790858048.3240182
+        },
+        "answer": "Đã đọc HẾT artifact được giao (`a-4a9feda203ab44228ee767250e611cde`, 460 ký tự, `allAssignedArtifactsRead=true`) và tự mở lại nguồn gốc để kiểm chứng độc lập.\n\n## Vấn đề chặn\n\n**none**\n\nĐã kiểm và nêu bằng chứng đối chiếu trực tiếp với source, không chỉ đọc artifact:\n\n| Nội dung artifact | Source CPython 3.13 tôi tự mở | Kết quả |\n|---|---|---|\n| \"Py_UCS4 cho field\" | `ReaderObj`: `Py_UCS4 *field; /* temporary buffer */` | Khớp |\n| \"so field_len với field_limit trong parse_add_char\" | `if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" }` | Khớp chính xác |\n| \"giới hạn là ký tự Unicode, không phải byte UTF-8\" | `Reader_iternext`: `c = PyUnicode_READ(kind, data, pos); linelen = PyUnicode_GET_LENGTH(lineobj);` → `field_len++` **một lần mỗi code point** | Khớp |\n| \"field_size_limit cho phép đổi giới hạn\" | `_csv_field_size_limit_impl`: `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` + docs 3.13.16: *\"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\"* | Khớp |\n\nNguồn thứ hai tôi mở để tìm bằng chứng trái chiều (docs 3.13.16, `csv.field_size_limit`) **củng cố** kết luận artifact, không phản bác. Tôi cũng quét toàn bộ 42476 ký tự của `_csv.c` đường đọc: không tồn tại bất kỳ giới hạn nào tính theo byte; con số `128 * 1024` chỉ xuất hiện đúng một lần tại `csv_exec` và là **mặc định khả năng thay đổi**, không phải hằng bất biến. Artifact đã bác bỏ đúng tiền đề, đúng nghĩa (đơn vị + tính bất biến), và không mở rộng sang đề xuất triển khai.\n\n**Counterexample chưa chạy:** NOT RUN — phiên review này không có công cụ thực thi Python; kết luận suy ra từ source, đã nêu trung thực.\n\n## Ghi chú không chặn\n\n1. **Con số 128 KiB chưa được trích dẫn tại chỗ.** Artifact bác bỏ tiền đề mà không nêu `csv_exec: module_state->field_limit = 128 * 1024;`. Vì tiêu chí A1 mang con số \"128 KiB\", việc chỉ vào đúng hàng khởi tạo sẽ khép kín lập luận hơn. (Không chặn: đơn vị và tính khả đổi mới là phần quyết định.)\n2. **\"ký tự Unicode\" nên hiệu chính là code point.** Với tiếng Việt dựng sẵn (NFC) 1 ký tự = 1 code point nên kết luận đúng; nhưng với dạng NFD một grapheme có thể nhiều code point. Nói \"code point (`Py_UCS4`)\" là chuẩn xác hơn — và nói thêm sẽ **củng cố** lập luận byte-vs-ký tự.\n3. **Hệ quả ngược chiều chưa được nêu.** Vì giới hạn tính theo code point, một field tiếng Việt UTF-8 chiếm ~2–3 byte/ký tự vẫn được chấp nhận tới131071 ký tự (~390 KB trên đĩa). Nói rõ điều này cho thấy mức 128 KiB làm CSV **dễ chịu hơn**, chứ không khắc nghiệt hơn như tiền đề — lập luận chống chuyển JSON mạnh hơn.\n4. **URL chưa pin commit** (`/cpython/3.13/`). Đây là nhánh đúng phiên bản 3.13; theo tiêu chí review, thiếu commit pin không phải lỗi đúng-sai.\n5. **Độ phủ so với mục tiêu người dùng.** Mục tiêu là \"khả năng giữ tiếng Việt của CSV\", nhưng R1 chỉ phủ chiều field-limit và nói rõ \"Không mở rộng phạm vi\" — đúng phạm vi được giao. Các chiều còn lại (encoding `utf-8` vs `utf-8-sig`, `newline=''`, round-trip writer→reader) nên được một nút khác phủ; tôi không yêu cầu nút này làm thay.\n6. Không có yêu cầu hàng CSV, code chạy được hay API nào trong artifact — đúng với báo cáo nghiên cứu chỉ-nghiên-cứu.\n\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"evidence\": \"Tiền đề main bị nguồn bác bỏ trên cả hai điểm: (1) đơn vị — parse_add_char so field_len với field_limit, còn Reader_iternext cấp char qua PyUnicode_READ theo từng code point nên giới hạn tính theo ký tự, không phải byte UTF-8; (2) tính bất biến — _csv_field_size_limit_impl cho phép ghi field_limit bất kỳ lúc nào (docs 3.13.16: 'If new_limit is given, this becomes the new limit'). Sửa tiêu chí cho main: thay 'giới hạn bất biến 128 KiB theo byte nên bắt buộc chuyển JSON' bằng 'xác minh đơn vị và khả năng cấu hình của csv.field_size_limit trên CPython 3.13'. Artifact báo cáo mâu thuẫn đúng yêu cầu, không nhắc lại tiền đề sai.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"evidence\": \"Đọc đúng source CPython 3.13: https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c — tôi tự mở lại và xác nhận từng đoạn trích khớp nguyên văn (ReaderObj Py_UCS4 *field; parse_add_char; csv_exec field_limit = 128 * 1024). Phân biệt rõ dữ kiện (mã nguồn) và đề xuất (sửa tiêu chí A1); không triển khai, không tuyên bố đã chạy test.\"}, {\"id\": \"C1\", \"status\": \"pass\", \"evidence\": \"Đã mở nguồn gốc quan trọng và kiểm cả chiều trái chiều: nguồn thứ hai docs.python.org/3.13/library/csv.html (bản 3.13.16) về csv.field_size_limit củng cố kết luận. Quét toàn bộ 42476 ký tự _csv.c đường đọc: không có giới hạn nào tính theo byte; 128*1024 chỉ là mặc định khả đổi, không phải hằng bất biến. Phạm vi và giới hạn được nêu rõ (chỉ branch 3.13, chưa chạy test).\"}]}\n```\n\nVERDICT: ok",
+        "auditedRoutingOracle": false,
+        "auditReason": "status-only raw oracle, target omitted; inputConflicts empty"
+      },
+      {
+        "case": "correct_csv_char_unit",
+        "repeat": 1,
+        "expected": "pass",
+        "status": "pass",
+        "oracle": true,
+        "latencySeconds": 247.774,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "9d3aad81d769e8fabf53cc2a309a2895749e0a1699a7d82ddb98d5421298f14f",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "ada2eec5c621499f291b784ccc8777a870134d939e5f8f62f26fa380fb19ac92"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-e613aa2b697b47cc8f304b3d1790ac1c",
+          "runId": "w-a570955c34",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-f84f4eb8a8d740ad88378230731471bd",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "pass",
+          "binding": {
+            "nodeDefinition": "30ca532ae57b8ac5679486d2d200358f2166e0d8647d9d9bca0cd65e5e036155",
+            "dependencies": {},
+            "owner": "be1ae8d1ae8c20c9302cb896b28b9470a216710e1fb4d169468d5228c070aee2",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790858048.6477933,
+          "attempts": [
+            {
+              "childId": "6dda3be377124778979b07ee6a55c6d4",
+              "status": "pass",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 11,
+                "outputTokens": 16879,
+                "wallMs": 247755,
+                "toolCalls": 10
+              }
+            }
+          ],
+          "childId": "6dda3be377124778979b07ee6a55c6d4",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "pass",
+              "evidence": "Artifact phân biệt rõ ký tự vs byte và có ví dụ tiếng Việt cụ thể ('80000 ký tự ơ' = 160000 byte, không vượt 131072 ký tự). Tôi mở _csv.c 3.13 và xác nhận cơ chế: ReaderObj.field là Py_UCS4*, parse_add_char kiểm 'self->field_len >= field_limit' rồi 'self->field[self->field_len++] = c' => đếm 1 code point/lần thêm, không có phép quy đổi byte nào. U+01A1 thuộc [U+0080,U+07FF] nên 2 byte, số học 80000x2=160000 và 80000<131072 đều đúng."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "evidence": "Mặc định đúng: csv_exec trong _csv.c 3.13 đặt 'module_state->field_limit = 128 * 1024' = 131072 ký tự. Cấu hình đúng: _csv_field_size_limit_impl nhận new_limit (PyLong, PyLong_AsSsize_t) và ghi vào field_limit; docs.python.org/3.13 xác nhận 'If new_limit is given, this becomes the new limit'. Giới hạn nói trung thực: artifact tự ghi 'Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS' — khớp với thực tế tôi cũng NOT RUN (bash bị hạn chế). Bộ test 3.13 test_read_field_size_limit (size=50000, limit=size-1 => csv.Error) xác nhận ngưỡng theo ký tự."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "evidence": "Mở nguồn gốc: Modules/_csv.c 3.13 (HTTP 200, 42476 ký tự), docs.python.org/3.13/library/csv.html (3.13.16), Lib/csv.py 3.13, Lib/test/test_csv.py 3.13. Nguồn hỗ trợ trực tiếp từng trích dẫn; Lib/csv.py chỉ re-export field_size_limit nên không tồn tại lớp giới hạn byte thứ hai. Trái chiều: không tìm thấy. Giới hạn được nêu: suy luận từ source, chưa chạy test; test_csv.py chỉ dùng 'X'*size (ASCII) nên chưa có bằng chứng độc lập cho ký tự đa byte. Ghi chú phạm vi chưa nêu: field_limit chỉ áp dụng reader, và là biến module-level không per-dialect."
+            }
+          ],
+          "findings": "## Đã kiểm\n\n- **Snapshot**: `a-f84f4eb8a8d740ad88378230731471bd` (v1, hash `79648ec1…`, 480 ký tự) — đọc đầy đủ, `coverageComplete=true`, `allAssignedArtifactsRead=true`. Không có artifact nào khác được giao.\n- **Nguồn gốc đã mở (4/6 budget)**:\n  1. `raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` — HTTP 200, đọc 42476 ký tự, không cắt bỏ phần quyết định.\n  2. `docs.python.org/3.13/library/csv.html` — bản 3.13.16.\n  3. `raw.githubusercontent.com/python/cpython/3.13/Lib/csv.py`.\n  4. `raw.githubusercontent.com/python/cpython/3.13/Lib/test/test_csv.py`.\n- **Không chạy được**: `bash`/`read` bị hạn chế ⇒ **NOT RUN** đối với mọi counterexample. Kết luận dưới đây là suy luận từ source, đúng như khai báo giới hạn của producer.\n\n## Đối chiếu từng khẳng định với source 3.13\n\n| Khẳng định artifact | Bằng chứng gốc | Kết quả |\n|---|---|---|\n| \"lưu field bằng Py_UCS4\" | `ReaderObj` có `Py_UCS4 *field;`; `parse_save_field` gọi `PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, (void *) self->field, self->field_len)` | Đúng |\n| \"parse_add_char so field_len với field_limit\" | `if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" ... }` rồi `self->field[self->field_len++] = c;` | Đúng — mỗi lần +1 code point |\n| \"giới hạn ký tự Unicode, không phải byte UTF-8\" | `field_len` là số phần tử `Py_UCS4`; không có nhánh nào quy đổi sang byte | Đúng |\n| \"mặc định 128*1024 là 131072 ký tự\" | `csv_exec`: `module_state->field_limit = 128 * 1024;` | Đúng |\n| \"cấu hình bằng field_size_limit(new_limit)\" | `_csv_field_size_limit_impl` lưu `new_limit` vào `module_state->field_limit`; docs 3.13: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\" | Đúng |\n| \"80000 ký tự ơ → 160000 byte, không vượt 131072\" | U+01A1 ∈ [U+0080, U+07FF] ⇒ 2 byte; 80000×2=160000; 80000<131072 | Đúng |\n\n**Bằng chứng độc lập từ bộ test 3.13** (`test_read_field_size_limit`): đặt `size=50000`, `csv.field_size_limit(size-1)` → `csv.Error`. Khớp chính xác với điều kiện `field_len >= field_limit` trong `parse_add_char`, tức ngưỡng là số ký tự. Test này dùng `'X' * size` (ASCII) nên **không** chứng minh độc lập hành vi với ký tự đa byte — phần char-based vẫn dựa vào `_csv.c`, tôi ghi nhận điều này.\n\n**Đã xét phản bác**: không tìm thấy nguồn nào trong CPython 3.13 đo `field_size_limit` theo byte. `Lib/csv.py` chỉ re-export `field_size_limit` từ `_csv`, không có lớp giới hạn byte nào. Không có bằng chứng trái chiều.\n\n## Vấn đề chặn\n\n`none`\n\n## Ghi chú không chặn\n\n1. **Phạm vi: chỉ áp dụng cho reader.** `field_limit` chỉ được kiểm trong `parse_add_char`; `join_append_data` (writer) không kiểm tra. Nên ghi rõ \"giới hạn khi **đọc**\" để tránh hiểu nhầm là chặn cả khi xuất.\n2. **Phạm vi: biến module-level, không per-dialect.** `field_limit` nằm trong `_csvstate`, đọc qua `FT_ATOMIC_LOAD_SSIZE_RELAXED` ⇒ một giá trị cho toàn process, không gắn với `Dialect`. Ảnh hưởng thiết kế cấu hình ở bước sau.\n3. **Từ vựng.** `field_len` đếm ký tự **đã giải mã**: escapechar làm 2 ký tự vật lý thành 1 (`parse_process_char` case `ESCAPED_CHAR` gọi `parse_add_char` một lần). Cách nói \"ký tự Unicode\" của artifact là chính xác, chỉ có thể làm rõ thêm.\n4. **Hình thức.** Artifact là một đoạn văn Markdown 480 ký tự, không có heading `Câu hỏi`/`Phát hiện`/`Nguồn`/`Mâu thuẫn còn lại`/`Việc chưa làm`/`Phản biện`. Nội dung \"việc chưa làm\" và giới hạn **có** mặt dạng văn xuôi (\"Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS\"). Không làm mất căn cứ kết luận; là vấn đề trình bày nếu node này được dùng làm dossier cuối.\n5. **Pin phiên bản.** Dùng branch `3.13` không pin commit — nhãn phiên bản đúng, không phải lỗi đúng/sai.\n6. **Ví dụ 160000 byte** là phép tính UTF-8 chuẩn, không có URL dẫn; chấp nhận được nhưng nên tách nhãn là dữ kiện tính toán, không phải trích dẫn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Artifact phân biệt rõ ký tự vs byte và có ví dụ tiếng Việt cụ thể ('80000 ký tự ơ' = 160000 byte, không vượt 131072 ký tự). Tôi mở _csv.c 3.13 và xác nhận cơ chế: ReaderObj.field là Py_UCS4*, parse_add_char kiểm 'self->field_len >= field_limit' rồi 'self->field[self->field_len++] = c' => đếm 1 code point/lần thêm, không có phép quy đổi byte nào. U+01A1 thuộc [U+0080,U+07FF] nên 2 byte, số học 80000x2=160000 và 80000<131072 đều đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Mặc định đúng: csv_exec trong _csv.c 3.13 đặt 'module_state->field_limit = 128 * 1024' = 131072 ký tự. Cấu hình đúng: _csv_field_size_limit_impl nhận new_limit (PyLong, PyLong_AsSsize_t) và ghi vào field_limit; docs.python.org/3.13 xác nhận 'If new_limit is given, this becomes the new limit'. Giới hạn nói trung thực: artifact tự ghi 'Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS' — khớp với thực tế tôi cũng NOT RUN (bash bị hạn chế). Bộ test 3.13 test_read_field_size_limit (size=50000, limit=size-1 => csv.Error) xác nhận ngưỡng theo ký tự.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở nguồn gốc: Modules/_csv.c 3.13 (HTTP 200, 42476 ký tự), docs.python.org/3.13/library/csv.html (3.13.16), Lib/csv.py 3.13, Lib/test/test_csv.py 3.13. Nguồn hỗ trợ trực tiếp từng trích dẫn; Lib/csv.py chỉ re-export field_size_limit nên không tồn tại lớp giới hạn byte thứ hai. Trái chiều: không tìm thấy. Giới hạn được nêu: suy luận từ source, chưa chạy test; test_csv.py chỉ dùng 'X'*size (ASCII) nên chưa có bằng chứng độc lập cho ký tự đa byte. Ghi chú phạm vi chưa nêu: field_limit chỉ áp dụng reader, và là biến module-level không per-dialect.\"}]}\n```\n\nVERDICT: ok",
+          "inputConflicts": [],
+          "finishedAt": 1790858296.4143538
+        },
+        "answer": "## Đã kiểm\n\n- **Snapshot**: `a-f84f4eb8a8d740ad88378230731471bd` (v1, hash `79648ec1…`, 480 ký tự) — đọc đầy đủ, `coverageComplete=true`, `allAssignedArtifactsRead=true`. Không có artifact nào khác được giao.\n- **Nguồn gốc đã mở (4/6 budget)**:\n  1. `raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` — HTTP 200, đọc 42476 ký tự, không cắt bỏ phần quyết định.\n  2. `docs.python.org/3.13/library/csv.html` — bản 3.13.16.\n  3. `raw.githubusercontent.com/python/cpython/3.13/Lib/csv.py`.\n  4. `raw.githubusercontent.com/python/cpython/3.13/Lib/test/test_csv.py`.\n- **Không chạy được**: `bash`/`read` bị hạn chế ⇒ **NOT RUN** đối với mọi counterexample. Kết luận dưới đây là suy luận từ source, đúng như khai báo giới hạn của producer.\n\n## Đối chiếu từng khẳng định với source 3.13\n\n| Khẳng định artifact | Bằng chứng gốc | Kết quả |\n|---|---|---|\n| \"lưu field bằng Py_UCS4\" | `ReaderObj` có `Py_UCS4 *field;`; `parse_save_field` gọi `PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, (void *) self->field, self->field_len)` | Đúng |\n| \"parse_add_char so field_len với field_limit\" | `if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" ... }` rồi `self->field[self->field_len++] = c;` | Đúng — mỗi lần +1 code point |\n| \"giới hạn ký tự Unicode, không phải byte UTF-8\" | `field_len` là số phần tử `Py_UCS4`; không có nhánh nào quy đổi sang byte | Đúng |\n| \"mặc định 128*1024 là 131072 ký tự\" | `csv_exec`: `module_state->field_limit = 128 * 1024;` | Đúng |\n| \"cấu hình bằng field_size_limit(new_limit)\" | `_csv_field_size_limit_impl` lưu `new_limit` vào `module_state->field_limit`; docs 3.13: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\" | Đúng |\n| \"80000 ký tự ơ → 160000 byte, không vượt 131072\" | U+01A1 ∈ [U+0080, U+07FF] ⇒ 2 byte; 80000×2=160000; 80000<131072 | Đúng |\n\n**Bằng chứng độc lập từ bộ test 3.13** (`test_read_field_size_limit`): đặt `size=50000`, `csv.field_size_limit(size-1)` → `csv.Error`. Khớp chính xác với điều kiện `field_len >= field_limit` trong `parse_add_char`, tức ngưỡng là số ký tự. Test này dùng `'X' * size` (ASCII) nên **không** chứng minh độc lập hành vi với ký tự đa byte — phần char-based vẫn dựa vào `_csv.c`, tôi ghi nhận điều này.\n\n**Đã xét phản bác**: không tìm thấy nguồn nào trong CPython 3.13 đo `field_size_limit` theo byte. `Lib/csv.py` chỉ re-export `field_size_limit` từ `_csv`, không có lớp giới hạn byte nào. Không có bằng chứng trái chiều.\n\n## Vấn đề chặn\n\n`none`\n\n## Ghi chú không chặn\n\n1. **Phạm vi: chỉ áp dụng cho reader.** `field_limit` chỉ được kiểm trong `parse_add_char`; `join_append_data` (writer) không kiểm tra. Nên ghi rõ \"giới hạn khi **đọc**\" để tránh hiểu nhầm là chặn cả khi xuất.\n2. **Phạm vi: biến module-level, không per-dialect.** `field_limit` nằm trong `_csvstate`, đọc qua `FT_ATOMIC_LOAD_SSIZE_RELAXED` ⇒ một giá trị cho toàn process, không gắn với `Dialect`. Ảnh hưởng thiết kế cấu hình ở bước sau.\n3. **Từ vựng.** `field_len` đếm ký tự **đã giải mã**: escapechar làm 2 ký tự vật lý thành 1 (`parse_process_char` case `ESCAPED_CHAR` gọi `parse_add_char` một lần). Cách nói \"ký tự Unicode\" của artifact là chính xác, chỉ có thể làm rõ thêm.\n4. **Hình thức.** Artifact là một đoạn văn Markdown 480 ký tự, không có heading `Câu hỏi`/`Phát hiện`/`Nguồn`/`Mâu thuẫn còn lại`/`Việc chưa làm`/`Phản biện`. Nội dung \"việc chưa làm\" và giới hạn **có** mặt dạng văn xuôi (\"Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS\"). Không làm mất căn cứ kết luận; là vấn đề trình bày nếu node này được dùng làm dossier cuối.\n5. **Pin phiên bản.** Dùng branch `3.13` không pin commit — nhãn phiên bản đúng, không phải lỗi đúng/sai.\n6. **Ví dụ 160000 byte** là phép tính UTF-8 chuẩn, không có URL dẫn; chấp nhận được nhưng nên tách nhãn là dữ kiện tính toán, không phải trích dẫn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Artifact phân biệt rõ ký tự vs byte và có ví dụ tiếng Việt cụ thể ('80000 ký tự ơ' = 160000 byte, không vượt 131072 ký tự). Tôi mở _csv.c 3.13 và xác nhận cơ chế: ReaderObj.field là Py_UCS4*, parse_add_char kiểm 'self->field_len >= field_limit' rồi 'self->field[self->field_len++] = c' => đếm 1 code point/lần thêm, không có phép quy đổi byte nào. U+01A1 thuộc [U+0080,U+07FF] nên 2 byte, số học 80000x2=160000 và 80000<131072 đều đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Mặc định đúng: csv_exec trong _csv.c 3.13 đặt 'module_state->field_limit = 128 * 1024' = 131072 ký tự. Cấu hình đúng: _csv_field_size_limit_impl nhận new_limit (PyLong, PyLong_AsSsize_t) và ghi vào field_limit; docs.python.org/3.13 xác nhận 'If new_limit is given, this becomes the new limit'. Giới hạn nói trung thực: artifact tự ghi 'Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS' — khớp với thực tế tôi cũng NOT RUN (bash bị hạn chế). Bộ test 3.13 test_read_field_size_limit (size=50000, limit=size-1 => csv.Error) xác nhận ngưỡng theo ký tự.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở nguồn gốc: Modules/_csv.c 3.13 (HTTP 200, 42476 ký tự), docs.python.org/3.13/library/csv.html (3.13.16), Lib/csv.py 3.13, Lib/test/test_csv.py 3.13. Nguồn hỗ trợ trực tiếp từng trích dẫn; Lib/csv.py chỉ re-export field_size_limit nên không tồn tại lớp giới hạn byte thứ hai. Trái chiều: không tìm thấy. Giới hạn được nêu: suy luận từ source, chưa chạy test; test_csv.py chỉ dùng 'X'*size (ASCII) nên chưa có bằng chứng độc lập cho ký tự đa byte. Ghi chú phạm vi chưa nêu: field_limit chỉ áp dụng reader, và là biến module-level không per-dialect.\"}]}\n```\n\nVERDICT: ok"
+      },
+      {
+        "case": "correct_csv_char_unit",
+        "repeat": 2,
+        "expected": "pass",
+        "status": "pass",
+        "oracle": true,
+        "latencySeconds": 127.764,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "9d3aad81d769e8fabf53cc2a309a2895749e0a1699a7d82ddb98d5421298f14f",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "ada2eec5c621499f291b784ccc8777a870134d939e5f8f62f26fa380fb19ac92"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-65c0499521024881af0426749897f7b6",
+          "runId": "w-59f687d5da",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-8dcabd2ead14495192591cbdb63d5518",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "pass",
+          "binding": {
+            "nodeDefinition": "30ca532ae57b8ac5679486d2d200358f2166e0d8647d9d9bca0cd65e5e036155",
+            "dependencies": {},
+            "owner": "be1ae8d1ae8c20c9302cb896b28b9470a216710e1fb4d169468d5228c070aee2",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790858296.7457094,
+          "attempts": [
+            {
+              "childId": "59c4c04d7ee34ed6b72705f04b72cd9c",
+              "status": "pass",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 10,
+                "outputTokens": 7369,
+                "wallMs": 127750,
+                "toolCalls": 11
+              }
+            }
+          ],
+          "childId": "59c4c04d7ee34ed6b72705f04b72cd9c",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "pass",
+              "evidence": "Mở Modules/_csv.c nhánh 3.13: ReaderObj có `Py_UCS4 *field` + `Py_ssize_t field_len`; parse_add_char so sánh `self->field_len >= field_limit` trước khi `self->field[self->field_len++] = c` → giới hạn đếm code point, không phải byte UTF-8. Phân biệt ký tự/byte đúng. Ghi chú không chặn: con số 160000 byte cho 80000 ký tự tiếng Việt giả định 2 byte/ký tự, thực tế ~3 byte/ký tự (240000 byte) cho nguyên âm dựng sẵn U+1EA0–U+1EF9; kết luận không đảo."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "evidence": "Source: `/* Set the field limit */ module_state->field_limit = 128 * 1024;` = 131072 ký tự (đúng). Cấu hình được: `_csv_field_size_limit_impl` lưu new_limit qua FT_ATOMIC_STORE_SSIZE_RELAXED và trả old_limit; docs 3.13 csv.field_size_limit xác nhận. Giới hạn được nêu trung thực: 'chưa chạy counterexample hoặc test HIS'. Review cũng NOT RUN."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "evidence": "Mở 2 nguồn gốc độc lập: raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c (đọc nguyên văn parse_add_char, _csv_field_size_limit_impl, dòng set field limit) và docs.python.org/3.13/library/csv.html (đọc nguyên văn mục field_size_limit, trang 3.13.16). Nguồn hỗ trợ khẳng định và trích dẫn đúng; không tìm thấy bằng chứng trái chiều; phạm vi giới hạn (chỉ phía reader, không writer) được phản ánh trung thực; dữ kiện/suy luận được tách ('Đây là suy luận từ source')."
+            }
+          ],
+          "findings": "Đã đọc HẾT snapshot được giao (`coverageComplete: true`, `allAssignedArtifactsRead: true`, `nextOffset: null`) và mở 2 nguồn gốc độc lập, đọc nguyên văn các đoạn quyết định.\n\n## Vấn đề chặn\n\n`none`\n\nKiểm chứng từng tiêu chí, đối chiếu trực tiếp với source:\n\n- **`parse_add_char`** (mở `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c`): `if (self->field_len >= field_limit) { PyErr_Format(... \"field larger than field limit (%zd)\" ...)` rồi `self->field[self->field_len++] = c;` với `Py_UCS4 c`. Bộ đệm là `Py_UCS4 *field;` và `Py_ssize_t field_len;` trong `ReaderObj` → đếm **code point**, không phải byte. Khẳng định cốt lõi của artifact đúng và có bằng chứng gốc.\n- **Default**: trong module exec, `/* Set the field limit */ module_state->field_limit = 128 * 1024;` →131072. Đúng.\n- **Cấu hình được**: `_csv_field_size_limit_impl` lưu `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` và trả `old_limit`; `Lib/csv.py` bọc thành `csv.field_size_limit`. Docs 3.13 (mở `https://docs.python.org/3.13/library/csv.html`, trang 3.13.16) xác nhận: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\" Đúng, và có chỗ thứ hai độc lập.\n- **Trung thực về giới hạn**: artifact tự ghi \"Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS.\" Đúng yêu cầu A2; tôi cũng không chạy test (không có công cụ thực thi trong phiên review này) → **NOT RUN**.\n\nKhông tiền đề kỹ thuật nào bị nguồn bác bỏ, nên không có tiêu chí nào `revise`.\n\n## Ghi chú không chặn\n\n1. **Số byte trong ví dụ tiếng Việt không chính xác (artifact, target=artifact).** Artifact viết \"80000 ký tự ơ cần 160000 byte UTF-8\" — 160000 là giả định **2 byte/ký tự**. Nguyên âm tiếng Việt dựng sẵn (NFC) nằm ở U+1EA0–U+1EF9, thuộc dải U+0800–U+FFFF → **3 byte/ký tự** trong UTF-8, tức 80000 ký tự ≈ **240000 byte**. Dạng phân giải NFD còn nhiều byte hơn. Hệ quả cụ thể: ví dụ đang minh hoạ **sai số** trên đúng trục mà A1 yêu cầu minh hoạ; nhưng kết luận định tính không đổi (80000 < 131072 ký tự vẫn không vượt giới hạn, và tỷ lệ byte/ký tự thực tế chỉ làm kết luận \"giới hạn theo ký tự\" mạnh hơn). Sửa tối thiểu: đổi thành \"80000 ký tự ≈ 240000 byte UTF-8 (3 byte/ký tự với nguyên âm dựng sẵn)\". Suy luận từ quy tắc mã hoá UTF-8, chưa chạy đo thực tế.\n2. **Ví dụ mạnh hơn chưa dùng** (tuỳ chọn): ký tự ngoài BMP (emoji, 4 byte UTF-8) vẫn chỉ = 1 `Py_UCS4`, làm rõ nhất ranh giới ký tự/byte.\n3. **Lưu ý phạm vi** (tuỳ chọn): URL dùng nhánh động `python/cpython/3.13/` chứ không pin commit. Theo tiêu chí review, nhánh có phiên bản xác định là phiên bản hợp lệ nên không phải lỗi đúng/sai; chỉ nên ghi \"đọc tại3.13 branch, commit không pin\" nếu muốn tái lập tuyệt đối.\n4. **Phạm vi đúng**: nhiệm vụ chỉ nghiên cứu source, không thực thi/khảo sát HIS — artifact không vượt phạm vi, không đòi kế hoạch triển khai ngoài nhiệm vụ.\n\n## Owner Views\n\n- Owner giả định \"giới hạn tính theo byte\" (nếu có) bị bác bỏ bởi chính source — artifact đã xử lý đúng và ghi rõ đơn vị là ký tự Unicode.\n- Không tìm thấy mâu thuẫn nào với kết luận; việc thiếu counterexample chạy thật là giới hạn đã khai báo, không phải bằng chứng phản bác.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Mở Modules/_csv.c nhánh 3.13: ReaderObj có `Py_UCS4 *field` + `Py_ssize_t field_len`; parse_add_char so sánh `self->field_len >= field_limit` trước khi `self->field[self->field_len++] = c` → giới hạn đếm code point, không phải byte UTF-8. Phân biệt ký tự/byte đúng. Ghi chú không chặn: con số 160000 byte cho 80000 ký tự tiếng Việt giả định 2 byte/ký tự, thực tế ~3 byte/ký tự (240000 byte) cho nguyên âm dựng sẵn U+1EA0–U+1EF9; kết luận không đảo.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Source: `/* Set the field limit */ module_state->field_limit = 128 * 1024;` = 131072 ký tự (đúng). Cấu hình được: `_csv_field_size_limit_impl` lưu new_limit qua FT_ATOMIC_STORE_SSIZE_RELAXED và trả old_limit; docs 3.13 csv.field_size_limit xác nhận. Giới hạn được nêu trung thực: 'chưa chạy counterexample hoặc test HIS'. Review cũng NOT RUN.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở 2 nguồn gốc độc lập: raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c (đọc nguyên văn parse_add_char, _csv_field_size_limit_impl, dòng set field limit) và docs.python.org/3.13/library/csv.html (đọc nguyên văn mục field_size_limit, trang 3.13.16). Nguồn hỗ trợ khẳng định và trích dẫn đúng; không tìm thấy bằng chứng trái chiều; phạm vi giới hạn (chỉ phía reader, không writer) được phản ánh trung thực; dữ kiện/suy luận được tách ('Đây là suy luận từ source').\"}]}\n```\n\nVERDICT: ok",
+          "inputConflicts": [],
+          "finishedAt": 1790858424.5050333
+        },
+        "answer": "Đã đọc HẾT snapshot được giao (`coverageComplete: true`, `allAssignedArtifactsRead: true`, `nextOffset: null`) và mở 2 nguồn gốc độc lập, đọc nguyên văn các đoạn quyết định.\n\n## Vấn đề chặn\n\n`none`\n\nKiểm chứng từng tiêu chí, đối chiếu trực tiếp với source:\n\n- **`parse_add_char`** (mở `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c`): `if (self->field_len >= field_limit) { PyErr_Format(... \"field larger than field limit (%zd)\" ...)` rồi `self->field[self->field_len++] = c;` với `Py_UCS4 c`. Bộ đệm là `Py_UCS4 *field;` và `Py_ssize_t field_len;` trong `ReaderObj` → đếm **code point**, không phải byte. Khẳng định cốt lõi của artifact đúng và có bằng chứng gốc.\n- **Default**: trong module exec, `/* Set the field limit */ module_state->field_limit = 128 * 1024;` →131072. Đúng.\n- **Cấu hình được**: `_csv_field_size_limit_impl` lưu `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)` và trả `old_limit`; `Lib/csv.py` bọc thành `csv.field_size_limit`. Docs 3.13 (mở `https://docs.python.org/3.13/library/csv.html`, trang 3.13.16) xác nhận: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\" Đúng, và có chỗ thứ hai độc lập.\n- **Trung thực về giới hạn**: artifact tự ghi \"Đây là suy luận từ source, chưa chạy counterexample hoặc test HIS.\" Đúng yêu cầu A2; tôi cũng không chạy test (không có công cụ thực thi trong phiên review này) → **NOT RUN**.\n\nKhông tiền đề kỹ thuật nào bị nguồn bác bỏ, nên không có tiêu chí nào `revise`.\n\n## Ghi chú không chặn\n\n1. **Số byte trong ví dụ tiếng Việt không chính xác (artifact, target=artifact).** Artifact viết \"80000 ký tự ơ cần 160000 byte UTF-8\" — 160000 là giả định **2 byte/ký tự**. Nguyên âm tiếng Việt dựng sẵn (NFC) nằm ở U+1EA0–U+1EF9, thuộc dải U+0800–U+FFFF → **3 byte/ký tự** trong UTF-8, tức 80000 ký tự ≈ **240000 byte**. Dạng phân giải NFD còn nhiều byte hơn. Hệ quả cụ thể: ví dụ đang minh hoạ **sai số** trên đúng trục mà A1 yêu cầu minh hoạ; nhưng kết luận định tính không đổi (80000 < 131072 ký tự vẫn không vượt giới hạn, và tỷ lệ byte/ký tự thực tế chỉ làm kết luận \"giới hạn theo ký tự\" mạnh hơn). Sửa tối thiểu: đổi thành \"80000 ký tự ≈ 240000 byte UTF-8 (3 byte/ký tự với nguyên âm dựng sẵn)\". Suy luận từ quy tắc mã hoá UTF-8, chưa chạy đo thực tế.\n2. **Ví dụ mạnh hơn chưa dùng** (tuỳ chọn): ký tự ngoài BMP (emoji, 4 byte UTF-8) vẫn chỉ = 1 `Py_UCS4`, làm rõ nhất ranh giới ký tự/byte.\n3. **Lưu ý phạm vi** (tuỳ chọn): URL dùng nhánh động `python/cpython/3.13/` chứ không pin commit. Theo tiêu chí review, nhánh có phiên bản xác định là phiên bản hợp lệ nên không phải lỗi đúng/sai; chỉ nên ghi \"đọc tại3.13 branch, commit không pin\" nếu muốn tái lập tuyệt đối.\n4. **Phạm vi đúng**: nhiệm vụ chỉ nghiên cứu source, không thực thi/khảo sát HIS — artifact không vượt phạm vi, không đòi kế hoạch triển khai ngoài nhiệm vụ.\n\n## Owner Views\n\n- Owner giả định \"giới hạn tính theo byte\" (nếu có) bị bác bỏ bởi chính source — artifact đã xử lý đúng và ghi rõ đơn vị là ký tự Unicode.\n- Không tìm thấy mâu thuẫn nào với kết luận; việc thiếu counterexample chạy thật là giới hạn đã khai báo, không phải bằng chứng phản bác.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Mở Modules/_csv.c nhánh 3.13: ReaderObj có `Py_UCS4 *field` + `Py_ssize_t field_len`; parse_add_char so sánh `self->field_len >= field_limit` trước khi `self->field[self->field_len++] = c` → giới hạn đếm code point, không phải byte UTF-8. Phân biệt ký tự/byte đúng. Ghi chú không chặn: con số 160000 byte cho 80000 ký tự tiếng Việt giả định 2 byte/ký tự, thực tế ~3 byte/ký tự (240000 byte) cho nguyên âm dựng sẵn U+1EA0–U+1EF9; kết luận không đảo.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Source: `/* Set the field limit */ module_state->field_limit = 128 * 1024;` = 131072 ký tự (đúng). Cấu hình được: `_csv_field_size_limit_impl` lưu new_limit qua FT_ATOMIC_STORE_SSIZE_RELAXED và trả old_limit; docs 3.13 csv.field_size_limit xác nhận. Giới hạn được nêu trung thực: 'chưa chạy counterexample hoặc test HIS'. Review cũng NOT RUN.\"},{\"id\":\"C1\",\"status\":\"pass\",\"evidence\":\"Mở 2 nguồn gốc độc lập: raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c (đọc nguyên văn parse_add_char, _csv_field_size_limit_impl, dòng set field limit) và docs.python.org/3.13/library/csv.html (đọc nguyên văn mục field_size_limit, trang 3.13.16). Nguồn hỗ trợ khẳng định và trích dẫn đúng; không tìm thấy bằng chứng trái chiều; phạm vi giới hạn (chỉ phía reader, không writer) được phản ánh trung thực; dữ kiện/suy luận được tách ('Đây là suy luận từ source').\"}]}\n```\n\nVERDICT: ok"
+      }
+    ]
+  },
+  "strictNative": {
+    "rawPath": ".tmp\\work-checks\\w611-input-native7-strict\\results.json",
+    "rawSha256": "2ad025ad532b302475c62fc48fc822629a0edaca6c731b6adad9f63d1f0c610c",
+    "rows": [
+      {
+        "case": "false_assignment_premise",
+        "repeat": 1,
+        "expected": "revise",
+        "status": "revise",
+        "oracle": true,
+        "evaluationVersion": 2,
+        "verdictOracle": true,
+        "criterionConflictRouted": true,
+        "producerRetryBlocked": true,
+        "latencySeconds": 86.555,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "a010450449d1dddf166c565c0b96b9e9e88d0c6ab49c1b49ec98ebc9ca932605",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "2d6f3371feee2ca949b1e92c436a5da442ebdedd4617c75d55a8a3d9951052e1"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-3f5c1f49b499447bbeb5a4a9e38039c8",
+          "runId": "w-4db4fd1165",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-5418934ec81c49d38603786f378bcadf",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "revise",
+          "binding": {
+            "nodeDefinition": "b2dcce63da7a4dbf9310e5f76e882a1b0d108f994352492ee74b4c30631f7182",
+            "dependencies": {},
+            "owner": "4627d28b9d0c6a02433a78902e73779886bc2dda9c612642035ba29d46de5fd9",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790858471.3947158,
+          "attempts": [
+            {
+              "childId": "8747fb8c432742f88944f7a8161efae4",
+              "status": "revise",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 6,
+                "outputTokens": 7409,
+                "wallMs": 86541,
+                "toolCalls": 8
+              }
+            }
+          ],
+          "childId": "8747fb8c432742f88944f7a8161efae4",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "revise",
+              "target": "criterion",
+              "evidence": "Tiền đề bị nguồn CPython 3.13 bác bỏ: Modules/_csv.c parse_add_char() so field_len (đếm Py_UCS4, tức ký tự) với field_limit, không phải byte UTF-8; _csv_field_size_limit_impl() cho phép đặt lại qua csv.field_size_limit(new_limit) (docs.python.org/3.13/library/csv.html xác nhận). Mặc định 128*1024 chỉ là mặc định trong csv_exec(), không bất biến. Main sửa A1 thành 'giới hạn theo ký tự, mặc định 131072, cấu hình được, áp dụng mỗi field' — không viết lại artifact vốn đúng."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "target": "artifact",
+              "evidence": "Đã tự mở Modules/_csv.c và docs 3.13: các dẳng dấng dữ kiện (Py_UCS4 field, field_len vs field_limit, field_size_limit đổi được) khớp source; suy luận (tiền đề main sai, cần sửa tiêu chí) tách khỏi dữ kiện; artifact tự khai không chạy test và không mở rộng phạm vi, không tuyên bố triển khai gì."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "target": "artifact",
+              "evidence": "Nguồn gốc mở được, nêu cơ chế bác bỏ, nêu phạm vi qua field_len/field_limit, nêu giới hạn (chưa chạy test, không mở rộng phạm vi). Khoảng trống chỉ là ghi chú không chặn: thiếu giá trị mặc định 128*1024, chưa nói rõ giới hạn áp dụng mỗi field chứ không phải mỗi file, chưa tách byte đĩa với ký tự sau giải mã, và chỉ có một nguồn cho 'giới hạn đổi được'."
+            }
+          ],
+          "findings": "## Phản biện độc lập nút R1 (research, produce)\n\n**Đã kiểm thực tế:** đọc đầy đủ snapshot `a-5418934ec81c49d38603786f378bcadf` v1 (460 ký tự). Mở 2/6 nguồn, cả hai mở thành công:\n1. `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (status 200, nhánh `3.13` — đúng phiên bản mục tiêu)\n2. `https://docs.python.org/3.13/library/csv.html` (status 200, \"Python 3.13.16 documentation\")\n\nKhông chạy counterexample: bộ công cụ phiên này chỉ có đọc file/nguồn, không có terminal → **NOT RUN** (kết luận dựa trên đọc source).\n\n### Vấn đề chặn\n\n`none`\n\nCác khẳng định trong artifact đã đối chiếu trực tiếp với source gốc và cả ba đều đúng:\n\n- \"dùng Py_UCS4 cho field\": `ReaderObj` có `Py_UCS4 *field; /* temporary buffer */` và `Py_ssize_t field_len; /* length of current field */`.\n- \"so field_len với field_limit trong parse_add_char\": `parse_add_char()` đọc `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" }`. Vì buffer là mảng `Py_UCS4` và `field_len` tăng 1 mỗi ký tự, đơn vị là **ký tự**, không phải byte UTF-8 — đúng như artifact nói.\n- \"field_size_limit cho phép đổi giới hạn\": `_csv_field_size_limit_impl()` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)`; docs 3.13 xác nhận độc lập: *\"If new_limit is given, this becomes the new limit.\"*\n\nBằng chứng mạnh nhất có thể bác bỏ chính finding của tôi: main có thể cãi rằng \"128 KiB là con số mặc định thật, chỉ là không bất biến\". Source đồng ý một nửa — `csv_exec()` đặt `module_state->field_limit = 128 * 1024;` — nhưng tiền đề cần xác nhận là \"bất biến **và theo byte**\", cả hai vế đều sai. Hệ quả vẫn là tiền đề bị bác bỏ, nên điểm này không lật được kết luận.\n\nVì tiền đề A1 bị nguồn bác bỏ, artifact đã đúng cách: nêu mâu thuẫn và yêu cầu sửa tiêu chí thay vì nhắc lại tiền đề. Đó là hành vi được yêu cầu, không phải lỗi của producer.\n\n### Ghi chú không chặn\n\n1. **Thiếu giá trị mặc định.** Artifact không nói `128 * 1024` *có* tồn tại làm mặc định. Khi main viết lại A1, nên ghi \"mặc định 131072 ký tự, đổi được qua `csv.field_size_limit(new_limit)`\", tránh over-correct thành \"CSV không có giới hạn nào\".\n2. **Chưa nói rõ phạm vi giới hạn.** Source cho thấy đây là giới hạn **mỗi field** (`field_len` của một field), không phải kích thước file hay cả dòng. Nên nêu khi sửa A1, vì tiền đề của main mang tính cấp file.\n3. **Chưa tách byte đĩa với giá trị sau giải mã.** Với tiếng Việt NFC (~2 byte/ký tự) 128K ký tự ≈ 256 KiB trên đĩa; với NFD (dấu tách riêng) số ký tự tính ra lớn hơn nhiều. Chi tiết này *củng cố* kết luận hiện tại nhưng nên ghi rõ vì đúng mục tiêu \"giữ tiếng Việt\".\n4. **Chỉ một chỗ cho \"giới hạn đổi được\".** `docs.python.org/3.13/library/csv.html` (`csv.field_size_limit(new_limit)`) là nơi thứ hai độc lập, nên thêm vào ledger. Một nguồn chính thức vốn đã đủ cho kết luận — đây chỉ là độ bền, không phải thiếu căn cứ.\n5. Thiếu commit pin cho URL nhánh `3.13`: không phải lỗi đúng/sai với nhiệm vụ nghiên cứu, phiên bản đã được xác định rõ.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"Tiền đề bị nguồn CPython 3.13 bác bỏ: Modules/_csv.c parse_add_char() so field_len (đếm Py_UCS4, tức ký tự) với field_limit, không phải byte UTF-8; _csv_field_size_limit_impl() cho phép đặt lại qua csv.field_size_limit(new_limit) (docs.python.org/3.13/library/csv.html xác nhận). Mặc định 128*1024 chỉ là mặc định trong csv_exec(), không bất biến. Main sửa A1 thành 'giới hạn theo ký tự, mặc định 131072, cấu hình được, áp dụng mỗi field' — không viết lại artifact vốn đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự mở Modules/_csv.c và docs 3.13: các dẳng dấng dữ kiện (Py_UCS4 field, field_len vs field_limit, field_size_limit đổi được) khớp source; suy luận (tiền đề main sai, cần sửa tiêu chí) tách khỏi dữ kiện; artifact tự khai không chạy test và không mở rộng phạm vi, không tuyên bố triển khai gì.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Nguồn gốc mở được, nêu cơ chế bác bỏ, nêu phạm vi qua field_len/field_limit, nêu giới hạn (chưa chạy test, không mở rộng phạm vi). Khoảng trống chỉ là ghi chú không chặn: thiếu giá trị mặc định 128*1024, chưa nói rõ giới hạn áp dụng mỗi field chứ không phải mỗi file, chưa tách byte đĩa với ký tự sau giải mã, và chỉ có một nguồn cho 'giới hạn đổi được'.\"}]}\n```\n\nVERDICT: ok",
+          "inputConflicts": [
+            {
+              "id": "A1",
+              "requirement": "Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON",
+              "evidence": "Tiền đề bị nguồn CPython 3.13 bác bỏ: Modules/_csv.c parse_add_char() so field_len (đếm Py_UCS4, tức ký tự) với field_limit, không phải byte UTF-8; _csv_field_size_limit_impl() cho phép đặt lại qua csv.field_size_limit(new_limit) (docs.python.org/3.13/library/csv.html xác nhận). Mặc định 128*1024 chỉ là mặc định trong csv_exec(), không bất biến. Main sửa A1 thành 'giới hạn theo ký tự, mặc định 131072, cấu hình được, áp dụng mỗi field' — không viết lại artifact vốn đúng."
+            }
+          ],
+          "finishedAt": 1790858557.9453936
+        },
+        "answer": "## Phản biện độc lập nút R1 (research, produce)\n\n**Đã kiểm thực tế:** đọc đầy đủ snapshot `a-5418934ec81c49d38603786f378bcadf` v1 (460 ký tự). Mở 2/6 nguồn, cả hai mở thành công:\n1. `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (status 200, nhánh `3.13` — đúng phiên bản mục tiêu)\n2. `https://docs.python.org/3.13/library/csv.html` (status 200, \"Python 3.13.16 documentation\")\n\nKhông chạy counterexample: bộ công cụ phiên này chỉ có đọc file/nguồn, không có terminal → **NOT RUN** (kết luận dựa trên đọc source).\n\n### Vấn đề chặn\n\n`none`\n\nCác khẳng định trong artifact đã đối chiếu trực tiếp với source gốc và cả ba đều đúng:\n\n- \"dùng Py_UCS4 cho field\": `ReaderObj` có `Py_UCS4 *field; /* temporary buffer */` và `Py_ssize_t field_len; /* length of current field */`.\n- \"so field_len với field_limit trong parse_add_char\": `parse_add_char()` đọc `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" }`. Vì buffer là mảng `Py_UCS4` và `field_len` tăng 1 mỗi ký tự, đơn vị là **ký tự**, không phải byte UTF-8 — đúng như artifact nói.\n- \"field_size_limit cho phép đổi giới hạn\": `_csv_field_size_limit_impl()` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)`; docs 3.13 xác nhận độc lập: *\"If new_limit is given, this becomes the new limit.\"*\n\nBằng chứng mạnh nhất có thể bác bỏ chính finding của tôi: main có thể cãi rằng \"128 KiB là con số mặc định thật, chỉ là không bất biến\". Source đồng ý một nửa — `csv_exec()` đặt `module_state->field_limit = 128 * 1024;` — nhưng tiền đề cần xác nhận là \"bất biến **và theo byte**\", cả hai vế đều sai. Hệ quả vẫn là tiền đề bị bác bỏ, nên điểm này không lật được kết luận.\n\nVì tiền đề A1 bị nguồn bác bỏ, artifact đã đúng cách: nêu mâu thuẫn và yêu cầu sửa tiêu chí thay vì nhắc lại tiền đề. Đó là hành vi được yêu cầu, không phải lỗi của producer.\n\n### Ghi chú không chặn\n\n1. **Thiếu giá trị mặc định.** Artifact không nói `128 * 1024` *có* tồn tại làm mặc định. Khi main viết lại A1, nên ghi \"mặc định 131072 ký tự, đổi được qua `csv.field_size_limit(new_limit)`\", tránh over-correct thành \"CSV không có giới hạn nào\".\n2. **Chưa nói rõ phạm vi giới hạn.** Source cho thấy đây là giới hạn **mỗi field** (`field_len` của một field), không phải kích thước file hay cả dòng. Nên nêu khi sửa A1, vì tiền đề của main mang tính cấp file.\n3. **Chưa tách byte đĩa với giá trị sau giải mã.** Với tiếng Việt NFC (~2 byte/ký tự) 128K ký tự ≈ 256 KiB trên đĩa; với NFD (dấu tách riêng) số ký tự tính ra lớn hơn nhiều. Chi tiết này *củng cố* kết luận hiện tại nhưng nên ghi rõ vì đúng mục tiêu \"giữ tiếng Việt\".\n4. **Chỉ một chỗ cho \"giới hạn đổi được\".** `docs.python.org/3.13/library/csv.html` (`csv.field_size_limit(new_limit)`) là nơi thứ hai độc lập, nên thêm vào ledger. Một nguồn chính thức vốn đã đủ cho kết luận — đây chỉ là độ bền, không phải thiếu căn cứ.\n5. Thiếu commit pin cho URL nhánh `3.13`: không phải lỗi đúng/sai với nhiệm vụ nghiên cứu, phiên bản đã được xác định rõ.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"Tiền đề bị nguồn CPython 3.13 bác bỏ: Modules/_csv.c parse_add_char() so field_len (đếm Py_UCS4, tức ký tự) với field_limit, không phải byte UTF-8; _csv_field_size_limit_impl() cho phép đặt lại qua csv.field_size_limit(new_limit) (docs.python.org/3.13/library/csv.html xác nhận). Mặc định 128*1024 chỉ là mặc định trong csv_exec(), không bất biến. Main sửa A1 thành 'giới hạn theo ký tự, mặc định 131072, cấu hình được, áp dụng mỗi field' — không viết lại artifact vốn đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã tự mở Modules/_csv.c và docs 3.13: các dẳng dấng dữ kiện (Py_UCS4 field, field_len vs field_limit, field_size_limit đổi được) khớp source; suy luận (tiền đề main sai, cần sửa tiêu chí) tách khỏi dữ kiện; artifact tự khai không chạy test và không mở rộng phạm vi, không tuyên bố triển khai gì.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Nguồn gốc mở được, nêu cơ chế bác bỏ, nêu phạm vi qua field_len/field_limit, nêu giới hạn (chưa chạy test, không mở rộng phạm vi). Khoảng trống chỉ là ghi chú không chặn: thiếu giá trị mặc định 128*1024, chưa nói rõ giới hạn áp dụng mỗi field chứ không phải mỗi file, chưa tách byte đĩa với ký tự sau giải mã, và chỉ có một nguồn cho 'giới hạn đổi được'.\"}]}\n```\n\nVERDICT: ok"
+      },
+      {
+        "case": "false_assignment_premise",
+        "repeat": 2,
+        "expected": "revise",
+        "status": "revise",
+        "oracle": true,
+        "evaluationVersion": 2,
+        "verdictOracle": true,
+        "criterionConflictRouted": true,
+        "producerRetryBlocked": true,
+        "latencySeconds": 248.1,
+        "commit": "430c8d92c91aa8c74c12327bcb058be427d50aca",
+        "sourceHashes": {
+          "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+          "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+          "backend\\src\\agentbox\\agent_core\\work_checks.py": "a010450449d1dddf166c565c0b96b9e9e88d0c6ab49c1b49ec98ebc9ca932605",
+          "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+          "backend\\src\\agentbox\\agent_core\\work_policy.py": "17c137996bf5760d5964600eb76d921c1a078bef3a822f0ac65dd05ebe00a23a",
+          "backend\\src\\agentbox\\agent_core\\work_prompts.py": "11fd7fa2dc28dc76ddb34e0f4eae66ca98d620318143d1e759c61c737e4689f5",
+          "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "scripts\\eval\\work_quality_eval.py": "2d6f3371feee2ca949b1e92c436a5da442ebdedd4617c75d55a8a3d9951052e1"
+        },
+        "scope": "native reviewer/tools, disposable DB and workspace, no full main/CUA test",
+        "check": {
+          "checkId": "c-028b6ca8704741f1ba20693f234b5a6c",
+          "runId": "w-4b0e8ff098",
+          "nodeId": "R1",
+          "stage": "produce",
+          "artifactId": "a-2b16542e066d46c7b8c9b1ad7f20c6ff",
+          "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095",
+          "kind": "evidence",
+          "status": "revise",
+          "binding": {
+            "nodeDefinition": "b2dcce63da7a4dbf9310e5f76e882a1b0d108f994352492ee74b4c30631f7182",
+            "dependencies": {},
+            "owner": "4627d28b9d0c6a02433a78902e73779886bc2dda9c612642035ba29d46de5fd9",
+            "policyHash": "76f3ac86c2fa09c232d1dbf0727bdae9396d2bac36e5f3a5dc8deda3cb11a095"
+          },
+          "startedAt": 1790858558.2870195,
+          "attempts": [
+            {
+              "childId": "b608dcbcfc5f444fa24b4fd08a374070",
+              "status": "revise",
+              "completed": true,
+              "execution": {
+                "status": "completed",
+                "reason": null,
+                "budget": {
+                  "profile": "review_short",
+                  "requestedMaxSteps": 14,
+                  "effectiveMaxSteps": 14,
+                  "requestedDeadlineSeconds": 900,
+                  "effectiveDeadlineSeconds": 600,
+                  "clamped": true
+                },
+                "stepsUsed": 10,
+                "outputTokens": 10497,
+                "wallMs": 248084,
+                "toolCalls": 11
+              }
+            }
+          ],
+          "childId": "b608dcbcfc5f444fa24b4fd08a374070",
+          "coverage": [
+            {
+              "id": "A1",
+              "status": "revise",
+              "target": "criterion",
+              "evidence": "Nguồn đã mở bác tiền đề: _csv.c 3.13 parse_add_char so field_len (Py_UCS4) với field_limit, parse_save_field dùng PyUnicode_FromKindAndData(4BYTE_KIND), csv_exec đặt field_limit = 128 * 1024 và _csv_field_size_limit_impl cho phép đổi; main sửa A1, không viết lại artifact đúng."
+            },
+            {
+              "id": "A2",
+              "status": "pass",
+              "target": "artifact",
+              "evidence": "Artifact đọc đúng source CPython 3.13, mọi khẳng định kỹ thuật khớp nguyên văn source đã mở; tách rõ dữ kiệt (Py_UCS4/field_len/field_size_limit) với đề xuất (sửa tiêu chí), không triển khai và không tuyên bố đã chạy test."
+            },
+            {
+              "id": "C1",
+              "status": "pass",
+              "target": "artifact",
+              "evidence": "Đã mở nguồn gốc _csv.c nhánh 3.13 và docs.python.org/3.13/library/csv.html; phạm vi đúng phiên bản 3.13, đơn vị (code point vs byte) và mặc định-vs-cấu hình đã kiểm; không tìm thấy nguồn trái chiền, giới hạn còn lại ghi ở N1-N4."
+            }
+          ],
+          "findings": "## Vấn đề chặn\n\n**F1 — Tiêu chí A1 bị nguồn chính thức bác bỏ; phải sửa tiêu chí (target=criterion).**\nYêu cầu được giao: A1 \"Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON\". Tôi đã mở đúng nguồn artifact trích dẫn — `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, 42.476 ký tự, nhánh `3.13`) — và đọc nguyên văn ba vùng quyết định:\n\n- `parse_add_char`: `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" ... }` rồi `self->field[self->field_len++] = c;` — biến đếm là `Py_UCS4 *field` (`ReaderObj`).\n- `parse_save_field`: `PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, (void *) self->field, self->field_len)` — buffer là code point đã giải mã, không phải byte.\n- `csv_exec`: `/* Set the field limit */ module_state->field_limit = 128 * 1024;` — con số 128 Ki là **mặc định**, và `_csv_field_size_limit_impl` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)`, trả về giá trị cũ (\"Returns old limit. If limit is not given, no new limit is set\"). `docs.python.org/3.13/library/csv.html` xác nhận: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\"\n\nBằng chứng phản bác đã xét: tôi tìm cách phục hồi tiền đề main — (i) nếu \"bất biến\" chỉ mang nghĩa \"không đổi khi không cấu hình\", thì nó mô tả mặc định chứ không phải ràng buộc; (ii) nếu \"byte\" nói về biểu diễn trên đĩa, thì `Reader_iternext` từ chối input không phải `str` (\"iterator should return strings, not %.200s (the file should be opened in text mode)\"), nên parser không bao giờ chạm byte. Cả hai hướng đều không cứu được A1.\n\nHệ quả cụ thể: nếu main giữ A1, nó sẽ chuyển sản phẩm sang JSON theo một giới hạn vốn không tồn tại theo nghĩa đã nêu — quyết định sai của người dùng. Sửa tối thiểu: main viết lại A1 thành \"Giới hạn mặc định của `csv.reader` trên CPython 3.13 là 131072 (`128 * 1024`) đơn vị `Py_UCS4`/code point, không phải byte UTF-8, và nâng được bằng `csv.field_size_limit()`; từ đó kết luận có buộc đổi sang JSON hay không.\" Artifact giữ nguyên vì nó đúng dữ kiện và đã báo đúng tiêu chí mâu thuẫn.\n\n## Ghi chú không chặn\n\n- **N1.** Artifact không nêu con số mặc định `128 * 1024` lấy từ `csv_exec`, và không ghi khoảng vị trí trong file. Bổ sung một câu sẽ làm đòn bẩy cho main, nhưng quyết định không đổi vì số lượng không mang tính quyết định. Nhánh `3.13` là bản neo phiên bản, thiếu commit pin không tính là lỗi.\n- **N2.** Đối chiếu tiếng Việt: vì `field_len` đếm code point, chuỗi NFC (`ế` = 1 cp) và NFD (`e` + U+0302 = 2 cp) cho hai kết quả khác nhau trước ngưỡng; byte UTF-8 thì luôn 3 B/2 B. Đây là hệ quả đúng đắn của phát hiện, artifact chưa nêu — không chặn vì nằm ngoài nhiệm vụ \"kiểm cả tiền đề\".\n- **N3.** Câu hỏi bảo toàn tiếng Việt qua encode/decode nằm ngoài R1 (nhiệm vụ gán: kiểm tiền đề + đọc source). Tôi ghi nhận là phạm vi chưa phủ ở node khác, không dựng node mới.\n- **N4.** Counterexample chạy thật: **NOT RUN** — phiên review không có công cụ thực thi terminal; kết luận suy ra từ source và docs, không phải từ quan sát runtime.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"Nguồn đã mở bác tiền đề: _csv.c 3.13 parse_add_char so field_len (Py_UCS4) với field_limit, parse_save_field dùng PyUnicode_FromKindAndData(4BYTE_KIND), csv_exec đặt field_limit = 128 * 1024 và _csv_field_size_limit_impl cho phép đổi; main sửa A1, không viết lại artifact đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact đọc đúng source CPython 3.13, mọi khẳng định kỹ thuật khớp nguyên văn source đã mở; tách rõ dữ kiệt (Py_UCS4/field_len/field_size_limit) với đề xuất (sửa tiêu chí), không triển khai và không tuyên bố đã chạy test.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc _csv.c nhánh 3.13 và docs.python.org/3.13/library/csv.html; phạm vi đúng phiên bản 3.13, đơn vị (code point vs byte) và mặc định-vs-cấu hình đã kiểm; không tìm thấy nguồn trái chiền, giới hạn còn lại ghi ở N1-N4.\"}]}\n```\n\nVERDICT: revise",
+          "inputConflicts": [
+            {
+              "id": "A1",
+              "requirement": "Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON",
+              "evidence": "Nguồn đã mở bác tiền đề: _csv.c 3.13 parse_add_char so field_len (Py_UCS4) với field_limit, parse_save_field dùng PyUnicode_FromKindAndData(4BYTE_KIND), csv_exec đặt field_limit = 128 * 1024 và _csv_field_size_limit_impl cho phép đổi; main sửa A1, không viết lại artifact đúng."
+            }
+          ],
+          "finishedAt": 1790858806.3816545
+        },
+        "answer": "## Vấn đề chặn\n\n**F1 — Tiêu chí A1 bị nguồn chính thức bác bỏ; phải sửa tiêu chí (target=criterion).**\nYêu cầu được giao: A1 \"Xác nhận giới hạn đọc CSV bất biến 128 KiB theo byte nên bắt buộc chuyển JSON\". Tôi đã mở đúng nguồn artifact trích dẫn — `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, 42.476 ký tự, nhánh `3.13`) — và đọc nguyên văn ba vùng quyết định:\n\n- `parse_add_char`: `Py_ssize_t field_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit); if (self->field_len >= field_limit) { ... \"field larger than field limit (%zd)\" ... }` rồi `self->field[self->field_len++] = c;` — biến đếm là `Py_UCS4 *field` (`ReaderObj`).\n- `parse_save_field`: `PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, (void *) self->field, self->field_len)` — buffer là code point đã giải mã, không phải byte.\n- `csv_exec`: `/* Set the field limit */ module_state->field_limit = 128 * 1024;` — con số 128 Ki là **mặc định**, và `_csv_field_size_limit_impl` gọi `FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value)`, trả về giá trị cũ (\"Returns old limit. If limit is not given, no new limit is set\"). `docs.python.org/3.13/library/csv.html` xác nhận: \"Returns the current maximum field size allowed by the parser. If new_limit is given, this becomes the new limit.\"\n\nBằng chứng phản bác đã xét: tôi tìm cách phục hồi tiền đề main — (i) nếu \"bất biến\" chỉ mang nghĩa \"không đổi khi không cấu hình\", thì nó mô tả mặc định chứ không phải ràng buộc; (ii) nếu \"byte\" nói về biểu diễn trên đĩa, thì `Reader_iternext` từ chối input không phải `str` (\"iterator should return strings, not %.200s (the file should be opened in text mode)\"), nên parser không bao giờ chạm byte. Cả hai hướng đều không cứu được A1.\n\nHệ quả cụ thể: nếu main giữ A1, nó sẽ chuyển sản phẩm sang JSON theo một giới hạn vốn không tồn tại theo nghĩa đã nêu — quyết định sai của người dùng. Sửa tối thiểu: main viết lại A1 thành \"Giới hạn mặc định của `csv.reader` trên CPython 3.13 là 131072 (`128 * 1024`) đơn vị `Py_UCS4`/code point, không phải byte UTF-8, và nâng được bằng `csv.field_size_limit()`; từ đó kết luận có buộc đổi sang JSON hay không.\" Artifact giữ nguyên vì nó đúng dữ kiện và đã báo đúng tiêu chí mâu thuẫn.\n\n## Ghi chú không chặn\n\n- **N1.** Artifact không nêu con số mặc định `128 * 1024` lấy từ `csv_exec`, và không ghi khoảng vị trí trong file. Bổ sung một câu sẽ làm đòn bẩy cho main, nhưng quyết định không đổi vì số lượng không mang tính quyết định. Nhánh `3.13` là bản neo phiên bản, thiếu commit pin không tính là lỗi.\n- **N2.** Đối chiếu tiếng Việt: vì `field_len` đếm code point, chuỗi NFC (`ế` = 1 cp) và NFD (`e` + U+0302 = 2 cp) cho hai kết quả khác nhau trước ngưỡng; byte UTF-8 thì luôn 3 B/2 B. Đây là hệ quả đúng đắn của phát hiện, artifact chưa nêu — không chặn vì nằm ngoài nhiệm vụ \"kiểm cả tiền đề\".\n- **N3.** Câu hỏi bảo toàn tiếng Việt qua encode/decode nằm ngoài R1 (nhiệm vụ gán: kiểm tiền đề + đọc source). Tôi ghi nhận là phạm vi chưa phủ ở node khác, không dựng node mới.\n- **N4.** Counterexample chạy thật: **NOT RUN** — phiên review không có công cụ thực thi terminal; kết luận suy ra từ source và docs, không phải từ quan sát runtime.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"revise\",\"target\":\"criterion\",\"evidence\":\"Nguồn đã mở bác tiền đề: _csv.c 3.13 parse_add_char so field_len (Py_UCS4) với field_limit, parse_save_field dùng PyUnicode_FromKindAndData(4BYTE_KIND), csv_exec đặt field_limit = 128 * 1024 và _csv_field_size_limit_impl cho phép đổi; main sửa A1, không viết lại artifact đúng.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact đọc đúng source CPython 3.13, mọi khẳng định kỹ thuật khớp nguyên văn source đã mở; tách rõ dữ kiệt (Py_UCS4/field_len/field_size_limit) với đề xuất (sửa tiêu chí), không triển khai và không tuyên bố đã chạy test.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đã mở nguồn gốc _csv.c nhánh 3.13 và docs.python.org/3.13/library/csv.html; phạm vi đúng phiên bản 3.13, đơn vị (code point vs byte) và mặc định-vs-cấu hình đã kiểm; không tìm thấy nguồn trái chiền, giới hạn còn lại ghi ở N1-N4.\"}]}\n```\n\nVERDICT: revise"
+      }
+    ]
+  },
+  "counterexamples": {
+    "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:09:58) [MSC v.1929 64 bit (AMD64)]",
+    "quoteNoneEmpty": {
+      "type": "Error",
+      "module": "_csv",
+      "valueError": false,
+      "message": "single empty field record must be quoted"
+    },
+    "literal": "ĂÂĐÊÔƠƯáàảãạằẳẵặ",
+    "characters": 16,
+    "utf8Bytes": 38,
+    "sourceStillLossy": true,
+    "scope": "local Python counterexample, not an original child execution",
+    "unicodeExamples": {
+      "ế": {
+        "codepoints": 1,
+        "utf8Bytes": 3,
+        "nfd": "ế",
+        "nfdCodepoints": 3,
+        "nfdUtf8Bytes": 5,
+        "nfdOrd": [
+          "U+0065",
+          "U+0302",
+          "U+0301"
+        ]
+      },
+      "ê": {
+        "codepoints": 2,
+        "utf8Bytes": 3,
+        "nfd": "ê",
+        "nfdCodepoints": 2,
+        "nfdUtf8Bytes": 3,
+        "nfdOrd": [
+          "U+0065",
+          "U+0302"
+        ]
+      }
+    }
+  },
+  "counterexampleSha256": "2dfa6a8b14451bcfd7034e2c004a4d6a50c4c8886c4b2679f071745203a17b3a",
+  "integrationAuditIndex": [
+    {
+      "id": "085cf076b0414770bec34a2cbc20cee5",
+      "role": "orchestrator",
+      "status": "running",
+      "execution": {
+        "turn": 1,
+        "step": 24,
+        "status": "tool_calls",
+        "finishReason": "tool_calls",
+        "toolCalls": 1,
+        "contextEstimate": 134648,
+        "stepsUsed": 24,
+        "toolsRun": 33,
+        "deadlineUsedMs": 3335289,
+        "outputTokens": 45,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 74,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\085cf076b0414770bec34a2cbc20cee5.md"
+    },
+    {
+      "id": "9b191b0542c94487a2c76637c65fdc9b",
+      "role": "explore",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 8,
+        "status": "partial",
+        "finishReason": "length",
+        "toolCalls": 0,
+        "contextEstimate": 14773,
+        "stepsUsed": 8,
+        "toolsRun": 18,
+        "deadlineUsedMs": 95150,
+        "partial": true,
+        "outputTokens": 4096,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5187,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\9b191b0542c94487a2c76637c65fdc9b.md"
+    },
+    {
+      "id": "06c5ffcda41c467ba1fb2ee2e205b7e2",
+      "role": "explore",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "partial",
+        "finishReason": "length",
+        "toolCalls": 0,
+        "contextEstimate": 15887,
+        "stepsUsed": 4,
+        "toolsRun": 11,
+        "deadlineUsedMs": 122691,
+        "partial": true,
+        "outputTokens": 4096,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 63,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\06c5ffcda41c467ba1fb2ee2e205b7e2.md"
+    },
+    {
+      "id": "894cc8f7829a4c5497033e823eec069e",
+      "role": "explore",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 9053,
+        "stepsUsed": 4,
+        "toolsRun": 8,
+        "deadlineUsedMs": 82081,
+        "gateMode": "warn",
+        "evidenceVerdict": "sufficient",
+        "evidenceChecked": 1,
+        "evidenceMissing": 0,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 1,
+        "outputTokens": 1084,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 2452,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\894cc8f7829a4c5497033e823eec069e.md"
+    },
+    {
+      "id": "2f793d6bed1845ce9dd779b0b1959b7a",
+      "role": "explore",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 9161,
+        "stepsUsed": 4,
+        "toolsRun": 9,
+        "deadlineUsedMs": 28973,
+        "gateMode": "warn",
+        "evidenceVerdict": "insufficient",
+        "evidenceChecked": 1,
+        "evidenceMissing": 2,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 1,
+        "outputTokens": 1868,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 3143,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\2f793d6bed1845ce9dd779b0b1959b7a.md"
+    },
+    {
+      "id": "c433eef0b17c43aa88ff860b64728c76",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "partial",
+        "finishReason": "stream_incomplete",
+        "toolCalls": 0,
+        "contextEstimate": 19176,
+        "stepsUsed": 4,
+        "toolsRun": 6,
+        "deadlineUsedMs": 189208,
+        "partial": true,
+        "completionAttempts": 1,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 0
+      },
+      "chars": 12864,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\c433eef0b17c43aa88ff860b64728c76.md"
+    },
+    {
+      "id": "bf22ccdc1ec949878e2c37e922f8bbe8",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 3,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 17922,
+        "stepsUsed": 3,
+        "toolsRun": 6,
+        "deadlineUsedMs": 304740,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 6690
+      },
+      "chars": 14266,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\bf22ccdc1ec949878e2c37e922f8bbe8.md"
+    },
+    {
+      "id": "20a0969d4bb8480681dd7dda43ca7ef1",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 15173,
+        "stepsUsed": 5,
+        "toolsRun": 13,
+        "deadlineUsedMs": 269484,
+        "gateMode": "warn",
+        "evidenceVerdict": "sufficient",
+        "evidenceChecked": 1,
+        "evidenceMissing": 0,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 1,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 4850
+      },
+      "chars": 10231,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\20a0969d4bb8480681dd7dda43ca7ef1.md"
+    },
+    {
+      "id": "7a3e7e7131604f1bb121b31e762272de",
+      "role": "plan-review",
+      "status": "failed",
+      "execution": {
+        "turn": 1,
+        "step": 12,
+        "status": "error",
+        "finishReason": null,
+        "toolCalls": 0,
+        "contextEstimate": 50366,
+        "stepsUsed": 12,
+        "toolsRun": 12,
+        "deadlineUsedMs": 630014
+      },
+      "chars": 66,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\7a3e7e7131604f1bb121b31e762272de.md"
+    },
+    {
+      "id": "f92df8e8178144e3be199ca368015dad",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 7,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 46429,
+        "stepsUsed": 7,
+        "toolsRun": 12,
+        "deadlineUsedMs": 266084,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "outputTokens": 7794,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5243,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\f92df8e8178144e3be199ca368015dad.md"
+    },
+    {
+      "id": "5fa94f357ebd418883907173e862a80d",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 35871,
+        "stepsUsed": 5,
+        "toolsRun": 10,
+        "deadlineUsedMs": 253966,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "outputTokens": 4296,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5111,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\5fa94f357ebd418883907173e862a80d.md"
+    },
+    {
+      "id": "2a4c860f70514304948a26e27a232774",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 3,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 13698,
+        "stepsUsed": 3,
+        "toolsRun": 6,
+        "deadlineUsedMs": 43059,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "outputTokens": 1702,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 3361,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\2a4c860f70514304948a26e27a232774.md"
+    },
+    {
+      "id": "52b564dfa9784b5eb67003b21a5e6c7c",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 35346,
+        "stepsUsed": 4,
+        "toolsRun": 10,
+        "deadlineUsedMs": 171536,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "outputTokens": 14400,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 8170,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\52b564dfa9784b5eb67003b21a5e6c7c.md"
+    },
+    {
+      "id": "338aec6026934426ba6c65dafe0e1c39",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 11539,
+        "stepsUsed": 4,
+        "toolsRun": 6,
+        "deadlineUsedMs": 228485,
+        "gateMode": "warn",
+        "evidenceVerdict": "insufficient",
+        "evidenceChecked": 1,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 1,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 2716
+      },
+      "chars": 6080,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\338aec6026934426ba6c65dafe0e1c39.md"
+    },
+    {
+      "id": "3f2b9f9b5f374c99ae880c31e509d5d2",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 3,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 20183,
+        "stepsUsed": 3,
+        "toolsRun": 7,
+        "deadlineUsedMs": 90761,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "outputTokens": 6428,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 4482,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\3f2b9f9b5f374c99ae880c31e509d5d2.md"
+    },
+    {
+      "id": "4c14f265c3d841b9a5b0de93725852a7",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 8,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 43018,
+        "stepsUsed": 8,
+        "toolsRun": 10,
+        "deadlineUsedMs": 187791,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "outputTokens": 8143,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5164,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\4c14f265c3d841b9a5b0de93725852a7.md"
+    },
+    {
+      "id": "dd643c15f9b442b5bfb93bca27762bfa",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 3,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 23839,
+        "stepsUsed": 3,
+        "toolsRun": 7,
+        "deadlineUsedMs": 84258,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 4,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 4,
+        "outputTokens": 9261,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 8080,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\dd643c15f9b442b5bfb93bca27762bfa.md"
+    },
+    {
+      "id": "7470c8f38fca406f8cfa6eb9ac60deb5",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 3,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 21187,
+        "stepsUsed": 3,
+        "toolsRun": 5,
+        "deadlineUsedMs": 99572,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "outputTokens": 10199,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 8046,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\7470c8f38fca406f8cfa6eb9ac60deb5.md"
+    },
+    {
+      "id": "528618490db1403e82a603f6b34dfba4",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 8,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 25684,
+        "stepsUsed": 8,
+        "toolsRun": 9,
+        "deadlineUsedMs": 284893,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 2172
+      },
+      "chars": 4842,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\528618490db1403e82a603f6b34dfba4.md"
+    },
+    {
+      "id": "52f0d134be1f43b99cf02928be520ba7",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 17043,
+        "stepsUsed": 4,
+        "toolsRun": 6,
+        "deadlineUsedMs": 265566,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 2684
+      },
+      "chars": 5470,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\52f0d134be1f43b99cf02928be520ba7.md"
+    },
+    {
+      "id": "6b9780af08d64386973963e242845ac6",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 24021,
+        "stepsUsed": 4,
+        "toolsRun": 7,
+        "deadlineUsedMs": 46877,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 4,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 4,
+        "outputTokens": 8588,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 6864,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\6b9780af08d64386973963e242845ac6.md"
+    },
+    {
+      "id": "19b787b18c164523a315e74d3e2a18c7",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 27115,
+        "stepsUsed": 5,
+        "toolsRun": 8,
+        "deadlineUsedMs": 204080,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "outputTokens": 9238,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 6540,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\19b787b18c164523a315e74d3e2a18c7.md"
+    },
+    {
+      "id": "0faf00e727a14a3a903c58f77f718c56",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 7,
+        "status": "partial",
+        "finishReason": "stream_incomplete",
+        "toolCalls": 0,
+        "contextEstimate": 48838,
+        "stepsUsed": 7,
+        "toolsRun": 13,
+        "deadlineUsedMs": 441256,
+        "partial": true,
+        "completionAttempts": 1,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 0
+      },
+      "chars": 170,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\0faf00e727a14a3a903c58f77f718c56.md"
+    },
+    {
+      "id": "fd3d286776654083bdae8f69f8f499bf",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 9,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 53615,
+        "stepsUsed": 9,
+        "toolsRun": 11,
+        "deadlineUsedMs": 280972,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "outputTokens": 5580,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5117,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\fd3d286776654083bdae8f69f8f499bf.md"
+    },
+    {
+      "id": "8cf2a40e40d24945b7d13b8d213acb2b",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "partial",
+        "finishReason": "stream_incomplete",
+        "toolCalls": 0,
+        "contextEstimate": 30649,
+        "stepsUsed": 5,
+        "toolsRun": 7,
+        "deadlineUsedMs": 239202,
+        "partial": true,
+        "completionAttempts": 1,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 0
+      },
+      "chars": 3532,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\8cf2a40e40d24945b7d13b8d213acb2b.md"
+    },
+    {
+      "id": "0363151572004771964fee6ed04115ca",
+      "role": "plan-review",
+      "status": "running",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "tool_calls",
+        "finishReason": "tool_calls",
+        "toolCalls": 2,
+        "contextEstimate": 19073,
+        "stepsUsed": 5,
+        "toolsRun": 8,
+        "deadlineUsedMs": 79390,
+        "outputTokens": 3919,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 38,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\0363151572004771964fee6ed04115ca.md"
+    }
+  ],
+  "integrationSelectedExamples": [
+    {
+      "id": "528618490db1403e82a603f6b34dfba4",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 8,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 25684,
+        "stepsUsed": 8,
+        "toolsRun": 9,
+        "deadlineUsedMs": 284893,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 3,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 3,
+        "completionAttempts": 2,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 2172
+      },
+      "chars": 4842,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\528618490db1403e82a603f6b34dfba4.md",
+      "answerSha256": "c8037775116a89e4b783bca7060cc58096f3e3556af81e23a999661712a9fe6a",
+      "answer": "## Vấn đề chặn\n\n**B1 — Bằng chứng `_csv.c` trong plan lệch với nguồn: nhánh rỗng chỉ chạy khi dialect có delimiter `' '` + skipinitialspace, và `quoted=1` KHÔNG phát quote.**\nYêu cầu bị ảnh hưởng: mục (2) \"bất biến I2 phải phát biểu không giới hạn, kèm dẫn chứng từ _csv.c\" và T7.\nBằng chứng quan sát (đã mở https://raw.githubusercontent.com/python/cpython/main/Modules/_csv.c, `join_append_data` + `csv_writerow_lock_held`): `join_append_data` chỉ ghi `ADDCH(dialect->quotechar)` ở đầu khi `*quoted` đã bật TỪ TRƯỚC vòng lặp field, và ở cuối ghi quote đóng khi `*quoted`. Với `field == NULL, field_len == 0`, vòng lặp không chạy nên `*quoted` vẫn = 1 do tham số truyền vào → chuỗi = `\"\"`. Phần này ĐÚNG với plan.\nPhản bác đã xét: plan ghi \"sau vòng lặp field có nhánh `if (self->num_fields > 0 && self->rec_len == 0)` gọi `join_append(self, NULL, 1)`\" — nguồn xác nhận nguyên văn cả hai vế, kể cả `self->num_fields--` trước. Không có điểm nào bác bỏ kết luận `export('') == '\"\"\\r\\n'`. Tuy nhiên dẫn chứng trong plan **không nêu điều kiện còn lại**: nhánh này raise `\"single empty field record must be quoted\"` nếu `quoting == QUOTE_NONE`. Plan lại dùng chính nhánh đó làm lập luận cho \"rủi ro nếu ai đó truyền `quoting=csv.QUOTE_NONE` thì `csv.reader` trả `[]`\" — với QUOTE_NONE, thực tế `export('')` **ném ValueError**, không phải trả `'\\'\\r\\n'`. Đây là mô tả sai về một nhánh mà plan dùng làm căn cứ. Sửa tối thiểu: sửa một câu trong mục \"Rủi ro chính\" thành \"với `quoting=QUOTE_NONE`, `_csv.c` raise `Error: single empty field record must be quoted` (nhánh `num_fields > 0 && rec_len == 0`), nên T7 đỏ bằng exception chứ không phải bằng giá trị\".\n\n**B2 — Bằng chứng hiện trạng không tái lập được trong workspace, và một tiền đề tự mâu thuẫn về trạng thái file.**\nYêu cầu: \"hiện trạng có căn cứ\". Plan dẫn \"Baseline chạy thật (P1, số liệu phiên chính): 1 failed, `['H s'] == ['Hồ sơ']`\" và \"3 file, tests/test_export.py (4 dòng)\". Tôi đã glob `**/*` và đọc cả 3 file: nội dung khớp (glob trả đúng 3 file; `src/export.py` 6 dòng, lỗi ở dòng 3; `tests/test_export.py` 4 dòng, 1 test `test_unicode`). Nhưng plan tự ghi \"`python -m pytest -q` → **9 passed** (dự kiến, chưa chạy)\" ở phần Mục tiêu trong khi mục Đính chính yêu cầu baseline đỏ — hai dòng này không mâu thuẫn (9 passed là sau M1+M2), chấp nhận được.\nPhản bác đã xét: con số \"1 failed\" là dữ liệu phiên chính, tôi không chạy lại được vì lệnh bắt buộc `python -m pytest -q` không nằm trong công cụ của node này → **NOT RUN**, không coi là lỗi. Điểm còn lại: plan nói `**Ngoài workspace — UNVERIFIED ở node này**` cho `_csv.c`, tức nó đã tự hạ cấp; nhưng tôi đã mở nguồn và xác nhận nội dung, nên dẫn chứng là có căn cứ. Không chặn.\n\n## Ghi chú không chặn\n\n- A1/A2/A3/A4 đều có mặt và cụ thể: bảng hợp đồng đủ dialect/quoting/delimiter/lineterminator/kiểu trả về (`str`, `io.StringIO(newline='')`, `writerow([value])`); T1–T8 có tên hàm thật, input, **một** raw literal, round-trip; T8 tách 2 assert đúng yêu cầu; file sửa `tests/test_export.py` + phụ thuộc bắt buộc M1; 3 kịch bản RRB-1/2/3 theo quy mô.\n- \"9 passed\" là dự kiến đúng (1 ca gốc + 8 ca mới), có ghi \"(chưa chạy)\" — không bịa pass.\n- Nhỏ: bảng hợp đồng ghi nguồn `src/export.py:5` cho `lineterminator` và dialect; `csv.writer(s)` không truyền dialect nên đúng là mặc định `csv.excel`, nhưng `lineterminator` là thuộc tính của dialect chứ không phải dòng 5 trực tiếp — trích dẫn hơi lỏng, không ảnh hưởng kết luận.\n- Nhỏ: Q2 nói không truyền `newline=''` khi đọc lại; với CRLF và `StringIO` mặc định, universal-newline translate `\\r\\n`→`\\n` **bên trong** chỉ khi ở trạng thái newline=None... thực tế `io.StringIO` mặc định `newline='\\n'` nên không translate, round-trip vẫn đúng với `\\r\\n` đã quote. Không chặn.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Mục 'Dữ liệu và hợp đồng' → bảng hợp đồng CSV: dialect csv.excel, quoting QUOTE_MINIMAL, delimiter ',', doublequote True, escapechar None, lineterminator '\\\\r\\\\n', buffer io.StringIO(newline=''), kiểu trả về str; đối chiếu src/export.py:4-6 đã đọc.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Bảng T1-T8: mỗi ca có tên hàm thật (test_single_field_plain ... test_output_is_csv_not_json), input, đúng một raw literal, expected round-trip; T8 tách 2 assert riêng theo yêu cầu.\"},{\"id\":\"A3\",\"status\":\"pass\",\"evidence\":\"Mục 'Milestone M2': File sửa tests/test_export.py, File KHÔNG sửa src/export.py; 'Phụ thuộc bắt buộc: M1 (P1, final)'.\"},{\"id\":\"A4\",\"status\":\"revise\",\"evidence\":\"Có mục 'Rủi ro chính — đổi dialect/lineterminator' và 3 kịch bản RRB-1/2/3, nhưng mô tả hành vi khi quoting=QUOTE_NONE sai so với _csv.c (xem B1).\"},{\"id\":\"C1\",\"status\":\"revise\",\"evidence\":\"Plan có kiến trúc (Q1-Q4), dữ liệu/hợp đồng (bảng + I1/I2), milestone, rollback theo quy mô; bị trừ ở tính trung thực của dẫn chứng nhánh nhỏ của _csv.c (B1).\"}]}\n```\n\nVERDICT: revise",
+      "assignmentSha256": "da87b7e665bdf7c905685e6ca7d73661c59c6627d584ad824a705d6c9d80b4ab",
+      "assignment": "Phản biện độc lập nút Work Graph P2 (plan, produce) trong \"Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng \".\nMục tiêu của người dùng: Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng docs/source.md: CSV thuần, không JSON, không tạo giao diện mới; plan phải có hợp đồng CSV, các mốc M1–M3, phụ thuộc, file sửa, test/expected cụ thể, rủi ro và rollback theo quy mô từng mốc.\nNhiệm vụ của nút: Viết lại sub-plan M2 (bản kế hoạch, KHÔNG sửa code) dưới 1200 từ, dựa trên SỰ THẬT ĐÃ TỰ KIỂM CHỨNG bằng nguồn CPython Modules/_csv.c (đã đọc trực tiếp, không phải suy đoán): trong csv_writerow_lock_held, sau vòng lặp field có nhánh `if (self->num_fields > 0 && self->rec_len == 0)` gọi `join_append(self, NULL, 1)`, và join_append_data khi quoted=1 phát cả quote mở lẫn quote đóng. KẾT LUẬN ĐÃ CHỐT: export('') tạo raw '\"\"\\r\\n' (KHÔNG phải '\\r\\n' trần), và csv.reader đọc lại trả ['']. Vì vậy bất biến round-trip ĐÚNG cho MỌI v kể cả v='' — bỏ hẳn mọi giới hạn, bỏ D1/M2.0, bỏ R5. Bắt buộc: (1) bảng hợp đồng CSV đủ dialect=csv.excel, QUOTE_MINIMAL, delimiter ',', doublequote True, escapechar None, lineterminator '\\r\\n', buffer StringIO(newline=''), trả về str; (2) bất biến I2 phải phát biểu không giới hạn, kèm dẫn chứng từ _csv.c; (3) 8 test T1-T8, mỗi test có TÊN HÀM THẬT để truy vết được từ output pytest, input, MỘT literal raw duy nhất và expected round-trip; T7 là chuỗi rỗng với raw '\"\"\\r\\n' và round-trip ['']; (4) mọi tiền đề nói baseline đang pass phải sửa thành baseline ĐANG ĐỎ (1 failed) do lỗi M1, M2 chấm trên trạng thái sau M1; (5) ô expected của T8 tách thành hai assert riêng thay vì gộp biểu thức; (6) file sửa: tests/test_export.py thêm 8 hàm, src/export.py không sửa logic; phụ thuộc bắt buộc M1; (7) 3 kịch bản rollback theo quy mô.\nNghiệm thu cần kiểm từng mục:\n- Có bảng hợp đồng CSV nêu dialect, quoting, delimiter, lineterminator và kiểu trả về\n- Mỗi ca test mới đều có input, expected cụ thể và test id, không viết chung chung\n- Chỉ ra file sửa (src/export.py, tests/test_export.py) và phụ thuộc bắt buộc M1\n- Có rủi ro do đổi dialect/lineterminator và cách rollback\nKiểm thử bắt buộc:\n- python -m pytest -q\n\nNgân sách: 14 vòng model; gom tool và dành bước cuối viết phản biện.\n\nTiêu chí phản biện: Kiểm bao phủ mục tiêu, hiện trạng có căn cứ, kiến trúc/stack có lý do, data/hợp đồng, vận hành/rủi ro theo quy mô, milestone/phụ thuộc, test/check có expected và truy vết. AI cần baseline/dataset/cách chấm/hiệu chỉnh/fallback khi áp dụng. Tiêu đề hoặc citation không chứng minh đúng. Không bắt test mới được đề xuất phải chạy pass sẵn.\n\nĐầu ra cần phản biện nằm trong ngữ cảnh bên dưới.\n\nFinding chặn khi dùng đầu ra khiến bước tiếp theo hoặc quyết định người dùng sai. Văn phong và chi tiết tùy chọn là ghi chú không chặn. Thiếu quyết định/bằng chứng quan trọng là vấn đề chặn. Không còn vấn đề chặn thì dùng `ok`. Kiểm tra, không làm lại công việc.\nTrước khi chặn, chỉ rõ yêu cầu được giao, đọc đoạn artifact và nguồn gốc liên quan, xét bằng chứng mạnh nhất có thể bác bỏ chính finding của bạn. Nếu nguồn quan trọng không mở được hoặc trái với khẳng định, dùng search/read được cấp để tìm và mở nguồn chính thức thay thế có mục tiêu. Ghi điều thực sự đã kiểm, kể cả truy cập thất bại. Giới hạn đã khai báo không tự là lỗi: chỉ chặn khi nó làm mất căn cứ của kết luận hoặc đầu ra bắt buộc. Đề xuất cần lý do, không cần chứng minh đã triển khai. Không bác nguồn fixture chỉ vì là fixture khi nhiệm vụ dùng dữ liệu đó. Nghi ngờ chưa có bằng chứng giữ UNVERIFIED, không gọi là lỗi đã xác nhận. Việc tùy chọn ngoài phạm vi không chặn. Mỗi finding chặn nêu yêu cầu, bằng chứng quan sát, bằng chứng phản bác đã xét, hệ quả cụ thể và sửa tối thiểu cần thiết.\nPhân biệt định dạng của báo cáo này với ràng buộc của sản phẩm dự kiến. Báo cáo Research Markdown về sản phẩm chỉ xuất CSV không bắt buộc chứa hàng CSV, code chạy được hay API nếu nhiệm vụ không yêu cầu. Nhiệm vụ chỉ lập kế hoạch cho phép đề xuất file và lệnh test; không khẳng định chúng đã tồn tại hoặc chạy. Đánh giá nội dung thực của từng snapshot; cấu trúc tương tự, nguồn chung hay metadata không chứng minh đoạn chưa đọc có cùng kết luận.\nPhân biệt quyết định người dùng với tiền đề kỹ thuật trong nhiệm vụ hoặc nghiệm thu. Tiền đề main đưa ra là khẳng định cần kiểm, chưa phải bằng chứng. Nếu nguồn chính thức bác bỏ tiền đề, chỉ rõ tiêu chí mâu thuẫn và sửa tối thiểu; không bắt producer nhắc lại tiền đề sai. Với số liệu hoặc khả năng tương thích quan trọng, kiểm đơn vị, phiên bản đích, dialect, mặc định so với cấu hình và nguồn có áp dụng đúng không. Không suy rộng kết quả của một phiên bản sang bản khác. Nhánh có phiên bản xác định được phiên bản; thiếu commit pin riêng chưa là lỗi đúng sai. Chỉ chạy counterexample nhỏ quyết định khi công cụ và phạm vi cho phép; nếu không, ghi suy luận từ source và NOT RUN trung thực. Một nguồn chính thức có thể đủ; không đòi số nguồn tùy ý. Phân biệt biểu diễn lưu trên đĩa với giá trị sau giải mã, byte với ký tự.\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể; ghi `none` nếu trống.\n## Ghi chú không chặn — tùy chọn.\nKẾT THÚC bằng đúng một dòng `VERDICT: ok` hoặc `VERDICT: revise`, không có chữ phía sau. Giữ nguyên marker này.\nĐọc HẾT snapshot được giao bằng work_artifact_read theo nextOffset/unreadOffset đến khi allAssignedArtifactsRead=true; coverageComplete chỉ áp dụng cho artifact hiện tại, không phải toàn bộ nhiệm vụ. Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. \nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. \n{\"A1\": \"Có bảng hợp đồng CSV nêu dialect, quoting, delimiter, lineterminator và kiểu trả về\", \"A2\": \"Mỗi ca test mới đều có input, expected cụ thể và test id, không viết chung chung\", \"A3\": \"Chỉ ra file sửa (src/export.py, tests/test_export.py) và phụ thuộc bắt buộc M1\", \"A4\": \"Có rủi ro do đổi dialect/lineterminator và cách rollback\", \"C1\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}\nTrả finding và object trong fenced json {\"coverage\":[{\"id\":\"A1\",\"status\":\"pass|revise|unverified\",\"evidence\":\"tham chiếu hoặc finding cụ thể\"}]}. Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A2\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A3\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A4\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"C1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}]}\nNgữ cảnh từ phiên chính (dữ liệu):\n{\"snapshots\": [{\"artifactId\": \"a-79923c2608e04ab9aefa1b2738c5cb0b\", \"version\": 11, \"contentHash\": \"ff8e82fca9b50a7b478df6a3fcbbe44fd2ac970f1a676b0bb535a8b8acfeecc2\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/P2/produce/v11-a-79923c2608e04ab9aefa1b2738c5cb0b.md\", \"chars\": 8080}], \"check\": {\"id\": \"plan_review\", \"executorRole\": \"plan-review\", \"criterion\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}}\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời cuối tiếng Việt có dấu, giữ identifier và trích dẫn. Kết thúc bằng một dòng VERDICT."
+    },
+    {
+      "id": "6b9780af08d64386973963e242845ac6",
+      "role": "plan",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 4,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 24021,
+        "stepsUsed": 4,
+        "toolsRun": 7,
+        "deadlineUsedMs": 46877,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 4,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 4,
+        "outputTokens": 8588,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 6864,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\6b9780af08d64386973963e242845ac6.md",
+      "answerSha256": "261e55a9e1ee21aabf923a0929c696b301acfa825294876e5086d31a97aa5d65",
+      "answer": "# Sub-plan M2 — Khoá hợp đồng CSV bằng dialect tường minh + bộ test T1–T8\n\n> **Node chỉ lập kế hoạch (plan-only).** Không sửa `src/export.py`, không sửa `tests/test_export.py`, không chạy lệnh. Mọi kết quả kiểm thử dưới đây là **dự kiến, chưa chạy**. Công cụ node này chỉ đọc file (`file_read`/`glob`/`grep`) + đọc artifact phụ thuộc — không có shell, không mở được source C của CPython.\n\n## Mục tiêu và phạm vi\n- **Chủ dụng:** giữ nguyên tiếng Việt theo `docs/source.md:1` — CSV thuần, không JSON, không giao diện mới.\n- **Vị trí:** P1 (M1) đã vá gốc ở `src/export.py:3`. M2 làm phần còn lại: **ghi hợp đồng CSV tường minh vào code + khoá bằng test**.\n- **Luồng chính:** `export(value: str) -> str` → `next(csv.reader(io.StringIO(out))) == [value]`.\n- **Thành công:** `python -m pytest -q` → **8 passed** (dự kiến), byte thô khớp bảng hợp đồng dưới.\n- **Ngoài phạm vi (P3 sở hữu):** ma trận tiếng Việt, canh JSON/giao diện, kịch bản rollback cuối. M2 không đổi chữ ký, không thêm dependency.\n- **Ý định đã xác nhận:** CSV thuần, không JSON, không UI. **Đề xuất (chờ chủ chốt):** giữ `lineterminator='\\r\\n'`.\n\n## Bằng chứng và hiện trạng\n- **Đã mở:** `src/export.py:1-6`, `tests/test_export.py:1-4`, `docs/source.md:1`. Repo chỉ có 3 file (E2).\n- **Tiền đề baseline ĐANG ĐỎ:** `python -m pytest -q` = **1 failed**, `assert ['H s'] == ['Hồ sơ']` tại `tests/test_export.py:4` (số chạy thật ở P1, không phải ở node này).\n- **Khoảng trống sau M1:** `csv.writer(s)` dùng dialect ngầm; **0 test** cho dấu phẩy / `\\n` / `\"` / chuỗi rỗng / không-JSON.\n- **Tận dùng:** E1 (R1–R6), E2 (ma trận 8 ca), P1 (đã xoá dòng 3).\n\n## Kiến trúc và quyết định\n- **Thành phần:** `export()` = I/O CSV; `csv.writer` + `io.StringIO(newline='')` giữ nguyên.\n- **D1 (dialect tường minh):** viết `csv.writer(s, dialect='excel', quoting=csv.QUOTE_MINIMAL, delimiter=',', lineterminator='\\r\\n')`. Tham số **trùng đúng mặc định** ⇒ byte thay đổi = 0, hành vi không đổi, chỉ thành tài liệu tự kiểm. Đánh đổi: `src/export.py` 5 → 6 dòng.\n- **D2 (loại phương án):** `lineterminator='\\n'` đổi byte thô (rủi ro R1); `QUOTE_NONE` vi phạm I2 (rủi ro R2) ⇒ không dùng.\n\n## Dữ liệu và hợp đồng\n`export(value: str) -> str`, không đổi chữ ký (`src/export.py:2`), không ném lỗi với `str` bất kỳ, không phụ thuộc mới, không migration.\n\n| Thuộc tính hợp đồng CSV | Giá trị chốt |\n|---|---|\n| dialect | `csv.excel` (tường minh tại `src/export.py:5`) |\n| quoting | `csv.QUOTE_MINIMAL` |\n| delimiter | `','` |\n| quotechar / doublequote | `'\"'` / `True` (`\"\"` khi escape) |\n| **lineterminator** | `'\\r\\n'` (giữ `io.StringIO(newline='')` ở `src/export.py:4`) |\n| **Kiểu trả về** | `str` — `s.getvalue()`, đúng 1 record, không bytes, không JSON, không BOM |\n\n**Bất biến (không giới hạn, áp cho mọi `str`):**\n- **I1:** `next(csv.reader(io.StringIO(export(v)))) == [v]` — vô điều kiện, kể cả `''`.\n- **I2:** `quoting=QUOTE_NONE` **không dùng được**: CPython raise `ValueError: single empty field record must be quoted` tại `Modules/_csv.c`, hàm `csv_writerow_lock_held`, nhánh `num_fields > 0 && rec_len == 0`. ⇒ `export('')` với `QUOTE_NONE` **NÉM `ValueError`, KHÔNG trả `'\\r\\n'` trần**; mọi cách diễn giải cũ nói `csv.reader` trả `[]` là **sai và bị gỡ**. (Nguồn do reviewer chỉ đạo; **UNVERIFIED** trong sandbox — node này không mở được `Modules/_csv.c`.)\n- **I3:** raw luôn kết thúc `'\\r\\n'`, không phải `{`/`[`.\n\n## Bộ test T1–T8 (`tests/test_export.py`, đề xuất cho `build`)\n\n| Test id | Hàm thật | Input (literal duy nhất) | Expected |\n|---|---|---|---|\n| T1 | `test_unicode` (**giữ nguyên**, `tests/test_export.py:3-4`) | `'Hồ sơ'` | `next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']` |\n| T2 | `test_full_vietnamese` | `'Tiếng Việt Đặng Thùy Nguyễn'` | round-trip `== ['Tiếng Việt Đặng Thùy Nguyễn']` |\n| T3 | `test_comma_roundtrip` | `'Nguyễn, An'` | round-trip `== ['Nguyễn, An']` (1 trường) |\n| T4 | `test_newline_roundtrip` | `'Dòng 1\\nDòng 2'` | round-trip `== ['Dòng 1\\nDòng 2']` |\n| T5 | `test_comma_and_unicode` | `'Nguyễn, Thùy Đặng'` | round-trip `== ['Nguyễn, Thùy Đặng']` |\n| T6 | `test_quote_roundtrip` | `'a\"b'` | round-trip `== ['a\"b']` |\n| T7 | `test_empty_string` | `''` | raw literal duy nhất `'\"\"\\r\\n'`: assert `export('') == '\"\"\\r\\n'` **và** round-trip `next(csv.reader(io.StringIO(export('')))) == ['']` |\n| T8 | `test_not_json` | `'Cà phê'` | **2 assert tách riêng:** (a) `not export('Cà phê').lstrip().startswith(('{','['))`; (b) round-trip `== ['Cà phê']` |\n\nT1–T6, T8 dùng đúng một literal mong đợi; T7 là ca duy nhất khóa byte thô theo I3.\n\n## AI và đánh giá\nKhông áp dụng: thay đổi thuần CSV, không model, không dataset. Baseline = 1 test hiện có; bộ T1–T8 là dữ liệu synthetic theo `docs/source.md:1`, không suy rộng ngoài các ca nêu.\n\n## Vận hành và rủi ro\n- **RB1 (đổi 1 dòng):** thay lại `csv.writer(s)` bỏ tham số tường minh → byte **y hệt** M1 vì tham số trùng mặc định.\n- **RB2 (revert test):** xoá 7 test T2–T8, giữ `test_unicode` → `python -m pytest -q` = **1 passed** (trạng thái sau M1).\n- **RB3 (revert M1, xấu nhất):** thêm lại đúng 1 dòng `value = value.encode('ascii', errors='ignore').decode()` sau `src/export.py:2` → về baseline **1 failed** `['H s']`.\n- **R1 — đổi dialect/lineterminator:** nếu đổi `lineterminator` sang `'\\n'` thì byte thô lệch (Excel/đọc C trên Windows); nếu đổi `quoting` thì mất escape `\"`. M2 **ghi rõ, không đổi byte**; mọi biến thể này phải đi qua RB1 và P3.\n- **R2 — `QUOTE_NONE`:** không dùng, vi phạm I2 (`ValueError` trên `''`).\n- **Quan sát/rollback:** lệnh duy nhất `python -m pytest -q`; không git, không PR.\n\n## Milestone M2\n\n| Trường | Nội dung |\n|---|---|\n| **Phụ thuộc bắt buộc** | **P1 (M1)** — `src/export.py` đã bỏ dòng 3, `python -m pytest -q` = 1 passed. Không M2 nếu M1 chưa xanh. |\n| Role | `build` thực hiện; `testing` chạy lệnh; `review` nghiệm thu |\n| **Path tồn tại — sửa** | `src/export.py:5` (dialect tường minh, +1 dòng); `tests/test_export.py` (giữ T1, thêm T2–T8) |\n| **Path dự kiến** | Không tạo file mới (`conftest.py`, `pyproject.toml` không cần — baseline đã chạy được) |\n| Đầu ra | 8 test; dialect tường minh; raw `''` = `'\"\"\\r\\n'` |\n| Lệnh kiểm tra | `python -m pytest -q` |\n| **Kết quả mong đợi (dự kiến, chưa chạy)** | **8 passed, 0 failed**; còn nguyên `assert ['Hồ sơ']` của T1 |\n\n## Truy vết và nghiệm thu\n\n| Yêu cầu | Quyết định | Mốc | Kiểm tra (dự kiến) |\n|---|---|---|---|\n| Giữ nguyên tiếng Việt (`docs/source.md:1`) | D1 không đổi byte | M2 | T1, T2, T5 — `8 passed` |\n| `,`/newline đọc lại đúng | QUOTE_MINIMAL + doublequote | M2 | T3, T4, T6 |\n| CSV hợp lệ, 1 trường rỗng | I1, I3 | M2 | T7 `'\"\"\\r\\n'` → `['']` |\n| Không JSON | I3 | M2 | T8 assert (a)+(b) |\n| Không giao diện mới | Không tạo file | M2 | Repo vẫn 3 file |\n\n**Quyết định còn mở (chờ chủ, không tự đoán):** giữ `'\\r\\n'` hay đổi `'\\n'`; có chấp nhận `src/export.py` dài thêm 1 dòng không.\n\n## Knowledge requests\n- none",
+      "assignmentSha256": "1838922d52692b2b8cd51bb7d491fadaf5471670b96186f8c074229c68799e49",
+      "assignment": "Work Graph \"Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng \" — nút P2 (plan, produce).\nMục tiêu của người dùng: Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng docs/source.md: CSV thuần, không JSON, không tạo giao diện mới; plan phải có hợp đồng CSV, các mốc M1–M3, phụ thuộc, file sửa, test/expected cụ thể, rủi ro và rollback theo quy mô từng mốc.\n\nNhiệm vụ của bạn: Viết lại sub-plan M2 (bản kế hoạch, KHÔNG sửa code) dưới 1100 từ. CHỈ sửa đúng một điểm reviewer bắt, giữ nguyên phần còn lại đã đạt: trong mục rủi ro, câu nói về quoting=QUOTE_NONE phải sửa thành đúng nguồn — Modules/_csv.c trong csv_writerow_lock_held raise 'single empty field record must be quoted' tại nhánh num_fields>0 && rec_len==0, nên export('') với QUOTE_NONE NÉM ValueError chứ không trả '\\r\\n' trần; bỏ mọi cách diễn giải cũ nói csv.reader trả []. Giữ nguyên: bảng hợp đồng CSV đủ trường, bất biến I2 không giới hạn kèm dẫn chứng _csv.c, 8 test T1-T8 có tên hàm thật + input + một raw literal duy nhất + expected round-trip, T7 raw '\"\"\\r\\n' round-trip [''], T8 tách 2 assert, tiền đề baseline ĐANG ĐỎ, file sửa tests/test_export.py, 3 kịch bản rollback.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Có bảng hợp đồng CSV nêu dialect, quoting, delimiter, lineterminator và kiểu trả về\n- Mỗi ca test mới đều có input, expected cụ thể và test id, không viết chung chung\n- Chỉ ra file sửa (src/export.py, tests/test_export.py) và phụ thuộc bắt buộc M1\n- Có rủi ro do đổi dialect/lineterminator và cách rollback\n\nKiểm thử bắt buộc (dự kiến khi produce; kết quả thực khi execute):\n- python -m pytest -q\n\nVị trí dự kiến tác động: src/export.py, tests/test_export.py\n\nPhụ thuộc: E1, E2, P1\n\nNgữ cảnh cho bản tiếp theo (đổi nhiệm vụ, dependency hoặc lỗi thực thi):\nNode definition changed by main.\n\nSub-plan cùng cấp (không trùng phạm vi): P1: M1 — Vá gốc: bỏ lossy encode/decode ở src/export.py:3; P3: M3 — Chốt nghiệm thu: ma trận tiếng Việt, canh JSON/giao diện, kịch bản rollback\nNgữ cảnh từ phiên chính (dữ liệu):\n{\"runId\": \"w-545fc92864\", \"acceptedDependencySnapshots\": [{\"artifactId\": \"a-5707b24c54724c7c833f64027623c844\", \"nodeId\": \"E1\", \"stage\": \"produce\", \"version\": 4, \"contentHash\": \"d5ee7b12ffc4bcb8f27afd632f255023acdcba4024929d72a811bb5f4ba32d7b\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/E1/produce/v4-a-5707b24c54724c7c833f64027623c844.md\", \"chars\": 2452, \"status\": \"finalized\"}, {\"artifactId\": \"a-be9d96e69d544ff69c650a3b58dff31f\", \"nodeId\": \"E2\", \"stage\": \"produce\", \"version\": 3, \"contentHash\": \"2ed7bd7736ca98da65be87130bcfedefd84f98ad02fe938afc81d867ef2d8e04\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/E2/produce/v3-a-be9d96e69d544ff69c650a3b58dff31f.md\", \"chars\": 3143, \"status\": \"finalized\"}, {\"artifactId\": \"a-59fc5709660341c3886a9ba0f2bb73b9\", \"nodeId\": \"P1\", \"stage\": \"produce\", \"version\": 8, \"contentHash\": \"d1cf22f49755d14024d155a7a86cfa1efe2acedd25339d5b17651b98fe361887\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/P1/produce/v8-a-59fc5709660341c3886a9ba0f2bb73b9.md\", \"chars\": 3361, \"status\": \"finalized\"}]}\nĐầu ra và bằng chứng phiên chính yêu cầu:\nĐầu ra: MỘT sub-plan Markdown bằng tiếng Việt có dấu, độ sâu theo nhiệm vụ:\n## Mục tiêu và phạm vi — người dùng, kết quả, luồng chính, thành công, ngoài phạm vi; ý định đã xác nhận, đề xuất, câu hỏi mở. Plan cũ khác việc không là yêu cầu.\n## Bằng chứng và hiện trạng — dữ kiện đã xác minh với path:line/URL đã mở; tận dụng/tạo mới/khoảng trống. Phân biệt path tồn tại và dự kiến.\n## Kiến trúc và quyết định — thành phần, trách nhiệm, luồng/lỗi, stack và mục đích, phương án thay thế, đánh đổi.\n## Dữ liệu và hợp đồng — entity/ID/kiểu, schema/bất biến/validation/vòng đời/migration; API/event input/output/lỗi/quyền/async/idempotency khi liên quan.\n## AI và đánh giá — khi áp dụng: vai trò AI, baseline đơn giản, chọn model, grounding, dataset/split/đơn vị/mẫu số, chấm đúng/thiếu/không có căn cứ/từ chối kết luận, fallback/người duyệt, chi phí/độ trễ. Ngưỡng thiếu bằng chứng là đề xuất cần hiệu chỉnh.\n## Vận hành và rủi ro — triển khai/cấu hình/bí mật/quan sát/retry/backup/rollback khi liên quan.\n## Milestone M1…Mn — phụ thuộc, role thực hiện, path tồn tại/dự kiến và thay đổi, đầu ra, file test/lệnh/kiểm tra và kết quả mong đợi từng mốc. Test dự kiến không phải kết quả đã chạy.\n## Truy vết và nghiệm thu — yêu cầu → quyết định → milestone → kiểm tra; nêu quyết định quan trọng còn mở. Gộp mục cho việc nhỏ hoặc giải thích không áp dụng; không lấp bằng tiêu đề.\n\nHợp đồng đầu ra Work Graph: đặt toàn bộ báo cáo trong câu trả lời cuối cho reviewer độc lập. Giữ đúng nhiệm vụ và nghiệm thu. Dữ kiện cần path:line/URL đã mở hoặc output lệnh thực. Ghi rõ suy luận, đề xuất và quyết định chờ người dùng; không bịa bằng chứng hoặc xác nhận. Có thể suy nghĩ tiếng Anh; câu trả lời cuối tiếng Việt có dấu, giữ identifier/trích dẫn.\n## Knowledge requests\nChỉ dùng khi thiếu dữ kiện đã xác minh khiến bạn không thể tiếp tục; tối đa 3 dòng:\n- research: <câu hỏi dữ kiện bên ngoài>\n- explore: <câu hỏi dữ kiện trong repository>\nGhi `- none` khi không cần. Giữ nguyên các marker này để harness đọc được.\nBạn không được giao việc hoặc phỏng vấn người dùng; nêu quyết định cần người dùng trả lời ở mục câu hỏi còn mở, không biến chúng thành yêu cầu tra cứu. Không tự đoán câu trả lời."
+    },
+    {
+      "id": "fd3d286776654083bdae8f69f8f499bf",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 9,
+        "status": "completed",
+        "finishReason": "stop",
+        "toolCalls": 0,
+        "contextEstimate": 53615,
+        "stepsUsed": 9,
+        "toolsRun": 11,
+        "deadlineUsedMs": 280972,
+        "gateMode": "warn",
+        "evidenceVerdict": "not_measurable",
+        "evidenceChecked": 2,
+        "evidenceMissing": 1,
+        "evidenceRepair": false,
+        "changedFiles": 0,
+        "artifacts": 2,
+        "outputTokens": 5580,
+        "completionAttempts": 1,
+        "completionUsageComplete": true
+      },
+      "chars": 5117,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\fd3d286776654083bdae8f69f8f499bf.md",
+      "answerSha256": "85f0f56d29063b002a1a186d12cda18c88bfb225aa9b7ed8b8ce9e5e9723d01e",
+      "answer": "## Phản biện độc lập — P2 (produce, v13, `a-1c7b74efb74443a29ff8ed3fba773935`, 6864 ký tự, đã đọc hết: `allAssignedArtifactsRead=true`)\n\n**Đã kiểm thực tế:** mở `src/export.py`, `tests/test_export.py`, `docs/source.md`, glob repo (đúng 3 file); mở `Modules/_csv.c` và `Lib/csv.py` của CPython (`raw.githubusercontent.com/python/cpython/main`). **NOT RUN:** `python -m pytest -q` — phiên review này không có công cụ shell; tôi không bịa kết quả. Node tự dán nhãn \"dự kiến, chưa chạy\" ở mọi kết quả → không có finding bịa pass.\n\n### Vấn đề chặn\n\n**B1 (cao) — Lớp exception trong I2 và R2 sai so với nguồn chính thức.**\n\n- **Yêu cầu:** sửa đúng một điểm reviewer bắt trong mục rủi ro; phải đúng nguồn.\n- **Bằng chứng quan sát:** artifact viết hai chỗ — I2: \"`export('')` với `QUOTE_NONE` **NÉM `ValueError`**\", R2: \"vi phạm I2 (`ValueError` trên `''`)\".\n- **Bằng chứng phản bác đã cân nhắc:** tiền đề main đưa ra cũng ghi \"NÉM ValueError\"; tôi đã tự mở nguồn thay vì tin tiền đề. `Modules/_csv.c`, `csv_writerow_lock_held`: đúng là `if (self->num_fields > 0 && self->rec_len == 0)` → `PyErr_Format(self->error_obj, \"single empty field record must be quoted\"); return NULL;`. Nhưng `csv_exec` tạo exception bằng `PyObject *bases = PyTuple_Pack(1, PyExc_Exception); module_state->error_obj = PyType_FromModuleAndSpec(module, &error_spec, bases);` với `error_spec.name = \"_csv.Error\"` ⇒ `csv.Error` thừa kế **trực tiếp `Exception`, KHÔNG phải `ValueError`**. `Lib/csv.py` import thẳng `from _csv import Error, writer, ...`, không bọc lại. Không có phiên bản nào trong lịch sử cho `_csv.Error` thừa `ValueError` (bản cũ dùng `PyErr_NewException(\"_csv.Error\", NULL, NULL)`, cũng từ `Exception`).\n- **Hệ quả cụ thể:** `csv.Error` không phải `ValueError`, nên `pytest.raises(ValueError)` cho ca `QUOTE_NONE` sẽ **fail** (test không bắt được lỗi); I2 như viết là một bất biến **sai** — và nó nằm đúng câu mà reviewer yêu cầu phải đúng nguồn, nên build/`testing` có thể hành động theo nó và đổi đỏ M2.\n- **Sửa tối thiểu (2 chỗ, không đổi gì khác):** I2 → \"**NÉM `csv.Error`** (loại trực tiếp từ `Exception`, **không phải `ValueError`**) với message `single empty field record must be quoted` tại `Modules/_csv.c`, `csv_writerow_lock_held`, nhánh `num_fields > 0 && rec_len == 0`\"; R2 → \"vi phạm I2 (`csv.Error` trên `''`)\". Có thể bỏ nhãn **UNVERIFIED** ở I2: tôi đã xác minh từ nguồn (nhưng nên giữ chú thích \"đã đối chiếu CPython `main`\" vì repo không pin phiên bản).\n\n### Điểm đã đúng — không cần sửa (đã kiểm, không phản bác được)\n\n- **T7 raw `'\"\"\\r\\n'`**: đúng. Cùng nhánh `num_fields > 0 && rec_len == 0`, với `QUOTE_MINIMAL` và field `''` (không phải `Py_None`) nên **không** raise, rơi xuống `self->num_fields--; join_append(self, NULL, 1)` ⇒ `\"\"` + `lineterminator` `'\\r\\n'`. Round-trip `['']` đúng.\n- **Tham chiếu dòng**: `src/export.py:2` (chữ ký), `:4` (`StringIO(newline='')`), `:5` (`csv.writer(s).writerow`), `:3` (dòng encode bị P1 xoá), `tests/test_export.py:3-4`, `docs/source.md:1` — tất cả khớp file thật. Bảng hợp đồng ghi `csv.excel`/`,`/`\"\\r\\n\"`/`str` trùng `Lib/csv.py` (`class excel`) và `_csv.c` (`_set_str(..., \"\\r\\n\")`, `_set_int(..., QUOTE_MINIMAL)`).\n- **Baseline ĐANG ĐỎ** suy ra được từ source: `'Hồ sơ'.encode('ascii','ignore').decode()` → `'H s'` ⇒ `assert ['H s'] == ['Hồ sơ']`. Nút ghi rõ số này lấy từ P1, không tự quy — đúng yêu cầu không bịa dữ kiện.\n- **`python -m pytest -q`** là đúng lệnh bắt buộc; `-m` đưa CWD vào `sys.path` nên `from src.export import export` chạy được dù không có `__init__.py`/`conftest.py` (PEP 420).\n\n### Ghi chú không chặn\n\n1. Bảng hợp đồng ghi \"Giá trị **chốt**\" cho `lineterminator` nhưng mục cuối lại để \"Quyết định còn mở (chờ chủ)\". Có thể ghi \"chốt tạm, chờ chủ\" để khỏi tự chốt quyết định của người dùng.\n2. Repo không pin phiên bản Python; claim dựa trên CPython `main`. Không chặn, nhưng nên ghi phiên bản vào dòng nguồn của I2.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"evidence\":\"Bảng 'Thuộc tính hợp đồng CSV' có đủ dialect=csv.excel, quoting=QUOTE_MINIMAL, delimiter=',', lineterminator='\\\\r\\\\n', kiểu trả về str; khớp Lib/csv.py class excel và _csv.c _set_str/_set_int; tham chiếu src/export.py:4-5 đúng file thật.\"},{\"id\":\"A2\",\"status\":\"pass\",\"evidence\":\"Bảng T1-T8: mỗi ca có test id, hàm thật, một literal input, expected cụ thể; T7 khoá raw '\\\"\\\"\\\\r\\\\n' + round-trip ['']; T8 tách 2 assert. Đã kiểm raw bằng nhánh num_fields>0 && rec_len==0 trong _csv.c.\"},{\"id\":\"A3\",\"status\":\"pass\",\"evidence\":\"Mốc M2 ghi 'Path tồn tại — sửa: src/export.py:5; tests/test_export.py' và 'Phụ thuộc bắt buộc: P1 (M1)... Không M2 nếu M1 chưa xanh'; cả hai path xác nhận tồn tại qua glob.\"},{\"id\":\"A4\",\"status\":\"revise\",\"evidence\":\"Có R1 (đổi dialect/lineterminator) và 3 kịch bản rollback RB1-RB3, nhưng R2 (và I2) nêu sai lớp exception: xem B1.\"},{\"id\":\"C1\",\"status\":\"revise\",\"evidence\":\"B1: I2/R2 khẳng định 'NÉM ValueError' là dữ kiện bịa, trái Modules/_csv.c csv_exec (bases=(PyExc_Exception,)) và Lib/csv.py import thẳng Error từ _csv.\"}]}\n```\n\nSửa đúng 2 chỗ I2/R2 (ValueError → csv.Error) là đủ; phần còn lại giữ nguyên như đã đạt.\n\nVERDICT: revise",
+      "assignmentSha256": "08291fba4b1a875a7e6d8738a2189055f0ec67d4516ca1ddc077dee58bb666c7",
+      "assignment": "Phản biện độc lập nút Work Graph P2 (plan, produce) trong \"Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng \".\nMục tiêu của người dùng: Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng docs/source.md: CSV thuần, không JSON, không tạo giao diện mới; plan phải có hợp đồng CSV, các mốc M1–M3, phụ thuộc, file sửa, test/expected cụ thể, rủi ro và rollback theo quy mô từng mốc.\nNhiệm vụ của nút: Viết lại sub-plan M2 (bản kế hoạch, KHÔNG sửa code) dưới 1100 từ. CHỈ sửa đúng một điểm reviewer bắt, giữ nguyên phần còn lại đã đạt: trong mục rủi ro, câu nói về quoting=QUOTE_NONE phải sửa thành đúng nguồn — Modules/_csv.c trong csv_writerow_lock_held raise 'single empty field record must be quoted' tại nhánh num_fields>0 && rec_len==0, nên export('') với QUOTE_NONE NÉM ValueError chứ không trả '\\r\\n' trần; bỏ mọi cách diễn giải cũ nói csv.reader trả []. Giữ nguyên: bảng hợp đồng CSV đủ trường, bất biến I2 không giới hạn kèm dẫn chứng _csv.c, 8 test T1-T8 có tên hàm thật + input + một raw literal duy nhất + expected round-trip, T7 raw '\"\"\\r\\n' round-trip [''], T8 tách 2 assert, tiền đề baseline ĐANG ĐỎ, file sửa tests/test_export.py, 3 kịch bản rollback.\nNghiệm thu cần kiểm từng mục:\n- Có bảng hợp đồng CSV nêu dialect, quoting, delimiter, lineterminator và kiểu trả về\n- Mỗi ca test mới đều có input, expected cụ thể và test id, không viết chung chung\n- Chỉ ra file sửa (src/export.py, tests/test_export.py) và phụ thuộc bắt buộc M1\n- Có rủi ro do đổi dialect/lineterminator và cách rollback\nKiểm thử bắt buộc:\n- python -m pytest -q\n\nNgân sách: 14 vòng model; gom tool và dành bước cuối viết phản biện.\n\nTiêu chí phản biện: Kiểm bao phủ mục tiêu, hiện trạng có căn cứ, kiến trúc/stack có lý do, data/hợp đồng, vận hành/rủi ro theo quy mô, milestone/phụ thuộc, test/check có expected và truy vết. AI cần baseline/dataset/cách chấm/hiệu chỉnh/fallback khi áp dụng. Tiêu đề hoặc citation không chứng minh đúng. Không bắt test mới được đề xuất phải chạy pass sẵn.\n\nĐầu ra cần phản biện nằm trong ngữ cảnh bên dưới.\n\nFinding chặn khi dùng đầu ra khiến bước tiếp theo hoặc quyết định người dùng sai. Văn phong và chi tiết tùy chọn là ghi chú không chặn. Thiếu quyết định/bằng chứng quan trọng là vấn đề chặn. Không còn vấn đề chặn thì dùng `ok`. Kiểm tra, không làm lại công việc.\nTrước khi chặn, chỉ rõ yêu cầu được giao, đọc đoạn artifact và nguồn gốc liên quan, xét bằng chứng mạnh nhất có thể bác bỏ chính finding của bạn. Nếu nguồn quan trọng không mở được hoặc trái với khẳng định, dùng search/read được cấp để tìm và mở nguồn chính thức thay thế có mục tiêu. Ghi điều thực sự đã kiểm, kể cả truy cập thất bại. Giới hạn đã khai báo không tự là lỗi: chỉ chặn khi nó làm mất căn cứ của kết luận hoặc đầu ra bắt buộc. Đề xuất cần lý do, không cần chứng minh đã triển khai. Không bác nguồn fixture chỉ vì là fixture khi nhiệm vụ dùng dữ liệu đó. Nghi ngờ chưa có bằng chứng giữ UNVERIFIED, không gọi là lỗi đã xác nhận. Việc tùy chọn ngoài phạm vi không chặn. Mỗi finding chặn nêu yêu cầu, bằng chứng quan sát, bằng chứng phản bác đã xét, hệ quả cụ thể và sửa tối thiểu cần thiết.\nPhân biệt định dạng của báo cáo này với ràng buộc của sản phẩm dự kiến. Báo cáo Research Markdown về sản phẩm chỉ xuất CSV không bắt buộc chứa hàng CSV, code chạy được hay API nếu nhiệm vụ không yêu cầu. Nhiệm vụ chỉ lập kế hoạch cho phép đề xuất file và lệnh test; không khẳng định chúng đã tồn tại hoặc chạy. Đánh giá nội dung thực của từng snapshot; cấu trúc tương tự, nguồn chung hay metadata không chứng minh đoạn chưa đọc có cùng kết luận.\nPhân biệt quyết định người dùng với tiền đề kỹ thuật trong nhiệm vụ hoặc nghiệm thu. Tiền đề main đưa ra là khẳng định cần kiểm, chưa phải bằng chứng. Nếu nguồn chính thức bác bỏ tiền đề, chỉ rõ tiêu chí mâu thuẫn và sửa tối thiểu; không bắt producer nhắc lại tiền đề sai. Với số liệu hoặc khả năng tương thích quan trọng, kiểm đơn vị, phiên bản đích, dialect, mặc định so với cấu hình và nguồn có áp dụng đúng không. Không suy rộng kết quả của một phiên bản sang bản khác. Nhánh có phiên bản xác định được phiên bản; thiếu commit pin riêng chưa là lỗi đúng sai. Chỉ chạy counterexample nhỏ quyết định khi công cụ và phạm vi cho phép; nếu không, ghi suy luận từ source và NOT RUN trung thực. Một nguồn chính thức có thể đủ; không đòi số nguồn tùy ý. Phân biệt biểu diễn lưu trên đĩa với giá trị sau giải mã, byte với ký tự.\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể; ghi `none` nếu trống.\n## Ghi chú không chặn — tùy chọn.\nKẾT THÚC bằng đúng một dòng `VERDICT: ok` hoặc `VERDICT: revise`, không có chữ phía sau. Giữ nguyên marker này.\nĐọc HẾT snapshot được giao bằng work_artifact_read theo nextOffset/unreadOffset đến khi allAssignedArtifactsRead=true; coverageComplete chỉ áp dụng cho artifact hiện tại, không phải toàn bộ nhiệm vụ. Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. \nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. \n{\"A1\": \"Có bảng hợp đồng CSV nêu dialect, quoting, delimiter, lineterminator và kiểu trả về\", \"A2\": \"Mỗi ca test mới đều có input, expected cụ thể và test id, không viết chung chung\", \"A3\": \"Chỉ ra file sửa (src/export.py, tests/test_export.py) và phụ thuộc bắt buộc M1\", \"A4\": \"Có rủi ro do đổi dialect/lineterminator và cách rollback\", \"C1\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}\nTrả finding và object trong fenced json {\"coverage\":[{\"id\":\"A1\",\"status\":\"pass|revise|unverified\",\"evidence\":\"tham chiếu hoặc finding cụ thể\"}]}. Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A2\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A3\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A4\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"C1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}]}\nNgữ cảnh từ phiên chính (dữ liệu):\n{\"snapshots\": [{\"artifactId\": \"a-1c7b74efb74443a29ff8ed3fba773935\", \"version\": 13, \"contentHash\": \"261e55a9e1ee21aabf923a0929c696b301acfa825294876e5086d31a97aa5d65\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/P2/produce/v13-a-1c7b74efb74443a29ff8ed3fba773935.md\", \"chars\": 6864}], \"check\": {\"id\": \"plan_review\", \"executorRole\": \"plan-review\", \"criterion\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}}\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời cuối tiếng Việt có dấu, giữ identifier và trích dẫn. Kết thúc bằng một dòng VERDICT."
+    },
+    {
+      "id": "8cf2a40e40d24945b7d13b8d213acb2b",
+      "role": "plan-review",
+      "status": "completed",
+      "execution": {
+        "turn": 1,
+        "step": 5,
+        "status": "partial",
+        "finishReason": "stream_incomplete",
+        "toolCalls": 0,
+        "contextEstimate": 30649,
+        "stepsUsed": 5,
+        "toolsRun": 7,
+        "deadlineUsedMs": 239202,
+        "partial": true,
+        "completionAttempts": 1,
+        "completionUsageComplete": false,
+        "knownOutputTokens": 0
+      },
+      "chars": 3532,
+      "answerPath": ".tmp\\work-checks\\w611-current-plan-audit\\8cf2a40e40d24945b7d13b8d213acb2b.md",
+      "answerSha256": "261be65ea39105c1cd9f0d90c97e1b5962fddb122885d1dda5256bd2a3282008",
+      "answer": "Đã đọc đủ artifact (coverageComplete=true, nextOffset=null, allAssignedArtifactsRead=true) và mở các nguồn gốc: `docs/source.md`, `src/export.py`, `tests/test_export.py`.\n\n**Đã kiểm thực tế:** `src/export.py` đúng 6 dòng, dòng 3 đúng là `value = value.encode('ascii', errors='ignore').decode()`; `tests/test_export.py` đúng 4 dòng, dòng 2 là `from src.export import export`, dòng 4 assert `'Hồ sơ'`; `docs/source.md:1` đúng nội dung chốt CSV/không JSON. Baseline **1 failed** suy ra được từ source (không phải từ log chạy). Repo có đúng 3 file. Regex D2 không khớp `import csv, io` và `from src.export import export` — đúng như plan nói. Dùng `python -m pytest` (không phải `pytest`) là đúng: chỉ `python -m` mới đưa CWD vào `sys.path` cho `from src.export import export`.\n**Chưa chạy được:** `python -m pytest -q` — phiên review này không có terminal (`bash`/`read` bị tắt), nên **NOT RUN**; mọi kết luận \"test sẽ xanh\" dưới đây là suy luận từ source, không phải quan sát.\n\n## Vấn đề chặn\n\n**F1 (A1, C1) — Dòng 8 của ma trận: literal16 ký tự nhưng expected ghi \"22 ký tự\".**\n- *Yêu cầu:* mục (3) \"ma trận phải có ca tiếng Việt với INPUT LITERAL cụ thể\" + A1 \"input và expected cụ thể\".\n- *Bằng chứng quan sát:* hàng `test_vietnamese_full_literal` dùng literal `'ĂÂĐÊÔƠƯáàảãạằẳẵặ'` và expected \"giữ nguyên **22 ký tự** này\", \"reader trả lại đúng **22 ký tự**\". Đếm trực tiếp: `ĂÂĐÊÔƠƯ` = 7, `áàảãạ` = 5, `ằẳẵặ` = 4 → **16 codepoint**; UTF-8 = 12×2 + 4×3 = **36 byte**.\n- *Bằng chứng phản bác đã xét:* 22 khớp 16 (ký tự) lẫn 36 (byte) đều không; không có literal nào khác trong ma trận dài 22; phần \"toàn bộ dấu\"/công thức `'\"'+v+'\"'` đã bị gỡ đúng yêu cầu nên đây là lỗi đếm sót, không phải cách diễn giải khác.\n- *Hệ quả:* nếu P2 hoặc người nghiệm thu chốt `len == 22` theo \"expected\" này thì ca đúng bị đánh đỏ giả; nếu ai đó coi \"22\" là chuẩn thì ma trận tự mâu thuẫn và cổng đóng M3 mất tính quyết định.\n- *Sửa tối thiểu:* đổi `22` → `16` ở cả hai vế dòng 8 (hoặc bỏ số, viết \"giữ nguyên đúng chuỗi literal\").\n\n**F2 (A4) — Dòng rollback quy mô \"1 dòng\" dự đoán kết quả trái với chính ma trận M3.**\n- *Yêu cầu:* mục (1)/(4) \"mọi dòng rollback quy về 9 item\" + A4 \"bảng rủi ro và rollback phân theo quy mô\".\n- *Bằng chứng quan sát:* dòng \"1 dòng — `src/export.py`\" ghi kết quả mong đợi `1 failed`; \"8/9 item xanh, `test_unicode` đỏ\". Nhưng ma trận cùng tài liệu đặt input có tiếng Việt cho mục 1, 2, 4, 6, 8, 9 và expected là round-trip **đúng literal**; `src/export.py:3` (`encode('ascii', errors='ignore')`) xoá toàn bộ ký tự >127 ⇒ các mục đó bắt buộc phải đỏ. Mục 3 (`'a'`) và 7 (`''`) là ASCII nên vẫn xanh; mục 5 (`'Hồ\\nsơ'`) còn tuỳ cách P2 assert.\n- *Bằng chứng phản bác đã xét:* thử tìm cách để8/9 xanh — không có: chính phần \"Bằng chứng và hiện trạng\" của plan xác nhận dòng 3 là nguyên nhân hỏng tiếng Việt, và `grep test_output_is_csv_not_json` không có kết quả (tôi đã đọc cả 2 file, tên này chưa tồn tại), nên không thể có ngoại lệ nào. Số `1 failed` có vẻ bị sao chép từ baseline P1 sang bảng 9 item.\n- *Hệ quả:* khi thật sự rollback 1 dòng, người nghiệm thu thấy 6–7 test đỏ, đối chiếu bảng sẽ kết luận sai rằng M1 chưa vá hoặc P2 viết test sai → quyết định sai (vá lặp hoặc revert oan P2).\n- *Sửa tối thiểu:* đổi cột \"Kết quả mong đợi\" của dòng này thành: \"mục 1,2,4,6,8,9 chuyển đỏ; mục 3 và 7 giữ xanh; con số `1 failed` chỉ đúng ở quy mô toàn plan (baseline)\".\n\n## Ghi chú không chặn\n\n- Cổng C (`grep -c '^def test_' = 9`) ngầm đòi P2 viết test ở cột0. `tests/test_export.py:3` đang theo đúng quy ước đó nên rủ",
+      "assignmentSha256": "ab5b5db2d147e325bf10223507cd814d132cee8cea4dd65eea0c73e28e8ce34d",
+      "assignment": "Phản biện độc lập nút Work Graph P3 (plan, produce) trong \"Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng \".\nMục tiêu của người dùng: Lập plan chi tiết (chỉ plan, KHÔNG thực thi thay đổi) sửa exporter src/export.py để giữ nguyên tiếng Việt theo hợp đồng docs/source.md: CSV thuần, không JSON, không tạo giao diện mới; plan phải có hợp đồng CSV, các mốc M1–M3, phụ thuộc, file sửa, test/expected cụ thể, rủi ro và rollback theo quy mô từng mốc.\nNhiệm vụ của nút: Viết lại sub-plan M3 (bản kế hoạch, KHÔNG sửa code) dưới 1100 từ, sửa đúng 4 lỗi reviewer: (1) QUYẾT ĐỊNH DỨT KHOÁT: M3 KHÔNG thêm test nào — file sửa của M3 rỗng; toàn bộ ma trận nghiệm thu là bảng đối chiếu 8 test P2 + test_unicode gốc, tổng đúng 9 item, dùng con số 9 ở MỌI cổng và mọi dòng rollback, không nêu 13, bỏ mọi ngoặc kép; (2) regex canh không-JSON/không-giao-diện phải CHỈ khớp dòng import, dạng ^\\s*(import|from)\\s+(json|flask|fastapi|django|tornado|tkinter|PyQt), bỏ hoàn toàn kỳ tự print\\( — lý do: tên hàm test_output_is_csv_not_json chứa chữ json nên regex cũ tự khớp chính file test và cổng không bao giờ đóng; dán đúng MỘT chuỗi này ở mọi nơi; (3) ma trận phải có ca tiếng Việt với INPUT LITERAL cụ thể (ví dụ 'ĂÂĐÊÔƠƯáàảãạằẳẵặ'), không dùng mô tả 'toàn bộ dấu' và không dùng công thức '\"'+v+'\"' cho ca chứa ký tự cần escape; mọi ca khác giữ literal sẵn có; (4) lệnh tổng hợp nối mọi lệnh bằng &&, bỏ lệnh ls đứng riêng, giữ tiền đề môi trường; vẫn bỏ -W error và bỏ idempotence; giữ nguyên hai bảng rủi ro và rollback 4 quy mô đã đạt.\nNghiệm thu cần kiểm từng mục:\n- Ma trận nghiệm thu có input và expected cụ thể cho từng ca tiếng Việt\n- Có cách canh ràng buộc không JSON và không giao diện, nêu lệnh/lệnh kiểm tra và kết quả mong đợi\n- Có tiêu chí đóng M3 định lượng gắn với python -m pytest -q\n- Có bảng rủi ro và rollback phân theo quy mô từng mốc\nKiểm thử bắt buộc:\n- python -m pytest -q\n\nNgân sách: 14 vòng model; gom tool và dành bước cuối viết phản biện.\n\nTiêu chí phản biện: Kiểm bao phủ mục tiêu, hiện trạng có căn cứ, kiến trúc/stack có lý do, data/hợp đồng, vận hành/rủi ro theo quy mô, milestone/phụ thuộc, test/check có expected và truy vết. AI cần baseline/dataset/cách chấm/hiệu chỉnh/fallback khi áp dụng. Tiêu đề hoặc citation không chứng minh đúng. Không bắt test mới được đề xuất phải chạy pass sẵn.\n\nĐầu ra cần phản biện nằm trong ngữ cảnh bên dưới.\n\nFinding chặn khi dùng đầu ra khiến bước tiếp theo hoặc quyết định người dùng sai. Văn phong và chi tiết tùy chọn là ghi chú không chặn. Thiếu quyết định/bằng chứng quan trọng là vấn đề chặn. Không còn vấn đề chặn thì dùng `ok`. Kiểm tra, không làm lại công việc.\nTrước khi chặn, chỉ rõ yêu cầu được giao, đọc đoạn artifact và nguồn gốc liên quan, xét bằng chứng mạnh nhất có thể bác bỏ chính finding của bạn. Nếu nguồn quan trọng không mở được hoặc trái với khẳng định, dùng search/read được cấp để tìm và mở nguồn chính thức thay thế có mục tiêu. Ghi điều thực sự đã kiểm, kể cả truy cập thất bại. Giới hạn đã khai báo không tự là lỗi: chỉ chặn khi nó làm mất căn cứ của kết luận hoặc đầu ra bắt buộc. Đề xuất cần lý do, không cần chứng minh đã triển khai. Không bác nguồn fixture chỉ vì là fixture khi nhiệm vụ dùng dữ liệu đó. Nghi ngờ chưa có bằng chứng giữ UNVERIFIED, không gọi là lỗi đã xác nhận. Việc tùy chọn ngoài phạm vi không chặn. Mỗi finding chặn nêu yêu cầu, bằng chứng quan sát, bằng chứng phản bác đã xét, hệ quả cụ thể và sửa tối thiểu cần thiết.\nPhân biệt định dạng của báo cáo này với ràng buộc của sản phẩm dự kiến. Báo cáo Research Markdown về sản phẩm chỉ xuất CSV không bắt buộc chứa hàng CSV, code chạy được hay API nếu nhiệm vụ không yêu cầu. Nhiệm vụ chỉ lập kế hoạch cho phép đề xuất file và lệnh test; không khẳng định chúng đã tồn tại hoặc chạy. Đánh giá nội dung thực của từng snapshot; cấu trúc tương tự, nguồn chung hay metadata không chứng minh đoạn chưa đọc có cùng kết luận.\nPhân biệt quyết định người dùng với tiền đề kỹ thuật trong nhiệm vụ hoặc nghiệm thu. Tiền đề main đưa ra là khẳng định cần kiểm, chưa phải bằng chứng. Nếu nguồn chính thức bác bỏ tiền đề, chỉ rõ tiêu chí mâu thuẫn và sửa tối thiểu; không bắt producer nhắc lại tiền đề sai. Với số liệu hoặc khả năng tương thích quan trọng, kiểm đơn vị, phiên bản đích, dialect, mặc định so với cấu hình và nguồn có áp dụng đúng không. Không suy rộng kết quả của một phiên bản sang bản khác. Nhánh có phiên bản xác định được phiên bản; thiếu commit pin riêng chưa là lỗi đúng sai. Chỉ chạy counterexample nhỏ quyết định khi công cụ và phạm vi cho phép; nếu không, ghi suy luận từ source và NOT RUN trung thực. Một nguồn chính thức có thể đủ; không đòi số nguồn tùy ý. Phân biệt biểu diễn lưu trên đĩa với giá trị sau giải mã, byte với ký tự.\n## Vấn đề chặn — tiêu chí/mục, bằng chứng và sửa cụ thể; ghi `none` nếu trống.\n## Ghi chú không chặn — tùy chọn.\nKẾT THÚC bằng đúng một dòng `VERDICT: ok` hoặc `VERDICT: revise`, không có chữ phía sau. Giữ nguyên marker này.\nĐọc HẾT snapshot được giao bằng work_artifact_read theo nextOffset/unreadOffset đến khi allAssignedArtifactsRead=true; coverageComplete chỉ áp dụng cho artifact hiện tại, không phải toàn bộ nhiệm vụ. Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. \nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. \n{\"A1\": \"Ma trận nghiệm thu có input và expected cụ thể cho từng ca tiếng Việt\", \"A2\": \"Có cách canh ràng buộc không JSON và không giao diện, nêu lệnh/lệnh kiểm tra và kết quả mong đợi\", \"A3\": \"Có tiêu chí đóng M3 định lượng gắn với python -m pytest -q\", \"A4\": \"Có bảng rủi ro và rollback phân theo quy mô từng mốc\", \"C1\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}\nTrả finding và object trong fenced json {\"coverage\":[{\"id\":\"A1\",\"status\":\"pass|revise|unverified\",\"evidence\":\"tham chiếu hoặc finding cụ thể\"}]}. Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A2\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A3\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"A4\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}, {\"id\": \"C1\", \"status\": \"unverified\", \"evidence\": \"<reference or finding>\"}]}\nNgữ cảnh từ phiên chính (dữ liệu):\n{\"snapshots\": [{\"artifactId\": \"a-e2eb64ee2e174e21bf135dec3cb0a4d0\", \"version\": 14, \"contentHash\": \"130f71fb64e3b9fa6d28e5149b7f352cee218723e7d95de4e0edb913eb55cfb0\", \"path\": \".plans/work/5410e1c44edec33fb908/w-545fc92864/P3/produce/v14-a-e2eb64ee2e174e21bf135dec3cb0a4d0.md\", \"chars\": 6540}], \"check\": {\"id\": \"plan_review\", \"executorRole\": \"plan-review\", \"criterion\": \"Plan SWE/AI cụ thể: kiến trúc, dữ liệu, hợp đồng, milestone, test; không bịa dữ kiện hoặc quyết định người dùng.\"}}\n\nPhản biện Work Graph độc lập: tự đọc bằng chứng. Câu trả lời cuối tiếng Việt có dấu, giữ identifier và trích dẫn. Kết thúc bằng một dòng VERDICT."
+    }
+  ],
+  "integrationScope": "policy6 still in progress, last nonempty outputs at capture can be partial/interim, not full/atomic final certification",
+  "remaining": [
+    "W6.1.2 unsupported optional reviewer claims and marker consistency",
+    "C4 full main/child semantic assessment pending",
+    "W6.2 main/sub signs held for approval and W8 comparison",
+    "W7 not started"
+  ]
+}

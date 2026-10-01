@@ -718,6 +718,13 @@ class WorkGraph:
                                     self.checks.save(record)
                             node['stages'][name] = new_stage() | {'feedback': 'Node definition changed by main.',
                                                                  'rounds': state.get('rounds', [])}
+                            # A title/file edit must not erase a conflict in an
+                            # unchanged acceptance requirement (nor may reordering it).
+                            conflicts = [item | {'id': f'A{node["acceptance"].index(item["requirement"]) + 1}'}
+                                         for item in state.get('inputConflicts', [])
+                                         if item['requirement'] in node['acceptance']]
+                            if conflicts:
+                                node['stages'][name]['inputConflicts'] = conflicts
             by_id[node_id] = node
         nodes = list(by_id.values())
         if len(nodes) > MAX_NODES:
@@ -834,6 +841,12 @@ class WorkGraph:
     def next_step(self, run):
         """One sentence telling main what the harness expects next (keeps weak models on the path)."""
         status = run['status']
+        conflicts = [(n['id'], stage, s['inputConflicts']) for n in run['nodes']
+                     for stage, s in n['stages'].items() if s.get('inputConflicts')]
+        if conflicts:
+            return ('Main: correct the conflicting node goal/acceptance with work_graph action=update before '
+                    'retrying checks or production. Preserve facts in the artifact; the assignment needs correction: '
+                    + str(conflicts))
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in run['nodes'] for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1117,6 +1130,12 @@ class WorkGraph:
             run.update(verificationVersion=work_policy.VERSION, status='drafting', approval=None,
                        executionRequested=self.execution_requested(session, run))
         self.refresh(run)
+        only = set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))
+        conflicts = [{'nodeId': n['id'], 'stage': stage, 'findings': n['stages'][stage]['inputConflicts']}
+                     for n in run['nodes'] if stage in n['stages'] and (not only or n['id'] in only)
+                     and n['stages'][stage].get('inputConflicts')]
+        if conflicts:
+            return self.result(run) | {'inputConflicts': conflicts}
         if stage == 'execute':
             self.require_execution(run)
             self.require_planning_current(run)
@@ -1136,7 +1155,6 @@ class WorkGraph:
         else:
             run['status'] = 'discovering'
         max_rounds = max(1, min(MAX_ROUNDS_CEILING, int(args.get('maxRounds') or MAX_ROUNDS_DEFAULT)))
-        only = set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))
         lock = self.locks.setdefault(run['runId'], asyncio.Lock())
         if lock.locked():
             raise ValueError('WORK_RUN_BUSY: work_run is already running for this run')
@@ -1481,6 +1499,10 @@ class WorkGraph:
                     state.update({'status': 'revise', 'feedback': 'Whole-plan review: ' + reason,
                                   'feedbackSource': 'checks',
                                   'attempts': max(0, state['attempts'] - 1)})
+                    state['inputConflicts'] = [{'id': item['id'].split('.', 1)[1],
+                        'requirement': node['acceptance'][int(item['id'].split('.A', 1)[1]) - 1],
+                        'evidence': item['evidence']} for item in coverage
+                        if item.get('target') == 'criterion' and item['id'].startswith(node_id + '.A')]
             run['status'] = 'needs_revision'
             self.save(run, 'verify_revise', ','.join(targets) or 'structural')
         out = self.result(run)

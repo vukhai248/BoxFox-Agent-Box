@@ -120,6 +120,7 @@ def test_whole_json_finding_routes_node_even_without_revise_marker(tmp_path):
         first = next(m.get('content', '') for m in messages if m['role'] == 'user')
         if first.startswith('Whole-plan review') and result['choices'][0]['finish_reason'] == 'stop':
             coverage = [{'id': k, 'status': 'revise' if k == 'R1.A2' else 'pass',
+                         'target': 'artifact',
                          'evidence': 'Separate facts from recommendations.' if k == 'R1.A2' else 'Observed fixture.'}
                         for k in ('G1', 'G2', 'G3', 'R1.A1', 'R1.A2')]
             return answer('Missing labels in R1.\n```json\n' + json.dumps({'coverage': coverage}) + '\n```\nVERDICT: revise')

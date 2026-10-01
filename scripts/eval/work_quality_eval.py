@@ -100,6 +100,24 @@ CASE_TASKS = {
 }
 
 
+def outcome(case, doc, acceptance, state, next_step):
+    """A revise verdict alone does not prove a false premise was routed to main."""
+    expected = CASES[case][1]
+    verdict_ok = doc['status'] == expected
+    result = {'evaluationVersion': 2, 'verdictOracle': verdict_ok}
+    if case == 'false_assignment_premise':
+        coverage = doc.get('coverage', [])
+        typed = any(c.get('id') == 'A1' and c.get('status') == 'revise' and
+                    c.get('target') == 'criterion' for c in coverage)
+        conflicts = state.get('inputConflicts', [])
+        routed = any(c.get('id') == 'A1' and c.get('requirement') == acceptance[0] for c in conflicts)
+        result.update(criterionConflictRouted=typed and routed and
+                      str(next_step).startswith('Main: correct the conflicting node goal/acceptance'))
+        verdict_ok = verdict_ok and result['criterionConflictRouted']
+    result['oracle'] = verdict_ok
+    return result
+
+
 async def run(args):
     assert subprocess.check_output(['git','branch','--show-current'], cwd=ROOT,text=True).strip() == 'B'
     os.environ['BOXFOX_WORK_CHECK_OUTPUT_TOKENS'] = '16000'
@@ -146,7 +164,16 @@ async def run(args):
                 doc=result['checks'][0]
                 row={'case':case,'repeat':repeat,'expected':expected,'status':doc['status'], 'check':doc,
                     'answer':graph.child_answer(doc.get('childId')),'reads':work_checks.good_reads(graph,doc.get('childId')),
-                    'oracle':doc['status']==expected,'latencySeconds':round(time.monotonic()-start,3)}
+                    'latencySeconds':round(time.monotonic()-start,3)}
+                node_state = graph.get(run['runId'])['nodes'][0]['stages']['produce']
+                row.update(outcome(case, doc, acceptance, node_state, result.get('next')))
+                if case == 'false_assignment_premise':
+                    row['producerRetryBlocked'] = False
+                    if node_state.get('inputConflicts'):
+                        before = len(store.children_of(session['id']))
+                        guarded = await graph.run(session, {'phase': 'discover', 'runId': run['runId']})
+                        row['producerRetryBlocked'] = bool(guarded.get('inputConflicts')) and before == len(store.children_of(session['id']))
+                    row['oracle'] = row['oracle'] and row['producerRetryBlocked']
             except Exception as exc:
                 row={'case':case,'repeat':repeat,'status':'error','error':str(exc),'oracle':False}
             rows.append(row)

@@ -1847,8 +1847,54 @@ Neo W6.5.1 đã lưu **cedf58aa**. Quyết định “cho bằng cha” vẫn l�
 
 [Audit Design cũ](W6.1-design-followup-evidence.json) ghi từng 20 child và main theo output/checkpoint thực, không tuyên bố chứng nhận mọi claim. Counterexample local phân biệt StringIO default/None/empty và chuỗi rỗng: default `newline='\n'` giữ CR/CRLF; `None` dịch sang LF; writer một field rỗng ra `""\r\n`. Có reviewer bắt đúng lỗi rồi cũng đưa finding sai; nhiều output dở vẫn bị gate từ chối. Một lookup accepted dù tự ghi pytest NOT RUN, cho thấy evidence đọc file chưa chứng minh mọi acceptance thực thi đạt. Design chưa whole/final; không phải plan được duyệt.
 
-- [ ] Bổ sung contract/metadata conflict tiêu chí: tiêu chí A* có tiền đề sai phải trả cho main; artifact đúng được giữ, tránh vòng producer sửa theo tiền đề sai. Không silently pass tiêu chí khác nghĩa.
+- [x] Bổ sung contract/metadata conflict tiêu chí A*: policy 7, schema có `target=criterion`, conflict bền vững và trả đúng main; native strict 2/2 và regression ở mục 24. Không chứng nhận mọi finding chuyên môn từ kết quả này.
 - [ ] Chặn false scope/severity dựa trên miền được nhắc như giới hạn, không phải yêu cầu user. Đo lại native sau sửa, giữ mọi attempt/failure.
 - [ ] Hoàn tất và đánh giá từng child/main của `.tmp/work-checks/w611-integration-current` (Plan/Design, hai lượt mỗi ca, cha 40/600). Tiến trình đang đo, chưa tính đạt từ status trung gian.
 - [ ] Main-final binding vẫn chưa chứng nhận claim mới; instruction không thay cho kiểm bản chính thức.
 - [ ] W7 durable feedback/interview/same-child chưa code; chỉ chuyển sang sau khi W6.1 được nghiệm thu. CUA vẫn giữ runbook bàn giao riêng.
+
+## 24. W6.1.1 — hợp đồng review và quy tắc quy nguyên nhân
+
+### Phạm vi đã chốt lại với chủ dự án
+
+Ưu tiên tinh chỉnh **review**. Với dấu hiệu ở main/sub: đối chiếu yêu cầu gốc, assignment, snapshot và bằng chứng thực trước. Chỉ khi xác nhận vấn đề độc lập với lỗi review mới ghi W riêng; **không sửa main/sub ngay**. W6.2 bên dưới là backlog chờ duyệt và phải đối chiếu W8, không tự thêm vào đợt thi công này. W7 chưa bắt đầu. UI/UX, scheduler/fanout và DAG dependencies giữ nguyên.
+
+Đánh giá từng finding, không quy cả agent thành đúng hoặc sai:
+
+| Trường hợp | Hướng xử lý |
+|---|---|
+| Artifact sai, reviewer bác đúng bằng chứng và phạm vi | Ghi lỗi main/sub đã xác nhận vào W riêng, chưa sửa trước khi duyệt. |
+| Artifact đúng, reviewer bác sai hoặc tự thêm yêu cầu | Sửa/đo lại review. |
+| Reviewer sai trước, main/sub lặp lại finding đó | Ghi chuỗi lan truyền từ review; chưa quy thành lỗi main/sub độc lập. |
+| Cả hai sai, hoặc thiếu nguồn/receipt | Tách từng khẳng định; ghi chưa xác minh và bước cần kiểm, không ép pass/revise. |
+
+### Bản sửa policy 7
+
+- [x] Coverage phân biệt `target=artifact` và `target=criterion`. Chỉ A* bị nguồn bác bỏ được ghi conflict tiêu chí; C/G không dùng nhãn này. Giữ đọc đủ snapshot, đọc nguồn thực, provider/partial và binding gates.
+- [x] Conflict lưu theo check và stage, giữ nguyên requirement; replay invocation không mở reviewer trùng. Đổi title hoặc đảo thứ tự acceptance không xóa conflict; sửa requirement mới cho phép draft/check mới.
+- [x] `work_run` trả conflict cho main trước khi chạy producer lại; whole review cũng ánh xạ A* về đúng node. Đây là xử lý kết quả review, không đổi edges, lịch chạy hoặc cách main phân rã công việc.
+- [x] Template JSON và skeleton đều có `target`. Review mới revise A* nhưng thiếu target được xem là report không hợp lệ, retry reviewer tối đa một lần với lý do cụ thể. Không đoán target từ prose. Parser legacy vẫn đọc được report cũ; không gán chất lượng mới cho lịch sử.
+- [x] Test mục tiêu **158 passed**, 42,49s; toàn `backend/tests` **2750 passed, 21 skipped, 0 failed/errors**, 506,59s. Sweep trước strict **2746/21/0**, 472,12s được giữ riêng. Evidence: [W6.1-input-conflict-evidence.json](W6.1-input-conflict-evidence.json).
+- [x] Native Space Bunny strict **2/2**: A1 `revise/criterion`, conflict chuyển về main và `work_run` không mở thêm producer; 86,555s và 248,100s. Không phải thử main tự sửa tiêu chí hoặc toàn app/CUA.
+
+Lượt permissive trước strict có bốn verdict đúng trạng thái, nhưng hai ca tiền đề sai **0/2 chuyển được conflict** vì JSON thiếu target. Raw oracle cũ chỉ kiểm status; giữ nguyên, bổ sung audit riêng, không gọi “4/4 đã sửa bug”. Hai ca đơn vị đúng pass 2/2 ở snapshot trước strict; không gộp thành bốn lượt trên cùng source mới.
+
+### W6.1.2 — ghi chú reviewer còn sai, ưu tiên tiếp theo
+
+- [ ] Chặn việc reviewer tự thêm ví dụ/số liệu kỹ thuật ngoài nhiệm vụ mà không kiểm. Native strict đạt routing nhưng còn ghi chú Unicode sai: reviewer thứ hai nói NFD của `ế` là hai code point và byte tương ứng 2; Python thực cho **3 code point, 5 byte**, NFC `ế` là **1 code point, 3 byte**. Reviewer thứ nhất dùng ước lượng tiếng Việt NFC hai byte/ký tự không có cơ sở cho mọi ký tự. Không dùng pass giao thức để chứng nhận các ghi chú này.
+- [ ] Tinh chỉnh prompt review để mọi finding và ghi chú kỹ thuật có căn cứ đã kiểm; đo lại cả ca artifact đúng và sai, giữ tất cả attempt. Chưa thay tool quyền hạn hoặc thêm tầng reviewer mới.
+- [ ] Theo dõi bất nhất prose/marker: native strict lượt 1 ghi artifact không có lỗi và `VERDICT: ok`, coverage A1 lại revise/criterion; backend tổng hợp thành revise và chặn đúng. Không biến nhãn artifact đúng thành tiêu chí main đã được giải quyết.
+- [ ] Hoàn tất live C4 policy 6 đang chạy trước patch 7, đánh giá từng child/main theo receipt; không gọi dữ liệu policy 6 là nghiệm thu policy 7. Chưa có main final/whole thì chưa tick W6.1 hoàn tất.
+
+Một chuỗi lỗi đã xác minh trong C4: reviewer `528618490d…` đưa exception `ValueError`; main đưa nó vào goal mới, producer `6b9780af08…` lặp lại; reviewer `fd3d286776…` mở `_csv.c`/`Lib/csv.py` sửa thành `csv.Error`. Counterexample local cũng xác nhận không phải ValueError. **Nguồn lỗi đầu tiên ở review**, không tự kết luận main/sub cần sửa prompt. Reviewer `8cf2a40e40…` bắt đúng literal 16 code point thay vì 22 nhưng ghi sai **36 byte**; thực tế **38 byte**. Finding đúng có thể kèm khẳng định phụ sai.
+
+### W6.2 — backlog dấu hiệu main/sub, chờ duyệt và đối chiếu W8
+
+Chỉ ghi nhận để khảo sát, **chưa code**, chưa kết luận nguyên nhân chỉ từ badge hoặc số lượng agent:
+
+- [ ] Producer ở lượt plan-only viết “P1 đã vá/đã xoá dòng 3” trong khi source fixture vẫn chứa lossy encode. Đối chiếu planned dependency với trạng thái thực thi và assignment gốc; phân biệt diễn đạt điều kiện sau M1 với claim hiện trạng. Không coi artifact `produce` accepted là code đã execute.
+- [ ] Một sub-plan nói 8 passed ở mục thành công nhưng cổng kiểm nói 9; các bản trung gian cũng lệch số ca giữa P2/P3 và rollback. Kiểm bản cuối và provenance để phân biệt lỗi producer, premise main hay finding reviewer đã sửa; chưa có kết luận bản cuối sai.
+- [ ] Lookup cũ accepted dù pytest NOT RUN: xác minh assignment/capability/minimum gate. Không tự thêm review cho mọi lookup hoặc cấp terminal trong đợt này. Đây có thể là hợp đồng nghiệm thu/tool, không mặc nhiên do LLM kém.
+- [ ] Nhiều lượt producer/reviewer trên fixture rất nhỏ: đo việc main đổi definition, retry provider và sửa nội dung riêng. Không dùng số child để kết luận DAG sai; mọi thay đổi phân rã/lịch chạy phải xét cùng W8.
+
+Receipt/counterexample và triage có phạm vi ở [W6.1-review-triage-report.md](W6.1-review-triage-report.md). Chờ người dùng duyệt W6.2 trước mọi chỉnh sửa main/sub; công việc hiện tại tiếp tục review W6.1.2.
