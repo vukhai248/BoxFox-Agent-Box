@@ -88,16 +88,22 @@ async def run(args):
             graph = getattr(rt, 'work_graph', None)
             work = graph.active(sid) if graph else None
             children = [store.get(c['session_id']) for c in store.children_of(sid)]
+            main_events = events(store, sid)
+            main_ends = [e['data'] for e in main_events if e['type'] == 'turn_end']
+            main_execution = main_ends[-1].get('status') if main_ends else None
+            main_reason = rt.partial_turn(sid)
             answer = next((m.get('content') for m in reversed(store.get(sid)['messages'])
                            if m['role'] == 'assistant' and m.get('content')), '')
             record = {'case': case, 'repeat': repeat, 'sessionId': sid, 'route': route,
                 'commit': source_commit, 'sourceHashes': source_hashes,
                 'ownerSteps': args.steps, 'ownerDeadline': args.deadline,
-                'status': store.get(sid)['status'], 'work': work, 'error': error,
+                'status': store.get(sid)['status'], 'mainExecutionStatus': main_execution,
+                'mainPartialReason': main_reason, 'work': work, 'error': error,
                 'latencySeconds': round(time.monotonic()-started, 3), 'mainAnswer': answer,
                 'children': [{'id': c['id'], 'role': c['role'], 'status': c['status'], 'messages': c['messages'],
-                    'events': events(store, c['id'])} for c in children], 'events': events(store, sid),
-                'oracle': bool(work and work['status'] == 'verified' and children
+                    'events': events(store, c['id'])} for c in children], 'events': main_events,
+                'oracle': bool(main_execution == 'completed' and not main_reason
+                    and work and work['status'] == 'verified' and children
                     and not any(c['role'] in ('build', 'simplify') for c in children)),
                 'semanticAdjudication': 'pending; verified runtime status alone is not semantic proof',
                 'scope': 'live main/producer/checks, disposable fixture executor; not Docker/CUA/full benchmark'}

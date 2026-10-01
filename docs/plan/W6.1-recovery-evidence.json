@@ -1,0 +1,188 @@
+{
+  "schema": "boxfox-w61-main-recovery/1",
+  "branch": "B",
+  "runtimePatch": "Keep original output/stream interruption on text-only recovery while main drives Work Graph. No DAG edges/UI changes.",
+  "sourceHashesAfterTest": {
+    "backend/src/agentbox/agent_core/runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend/tests/unit/test_work_completion_recovery.py": "2f7a01bc0185754b5408dd85de3dfea482946d6c05a37ae301e1bf3bbd08bbb5"
+  },
+  "fullUnit": {
+    "xml": {
+      "path": ".tmp/work-checks/w61-recovery-final-full.xml",
+      "sha256": "f12dab3954f22f72c75c136f11520f0737ccea5df7507d3f0a2550476e05999c"
+    },
+    "log": {
+      "path": ".tmp/work-checks/w61-recovery-final-full.log",
+      "sha256": "87d97f5206557ee90ab8b8d87d3ab5672702b08196429eb8b7b113161e6f2a7d"
+    },
+    "exit": {
+      "path": ".tmp/work-checks/w61-recovery-final-full.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    "tests": 2742,
+    "passed": 2724,
+    "skipped": 18,
+    "failed": 0,
+    "errors": 0,
+    "seconds": 449.87
+  },
+  "targetUnit": {
+    "path": ".tmp/work-checks/w61-recovery-final-target.xml",
+    "sha256": "129de84765f534569aeb25edcd10274e8469fa834f74aef125f854fd98813f06"
+  },
+  "failedFixtureAttempt": {
+    "xml": {
+      "path": ".tmp/work-checks/w61-recovery-target.xml",
+      "sha256": "52ac5e3159bbd55645bcb316e24e299e6a15333ed1a433c5ebc174601968f59d"
+    },
+    "cause": "New test invoked rt.start before entering asyncio loop: seven fixture failures, 59 passes. Fixture corrected; retained as failed attempt."
+  },
+  "limits": [
+    "Eight deterministic regressions and two native Space Bunny recaps after injected failures; not full main/producer/DAG completion or a measurement of provider-failure incidence.",
+    "Current main live integration process loaded earlier runtime/policy; its partials/failures stay separate.",
+    "Recap can still have inaccurate prose; partial receipt does not semantically validate that prose.",
+    "Windows 18 skips stay skips; separate Linux execution passed those tests.",
+    "W6.1.1/W6.5.1/W7 not completed by this patch."
+  ],
+  "previousFullUnit": {
+    "xml": {
+      "path": ".tmp/work-checks/w61-recovery-full.xml",
+      "sha256": "c712e0496708ede2519cb91fd2e93c3d7f68684f88b4bfc91f248c16ca8ade4c"
+    },
+    "log": {
+      "path": ".tmp/work-checks/w61-recovery-full.log",
+      "sha256": "c8bd9b483a13d84019b9780dcdf3abc313b74f165c5ea31a3a8134bc5966528e"
+    },
+    "exit": {
+      "path": ".tmp/work-checks/w61-recovery-full.exit",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354"
+    },
+    "tests": 2741,
+    "passed": 2723,
+    "skipped": 18,
+    "failed": 0,
+    "errors": 0,
+    "seconds": 531.363
+  },
+  "previousSourceHashes": {
+    "backend/src/agentbox/agent_core/runtime.py": "d573c94f8c462d42d951dea79fceb76b761fba953191819c7a86ad27397037e6",
+    "backend/tests/unit/test_work_completion_recovery.py": "c181875efb51b9cf0c0668fec6cf7ad09920339bb90b21af030ea58029e0f6e2"
+  },
+  "previousTargetUnit": {
+    "path": ".tmp/work-checks/w61-recovery-fix.xml",
+    "sha256": "ec9c4107eb6b69c51c10cabf2944ab49354019d929cc234d910f0573418cf2a7"
+  },
+  "sourceFreeze": {
+    "path": ".tmp/work-checks/w61-recovery-final-source.json",
+    "sha256": "4732839d69d401d563dc91fed0d3a5324ecfa1e738f41d0afa1a46e818278762"
+  },
+  "nativeRecovery": {
+    "raw": {
+      "path": ".tmp/work-checks/w61-main-recovery-native/results.json",
+      "sha256": "e69e2ab5081045a528e04bc2eeed1f820340f829792d85b83a4b240e6d760cc6"
+    },
+    "scope": "Native main recovery with injected empty failures and Space Bunny recap.\n\nOnly the first graph creation and failure response are scripted. The recovery\ncompletion uses the configured actual provider. This is not a full plan/DAG or\nprovider-failure incidence benchmark; no production sessions/resources are used.\n",
+    "rows": [
+      {
+        "injectedFailure": "length",
+        "expectedCode": "PROVIDER_OUTPUT_TRUNCATED",
+        "sessionId": "c5e9e58861b74244a6cfe4cc2cec7592",
+        "route": {
+          "connectionId": "07a63353-908c-4ba7-9296-d8bf4364294e",
+          "modelId": "space-bunny-free"
+        },
+        "sourceHashesAtStart": {
+          "backend/src/agentbox/agent_core/runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "backend/src/agentbox/agent_core/work_graph.py": "0327afcf181944ede10b0a5a73fa58deb4b6f3bf92db2b170bb49cee1f37a5bb",
+          "scripts/eval/work_main_recovery_eval.py": "80e3bee2b1fd5f4d69cae3d7f6b666e15631ca687573a05fe8709d0d9bebd307"
+        },
+        "scriptedCompletionCalls": 2,
+        "nativeCompletionCalls": 1,
+        "error": null,
+        "elapsedSeconds": 8.793,
+        "mainEnd": {
+          "turn": 1,
+          "step": 2,
+          "status": "partial",
+          "finishReason": "stop",
+          "toolCalls": 0,
+          "contextEstimate": 22990,
+          "stepsUsed": 2,
+          "toolsRun": 1,
+          "deadlineUsedMs": 8783,
+          "partial": true,
+          "completionAttempts": 2,
+          "completionUsageComplete": false,
+          "knownOutputTokens": 435
+        },
+        "finish": {
+          "status": "completed",
+          "turn": 1,
+          "steps": 2,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0,
+          "partial": true,
+          "code": "PROVIDER_OUTPUT_TRUNCATED"
+        },
+        "partialReason": "PROVIDER_OUTPUT_TRUNCATED",
+        "runStatus": "drafting",
+        "childCount": 0,
+        "oracle": true
+      },
+      {
+        "injectedFailure": "stream_incomplete",
+        "expectedCode": "PROVIDER_STREAM_INTERRUPTED",
+        "sessionId": "03d730ad6d4e4d208665f209b1c5e03f",
+        "route": {
+          "connectionId": "07a63353-908c-4ba7-9296-d8bf4364294e",
+          "modelId": "space-bunny-free"
+        },
+        "sourceHashesAtStart": {
+          "backend/src/agentbox/agent_core/runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+          "backend/src/agentbox/agent_core/work_graph.py": "0327afcf181944ede10b0a5a73fa58deb4b6f3bf92db2b170bb49cee1f37a5bb",
+          "scripts/eval/work_main_recovery_eval.py": "80e3bee2b1fd5f4d69cae3d7f6b666e15631ca687573a05fe8709d0d9bebd307"
+        },
+        "scriptedCompletionCalls": 2,
+        "nativeCompletionCalls": 1,
+        "error": null,
+        "elapsedSeconds": 2.802,
+        "mainEnd": {
+          "turn": 1,
+          "step": 2,
+          "status": "partial",
+          "finishReason": "stop",
+          "toolCalls": 0,
+          "contextEstimate": 22702,
+          "stepsUsed": 2,
+          "toolsRun": 1,
+          "deadlineUsedMs": 2791,
+          "partial": true,
+          "completionAttempts": 2,
+          "completionUsageComplete": false,
+          "knownOutputTokens": 141
+        },
+        "finish": {
+          "status": "completed",
+          "turn": 1,
+          "steps": 2,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0,
+          "partial": true,
+          "code": "PROVIDER_STREAM_INTERRUPTED"
+        },
+        "partialReason": "PROVIDER_STREAM_INTERRUPTED",
+        "runStatus": "drafting",
+        "childCount": 0,
+        "oracle": true
+      }
+    ]
+  }
+}

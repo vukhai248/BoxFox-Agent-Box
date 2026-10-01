@@ -1735,10 +1735,11 @@ Raw: `.tmp/work-checks/w65-request-time/results.json` và Markdown/thought từn
 
 ### 19.5 W6.5.1 — các tầng chưa kiểm chứng live dài
 
-- [ ] Tool worker: shell default 30s, hard cap 120s; Docker communicate 140s/client 40s còn phải kiểm quan hệ timeout từng command. Ca pytest 5s không chứng minh lệnh >120s chạy được. Không tự tăng tất cả trần.
-- [ ] Child active 900s/watchdog 1200s/tick 10s: có unit/cancellation tests, chưa có Docker live đủ thời gian để xác nhận không orphan hoặc hủy sớm.
+- [x] Tool worker/Docker transport: đo lệnh 95s thành công (95,457s), xin 130s bị worker hard cap 120s (120,535s), cancel dọn marker/leader (3,048s). Capture HTTP client 40s không nằm trên terminal path. Chi tiết/giới hạn fixture ở mục 22; không tự nâng trần.
+- [x] Child active 900s: Space Bunny + worker thật chạy tám lệnh 100s, lệnh chín bị cắt; `partial/DEADLINE_EXCEEDED`, toàn phép đo 916,450s, cleanup đạt. Watchdog 1200s không giết sớm; chưa chứng nhận boundary 1200s.
+- [ ] Watchdog boundary 1200s/tick 10s độc lập: unit có; live 900s kết thúc trước nên chưa đo trực tiếp trần này.
 - [ ] Throughput/peak concurrency có kiểm soát: fan-out/queue/run ceilings giữ nguyên; các job eval đồng thời không dùng để suy performance hệ thống.
-- [ ] 18 Linux tests skipped trên Windows: cần môi trường Linux/Docker để chạy; CUA chưa chạy, bàn giao theo mục 16.7.
+- [x] 18 Linux tests: Docker Linux chạy **18/18 pass**, 2,31s, fake CLI/router stub; Windows skips lịch sử giữ nguyên. CUA chưa chạy, bàn giao theo mục 16.7.
 
 W6.5.1 là phần nghiệm thu chưa chạy, không phải tính năng mới đã thực hiện. W7 giữ trách nhiệm user-wait bền vững; không sửa nó bằng kéo dài timeout.
 
@@ -1795,9 +1796,28 @@ Không tick W7 từ việc đã đọc code. Không sửa DAG edge semantics ho�
 - [x] CSV-limit probe 2/2 đúng oracle; receipt/source hashes được giữ riêng theo snapshot.
 - [x] Research-1 đi hết vòng main → producer → revise → bản mới → whole → main final; đánh giá từng output có phạm vi ghi rõ. Lỗi đơn vị và trộn phiên bản vẫn còn, không tick chất lượng chuyên môn đạt.
 - [ ] C4 còn các lượt Research/Plan/Design khác; process đang chạy, không coi thời gian chờ là kết quả.
-- [ ] Probe bổ sung policy 5: `false_csv_byte_unit`, `version_limited_null_312`, `false_modern_null_313`, hai lượt mỗi ca. Dùng native reviewer thật, nguồn đúng phiên bản và Space Bunny; raw tại `.tmp/work-checks/w61-units-version-policy5`. Không đổi prompt production hoặc nâng profile để ép kết quả. Đang chạy, chưa tính đạt.
+- [x] Probe bổ sung policy 5: `false_csv_byte_unit`, `version_limited_null_312`, `false_modern_null_313`, hai lượt mỗi ca: **6/6 final verdict đúng**, 9 attempt/3 incomplete được giữ. Native reviewer thật/Space Bunny, raw `.tmp/work-checks/w61-units-version-policy5`; finding vượt phạm vi vẫn ghi riêng, không gọi mọi finding đúng. Báo cáo ở mục 22.
 - [ ] **W6.1.1:** tiền đề kỹ thuật sai trong acceptance, đơn vị/version/default/configurable, counterexample cho reviewer, claim mới ở final main chưa được bound vào whole review; checklist chi tiết ở report. Chưa code các việc này.
 - [ ] **W6.5.1:** các tầng live dài/Docker/watchdog/throughput chưa đo ở 19.5; mạng mất không được dùng suy ra cần nâng timeout.
 - [ ] **W7:** triển khai durable request/answer/outbox và resume cùng child; kiến trúc đã khảo sát ở 20.3, chưa bật tính năng.
 
 Chủ dự án chốt trần sub-agent **không vượt cha**: cha 40 thì Research/Plan/Design tối đa 40; cha 60 thì profile dài tối đa 60. Reviewer vẫn theo profile 14/24 và kẹp theo cha. Khoảng chờ câu trả lời ở W7 không được tính là active compute hay tự reset ngân sách vô hạn.
+
+## 22. Bổ sung W6.1/W6.5: boundary thật và recovery main
+
+Evidence/báo cáo đã lưu:
+
+- [W6.5-boundary-report.md](W6.5-boundary-report.md): worker 3/3, child 900s, Linux 18/18; hashes và correction bộ đếm từ SQLite ở JSON đi kèm. Watchdog 1200s/throughput vẫn chưa tick.
+- [W6.1-review-unit-version-report.md](W6.1-review-unit-version-report.md): reviewer final oracle 6/6, riêng 9 attempt và các finding thừa. Không thay cho nghiệm thu main/producer.
+
+**Bug recovery main:** sau một completion rỗng bị cắt output/stream, runtime xin recap plain text và ngừng cấp tool. Recap có finish `stop` được tính completed dù Work Graph còn drafting/discovering. Recap còn có thể tự nói user đã yêu cầu dừng. Patch giữ partial và lý do interruption gốc khi main còn điều phối Work Graph; đường recovery ngoài graph giữ hợp đồng cũ. Không đổi UI/UX hoặc DAG edges.
+
+- [x] Regression recovery cuối: **8/8** riêng; sáu ca Plan/Research/Design × output/stream, một ca ngoài graph và một ca reasoning-only phục hồi bằng tool vẫn thực thi. Runner đầu test viết sai asyncio (không có running loop), đã sửa fixture, giữ log thất bại; đây không phải lỗi sản phẩm.
+- [x] Full backend cuối sau patch recovery: **2724 passed, 18 skipped, 0 failed/errors**, 450,07s; `.tmp/work-checks/w61-recovery-final-full.xml/.log/.exit`, hash nguồn trước/sau khớp. Sweep trước 2723/18/0 và 531,74s được giữ riêng, trước regression reasoning-only. 18 Linux tests đo riêng, không đổi Windows skips thành pass.
+- [x] Native recovery Space Bunny **2/2**: inject graph rỗng + empty length/stream, sau đó recap model thật; giữ đúng partial/error code, graph còn drafting. Không phải phép thử main tự hoàn tất plan/DAG hoặc tỷ lệ lỗi provider. Raw `.tmp/work-checks/w61-main-recovery-native`, evidence `W6.1-recovery-evidence.json`.
+- [ ] Live C4 còn Design; Research-2 và Plan-1/2 đã có kết quả không đạt, không xóa lượt lỗi hoặc gọi plan hoàn chỉnh. Process nạp snapshot trước policy 4/5 và patch recovery; không chứng nhận source mới.
+- [ ] W6.1.1 chất lượng/main-final và W6.5.1 throughput/watchdog còn mở. **W7 chưa code**, phải giữ cùng child ID/context và không reset ngân sách sau interview khi thực hiện.
+
+Neo phép đo W6.5.1: **01c44458**. Bản sửa recovery và báo cáo reviewer được commit riêng sau full suite; tra message Git tương ứng. Eval main bổ sung `mainExecutionStatus/mainPartialReason` và oracle không nhận partial: vocabulary `sessions.status=completed` cũ không được hiểu là graph hoặc deliverable đã xong. Raw cũ không bị ghi lại theo script mới.
+
+Watchdog boundary 1200s đã bắt đầu tại `.tmp/work-checks/w65-real-watchdog-boundary`, container riêng `boxfox-eval-w65-watchdog`. Đây là fault injection task treo bỏ qua normal child deadline, **không gọi model**, dùng watchdog/registry/slots/Docker worker thật. Mục này vẫn chưa tick khi chưa có kết quả; không gán bài 900s thành đã đo 1200s. Không tác động container/workspace sản phẩm.

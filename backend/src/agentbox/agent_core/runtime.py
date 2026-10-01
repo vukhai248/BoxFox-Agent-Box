@@ -4428,7 +4428,14 @@ class HarnessRuntime(RuntimeCommands):
                     if completion == 'provider_error':
                         raise ValueError('PROVIDER_COMPLETION_FAILED: ' + str(text or 'provider reported a failed completion')[:500])
                     recovery_size = len(json.dumps(request_messages, ensure_ascii=False))
+                    interrupted_work_completion = None
                     if not text.strip() and not calls and completion != 'complete' and recovery_size <= output_policy.RECOVERY_INPUT_MAX_CHARS:
+                        # A text-only recovery is a checkpoint, not completion of
+                        # the Work Graph that main was still driving. Preserve
+                        # the provider's original interruption even if its recap
+                        # stops normally (and invents that the owner asked to stop).
+                        if completion in {'output_limit', 'stream_interrupted'} and work_graph.driving(self, session):
+                            interrupted_work_completion = completion
                         # Preserve B8's action retry for an empty normal response. Output/stream
                         # exhaustion uses plain-text finalization; route/thinking settings stay intact.
                         if completion in {'output_limit', 'stream_interrupted'} or (config['route'] or {}).get('thinkingLevel'):
@@ -4458,6 +4465,8 @@ class HarnessRuntime(RuntimeCommands):
                         system_log.write('turn.retry', level='warn', session_id=sid, turn_id=steps_used,
                                          turn=turn_no, step=steps_used,
                                          reason='empty_response', how=empty_how)
+                    if completion == 'complete' and interrupted_work_completion:
+                        completion = interrupted_work_completion
                     if completion == 'provider_refusal':
                         raise ValueError('UPSTREAM_REFUSAL: ' + str(message.get('refusal') or text or 'provider refused the completion')[:500])
                     if completion == 'provider_error':

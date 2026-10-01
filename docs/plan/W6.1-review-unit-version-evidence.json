@@ -1,0 +1,1707 @@
+{
+  "schema": "boxfox-w61-unit-version-review/1",
+  "branch": "B",
+  "policy": "work-checks/5",
+  "raw": {
+    "path": ".tmp/work-checks/w61-units-version-policy5/results.json",
+    "sha256": "9039bab25e95bcf7bbccbe5cb89a533c021ce42d278a695b95b0dd82fcab852f"
+  },
+  "commitAtStart": "0cbc7d52ffa0dc87906e4deb071b001e5927c416",
+  "sourceHashesAtStart": {
+    "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend\\src\\agentbox\\agent_core\\work_checks.py": "d345905815ff84e1fc630db91d3c0f05441a26c089e24c50b458432eb8a78f5d",
+    "backend\\src\\agentbox\\agent_core\\work_graph.py": "0327afcf181944ede10b0a5a73fa58deb4b6f3bf92db2b170bb49cee1f37a5bb",
+    "backend\\src\\agentbox\\agent_core\\work_policy.py": "6380440d272daf6ce6b46d637b647830f3f5c0818f2507f39169537b2b8ad039",
+    "backend\\src\\agentbox\\agent_core\\work_prompts.py": "b3e20178a578504de958807488b97c40dcf7683a8e79a38ca1d31f94cfdc709d",
+    "backend\\src\\agentbox\\agent_core\\runtime.py": "cf4ed3982c283f44f38d0fc26c7a859e76cf9409e9347900a79b981877ce8fd8",
+    "scripts\\eval\\work_quality_eval.py": "e218f0b4412f92d60579d73836727cd104d3ca71efe698ff767faf2df2da0eb6"
+  },
+  "model": "opencode/space-bunny-free",
+  "fixture": "Native reviewer + scripted immutable research artifact and actual source tools; no main/producer/DAG/medical evaluation.",
+  "rows": [
+    {
+      "case": "false_csv_byte_unit",
+      "repeat": 1,
+      "expected": "revise",
+      "status": "revise",
+      "oracle": true,
+      "latencySeconds": 161.494,
+      "checkId": "c-79311b2821ea458494f0c7998542e064",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "revise",
+          "evidence": "Artifact khẳng định đơn vị là byte và cho ví dụ 80000 ký tự tiếng Việt (160000 byte) vượt mặc định. Đã mở Modules/_csv.c 3.13: parse_add_char so sánh self->field_len (tăng 1 mỗi Py_UCS4) với field_limit; Reader_iternext dùng PyUnicode_GET_LENGTH và yêu cầu PyUnicode_Check(lineobj). Đơn vị là ký tự; 80000 < 131072 nên không vượt mặc định. Đối chiếu phản bác: docstring _csv_field_size_limit_impl và Doc/library/csv.rst không nhắc 'byte'; test_csv.py chỉ dùng 'X' nên không phân biệt được; docs.python.org 503 (UNVERIFIED, đã thay bằng .rst gốc)."
+        },
+        {
+          "id": "A2",
+          "status": "revise",
+          "evidence": "Phân biệt default/cấu hình thì đúng (mặc định 128*1024 trong csv_exec, đổi được bằng field_size_limit(new_limit)); nhưng kết luận áp dụng mặc định cho fixture tiếng Việt là sai do sai đơn vị ở A1, nên đầu ra dẫn tới cấu hình thừa không cần thiết."
+        },
+        {
+          "id": "C1",
+          "status": "revise",
+          "evidence": "Chỉ một nguồn (_csv.c) trích không có anchor dòng/hàm, không tách dữ kiện khỏi suy luận, không có nguồn thứ hai hay mục mâu thuẫn. Tôi đã mở chính nguồn đó: hỗ trợ giá trị mặc định, mâu thuẫn với khẳng định đơn vị byte."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "019fa2c9191d474d96ba4c6e6f3e5e43",
+          "status": "revise",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 11,
+            "outputTokens": 9382,
+            "wallMs": 161475,
+            "toolCalls": 16
+          }
+        }
+      ],
+      "answerSha256": "4f7e6e230fa435c5382e573f34ae712be4a9e446a49b7f0a4ec8b2fd98a0fdf9",
+      "excerpt": "## Phản biện độc lập nút R1 (produce, v1, hash `1e7146c7…`)\n\nĐã đọc HẾT artifact `a-cad2fd15d8f34cc296026fa21977ae17` (`coverageComplete: true`, `allAssignedArtifactsRead: true`, 340 ký tự), rồi tự mở nguồn gốc nó trích dẫn.\n\n### Vấn đề chặn\n\n**B1 — Đơn vị của `field_size_limit` là KÝ TỰ (code point), không phải byte; artifact khẳng định ngược lại.** `high`\n\n- **Yêu cầu**: A1 \"Phân biệt chính xác byte và ký tự khi đọc field tiếng Việt\"; nhiệm vụ node ghi rõ \"không suy đơn vị chỉ từ hằng 128*1024\" — đúng loại lỗi mà bước này cảnh báo.\n- **Bằng chứng quan sát** (mở `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c`, 42476 ký tự, HTTP 200):\n  - `csv_exec()`: `module_state->field_limit = 128 * 1024;` → mặc định **131072** (phần này artifact đúng).\n  - `parse_add_char()`: `if (self->field_len >= field_limit) { PyErr_Format(..., \"field larger than field limit (%zd)\", field_limit); ... }` rồi `self->field[self->field_len++] = c;` → `field_len` tăng **1 mỗi ký tự**, biến đệ",
+      "sourceReads": [
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c",
+            "maxChars": 2000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "063d99670c5005abedff568d0da544a3d557e6bf10bb048d4ec526d079afdb1f"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3.13/library/csv.html",
+            "maxChars": 3000,
+            "find": "field_size_limit"
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77",
+            "find": [
+              "field_size_limit",
+              "FIELD_SIZE_LIMIT",
+              "csv_field_limit",
+              "128"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "5227b560bc02be47234abc441fb67210b9eb96d67d6b2aeea5686defaeb57b2f"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77",
+            "find": [
+              "parse_add_char",
+              "field_limit"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "faa3e1ec6aaf521731bc4fd7addf32e69aff8823440b84f61ad3da678dd95e70"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77",
+            "offset": 16200,
+            "maxChars": 3000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "5187fad8a2949c9297bce1fe13be58e17635599fcc982f3644a579638ac75a51"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 2500,
+            "url": "https://docs.python.org/3/library/csv.html#csv.field_size_limit"
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 2500,
+            "find": [
+              "field_size_limit",
+              "characters"
+            ],
+            "url": "https://github.com/python/cpython/issues/69825"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 3610,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/html",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "e773725c19533dc011f2b46a424ba2ed682fe8fdec3fe679cff18dda218087aa"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 2500,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst",
+            "find": [
+              "field_size_limit",
+              "bytes",
+              "characters"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "36320b5d83affcec9dd7b8660529843ae706499bfdb254d57b3d541e2967fb94"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 2500,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Lib/test/test_csv.py",
+            "find": [
+              "field_size_limit",
+              "_testcsv"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 54751,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "130e5837c944491dbc0c172b796f3dd3fa52970bb55a49aa69f646ea00491c9f"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "field limit"
+            ],
+            "ref": "r-bdecfd2833bd431ca7fab8b11fc1fcdf"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "97779d5d6e9bbd296a42cbb2998adab765b09cbd173b711c55174ae6014fa7d4"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "131072"
+            ],
+            "ref": "r-3a8656caa3ea4670adafa5dbba333798"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 54751,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "d09f0847d6cbf4317442485e41f9da99a52290dd96bf6ddc299e95e466fcffd8"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "field_limit"
+            ],
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "faa3e1ec6aaf521731bc4fd7addf32e69aff8823440b84f61ad3da678dd95e70"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 2000,
+            "url": "https://duckduckgo.com/html/?q=cpython+csv.field_size_limit+characters+not+bytes+issue",
+            "find": [
+              "field_size_limit",
+              "characters"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 4106,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/html",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "2a8c1e4c0a655e0555789fc7a66377955f2ddfef76f1ceee7a1c7028a7fdd3a1"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "Reader_iternext",
+              "PyUnicode_READ",
+              "PyUnicode_KIND"
+            ],
+            "maxChars": 4500,
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "4ead31613736a06ad209c8508e54e07a5c81012955e539b661a11418e7ad0b59"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "maxChars": 4000,
+            "offset": 21100,
+            "ref": "r-005bdf287c364ced9b8a5512c90e9e77"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "b6403a99d67d302b675f87e580eb938a2a18d345366423fdcf0559c006a83b86"
+        }
+      ]
+    },
+    {
+      "case": "false_csv_byte_unit",
+      "repeat": 2,
+      "expected": "revise",
+      "status": "revise",
+      "oracle": true,
+      "latencySeconds": 205.151,
+      "checkId": "c-a02c6e9d4f934f1cba657d5dbeffc45d",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "revise",
+          "evidence": "B1: kết luận 'đơn vị vẫn là byte' sai. Modules/_csv.c 3.13: ReaderObj có `Py_UCS4 *field` + `Py_ssize_t field_len` ('length of current field'); parse_add_char so `self->field_len >= field_limit` rồi `self->field[self->field_len++] = c` (mỗi lần ghi = 1 code point); parse_save_field dùng `PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND, (void *) self->field, self->field_len)`. Không có phép đổi byte. Vì vậy 80000 ký tự 'ơ' KHÔNG vượt mặc định 131072 ký tự; dòng suy từ 160000 byte phải bị bỏ."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Snapshot nêu đúng mặc định 128*1024 và cơ chế field_size_limit(new_limit), không biến giới hạn thành không khả thi của CSV. Xác nhận từ csv_exec (`module_state->field_limit = 128 * 1024;`) và _csv_field_size_limit_impl (trả old_limit, TypeError nếu không phải int). Chỉ áp dụng reader, không áp writer (test_write_bigfield với 'X'*50000)."
+        },
+        {
+          "id": "C1",
+          "status": "revise",
+          "evidence": "Đã mở nguồn gốc: Modules/_csv.c 3.13, Lib/test/test_csv.py 3.13 (test_read_bigfield: size=50000, field_size_limit(size-1) -> csv.Error, không có phép tính byte), Lib/csv.py 3.13 (chỉ re-export, KHÔNG có mô tả field_size_limit). docs.python.org/3.13/library/csv.html thất bại 2 lần (503) -> UNVERIFIED. B2/B3: artifact không đối chiếu parse_add_char/parse_save_field/cấu trúc field dù nhiệm vụ giao rõ, và đơn vị 'ký tự' phải được ghi là suy luận từ mã C chứ không phải trích tài liệu."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "e1b4c186dc2b412d80881a500e501160",
+          "status": "revise",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 11,
+            "outputTokens": 8359,
+            "wallMs": 205137,
+            "toolCalls": 13
+          }
+        }
+      ],
+      "answerSha256": "da5948a582ac902c259e794cc00bc76f162e7bd9db1c54ae4b94fa6d459794ad",
+      "excerpt": "## Đã kiểm thực tế\n\nNguồn đã mở (4):\n1. `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` — mở OK (ref `r-e38b5ac1f6d74358ba8fc4671c11c4c6`), đọc đủ `ReaderObj`, `parse_save_field`, `parse_add_char`, `_csv_field_size_limit_impl`, `csv_exec`.\n2. `https://raw.githubusercontent.com/python/cpython/3.13/Lib/test/test_csv.py` — mở OK (ref `r-603f0b947e1e41fd9a0888e63037de0d`), đọc `test_read_bigfield`.\n3. `https://raw.githubusercontent.com/python/cpython/3.13/Lib/csv.py` — mở OK (ref `r-0a017739694c408d87ddf64feab1f9ac`), chỉ xác nhận re-export `field_size_limit`.\n4. `https://docs.python.org/3.13/library/csv.html` — **truy cập thất bại 2 lần** (\"503 Service Unavailable\") → giữ **UNVERIFIED**, không dùng làm bằng chứng.\n\nSnapshot đã đọc hết: `a-90b1ca26ed1c478dbd6360b42999544c` (340 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`).\n\n## Vấn đề chặn\n\n**B1 (chặn, cao) — Đơn vị của `field_size_limit()` là KÝ TỰ, không phải byte. Kết luận của snapshot sai và đả",
+      "sourceReads": [
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c",
+            "maxChars": 30000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "74cdf2d2ffcffb506e5f8f92f9c5ffda001e314021875218bb06b5ffcd90dffe"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3.13/library/csv.html",
+            "maxChars": 20000,
+            "find": [
+              "field_size_limit",
+              "field limit"
+            ]
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "128",
+              "field_limit"
+            ],
+            "ref": "r-e38b5ac1f6d74358ba8fc4671c11c4c6"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "faa3e1ec6aaf521731bc4fd7addf32e69aff8823440b84f61ad3da678dd95e70"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "FIELD_SIZE_LIMIT"
+            ],
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Lib/test/test_csv.py"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 54751,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "fcb1d8b725b65d8099d9369c9d954f8326e1ec1b37890d96c6cd7cb3f9cb2dd8"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "offset": 37100,
+            "maxChars": 2200,
+            "ref": "r-e38b5ac1f6d74358ba8fc4671c11c4c6"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "157241500d4b0a2473de0b535463590b9f3ae8073915b38a48685b5e4a977654"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "maxChars": 1500,
+            "offset": 40900,
+            "ref": "r-e38b5ac1f6d74358ba8fc4671c11c4c6"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "2cec5ce23baa0cc8e0de577ab852249564f8313748be1249aa077053e9fc3ea8"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "FIELD_SIZE_LIMIT",
+              "BigField"
+            ],
+            "maxChars": 2500,
+            "ref": "r-603f0b947e1e41fd9a0888e63037de0d"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 54751,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "fe15709b9f034f46547662a95feb3a1bf0d0b7fb078f82efc8de7e04fab4aee3"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "maxChars": 2200,
+            "offset": 17800,
+            "ref": "r-603f0b947e1e41fd9a0888e63037de0d"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 54751,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "a823d8bf5fc257a9ab203e62977fbaa795a56251c27333dcf55a4ab204592bcd"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "character"
+            ],
+            "maxChars": 3000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Lib/csv.py"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 15861,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "d6aca69dc4aa835844e6e7ee7b3d5bfe0b62b095e9d7587293565e539bd768f9"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "maximum number of characters",
+              "field_size_limit"
+            ],
+            "maxChars": 1400,
+            "ref": "r-0a017739694c408d87ddf64feab1f9ac"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 15861,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "312da8ed21ef07c8c436c60437abfe9620a79d421a86454b968ab7786b0c9d1f"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "field_size_limit",
+              "number of characters"
+            ],
+            "url": "https://docs.python.org/3.13/library/csv.html",
+            "maxChars": 3000
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        }
+      ]
+    },
+    {
+      "case": "version_limited_null_312",
+      "repeat": 1,
+      "expected": "pass",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 176.832,
+      "checkId": "c-43e8c214e4d347efaae585f19bd4530b",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "3.12/Doc/library/csv.rst offset ~13854: 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13.' — khớp nguyên văn artifact; xác nhận thứ hai: 3.13/csv.rst đã xoá note bug và giữ mô tả reader không cảnh báo; củng cố mã: 3.12/Modules/_csv.c parse_process_char chỉ xử lý QUOTE_NONNUMERIC và != QUOTE_NONE, không có nhánh cho hai hằng"
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Artifact ghi 'Không tuyên bố đã chạy Python 3.12'; không tuyên bố thực thi, không yêu cầu triển khai hay file/test"
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Mở 5 nguồn: 3.12 csv.rst, 3.12 Modules/_csv.c, 3.13 csv.rst, 3.13 whatsnew (không có mục csv), 2 truy cập thất bại (Module/_csv.c 404, docs.python.org 503). Đã kiểm hỗ trợ, trái chiều, phạm vi phiên bản và giới hạn; không tìm thấy bằng chứng trái chiều"
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "28be559e9f17494999d5a70f6039b5ae",
+          "status": "error",
+          "completed": false,
+          "execution": {
+            "status": "failed",
+            "reason": "UPSTREAM_HTTP_502: the model router answered Router HTTP 502 (Provider is unavailable or returned an invalid response.)",
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 4,
+            "outputTokens": 315,
+            "wallMs": 50589,
+            "toolCalls": 3
+          }
+        },
+        {
+          "childId": "d3b350807ba74054b9bf162df7b06f40",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 9,
+            "outputTokens": 10658,
+            "wallMs": 126212,
+            "toolCalls": 15
+          }
+        }
+      ],
+      "answerSha256": "0400075d1b486c8695c78ba7c5757bc276ada8d5316934dbe7c2988653448687",
+      "excerpt": "## Đã kiểm\n\nArtifact đọc đầy đủ (361 ký tự, `allAssignedArtifactsRead=true`). Mở 5 nguồn gốc:\n\n| Nguồn | Kết quả |\n|---|---|\n| `raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst` | HTTP 200, đọc đoạn noteở offset ~13854 |\n| `raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c` | HTTP 200, đọc `parse_process_char` |\n| `raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst` | HTTP 200, đọc khối `QUOTE_NOTNULL`/`QUOTE_STRINGS` |\n| `raw.githubusercontent.com/python/cpython/3.13/Doc/whatsnew/3.13.rst` | HTTP 200, không có mục `csv` |\n| **Truy cập thất bại:** `cpython/3.12/Module/_csv.c` (404, sai đường dẫn → đã thay bằng `Modules/_csv.c`); `docs.python.org/3.12/library/csv.html` (503) | Không dùng làm căn cứ |\n\n## Xác nhận A1 — PASS, đúng nguyên văn\n\nBằng chứng quan sát (3.12 `csv.rst`, offset 13854, nguyên văn):\n\n> Due to a bug, constants `QUOTE_NOTNULL` and `QUOTE_STRINGS` do not affect behaviour of `reader` objects. This bug is fixed in Python 3.13.\n\n",
+      "sourceReads": [
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst",
+            "maxChars": 6000,
+            "find": [
+              "QUOTE_NOTNULL",
+              3.13
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 21714,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "42301f18129d4af609dc150b0d6e0985654ceacbeb735ec6e15c4f4925dd8861"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst",
+            "maxChars": 6000,
+            "find": [
+              "QUOTE_NOTNULL",
+              "reader"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "8f1a55afa8893fa786f66894a3e7fc3e31f9805fc79fa2b7cc0c07a2a6ab9101"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-270d4891a8624944a84cdf6cfbb1d934",
+            "find": [
+              "QUOTE_NOTNULL",
+              "3.13"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 21714,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "a347261f78f38d0033f7c77ab40b8e24940b28a9f43ea1440f1224695ed28a45"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-a6660742dcec4477b995b8ab91fbe975",
+            "find": [
+              "QUOTE_NOTNULL",
+              "reader"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "ae0e3dae384f663686b260a2b391460f117434d9ac155040233b4ed0db1646a9"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "bug",
+              "QUOTE_STRINGS"
+            ],
+            "ref": "r-a6660742dcec4477b995b8ab91fbe975",
+            "offset": 14000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "fd03e337452a5d084dc743309f3fdfcaa308fdee6eafca49a71f571b5e427c61"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "QUOTE_NOTNULL"
+            ],
+            "maxChars": 4000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Module/_csv.c"
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 14 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 14,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "csv",
+              "QUOTE_NOTNULL"
+            ],
+            "maxChars": 3000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Doc/whatsnew/3.13.rst"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 109776,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "5ad5f9a9952f4b2cc186bbb39c572072fe79e5df85e1665d411d4c39632c7b32"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "QUOTE_NOTNULL"
+            ],
+            "maxChars": 3000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "4790d6141a45b550f9d780cd03d90870e0f25d58c37c2d35de39a39bf301b31b"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "QUOTE_NONNUMERIC"
+            ],
+            "ref": "r-24396e2caa0442a49f9bbce76c8e3a00"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "08cf927f9dd194542a33ae343b59453051e67996befc3298dd45c0d6911bc17b"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "csv"
+            ],
+            "ref": "r-9ce3716d030b4595a389b2c2f532a139"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 109776,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "ab007b0d9c8eadb427cace6fc24baf127667ad1d943c303ee983567f6dc25a17"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "QUOTE_NOTNULL",
+              "quoting"
+            ],
+            "ref": "r-9ce3716d030b4595a389b2c2f532a139"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 109776,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "ab007b0d9c8eadb427cace6fc24baf127667ad1d943c303ee983567f6dc25a17"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "numeric_field"
+            ],
+            "ref": "r-24396e2caa0442a49f9bbce76c8e3a00"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "6e37e5b0bd16189750c3b7d602762c1cdbcf1727b6af001f75a1c07029934d2e"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "dialect->quoting == QUOTE_NONNUMERIC"
+            ],
+            "ref": "r-24396e2caa0442a49f9bbce76c8e3a00"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "a42b0dc158f40922ad53e0b95bc205f97e7310c7a979f47aa765ef92fc2550d9"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "find": [
+              "bug",
+              3.13
+            ],
+            "maxChars": 3000,
+            "url": "https://docs.python.org/3.12/library/csv.html"
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        }
+      ]
+    },
+    {
+      "case": "version_limited_null_312",
+      "repeat": 2,
+      "expected": "pass",
+      "status": "pass",
+      "oracle": true,
+      "latencySeconds": 219.56,
+      "checkId": "c-e0aef88c55b94043ab34ddc584782a34",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "pass",
+          "evidence": "Đã mở 3.12/Doc/library/csv.rst: note nguyên văn 'Due to a bug, constants QUOTE_NOTNULL and QUOTE_STRINGS do not affect behaviour of reader objects. This bug is fixed in Python 3.13.'; 3.13/Doc/library/csv.rst đã xoá note này; Modules/_csv.c (3.12) parse_process_char không có nhánh cho hai hằng nên no-op âm thầm - xác nhận độc lập."
+        },
+        {
+          "id": "A2",
+          "status": "pass",
+          "evidence": "Artifact ghi 'Không tuyên bố đã chạy Python 3.12'; không có yêu cầu triển khai, fixture hay lệnh test nào."
+        },
+        {
+          "id": "C1",
+          "status": "pass",
+          "evidence": "Nguồn nêu (raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst) mở thành công, chứa đúng đoạn dùng làm căn cứ; artifact tự giới hạn phạm vi 3.12 và từ chối suy rộng; bằng chứng trái chiều đã mở và không phủ định kết luận."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "0a4eb4280a1b4802bea0d5b5a2287936",
+          "status": "pass",
+          "completed": false,
+          "execution": {
+            "status": "partial",
+            "reason": "STEP_BUDGET_EXHAUSTED",
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 12,
+            "outputTokens": 6437,
+            "wallMs": 129821,
+            "toolCalls": 13
+          }
+        },
+        {
+          "childId": "e0630262cd554ce48f310beb5d6e3ca2",
+          "status": "pass",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 6,
+            "outputTokens": 7751,
+            "wallMs": 89708,
+            "toolCalls": 9
+          }
+        }
+      ],
+      "answerSha256": "27f636d35824e355bcb1f81b1d0db6f3c909b9b7dd2b9c2c321ce6e927992a4e",
+      "excerpt": "## Phản biện độc lập — Work Graph R1 (research/produce)\n\n**Đã kiểm:** đọc đầy đủ snapshot `a-5605dbb9043d4a5898624c60df70b147` (v1, 361 ký tự, `allAssignedArtifactsRead=true`), rồi mở nguồn gốc: `Doc/library/csv.rst` nhánh `3.12`, nhánh `3.13`, `Lib/csv.py` (3.12), `Modules/_csv.c` (3.12), `Lib/test/test_csv.py` (3.12). Không có nguồn nào thất bại.\n\n## Vấn đề chặn\n\n`none`\n\n**A1 — pass.** Khẳng định cốt lõi khớp nguyên văn tài liệu 3.12. Trong `3.12/Doc/library/csv.rst`, ngay sau mục `QUOTE_STRINGS` (`.. versionadded:: 3.12`) có note: *\"Due to a bug, constants `QUOTE_NOTNULL` and `QUOTE_STRINGS` do not affect behaviour of `reader` objects. This bug is fixed in Python 3.13.\"* Artifact phát biểu đúng cả vế version (`3.12`) và vế ngoại lệ. Vế \"writer có QUOTE_NOTNULL/QUOTE_STRINGS\" cũng có chỗ đứng: hai mục `.. data::` mô tả hành vi `writer`, và `Lib/test/test_csv.py` 3.12 có test writer cho cả hai (`test_write_quoting`: `['a','',None,1]` → `'\"a\",\"\",,1'` cho `QUOTE_STRINGS`). So mốc sửa 3.",
+      "sourceReads": [
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 21714,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "e84f7d001a7ca9c66f408e2db62a6369b6417ebbfff7b9e9a41eddd89401eb9b"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Doc/library/csv.rst",
+            "find": [
+              "QUOTE_NOTNULL",
+              "QUOTE_STRINGS",
+              3.13,
+              "versionchanged"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "5dead0cc0b3520a3cada82e57145787ab559ce4606c5017b8adc796f3d3c6edb"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-4764de1db929421085df954890341a4e",
+            "find": [
+              "QUOTE_NOTNULL",
+              "QUOTE_STRINGS",
+              "bug",
+              "versionchanged"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 21714,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "067be7b98ecd5d1eea4a9c7bf310e45b4e460eacf221bbfa980a1383cd33ad39"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-d954813ed79c488f9877c9c107362dda",
+            "find": [
+              "QUOTE_NOTNULL",
+              "QUOTE_STRINGS",
+              "reader"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "ae0e3dae384f663686b260a2b391460f117434d9ac155040233b4ed0db1646a9"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "offset": 13300,
+            "maxChars": 3500,
+            "ref": "r-d954813ed79c488f9877c9c107362dda"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 23823,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "34637e88884b2a38cabfbe1158ab10efe719bf9cb36a115249c9a039e951ddd9"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 30000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Lib/csv.py"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 13141,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "3fa275d70ed089b5567e605ac0d57b740b512435cb3be26f281912f526cfa547"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 200000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "4a795aca4fdbc105eb00fa4276c6559e0cbc9c293cc56f6613280c330a454b82"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "maxChars": 200000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Lib/test/test_csv.py"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 52167,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "f46d219ac12eba8997d0224d19603bf009ee5d56db25d149b2a478936561ca91"
+        }
+      ]
+    },
+    {
+      "case": "false_modern_null_313",
+      "repeat": 1,
+      "expected": "revise",
+      "status": "revise",
+      "oracle": true,
+      "latencySeconds": 336.902,
+      "checkId": "c-f6318fbfd79b4515b8a8687378873895",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "revise",
+          "evidence": "B1: artifact nói reader 3.13 trả str cho cả hai; nguồn Modules/_csv.c 3.13 parse_save_field() có nhánh (quoting==QUOTE_NOTNULL||QUOTE_STRINGS) -> Py_NewRef(Py_None), tức reader trả None cho field rỗng không quote, còn \"\" (quoted) đi nhánh else trả str."
+        },
+        {
+          "id": "A2",
+          "status": "revise",
+          "evidence": "B1: kết luận 'Vì vậy phải đổi sang JSON' là kết luận buộc đổi định dạng, trong khi chính nguồn được dẫn chứng minh CSV xử lý được bằng QUOTE_NOTNULL hai chiều."
+        },
+        {
+          "id": "C1",
+          "status": "revise",
+          "evidence": "B2: nguồn chỉ được nêu dạng con trỏ file, không trích đoạn parse_save_field quyết định; docs.python.org/3.13 không mở được (DNS) nên chưa có nguồn thứ hai."
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "be2ee3083d7443c3a02e6176946ff0db",
+          "status": "error",
+          "completed": false,
+          "execution": {
+            "status": "failed",
+            "reason": "UPSTREAM_HTTP_502: the model router answered Router HTTP 502 (Provider is unavailable or returned an invalid response.)",
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 3,
+            "outputTokens": 1805,
+            "wallMs": 200067,
+            "toolCalls": 3
+          }
+        },
+        {
+          "childId": "1c572f1fb47c499e8accdb2680d400d0",
+          "status": "revise",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 3,
+            "outputTokens": 1559,
+            "wallMs": 136813,
+            "toolCalls": 4
+          }
+        }
+      ],
+      "answerSha256": "0a72c8d2a2dd955cf0f50c289143ddc115badcd8aaf6f1eb6773288d22142329",
+      "excerpt": "# Phản biện độc lập nút R1 (research, produce)\n\n**Artifact đã đọc**: `a-34fee1b69c4a45828e1c601d5f26d6c4`, v1, hash `dea931bc…19e35`, 326 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`. Đã đọc hết (offset 0 → 326).\n\n**Bằng chứng gốc đã mở**: `https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c` (HTTP 200, đã đọc). `docs.python.org/3.13/library/csv.html` **không mở được** (DNS: `getaddrinfo failed`) → giữ UNVERIFIED, không dùng làm căn cứ.\n\n## Kiểm chứng A1 — kết luận reader 3.13 về None vs chuỗi rỗng: **SAI (ngược)**\n\nĐoạn artifact khẳng định: *\"csv.reader 3.13 trả str cho cả hai\"* và *\"QUOTE_NOTNULL chỉ ảnh hưởng phía ghi\"*.\n\nNguồn gốc `Modules/_csv.c` (3.13) `parse_save_field()` nói ngược lại:\n\n```c\nif (self->unquoted_field &&\n    self->field_len == 0 &&\n    (quoting == QUOTE_NOTNULL || quoting == QUOTE_STRINGS))\n{\n    field = Py_NewRef(Py_None);\n}\nelse { field = PyUnicode_FromKindAndData(...); }\n```\n\nTức reader 3.13 **có** đọc `QUOTE_NOTNULL` (và `Q",
+      "sourceReads": [
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c",
+            "maxChars": 20000,
+            "find": [
+              "QUOTE_NOTNULL",
+              "join_append",
+              "parse_save_field"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "74cdf2d2ffcffb506e5f8f92f9c5ffda001e314021875218bb06b5ffcd90dffe"
+        }
+      ]
+    },
+    {
+      "case": "false_modern_null_313",
+      "repeat": 2,
+      "expected": "revise",
+      "status": "revise",
+      "oracle": true,
+      "latencySeconds": 95.449,
+      "checkId": "c-161ef6538d604bc69a6d65a8d3d98ffd",
+      "coverage": [
+        {
+          "id": "A1",
+          "status": "revise",
+          "evidence": "BLOCKER B1: artifact 'csv.reader 3.13 trả str cho cả hai' bị phủ định bởi chính nguồn nó trích — Modules/_csv.c 3.13 parse_save_field: 'if (self->unquoted_field && self->field_len == 0 && (quoting == QUOTE_NOTNULL || quoting == QUOTE_STRINGS)) field = Py_NewRef(Py_None);'"
+        },
+        {
+          "id": "A2",
+          "status": "revise",
+          "evidence": "BLOCKER B2: nguồn chứng minh CSV có cách xử lý (round-trip None vs \"\" với QUOTE_NOTNULL ở 3.13), nhưng artifact vẫn kết luận 'phải đổi sang JSON' dựa trên lý do sai; A2 không thoả"
+        },
+        {
+          "id": "C1",
+          "status": "unverified",
+          "evidence": "Đã mở nguồn gốc artifact (raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c, HTTP 200) và nguồn đối chiếu 3.12; docs.python.org/3.13/library/csv.html trả 503, Lib/test/test_csv.py chưa mở — còn UNVERIFIED; ngoài ra URL dẫn branch động không ghim phiên bản (B3)"
+        }
+      ],
+      "attempts": [
+        {
+          "childId": "6cd592abc73d450aa475d99ce826b5ec",
+          "status": "revise",
+          "completed": true,
+          "execution": {
+            "status": "completed",
+            "reason": null,
+            "budget": {
+              "profile": "review_short",
+              "requestedMaxSteps": 14,
+              "effectiveMaxSteps": 14,
+              "requestedDeadlineSeconds": 900,
+              "effectiveDeadlineSeconds": 600,
+              "clamped": true
+            },
+            "stepsUsed": 8,
+            "outputTokens": 5796,
+            "wallMs": 95437,
+            "toolCalls": 10
+          }
+        }
+      ],
+      "answerSha256": "55c51580c4e28f462f5e111ff45787b54f026513621602354c3385c31cce202b",
+      "excerpt": "Đã đọc HẾT artifact `a-abd34239dfe44741bbd35cc4239be5af` (runId `w-8dc9b71617`, 326 ký tự, `allAssignedArtifactsRead=true`) và mở nguồn gốc được artifact trích dẫn.\n\n## Vấn đề chặn\n\n**B1 — Kết luận cốt lõi sai dấu (chặn).** Yêu cầu giao: A1 \"Kết luận đúng reader 3.13 cho None và chuỗi rỗng khi cùng chế độ quoting\". Artifact khẳng định: *\"csv.reader 3.13 trả str cho cả hai\"*.\n\nBằng chứng quan sát từ chính nguồn artifact tự dẫn, `Modules/_csv.c` nhánh 3.13, hàm `parse_save_field` (reader):\n\n```c\nif (self->unquoted_field &&\n    self->field_len == 0 &&\n    (quoting == QUOTE_NOTNULL || quoting == QUOTE_STRINGS))\n{\n    field = Py_NewRef(Py_None);\n}\n```\n\nReader 3.13 **trả `None` cho field rỗng không quote khi `quoting=QUOTE_NOTNULL`**. Phía writer (`csv_writerow`, cùng file) đặt `quoted = field != Py_None` cho `QUOTE_NOTNULL`, nên `None` ghi ra trống (unquoted) còn `\"\"` ghi ra `\"\"`. Hai chiều khớp đúng: round-trip `[None, \"\"]` trả lại `[None, \"\"]`, phân biệt được.\n\nBằng chứng phản bác đã xét:",
+      "sourceReads": [
+        {
+          "tool": "read_source",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.13/Modules/_csv.c",
+            "find": [
+              "QUOTE_NOTNULL",
+              "quote_notnull"
+            ]
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "cdbb69d8c21c219031102d5ad7b9deafd07548c60328e068e82870dec627e761"
+        },
+        {
+          "tool": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3.13/library/csv.html",
+            "find": "QUOTE_NOTNULL"
+          },
+          "status": 0,
+          "quality": {
+            "verdict": "thin",
+            "reason": "only 75 characters — read it, but look for a second source",
+            "junkRatio": 0.0,
+            "textChars": 75,
+            "underMinChars": true,
+            "reader": "r.jina.ai",
+            "contentType": "text/markdown",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "569cefeb935f444f3ba93da73d19b45f78300fbf1ff42f8a9fad426a3f593507"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-5fcb8af7dbfb4f1b9b944a864f4f75c3",
+            "find": [
+              "parse_save_field",
+              "QUOTE_NOTNULL"
+            ],
+            "offset": 24000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "cdbb69d8c21c219031102d5ad7b9deafd07548c60328e068e82870dec627e761"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "ref": "r-5fcb8af7dbfb4f1b9b944a864f4f75c3",
+            "find": [
+              "join_append",
+              "field_quotes",
+              "Py_None"
+            ],
+            "offset": 20000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "24422ee4dd106907a0258dbf5b2762b1a61c1fed1209156be08cabe2239471ce"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "offset": 14800,
+            "ref": "r-5fcb8af7dbfb4f1b9b944a864f4f75c3",
+            "maxChars": 7000
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "6f29898e9c1767b57bea3d3f843921712ffc39966f66b8b34b4a4bae474ed1c8"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "maxChars": 6000,
+            "offset": 24800,
+            "ref": "r-5fcb8af7dbfb4f1b9b944a864f4f75c3"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "2b074ee97c347edc7b52f556669340b7171aec18435f7637f3e52f6884641ca1"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "find": [
+              "parse_save_field"
+            ],
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 43705,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "b2a7b06cecf2142d6744303053455b561ee3c19bfc7416cd8f21f17d019caf67"
+        },
+        {
+          "tool": "read_source",
+          "args": {
+            "maxChars": 2200,
+            "offset": 30600,
+            "ref": "r-5fcb8af7dbfb4f1b9b944a864f4f75c3"
+          },
+          "status": 200,
+          "quality": {
+            "verdict": "ok",
+            "reason": "",
+            "junkRatio": 0.0,
+            "textChars": 42476,
+            "underMinChars": false,
+            "reader": "",
+            "contentType": "text/plain",
+            "status": 200
+          },
+          "isError": false,
+          "returnedBodySha256": "eff88ab0b257df40bc9e9e1d7d76e1295914962707caaf8009674eb3eae762a0"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "completedCases": 6,
+    "expectedFinalVerdicts": 6,
+    "attempts": 9,
+    "incompleteAttempts": 3
+  },
+  "limits": [
+    "Final verdict oracle passed 6/6; intermediate failures retained, not 6 clean first attempts.",
+    "Some reviewers demand a second source/full method section beyond the narrow assignment, and call a named 3.13 branch unpinned. Those extra findings are not the basis of the correctness oracle; do not certify every finding.",
+    "No full main/producer integration or exhaustive grounding/semantic proof from six small artifacts."
+  ]
+}
