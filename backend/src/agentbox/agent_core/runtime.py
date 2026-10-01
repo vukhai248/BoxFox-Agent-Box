@@ -6714,6 +6714,9 @@ class HarnessRuntime(RuntimeCommands):
             raise PermissionError('Leaf agents cannot delegate')
         role = args.get('role')
         work = dict(work) if isinstance(work, dict) else None
+        controller = work_graph.service(self).continuations if work and work.get('controllerAction') else None
+        if controller:
+            controller.authorize_new(session['id'], work)
         planning_run = None if work else plan_workflow.bound_run(self, self.store.get(session['id']))
         if planning_run is not None and role not in plan_workflow.ROLES:
             raise PermissionError('PLAN_DELEGATE_BLOCKED: Plan chỉ giao khảo sát/thiết kế/phản biện')
@@ -6827,6 +6830,8 @@ class HarnessRuntime(RuntimeCommands):
         # `sessions` không được sinh ra rồi mới bị từ chối, và một lượt không được sinh con vô hạn.
         parent_id = session['id']
         turn = self.active_turn.get(parent_id) or 0
+        if controller:
+            turn = 0  # a run-owned admission is not owned by an unrelated root turn
         step = self.active_step.get(parent_id) or 0
         spawned = len(self.store.children_of(parent_id, turn=turn)) if turn else 0
         if spawned >= CHILDREN_PER_TURN_MAX and not work:
@@ -6864,6 +6869,14 @@ class HarnessRuntime(RuntimeCommands):
         output_budget = output_policy.child_budget(role, work, task_kind)
         await self.acquire_child_slot(parent_id)
         try:
+            if controller:
+                await controller.after_slot(parent_id, work)
+                config = self.store.get(parent_id)['config']
+                configured = next((r for r in config['subagents'] if r['id'] == role and r.get('enabled', True)), None)
+                if not configured:
+                    raise PermissionError('Specialist is disabled or unknown')
+                child_steps = min(budget_request['maxSteps'], config['maxSteps'])
+                child_deadline = min(budget_request['deadlineSeconds'], config['deadlineSeconds'])
             child_route = route_for(configured.get('model')) or config['route']
             child = self.create({**child_route,
                 'skills': sorted(set(config['skills']) & ROLE_SKILLS[role]),
@@ -6873,6 +6886,8 @@ class HarnessRuntime(RuntimeCommands):
                 'contextWindowSource': config.get('contextWindowSource'),
                 'instructions': configured.get('systemPromptAppended', '')},
                 parent_id=session['id'], role=role, parent_tools=config['tools'])
+            if controller:
+                controller.register_new(parent_id, work, child['id'])
             if review_target is not None:
                 child['config']['reviewTarget'] = review_target
             if research_question_id:

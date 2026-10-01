@@ -405,7 +405,8 @@ class Checks:
             result, text = await graph.spawn(session, run, None if whole else node, stage, 'review',
                                             spec['executorRole'], attempt_goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
-                                                           'checkKind': spec['id'], 'budgetHints': hints})
+                                                           'checkKind': spec['id'], 'budgetHints': hints,
+                                                           **({'controllerAction': doc['controllerAction']} if doc.get('controllerAction') else {})})
             if result.get('request'):
                 doc.update(childId=result['sessionId'], status='needs_user', requestId=result['request']['requestId'],
                            error='Saved checkpoint: main must resolve request before continuing this checker.')
@@ -444,6 +445,9 @@ class Checks:
             raise ValueError('WORK_RUN_CLOSED: checks cannot start on a closed run')
         lock = graph.locks.setdefault(run['runId'], asyncio.Lock())
         if lock.locked():
+            receipt = await self.busy_receipt(session, graph.current(run['runId']), args)
+            if receipt is not None:
+                return receipt
             raise ValueError('WORK_RUN_BUSY: another run/check operation is active')
         async with lock:
             run = graph.get(run['runId'])
@@ -453,7 +457,61 @@ class Checks:
             finally:
                 graph.live.pop(run['runId'], None)
 
-    async def start_locked(self, session, run, args):
+    async def busy_receipt(self, session, run, args):
+        """Join an already admitted identical check; never start work without the run lock."""
+        if session.get('parent_id') or session['id'] != run['sessionId']:
+            raise PermissionError('WORK_ROOT_ONLY: only owner may join checks')
+        if run['status'] in ('cancelled', 'shipped', 'rejected', 'paused') or args.get('recheck', False):
+            return None
+        node = next((n for n in run['nodes'] if n['id'] == args.get('nodeId')), None)
+        stage = args.get('stage', 'produce')
+        state = node['stages'].get(stage, {}) if node else {}
+        meta, policy = state.get('artifact') or {}, state.get('policy') or {}
+        if meta.get('artifactId') != args.get('artifactId') or meta.get('status') != 'finalized':
+            return None
+        registered, _ = self.graph.artifacts.get(run['runId'], meta['artifactId'])
+        if registered != meta or any(meta['binding'].get(k) != v for k,v in self.binding(run,node,stage).items()):
+            return None
+        if (meta['binding'].get('policyHash') != policy.get('hash') or policy.get('version') != work_policy.VERSION
+                or work_policy.digest({k:v for k,v in policy.items() if k!='hash'}) != policy.get('hash')):
+            return None
+        ids = args.get('checkIds') or [s['id'] for s in policy['required']]
+        if not isinstance(ids, list) or not ids or len(ids)!=len(set(ids)) or not set(ids)<={s['id'] for s in policy['required']}:
+            return None
+        invocation = str(args.get('invocationId') or '').strip()
+        if not 1 <= len(invocation) <= 120:
+            raise ValueError('WORK_CHECK_INVOCATION: unique invocationId required (1..120 chars)')
+        current = self.latest(run,node,stage)
+        docs = []
+        for cid in ids:
+            spec = next(s for s in policy['required'] if s['id']==cid)
+            unavailable = preflight(session,spec)
+            if unavailable:
+                raise ValueError(unavailable)
+            doc = current.get(cid)
+            if not doc or doc['status'] not in ('running','pass') or doc.get('workKey') != self.input_key(run,node,stage,meta,policy,spec):
+                return None
+            docs.append(doc)
+        source = meta['binding'].get('codeSnapshot')
+        if source and await snapshot(self.graph, run['sessionId']) != source:
+            raise ValueError('WORK_CHECK_STALE: code changed; cannot join old check')
+        # Re-read after an awaited snapshot: another operation may have stopped or
+        # superseded the admission. Receipt aliases do not mutate the live graph.
+        if run['status'] in ('paused','cancelled','shipped','rejected') or state.get('artifact') != meta:
+            return None
+        if any(meta['binding'].get(k) != v for k,v in self.binding(run,node,stage).items()):
+            return None
+        latest = self.latest(run,node,stage)
+        docs = [latest.get(d['kind']) for d in docs]
+        if any(not d or d['status'] not in ('running','pass') for d in docs):
+            return None
+        request = work_policy.digest({'node':node['id'],'stage':stage,'artifact':meta['artifactId'],'policy':policy['hash'],'ids':ids})
+        for doc in docs:
+            if not self.invocation_record(run['runId'],invocation+':'+doc['kind'],request):
+                self.remember_invocation(run['runId'],invocation+':'+doc['kind'],request,doc['checkId'])
+        return self.graph.result(run) | {'checks':docs,'joined':True}
+
+    async def start_locked(self, session, run, args, controller_action=None):
         """Shared admission path; caller owns the canonical run lock/live copy."""
         graph = self.graph
         if not graph.busy(run) or graph.live.get(run['runId']) is not run:
@@ -532,6 +590,8 @@ class Checks:
                            'stage': stage, 'artifactId': meta['artifactId'], 'policyHash': policy['hash'],
                            'kind': cid, 'status': 'running', 'binding': meta['binding'], 'workKey': work_key,
                            'requestedRecheck': recheck, 'startedAt': time.time()}
+                    if controller_action:
+                        doc['controllerAction'] = controller_action
                     with self.db:
                         self.db.execute('INSERT INTO work_checks VALUES(?,?,?,?,?)',
                                         (doc['checkId'], run['runId'], key, request, json.dumps(doc)))

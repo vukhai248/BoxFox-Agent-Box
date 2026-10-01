@@ -18,6 +18,7 @@ class Continuations:
         self.wakes = {}
         self.schedulers = {}
         self.children = set()
+        self.admissions = {}  # backend action -> active task/scope; never a model flag
         # A claim with no child admission is safe to retry. Once an admission
         # may have started, retain an interrupted receipt, never replay tools.
         for row in self.db.execute("SELECT * FROM work_feedback_outbox WHERE status='claimed'").fetchall():
@@ -106,6 +107,37 @@ class Continuations:
     def owns_child(self, child_id):
         return child_id in self.children
 
+    def authorize_new(self, owner, work):
+        """Validate real controller ownership before slot creation/start, including after waits."""
+        action = self.admissions.get(work.get('controllerAction'))
+        if not action or action['task'] is not asyncio.current_task() or action['owner'] != owner:
+            raise PermissionError('WORK_CONTROLLER_RIGHTS: no active backend admission')
+        if any(action[k] != work.get(k) for k in ('runId', 'nodeId', 'stage', 'purpose')):
+            raise PermissionError('WORK_CONTROLLER_RIGHTS: action scope mismatch')
+        run = self.graph.current(action['runId'])
+        row = self.db.execute('SELECT * FROM work_handoff_actions WHERE id=?', (work['controllerAction'],)).fetchone()
+        transition = json.loads(row['doc'])['transitionId'] if row else None
+        assignment = next((h for h in self.graph.handoffs.records(run['runId']) if h['transitionId'] == transition), None)
+        if (not row or row['status'] != 'admitted' or run['status'] in ('paused', 'cancelled', 'shipped', 'rejected')
+                or not assignment or not self.graph.handoffs.valid(run, assignment)):
+            raise PermissionError('WORK_CONTROLLER_RIGHTS: admission stopped, revoked or stale')
+        return action
+
+    def register_new(self, owner, work, child_id):
+        action = self.authorize_new(owner, work)
+        action['children'].add(child_id)
+        self.children.add(child_id)
+
+    async def after_slot(self, owner, work):
+        self.authorize_new(owner, work)
+        row = self.db.execute('SELECT doc FROM work_handoff_actions WHERE id=?', (work['controllerAction'],)).fetchone()
+        source = json.loads(row['doc'])['input']['artifact']['binding'].get('codeSnapshot')
+        if source:
+            from .work_checks import snapshot
+            if await snapshot(self.graph, owner) != source:
+                raise ValueError('WORK_HANDOFF_STALE: code changed while queued for a child slot')
+        self.authorize_new(owner, work)
+
     async def execute(self, row, session, run, node):
         doc = self.graph.feedback.get(row['request_id'])
         self.authorized(doc, run)
@@ -127,6 +159,18 @@ class Continuations:
 
     def inject(self, session, run, stage, only, running, limit):
         """Called only by the scheduler holding the canonical live run/lock."""
+        for row in self.graph.handoffs.actions(run['runId'], pending=True):
+            doc = json.loads(row['doc'])
+            target = doc['target']
+            node_id = target.get('nodeId', doc['nodeId'])
+            chosen_stage = target.get('stage', doc['stage'])
+            if chosen_stage != stage or node_id in running or len(running) >= limit:
+                continue
+            try:
+                if self.graph.handoffs.inspect(row, run) and self.graph.handoffs.claim(row):
+                    running[node_id] = asyncio.create_task(self.graph.handoffs.execute(row, session, run))
+            except (KeyError, ValueError) as exc:
+                self.graph.handoffs.finish(row, 'blocked', exc)
         for row in self.rows(run['runId']):
             try:
                 value = self.inspect(row)
@@ -147,6 +191,23 @@ class Continuations:
         lock = self.graph.locks.setdefault(run_id, asyncio.Lock())
         try:
             async with lock:
+                if json.loads(row['doc']).get('action') == 'handoff':
+                    run = self.graph.get(run_id)
+                    current = next((r for r in self.graph.handoffs.actions(run_id) if r['id'] == row['id']), None)
+                    if not current or current['status'] != 'pending':
+                        return
+                    try:
+                        if not self.graph.handoffs.inspect(current, run) or not self.graph.handoffs.claim(current):
+                            return
+                        self.graph.live[run_id] = run
+                        self.graph.child_budget[run_id] = [8]
+                        await self.graph.handoffs.execute(current, self.rt.store.get(row['owner_id']), run)
+                    except (KeyError, ValueError) as exc:
+                        self.graph.handoffs.finish(current, 'blocked', exc)
+                    finally:
+                        self.graph.child_budget.pop(run_id, None)
+                        self.graph.live.pop(run_id, None)
+                    return
                 value = self.inspect(row)
                 if not value or not self.claim(row):
                     return
@@ -195,6 +256,15 @@ class Continuations:
                 if doc['status'] == 'resuming' and child_task and not child_task.done():
                     child_task.cancel()
 
+    def revoke_handoff(self, transition_id):
+        for row in self.graph.handoffs.actions():
+            if json.loads(row['doc'])['transitionId'] != transition_id or row['status'] not in ('pending', 'claimed', 'admitted'):
+                continue
+            self.graph.handoffs.finish(row, 'blocked', 'WORK_HANDOFF_REVOKED: main revoked this assignment')
+            task = self.tasks.get(row['id']) or self.admissions.get(row['id'], {}).get('task')
+            if task:
+                task.cancel()
+
     def cancel_request(self, request_id):
         for row in self.db.execute('SELECT id FROM work_feedback_outbox WHERE request_id=?', (request_id,)):
             task = self.tasks.get(row['id'])
@@ -207,8 +277,14 @@ class Continuations:
                 task.cancel()
 
     async def stop(self, owner):
-        tasks = [task for oid, task in list(self.tasks.items()) if self.db.execute(
-            'SELECT 1 FROM work_feedback_outbox WHERE id=? AND owner_id=?', (oid, owner)).fetchone()]
+        handoffs = self.graph.handoffs.actions()
+        for row in handoffs:
+            if row['owner_id'] == owner and row['status'] in ('pending', 'claimed', 'admitted'):
+                self.graph.handoffs.finish(row, 'interrupted', 'Root stopped; main must inspect before resuming.')
+        tasks = {task for oid, task in list(self.tasks.items()) if self.db.execute(
+            'SELECT 1 FROM work_feedback_outbox WHERE id=? AND owner_id=?', (oid, owner)).fetchone()
+            or any(r['id'] == oid and r['owner_id'] == owner for r in handoffs)}
+        tasks.update(a['task'] for a in self.admissions.values() if a['owner'] == owner)
         for task in tasks:
             task.cancel()
         if tasks:

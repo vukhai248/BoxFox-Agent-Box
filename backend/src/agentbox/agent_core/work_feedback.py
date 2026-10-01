@@ -472,6 +472,7 @@ async def pump(rt):
     if not work_graph.enabled():
         return
     feedback = service(rt)
+    feedback.graph.handoffs.dispatch()
     rows = feedback.db.execute("SELECT * FROM work_feedback_outbox WHERE status='pending'").fetchall()
     for row in rows:
         try:

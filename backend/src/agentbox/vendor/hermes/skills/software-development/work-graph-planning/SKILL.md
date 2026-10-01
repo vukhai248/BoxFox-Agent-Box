@@ -49,6 +49,12 @@ Execute only after an execution request and the existing approval gate.
    Call `work_check(action='start', nodeId=..., stage='produce', artifactId=<current>, checkIds=[...], invocationId=<unique>)`.
    Backend selects checker roles and binds results to artifact version/hash, node definition, owner decisions and dependencies.
    Research checks source entailment and scope; consequential research adds critique. Plans always need Plan review even if a Research child produced them.
+   Main may explicitly assign a handoff before production with `work_graph(action='assign_handoff', nodeId, stage, predicate, target, revision, invocationId)`.
+   A check target is `{kind:'check', checkIds:[...]}` with `artifact_finalized` or `code_snapshot_ready` (execute source).
+   An existing dependent-node target is `{kind:'node', nodeId, stage}` with `required_checks_passed`; the declared DAG edge must consume the source stage.
+   The backend fills immutable refs/hash, dispatches only assigned work and separately notifies main; no main model turn is needed to relay it.
+   `revoke_handoff(transitionId, revision, invocationId)` is an action of `work_graph`, not a separate tool.
+   No assignment confers execution approval or artifact-only Build scope. Red/error/interrupted receipts require main's decision; they do not automatically call Debug or repair.
    Simple lookup/diagnosis needs real opened evidence. A patch always needs Testing; consequential code also needs code review.
    On `revise`, main routes specific findings to the producer/Debug, then calls `work_run` for a new snapshot and checks that new ref.
    `error`, `unverified`, `partial`, unread ranges, missing acceptance coverage and stale checks NEVER count as a pass. Preserve the checkpoint at the repair cap. Knowledge requests from children (`- research: ...`, `- explore: ...`) are

@@ -30,7 +30,7 @@ import unicodedata
 import uuid
 from copy import deepcopy
 
-from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback, work_grants, work_continuations
+from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback, work_grants, work_continuations, work_handoffs
 
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
@@ -521,6 +521,7 @@ class WorkGraph:
         self.checks = work_checks.Checks(self)
         self.feedback = work_feedback.Feedback(self)
         self.grants = work_grants.Grants(self)
+        self.handoffs = work_handoffs.Handoffs(self)
         self.recover()
         self.continuations = work_continuations.Continuations(self)
 
@@ -612,7 +613,10 @@ class WorkGraph:
                 'revision=excluded.revision, doc=excluded.doc, updated=excluded.updated',
                 (run['runId'], run['sessionId'], run['status'], revision, json.dumps(doc, ensure_ascii=False),
                  run.get('createdAt') or run['updatedAt'], run['updatedAt']))
+            self.handoffs.enqueue(run)
         self.emit(run)
+        if hasattr(self, 'continuations'):
+            self.handoffs.dispatch(run['runId'])
         return run
 
     def emit(self, run):
@@ -656,6 +660,8 @@ class WorkGraph:
                 'checks': self.checks.records(run['runId']),
                 'requests': self.feedback.records(run['runId']),
                 'grants': self.grants.records(run['runId']),
+                'handoffs': self.handoffs.records(run['runId']),
+                'handoffActions': [json.loads(r['doc']) | {'status': r['status']} for r in self.handoffs.actions(run['runId'])],
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],
@@ -758,6 +764,8 @@ class WorkGraph:
 
     def graph(self, session, args):
         action = str(args.get('action') or 'status').strip().lower()
+        if action in ('assign_handoff', 'revoke_handoff'):
+            return self.handoffs.action(session, args)
         if action in ('grant','revoke'):
             return self.grants.action(session,args)
         if action == 'create':
@@ -850,7 +858,8 @@ class WorkGraph:
                    for i, node in enumerate(view['nodes'])]
         out = {'runId': run['runId'], 'status': run['status'], 'flow': run['flow'], 'revision': run['revision'],
                'autopilot': view['autopilot'], 'nodes': summary, 'waves': view['waves'], 'issues': view['issues'],
-               'documents': view['documents'], 'next': self.next_step(run)}
+               'documents': view['documents'], 'handoffs': view['handoffs'],
+               'handoffActions': view['handoffActions'], 'next': self.next_step(run)}
         if message:
             out['message'] = message
         return out
@@ -1086,7 +1095,7 @@ class WorkGraph:
                 return item | {'childId': None, 'status': 'failed', 'answer': f'UNAVAILABLE: {exc}'[:500]}
         return list(await asyncio.gather(*(one(item) for item in requests)))
 
-    async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False):
+    async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False, controller_action=None):
         """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
         from . import work_budget
         state = node['stages'][stage]
@@ -1113,7 +1122,8 @@ class WorkGraph:
             context = '\n\n'.join(p for p in (self.interview_context(run), self.dependency_context(run, node, stage)) if p)
             expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role, work_prompts.language(run['goal']))
             produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
-                extra_binding={'controllerOwned': True} if controller_owned else None)
+                extra_binding={'controllerAction': controller_action} if controller_action else
+                              {'controllerOwned': True} if controller_owned else None)
             entry['producerId'] = produced.get('sessionId')
             if produced.get('request'):
                 request = produced['request']
@@ -1127,7 +1137,8 @@ class WorkGraph:
                 answers = await self.answer_knowledge(session, run, node, stage, requests, attempt)
                 entry['knowledge'] = answers
                 role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
-                produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
+                produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
+                    extra_binding={'controllerAction': controller_action} if controller_action else None)
                 entry['producerId'] = produced.get('sessionId')
             entry['execution'] = work_budget.receipt(produced)
             after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
@@ -1292,6 +1303,7 @@ class WorkGraph:
     async def schedule_nodes(self, session, run, stage, max_rounds, only, limit):
         started = time.monotonic()
         running = {}
+        dispatched = set()
         timed_out = False
         self.continuations.schedulers[run['runId']] = stage
         wake = self.continuations.wakes.setdefault(run['runId'], asyncio.Event())
@@ -1305,9 +1317,11 @@ class WorkGraph:
                 budget = self.child_budget.get(run['runId'])
                 if budget is None or budget[0] > 0:
                     self.continuations.inject(session, run, stage, only, running, limit)
+                    dispatched.update(running)
                     for node in ready_nodes(run, stage, only or None):
-                        if node['id'] in running or len(running) >= limit:
+                        if node['id'] in dispatched or len(running) >= limit:
                             continue
+                        dispatched.add(node['id'])
                         running[node['id']] = asyncio.ensure_future(
                             self.run_stage(session, run, node, stage, max_rounds))
                 if not running:

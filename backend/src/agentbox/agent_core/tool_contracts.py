@@ -663,9 +663,14 @@ SCHEMAS = [
          'their findings; cancel closes the run. Only main calls this. '
          'grant assigns interview rights to one node/stage/purpose with 1-3 stable decisionKeys, current run revision, '
          'publishInterview/resumeOnAnswers booleans and invocationId; revoke uses grantId and its revision. '
+         'assign_handoff explicitly assigns a check or an existing dependent node: nodeId/stage source, '
+         'target={kind:check,checkIds:[...]} with artifact_finalized/code_snapshot_ready, or '
+         'target={kind:node,nodeId:...,stage:...} with required_checks_passed; revision and invocationId required. '
+         'Backend dispatches eligible refs and independently notifies main; no main relay turn. '
+         'revoke_handoff uses transitionId and assignment revision. No implied Build/Debug or automatic repair. '
          'Grants cover owner intent only, never permission to implement an artifact-only request.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
-                                                'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke']},
+                                                'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff']},
           'runId': STRING, 'goal': STRING, 'title': STRING,
           'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
                    'description': 'what the owner asked for; plan+research/design is `mixed`'},
@@ -676,11 +681,18 @@ SCHEMAS = [
           'decisionKeys': {'type':'array','minItems':1,'maxItems':3,'items':STRING},
           'publishInterview': {'type':'boolean'}, 'resumeOnAnswers': {'type':'boolean'},
           'grantId': STRING, 'revision': {'type':'integer'}, 'invocationId': STRING,
+          'transitionId': STRING,
+          'predicate': {'type':'string','enum':['artifact_finalized','code_snapshot_ready','required_checks_passed']},
+          'target': {'type':'object','properties': {'kind': {'type':'string','enum':['check','node']},
+              'checkIds': {'type':'array','items':STRING}, 'nodeId':STRING,
+              'stage': {'type':'string','enum':['produce','execute']}}, 'required':['kind']},
           'summary': {'type': 'string', 'description': 'submit: what the owner approves, in their language'}},
          ['action']),
     tool('work_run',
          'Produce ready nodes in parallel with existing dependency rules. Returns full saved artifact refs and minimum policies; '
          'main inspects drafts and explicitly calls work_check for required checks. No fixed automatic reviewer chain. '
+         'Explicit assign_handoff may dispatch the assigned checks/consumer as soon as refs and predicates are ready; '
+         'notification to main does not block the handoff. A failed check requires a repair decision, never an implicit retry. '
          'On revise, route findings and call work_run for a new artifact, bounded by maxRounds. '
          'phase=execute requires execution scope plus owner approval or Autopilot; artifact-only requests cannot execute.',
          {'runId': STRING, 'phase': {'type': 'string', 'enum': ['discover','execute']},
