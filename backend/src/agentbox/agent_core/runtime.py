@@ -218,6 +218,7 @@ A. Triage: a quick fact, one command or one file you answer yourself — this in
 B. Create: `work_graph(action='create', goal=<owner words>, flow=plan|research|design|fix|mixed)`.
 C. Discover: add nodes with `work_graph(action='add', nodes=[...])` — explore E1..En first (each a precise repository question), research R1..Rn for external facts, design D1 for UI/API shape. Each node: id, kind, title, goal (>= 20 chars, concrete), dependsOn, acceptance (checkable items). Then `work_run(phase='discover')`: independent nodes produce saved drafts. Inspect refs and policy.required; read full artifacts with work_artifact_read. Call work_check(action='start', nodeId, stage, artifactId, checkIds, invocationId). Simple lookup/diagnosis requires actual evidence without an automatic reviewer. On revise, route findings to producer/Debug and work_run for a fresh artifact. Existing knowledge requests remain research/explore lookups.
 D. Interview only on real ambiguity after exploring: `interview(questions=[{id, question, rationale, options:[{label, description, recommended}]}])` — 1-5 questions, 2-4 options each; the card adds "Other" and "let the agent decide". Never ask what the repository already answers.
+   For a specifically assigned Work Graph node, `work_graph(action='grant', nodeId, stage, purpose, decisionKeys, publishInterview, resumeOnAnswers, revision, invocationId)` grants 1-3 owner-intent decision keys. The child drafts its questions; backend publication/continuation uses the root grant without another main model relay. Without a grant use `interview(workRequestId, revision)` to publish its saved questions by ref. Notifications are progress, not a mandatory decision turn. A revoked/stale grant or changed check binding requires your decision; no grant permits Build for an artifact-only request.
 E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (each entry is an exact runnable command; describe expected results in acceptance/the document) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again saves sub-plans. Main starts plan_review and any required critique through work_check before whole verification.
 F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
 G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead.
@@ -2120,6 +2121,7 @@ class HarnessRuntime(RuntimeCommands):
     async def stop(self, sid):
         if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
             self.work_graph.feedback.cancel(sid)
+            await self.work_graph.continuations.stop(sid)
         children = self.store.db.execute("SELECT id FROM sessions WHERE parent_id=? AND status IN ('running','awaiting_decision')", (sid,)).fetchall()
         for child in children:
             await self.stop(child['id'])
@@ -2225,6 +2227,9 @@ class HarnessRuntime(RuntimeCommands):
         for row in self.store.children_of(sid, turn=turn):
             if row['status'] != 'started':
                 continue
+            graph = getattr(self, 'work_graph', None)
+            if graph and graph.continuations.owns_child(row['session_id']):
+                continue  # a run-owned worker owns cleanup; root stop still cancels it
             task = self.tasks.get(row['session_id'])
             if task is not None and task.done() and not task.cancelled():
                 continue
@@ -4668,7 +4673,7 @@ class HarnessRuntime(RuntimeCommands):
                                            'toolCallId': call['id']})
                     feedback = getattr(self, 'work_graph', None)
                     checkpoint = feedback.feedback.yielded(sid) if feedback and session.get('parent_id') else None
-                    cards = feedback.feedback.pending(sid) if feedback and not session.get('parent_id') else []
+                    cards = [card for card in feedback.feedback.pending(sid) if card.get('requiresMainYield',True)] if feedback and not session.get('parent_id') else []
                     if checkpoint or cards:
                         close_turn('needs_user', 'work_checkpoint', len(calls), response.get('usage'))
                         self.store.save(sid, messages, 'completed')

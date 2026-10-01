@@ -1,6 +1,6 @@
 # Sửa độ tin cậy của Work Graph: điều phối linh hoạt, kiểm chứng theo nhiệm vụ và phỏng vấn có thể tiếp tục
 
-> Bản cập nhật v2 — 02/10/2026. Trạng thái mới nhất: nền B `68765ba2`; W7 foundation A1 đã kiểm chứng tại mục 30, đang tạo neo riêng; W7/A2 và W8 chưa thi công. Chủ dự án đã duyệt lựa chọn A ở mục 29. Các checkpoint trước đó là lịch sử của đúng snapshot được ghi, không chứng nhận patch hiện tại.
+> Bản cập nhật v2 — 02/10/2026. Trạng thái mới nhất: neo B **`7b55e7cc`** cho W7 foundation A1 (mục 30); A2 grant/card/ref đang sửa dở, chưa commit (mục 31); direct continuation và W8 chưa triển khai. Chủ dự án đã duyệt lựa chọn A ở mục 29. Các checkpoint trước đó là lịch sử của đúng snapshot được ghi, không chứng nhận patch hiện tại.
 >
 > Quyết định mới của chủ dự án thay thế yêu cầu “mọi sub-agent đều có một lượt review giống nhau”: main chọn specialist và cách kiểm chứng phù hợp; backend bảo đảm các kiểm tra bắt buộc theo đầu ra, phạm vi thay đổi và rủi ro. Phần 6–9 cụ thể hóa chính sách này, chuẩn đầu ra và prompt cho coding agent.
 
@@ -2097,7 +2097,7 @@ Các mục dưới là kết quả đọc code/test, không mở rộng patch ma
 |---|---|---|---|
 | **A0 — đối chiếu ý định/code** | Sửa sơ đồ và thuật ngữ “về main”, đọc goal/patch/tests, phân biệt draft/đã nghiệm thu. | Mục 6.2/27/28/29 nhất quán, có evidence và phần chưa làm rõ. | [x] Tài liệu; chưa triển khai kiến trúc mới. |
 | **A1 — ổn định W7 foundation** | Sửa inventory oracle 45→46 theo schema thực; checkpoint/final guidance; freshness/body proof/duplicate/restart guards; giữ W6.2 ngoài scope. | Targeted + full suite source cố định; native Space Bunny đọc final và từng lỗi, không chỉ badge; neo W7 foundation. | [x] Foundation code/tests tại mục 30; không tính là toàn W7 đạt. Neo riêng sau checkpoint này. |
-| **A2 — W7 grant/card/resume** | Root-owned grant, publish bằng ref hoặc direct khi hợp lệ; continuation bền vững cùng child không relay main. | WG01–WG06/WG10/WG11; nhánh độc lập và root bận không làm mất câu hỏi/answer. | [ ] Kiến trúc đã duyệt A; implementation sau neo A1. |
+| **A2 — W7 grant/card/resume** | Root-owned grant, publish bằng ref hoặc direct khi hợp lệ; continuation bền vững cùng child không relay main. | WG01–WG06/WG10/WG11; nhánh độc lập và root bận không làm mất câu hỏi/answer. | [x] Neo backend: target 160, full 2807/21, native cuối 2/2 workflow. Phạm vi đã kiểm tại mục 31.1; shared-answer/anti-loop/CUA chưa hoàn tất toàn W7. |
 | **A3 — W8 handoff/admission** | Typed predicates, notification tách dispatch, manual/auto cùng admission, run-owned lifecycle và cycle/compatibility. | WG01/WG07–WG12, restart/fault traces; legacy không tự mở Build. | [ ] Kiến trúc đã duyệt A; sau A1/A2, chưa thi công. |
 | **A4 — W8 repair/retest/integration** | Build sửa trực tiếp hoặc Debug khi cần theo assignment; retest tester cũ; input refs tối thiểu, lock/touch set và integration/ship. | WG03/WG07–WG09/WG12 + tests integration đúng snapshot; branch/scope/current approval giữ. | [ ] Không blanket Debug/Review; neo riêng. |
 
@@ -2162,8 +2162,120 @@ Kiểm thử:
 
 ### 30.3 Điểm bắt đầu tiếp theo
 
-1. Tạo commit nền W7 A1 trên B và ghi hash làm điểm neo. Giữ goal W6.1/W6.5/W7/W8 active.
+1. [x] Commit nền W7 A1 **`7b55e7cc`** trên B. Giữ goal W6.1/W6.5/W7/W8 active.
 2. A2: root cấp grant gắn assignment/decision keys, sub tự soạn card, root publish bằng ref hoặc backend publish khi có grant; child đọc answer/checkpoint bằng ref và direct resume cùng context. Legacy không có grant giữ manual.
 3. Controller phải giữ công việc ngoài lượt model main: root kết thúc turn không được reap nhầm child do worker sở hữu; root stop/revoke vẫn chặn admission. Answer đến khi nhánh khác đang chạy phải được scheduler nhận, không đợi main LLM relay; chỉ một nguồn live run và một đường admission.
 4. A3/A4 nối handoff predicates và cùng tester retest; không lấy `artifact_finalized` làm accepted, không dựng pipeline role cố định. Test WG01–WG12 theo điều kiện thực, rồi native Space Bunny ở các điểm model quyết định.
 5. CUA dành agent kiểm sau: root card có câu hỏi/options như sub; submit/reload vẫn thấy câu trả lời trong chat/Decisions; không sửa UI/UX trong patch này. SQLite/events xanh chưa chứng minh render xanh.
+
+## 31. A2 grant/card/ref — checkpoint backend, chưa nghiệm thu toàn W7/W8
+
+**Nền:** `7b55e7cc`, branch B. Neo A2 được ghi tại mục 31.2 sau commit. Không sử dụng kết quả full 2780 tests của A1 để chứng nhận các thay đổi sau neo.
+
+- [x] Tạo `work_grants.py`: root gán quyền cụ thể qua `work_graph action=grant`, node/stage/purpose, 1–3 `decisionKeys`, booleans `publishInterview`/`resumeOnAnswers`, run revision và invocation ID. Revoke dùng grant revision. Scope hash ràng buộc goal/node definition; grant sống qua service restart, child không tự cấp quyền.
+- [x] `needs_user` mang decisionKeys hợp lệ: backend dùng nguyên bảng hỏi, publish thẻ root khi có quyền; không gọi model main chỉ để publish. Không có quyền giữ waiting_main. Cùng logical key còn hiệu lực/đã trả lời không mở card thứ hai; conflict quay main, không suy câu hỏi tương đương chỉ từ văn bản.
+- [x] `work_report action=read` cho child đọc checkpoint/answer của chính nó bằng request ID; cross-child bị chặn. Prompt tiếp tục chỉ mang request/artifact/ref/revision, không chép toàn bảng answer vào prompt; phần mô tả cấp quyền/đọc ref theo ngôn ngữ owner.
+- [x] Auto card không khiến lượt main không liên quan tự kết thúc. Child vẫn yield khi card đã publish, kể cả answer đến sớm trước tool_end; không mất câu trả lời hoặc chạy tiếp cùng admission cũ.
+- [x] Sửa proof `read_source(ref=...)` lấy URL từ reader result hoặc ref, không chỉ nhận args.url. Không coi ref đã mở là bằng chứng nếu body/quality không hợp lệ.
+- [x] **Direct resume cho producer đã nối:** answer + typed outbox cùng transaction. Grant còn hiệu lực cho phép worker tiếp tục cùng child, đọc answer/checkpoint bằng ref, không mở lượt model main. Scheduler đang chạy nhận wake để nhánh này tiếp tục trước khi nhánh độc lập kết thúc; worker ngoài lượt dùng cùng run lock/live copy. Các kiểm thử và giới hạn xem mục 31.1.
+- [ ] Conflict hiện chuyển main để xử lý; đã có cancel theo revision/invocation, chưa có shared answer receipt/follower continuation hoặc edit/reconcile đầy đủ. Cần test câu hỏi đã trả lời, câu hỏi đổi options, binding mới và cùng key ở nhiều child.
+- [ ] Helper evidence receipts/ba lượt không tiến triển còn A3/A4. Native grant/ref đã chạy đủ tám lượt; full snapshot cuối 2807/21 đạt. Không auto-build/review blanket.
+
+**Kiểm thử thực:** `python -X utf8 -m pytest backend/tests/unit/test_work_grants_w7.py backend/tests/unit/test_work_feedback_w7.py backend/tests/unit/test_work_graph.py -q --disable-warnings --maxfail=2`: **69 passed / 30.81s**, exit **0**, XML `.tmp/work-checks/w7-a2-grant-target.xml`. Bao gồm 6 test grant/card/ref mới và 19 foundation; model stub, không phải kết quả live/CUA. Lượt trước 23/63 passed là snapshot nhỏ hơn, không thay chứng cứ cuối.
+
+**Thứ tự tiếp tục:** hoàn thiện typed outbox + run-owned continuation; kiểm root busy/turn cleanup/stop/revoke/restart; WG05/WG06/WG10/WG11; rồi neo A2. A3 dùng cùng controller/admission cho handoff và checks, tránh tạo worker thứ hai cùng sửa một run. Không cấp budget vô hạn hoặc reset chỉ vì checkpoint prose đổi.
+
+**Eval policy9 cũ đã kết thúc đủ 4 lượt:** Plan repeats 1/2, Design repeats 1/2; **0/4 workflow oracle**. Design repeat2 root completed nhưng oracle vẫn false (3664.036s); đã đọc đủ chín child/main và lưu tại mục 32. Không loại lượt này hoặc tính completed là đạt. Source hashes trong `.tmp/work-checks/w612-scope9-compact-flow/results.json` thuộc source cũ, không gán kết quả này cho grant A2.
+
+### 31.1 Direct continuation — checkpoint kiểm chứng đang chốt
+
+**Nhánh B; kiến trúc A đã được duyệt.** Không sửa frontend/UI/UX, không dùng CUA, không chuyển provider/model.
+
+- [x] `work_continuations.py` quản lý typed outbox, claim bằng CAS và worker theo run. Thông báo tiến độ không mở main turn. `work_run` đang giữ run nhận câu trả lời qua scheduler wake; worker khác không cùng ghi một live run.
+- [x] Giữ cùng child/context/folder và ngân sách từng admission bị kẹp bởi cấu hình cha **tại thời điểm nhận slot**; lifetime usage vẫn cộng dồn. Kiểm lại grant/request sau khi chờ slot, không cấp quyền triển khai từ interview grant.
+- [x] Root kết thúc lượt không reap nhầm worker-owned child; watchdog cũng nhận ownership thực, vẫn giữ timeout/restart guards. Root stop/revoke/cancel chặn công việc, giữ checkpoint; callback cũ không đổi cancelled thành consumed hoặc ghi đè lý do watchdog.
+- [x] Restart claim trước admission có thể thử lại. Khi đã có thể mở admission thì giữ interrupted, không replay tools. Gửi trùng answer/pump không mở hai lượt.
+- [x] Final, command proof và artifact read coverage theo admission hiện tại. Thêm migration `work_artifact_reads.admission_seq`; không lấy test xanh hoặc final cũ cho lượt mới.
+- [x] **Sửa over-rejection phát hiện bằng live probe:** producer cùng assignment được dùng nguồn đã mở thật trước checkpoint. Chỉ kế thừa từ request consumed có binding còn hiệu lực; đổi assignment thì không dùng. Đây là bằng chứng đã quan sát, không tuyên bố đã xác minh lại source hiện tại. Tester/reviewer vẫn cần proof/coverage của admission mới.
+- [x] `work_report cancel` cho main hủy request xung đột theo revision/invocation. Hủy/stale/stop phát đúng một `decision_resolved` cho card đã mở, status cancelled, không dựng câu trả lời hoặc consent. Giữ hợp đồng render hiện hữu.
+- [x] **Lỗi event trả lời được xác nhận bằng code giao diện:** `decisionStatusFrom` chỉ nhận answered/approved/rejected/expired/cancelled. Event trước đó dùng status resolved của API khiến lịch sử reload parse thành pending. Backend nay phát answered + reason user/resolvedAt; receipt API vẫn resolved. Hai ca manual/granted kiểm partial answer, service reload, duplicate và answer provenance. Không sửa frontend; chưa kiểm render/CUA. Lịch sử cũ và crash sau transaction/trước emit cần reconciliation theo receipt thật ở A3, không ghi đè lịch sử hoặc bịa consent.
+- [x] Câu trả lời trong checker làm đổi decision binding của producer: outbox ghi `WORK_CHECK_INPUT_CHANGED` + main_decision_required. Không tiếp tục review để duyệt artifact đã mất hiệu lực. Main cần tạo/kiểm bản mới; phân loại tác động tinh hơn nằm trong A3.
+- [ ] Helper evidence receipt qua ref, shared answer/follower, ba lượt không tiến triển và handoff/check/retest thống nhất tiếp tục ở A3/A4. Không coi A2 là toàn W7/W8.
+- [x] Hồi quy toàn backend cuối **2807 passed/21 skipped, 798.43s**, exit 0; 19 file hashes không drift trong sweep. Manifest được giữ ở `w7-a2-answer-enum-certified-source.json` trước cập nhật evidence sau test. Chưa chứng nhận CUA hoặc toàn DAG/live main.
+
+| Probe | Kết quả thực | Giới hạn |
+|---|---|---|
+| Target trước lifecycle guards | 136 passed / 90.89s; rồi 139 passed / 123.62s | Snapshot trước các guard cuối. |
+| Lifecycle + giữ source checkpoint | 30 passed / 14.31s | Mock model; không phải đánh giá nội dung. |
+| Target cuối, 6 modules | **158 passed / 72.50s**, exit 0, `w7-a2-final-guards.xml` | Grant/card/continuation/checks/graph/watchdog; không CUA. |
+| Native direct trước sửa retention, OpenCode space-bunny-free | **0/2 workflow**, 29.221s / 88.809s; worker vẫn đúng child và rootModelTurns=0 | Backend sai vì chỉ đếm reads của lượt mới; giữ cả hai failure trong evidence. |
+| Native direct sau sửa retention | **2/2 workflow accepted**, 61.761s / 39.292s, cùng child, một request, rootModelTurns=0, slots=[] | Final **218/640 từ**: **0/2 length oracle**. Đây không phải kết quả chất lượng nội dung toàn bộ đạt. |
+| Native direct source cuối trước sửa enum | **2/2 workflow accepted**, 52.082s / 34.844s, một request, cùng child, rootModelTurns=0, slots=[] | Final **272/294 từ**: **0/2 length oracle**. Không chứng nhận giao diện hoặc toàn chất lượng. |
+| Full trước sửa enum trả lời | **2805 passed, 21 skipped / 779.03s**, exit 0, `w7-a2-certified-full.xml` | 18 file hashes; snapshot giữ riêng `w7-a2-pre-answer-enum-source.json`. |
+| Target sau sửa enum, 6 modules | **160 passed / 76.00s**, exit 0, `w7-a2-answer-enum-target.xml` | Thêm hai ca manual/granted, không sửa UI. Full mới có manifest riêng. |
+| Full sau sửa enum trả lời | **2807 passed, 21 skipped / 798.43s**, exit 0, `w7-a2-answer-enum-full.xml` | Source không đổi trong sweep; evidence/tài liệu được cập nhật sau khi test kết thúc. |
+| Native sau sửa enum, OpenCode space-bunny-free | **2/2 workflow accepted**, 48.697s / 38.444s; cùng child, rootModelTurns=0, một request và event answered/lượt | Final **222/513 từ**, 0/2 length; read-only kiểm SQLite/events, không renderer/CUA. |
+
+Hai full sweeps trước bị **chủ động ngắt để sửa lỗi đã tìm thấy**, không phải provider failure hoặc hồi quy đã đạt. Receipts `.tmp/work-checks/w7-a2-full-interrupted-for-evidence-fix.txt` và `w7-a2-full-interrupted-for-card-event.txt`. Snapshot cuối `.tmp/work-checks/w7-a2-final-source.json`; XML/log cuối `w7-a2-certified-full.*`. Không sửa source đã freeze khi sweep cuối đang chạy.
+
+**W6.2 ghi dấu hiệu, chưa tuning producer/main:** model vẫn kéo báo cáo nhỏ thành nhiều mục, diễn giải “dưới 200 từ” thành chỉ phần Trả lời. Sau khi đối chiếu **bảng hỏi thực**, nhiều option đã có mô tả ca trực/bàn giao/chăm sóc và user synthetic chọn option ấy; việc nhắc lại mô tả không đủ chứng minh model tự bịa nghiệp vụ ở final. Vấn đề cần đánh giá là bảng hỏi gộp vai trò với nghiệp vụ chưa khảo sát, rationale phóng đại vai trò quyết định Unicode dù source đã chốt giữ Unicode; không kết luận mọi khuyến nghị là consent bịa. Một R2 coi chỉ dẫn trong nguồn fixture là lệnh; prompt owner cũng có ràng buộc đó nên chưa chứng minh bị prompt injection. R2 source trước enum fix tự nêu ngày 2026-08-03 và tài liệu ba dòng trong khi fixture một dòng; R1 sau enum fix tự nêu ngày 2025-08-01. Những ngày này không được đầu vào xác nhận. Không tăng output cap hoặc chỉnh DAG để che lỗi. [Evidence A2](W7-A2-evidence.json) giữ đủ tám final + bảng hỏi/events: workflow 6/8, length 1/8; hai failure đầu do product proof retention, không do provider. Hai lượt sau enum fix đạt 48.697s/38.444s, final 222/513 từ, rootModelTurns=0, events answered. Không có main LLM hoặc render CUA trong native probe.
+
+**Cần CUA do agent khác kiểm, không có claim đã chạy:** (1) card tự xuất hiện tại root Chat/Decisions với câu hỏi/options của sub; (2) partial answer → reload vẫn thấy câu cũ + answer, câu còn lại tiếp tục; (3) submit lặp không tạo thêm child/turn; (4) root đang báo tiến độ không phải relay bảng hỏi; (5) stop/cancel/stale chuyển card lịch sử sang cancelled, không còn trong Pending và không ghi answer giả; (6) sau trả lời, cùng child tiếp tục, Plan tab vẫn đọc đúng artifact/version/hash, không Build nếu request chỉ artifact. Ngôn ngữ hiển thị phải có dấu; chưa thay UI để đạt các ca này.
+
+## 32. W6.1.3 / W6.2 — đọc xong Design compact repeat 2 cũ
+
+[Bằng chứng đầy đủ 9 child + main](W6.1.3-design-repeat2-evidence.json) chỉ lưu visible final, receipt và adjudication, không lưu hidden reasoning. Source **policy9**, commit `1be035fb`, run `w-e9501a3a92`; không chứng nhận A2. Root completed nhưng whole review chưa đạt, workflow oracle false, **3664.036s**. Giữ đủ 4/4 lượt cũ thất bại trong thống kê.
+
+1. Design v1 (676 từ) sai output field rỗng, giải thích StringIO và nhầm shape `list(reader)` với `next(reader)`. Việc thiếu receipt baseline được ghi trung thực.
+2. Reviewer thứ nhất **bắt đúng** `writerow(['']) -> '""\r\n'` và raw blank row → `[]`, bằng nhánh writer `_csv.c`. Không quy mọi revise thành bias. Reviewer này vẫn vượt cap 600 từ (707).
+3. Reviewer thứ hai bỏ sót empty-field, pass theo số dòng/heading; nói quoted CRLF bị tách/mất CR sai. Khoảng trống bàn giao baseline có thật nhưng main có command receipt. Finding thiếu evidence không chứng minh số đo bịa. Reviewer 733 từ, cũng vượt cap.
+4. Main đưa tiền đề newline sai vào nhiệm vụ sửa; Design v2 (851 từ, vượt <700) kế thừa và giữ empty-field sai dù reviewer trước đã chỉ ra đúng. Cần giữ các finding chưa giải quyết của từng check, không chỉ feedback cuối. UTF-8 encode/decode thay bước ASCII vẫn giữ Unicode; gọi nó không thể phục hồi mà không phân biệt thời điểm thay đổi là lập luận sai.
+5. Reviewer v2 (561 từ) ghi ok và pass empty/newline sai. Citation vừa đánh UNVERIFIED lại pass criterion kỹ thuật. Main lặp hai kết luận sai trong final, nhưng nói đúng whole verify còn thiếu.
+6. Bốn whole-review attempts: một failed DEADLINE_EXCEEDED không final; hai completed nhưng partial DEADLINE_EXCEEDED, thiếu coverage/VERDICT; một partial PROVIDER_STREAM_INTERRUPTED không final. Không có review thành công. Một partial suy sai reader C-state; partial sau giữ uncertainty khi chưa đọc được thân parser, hợp lý hơn nhưng vẫn chưa hoàn tất.
+
+**Counterexamples đã chạy, Python 3.13.9:** empty writer ra `""\r\n`, reader ra `['']`; raw `\r\n` reader ra `[]`; default StringIO vẫn giữ LF/CR/CRLF bên trong field đã quote. Bằng chứng trong JSON nêu rõ interpreter cục bộ; không gọi là đã chạy CPython phiên bản source web khác.
+
+**Theo dõi tiếp:** W6.1.3 sửa sự công tâm/diễn giải source/coverage thật của review, phân biệt criterion sai với artifact sai; W6.2 mới xét main/producer và việc bỏ mất finding sau khi đã xác nhận không do reviewer. Không sửa prompt chất lượng tổng quát trong patch A2 hoặc mở pipeline role cố định.
+
+## 33. A3 — đối chiếu đường bàn giao trước khi thi công
+
+**Trạng thái:** đọc code trên B trong khi hồi quy A2 chạy; chưa sửa source W8. Đây là cách chia nhỏ kiến trúc A đã duyệt tại mục 29, không cấp thêm quyền Build hoặc tạo pipeline theo role.
+
+### 33.1 Những điểm đã đối chiếu
+
+| Điểm hiện tại | Rủi ro nếu nối auto sơ sài | Cách nối cần kiểm |
+|---|---|---|
+| `Checks.tool` giữ run lock, dedup theo invocation/check; invocation khác vẫn có thể tạo check cùng artifact/policy. | Hai đường manual/auto có thể chạy cùng tester, hoặc auto gọi lại tool bên trong lock gây deadlock. | Tách hàm kiểm/admission có thể gọi dưới lock đang giữ; cả manual/auto đi chung admission key theo input binding. Không tạo worker/check state machine thứ hai. |
+| `schedule_nodes` giữ live run và map task theo node; A2 inject chỉ hỗ trợ resume producer cùng pha. | Auto check ngoài scheduler ghi run cũ; nhánh bị ghi đè hoặc check phải chờ cả wave xong. | Controller hiện có nhận action check; scheduler tiếp nhận khi đủ slot, đối chiếu current live run trước admit. Notification cho main độc lập với action. |
+| `run_stage` lưu immutable artifact/policy rồi đặt needs_checks. | Nếu nhìn artifact tồn tại như accepted thì consumer/Build chạy quá sớm. | Artifact finalized đủ để checker đọc; chỉ check-pass đúng binding đủ để consumer cần kết quả đã kiểm chạy. Tester chạy khi code snapshot ready, không đợi test của chính nó pass. |
+| `Checks.judge` mặc định spawn checker mới. `observations`/coverage đã có admission boundary. | Test xanh cũ/context mất sau sửa; chỉ thêm resume ID mà không đổi proof sẽ nghiệm thu sai. | A4 giữ tester cũ cho cùng assignment/check kind, ref mới và code hash mới; bắt command/read proof của admission mới. Đổi nhiệm vụ hoặc quyền không reuse ngầm. |
+| `recover` còn reset in-flight stage tổng quát thành pending/revise, giảm attempts. | Admission thực thi có thể đã chạy tool trước crash rồi bị chạy lại. | Action ledger phải phân biệt claim trước start với admission đã có thể gây effect; trường hợp sau interrupted + main decision, không replay tự động. Run legacy giữ adapter rõ. |
+| Answer transaction có outbox nhưng event resolved phát sau commit. | Crash trong cửa sổ commit→emit làm DB có answer nhưng lịch sử event còn pending; event cũ status resolved cũng parse sai. | A3/W7.1 bổ sung reconciliation có dedup từ user-action receipt thật, append correction event; không ghi đè lịch sử, không biến đề xuất/timeout thành consent. |
+
+### 33.2 Thứ tự làm và checkpoint
+
+1. **A3.1 — admission/check dùng chung.** Tách validate/current-binding và chạy check dưới run lock hiện có. Lưu action identity từ owner/run/node/stage, artifact/version/hash, policy/check IDs, code/input binding; invocation chỉ chống gửi trùng, không là lý do chạy công việc mới. Manual/auto cạnh tranh lấy cùng admission; replay trả receipt. Retry sau lỗi là quyết định riêng có lịch sử, không tự sinh random key để vượt chống lặp. Kiểm WG07, thiếu capability, artifact partial/stale, root stop và crash boundaries trước khi nối scheduler.
+2. **A3.2 — handoff main giao trước.** Assignment chuyển tiếp có predicate, target cụ thể và revision/scope; backend điền refs/hash từ registry. Grant interview không cấp handoff. Chỉ source phù hợp/đủ điều kiện mới enqueue; notification không cần main acknowledge. Không có assignment hoặc có input/criteria conflict thì báo main; không tự thêm Testing/Debug/Review dựa duy nhất role. Kiểm WG01/WG02/WG09/WG12 với main model bị cấm relay.
+3. **A3.3 — scheduler/recovery và input refs.** Dùng controller/run lock/lifecycle hiện có; ưu tiên các action được giao còn hợp lệ, giữ nhánh độc lập. Thêm helper evidence/command receipt qua ref để reviewer thấy output thực của main/helper; source receipt là dữ liệu, không instruction hoặc chứng minh mọi suy luận. Reconcile card từ receipt; shared answer/follower phải giữ binding và tránh options mâu thuẫn. Kiểm WG04/WG06/WG10/WG11, restart/paused/revoke và ba vòng không tiến triển.
+4. **A4 — repair/retest/integration.** Sau các neo trên mới nối sửa→tester cũ, touch set/lock/code snapshot và integration/ship. Test đỏ rõ nguyên nhân cho phép Build sửa khi đã được giao; Debug chỉ khi cần điều tra; thiếu quyền/phạm vi mới về main. Không tạo PR/Build cho run chỉ yêu cầu plan/research/design.
+
+```mermaid
+flowchart TD
+    M[Main giao mục tiêu, quyền và chuyển tiếp cần thiết] --> P[Sub thực hiện và lưu artifact/checkpoint]
+    P --> N[Báo tiến độ và ref cho main]
+    P --> G{Có chuyển tiếp đã giao còn hiệu lực?}
+    G -->|Không hoặc cần quyết định mới| D[Lưu vấn đề để main chọn hướng]
+    G -->|Có| R{Predicate và input binding đạt?}
+    R -->|Chưa| W[Giữ pending hoặc blocked với lý do]
+    R -->|Đạt| A[Admission dùng chung manual/auto]
+    A --> C[Agent tiếp theo đọc đúng ref/snapshot]
+    C --> P
+    P -->|Hiếm: cần ý định user| U{Có grant interview phù hợp?}
+    U -->|Có| Q[Backend mở card root bằng câu hỏi sub]
+    U -->|Không hoặc xung đột| D
+    Q --> V[User trả lời; lưu receipt + continuation]
+    V --> S[Cùng child tiếp tục khi đủ thông tin và quyền]
+    S --> P
+```
+
+**Không suy từ sơ đồ thành code đã có:** hiện A2 chỉ chứng nhận đường grant/question/answer/direct producer. Auto check/handoff và retest vẫn là A3/A4. Các receipt full/native của A2 không được dùng để tick WG01 Build→Testing hoặc WG08 retest.

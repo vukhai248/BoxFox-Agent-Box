@@ -22,8 +22,11 @@ class Artifacts:
             CREATE INDEX IF NOT EXISTS work_artifacts_run ON work_artifacts(run_id);
             CREATE TABLE IF NOT EXISTS work_artifact_reads (
                 check_id TEXT NOT NULL, artifact_id TEXT NOT NULL, start INTEGER NOT NULL,
-                end INTEGER NOT NULL, reader_id TEXT NOT NULL);
+                end INTEGER NOT NULL, reader_id TEXT NOT NULL, admission_seq INTEGER NOT NULL DEFAULT 0);
         ''')
+        if 'admission_seq' not in {row['name'] for row in self.db.execute('PRAGMA table_info(work_artifact_reads)')}:
+            with self.db:
+                self.db.execute('ALTER TABLE work_artifact_reads ADD COLUMN admission_seq INTEGER NOT NULL DEFAULT 0')
 
     async def put(self, run, node_id, stage, text, binding, finalized, producer_id=None):
         aid = 'a-' + uuid.uuid4().hex
@@ -73,8 +76,8 @@ class Artifacts:
         cid = binding.get('checkId')
         if cid:
             with self.db:
-                self.db.execute('INSERT INTO work_artifact_reads VALUES(?,?,?,?,?)',
-                                (cid, aid, offset, end, session['id']))
+                self.db.execute('INSERT INTO work_artifact_reads VALUES(?,?,?,?,?,?)',
+                                (cid, aid, offset, end, session['id'], binding.get('admissionSeq', 0)))
         result = meta | {'offset': offset, 'content': text[offset:end], 'nextOffset': end if end < len(text) else None}
         if cid:
             prefix, complete = self.progress(cid, meta, session['id'])
@@ -94,9 +97,10 @@ class Artifacts:
 
     def progress(self, check_id, meta, reader_id):
         """Contiguous audited prefix, scoped to this exact check/artifact/reader."""
+        admission = (self.graph.store.get(reader_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)
         rows = self.db.execute('SELECT start,end FROM work_artifact_reads WHERE check_id=? '
-                              'AND artifact_id=? AND reader_id=? ORDER BY start',
-                              (check_id, meta['artifactId'], reader_id)).fetchall()
+                              'AND artifact_id=? AND reader_id=? AND admission_seq=? ORDER BY start',
+                              (check_id, meta['artifactId'], reader_id, admission)).fetchall()
         end = 0
         for row in rows:
             if row['start'] > end:

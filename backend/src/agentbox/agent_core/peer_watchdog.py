@@ -111,7 +111,15 @@ class PeerWatchdog:
                 if self._close(child_id, row, WATCHDOG_TIMEOUT_REASON, cancel=True):
                     report['timeout'].append(child_id)
                 continue
-            if not self._parent_alive(row['parent_id']):
+            graph = getattr(self.runtime, 'work_graph', None)
+            controller = getattr(graph, 'continuations', None)
+            owned = bool(controller and controller.owns_child(child_id))
+            if owned:
+                try:
+                    self.store.get(row['parent_id'])
+                except KeyError:
+                    owned = False
+            if not owned and not self._parent_alive(row['parent_id']):
                 if self._close(child_id, row, WATCHDOG_ORPHAN_REASON, cancel=True):
                     report['orphan'].append(child_id)
         if any(report.values()):

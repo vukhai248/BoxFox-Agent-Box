@@ -10,7 +10,7 @@ from pathlib import Path
 
 from work_check_eval import ROOT, FixtureExecutor
 from agentbox.agent_core.runtime import HarnessRuntime, RouterClient
-from agentbox.agent_core import work_graph as wg
+from agentbox.agent_core import work_graph as wg, work_feedback
 from agentbox.memory.session_store import SessionStore
 
 
@@ -40,7 +40,7 @@ async def run(args):
     route=next({'connectionId':c['id'],'modelId':m['id']} for c in state['connections']
                if c['providerId']=='opencode' and c.get('enabled') for m in c['models']
                if m['id']=='space-bunny-free' and m.get('enabled'))
-    sources=list((ROOT/'backend/src/agentbox/agent_core').glob('work_*.py'))+[ROOT/'backend/src/agentbox/agent_core/runtime.py',ROOT/'backend/src/agentbox/agent_core/roles.py']
+    sources=list((ROOT/'backend/src/agentbox/agent_core').glob('work_*.py'))+[ROOT/'backend/src/agentbox/agent_core/runtime.py',ROOT/'backend/src/agentbox/agent_core/roles.py',ROOT/'backend/src/agentbox/agent_core/tool_contracts.py']
     hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     rows=[]
     for repeat in range(1,args.repeats+1):
@@ -51,28 +51,50 @@ async def run(args):
         graph=wg.service(rt);run=graph.create(store.get(sid),{'flow':'research','goal':'Nghiên cứu mô tả exporter CSV sau khi chốt người dùng; chỉ báo cáo, không triển khai.',
           'nodes':[{'id':'R1','kind':'research','taskKind':'lookup','title':'Mô tả exporter','goal':
            'Đây là ca kiểm thử lớp bảo vệ hiếm. Đọc docs/source.md và giữ dữ kiện đã biết. Thiếu quyết định ai dùng exporter, không tự đoán: '
-           'gọi work_report action=needs_user lưu checkpoint đã đọc và hỏi một câu có lựa chọn Bác sĩ/Điều dưỡng. '
+           'gọi work_report action=needs_user lưu checkpoint đã đọc và hỏi một câu có lựa chọn Bác sĩ/Điều dưỡng, decisionKeys=["users"]. '
            'Sau khi main đưa câu trả lời, tiếp tục từ checkpoint, báo đúng lựa chọn và dữ kiện có sẵn dưới 200 từ; không hỏi lại, không khảo sát lại định dạng.',
            'acceptance':['Đọc nguồn và báo đúng người dùng đã trả lời'], 'dependsOn':[]}]})
-        started=time.monotonic();row={'repeat':repeat,'route':route,'sourceHashes':hashes,'scope':'native child; synthetic owner answer; no CUA/full main'}
+        if args.direct:
+            graph.grants.action(store.get(sid),{'action':'grant','runId':run['runId'],'revision':run['revision'],
+                'nodeId':'R1','decisionKeys':['users'],'publishInterview':True,'resumeOnAnswers':True,'invocationId':'probe-rights'})
+        started=time.monotonic();row={'repeat':repeat,'route':route,'sourceHashes':hashes,
+            'scope':'native child; synthetic owner answer; no CUA/full main','direct':args.direct}
         try:
             first=await graph.run(store.get(sid),{'phase':'discover'})
             requests=graph.feedback.records(run['runId']);row['first']=first
             row['activeSlotsAfterYield']=rt.store.live_children(sid)
             if len(requests)!=1 or requests[0]['kind']!='needs_user':
                 raise ValueError('Expected one durable needs_user checkpoint')
-            req=requests[0];old_child=req['childId'];card=graph.feedback.open_interview(store.get(sid),{'workRequestId':req['requestId'],'revision':req['revision']},'synthetic-interview')
+            req=requests[0];old_child=req['childId']
+            if args.direct:
+                if req['status'] != 'needs_user' or not req.get('grantId'):
+                    raise ValueError('Expected automatically published granted card')
+                card=rt.pending_for(sid)[0]
+            else:
+                card=graph.feedback.open_interview(store.get(sid),{'workRequestId':req['requestId'],'revision':req['revision']},'synthetic-interview')
             # Real backend validation/persistence, simulated human action.
             option=next(q['id'] for q in card['questions'][0]['options'] if 'Điều' in q['label'])
             response=rt.resolve_decision(sid,card['decisionId'],'submit',answers=[{'questionId':card['questions'][0]['id'],'optionId':option}])
             row['answer']=response
             # Service restart; waiting time does not run a model or use an active slot.
             rt.work_graph=wg.WorkGraph(rt);graph=rt.work_graph
-            second=await graph.run(store.get(sid),{'phase':'discover'});row['second']=second
+            if args.direct:
+                await work_feedback.pump(rt)
+                tasks=list(graph.continuations.tasks.values())
+                if not tasks:
+                    raise ValueError('Expected granted backend continuation, not main relay')
+                await asyncio.gather(*tasks)
+                second=graph.result(graph.get(run['runId']))
+                row['outbox']=[dict(r) for r in store.db.execute('SELECT * FROM work_feedback_outbox')]
+                row['rootModelTurns']=store.db.execute("SELECT COUNT(*) FROM events WHERE session_id=? AND kind='user'",(sid,)).fetchone()[0]
+            else:
+                second=await graph.run(store.get(sid),{'phase':'discover'})
+            row['second']=second
             final=graph.get(run['runId'])['nodes'][0]['stages']['produce'];output=final.get('output','')
             row.update(childId=old_child,output=output,status=final['status'],
               oracle=final['rounds'][-1]['producerId']==old_child and 'Điều dưỡng'.lower() in output.lower()
-                     and final['status']=='accepted' and len(store.children_of(sid))==1,
+                     and final['status']=='accepted' and len(store.children_of(sid))==1
+                     and (not args.direct or row['rootModelTurns']==0 and all(r['status']=='completed' for r in row['outbox'])),
               telemetry=store.child_usage_from_events(old_child))
             row.update(questionCount=len(card['questions']),
                        finalRequestCount=len(graph.feedback.records(run['runId'])),
@@ -89,4 +111,4 @@ async def run(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--router',required=True);parser.add_argument('--output',required=True)
-    parser.add_argument('--repeats',type=int,default=2);asyncio.run(run(parser.parse_args()))
+    parser.add_argument('--repeats',type=int,default=2);parser.add_argument('--direct',action='store_true');asyncio.run(run(parser.parse_args()))

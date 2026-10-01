@@ -1,7 +1,7 @@
-"""Durable specialist checkpoints. Main owns interviewing and continuation.
+"""Durable specialist checkpoints, root-owned interview and granted continuation.
 
-No model-supplied answer is recorded as a user decision. Requests release the
-model turn; an outbox wakes main, which resumes the original child explicitly.
+Only user actions confirm answers. Requests release the model turn; typed jobs
+either continue the original child under root rights or request a main decision.
 """
 import asyncio
 import json
@@ -39,8 +39,10 @@ def evidence_signature(event):
     content = result.get('content') or result.get('text') or result.get('output')
     if not content:
         return None
-    if name in ('file_read', 'web_fetch', 'read_source'):
+    if name in ('file_read', 'web_fetch'):
         ref = args.get('path') or args.get('url')
+    elif name == 'read_source':
+        ref = result.get('url') or args.get('url') or args.get('ref')
     elif name == 'terminal_exec' and result.get('exit_code', result.get('exitCode')) == 0:
         ref = 'command:' + str(args.get('command') or '')
     elif name == 'work_artifact_read' and result.get('status') == 'finalized':
@@ -139,9 +141,12 @@ class Feedback:
     def validate(self, doc):
         run = self.graph.current(doc['runId'])
         if run['status'] in ('cancelled', 'rejected', 'shipped') or self.fingerprint(run, doc['binding']) != doc['fingerprint']:
+            pending = doc['status'] == 'needs_user'
             with self.db:
                 doc.update(status='stale')
                 self.save(doc)
+            if pending:
+                self.resolve_card(doc, 'assignment_changed')
             raise FeedbackError('WORK_REQUEST_STALE', 'assignment changed or run closed; inspect the saved checkpoint')
         for aid in doc['binding'].get('artifactIds', []):
             self.graph.artifacts.get(run['runId'], aid)
@@ -149,6 +154,12 @@ class Feedback:
 
     async def report(self, session, args, call_id):
         binding = session['config'].get('workBinding') or {}
+        if args.get('action') == 'read':
+            doc = self.get(args.get('requestId'),session.get('parent_id') or session['id'])
+            if session.get('parent_id') and doc['childId'] != session['id']:
+                raise FeedbackError('WORK_REQUEST_SCOPE','child may read only its own checkpoint/answers',403)
+            self.validate(doc)
+            return doc
         if not session.get('parent_id'):
             return self.main_action(session, args)
         if not binding.get('runId'):
@@ -167,6 +178,11 @@ class Feedback:
                 raise FeedbackError('WORK_REPORT_INVALID', 'ask 1..3 questions per interview round', 400)
         elif questions:
             raise FeedbackError('WORK_REPORT_INVALID', 'questions belong to needs_user; evidence requests use reason', 400)
+        keys, grant = [], None
+        if kind == 'needs_user':
+            from .work_grants import decision_keys
+            keys = decision_keys(args.get('decisionKeys'),len(questions)) if 'decisionKeys' in args else [q['id'] for q in questions]
+            grant = self.graph.grants.find(run,binding,keys)
         invocation = str(args.get('invocationId') or call_id or '')
         if not 1 <= len(invocation) <= 120:
             raise FeedbackError('WORK_REPORT_INVOCATION', 'invocationId required, max 120 characters', 400)
@@ -188,10 +204,24 @@ class Feedback:
                'revision': 1, 'kind': kind, 'status': 'waiting_main', 'questions': questions,
                'answers': [], 'reason': str(args.get('reason') or '')[:3000], 'artifact': meta,
                'binding': binding, 'fingerprint': self.fingerprint(run, binding), 'createdAt': time.time()}
+        if kind == 'needs_user':
+            doc['decisionKeys'] = keys if grant or 'decisionKeys' in args else []
+            if grant:
+                doc['grantId'] = grant['grantId']
         with self.db:
             self.db.execute('INSERT INTO work_requests VALUES(?,?,?,?,?,?,?)',
                 (doc['requestId'], run['runId'], doc['ownerId'], session['id'], invocation, request_hash,
                  json.dumps(doc, ensure_ascii=False)))
+        if kind == 'needs_user' and doc.get('grantId'):
+            conflict = self.decision_conflict(doc)
+            if conflict:
+                with self.db:
+                    doc.update(routingReason='decision_conflict',conflictingRequestId=conflict['requestId'])
+                    self.save(doc)
+            elif grant['publishInterview']:
+                self.open_interview(self.rt.store.get(doc['ownerId']),
+                    {'workRequestId':doc['requestId'],'revision':doc['revision']},call_id,automatic=True)
+                doc = self.get(doc['requestId'])
         self.rt.store.emit(session['parent_id'], 'work_feedback', doc)
         return doc
 
@@ -207,7 +237,7 @@ class Feedback:
         if explicit is not None and (not isinstance(explicit, str) or not 1 <= len(explicit) <= 120):
             raise FeedbackError('WORK_REPORT_INVOCATION', 'invocationId must contain 1..120 characters', 400)
         digest = work_policy.digest(args)
-        invocation = 'resume:' + (explicit or digest)
+        invocation = str(args.get('action')) + ':' + (explicit or digest)
         old = self.db.execute('SELECT request_hash,result FROM work_feedback_invocations WHERE owner_id=? AND invocation=?',
                               (session['id'], invocation)).fetchone()
         if old:
@@ -222,6 +252,19 @@ class Feedback:
             raise FeedbackError('WORK_REQUEST_UNKNOWN', 'request is from another run', 404)
         self.validate(doc)
         self.revision(doc, args.get('revision'))
+        if args.get('action') == 'cancel':
+            pending_card = self.card(doc) if doc['status'] == 'needs_user' else None
+            with self.db:
+                doc.update(status='cancelled', revision=doc['revision'] + 1)
+                self.save(doc)
+                self.db.execute("UPDATE work_feedback_outbox SET status='cancelled' WHERE request_id=? AND status IN ('pending','claimed')", (doc['requestId'],))
+                self.db.execute('INSERT INTO work_feedback_invocations VALUES(?,?,?,?)',
+                    (session['id'], invocation, digest, json.dumps(doc, ensure_ascii=False)))
+            self.graph.continuations.cancel_request(doc['requestId'])
+            if pending_card:
+                self.resolve_card(doc, 'session_cancelled', card=pending_card)
+            self.rt.store.emit(session['id'], 'work_feedback', doc)
+            return doc
         if args.get('action') != 'resume' or doc['kind'] == 'needs_user' and doc['status'] != 'interrupted':
             raise FeedbackError('WORK_REPORT_ACTION', 'main interviews needs_user via interview(workRequestId); resumes other checkpoints', 400)
         if doc['status'] not in ('waiting_main', 'ready', 'interrupted'):
@@ -247,7 +290,23 @@ class Feedback:
                             (session['id'], invocation, digest, json.dumps(doc, ensure_ascii=False)))
         return doc
 
-    def open_interview(self, session, args, call_id):
+    def decision_conflict(self, doc):
+        """IDs define a logical decision; don't infer semantic equivalence from prose."""
+        keys = set(doc.get('decisionKeys') or [])
+        if not keys:
+            return None
+        for other in self.records(doc['runId']):
+            if (other['requestId'] == doc['requestId'] or other['status'] in ('stale','cancelled')
+                    or not keys & set(other.get('decisionKeys') or [])):
+                continue
+            try:
+                self.validate(other)
+            except FeedbackError:
+                continue
+            return other
+        return None
+
+    def open_interview(self, session, args, call_id, *, automatic=False):
         doc = self.get(args.get('workRequestId'), session['id'])
         self.validate(doc)
         self.revision(doc, args.get('revision'))
@@ -255,11 +314,15 @@ class Feedback:
             raise FeedbackError('WORK_REQUEST_NOT_READY', 'request is not waiting for an interview')
         if doc['status'] == 'needs_user':
             return self.card(doc)
+        conflict = self.decision_conflict(doc)
+        if conflict:
+            raise FeedbackError('WORK_INTERVIEW_CONFLICT','decision already belongs to '+conflict['requestId']+'; resolve or cancel the conflicting request')
         questions = self.rt.normalize_interview(args) if args.get('questions') else doc['questions']
         if len(questions) > 3:
             raise FeedbackError('WORK_REPORT_INVALID', 'ask 1..3 questions per interview round', 400)
         with self.db:
             doc.update(status='needs_user', questions=questions, toolCallId=call_id,
+                       publication='delegated' if automatic else 'main',requiresMainYield=not automatic,
                        title=str(args.get('title') or 'Câu hỏi làm rõ')[:160])
             self.save(doc)
         card = self.card(doc)
@@ -277,11 +340,18 @@ class Feedback:
                             {'id': 'decide', 'label': 'Để agent quyết định', 'kind': 'alternative'}],
                 'answers': doc['answers'], 'deadline': None, 'defaultChoice': 'decide',
                 'toolCallId': doc.get('toolCallId'), 'runId': doc['runId'], 'workRequestId': doc['requestId'],
-                'revision': doc['revision'], 'durable': True, 'resolved': False}
+                'revision': doc['revision'], 'durable': True, 'resolved': False,
+                'requiresMainYield':doc.get('requiresMainYield',True)}
 
     def pending(self, owner):
         return [self.card(json.loads(r['doc'])) for r in self.db.execute(
             'SELECT doc FROM work_requests WHERE owner_id=?', (owner,)) if json.loads(r['doc'])['status'] == 'needs_user']
+
+    def resolve_card(self, doc, reason, *, card=None):
+        """Close the existing UI contract without inventing an answer/consent."""
+        self.rt.store.emit(doc['ownerId'], 'decision_resolved', (card or self.card(doc)) | {
+            'status': 'cancelled', 'resolved': True, 'outcome': 'cancelled', 'reason': reason,
+            'choice': None, 'resolvedAt': time.time()})
 
     def answer(self, owner, decision_id, choice, answers, invocation=None):
         try:
@@ -329,19 +399,30 @@ class Feedback:
                 (owner, invocation, digest, json.dumps(result, ensure_ascii=False)))
             if done:
                 oid = 'work-feedback-' + rid + '-' + str(doc['revision'])
+                rights = next((g for g in self.graph.grants.records(run['runId'])
+                               if g['grantId'] == doc.get('grantId')), None)
+                direct = bool(rights and rights['resumeOnAnswers'] and self.graph.grants.valid(rights, run, doc['binding']))
+                job = ({'action': 'resume_child', 'runId': run['runId'], 'stage': doc['binding']['stage'],
+                        'requestRevision': doc['revision'], 'childId': doc['childId']} if direct else
+                       {'action': 'main_decision', 'prompt': f'[Work Graph] Answers saved for {rid}. Read work_report status; '
+                        'continue the original child via work_run/work_check from the saved checkpoint. '
+                        'New answers allow fresh owner-clamped turn budget; preserve lifetime usage and child identity.'})
                 self.db.execute('INSERT INTO work_feedback_outbox VALUES(?,?,?,?,?)',
-                    (oid, owner, rid, 'pending', json.dumps({'prompt': f'[Work Graph] Answers saved for {rid}. Read work_report status; '
-                     'continue the original child via work_run/work_check from the saved checkpoint. '
-                     'New answers allow fresh owner-clamped turn budget; preserve lifetime usage and child identity.'})))
-        self.rt.store.emit(owner, 'decision_resolved', old_card | result)
+                    (oid, owner, rid, 'pending', json.dumps(job, ensure_ascii=False)))
+        # The route receipt uses `resolved`; the existing transcript contract
+        # accepts `answered`. Sending the receipt status made reload show pending.
+        self.rt.store.emit(owner, 'decision_resolved', old_card | result | {
+            'status': 'answered', 'resolved': True, 'reason': 'user', 'resolvedAt': time.time()})
         if not done:
             self.rt.store.emit(owner, 'decision_requested', self.card(doc))
         self.rt.store.emit(owner, 'work_feedback', doc)
+        if done:
+            self.graph.continuations.wake(run['runId'])
         return result
 
     def yielded(self, child_id):
         rows = self.db.execute('SELECT doc FROM work_requests WHERE child_id=? ORDER BY rowid DESC', (child_id,))
-        return next((json.loads(r['doc']) for r in rows if json.loads(r['doc'])['status'] == 'waiting_main'), None)
+        return next((json.loads(r['doc']) for r in rows if json.loads(r['doc'])['status'] in ('waiting_main','needs_user','ready')), None)
 
     def ready(self, work):
         for doc in reversed(self.records(work['runId'])):
@@ -352,27 +433,37 @@ class Feedback:
 
     def consume(self, doc):
         with self.db:
-            doc.update(status='consumed')
-            self.save(doc)
+            current = self.get(doc['requestId'])
+            if current['status'] == 'resuming':
+                current.update(status='consumed')
+                self.save(current)
 
     def admission(self, doc, work):
         """Record before starting; an uncertain crash is not an automatic replay."""
         with self.db:
-            doc.update(status='resuming', resumedBinding=work, resumedAt=time.time())
-            self.save(doc)
+            current = self.get(doc['requestId'])
+            if current['status'] != 'ready' or current['revision'] != doc['revision']:
+                raise FeedbackError('WORK_RESUME_BUSY', 'request changed before admission')
+            current.update(status='resuming', resumedBinding=work, resumedAt=time.time())
+            self.save(current)
 
     def cancel(self, owner):
+        cards = []
         with self.db:
             for row in self.db.execute('SELECT doc FROM work_requests WHERE owner_id=?', (owner,)).fetchall():
                 doc = json.loads(row['doc'])
                 if doc['status'] not in ('consumed', 'stale', 'cancelled'):
+                    if doc['status'] == 'needs_user':
+                        cards.append(doc.copy())
                     doc['status'] = 'cancelled'
                     self.save(doc)
-            self.db.execute("UPDATE work_feedback_outbox SET status='cancelled' WHERE owner_id=? AND status='pending'", (owner,))
+            self.db.execute("UPDATE work_feedback_outbox SET status='cancelled' WHERE owner_id=? AND status IN ('pending','claimed')", (owner,))
+        for doc in cards:
+            self.resolve_card(doc, 'session_cancelled')
 
 
 async def pump(rt):
-    """Admit main once. A crash after an actual turn started needs explicit continuation.
+    """Dispatch typed jobs; notifications/granted handoffs never open a main turn.
 
     Retrying an admission that may have run tools would replay effects. Preserve an
     interrupted receipt instead, and let main inspect the durable ready request.
@@ -384,6 +475,9 @@ async def pump(rt):
     rows = feedback.db.execute("SELECT * FROM work_feedback_outbox WHERE status='pending'").fetchall()
     for row in rows:
         try:
+            if json.loads(row['doc']).get('action') == 'resume_child':
+                feedback.graph.continuations.kick(row)
+                continue
             doc = feedback.get(row['request_id'], row['owner_id'])
             feedback.validate(doc)
             sid = row['owner_id']
@@ -431,8 +525,17 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         current = rt.store.get(child_id)
         if current['status'] in ('running', 'awaiting_decision') or rt.tasks.get(child_id) and not rt.tasks[child_id].done():
             raise FeedbackError('WORK_RESUME_BUSY', 'another admission won the child slot')
-        if request and feedback.get(request['requestId'])['status'] != 'ready':
-            raise FeedbackError('WORK_RESUME_BUSY', 'request already admitted or changed')
+        if request:
+            saved = feedback.get(request['requestId'])
+            feedback.validate(saved)
+            if saved['status'] != 'ready' or saved['revision'] != request['revision']:
+                raise FeedbackError('WORK_RESUME_BUSY', 'request already admitted or changed')
+        if work.get('controllerOwned'):
+            feedback.graph.continuations.authorized(request, feedback.validate(request))
+        # The owner can lower limits while this admission waits for a slot.
+        owner = rt.store.get(owner['id'])
+        step_limit = min(effective.get('requestedMaxSteps', effective.get('effectiveMaxSteps', child['config']['maxSteps'])), owner['config']['maxSteps'])
+        deadline = min(effective.get('requestedDeadlineSeconds', effective.get('effectiveDeadlineSeconds', child['config']['deadlineSeconds'])), owner['config']['deadlineSeconds'])
         work = dict(work)
         work['admissionSeq'] = rt.store.db.execute('SELECT COALESCE(MAX(seq),0) FROM events WHERE session_id=?', (child_id,)).fetchone()[0]
         config = child['config']
@@ -448,7 +551,7 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
             feedback.db.execute('INSERT INTO work_resume_inputs VALUES(?,?,?)', (child_id,input_hash,time.time()))
         # The legacy child ledger aggregates this identity; the event ledger keeps each turn.
         rt.store.db.execute("UPDATE children SET status='started',finished=NULL,started=?,parent_turn=? WHERE session_id=?",
-                            (time.time(), rt.active_turn.get(owner['id'], 0), child_id))
+                            (time.time(), 0 if work.get('controllerOwned') else rt.active_turn.get(owner['id'], 0), child_id))
         rt.store.db.commit()
         rt.track_child_slot(child_id, owner['id'])
         task = rt.start(child_id, prompt, invocation_id='work-resume-' + uuid.uuid4().hex)
@@ -468,8 +571,9 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
                     saved.update(status='interrupted')
                     feedback.save(saved)
         lifetime_steps, lifetime_tokens = rt.store.child_usage_from_events(child_id)
-        rt.store.child_finish(child_id, 'cancelled', reason='WORK_RESUME_CANCELLED',
-                              steps_used=lifetime_steps, output_tokens=lifetime_tokens, answer_chars=0)
+        if (rt.store.child(child_id) or {}).get('status') == 'started':
+            rt.store.child_finish(child_id, 'cancelled', reason='WORK_RESUME_CANCELLED',
+                                  steps_used=lifetime_steps, output_tokens=lifetime_tokens, answer_chars=0)
         raise
     feedback = service(rt)
     checkpoint = feedback.yielded(child_id)

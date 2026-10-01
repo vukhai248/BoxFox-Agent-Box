@@ -1,0 +1,1449 @@
+{
+  "scope": "Post-hoc visible-final audit of OLD policy9 output; no certification of A2/current code",
+  "sourceFile": ".tmp\\work-checks\\w612-scope9-compact-flow\\results.json",
+  "sourceHash": "4a9c83bfdbdc9a3ab43f71d9cf23c2b547dc765666459b538092d3189bb4fab1",
+  "route": {
+    "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+    "modelId": "space-bunny-free"
+  },
+  "sourceCommit": "1be035fb8bc3c1beb08df77d65fd7d7891cf22dc",
+  "sourceHashes": {
+    "backend\\src\\agentbox\\agent_core\\work_artifacts.py": "fd542fe1eb4fe73d626b74100e02dcf6413dff29d082619d2833d16e9823139f",
+    "backend\\src\\agentbox\\agent_core\\work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend\\src\\agentbox\\agent_core\\work_checks.py": "91ba0109d7a367640a652d7371b62c6405d899dc65febc0e7547e5556039a74d",
+    "backend\\src\\agentbox\\agent_core\\work_graph.py": "8c47321ad59f8c250b753fae798e6ea53d98f209fea80434b4540a11f3027b16",
+    "backend\\src\\agentbox\\agent_core\\work_policy.py": "e2c457a2ba021471987c1860f7f8056d8af812dd4153a771ee01f794c1b987da",
+    "backend\\src\\agentbox\\agent_core\\work_prompts.py": "17a14afac5c28fb74b681455fb75a8066af5a5d0afc616306c81cad970172a42",
+    "backend\\src\\agentbox\\agent_core\\runtime.py": "3611d2aced03d8aee3979dd115653badaae9378ec2066f195e83dff71ed7f56e",
+    "backend\\src\\agentbox\\agent_core\\roles.py": "5cabb2907da1be9c44239c8cceea8a8d536c80c7765cd13f791ee5c12b932da1",
+    "backend\\src\\agentbox\\memory\\session_store.py": "4f5de3e68d9a1b10a47fff8eddf1eaeed9f8f8f0c5b5f64b5ded858b448a2c11",
+    "scripts\\eval\\work_integration_eval.py": "a5c4c54d248f032e66f6722d5b69165ff1af118ad2a3754a7b845eeed2876cbe"
+  },
+  "mainStatus": "completed",
+  "mainExecutionStatus": "completed",
+  "workflowOracle": false,
+  "latencySeconds": 3664.036,
+  "mainVisibleFinal": "## Kết quả\n\n**Bản thiết kế đã kiểm:** `.plans/work/a59996b010c2c1e331d7/w-e9501a3a92/D1/produce/v2-a-b7097396bd0d4c45bb56c23977f3de35.md`\n\nKhông sửa dòng code nào. Baseline chạy lại lúc cuối vẫn `1 failed in 0.20s`.\n\n### 1. Hiện trạng (bằng chứng chạy thật)\n\n`python -m pytest -q` → 1 test, 1 failed:\n```\nE       AssertionError: assert ['H s'] == ['Hồ sơ']\ntests\\test_export.py:4: AssertionError\n```\nNguyên nhân xác minh tại `src/export.py:3`: `value.encode('ascii', errors='ignore').decode()` xoá mọi ký tự phi-ASCII, nên `'Hồ sơ'` thành `'H s'`. Vi phạm trực tiếp `docs/source.md:1` (\"giữ nguyên tiếng Việt\").\n\n### 2. Hợp đồng dự kiến\n\nChữ ký `export(value: str) -> str`. Đầu vào: đúng **một chuỗi**. Đầu ra: đúng **một bản ghi CSV một trường**, dialect `excel`, luôn kết thúc `\\r\\n`, không BOM, không header. Thực thi: `csv.writer(io.StringIO(newline=''), dialect='excel').writerow([value])` rồi trả `getvalue()`.\n\nQuy tắc `QUOTE_MINIMAL`: bọc `\"` khi trường chứa `,` `\"` `\\r` hoặc `\\n`; `\"` bên trong nhân đôi thành `\"\"`.\n\n### 3. Unicode / escaping / newline / chuỗi rỗng\n\n| input | output | round-trip `csv.reader` |\n|---|---|---|\n| `'a'` | `a\\r\\n` | `['a']` |\n| `'Hồ sơ'` | `Hồ sơ\\r\\n` | `['Hồ sơ']` |\n| `'a,b'` | `\"a,b\"\\r\\n` | `['a,b']` |\n| `'a\"b'` | `\"a\"\"b\"\\r\\n` | `['a\"b']` |\n| `'a\\r\\nb'` | `\"a\\r\\nb\"\\r\\n` | `['a\\r\\nb']` |\n| `''` | `\\r\\n` | `['']` |\n\nChuỗi rỗng là giá trị **hợp lệ**, không phải lỗi, không phải `None`.\n\nVề newline phía đọc: `io.StringIO(out)` mặc định `newline='\\n'` nên **không** dịch `\\r` thành `\\n`. Lỗi thật là `csv.reader` kết thúc bản ghi tại ký tự cuối dòng, nên trường đã quote chứa `\\r\\n` bị tách thành **hai bản ghi** và mất `\\r`. Vì vậy phía test bắt buộc `io.StringIO(out, newline='')`.\n\n**Lỗi:** `value` không phải `str` → ném `TypeError` (guard đặt trước bước ghi). Mọi `str` còn lại không rơi vào nhánh lỗi nào.\n\n### 4. Bảng kiểm chứng\n\n| input | expected output | expected round-trip | test | trạng thái |\n|---|---|---|---|---|\n| `'Hồ sơ'` | `Hồ sơ\\r\\n` | `['Hồ sơ']` | `test_unicode` | **đang tồn tại** (`tests/test_export.py:3-4`) |\n| `'a'` | `a\\r\\n` | `['a']` | `test_plain` | dự kiến thêm |\n| `'a,b'` | `\"a,b\"\\r\\n` | `['a,b']` | `test_comma` | dự kiến thêm |\n| `'a\"b'` | `\"a\"\"b\"\\r\\n` | `['a\"b']` | `test_quote` | dự kiến thêm |\n| `'a\\r\\nb'` | `\"a\\r\\nb\"\\r\\n` | `['a\\r\\nb']` | `test_newline` | dự kiến thêm |\n| `''` | `\\r\\n` | `['']` | `test_empty` | dự kiến thêm |\n| `123` | — | ném `TypeError` | `test_type_error` | dự kiến thêm |\n\nChỉ `test_unicode` tồn tại; 6 test còn lại **chưa tồn tại**, không test nào được ghi là đã pass.\n\n### 5. Khác biệt source đang lỗi ↔ thiết kế sau sửa\n\n| vị trí | hiện trạng | sau sửa |\n|---|---|---|\n| `src/export.py:3` | `.encode('ascii', errors='ignore').decode()` → mất tiếng Việt | bỏ hẳn dòng này, giữ nguyên `value` |\n| `src/export.py:2` | không kiểm tra kiểu, non-`str` → `AttributeError` | thêm guard `TypeError` |\n| `tests/test_export.py:4` | `io.StringIO(export(...))` | `io.StringIO(export(...), newline='')` |\n\n## Trạng thái kiểm chứng Work Graph\n\nRun `w-e9501a3a92`, đúng một node design D1 như yêu cầu.\n\n- Vòng 1: `design_review` trên artifact v1 → **revise**, 3 finding thật (thiếu output baseline; sai cơ chế giải thích `io.StringIO`; bảng test không tách test tồn tại với test dự kiến).\n- Tôi đã sửa cả 3 và sinh v2.\n- Vòng 2: `design_review` trên v2 → **VERDICT: ok**, coverage A1–A8 + C1 đều `pass`.\n\n**Chưa đóng được:** `work_graph action=verify` gọi hai lần, cả hai trả `needs_revision` với findings `Missing single final VERDICT line` — reviewer toàn cục không in dòng `VERDICT:` cuối nên harness không chấp nhận, run không chuyển sang `verified` và chưa ghi tài liệu tổng hợp. Đây là lỗi định dạng output của reviewer, không phải finding về nội dung thiết kế; `validate` vẫn trả `valid: true` và `retry` báo không có stage nào bị reject. Tôi không coi bản này là đã qua whole verify và không bịa kết quả thay cho nó.\n\nMột điểm tôi chưa đo được: sandbox chỉ cho phép chạy `python -m pytest -q` nên không đếm được số từ. Văn bản dài 5335 ký tự, ước ngang sát trần 700 từ — có thể vượt nhẹ. Nếu chủ nhà muốn cắt gọn, phần dễ bỏ nhất là mục \"Phương án và đánh đổi\" (4 mục loại) và \"Vị trí tác động\", vì không thuộc yêu cầu báo cáo.",
+  "mainAdjudication": "Main correctly states whole verification unfinished, but incorrectly calls all three prior findings real and v2 checked. Repeats wrong empty output/round-trip and wrong quoted-newline claim; 5335 characters is not word-count proof. Source-preserving artifact-only scope remains intact.",
+  "children": [
+    {
+      "index": 0,
+      "id": "7db837ce0c5742f4b4a4be7e211bb5cf",
+      "role": "design",
+      "sessionStatus": "completed",
+      "visibleFinal": "## Mục tiêu và phạm vi\n\nThiết kế hợp đồng hàm `export(value) -> str` theo `docs/source.md:1` (chỉ CSV, giữ tiếng Việt, input một chuỗi, output một dòng CSV hợp lệ, `csv.reader` phải đọc lại đúng). Tài liệu thuần, không UI, không API server/endpoint, không ghi vào `src/` hay `tests/`.\n\nBaseline: main đã chạy `python -m pytest -q`; snapshot phiên tôi không chứa output (`acceptedDependencySnapshots: []`) nên **không** khẳng định pass/fail. Dự đoán nguyên nhân là suy luận, mục 6 nêu rõ.\n\n## Cấu trúc\n\nChữ ký: `def export(value: str) -> str`\n\n- **Input**: đúng một chuỗi. Mọi `str` hợp lệ: `''`, có `,`, `\"`, `\\r`, `\\n`, tiếng Việt có dấu.\n- **Output**: đúng **một dòng CSV** theo dialect `excel` — delimiter `,`, quotechar `\"`, `QUOTE_MINIMAL`, lineterminator `\\r\\n` (mặc định `csv.writer`), luôn kết thúc bằng `\\r\\n`. Không BOM, không header, không dòng thứ hai, không `None`, không `list`.\n\nSkeleton hợp đồng (mô tả, không ghi file):\n\n```python\ndef export(value: str) -> str:\n    if not isinstance(value, str): raise TypeError(...)\n    s = io.StringIO(newline='')\n    csv.writer(s).writerow([value])\n    return s.getvalue()   # writerow ghi thẳng ra buffer\n```\n\n## Luồng và lỗi\n\nBảng hành vi (`\\r\\n` viết dạng escape = 2 ký tự thật):\n\n| input | output mong đợi | round-trip `list(csv.reader(io.StringIO(out, newline='')))` |\n|---|---|---|\n| `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` |\n| `'a'` | `'a\\r\\n'` | `['a']` |\n| `'a,b'` | `'\"a,b\"\\r\\n'` | `['a,b']` |\n| `'a\"b'` | `'\"a\"\"b\"\\r\\n'` | `['a\"b']` |\n| `'a\\r\\nb'` | `'\"a\\r\\nb\"\\r\\n'` | `['a\\r\\nb']` |\n| `''` | `'\\r\\n'` | `['']` |\n\nQuy tắc: chuỗi không ký tự đặc biệt → không quote; chỉ quote khi chứa `,`/`\"`/`\\r`/`\\n`, nhân đôi `\"` bên trong. `''` **là giá trị hợp lệ**, không phải lỗi, không phải `None`.\n\n**Lỗi**: vi phạm tiền điều kiện (`value` không phải `str`) → **ném `TypeError`** với thông điệp nêu rõ `type(value).__name__`; đây là lỗi lập trình ở call site, không phải lỗi dữ liệu. Mọi `str` còn lại không nhánh lỗi nào (không `ValueError`, không lỗi encoding). Với mọi test, phía đọc **bắt buộc** `io.StringIO(out, newline='')`: `newline=''` giữ nguyên `\\r\\n` và `\\r\\n` nằm trong trường đã quote, khác `io.StringIO` mặc định (`tests/test_export.py:4` đang thiếu).\n\n## Vị trí tác động\n\nĐọc, tồn tại: `docs/source.md:1`, `src/export.py:1-6`, `tests/test_export.py:1-4`. Dự kiến sửa sau khi duyệt: `src/export.py` (bỏ dòng 3, thêm guard), `tests/test_export.py` (thêm `newline=''` + 6 test). `docs/source.md` giữ nguyên.\n\n## Phương án và đánh đổi\n\n| Nội dung | Hiện tại | Sau sửa | Vì sao hiện tại sai |\n|---|---|---|---|\n| Encoding | `src/export.py:3` `.encode('ascii', errors='ignore')` | giữ `str` nguyên vẹn | `'Hồ sơ'` → `'H s'`, mất dấu, vi phạm `docs/source.md:1` |\n| Lỗi type | `.encode` trên non-`str` → `AttributeError` | `TypeError` có thông điệp | Sai loại lỗi trong hợp đồng |\n| Đọc lại | `tests/test_export.py:4` `io.StringIO(...)` | `io.StringIO(..., newline='')` | Đọc mặc định dịch `\\r`→`\\n`, hỏng round-trip với giá trị chứa `\\r\\n` |\n\nChọn dialect `excel` mặc định (RFC 4180) thay vì `lineterminator='\\n'`: đổi terminator sẽ đổi **mọi** expected value trong bảng; nếu pipeline cần `\\n` thì phải chốt sớm.\n\n## Nghiệm thu và điều chưa rõ\n\n| input | expected output | expected round-trip | test |\n|---|---|---|---|\n| `'a'` | `'a\\r\\n'` | `['a']`, 1 dòng | `test_plain` |\n| `'Hồ sơ'` | `'Hồ sơ\\r\\n'` | `['Hồ sơ']` | `test_unicode` (sửa `:4`) |\n| `'a,b'` | `'\"a,b\"\\r\\n'` | `['a,b']` | `test_comma` |\n| `'a\"b'` | `'\"a\"\"b\"\\r\\n'` | `['a\"b']` | `test_quote` |\n| `'a\\r\\nb'` | `'\"a\\r\\nb\"\\r\\n'` | `['a\\r\\nb']`, đúng 1 dòng | `test_newline_in_value` |\n| `''` | `'\\r\\n'` | `['']` | `test_empty_is_valid` |\n| `42` | — | `pytest.raises(TypeError)` | `test_non_str_raises` |\n\nMọi dòng kiểm chứng assert cả output string lẫn round-trip. Suy luận (chưa chạy): `test_unicode` hiện FAIL vì `'H s' != 'Hồ sơ'`; cần bằng chứng chạy mới khẳng định.\n\nChờ người dùng: (1) chốt `\\r\\n` hay `\\n`; (2) có giữ `TypeError` strict hay nới sang `str(value)`; (3) có chấp nhận thêm test file hay giữ một file. Rủi ro: kỳ vọng escape `\\r\\n` dễ sai nếu ai đó đổi dialect.\n\n## Knowledge requests\n- none",
+      "wordCount": 676,
+      "contentHash": "449eee36b5deb52d30d717c3055b23d150c7fc8a28eb429d1b16b5df3c1186e9",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 3,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        }
+      ],
+      "adjudication": "Producer v1 has wrong empty-field output/round-trip, wrongly describes default StringIO CR translation, and labels list(reader) results with the flat next(reader) shape. Baseline unavailable is disclosed honestly. 676 words meets <700."
+    },
+    {
+      "index": 1,
+      "id": "29b5d5d811204bd5bae74d28de696de9",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "## Blocking findings\n\n**1. [HIGH] `''` → `'\\r\\n'` là expected output sai; giá trị đúng là `'\"\"\\r\\n'`**\n\nArtifact (mục \"Luồng và lỗi\" và bảng \"Nghiệm thu\") ghi: `''` → `''\\r\\n''`, round-trip `['']`. Cả hai vế đều sai theo CPython `Modules/_csv.c`, hàm `csv_writerow_lock_held`:\n\n```c\n if (self->num_fields > 0 && self->rec_len == 0) {\n   ...\n   self->num_fields--;\n   if (!join_append(self, NULL, 1))   /* quoted = 1 */\n```\n\nVới một field rỗng, `rec_len == 0` sau `join_append`, nên writer **ép `quoted=1`** và phát `\"\"`. `csv.writer(...).writerow([''])` cho `'\"\"\\r\\n'`, không phải `'\\r\\n'`.\n\nVế round-trip cũng không tự nhất quán: `'\\r\\n'` là một dòng trống, và `Reader_iternext_lock_held` trả `self->fields` — list rỗng `[]`. Bằng chứng độc lập trong chính `Lib/csv.py`: `DictReader.__next__` có `while row == []:` kèm chú thích *\"unlike the basic reader, we prefer not to return blanks\"`. `csv.reader` trên dòng trống trả `[]`, không phải `['']`.\n\nHệ quả cụ thể: `test_empty_is_valid` được thiết kế theo artifact sẽ **fail** khi implement, vì assert `export('') == '\\r\\n'` không bao giờ đúng với `csv` module. Đây là dòng mà nghiệm thu A2 và A5 bắt buộc phải có, và là hợp đồng cốt lõi (empty value hợp lệ). Bằng chứng phản bác đã xét: `lib/csv.py` `excel` dialect dùng `QUOTE_MINIMAL`, không phải `QUOTE_ALL`; nhưng `QUOTE_MINIMAL` **không** có ngoại lệ \"không quote\" cho field rỗng đơn — nhánh ép quote nằm ngoài `switch (dialect->quoting)`, nên vẫn áp dụng. Sửa tối thiểu: đổi hai ô thành `''` → `'\"\"\\r\\n'`, round-trip `['']`, và thêm ghi chú một dòng rằng field rỗng đơn luôn được quote theo `_csv.c`.\n\n## Ghi chú không chặn\n\n- **Baseline chưa vào tài liệu.** Task mục (1) yêu cầu nêu kết quả `python -m pytest -q`; artifact từ chối khẳng định vì `acceptedDependencySnapshots: []`. Đây là xử lý trung thực, **không** phải lỗi — nhưng main nên chèn output thật của main vào mục 1.\n- **A3 đúng và có nền.** Khuyến nghị `io.StringIO(out, newline='')` khớp tài liệu chính thức: *\"If csvfile is a file object, it should be opened with `newline=''`\"* (docs.python.org/3/library/csv.html). Cơ chế dịch `\\r`→`\\n` tôi suy từ các field `readuniversal`/`readtranslate` trong `Modules/_io/stringio.c`, **chưa chạy** — NOT RUN.\n- **Các claim khác đã kiểm và đúng:** `'Hồ sơ'` → `'H s'` (`.encode('ascii', errors='ignore')` loại ký tự ngoài ASCII) và `AttributeError` cho non-`str` khớp `src/export.py:3`. Đường dẫn và số dòng `docs/source.md:1`, `src/export.py:1-6`, `tests/test_export.py:1-4` đều tồn tại và chính xác.\n- **Câu hỏi mở vs hợp đồng đã chốt.** Bảng ghi `test_non_str_raises` → `pytest.raises(TypeError)` nhưng mục cuối lại hỏi user \"giữ `TypeError` strict hay nới sang `str(value)`\". Nên chốt một nhánh.\n- **A7 (word count):** không có công cụ đếm;4137 ký tự, ước lượng sát700. Phần \"không UI/API/endpoint\" thì rõ ràng đạt — không thấy HTTP, server hay endpoint nào.\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Chữ ký `def export(value: str) -> str`, output một dòng kết thúc `\\\\r\\\\n`; xác nhận đúng qua CPython Lib/csv.py: excel dialect `lineterminator = '\\\\r\\\\n'`, `quoting = QUOTE_MINIMAL`.\"},{\"id\":\"A2\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Có đủ 6 dòng hành vi nhưng dòng `''` sai: expected output phải `'\\\"\\\"\\\\r\\\\n'` chứ không phải `'\\\\r\\\\n'` — `csv_writerow_lock_held` ép `join_append(self, NULL, 1)` khi `num_fields>0 && rec_len==0`.\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Quy định bắt buộc `io.StringIO(out, newline='')` phía đọc cho mọi test; khớp docs.python.org/3/library/csv.html: \\\"it should be opened with newline=''\\\".\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Nêu rõ non-`str` → ném `TypeError` kèm `type(value).__name__`, và `''` là giá trị hợp lệ không phải lỗi (không ValueError, không nhánh lỗi nào khác).\"},{\"id\":\"A5\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Có đủ 4 cột input/expected output/expected round-trip/test, nhưng dòng `''` ghi `'' -> '\\\\r\\\\n' -> ['']`: cặp này tự mâu thuẫn — `csv.reader` trên dòng trống trả `[]` (bằng chứng: `DictReader.__next__` có `while row == []` với chú thích 'we prefer not to return blanks').\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Chỉ ra lỗi `src/export.py:3` ascii-ignore mất dấu và thiếu type guard, nêu hệ quả; nói rõ 'Suy luận (chưa chạy)' và không khẳng định test nào pass. Cả hai claim đã kiểm và đúng.\"},{\"id\":\"A7\",\"status\":\"unverified\",\"target\":\"artifact\",\"evidence\":\"Nửa 'không UI/API/endpoint' đạt rõ ràng. Nửa word count không kiểm được: không có công cụ đếm từ trong phiên này; artifact dài 4137 ký tự, ước lượng sát ngưỡng 700.\"},{\"id\":\"C1\",\"status\":\"revise\",\"target\":\"artifact\",\"evidence\":\"Đúng loại tài liệu (hợp đồng hàm, không UI/API), nhưng hợp đồng cho giá trị rỗng — trường hợp biên quan trọng nhất — viết sai giá trị trả về, nên chưa thống nhất giữa bảng hành vi và bảng kiểm chứng với hành vi thật của csv module.\"}]}\n```\n\nVERDICT: revise",
+      "wordCount": 707,
+      "contentHash": "41f8501d98ed1f5abb12ba40b25fe10f597044aeebf0338d991240dcee19355b",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 12,
+          "partial": true,
+          "code": "STEP_BUDGET_EXHAUSTED",
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e771201f8ed14d899003e4ee7b957c6e",
+            "runId": "a59996b010c2c1e331d7"
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e771201f8ed14d899003e4ee7b957c6e"
+          },
+          "resultHash": "ced461b4b2c125310ce4d4bbb6aab0be78f185cb5dcc38665247ea99ee896c4a"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Modules/_io/stringio.c",
+            "find": "readuniversal"
+          },
+          "resultHash": "4cd1691f850e85ca64f0ab7fac6fb213dddf3836a9515e64fa9d8a6ffee8dbf7"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/csv.html",
+            "find": "newline"
+          },
+          "resultHash": "65a4d1b139f3a2afdab529cae71f654b5a557ae311a7577de2487f63ff75adc4"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "blank line"
+          },
+          "resultHash": "9062c743260572d87e061b59a823778b3c226e0b8cd2b9006007e1f11147bf11"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.14/Lib/csv.py",
+            "find": "excel_dialect"
+          },
+          "resultHash": "1312d33d0926487e37b485f0f20985c7d78c2f071039547e5b72bf2b4c56266c"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.14/Modules/_csv.c",
+            "find": "quotechar"
+          },
+          "resultHash": "12122ab08f76617da0aa5bd3e0ea691b68c582eba4289bb4dc2ee1bf71414bfc"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/csv.html",
+            "find": "blank"
+          },
+          "resultHash": "e6293c0a93afbe9c32a6b4d97f3fc4936a08efdb12be09910d4362150f757b68"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "special_chars",
+            "ref": "r-fec33c9209824cfe924ad8567d789b0b"
+          },
+          "resultHash": "07fd67f01837f64bd2ded7fb147836cb6236da18f1c34f62677f43bf89780035"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "ref": "r-fec33c9209824cfe924ad8567d789b0b",
+            "find": "START_RECORD",
+            "offset": 22000,
+            "maxChars": 8000
+          },
+          "resultHash": "d209dd4cf91c4254161f3b5e761b357c36026e820ea193a1fe5fe437034c97d6"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "find": "StringIO",
+            "url": "https://docs.python.org/3/library/io.html"
+          },
+          "resultHash": "d285c83fcdb2c148f4e2f6f6acfc06ca11118e592ba404e7514b550ba51740d7"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "offset": 30000,
+            "find": "blank",
+            "maxChars": 6000,
+            "ref": "r-fec33c9209824cfe924ad8567d789b0b"
+          },
+          "resultHash": "c20f5b405f20e0b621e418a4945106590f2aecb1f9e3c966dbd7dbcd45f190a4"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "join_append",
+            "maxChars": 6000,
+            "offset": 26000,
+            "ref": "r-fec33c9209824cfe924ad8567d789b0b"
+          },
+          "resultHash": "7d17db8be410a2bf0f38763c7614b814598312e4dfe7b7fc637aa98ed57a07ca"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "num_fields == 0",
+            "maxChars": 6000,
+            "offset": 19000,
+            "ref": "r-fec33c9209824cfe924ad8567d789b0b"
+          },
+          "resultHash": "7bd965fe5e53760af12b1beee9a2cc4e52f61e128cd9b1739b7fbb82d8d0424a"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "readuniversal",
+            "maxChars": 6000,
+            "offset": 16000,
+            "ref": "r-9e6d31286b7540929332a8986e8a13e6"
+          },
+          "resultHash": "748bc7d3b693f6622fd8b3065d08ac093bf508331e8efa8bd857b59753911174"
+        }
+      ],
+      "adjudication": "Reviewer correctly refutes empty-field output using the exact _csv.c writer branch; blank raw row -> [] is also correct. Baseline gap is nonblocking here. Mechanism claims remain unexecuted. 707 words exceeds the 600-word reviewer cap."
+    },
+    {
+      "index": 2,
+      "id": "d165315e5dd34da6a8bbf5bc3d7d268e",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "## Đã kiểm\n- Đọc **toàn bộ** artifact `a-e771201f8ed14d899003e4ee7b957c6e` (4137 ký tự, `coverageComplete=true`, `allAssignedArtifactsRead=true`).\n- Mở nguồn gốc: `src/export.py` (6 dòng), `docs/source.md` (1 dòng), `tests/test_export.py` (4 dòng) — mọi trích dẫn `path:line` trong artifact đều khớp.\n- Mở nguồn chính thức: `docs.python.org/3/library/csv.html` (`csv.reader`/`writer` \"opened with `newline=''`\", dialect `excel`) và `Lib/_pyio.py` + `docs.python.org/3/library/io.html` (semantics `newline` của `TextIOWrapper`/`StringIO`).\n- **NOT RUN**: không có công cụ terminal trong phiên này (`bash`/`read` bị từ chối), nên tôi **không** chạy được `python -m pytest -q` và **không** đếm được số từ.\n\n## Blocking findings**B1 — Thiếu bằng chứng baseline `python -m pytest -q` (mục (1) được giao).**\n- Yêu cầu: mục (1) nêu rõ \"hiện trạng quan sát được, gồm kết quả baseline `python -m pytest -q` đã main chạy\".\n- Bằng chứng quan sát: artifact chỉ ghi *\"Baseline: main đã chạy `python -m pytest -q`; snapshot phiên tôi không chứa output (`acceptedDependencySnapshots: []`)… **không** khẳng định pass/fail\"*, và mục so sánh ghi *\"Suy luận (chưa chạy): `test_unicode` hiện FAIL\"*. Không có dòng output nào trong tài liệu.\n- Bằng chứng phản bác đã xét: artifact **không bịa** pass/fail, nên A6 vẫn đúng; nhưng việc khai báo giới hạn không xoá mục (1) được giao.\n- Hệ quả: node build kế tiếp không có baseline để biết `test_unicode` đang đỏ hay xanh trước khi sửa `src/export.py:3`; toàn bộ mục (7) \"vì sao hiện tại sai\" vẫn là suy luận, dù lỗi `.encode('ascii', errors='ignore')` tại `src/export.py:3` đã đúng theo tĩnh (tôi xác nhận `'Hồ sơ'` → `'H s'` là đúng).\n- Sửa tối thiểu: dán nguyên văn output `python -m pytest -q` vào mục hiện trạng, hoặc ghi rõ \"baseline: CHƯA chạy — owner phải chạy trước khi duyệt\" như một mục nghiệm thu mở.\n\n## Ghi chú không chặn\n- **N1 (medium, lỗi cơ chế trong tài liệu):** artifact viết `tests/test_export.py:4` \"Đọc mặc định dịch `\\r`→`\\n`\". Theo `Lib/_pyio.py`, `StringIO.__init__(initial_value=\"\", newline=\"\\n\")` — mặc định là `'\\n'`, **không phải** `None`; `io.html` quy định với `newline` là giá trị hợp lệ khác `None` thì \"line endings are returned to the caller untranslated\". Nên không có bước dịch `\\r`→`\\n`. Kết luận \"đọc mặc định làm hỏng round-trip\" vẫn đúng theo cơ chế khác (reader cắt dòng ở `\\n`, trường đã quote bị cắt đôi → mất `\\r`), nhưng lý do viết sai. Sửa: viết lại câu giải thích; **giữ nguyên** yêu cầu `io.StringIO(out, newline='')` (được `csv.html` chốt: \"opened with `newline=''`\").\n- **N2 (A7, unverified):** đã đọc hết artifact, không thấy UI/server/endpoint. Số từ không đo được (không có shell); 4137 ký tự ước ~700–760 token ⇒ rủi ro sát trần 700. Main nên tự đếm trước khi nghiệm thu.\n- **N3:** cột \"test\" trong bảng kiểm chứng liệt kê `test_plain`, `test_comma`, `test_quote`, `test_newline_in_value`, `test_empty_is_valid`, `test_non_str_raises` — trong repo chỉ có `test_unicode` (`tests/test_export.py:3`). Artifact có nói \"thêm 6 test\" ở mục Vị trí tác động, nhưng bảng không đánh dấu rõ cái nào đang tồn tại/cái nào dự kiến.\n\n## Trạng thái coverage\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Cấu trúc': `def export(value: str) -> str`, output đúng một dòng dialect `excel`, luôn kết thúc newline; khớp `docs/source.md:1`\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng hành vi có đủ 6 ca: 'a', 'Hồ sơ', 'a,b', 'a\\\"b', 'a\\\\r\\\\nb', '' (mỗi ca kèm output mong đợi + round-trip)\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục lỗi: 'phía đọc **bắt buộc** `io.StringIO(out, newline=\\\"\\\")`'; khớp csv.html 'it should be opened with newline='\\\"'\\\"''\\\"'\\\"''\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"'vi phạm tiền điều kiện … → **ném `TypeError`** với thông điệp nêu rõ `type(value).__name__`'; \\\"`''` **là giá trị hợp lệ**, không phải lỗi\\\"\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng nghiệm thu 4 cột: input | expected output | expected round-trip | test (7 dòng, gồm ca non-str dùng pytest.raises(TypeError))\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng so sánh nêu lỗi `src/export.py:3` và `tests/test_export.py:4` + hệ quả; không khẳng định pass nào, ghi rõ 'Suy luận (chưa chạy)'. Xem N1 về cơ chế diễn giải\"},{\"id\":\"A7\",\"status\":\"unverified\",\"target\":\"artifact\",\"evidence\":\"Đã đọc hết: không có UI/API server/endpoint (đạt). Số từ không đo được — không có công cụ terminal; 4137 ký tự ước ~700–760 token, sát trần 700 (xem N2)\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đúng loại thiết kế (hợp đồng hàm, không phải UI/API nên không cần màn hình trạng thái); hợp đồng/lỗi/threshold nhất quán; các path `docs/source.md:1`, `src/export.py:1-6`, `tests/test_export.py:1-4` đều tồn tại và khớp nội dung thật\"}]}\n```\n\nLưu ý nhất quán: verdict `revise` đến từ B1 (mục (1) được giao nhưng thiếu bằng chứng chạy), B1 nằm ngoài các id A/C nên không id coverage nào bị đánh `revise` — tôi không đánh dấu sai một tiêu chí thực sự thoả để khớp verdict.\n\nVERDICT: revise",
+      "wordCount": 733,
+      "contentHash": "b099529f760641d8d7dfe2a84b5a416385054a2f1df19d4fe51bc19f154ed845",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 12,
+          "partial": true,
+          "code": "STEP_BUDGET_EXHAUSTED",
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e771201f8ed14d899003e4ee7b957c6e",
+            "runId": "a59996b010c2c1e331d7",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e771201f8ed14d899003e4ee7b957c6e",
+            "limit": 8000,
+            "offset": 0
+          },
+          "resultHash": "ced461b4b2c125310ce4d4bbb6aab0be78f185cb5dcc38665247ea99ee896c4a"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/csv.html",
+            "maxChars": 6000,
+            "find": "lineterminator"
+          },
+          "resultHash": "d51febae83983f420a9f63e9589a2ff22e0c6a3a5cf3c104726727b1455bb34a"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Lib/_pyio.py",
+            "maxChars": 4000,
+            "find": "newline"
+          },
+          "resultHash": "c8dd1528fcb4e14ac57e5b054a73ce86cb807385063d279c78eb5b24935072fe"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "lineterminator",
+            "ref": "r-57219c15f7d240049e6f4749d87bc9c3",
+            "maxChars": 2500
+          },
+          "resultHash": "e99d92a4c71e763ee0b6ef88134769969277087ef7da29f79f14131f01561eab"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "class StringIO",
+            "ref": "r-3f2c40aba08e427daffc7d8c329b86e4",
+            "maxChars": 2500
+          },
+          "resultHash": "212e8dc2b1377a2f27bee579cf6897582b47a7000bb9e985bac2a15d8a339341"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "find": "newline",
+            "maxChars": 3000,
+            "url": "https://docs.python.org/3/library/io.html"
+          },
+          "resultHash": "2aed0234a3c0c048ac1db8a8acda08b80b6796f8262e6f96ba0b83fc579b5e58"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "newline universal",
+            "maxChars": 3000,
+            "ref": "r-5e1271efe24843d0ada750be3dc071c2"
+          },
+          "resultHash": "1df28c650ab66bcd9764474502eaf2f59d884d72db85a369611f2f4e8f77ba61"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "Read/write|When writing output|any other legal values",
+            "maxChars": 3200,
+            "ref": "r-5e1271efe24843d0ada750be3dc071c2",
+            "offset": 14000
+          },
+          "resultHash": "b00ce248347a66f83b71d2b893f13bcc3535ecba77ef88bbd121d678aec2824b"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "newline can be None",
+            "maxChars": 3500,
+            "offset": 24000,
+            "ref": "r-5e1271efe24843d0ada750be3dc071c2"
+          },
+          "resultHash": "c0491a667db1777a168ecebf880ff84e2a7ec1b9d5697aba7f3cff47111e83f8"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": "TextIOWrapper|newline",
+            "maxChars": 4000,
+            "offset": 31000,
+            "ref": "r-5e1271efe24843d0ada750be3dc071c2"
+          },
+          "resultHash": "4077e348f5dddfff5455e2e7c850eb026befb0a39841c853712d77523c14b70d"
+        }
+      ],
+      "adjudication": "Reviewer misses the empty-field error, passes A2/A5 by counting rows/headings, and incorrectly asserts quoted CRLF splits records under default StringIO. Baseline handoff gap is real but main had a command receipt; not fabrication. 733 words exceeds 600."
+    },
+    {
+      "index": 3,
+      "id": "674363c3dbd643668dd29f234885fc14",
+      "role": "design",
+      "sessionStatus": "completed",
+      "visibleFinal": "Đã đọc xong ba file nguồn (`docs/source.md:1`, `src/export.py:1-6`, `tests/test_export.py:1-4`). Dưới đây là bản thiết kế v2.\n\n# Hợp đồng `export(value) -> CSV string` (v2 — tài liệu thiết kế)\n\n## Mục tiêu và phạm vi\nThiết kế hợp đồng hàm `export(value) -> str`. Chỉ tài liệu: **không** sửa code, **không** UI, **không** API server/endpoint. Căn cứ: `docs/source.md:1` (chỉ xuất CSV, giữ tiếng Việt, một chuỗi vào – một dòng CSV hợp lệ ra), `src/export.py:1-6`, `tests/test_export.py:1-4`.\n\n## Hiện trạng — output thật do main chạy `python -m pytest -q`\n```\nF                                                                        [100%]\n================================== FAILURES ===================================\n________________________________ test_unicode _________________________________\n    def test_unicode():\n>       assert next(csv.reader(io.StringIO(export('Hồ sơ')))) == ['Hồ sơ']\nE       AssertionError: assert ['H s'] == ['Hồ sơ']\nE         At index 0 diff: 'H s' != 'Hồ sơ'\nE         Use -v to get more diff\ntests\\test_export.py:4: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_export.py::test_unicode - AssertionError: assert ['H s'] ==...\n1 failed in 0.14s\n```\n**1 test, 1 failed.** Nguyên nhân xác minh tại `src/export.py:3`: `value.encode('ascii', errors='ignore').decode()` loại bỏ mọi ký tự phi ASCII → `'Hồ sơ'` thành `'H s'`.\n\n## Cấu trúc và hợp đồng dữ liệu\n- Chữ ký: `export(value: str) -> str`.\n- Đầu vào: đúng **một chuỗi**. Đầu ra: đúng **một bản ghi CSV dialect `excel`**, **một trường**, **luôn kết thúc bằng `\\r\\n`**, không BOM, không header.\n- Thực thi hợp đồng: `csv.writer(io.StringIO(newline=''), dialect='excel').writerow([value])` rồi trả `getvalue()`.\n- Quy tắc trích dẫn (`QUOTE_MINIMAL` của dialect `excel`): bọc `\"` khi trường chứa `,` `\"` `\\r` hoặc `\\n`; `\"` bên trong nhân đôi thành `\"\"`.\n\n## Luồng và lỗi\n- `value` không phải `str` → ném `TypeError` (guard đặt ở `src/export.py:2`, **trước** bước ghi). Chuỗi rỗng là giá trị **hợp lệ**, không phải lỗi.\n- Phía đọc: `io.StringIO(out)` mặc định `newline='\\n'` nên **không** dịch `\\r` thành `\\n` — ký tự được giữ nguyên. Lỗi thật nằm ở chỗ `csv.reader` kết thúc bản ghi tại ký tự kết thúc dòng: trường đã bọc quote chứa `\\r\\n` bị tách làm **hai bản ghi** và **mất `\\r`**. Vì vậy phía test bắt buộc dùng `io.StringIO(out, newline='')`, theo khuyến nghị trong `csv.html` (“If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted correctly”). Đây là quy tắc thiết kế theo tài liệu; phiên này không chạy lệnh nào ngoài baseline ở trên.\n\n### Bảng hành vi\n| input | output | round-trip |\n|---|---|---|\n| `'a'` | `a\\r\\n` | `['a']` |\n| `'Hồ sơ'` | `Hồ sơ\\r\\n` | `['Hồ sơ']` |\n| `'a,b'` | `\"a,b\"\\r\\n` | `['a,b']` |\n| `'a\"b'` | `\"a\"\"b\"\\r\\n` | `['a\"b']` |\n| `'a\\r\\nb'` | `\"a\\r\\nb\"\\r\\n` | `['a\\r\\nb']` |\n| `''` | `\\r\\n` | `['']` |\n\n### Bảng kiểm chứng\n| input | expected output | expected round-trip | test | trạng thái |\n|---|---|---|---|---|\n| `'Hồ sơ'` | `Hồ sơ\\r\\n` | `['Hồ sơ']` | `test_unicode` | **ĐANG TỒN TẠI** (`tests/test_export.py:3-4`) |\n| `'a'` | `a\\r\\n` | `['a']` | `test_plain` | DỰ KIẾN THÊM |\n| `'a,b'` | `\"a,b\"\\r\\n` | `['a,b']` | `test_comma` | DỰ KIẾN THÊM |\n| `'a\"b'` | `\"a\"\"b\"\\r\\n` | `['a\"b']` | `test_quote` | DỰ KIẾN THÊM |\n| `'a\\r\\nb'` | `\"a\\r\\nb\"\\r\\n` | `['a\\r\\nb']` | `test_newline` | DỰ KIẾN THÊM |\n| `''` | `\\r\\n` | `['']` | `test_empty` | DỰ KIẾN THÊM |\n| `123` (không phải `str`) | — | ném `TypeError` | `test_type_error` | DỰ KIẾN THÊM |\n\nMọi round-trip đọc bằng `next(csv.reader(io.StringIO(out, newline='')))`.\n\n## So sánh hiện trạng ↔ thiết kế sau sửa\n| vị trí | hiện trạng | thiết kế |\n|---|---|---|\n| `src/export.py:3` | `.encode('ascii', errors='ignore').decode()` → mất tiếng Việt; baseline chứng minh `'Hồ sơ'` → `'H s'` | **bỏ hẳn dòng này**, giữ nguyên `value` |\n| `src/export.py:2` | không kiểm tra kiểu | **thêm guard `TypeError`** |\n| `tests/test_export.py:4` | `io.StringIO(export(...))` | **`io.StringIO(export(...), newline='')`** |\n\n## Vị trí tác động\n- **Đã đọc, tồn tại:** `docs/source.md`, `src/export.py`, `tests/test_export.py`.\n- **Dự kiến sửa (chưa tạo file mới):** `src/export.py`, `tests/test_export.py`.\n\n## Phương án và đánh đổi\n1. **Bỏ encode hoàn toàn (chọn).** Đúng yêu cầu giữ tiếng Việt, code ít đi. Đánh đổi: mã hoá khi ghi ra file phải do lớp gọi quyết định (UTF-8) — ngoài phạm vi hợp đồng này.\n2. `.encode('utf-8').decode()` — loại: encode rồi decode vẫn không phục hồi ký tự đã mất.\n3. `csv.QUOTE_ALL` — loại: sinh `\"` thừa cho `'a'`, lệch bảng hành vi.\n4. `lineterminator='\\r\\n'` tường minh — tương đương mặc định dialect `excel`; giữ dialect `excel` cho ngắn.\n\n## Nghiệm thu và điều chưa rõ\n- **Nghiệm thu:** `python -m pytest -q` phải xanh toàn bộ sau khi áp dụng các thay đổi trên; 7 dòng trong bảng kiểm chứng là tiêu chí đạt/không đạt. Riêng `test_unicode` phải chuyển từ **failed** (baseline ở trên) sang passed.\n- **Chờ người dùng quyết:** (a) mã hoá khi ghi file — UTF-8 có BOM hay không; (b) có cần mở rộng `export` sang nhiều cột / `export_many` trong tương lai không.\n- **Rủi ro:** dialect `excel` cố định `\\r\\n`; nếu còn test nào dùng `io.StringIO(out)` không có `newline=''` thì test trường chứa newline dễ xanh/đỏ sai nguyên nhân.\n\n## Knowledge requests\n- none",
+      "wordCount": 851,
+      "contentHash": "367f31653d34171648a3ec19ec9c97431f66910e743a922131d41d1ea5a3cadc",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 2,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        }
+      ],
+      "adjudication": "Producer v2 inherits false reader-mechanism premise from main, retains wrong empty-field output/round-trip despite reviewer 1, and exceeds <700 (851 words). Current vs planned test labels improved. UTF8 encode/decode alternative is redundant, not intrinsically unable to preserve Unicode when replacing ASCII conversion."
+    },
+    {
+      "index": 4,
+      "id": "c3fc875a7a0f412b8b4d298769e266ef",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "# Phản biện độc lập — Work Graph node D1 (design, produce), artifact v2\n\n**Đã kiểm:** đọc đầy đủ artifact `v2-a-b7097396bd0d4c45bb56c23977f3de35.md` (5335 ký tự, `coverageComplete=true`) và3 nguồn gốc: `src/export.py:1-6`, `tests/test_export.py:1-4`, `docs/source.md:1`. Không chạy lại `pytest` (baseline do main cung cấp, artifact dán nguyên văn khớp).\n\n## Vấn đề chặn — `none`\n\n## Ghi chú không chặn\n\n- **A1/A7 — baseline khớp nguyên văn.** Artifact dán đúng 15 dòng output main đưa, kết luận \"1 test, 1 failed\" khớp `1 failed in 0.14s`. Chẩn đoán `src/export.py:3` (`value.encode('ascii', errors='ignore').decode()`) khớp đúng source đã mở; `'Hồ sơ' → 'H s'` là hệ quả `errors='ignore'`, không phải suy luận.\n- **A2 — khớp.** `csv.writer(...).writerow([value])` + `io.StringIO(newline='')` mặc định dialect `excel` cho `\\r\\n`; artifact nêu đúng \"một bản ghi, một trường, không BOM/header\".\n- **A3/A6 — 6 dòng bảng hành vi khớp 6 input bắt buộc; cột trạng thái tách rõ `test_unicode` (ĐANG TỒN TẠI, `tests/test_export.py:3-4`) và 6 test DỰ KIẾN THÊM.** Ba finding vòng trước (B1/N1/N3) đều đã được sửa đúng.\n- **A4 — cơ chế đã đúng cơ chế.** Artifact nói `io.StringIO` mặc định `newline='\\n'` **không** dịch `\\r`, lỗi thật do `csv.reader` cắt bản ghi tại `\\n`. UNVERIFIED: câu trích `csv.html` (\"If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted correctly\") — không có công cụ mở web/tài liệu chuẩn trong phiên này, chỉ UNVERIFIED theo nội dung artifact, không phải lỗi đã xác nhận.\n- **Ghi chú nhỏ (không chặn, liên quan task):** `src/export.py:4-5` gọi `csv.writer(s)` không truyền `dialect='excel'` — tương đương về hành vi (excel là dialect mặc định) nhưng bảng \"so sánh\" nên ghi rõ dòng này là nơi `lineterminator`/`quoting` được quyết định, không chỉ dòng 2 và 3.\n- **A5 — khớp**, guard `TypeError` và `''` hợp lệ đều nêu tường minh; `'' → \\r\\n` → `['']` khớp với hành vi `QUOTE_MINIMAL` (trường rỗng không cần quote).\n- **A8 — không UI/API/endpoint;** độ dài 5335 ký tự, chưa đếm từ — không có dấu hiệu vượt 700 từ.\n- **C1 — đúng loại thiết kế** (hợp đồng hàm, không phải kế hoạch triển khai), hợp đồng/trạng thái/lỗi thống nhất giữa bảng hành vi, bảng kiểm chứng và bảng so sánh; phạm vi chỉ 3 path có thật (`codebase_glob` trả về đúng `src/export.py`, `docs/source.md`, `tests/test_export.py`).\n\n```json\n{\"coverage\":[{\"id\":\"A1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Hiện trạng' dán nguyên văn 15 dòng baseline, kết luận '1 test, 1 failed'; khớp block main cung cấp.\"},{\"id\":\"A2\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Cấu trúc và hợp đồng dữ liệu': export(value: str) -> str, một bản ghi excel một trường, luôn \\\\r\\\\n, không BOM/header.\"},{\"id\":\"A3\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng hành vi có đủ 6 input: 'a', 'Hồ sơ', 'a,b', 'a\\\"b', 'a\\\\r\\\\nb', ''.\"},{\"id\":\"A4\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Artifact nêu đúng: StringIO mặc định newline='\\\\n' KHÔNG dịch \\\\r; lỗi do csv.reader cắt bản ghi tại \\\\n; bắt buộc io.StringIO(out, newline=''). Trích csv.html chưa mở được nguồn -> UNVERIFIED, không tính lỗi.\"},{\"id\":\"A5\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Mục 'Luồng và lỗi': non-str -> TypeError guard tại src/export.py:2 trước bước ghi; '' là giá trị hợp lệ.\"},{\"id\":\"A6\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng kiểm chứng có cột input/expected output/expected round-trip/test/trạng thái; test_unicode ĐANG TỒN TẠI (tests/test_export.py:3-4), 6 test còn lại DỰ KIẾN THÊM.\"},{\"id\":\"A7\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Bảng so sánh nêu src/export.py:3 .encode('ascii', errors='ignore').decode() -> mất tiếng Việt, dựa trên baseline đã chạy; khớp source đã mở.\"},{\"id\":\"A8\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Không có mục UI/API server/endpoint; thiếu phần UI/loading không thuộc loại thiết kế này.\"},{\"id\":\"C1\",\"status\":\"pass\",\"target\":\"artifact\",\"evidence\":\"Đúng loại thiết kế hợp đồng hàm; hợp đồng/trạng thái/lỗi thống nhất giữa 3 bảng; chỉ 3 path có thật theo codebase_glob.\"}]}\n```\n\nVERDICT: ok",
+      "wordCount": 561,
+      "contentHash": "32284a65519cbabc74f331d4f4d2a5258a143cb2038c80a00d36a5deece250be",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 3,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35"
+          },
+          "resultHash": "02de1e798af543b7c99bfaef3afdaba67ffbebfeeba8e3f49144e61e19a25306"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        }
+      ],
+      "adjudication": "Reviewer returns ok and passes empty/newline claims that counterexamples refute. Describes web quote as unverified yet marks its technical criterion pass; word limit is not included in that coverage entry. 561 words meets reviewer cap, but semantic pass is wrong."
+    },
+    {
+      "index": 5,
+      "id": "bb932bf9fe4448149179c8536864184a",
+      "role": "plan-review",
+      "sessionStatus": "failed",
+      "visibleFinal": "",
+      "wordCount": 0,
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "finishReceipts": [
+        {
+          "message": "DEADLINE_EXCEEDED: the turn ran out of time before an answer was produced",
+          "code": "DEADLINE_EXCEEDED"
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-e70cec72c2944ce296d38008670a90e0",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "096cc8934dc1e1d0fb7aa23c5093dfcd1a0788a79b81f0cbb35696bdc32186af"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e70cec72c2944ce296d38008670a90e0",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4dffd3d47a3267e16e27ac02c6b393184f45e0ee7c8566ad659c1b3d92f7e148"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Lib/_csv.c",
+            "maxChars": 4000
+          },
+          "resultHash": "4e749bfbc4ed69e3b0e4bf3c347764e42faf752c812d80b5a226af89ae18cf74"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/csv.html",
+            "find": {
+              "item": "newline='' is not specified"
+            },
+            "item": "lineterminator",
+            "maxChars": 6000
+          },
+          "resultHash": "0d9af1f6c1a0d4ce41e2bbb8b931837e090b24cfc94d3a6e04420bf651fc4f26"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "embedded inside quoted fields",
+              "lineterminator",
+              "dialect excel"
+            ],
+            "ref": "r-c42a9de9d487432da282b6f63672f738",
+            "maxChars": 3500
+          },
+          "resultHash": "76915918616f5d01b79faf89c3619eef6c7f83592f97679d968a50f93cb63f75"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 3000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c"
+          },
+          "resultHash": "a01f7aae373abe41c0521ed3576de4d86ed55ac621ad2504e6039384819e20e0"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "find": {
+              "item": [
+                "io.StringIO",
+                "newline"
+              ]
+            },
+            "maxChars": 4000,
+            "url": "https://docs.python.org/3/library/io.html"
+          },
+          "resultHash": "b7824ecdf4b51b3ab681a19671b05ceb6bb578402250539fd0c28649f7e0893f"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "embedded inside quoted fields",
+              "If newline='' is not specified"
+            ],
+            "ref": "r-c42a9de9d487432da282b6f63672f738",
+            "maxChars": 2500
+          },
+          "resultHash": "56681408be60dcd9c155cfa0048245201e662dba32575a0ea0f7d05316e89d8d"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "StringIO(initial_value",
+              "newline argument works like"
+            ],
+            "ref": "r-020c56205132432db4526e526b49c633",
+            "maxChars": 3000
+          },
+          "resultHash": "24201f643549c1652f1bec1e31ed57a3fc2856adfde58981c5306de753753096"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "EAT_CRNL",
+              "EOL"
+            ],
+            "ref": "r-199e42a6ef414084840271df5534a8a4",
+            "maxChars": 3500
+          },
+          "resultHash": "9001278a48ecd0ae756c06f8f87ebe96769beb8b3c2c222dff3c33a73f0c3f15"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "case IN_QUOTED_FIELD",
+              "end of line - return [fields]",
+              "EAT_CRNL:"
+            ],
+            "maxChars": 4000,
+            "ref": "r-199e42a6ef414084840271df5534a8a4"
+          },
+          "resultHash": "7e6eb8e46afe648329a36a4de069aae4682da94a0405a60cbd8057b377086ca7"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "maxChars": 3000,
+            "offset": 19500,
+            "ref": "r-c42a9de9d487432da282b6f63672f738"
+          },
+          "resultHash": "68ca122bf750f74d737220edbd83e9f147bfb93845fcfea12aad8281aba92474"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "case START_RECORD",
+              "case IN_FIELD",
+              "case START_FIELD"
+            ],
+            "maxChars": 3000,
+            "ref": "r-199e42a6ef414084840271df5534a8a4"
+          },
+          "resultHash": "b2176f9f8077dab935bb710f31a7af179e760a84d13b88fc98badc021aa822a7"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "find": {
+              "item": [
+                "class excel",
+                "lineterminator"
+              ]
+            },
+            "maxChars": 2500,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Lib/csv.py"
+          },
+          "resultHash": "520c1dd4ec04b30a5600140d55fb8aceaa34150e00e6f1d62a9e806b276b7d5c"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 2000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_io/stringio.c"
+          },
+          "resultHash": "929e75617f3239f0386d71115bcbdb19113d6abb0f061d577c733afc63948e5d"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readuniversal",
+              "readtranslate",
+              "self->readnl"
+            ],
+            "maxChars": 2500,
+            "ref": "r-d86251e57b274f5293217c8ac0909c15"
+          },
+          "resultHash": "cd2ed580c014876c10aed4d3477b98d31af9cb3e1ffea96542a8ef1aac17cde9"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "find": {
+              "item": "embedded inside quoted fields"
+            },
+            "maxChars": 2000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Doc/library/csv.rst"
+          },
+          "resultHash": "43ce8a91eeeaaf17470c5a70c9a932df26a77841421a00564d8fa10fe722202d"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "embedded inside quoted fields",
+              ".. [1]"
+            ],
+            "maxChars": 2500,
+            "ref": "r-7a8a250022b242d4895a288e8630c83f"
+          },
+          "resultHash": "784c73cf77c9f00881e74a16c5720189392cfe9a36f5cc1e74fdd52d9555f57d"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readuniversal =",
+              "readtranslate =",
+              "writetranslate"
+            ],
+            "maxChars": 3000,
+            "offset": 8500,
+            "ref": "r-d86251e57b274f5293217c8ac0909c15"
+          },
+          "resultHash": "d14146c567d881e0b27c363fef1017b95028bff52cacd3678e8e56f432b2a8cd"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "_PyIO_find_line_ending",
+              "readnl = ",
+              "readline"
+            ],
+            "maxChars": 2000,
+            "ref": "r-d86251e57b274f5293217c8ac0909c15"
+          },
+          "resultHash": "1abd7a5f3f06d433951d01f683621d5d18a3816688ffecaf47dfc32fcf57285f"
+        }
+      ],
+      "adjudication": "Whole reviewer failed DEADLINE_EXCEEDED with no final; this is execution failure, not an adjudicated semantic verdict."
+    },
+    {
+      "index": 6,
+      "id": "11a5b1a98e724e4dbcf42de401d12620",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "**Đã làm xong**\n\n- Đọc đủ 2/2 artifact được giao (`allAssignedArtifactsRead=true`): `D1/produce/v2` (5335 chars) và `whole/verify/v3` (5975 chars).\n- Đối chiếu 3 file nguồn trong repo: `docs/source.md`, `src/export.py` (dòng 3 đúng là `.encode('ascii', errors='ignore').decode()`), `tests/test_export.py`. `codebase_glob` xác nhận repo chỉ có đúng 3 file này — không có UI/API nào.\n- Mở nguồn chính thức: `Modules/_csv.c` (CPython 3.12) — đọc được `parse_process_char` và `Reader_iternext`; `Lib/csv.py` — `excel.lineterminator = '\\r\\n'`, `quoting = QUOTE_MINIMAL`; `docs.python.org/3/library/csv.html`; `Modules/_io/stringio.c` — `_stringio_readline` dùng `_PyIO_find_line_ending(self->readtranslate, self->readuniversal, self->readnl, ...)`.\n- NOT RUN: không chạy được `python -m pytest -q` (không có terminal tool), nên **không tự xác minh output baseline** — chỉ đọc được khối baseline dán sẵn trong artifact.\n\n**Đang kẹt**\n\nKhông kẹt kỹ thuật, nhưng còn **1 kiểm chứng then chốt chưa khép lại**: dòng `''` trong bảng hành vi/bảng kiểm chứng của D1 khẳng định round-trip là `['']`. Đọc `Reader_iternext` cho thấy với `out = '\\r\\n'`, vòng `PyIter_Next` lấy dòng `'\\r\\n'`, parseở `START_FIELD` với `c=='\\r'` → `parse_save_field` → state `EAT_CRNL` → `EOL` → `START_RECORD`, nên về logic phải ra `['']`. Đây là **suy luận từ source C, chưa chạy**, và tôi chưa viết được phần báo cáo + khối JSON coverage theo đúng format bắt buộc.\n\n**Còn lại**\n\n- Viết findings chặn/không chặn + dòng `REVISE D1: ...` (nếu có) + fenced JSON coverage 11 id (G1,G2,G3,D1.A1–A8, mỗi id đúng 1 lần) + dòng `VERDICT` cuối cùng.\n\n**Làm tiếp**\n\n1. Chốt dòng `''` thành **UNVERIFIED (suy luận từ source, NOT RUN)** — không gọi là lỗi đã xác nhận, cũng không ghi pass vô điều kiện.\n2. Ghi pass cho A2–A8 (đã đối chiếu source + repo), A1 chỉ `unverified` vì không chạy được lệnh (baseline là khối main dán, đúng yêu cầu \"dán nguyên văn\").\n3. Rủi ro chính còn lại để thành finding: bảng hành vi thiếu `'a,b\\nc'`/`'a\\rb'` (chỉ có `\\r\\n`) và thiếu `'a;b'` cho `Sniffer` — nhưng đây là ghi chú tùy chọn, không chặn.",
+      "wordCount": 323,
+      "contentHash": "8d870622e8fbca6905fa02adbb3e44d8dbb0c741367e8a5f32f1cf80d349ff4a",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 9,
+          "partial": true,
+          "code": "DEADLINE_EXCEEDED",
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-e70cec72c2944ce296d38008670a90e0",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "limit": 8000,
+            "offset": 0
+          },
+          "resultHash": "096cc8934dc1e1d0fb7aa23c5093dfcd1a0788a79b81f0cbb35696bdc32186af"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-e70cec72c2944ce296d38008670a90e0",
+            "limit": 8000,
+            "offset": 0
+          },
+          "resultHash": "4dffd3d47a3267e16e27ac02c6b393184f45e0ee7c8566ad659c1b3d92f7e148"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_csv.c",
+            "maxChars": 20000,
+            "find": "IN_QUOTED_FIELD"
+          },
+          "resultHash": "3c68bad4d02b0b90dfd36df49bb5faa3823e3cd327da5ea5d444fe319868edcb"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 12000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Lib/csv.py",
+            "find": "readline"
+          },
+          "resultHash": "9d8b9c2ba38d169104d36749f297beb9fe67f0c9e3a2fe60291c310121f46c50"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 8000,
+            "url": "https://docs.python.org/3/library/csv.html",
+            "find": "newline=''"
+          },
+          "resultHash": "fd9b66304406a7cb6996d9da6e979ed17ee3d29262fa093f8a2be89bc80a5410"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "ref": "r-435d063fe7fa46e99052e6a94050c1eb",
+            "find": [
+              "Reader_iternext",
+              "empty line",
+              "EAT_CRNL"
+            ]
+          },
+          "resultHash": "a736e261fe217af230e85e9ac3a106234681479e6aefb23940f4f334ee6339ad"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 9000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.12/Modules/_io/stringio.c",
+            "find": "_stringio_readline"
+          },
+          "resultHash": "5c734970b6d562951dac8e3e4411fc980034733289cd866b05e23a9335296ed9"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "empty line",
+              "fields_len",
+              "parse_process_char(self"
+            ],
+            "ref": "r-435d063fe7fa46e99052e6a94050c1eb",
+            "offset": 15500
+          },
+          "resultHash": "d442c584dedca376772eb2ec923604f4a8c8ca8861d4db3f9e171f9cb605e5c2"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readuniversal",
+              "readtranslate",
+              "newline"
+            ],
+            "ref": "r-3df8b3fd4c174de39f7db7194884e020",
+            "offset": 14000
+          },
+          "resultHash": "38eb4cb9aef583b4ac5d0b1cded54519a52a2134a9896dcccee9cd79d5e965fd"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readuniversal",
+              "readnl",
+              "newline",
+              "translate"
+            ],
+            "maxChars": 6000,
+            "offset": 4200,
+            "ref": "r-3df8b3fd4c174de39f7db7194884e020"
+          },
+          "resultHash": "44a2a7974b459d1b6dcb421c4561dc845db8806757096fbc2659204b58756323"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "newline=''",
+              "embedded inside quoted fields"
+            ],
+            "maxChars": 7000,
+            "offset": 8000,
+            "ref": "r-d0ffbe8efe604a99badae6cc4cb3624c"
+          },
+          "resultHash": "41f38c089018c91a0f371e0e8ba7e3623341b00157e7d65aa3ed9e98a8dd5913"
+        }
+      ],
+      "adjudication": "Whole reviewer final is a partial checkpoint (DEADLINE_EXCEEDED), lacks final VERDICT/coverage, and incorrectly infers raw blank row -> [empty string] from an incomplete C-state reading. No valid review completion."
+    },
+    {
+      "index": 7,
+      "id": "cf06ccd0582c4e6889d80f19a387bbe3",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "**Đã làm xong:** đọc đầy đủ 2 artifact được giao (`whole/verify/v4-a-a682753a…` và `D1/produce/v2-a-b7097396…`, `allAssignedArtifactsRead=true`); đọc gốc trong repo (`src/export.py`, `tests/test_export.py`, `docs/source.md`, `codebase_glob` → đúng 3 file, khớp trích dẫn `path:line` của artifact); mở nguồn chính thức `csv.html` + `Doc/library/csv.rst` (3.14.8) và `Modules/_io/stringio.c`.\n\n**Đangở đâu / bằng chứng then chốt:** đã đọc `Modules/_io/stringio.c` offset17600 — `StringIO.__init__` đặt `readtranslate = (newline == NULL)` và `readuniversal = (newline == NULL || newline[0] == '\\0')`, tức `io.StringIO(out)` (newline mặc định `'\\n'`) → `readtranslate = 0`, `readuniversal = 0`. Điều này **xác nhận** tiền đề A4: StringIO mặc định không dịch `\\r`→`\\n` (đoạn artifact viết đúng, và A4 cấm viết sai). Chưa đọc được `Modules/_io/IOBase.c` (404 hai lần, file đã chuyển tên trong main).\n\n**Còn lại:** chưa kịp quyết định `status` cho11 id coverage và viết phần finding + `REVISE`/VERDICT. Điểm còn treo: claim \"csv.reader cắt bản ghi tại `\\n` nên trường quote chứa `\\r\\n` bị tách đôi và mất `\\r`\" trong `Modules/_csv.c` tôi mới chỉ đọc tới phần enum `ParserState` (`IN_QUOTED_FIELD`, `EAT_CRNL`) chứ chưa đọc thân vòng lặp `Reader_iternext` — đây là mắt xích quyết định status `pass`/`revise` cho A4 và A2 (bảng hành vi `''` → `\\r\\n`, round-trip `['']`).\n\n**Nên làm tiếp:** đọc tiếp `Modules/_csv.c` (bùng `read_source` quanh offset 13977–20000) để chốt hành vi `EAT_CRNL`; nếu không đọc kịp thì đánh dấu A4/A2 là `unverified` chứ không `pass`, rồi phát hành báo cáo với `VERDICT: revise` kèm `REVISE D1` cho phần nghiệm thu chưa tách được \"thiết kế\" với \"code chạy được\" (`python -m pytest -q` +6 test `DỰ KIẾN THÊM` chưa tồn tại — nhiệm vụ chỉ là tài liệu, nên nghiệm thu phải nêu rõ đây là tiêu chí thiết kế sau này, không phải trạng thái hiện tại).",
+      "wordCount": 288,
+      "contentHash": "02bbd9af5340d494c1bfa85900882643e308b5c884a325d9e997ea7b9d12e3ff",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 10,
+          "partial": true,
+          "code": "DEADLINE_EXCEEDED",
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-a682753a9db0462c87c9c3c15039f03d",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-a682753a9db0462c87c9c3c15039f03d",
+            "limit": 8000
+          },
+          "resultHash": "e3668d610c22c46dd9c51f029665f8b6cd0794b162fb7b44c30f6cf612bc3ddd"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "limit": 8000
+          },
+          "resultHash": "02de1e798af543b7c99bfaef3afdaba67ffbebfeeba8e3f49144e61e19a25306"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/csv.html",
+            "maxChars": 30000
+          },
+          "resultHash": "3e71b56f3522d77d3bb88edab31f8863ffbe458a9969f0efd920ec18e4608d47"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Modules/_csv.c",
+            "maxChars": 30000
+          },
+          "resultHash": "2a8805a0fca322f44fe9340e156aeff4917e605348541a108668e74a547766eb"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Modules/_io/stringio.c",
+            "find": [
+              "readline",
+              "newline",
+              "cr",
+              "lf"
+            ],
+            "maxChars": 14000
+          },
+          "resultHash": "8d34956ef7e4e9d0af4ce3c98242b788131f43a21a5e62d21e53565e23b995ac"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "ref": "r-cceca916c19b44d0a6f0d350858a152b",
+            "offset": 20000,
+            "maxChars": 3000
+          },
+          "resultHash": "9b2c98d3c9c08076184089655f6262a4c4b851f6bf4fd86e595d572e253c7237"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 12000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.14/Modules/_io/IOBase.c"
+          },
+          "resultHash": "7d9128b571689c0162a1eda11b0640ef3a4a5d72c33c9b50ad8b565eb318cd2c"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 14000,
+            "url": "https://raw.githubusercontent.com/python/cpython/3.14/Doc/library/csv.rst"
+          },
+          "resultHash": "66bf80b59d805043cf4c4730e1506d550ecdc4423345fa80622f94e0916a4afe"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "IN_QUOTED_FIELD",
+              "EAT_CRNL"
+            ],
+            "maxChars": 12000,
+            "ref": "r-8b9b79c86161438783aa9b0244ff5b6b"
+          },
+          "resultHash": "efceab5df8a41f0a51d3764e8970bb5d44019c1ba5021e64efa1751ea4993b1b"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readtranslate",
+              "readuniversal",
+              "readnl"
+            ],
+            "maxChars": 9000,
+            "ref": "r-9e6d31286b7540929332a8986e8a13e6"
+          },
+          "resultHash": "ae418412575eb548e77bd9fe32b4fd332eebb39ab5be76fb7568e6478a64db73"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "offset": 20000,
+            "maxChars": 4000,
+            "ref": "r-6dae53f3aed04806bbafa871a70c4349"
+          },
+          "resultHash": "8960740cfdd5565c25a80e20415fbcd640f630eb3cf70a53f0aa02339d6eb2d1"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "readuniversal =",
+              "readtranslate",
+              "newline"
+            ],
+            "maxChars": 7000,
+            "ref": "r-9e6d31286b7540929332a8986e8a13e6"
+          },
+          "resultHash": "a542c905863f48fa51fe5d4eccc0d8c1265a4e494778834c7afd920ec576ad57"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 9000,
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Modules/_io/IOBase.c"
+          },
+          "resultHash": "54a827057d88b26bb434d3fcb910f0792668833ca23ed2a541ff1f2751dc2635"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "maxChars": 4500,
+            "offset": 17600,
+            "ref": "r-9e6d31286b7540929332a8986e8a13e6"
+          },
+          "resultHash": "e8859a3e7d2ffbe8eaff488d82be437a764e083fa63a520b2fd9d36581a7e939"
+        }
+      ],
+      "adjudication": "Whole reviewer partial final (DEADLINE_EXCEEDED) correctly confirms no default CR translation; explicitly has not read the decisive CSV parser body. Appropriate uncertainty, but no valid final VERDICT/coverage."
+    },
+    {
+      "index": 8,
+      "id": "cf4f051f6cf84b49896e9b1f276d0d74",
+      "role": "plan-review",
+      "sessionStatus": "completed",
+      "visibleFinal": "",
+      "wordCount": 0,
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "finishReceipts": [
+        {
+          "status": "completed",
+          "turn": 1,
+          "steps": 9,
+          "waitedMs": 0,
+          "extensionMs": 0,
+          "childCount": 0,
+          "childSteps": 0,
+          "childTokens": 0,
+          "childDeliveries": 0,
+          "partial": true,
+          "code": "PROVIDER_STREAM_INTERRUPTED"
+        }
+      ],
+      "readReceipts": [
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-a682753a9db0462c87c9c3c15039f03d",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "runId": "a59996b010c2c1e331d7",
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "offset": 0,
+            "limit": 8000
+          },
+          "resultHash": "4abee5f67049f32801fe588788a9463ca308f762d58bf10ac7daa6a7a5e290df"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-a682753a9db0462c87c9c3c15039f03d",
+            "limit": 8000,
+            "offset": 0
+          },
+          "resultHash": "e3668d610c22c46dd9c51f029665f8b6cd0794b162fb7b44c30f6cf612bc3ddd"
+        },
+        {
+          "name": "work_artifact_read",
+          "args": {
+            "artifactId": "a-b7097396bd0d4c45bb56c23977f3de35",
+            "limit": 8000,
+            "offset": 0
+          },
+          "resultHash": "02de1e798af543b7c99bfaef3afdaba67ffbebfeeba8e3f49144e61e19a25306"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "docs/source.md"
+          },
+          "resultHash": "d999dd048d4722f52f4e35fe04e80d9e07aaa4231aede105630e11125aa00fc1"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "src/export.py"
+          },
+          "resultHash": "80417d94ffa01c376fec59c760e39301a0ff53f2ce18f2f453ed0bf1009c2a96"
+        },
+        {
+          "name": "file_read",
+          "args": {
+            "path": "tests/test_export.py"
+          },
+          "resultHash": "4920f838b2405b2b867f8164da8a1d6dde27dd7cce2ce6eaaa523221fc2ea911"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Lib/csv.py",
+            "maxChars": 40000
+          },
+          "resultHash": "75dd6014a4f1e7d2667a04a930129093eb14fcb434a8f896c39a0f1f2ff1d732"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "url": "https://docs.python.org/3/library/io.html",
+            "maxChars": 30000,
+            "find": {
+              "item": [
+                "StringIO",
+                "newline"
+              ]
+            }
+          },
+          "resultHash": "8c9743a65cddde0eeccb23f448b150e49901bfca5046795cf48efb10657f933a"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 30000,
+            "url": "https://raw.githubusercontent.com/python/cpython/main/Modules/_csv.c"
+          },
+          "resultHash": "77c9521f8671e2ed350f997df19fef81413f1d2b58c5e09d809a428d188fd95d"
+        },
+        {
+          "name": "web_fetch",
+          "args": {
+            "maxChars": 20000,
+            "url": "https://docs.python.org/3/library/csv.html",
+            "find": {
+              "item": {
+                "item": [
+                  "newline='' is not specified",
+                  "newlines embedded inside quoted fields"
+                ]
+              }
+            }
+          },
+          "resultHash": "4297839978adf9d41b4af7ad3dea8fb819c4d8a10d45820b584e0d1c9f77b232"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "AFTER_ESCAPED_CRNL",
+              "QUOTE_IN_QUOTED_FIELD",
+              "EAT_CRNL"
+            ],
+            "ref": "r-e3bc80034ae446ad9a6039dc34d98537"
+          },
+          "resultHash": "2c03b6abf65e2584b4aab515b3f05636b1e64b26e8a17455b103f770bcc2d197"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "find": [
+              "newlines embedded inside quoted fields",
+              "newline='' is not specified"
+            ],
+            "ref": "r-2cbb8cf8cb494e039e16530f969263e2"
+          },
+          "resultHash": "93bb7f2c65d14d384d441158c2adeeba55d8c0a3d4382913a1d0d15f12e4862e"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "maxChars": 13000,
+            "offset": 25000,
+            "ref": "r-e3bc80034ae446ad9a6039dc34d98537"
+          },
+          "resultHash": "b4ccc81bec6219bf03168bb7bb6a6e2ef9c9e98c9cd2c594c3bcc2582f8064b4"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "maxChars": 3000,
+            "offset": 19500,
+            "ref": "r-2cbb8cf8cb494e039e16530f969263e2"
+          },
+          "resultHash": "61817d20b6e1f864aee1c4b8f3d3d367ae95bf435309fbae1f5658e78580af5b"
+        },
+        {
+          "name": "read_source",
+          "args": {
+            "maxChars": 12000,
+            "offset": 15000,
+            "ref": "r-e3bc80034ae446ad9a6039dc34d98537"
+          },
+          "resultHash": "c515eeb6ddd80b63a3efffd514d310782f2f796e8de1d11ce0983ad9114effd3"
+        }
+      ],
+      "adjudication": "Whole reviewer has no final and finish partial PROVIDER_STREAM_INTERRUPTED. Valid review result unavailable; do not interpret absence as pass or blame a word/token ceiling without evidence."
+    }
+  ],
+  "localCounterexamples": {
+    "python": "3.13.9",
+    "cases": [
+      {
+        "input": "",
+        "writerOutput": "\"\"\r\n",
+        "defaultReader": [
+          [
+            ""
+          ]
+        ],
+        "newlineEmptyReader": [
+          [
+            ""
+          ]
+        ]
+      },
+      {
+        "input": "a\r\nb",
+        "writerOutput": "\"a\r\nb\"\r\n",
+        "defaultReader": [
+          [
+            "a\r\nb"
+          ]
+        ],
+        "newlineEmptyReader": [
+          [
+            "a\r\nb"
+          ]
+        ]
+      },
+      {
+        "input": "a\rb",
+        "writerOutput": "\"a\rb\"\r\n",
+        "defaultReader": [
+          [
+            "a\rb"
+          ]
+        ],
+        "newlineEmptyReader": [
+          [
+            "a\rb"
+          ]
+        ]
+      },
+      {
+        "input": "a\nb",
+        "writerOutput": "\"a\nb\"\r\n",
+        "defaultReader": [
+          [
+            "a\nb"
+          ]
+        ],
+        "newlineEmptyReader": [
+          [
+            "a\nb"
+          ]
+        ]
+      },
+      {
+        "input": "Hồ sơ",
+        "writerOutput": "Hồ sơ\r\n",
+        "defaultReader": [
+          [
+            "Hồ sơ"
+          ]
+        ],
+        "newlineEmptyReader": [
+          [
+            "Hồ sơ"
+          ]
+        ]
+      }
+    ],
+    "rawBlankRow": [
+      []
+    ],
+    "nextBlankRow": [],
+    "asciiIgnore": "H s"
+  },
+  "limits": [
+    "No hidden reasoning retained.",
+    "Tool read receipts do not establish correct interpretation.",
+    "No current-source or provider latency attribution from the old run.",
+    "Fixture baseline output handoff lacked artifact receipt; this does not prove the main fabricated it."
+  ]
+}

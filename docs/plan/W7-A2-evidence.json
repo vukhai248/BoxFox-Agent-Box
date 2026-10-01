@@ -1,0 +1,1720 @@
+{
+  "schema": "boxfox-w7-a2-evidence-v1",
+  "branch": "B",
+  "baseCommit": "7b55e7cc",
+  "scope": "Granted root cards and same-child producer continuation; isolated stores/workspaces, synthetic user, OpenCode space-bunny-free.",
+  "limits": [
+    "No live main model, full DAG, CUA or frontend render in native probe.",
+    "First six native results precede event enum fix; the final two use the fixed source. Preserve per-attempt hashes, cards and event status.",
+    "Workflow oracle verifies continuity/binding/slots, not factual correctness or acceptance by independent review.",
+    "Only visible deliverables and receipts; no hidden reasoning.",
+    "A2 is a checkpoint, not completed W7/W8; helper receipts/shared answers/handoff/retest remain."
+  ],
+  "totals": {
+    "nativeAttempts": 8,
+    "workflowPass": 6,
+    "workflowFail": 2,
+    "lengthPass": 1,
+    "lengthFail": 7
+  },
+  "probes": [
+    {
+      "label": "w7-a2-native-direct",
+      "rawReceipt": ".tmp/work-checks/w7-a2-native-direct/results.json",
+      "rawHash": "418e326923c94c2d1d8606112df40052d0a82d9f06c3ba461431d159fa328639",
+      "records": [
+        {
+          "repeat": 1,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 29.221,
+          "wordCount": 197,
+          "lengthOracle": true,
+          "rootModelTurns": 0,
+          "childId": "c1661bf597674a918ada497783f74818",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            5,
+            1728
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "Đã nhận câu trả lời: **Điều dưỡng** (optionId `nurse`, `decidedBy: user`).\n\n## Trả lời\nNgười dùng mục tiêu của exporter CSV là **Điều dưỡng** (quyết định chủ sở hữu, requestId `wr-a84322da2bee44afa430ee4156894fea`). Theo dữ kiện đã có, exporter xuất CSV và giữ nguyên Unicode. Không khảo sát lại định dạng.\n\n## Phạm vi và phương pháp\nĐọc `docs/source.md` (repository, duy nhất). Không tìm kiếm ngoài; mốc thời gian: phiên hiện tại.\n\n## Dữ kiện đã xác minh\n- `docs/source.md:1` — \"exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\" (lời nguồn)\n- Người dùng mục tiêu = Điều dưỡng (lời chủ sở hữu, không phải lời nguồn)\n\n## So sánh phương án\nBác sĩ bị loại; chi phí so sánh: bảng cột dữ liệu theo ca/chuyển giao là **suy luận**, chưa có nguồn.\n\n## Bằng chứng trái chiều và khoảng trống\nDanh sách cột, delimiter, encoding cụ thể: **UNVERIFIED** (nguồn không nêu). Chưa tìm thấy ≠ không tồn tại.\n\n## Khuyến nghị\nBáo cáo mô tả CSV cho Điều dưỡng; chỉ báo cáo, không triển khai. Cần xác minh cột dữ liệu nếu mở rộng.\n\n## Knowledge requests\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "6f703d74ebcbf0b840023d27d5f1e1b6145a946356ab1201150fa3bbdbd35141",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "a7338765935011f8344330a2cfa4c0879e25efb886a9fe8c2d222a90850b4bbd",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "42bfbafb7f401d2e4a17474027613c997d205a24872380b52ff6d9f3583c67aa",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "71814dc67e184ac22d04de3342f4df9cad15ee07bb1556536347dd873e28fbf4",
+          "adjudication": [
+            "Workflow rejected by backend despite same-child continuation: prior opened source was excluded.",
+            "Selected option already mentions shift/handoff. Repeating that description is not independently proven hallucination; columns remain labelled inference."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-a84322da2bee44afa430ee4156894fea-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "users",
+                "question": "Người dùng mục tiêu của exporter CSV là ai?",
+                "optionId": "nurse",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790877418.5160575,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-a84322da2bee44afa430ee4156894fea",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-a84322da2bee44afa430ee4156894fea-2",
+              "owner_id": "de0a366321aa4e1bb8e7a9a2f2334a79",
+              "request_id": "wr-a84322da2bee44afa430ee4156894fea",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-a34738a97a\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"c1661bf597674a918ada497783f74818\", \"claimedAt\": 1790877418.5198476, \"finishedAt\": 1790877432.524472}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-a84322da2bee44afa430ee4156894fea-r1",
+              "sessionId": "de0a366321aa4e1bb8e7a9a2f2334a79",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là ai?",
+                  "rationale": "Mô tả cột dữ liệu và cách dùng file CSV phụ thuộc trực tiếp vào người dùng chính; docs/source.md ghi rõ người dùng mục tiêu chưa chốt và cấm tự khảo sát lại định dạng.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Dùng để tra cứu hồ sơ/báo cáo lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Dùng để chuyển giao ca / theo dõi bệnh nhân.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_function_5tmtjlxrdohn_1",
+              "runId": "w-a34738a97a",
+              "workRequestId": "wr-a84322da2bee44afa430ee4156894fea",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-a84322da2bee44afa430ee4156894fea-r1",
+              "sessionId": "de0a366321aa4e1bb8e7a9a2f2334a79",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là ai?",
+                  "rationale": "Mô tả cột dữ liệu và cách dùng file CSV phụ thuộc trực tiếp vào người dùng chính; docs/source.md ghi rõ người dùng mục tiêu chưa chốt và cấm tự khảo sát lại định dạng.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Dùng để tra cứu hồ sơ/báo cáo lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Dùng để chuyển giao ca / theo dõi bệnh nhân.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là ai?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790877418.5160575,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_function_5tmtjlxrdohn_1",
+              "runId": "w-a34738a97a",
+              "workRequestId": "wr-a84322da2bee44afa430ee4156894fea",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-a84322da2bee44afa430ee4156894fea",
+              "remaining": false
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "failed",
+          "oracle": false,
+          "latencySeconds": 88.809,
+          "wordCount": 332,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "05a02d9aa789405fa78761fefeed7a4c",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            5,
+            2928
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "Đã đọc lại checkpoint và câu trả lời đã lưu. Người dùng chọn **Điều dưỡng** (`decidedBy: user`, `source: user_action`).\n\n## Trả lời\n\nNgười dùng chính của exporter CSV là **Điều dưỡng** — đây là lựa chọn người dùng xác nhận, không phải suy luận của tôi. Mô tả dưới đây chỉ áp dụng cho mục này: file CSV sinh ra phục vụ điều dưỡng theo dõi danh sách chăm sóc. Hai dữ kiện đã xác minh và giữ nguyên từ `docs/source.md` (r1): exporter xuất **định dạng CSV**, và **giữ Unicode** — tức dấu tiếng Việt không bị mất khi mở file. Tôi không khảo sát lại định dạng, không mở rộng sang triển khai.\n\n## Phạm vi và phương pháp\n\nCâu hỏi: ai dùng exporter CSV. Phạm vi: nguồn nội bộ `docs/source.md` + một câu hỏi người dùng (requestId `wr-4c4ff7579f7e4e66925d498b3a8d338c`, revision 2). Không có nguồn ngoài; không có mốc thời gian. Giới hạn: câu trả lời người dùng chỉ nêu vai trò, không mô tả nghiệp vụ cụ thể.\n\n## Dữ kiện đã xác minh\n\n- Lời nguồn, `docs/source.md`: \"Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt.\" (r1)\n- Quyết định người dùng: option `dieu-duong` = \"Điều dưỡng\" (work_report read, không phải dữ kiện kỹ thuật).\n\n## So sánh phương án\n\nBác sĩ bị loại: người dùng không chọn. Chưa có chi phí/đánh đổi nào được yêu cầu — ngoài phạm vi báo cáo.\n\n## Bằng chứng trái chiều và khoảng trống\n\nUNVERIFIED: nghiệp vụ cụ thể của điều dưỡng (lịch ca, khoa, trường dữ liệu) chưa được nguồn nào xác nhận — tôi không suy diễn. Không tìm thấy nguồn ngoài, không phải vì đã tìm mà không có.\n\n## Khuyến nghị\n\nGiữ phạm vi: chỉ mô tả exporter theo góc nhìn điều dưỡng. Điều sẽ đổi lựa chọn: nếu sau này cả hai vai trò dùng chung một bản xuất, cần chốt lại phạm vi người dùng.\n\n## Knowledge requests\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "6f703d74ebcbf0b840023d27d5f1e1b6145a946356ab1201150fa3bbdbd35141",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "a7338765935011f8344330a2cfa4c0879e25efb886a9fe8c2d222a90850b4bbd",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "42bfbafb7f401d2e4a17474027613c997d205a24872380b52ff6d9f3583c67aa",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "f54abe8aba07af0839c0d6add790335e05e24fb9b2a3e7ddd9a816faa4c753b4",
+          "adjudication": [
+            "Same backend over-rejection; output exceeds 200 words.",
+            "Selected option mentions care schedules/shift changes; final use of care context is not independently proven fabricated scope. Detailed fields remain unverified."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-4c4ff7579f7e4e66925d498b3a8d338c-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "csv_exporter_user",
+                "question": "Ai là người dùng chính của báo cáo CSV mà exporter tạo ra?",
+                "optionId": "dieu-duong",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790877474.3928478,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-4c4ff7579f7e4e66925d498b3a8d338c",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-4c4ff7579f7e4e66925d498b3a8d338c-2",
+              "owner_id": "5fbd9f121ea74c0da3e22b690d5217e7",
+              "request_id": "wr-4c4ff7579f7e4e66925d498b3a8d338c",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-18c002e6ff\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"05a02d9aa789405fa78761fefeed7a4c\", \"claimedAt\": 1790877474.3980303, \"finishedAt\": 1790877522.5264158}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-4c4ff7579f7e4e66925d498b3a8d338c-r1",
+              "sessionId": "5fbd9f121ea74c0da3e22b690d5217e7",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "csv_exporter_user",
+                  "question": "Ai là người dùng chính của báo cáo CSV mà exporter tạo ra?",
+                  "rationale": "docs/source.md xác nhận định dạng (CSV, giữ Unicode) nhưng ghi rõ \"Người dùng mục tiêu chưa chốt\"; mô tả exporter cần biết vai trò dùng để nêu đúng ngữ cảnh sử dụng.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "Xuất CSV để bác sĩ xem lại / đối chiếu danh sách bệnh nhân, thống kê hay ký số.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất CSV để điều dưỡng theo dõi lịch chăm sóc, chuyển ca hoặc danh sách theo khoa.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_EEnF8g83M6nnHTkkAw3S1BOI",
+              "runId": "w-18c002e6ff",
+              "workRequestId": "wr-4c4ff7579f7e4e66925d498b3a8d338c",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-4c4ff7579f7e4e66925d498b3a8d338c-r1",
+              "sessionId": "5fbd9f121ea74c0da3e22b690d5217e7",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "csv_exporter_user",
+                  "question": "Ai là người dùng chính của báo cáo CSV mà exporter tạo ra?",
+                  "rationale": "docs/source.md xác nhận định dạng (CSV, giữ Unicode) nhưng ghi rõ \"Người dùng mục tiêu chưa chốt\"; mô tả exporter cần biết vai trò dùng để nêu đúng ngữ cảnh sử dụng.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "Xuất CSV để bác sĩ xem lại / đối chiếu danh sách bệnh nhân, thống kê hay ký số.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất CSV để điều dưỡng theo dõi lịch chăm sóc, chuyển ca hoặc danh sách theo khoa.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "csv_exporter_user",
+                  "question": "Ai là người dùng chính của báo cáo CSV mà exporter tạo ra?",
+                  "optionId": "dieu-duong",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790877474.3928478,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_EEnF8g83M6nnHTkkAw3S1BOI",
+              "runId": "w-18c002e6ff",
+              "workRequestId": "wr-4c4ff7579f7e4e66925d498b3a8d338c",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-4c4ff7579f7e4e66925d498b3a8d338c",
+              "remaining": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "w7-a2-native-retained",
+      "rawReceipt": ".tmp/work-checks/w7-a2-native-retained/results.json",
+      "rawHash": "d2db16eeb57742fb5f8bed7b5e84bda4a83890071402e1e95eeb9e6ae4d0a242",
+      "records": [
+        {
+          "repeat": 1,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 61.761,
+          "wordCount": 218,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "a7b7e777ce7345009ae6ab567a84bcbc",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            5,
+            1866
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "Đã nhận câu trả lời từ checkpoint (request `wr-3e5ce5ecb8b54aa996eab722871ea793`, revision 2): người dùng chọn **Điều dưỡng**, `decidedBy: user`.\n\n## Trả lời\nBáo cáo mô tả exporter CSV dành cho nhóm người dùng mục tiêu: **Điều dưỡng** — người dùng đã trả lời trực tiếp, không phải suy đoán. Dữ kiện có sẵn: exporter dùng định dạng CSV và giữ nguyên Unicode. Phạm vi chỉ giới hạn ở báo cáo; không triển khai, không khảo sát lại định dạng.\n\n## Phạm vi và phương pháp\nĐọc `docs/source.md` (fixture, 1 dòng). Không mở nguồn ngoài; không tìm kiếm web (định dạng đã được chốt sẵn).\n\n## Dữ kiện đã xác minh\n- `docs/source.md:1` — \"exporter dùng CSV, giữ Unicode\" (lời nguồn).\n- `docs/source.md:1` — \"Người dùng mục tiêu chưa chốt\" (lời nguồn, đã được người dùng chốt: Điều dưỡng).\n- `docs/**/*` glob: không có tài liệu khác.\n\n## So sánh phương án\nBác sĩ (mục đích lâm sàng) vs Điều dưỡng (quy trình hằng ngày). Người dùng chọn Điều dưỡng; không phát sinh chi phí.\n\n## Bằng chứng trái chiều và khoảng trống\nKhông có mâu thuẫn. Quy mô người dùng, ứng dụng đích: UNVERIFIED.\n\n## Khuyến nghị\nTrình bày hướng dẫn thao tác xuất file cho điều dưỡng; không mở phạm vi triển khai.\n\n## Knowledge requests\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "a7338765935011f8344330a2cfa4c0879e25efb886a9fe8c2d222a90850b4bbd",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "8077d9df0617b4f5aa873c79e013faa90d0d19523f4f7f4f3e20ffacdbe4e763",
+          "adjudication": [
+            "Workflow accepted after retained producer evidence fix; output exceeds 200 words.",
+            "Selected option describes daily-use/practical workflow; final instructions remain recommendations, not new confirmed requirements."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-3e5ce5ecb8b54aa996eab722871ea793-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "target_user",
+                "question": "Đối tượng người dùng mục tiêu của báo cáo mô tả exporter CSV là nhóm nào?",
+                "optionId": "nurse",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790877917.4982686,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-3e5ce5ecb8b54aa996eab722871ea793",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-3e5ce5ecb8b54aa996eab722871ea793-2",
+              "owner_id": "70a5d5ecf3fc452fa55a9a9790034f4f",
+              "request_id": "wr-3e5ce5ecb8b54aa996eab722871ea793",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-08e587572c\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"a7b7e777ce7345009ae6ab567a84bcbc\", \"claimedAt\": 1790877917.501858, \"finishedAt\": 1790877944.8016548}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-3e5ce5ecb8b54aa996eab722871ea793-r1",
+              "sessionId": "70a5d5ecf3fc452fa55a9a9790034f4f",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "target_user",
+                  "question": "Đối tượng người dùng mục tiêu của báo cáo mô tả exporter CSV là nhóm nào?",
+                  "rationale": "docs/source.md xác nhận exporter dùng CSV và giữ Unicode nhưng chưa chốt người dùng mục tiêu; không tự đoán vì nhóm người dùng quyết định cách mô tả mức chi tiết của báo cáo.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Báo cáo thiên về mục đích lâm sàng, thuật ngữ chuyên môn",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Báo cáo thiên về quy trình sử dụng hằng ngày, thao tác thực tế",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_8eb477189c654b1ba1af636f",
+              "runId": "w-08e587572c",
+              "workRequestId": "wr-3e5ce5ecb8b54aa996eab722871ea793",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-3e5ce5ecb8b54aa996eab722871ea793-r1",
+              "sessionId": "70a5d5ecf3fc452fa55a9a9790034f4f",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "target_user",
+                  "question": "Đối tượng người dùng mục tiêu của báo cáo mô tả exporter CSV là nhóm nào?",
+                  "rationale": "docs/source.md xác nhận exporter dùng CSV và giữ Unicode nhưng chưa chốt người dùng mục tiêu; không tự đoán vì nhóm người dùng quyết định cách mô tả mức chi tiết của báo cáo.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Báo cáo thiên về mục đích lâm sàng, thuật ngữ chuyên môn",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Báo cáo thiên về quy trình sử dụng hằng ngày, thao tác thực tế",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "target_user",
+                  "question": "Đối tượng người dùng mục tiêu của báo cáo mô tả exporter CSV là nhóm nào?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790877917.4982686,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_8eb477189c654b1ba1af636f",
+              "runId": "w-08e587572c",
+              "workRequestId": "wr-3e5ce5ecb8b54aa996eab722871ea793",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-3e5ce5ecb8b54aa996eab722871ea793",
+              "remaining": false
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 39.292,
+          "wordCount": 640,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "9c4ae4d11e984f1fb1f02018ffebb411",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            5,
+            3703
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "## Trả lời\n\nNgười dùng chủ đã chốt: **Điều dưỡng** là người dùng chính của CSV exporter (nguồn: `work_report` `wr-35f9424b68724724ab58c65c63b28b50`, `questionId=exporter_target_user`, `optionId=nurse`, `decidedBy=user`). Dữ kiện đã xác minh từ `docs/source.md` (r1, host-doc, dòng 1, trích nguyên văn: *\"Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\"*): exporter xuất **CSV** và **giữ Unicode**. Câu trả lời của chủ thay thế mục \"Người dùng mục tiêu chưa chốt\" trong tài liệu — nó không sửa hai dữ kiện còn lại. Không có mô tả hành vi CSV nào khác trong repo; workspace chỉ có đúng một file (`codebase_glob \"**/*\"` → `[\"docs/source.md\"]`), nên tôi không suy diễn thêm về cột dữ liệu, phân cách, BOM hay encoding.\n\nLưu ý bảo vệ: checkpoint của tôi từng đánh dấu `doctor` là `recommended: true`, nhưng chủ đã chọn `nurse`. Đây là lựa chọn của chủ, không phải đề xuất của tôi — tôi báo theo lựa chọn đã xác nhận.\n\n## Phạm vi và phương pháp\n- Câu hỏi: ai là người dùng chính của CSV exporter.\n- Phạm vi: chỉ `docs/source.md` (file chủ cung cấp) + quyết định chủ tại `wr-35f9424b68724724ab58c65c63b28b50`.\n- Mốc thời gian: quyết định ghi `confirmedAt` 1790877957.766679, `requestRevision` 1, nguồn `user_action`.\n- Nguồn đã mở: 1 nguồn nội bộ. Không tìm kiếm ngoài — không cần, và lệnh trong tài liệu cấm khảo sát lại định dạng.\n- Giới hạn: ngoài CSV + Unicode, không có gì để xác minh.\n\n## Dữ kiện đã xác minh\n| # | Dữ kiện | Nguồn đã mở | Loại |\n|---|---|---|---|\n| 1 | Người dùng chính = **Điều dưỡng** | `work_report` read, `wr-35f9…8b50`, `optionId=nurse`, `decidedBy=user` | Quyết định chủ (không phải suy luận) |\n| 2 | Exporter dùng định dạng **CSV** | `docs/source.md` (r1, dòng 1) | Lời nguồn |\n| 3 | Exporter **giữ Unicode** | `docs/source.md` (r1, dòng 1) | Lời nguồn |\n| 4 | Không nghiên cứu lại định dạng (ràng buộc) | `docs/source.md` (r1, dòng 1) | Lời nguồn |\n\nMọi phát biểu ở mục Trả lời về việc \"không có mô tả hành vi nào khác\" là **suy luận** từ kết quả `codebase_glob`, không phải lời nguồn.\n\n## So sánh phương án\nHai lựa chọn được hỏi: `doctor` (Bác sĩ) và `nurse` (Điều dưỡng), thêm `both`. Chủ chọn **Điều dưỡng**. Không cần so sánh chi phí/đánh đổi giữa các lựa chọn nữa vì quyết định đã xong; mọi phân tích thuộc phạm vi việc khác.\n\n## Bằng chứng trái chiều và khoảng trống\n- **Mâu thuẫn nội bộ đã được xử lý:** `docs/source.md` (r1) nói \"Người dùng mục tiêu chưa chốt\" — trạng thái này đã bị thay thế bởi quyết định `nurse` của chủ. Không còn mâu thuẫn mở.\n- **Không có nguồn ngoài nào** được mở; không có URL công khai nào được trích.\n- **UNVERIFIED:** tên cột, số cột, dấu phân cách, BOM, encoding cụ thể, hành vi ngày/giờ. Nhãn UNVERIFIED vì không có tài liệu nào; chưa tìm thấy không đồng nghĩa không tồn tại.\n- **Cần người dùng quyết:** không còn câu nào mở trong `decisionKeys=[\"users\"]`.\n\n## Khuyến nghị\n- Mô tả exporter hướng tới **Điều dưỡng**: ưu tiên rõ ràng, nhập liệu nhanh, ít thao tác.\n- Vì giữ Unicode là dữ kiện có sẵn, đó là hành vi giữ nguyên — không suy ra thêm chi tiết encoding.\n- Không mở phạm vi triển khai, không tạo sub-plan (đúng yêu cầu \"chỉ báo cáo\").\n- Điều có thể đổi lựa chọn: nếu người dùng đổi sang Bác sĩ, mô tả nên chuyển trọng tâm sang xem/tra cứu dữ liệu thay vì nhập liệu.\n\n## Knowledge requests\n- none*(Báo cáo này dưới 200 từ cho phần Trả lời như yêu cầu; ledger chỉ có 1 row `r1`.)*",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "a7338765935011f8344330a2cfa4c0879e25efb886a9fe8c2d222a90850b4bbd",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "22be2995065892f8a9666ebd05d9a81639b8062bdd31b89cc7216f32d7f3f76f",
+          "adjudication": [
+            "Workflow accepted; 640-word full report reinterprets the cap as Answer section only.",
+            "Calls instruction inside source a command; owner prompt also contains same constraint, so this is not proof of exploited prompt injection.",
+            "Fast-entry/viewing suggestions are recommendations; the selected option itself only confirms role, not this rationale. Do not classify a labelled recommendation as fabricated user consent."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-35f9424b68724724ab58c65c63b28b50-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "exporter_target_user",
+                "question": "CSV exporter sẽ phục vụ ai là chính?",
+                "optionId": "nurse",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790877957.766679,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-35f9424b68724724ab58c65c63b28b50",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-35f9424b68724724ab58c65c63b28b50-2",
+              "owner_id": "a4797a2b80be46bca9fc47c160e8be70",
+              "request_id": "wr-35f9424b68724724ab58c65c63b28b50",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-62a0652552\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"9c4ae4d11e984f1fb1f02018ffebb411\", \"claimedAt\": 1790877957.7722852, \"finishedAt\": 1790877984.6604896}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-35f9424b68724724ab58c65c63b28b50-r1",
+              "sessionId": "a4797a2b80be46bca9fc47c160e8be70",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_target_user",
+                  "question": "CSV exporter sẽ phục vụ ai là chính?",
+                  "rationale": "docs/source.md ghi \"Người dùng mục tiêu chưa chốt\". Không có tài liệu nào trong repo nói ai dùng exporter, và tôi không được đoán. Lựa chọn này quyết định cách mô tả hành vi CSV (ví dụ mã hóa Unicode cho Bác sĩ đọc bằng Excel tiếng Việt vs cho Điều dưỡng nhập liệu nhanh), nên báo cáo không thể hoàn tất nếu thiếu nó.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Bác sĩ là người dùng chính của CSV exporter",
+                      "recommended": true
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Điều dưỡng là người dùng chính của CSV exporter",
+                      "recommended": false
+                    },
+                    {
+                      "id": "both",
+                      "label": "Cả hai",
+                      "description": "Cả Bác sĩ và Điều dưỡng đều dùng",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8a4fbf9712489d9ead9",
+              "runId": "w-62a0652552",
+              "workRequestId": "wr-35f9424b68724724ab58c65c63b28b50",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-35f9424b68724724ab58c65c63b28b50-r1",
+              "sessionId": "a4797a2b80be46bca9fc47c160e8be70",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_target_user",
+                  "question": "CSV exporter sẽ phục vụ ai là chính?",
+                  "rationale": "docs/source.md ghi \"Người dùng mục tiêu chưa chốt\". Không có tài liệu nào trong repo nói ai dùng exporter, và tôi không được đoán. Lựa chọn này quyết định cách mô tả hành vi CSV (ví dụ mã hóa Unicode cho Bác sĩ đọc bằng Excel tiếng Việt vs cho Điều dưỡng nhập liệu nhanh), nên báo cáo không thể hoàn tất nếu thiếu nó.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Bác sĩ là người dùng chính của CSV exporter",
+                      "recommended": true
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Điều dưỡng là người dùng chính của CSV exporter",
+                      "recommended": false
+                    },
+                    {
+                      "id": "both",
+                      "label": "Cả hai",
+                      "description": "Cả Bác sĩ và Điều dưỡng đều dùng",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "exporter_target_user",
+                  "question": "CSV exporter sẽ phục vụ ai là chính?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790877957.766679,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8a4fbf9712489d9ead9",
+              "runId": "w-62a0652552",
+              "workRequestId": "wr-35f9424b68724724ab58c65c63b28b50",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-35f9424b68724724ab58c65c63b28b50",
+              "remaining": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "w7-a2-native-final",
+      "rawReceipt": ".tmp/work-checks/w7-a2-native-final/results.json",
+      "rawHash": "8c1d37beb1e92d50a340bca40c1a3f539033332a161ca12dfdf826b4cd298e9c",
+      "records": [
+        {
+          "repeat": 1,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 52.082,
+          "wordCount": 272,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "adc45c8c022e4856ab33a33a974f4541",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            6,
+            4590
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "Đã đọc lại yêu cầu đã lưu: câu hỏi `exporter_users` được người dùng trả lời `optionId: dieu-duong` (\"Điều dưỡng\"), `decidedBy: user`, `source: user_action`. Không hỏi lại, không khảo sát lại định dạng.\n\n## Trả lời\n\n**Chốt: người dùng chính của bản CSV là Điều dưỡng** — đây là quyết định của người dùng, không phải suy luận của tôi. Chỉ áp dụng cho nút R1.\n\n## Phạm vi và phương pháp\n\nCâu hỏi: mô tả exporter CSV sau khi chốt người dùng. Nguồn đã mở: `docs/source.md` (ledger **r1**). Không mở nguồn ngoài, không khảo sát lại định dạng.\n\n## Dữ kiện đã xác minh\n\n- **Lời nguồn**, `docs/source.md`: exporter dùng CSV, giữ Unicode (r1).\n- **Lời nguồn**, cùng file: \"Người dùng mục tiêu chưa chốt\" (r1) — nay đã được chốt.\n- **Quyết định người dùng**: Điều dưỡng — `wr-44593489968e4ffdaee9385865dc1448`, revision 2.\n\n## So sánh phương án\n\nHai lựa chọn: Bác sĩ / Điều dưỡng. Người dùng chọn Điều dưỡng. Tôi có gắn cờ `recommended` cho Điều dưỡng khi hỏi — đó là đề xuất của tôi, không phải quyết định.\n\n## Bằng chứng trái chiều và khoảng trống\n\nr1 xếp tầng 3 (nguồn thứ cấp), repo chỉ có một file, không có mã nguồn hay spec định dạng. UNVERIFIED: tên cột, thứ tự trường, cấu trúc ca trực/bàn giao. Chưa tìm thấy không đồng nghĩa không tồn tại.\n\n## Khuyến nghị\n\nMô tả theo góc nhìn điều dưỡng (ca trực, bàn giao chăm sóc). Không mở phạm vi triển khai, không tạo sub-plan. Nếu người dùng đổi sang Bác sĩ, toàn bộ mô tả đổi theo.\n\n## Knowledge requests\n\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "d83cd88be87a3a3b5ca0a10555098d3d1f21e3d692d2f31ee0a1f4b2558174be",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "16d2cd6abc74595aaa748fa5d80b579076de427e5d414468e3b11dc72172989e",
+          "adjudication": [
+            "Workflow accepted; output exceeds 200 words.",
+            "Selected option explicitly describes shift/handoff care; repeating that is not a separately proven hallucination. Question rationale overstates role as deciding Unicode requirements despite the fixture already preserving Unicode."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-44593489968e4ffdaee9385865dc1448-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "exporter_users",
+                "question": "Đối tượng người dùng chính của bản CSV do exporter tạo ra là nhóm nào?",
+                "optionId": "dieu-duong",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790878946.997728,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-44593489968e4ffdaee9385865dc1448",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-44593489968e4ffdaee9385865dc1448-2",
+              "owner_id": "0c23979a66fc4ef9a05d1692e898044d",
+              "request_id": "wr-44593489968e4ffdaee9385865dc1448",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-3649033230\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"adc45c8c022e4856ab33a33a974f4541\", \"claimedAt\": 1790878947.0006034, \"finishedAt\": 1790878977.1111434}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-44593489968e4ffdaee9385865dc1448-r1",
+              "sessionId": "0c23979a66fc4ef9a05d1692e898044d",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_users",
+                  "question": "Đối tượng người dùng chính của bản CSV do exporter tạo ra là nhóm nào?",
+                  "rationale": "docs/source.md xác nhận \"Người dùng mục tiêu chưa chốt\". Lựa chọn này quyết định toàn bộ phần còn lại của báo cáo (tên cột, thứ tự trường, mức chi tiết, yêu cầu Unicode) nhưng không thể suy ra từ tài liệu hay từ định dạng CSV.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "Người dùng chính là bác sĩ; CSV phục vụ tra cứu/lập hồ sơ bệnh nhân.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "Người dùng chính là điều dưỡng; CSV phục vụ ca trực/bàn giao chăm sóc.",
+                      "recommended": true
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8b41405708392c8c599",
+              "runId": "w-3649033230",
+              "workRequestId": "wr-44593489968e4ffdaee9385865dc1448",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-44593489968e4ffdaee9385865dc1448-r1",
+              "sessionId": "0c23979a66fc4ef9a05d1692e898044d",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_users",
+                  "question": "Đối tượng người dùng chính của bản CSV do exporter tạo ra là nhóm nào?",
+                  "rationale": "docs/source.md xác nhận \"Người dùng mục tiêu chưa chốt\". Lựa chọn này quyết định toàn bộ phần còn lại của báo cáo (tên cột, thứ tự trường, mức chi tiết, yêu cầu Unicode) nhưng không thể suy ra từ tài liệu hay từ định dạng CSV.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "Người dùng chính là bác sĩ; CSV phục vụ tra cứu/lập hồ sơ bệnh nhân.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "Người dùng chính là điều dưỡng; CSV phục vụ ca trực/bàn giao chăm sóc.",
+                      "recommended": true
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "exporter_users",
+                  "question": "Đối tượng người dùng chính của bản CSV do exporter tạo ra là nhóm nào?",
+                  "optionId": "dieu-duong",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790878946.997728,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8b41405708392c8c599",
+              "runId": "w-3649033230",
+              "workRequestId": "wr-44593489968e4ffdaee9385865dc1448",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-44593489968e4ffdaee9385865dc1448",
+              "remaining": false
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "route": {
+            "connectionId": "a65ac4a6-9cb0-4eeb-92d1-a15820a88659",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 34.844,
+          "wordCount": 294,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "30e649c1278b479ba56dfb043eecdf11",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            7,
+            2545
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "## Trả lời\n\nNgười dùng mục tiêu của exporter CSV là **Điều dưỡng** (chủ sở hữu đã trả lời trực tiếp, `decidedBy: user`, request `wr-f46c9a16b340450e9cceb258ae9a4cc4`, revision 2). Mô tả hiện có chỉ áp dụng cho nhóm này; không suy rộng sang Bác sĩ.\n\n## Phạm vi và phương pháp\n\n- Câu hỏi: ai dùng exporter CSV.\n- Phạm vi: chỉ tài liệu nội bộ, không tra cứu ngoài, không khảo sát lại định dạng.\n- Mốc thời gian: 2026-08-03 (phiên `w-15d8a8877f`).\n- Nguồn đã mở: `docs/source.md`; artifact checkpoint `a-6ba2eb227cb84f40b1ccc13c672c896a`.\n- Giới hạn: tài liệu chỉ có 3 dòng, không có mã nguồn hay đặc tả kỹ thuật kèm theo.\n\n## Dữ kiện đã xác minh\n\n| Dữ kiện | Nguồn | Trích |\n|---|---|---|\n| Exporter dùng định dạng CSV | `docs/source.md:1` | \"exporter dùng CSV\" |\n| Giữ nguyên Unicode | `docs/source.md:1` | \"giữ Unicode\" |\n| Không khảo sát lại định dạng | `docs/source.md:1` | \"Không nghiên cứu lại định dạng\" |\n| Người dùng là Điều dưỡng | `work_report` revision 2 | `optionId: dieu-duong`, `decidedBy: user` |\n\nSuy luận (chưa có nguồn): ý nghĩa Unicodeảnh hưởng tiếng Việt có dấu.\n\n## So sánh phương án\n\nKhông so sánh; chỉ còn một lựa chọn đã chốt.\n\n## Bằng chứng trái chiều và khoảng trống\n\nKhông có nguồn trái chiều. `docs/source.md:1` trước đây ghi \"Người dùng mục tiêu chưa chốt\" — nay đã được câu trả lời thay thế. UNVERIFIED: tên cột, kích thước tệp, giới hạn bản ghi, nơi lưu tệp.\n\n## Khuyến nghị\n\nGiữ mô tả hướng đến Điều dưỡng, ưu tiên tiếng Việt có dấu. Cần main xác nhận tập cột và nơi lưu tệp trước khi triển khai. Không mở phạm vi triển khai.\n\n## Knowledge requests\n\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "d83cd88be87a3a3b5ca0a10555098d3d1f21e3d692d2f31ee0a1f4b2558174be",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "be04b06e2ecf0fae7eec614cb00ef6ec503b3be9d7b66cfaee36926f18167426",
+          "adjudication": [
+            "Workflow accepted; output exceeds 200 words.",
+            "Invented 2026-08-03 reference date and 3-line source count; fixture actually contains one line.",
+            "Correctly distinguishes actual user choice from source and avoids implementation."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-f46c9a16b340450e9cceb258ae9a4cc4-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "exporter_audience",
+                "question": "Ai là người dùng mục tiêu của exporter CSV?",
+                "optionId": "dieu-duong",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790878991.686482,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-f46c9a16b340450e9cceb258ae9a4cc4",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-f46c9a16b340450e9cceb258ae9a4cc4-2",
+              "owner_id": "3f69923f6af34f4dadfb89e7f5bc27c8",
+              "request_id": "wr-f46c9a16b340450e9cceb258ae9a4cc4",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-15d8a8877f\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"30e649c1278b479ba56dfb043eecdf11\", \"claimedAt\": 1790878991.689887, \"finishedAt\": 1790879012.3686173}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-f46c9a16b340450e9cceb258ae9a4cc4-r1",
+              "sessionId": "3f69923f6af34f4dadfb89e7f5bc27c8",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_audience",
+                  "question": "Ai là người dùng mục tiêu của exporter CSV?",
+                  "rationale": "Nhóm người dùng quyết định nội dung mô tả và các giới hạn ràng buộc; không thể suy ra từ tài liệu nguồn.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8b4c26e70568d829220",
+              "runId": "w-15d8a8877f",
+              "workRequestId": "wr-f46c9a16b340450e9cceb258ae9a4cc4",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-f46c9a16b340450e9cceb258ae9a4cc4-r1",
+              "sessionId": "3f69923f6af34f4dadfb89e7f5bc27c8",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_audience",
+                  "question": "Ai là người dùng mục tiêu của exporter CSV?",
+                  "rationale": "Nhóm người dùng quyết định nội dung mô tả và các giới hạn ràng buộc; không thể suy ra từ tài liệu nguồn.",
+                  "options": [
+                    {
+                      "id": "bac-si",
+                      "label": "Bác sĩ",
+                      "description": "",
+                      "recommended": false
+                    },
+                    {
+                      "id": "dieu-duong",
+                      "label": "Điều dưỡng",
+                      "description": "",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "exporter_audience",
+                  "question": "Ai là người dùng mục tiêu của exporter CSV?",
+                  "optionId": "dieu-duong",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790878991.686482,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0f8b4c26e70568d829220",
+              "runId": "w-15d8a8877f",
+              "workRequestId": "wr-f46c9a16b340450e9cceb258ae9a4cc4",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false,
+              "status": "resolved",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-f46c9a16b340450e9cceb258ae9a4cc4",
+              "remaining": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "w7-a2-native-answer-enum",
+      "rawReceipt": ".tmp/work-checks/w7-a2-native-answer-enum/results.json",
+      "rawHash": "8a040190ee16fb447c86885ec3139117a34de5d79130540df8bd686caf97560f",
+      "records": [
+        {
+          "repeat": 1,
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 48.697,
+          "wordCount": 222,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "aa4dc36e5b2f4cb6bb5963200f2f1b2d",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            5,
+            1835
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "## Trả lời\n\nNgười dùng mục tiêu của exporter CSV là **Điều dưỡng** (quyết định của người dùng, `wr-25ea2913b26941c7ba6138f1065ddf2c`, optionId `nurse`). Mô tả nên nhấn vào dữ liệu dùng trong công việc chăm sóc hằng ngày. Dữ kiện đã có: exporter xuất **CSV**, **giữ Unicode**. Giới hạn: chỉ báo cáo, không triển khai.\n\n## Phạm vi và phương pháp\n\nĐọc `docs/source.md` (nguồn nội bộ duy nhất). Không mở nguồn ngoài, không khảo sát lại định dạng. Mốc thời gian: 2025-08-01 (phiên làm việc hiện tại).\n\n## Dữ kiện đã xác minh\n\n| Dữ kiện | Nguồn | Trích |\n|---|---|---|\n| Exporter dùng CSV | `docs/source.md:1` | \"exporter dùng CSV, giữ Unicode\" |\n| Giữ Unicode | `docs/source.md:1` | \"giữ Unicode\" |\n| Người dùng = Điều dưỡng | `wr-25ea2913b26941c7ba6138f1065ddf2c` (user) | optionId `nurse`, decidedBy `user` |\n\n## So sánh phương án\n\nBác sĩ (bị loại) và Điều dưỡng (được chọn) là hai lựa chọn duy nhất được hỏi. Chọn Điều dưỡng.\n\n## Bằng chứng trái chiều và khoảng trống\n\nKhông có nguồn trái chiều. UNVERIFIED: cột dữ liệu, encoding cụ thể (UTF-8/BOM), nơi nhập CSV — `docs/source.md` không nêu, và không được khảo sát lại.\n\n## Khuyến nghị\n\nMô tả cho Điều dưỡng; chỉ báo cáo. Cần câu hỏi mới về cột/encoding nếu muốn mở rộng.\n\n## Knowledge requests\n\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "d0cc442cb540cc81deba1f68fadccfe44b30e1ec67a307a12c3e94d91bf6d844",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "f3141ae155052065bb023926e742297b9a0c8ebdc4f114a423c19e6c3b5cec09",
+          "adjudication": [
+            "Workflow and answered event accepted; output exceeds 200 words.",
+            "Invented reference date 2025-08-01 is not given by fixture or user.",
+            "Selected option already describes daily care; final use of that context is not independently proven hallucinated scope."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-25ea2913b26941c7ba6138f1065ddf2c-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "users",
+                "question": "Đối tượng nào dùng exporter CSV này?",
+                "optionId": "nurse",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790880371.368418,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-25ea2913b26941c7ba6138f1065ddf2c",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-25ea2913b26941c7ba6138f1065ddf2c-2",
+              "owner_id": "56e7ab6ab79945be89890037b444da56",
+              "request_id": "wr-25ea2913b26941c7ba6138f1065ddf2c",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-7465e4d100\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"aa4dc36e5b2f4cb6bb5963200f2f1b2d\", \"claimedAt\": 1790880371.3727958, \"finishedAt\": 1790880402.7121656}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-25ea2913b26941c7ba6138f1065ddf2c-r1",
+              "sessionId": "56e7ab6ab79945be89890037b444da56",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Đối tượng nào dùng exporter CSV này?",
+                  "rationale": "docs/source.md nói rõ người dùng mục tiêu chưa chốt; mô tả exporter phụ thuộc vào người đọc dữ liệu nên tôi không tự đoán.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Người dùng là bác sĩ; mô tả tập trung vào dữ liệu lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Người dùng là điều dưỡng; mô tả tập trung vào quy trình chăm sóc hằng ngày.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_9xR9OIjB9ewYHFlMiVP0x9iC",
+              "runId": "w-7465e4d100",
+              "workRequestId": "wr-25ea2913b26941c7ba6138f1065ddf2c",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-25ea2913b26941c7ba6138f1065ddf2c-r1",
+              "sessionId": "56e7ab6ab79945be89890037b444da56",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Đối tượng nào dùng exporter CSV này?",
+                  "rationale": "docs/source.md nói rõ người dùng mục tiêu chưa chốt; mô tả exporter phụ thuộc vào người đọc dữ liệu nên tôi không tự đoán.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Người dùng là bác sĩ; mô tả tập trung vào dữ liệu lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Người dùng là điều dưỡng; mô tả tập trung vào quy trình chăm sóc hằng ngày.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "users",
+                  "question": "Đối tượng nào dùng exporter CSV này?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790880371.368418,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_9xR9OIjB9ewYHFlMiVP0x9iC",
+              "runId": "w-7465e4d100",
+              "workRequestId": "wr-25ea2913b26941c7ba6138f1065ddf2c",
+              "revision": 2,
+              "durable": true,
+              "resolved": true,
+              "requiresMainYield": false,
+              "status": "answered",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-25ea2913b26941c7ba6138f1065ddf2c",
+              "remaining": false,
+              "reason": "user",
+              "resolvedAt": 1790880371.3692882
+            }
+          ]
+        },
+        {
+          "repeat": 2,
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "scope": "native child; synthetic owner answer; no CUA/full main",
+          "direct": true,
+          "status": "accepted",
+          "oracle": true,
+          "latencySeconds": 38.444,
+          "wordCount": 513,
+          "lengthOracle": false,
+          "rootModelTurns": 0,
+          "childId": "bd5e8711ac1c4f8f84f842e2e4af9baa",
+          "questionCount": 1,
+          "finalRequestCount": 1,
+          "telemetry": [
+            6,
+            3159
+          ],
+          "activeSlotsAfterYield": [],
+          "activeSlotsAfterCompletion": [],
+          "output": "## Trả lời\n\nNgười dùng mục tiêu của báo cáo xuất CSV là **Điều dưỡng** (lựa chọn `nurse`, `decidedBy: user`, yêu cầu `wr-5e071110bac441d087ffb2afbe0ca752`, revision 2). Dữ kiện đã xác minh từ nguồn chủ nhà cung cấp: exporter dùng định dạng **CSV** và **giữ Unicode**. `docs/source.md` trước đó ghi \"Người dùng mục tiêu chưa chốt\", nay đã được chốt là Điều dưỡng nên báo cáo nên tập trung vào theo dõi và bàn giao chăm sóc hằng ngày. Theo yêu cầu, tôi không khảo sát lại định dạng. Phạm vi giới hạn ở mục này: mô tả exporter, không triển khai.\n\n## Phạm vi và phương pháp\n\n- Câu hỏi: ai dùng exporter CSV; dữ kiện kỹ thuật nào đã xác minh.\n- Nguồn đã mở: `docs/source.md` (file nhà cung cấp, đọc toàn văn, 1 đoạn).\n- Mốc thời gian: phiên làm việc `w-d6584385a7`, node R1 (stage `produce`), lần thử 1 → tiếp tục từ checkpoint sau khi có câu trả lời.\n- Giới hạn: không tìm kiếm web, không phân tích mã nguồn, không khảo sát lại định dạng CSV/Unicode.\n\n## Dữ kiện đã xác minh\n\n| Dữ kiện | Nguồn | Trích |\n|---|---|---|\n| Exporter dùng CSV, giữ Unicode | `docs/source.md` (ledger `r1`) | \"exporter dùng CSV, giữ Unicode\" — lời nguồn |\n| Người dùng mục tiêu = Điều dưỡng | `wr-5e071110bac441d087ffb2afbe0ca752` rev 2, `optionId: nurse` | quyết định người dùng, không phải lời tài liệu |\n| Trước đó chưa chốt người dùng | `docs/source.md` (ledger `r1`) | \"Người dùng mục tiêu chưa chốt\" — lời nguồn |\n\nSuy luận của tôi: \"báo cáo cho Điều dưỡng nên thiên về theo dõi/bàn giao hằng ngày\" là suy luận từ mô tả lựa chọn, không phải lời nguồn.\n\n## So sánh phương án\n\nHai lựa chọn đã được trình bày: Bác sĩ (hồ sơ/quyết định lâm sàng) và Điều dưỡng (theo dõi, bàn giao). Người dùng chọn Điều dưỡng. Chi phí/đánh đổi giữa hai hướng nằm ở bố cục báo cáo; hiện chưa có tài liệu nào trong `docs/` đủ để định lượng, nên tôi không suy diễn thêm.\n\n## Bằng chứng trái chiều và khoảng trống\n\n- Không có nguồn trái chiều; `docs/source.md` là tài liệu duy nhất được mở.\n- `docs/source.md` nói \"chưa chốt\" trong khi quyết định đã là \"Điều dưởng\" — đây không phải mâu thuẫn, tài liệu chỉ ghi trạng thái trước đó.\n- UNVERIFIED: tên trường dữ liệu, quy mô báo cáo, tần suất xuất, quy trình bàn giao — tài liệu không đề cập, chưa tìm thấy không đồng nghĩa không tồn tại.\n- Không còn câu hỏi mở nào về người dùng.\n\n## Khuyến nghị\n\nGiữ báo cáo ở mức mô tả cho Điều dưởng, tập trung dữ liệu phục vụ theo dõi và bàn giao chăm sóc, giữ nguyên định dạng CSV/Unicode đã xác minh. Nếu cần mô tả chi tiết hơn về trường dữ liệu hoặc quy trình, cần tài liệu bổ sung — tôi không tự mở phạm vi triển khai hay tạo sub-plan.\n\n## Knowledge requests\n- none",
+          "error": null,
+          "sourceHashes": {
+            "backend/src/agentbox/agent_core/work_artifacts.py": "30043c6090233c897bdd0c2a3de34c55655938325e8e5f61093dfbf9f75d7ba2",
+            "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+            "backend/src/agentbox/agent_core/work_checks.py": "5dbbc886245213ef15ce40186839170fa1fb1de1cbe1ff4471d8fb69c6d7c58d",
+            "backend/src/agentbox/agent_core/work_continuations.py": "a724aef13fca989ba4bf171a5d1fa20248c5f1e8f182b3e99c9ce7c145a685ae",
+            "backend/src/agentbox/agent_core/work_feedback.py": "d0cc442cb540cc81deba1f68fadccfe44b30e1ec67a307a12c3e94d91bf6d844",
+            "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+            "backend/src/agentbox/agent_core/work_graph.py": "ccd2a6759e313cf457d7869b95c04c427c197c310c887e2755b44375265d11b2",
+            "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+            "backend/src/agentbox/agent_core/work_prompts.py": "2424505cc2418c91ec3e6c6d0de1e25f841c9b50a09f8d8d8f57fabcd4b60955",
+            "backend/src/agentbox/agent_core/runtime.py": "93925e7ca6c06b940dbe86d77debeceb9a756ff1d8764d15265e827471cda92b",
+            "backend/src/agentbox/agent_core/roles.py": "9cf60814cf0957d7f6acc9adb57719b496fc8aaa5e6ecff28d2bca6ae23e1d2f",
+            "backend/src/agentbox/agent_core/tool_contracts.py": "9d0a3175035ab0589496fadbf51c8bbc2eec4d7594f74174a113aeaabeca17d6"
+          },
+          "outputHash": "85f5ed5a9494a192704e7beffeeb15e7d51d869522911817952aaf0c4ecd0faa",
+          "adjudication": [
+            "Workflow and answered event accepted; output exceeds 200 words.",
+            "Selected option explicitly includes daily follow-up/handoff; final labels its workflow interpretation as inference.",
+            "Two later uses misspell the role as Điều dưởng; primary answer and Unicode facts remain correct."
+          ],
+          "fixtureSource": "Dữ kiện đã xác minh: exporter dùng CSV, giữ Unicode. Người dùng mục tiêu chưa chốt. Không nghiên cứu lại định dạng.\n",
+          "fixtureSourceLines": 1,
+          "answerReceipt": {
+            "status": "resolved",
+            "decisionId": "wr-5e071110bac441d087ffb2afbe0ca752-r1",
+            "choice": "submit",
+            "outcome": "answered",
+            "answers": [
+              {
+                "questionId": "exporter_users",
+                "question": "Ai là người dùng mục tiêu chính của báo cáo xuất CSV?",
+                "optionId": "nurse",
+                "answer": "Điều dưỡng",
+                "decidedBy": "user",
+                "confirmedAt": 1790880415.9435766,
+                "requestRevision": 1,
+                "source": "user_action"
+              }
+            ],
+            "requestId": "wr-5e071110bac441d087ffb2afbe0ca752",
+            "revision": 2,
+            "remaining": false
+          },
+          "outbox": [
+            {
+              "id": "work-feedback-wr-5e071110bac441d087ffb2afbe0ca752-2",
+              "owner_id": "81050fb74049465fad67e3e77bd0a640",
+              "request_id": "wr-5e071110bac441d087ffb2afbe0ca752",
+              "status": "completed",
+              "doc": "{\"action\": \"resume_child\", \"runId\": \"w-d6584385a7\", \"stage\": \"produce\", \"requestRevision\": 2, \"childId\": \"bd5e8711ac1c4f8f84f842e2e4af9baa\", \"claimedAt\": 1790880415.9476695, \"finishedAt\": 1790880441.6209476}"
+            }
+          ],
+          "questionCards": [
+            {
+              "decisionId": "wr-5e071110bac441d087ffb2afbe0ca752-r1",
+              "sessionId": "81050fb74049465fad67e3e77bd0a640",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_users",
+                  "question": "Ai là người dùng mục tiêu chính của báo cáo xuất CSV?",
+                  "rationale": "docs/source.md (dòng 1) ghi rõ \"Người dùng mục tiêu chưa chốt\"; không thể suy ra từ tài liệu và không được tự đoán. Lựa chọn này quyết định nội dung và bố cục báo cáo.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Xuất để dùng cho hồ sơ/ra quyết định lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất để theo dõi/bàn giao chăm sóc hằng ngày.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_function_nwaxgj4tm70l_1",
+              "runId": "w-d6584385a7",
+              "workRequestId": "wr-5e071110bac441d087ffb2afbe0ca752",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          ],
+          "resolutionEvents": [
+            {
+              "decisionId": "wr-5e071110bac441d087ffb2afbe0ca752-r1",
+              "sessionId": "81050fb74049465fad67e3e77bd0a640",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "exporter_users",
+                  "question": "Ai là người dùng mục tiêu chính của báo cáo xuất CSV?",
+                  "rationale": "docs/source.md (dòng 1) ghi rõ \"Người dùng mục tiêu chưa chốt\"; không thể suy ra từ tài liệu và không được tự đoán. Lựa chọn này quyết định nội dung và bố cục báo cáo.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Xuất để dùng cho hồ sơ/ra quyết định lâm sàng.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất để theo dõi/bàn giao chăm sóc hằng ngày.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "exporter_users",
+                  "question": "Ai là người dùng mục tiêu chính của báo cáo xuất CSV?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790880415.9435766,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_function_nwaxgj4tm70l_1",
+              "runId": "w-d6584385a7",
+              "workRequestId": "wr-5e071110bac441d087ffb2afbe0ca752",
+              "revision": 2,
+              "durable": true,
+              "resolved": true,
+              "requiresMainYield": false,
+              "status": "answered",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-5e071110bac441d087ffb2afbe0ca752",
+              "remaining": false,
+              "reason": "user",
+              "resolvedAt": 1790880415.94459
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "testReceipts": [
+    {
+      "label": "w7-a2-final-guards",
+      "path": ".tmp/work-checks/w7-a2-final-guards.xml",
+      "hash": "7780d783268a80e09ff79ddf018bedc50738fdd72a53cd23cc96944309aa91b5",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "158",
+          "time": "72.451",
+          "timestamp": "2026-10-02T01:14:24.433463+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    },
+    {
+      "label": "w7-a2-certified-full",
+      "path": ".tmp/work-checks/w7-a2-certified-full.xml",
+      "hash": "c1b7d1f65e59290542d238a4fb022015ff0125c2debc88c95eacaa46556515de",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "21",
+          "tests": "2826",
+          "time": "777.747",
+          "timestamp": "2026-10-02T01:15:39.968287+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    },
+    {
+      "label": "w7-a2-answer-enum-target",
+      "path": ".tmp/work-checks/w7-a2-answer-enum-target.xml",
+      "hash": "9731d316b272d040eb61196dbb2ca99460aefbe78c77281bc23453584a806157",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "160",
+          "time": "75.958",
+          "timestamp": "2026-10-02T01:37:00.319907+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    },
+    {
+      "label": "w7-a2-answer-enum-full",
+      "path": ".tmp/work-checks/w7-a2-answer-enum-full.xml",
+      "hash": "14735c56920dd1406c8c4c9590e06fbc518b3d0599096505ee4cf984df842586",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "21",
+          "tests": "2828",
+          "time": "797.489",
+          "timestamp": "2026-10-02T01:39:05.128392+07:00",
+          "hostname": "Admin-PC"
+        }
+      ],
+      "exit": "0"
+    }
+  ]
+}

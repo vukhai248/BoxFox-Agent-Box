@@ -57,21 +57,45 @@ def complete(result):
     return isinstance(result, dict) and result.get('status') == 'completed' and not result.get('is_error')
 
 
-def observations(graph, child_id):
+def observations(graph, child_id, *, after=None):
     if not child_id:
         return []
-    rows = graph.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='tool_end' ORDER BY seq",
-                            (child_id,)).fetchall()
+    try:
+        admission = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0) if after is None else after
+    except KeyError:
+        return []
+    rows = graph.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='tool_end' AND seq>? ORDER BY seq",
+                            (child_id, admission)).fetchall()
     return [json.loads(row['payload']) for row in rows]
 
 
-def good_reads(graph, child_id):
+def good_reads(graph, child_id, *, retained_checkpoint=False):
     # Reading a workspace copy of the assigned artifact is still self-evidence,
     # even when the model uses file_read rather than work_artifact_read.
     try:
         binding = graph.store.get(child_id)['config'].get('workBinding') or {}
     except KeyError:
         binding = {}
+    start = None
+    if retained_checkpoint and binding.get('purpose') == 'produce' and binding.get('stage') == 'produce':
+        # A same-assignment producer may use sources genuinely opened before
+        # its durable checkpoint. This is observed evidence, not a current
+        # revalidation. Test/reviewer callers always use the new admission only.
+        records = graph.feedback.records(binding['runId'])
+        resumed = any(d['childId'] == child_id and d['status'] == 'consumed'
+                      and d.get('resumedBinding', {}).get('admissionSeq') == binding.get('admissionSeq') for d in records)
+        if resumed:
+            for doc in records:
+                if doc['childId'] != child_id or doc['status'] != 'consumed':
+                    continue
+                if any(doc['binding'].get(k) != binding.get(k) for k in ('nodeId', 'stage', 'purpose', 'checkKind')):
+                    continue
+                try:
+                    graph.feedback.validate(doc)
+                except ValueError:
+                    continue
+                seq = doc['binding'].get('admissionSeq', 0)
+                start = seq if start is None else min(start, seq)
     paths = []
     for aid in binding.get('artifactIds', []):
         row = graph.db.execute('SELECT metadata FROM work_artifacts WHERE id=?', (aid,)).fetchone()
@@ -105,7 +129,7 @@ def good_reads(graph, child_id):
         # failed HTTP response must never count as evidence just because it has text.
         status = result.get('status')
         return status is None or (isinstance(status, int) and not isinstance(status, bool) and 200 <= status < 300)
-    return [item for item in observations(graph, child_id)
+    return [item for item in observations(graph, child_id, after=start)
             if item.get('name') in ('file_read', 'web_fetch', 'read_source', 'codebase_grep')
             and isinstance(item.get('result'), dict) and not item['result'].get('is_error')
             and any((value.strip() if isinstance(value, str) else bool(value))

@@ -10,7 +10,7 @@ platforms: [linux, macos, windows]
 
 The main agent is the brain. It triages, decomposes, delegates, and decides. Children produce one
 deliverable each. Main receives immutable artifact refs, inspects the draft, and calls `work_check` for checks appropriate to the artifact/risk. Simple lookup and diagnosis do not require a semantic reviewer by default.
-Only the main agent delegates or asks the owner.
+Only the main agent delegates and owns the interview. Children may save questions by ref; explicit root grants permit backend publication and same-child continuation.
 
 ## When to Use
 
@@ -55,6 +55,11 @@ Execute only after an execution request and the existing approval gate.
    answered by the engine through new research or explore children, never by the child itself.
 4. Real ambiguity that changes the approach: one `interview` card with 1-5 questions, 2-4 options
    each, a recommended option, and a rationale. Never ask what the repository can answer.
+   A blocked child may save 1-3 questions via `work_report(action='needs_user')`; publish by `interview(workRequestId, revision)` without rewriting the question payload.
+   Main may preassign `work_graph(action='grant', nodeId, stage, purpose, decisionKeys, publishInterview, resumeOnAnswers, revision, invocationId)`.
+   The root-owned grant covers specific owner-intent decisions, not technical facts or new implementation scope.
+   Backend may publish and continue the same child from saved answers/checkpoint refs without another main model turn; missing/revoked/conflicting rights or an invalidated check binding require main's decision.
+   `work_report(action='cancel', requestId, revision, invocationId)` cancels an unwanted/conflicting request; cancellation never confirms an answer.
 5. Add plan nodes `P1..Pn`. Each sub-plan owns one coherent slice (a module, a contract, a UI surface).
    Set `dependsOn` to the real order (a contract before its callers, a schema before its readers).
    Give every plan node `files`, `tests` and `acceptance`. Each `tests` entry is an exact runnable command;
@@ -106,4 +111,4 @@ Return findings and one fenced JSON object with `coverage`, one `{id,status,evid
 Statuses are `pass`, `revise`, `unverified`. End with exactly one final `VERDICT: ok` or `VERDICT: revise` line.
 Only the backend records pass after completion, read coverage, bindings and actual test events are validated.
 Do not delegate a reviewer-of-reviewer. Do not edit source while checking. A source URL, citation or JSON field alone does not prove a recommendation correct.
-Internal user-feedback/same-child resume is W7; this protocol does not implement it.
+W7 persists questions/answers/checkpoints and granted same-child continuation. This does not imply automatic downstream checks or repair; main still dispatches them unless a separate W8 handoff policy is assigned.

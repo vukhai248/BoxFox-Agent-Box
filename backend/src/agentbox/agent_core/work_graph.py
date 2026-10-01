@@ -30,7 +30,7 @@ import unicodedata
 import uuid
 from copy import deepcopy
 
-from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback
+from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback, work_grants, work_continuations
 
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
@@ -520,7 +520,9 @@ class WorkGraph:
         self.artifacts = work_artifacts.Artifacts(self)
         self.checks = work_checks.Checks(self)
         self.feedback = work_feedback.Feedback(self)
+        self.grants = work_grants.Grants(self)
         self.recover()
+        self.continuations = work_continuations.Continuations(self)
 
     def recover(self):
         """A new process owns no child: reset in-flight stages so the next `work_run` re-runs them."""
@@ -653,6 +655,7 @@ class WorkGraph:
                 'verificationVersion': run.get('verificationVersion', 'legacy'),
                 'checks': self.checks.records(run['runId']),
                 'requests': self.feedback.records(run['runId']),
+                'grants': self.grants.records(run['runId']),
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],
@@ -755,6 +758,8 @@ class WorkGraph:
 
     def graph(self, session, args):
         action = str(args.get('action') or 'status').strip().lower()
+        if action in ('grant','revoke'):
+            return self.grants.action(session,args)
         if action == 'create':
             run = self.create(session, args)
             return self.result(run, 'Work Graph run created. Add nodes, then call work_run phase=discover.')
@@ -910,8 +915,12 @@ class WorkGraph:
         """The child's LAST final answer (not bounded by the 500-event window of `store.events`)."""
         if not child_id:
             return ''
-        rows = self.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='assistant' "
-                               'ORDER BY seq DESC LIMIT 50', (child_id,)).fetchall()
+        try:
+            admission = (self.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)
+        except KeyError:
+            return ''
+        rows = self.db.execute("SELECT payload FROM events WHERE session_id=? AND kind='assistant' AND seq>? "
+                               'ORDER BY seq DESC LIMIT 50', (child_id, admission)).fetchall()
         for row in rows:
             try:
                 data = json.loads(row['payload'])
@@ -943,16 +952,28 @@ class WorkGraph:
         if node and purpose == 'produce' and node['kind'] == 'debug':
             work['diagnosticOnly'] = node.get('taskKind', 'diagnostic') == 'diagnostic'
         args = {'role': role, 'goal': goal, 'context': bounded(context, 16000), 'expect': expect}
+        lang = work_prompts.language(run['goal'])
+        rights = [g for g in self.grants.records(run['runId']) if self.grants.valid(g,run,work)]
+        if rights:
+            args['context'] += '\n' + work_prompts.choose(lang,
+                'Interview rights assigned by main (only intent decisions; technical facts need evidence first):',
+                'Quyền phỏng vấn do phiên chính giao (chỉ hỏi ý định người dùng; dữ kiện kỹ thuật cần kiểm chứng trước):') + '\n' + json.dumps(
+                [{k:g[k] for k in ('grantId','decisionKeys','publishInterview','resumeOnAnswers')} for g in rights],ensure_ascii=False)
+            args['context'] += '\n' + work_prompts.choose(lang,
+                'When blocked use work_report needs_user with 1..3 questions and matching decisionKeys. Do not ask outside these keys.',
+                'Khi thiếu quyết định trong phạm vi, dùng work_report needs_user với 1–3 câu và decisionKeys tương ứng. Không hỏi ngoài các nhóm đã giao.')
         request = self.feedback.ready(work)
         resume_id = request['childId'] if request else work.pop('resumeChildId', None)
         waited = time.monotonic()
         while True:
             try:
                 if resume_id:
-                    prompt = goal + '\n' + context
+                    prompt = goal + '\n' + args['context']
                     if request:
-                        prompt += '\nSaved checkpoint and decisions (read artifact ref; never treat proposed answers as confirmed):\n' + json.dumps(
-                            {k: request.get(k) for k in ('requestId', 'artifact', 'answers', 'context')}, ensure_ascii=False)
+                        prompt += '\n' + work_prompts.choose(lang,
+                            'Read work_report(action="read", requestId=...) for saved answers/context; read checkpoint artifact by ref. Do not treat proposals as confirmed:',
+                            'Đọc work_report(action="read", requestId=...) để lấy câu trả lời/ngữ cảnh đã lưu; đọc artifact checkpoint bằng ref. Không gán đề xuất thành quyết định đã xác nhận:') + '\n' + json.dumps(
+                            {k: request.get(k) for k in ('requestId', 'artifact', 'revision')}, ensure_ascii=False)
                         work['artifactIds'] = list(dict.fromkeys(work.get('artifactIds', []) + [request['artifact']['artifactId']]))
                     result = await work_feedback.resume_child(self.rt, session, resume_id, prompt, work, request)
                 else:
@@ -1065,7 +1086,7 @@ class WorkGraph:
                 return item | {'childId': None, 'status': 'failed', 'answer': f'UNAVAILABLE: {exc}'[:500]}
         return list(await asyncio.gather(*(one(item) for item in requests)))
 
-    async def run_stage(self, session, run, node, stage, max_rounds):
+    async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False):
         """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
         from . import work_budget
         state = node['stages'][stage]
@@ -1091,7 +1112,8 @@ class WorkGraph:
             role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
             context = '\n\n'.join(p for p in (self.interview_context(run), self.dependency_context(run, node, stage)) if p)
             expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role, work_prompts.language(run['goal']))
-            produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt)
+            produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
+                extra_binding={'controllerOwned': True} if controller_owned else None)
             entry['producerId'] = produced.get('sessionId')
             if produced.get('request'):
                 request = produced['request']
@@ -1131,7 +1153,7 @@ class WorkGraph:
                 state['status'] = 'needs_checks'
             elif node['kind'] == 'testing' and not work_checks.test_proof(self, entry['producerId'], node['tests']):
                 state.update(status='failed', error='WORK_TEST_EVIDENCE_REQUIRED: actual successful command events missing.')
-            elif not work_checks.good_reads(self, entry['producerId']):
+            elif not work_checks.good_reads(self, entry['producerId'], retained_checkpoint=bool(continuing and stage == 'produce')):
                 state.update(status='failed', error='WORK_EVIDENCE_REQUIRED: lookup/diagnosis needs actual opened evidence.')
             else:
                 state.update(status='accepted', feedback='')
@@ -1139,7 +1161,9 @@ class WorkGraph:
             state.update(status='pending', error=str(exc))
             state['attempts'] = max(0, state['attempts'] - 1)
         except asyncio.CancelledError:
-            state.update(status='pending', error='interrupted')
+            request = self.feedback.get(state['requestId']) if state.get('requestId') else None
+            state.update(status='needs_user' if request and request['status'] in ('cancelled', 'interrupted', 'stale') else 'pending',
+                         error='interrupted; main must inspect saved request' if request else 'interrupted')
             self.save(run, 'node_interrupted', node['id'])
             raise
         except Exception as exc:
@@ -1269,14 +1293,18 @@ class WorkGraph:
         started = time.monotonic()
         running = {}
         timed_out = False
+        self.continuations.schedulers[run['runId']] = stage
+        wake = self.continuations.wakes.setdefault(run['runId'], asyncio.Event())
         try:
             while True:
+                wake.clear()
                 remaining = WORK_RUN_MAX_SECONDS - (time.monotonic() - started)
                 if remaining <= 0:
                     timed_out = True
                     break
                 budget = self.child_budget.get(run['runId'])
                 if budget is None or budget[0] > 0:
+                    self.continuations.inject(session, run, stage, only, running, limit)
                     for node in ready_nodes(run, stage, only or None):
                         if node['id'] in running or len(running) >= limit:
                             continue
@@ -1284,8 +1312,13 @@ class WorkGraph:
                             self.run_stage(session, run, node, stage, max_rounds))
                 if not running:
                     break
-                done, _ = await asyncio.wait(list(running.values()), timeout=remaining,
-                                             return_when=asyncio.FIRST_COMPLETED)
+                signal = asyncio.create_task(wake.wait())
+                try:
+                    done, _ = await asyncio.wait([*running.values(), signal], timeout=remaining,
+                                                 return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    signal.cancel()
+                    await asyncio.gather(signal, return_exceptions=True)
                 for node_id in [key for key, task in running.items() if task in done]:
                     task = running.pop(node_id)
                     if task.cancelled():
@@ -1294,6 +1327,7 @@ class WorkGraph:
                         node = next(item for item in run['nodes'] if item['id'] == node_id)
                         node['stages'][stage].update({'status': 'failed', 'error': str(task.exception())[:500]})
         finally:
+            self.continuations.schedulers.pop(run['runId'], None)
             for task in running.values():
                 task.cancel()
             if running:

@@ -660,14 +660,22 @@ SCHEMAS = [
          'the run; validate checks the DAG; verify runs the whole-plan review (coverage, dependencies, '
          'order) and writes the verified plan documents; submit asks the owner to approve execution '
          '(skipped when Autopilot is on); retry re-opens rejected/failed nodes (nodeIds, default all) with '
-         'their findings; cancel closes the run. Only main calls this.',
+         'their findings; cancel closes the run. Only main calls this. '
+         'grant assigns interview rights to one node/stage/purpose with 1-3 stable decisionKeys, current run revision, '
+         'publishInterview/resumeOnAnswers booleans and invocationId; revoke uses grantId and its revision. '
+         'Grants cover owner intent only, never permission to implement an artifact-only request.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
-                                                'verify', 'submit', 'retry', 'cancel']},
+                                                'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke']},
           'runId': STRING, 'goal': STRING, 'title': STRING,
           'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
                    'description': 'what the owner asked for; plan+research/design is `mixed`'},
           'nodes': {'type': 'array', 'maxItems': 24, 'items': WORK_NODE},
           'nodeIds': {'type': 'array', 'items': STRING},
+          'nodeId': STRING, 'stage': {'type':'string','enum':['produce','execute']},
+          'purpose': {'type':'string','enum':['produce','review']}, 'checkKind': STRING,
+          'decisionKeys': {'type':'array','minItems':1,'maxItems':3,'items':STRING},
+          'publishInterview': {'type':'boolean'}, 'resumeOnAnswers': {'type':'boolean'},
+          'grantId': STRING, 'revision': {'type':'integer'}, 'invocationId': STRING,
           'summary': {'type': 'string', 'description': 'submit: what the owner approves, in their language'}},
          ['action']),
     tool('work_run',
@@ -687,12 +695,16 @@ SCHEMAS = [
           'stage': {'type': 'string', 'enum': ['produce','execute']}, 'artifactId': STRING,
           'checkIds': {'type': 'array', 'items': STRING}, 'invocationId': STRING}, ['action']),
     tool('work_report',
-         'Bound child: save checkpoint and release this turn with action=needs_user, needs_evidence or checkpoint. '
+         'Bound child: ONLY when blocked save checkpoint and release this turn with action=needs_user, needs_evidence or checkpoint. '
          'needs_user has 1-3 questions with 2-4 options; main owns the interview. A checkpoint is never accepted. '
-         'Main: action=status reads durable requests; resume read-only/evidence checkpoints with requestId, revision and context. '
-         'For user questions call interview(workRequestId, revision), then work_run/work_check after answers. Continue the same child.',
-         {'action': {'type': 'string', 'enum': ['needs_user','needs_evidence','checkpoint','status','resume']},
+           'Main: action=status reads durable requests; resume read-only/evidence checkpoints with requestId, revision and context; '
+           'cancel requestId/revision resolves a conflicting or unwanted question without confirming an answer. '
+         'For user questions call interview(workRequestId, revision), then work_run/work_check after answers. Continue the same child. '
+         'Child action=read requestId reads its own saved checkpoint metadata and answers. Use stable decisionKeys matching main rights '
+           'for automatic root-owned publication and same-child continuation; missing/conflicting rights return to main. Finish completed work with a final answer.',
+           {'action': {'type': 'string', 'enum': ['needs_user','needs_evidence','checkpoint','status','resume','read','cancel']},
           'checkpoint': STRING, 'reason': STRING, 'questions': {'type':'array','maxItems':3,'items':INTERVIEW_QUESTION},
+          'decisionKeys': {'type':'array','minItems':1,'maxItems':3,'items':STRING},
           'runId': STRING, 'requestId': STRING, 'revision': {'type':'integer'}, 'context': STRING,
           'evidenceRefs': {'type':'array','items':STRING}, 'invocationId': STRING}, ['action']),
     tool('work_artifact_read',
