@@ -2222,6 +2222,12 @@ Hai full sweeps trước bị **chủ động ngắt để sửa lỗi đã tìm
 
 **Cần CUA do agent khác kiểm, không có claim đã chạy:** (1) card tự xuất hiện tại root Chat/Decisions với câu hỏi/options của sub; (2) partial answer → reload vẫn thấy câu cũ + answer, câu còn lại tiếp tục; (3) submit lặp không tạo thêm child/turn; (4) root đang báo tiến độ không phải relay bảng hỏi; (5) stop/cancel/stale chuyển card lịch sử sang cancelled, không còn trong Pending và không ghi answer giả; (6) sau trả lời, cùng child tiếp tục, Plan tab vẫn đọc đúng artifact/version/hash, không Build nếu request chỉ artifact. Ngôn ngữ hiển thị phải có dấu; chưa thay UI để đạt các ca này.
 
+### 31.2 Neo A2 và phần tiếp tục
+
+**Commit implementation A2: `dd16ad32` trên B**, nền A1 `7b55e7cc`. Không sửa frontend, không dùng CUA, không push/merge/main. Target cuối 160 passed; full cuối 2807 passed/21 skipped; hai native cuối đạt cơ chế continuation và answered event nhưng đều vượt cap. Evidence giữ đủ tám lượt và phân biệt nội dung/flow, không giấu hai product failures trước sửa retention.
+
+Tiếp tục **A3.1**: tách check dưới lock hiện có để manual/handoff cùng dùng; bổ sung input identity và không chạy lại check xanh trên cùng binding chỉ vì invocation khác. Nối auto assignment/scheduler ở A3.2; lifecycle checker mới và retest ở các checkpoint tiếp theo, không gọi refactor A3.1 là đã xong Build→Testing tự động. Goal W6.1/W6.5/W7/W8 vẫn active.
+
 ## 32. W6.1.3 / W6.2 — đọc xong Design compact repeat 2 cũ
 
 [Bằng chứng đầy đủ 9 child + main](W6.1.3-design-repeat2-evidence.json) chỉ lưu visible final, receipt và adjudication, không lưu hidden reasoning. Source **policy9**, commit `1be035fb`, run `w-e9501a3a92`; không chứng nhận A2. Root completed nhưng whole review chưa đạt, workflow oracle false, **3664.036s**. Giữ đủ 4/4 lượt cũ thất bại trong thống kê.
