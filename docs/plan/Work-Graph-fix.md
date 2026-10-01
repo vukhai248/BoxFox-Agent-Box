@@ -1914,3 +1914,53 @@ Neo hợp đồng policy 7: **3759d34d**. Đợt này chỉ sửa review prompt/
 Evidence: [W6.1-notes-scope-evidence.json](W6.1-notes-scope-evidence.json). Ca nhỏ này chưa chứng minh reviewer công tâm với mọi Plan/Research/Design; W6.1 vẫn mở, W7/W8 chưa thi công. C4 policy 6 vẫn dùng để tìm dấu hiệu, không chứng nhận policy 8.
 
 **W6.5.2 — ghi nhận semantics ngân sách, chờ duyệt cùng W8:** `WORK_CHILDREN_PER_RUN_CALL=72` và 3600s được tạo/đếm theo từng lời gọi work_run/schedule_nodes, không phải trần toàn đời run. C4 có nhiều lời gọi nên tổng thời gian có thể vượt 3600s; không gọi riêng điều này là timeout bug hoặc mất mạng. Khảo sát budget/admission trước W7/W8; chưa sửa bộ đếm, scheduler hay giới hạn đã chốt với cha.
+
+## 26. W6.1.2 — checkpoint policy 9/10 và lỗi thực, đang đo
+
+Nhánh **B**, nền `1be035fb`. Không sửa UI/UX, prompt main/producer, quyền tool hoặc scheduler trong bản sửa này. Tách phạm vi node khỏi bao phủ toàn run; nguồn phải chứng minh riêng từng con số/trích dẫn đề nghị sửa. Một finding đúng không cho phép sửa các giá trị bên cạnh thiếu căn cứ. Policy 10 làm check của hợp đồng cũ không đủ chứng nhận hợp đồng mới; lịch sử vẫn đọc được.
+
+- [x] Policy 9: backend **2759 passed / 21 skipped / 0 lỗi**, 617,89s; native 6 lượt, 8 attempt. Oracle verdict/routing đúng **6/6**, nhưng không phải 6/6 mọi finding đúng: negative lượt 1 đòi sửa 160000 byte thành 240000. `ơ` U+01A1 thực cần **2 byte**, không phải 3. Counterexample local và bảng RFC 3629 xác nhận lỗi thuộc reviewer.
+- [x] Policy 10: test mục tiêu **161 passed**, 52,07s; backend **2761 passed / 21 skipped / 0 lỗi**, 549,59s. Runtime source bytes trước/sau test khớp. Hai lệnh chuẩn bị gõ nhầm tên test không chạy bài nào; không tính vào pass.
+- [x] Native policy 10: **8 lượt / 8 attempt**, artifact đúng pass 2/2, artifact sai revise 2/2, tiền đề main sai route và guard 2/2, ngoại lệ Python 3.12 pass 2/2. Oracle gồm marker **7/8**: false-premise lượt 2 ghi marker ok dù A1 revise; backend vẫn giữ revise, không có false pass. Scope A2/C1 của artifact đúng được giữ 2/2, nhưng prose còn lỗi ở W6.1.3; không chứng nhận toàn bộ reviewer đạt.
+- [ ] Native Plan: cặp khác đúng một biểu thức `list(csv.reader(...)) == [[value]]` / `[value]`, giữ hợp đồng rỗng và milestone như nhau. Reviewer từng chấp nhận sai shape; phép thử mới dùng artifact bất biến và workspace riêng.
+
+### C4 — kết quả có thật, không chuyển lỗi thành pass
+
+Baseline policy 6 Plan-1 đã kết thúc: **7588,713s**, 36 child (4 Explore, 14 Plan, 18 Plan-review); 9 lần main update definition; **main partial STEP_BUDGET_EXHAUSTED**, chưa whole verify (0 lời gọi), chưa có master plan. Main cuối ghi rõ chưa xong, không tuyên bố ship. P2 accepted vẫn có expected chuỗi rỗng sai; một reviewer bắt đúng, reviewer sau đọc thiếu nhánh ép quote rồi cho pass. P3 lặp lại lỗi từ dependency này. Đây là vấn đề kiểm nguồn và kết quả review, không tự quy cả chuỗi cho producer/main. Toàn bộ 36 output/assignment được lưu trong [corpus baseline](W6.1-plan-baseline-final-evidence.json), phân biệt output trung gian với final receipt.
+
+Đã dừng phép đo baseline policy 6 sau khi lưu SQLite backup và trạng thái Plan-2 còn dở (`.tmp/work-checks/w612-baseline-stop`). Đây là quyết định dừng phép thử đã lỗi thời, **không phải** lỗi mạng/provider/timeout sản phẩm; không tính Plan-2 pass hoặc âm thầm loại nó khỏi report.
+
+Compact Plan policy 9 lượt 1: **1488,094s**, error **DEADLINE_EXCEEDED**, 7 child, chưa whole/master. Reviewer đúng khi giữ word-count chưa kiểm là unverified; nhưng nó cũng xác nhận sai invariant list-of-rows. Main tiếp tục sửa definition và sinh bản thay vì có kết quả đã kiểm. Model/tool timeout và phần thời gian delegate đã được tách; chưa kết luận cần tăng timeout. Raw: `.tmp/work-checks/w612-scope9-compact-flow`. Các lượt còn đang chạy chưa tính đạt.
+
+### Việc liên quan phải có checkpoint riêng
+
+- **W6.1.3 (đã xác nhận sau policy 10):** negative-2 nói field ≥131072 ký tự đã vượt (thực nhận được 131072, lỗi ở 131073); correct-unit-2 coi đúng 80000 ký tự `ơ` là tiếng Việt bất kỳ và đòi đổi số byte chính xác thành cận dưới; false-premise-2 nói BMP tiếng Việt xấp xỉ một byte và marker sai. Snapshot và counterexample từng finding, không chứng nhận mọi claim từ một VERDICT. Nối fact/proof requests với main và checker phù hợp trong W7/W8; chưa thêm calculator, cấp terminal cho Review hoặc tầng model mới.
+- **W6.2:** producer đặt invariant sai, lỗi planned/current/test-count; main sửa definition nhiều lần. Chỉ sửa sau triage loại trừ nguồn lỗi ở review; đối chiếu W8, không lén sửa trong patch review.
+- **W6.5.2/W8:** giới hạn per-call không là ngân sách suốt run; definition update reset stage có thể mở nhiều đợt. Cần tracing/admission trước khi quyết định cơ chế; không gọi 7588s là mạng chậm hay tự tăng trần.
+- **W8:** reviewer của một node không được mở dependency artifact nếu không nằm trong assigned snapshots. Không cho nó bịa nội dung dependency; phải thiết kế tập input bất biến tối thiểu và phân biệt snapshot cần đọc với artifact cần phán xét.
+
+## 27. Phương án W7/W8 để chủ dự án duyệt trước thay đổi kiến trúc
+
+Yêu cầu mới: hoàn thiện W6.1/W6.5/W7/W8 theo checkpoint riêng, đánh giá output trước W8; hỏi chủ dự án duyệt **phương án kiến trúc mới**. **Chủ dự án đã duyệt mục 27**, bổ sung giữ sub Testing cũ khi retest sau Debug/sửa lỗi. W7/W8 chưa code tại thời điểm ghi nhận; không tick implementation từ việc được duyệt. Giữ giao diện hiện tại, model OpenCode Space Bunny, chỉ nhánh B.
+
+### W7 — giữ main điều phối, chờ và tiếp tục đúng child
+
+1. Child có binding báo checkpoint hoặc thiếu quyết định người dùng bằng `work_report`; lưu request/artifact nháp, nhả compute/slot. Checkpoint không là sản phẩm accepted.
+2. Main nhận request, xem yêu cầu gốc và gộp **1–3 câu** cần người dùng chốt vào thẻ phỏng vấn hiện có. Không tự suy câu trả lời từ timeout; backend ghi nguồn xác nhận từ hành động user.
+3. SQLite lưu session/run/node/stage/child/origin-turn, request revision, question/answer IDs và outbox. Transaction answer + resume; invocation chống double-click; reject stale/cross-owner. Câu trả lời từng phần giữ phần còn mở và lịch sử.
+4. Khi đủ quyết định, tiếp tục **cùng child ID, context, folder**; cộng usage, không reset budget, thời gian user nghĩ không tính compute. Restart xử lý outbox lại được mà không mở hai lượt.
+5. Child viết artifact version mới; main đọc ref và chọn checks cần thiết. Chỉ invalidation node chịu tác động và downstream, giữ check nhánh độc lập. Test identity/restart/duplicate/stale/partial-answer/budget trước khi nối scheduler W8.
+
+### W8 — dependency có pha, kiểm theo nhu cầu, quyền thực thi rõ
+
+1. Chuẩn hóa cạnh cần **artifact produce được kiểm** hoặc **execute/tests đã đạt**; giữ adapter dependsOn cũ. Kiểm cycle, hợp đồng và input refs trước admission. Snapshot dependency được giao làm nguồn đọc, không tự biến mọi dependency thành đầu ra phải review lại.
+2. Main nhận draft/check/result và điều phối bước kế tiếp. Policy chỉ yêu cầu chứng cứ tối thiểu theo loại artifact/rủi ro; main chọn thêm Testing, Debug, Research hoặc Review theo finding. **Không thêm Debug cho mọi Build**, không thêm Review cho mọi lookup.
+3. Ví dụ patch có test đỏ: **Build → main → Testing → main → Debug (khi cần tìm nguyên nhân) → sửa → tiếp tục chính sub Testing cũ**; Review kiểm patch đã sửa khi policy/rủi ro yêu cầu. Testing giữ child ID/context, test matrix và finding cũ; nhận ref/hash mới, đọc thay đổi và **chạy lại** test trên snapshot mới. Kết quả/command của lần trước không được dùng để pass lần retest; proof phải thuộc admission/turn và code hash mới. Usage cộng dồn, không reset budget. Nếu không còn child/budget hoặc phạm vi đã đổi lớn, main báo lý do và checkpoint trước khi thay tester, không âm thầm mở con mới. Reviewer thiếu fact thực thi trả yêu cầu kiểm chứng cho main, không tự bịa expected hoặc mở quyền của mình. Thứ tự linh hoạt nhưng không bỏ gate bắt buộc.
+4. Scheduler chỉ mở node khi cạnh đúng pha đã đạt, không còn needs_user/check thiếu và không xung đột touch set. Nhánh độc lập song song; quyền ghi/branch/snapshot được kiểm trước Build. Dừng/resume không tạo orphan hoặc double execution.
+5. Run-owned integration/ship chỉ từ đúng code/artifact/hash đã kiểm và có yêu cầu thực thi. Artifact-only không Build/PR. Số lần admission/repair theo run/node giữ lịch sử qua update; không âm thầm bỏ giới hạn bằng đổi definition. Giá trị ngân sách mới phải đo/chốt riêng W6.5.2, chưa tự chọn một trần mới.
+
+### Cách thi công để truy nguyên lỗi
+
+**Neo W6 → W7 storage/report → W7 answer/resume → W7 tích hợp → neo W7 → W8 cạnh/admission → W8 isolation/checks → W8 integration/ship → neo W8.** Mỗi phần có regression/fault tests, chạy native ở điểm nối; lưu cả failure. Chưa đạt phải có W con kèm nguyên nhân/bằng chứng và output cần đạt, không tick nhờ một bộ unit xanh. Không sửa đồng loạt toàn workflow rồi mới thử.
+
+Test bổ sung W8 đã chốt: test đỏ → Debug/sửa → retest cùng tester ID/context; command cũ pass không đóng cổng mới; đổi hash trước/during retest bị từ chối; restart/duplicate chỉ mở một lượt; budget cũ hết không tự reset hoặc đổi child.

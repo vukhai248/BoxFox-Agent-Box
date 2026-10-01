@@ -305,6 +305,7 @@ class Checks:
                                                  research_only=work_policy.research_only(run))
         else:
             goal, _ = graph.reviewer_goal(run, node, stage, '', budget_steps=effective_steps)
+            goal += work_prompts.node_review_scope(node, stage, lang)
         if whole:
             goal += work_prompts.choose(lang,
                 f'\nBudget: {effective_steps} model steps; batch tools and reserve time for the verdict.',

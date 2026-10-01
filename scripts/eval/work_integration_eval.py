@@ -41,6 +41,25 @@ PROMPTS = {
         'Main giao Design và kiểm bản tổng hợp bằng Work Graph trước khi trả kết quả.',
 }
 
+# Smaller fixtures exercise the same dispatch/version/check/publication paths.
+# Keep original prompts/results unchanged; these are not a replacement benchmark.
+PROMPTS['plan_compact'] = PROMPTS['plan'] + (
+    '\nĐây là sửa một hàm 6 dòng với một test, không phải app mới. Main đọc ba file và '
+    'chạy baseline python -m pytest -q trước. Dùng đúng một node plan P1, không cần '
+    'Explore/Research riêng; P1 chứa M1–M3 trong một sub-plan dưới 700 từ, có lý do '
+    'Python csv chuẩn, hợp đồng input/output, thay đổi dự kiến, test/expected và rollback. '
+    'Không biến kế hoạch thành tuyên bố code đã sửa. Main gọi check còn thiếu theo policy, '
+    'sửa khi có finding thực rồi whole verify, trả đường dẫn và tóm tắt bản đã kiểm. '
+    'Các test bổ sung chưa tồn tại; không bịa số passed sau sửa.')
+PROMPTS['design_compact'] = PROMPTS['design'] + (
+    '\nĐây là hợp đồng một hàm 6 dòng, không phải app mới. Main đọc ba file và chạy '
+    'baseline python -m pytest -q trước. Dùng đúng một node design D1, không cần '
+    'Explore/Research/Plan riêng; report dưới 700 từ, nêu hiện trạng, hợp đồng dự kiến '
+    'cho str và CSV một trường, Unicode/escaping/newline/chuỗi rỗng, test input/output '
+    'và khác biệt giữa source đang lỗi với thiết kế sau sửa. Không thêm API/server/UI '
+    'hoặc test giả đã passed. Main gọi check còn thiếu theo policy, sửa khi có finding '
+    'thực rồi whole verify, trả đường dẫn và tóm tắt bản đã kiểm.')
+
 
 async def run(args):
     assert subprocess.check_output(['git', 'branch', '--show-current'], cwd=ROOT, text=True).strip() == 'B'

@@ -57,7 +57,7 @@ def test_verified_response_limits_main_to_checked_snapshots(tmp_path):
 
 
 def test_contract_change_has_a_new_policy_version():
-    assert work_policy.VERSION == 'work-checks/8'
+    assert work_policy.VERSION == 'work-checks/10'
 
 
 @pytest.mark.parametrize('lang,terms', [
@@ -68,3 +68,50 @@ def test_contract_change_has_a_new_policy_version():
 ])
 def test_notes_and_criterion_conflicts_follow_the_same_evidence_contract(lang, terms):
     assert all(term in work_prompts.review_tail(lang) for term in terms)
+
+
+@pytest.mark.parametrize('lang,terms', [
+    ('en', ('Establish each proposed correction independently', 'Preserve values',
+            'original inputs, units', 'applicable conversion rule from opened evidence',
+            'inequalities and code-point ranges', 'omit the invented replacement',
+            'does not prove the opposite claim', 'Quote only text present', 'smallest evidenced correction')),
+    ('vi', ('chứng minh riêng từng', 'giữ giá trị', 'input gốc, đơn vị',
+            'quy tắc chuyển đổi từ nguồn đã mở', 'bất đẳng thức', 'khoảng code point',
+            'bỏ giá trị bịa', 'chưa chứng minh claim ngược lại', 'Chỉ trích nguyên văn',
+            'sửa tối thiểu có bằng chứng')),
+])
+def test_one_valid_finding_cannot_license_unproved_numeric_or_quoted_corrections(lang, terms):
+    assert all(term in work_prompts.review_tail(lang) for term in terms)
+
+
+@pytest.mark.parametrize('lang,terms', [
+    ('en', ('REVIEW SCOPE: node R1, stage produce', 'Assigned work: Verify the premise',
+            'Owner constraints', 'does not make', 'cannot remove assigned requirements')),
+    ('vi', ('PHẠM VI REVIEW: nút R1, pha produce', 'Nhiệm vụ được giao: Verify the premise',
+            'Ràng buộc người dùng', 'nó không nêu', 'không xóa yêu cầu được giao')),
+])
+def test_node_scope_respects_constraints_and_does_not_inherit_all_owner_work(lang, terms):
+    assert all(term in work_prompts.node_review_scope({'id': 'R1', 'goal': 'Verify the premise'}, 'produce', lang)
+               for term in terms)
+
+
+def test_node_check_dispatch_includes_actual_assignment_scope(tmp_path):
+    _, rt, model, _, sid = build(tmp_path)
+
+    async def run():
+        _, draft = await setup(rt, sid)
+        await start(rt, sid, draft)
+        assert 'REVIEW SCOPE: node R1, stage produce' in model.prompts[-1][1]
+        assert 'Assigned work: Compare two export formats using the provided evidence' in model.prompts[-1][1]
+        assert 'Coverage elsewhere belongs to whole review' in model.prompts[-1][1]
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('lang', ['en', 'vi'])
+@pytest.mark.parametrize('research', [False, True])
+def test_whole_scope_keeps_global_coverage_without_widening_every_node(lang, research):
+    text = work_prompts.whole_review_goal('Title', 'Goal', lang, research_only=research)
+    assert ('Missing overall coverage belongs to the whole-run criteria' if lang == 'en'
+            else 'Thiếu bao phủ tổng thể thuộc tiêu chí toàn run') in text
+    assert ('within its assignment' if lang == 'en' else 'trong nhiệm vụ của nút') in text

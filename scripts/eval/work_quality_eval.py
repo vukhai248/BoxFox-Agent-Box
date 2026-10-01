@@ -104,7 +104,7 @@ def outcome(case, doc, acceptance, state, next_step):
     """A revise verdict alone does not prove a false premise was routed to main."""
     expected = CASES[case][1]
     verdict_ok = doc['status'] == expected
-    result = {'evaluationVersion': 3, 'verdictOracle': verdict_ok}
+    result = {'evaluationVersion': 4, 'verdictOracle': verdict_ok}
     expected_marker = 'VERDICT: revise' if expected == 'revise' else 'VERDICT: ok'
     result['markerOracle'] = str(doc.get('findings', '')).strip().endswith(expected_marker)
     if case == 'false_assignment_premise':
@@ -121,6 +121,11 @@ def outcome(case, doc, acceptance, state, next_step):
             by_id.get(cid, {}).get('target', 'artifact') == 'artifact'
             for cid in [f'A{i+1}' for i in range(1, len(acceptance))] + ['C1'])
         verdict_ok = verdict_ok and result['criterionConflictRouted'] and result['artifactCoverageOracle']
+    elif case == 'false_csv_byte_unit':
+        result['invalidClaimRejected'] = any(c.get('id') == 'A1' and c.get('status') == 'revise' and
+            c.get('target', 'artifact') == 'artifact' for c in doc.get('coverage', []))
+        result['noAssignmentConflict'] = not state.get('inputConflicts')
+        verdict_ok = verdict_ok and result['invalidClaimRejected'] and result['noAssignmentConflict']
     result['oracle'] = verdict_ok and result['markerOracle']
     return result
 

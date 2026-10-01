@@ -193,11 +193,30 @@ def review_tail(lang='en'):
         '\nKeep optional notes relevant to the assignment. Technical claims in notes need the same '
         'opened original evidence or actual execution as blocking findings. Check numeric examples, '
         'units and transformations before stating their results; omit unchecked illustrative detours. '
+        'Establish each proposed correction independently: a true finding does not prove adjacent '
+        'numbers, quotes or exceptions are wrong. Preserve values the evidence supports. A source '
+        'about a parser limit does not also prove an encoding calculation. Before replacing a '
+        'number, show the original inputs, units, applicable conversion rule from opened evidence '
+        'and the calculation; check inequalities and code-point ranges against that rule. '
+        'If available read tools cannot establish the replacement, label that correction UNVERIFIED '
+        'and omit the invented replacement, not the independently verified finding. Missing proof '
+        'for a required claim may still block; it does not prove the opposite claim. Quote only '
+        'text present in the opened source. Prefer the smallest evidenced correction; avoid optional '
+        'examples and implementation advice that are unnecessary to decide acceptance. '
         'Separate a correct artifact from a conflicting assignment: a coverage item marked revise '
         '(including target=criterion) requires final VERDICT: revise. ',
         '\nGhi chú tùy chọn phải liên quan nhiệm vụ. Khẳng định kỹ thuật trong ghi chú cần bằng chứng '
         'gốc đã mở hoặc lệnh thực đã chạy như finding chặn. Kiểm ví dụ số, đơn vị và phép biến đổi '
-        'trước khi nêu kết quả; bỏ minh họa chưa kiểm ngoài nhiệm vụ. Phân biệt artifact đúng với '
+        'trước khi nêu kết quả; bỏ minh họa chưa kiểm ngoài nhiệm vụ. Cần chứng minh riêng từng '
+        'sửa đổi đề nghị. Finding đúng không chứng minh '
+        'số liệu, trích dẫn hoặc exception bên cạnh sai; giữ giá trị được bằng chứng hỗ trợ. Nguồn '
+        'về giới hạn parser chưa chứng minh phép tính encoding. Trước khi thay một con số, nêu '
+        'input gốc, đơn vị, quy tắc chuyển đổi từ nguồn đã mở và phép tính; kiểm bất đẳng thức '
+        'và khoảng code point theo quy tắc đó. Công cụ đọc chưa đủ chứng minh giá trị thay thế '
+        'thì ghi sửa đổi đó UNVERIFIED và bỏ giá trị bịa, vẫn giữ finding độc lập đã xác minh. '
+        'Thiếu chứng minh claim bắt buộc có thể chặn, nhưng chưa chứng minh claim ngược lại. '
+        'Chỉ trích nguyên văn có trong nguồn đã mở. Ưu tiên sửa tối thiểu có bằng chứng; tránh '
+        'ví dụ tùy chọn và lời khuyên triển khai không cần để kết luận nghiệm thu. Phân biệt artifact đúng với '
         'nhiệm vụ mâu thuẫn: coverage có revise (kể cả target=criterion) thì cuối phải VERDICT: revise. ')
 
 
@@ -214,6 +233,25 @@ def child_contract(purpose, lang='en'):
 """) + KNOWLEDGE[lang if lang == 'vi' else 'en']
 
 
+def node_review_scope(node, stage, lang='en'):
+    """The global goal constrains a node; it does not assign every task to it."""
+    return choose(lang,
+        f'\nREVIEW SCOPE: node {node["id"]}, stage {stage}. Assigned work: {node["goal"]}\n'
+        'Judge this assignment, its acceptance and the artifact\'s actual claims. Owner constraints '
+        'still apply, but the overall goal is not a requirement for every node to deliver the entire '
+        'system. Coverage elsewhere belongs to whole review. Do not reject a focused artifact for '
+        'a hypothetical broader conclusion it does not make. A gap elsewhere can be a non-blocking '
+        'handoff note for main. Declared limitations cannot remove assigned requirements; missing '
+        'evidence or coverage required here still blocks. ',
+        f'\nPHẠM VI REVIEW: nút {node["id"]}, pha {stage}. Nhiệm vụ được giao: {node["goal"]}\n'
+        'Kiểm nhiệm vụ này, nghiệm thu và những claim artifact thực sự nêu. Ràng buộc người dùng '
+        'vẫn áp dụng, nhưng mục tiêu tổng thể không buộc mỗi nút giao toàn bộ hệ thống. Bao phủ '
+        'ở nơi khác thuộc whole review. Không bác artifact có phạm vi hẹp vì một kết luận rộng '
+        'giả định mà nó không nêu. Khoảng trống ở nơi khác có thể ghi chú không chặn cho main. '
+        'Giới hạn tự khai không xóa yêu cầu được giao; thiếu bằng chứng hoặc bao phủ bắt buộc '
+        'ở đây vẫn là vấn đề chặn. ')
+
+
 def whole_review_goal(title, goal, lang='en', research_only=False):
     if research_only:
         return choose(lang, f'''Whole-plan review of Work Graph run "{title}" — research deliverable.
@@ -221,18 +259,22 @@ Owner goal: {goal}
 Check research coverage, claim/source entailment, consistency across nodes, owner scope, uncertainty and limitations.
 This is research, not an implementation contract. Do not require an app plan, API/schema/defaults, rollout/rollback or executed tests unless the owner requested them. Keep optional implementation detail non-blocking.
 For each research node that must change write `REVISE <nodeId>: <what to fix>`.
+Each node's A criteria are judged within its assignment. Missing overall coverage belongs to the whole-run criteria; do not force one focused node to cover every other node's work.
 ''', f'''Phản biện toàn kế hoạch Work Graph "{title}" — sản phẩm nghiên cứu.
 Mục tiêu của người dùng: {goal}
 Kiểm bao phủ câu hỏi nghiên cứu, nguồn hỗ trợ khẳng định, thống nhất giữa các nút, phạm vi người dùng, độ bất định và giới hạn.
 Đây là nghiên cứu, chưa phải hợp đồng triển khai. Không đòi plan app, API/schema/default, rollout/rollback hay test đã chạy nếu người dùng chưa yêu cầu. Chi tiết triển khai tùy chọn là ghi chú không chặn.
+Tiêu chí A của mỗi nút được kiểm trong nhiệm vụ của nút. Thiếu bao phủ tổng thể thuộc tiêu chí toàn run; không bắt một nút hẹp làm toàn bộ việc của các nút khác.
 Với từng nút nghiên cứu cần sửa ghi `REVISE <nodeId>: <nội dung cần sửa>`. Giữ nguyên marker REVISE.
 ''') + review_tail(lang)
     return choose(lang, f'''Whole-plan review of Work Graph run "{title}" before the owner approves it.
 Owner goal: {goal}
 Check goal/owner-decision COVERAGE, DEPENDENCIES (declared needs, no hidden coupling, consistent contracts), ORDER (safe execution waves), TESTS (concrete checks that prove the goal) and RISK (rollout/rollback).
+Each node's A criteria are judged within its assignment. Missing overall coverage belongs to the whole-run criteria; do not force one focused node to cover every other node's work.
 For each sub-plan that must change write `REVISE <nodeId>: <what to fix>`. Missing sub-plans or wrong dependencies are blocking.
 ''', f'''Phản biện toàn kế hoạch Work Graph "{title}" trước khi người dùng duyệt.
 Mục tiêu của người dùng: {goal}
 Kiểm bao phủ mục tiêu/quyết định người dùng; phụ thuộc đã khai báo, không liên kết ngầm, hợp đồng thống nhất; thứ tự thực thi an toàn; kiểm thử cụ thể chứng minh mục tiêu; rủi ro, rollout và rollback.
+Tiêu chí A của mỗi nút được kiểm trong nhiệm vụ của nút. Thiếu bao phủ tổng thể thuộc tiêu chí toàn run; không bắt một nút hẹp làm toàn bộ việc của các nút khác.
 Với từng sub-plan cần sửa ghi `REVISE <nodeId>: <nội dung cần sửa>`. Thiếu sub-plan hoặc sai phụ thuộc là vấn đề chặn. Giữ nguyên marker REVISE.
 ''') + review_tail(lang)
