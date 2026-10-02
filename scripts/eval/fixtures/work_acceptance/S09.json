@@ -1,0 +1,39 @@
+{
+  "id": "S09",
+  "title": "Restart khi đang chờ trả lời — thẻ còn, resume đúng child (W7.1)",
+  "goal": "Harness khởi động lại giữa lúc chờ owner: thẻ interview sống sót và câu trả lời resume đúng child",
+  "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Triển khai endpoint + hỏi chủ nhà về định dạng cột ⇒ luồng thi công (mixed)."},
+  "notes": "Khi có thẻ interview đang chờ, bench đóng DB/runtime rồi mở lại trên cùng DB/workspace trước khi trả lời. Sau restart, lượt main cũ mất theo tiến trình nên bench mô phỏng lượt kế tiếp của người dùng (RESTART_RESUME_PROMPT) để run đi tiếp trên trạng thái bền.",
+  "prompt": "Triển khai endpoint xuất CSV trong repo này. Nếu cần tôi quyết định về định dạng cột (dấu phẩy hay tab, có header hay không) thì hỏi tôi rồi làm tiếp; chạy python -m pytest -q sau khi xong.",
+  "interviewAnswers": [
+    {"text": "Dùng dấu phẩy và có header; tên cột giữ như trong tests."}
+  ],
+  "faults": [
+    {"kind": "restart_while_waiting"}
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/reports.py",
+        "content": "\"\"\"Xuất CSV báo cáo.\"\"\"\n\n\ndef export_csv(rows):\n    return ''\n"
+      },
+      {
+        "path": "tests/test_reports.py",
+        "content": "from src.reports import export_csv\n\n\ndef test_header():\n    assert export_csv([]).splitlines()[0] == 'date,revenue'\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "event_kind_seen", "eventKind": "decision_requested", "min": 1, "why": "thẻ interview phải còn sau restart"},
+      {"kind": "interview_answered", "why": "câu trả lời sau restart phải được ghi nhận"},
+      {"kind": "interview_questions_max", "max": 3, "why": "chỉ hỏi câu quyết định"}
+    ],
+    "flow": [
+      {"kind": "same_child_continuation", "why": "W7.1: resume đúng child đã hỏi sau restart"},
+      {"kind": "no_duplicate_continuation", "why": "restart không được nhân đôi continuation"}
+    ]
+  }
+}

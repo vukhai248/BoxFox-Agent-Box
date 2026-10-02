@@ -1,0 +1,39 @@
+{
+  "id": "S05",
+  "title": "Output bị cắt (finish_reason=length) — partial, không auto-pass",
+  "goal": "Lượt bị cắt vì hết token phải mang trạng thái partial và không được tính là đạt",
+  "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Triển khai endpoint kèm pytest ⇒ luồng thi công (mixed)."},
+  "notes": "Hai phản hồi model đầu tiên bị cắt còn 240 ký tự với finish_reason=length.",
+  "prompt": "Triển khai endpoint GET /api/reports/revenue trả JSON {total, rows:[{date,revenue}]} trong repo này; giới hạn 500 dòng, sắp xếp date tăng dần; chạy python -m pytest -q và báo kết quả.",
+  "interviewAnswers": [],
+  "faults": [
+    {"kind": "output_length", "calls": 2, "maxChars": 240}
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/reports.py",
+        "content": "\"\"\"Báo cáo doanh thu (bản khung).\"\"\"\n\n\ndef revenue_rows(rows):\n    return []\n"
+      },
+      {
+        "path": "tests/test_reports.py",
+        "content": "from src.reports import revenue_rows\n\n\ndef test_rows_sorted():\n    assert revenue_rows([{'date': '2026-01-02'}, {'date': '2026-01-01'}]) == [{'date': '2026-01-01'}, {'date': '2026-01-02'}]\n"
+      }
+    ]
+  },
+  "expectedState": "partial",
+  "expectedStateSource": "turn",
+  "oracle": {
+    "main": [
+      {"kind": "turn_status_any", "status_in": ["partial"], "why": "output bị cắt phải được ghi là partial"},
+      {"kind": "no_auto_pass", "why": "partial không được auto-pass"}
+    ],
+    "reviewer": [
+      {"kind": "check_status_any", "status_in": ["unverified", "error", "revise", "pass"], "why": "không khẳng định pass khi bằng chứng bị cắt; ghi nhận trạng thái thật"}
+    ],
+    "flow": [
+      {"kind": "no_duplicate_continuation", "why": "retry không được tạo continuation trùng"}
+    ]
+  }
+}

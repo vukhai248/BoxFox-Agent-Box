@@ -1,0 +1,44 @@
+{
+  "case": "a timed-out verify_exec receipt cannot stand in for a computed number",
+  "expected": {
+    "blocking": [],
+    "downgraded": [
+      {
+        "findingId": "F1",
+        "reason": "NUMERIC_UNVERIFIED"
+      }
+    ],
+    "status": "unverified"
+  },
+  "reportText": "Review of the assigned artifact.\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\", \"findingIds\": [\"F1\"]}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}], \"findings\": [{\"id\": \"F1\", \"criterionId\": \"A1\", \"severity\": \"blocking\", \"scope\": \"node\", \"claim\": \"The export writes 4182 bytes per file.\", \"evidenceRefs\": [\"call_verify\"], \"impact\": \"A1 requires the BOM\", \"fix\": \"write the BOM first\", \"counterCheck\": {\"strongest\": \"Maybe the writer counts characters\", \"checkedBy\": \"call_verify\", \"outcome\": \"refuted\"}}]}\n```\nVERDICT: revise",
+  "source": "review vòng 2 (review-sandbox F6) — a receipt that printed nothing is not a computation",
+  "toolEvents": [
+    {
+      "args": {
+        "claim": "file size",
+        "code": "import time\ntime.sleep(60)",
+        "language": "python"
+      },
+      "id": "call_verify",
+      "name": "verify_exec",
+      "result": {
+        "content": "",
+        "exit_code": null,
+        "is_error": true,
+        "receipt": {
+          "kind": "verify_exec",
+          "language": "python",
+          "interpreter": "python3",
+          "codeHash": "sha256:deadbeef",
+          "stdinHash": "sha256:e3b0c442",
+          "outputHash": "sha256:e3b0c442",
+          "exitCode": null,
+          "durationMs": 20000,
+          "truncated": false,
+          "timedOut": true,
+          "claim": "file size"
+        }
+      }
+    }
+  ]
+}

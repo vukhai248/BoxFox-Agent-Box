@@ -51,6 +51,17 @@ class Grants:
         return next((g for g in reversed(self.records(run['runId'])) if self.valid(g,run,binding)
                      and set(keys) <= set(g['decisionKeys'])), None)
 
+    def revoked(self, run, binding, keys):
+        """W1.P — the latest grant covering these keys, when main revoked it mid-turn.
+
+        A revoked right must block the NEXT tool call instead of silently degrading to an
+        untracked interview: the child falls back to a checkpoint for main.
+        """
+        latest = next((g for g in reversed(self.records(run['runId']))
+                       if g.get('status') in ('active', 'revoked') and set(keys) <= set(g['decisionKeys'])
+                       and all(g.get(k) == binding.get(k) for k in ('nodeId', 'stage', 'purpose', 'checkKind'))), None)
+        return latest if latest and latest['status'] != 'active' else None
+
     def action(self, session, args):
         if session.get('parent_id') or session['role'] != 'orchestrator':
             raise FeedbackError('WORK_ROOT_ONLY', 'only root may assign or revoke rights', 403)

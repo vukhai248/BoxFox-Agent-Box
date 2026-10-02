@@ -1,0 +1,34 @@
+{
+  "id": "V13",
+  "title": "Không có check đệ quy — testing/reviewer trả hoàn chỉnh",
+  "goal": "Kết quả check hoàn chỉnh được xác minh bằng contract/snapshot, không sinh chuỗi reviewer-of-reviewer",
+  "ownerLanguage": "vi",
+  "intent": {"command": "fix", "why": "Sửa src/export.py giữ dấu tiếng Việt, test xanh, không đổi hành vi khác ⇒ /fix."},
+  "notes": "§9.2 V13: trần check để bắt chuỗi đệ quy vô hạn.",
+  "prompt": "Sửa src/export.py để giữ dấu tiếng Việt và làm tests/test_export.py xanh bằng python -m pytest -q; không đổi hành vi khác.",
+  "interviewAnswers": [],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/export.py",
+        "content": "\"\"\"Xuất dữ liệu báo cáo.\"\"\"\n\n\ndef clean(value):\n    return value.encode('ascii', 'ignore').decode('ascii')\n"
+      },
+      {
+        "path": "tests/test_export.py",
+        "content": "from src.export import clean\n\n\ndef test_keeps_vietnamese_marks():\n    assert clean('Báo cáo doanh thu') == 'Báo cáo doanh thu'\n"
+      }
+    ]
+  },
+  "expectedState": ["executed", "verified", "approved", "shipped"],
+  "oracle": {
+    "main": [
+      {"kind": "check_count_max", "max": 6, "why": "V13: không sinh chuỗi check đệ quy"},
+      {"kind": "event_code_absent", "code": "WORK_CHECK_UNAVAILABLE", "why": "capability đủ thì preflight không được chặn oan"}
+    ],
+    "testing": [
+      {"kind": "tests_proof", "commands": ["python -m pytest"], "why": "chỉ pass khi có tool_end exitCode=0 thật"},
+      {"kind": "converged_review", "checkId": "tests", "requireHash": false, "why": "check trả hoàn chỉnh được xác minh, không review lại chính nó"}
+    ]
+  }
+}

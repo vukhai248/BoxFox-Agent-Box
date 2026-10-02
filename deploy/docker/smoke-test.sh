@@ -66,11 +66,22 @@ CH=$(DX 'ls /opt/ms-playwright 2>/dev/null | grep -i chromium | head -1')
 [ -n "$V" ] && [ -n "$CH" ] \
   && ok "$V · browser: $CH" || bad "playwright/chromium thiếu ($V / '$CH')"
 
-head "7) Quy tắc ②a: mạng mặc định TẮT → curl phải THẤT BẠI"
-if docker exec "$CONTAINER" curl -m 4 -sI https://example.com >/dev/null 2>&1; then
-  bad "curl THÀNH CÔNG khi mạng phải tắt — vi phạm ②a!"
+# ②a đọc thẳng BOX_DEFAULT_NETWORK của container, để đường LÙI đã ghi trong compose
+# ("xoá 2 dòng security_opt") và đường lùi mạng ("đặt lại off") không bị báo hỏng oan.
+DEFAULT_NET=$(docker exec "$CONTAINER" printenv BOX_DEFAULT_NETWORK 2>/dev/null | tr -d '\r')
+head "7) ②a: mạng lúc boot theo BOX_DEFAULT_NETWORK (container: '${DEFAULT_NET:-unset}')"
+if docker exec "$CONTAINER" curl -m 6 -sI https://example.com >/dev/null 2>&1; then
+  if [ "$DEFAULT_NET" = "on" ]; then
+    ok "curl thành công — khớp mặc định 'on' của compose"
+  else
+    bad "curl thành công dù BOX_DEFAULT_NETWORK='${DEFAULT_NET:-unset}' — biên phải đóng lúc boot"
+  fi
 else
-  ok "curl thất bại như mong đợi (biên đóng)"
+  if [ "$DEFAULT_NET" = "on" ]; then
+    bad "curl thất bại dù BOX_DEFAULT_NETWORK=on — kiểm tra box-firewall/NET_ADMIN"
+  else
+    ok "curl thất bại — khớp BOX_DEFAULT_NETWORK='${DEFAULT_NET:-unset}'"
+  fi
 fi
 
 head "8) Công tắc ②b: box-firewall on → curl thành công → off → thất bại lại"

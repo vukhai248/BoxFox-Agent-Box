@@ -411,7 +411,18 @@ def create_app(runtime):
     app.on_cleanup.append(stop_research_continuations)
 
     async def health(request):
-        return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION})
+        # W6.1.3: `?probe=verify` chạy probe bwrap trong box; mặc định chỉ trả lần quan sát gần nhất
+        # (health phải rẻ, không docker exec mỗi lần gọi).
+        if request.query.get('probe') == 'verify':
+            from ..agent_core import verify_exec
+            try:
+                answer = await runtime.executor.execute('verify_exec_probe', {'refresh': True}, 'health')
+            except Exception as exc:  # box không chạy: báo thật, không giả là có isolation
+                answer = {'available': False, 'reason': str(exc)[:300]}
+            runtime.verify_exec_status = verify_exec.observed(answer, getattr(runtime, 'verify_exec_status', None))
+        return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION,
+                                  'verifyExec': getattr(runtime, 'verify_exec_status', None)
+                                  or {'available': None, 'reason': 'not probed yet'}})
 
     async def catalog(request):
         return web.json_response({'roles': [{'id': r.id, 'name': r.name, 'instructions': r.instructions, 'tools': sorted(r.tools)} for r in ROLES.values()], 'skills': runtime.catalog.list(runtime.commands.settings()['enabled'])})
@@ -1110,8 +1121,12 @@ def create_app(runtime):
         # bao nhiêu, đã nén mấy lần, hay `deadlineSeconds` đã bị hạ trần lúc tạo, mà không tải cả
         # transcript. Bốn khoá này đọc từ chính hàng đã lưu nên rẻ.
         journal_tail = runtime.journal_records(sid, limit=50)
+        # W7.1: a session can hold far more than one 500-event page. `hasMore`/`nextAfter` let a
+        # client walk the whole log; older clients that ignore them keep today's behaviour.
+        page = runtime.store.events_page(sid, int(request.query.get('after', '0')))
         return web.json_response({k: v for k, v in value.items() if k != 'messages'} |
-                                 {'events': runtime.store.events(sid, int(request.query.get('after', '0'))),
+                                 {'events': page['events'], 'hasMore': page['hasMore'],
+                                  'nextAfter': page['nextAfter'],
                                   'sessionMetrics': runtime.session_metrics(sid),
                                   # A9 (đợt 20): khối `journal` cộng thêm — chỗ đọc cũ không phải biết
                                   # tới nó, còn UI sau này có sẵn `records`/`lastSeq`/`degraded`.

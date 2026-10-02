@@ -1,0 +1,38 @@
+{
+  "id": "S07",
+  "title": "Research cần user giữa chừng — cùng child tiếp tục",
+  "goal": "Child hỏi owner giữa việc research; sau khi trả lời, chính child đó chạy tiếp (W7.1)",
+  "ownerLanguage": "vi",
+  "intent": {"command": "research", "why": "Câu hỏi nghiên cứu nhiều tiêu chí, phải hỏi chủ nhà rồi cùng child chạy tiếp ⇒ /research."},
+  "notes": "Prompt mời hỏi khi cần chọn hướng; câu trả lời đến từ fixture, không phải người thật.",
+  "prompt": "Nghiên cứu giúp tôi nên chọn SQLite hay Postgres cho dịch vụ nhỏ chạy một máy, rồi viết kết luận vào docs/db-choice.md kèm lý do và giới hạn. Tiêu chí do tôi quyết: nếu cần chọn giữa hai hướng thì hỏi tôi trước khi kết luận.",
+  "interviewAnswers": [
+    {"text": "Ưu tiên vận hành đơn giản và sao lưu bằng file; chấp nhận giới hạn ghi đồng thời."}
+  ],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "docs/db-choice.md",
+        "content": "# Chọn database\n\n(chưa có kết luận; phải dựa trên tiêu chí owner đã xác nhận)\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "interview_questions_max", "max": 3, "why": "chỉ hỏi câu quyết định hướng, tối đa 3"},
+      {"kind": "interview_answered", "why": "câu trả lời đã định trước phải được ghi vào request"}
+    ],
+    "producer": [
+      {"kind": "artifact_regex_any", "patterns": ["docs/db-choice\\.md"], "why": "kết luận phải nằm ở đúng file owner yêu cầu"}
+    ],
+    "research": [
+      {"kind": "word_count_max", "source": "turn", "role": "research", "max": 120, "min_sources": 1, "why": "lookup ≤ 120 từ, không trả bài luận cho câu hỏi tra cứu (§10 research)"}
+    ],
+    "flow": [
+      {"kind": "same_child_continuation", "why": "W7.1: trả lời phải resume ĐÚNG child đã hỏi, không tạo child mới"},
+      {"kind": "no_duplicate_continuation", "why": "một request/revision chỉ resume một lần"}
+    ]
+  }
+}

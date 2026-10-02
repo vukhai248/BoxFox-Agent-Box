@@ -6,9 +6,9 @@ import re
 import time
 import uuid
 
-from . import work_policy, work_prompts
+from . import work_policy, work_prompts, work_repair, work_worktrees
 
-INPUTS_VERSION = 'work-check-inputs/1'
+INPUTS_VERSION = 'work-check-inputs/2'  # W6.1.3: findings/citation contract
 
 SNAPSHOT_SCRIPT = '''import hashlib,json,os,re,subprocess
 p=subprocess.run(['git','ls-files','-co','--exclude-standard','-z'],capture_output=True,check=True)
@@ -16,11 +16,13 @@ paths=sorted(set(x.decode('utf-8') for x in p.stdout.split(b'\\0') if x))
 ignored=subprocess.run(['git','ls-files','-o','-i','--exclude-standard','-z'],capture_output=True,check=True)
 source_ext=('.py','.ts','.tsx','.js','.jsx','.mjs','.json','.toml','.yaml','.yml','.sql','.sh','.ps1','.html','.css','.env')
 paths=sorted(set(paths+[x.decode('utf-8') for x in ignored.stdout.split(b'\\0') if x and x.decode('utf-8').endswith(source_ext)]))
-paths=[path for path in paths if not any(x in ('.plans','.tmp','.pytest_cache','__pycache__','test-results','coverage','node_modules','.venv','venv') for x in path.split('/'))]
+JUNK=('.plans','.tmp','.boxfox','.pytest_cache','__pycache__','test-results','coverage','node_modules','.venv','venv')
+junk=lambda path: any(x in JUNK for x in path.split('/')) or path.endswith(('.pyc','.pyo'))
+paths=[path for path in paths if not junk(path)]
 if len(paths)>30000: raise ValueError('snapshot file limit')
 h=hashlib.sha256(); total=0
 for path in paths:
- if any(x in ('.plans','.tmp','.pytest_cache','__pycache__','test-results','coverage') for x in path.split('/')): continue
+ if junk(path): continue
  if not os.path.lexists(path): data=b'<deleted>'
  elif os.path.islink(path): data=os.readlink(path).encode('utf-8')
  elif os.path.isfile(path):
@@ -30,7 +32,8 @@ for path in paths:
  else: continue
  h.update(path.encode('utf-8')+b'\\0'+hashlib.sha256(data).digest())
 head=subprocess.run(['git','rev-parse','HEAD'],capture_output=True,check=True).stdout.decode().strip()
-diff=subprocess.run(['git','diff','--name-only','HEAD','-z'],capture_output=True,check=True).stdout
+base=os.environ.get('BOXFOX_SNAPSHOT_BASE') or 'HEAD'
+diff=subprocess.run(['git','diff','--name-only',base,'-z'],capture_output=True,check=True).stdout
 changed=[x.decode('utf-8') for x in diff.split(b'\\0') if x]
 tracked=subprocess.run(['git','ls-files','-z'],capture_output=True,check=True).stdout
 tracked={x.decode('utf-8') for x in tracked.split(b'\\0') if x}
@@ -42,17 +45,42 @@ SNAPSHOT_COMMAND = "python3 -c \"import base64;exec(base64.b64decode('%s'))\"" %
     SNAPSHOT_SCRIPT.encode()).decode()
 
 
-async def snapshot(graph, sid):
+async def snapshot(graph, sid, root=None, base=None):
+    """Code identity of the workspace, or (W8.A4.4) of one run/node worktree.
+
+    A scoped snapshot records its `root`/`base` so every later comparison reads the
+    same tree: node A editing its worktree never makes node B's snapshot stale.
+    """
+    command = SNAPSHOT_COMMAND
+    if base:
+        if not re.fullmatch(r'[0-9a-f]{40}', str(base)):
+            return None
+        command = f'BOXFOX_SNAPSHOT_BASE={base} {command}'
+    if root:
+        from .work_worktrees import ROOT_RE
+        if not ROOT_RE.fullmatch(str(root)):
+            return None
+        command = f"cd '{root}' && {command}"
     try:
-        result = await graph.rt.executor.execute('terminal_exec', {'command': SNAPSHOT_COMMAND, 'timeout': 90}, sid)
+        result = await graph.rt.executor.execute('terminal_exec', {'command': command, 'timeout': 90}, sid)
         if result.get('is_error') or result.get('exit_code', result.get('exitCode')) != 0:
             return None
         value = json.loads(result.get('content') or result.get('output') or '')
         if value.get('schema') == 'work-code/1' and re.fullmatch(r'[a-f0-9]{64}', value.get('hash', '')):
+            if root:
+                value['root'] = root
+            if base:
+                value['base'] = base
             return value
     except Exception:
         pass
     return None
+
+
+async def snapshot_of(graph, sid, source):
+    """Re-read the tree a stored snapshot was taken from (legacy: the whole workspace)."""
+    source = source if isinstance(source, dict) else {}
+    return await snapshot(graph, sid, source.get('root'), source.get('base'))
 
 
 def complete(result):
@@ -186,6 +214,188 @@ def parse_report(text, required, *, require_target=False):
     return status, coverage, raw
 
 
+# --- W6.1.3: finding/citation contract và self-challenge ------------------------------------------
+FINDING_LIMIT = 8
+FINDING_CLAIM_MAX = 300
+FINDING_REFS_MAX = 6
+PROSE_WORD_CAP = 600
+COUNTER_OUTCOMES = ('refuted', 'confirmed', 'not_run')
+NUMERIC_CLAIM_RE = re.compile(
+    r'(\d[\d.,]*)\s*(?:-\s*)?(?:chars?|characters?|bytes?|code[ -]?points?|words?|lines?|ký tự|byte|từ|dòng)\b',
+    re.I)
+COMPUTE_TOOLS = ('verify_exec', 'terminal_exec')
+SOURCE_TOOLS = ('file_read', 'web_fetch', 'read_source', 'codebase_grep', 'work_artifact_read')
+
+
+def report_json(raw):
+    """The last fenced json object of a report, or {} (legacy/prose reports stay parseable)."""
+    blocks = re.findall(r'```json\s*\n(.*?)\n```', str(raw or ''), re.S)
+    try:
+        value = json.loads(blocks[-1]) if blocks else {}
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def prose_words(raw):
+    """Words outside fenced blocks and the VERDICT line: the contract's 600-word cap is a metric."""
+    text = re.sub(r'```.*?```', ' ', str(raw or ''), flags=re.S)
+    text = re.sub(r'^\s*VERDICT: (?:ok|revise)\s*$', ' ', text, flags=re.M)
+    return len(re.findall(r'\S+', text))
+
+
+def receipt_index(graph, child_id, admission_seq, artifacts):
+    """ref -> observed content text ('' when none) for refs valid in THIS admission only."""
+    from .work_feedback import evidence_signature
+    index = {}
+    for event in observations(graph, child_id, after=admission_seq or 0):
+        result = event.get('result') if isinstance(event.get('result'), dict) else {}
+        name = event.get('name')
+        receipt = result.get('receipt') if name == 'verify_exec' else None
+        # A failed tool proves nothing, except a verify_exec timeout: that is still an observation.
+        if result.get('is_error') and not isinstance(receipt, dict):
+            continue
+        text = str(result.get('content') or result.get('text') or result.get('output') or '')
+        # `computed`: the observation may stand in for a CALCULATED number. A run that timed out, was
+        # cut by the output cap, failed, or printed nothing proves no value — citing it as `computed`
+        # is how a receipt that proves nothing used to satisfy the numeric gate (review vòng 2, F6).
+        entry = {'kind': name, 'text': text,
+                 'computed': bool(name in COMPUTE_TOOLS and text.strip() and not result.get('is_error')
+                                  and not (isinstance(receipt, dict)
+                                           and (receipt.get('timedOut') or receipt.get('outputOverflow'))))}
+        if event.get('id'):
+            index[str(event['id'])] = entry
+        signature = evidence_signature(event)
+        if signature:
+            index.setdefault(signature['ref'], entry)
+    for meta in artifacts or []:
+        ref = f"artifact:{meta.get('artifactId')}@{meta.get('contentHash')}"
+        text = ''
+        try:
+            _, text = graph.artifacts.get(meta['runId'], meta['artifactId'])
+        except (KeyError, ValueError, TypeError, AttributeError):
+            continue  # an unknown or corrupt snapshot is not a valid receipt
+        index[ref] = {'kind': 'work_artifact_read', 'text': text}
+    return index
+
+
+def finding_problem(item, required, scope_kind, receipts):
+    """None when a blocking finding stands; otherwise the downgrade reason."""
+    refs = item.get('evidenceRefs')
+    if scope_kind == 'node' and item.get('scope') == 'run':
+        return 'SCOPE_RUN_IN_NODE_REVIEW'
+    if item.get('criterionId') not in required:
+        return 'CRITERION_UNKNOWN'
+    if not isinstance(refs, list) or not refs or not all(isinstance(r, str) and r.strip() for r in refs):
+        return 'NO_RECEIPT'
+    if any(ref not in receipts for ref in refs):
+        return 'UNKNOWN_RECEIPT'
+    for number in NUMERIC_CLAIM_RE.findall(item['claim']):
+        computed = any(receipts[ref].get('computed') for ref in refs)
+        sourced = any(receipts[ref]['kind'] in SOURCE_TOOLS and number in receipts[ref]['text'] for ref in refs)
+        if not computed and not sourced:
+            return 'NUMERIC_UNVERIFIED'
+    counter = item.get('counterCheck')
+    if (not isinstance(counter, dict) or counter.get('outcome') not in COUNTER_OUTCOMES
+            or not isinstance(counter.get('strongest'), str) or not counter['strongest'].strip()):
+        return 'NO_COUNTERCHECK'
+    if counter['outcome'] == 'confirmed':
+        return 'SELF_REFUTED'  # the strongest objection held, yet the finding still claims to block
+    if counter['outcome'] == 'refuted' and (not isinstance(counter.get('checkedBy'), str)
+                                           or not counter['checkedBy'].strip()):
+        return 'NO_COUNTERCHECK'  # "refuted" must name what refuted it (receipt id or source)
+    return None
+
+
+def validate_findings(graph, child_id, admission_seq, raw, required, scope_kind, artifacts):
+    """Backend check of the findings block; the model's VERDICT alone never blocks.
+
+    Returns {'findings': n, 'blocking': [ids], 'notes': [ids], 'downgraded': [{findingId, reason}],
+    'items': [...]}. Called right after parse_report() and before the existing gates.
+    """
+    items = report_json(raw).get('findings')
+    items = items if isinstance(items, list) else []
+    receipts = receipt_index(graph, child_id, admission_seq, artifacts) if child_id else {}
+    blocking, notes, downgraded, kept = [], [], [], []
+    for position, item in enumerate(items):
+        fid = str(item.get('id') or f'F{position + 1}') if isinstance(item, dict) else f'F{position + 1}'
+        if position >= FINDING_LIMIT:
+            downgraded.append({'findingId': fid, 'reason': 'FINDING_LIMIT'})
+            continue
+        if (not isinstance(item, dict) or item.get('severity') not in ('blocking', 'note')
+                or item.get('scope', 'node') not in ('node', 'run')
+                or not isinstance(item.get('claim'), str) or not item['claim'].strip()
+                or len(item['claim']) > FINDING_CLAIM_MAX
+                or isinstance(item.get('evidenceRefs'), list) and len(item['evidenceRefs']) > FINDING_REFS_MAX):
+            downgraded.append({'findingId': fid, 'reason': 'MALFORMED'})
+            continue
+        kept.append(item | {'id': fid})
+        if item['severity'] == 'note':
+            notes.append(fid)  # a side remark never blocks
+            continue
+        reason = finding_problem(item, required, scope_kind, receipts)
+        if reason:
+            downgraded.append({'findingId': fid, 'reason': reason})
+            notes.append(fid)
+        else:
+            blocking.append(fid)
+    return {'findings': len(items), 'blocking': blocking, 'notes': notes, 'downgraded': downgraded,
+            'items': kept}
+
+
+def apply_findings(raw, status, coverage, analysis):
+    """Re-derive status: only a valid blocking finding (or an evidenced criterion conflict) revises.
+
+    A report that never declares `findings` keeps the old semantics (policy-10 records and legacy
+    fixtures stay readable); the stricter rule applies to the new contract.
+
+    Returns (status, coverage, uncitedError|None).
+    """
+    if status == 'error' or not isinstance(report_json(raw).get('findings'), list):
+        return status, coverage, None
+    by_id = {item['id']: item for item in analysis['items']}
+    valid = set(analysis['blocking'])
+    reasons = {d['findingId']: d['reason'] for d in analysis['downgraded']}
+    uncited, updated = [], []
+    for entry in coverage:
+        entry = dict(entry)
+        if entry['status'] == 'revise' and entry.get('target', 'artifact') != 'criterion':
+            linked = entry.get('findingIds')
+            linked = [str(x) for x in linked] if isinstance(linked, list) and linked else \
+                [fid for fid, item in by_id.items() if item.get('criterionId') == entry['id']]
+            if not any(fid in valid for fid in linked):
+                entry['status'] = 'unverified'
+                entry['findingError'] = 'WORK_FINDING_UNCITED'
+                uncited.append((entry['id'], [(fid, reasons.get(fid, 'NOT_BLOCKING')) for fid in linked]))
+        updated.append(entry)
+    verdict = re.findall(r'^\s*VERDICT: (ok|revise)\s*$', str(raw or ''), re.M)[-1:] or ['revise']
+    statuses = {entry['status'] for entry in updated}
+    if 'revise' in statuses or verdict[0] == 'revise' and valid:
+        new = 'revise'
+    elif verdict[0] == 'revise' or 'unverified' in statuses:
+        new = 'unverified'
+    else:
+        new = 'pass'
+    ignored = sorted(valid) if new == 'pass' and valid else []
+    if ignored:
+        # Soundness: a validated blocking finding is the thing that blocks. A report cannot neutralise
+        # it by marking every criterion pass and writing `VERDICT: ok` — the finding stays authoritative
+        # (review vòng 2, F1). Downgrading is the only way out, and that happens in validate_findings.
+        new = 'revise'
+    error = None
+    if ignored:
+        error = ('WORK_FINDING_IGNORED: kept blocking finding(s) ' + ', '.join(ignored) + ' but every criterion '
+                 'is pass and VERDICT: ok. A validated blocking finding blocks the artifact: mark the criterion '
+                 'revise, downgrade the finding, or drop it.')
+    if status == 'revise' and new != 'revise':
+        detail = '; '.join(f"{cid}: " + (', '.join(f'{fid} {why}' for fid, why in pairs) or 'no linked finding')
+                           for cid, pairs in uncited) or 'VERDICT: revise without a valid blocking finding'
+        error = ('WORK_FINDING_UNCITED: ' + detail + '. A blocking finding needs criterionId, 1-6 evidenceRefs '
+                 'from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; '
+                 'numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.')
+    return new, updated, error
+
+
 def input_conflicts(coverage, criteria):
     """An evidenced conflict in main's assignment, not a request to falsify the artifact."""
     return [{'id': item['id'], 'requirement': criteria[item['id']], 'evidence': item['evidence']}
@@ -203,7 +413,8 @@ def contract(lang, criteria):
         'Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. '
         'Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. ')
     skeleton = {'coverage': [{'id': key, 'status': 'unverified', 'target': 'artifact',
-                             'evidence': '<reference or finding>'} for key in criteria]}
+                             'evidence': '<reference or finding>'} for key in criteria],
+                'findings': []}
     return head + work_prompts.choose(lang,
         '\nKeep findings under 600 words. Do not rewrite the deliverable or add scope. Snapshot hashes are checked by the backend; do not spend steps recomputing them. ',
         '\nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. ') + work_prompts.choose(lang,
@@ -228,22 +439,82 @@ def contract(lang, criteria):
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
         '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
         'Ví dụ tiền đề bị bác bỏ: {"id":"A1","status":"revise","target":"criterion","evidence":"Nguồn đã mở bác tiền đề; main sửa A1, không viết lại artifact đúng."}. '
-        'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + '\n' + json.dumps(skeleton, ensure_ascii=False)
+        'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + work_prompts.choose(lang,
+        '\nFindings (same json object, at most 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
+        '"scope":"node|run","claim":"<=300 chars","evidenceRefs":["<tool call id>","verify:<codeHash>",'
+        '"artifact:<artifactId>@<contentHash>"],"counterCheck":{"strongest":"best objection to this finding",'
+        '"checkedBy":"<tool call id>","outcome":"refuted|confirmed|not_run"},"impact":"...","fix":"..."}. '
+        'A revise coverage entry lists its findingIds. The backend keeps a blocking finding only when every evidenceRef '
+        'was observed in THIS review (1-6 refs), criterionId is assigned, counterCheck is present and not confirmed, '
+        'and a numeric count/encoding/byte claim cites verify_exec/terminal_exec or an opened source containing that '
+        'number; otherwise it becomes a note and the criterion is UNVERIFIED, not revise. '
+        'An evidenceRef must be the toolCallId of a call YOU made in this admission (e.g. "call_ab12..."), a '
+        '"verify:<codeHash>" signature returned by verify_exec, or "artifact:<artifactId>@<contentHash>". A prose '
+        'reference such as "file_read:src/x.py" or "codebase_grep:NFD" matches no receipt and downgrades the finding. '
+        'For any count, encoding, byte, arithmetic, parser or limit claim call verify_exec first (it reads the repo '
+        'read-only, writes scratch files under /tmp/work and can reach the network) and cite its tool call id. '
+        'In a node review a run-level gap is scope=run (a note for main).',
+        '\nFinding (cùng object json, tối đa 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
+        '"scope":"node|run","claim":"<=300 ký tự","evidenceRefs":["<tool call id>","verify:<codeHash>",'
+        '"artifact:<artifactId>@<contentHash>"],"counterCheck":{"strongest":"phản biện mạnh nhất với finding",'
+        '"checkedBy":"<tool call id>","outcome":"refuted|confirmed|not_run"},"impact":"...","fix":"..."}. '
+        'Coverage revise ghi findingIds. Backend chỉ giữ finding chặn khi mọi evidenceRef được quan sát trong CHÍNH '
+        'lượt review này (1-6 ref), criterionId thuộc tiêu chí được giao, có counterCheck và outcome không phải confirmed, '
+        'và claim số đếm/encoding/byte trích verify_exec/terminal_exec hoặc nguồn đã mở chứa đúng con số đó; nếu không, '
+        'finding thành ghi chú và tiêu chí thành UNVERIFIED, không phải revise. '
+        'Mỗi evidenceRef phải là toolCallId của một call BẠN đã gọi trong chính lượt này (ví dụ "call_ab12..."), '
+        'chữ ký "verify:<codeHash>" do verify_exec trả về, hoặc "artifact:<artifactId>@<contentHash>". Tham chiếu văn '
+        'xuôi như "file_read:src/x.py" hay "codebase_grep:NFD" không khớp receipt nào và làm finding bị hạ. '
+        'Với mọi claim số đếm/encoding/byte/số học/parser/giới hạn, hãy gọi verify_exec trước (đọc repo read-only, ghi '
+        'scratch trong /tmp/work, ra mạng được) rồi trích tool call id của nó. '
+        'Trong review một nút, khoảng trống cấp run ghi scope=run (ghi chú cho main).') + '\n' + json.dumps(skeleton, ensure_ascii=False)
+
+
+READ_TOOLS = frozenset({'file_read', 'web_fetch', 'read_source', 'codebase_grep'})
+
+
+def capability_preflight(session, need):
+    """W1.P — one capability gate before any child spends a turn: `str` cause or None.
+
+    `need = {role, tools: set (all required), anyTools: set (at least one), readTool: bool,
+    check: bool, code}`. Reads the owner's CURRENT config; never enables a role or tool and never
+    turns a missing capability into a pass.
+    """
+    from .roles import allowed_tools, work_check_tools
+    config = session['config']
+    role = need['role']
+    code = need.get('code') or ('WORK_CHECK_UNAVAILABLE' if need.get('check') else 'WORK_ROLE_UNAVAILABLE')
+    if not any(r['id'] == role and r.get('enabled', True) for r in config.get('subagents') or []):
+        return f'{code}: required role {role} is disabled or missing; enable it explicitly before retrying'
+    owner = config.get('tools') or []
+    tools = set(work_check_tools(role, owner) if need.get('check') else allowed_tools(role, owner))
+    for name in sorted(set(need.get('tools') or ()) - tools):
+        return f'{code}: {role} requires {name}; owner tool setting is respected'
+    wanted = set(need.get('anyTools') or ())
+    if wanted and not tools & wanted:
+        return f'{code}: {role} requires one of {", ".join(sorted(wanted))}; owner tool setting is respected'
+    if need.get('readTool') and not tools & READ_TOOLS:
+        return f'{code}: no tool to open original evidence; enable the required read capability explicitly'
+    return None
 
 
 def preflight(session, spec):
     """Fail before spawning or consuming a retry if required capabilities are off."""
-    from .roles import work_check_tools
-    config = session['config']
-    role = spec['executorRole']
-    if not any(r['id'] == role and r.get('enabled', True) for r in config['subagents']):
-        return f'WORK_CHECK_UNAVAILABLE: required role {role} is disabled or missing; enable it explicitly before retrying'
-    tools = work_check_tools(role, config['tools'])
-    if spec['id'] == 'tests' and 'terminal_exec' not in tools:
+    unavailable = capability_preflight(session, {
+        'role': spec['executorRole'], 'check': True,
+        'tools': {'terminal_exec'} if spec['id'] == 'tests' else set(),
+        'readTool': spec['id'] in ('evidence', 'critique', 'whole')})
+    if unavailable and spec['id'] == 'tests' and 'terminal_exec' in unavailable:
         return 'WORK_CHECK_UNAVAILABLE: tests requires terminal_exec; owner tool setting is respected'
-    if spec['id'] in ('evidence', 'critique', 'whole') and not tools & {'file_read', 'web_fetch', 'read_source', 'codebase_grep'}:
-        return 'WORK_CHECK_UNAVAILABLE: no tool to open original evidence; enable the required read capability explicitly'
-    return None
+    return unavailable
+
+
+def producer_need(role, stage, purpose):
+    """Minimum capability of a spawned child; the role's own permissions decide the rest."""
+    need = {'role': role, 'check': purpose == 'review', 'readTool': purpose == 'knowledge'}
+    if role == 'testing' and stage == 'execute' and purpose == 'produce':
+        need['tools'] = {'terminal_exec'}
+    return need
 
 
 class Checks:
@@ -313,6 +584,10 @@ class Checks:
             return doc
         return None
 
+    def node(self, run, node_id):
+        """Real node or the virtual `__integration__` node of a git-isolated run (W8.A4.4)."""
+        return self.graph.find_node(run, node_id)
+
     def binding(self, run, node, stage):
         dependencies = {}
         for dep_id in node['dependsOn']:
@@ -343,7 +618,7 @@ class Checks:
         if any(artifact['binding'].get(k) != v for k, v in binding.items()):
             return False
         policy = state.get('policy') or {}
-        if (policy.get('version') != work_policy.VERSION or not policy.get('hash')
+        if (not work_policy.version_ok(policy.get('version')) or not policy.get('hash')
                 or artifact['binding'].get('policyHash') != policy['hash']
                 or work_policy.digest({k: v for k, v in policy.items() if k != 'hash'}) != policy['hash']):
             return False
@@ -421,7 +696,7 @@ class Checks:
             from .work_graph import enabled
             run = self.graph.resolve(owner, work['runId'])
             doc = next((r for r in self.records(run['runId']) if r['checkId'] == work['checkId']), None)
-            node = next((n for n in run['nodes'] if n['id'] == work['nodeId']), None)
+            node = self.graph.find_node(run, work['nodeId'])
             if (not enabled() or run['status'] in ('paused', 'cancelled', 'rejected', 'shipped')
                     or not node or not doc or doc['status'] != 'running' or doc.get('retestOf') != work['retestOf']
                     or self.graph.progress.get(work['progressAdmissionId'])['status'] != 'reserved'
@@ -432,7 +707,7 @@ class Checks:
             self.graph.require_planning_current(run)
             return doc['binding'].get('codeSnapshot')
         source = current()
-        if not source or await snapshot(self.graph, owner) != source:
+        if not source or await snapshot_of(self.graph, owner, source) != source:
             raise ValueError('WORK_RETEST_STALE: code changed while waiting for slot')
         if current() != source:
             raise ValueError('WORK_RETEST_STALE: check binding changed during code inspection')
@@ -564,7 +839,7 @@ class Checks:
         source = targets[0]['binding'].get('codeSnapshot')
         if spec['id'] in ('tests', 'code_review') and not source:
             return doc | {'status': 'unverified', 'error': 'Exact code snapshot required.'}
-        if source and await snapshot(graph, run['sessionId']) != source:
+        if source and await snapshot_of(graph, run['sessionId'], source) != source:
             return doc | {'status': 'superseded', 'error': 'Code changed before check.'}
         previous_tester = None if whole else self.retest_candidate(session, run, node, stage, spec, criteria, targets[0], doc['checkId'])
         if previous_tester:
@@ -589,6 +864,8 @@ class Checks:
                                                            **({'resumeChildId': previous_tester['childId']} if previous_tester and not retry else {}),
                                                            **({'retestOf': previous_tester['checkId']} if previous_tester and not retry else {}),
                                                            **({'inputManifestId': manifest['artifactId']} if manifest else {}),
+                                                           # W8.A4.3: the tester/reviewer reads and runs in the node worktree.
+                                                           **({'workspace': workspace} if (workspace := graph.workspace_of(run, node)) else {}),
                                                            'checkKind': spec['id'], 'budgetHints': hints,
                                                            **({'controllerAction': doc['controllerAction']} if doc.get('controllerAction') else {})})
             if result.get('request'):
@@ -598,12 +875,31 @@ class Checks:
             child_id = result.get('sessionId')
             status, coverage, findings = parse_report(text, criteria, require_target=True)
             doc.pop('error', None)
+            admission = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0) \
+                if child_id else 0
+            analysis = validate_findings(graph, child_id, admission, findings if status != 'error' else '',
+                                         criteria, 'run' if whole else 'node', metas)
+            status, coverage, uncited = apply_findings(findings, status, coverage, analysis)
+            if uncited and not retry and str(uncited).startswith('WORK_FINDING_UNCITED'):
+                # Only an INVALID report (revise without a valid blocking finding) earns a retry with the
+                # reasons. `WORK_FINDING_IGNORED` is the opposite case: the finding is valid and the backend
+                # overrides the verdict to `revise`; turning that into `error` let a fresh attempt drop the
+                # finding and pass the artifact (review vòng 2, F1 — reproduced end-to-end).
+                status = 'error'
             doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
                 'completed': complete(result), 'execution': work_budget.receipt(result),
-                **({'contractError': findings} if status == 'error' else {})})
-            doc.update(childId=child_id, coverage=coverage, findings=findings, status=status)
+                'findings': analysis['findings'], 'blocking': len(analysis['blocking']),
+                'downgraded': analysis['downgraded'],
+                **({'overLimit': True} if prose_words(text) > PROSE_WORD_CAP else {}),
+                **({'contractError': str(uncited).split(':', 1)[0]} if uncited else
+                   {'contractError': findings} if status == 'error' else {})})
+            doc.update(childId=child_id, coverage=coverage, findings=findings, status=status,
+                       blocking=analysis['blocking'], downgraded=analysis['downgraded'],
+                       findingNotes=analysis['notes'])
+            if uncited:
+                doc['error'] = uncited
             if child_id:
-                doc['admissionSeq'] = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)
+                doc['admissionSeq'] = admission
             if not complete(result):
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
             elif not all(graph.artifacts.covered(doc['checkId'], meta, child_id) for meta in metas):
@@ -615,7 +911,7 @@ class Checks:
                 doc.update(status='unverified', error='Missing actual successful required test command events.')
             if doc['status'] != 'error':
                 break
-        if source and await snapshot(graph, run['sessionId']) != source:
+        if source and await snapshot_of(graph, run['sessionId'], source) != source:
             doc.update(status='superseded', error='Source changed during check (including terminal side effects).')
         doc['inputConflicts'] = input_conflicts(doc.get('coverage', []), criteria) if doc['status'] == 'revise' else []
         doc['finishedAt'] = time.time()
@@ -650,7 +946,7 @@ class Checks:
             raise PermissionError('WORK_ROOT_ONLY: only owner may join checks')
         if run['status'] in ('cancelled', 'shipped', 'rejected', 'paused') or args.get('recheck', False):
             return None
-        node = next((n for n in run['nodes'] if n['id'] == args.get('nodeId')), None)
+        node = self.node(run, args.get('nodeId'))
         stage = args.get('stage', 'produce')
         state = node['stages'].get(stage, {}) if node else {}
         meta, policy = state.get('artifact') or {}, state.get('policy') or {}
@@ -659,7 +955,7 @@ class Checks:
         registered, _ = self.graph.artifacts.get(run['runId'], meta['artifactId'])
         if registered != meta or any(meta['binding'].get(k) != v for k,v in self.binding(run,node,stage).items()):
             return None
-        if (meta['binding'].get('policyHash') != policy.get('hash') or policy.get('version') != work_policy.VERSION
+        if (meta['binding'].get('policyHash') != policy.get('hash') or not work_policy.version_ok(policy.get('version'))
                 or work_policy.digest({k:v for k,v in policy.items() if k!='hash'}) != policy.get('hash')):
             return None
         ids = args.get('checkIds') or [s['id'] for s in policy['required']]
@@ -680,7 +976,7 @@ class Checks:
                 return None
             docs.append(doc)
         source = meta['binding'].get('codeSnapshot')
-        if source and await snapshot(self.graph, run['sessionId']) != source:
+        if source and await snapshot_of(self.graph, run['sessionId'], source) != source:
             raise ValueError('WORK_CHECK_STALE: code changed; cannot join old check')
         # Re-read after an awaited snapshot: another operation may have stopped or
         # superseded the admission. Receipt aliases do not mutate the live graph.
@@ -713,7 +1009,7 @@ class Checks:
         recheck = args.get('recheck', False)
         if not isinstance(recheck, bool):
             raise ValueError('WORK_CHECK_INVALID: recheck must be a boolean')
-        node = next((n for n in run['nodes'] if n['id'] == args.get('nodeId')), None)
+        node = self.node(run, args.get('nodeId'))
         stage = args.get('stage', 'produce')
         if node is None or stage not in node['stages']:
             raise ValueError('WORK_NODE_UNKNOWN: node/stage not in run')
@@ -732,7 +1028,7 @@ class Checks:
         if any(meta['binding'].get(k) != v for k, v in current.items()):
             raise ValueError('WORK_CHECK_STALE: node, owner decisions or dependencies changed')
         policy = state['policy']
-        if (policy.get('version') != work_policy.VERSION
+        if (not work_policy.version_ok(policy.get('version'))
                 or policy.get('hash') != work_policy.digest({k:v for k,v in policy.items() if k!='hash'})
                 or meta['binding'].get('policyHash') != policy.get('hash')):
             raise ValueError('WORK_CHECK_STALE: check policy or artifact policy binding changed')
@@ -747,6 +1043,9 @@ class Checks:
         invocation = str(args.get('invocationId') or '').strip()
         if not 1 <= len(invocation) <= 120:
             raise ValueError('WORK_CHECK_INVOCATION: unique invocationId required (1..120 chars)')
+        if node['id'] == work_worktrees.INTEGRATION_NODE:
+            # W8.A4.5: one review on the converged tree, after its tests are green on that exact snapshot.
+            work_repair.converged(node, policy, ids, self.latest(run, node, stage))
         own_budget = run['runId'] not in graph.child_budget
         if own_budget:
             graph.child_budget[run['runId']] = [8]
@@ -768,7 +1067,7 @@ class Checks:
                         inputs = graph.artifacts.input_closure(run['runId'], [meta])
                         graph.artifacts.validate_manifest(run, receipt or passed, inputs, [meta['artifactId']])
                         source = meta['binding'].get('codeSnapshot')
-                        if source and await snapshot(graph, run['sessionId']) != source:
+                        if source and await snapshot_of(graph, run['sessionId'], source) != source:
                             raise ValueError('WORK_CHECK_STALE: code changed; old check receipt is not current proof')
                         if passed:
                             self.remember_invocation(run['runId'], key, request, passed['checkId'])
@@ -825,8 +1124,24 @@ class Checks:
                 reviewerRole=next(r['executorRole'] for r in policy['required'] if r['id'] == doc['kind']),
                 verdict='ok' if state['status'] == 'accepted' else 'revise' if state['status'] in ('revise','rejected') else doc['status'],
                 findings=state.get('feedback') or doc.get('findings', ''), checkIds=[r['checkId'] for r in records])
+        if stage == 'execute' and node['id'] == work_worktrees.INTEGRATION_NODE:
+            integration = run.setdefault('integration', {})
+            if state['status'] == 'accepted':
+                integration.update(status='checked', checkIds=[r['checkId'] for r in self.latest(run, node, stage).values()],
+                                   checkedAt=time.time())
+            elif integration.get('status') == 'checked':
+                integration.update(status='pending')
         if stage == 'execute':
-            stages = [n['stages']['execute'] for n in run['nodes'] if 'execute' in n['stages']]
-            run['status'] = 'executed' if all(s['status'] == 'accepted' for s in stages) else ('execute_failed' if state['status'] == 'rejected' else 'approved')
+            run['status'] = graph.execute_status(run) or ('execute_failed' if state['status'] == 'rejected' else 'approved')
         graph.save(run, 'checks_finished', f'{node["id"]}:{stage}')
-        return graph.result(run) | {'checks': records}
+        out = graph.result(run) | {'checks': records}
+        if stage == 'execute' and work_repair.routed(run) and state['status'] in ('revise', 'rejected'):
+            # W8.A4.5: a red check is classified and repaired here; ready_nodes no longer auto-revises.
+            repair = await work_repair.route(graph, session, run, node,
+                                             [r for r in records if r.get('status') == 'revise'],
+                                             state.get('maxRounds', 3))
+            run['status'] = graph.execute_status(run) or ('execute_failed' if state['status'] == 'rejected'
+                                                          else 'approved')
+            graph.save(run, 'repair_routed', json.dumps({k: v for k, v in repair.items() if k != 'entry'})[:300])
+            out = graph.result(run) | {'checks': records, 'repair': repair}
+        return out

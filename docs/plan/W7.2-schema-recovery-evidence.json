@@ -1,0 +1,308 @@
+{
+  "schema": "boxfox-w72-schema-recovery-evidence/1",
+  "branch": "vorflux/w7-contracts",
+  "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+  "model": "opencode/space-bunny-free",
+  "scope": "W7.2: schema work_report theo action + envelope lỗi có field/hint/received, work_artifact_read ở root thiếu runId trả WORK_ARTIFACT_RUN_REQUIRED, và recovery tool sau crash (dùng lại tool_end đã commit, chạy lại một lần tool safe, receipt TOOL_INTERRUPTED_UNSAFE cho tool unsafe, chặn tool bị thu hồi). Probe native đo hành vi main thật; phần replay đo bằng test đơn vị (không model).",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/tool_arg_errors.py": "ef78704b96387cfd2410da0c85fe5b9b3ec9847e6f8d1b3db14096958d8c951e",
+    "backend/src/agentbox/agent_core/work_feedback.py": "f0859f6144a4a796a6c448f1962541e77e56cc96e225c7f74974db6661fee520",
+    "backend/src/agentbox/agent_core/work_artifacts.py": "4a79238b226caa2b7a1b73fcf071c85dc791eb49ea87274fad1209ffa825224d",
+    "backend/src/agentbox/agent_core/tool_contracts.py": "5663d00df213e1e2f0880c71662a307a036a1d33898f122fd96e8c68eaf8063c",
+    "backend/src/agentbox/agent_core/runtime.py": "d52d413c378a6ae766d3a4ecb1f076d1fca6d2845e4c31d4d4483c4397f003b1",
+    "backend/src/agentbox/agent_core/tool_recovery.py": "b246efc75a0c6ba9d3ea777dcda72acb19e09cdd3e79f759ac8b7dd5ce7efc90",
+    "backend/src/agentbox/agent_core/work_progress.py": "43076e95e0f5c124e2024acab10ea863ecf371a140a560da02ea8601dfdd0f38",
+    "backend/src/agentbox/agent_core/work_grants.py": "a4b322e341805ec4c91960a284b8a51ba0daed1b00fc05f3d123496a95c807ed",
+    "backend/src/agentbox/agent_core/work_decisions.py": "da3e48d390334fb01ee09deae1623dd336f3f0162da41a59862534441cd9cc6d",
+    "backend/tests/unit/test_work_report_schema.py": "0f149f3d5856b8a1be81ce624044246c0ab99accbcfc0c86736d0065e6d1792f",
+    "backend/tests/unit/test_work_tool_replay.py": "e7c79f02c26396a83db8ddca58b066adc5314f151ab4a0c1a3489654aae07524",
+    "scripts/eval/work_report_schema_probe.py": "b62635db7c4dffe290f6085a987d1191d7dd796dce5f7dc23c137e9ee9bf7e74"
+  },
+  "raw": {
+    "path": ".tmp/w7-report-schema/results.json",
+    "sha256": "0dbc6c5ad08087c697c745be2aa9d3dc8c0179af265e52f5acee8c3ae2a801db"
+  },
+  "nativeProbe": {
+    "command": "python3 scripts/eval/work_report_schema_probe.py --router http://127.0.0.1:36219 --output .tmp/w7-report-schema --manifest .tmp/w7-contracts-manifest.json --repeats 2",
+    "trials": [
+      {
+        "trial": 1,
+        "oracle": true,
+        "status": "completed",
+        "latencySeconds": 31.221,
+        "providerCalls": 8,
+        "artifactRead": true,
+        "aclMisread": [],
+        "faults": {
+          "report_missing_runid": {
+            "fault": {
+              "args": {
+                "action": "status"
+              },
+              "errorCode": "WORK_REPORT_FIELD_REQUIRED",
+              "error": "WORK_REPORT_FIELD_REQUIRED: runId required for action=status; hint: runId from work_graph(action='status') or the work_run/work_check result",
+              "details": {
+                "field": "runId",
+                "action": "status",
+                "hint": "runId from work_graph(action='status') or the work_run/work_check result",
+                "received": "{\"action\": \"status\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc5f4a4a76658ad6511f",
+              "args": {
+                "action": "status",
+                "runId": "w-d303f9c5b3"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          },
+          "report_forbidden_action": {
+            "fault": {
+              "args": {
+                "action": "checkpoint",
+                "checkpoint": "nháp"
+              },
+              "errorCode": "WORK_REPORT_ACTION",
+              "error": "WORK_REPORT_ACTION: main uses status, resume, cancel or read; ask the user with interview(workRequestId, revision); received action='checkpoint'",
+              "details": {
+                "field": "action",
+                "action": "checkpoint",
+                "hint": "allowed actions: status, resume, cancel, read",
+                "received": "{\"action\": \"checkpoint\", \"checkpoint\": \"nháp\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc5f68b87204a7a09ff2",
+              "args": {
+                "action": "status",
+                "runId": "w-d303f9c5b3"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          },
+          "artifact_missing_runid": {
+            "fault": {
+              "args": {
+                "artifactId": "a-44d7373942e94a2ba2181542fb2bbe43"
+              },
+              "errorCode": "WORK_ARTIFACT_RUN_REQUIRED",
+              "error": "WORK_ARTIFACT_RUN_REQUIRED: runId required at root; artifact ids are per run, so this is not an access-control denial",
+              "details": {
+                "field": "runId",
+                "hint": "runId from work_graph(action='status') or the work_run/work_check result",
+                "received": "{\"artifactId\": \"a-44d7373942e94a2ba2181542fb2bbe43\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc5f77e47165afbb81df",
+              "args": {
+                "runId": "w-d303f9c5b3",
+                "artifactId": "a-44d7373942e94a2ba2181542fb2bbe43"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          }
+        },
+        "toolCalls": [
+          {
+            "name": "work_report",
+            "errorCode": "WORK_REPORT_FIELD_REQUIRED"
+          },
+          {
+            "name": "work_graph",
+            "errorCode": null
+          },
+          {
+            "name": "work_report",
+            "errorCode": null
+          },
+          {
+            "name": "work_report",
+            "errorCode": "WORK_REPORT_ACTION"
+          },
+          {
+            "name": "work_report",
+            "errorCode": null
+          },
+          {
+            "name": "work_artifact_read",
+            "errorCode": "WORK_ARTIFACT_RUN_REQUIRED"
+          },
+          {
+            "name": "work_artifact_read",
+            "errorCode": null
+          }
+        ]
+      },
+      {
+        "trial": 2,
+        "oracle": true,
+        "status": "completed",
+        "latencySeconds": 34.525,
+        "providerCalls": 7,
+        "artifactRead": true,
+        "aclMisread": [],
+        "faults": {
+          "report_missing_runid": {
+            "fault": {
+              "args": {
+                "action": "status"
+              },
+              "errorCode": "WORK_REPORT_FIELD_REQUIRED",
+              "error": "WORK_REPORT_FIELD_REQUIRED: runId required for action=status; hint: runId from work_graph(action='status') or the work_run/work_check result",
+              "details": {
+                "field": "runId",
+                "action": "status",
+                "hint": "runId from work_graph(action='status') or the work_run/work_check result",
+                "received": "{\"action\": \"status\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc5fb60f73bdb42ed3e9",
+              "args": {
+                "action": "status",
+                "runId": "w-07057aa201"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          },
+          "report_forbidden_action": {
+            "fault": {
+              "args": {
+                "action": "checkpoint",
+                "checkpoint": "nháp"
+              },
+              "errorCode": "WORK_REPORT_ACTION",
+              "error": "WORK_REPORT_ACTION: main uses status, resume, cancel or read; ask the user with interview(workRequestId, revision); received action='checkpoint'",
+              "details": {
+                "field": "action",
+                "action": "checkpoint",
+                "hint": "allowed actions: status, resume, cancel, read",
+                "received": "{\"action\": \"checkpoint\", \"checkpoint\": \"nháp\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc5ff3ec74819b6013b7",
+              "args": {
+                "action": "status",
+                "runId": "w-07057aa201"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          },
+          "artifact_missing_runid": {
+            "fault": {
+              "args": {
+                "artifactId": "a-7e76756745554b62bd5102789dfba739"
+              },
+              "errorCode": "WORK_ARTIFACT_RUN_REQUIRED",
+              "error": "WORK_ARTIFACT_RUN_REQUIRED: runId required at root; artifact ids are per run, so this is not an access-control denial",
+              "details": {
+                "field": "runId",
+                "hint": "runId from work_graph(action='status') or the work_run/work_check result",
+                "received": "{\"artifactId\": \"a-7e76756745554b62bd5102789dfba739\"}"
+              }
+            },
+            "retry": {
+              "callId": "call_01a0fc60120c7201a7ab5978",
+              "args": {
+                "artifactId": "a-7e76756745554b62bd5102789dfba739",
+                "runId": "w-07057aa201"
+              },
+              "errorCode": null
+            },
+            "corrected": true
+          }
+        },
+        "toolCalls": [
+          {
+            "name": "work_report",
+            "errorCode": "WORK_REPORT_FIELD_REQUIRED"
+          },
+          {
+            "name": "work_report",
+            "errorCode": null
+          },
+          {
+            "name": "work_report",
+            "errorCode": "WORK_REPORT_ACTION"
+          },
+          {
+            "name": "work_report",
+            "errorCode": null
+          },
+          {
+            "name": "work_artifact_read",
+            "errorCode": "WORK_ARTIFACT_RUN_REQUIRED"
+          },
+          {
+            "name": "work_artifact_read",
+            "errorCode": null
+          }
+        ]
+      }
+    ],
+    "oracleAll": true,
+    "mechanismAudit": {
+      "faultInjected": 3,
+      "faultObserved": 3,
+      "correctedWithinOneRetry": 3,
+      "aclMisread": 0
+    },
+    "limits": [
+      "Đo cơ chế + hành vi model, không phải chứng nhận chất lượng câu trả lời.",
+      "Hai lượt chạy, một model, một provider; không suy rộng ra tải sản xuất."
+    ]
+  },
+  "unit": [
+    {
+      "path": "backend/tests/unit/test_work_report_schema.py",
+      "passed": 10,
+      "failed": 0
+    },
+    {
+      "path": "backend/tests/unit/test_work_tool_replay.py",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "path": "backend/tests/unit/test_work_main_interview_w71.py",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "path": "backend/tests/unit/test_harness_runtime.py",
+      "passed": 23,
+      "failed": 0
+    }
+  ],
+  "recovery": {
+    "commitPoint": "tool_end phát trước khi append tool message + store.save",
+    "committedToolEndReused": {
+      "modelCalls": 0,
+      "executorCalls": 0
+    },
+    "safeReadReplayedOnce": true,
+    "unsafeNotReplayed": [
+      "terminal_exec",
+      "work_ship"
+    ],
+    "receipt": "TOOL_INTERRUPTED_UNSAFE",
+    "notStarted": "TOOL_NOT_STARTED",
+    "replayPending": "TOOL_REPLAY_PENDING",
+    "progressErrors": "work_progress.finish() thêm {tool, code: TOOL_INTERRUPTED_UNSAFE, callId}",
+    "revokedGrantBlocksNextCall": "WORK_CAPABILITY_REVOKED (403)"
+  },
+  "deviations": [
+    "decisionKeys không bắt buộc cho needs_user (design §5 ghi bắt buộc): mặc định suy ra từ id câu hỏi; giá trị sai vẫn bị WORK_DECISION_KEYS_INVALID. Ghi nhận trong test_needs_user_requires_decision_keys.",
+    "invocationId không bắt buộc vì code mặc định lấy call_id.",
+    "work_artifact_read ở root: chặn sớm khi thiếu runId; khi đã có runId thì WORK_ARTIFACT_UNKNOWN kèm câu 'not an access-control denial'."
+  ],
+  "note": "Probe/test chạy trong worktree trước khi commit; sourceManifest khớp byte với bản đã commit. commit trong results.json (raw) là commit nền 68ecdf04 vì thời điểm chạy chưa commit."
+}
