@@ -1,4 +1,4 @@
-"""W6.5.3: measurement-only output cap override for nested lookup helpers; scripted model only."""
+"""W6.5.3: helper lookup output cap (default 16000 after measurement) and its env override."""
 import asyncio
 
 import pytest
@@ -11,10 +11,11 @@ ENV = 'BOXFOX_WORK_HELPER_OUTPUT_TOKENS'
 HELPER = {'runId': 'w-x', 'nodeId': 'R1', 'stage': 'produce', 'purpose': 'knowledge', 'helperRole': 'research'}
 
 
-def test_unset_keeps_historical_default(monkeypatch):
+def test_unset_uses_measured_default(monkeypatch):
     monkeypatch.delenv(ENV, raising=False)
     for role in ('research', 'explore'):
-        assert policy.child_budget(role, HELPER) is None  # request_budget falls back to 4096
+        assert policy.child_budget(role, HELPER) == 16000 == policy.WORK_HELPER_OUTPUT_TOKENS
+    # Unrelated defaults are untouched by the W6.5.3 decision.
     assert policy.request_budget({}) == policy.DEFAULT_OUTPUT_TOKENS == 4096
 
 
@@ -36,7 +37,7 @@ def test_override_applies_only_to_knowledge_helpers(raw, expected, monkeypatch):
     assert policy.child_budget('research', task_kind='knowledge') is None
 
 
-@pytest.mark.parametrize('raw', ['8192', '0', 'banana', '', '64000'])
+@pytest.mark.parametrize('raw', ['8192', '0', 'banana', '', '64000', '32000'])
 def test_invalid_override_fails_closed(raw, monkeypatch):
     monkeypatch.setenv(ENV, raw)
     with pytest.raises(ValueError, match='OUTPUT_BUDGET_INVALID: BOXFOX_WORK_HELPER_OUTPUT_TOKENS'):
@@ -47,7 +48,7 @@ def test_parent_ceiling_still_bounds_helper_request():
     assert policy.request_budget({'maxTokens': 16000, 'outputTokenCeiling': 8192}) == 8192
 
 
-@pytest.mark.parametrize('raw,expected', [(None, 4096), ('16000', 16000), ('4096', 4096)])
+@pytest.mark.parametrize('raw,expected', [(None, 16000), ('16000', 16000), ('4096', 4096)])
 def test_helper_child_request_uses_override_through_runtime(raw, expected, tmp_path, monkeypatch):
     if raw is None:
         monkeypatch.delenv(ENV, raising=False)
@@ -61,5 +62,5 @@ def test_helper_child_request_uses_override_through_runtime(raw, expected, tmp_p
     assert result[0]['status'] == 'completed'
     assert [tokens for kind, _, tokens in model.tokens if kind == 'knowledge'] == [expected]
     child = rt.store.get(result[0]['childId'])['config']
-    assert child.get('maxTokens') == (None if raw is None else expected)
+    assert child.get('maxTokens') == expected
     assert child['workBinding']['purpose'] == 'knowledge'

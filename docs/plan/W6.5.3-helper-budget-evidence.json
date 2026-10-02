@@ -1,0 +1,2452 @@
+{
+ "item": "W6.5.3",
+ "title": "Cap output helper lookup lồng: 4096 so với 16000 (Space Bunny native)",
+ "meta": {
+  "branch": "vorflux/w65-helper-budget",
+  "commit": "f21c59b1b4cf65228d0b79c40a00e34a70d33beb",
+  "dirty": false,
+  "sourceManifest": {
+   "backend/src/agentbox/agent_core/output_policy.py": "4fac1f166e7010085a1b081ea926cc7a2ec089cef530b2451e002cd82daab363",
+   "backend/src/agentbox/agent_core/runtime.py": "b4c14f3865492dfe13bd1d8d497e94a2938ad3ff5da3b56a4f09baa40c8dcc3f",
+   "backend/src/agentbox/agent_core/work_graph.py": "57d8d94c38cbf0b8bc24b9582a7f7e9bdf7417249a48a6ce3d9461cc5ac9b246",
+   "backend/src/agentbox/agent_core/work_prompts.py": "883c3a7593d33f73509f776574f503864ea88cade2c3bf130b035ff3a29034cf",
+   "backend/src/agentbox/agent_core/work_checks.py": "49b7a35d9d947cb4b31f2ab750559565cfa73738bfbecfc7d899cf5a935f043d",
+   "router/src/providers/opencode.mjs": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+   "router/src/engine.mjs": "2c5c3216ce7408a175fa10d6b230768915d8dba5f778f407dbdbf024f3b82396",
+   "router/src/request-budget.mjs": "5401d961400d1a17143d32d4516b347f7490939611b04662c87dd3bed2c5fa2a",
+   "scripts/eval/work_check_eval.py": "276eed71ca077fab48125565945d6c1fcc2494d18539e88d21b88eed4fa56f80",
+   "scripts/eval/work_helper_budget_fixture.py": "36276be715b226e05b872c907b99ef0dd8212ee77086ee51974d942749d510d1",
+   "scripts/eval/work_helper_budget_eval.py": "0b7f3ea3921f060a536ee79c33f93a0b4f9da7b8d6ffc836f48ff45f28a9261c"
+  },
+  "sourceManifestSha256": "dbd808e733bc96751f3ee48e692b58219bd247aa79d49b628b7630882304c484",
+  "opencodeAdapterSha256": "6d684ffa78b1aa322af07278dc378e2d8530a04f023f4dd02c7239d9772a8fb6",
+  "route": {
+   "connectionId": "72c7ed8d-675f-4b49-b038-a1598ed228c7",
+   "modelId": "space-bunny-free"
+  },
+  "router": "http://127.0.0.1:36219",
+  "routerDeadline": "small 90000 ms (<8000 max_tokens), large 180000 ms (>=8000)",
+  "routerNote": "Shared disposable router (scripts/eval/work_budget_router.mjs) started 10:51 UTC from main checkout B@68ecdf0, pid 22925; router source files byte-identical to this worktree; smallDeadlineMs 90000, largeDeadlineMs 180000 (applies when max_tokens >= 8000, so the 16000 arm has a longer per-request deadline). Other build tracks run tests/probes concurrently on this 4-CPU machine and share this router.",
+  "parentBudget": {
+   "maxSteps": 18,
+   "deadlineSeconds": 300
+  },
+  "rule": {
+   "lengthRunsAt4096Min": 2,
+   "runsAt4096": 16,
+   "coverageDropPointsMin": 10,
+   "coverageDropDefinition": "mean over 8 cases of (mean16000 - mean4096) per case",
+   "wallMedianRatioMax": 1.25,
+   "combine": "(A or B) and C"
+  },
+  "cases": [
+   {
+    "id": "limits_table",
+    "role": "explore",
+    "items": 15
+   },
+   {
+    "id": "error_codes_table",
+    "role": "explore",
+    "items": 13
+   },
+   {
+    "id": "routes_table",
+    "role": "explore",
+    "items": 13
+   },
+   {
+    "id": "retry_three_sources",
+    "role": "research",
+    "items": 13
+   },
+   {
+    "id": "adr_history",
+    "role": "research",
+    "items": 13
+   },
+   {
+    "id": "changelog_table",
+    "role": "explore",
+    "items": 11
+   },
+   {
+    "id": "alerts_table",
+    "role": "explore",
+    "items": 11
+   },
+   {
+    "id": "flags_table",
+    "role": "explore",
+    "items": 12
+   }
+  ],
+  "fixtureSha256": "ab2d1340019c6190bca79c0d575c9250dfcee75b107768eabb7cb721d3321e8b",
+  "cpuCount": 4,
+  "scope": "Native helper lookup only via graph.answer_knowledge; synthetic run/node; fixture tools file_read/codebase_grep/codebase_glob/work_artifact_read; no producer/reviewer/main/UI.",
+  "sourceUnchangedDuringRun": true
+ },
+ "loadSummary": {
+  "loadavg1mMin": 0.28,
+  "loadavg1mMax": 8.87,
+  "loadavg1mMean": 4.85,
+  "cpuCount": 4
+ },
+ "summary": {
+  "byCap": {
+   "4096": {
+    "runs": 16,
+    "lengthRuns": 5,
+    "finalFinishReasons": {
+     "length": 5,
+     "stop": 10,
+     "stream_incomplete": 1
+    },
+    "meanCoverage": 92.22,
+    "medianWallMs": 93268.5,
+    "meanWallMs": 98769,
+    "medianCompletionTokens": 5056.5,
+    "maxFinalCompletionTokens": 4096,
+    "medianPromptTokens": 40355.5,
+    "medianWords": 924.0,
+    "statuses": {
+     "completed": 10,
+     "unverified": 6
+    },
+    "evidenced": 10,
+    "executionReasons": {
+     "None": 10,
+     "PROVIDER_OUTPUT_TRUNCATED": 5,
+     "PROVIDER_STREAM_INTERRUPTED": 1
+    },
+    "limitationsSectionPresent": 12,
+    "mechanismOk": 16
+   },
+   "16000": {
+    "runs": 16,
+    "lengthRuns": 0,
+    "finalFinishReasons": {
+     "stop": 16
+    },
+    "meanCoverage": 100.0,
+    "medianWallMs": 84293.0,
+    "meanWallMs": 104862,
+    "medianCompletionTokens": 5638.5,
+    "maxFinalCompletionTokens": 7202,
+    "medianPromptTokens": 58777.5,
+    "medianWords": 976.0,
+    "statuses": {
+     "completed": 15,
+     "unverified": 1
+    },
+    "evidenced": 15,
+    "executionReasons": {
+     "None": 15,
+     "STEP_BUDGET_EXHAUSTED": 1
+    },
+    "limitationsSectionPresent": 16,
+    "mechanismOk": 16
+   }
+  },
+  "perCase": {
+   "limits_table": {
+    "coverage4096": 100.0,
+    "coverage16000": 100.0,
+    "drop": 0.0
+   },
+   "error_codes_table": {
+    "coverage4096": 50.0,
+    "coverage16000": 100.0,
+    "drop": 50.0
+   },
+   "routes_table": {
+    "coverage4096": 100.0,
+    "coverage16000": 100.0,
+    "drop": 0.0
+   },
+   "retry_three_sources": {
+    "coverage4096": 100.0,
+    "coverage16000": 100.0,
+    "drop": 0.0
+   },
+   "adr_history": {
+    "coverage4096": 92.3,
+    "coverage16000": 100.0,
+    "drop": 7.7
+   },
+   "changelog_table": {
+    "coverage4096": 95.5,
+    "coverage16000": 100.0,
+    "drop": 4.5
+   },
+   "alerts_table": {
+    "coverage4096": 100.0,
+    "coverage16000": 100.0,
+    "drop": 0.0
+   },
+   "flags_table": {
+    "coverage4096": 100.0,
+    "coverage16000": 100.0,
+    "drop": 0.0
+   }
+  },
+  "meanPairedCoverageDrop": 7.78,
+  "wallMedianRatio16000over4096": 0.904,
+  "conditions": {
+   "A_length": true,
+   "B_coverage": false,
+   "C_wall": true
+  },
+  "complete": true,
+  "decision": "raise_to_16000"
+ },
+ "rows": [
+  {
+   "case": "limits_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 5,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 5,
+   "promptTokens": 18174,
+   "completionTokens": 3432,
+   "reasoningTokens": 0,
+   "finalCompletionTokens": 2234,
+   "usageComplete": true,
+   "wallMs": 57911,
+   "words": 883,
+   "chars": 5105,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 15,
+    "total": 15,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      1.65,
+      1.1,
+      0.79
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      1.72,
+      1.23,
+      0.85
+     ],
+     "otherTestProcesses": 2
+    }
+   }
+  },
+  {
+   "case": "limits_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 11,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 11,
+   "promptTokens": 60169,
+   "completionTokens": 7072,
+   "reasoningTokens": 3141,
+   "finalCompletionTokens": 3663,
+   "usageComplete": true,
+   "wallMs": 128340,
+   "words": 1160,
+   "chars": 6853,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 15,
+    "total": 15,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      1.72,
+      1.23,
+      0.85
+     ],
+     "otherTestProcesses": 2
+    },
+    "after": {
+     "loadavg": [
+      5.5,
+      2.63,
+      1.4
+     ],
+     "otherTestProcesses": 2
+    }
+   }
+  },
+  {
+   "case": "error_codes_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 8,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 8,
+   "promptTokens": 38043,
+   "completionTokens": 4257,
+   "reasoningTokens": 989,
+   "finalCompletionTokens": 3493,
+   "usageComplete": true,
+   "wallMs": 87711,
+   "words": 1063,
+   "chars": 5886,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.5,
+      2.63,
+      1.4
+     ],
+     "otherTestProcesses": 2
+    },
+    "after": {
+     "loadavg": [
+      5.36,
+      3.42,
+      1.8
+     ],
+     "otherTestProcesses": 0
+    }
+   }
+  },
+  {
+   "case": "error_codes_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 1,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "STEP_BUDGET_EXHAUSTED",
+   "stepsUsed": 16,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 16,
+   "promptTokens": 104404,
+   "completionTokens": 5836,
+   "reasoningTokens": 2330,
+   "finalCompletionTokens": 2651,
+   "usageComplete": true,
+   "wallMs": 200819,
+   "words": 946,
+   "chars": 5686,
+   "verification": "unverified",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.41,
+      3.46,
+      1.82
+     ],
+     "otherTestProcesses": 0
+    },
+    "after": {
+     "loadavg": [
+      7.2,
+      5.16,
+      2.81
+     ],
+     "otherTestProcesses": 4
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "routes_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 8,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 8,
+   "promptTokens": 42931,
+   "completionTokens": 4654,
+   "reasoningTokens": 1418,
+   "finalCompletionTokens": 3205,
+   "usageComplete": true,
+   "wallMs": 79208,
+   "words": 925,
+   "chars": 6322,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.2,
+      5.16,
+      2.81
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      7.77,
+      5.78,
+      3.22
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "routes_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 35574,
+   "completionTokens": 4893,
+   "reasoningTokens": 1524,
+   "finalCompletionTokens": 3279,
+   "usageComplete": true,
+   "wallMs": 89262,
+   "words": 980,
+   "chars": 6339,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.77,
+      5.78,
+      3.22
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      5.92,
+      5.79,
+      3.47
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "retry_three_sources",
+   "role": "research",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 13,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 13,
+   "promptTokens": 100094,
+   "completionTokens": 5616,
+   "reasoningTokens": 1116,
+   "finalCompletionTokens": 3050,
+   "usageComplete": true,
+   "wallMs": 144376,
+   "words": 1164,
+   "chars": 6681,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.92,
+      5.79,
+      3.47
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      3.95,
+      5.05,
+      3.54
+     ],
+     "otherTestProcesses": 3
+    }
+   }
+  },
+  {
+   "case": "retry_three_sources",
+   "role": "research",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 11,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 11,
+   "promptTokens": 94824,
+   "completionTokens": 11364,
+   "reasoningTokens": 5655,
+   "finalCompletionTokens": 4769,
+   "usageComplete": true,
+   "wallMs": 149023,
+   "words": 1823,
+   "chars": 10075,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      3.95,
+      5.05,
+      3.54
+     ],
+     "otherTestProcesses": 3
+    },
+    "after": {
+     "loadavg": [
+      8.87,
+      6.43,
+      4.26
+     ],
+     "otherTestProcesses": 2
+    }
+   }
+  },
+  {
+   "case": "adr_history",
+   "role": "research",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 9,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 9,
+   "promptTokens": 68465,
+   "completionTokens": 4789,
+   "reasoningTokens": 0,
+   "finalCompletionTokens": 3677,
+   "usageComplete": true,
+   "wallMs": 44057,
+   "words": 1369,
+   "chars": 7949,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      8.87,
+      6.43,
+      4.26
+     ],
+     "otherTestProcesses": 2
+    },
+    "after": {
+     "loadavg": [
+      7.79,
+      6.47,
+      4.38
+     ],
+     "otherTestProcesses": 2
+    }
+   }
+  },
+  {
+   "case": "adr_history",
+   "role": "research",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 1,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_OUTPUT_TRUNCATED",
+   "stepsUsed": 11,
+   "finalFinishReason": "length",
+   "lengthHit": true,
+   "providerCalls": 11,
+   "promptTokens": 91971,
+   "completionTokens": 8001,
+   "reasoningTokens": 4123,
+   "finalCompletionTokens": 4096,
+   "usageComplete": true,
+   "wallMs": 116507,
+   "words": 991,
+   "chars": 6372,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 92.3,
+    "covered": 12,
+    "total": 13,
+    "missing": [
+     12
+    ],
+    "tailPresent": false
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "length"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.79,
+      6.47,
+      4.38
+     ],
+     "otherTestProcesses": 0
+    },
+    "after": {
+     "loadavg": [
+      5.77,
+      6.16,
+      4.52
+     ],
+     "otherTestProcesses": 8
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "changelog_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 8,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 8,
+   "promptTokens": 35495,
+   "completionTokens": 4293,
+   "reasoningTokens": 1780,
+   "finalCompletionTokens": 2541,
+   "usageComplete": true,
+   "wallMs": 151878,
+   "words": 711,
+   "chars": 4011,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.77,
+      6.16,
+      4.52
+     ],
+     "otherTestProcesses": 8
+    },
+    "after": {
+     "loadavg": [
+      4.28,
+      5.42,
+      4.5
+     ],
+     "otherTestProcesses": 5
+    }
+   }
+  },
+  {
+   "case": "changelog_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 31269,
+   "completionTokens": 6231,
+   "reasoningTokens": 3180,
+   "finalCompletionTokens": 2528,
+   "usageComplete": true,
+   "wallMs": 50133,
+   "words": 921,
+   "chars": 5112,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      4.28,
+      5.42,
+      4.5
+     ],
+     "otherTestProcesses": 5
+    },
+    "after": {
+     "loadavg": [
+      4.69,
+      5.34,
+      4.52
+     ],
+     "otherTestProcesses": 4
+    }
+   }
+  },
+  {
+   "case": "alerts_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 12,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 12,
+   "promptTokens": 70182,
+   "completionTokens": 6753,
+   "reasoningTokens": 2568,
+   "finalCompletionTokens": 3884,
+   "usageComplete": true,
+   "wallMs": 68925,
+   "words": 1110,
+   "chars": 7312,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      4.69,
+      5.34,
+      4.52
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      5.07,
+      5.31,
+      4.57
+     ],
+     "otherTestProcesses": 8
+    }
+   }
+  },
+  {
+   "case": "alerts_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 12,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 12,
+   "promptTokens": 76185,
+   "completionTokens": 6530,
+   "reasoningTokens": 1981,
+   "finalCompletionTokens": 3234,
+   "usageComplete": true,
+   "wallMs": 67937,
+   "words": 1168,
+   "chars": 7358,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.07,
+      5.31,
+      4.57
+     ],
+     "otherTestProcesses": 8
+    },
+    "after": {
+     "loadavg": [
+      5.65,
+      5.44,
+      4.66
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "flags_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 1,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 6,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 6,
+   "promptTokens": 25059,
+   "completionTokens": 4436,
+   "reasoningTokens": 1230,
+   "finalCompletionTokens": 3585,
+   "usageComplete": true,
+   "wallMs": 88051,
+   "words": 896,
+   "chars": 6448,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 12,
+    "total": 12,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.65,
+      5.44,
+      4.66
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      4.44,
+      5.06,
+      4.6
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "flags_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 1,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 10,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 10,
+   "promptTokens": 63996,
+   "completionTokens": 5159,
+   "reasoningTokens": 1650,
+   "finalCompletionTokens": 2662,
+   "usageComplete": true,
+   "wallMs": 123430,
+   "words": 793,
+   "chars": 5601,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 12,
+    "total": 12,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      4.44,
+      5.06,
+      4.6
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      3.94,
+      4.73,
+      4.54
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "limits_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 0,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_OUTPUT_TRUNCATED",
+   "stepsUsed": 9,
+   "finalFinishReason": "length",
+   "lengthHit": true,
+   "providerCalls": 9,
+   "promptTokens": 43205,
+   "completionTokens": 6869,
+   "reasoningTokens": 3608,
+   "finalCompletionTokens": 4096,
+   "usageComplete": true,
+   "wallMs": 116933,
+   "words": 952,
+   "chars": 6014,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 15,
+    "total": 15,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "length"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      3.94,
+      4.73,
+      4.54
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      2.99,
+      4.14,
+      4.34
+     ],
+     "otherTestProcesses": 6
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "limits_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 12,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 12,
+   "promptTokens": 68531,
+   "completionTokens": 7287,
+   "reasoningTokens": 3171,
+   "finalCompletionTokens": 4800,
+   "usageComplete": true,
+   "wallMs": 185618,
+   "words": 1215,
+   "chars": 7560,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 15,
+    "total": 15,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      2.99,
+      4.14,
+      4.34
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      0.28,
+      2.41,
+      3.64
+     ],
+     "otherTestProcesses": 0
+    }
+   }
+  },
+  {
+   "case": "error_codes_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 10,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 10,
+   "promptTokens": 53559,
+   "completionTokens": 5441,
+   "reasoningTokens": 2090,
+   "finalCompletionTokens": 3122,
+   "usageComplete": true,
+   "wallMs": 148287,
+   "words": 1006,
+   "chars": 5802,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      0.42,
+      2.4,
+      3.63
+     ],
+     "otherTestProcesses": 0
+    },
+    "after": {
+     "loadavg": [
+      2.78,
+      2.37,
+      3.42
+     ],
+     "otherTestProcesses": 4
+    }
+   }
+  },
+  {
+   "case": "error_codes_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 1,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_STREAM_INTERRUPTED",
+   "stepsUsed": 7,
+   "finalFinishReason": "stream_incomplete",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 26245,
+   "completionTokens": 750,
+   "reasoningTokens": 251,
+   "finalCompletionTokens": null,
+   "usageComplete": false,
+   "wallMs": 149511,
+   "words": 18,
+   "chars": 124,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 0.0,
+    "covered": 0,
+    "total": 13,
+    "missing": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12
+    ],
+    "tailPresent": false
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stream_incomplete"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      2.78,
+      2.37,
+      3.42
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      3.74,
+      2.96,
+      3.48
+     ],
+     "otherTestProcesses": 6
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "routes_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 6,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 6,
+   "promptTokens": 24076,
+   "completionTokens": 3760,
+   "reasoningTokens": 0,
+   "finalCompletionTokens": 3050,
+   "usageComplete": true,
+   "wallMs": 32748,
+   "words": 877,
+   "chars": 6186,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      3.74,
+      2.96,
+      3.48
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      3.8,
+      3.07,
+      3.5
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "routes_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 32069,
+   "completionTokens": 3668,
+   "reasoningTokens": 849,
+   "finalCompletionTokens": 2890,
+   "usageComplete": true,
+   "wallMs": 66989,
+   "words": 817,
+   "chars": 5530,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      3.8,
+      3.07,
+      3.5
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      4.03,
+      3.29,
+      3.55
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "retry_three_sources",
+   "role": "research",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 9,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 9,
+   "promptTokens": 71778,
+   "completionTokens": 8301,
+   "reasoningTokens": 3220,
+   "finalCompletionTokens": 7202,
+   "usageComplete": true,
+   "wallMs": 159268,
+   "words": 1674,
+   "chars": 9468,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      4.19,
+      3.33,
+      3.56
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      3.14,
+      3.28,
+      3.51
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "retry_three_sources",
+   "role": "research",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 1,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_OUTPUT_TRUNCATED",
+   "stepsUsed": 12,
+   "finalFinishReason": "length",
+   "lengthHit": true,
+   "providerCalls": 12,
+   "promptTokens": 90888,
+   "completionTokens": 5651,
+   "reasoningTokens": 1980,
+   "finalCompletionTokens": 4096,
+   "usageComplete": true,
+   "wallMs": 97275,
+   "words": 1065,
+   "chars": 5899,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "length"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      3.14,
+      3.28,
+      3.51
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      2.34,
+      2.99,
+      3.38
+     ],
+     "otherTestProcesses": 2
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "adr_history",
+   "role": "research",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 0,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_OUTPUT_TRUNCATED",
+   "stepsUsed": 8,
+   "finalFinishReason": "length",
+   "lengthHit": true,
+   "providerCalls": 8,
+   "promptTokens": 62033,
+   "completionTokens": 5181,
+   "reasoningTokens": 2859,
+   "finalCompletionTokens": 4096,
+   "usageComplete": true,
+   "wallMs": 109932,
+   "words": 580,
+   "chars": 3378,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 92.3,
+    "covered": 12,
+    "total": 13,
+    "missing": [
+     12
+    ],
+    "tailPresent": false
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "length"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      2.34,
+      2.99,
+      3.38
+     ],
+     "otherTestProcesses": 2
+    },
+    "after": {
+     "loadavg": [
+      0.63,
+      2.2,
+      3.05
+     ],
+     "otherTestProcesses": 2
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "adr_history",
+   "role": "research",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 14,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 14,
+   "promptTokens": 107099,
+   "completionTokens": 6862,
+   "reasoningTokens": 2745,
+   "finalCompletionTokens": 4736,
+   "usageComplete": true,
+   "wallMs": 137324,
+   "words": 1147,
+   "chars": 6740,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 13,
+    "total": 13,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      0.63,
+      2.2,
+      3.05
+     ],
+     "otherTestProcesses": 2
+    },
+    "after": {
+     "loadavg": [
+      4.62,
+      2.86,
+      3.15
+     ],
+     "otherTestProcesses": 4
+    }
+   }
+  },
+  {
+   "case": "changelog_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 30431,
+   "completionTokens": 4495,
+   "reasoningTokens": 1849,
+   "finalCompletionTokens": 2445,
+   "usageComplete": true,
+   "wallMs": 46856,
+   "words": 772,
+   "chars": 4355,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      4.62,
+      2.86,
+      3.15
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      5.76,
+      3.41,
+      3.32
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "changelog_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 1,
+   "status": "unverified",
+   "executionStatus": "partial",
+   "executionReason": "PROVIDER_OUTPUT_TRUNCATED",
+   "stepsUsed": 8,
+   "finalFinishReason": "length",
+   "lengthHit": true,
+   "providerCalls": 8,
+   "promptTokens": 42668,
+   "completionTokens": 5331,
+   "reasoningTokens": 2758,
+   "finalCompletionTokens": 4096,
+   "usageComplete": true,
+   "wallMs": 57521,
+   "words": 673,
+   "chars": 4115,
+   "verification": "unverified",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 90.9,
+    "covered": 10,
+    "total": 11,
+    "missing": [
+     10
+    ],
+    "tailPresent": false
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "length"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      5.76,
+      3.41,
+      3.32
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      6.58,
+      4.09,
+      3.57
+     ],
+     "otherTestProcesses": 4
+    }
+   },
+   "error": "UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it"
+  },
+  {
+   "case": "alerts_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 35148,
+   "completionTokens": 4932,
+   "reasoningTokens": 1884,
+   "finalCompletionTokens": 3726,
+   "usageComplete": true,
+   "wallMs": 56981,
+   "words": 895,
+   "chars": 5718,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      6.58,
+      4.09,
+      3.57
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      7.69,
+      4.84,
+      3.85
+     ],
+     "otherTestProcesses": 4
+    }
+   }
+  },
+  {
+   "case": "alerts_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 8,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 8,
+   "promptTokens": 43919,
+   "completionTokens": 6127,
+   "reasoningTokens": 2224,
+   "finalCompletionTokens": 4827,
+   "usageComplete": true,
+   "wallMs": 70571,
+   "words": 1155,
+   "chars": 7081,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 11,
+    "total": 11,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.69,
+      4.84,
+      3.85
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      7.63,
+      5.43,
+      4.14
+     ],
+     "otherTestProcesses": 6
+    }
+   }
+  },
+  {
+   "case": "flags_table",
+   "role": "explore",
+   "cap": 16000,
+   "repeat": 2,
+   "order": 0,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 9,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 9,
+   "promptTokens": 43676,
+   "completionTokens": 5156,
+   "reasoningTokens": 2237,
+   "finalCompletionTokens": 3003,
+   "usageComplete": true,
+   "wallMs": 89378,
+   "words": 762,
+   "chars": 5505,
+   "verification": "evidenced",
+   "childMaxTokens": 16000,
+   "coverage": {
+    "score": 100.0,
+    "covered": 12,
+    "total": 12,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     16000
+    ],
+    "attemptMaxTokens": [
+     16000
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.63,
+      5.43,
+      4.14
+     ],
+     "otherTestProcesses": 6
+    },
+    "after": {
+     "loadavg": [
+      7.18,
+      5.96,
+      4.46
+     ],
+     "otherTestProcesses": 4
+    }
+   }
+  },
+  {
+   "case": "flags_table",
+   "role": "explore",
+   "cap": 4096,
+   "repeat": 2,
+   "order": 1,
+   "status": "completed",
+   "executionStatus": "completed",
+   "executionReason": null,
+   "stepsUsed": 7,
+   "finalFinishReason": "stop",
+   "lengthHit": false,
+   "providerCalls": 7,
+   "promptTokens": 30164,
+   "completionTokens": 3203,
+   "reasoningTokens": 604,
+   "finalCompletionTokens": 2444,
+   "usageComplete": true,
+   "wallMs": 85339,
+   "words": 674,
+   "chars": 5059,
+   "verification": "evidenced",
+   "childMaxTokens": 4096,
+   "coverage": {
+    "score": 100.0,
+    "covered": 12,
+    "total": 12,
+    "missing": [],
+    "tailPresent": true
+   },
+   "mechanism": {
+    "requestedMaxTokens": [
+     4096
+    ],
+    "attemptMaxTokens": [
+     4096
+    ],
+    "ok": true
+   },
+   "finishReasons": [
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "tool_calls",
+    "stop"
+   ],
+   "load": {
+    "before": {
+     "loadavg": [
+      7.18,
+      5.96,
+      4.46
+     ],
+     "otherTestProcesses": 4
+    },
+    "after": {
+     "loadavg": [
+      6.05,
+      5.97,
+      4.6
+     ],
+     "otherTestProcesses": 2
+    }
+   }
+  }
+ ],
+ "notes": [
+  "Native helper lookups only (graph.answer_knowledge, synthetic run/node E1), 8 long lookup cases x 2 caps x 2 repeats, sequential, OpenCode space-bunny-free via the shared disposable router http://127.0.0.1:36219 (router source byte-identical to this worktree; 16000 arm uses the router's large 180s deadline, 4096 arm the 90s small deadline - see loadSummary/notes).",
+  "Mechanism audit: all 32 runs had every provider call and the child config at exactly the requested cap (mechanism.ok).",
+  "Decision per pre-registered rule: (A) 5/16 runs at 4096 ended finish_reason=length (0/16 at 16000) => A true; (B) mean paired coverage drop 7.78 points < 10 => B false; (C) median wall ratio 16000/4096 = 0.904 <= 1.25 => C true; (A or B) and C => raise_to_16000.",
+  "Honest caveats: loadavg1m up to ~7.8 on 4 CPUs because other build tracks ran tests/probes concurrently; the single 0-coverage 4096 run (error_codes_table r2) was killed by the router's 90s small-token deadline (stream_incomplete at 90043 ms), not by the output cap; 16000 never approached its 180s deadline (max call 114s)."
+ ]
+}

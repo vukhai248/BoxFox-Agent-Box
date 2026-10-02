@@ -5,6 +5,10 @@ DEFAULT_OUTPUT_TOKENS = 4096
 RESEARCH_OUTPUT_TOKENS = 16000  # 8k/12k hit the cap in the Space Bunny long-report fixtures.
 DOCUMENT_OUTPUT_TOKENS = 16000
 REVIEW_OUTPUT_TOKENS = 16000  # W6: user requested measured 8k/16k reviewer comparison.
+# W6.5.3: nested lookup helper (work purpose `knowledge`). Measured 02/10/2026 on Space Bunny:
+# 5/16 runs at 4096 ended `length` (0/16 at 16000) and median wall time was not worse at 16000
+# (docs/plan/W6.5.3-helper-budget-evidence.json). Keep the knob for re-measurement only.
+WORK_HELPER_OUTPUT_TOKENS = 16000
 WORK_CHECK_OUTPUT_TOKENS = REVIEW_OUTPUT_TOKENS
 MAX_OUTPUT_TOKENS = 64000  # Existing router request limit, not a model capability.
 RECOVERY_INPUT_MAX_CHARS = 64000
@@ -34,9 +38,8 @@ def child_budget(role, work=None, task_kind=None):
     if role in {'review', 'plan-review', 'research-review'}:
         return configured_budget('BOXFOX_REVIEW_OUTPUT_TOKENS', REVIEW_OUTPUT_TOKENS, {8192, 16000})
     if work.get('purpose') == 'knowledge':
-        # W6.5.3: measurement-only override for nested lookup helpers. Unset keeps the
-        # historical profile (None -> request default DEFAULT_OUTPUT_TOKENS = 4096).
-        return configured_budget('BOXFOX_WORK_HELPER_OUTPUT_TOKENS', None, {DEFAULT_OUTPUT_TOKENS, 16000})
+        return configured_budget('BOXFOX_WORK_HELPER_OUTPUT_TOKENS', WORK_HELPER_OUTPUT_TOKENS,
+                                 {DEFAULT_OUTPUT_TOKENS, WORK_HELPER_OUTPUT_TOKENS})
     if work and (work.get('purpose') != 'produce' or work.get('stage') != 'produce'):
         return None
     if role in {'plan', 'design'}:
