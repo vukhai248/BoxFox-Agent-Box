@@ -888,3 +888,37 @@ def test_a_cell_without_a_run_can_never_match_a_negative_state():
     incomplete = bench.build_bundle(events=[], run={'status': 'verified'}, expected_state='!verified',
                                     missing=['run: boom'])
     assert bench.score_bundle(scenario, rubric, incomplete)['stateMatched'] is False
+
+
+def test_rescore_rebuilds_scores_from_saved_bundles(tmp_path):
+    """Oracle đổi thì chấm lại từ bundle: lượt `no_run` không còn được tính là đạt trạng thái."""
+    docs, paths = _shard_docs(tmp_path, shards=1, bad={('S11', 1)})
+    doc = docs[0]
+    runs = tmp_path / 'shard1' / 'runs'
+    for cell in doc['cells']:
+        directory = runs / f"{cell['caseId']}-r{cell['repeat']}"
+        directory.mkdir(parents=True, exist_ok=True)
+        events = []
+        if cell['caseId'] == 'S02':
+            events = [{'kind': 'tool_end', 'sessionId': 'root',
+                       'data': {'id': 'call_1', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest -q'},
+                                'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}}]
+        run = {} if cell['caseId'] == 'S11' else {'status': _observed_state(cell['expectedState'])}
+        bundle = bench.build_bundle(events=events, run=run, checks=[], calls=[])
+        bench._write_json(directory / 'bundle.json', {'bundle': bundle, 'validity': 'quality-valid', 'error': None})
+    merged = bench.merge_results(docs, paths=paths, rescore=True)
+    by_key = {(cell['caseId'], cell['repeat']): cell for cell in merged['cells']}
+    assert merged['plan']['rescored']['cells'] == 24
+    assert all(cell['rescored'] is True for cell in merged['cells'])
+    assert by_key[('S11', 1)]['observedState'] == 'no_run'
+    assert by_key[('S11', 1)]['passed'] is False, 'no_run không được đạt'
+    # 22 = 24 − S05 r1/r2 (kỳ vọng theo `turn`, bundle giả không có turn) − S11 r1 (`no_run`,
+    # trước bản vá này `no_run` khớp `!verified` nên bị tính là đạt → 23).
+    assert merged['gate']['statePassed'] == 22
+    assert merged['gate']['ok'] is False
+
+
+def test_rescore_requires_the_saved_bundles(tmp_path):
+    docs, paths = _shard_docs(tmp_path, shards=1)
+    with pytest.raises(ValueError, match='thiếu bundle.json'):
+        bench.merge_results(docs, paths=paths, rescore=True)

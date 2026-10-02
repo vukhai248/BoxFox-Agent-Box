@@ -1802,6 +1802,9 @@ def parse_args(argv=None):
     parser.add_argument('--cases', default=None, help='danh sách id, ví dụ S01,S02 (mặc định S01–S12)')
     parser.add_argument('--shard', default=None,
                         help='chỉ chạy một phần của kế hoạch: I/N (1-based), ví dụ 2/4 cho tiến trình song song')
+    parser.add_argument('--rescore', action='store_true',
+                        help='đi cùng --merge: chấm lại từng lượt từ runs/<ca>-r<n>/bundle.json đã lưu '
+                             '(oracle đổi thì không phải chạy lại model)')
     parser.add_argument('--merge', default=None,
                         help='gộp results.json của các shard: danh sách thư mục/tệp, ví dụ s1,s2,s3 '
                              '(cần --out; không chạy model)')
@@ -1927,7 +1930,33 @@ def _plan_identity(plan):
             'configHash': (plan.get('configHash') or {}).get('combined')}
 
 
-def merge_results(docs, *, paths=None):
+def rescore_cells(cells, labels, *, rubric=None, scenarios_dir=None):
+    """Chấm LẠI từng lượt từ `runs/<ca>-r<n>/bundle.json` đã lưu — không gọi model.
+
+    Oracle đổi (ví dụ sau review vòng 2) thì 24 lượt đã chạy vẫn dùng được: bundle là bằng chứng
+    thô, chỉ phần chấm điểm được tính lại. Trả số lượt đã chấm lại.
+    """
+    rubric = rubric or load_rubric()
+    scenarios, rescored = {}, 0
+    for label, cell in zip(labels, cells):
+        case_id, repeat = str(cell.get('caseId')), int(cell.get('repeat') or 0)
+        path = Path(label).parent / 'runs' / f'{case_id}-r{repeat}' / 'bundle.json'
+        if not path.exists():
+            raise ValueError(f'{path}: thiếu bundle.json để chấm lại (chỉ chấm lại được khi shard giữ `runs/`)')
+        bundle = json.loads(path.read_text(encoding='utf-8')).get('bundle') or {}
+        if case_id not in scenarios:
+            scenarios[case_id] = load_scenario(scenario_path(case_id, scenarios_dir))
+        scored = score_bundle(scenarios[case_id], rubric, bundle)
+        cell.update(observedState=scored['observedState'], expectedState=scenarios[case_id]['expectedState'],
+                    passed=scored['passed'], score=scored['score'],
+                    failedRules={role: list((scored['roles'].get(role) or {}).get('failed') or [])
+                                 for role in RUBRIC_ROLES},
+                    missing=scored['missing'], rescored=True)
+        rescored += 1
+    return rescored
+
+
+def merge_results(docs, *, paths=None, rescore=False, scenarios_dir=None):
     """Gộp results.json của các shard: từ chối trùng/thiếu/khác cấu hình, cộng token, tính lại cổng."""
     if not docs:
         raise ValueError('cần ít nhất một results.json để gộp')
@@ -1943,7 +1972,7 @@ def merge_results(docs, *, paths=None):
         other = _plan_identity(doc.get('plan') or {})
         if other != identity:
             raise ValueError(f'{label}: khác cấu hình với shard đầu ({other} != {identity}) — không gộp được')
-    cells, seen = [], {}
+    cells, seen, cell_labels = [], {}, []
     for label, doc in zip(labels, docs):
         for cell in doc.get('cells') or []:
             if 'failedRules' not in cell:
@@ -1954,6 +1983,7 @@ def merge_results(docs, *, paths=None):
                 raise ValueError(f'trùng lượt {key[0]} r{key[1]} ({seen[key]} và {label})')
             seen[key] = label
             cells.append(cell)
+            cell_labels.append(label)
     plan = dict(first.get('plan') or {})
     plan_cells = {}
     for doc in docs:
@@ -1979,6 +2009,16 @@ def merge_results(docs, *, paths=None):
     plan['cellCount'] = len(plan['cells'])
     plan.pop('shard', None)
     plan['shards'] = labels
+    rescored = 0
+    if rescore:
+        # Thứ tự `cells` vừa được sắp lại: gắn nhãn shard theo đúng thứ tự đó trước khi chấm lại.
+        by_key = {(str(cell.get('caseId')), int(cell.get('repeat') or 0)): label
+                  for cell, label in zip(cells, cell_labels)}
+        cell_labels = [by_key[key] for key in order]
+        rescored = rescore_cells(cells, cell_labels, scenarios_dir=scenarios_dir)
+        plan['rescored'] = {'cells': rescored, 'at': time.time(),
+                            'commit': manifest_mod.repo_state(REPO_DIR).get('commit'),
+                            'source': 'chấm lại từ bundle.json đã lưu; model không chạy lại'}
     roles = {}
     for role in RUBRIC_ROLES:
         rules = passed = 0
@@ -2044,7 +2084,8 @@ def merge_main(args):
         for path in paths:
             if out_root == path.parent or out_root in path.parents:
                 raise ValueError(f'--out {out_root} nằm trong chính shard {path.parent} — chọn thư mục khác')
-        merged = merge_results(docs, paths=paths)
+        merged = merge_results(docs, paths=paths, rescore=bool(args.rescore),
+                               scenarios_dir=args.fixtures)
     except ValueError as exc:
         print(f'lỗi cách dùng: {exc}', file=sys.stderr)
         return EXIT_USAGE
