@@ -72,3 +72,37 @@ def parse_tool_arguments(raw_arguments: Any) -> tuple[dict, Optional[str]]:
     if error is None:
         return arguments, None
     return arguments, describe_tool_arguments(raw_arguments)
+
+
+# W7.2 — lỗi theo TRƯỜNG của một action (mẫu pi `validation.ts`: kèm đường dẫn trường và giá
+# trị đã nhận). Phong bì tool cũ `{is_error, error, errorCode}` giữ nguyên; các khoá dưới đây là
+# khoá CỘNG THÊM mà vòng tool của runtime gộp vào kết quả khi exception mang `details`.
+RECEIVED_MAX_CHARS = 500
+
+
+def received_args(args: Any) -> str:
+    """Args the model actually sent, JSON-encoded and cut to a bounded preview."""
+    try:
+        text = json.dumps(args, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        text = repr(args)
+    return text if len(text) <= RECEIVED_MAX_CHARS else text[:RECEIVED_MAX_CHARS] + '…[truncated]'
+
+
+def field_details(field: str, action: Optional[str], args: Any, hint: Optional[str] = None) -> dict:
+    details = {'field': field, 'received': received_args(args)}
+    if action is not None:
+        details['action'] = action
+    if hint:
+        details['hint'] = hint
+    return details
+
+
+class ToolFieldError(ValueError):
+    """`CODE: message` like every other tool error, plus machine-readable `details`."""
+
+    def __init__(self, code: str, message: str, *, field: str, args: Any, action: Optional[str] = None,
+                 hint: Optional[str] = None, status: int = 400):
+        super().__init__(code + ': ' + message)
+        self.code, self.status = code, status
+        self.details = field_details(field, action, args, hint)

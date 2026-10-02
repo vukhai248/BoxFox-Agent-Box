@@ -115,6 +115,19 @@ def reflection_hint(name, code=None):
                          'the pending change with that state, then retry once with its current revision '
                          'only if the change still applies. Never guess a revision or blindly replay '
                          'a stale mutation.')
+    if code in ('WORK_REPORT_FIELD_REQUIRED', 'WORK_REPORT_FIELD_FORBIDDEN', 'WORK_ARTIFACT_RUN_REQUIRED'):
+        return prefix + ('This is an argument-shape error, not a permission denial. `field` names the '
+                         'argument, `hint` says where its value comes from and `received` shows what you sent. '
+                         'Fix only that field and call again once; do not guess ids.')
+    if code == 'WORK_ARTIFACT_UNKNOWN':
+        return prefix + ('Not an access-control denial: the artifactId is not in that runId. Re-read the '
+                         'refs from work_graph(action="status") and retry with the matching pair once.')
+    if code == 'TOOL_INTERRUPTED_UNSAFE':
+        return prefix + ('The call may have partially run before an interruption. Inspect the current state '
+                         '(files, run status) before deciding to retry; never assume success.')
+    if code == 'WORK_CAPABILITY_REVOKED':
+        return prefix + ('The owner removed this capability during the turn. Do not retry it; continue with '
+                         'the remaining tools or report the capability gap.')
     schema = next((item['function'] for item in SCHEMAS if item['function']['name'] == name), None)
     base = (prefix + 'Read `error`: it names the '
             'field and the rule. Fix only that input and call again once; never resend identical arguments.')
@@ -715,7 +728,9 @@ SCHEMAS = [
            'cancel requestId/revision resolves a conflicting or unwanted question without confirming an answer. '
          'For user questions call interview(workRequestId, revision), then work_run/work_check after answers. Continue the same child. '
          'Child action=read requestId reads its own saved checkpoint metadata and answers. Use stable decisionKeys matching main rights '
-           'for automatic root-owned publication and same-child continuation; missing/conflicting rights return to main. Finish completed work with a final answer.',
+           'for automatic root-owned publication and same-child continuation; missing/conflicting rights return to main. Finish completed work with a final answer. '
+         'Fields per action: needs_user checkpoint+questions(+decisionKeys); needs_evidence/checkpoint checkpoint, no questions; '
+         'status runId; resume requestId+revision(+context, evidenceRefs); cancel requestId+revision; read requestId.',
            {'action': {'type': 'string', 'enum': ['needs_user','needs_evidence','checkpoint','status','resume','read','cancel']},
           'checkpoint': STRING, 'reason': STRING, 'questions': {'type':'array','maxItems':3,'items':INTERVIEW_QUESTION},
           'decisionKeys': {'type':'array','minItems':1,'maxItems':3,'items':STRING},
@@ -750,6 +765,26 @@ SCHEMAS = [
          {'summary': STRING, 'labels': {'type': 'array', 'items': STRING},
           'nextSteps': {'type': 'array', 'items': STRING}, 'designId': STRING}, ['summary']),
 ]
+
+
+# W7.2 — replay label per tool (pi durable ToolTask): after a crash, a call without a committed
+# result is re-run only when it cannot have side effects. Unknown tools default to unsafe.
+REPLAY_SAFE = frozenset({
+    'file_read', 'codebase_glob', 'codebase_grep', 'skills_list', 'skill_view', 'web_search', 'web_fetch',
+    'read_source', 'source_list', 'source_verify', 'research_status', 'work_artifact_read', 'peer_read',
+    'verify_exec'})
+REPLAY_SAFE_ACTIONS = {'work_report': frozenset({'read', 'status'})}
+REPLAY = {name: 'safe' for name in REPLAY_SAFE} | {name: 'unsafe' for name in (
+    'file_write', 'file_edit_block', 'terminal_exec', 'work_ship', 'work_run', 'work_check', 'delegate_task',
+    'request_approval', 'interview', 'work_report')}
+
+
+def replay_class(name, args=None):
+    """'safe' | 'unsafe' for one concrete call; default unsafe."""
+    actions = REPLAY_SAFE_ACTIONS.get(name)
+    if actions is not None:
+        return 'safe' if isinstance(args, dict) and args.get('action') in actions else 'unsafe'
+    return REPLAY.get(name, 'unsafe')
 
 
 def schemas_for(names):

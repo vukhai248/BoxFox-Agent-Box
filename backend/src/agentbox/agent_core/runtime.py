@@ -74,6 +74,7 @@ from ..skills.lifecycle import SkillLoader
 from ..skills.runtime_commands import RuntimeCommands
 from ..observability.system_log import system_log
 from .tool_arg_errors import parse_tool_arguments
+from . import tool_recovery
 # P1 — vỏ chế độ Research: hằng và cổng của mode (plan v2 §5.2).
 from .limits import (RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAULT_MODE,
                      RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
@@ -1668,6 +1669,7 @@ class HarnessRuntime(RuntimeCommands):
         self.tasks = {}
         # decisionId -> pending record; settled records are kept so a second answer is a real 409.
         self.pending = {}
+        self.pending_replays = {}  # W7.2: sid -> read-only calls to re-run once at turn start
         # sessionId -> the asyncio.timeout budget of the live turn (paused while a decision blocks).
         self.run_budget = {}
         # Vòng 25 (D-35) — số lần đã nới hạn chót của lượt (`extend_turn_budget`) và mốc bắt đầu
@@ -2067,17 +2069,14 @@ class HarnessRuntime(RuntimeCommands):
         # lượt nằm ở `validate_inline_images` (một nguồn, xem `agent_core/attachments.py`).
         checked_images = validate_inline_images([image, *(images or [])])
         checked_attachments = validate_attachments(attachments)
-        # Reconcile interrupted tool groups without replaying side effects.
+        # Reconcile interrupted tool groups without replaying side effects (W7.2, `tool_recovery`):
+        # reuse a committed tool_end, re-run read-only calls once, receipt unsafe ones as interrupted.
         messages = session['messages']
-        pending = {}
-        for m in messages:
-            if m['role'] == 'assistant':
-                pending.update({c['id']: c['function']['name'] for c in m.get('tool_calls', [])})
-            if m['role'] == 'tool':
-                pending.pop(m.get('tool_call_id'), None)
-        for cid, name in pending.items():
-            messages.append({'role': 'tool', 'tool_call_id': cid, 'name': name,
-                             'content': 'Interrupted before result was committed. Inspect current state; do not assume success or replay blindly.'})
+        replays = tool_recovery.reconcile(self, sid, messages)
+        if replays:
+            self.pending_replays[sid] = replays
+        else:
+            self.pending_replays.pop(sid, None)
         # Khối tệp đính kèm do HARNESS dựng (`attachment_prompt_block`) — nguồn duy nhất cho
         # cả đường lượt thường lẫn đường command/skill; client không tự nhồi đường dẫn.
         block = attachment_prompt_block(checked_attachments)
@@ -3926,6 +3925,11 @@ class HarnessRuntime(RuntimeCommands):
             self._sync_mode_block(session, self.turn_invocations.get(sid))
             messages[0] = session['messages'][0]
         allowed_tools = set(profile['tools'])
+        replays = self.pending_replays.pop(sid, None)
+        if replays:
+            await tool_recovery.replay_safe(self, session, messages, replays, allowed_tools)
+        # W7.2/W1.P: owner switches at turn start; a tool removed since then is revoked at dispatch.
+        start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
         tools = schemas_for(profile['tools'])
@@ -4631,7 +4635,7 @@ class HarnessRuntime(RuntimeCommands):
                         fn = call['function']
                         args, error = parse_tool_arguments(fn.get('arguments'))
                         name = fn.get('name', '')
-                        self.store.emit(sid, 'tool_start', {'id': call['id'], 'name': name, 'args': args})
+                        self.store.emit(sid, 'tool_start', tool_recovery.start_payload(call['id'], name, args))
                         tools_run += 1
                         tool_started = time.time()
                         try:
@@ -4639,6 +4643,9 @@ class HarnessRuntime(RuntimeCommands):
                                 raise ValueError(error)
                             if name not in allowed_tools:
                                 raise PermissionError('Tool not permitted for this role: ' + name)
+                            if name in start_owner_tools and name not in tool_recovery.owner_tools(self.store, session):
+                                raise PermissionError('WORK_CAPABILITY_REVOKED: the owner removed ' + name +
+                                                      ' during this turn; it was not run')
                             result = await self.dispatch(session, name, args, call['id'])
                         except Exception as exc:
                             code, message = classify_failure(exc)
@@ -4651,6 +4658,10 @@ class HarnessRuntime(RuntimeCommands):
                                              message=log_message,
                                              durationMs=(time.time() - tool_started) * 1000, detail=log_detail)
                             result = {'is_error': True, 'error': message, 'errorCode': code}
+                            if isinstance(exc, PermissionError) and str(exc).startswith('WORK_CAPABILITY_REVOKED'):
+                                result['errorCode'] = 'WORK_CAPABILITY_REVOKED'
+                            if isinstance(getattr(exc, 'details', None), dict):
+                                result.update(exc.details)  # W7.2 field/action/hint/received
                         system_log.write('tool.end', session_id=sid, turn_id=steps_used, turn=turn_no,
                                          step=step + 1, tool=name,
                                          isError=bool(result.get('is_error')),
@@ -4667,9 +4678,11 @@ class HarnessRuntime(RuntimeCommands):
                         tool_content = text_result
                         if result.get('image'):
                             tool_content = [{'type': 'text', 'text': text_result}, {'type': 'image_url', 'image_url': {'url': 'data:' + result.get('mime', 'image/png') + ';base64,' + result['image']}}]
+                        # W7.2: tool_end is the commit point; a crash before the transcript save is
+                        # recovered by reusing this exact result instead of running the tool again.
+                        self.store.emit(sid, 'tool_end', {'id': call['id'], 'name': name, 'args': args, 'result': safe})
                         messages.append({'role': 'tool', 'tool_call_id': call['id'], 'name': name, 'content': tool_content})
                         self.store.save(sid, messages)
-                        self.store.emit(sid, 'tool_end', {'id': call['id'], 'name': name, 'args': args, 'result': safe})
                         # P3.1 — cùng một hàng `tool_end` mà cổng đọc, cộng số BƯỚC của lượt (P1.4
                         # đã bảo worker gắn số bước vào ảnh/bằng chứng; ở đây harness gắn số bước
                         # vào chính lời gọi, nên phép dò và cổng biết việc nào thuộc bước nào).
@@ -5786,9 +5799,14 @@ class HarnessRuntime(RuntimeCommands):
             return work_graph.service(self).feedback.open_interview(session, args, call_id)
         questions = self.normalize_interview(args)
         run_id = str(args.get('runId') or '').strip() or None
-        if run_id is None and work_graph.enabled():
-            active = work_graph.service(self).active(sid)
+        if work_graph.enabled():
+            graph = work_graph.service(self)
+            active = graph.resolve(sid, run_id) if run_id else graph.active(sid)
             run_id = active['runId'] if active else None
+            if active and active['status'] not in work_graph.TERMINAL_STATUSES:
+                # W7.1: with an active run the card is a durable request (survives restart) and
+                # main yields; the answers come back as a new turn instead of a live future.
+                return graph.feedback.open_main_interview(session, args, call_id, run_id)
         decision_id = uuid.uuid4().hex[:16]
         options = [{'id': INTERVIEW_SUBMIT, 'label': 'Gửi câu trả lời', 'kind': 'approve'},
                    {'id': INTERVIEW_DECIDE, 'label': 'Để agent quyết định', 'kind': 'alternative'}]

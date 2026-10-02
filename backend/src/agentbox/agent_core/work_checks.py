@@ -231,19 +231,51 @@ def contract(lang, criteria):
         'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + '\n' + json.dumps(skeleton, ensure_ascii=False)
 
 
+READ_TOOLS = frozenset({'file_read', 'web_fetch', 'read_source', 'codebase_grep'})
+
+
+def capability_preflight(session, need):
+    """W1.P — one capability gate before any child spends a turn: `str` cause or None.
+
+    `need = {role, tools: set (all required), anyTools: set (at least one), readTool: bool,
+    check: bool, code}`. Reads the owner's CURRENT config; never enables a role or tool and never
+    turns a missing capability into a pass.
+    """
+    from .roles import allowed_tools, work_check_tools
+    config = session['config']
+    role = need['role']
+    code = need.get('code') or ('WORK_CHECK_UNAVAILABLE' if need.get('check') else 'WORK_ROLE_UNAVAILABLE')
+    if not any(r['id'] == role and r.get('enabled', True) for r in config.get('subagents') or []):
+        return f'{code}: required role {role} is disabled or missing; enable it explicitly before retrying'
+    owner = config.get('tools') or []
+    tools = set(work_check_tools(role, owner) if need.get('check') else allowed_tools(role, owner))
+    for name in sorted(set(need.get('tools') or ()) - tools):
+        return f'{code}: {role} requires {name}; owner tool setting is respected'
+    wanted = set(need.get('anyTools') or ())
+    if wanted and not tools & wanted:
+        return f'{code}: {role} requires one of {", ".join(sorted(wanted))}; owner tool setting is respected'
+    if need.get('readTool') and not tools & READ_TOOLS:
+        return f'{code}: no tool to open original evidence; enable the required read capability explicitly'
+    return None
+
+
 def preflight(session, spec):
     """Fail before spawning or consuming a retry if required capabilities are off."""
-    from .roles import work_check_tools
-    config = session['config']
-    role = spec['executorRole']
-    if not any(r['id'] == role and r.get('enabled', True) for r in config['subagents']):
-        return f'WORK_CHECK_UNAVAILABLE: required role {role} is disabled or missing; enable it explicitly before retrying'
-    tools = work_check_tools(role, config['tools'])
-    if spec['id'] == 'tests' and 'terminal_exec' not in tools:
+    unavailable = capability_preflight(session, {
+        'role': spec['executorRole'], 'check': True,
+        'tools': {'terminal_exec'} if spec['id'] == 'tests' else set(),
+        'readTool': spec['id'] in ('evidence', 'critique', 'whole')})
+    if unavailable and spec['id'] == 'tests' and 'terminal_exec' in unavailable:
         return 'WORK_CHECK_UNAVAILABLE: tests requires terminal_exec; owner tool setting is respected'
-    if spec['id'] in ('evidence', 'critique', 'whole') and not tools & {'file_read', 'web_fetch', 'read_source', 'codebase_grep'}:
-        return 'WORK_CHECK_UNAVAILABLE: no tool to open original evidence; enable the required read capability explicitly'
-    return None
+    return unavailable
+
+
+def producer_need(role, stage, purpose):
+    """Minimum capability of a spawned child; the role's own permissions decide the rest."""
+    need = {'role': role, 'check': purpose == 'review', 'readTool': purpose == 'knowledge'}
+    if role == 'testing' and stage == 'execute' and purpose == 'produce':
+        need['tools'] = {'terminal_exec'}
+    return need
 
 
 class Checks:
