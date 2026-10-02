@@ -1640,6 +1640,33 @@ class WorkGraph:
                 self.save(run, 'integration_conflict', node['id'])
         return changed
 
+    async def integration_artifact(self, run, snapshot, policy, session):
+        """W8.A4.5: the artifact the converged gate reviews must publish the tree it claims.
+
+        The review child is read-only (no terminal) and the run worktree sits under a git-excluded
+        path, so a reviewer cannot re-run the tests or browse the merged files by itself. The
+        producer therefore publishes the identity of the merged tree, the files this run owns, the
+        diff stat, and the verbatim output of every required test command. Best effort: a blocked or
+        failing command is reported exactly as it came back instead of failing the integration.
+        """
+        sid = session.get('id')
+        lines = ['Integrated run branch ' + str(snapshot['head'])[:12] + ' (tree ' + str(snapshot['treeHash'])[:12] + ')',
+                 '', '### Merged tree identity', '',
+                 f"- run branch: `{snapshot['branch']}`", f"- head: `{snapshot['head']}`",
+                 f"- tree: `{snapshot['treeHash']}`", f"- worktree: `{snapshot['worktree']}`"]
+        owned = await self.worktrees.owned_paths(run, sid)
+        lines.append('- files owned by this run: ' + (', '.join(f'`{path}`' for path in owned) if owned else '(none)'))
+        stat, _ = await self.worktrees.diff_text(run, sid)
+        if stat.strip():
+            lines += ['', '### Diff stat', '', '```', stat.strip()[-3000:], '```']
+        for command in [str(item).strip() for item in (policy.get('tests') or []) if str(item).strip()]:
+            proof = f'cd {snapshot["worktree"]} && {command} 2>&1; echo "EXIT=$?"'
+            ok, out = await self.worktrees.sh(sid, proof, 900)
+            code = out.rsplit('EXIT=', 1)[-1].strip() if 'EXIT=' in out else 'unknown'
+            lines += ['', f'### Verbatim test evidence — `{command}`', '',
+                      f'`{proof}` → exit `{code}` (executor ok={ok})', '', '```', out[-4000:], '```']
+        return '\n'.join(lines)
+
     async def build_integration(self, session, run):
         """W8.A4.4/A4.5: one converged check on the merged run branch before `executed`."""
         integration = run.setdefault('integration', {'nodes': {}, 'checkIds': []})
@@ -1660,8 +1687,7 @@ class WorkGraph:
             'workspace': {'root': snapshot['worktree'], 'branch': snapshot['branch'],
                           'base': run['isolation']['baselineCommit']}}
         meta = await self.artifacts.put(run, INTEGRATION_NODE, 'execute',
-            'Integrated run branch ' + str(snapshot['head'])[:12] + ' (tree ' + str(snapshot['treeHash'])[:12] + ')',
-            binding, True, None)
+            await self.integration_artifact(run, snapshot, policy, session), binding, True, None)
         state.update(status='needs_checks' if policy['required'] else 'accepted', attempts=max(1, state['attempts']),
                      artifact=meta, policy=policy, rounds=state.get('rounds') or [{'attempt': 1, 'producerRole': 'build',
                      'at': now(), 'knowledge': [], 'producerId': None}],

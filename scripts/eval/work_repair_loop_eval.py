@@ -18,6 +18,7 @@ Chạy: `python3 scripts/eval/work_repair_loop_eval.py --router <url> --output .
 import argparse
 import asyncio
 import json
+import shutil
 import subprocess
 import time
 import uuid
@@ -97,7 +98,9 @@ async def main(args):
     route['router'] = args.router
 
     folder = output / 'repair_loop'
-    folder.mkdir(parents=True, exist_ok=True)
+    if folder.exists():  # chạy lại trên cùng thư mục phải sạch như chạy mới
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
     repo = make_repo(folder)
     (repo / 'tests').mkdir(exist_ok=True)
     (repo / 'tests' / 'test_export.py').write_text(TEST_FILE, encoding='utf-8')

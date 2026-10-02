@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -395,6 +396,8 @@ async def main(args):
     rows = []
     for case in (case_isolated, case_touchset):
         folder = output / case.__name__.replace('case_', '')
+        if folder.exists():  # chạy lại trên cùng thư mục phải sạch như chạy mới
+            shutil.rmtree(folder)
         try:
             rows.append(await case(folder, route, frozen))
         except Exception as exc:  # một ca hỏng vẫn phải để lại bằng chứng cho ca kia

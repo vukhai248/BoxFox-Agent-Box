@@ -124,6 +124,32 @@ def test_review_before_tests_is_blocked_and_ship_waits_for_the_gate(tmp_path):
     assert run['status'] == 'executed'
 
 
+def test_integration_artifact_publishes_the_tree_it_claims(tmp_path):
+    """Artifact nút tổng hợp phải công bố cây mã được kiểm và output NGUYÊN VĂN của lệnh test.
+
+    Người phản biện là child chỉ đọc (không có `terminal_exec`) và worktree nhánh run nằm dưới
+    đường dẫn bị git loại trừ, nên một dòng `Integrated run branch ...` là bằng chứng không thể
+    kiểm chứng: cổng hội tụ sẽ đóng lại và run không bao giờ ship được.
+    """
+    store, runtime, _, executor, sid, workspace = build(tmp_path, model=QuietModel())
+    make_repo(workspace)
+    wg.set_autopilot(runtime, sid, True)
+    service = wg.service(runtime)
+
+    async def run_all():
+        run = await run_to_gate(runtime, sid, service)
+        node = service.integration_node(run)
+        _, text = service.artifacts.get(run['runId'], node['stages']['execute']['artifact']['artifactId'])
+        assert f"- head: `{run['integration']['head']}`" in text
+        assert f"- tree: `{run['integration']['treeHash']}`" in text
+        assert 'files owned by this run' in text and 'src/out-' in text
+        assert '### Diff stat' in text
+        assert 'Verbatim test evidence' in text and 'vitest ChatHeader.test.tsx' in text
+        assert 'EXIT=' in text  # kết quả thật, kể cả khi lệnh không có trên máy này
+
+    asyncio.run(run_all())
+
+
 def test_evidence_is_bound_to_the_current_integration_artifact(tmp_path):
     """`latest()` chỉ trả check của artifact HIỆN TẠI: artifact mới ⇒ cổng đóng lại.
 
