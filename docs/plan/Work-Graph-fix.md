@@ -3114,4 +3114,23 @@ Xác nhận đúng như ghi chú W6.5.2: `WORK_CHILDREN_PER_RUN_CALL=72` đượ
 
 ### 39.7 Kết quả lượt S09 pilot3 (chạy lại sau khi vá phép đo)
 
-_(đang chạy — sẽ ghi kết quả, gồm cả lượt lỗi, vào đây)_
+Lệnh: `BOXFOX_EVAL_ALLOW_SPEND=1 BOXFOX_ROUTER_KEY=bf_local_pilot BOXFOX_HARNESS_ADMIN_TOKEN=local-pilot BOXFOX_ROUTER_BASE_URL=http://127.0.0.1:3101 PYTHONPATH=backend/src PYTHONUNBUFFERED=1 timeout 3600 backend/.venv/bin/python scripts/eval/work_acceptance_bench.py --cases S09 --repeats 1 --execute --budget-usd 0.5 --out /var/tmp/w10-pilot3` — model `opencode/space-bunny-free`, kết thúc sau 2 700 320 ms, 92 lượt gọi model, 2 191 257 token vào / 229 549 token ra, 10 child.
+
+**Phép đo nay sạch (M1/M2/M3 xác nhận trên dữ liệu thật):**
+
+| Điểm kiểm | Kết quả |
+| --- | --- |
+| `missing` / lỗi phép đo | `missing: []`, `measurementInvalid: false` — không còn `Cannot operate on a closed database` |
+| Events đọc đủ trang | bundle 48 596 event = DB 48 596, có `seq` cuối 48 596; 4 phiên >4 000 event (trước bị cắt ở 500), không phiên nào đúng 500 |
+| Danh tính người gọi | `callsWithoutSessionId: 0`; **92/92** lượt gọi có `sessionId` (trước: 647/647 null); chia theo phiên: plan-review 47, plan 19, orchestrator 18, explore 8 |
+| Ngân sách | `requested {maxSteps 80, deadlineSeconds 2700}` vs `effective {60, 1200}` kèm `clampNotices [DEADLINE_CLAMPED, STEPS_CLAMPED]` |
+| `phaseNotReached` | `[]` |
+
+**Nhưng kịch bản vẫn KHÔNG đạt (giữ nguyên trong thống kê):**
+
+- `observedState: discovering` ≠ `expectedState: verified`; `score 71.43`; `passed: false`; cổng `ok: false` với lý do `passed 0/1 < 22`, `statePassed 0/1 < 22`, `sameChild=1`.
+- Run dừng ở `discovering`, revision 25: `E1` explore `accepted`; `P1` plan còn `needs_checks`; `B1` build và `T1` testing vẫn `pending`. Root tiêu hết 45 phút hạn driver trong vòng plan → plan-review (5 child plan-review) mà không mở được vòng kiểm cho `P1`.
+- **Không có `decision_requested`** trong cả lượt ⇒ lỗi restart của S09 (`restart_while_waiting`) và đường chữ tự do (`allowFreeText` + `note`) **chưa được chạy thử** ở lượt này. `same_child_continuation` hỏng theo đó: `derived.continuations: 0` nên luật trả `rows=0`, không phải một vi phạm độc lập.
+- Đối chiếu lượt pilot2 (trước khi vá, bị dừng tay): root hỏi chủ nhà ở giây 2 289 và câu hỏi nói `python -m pytest -q` chưa chạy được vì máy chưa cài pytest; driver chọn phương án có `allowFreeText` mà không kèm `note` nên `DECISION_NOTE_REQUIRED` chặn run (đã vá). Lượt 3 hỏng theo cùng kiểu "root quá chậm trước bước hỏi", không phải hồi quy do bản vá.
+
+**Kết luận:** lớp phép đo đã đúng; lỗi còn lại là chất lượng sản phẩm (root xoay plan/plan-review quá lâu, chưa tới bước hỏi/thi công, và môi trường worktree của sản phẩm thiếu pytest theo chính câu hỏi ở lượt 2). **Chưa chạy W10.F**; các lượt lỗi được giữ nguyên trong mẫu số.
