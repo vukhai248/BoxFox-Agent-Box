@@ -404,6 +404,11 @@ def contract(lang, criteria):
         'was observed in THIS review (1-6 refs), criterionId is assigned, counterCheck is present and not confirmed, '
         'and a numeric count/encoding/byte claim cites verify_exec/terminal_exec or an opened source containing that '
         'number; otherwise it becomes a note and the criterion is UNVERIFIED, not revise. '
+        'An evidenceRef must be the toolCallId of a call YOU made in this admission (e.g. "call_ab12..."), a '
+        '"verify:<codeHash>" signature returned by verify_exec, or "artifact:<artifactId>@<contentHash>". A prose '
+        'reference such as "file_read:src/x.py" or "codebase_grep:NFD" matches no receipt and downgrades the finding. '
+        'For any count, encoding, byte, arithmetic, parser or limit claim call verify_exec first (it reads the repo '
+        'read-only, writes scratch files under /tmp/work and can reach the network) and cite its tool call id. '
         'In a node review a run-level gap is scope=run (a note for main).',
         '\nFinding (cùng object json, tối đa 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
         '"scope":"node|run","claim":"<=300 ký tự","evidenceRefs":["<tool call id>","verify:<codeHash>",'
@@ -413,6 +418,11 @@ def contract(lang, criteria):
         'lượt review này (1-6 ref), criterionId thuộc tiêu chí được giao, có counterCheck và outcome không phải confirmed, '
         'và claim số đếm/encoding/byte trích verify_exec/terminal_exec hoặc nguồn đã mở chứa đúng con số đó; nếu không, '
         'finding thành ghi chú và tiêu chí thành UNVERIFIED, không phải revise. '
+        'Mỗi evidenceRef phải là toolCallId của một call BẠN đã gọi trong chính lượt này (ví dụ "call_ab12..."), '
+        'chữ ký "verify:<codeHash>" do verify_exec trả về, hoặc "artifact:<artifactId>@<contentHash>". Tham chiếu văn '
+        'xuôi như "file_read:src/x.py" hay "codebase_grep:NFD" không khớp receipt nào và làm finding bị hạ. '
+        'Với mọi claim số đếm/encoding/byte/số học/parser/giới hạn, hãy gọi verify_exec trước (đọc repo read-only, ghi '
+        'scratch trong /tmp/work, ra mạng được) rồi trích tool call id của nó. '
         'Trong review một nút, khoảng trống cấp run ghi scope=run (ghi chú cho main).') + '\n' + json.dumps(skeleton, ensure_ascii=False)
 
 
