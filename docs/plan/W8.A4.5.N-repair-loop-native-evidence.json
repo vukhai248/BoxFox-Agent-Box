@@ -1,0 +1,403 @@
+{
+  "probe": "W8.A4.5.N — nút tổng hợp __integration__ sau vòng sửa hội tụ (đo native, oracle CÒN FALSE)",
+  "script": "scripts/eval/work_repair_loop_eval.py",
+  "howToRun": "PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101 --output .tmp/w8-probe-repair-02-10 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json",
+  "branch": "vorflux/w10-w12-completion",
+  "baseCommit": "4e0923dae902c50906651773c584bfa8ccaaf3c2",
+  "probeCommits": [
+    "3d6fd2f",
+    "346430f"
+  ],
+  "model": "opencode/space-bunny-free (không thay thế)",
+  "why": "W8.A4.5.N: sau khi fixture được vá (trigger không còn khớp `.pytest_cache`), phải chứng minh bằng một lượt native rằng: Build tạo bản nháp → check tests THẬT đỏ → main chọn sửa → CHÍNH Testing child cũ kiểm lại trên hash mới → xanh → node tổng hợp `__integration__` được dựng và kiểm tests trên cây đã gộp. Chỉ khi cả ba nhóm đều đạt thì `oracle` mới true.",
+  "criteria": {
+    "mechanism": [
+      "oneRepairEntry",
+      "classified",
+      "debugOnlyWhenUnclassified",
+      "resumedSameChild",
+      "freshArtifactAfterRepair",
+      "findingsBoundToChild",
+      "codeHashPinned",
+      "redCheckIsRevise"
+    ],
+    "model": [
+      "testerSawTheRedCommand",
+      "buildChildTouchedItsFile",
+      "secondCheckPassed",
+      "nodeAccepted"
+    ],
+    "integrationNative": [
+      "built",
+      "hasRealChild",
+      "testsPassedOnMergedTree",
+      "integrationChecked"
+    ],
+    "oracle": "cả ba nhóm đều true",
+    "note": "Tên khoá lấy đúng theo mã probe (scripts/eval/work_repair_loop_eval.py:341-345); bản trước ghi nhầm `testsPassedOnGreenTree`."
+  },
+  "fixtureKnobs": {
+    "buildChildOutputTokens": 16000,
+    "why": "con Build mặc định 4096 token output; lượt 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất — núm này chỉ nới trần output cho con Build produce trong fixture, không sửa sản phẩm",
+    "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json",
+    "disclosedIn": "row.fixtureKnobs của từng results.json"
+  },
+  "runs": [
+    {
+      "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
+      "resultsSha256": "c51d2169b6850f88d97a11e1b71f5e3e258cf33144265fa5226f74e6f589588d",
+      "rawDir": "/var/tmp/w8-probe-run1-4096",
+      "oracle": false,
+      "error": "ValueError: WORK_CHECK_NOT_READY: producer must finish the current draft before checks",
+      "latencySeconds": 100.279,
+      "firstStatus": "failed",
+      "redCheck": null,
+      "repair": null,
+      "resumedChild": null,
+      "afterRepair": null,
+      "greenCheck": null,
+      "final": null,
+      "integration": null,
+      "mechanism": null,
+      "model": null,
+      "integrationNative": null,
+      "fixtureKnobs": null,
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": null,
+      "ownerHead": null,
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-d77647",
+        "root": ".boxfox/worktrees/w-d776477ace/main"
+      },
+      "calls": 15,
+      "narrative": "Trần output mặc định 4096 token của fixture làm con Build bị cắt (PROVIDER_OUTPUT_TRUNCATED, 3958 token reasoning), nên `checks.tool` từ chối: WORK_CHECK_NOT_READY — chưa có bản nháp hoàn tất để kiểm. Giữ làm mốc đối chứng cho núm 16000."
+    },
+    {
+      "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
+      "resultsSha256": "c7db934e2ae980606ad5390dbbd7c9823a5bed462df0b8372b8ced9a31dd1720",
+      "rawDir": "/var/tmp/w8-probe-run2-16000",
+      "oracle": false,
+      "error": "IndexError: list index out of range",
+      "latencySeconds": 293.466,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "childId": "6bbec24ef3d04c998ef6ad857da438ee",
+        "error": null,
+        "repairAction": "retest"
+      },
+      "repair": {
+        "n": 1,
+        "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
+        "class": "clear",
+        "reason": "required command failed with a trace into tracked files",
+        "debugChildId": null,
+        "debugArtifactId": null,
+        "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
+        "resumed": true,
+        "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
+        "at": 1790976847.6721373,
+        "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
+        "repairChildReason": null,
+        "status": "needs_checks"
+      },
+      "resumedChild": {
+        "id": "ac9164d9240d4fdba9cab6a08032eb88",
+        "parent": "7fb0e024579c4f8a9642dbe267facfbf",
+        "tools": [
+          "codebase_glob",
+          "terminal_exec",
+          "file_read",
+          "file_read",
+          "file_read",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec"
+        ],
+        "wroteExport": true,
+        "sawFindings": true
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "artifactId": "a-2c81f94b2efc4321822b9094a65885be",
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": [
+          {
+            "n": 1,
+            "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
+            "class": "clear",
+            "reason": "required command failed with a trace into tracked files",
+            "debugChildId": null,
+            "debugArtifactId": null,
+            "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
+            "resumed": true,
+            "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
+            "at": 1790976847.6721373,
+            "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
+            "repairChildReason": null,
+            "status": "needs_checks"
+          }
+        ]
+      },
+      "greenCheck": null,
+      "final": null,
+      "integration": null,
+      "mechanism": null,
+      "model": null,
+      "integrationNative": null,
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": null,
+      "ownerHead": null,
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-f9e51d",
+        "root": ".boxfox/worktrees/w-f9e51d0f2f/main"
+      },
+      "calls": 37,
+      "narrative": "Chuỗi đỏ→sửa chạy đúng: check tests đỏ `revise` (child 6bbec24e), `work_repair` phân loại `clear`/`retest`, resume CHÍNH child Build ac9164d9 (có đọc findings, có ghi export), nhưng probe tự nổ `IndexError: list index out of range` ở lần `checks.tool` xanh thứ hai khi phản hồi không có khoá `checks` — lỗi của probe, không phải của sản phẩm."
+    },
+    {
+      "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
+      "resultsSha256": "e6bb0fa3acfbaaa839ffa733f37751636e93f82dd69afbcf31b51e07055515d8",
+      "rawDir": "/var/tmp/w8-probe-run3-16000",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 465.186,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "e495ea2bb5d948b7b7581521a086169f",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-20b946658e164c238f23a348f0a939a2",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 2,
+        "childId": "d313cad627a44b2fbeee429c41e5eaa8",
+        "error": null,
+        "commands": [
+          "cd /workspace 2>/dev/null || cd .; pwd; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; echo \"--- pytest ---\"; python -m pytest -q 2>&1; echo \"EXIT=$?\"",
+          "cd /workspace 2>/dev/null || cd .; echo \"--- numbered src/export.py ---\"; cat -n src/export.py | sed -n '1,60p'",
+          "python -m pytest -q",
+          "git rev-parse HEAD",
+          "python -c \"\nfrom src.export import export_markdown as f\nprint('A1', repr(f('Hồ sơ')), f('Hồ sơ')=='Hồ sơ')\nprint('A2', repr(f('')), f('')=='')\nprint('A3', repr(f('A\\nB\\nC')), repr(f('X\\n\\nY')))\nprint('A4', repr(f('Nội dung')), f('Nội dung')=='Nội dung')\nprint('A5', repr(f(None)), f(None)=='')\nprint('A6', repr(f('Hồ  sơ  bệnh')), repr(f('a\\tb')))\nprint('A7', repr(f('  Dòng một  \\n\\tDòng hai\\t ')))\nprint('A8', repr(f('Ngày 12/03/2025, hồ sơ số 007: (A-1), 50%.')))\nprint('A9', f('  Hồ sơ  \\n  bệnh  ')==f('  Hồ sơ  \\n  bệnh  '))\nprint('type', type(f(None)).__name__, type(f('x')).__name__)\n\"",
+          "git status --short",
+          "git diff --name-only 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f",
+          "python -c \"\nimport unicodedata, importlib\nfrom src.export import export_markdown as f\ns='Hồ sơ'\nnfd=unicodedata.normalize('NFD', s)\nprint('A1 nfd_in', [hex(ord(c)) for c in nfd])\nprint('A1 nfd_out', [hex(ord(c)) for c in f(nfd)], f(nfd)==nfd)\nprint('A1 precomp_cps', [hex(ord(c)) for c in f(s)])\nt='A\\nB\\n'\nprint('A3 trailing_nl', repr(f(t)), f(t)==t)\nbig='Tiếng Việt: đ, Đ, ạ, ệ, ữ, ớ, ỳ — 100%!\\n  x  '\nr1=f(big); r2=f(big)\nprint('A9', r1==r2, repr(r1))\nprint('A9 repeat_nc', len(f(big.split(chr(10))[0]))>0)\nprint('nonascii_eq', f('Việt')=='Việt')\n\"",
+          "git diff 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f -- tests/test_export.py"
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "built": false,
+        "status": "pending",
+        "required": [],
+        "artifactId": null
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integrationNative": {
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": 7,
+      "ownerHead": "6c67252890c4dfc67319b3df65981e9bb17f275a",
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-196646",
+        "root": ".boxfox/worktrees/w-196646fdea/main"
+      },
+      "calls": 44,
+      "narrative": "Không nổ (guard mới ghi lại phản hồi rỗng). Chuỗi thực tế: check đầu trả `unverified` với lý do \"Missing actual successful required test command events\" vì model báo `pass` trong khi lệnh test bắt buộc đã đỏ — backend hạ đúng, nhưng vì không có `revise` nên vòng sửa không chạy; lượt kiểm lại (injection đã tắt) xanh và node được accepted. `integration` được yêu cầu nhưng `required: []`/`built: false` nên nhóm native vẫn false."
+    },
+    {
+      "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
+      "resultsSha256": "65f3bf31c2ffe1d29eb4ed63a945bebdf3c431466880af4945ac5bb54fd830c2",
+      "rawDir": "/var/tmp/w8-probe-run4-16000",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 731.34,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "f2ae142ccae7466da9693f5f4ac30507",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-b496ae4f53a34828b3331bdf28222f60",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 1,
+        "childId": "5fb1701a2f0a4c3fb9ba6f7d9de18d16",
+        "error": null,
+        "commands": [
+          "cd /home/user 2>/dev/null; pwd; ls -la; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; python -m pytest -q 2>&1 | tail -20",
+          "cd /home/user 2>/dev/null; echo \"=== git diff --stat vs base ea7b1eba ===\"; git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b 2>&1; echo; echo \"=== files in HEAD tree ===\"; git show --stat --oneline HEAD 2>&1 | head -20; echo; echo \"=== cat src/app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
+          "pwd; ls -la; git rev-parse HEAD; git status --short; python --version; python -m pytest -q",
+          "git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD; echo \"=== app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
+          "python -m pytest -q",
+          "git rev-parse HEAD && git status --short && python --version",
+          "python3 -c \"\nfrom src.export import export_markdown as e\nr=[]\ndef chk(n,got,want):\n    r.append(('PASS' if got==want else 'FAIL',n,repr(got),repr(want)))\nchk('A1 unicode',e('Hồ sơ'),'Hồ sơ')\nchk('A2 empty',e(''),'')\nchk('A3 multiline',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba')\nchk('A3b interior blanks',e('Mở đầu\\n\\nKết luận'),'Mở đầu\\n\\nKết luận')\nchk('A4 no wrapper',e('# sẵn có'),'# sẵn có')\nchk('A4b no fence',e('a\\nb'),'a\\nb')\nchk('A5 None',e(None),'')\nchk('A6 inner spaces',e('a  b   c'),'a  b   c')\nchk('A7 outer trim',e('  a  \\n\\tb\\t  '),'a\\nb')\nchk('A8 digits punct',e('15,5% — 007; A/B, C&D!'),'15,5% — 007; A/B, C&D!')\nchk('A9 pure x2',e('  x \\n\\n y '),e('  x \\n\\n y '))\nfor s in r: print(s)\nprint('TOTAL',sum(1 for x in r if x[0]=='PASS'),'/',len(r))\n\"",
+          "git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:src/export.py && echo \"=== BASE TEST FILE ===\" && git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:tests/test_export.py && echo \"=== BASE TREE ===\" && git ls-tree -r --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b",
+          "git branch -a; echo \"=== log all ===\"; git log --all --oneline; echo \"=== diff name-only base..HEAD ===\"; git diff --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD",
+          "python3 -c \"\nfrom src.export import export_markdown as e\nprint('leading blank lines:',repr(e('\\n\\nA\\nB\\n\\n')))\nprint('CRLF:',repr(e('A\\r\\nB')))\nprint('CR only:',repr(e('A\\rB')))\nprint('NBSP edge:',repr(e('\\u00a0A\\u00a0')))\nprint('multi-space inner:',repr(e('a \\t b')))\n\"",
+          "python3 -c \"\nimport unicodedata as u\nfrom src.export import export_markdown as e\ns='Hồ sơ Đề án'\no=e(s)\nprint('in cps ',[hex(ord(c)) for c in s])\nprint('out cps',[hex(ord(c)) for c in o])\nprint('equal codepoints:', [ord(c) for c in s]==[ord(c) for c in o])\nprint('in form',u.normalize('NFC',s)==s and 'NFC' or 'NFD','| out form',u.normalize('NFC',o)==o and 'NFC' or 'NFD')\nprint('no replacement char:', '\\ufffd' not in o)\nprint('combining marks kept:', sum(1 for c in o if u.combining(c)))\n\"",
+          "python -m pytest -q --collect-only | tail -18; echo \"exit=$?\""
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "built": false,
+        "status": "pending",
+        "required": [],
+        "artifactId": null
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integrationNative": {
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": 9,
+      "ownerHead": "ea7b1eba0e628e7f8eda718be30217a1faafc52b",
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe0688",
+        "root": ".boxfox/worktrees/w-fe0688bcdf/main"
+      },
+      "calls": 49,
+      "narrative": "Cùng dạng hỏng với lượt 3, nhưng lượt này CHỈ RA NGUYÊN NHÂN GỐC bằng lời của chính child kiểm thử: fixture trả kết quả CẮM SẴN cho MỌI lệnh chứa chuỗi `pytest` — kể cả `echo \"hello pytest world\"` cũng nhận đúng traceback đó. Child kết luận đúng là công cụ trả kết quả bịa, tự chạy lại pytest qua một script không chứa chữ `pytest` để lấy transcript thật (12 passed) rồi báo đạt. Vì lệnh test bắt buộc chưa từng chạy THÀNH CÔNG trong lượt kiểm, backend hạ `pass` → `unverified` (đúng luật), nên vòng sửa không được kích hoạt và `__integration__` vẫn `built: false`."
+    }
+  ],
+  "conclusion": {
+    "status": "chưa nghiệm thu",
+    "reason": "Bốn lượt đã chạy đều `oracle=false`, mỗi lượt dừng ở một chỗ khác nhau và đều được lưu nguyên văn. Lượt 1 dừng vì trần output 4096 của fixture (đã khai báo núm); lượt 2 chạy đúng chuỗi đỏ→sửa→resume CHÍNH child cũ nhưng probe tự nổ `IndexError` khi `checks.tool` trả danh sách rỗng; lượt 3 và 4 không nổ nhưng KHÔNG kích hoạt được vòng sửa, và lượt 4 chỉ ra nguyên nhân gốc: cò đỏ của fixture trả kết quả cắm sẵn cho mọi lệnh chứa chuỗi `pytest` (kể cả `echo \"hello pytest world\"`), child kiểm thử phát hiện đúng là kết quả bịa nên tự kiểm lại bằng đường khác rồi báo đạt — backend hạ xuống `unverified` (đúng) và vòng sửa không chạy.",
+    "openItems": [
+      "CÒN PHẢI SỬA FIXTURE: cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`; kết quả cắm sẵn vừa bị model phát hiện là bịa, vừa chặn mọi lệnh test thành công nên check luôn hạ về `unverified` và vòng sửa không bao giờ mở. Cần chốt với chủ máy vì đây là đổi ngữ nghĩa của phép đo.",
+      "`__integration__` chưa từng đạt: các lượt 3/4 dựng được yêu cầu tích hợp nhưng `required: []` và `built: false`; chỉ đo được tests trên cây gộp khi node tích hợp được accepted.",
+      "Chưa có lượt nào vừa đỏ→sửa→resume-cùng-child vừa kết thúc xanh trong cùng một lần chạy."
+    ]
+  }
+}
