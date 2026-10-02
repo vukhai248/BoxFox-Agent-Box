@@ -256,7 +256,13 @@ def receipt_index(graph, child_id, admission_seq, artifacts):
         if result.get('is_error') and not isinstance(receipt, dict):
             continue
         text = str(result.get('content') or result.get('text') or result.get('output') or '')
-        entry = {'kind': name, 'text': text}
+        # `computed`: the observation may stand in for a CALCULATED number. A run that timed out, was
+        # cut by the output cap, failed, or printed nothing proves no value — citing it as `computed`
+        # is how a receipt that proves nothing used to satisfy the numeric gate (review vòng 2, F6).
+        entry = {'kind': name, 'text': text,
+                 'computed': bool(name in COMPUTE_TOOLS and text.strip() and not result.get('is_error')
+                                  and not (isinstance(receipt, dict)
+                                           and (receipt.get('timedOut') or receipt.get('outputOverflow'))))}
         if event.get('id'):
             index[str(event['id'])] = entry
         signature = evidence_signature(event)
@@ -285,7 +291,7 @@ def finding_problem(item, required, scope_kind, receipts):
     if any(ref not in receipts for ref in refs):
         return 'UNKNOWN_RECEIPT'
     for number in NUMERIC_CLAIM_RE.findall(item['claim']):
-        computed = any(receipts[ref]['kind'] in COMPUTE_TOOLS for ref in refs)
+        computed = any(receipts[ref].get('computed') for ref in refs)
         sourced = any(receipts[ref]['kind'] in SOURCE_TOOLS and number in receipts[ref]['text'] for ref in refs)
         if not computed and not sourced:
             return 'NUMERIC_UNVERIFIED'
@@ -370,7 +376,17 @@ def apply_findings(raw, status, coverage, analysis):
         new = 'unverified'
     else:
         new = 'pass'
+    ignored = sorted(valid) if new == 'pass' and valid else []
+    if ignored:
+        # Soundness: a validated blocking finding is the thing that blocks. A report cannot neutralise
+        # it by marking every criterion pass and writing `VERDICT: ok` — the finding stays authoritative
+        # (review vòng 2, F1). Downgrading is the only way out, and that happens in validate_findings.
+        new = 'revise'
     error = None
+    if ignored:
+        error = ('WORK_FINDING_IGNORED: kept blocking finding(s) ' + ', '.join(ignored) + ' but every criterion '
+                 'is pass and VERDICT: ok. A validated blocking finding blocks the artifact: mark the criterion '
+                 'revise, downgrade the finding, or drop it.')
     if status == 'revise' and new != 'revise':
         detail = '; '.join(f"{cid}: " + (', '.join(f'{fid} {why}' for fid, why in pairs) or 'no linked finding')
                            for cid, pairs in uncited) or 'VERDICT: revise without a valid blocking finding'
@@ -871,7 +887,7 @@ class Checks:
                 'findings': analysis['findings'], 'blocking': len(analysis['blocking']),
                 'downgraded': analysis['downgraded'],
                 **({'overLimit': True} if prose_words(text) > PROSE_WORD_CAP else {}),
-                **({'contractError': 'WORK_FINDING_UNCITED'} if uncited else
+                **({'contractError': str(uncited).split(':', 1)[0]} if uncited else
                    {'contractError': findings} if status == 'error' else {})})
             doc.update(childId=child_id, coverage=coverage, findings=findings, status=status,
                        blocking=analysis['blocking'], downgraded=analysis['downgraded'],

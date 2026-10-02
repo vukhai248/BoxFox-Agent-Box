@@ -50,8 +50,8 @@ TOOL_GROUPS = [
      'alwaysOn': False},
     # Work Graph — main dựng đồ thị việc, harness chạy vòng phản biện, duyệt rồi chạy DAG.
     # W6.1.3 — `verify_exec` là công cụ của người phản biện (thử MỘT claim tính toán trong sandbox
-    # tạm, không mạng, không ghi workspace); nó nằm ở bộ của orchestrator để `allowed_tools`
-    # không cắt mất của con.
+    # tạm: repo chỉ-đọc, scratch riêng, mạng theo công tắc firewall của box — #6423); nó nằm ở bộ
+    # của orchestrator để `allowed_tools` không cắt mất của con.
     {'key': 'workGraph',
      'tools': ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read',
                'verify_exec'],

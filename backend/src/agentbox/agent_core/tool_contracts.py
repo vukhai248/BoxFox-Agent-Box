@@ -798,8 +798,10 @@ SCHEMAS = [
 # result is re-run only when it cannot have side effects. Unknown tools default to unsafe.
 REPLAY_SAFE = frozenset({
     'file_read', 'codebase_glob', 'codebase_grep', 'skills_list', 'skill_view', 'web_search', 'web_fetch',
-    'read_source', 'source_list', 'source_verify', 'research_status', 'work_artifact_read', 'peer_read',
-    'verify_exec'})
+    'read_source', 'source_list', 'source_verify', 'research_status', 'work_artifact_read', 'peer_read'})
+# `verify_exec` CỐ Ý không nằm trong REPLAY_SAFE (review vòng 2, F5): snippet đọc repo read-only nhưng
+# ghi được scratch và ra được mạng (theo công tắc firewall), nên chạy lại sau crash có thể lặp một
+# POST không idempotent. Mặc định unsafe: main đọc receipt `interrupted` rồi quyết định chạy lại.
 REPLAY_SAFE_ACTIONS = {'work_report': frozenset({'read', 'status'})}
 REPLAY = {name: 'safe' for name in REPLAY_SAFE} | {name: 'unsafe' for name in (
     'file_write', 'file_edit_block', 'terminal_exec', 'work_ship', 'work_run', 'work_check', 'delegate_task',

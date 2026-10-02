@@ -100,13 +100,17 @@ def deny(code, current, action):
 READ_COMMANDS = frozenset({'pwd', 'ls', 'cat', 'head', 'tail', 'wc', 'stat', 'file', 'du', 'tree', 'which',
                            'echo', 'grep', 'egrep', 'rg'})
 # Cờ của lệnh đọc mà vẫn ghi file hoặc chạy chương trình khác.
-READ_COMMAND_BANNED = {'rg': ('--pre', '--pre-glob'), 'tree': ('-o',)}
+READ_COMMAND_BANNED = {'rg': ('--pre', '--pre-glob'), 'tree': ('-o', '--output'),
+                       'file': ('-C', '--compile')}
 FIND_BANNED = frozenset({'-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf',
                          '-fls'})
 GIT_READ = frozenset({'status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'grep'})
 GIT_BRANCH_READ = frozenset({'--show-current', '-a', '-l', '--list'})
 GIT_BANNED = ('-c', '--output', '--ext-diff', '-O', '--open-files-in-pager')
-SHELL_FORBIDDEN = ('>', '<', ';', '`', '$(', '${', '\n', '\r')
+#: `$'…'`/`$"…"`: bash giải mã ANSI-C quote TRƯỚC khi chạy, còn `shlex` thì không — nên
+#: `git grep $'-O\040touch\040f' foo` từng được xếp `read` trong khi bash chạy thật `touch`
+#: (review vòng 2, F2.1). Lệnh đọc hợp lệ không cần hai dạng này, nên chặn thẳng cấu trúc.
+SHELL_FORBIDDEN = ('>', '<', ';', '`', '$(', '${', "$'", '$"', '\n', '\r')
 ASSIGNMENT_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=')
 LONE_AMPERSAND_RE = re.compile(r'(?<!&)&(?!&)')
 SEGMENT_SPLIT_RE = re.compile(r'&&|\|\||\|')

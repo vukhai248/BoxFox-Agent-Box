@@ -26,8 +26,11 @@ services:
     # bubblewrap cần tạo user namespace, nhưng profile mặc định của Docker chặn việc này —
     # đo trong container: "No permissions to create new namespace". Hai dòng dưới mở đúng
     # đường đó cho container `box` (đã đo: bwrap chạy được).
-    # ĐÁNH ĐỔI có ý thức: container `box` mất lớp lọc syscall mặc định của Docker và lớp
-    # AppArmor. Box vẫn giữ namespace + quyền hạ xuống `agent` + box-firewall. Muốn quay lại
+    # ĐÁNH ĐỔI có ý thức (review vòng 2, F4 — nói rõ bán kính): MỌI tiến trình trong container
+    # `box` mất lớp lọc syscall mặc định của Docker và lớp AppArmor — Chrome/renderer, code-server,
+    # ide-proxy (chạy root) và terminal_exec — không riêng tiến trình con của bwrap. Đây là một
+    # rào chắn thoát-container bị gỡ, không chỉ là điều kiện cho verify_exec. Box vẫn giữ namespace
+    # + quyền hạ xuống `agent` + box-firewall + repo chỉ-đọc qua `--ro-bind / /`. Muốn quay lại
     # mặc định an toàn hơn: xoá 2 dòng này — verify_exec tự báo VERIFY_EXEC_UNAVAILABLE
     # (fail closed, không có đường chạy không cách ly).
     security_opt:
@@ -40,6 +43,8 @@ services:
       # nguồn/thông tin tồn tại (verify_exec, W6.1.3). Trước đây theo quy tắc ②a là "off" và
       # người dùng bật bằng nút Mạng trên giao diện — công tắc đó vẫn còn nguyên. Muốn quay lại
       # biên đóng mặc định: đổi giá trị dưới đây thành "off" (hoặc tắt bằng nút Mạng).
+      # #6423: mặc định 'on' đổi tư thế egress của TOÀN BỘ box (trước đây 'off' theo luật ②a), không
+      # chỉ cho verify_exec; box-firewall vẫn là công tắc tắt/mở runtime.
       BOX_DEFAULT_NETWORK: "on"
       # Điện mặc định BẬT lúc boot; tắt/bật bằng nút Máy (/__box/power)
       BOX_DEFAULT_POWER: "on"

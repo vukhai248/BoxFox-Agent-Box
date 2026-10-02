@@ -29,8 +29,9 @@ SOURCE_READ = frozenset({'source_list', 'source_verify', 'research_status'})
 # bằng chứng cho hồ sơ nó chấm), và orchestrator không có (hồ sơ do main ghi bằng `dossier_write`). Vì orchestrator không giữ nó,
 # `allowed_tools` phải tự thêm lại — cùng khuôn với `claim_assess` của vai `research-review`.
 BRANCH_REPORT = frozenset({'research_branch_report'})
-# W6.1.3 — reviewer thử MỘT claim tính toán (đếm, mã hoá, số học, parser) trong sandbox tạm không mạng,
-# không ghi workspace. Không phải quyền chạy test dự án; vai `testing` đã có `terminal_exec`.
+# W6.1.3 — reviewer thử MỘT claim tính toán (đếm, mã hoá, số học, parser) trong sandbox tạm: repo
+# chỉ-đọc, scratch riêng, mạng theo công tắc firewall của box (#6423). Không phải quyền chạy test
+# dự án; vai `testing` đã có `terminal_exec`.
 VERIFY = frozenset({'verify_exec'})
 RESEARCH = READ | {'browser_use', 'web_search', 'web_fetch', 'read_source', 'paper_citations'} \
     | SOURCE_TOOLS | SOURCE_READ | BRANCH_REPORT

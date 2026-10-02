@@ -1161,8 +1161,16 @@ class WorkGraph:
                     result = await self.rt.delegate(session, dict(args), work=work)
                 break
             except ValueError as exc:
+                text = str(exc)
+                # Design A4.5: child cũ không resume được (đang chạy / đã yield / hết tiến triển) thì
+                # hạ cấp sang child MỚI giữ nguyên worktree, và `run_stage` ghi `repairChildReason`.
+                # Trước đây lỗi này rơi xuống `run_stage` và đóng node `failed`.
+                if resume_id and text.startswith('WORK_RESUME_'):
+                    resume_id, request = None, None
+                    work.pop('resumeChildId', None)
+                    continue
                 # Parallel nodes and their knowledge requests share the fan-out slots: queue, do not fail.
-                if not str(exc).startswith('FANOUT_BUSY') or time.monotonic() - waited > FANOUT_RETRY_SECONDS:
+                if not text.startswith('FANOUT_BUSY') or time.monotonic() - waited > FANOUT_RETRY_SECONDS:
                     self.progress.finish(progress_id, interrupted=True)
                     raise
                 await asyncio.sleep(FANOUT_RETRY_PAUSE)

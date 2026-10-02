@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import signal
 import shutil
 import socket
@@ -232,8 +233,15 @@ def shell(command, timeout=30, session='default'):
 # namespace còn lại, bỏ tmpfs che ROOT, giữ scratch = tmpfs /tmp + temp dir bind tại /tmp/work.
 # Không có fallback chạy không cô lập: thiếu bwrap/userns thì fail closed VERIFY_EXEC_UNAVAILABLE.
 VERIFY_OUTPUT_MAX = 8000
+# Trần CỨNG mỗi luồng khi đọc kết quả: `communicate()` đọc tới EOF nên một snippet in vài trăm MB
+# làm RSS của worker phình theo (đo được 20 MB → 920 MB); RLIMIT_FSIZE không áp cho pipe. Giữ phần
+# đầu, vượt trần thì SIGKILL cả process group (review vòng 2, F2).
+VERIFY_CAPTURE_MAX = 1 << 20
+VERIFY_CAPTURE_CHUNK = 1 << 16
+VERIFY_DRAIN_SECONDS = 2.0
 VERIFY_TIMEOUT_DEFAULT, VERIFY_TIMEOUT_MAX = 10, 20
 VERIFY_AS_BYTES = 512 << 20
+VERIFY_DATA_BYTES = 2 << 30       # trần bộ nhớ cho node (RLIMIT_AS làm V8 không khởi động được)
 VERIFY_FSIZE_BYTES = 8 << 20
 VERIFY_NPROC = 64
 VERIFY_WORKDIR = '/tmp/work'
@@ -322,21 +330,24 @@ def verify_probe(refresh=False):
 # bwrap hỏng EAGAIN; trong namespace mới nó chỉ đếm tiến trình của snippet.
 VERIFY_LAUNCHER = (
     'import os,resource,sys\n'
-    'cpu,nproc,fsize,space=map(int,sys.argv[1:5])\n'
+    'cpu,nproc,fsize,space,data=map(int,sys.argv[1:6])\n'
     'resource.setrlimit(resource.RLIMIT_NPROC,(nproc,nproc))\n'
     'resource.setrlimit(resource.RLIMIT_FSIZE,(fsize,fsize))\n'
     'resource.setrlimit(resource.RLIMIT_CPU,(cpu,cpu+1))\n'
     'space and resource.setrlimit(resource.RLIMIT_AS,(space,space))\n'
-    'os.execv(sys.argv[5],sys.argv[5:])\n')
+    'data and resource.setrlimit(resource.RLIMIT_DATA,(data,data))\n'
+    'os.execv(sys.argv[6],sys.argv[6:])\n')
 
 
 def _verify_launcher(language, timeout, interpreter, tail):
     launcher = _verify_interpreter('python')
-    # V8 giữ trước vùng địa chỉ lớn nên node không khởi động dưới RLIMIT_AS 512 MiB;
-    # node bị chặn heap bằng --max-old-space-size thay vào đó.
+    # V8 giữ trước vùng địa chỉ lớn nên node không khởi động dưới RLIMIT_AS 512 MiB; thay vào đó
+    # python dùng RLIMIT_AS, còn node dùng RLIMIT_DATA (heap + buffer ngoài, đo được: 2 GiB chặn
+    # `Buffer.alloc` 4 GiB trong khi snippet thường vẫn chạy — review vòng 2, F3).
     space = VERIFY_AS_BYTES if language == 'python' else 0
+    data = 0 if language == 'python' else VERIFY_DATA_BYTES
     return [launcher, '-I', '-c', VERIFY_LAUNCHER, str(timeout), str(VERIFY_NPROC), str(VERIFY_FSIZE_BYTES),
-            str(space), interpreter, *tail]
+            str(space), str(data), interpreter, *tail]
 
 
 def _verify_version(interpreter):
@@ -345,6 +356,68 @@ def _verify_version(interpreter):
         return ((done.stdout or '') + (done.stderr or '')).strip()[:80] or interpreter
     except (OSError, subprocess.TimeoutExpired):
         return interpreter
+
+
+def _verify_stdin(proc, payload):
+    """Ghi stdin (≤8000 ký tự, vừa một pipe buffer) rồi đóng để snippet thấy EOF."""
+    try:
+        if payload:
+            proc.stdin.write(payload)
+        proc.stdin.close()
+    except (BrokenPipeError, OSError, ValueError):
+        pass
+
+
+def _verify_pump(selector, buffers, seen, deadline):
+    """Đọc tới `deadline`; trả `(đã_đóng_hết, tràn_trần)`."""
+    while selector.get_map():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False, False
+        for key, _ in selector.select(remaining):
+            chunk = os.read(key.fileobj.fileno(), VERIFY_CAPTURE_CHUNK)
+            if not chunk:
+                selector.unregister(key.fileobj)
+                continue
+            seen[key.data] += len(chunk)
+            room = VERIFY_CAPTURE_MAX - len(buffers[key.data])
+            if room > 0:
+                buffers[key.data] += chunk[:room]
+            if seen[key.data] > VERIFY_CAPTURE_MAX:
+                return False, True
+    return True, False
+
+
+def _verify_capture(proc, payload, timeout):
+    """Đọc stdout/stderr có trần cứng; trả `(out, err, overflow, timed_out)`.
+
+    Vượt trần hoặc quá hạn thì giết cả process group (bwrap + snippet) rồi hút nốt phần còn
+    trong pipe; worker không bao giờ giữ nhiều hơn `VERIFY_CAPTURE_MAX` mỗi luồng.
+    """
+    buffers = {'out': bytearray(), 'err': bytearray()}
+    seen = {'out': 0, 'err': 0}
+    overflow = timed_out = False
+    selector = selectors.DefaultSelector()
+    for stream, name in ((proc.stdout, 'out'), (proc.stderr, 'err')):
+        selector.register(stream, selectors.EVENT_READ, name)
+    try:
+        _verify_stdin(proc, payload)
+        closed, overflow = _verify_pump(selector, buffers, seen, time.monotonic() + timeout)
+        if not closed:
+            timed_out = not overflow
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            _verify_pump(selector, buffers, seen, time.monotonic() + VERIFY_DRAIN_SECONDS)
+    finally:
+        selector.close()
+        _verify_stdin(proc, b'')
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+    return bytes(buffers['out']), bytes(buffers['err']), overflow, timed_out
 
 
 def verify_exec(args):
@@ -384,19 +457,14 @@ def verify_exec(args):
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 start_new_session=True,
                                 env={'PATH': '/usr/bin:/bin:/opt/node/bin', 'LANG': 'C.UTF-8', 'HOME': VERIFY_WORKDIR})
-        try:
-            out, err = proc.communicate(stdin.encode('utf-8'), timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            os.killpg(proc.pid, signal.SIGKILL)
-            out, err = proc.communicate()
+        out, err, overflow, timed_out = _verify_capture(proc, stdin.encode('utf-8'), timeout)
         scratch, scratch_overflow = _verify_scratch(tmp)  # phải quét TRƯỚC khi finally xoá temp dir
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     duration = int((time.monotonic() - started) * 1000)
     stdout = out.decode('utf-8', errors='replace')
     stderr = err.decode('utf-8', errors='replace')
-    truncated = len(stdout) > VERIFY_OUTPUT_MAX or len(stderr) > VERIFY_OUTPUT_MAX
+    truncated = overflow or len(stdout) > VERIFY_OUTPUT_MAX or len(stderr) > VERIFY_OUTPUT_MAX
     content = stdout[:VERIFY_OUTPUT_MAX]
     if stderr:
         content += ('\n' if content and not content.endswith('\n') else '') + '[stderr]\n' + stderr[:VERIFY_OUTPUT_MAX]
@@ -405,11 +473,16 @@ def verify_exec(args):
                'codeHash': _verify_digest(code), 'stdinHash': _verify_digest(stdin),
                'outputHash': _verify_digest(content), 'exitCode': exit_code, 'durationMs': duration,
                'truncated': truncated, 'timedOut': timed_out, 'claim': claim, 'isolation': probe['procMode'],
+               **({'outputOverflow': True} if overflow else {}),
                # Scratch để finding trích được file đã tạo; repo là read-only nhưng ĐỌC được, mạng dùng
                # netns của box (theo công tắc firewall).
                'scratchRoot': VERIFY_WORKDIR, 'scratch': scratch,
                **({'scratchOverflow': scratch_overflow} if scratch_overflow else {})}
-    result = {'content': content, 'exit_code': exit_code, 'is_error': timed_out, 'receipt': receipt}
+    result = {'content': content, 'exit_code': exit_code, 'is_error': timed_out or overflow, 'receipt': receipt}
+    if overflow:
+        result.update(errorCode='VERIFY_EXEC_OUTPUT_OVERFLOW',
+                      error=f'VERIFY_EXEC_OUTPUT_OVERFLOW: snippet produced more than {VERIFY_CAPTURE_MAX} '
+                            'bytes on one stream; process group stopped and only the head was kept')
     if timed_out:
         # Hết giờ vẫn là một quan sát hợp lệ: is_error=true nhưng receipt được giữ.
         result.update(errorCode='VERIFY_EXEC_TIMEOUT',

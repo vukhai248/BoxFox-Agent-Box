@@ -123,3 +123,20 @@ def test_stdin_and_node_interpreter():
     assert result['receipt']['stdinHash'] == result['receipt']['stdinHash']
     node = run("console.log([...'ế'.normalize('NFD')].length)", language='node')
     assert node['exit_code'] == 0 and node['content'].strip() == '3', node
+
+
+def test_node_external_memory_is_capped():
+    """F3: `Buffer.alloc` 4 GiB dưới RLIMIT_DATA phải chết, không chạy hết (đo ngoài: 4096 MiB)."""
+    code = "const a=[];for(let i=0;i<64;i++){a.push(Buffer.alloc(64*1024*1024,1));}console.log('DONE',a.length);"
+    result = run(code, language='node', timeoutSeconds=20)
+    assert 'DONE' not in result['content']
+    assert result['exit_code'] != 0
+
+
+def test_verify_output_flood_is_bounded():
+    """F2: snippet in liên tục không được để worker đọc tới EOF (đo ngoài: RSS 20 MB → 920 MB)."""
+    result = run('import sys\nwhile True: sys.stdout.write("x" * 65536)', timeoutSeconds=20)
+    assert result['is_error'] is True
+    assert result['errorCode'] == 'VERIFY_EXEC_OUTPUT_OVERFLOW'
+    assert result['receipt']['outputOverflow'] is True
+    assert len(result['content']) <= 2 * worker.VERIFY_OUTPUT_MAX

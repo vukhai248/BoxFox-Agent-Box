@@ -58,6 +58,18 @@ MUTATE = [
     'git -ccore.x=y status',
     'tree -oout.txt .',
     'tree -o out.txt .',
+    # F2.1 — `$'…'`: bash giải mã ANSI-C quote trước khi chạy nên `git grep $'-O\\040touch f' foo`
+    # CHẠY `touch f` trong khi shlex chỉ thấy một token vô hại; `find $'-exec' …` cũng vậy.
+    "git grep $'-O\\040touch\\040f' foo",
+    "find . $'-exec' touch f {} +",
+    "rg $'--pre=touch\\040f' y .",
+    "tree $'--output=f' .",
+    'echo $"xin chào"',
+    # F2.2 — dạng DÀI của cờ ghi trong lệnh đọc: `tree --output f` ghi file, `file -C` biên dịch magic.
+    'tree --output=out.txt .',
+    'tree --output out.txt .',
+    'file -C -m .',
+    'file --compile -m .',
     '',
     None,
     'ls "unterminated',
