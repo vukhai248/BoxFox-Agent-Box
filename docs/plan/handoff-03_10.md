@@ -10,7 +10,8 @@ Kết quả review + simplify chi tiết nằm ở [`review-simplify-03_10.md`](
 - Kế hoạch đã duyệt: `/code/.plans/v2-work-graph-completion.md` (plan_id 1253). Design: `w8-exec-design.md`, `quality-recovery-design.md`.
 - Đã gộp đủ 6 track: W8.A4.2, W8.A4.3–A4.5, W7.1/W7.2, W6.1.3/W6.2, W6.5.3, W9, W10 (harness), W1.P, W5.LEGACY.
 - Review vòng 2 (3 miền) và simplify đã trả kết quả; **mọi phát hiện của review đã vá**; simplify là báo cáo chỉ đọc, **chưa áp dụng**.
-- Đang chạy: (a) subagent `test-workgraph` (testing), (b) benchmark W10 thật — shard 1 và 6 còn chạy, shard 2/3/4/5 đã xong.
+- Kiểm thử: subagent `test-workgraph` **PASSED** (báo cáo đã nộp; chi tiết ở `docs/plan/review-simplify-03_10.md` §1 và bảng §7).
+- Đang chạy: benchmark W10 thật — shard 1 và 6 còn chạy, shard 2/3/4/5 đã xong (16/24 ô đã chấm).
 - Test nền: `python3 -m pytest backend/tests -q -k work` → **988 passed, 2 failed, 1 skipped** (2 lỗi là ca môi trường có tiền đề "host không có bwrap", tái hiện cả trên `68ecdf0`). Lượt chạy lại toàn bộ trên HEAD `8f24be7` đã xong với đúng con số đó (988/2/1); sau `1bd238f` cần chạy lại lần cuối trước khi chốt.
 
 ## 2. Tiến độ theo hạng mục kế hoạch
@@ -43,7 +44,7 @@ Kết quả review + simplify chi tiết nằm ở [`review-simplify-03_10.md`](
 
 ## 4. Việc còn lại (theo thứ tự)
 
-1. **Chờ `test-workgraph`** → chuyển kết quả thành **một** Test Report (`vflux_exec test-report submit --report-file-path /code/.generated_artifacts/test_report.md --status <passed|partial|blocked> --coverage <x>/<y>`); trạng thái lấy từ dòng `OVERALL STATUS:` của subagent.
+1. ~~Chờ `test-workgraph`~~ — **xong**: `OVERALL STATUS: PASSED`, Test Report đã nộp (report_id 955).
 2. **Chờ shard 1 và 6** → gộp 24 ô:
    `python3 scripts/eval/work_acceptance_bench.py --merge /var/tmp/w10-s1,/var/tmp/w10-s2,/var/tmp/w10-s3,/var/tmp/w10-s4,/var/tmp/w10-s5,/var/tmp/w10-s6 --rescore --out /var/tmp/w10-merged`
 3. Viết `docs/plan/W10-acceptance-evidence.json` (model, commit, configHash, attempts, budget, token/latency theo lượt và theo vai, **mọi failure trong mẫu số**) và `docs/plan/W10-acceptance-report.md` (kết luận trung thực: cổng đạt/không đạt, lý do, ảnh hưởng).
@@ -97,6 +98,6 @@ Mốc tick kế hoạch: `90b49b2` (W8.A4.2), `ab2a7e9` (W7.2/W7.1/W1.P/W5.LEGAC
 | `review-sandbox` | Ship with mitigations, 6/10 Medium | F1–F6 — đã vá hết |
 | `review-contracts` | Ship with mitigations, 5/10 Medium | F1–F5 — đã vá hết |
 | `simplify-workgraph` | Báo cáo chỉ đọc | ~40 dòng xoá + 5 mục gộp; chưa áp dụng |
-| `test-workgraph` | **Đang chạy** (đã tìm + vá một lỗ còn sót của F1) | e2e 8/12 → 12/12; full suite 988/2/1; xem `1bd238f` |
+| `test-workgraph` | **PASSED** (đã tìm + vá một lỗ còn sót của F1) | 8 kịch bản E2E thật đều đạt; bộ 18 file đích 294 passed/1 skipped; full sweep 988/2/1; xem `1bd238f` |
 
 Chi tiết đầy đủ (từng finding, mức, trạng thái, commit vá): [`review-simplify-03_10.md`](./review-simplify-03_10.md).
