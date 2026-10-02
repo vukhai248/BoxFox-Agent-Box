@@ -643,8 +643,10 @@ def score_rule(rule, bundle):
         count = len(bundle['children'])
         return count <= _int(rule['max']), f'children={count}'
     if kind == 'no_auto_pass':
+        # Review vòng 2 (finding 2): check doc thật mang `stage` ∈ {produce, execute} và `kind`
+        # ∈ {tests, code_review, …}; lọc theo `stage == 'tests'` nên bộ đếm không bao giờ bật.
         auto = [doc.get('checkId') for doc in checks if doc.get('status') == 'pass'
-                and not _tests_proof(bundle, None)[0] and str(doc.get('stage')) == 'tests']
+                and str(doc.get('kind')) == 'tests' and not _tests_proof(bundle, None)[0]]
         return not auto, f'auto-passed tests={auto}'
     if kind == 'provider_unchanged':
         return _provider_unchanged(bundle, rule)
@@ -908,20 +910,35 @@ def _no_leak(bundle, patterns):
     return not leaked, f'leaked={sorted(set(leaked))[:5]}'
 
 
+def tool_call(data):
+    """`tool_end.data` thật là `{id, name, args, result}` — mã thoát nằm trong `result`.
+
+    Review vòng 2 (finding 1): oracle đọc `data['exitCode']`/`data['command']` ở tầng ngoài nên
+    không bao giờ thấy một `terminal_exec` thật, và mọi lượt cần `tests_proof` bị chấm hỏng.
+    """
+    data = data if isinstance(data, dict) else {}
+    args = data.get('args') if isinstance(data.get('args'), dict) else {}
+    result = data.get('result') if isinstance(data.get('result'), dict) else {}
+    return {'id': data.get('id'), 'name': str(data.get('name') or ''),
+            'command': str(args.get('command') or data.get('command') or ''),
+            'exit_code': result.get('exit_code', result.get('exitCode')),
+            'is_error': bool(result.get('is_error')), 'result': result, 'args': args}
+
+
 def _tests_proof(bundle, commands):
-    """Lệnh test yêu cầu phải có tool_end thật với exitCode=0 (không tin lời khai)."""
+    """Lệnh test yêu cầu phải có tool_end thật với exit_code=0 (không tin lời khai)."""
     wanted = [str(command) for command in (commands or [])]
     proven = []
     for event in bundle['events']:
         if event.get('kind') != 'tool_end':
             continue
-        data = event.get('data') or {}
-        if data.get('exitCode') != 0:
+        call = tool_call(event.get('data'))
+        if call['exit_code'] != 0 or call['is_error']:
             continue
-        blob = json.dumps(data, ensure_ascii=False)
-        if wanted and not any(command in blob for command in wanted):
+        blob = json.dumps(event.get('data') or {}, ensure_ascii=False)
+        if wanted and not any(command in call['command'] or command in blob for command in wanted):
             continue
-        proven.append(data.get('command') or data.get('name') or 'tool')
+        proven.append(call['command'] or call['name'] or 'tool')
     return bool(proven), f'proven={proven[:5]}'
 
 
@@ -997,12 +1014,19 @@ def score_bundle(scenario, rubric, bundle):
                          'failed': [item['kind'] for item in results if not item['passed']]}
     observed = observe_state(bundle, scenario.get('expectedStateSource', 'run'))
     expected = scenario['expectedState']
+    missing = _missing_bundle(bundle)
     state_ok = state_matches(observed, expected)
+    if missing:
+        # Không có run thì không lượt nào chứng minh được điều gì — kể cả `!verified`
+        # (review vòng 2, finding 3: `no_run` từng khớp `!verified` và được tính là đạt).
+        state_ok = False
+    elif observed == 'no_run' and str(expected).startswith('!'):
+        state_ok = False
     score = round(100.0 * passed_total / weight_total, 2) if weight_total else 0.0
     return {'role': None, 'observedState': observed, 'expectedState': expected,
             'expectedStateSource': scenario.get('expectedStateSource', 'run'),
-            'stateMatched': state_ok, 'passed': bool(state_ok and weight_total
-                                                     and passed_total == weight_total),
+            'missing': bundle.get('missing') or [], 'stateMatched': state_ok,
+            'passed': bool(state_ok and weight_total and passed_total == weight_total),
             'score': score, 'roles': by_role}
 
 
@@ -1121,7 +1145,11 @@ def parse_shard(value):
 
 
 def shard_cells(cells, index, count):
-    """Chia `cells` thành `count` shard liên tiếp; hai lần lặp của cùng ca nằm chung một shard."""
+    """Chia `cells` thành `count` shard LIÊN TIẾP (không có shard rỗng).
+
+    Hai lần lặp của cùng ca nằm cạnh nhau trong kế hoạch nên thường chung một shard, nhưng điều đó
+    không được bảo đảm với mọi N (ví dụ N=5, 7, 8, 24): độ phủ thì luôn đúng và đủ.
+    """
     if count < 1 or not 1 <= index <= count:
         raise ValueError(f'shard {index}/{count} không hợp lệ')
     size, extra = divmod(len(cells), count)

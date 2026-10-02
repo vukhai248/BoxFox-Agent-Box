@@ -53,6 +53,34 @@ def step_seq(store, sid):
                             (sid,)).fetchone()[0]
 
 
+def _call_args(call):
+    """Tham số của call đang chờ; `None` khi transcript không đọc được."""
+    raw = (call.get('function') or {}).get('arguments')
+    if isinstance(raw, dict):
+        return raw
+    try:
+        value = json.loads(raw or '{}')
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _same_call(start, call):
+    """Provider dùng lại call id giữa các bước: biên nhận chỉ được tái dùng cho ĐÚNG call này.
+
+    Review vòng 2 (finding 4): một tiến trình bị giết giữa lúc lưu transcript và lúc ghi `usage`
+    để lại `tool_end` của bước CŨ sau mốc `step_seq`; nếu id được dùng lại, kết quả cũ sẽ bị báo
+    như kết quả của call mới. So `argsHash` (có thì so), không thì so thẳng `args`.
+    """
+    args = _call_args(call)
+    if args is None:
+        return False
+    stored_hash = start.get('argsHash')
+    if stored_hash:
+        return stored_hash == work_policy.digest(args)
+    return start.get('args') == args
+
+
 def _receipts(store, sid, call_id, after=0):
     rows = store.db.execute(
         "SELECT kind,payload FROM events WHERE session_id=? AND seq>? AND kind IN ('tool_start','tool_end') "
@@ -93,6 +121,14 @@ def reconcile(rt, sid, messages):
             messages.append({'role': 'tool', 'tool_call_id': cid, 'name': name, 'content': tool_content(name, result)})
             continue
         start, end = _receipts(rt.store, sid, cid, after)
+        if start is not None and not _same_call(start, call):
+            # Biên nhận thuộc một call CŨ dùng lại id này: không bao giờ báo nó là kết quả của call mới.
+            result = {'is_error': True, 'errorCode': INTERRUPTED_UNSAFE, 'error': INTERRUPTED_MESSAGE,
+                      'interrupted': True}
+            messages.append({'role': 'tool', 'tool_call_id': cid, 'name': name, 'content': tool_content(name, result)})
+            rt.store.emit(sid, 'tool_end', {'id': cid, 'name': name, 'args': _call_args(call) or {},
+                                            'result': result, 'interrupted': True, 'staleReceipt': True})
+            continue
         if end is not None:
             result = end.get('result') if isinstance(end.get('result'), dict) else {}
             messages.append({'role': 'tool', 'tool_call_id': cid, 'name': name, 'content': tool_content(name, result)})

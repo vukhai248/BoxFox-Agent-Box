@@ -418,8 +418,7 @@ def _plan_artifact():
 def test_oracle_scores_a_passing_transcript_and_a_failing_one():
     rubric = bench.load_rubric()
     passing = _cell('S02', events=[
-        {'kind': 'tool_end', 'sessionId': 'root',
-         'data': {'name': 'terminal_exec', 'command': 'python -m pytest -q', 'exitCode': 0}},
+        {'kind': 'tool_end', 'sessionId': 'root', 'data': {'id': 'call_414', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest -q'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}},
     ], checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}],
         artifacts=_plan_artifact())
     scored = bench.score_bundle(passing['scenario'], rubric, passing['bundle'])
@@ -428,8 +427,7 @@ def test_oracle_scores_a_passing_transcript_and_a_failing_one():
     assert scored['passed'] is True, scored['roles']
 
     failing = _cell('S02', run_status='execute_failed', events=[
-        {'kind': 'tool_end', 'sessionId': 'root',
-         'data': {'name': 'terminal_exec', 'command': 'python -m pytest -q', 'exitCode': 1}},
+        {'kind': 'tool_end', 'sessionId': 'root', 'data': {'id': 'call_414', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest -q'}, 'result': {'exit_code': 1, 'is_error': True, 'content': 'ok'}}},
     ], checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'revise'}])
     scored = bench.score_bundle(failing['scenario'], rubric, failing['bundle'])
     assert scored['stateMatched'] is False
@@ -441,8 +439,7 @@ def test_failures_stay_in_the_denominator_and_the_gate_counts_them():
     rubric = bench.load_rubric()
     cells = [
         _cell('S02', events=[{'kind': 'tool_end', 'sessionId': 'root',
-                              'data': {'name': 'terminal_exec', 'command': 'python -m pytest',
-                                       'exitCode': 0}}], artifacts=_plan_artifact(),
+                              'data': {'id': 'call_472', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}}], artifacts=_plan_artifact(),
               checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}]),
         _cell('S02', run_status='execute_failed'),
     ]
@@ -457,8 +454,7 @@ def test_failures_stay_in_the_denominator_and_the_gate_counts_them():
 def test_gate_requires_22_of_24_and_zero_auto_pass_duplicates_leaks_and_provider_switches():
     rubric = bench.load_rubric()
     ok_cell = _cell('S02', events=[{'kind': 'tool_end', 'sessionId': 'root',
-                                    'data': {'name': 'terminal_exec', 'command': 'python -m pytest',
-                                             'exitCode': 0}}], artifacts=_plan_artifact(),
+                                    'data': {'id': 'call_472', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}}], artifacts=_plan_artifact(),
                     checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}])
     bad_state = _cell('S02', run_status='needs_revision')
     auto_pass = _cell('S02', checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'tests',
@@ -475,14 +471,13 @@ def test_gate_requires_22_of_24_and_zero_auto_pass_duplicates_leaks_and_provider
                                     'childId': 'child-1', 'requestRevision': 1}}])
     leaked = _cell('S02', events=[
         {'kind': 'tool_end', 'sessionId': 'root',
-         'data': {'name': 'terminal_exec', 'command': 'python -m pytest', 'exitCode': 0}},
+         'data': {'id': 'call_472', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}},
         {'kind': 'assistant', 'sessionId': 'root',
          'data': {'final': True, 'text': 'Lỗi WORK_CHECK_UNAVAILABLE khi chạy.'}},
     ])
     switched = _cell('S02', calls=[{'providerId': 'anthropic', 'modelId': 'claude-sonnet'}],
                      events=[{'kind': 'tool_end', 'sessionId': 'root',
-                              'data': {'name': 'terminal_exec', 'command': 'python -m pytest',
-                                       'exitCode': 0}}])
+                              'data': {'id': 'call_472', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}}])
     cells = ([ok_cell] * 21 + [bad_state, auto_pass, duplicate, leaked, switched])
     scoring = bench.evaluate_run(cells, rubric)
     gate = scoring['gate']
@@ -701,7 +696,7 @@ def test_results_json_carries_gate_failures_and_per_role_latency(tmp_path):
     scenario = bench.load_scenario(bench.scenario_path('S02'))
     bundle = bench.build_bundle(
         events=[{'kind': 'tool_end', 'sessionId': 'root',
-                 'data': {'name': 'terminal_exec', 'command': 'python -m pytest', 'exitCode': 0}}],
+                 'data': {'id': 'call_472', 'name': 'terminal_exec', 'args': {'command': 'python -m pytest'}, 'result': {'exit_code': 0, 'is_error': False, 'content': 'ok'}}}],
         run={'status': 'verified'},
         checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}],
         artifacts=_plan_artifact(),
@@ -848,3 +843,48 @@ def test_require_work_graph_stops_the_execute_path(monkeypatch, capsys):
         types.SimpleNamespace(), types.SimpleNamespace()))
     with pytest.raises(ValueError, match='no_run'):
         bench.require_work_graph()
+
+
+# --- review vòng 2 (oracle): ba lỗ hổng đã bịt ---------------------------------------------------
+def _real_event(command, exit_code, name='terminal_exec'):
+    return {'kind': 'tool_end', 'sessionId': 'root',
+            'data': {'id': 'call_1', 'name': name, 'args': {'command': command},
+                     'result': {'exit_code': exit_code, 'is_error': exit_code != 0, 'content': 'out'}}}
+
+
+def test_tests_proof_reads_the_real_tool_end_payload():
+    """Finding 1: mã thoát nằm trong `result.exit_code`, lệnh nằm trong `args.command`."""
+    bundle = bench.build_bundle(events=[_real_event('python -m pytest -q', 0)])
+    assert bench._tests_proof(bundle, ['python -m pytest'])[0] is True
+    flat = bench.build_bundle(events=[{'kind': 'tool_end', 'data': {
+        'name': 'terminal_exec', 'command': 'python -m pytest -q', 'exitCode': 0}}])
+    assert bench._tests_proof(flat, ['python -m pytest'])[0] is False, 'dạng cũ không phải bằng chứng'
+    assert bench._tests_proof(bundle, ['vitest'])[0] is False, 'lệnh khác không tính'
+
+
+def test_no_auto_pass_fires_on_a_real_check_document():
+    """Finding 2: check doc thật có `kind == 'tests'` và `stage` ∈ {produce, execute}."""
+    scenario = bench.load_scenario(bench.scenario_path('S11'))
+    check = {'checkId': 'c1', 'nodeId': 'R1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}
+    without = bench.build_bundle(events=[], checks=[check])
+    ok, detail = bench.score_rule({'kind': 'no_auto_pass'}, without)
+    assert ok is False and 'c1' in detail
+    with_proof = bench.build_bundle(events=[_real_event('python -m pytest -q', 0)], checks=[check])
+    assert bench.score_rule({'kind': 'no_auto_pass'}, with_proof)[0] is True
+    assert scenario['id'] == 'S11'
+
+
+def test_a_cell_without_a_run_can_never_match_a_negative_state():
+    """Finding 3: `no_run` từng khớp `!verified` và được tính là đạt trạng thái."""
+    rubric = bench.load_rubric()
+    scenario = bench.load_scenario(bench.scenario_path('S11'))
+    assert scenario['expectedState'] == '!verified'
+    empty = bench.build_bundle(events=[], run={}, expected_state='!verified')
+    scored = bench.score_bundle(scenario, rubric, empty)
+    assert scored['observedState'] == 'no_run'
+    assert scored['stateMatched'] is False and scored['passed'] is False
+    assert scored['missing'] == []
+
+    incomplete = bench.build_bundle(events=[], run={'status': 'verified'}, expected_state='!verified',
+                                    missing=['run: boom'])
+    assert bench.score_bundle(scenario, rubric, incomplete)['stateMatched'] is False

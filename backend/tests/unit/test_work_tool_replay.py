@@ -154,3 +154,31 @@ def test_interrupted_calls_only_reports_started_without_end(tmp_path):
         assert [r['id'] for r in rows] == ['c1'] and rows[0]['replay'] == 'safe'
         store.close()
     asyncio.run(run())
+
+
+def test_reused_call_id_does_not_reuse_an_older_receipt(tmp_path):
+    """Finding 4: `tool_end` của bước cũ (id dùng lại) không được báo là kết quả của call mới."""
+    async def run():
+        path = tmp_path / 'sessions.db'
+        store = SessionStore(path)
+        runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
+        sid = runtime.create({'skills': []})['id']
+        old_args = {'path': 'src/old.py'}
+        runtime.store.save(sid, [{'role': 'user', 'content': 'việc đang dở'},
+                                 {'role': 'assistant', 'content': '',
+                                  'tool_calls': [call('file_read', {'path': 'src/new.py'}, 'call_0')]}], 'running')
+        runtime.store.emit(sid, 'tool_start', {'id': 'call_0', 'name': 'file_read', 'args': old_args,
+                                               'replay': 'safe', 'argsHash': 'sha256:cũ'})
+        runtime.store.emit(sid, 'tool_end', {'id': 'call_0', 'name': 'file_read', 'args': old_args,
+                                             'result': {'content': 'STALE-RESULT'}})
+        store.close()
+        store = SessionStore(path)
+        executor = FixtureExecutor()
+        runtime = HarnessRuntime(store, executor, FixtureModel([answer('tiếp tục')]))
+        await runtime.start(sid, 'đọc tiếp')
+        tools = [m for m in runtime.store.get(sid)['messages'] if m.get('role') == 'tool']
+        assert tools and 'STALE-RESULT' not in tools[0]['content'], tools
+        assert INTERRUPTED_UNSAFE in tools[0]['content']
+        assert not [c for c in executor.calls if c[0] == 'file_read'], 'không được chạy lại mù'
+        store.close()
+    asyncio.run(run())
