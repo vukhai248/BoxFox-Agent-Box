@@ -36,6 +36,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { EFFORT_LEVELS, modelRecord, modelThinking, normalizeFinishReason, parseJson, parseRetryAfter, providerError, sseEvents, thinkingFromProviderPayload } from './common.mjs';
 import { opencodeCapabilityFor } from './opencode-capabilities.mjs';
+import { priceFromOpenRouter } from '../pricing.mjs';
 import { RouterError } from '../errors.mjs';
 
 const BASE_URL = 'https://opencode.ai';
@@ -406,7 +407,7 @@ export function normalizeOpencodeReasoning(model, body = {}) {
     : current?.effort;
   const outgoing = { ...body };
   delete outgoing.reasoning_effort;
-  if (body?.thinkingLevel !== undefined) delete outgoing.thinkingLevel;
+  delete outgoing.thinkingLevel;
   const effort = typeof requested === 'string' ? requested.toLowerCase().trim() : '';
   if (!effort || effort === 'none' || effort === 'auto') {
     if (current) delete outgoing.reasoning;
@@ -630,13 +631,12 @@ function opencodeError(status, statusText, errorText, retryAfterMs = null) {
 export function opencodeModelRow(item = {}, { curated = null } = {}) {
   const id = typeof item.id === 'string' ? item.id.trim() : '';
   const payloadName = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : null;
-  const reasoning = item?.reasoning && typeof item.reasoning === 'object' ? item.reasoning : null;
-  const params = Array.isArray(item?.supported_parameters) ? item.supported_parameters : [];
-  const payloadThinking = Boolean(
-    reasoning?.supported_efforts?.length || reasoning?.default_enabled === true || reasoning?.mandatory === true
-    || params.includes('reasoning') || params.includes('include_reasoning') || params.includes('thinking'),
-  );
-  const published = payloadThinking ? thinkingFromProviderPayload(item) : null;
+  // Đọc payload MỘT lần bằng helper dùng chung: nó trả cả context window lẫn thinking,
+  // nên nhánh payload không khai báo thinking vẫn giữ được context window (trước đây
+  // `published` rỗng kéo theo mất luôn `context_length`).
+  const payload = thinkingFromProviderPayload(item);
+  const published = payload.thinkingType === 'none' ? null : payload;
+  const publishedPrice = item?.pricing && typeof item.pricing === 'object' ? priceFromOpenRouter(item.pricing) : null;
   const curatedThinking = curated && Array.isArray(curated.thinkingLevels) && curated.thinkingLevels.length
     ? { thinkingType: curated.thinkingType, thinkingLevels: curated.thinkingLevels, defaultThinking: curated.defaultThinking ?? null }
     : null;
@@ -644,7 +644,10 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
   const registryThinking = registry
     ? { thinkingType: registry.thinkingType, thinkingLevels: [...registry.thinkingLevels], defaultThinking: registry.defaultThinking ?? null }
     : null;
-  const chosen = published || curatedThinking || registryThinking || {};
+  const chosen = {
+    ...(payload.contextWindow ? { contextWindow: payload.contextWindow } : {}),
+    ...(published || curatedThinking || registryThinking || {}),
+  };
   // Nhãn nguồn dùng đúng từ vựng đã có trong repo: `live` cho payload provider
   // (hàng model cũng mang `source:'live'`), `documented` cho bảng curated/registry
   // có tài liệu, `probe` cho số đo của chính router, `reported` cho context window
@@ -654,6 +657,8 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
   const record = modelRecord(id, payloadName || curated?.name || id, capabilities, chosen);
   return {
     ...record,
+    // Giá chỉ có mặt khi payload công bố và parse được; nhãn `ping` đi cùng dữ liệu.
+    ...(publishedPrice ? { pricing: { ...publishedPrice, source: 'ping' } } : {}),
     source: 'live',
     stale: false,
     // Chỉ id `-free` mới trả lời khi không có credential (đo 2026-09-21).
@@ -665,8 +670,8 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
       inventory: 'live',
       name: payloadName ? 'live' : curated?.name ? 'documented' : 'unknown',
       thinking: thinkingSource,
-      contextWindow: record.contextWindowSource || (published?.contextWindow ? 'reported' : 'unknown'),
-      pricing: item?.pricing ? 'ping' : 'unknown',
+      contextWindow: record.contextWindowSource || (payload.contextWindow ? 'reported' : 'unknown'),
+      pricing: publishedPrice ? 'ping' : 'unknown',
     },
   };
 }
@@ -690,6 +695,27 @@ export function opencodeThinkingMetadata(model = {}) {
   };
 }
 
+/**
+ * W12.MODEL.METADATA — một hàng từ bảng curated khi KHÔNG có ping. Nhãn từng
+ * trường phải nói đúng nguồn static/documented; hai nhánh dự phòng dùng chung
+ * một định nghĩa để không trôi khỏi nhau.
+ */
+function staticModelRow(model) {
+  return {
+    ...model,
+    source: 'static',
+    stale: false,
+    enabled: true,
+    fieldSources: {
+      inventory: 'static',
+      name: 'documented',
+      thinking: model.thinkingLevels?.length ? 'documented' : 'unknown',
+      contextWindow: model.contextWindowSource || 'unknown',
+      pricing: 'unknown',
+    },
+  };
+}
+
 export function createOpenCodeAdapter({ fetchImpl }) {
   const baseFor = connection => {
     const rawBase = (connection?.endpoint || BASE_URL).replace(/\/+$/, '');
@@ -698,9 +724,8 @@ export function createOpenCodeAdapter({ fetchImpl }) {
 
   return {
     thinkingMetadata: model => opencodeThinkingMetadata(model || {}),
-    fallbackModels: OPENCODE_MODELS.map(model => ({ ...model, source: 'static', stale: false, enabled: true,
-      // Dòng dự phòng không đến từ ping: nhãn từng trường phải nói đúng như vậy.
-      fieldSources: { inventory: 'static', name: 'documented', thinking: model.thinkingLevels?.length ? 'documented' : 'unknown', contextWindow: model.contextWindowSource || 'unknown', pricing: 'unknown' } })),
+    // Dòng dự phòng không đến từ ping: nhãn từng trường phải nói đúng như vậy.
+    fallbackModels: OPENCODE_MODELS.map(staticModelRow),
 
     async discover({ connection, credentials, signal } = {}) {
       try {
@@ -725,12 +750,9 @@ export function createOpenCodeAdapter({ fetchImpl }) {
       } catch {
         /* best effort fallback */
       }
-      return {
-        // Curated fallback: the inventory call did not answer, so this is not
-        // live data (BUG-4/R2). W12: nhãn từng trường nói đúng nguồn curated.
-        models: OPENCODE_MODELS.map(m => ({ ...m, source: 'static', stale: false, enabled: true,
-          fieldSources: { inventory: 'static', name: 'documented', thinking: m.thinkingLevels?.length ? 'documented' : 'unknown', contextWindow: m.contextWindowSource || 'unknown', pricing: 'unknown' } })),
-      };
+      // Curated fallback: the inventory call did not answer, so this is not
+      // live data (BUG-4/R2). W12: nhãn từng trường nói đúng nguồn curated.
+      return { models: OPENCODE_MODELS.map(staticModelRow) };
     },
 
     async *generate({ connection, credentials, body, signal }) {

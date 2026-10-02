@@ -368,6 +368,37 @@ test('W12: discovery keeps payload metadata and labels every field with its sour
   assert.equal(mystery.fieldSources.thinking, 'unknown');
 });
 
+test('W12: a payload context window and price survive even without a reasoning block', async () => {
+  // The old mapping only read the payload when it declared thinking, so a gateway
+  // that publishes `context_length` (or a price) but no reasoning block lost both,
+  // and `fieldSources.pricing` still claimed `ping`. Data and label must agree.
+  const payload = {
+    data: [
+      { id: 'ctx-only-free', object: 'model', context_length: 64000 },
+      { id: 'priced-free', object: 'model', pricing: { prompt: '0.0000005', completion: '0.0000015' } },
+      { id: 'junk-price-free', object: 'model', pricing: { prompt: 'free', completion: 'free' } },
+    ],
+  };
+  const adapter = createProviders({ fetchImpl: async () => json(payload) }).opencode;
+  const { models } = await adapter.discover({ connection, credentials: {} });
+
+  const ctx = models.find(model => model.id === 'ctx-only-free');
+  assert.equal(ctx.contextWindow, 64000, 'a published context window is not dropped with the reasoning block');
+  assert.equal(ctx.fieldSources.contextWindow, 'reported');
+  assert.deepEqual(ctx.thinkingLevels, [], 'no reasoning block still means no thinking control');
+  assert.equal(ctx.thinkingSource, 'unknown');
+
+  const priced = models.find(model => model.id === 'priced-free');
+  assert.equal(priced.pricing?.source, 'ping', 'a parsed payload price is attached, not only labelled');
+  assert.equal(priced.pricing?.input, 0.5);
+  assert.equal(priced.fieldSources.pricing, 'ping');
+  assert.equal(priced.fieldSources.contextWindow, 'unknown');
+
+  const junk = models.find(model => model.id === 'junk-price-free');
+  assert.equal(junk.pricing, undefined, 'an unparseable price is not invented');
+  assert.equal(junk.fieldSources.pricing, 'unknown', 'and the label does not claim a source it does not have');
+});
+
 test('W12: the curated static fallback labels its own fields', async () => {
   const adapter = createProviders({ fetchImpl: async () => { throw new Error('offline'); } }).opencode;
   const { models } = await adapter.discover({ connection, credentials: {} });

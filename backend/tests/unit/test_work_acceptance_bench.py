@@ -955,6 +955,12 @@ def test_safe_events_reads_every_page_and_marks_read_errors():
                 raise RuntimeError('Cannot operate on a closed database')
             return [row for row in self.rows if row['seq'] > after][:self.EVENTS_PAGE]
 
+        def events_page(self, sid, after=0, limit=None):
+            """Cùng hợp đồng con trỏ với `SessionStore.events_page()` thật."""
+            rows = self.events(sid, after, limit)
+            return {'events': rows, 'hasMore': len(rows) == self.EVENTS_PAGE and bool(rows),
+                    'nextAfter': rows[-1]['seq'] if rows else int(after or 0)}
+
     rows = bench._safe_events(FakeStore(1200), 'root')
     assert [row['seq'] for row in rows][:2] == [1, 2]
     assert len(rows) == 1200, 'phải đọc hết mọi trang, không dừng ở 500'

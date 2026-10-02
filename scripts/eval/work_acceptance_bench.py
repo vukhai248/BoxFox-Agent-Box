@@ -1448,13 +1448,27 @@ class WorkspaceExecutor:
         cleaned = raw.rstrip('/') or '/'
         if cleaned == str(self.workspace) or cleaned.startswith(str(self.workspace) + '/'):
             return True
-        if cleaned in self.SYSTEM_PATH_ALLOW or cleaned.startswith(self.SYSTEM_PATH_ALLOW):
+        if cleaned.startswith(self.SYSTEM_PATH_ALLOW):
             return True
         # Toolchain của chính fixture (venv đang chạy bench) — không phải dữ liệu người dùng,
         # nhưng vẫn phải khai báo tường minh vì `python -m pytest` được dịch sang sys.executable.
         toolchain = {str(Path(sys.executable).parent), str(Path(sys.prefix))}
         return any(cleaned == item or cleaned.startswith(item.rstrip('/') + '/')
                    for item in toolchain)
+
+    @staticmethod
+    async def _communicate(proc, timeout, stdin=None):
+        """Chờ tiến trình con tới hạn; quá hạn thì giết cả nhóm rồi vẫn lấy output ra."""
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=timeout)
+            return out, err, False
+        except asyncio.TimeoutError:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+            out, err = await proc.communicate()
+            return out, err, True
 
     async def terminal(self, args, *, root=None):
         command = str(args.get('command') or '').strip()
@@ -1483,16 +1497,7 @@ class WorkspaceExecutor:
                                                      stdout=asyncio.subprocess.PIPE,
                                                      stderr=asyncio.subprocess.PIPE,
                                                      start_new_session=True)
-        timed_out = False
-        try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
-            timed_out = True
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                proc.kill()
-            out, err = await proc.communicate()
+        out, err, timed_out = await self._communicate(proc, timeout)
         content = (out + err).decode('utf-8', errors='replace')
         truncated = len(content) > self.TERMINAL_MAX_OUTPUT
         result = {'content': content[:self.TERMINAL_MAX_OUTPUT],
@@ -1542,16 +1547,7 @@ class WorkspaceExecutor:
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE,
                                                     start_new_session=True)
-        timed_out = False
-        try:
-            out, err = await asyncio.wait_for(proc.communicate(stdin.encode('utf-8')), timeout=timeout)
-        except asyncio.TimeoutError:
-            timed_out = True
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                proc.kill()
-            out, err = await proc.communicate()
+        out, err, timed_out = await self._communicate(proc, timeout, stdin.encode('utf-8'))
         duration = int((time.monotonic() - started) * 1000)
         stdout = out.decode('utf-8', errors='replace')
         stderr = err.decode('utf-8', errors='replace')
@@ -1777,13 +1773,12 @@ def _safe_events(store, sid):
     """
     rows, after = [], 0
     try:
-        page_size = int(getattr(store, 'EVENTS_PAGE', 500) or 500)
         while True:
-            page = store.events(sid, after) or []
-            rows.extend(page)
-            if len(page) < page_size:
+            page = store.events_page(sid, after)
+            rows.extend(page['events'] or [])
+            if not page.get('hasMore'):
                 break
-            next_after = page[-1].get('seq')
+            next_after = page.get('nextAfter')
             if next_after is None or int(next_after) <= int(after):
                 break
             after = int(next_after)
@@ -1930,16 +1925,13 @@ def _pending_answer(card, pool):
     return supplied
 
 
-async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_seconds,
-                        handles=None):
+async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_seconds, handles):
     """Vòng đời một lượt: chạy tới trạng thái cuối, trả lời interview, chịu fault, không tự bịa.
 
     `handles` (W10.M2) là dict sống mà người gọi giữ: sau restart giữa lượt, store/runtime/graph
     trong đó được thay bằng bộ MỚI. `run_cell` phải gom bundle từ đúng bộ đang mở, không đọc lại
     DB đã đóng (`Cannot operate on a closed database` — S09 r1/r2).
     """
-    if handles is None:
-        handles = {'store': rt.store, 'graph': graph, 'rt': rt}
     deadline = time.monotonic() + float(scenario_budget(scenario, deadline_seconds=deadline_seconds)
                                         ['deadlineSeconds'])
     answers = list(scenario.get('interviewAnswers') or [])
