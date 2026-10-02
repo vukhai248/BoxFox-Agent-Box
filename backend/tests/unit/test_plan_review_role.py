@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from agentbox.agent_core import runtime as runtime_module
-from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, READ, ROLES
+from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, READ, ROLES, VERIFY
 from agentbox.agent_core.tool_contracts import SCHEMAS
 from agentbox.agent_core.tool_groups import TOOL_GROUPS
 from agentbox.skills.catalog import DEFAULT_SKILLS, SkillCatalog
@@ -30,7 +30,9 @@ def delegate_roles():
 def test_the_critic_role_exists_and_can_only_read():
     role = ROLES[ROLE]
     assert role.name == 'Plan review'
-    assert role.tools == READ, 'người phản biện không được có công cụ ghi nào'
+    # W6.1.3 + quyết định #6423: plan-review có thêm verify_exec (đọc repo read-only, ghi scratch
+    # trong /tmp/work, ra mạng được) — vẫn không có công cụ ghi nào vào repo/kế hoạch.
+    assert role.tools == READ | VERIFY, 'người phản biện không được có công cụ ghi nào'
     for forbidden in ('write_plan', 'file_write', 'file_edit_block', 'terminal_exec', 'browser_use',
                       'computer_use'):
         assert forbidden not in role.tools, forbidden

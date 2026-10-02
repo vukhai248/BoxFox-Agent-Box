@@ -67,7 +67,8 @@ class Artifacts:
     def get(self, run_id, aid):
         row = self.db.execute('SELECT * FROM work_artifacts WHERE id=? AND run_id=?', (aid, run_id)).fetchone()
         if row is None:
-            raise ValueError('WORK_ARTIFACT_UNKNOWN: artifact is not owned by this run')
+            raise ValueError(f'WORK_ARTIFACT_UNKNOWN: artifact {aid!r} is not in run {run_id!r}; this is not an '
+                             'access-control denial — check runId and artifactId against work_graph(action=\'status\') refs')
         meta = json.loads(row['metadata'])
         text = row['content']
         if hashlib.sha256(text.encode('utf-8')).hexdigest() != meta['contentHash']:
@@ -78,6 +79,13 @@ class Artifacts:
         binding = (session.get('config') or {}).get('workBinding') or {}
         root = session.get('parent_id') or session['id']
         run_id = args.get('runId') or binding.get('runId')
+        if not run_id:
+            # W7.2: artifact ids are per run. Without a runId the lookup can only miss, and the old
+            # WORK_ARTIFACT_UNKNOWN was read by main as an ACL denial. Name the field instead.
+            from .tool_arg_errors import ToolFieldError
+            raise ToolFieldError('WORK_ARTIFACT_RUN_REQUIRED', "runId required at root; artifact ids are per run, "
+                                 "so this is not an access-control denial", field='runId', args=args,
+                                 hint="runId from work_graph(action='status') or the work_run/work_check result")
         self.graph.resolve(root, run_id)  # ownership before exposing metadata or text
         aid = str(args.get('artifactId') or '')
         if session.get('parent_id') and aid not in binding.get('artifactIds', []):

@@ -1,0 +1,106 @@
+{
+  "schema": "work-acceptance-rubric/1",
+  "version": "w10-rubric-v1",
+  "source": "docs/plan/Work-Graph-fix.md §5.3 + /code/.plans/quality-recovery-design.md §10",
+  "principle": "Chấm bằng oracle tất định trên event/artifact/report; không LLM judge. Mọi lượt lỗi vẫn nằm trong mẫu số của cổng đạt.",
+  "weights": {"main": 3, "producer": 3, "research": 2, "reviewer": 3, "testing": 3, "flow": 2},
+  "roles": {
+    "main": {
+      "title": "Main/orchestrator",
+      "checks": [
+        "số child ≤ ngưỡng của kịch bản (ví dụ S02 ≤ 8)",
+        "không kết thúc vì STEP_BUDGET_EXHAUSTED",
+        "commentary đúng ngôn ngữ của owner",
+        "không có unreviewed_claims chưa gắn nhãn chưa-kiểm",
+        "hiểu lỗi đúng: không coi WORK_ARTIFACT_UNKNOWN là lỗi ACL/quyền"
+      ]
+    },
+    "producer": {
+      "title": "Producer (plan/design)",
+      "checks": [
+        "đủ các mục bắt buộc trong DELIVERABLES_* của policy",
+        "có acceptance/test cụ thể: regex path:line hoặc lệnh test chạy được",
+        "số từ trong giới hạn depth của work_policy"
+      ]
+    },
+    "research": {
+      "title": "Research/helper",
+      "checks": [
+        "mỗi claim kỹ thuật có ref đã mở thật (read/web_fetch/terminal)",
+        "0 URL không xuất hiện trong web_fetch/read_source",
+        "lookup ≤ 120 từ, không trả bài luận cho câu hỏi tra cứu"
+      ]
+    },
+    "reviewer": {
+      "title": "Reviewer",
+      "checks": [
+        "mọi finding chặn có receipt hợp lệ trong chính lượt review đó",
+        "tỉ lệ finding bị hạ (downgraded) được báo riêng, không ẩn",
+        "finding đúng của oracle được giữ, không bị hạ oan",
+        "prose ≤ 600 từ (metric PROSE_WORD_CAP)"
+      ]
+    },
+    "testing": {
+      "title": "Testing",
+      "checks": [
+        "chạy đúng lệnh test bắt buộc",
+        "exit code khớp oracle của kịch bản",
+        "status check khớp oracle, không pass khi thiếu output tool"
+      ]
+    },
+    "flow": {
+      "title": "Flow/luồng",
+      "checks": [
+        "continuation cùng child 100%",
+        "không có continuation trùng (cùng request/revision/child)",
+        "không đổi provider trong suốt lượt",
+        "không rò diagnostic/mã lỗi nội bộ ra output cho user"
+      ]
+    }
+  },
+  "baseline": {
+    "main": [
+      {"kind": "no_auto_pass", "why": "test không được pass khi thiếu bằng chứng chạy thật (§10 auto-pass = 0)"},
+      {"kind": "event_code_absent", "code": "STEP_BUDGET_EXHAUSTED", "why": "lượt main không được cạn bước trong 24 lượt nghiệm thu"},
+      {"kind": "no_diagnostic_leak", "why": "mã lỗi nội bộ (WORK_*…) không được xuất hiện trong câu trả lời cho user"},
+      {"kind": "provider_unchanged", "why": "benchmark chỉ chạy opencode/space-bunny-free — 0 lượt đổi provider"},
+      {"kind": "child_count_max", "max": 12, "why": "trần fan-out mặc định; kịch bản nào chặt hơn thì khai trong oracle"}
+    ],
+    "producer": [],
+    "research": [],
+    "reviewer": [],
+    "testing": [],
+    "flow": []
+  },
+  "catalog": [
+    {"kind": "run_state_in", "states": ["verified"], "why": "kịch bản khép kín phải kết ở verified"},
+    {"kind": "run_state_not_in", "states": ["execute_failed"], "why": "lỗi thi công phải được sửa trước khi kết"},
+    {"kind": "stage_status_any", "stage": "plan_review", "status_in": ["revise"], "why": "review phải bắt được lỗi plan"},
+    {"kind": "no_execute_stage", "why": "W1.P: thiếu role mới thì dừng TRƯỚC producer, không thi công"},
+    {"kind": "event_code_seen", "code": "WORK_CHECK_UNAVAILABLE", "min": 1, "why": "W1.P: preflight báo thiếu role mới"},
+    {"kind": "event_code_seen", "code": "WORK_CLAIM_UNSOURCED", "min": 1, "why": "claim không căn cứ bị chặn"},
+    {"kind": "turn_status_any", "status_in": ["partial"], "why": "output bị cắt là partial, không auto-pass"},
+    {"kind": "check_status_any", "status_in": ["unverified", "revise", "error"], "why": "thiếu bằng chứng ⇒ không pass"},
+    {"kind": "interview_questions_max", "max": 3, "why": "prompt mơ hồ chỉ hỏi tối đa 3 câu quan trọng"},
+    {"kind": "interview_answered", "why": "interview đã định trước phải được trả lời và dùng"},
+    {"kind": "same_child_continuation", "why": "W7.1: trả lời resume đúng child đã hỏi"},
+    {"kind": "no_duplicate_continuation", "why": "một request/revision chỉ được resume một lần"},
+    {"kind": "feedback_revision_min", "min": 2, "why": "user đổi ý tạo revision mới, không ghi đè"},
+    {"kind": "no_fabricated_url", "why": "0 URL bịa: mọi URL user thấy phải từ web_fetch/read_source"},
+    {"kind": "artifact_regex_any", "patterns": ["src/[\\w./-]+:\\d+", "python -m pytest"], "why": "acceptance phải trỏ file:dòng hoặc lệnh test"},
+    {"kind": "artifact_excludes", "patterns": ["\\bTODO\\b", "\\bTBD\\b"], "why": "deliverable không được để chỗ trống"},
+    {"kind": "artifact_schema_seen", "schema": "work-code/1", "why": "review/build phải dựa trên snapshot mã có hash"},
+    {"kind": "finding_kept_min", "min": 1, "why": "finding đúng của oracle phải được giữ"},
+    {"kind": "finding_downgrade_rate_max", "max": 0.5, "why": "tỉ lệ hạ finding đúng phải thấp và được báo"},
+    {"kind": "tests_proof", "commands": ["python -m pytest"], "why": "chỉ pass khi có tool_end exitCode=0 thật"},
+    {"kind": "converged_review", "checkId": "tests", "requireHash": true, "why": "review một lần trên convergedHash"},
+    {"kind": "no_extra_ship_paths", "why": "file ngoài run (dirty) không được ship"},
+    {"kind": "user_output_excludes", "patterns": ["WORK_", "SEARCH_PROVIDER_ERROR"], "why": "output cho user sạch mã nội bộ"},
+    {"kind": "word_count_max", "source": "turn", "role": "research", "max": 120, "why": "lookup ≤ 120 từ (§10 research)"},
+    {"kind": "word_count_max", "source": "check", "checkId": "code_review", "max": 600, "why": "prose review ≤ 600 từ (PROSE_WORD_CAP)"},
+    {"kind": "word_count_max", "source": "artifact", "schema": "plan", "max": 2500, "why": "trần độ sâu plan — chỉnh theo depth của work_policy khi policy có số"},
+    {"kind": "no_misdiagnosis", "code": "WORK_ARTIFACT_UNKNOWN", "patterns": ["\\bACL\\b", "không có quyền", "permission denied"], "why": "WORK_ARTIFACT_UNKNOWN không phải lỗi ACL (main phải hiểu lỗi đúng)"},
+    {"kind": "unreviewed_claims_labelled", "why": "W6.2.BIND: claim ngoài tập đã phản biện phải gắn nhãn chưa-kiểm hoặc nằm trong artifact"},
+    {"kind": "any_of", "rules": [{"kind": "run_state_in", "states": ["verified"]}], "why": "ví dụ nhánh chấp nhận nhiều trạng thái"}
+  ]
+}

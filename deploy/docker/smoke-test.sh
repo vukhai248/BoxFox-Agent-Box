@@ -66,11 +66,11 @@ CH=$(DX 'ls /opt/ms-playwright 2>/dev/null | grep -i chromium | head -1')
 [ -n "$V" ] && [ -n "$CH" ] \
   && ok "$V · browser: $CH" || bad "playwright/chromium thiếu ($V / '$CH')"
 
-head "7) Quy tắc ②a: mạng mặc định TẮT → curl phải THẤT BẠI"
-if docker exec "$CONTAINER" curl -m 4 -sI https://example.com >/dev/null 2>&1; then
-  bad "curl THÀNH CÔNG khi mạng phải tắt — vi phạm ②a!"
+head "7) ②a: mạng lúc boot theo BOX_DEFAULT_NETWORK (compose đặt 'on' từ 02/10/2026) → curl phải THÀNH CÔNG"
+if docker exec "$CONTAINER" curl -m 6 -sI https://example.com >/dev/null 2>&1; then
+  ok "curl thành công — khớp mặc định 'on' của compose"
 else
-  ok "curl thất bại như mong đợi (biên đóng)"
+  bad "curl thất bại dù BOX_DEFAULT_NETWORK=on — kiểm tra box-firewall/NET_ADMIN"
 fi
 
 head "8) Công tắc ②b: box-firewall on → curl thành công → off → thất bại lại"

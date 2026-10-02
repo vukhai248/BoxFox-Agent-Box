@@ -171,6 +171,11 @@ class Progress:
                      (e.get('result') or {}).get('code') or (e.get('result') or {}).get('error') or '')[:500]}
                     for e in work_checks.observations(self.graph, cid, after=doc['admissionSeq'])
                     if isinstance(e.get('result'), dict) and e['result'].get('is_error')])
+        if interrupted:
+            # W7.2: a started call without a committed result may have had effects; main sees the cause.
+            from .tool_recovery import interrupted_calls, INTERRUPTED_UNSAFE
+            doc['errors'] += [{'tool': p.get('name'), 'code': INTERRUPTED_UNSAFE, 'callId': p.get('id')}
+                              for p in interrupted_calls(self.rt.store, cid, doc['admissionSeq']) if p['replay'] != 'safe']
         with self.db:
             won = self.save(doc, 'interrupted' if interrupted else 'finished', expected=doc['status'])
         if won and doc['blocked']:

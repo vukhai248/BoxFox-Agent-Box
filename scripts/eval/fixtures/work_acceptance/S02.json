@@ -1,0 +1,42 @@
+{
+  "id": "S02",
+  "title": "Prompt đầy đủ — 0 câu hỏi",
+  "goal": "Endpoint lịch hẹn với hợp đồng đã đầy đủ trong prompt",
+  "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Prompt xin triển khai endpoint kèm test thật ⇒ việc thi công rõ ràng, chọn mixed."},
+  "notes": "Prompt đã nêu hết quyết định (định dạng, payload, giới hạn, lỗi, test) ⇒ không được hỏi lại câu nào.",
+  "prompt": "Triển khai endpoint GET /api/patients/{id}/appointments trong repo này. Yêu cầu cố định, không cần hỏi lại: id là chuỗi 8 ký tự chữ và số, không phân biệt hoa thường; trả JSON {patientId, appointments:[{doctor,startAt,status}]}; tối đa 100 mục, sắp xếp startAt giảm dần; mã không tồn tại trả 404 với {'error':'PATIENT_NOT_FOUND'}; không cần auth. Chạy python -m pytest -q và báo kết quả thật.",
+  "interviewAnswers": [],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/appointments.py",
+        "content": "\"\"\"Tra cứu lịch hẹn theo mã bệnh nhân (bản khung, chưa có logic).\"\"\"\n\n\ndef appointments_for(patient_id, rows):\n    return []\n"
+      },
+      {
+        "path": "tests/test_appointments.py",
+        "content": "from src.appointments import appointments_for\n\n\ndef test_returns_rows_for_known_patient():\n    rows = [{'patientId': 'AB12CD34', 'doctor': 'Lan', 'startAt': '2026-01-01T09:00:00Z',\n             'status': 'booked'}]\n    assert appointments_for('ab12cd34', rows) == rows\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "interview_questions_max", "max": 0, "why": "prompt đã đủ: hỏi thêm là lỗi"},
+      {"kind": "child_count_max", "max": 8, "why": "việc nhỏ: không fan-out quá 8 child"}
+    ],
+    "producer": [
+      {"kind": "artifact_regex_any", "patterns": ["src/[\\w./-]+\\.py:\\d+", "python -m pytest"], "why": "plan/handoff phải có acceptance cụ thể"}
+    ],
+    "reviewer": [
+      {"kind": "check_status_any", "status_in": ["pass"], "why": "check cuối phải pass"}
+    ],
+    "testing": [
+      {"kind": "tests_proof", "commands": ["python -m pytest"], "why": "chỉ pass khi có tool_end exitCode=0 thật"}
+    ],
+    "flow": [
+      {"kind": "no_fabricated_url", "why": "0 URL bịa trong output cho user"}
+    ]
+  }
+}

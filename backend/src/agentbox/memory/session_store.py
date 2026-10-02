@@ -371,10 +371,25 @@ class SessionStore:
                                   (sid, kind, json.dumps(payload, ensure_ascii=False), time.time()))
         return cur.lastrowid
 
-    def events(self, sid, after=0):
+    EVENTS_PAGE = 500
+
+    def events(self, sid, after=0, limit=None):
+        """One page of events after `seq`; callers page with the last `seq` they received.
+
+        The page size is capped, so a caller that stops early silently loses events: read
+        `has_more`/`next_after` (see `events_page`) instead of assuming one call is the whole tail.
+        """
         self.get(sid)
+        size = min(int(limit or self.EVENTS_PAGE), self.EVENTS_PAGE)
         return [{'seq': r['seq'], 'type': r['kind'], 'data': json.loads(r['payload']), 'created': r['created']}
-                for r in self.db.execute('SELECT * FROM events WHERE session_id=? AND seq>? ORDER BY seq LIMIT 500', (sid, after))]
+                for r in self.db.execute('SELECT * FROM events WHERE session_id=? AND seq>? ORDER BY seq LIMIT ?',
+                                         (sid, after, size))]
+
+    def events_page(self, sid, after=0, limit=None):
+        """W7.1 — page plus the cursor a client needs to continue without gaps or duplicates."""
+        rows = self.events(sid, after, limit)
+        return {'events': rows, 'hasMore': len(rows) == min(int(limit or self.EVENTS_PAGE), self.EVENTS_PAGE) and bool(rows),
+                'nextAfter': rows[-1]['seq'] if rows else int(after or 0)}
 
     def events_tail(self, sid, limit=500):
         self.get(sid)

@@ -11,6 +11,8 @@ COMPATIBLE_VERSIONS = ('work-checks/10', 'work-checks/11')
 TASKS = ('lookup', 'diagnostic', 'deliverable', 'implementation')
 ARTIFACTS = ('knowledge', 'diagnostic', 'research', 'design', 'plan', 'patch', 'test_report')
 RISKS = ('normal', 'consequential')
+# W6.2 — độ sâu đầu ra tùy chọn của node; đổi depth làm definition() đổi nên artifact cũ thành stale.
+DEPTHS = ('brief', 'standard', 'full')
 CONSEQUENTIAL = re.compile(
     r'medical|clinical|health|legal|security|auth|migration|production|irreversible|'
     r'y tế|bệnh án|pháp lý|bảo mật|xác thực|di trú|mất dữ liệu', re.I)

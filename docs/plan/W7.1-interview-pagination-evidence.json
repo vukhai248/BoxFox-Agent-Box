@@ -1,0 +1,96 @@
+{
+  "schema": "boxfox-w71-interview-pagination-evidence/1",
+  "branch": "vorflux/w7-contracts",
+  "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+  "scope": "W7.1: card interview của main bền qua restart (work_requests kind=main_interview) và phân trang event >500. Không đụng renderer/UI: card dùng lại đúng event decision_requested/decision_resolved. Probe phân trang là deterministic (không model, không provider).",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/work_feedback.py": "f0859f6144a4a796a6c448f1962541e77e56cc96e225c7f74974db6661fee520",
+    "backend/src/agentbox/agent_core/work_decisions.py": "da3e48d390334fb01ee09deae1623dd336f3f0162da41a59862534441cd9cc6d",
+    "backend/src/agentbox/agent_core/runtime.py": "d52d413c378a6ae766d3a4ecb1f076d1fca6d2845e4c31d4d4483c4397f003b1",
+    "backend/src/agentbox/api/server.py": "608a4a7779adb5ce1eb2583ce0b6d5ff196d581eb7152f3f43e0e3fa949b043d",
+    "backend/src/agentbox/memory/session_store.py": "5854b065144803c7d9e8c94a34477e2c8cee3245300dc49ebbf87136653d6f35",
+    "backend/tests/unit/test_work_main_interview_w71.py": "6d9280a51df18869400c30cd89aa4b363a8f832a89e710d7a475a3e8e79d0ebf",
+    "scripts/eval/work_events_pagination_probe.py": "e44eb9299fc004b7fb2dd68b207d337a72f79df1447d66372d9f5f2372cb5013"
+  },
+  "raw": {
+    "path": ".tmp/w7-pagination/results.json",
+    "sha256": "2ff364dff150ad4e46fbdc3d1d8b7af063f25ad1a3c0e5757b60f51733a91632"
+  },
+  "pagination": {
+    "total": 1200,
+    "pageSize": 500,
+    "pageCount": 3,
+    "pages": [
+      {
+        "after": 0,
+        "count": 500,
+        "hasMore": true,
+        "nextAfter": 500
+      },
+      {
+        "after": 500,
+        "count": 500,
+        "hasMore": true,
+        "nextAfter": 1000
+      },
+      {
+        "after": 1000,
+        "count": 200,
+        "hasMore": false,
+        "nextAfter": 1200
+      }
+    ],
+    "fetched": 1200,
+    "noGaps": true,
+    "complete": true,
+    "storedRequestedSeq": 30,
+    "storedResolvedSeq": 1150,
+    "tailSeesResolvedWithoutRequested": true,
+    "reconciled": {
+      "status": "answered",
+      "answers": 1
+    },
+    "oracle": true,
+    "command": "python3 scripts/eval/work_events_pagination_probe.py --output .tmp/w7-pagination",
+    "harness": "Tiến trình riêng scripts/run-harness.py trên data dir của probe (BOXFOX_HARNESS_PORT=3199, BOXFOX_CONTEXT_WINDOW_LOCK=1); gọi HTTP qua net.py"
+  },
+  "mainInterview": {
+    "durableAcrossRestart": true,
+    "cardEvents": [
+      "decision_requested",
+      "decision_resolved"
+    ],
+    "answersRecordedInRunInterviews": true,
+    "outboxJob": "main_decision",
+    "mainTurnYields": {
+      "needsUser": true,
+      "keptFutureInMemory": false,
+      "runBudgetHeld": false
+    },
+    "noActiveRunKeepsLegacyFuture": true,
+    "crashBetweenAnswerAndRunWriteRepairedByRead": true,
+    "tests": {
+      "path": "backend/tests/unit/test_work_main_interview_w71.py",
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "unit": [
+    {
+      "path": "backend/tests/unit/test_work_main_interview_w71.py",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "backend/tests/unit/test_harness_runtime.py",
+      "passed": 23,
+      "failed": 0
+    }
+  ],
+  "open": [
+    "Chưa chạy probe native nhiều lượt cho main interview (đã có test restart thật trong process, mở lại DB).",
+    "Renderer không đổi theo yêu cầu; card mới hiển thị qua đúng event cũ, chưa xác nhận bằng UI render (không dùng CUA/browser)."
+  ],
+  "note": "Probe/test chạy trong worktree trước khi commit; sourceManifest khớp byte với bản đã commit. commit trong results.json (raw) là commit nền 68ecdf04 vì thời điểm chạy chưa commit."
+}

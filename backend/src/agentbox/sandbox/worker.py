@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 
 ROOT = Path('/home/agent/workspace').resolve()
@@ -225,6 +226,197 @@ def shell(command, timeout=30, session='default'):
             'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact}
 
 
+# --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------
+# Quyết định chủ máy 02/10 (duyệt #6423): reviewer được ĐỌC repo (read-only), ghi scratch và dùng MẠNG
+# (theo công tắc firewall của box), nhưng KHÔNG được sửa repo. Vì vậy: bỏ --unshare-net, giữ các
+# namespace còn lại, bỏ tmpfs che ROOT, giữ scratch = tmpfs /tmp + temp dir bind tại /tmp/work.
+# Không có fallback chạy không cô lập: thiếu bwrap/userns thì fail closed VERIFY_EXEC_UNAVAILABLE.
+VERIFY_OUTPUT_MAX = 8000
+VERIFY_TIMEOUT_DEFAULT, VERIFY_TIMEOUT_MAX = 10, 20
+VERIFY_AS_BYTES = 512 << 20
+VERIFY_FSIZE_BYTES = 8 << 20
+VERIFY_NPROC = 64
+VERIFY_WORKDIR = '/tmp/work'
+VERIFY_SCRATCH_MAX = 20          # số file scratch báo trong receipt
+VERIFY_SCRATCH_SCAN_MAX = 200    # trần số mục quét để snippet không làm treo phần thống kê
+_VERIFY_PROBE = None
+
+
+def _verify_digest(text):
+    return 'sha256:' + hashlib.sha256((text or '').encode('utf-8', errors='replace')).hexdigest()
+
+
+def _verify_interpreter(language):
+    fixed = {'python': '/usr/bin/python3', 'node': '/opt/node/bin/node'}[language]
+    found = fixed if os.access(fixed, os.X_OK) else shutil.which('python3' if language == 'python' else 'node')
+    return found
+
+
+def _verify_bwrap_argv(proc_mode, workdir=None):
+    # Bỏ --unshare-net có chủ đích (quyết định 02/10): snippet dùng netns của box nên ra mạng được nếu
+    # công tắc firewall của box đang mở; các namespace khác vẫn tách. Liệt kê tường minh thay cho
+    # --unshare-all để không vô tình tách mạng trở lại khi bubblewrap đổi nghĩa cờ gộp.
+    argv = ['bwrap', '--die-with-parent', '--unshare-user', '--unshare-pid', '--unshare-ipc',
+            '--unshare-uts', '--unshare-cgroup', '--new-session', '--ro-bind', '/', '/', '--dev', '/dev']
+    # Docker (seccomp/apparmor unconfined) cấm mount procfs mới trong userns lồng: khi đó che /proc bằng
+    # tmpfs rỗng thay vì để lộ /proc của container (environ của các tiến trình cùng uid).
+    argv += ['--proc', '/proc'] if proc_mode == 'proc' else ['--tmpfs', '/proc']
+    argv += ['--tmpfs', '/tmp']
+    if workdir is not None:
+        # `/` chỉ-đọc nên không tạo được `/work`; điểm gắn nằm trong tmpfs `/tmp` mới (đã thử --dir,
+        # --tmpfs và bind trước --ro-bind: đều lỗi "Can't mkdir /work: Read-only file system").
+        argv += ['--bind', workdir, VERIFY_WORKDIR]
+    # KHÔNG che ROOT nữa: reviewer phải đọc được repo (read-only) để đối chiếu trích dẫn nguồn.
+    argv += ['--chdir', VERIFY_WORKDIR if workdir is not None else '/', '--']
+    return argv
+
+
+def _verify_scratch(workdir):
+    """File snippet đã tạo trong scratch bind: ([{path, bytes}], overflow).
+
+    Chỉ quét temp dir của CHÍNH lượt gọi (không quét cả /tmp). Có trần số mục để một snippet tạo cây
+    file khổng lồ không làm treo phần thống kê; file chỉ tồn tại tới khi receipt được ghi.
+    """
+    items, seen = [], 0
+    for dirpath, dirnames, filenames in os.walk(workdir):
+        dirnames.sort()
+        for name in sorted(filenames):
+            seen += 1
+            if seen > VERIFY_SCRATCH_SCAN_MAX:
+                return items[:VERIFY_SCRATCH_MAX], seen
+            full = os.path.join(dirpath, name)
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                continue
+            items.append({'path': os.path.relpath(full, workdir), 'bytes': size})
+    items.sort(key=lambda item: item['path'])
+    return items[:VERIFY_SCRATCH_MAX], max(0, len(items) - VERIFY_SCRATCH_MAX)
+
+
+def verify_probe(refresh=False):
+    """Cached isolation probe: {available, reason, procMode}."""
+    global _VERIFY_PROBE
+    if _VERIFY_PROBE is not None and not refresh:
+        return _VERIFY_PROBE
+    if not shutil.which('bwrap'):
+        _VERIFY_PROBE = {'available': False, 'reason': 'bwrap not installed', 'procMode': None}
+        return _VERIFY_PROBE
+    reason = None
+    for mode in ('proc', 'tmpfs'):
+        try:
+            done = subprocess.run(_verify_bwrap_argv(mode) + ['true'], capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            reason = str(exc)[:300]
+            continue
+        if done.returncode == 0:
+            _VERIFY_PROBE = {'available': True, 'reason': None, 'procMode': mode}
+            return _VERIFY_PROBE
+        reason = (done.stderr or b'').decode('utf-8', errors='replace').strip()[:300] or f'exit {done.returncode}'
+    _VERIFY_PROBE = {'available': False, 'reason': reason, 'procMode': None}
+    return _VERIFY_PROBE
+
+
+# Giới hạn đặt BÊN TRONG user namespace mới, ngay trước execv: RLIMIT_NPROC đặt ở ngoài sẽ đếm mọi
+# thread cùng uid trên máy (trong Docker không thấy được qua /proc của container) và làm clone() của
+# bwrap hỏng EAGAIN; trong namespace mới nó chỉ đếm tiến trình của snippet.
+VERIFY_LAUNCHER = (
+    'import os,resource,sys\n'
+    'cpu,nproc,fsize,space=map(int,sys.argv[1:5])\n'
+    'resource.setrlimit(resource.RLIMIT_NPROC,(nproc,nproc))\n'
+    'resource.setrlimit(resource.RLIMIT_FSIZE,(fsize,fsize))\n'
+    'resource.setrlimit(resource.RLIMIT_CPU,(cpu,cpu+1))\n'
+    'space and resource.setrlimit(resource.RLIMIT_AS,(space,space))\n'
+    'os.execv(sys.argv[5],sys.argv[5:])\n')
+
+
+def _verify_launcher(language, timeout, interpreter, tail):
+    launcher = _verify_interpreter('python')
+    # V8 giữ trước vùng địa chỉ lớn nên node không khởi động dưới RLIMIT_AS 512 MiB;
+    # node bị chặn heap bằng --max-old-space-size thay vào đó.
+    space = VERIFY_AS_BYTES if language == 'python' else 0
+    return [launcher, '-I', '-c', VERIFY_LAUNCHER, str(timeout), str(VERIFY_NPROC), str(VERIFY_FSIZE_BYTES),
+            str(space), interpreter, *tail]
+
+
+def _verify_version(interpreter):
+    try:
+        done = subprocess.run([interpreter, '--version'], capture_output=True, text=True, timeout=5)
+        return ((done.stdout or '') + (done.stderr or '')).strip()[:80] or interpreter
+    except (OSError, subprocess.TimeoutExpired):
+        return interpreter
+
+
+def verify_exec(args):
+    import tempfile
+    language, code, claim = args.get('language'), args.get('code'), args.get('claim')
+    stdin = args.get('stdin') or ''
+    if language not in ('python', 'node'):
+        raise ValueError('VERIFY_EXEC_INVALID: language must be one of python|node')
+    for field, value, limit in (('code', code, 8000), ('claim', claim, 300)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f'VERIFY_EXEC_INVALID: {field} must be a non-empty string')
+        if len(value) > limit:
+            raise ValueError(f'VERIFY_EXEC_INVALID: {field} exceeds {limit} characters')
+    if not isinstance(stdin, str) or len(stdin) > 8000:
+        raise ValueError('VERIFY_EXEC_INVALID: stdin must be a string of at most 8000 characters')
+    requested = args.get('timeoutSeconds') or VERIFY_TIMEOUT_DEFAULT
+    if isinstance(requested, bool) or not isinstance(requested, int) or requested < 1:
+        raise ValueError('VERIFY_EXEC_INVALID: timeoutSeconds must be an integer 1-20')
+    timeout = min(VERIFY_TIMEOUT_MAX, requested)
+    probe = verify_probe()
+    if not probe['available']:
+        return {'is_error': True, 'errorCode': 'VERIFY_EXEC_UNAVAILABLE',
+                'error': 'VERIFY_EXEC_UNAVAILABLE: no working bubblewrap isolation in the box (' +
+                         str(probe['reason']) + '); see README sandbox/bwrap. No unisolated fallback.'}
+    interpreter = _verify_interpreter(language)
+    if not interpreter:
+        return {'is_error': True, 'errorCode': 'VERIFY_EXEC_UNAVAILABLE',
+                'error': f'VERIFY_EXEC_UNAVAILABLE: {language} interpreter not found'}
+    tail = ['-I', '-c', code] if language == 'python' else \
+        ['--max-old-space-size=256', '--input-type=module', '-e', code]
+    tmp = tempfile.mkdtemp(prefix='boxfox-verify-', dir='/tmp')
+    started = time.monotonic()
+    timed_out = False
+    scratch, scratch_overflow = [], 0
+    try:
+        argv = _verify_bwrap_argv(probe['procMode'], tmp) + _verify_launcher(language, timeout, interpreter, tail)
+        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                start_new_session=True,
+                                env={'PATH': '/usr/bin:/bin:/opt/node/bin', 'LANG': 'C.UTF-8', 'HOME': VERIFY_WORKDIR})
+        try:
+            out, err = proc.communicate(stdin.encode('utf-8'), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            os.killpg(proc.pid, signal.SIGKILL)
+            out, err = proc.communicate()
+        scratch, scratch_overflow = _verify_scratch(tmp)  # phải quét TRƯỚC khi finally xoá temp dir
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    duration = int((time.monotonic() - started) * 1000)
+    stdout = out.decode('utf-8', errors='replace')
+    stderr = err.decode('utf-8', errors='replace')
+    truncated = len(stdout) > VERIFY_OUTPUT_MAX or len(stderr) > VERIFY_OUTPUT_MAX
+    content = stdout[:VERIFY_OUTPUT_MAX]
+    if stderr:
+        content += ('\n' if content and not content.endswith('\n') else '') + '[stderr]\n' + stderr[:VERIFY_OUTPUT_MAX]
+    exit_code = None if timed_out else proc.returncode
+    receipt = {'kind': 'verify_exec', 'language': language, 'interpreter': _verify_version(interpreter),
+               'codeHash': _verify_digest(code), 'stdinHash': _verify_digest(stdin),
+               'outputHash': _verify_digest(content), 'exitCode': exit_code, 'durationMs': duration,
+               'truncated': truncated, 'timedOut': timed_out, 'claim': claim, 'isolation': probe['procMode'],
+               # Scratch để finding trích được file đã tạo; repo là read-only nhưng ĐỌC được, mạng dùng
+               # netns của box (theo công tắc firewall).
+               'scratchRoot': VERIFY_WORKDIR, 'scratch': scratch,
+               **({'scratchOverflow': scratch_overflow} if scratch_overflow else {})}
+    result = {'content': content, 'exit_code': exit_code, 'is_error': timed_out, 'receipt': receipt}
+    if timed_out:
+        # Hết giờ vẫn là một quan sát hợp lệ: is_error=true nhưng receipt được giữ.
+        result.update(errorCode='VERIFY_EXEC_TIMEOUT',
+                      error=f'VERIFY_EXEC_TIMEOUT: snippet exceeded {timeout}s; process group stopped')
+    return result
+
+
 def _pointer_move(x: int, y: int) -> None:
     """Đưa con trỏ tới (x, y) rồi CHỜ nó tới nơi — không dùng `mousemove --sync`.
 
@@ -258,11 +450,102 @@ def _pointer_click(args, *click_args) -> list:
     return ['xdotool', 'click', *click_args]
 
 
+# W9 (CDP attach): cổng 9222 mở KHÔNG có nghĩa CDP dùng được. Khi một tab đang chạy vòng lặp JS
+# trên main thread, `connect_over_cdp` phải khởi tạo CHÍNH trang đó nên bị chặn cho tới khi vòng lặp
+# kết thúc — đo trong box (`deploy/docker/tests/probe_cdp_attach.py`): vòng lặp 40 s giữ attach 59,2 s,
+# nên trần 15 s cũ nổ "Timeout 15000ms exceeded" dù websocket đã kết nối (đúng chữ ký lỗi sweep
+# W8-A4.1: `<ws connected> ws://127.0.0.1:9222/devtools/browser/...`). Ba lớp ở đây tách lỗi khỏi
+# mạng: chờ `/json/version` trả JSON trước khi attach; attach theo NGÂN SÁCH có thử lại; quét marker
+# từng trang bằng `wait_for_function` (có trần) để một trang treo không chặn cả lượt gọi.
+CDP_PORT = 9222
+CDP_ENDPOINT = 'http://127.0.0.1:9222'
+# Trần chờ CDP trả JSON sau khi cổng mở (Chromium còn dựng profile/target khi cổng đã nghe).
+# Đo trong box: khởi động lạnh trả `/json/version` sau 0,19 s, nên 15 s là rộng rãi.
+CDP_READY_TIMEOUT = 15.0
+# Mỗi lần attach 35 s, tối đa 2 lần. Trần 15 s cũ quá sát: khi có một tab bận JS, attach mất ĐÚNG
+# ~59,2 s (đo 4 mức vòng lặp 10/20/40/90 s — không phụ thuộc độ dài vòng lặp, giống một trần phía
+# Chromium), nên lần thử thứ hai bắt được ca đó. Tổng ngân sách: 15 (chờ CDP) + 70 (attach) + 25
+# (`page.goto`) = 110 s, vẫn dưới trần 140 s của `docker exec` (`sandbox/executor.py`).
+CDP_ATTACH_ATTEMPTS = 2
+CDP_ATTACH_ATTEMPT_TIMEOUT_MS = 35000
+# Trần cho một lần đọc `window.name` của một trang.
+CDP_PAGE_MARKER_TIMEOUT_MS = 5000
+
+
+def cdp_http_json(path, timeout=2.0):
+    """JSON từ endpoint HTTP của CDP (`/json/version`, `/json/list`) — thuần stdlib."""
+    with urllib.request.urlopen(CDP_ENDPOINT + path, timeout=timeout) as response:
+        return json.loads(response.read().decode('utf-8', 'replace'))
+
+
+def cdp_ready(deadline):
+    """CDP đã trả JSON chưa (cổng TCP mở là chưa đủ để attach)."""
+    while True:
+        try:
+            cdp_http_json('/json/version', timeout=1.0)
+            return True
+        except Exception:  # noqa: BLE001 - cổng chưa mở / Chromium còn dựng profile / HTTP chưa nghe
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.2)
+
+
+def cdp_attach(pw):
+    """`connect_over_cdp` theo ngân sách: thử lại một lần, lỗi nêu ĐÚNG bước đã hỏng.
+
+    Trả `(browser, {'attempts', 'attachSec'})`. Không gán lỗi attach cho mạng: đo được nguyên nhân
+    là một trang bận JS giữ quá trình khởi tạo trang, nên thử lại có ý nghĩa.
+    """
+    started = time.monotonic()
+    last = None
+    for attempt in range(1, CDP_ATTACH_ATTEMPTS + 1):
+        try:
+            client = pw.chromium.connect_over_cdp(CDP_ENDPOINT, timeout=CDP_ATTACH_ATTEMPT_TIMEOUT_MS)
+        except Exception as exc:  # noqa: BLE001 - Playwright ném Error/TimeoutError khác nhau theo bản
+            last = exc
+            continue
+        return client, {'attempts': attempt, 'attachSec': round(time.monotonic() - started, 3)}
+    raise ValueError('BROWSER_CDP_ATTACH_TIMEOUT: connect_over_cdp ' + CDP_ENDPOINT + ' failed after '
+                     + str(CDP_ATTACH_ATTEMPTS) + ' attempts x ' + str(CDP_ATTACH_ATTEMPT_TIMEOUT_MS // 1000)
+                     + 's (a page blocked by a long-running script can hold this open; retry after it '
+                       'finishes): ' + str(last)[:300])
+
+
+def page_has_marker(page, marker):
+    """`window.name` của trang có bằng marker của phiên không — CÓ TRẦN thời gian.
+
+    `page.evaluate` không nhận `timeout` và không dùng `set_default_timeout`, nên một trang đang bận
+    JS sẽ chặn cả lượt gọi cho tới khi harness cắt ở 140 s. `wait_for_function` có trần do driver
+    Playwright giữ, nên trang treo chỉ bị coi là "không phải trang của phiên" rồi đi tiếp.
+    """
+    try:
+        page.wait_for_function('(value) => window.name === value', arg=marker,
+                               timeout=CDP_PAGE_MARKER_TIMEOUT_MS)
+        return True
+    except Exception:  # noqa: BLE001 - hết trần (trang bận) hoặc trang đã đóng
+        return False
+
+
+def page_set_marker(page, marker):
+    """Đặt `window.name` của trang = marker, cũng CÓ TRẦN (lý do như `page_has_marker`).
+
+    Hàm JS trả `true` ngay nên `wait_for_function` chỉ gọi nó một lần; hết trần (trang bận JS) thì
+    trả False. Điều hướng trong cùng tab vốn giữ `window.name`, nên bước này chỉ để chống chệch.
+    """
+    try:
+        page.wait_for_function('(value) => { window.name = value; return true; }', arg=marker,
+                               timeout=CDP_PAGE_MARKER_TIMEOUT_MS)
+        return True
+    except Exception:  # noqa: BLE001 - hết trần (trang bận) hoặc trang đã đóng
+        return False
+
+
 def browser(args, session):
     from playwright.sync_api import sync_playwright
     action = args.get('action', 'snapshot')
+    started = time.monotonic()
     try:
-        with socket.create_connection(('127.0.0.1', 9222), timeout=1):
+        with socket.create_connection(('127.0.0.1', CDP_PORT), timeout=1):
             pass
     except OSError:
         if action != 'navigate':
@@ -271,29 +554,39 @@ def browser(args, session):
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         for _ in range(40):
             try:
-                with socket.create_connection(('127.0.0.1', 9222), timeout=0.2):
+                with socket.create_connection(('127.0.0.1', CDP_PORT), timeout=0.2):
                     break
             except OSError:
                 time.sleep(0.2)
         else:
             raise ValueError('Sandbox Chromium failed to start CDP')
+    if not cdp_ready(time.monotonic() + CDP_READY_TIMEOUT):
+        raise ValueError('BROWSER_CDP_NOT_READY: port ' + str(CDP_PORT) + ' is open but /json/version did '
+                         'not answer within ' + str(int(CDP_READY_TIMEOUT)) + 's')
     with sync_playwright() as pw:
-        client = pw.chromium.connect_over_cdp('http://127.0.0.1:9222', timeout=15000)
-        context = client.contexts[0]
+        client, attach = cdp_attach(pw)
+        attach['readySec'] = round(time.monotonic() - started, 3)
+        context = client.contexts[0] if client.contexts else None
+        if context is None:
+            raise ValueError('BROWSER_CDP_NO_CONTEXT: Chromium has no browser context to use')
         marker = 'boxfox-harness-' + session
-        page = next((p for p in context.pages if p.evaluate('window.name') == marker), None)
+        page = next((p for p in context.pages if page_has_marker(p, marker)), None)
         if page is None:
             if action != 'navigate':
                 raise ValueError('No browser page for this session. Navigate first.')
             page = context.new_page()
-            page.evaluate('(v) => window.name = v', marker)
+            if not page_set_marker(page, marker):
+                raise ValueError('BROWSER_MARKER_FAILED: could not tag the new browser page for this session')
         page.set_default_timeout(10000)
         if action == 'navigate':
             url = args['url']
             if not url.startswith(('http://', 'https://')):
                 raise ValueError('Only http/https browser URLs are allowed')
             page.goto(url, wait_until='domcontentloaded', timeout=25000)
-            page.evaluate('(v) => window.name = v', marker)
+            # KHÔNG `page.evaluate` ở đây: trang vừa điều hướng có thể đang bận JS (vòng lặp trên main
+            # thread) và `evaluate` không có trần → giữ cả lượt gọi tới khi harness cắt ở 140 s. Hỏng
+            # bước đặt lại marker cũng KHÔNG làm hỏng lượt điều hướng đã xong.
+            attach['markerSet'] = page_set_marker(page, marker)
         elif action in {'click', 'fill'}:
             ref = args.get('ref', '')
             if not re.fullmatch(r'[a-f0-9]{8}-\d+', ref):
@@ -312,7 +605,7 @@ def browser(args, session):
             output.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(output))
             return {'content': 'Browser screenshot captured', 'artifact': str(output.relative_to(ROOT)),
-                    'image': base64.b64encode(output.read_bytes()).decode(), 'mime': 'image/png'}
+                    'image': base64.b64encode(output.read_bytes()).decode(), 'mime': 'image/png', 'attach': attach}
         elif action != 'snapshot':
             raise ValueError('Unknown browser action')
         nonce = uuid.uuid4().hex[:8]
@@ -320,7 +613,8 @@ def browser(args, session):
             const ref = nonce + '-' + i; e.setAttribute('data-boxfox-ref',ref);
             return {ref,tag:e.tagName,text:(e.innerText||e.getAttribute('aria-label')||e.getAttribute('placeholder')||'').slice(0,180)};
         })''', nonce)
-        return {'url': page.url, 'title': page.title(), 'content': page.locator('body').inner_text()[:12000], 'elements': elements}
+        return {'url': page.url, 'title': page.title(), 'content': page.locator('body').inner_text()[:12000],
+                'elements': elements, 'attach': attach}
 
 
 # P1.4 (đợt 23) — BẰNG CHỨNG TẠI GỐC: mỗi lần ghi tệp để lại một mảnh kiểm chứng được, sinh
@@ -1225,6 +1519,10 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
         return {'content': '\n'.join(results)}
     if name == 'terminal_exec':
         return shell(args['command'], args.get('timeout', 30), session)
+    if name == 'verify_exec':
+        return verify_exec(args)
+    if name == 'verify_exec_probe':
+        return {'content': 'verify_exec isolation probe', **verify_probe(refresh=bool(args.get('refresh')))}
     if name == 'browser_use':
         return browser(args, session)
     if name == 'computer_use':

@@ -1,0 +1,11 @@
+{
+  "case": "a report without a findings block keeps the old semantics",
+  "expected": {
+    "blocking": [],
+    "downgraded": [],
+    "status": "revise"
+  },
+  "reportText": "Review of the assigned artifact.\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}]}\n```\nVERDICT: revise",
+  "source": "docs/plan/W6.1-review-unit-version-evidence.json",
+  "toolEvents": []
+}

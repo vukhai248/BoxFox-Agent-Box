@@ -244,7 +244,7 @@ class Decisions:
                     row = self.db.execute('SELECT * FROM work_feedback_outbox WHERE id=?', (doc['sourceId'],)).fetchone()
                     if not row or row['status'] != ident['sourceStatus']:
                         return False
-                    if kind == 'answer' and request['status'] != 'ready':
+                    if kind == 'answer' and request['status'] != ('answered' if request['kind'] == 'main_interview' else 'ready'):
                         return False
                     if kind == 'continuation' and request['status'] not in ('ready', 'interrupted'):
                         return False
