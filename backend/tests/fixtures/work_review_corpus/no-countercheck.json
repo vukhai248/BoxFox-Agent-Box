@@ -1,0 +1,29 @@
+{
+  "case": "blocking finding without a self-challenge is downgraded",
+  "expected": {
+    "blocking": [],
+    "downgraded": [
+      {
+        "findingId": "F1",
+        "reason": "NO_COUNTERCHECK"
+      }
+    ],
+    "status": "unverified"
+  },
+  "reportText": "Review of the assigned artifact.\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\", \"findingIds\": [\"F1\"]}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}], \"findings\": [{\"id\": \"F1\", \"criterionId\": \"A1\", \"severity\": \"blocking\", \"scope\": \"node\", \"claim\": \"parse_rows raises csv.Error, not ValueError.\", \"evidenceRefs\": [\"call_read\"], \"impact\": \"A1 requires the BOM\", \"fix\": \"write the BOM first\"}]}\n```\nVERDICT: revise",
+  "source": "docs/plan/W6.1.2-review-followup-evidence.json#ValueError-vs-csv.Error",
+  "toolEvents": [
+    {
+      "args": {
+        "path": "src/parse.py"
+      },
+      "id": "call_read",
+      "name": "file_read",
+      "result": {
+        "content": "raise csv.Error",
+        "exit_code": 0,
+        "is_error": false
+      }
+    }
+  ]
+}

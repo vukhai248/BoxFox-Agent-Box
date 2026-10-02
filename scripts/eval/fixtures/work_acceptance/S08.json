@@ -1,0 +1,42 @@
+{
+  "id": "S08",
+  "title": "User đổi ý sau checkpoint — revision mới, không trùng continuation",
+  "goal": "Câu trả lời đổi ý tạo revision mới của cùng request, không ghi đè và không resume hai lần",
+  "ownerLanguage": "vi",
+  "intent": {"command": "plan", "why": "Chỉ cần tài liệu kế hoạch di trú, không thi công ⇒ /plan (artifact-only)."},
+  "notes": "Vòng hỏi thứ hai dùng bộ trả lời khác (đổi ý) ⇒ revision phải tăng, không được tạo continuation trùng.",
+  "prompt": "Lập kế hoạch di trú schema theo hai giai đoạn cho dịch vụ nhỏ, ghi vào docs/migration.md. Nếu cần tôi quyết định giữ hay bỏ cột cũ thì hỏi; còn điểm nào mơ hồ thì hỏi tiếp cho rõ.",
+  "interviewAnswers": [
+    {"text": "Chọn phương án A: giữ cột cũ thêm một sprint để rollback."}
+  ],
+  "faults": [
+    {
+      "kind": "answer_revision",
+      "answers": [
+        {"text": "Tôi đổi ý: chọn phương án B, bỏ cột cũ ngay sau khi backfill xong và giữ backup một tuần."}
+      ]
+    }
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "docs/migration.md",
+        "content": "# Di trú schema\n\n(chưa có quyết định; ghi rõ quyết định của owner và phương án dự phòng)\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "interview_questions_max", "max": 3, "why": "chỉ hỏi câu quyết định, tối đa 3"},
+      {"kind": "interview_answered", "why": "cả hai vòng trả lời phải được ghi nhận"},
+      {"kind": "feedback_revision_min", "min": 2, "why": "đổi ý tạo revision mới của request, không ghi đè bản cũ"}
+    ],
+    "producer": [
+      {"kind": "artifact_regex_any", "patterns": ["docs/migration\\.md"], "why": "kế hoạch phải nằm ở file owner yêu cầu"}
+    ],
+    "flow": [
+      {"kind": "no_duplicate_continuation", "why": "mỗi (request, revision, child) chỉ được resume một lần"}
+    ]
+  }
+}

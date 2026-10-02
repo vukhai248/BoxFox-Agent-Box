@@ -450,7 +450,11 @@ def test_ship_in_a_git_repository_commits_on_a_local_branch(tmp_path):
     assert shipped['ship']['status'] == 'local' and shipped['ship']['commit'] == 'abc1234'
     assert shipped['ship']['branch'] == 'boxfox/add-an-export-button'
     commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
-    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") for command in commands if 'git ' in command)
+    # Legacy/touch-set ship stays scoped to repoPath; the only extra read is the isolation probe
+    # (W8.A4.3) that decides whether the workspace root itself is the repository.
+    probe = 'cd . && t=$(git rev-parse --show-toplevel'
+    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") or command.startswith(probe)
+               for command in commands if 'git ' in command)
     # An existing branch is reused, never reset with `-B`; plan artifacts stay out of the commit.
     assert any("git checkout 'boxfox/add-an-export-button' || git checkout -b 'boxfox/add-an-export-button'"
                in command for command in commands)
@@ -639,7 +643,9 @@ def test_interview_answers_are_recorded_on_the_active_run(tmp_path):
 def test_orchestrator_holds_the_work_tools_and_the_groups_cover_them():
     assert set(WORK_TOOLS) <= ORCHESTRATOR_TOOLS
     groups = {group['key']: group['tools'] for group in tool_groups.TOOL_GROUPS}
-    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read']
+    # W6.1.3: verify_exec vào nhóm workGraph (công cụ của người phản biện).
+    assert groups['workGraph'] == ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report',
+                                  'work_artifact_read', 'verify_exec']
     assert 'interview' in groups['questionsApprovals']
     names = {schema['function']['name'] for schema in SCHEMAS}
     assert set(WORK_TOOLS) <= names

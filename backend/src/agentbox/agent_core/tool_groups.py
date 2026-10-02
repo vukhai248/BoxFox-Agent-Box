@@ -1,7 +1,7 @@
 """Mười nhóm công cụ của runtime — bảng "Nút vặn của runtime" nói với giao diện.
 
 Bảng này là nguồn duy nhất cho khối "Tool access" ở tab Harness: hợp của mười nhóm
-phải bằng ĐÚNG bộ công cụ của orchestrator (`roles.ORCHESTRATOR_TOOLS`, 43 công cụ),
+phải bằng ĐÚNG bộ công cụ của orchestrator (`roles.ORCHESTRATOR_TOOLS`, 47 công cụ),
 và mỗi nhóm giữ trật tự như bảng trong kế hoạch. `alwaysOn` đánh dấu nhóm không thể
 tắt: hỏi người dùng và xin phép là hai công cụ quyết định (`roles.DECISION`), mọi
 vai trò đều có, nên một harness tắt chúng là một harness không còn hỏi được ai.
@@ -49,8 +49,12 @@ TOOL_GROUPS = [
      'tools': ['peer_read', 'await_children'],
      'alwaysOn': False},
     # Work Graph — main dựng đồ thị việc, harness chạy vòng phản biện, duyệt rồi chạy DAG.
+    # W6.1.3 — `verify_exec` là công cụ của người phản biện (thử MỘT claim tính toán trong sandbox
+    # tạm: repo chỉ-đọc, scratch riêng, mạng theo công tắc firewall của box — #6423); nó nằm ở bộ
+    # của orchestrator để `allowed_tools` không cắt mất của con.
     {'key': 'workGraph',
-     'tools': ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read'],
+     'tools': ['work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read',
+               'verify_exec'],
      'alwaysOn': False},
     {'key': 'questionsApprovals',
      'tools': ['ask_user', 'request_approval', 'interview'],

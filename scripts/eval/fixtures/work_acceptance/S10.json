@@ -1,0 +1,38 @@
+{
+  "id": "S10",
+  "title": "Plan nhiều heading thiếu design/acceptance — plan_review revise",
+  "goal": "Review phải bắt lỗi plan thiếu thiết kế/acceptance và giữ finding có căn cứ",
+  "ownerLanguage": "vi",
+  "intent": {"command": "plan", "why": "Kế hoạch phải qua plan_review trước khi chủ nhà duyệt ⇒ /plan (artifact-only)."},
+  "notes": "docs/plan-input.md là bản nháp nhiều mục nhưng thiếu hợp đồng dữ liệu, phân quyền và tiêu chí nghiệm thu.",
+  "prompt": "Dùng docs/plan-input.md làm đầu vào, lập kế hoạch triển khai API xuất CSV cho báo cáo doanh thu. Kế hoạch phải qua review độc lập trước khi tôi duyệt.",
+  "interviewAnswers": [],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "docs/plan-input.md",
+        "content": "# Nháp kế hoạch xuất CSV\n\n## M1\nTạo endpoint export.\n\n## M2\nXử lý lỗi.\n\n## M3\nBảo mật và phân quyền.\n\n## M4\nChạy test sau khi code xong.\n\n## M5\nTriển khai lên môi trường thật.\n\n## M6\nTheo dõi sau khi lên.\n\n## M7\nViết tài liệu.\n\n## M8\nDọn dẹp mã cũ.\n\n## M9\nTối ưu tốc độ.\n\n## M10\nBàn giao.\n"
+      },
+      {
+        "path": "src/reports.py",
+        "content": "\"\"\"Xuất CSV báo cáo.\"\"\"\n\n\ndef export_csv(rows):\n    return ''\n"
+      }
+    ]
+  },
+  "expectedState": "needs_revision",
+  "oracle": {
+    "main": [
+      {"kind": "check_status_any", "checkId": "plan_review", "status_in": ["revise"], "why": "review phải yêu cầu sửa plan thiếu design/acceptance"},
+      {"kind": "check_count_min", "checkId": "plan_review", "min": 1, "why": "plan phải được review độc lập trước khi trình duyệt"}
+    ],
+    "reviewer": [
+      {"kind": "finding_kept_min", "min": 1, "why": "finding đúng của oracle (thiếu hợp đồng/tiêu chí) phải được giữ, không bị hạ"},
+      {"kind": "finding_downgrade_rate_max", "max": 0.5, "why": "tỉ lệ hạ finding phải thấp và được báo riêng"},
+      {"kind": "word_count_max", "source": "check", "checkId": "plan_review", "max": 600, "min_sources": 1, "why": "prose của review ≤ 600 từ (PROSE_WORD_CAP), đo ngoài khối code và dòng VERDICT"}
+    ],
+    "producer": [
+      {"kind": "report_regex_any", "patterns": ["plan-input|plan_review|acceptance|nghiệm thu"], "why": "báo cáo review phải trỏ đúng chỗ thiếu"}
+    ]
+  }
+}

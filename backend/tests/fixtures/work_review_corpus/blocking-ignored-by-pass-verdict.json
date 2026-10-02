@@ -1,0 +1,26 @@
+{
+  "case": "a kept blocking finding cannot be neutralised by an all-pass report with VERDICT: ok",
+  "expected": {
+    "blocking": [
+      "F1"
+    ],
+    "downgraded": [],
+    "status": "revise"
+  },
+  "reportText": "Review of the assigned artifact.\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}], \"findings\": [{\"id\": \"F1\", \"criterionId\": \"A1\", \"severity\": \"blocking\", \"scope\": \"node\", \"claim\": \"The export path drops the owner label.\", \"evidenceRefs\": [\"call_read\"], \"counterCheck\": {\"strongest\": \"Maybe a later stage adds the label\", \"checkedBy\": \"call_read\", \"outcome\": \"refuted\"}, \"impact\": \"A1 requires the owner label\", \"fix\": \"keep the label in the export path\"}]}\n```\nVERDICT: ok",
+  "source": "review vòng 2 (review-sandbox F1) — soundness case: valid blocking finding + all-pass coverage",
+  "toolEvents": [
+    {
+      "args": {
+        "path": "src/exporter.py"
+      },
+      "id": "call_read",
+      "name": "file_read",
+      "result": {
+        "content": "def write(rows): ...",
+        "exit_code": 0,
+        "is_error": false
+      }
+    }
+  ]
+}

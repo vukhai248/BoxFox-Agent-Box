@@ -145,12 +145,12 @@ class SandboxExecutor:
                 raise BoxRequestError(box_error_message(response), status_code=response.status_code)
             return response.json()
 
-    async def execute(self, name, args, session, turn=None, step=None, tool_call_id=None):
+    async def execute(self, name, args, session, turn=None, step=None, tool_call_id=None, root=None):
         # P1.4: `turn`/`step`/`tool_call_id` do HARNESS đặt (không lấy từ `args` của model). Chỉ
         # chuyển tiếp giá trị THẬT: chỗ gọi cũ không truyền gì thì `_execute` nhận đúng ba tham
         # số như trước (bài kiểm cũ thay `_execute` bằng một hàm ba tham số).
         context = {key: value for key, value in (('turn', turn), ('step', step),
-                                                 ('tool_call_id', tool_call_id)) if value is not None}
+                                                 ('tool_call_id', tool_call_id), ('root', root)) if value is not None}
         if name in {'computer_screen_capture', 'computer_screen_record', 'computer_use', 'browser_use', 'inspect_element'}:
             async with self.visual_lock:
                 result = await self._execute(name, args, session, **context)
@@ -183,7 +183,7 @@ class SandboxExecutor:
             **note,
         )
 
-    async def _execute(self, name, args, session, turn=None, step=None, tool_call_id=None, retry=False):
+    async def _execute(self, name, args, session, turn=None, step=None, tool_call_id=None, retry=False, root=None):
         # `turn`/`step`/`tool_call_id` đi cùng yêu cầu (P1.4): hai route capture/ghi hình nhận
         # `step`/`toolCallId` (`deploy/docker/ide-proxy.py:284`), worker nhận cả ba trong payload.
         if name == 'inspect_element':
@@ -231,17 +231,23 @@ class SandboxExecutor:
                     raise ValueError('No recording owned by this session')
                 data = await self.request('/__box/record/stop', {'recordingId': rid})
                 self.recordings.pop(session, None)
+                if isinstance(data, dict) and data.get('ok') is False:
+                    # W9: box đã dừng ffmpeg nhưng file không probe được (`RECORDING_INCOMPLETE`).
+                    # Đánh dấu hỏng để model/harness không coi đó là một video đã lưu.
+                    data = {**data, 'is_error': True}
                 return data
             raise ValueError('Unknown recording action')
         # Worker executes inside Docker; no interpolation of model text into the host shell.
         if not self._worker_synced:
             self._sync_worker()
+        # W8.A4.3: `root` là worktree của run/node (worker kiểm lại đường dẫn); không có thì giữ workspace.
+        workdir = '/home/agent/workspace' + ('/' + root if root else '')
         proc = await asyncio.create_subprocess_exec('docker', 'exec', '-i', '--user', 'agent',
-            '--workdir', '/home/agent/workspace', self.container, '/opt/pw-driver/bin/python3', CONTAINER_WORKER_PATH,
+            '--workdir', workdir, self.container, '/opt/pw-driver/bin/python3', CONTAINER_WORKER_PATH,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
             payload = {'name': name, 'args': args, 'session': session, 'turn': turn, 'step': step,
-                       'toolCallId': tool_call_id}
+                       'toolCallId': tool_call_id, **({'root': root} if root else {})}
             out, err = await asyncio.wait_for(proc.communicate(json.dumps(payload).encode()), timeout=140)
         except BaseException:
             if proc.returncode is None:
@@ -255,7 +261,8 @@ class SandboxExecutor:
             if not retry and (CONTAINER_WORKER_PATH in err_msg or 'No such file' in err_msg or "can't open file" in err_msg):
                 self._worker_synced = False
                 self._sync_worker()
-                return await self._execute(name, args, session, turn=turn, step=step, tool_call_id=tool_call_id, retry=True)
+                return await self._execute(name, args, session, turn=turn, step=step, tool_call_id=tool_call_id,
+                                           retry=True, **({'root': root} if root else {}))
             raise RuntimeError('Sandbox unavailable: ' + err_msg[:500])
         return json.loads(out)
 

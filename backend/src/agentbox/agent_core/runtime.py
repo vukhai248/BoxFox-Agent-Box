@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow, work_graph, work_feedback
+from . import plan_workflow, verify_exec, work_graph, work_feedback, work_scope
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -74,6 +74,7 @@ from ..skills.lifecycle import SkillLoader
 from ..skills.runtime_commands import RuntimeCommands
 from ..observability.system_log import system_log
 from .tool_arg_errors import parse_tool_arguments
+from . import tool_recovery
 # P1 — vỏ chế độ Research: hằng và cổng của mode (plan v2 §5.2).
 from .limits import (RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAULT_MODE,
                      RESEARCH_MODE_BLOCK_MARKER, RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
@@ -189,7 +190,7 @@ Responses that only state intentions without action are strictly prohibited."""
 
 EXECUTION_DISCIPLINE_GUIDANCE = """# Execution Discipline & Mandatory Tool Use
 NEVER answer these from memory, mental computation, or hallucination — ALWAYS use a tool:
-- Arithmetic, math, calculations -> terminal_exec (e.g. python -c "...")
+- Arithmetic, math, calculations -> terminal_exec (e.g. python -c "..."); reviewers: verify_exec (reads the repo read-only, writes scratch in /tmp/work, network allowed)
 - Hashes, checksums, encodings -> terminal_exec (e.g. sha256sum, base64)
 - Current time, date, environment variables -> terminal_exec
 - System state: OS, memory, processes, ports -> terminal_exec
@@ -221,7 +222,7 @@ D. Interview only on real ambiguity after exploring: `interview(questions=[{id, 
    For a specifically assigned Work Graph node, `work_graph(action='grant', nodeId, stage, purpose, decisionKeys, publishInterview, resumeOnAnswers, revision, invocationId)` grants 1-3 owner-intent decision keys. The child drafts its questions; backend publication/continuation uses the root grant without another main model relay. Without a grant use `interview(workRequestId, revision)` to publish its saved questions by ref. Notifications are progress, not a mandatory decision turn. A revoked/stale grant or changed check binding requires your decision; no grant permits Build for an artifact-only request.
 E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (each entry is an exact runnable command; describe expected results in acceptance/the document) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again saves sub-plans. Main starts plan_review and any required critique through work_check before whole verification.
 F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
-G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead.
+G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead. The final answer cites the reviewed documents by path/version; any new technical decision or claim not in them is labeled 'chưa kiểm' (unverified) or written into the official artifact first, which invalidates the review. A claim that a reviewer verified must carry that reviewer's receipt: the toolCallId of the call that produced it or a `verify:<codeHash>` signature — never a paraphrase of a tool name. Commentary to the owner is in the owner's language; Vietnamese with accents.
 H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); main starts tests and any required code_review using work_check with stage=execute on that exact artifact/code snapshot. Testing failures go to main for Debug/repair/retest; a source edit by a tester invalidates the check. A node that is not accepted leaves the run `execute_failed`: `work_graph(action='retry', nodeIds=[...])` re-runs it with the findings. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
 I. Every tool result carries `next` — follow it. A tool error names the field and the rule: fix that input once, never resend identical arguments. Report honestly what was accepted, rejected or not verified.
 The legacy direct-delegation protocol below still applies to small tasks and to follow-up questions about a finished run.
@@ -1668,6 +1669,7 @@ class HarnessRuntime(RuntimeCommands):
         self.tasks = {}
         # decisionId -> pending record; settled records are kept so a second answer is a real 409.
         self.pending = {}
+        self.pending_replays = {}  # W7.2: sid -> read-only calls to re-run once at turn start
         # sessionId -> the asyncio.timeout budget of the live turn (paused while a decision blocks).
         self.run_budget = {}
         # Vòng 25 (D-35) — số lần đã nới hạn chót của lượt (`extend_turn_budget`) và mốc bắt đầu
@@ -1715,6 +1717,8 @@ class HarnessRuntime(RuntimeCommands):
         # `FANOUT_BUSY` mà không phải ngồi chờ 30 s.
         self.fanout_queue_wait = FANOUT_QUEUE_WAIT_SECONDS
         self.writer_lock = asyncio.Lock()
+        # W6.1.3: lần quan sát gần nhất về isolation của verify_exec, cho GET /api/agent/health.
+        self.verify_exec_status = dict(verify_exec.UNPROBED)
         # web_search / web_fetch run on the HOST: the box has no Internet (only loopback).
         self.web = WebTools(snapshot_store=store)
 
@@ -2067,17 +2071,14 @@ class HarnessRuntime(RuntimeCommands):
         # lượt nằm ở `validate_inline_images` (một nguồn, xem `agent_core/attachments.py`).
         checked_images = validate_inline_images([image, *(images or [])])
         checked_attachments = validate_attachments(attachments)
-        # Reconcile interrupted tool groups without replaying side effects.
+        # Reconcile interrupted tool groups without replaying side effects (W7.2, `tool_recovery`):
+        # reuse a committed tool_end, re-run read-only calls once, receipt unsafe ones as interrupted.
         messages = session['messages']
-        pending = {}
-        for m in messages:
-            if m['role'] == 'assistant':
-                pending.update({c['id']: c['function']['name'] for c in m.get('tool_calls', [])})
-            if m['role'] == 'tool':
-                pending.pop(m.get('tool_call_id'), None)
-        for cid, name in pending.items():
-            messages.append({'role': 'tool', 'tool_call_id': cid, 'name': name,
-                             'content': 'Interrupted before result was committed. Inspect current state; do not assume success or replay blindly.'})
+        replays = tool_recovery.reconcile(self, sid, messages)
+        if replays:
+            self.pending_replays[sid] = replays
+        else:
+            self.pending_replays.pop(sid, None)
         # Khối tệp đính kèm do HARNESS dựng (`attachment_prompt_block`) — nguồn duy nhất cho
         # cả đường lượt thường lẫn đường command/skill; client không tự nhồi đường dẫn.
         block = attachment_prompt_block(checked_attachments)
@@ -2104,6 +2105,10 @@ class HarnessRuntime(RuntimeCommands):
             _log_turn_drift(sid, turn, counted)
             turn = counted
         self.active_turn[sid] = turn
+        # W8.A4.2 — gắn phạm vi thi công cho LƯỢT này: `/plan|/research|/design` (intent) hoặc lượt
+        # bơm của harness (batch quyết định). Lượt người dùng mới đã bỏ binding cũ ở
+        # `runtime_commands._next_turn_skills`.
+        work_scope.begin_turn(self, sid, turn, invocation_id)
         event = {'text': prompt, 'turn': turn}
         if invocation_id:
             event['invocationId'] = invocation_id
@@ -3304,7 +3309,7 @@ class HarnessRuntime(RuntimeCommands):
                 files.append({'path': relative, 'bytes': bytes_, 'mtime': mtime})
         return files
 
-    async def probe_workspace(self, sid, started, step_no=None, turn_no=None, budget=None):
+    async def probe_workspace(self, sid, started, step_no=None, turn_no=None, budget=None, root=None):
         """P3.2 — MỘT lệnh `find` cố định: lượt này có đổi tệp nào trong workspace không?
 
         Lệnh do harness soạn, chỉ nội suy epoch của lượt (container dùng chung đồng hồ với host) và
@@ -3318,6 +3323,10 @@ class HarnessRuntime(RuntimeCommands):
         scope = str(sid or '')[:8] or 'unknown'
         command = evidence_gate.EVIDENCE_PROBE_COMMAND.format(epoch=int(started),
                                                              limit=EVIDENCE_PROBE_MAX_FILES)
+        if root:
+            # W8.A4.3: lượt của node ghi trong worktree của nó — phép dò phải đo ĐÚNG cây đó, nếu
+            # không thì mọi thay đổi thật đều nằm ngoài tầm nhìn và cổng bằng chứng báo "không đổi".
+            command = command.replace('cd /home/agent/workspace ', f'cd /home/agent/workspace/{root} ', 1)
         # Trần của phép dò không được dài hơn phần đời còn lại của lượt: một phép dò vượt hạn chót
         # sẽ xoá luôn câu trả lời mà nó đang định kiểm chứng.
         remaining = self.seconds_left(budget) if budget is not None else None
@@ -3326,7 +3335,8 @@ class HarnessRuntime(RuntimeCommands):
         limit = _clamp_timeout(EVIDENCE_PROBE_TIMEOUT_SECONDS, remaining, 1)
         try:
             answer = await asyncio.wait_for(
-                self.executor.execute('terminal_exec', {'command': command}, sid), limit)
+                self.executor.execute('terminal_exec', {'command': command}, sid,
+                                      **({'root': root} if root else {})), limit)
         except asyncio.TimeoutError:
             return {'ok': False, 'error': 'timeout', 'files': []}
         except Exception as exc:
@@ -3646,6 +3656,14 @@ class HarnessRuntime(RuntimeCommands):
     def turn_profile(self, session, invocation_id=None):
         """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
 
+        W8.A4.2 — phạm vi thi công của lượt (`work_scope`) áp lên hồ sơ ngay tại đây: cổng quyết định
+        nằm ở `dispatch`, còn đây chỉ để model không phí bước gọi thứ sẽ bị từ chối.
+        """
+        return work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
+
+    def turn_profile_base(self, session, invocation_id=None):
+        """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
+
         `mode='research'` khi mode đang bật, HOẶC khi đây là lượt bơm `research-resume-*` (run chạy
         nền vẫn dùng hồ sơ research kể cả khi mode đã tắt). Bộ công cụ research = bộ công cụ phiên
         trừ các công cụ ghi (§5.2). `invocation_id` mặc định `None` để chỗ gọi chỉ cần biết mode có
@@ -3926,6 +3944,11 @@ class HarnessRuntime(RuntimeCommands):
             self._sync_mode_block(session, self.turn_invocations.get(sid))
             messages[0] = session['messages'][0]
         allowed_tools = set(profile['tools'])
+        replays = self.pending_replays.pop(sid, None)
+        if replays:
+            await tool_recovery.replay_safe(self, session, messages, replays, allowed_tools)
+        # W7.2/W1.P: owner switches at turn start; a tool removed since then is revoked at dispatch.
+        start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
         tools = schemas_for(profile['tools'])
@@ -4081,7 +4104,9 @@ class HarnessRuntime(RuntimeCommands):
                 profile = evidence_gate.classify_turn(turn_calls)
                 probe = None
                 if profile.needs_probe:
-                    probe = await self.probe_workspace(sid, started, step_no, turn_no, budget)
+                    work = (self.store.get(sid).get('config') or {}).get('workBinding') or {}
+                    probe = await self.probe_workspace(sid, started, step_no, turn_no, budget,
+                                                       (work.get('workspace') or {}).get('root'))
                 fragments = evidence_gate.artifacts_from_calls(turn_calls)
                 verdict = evidence_gate.assess(text, profile, probe, fragments, mode=mode)
                 repaired = False
@@ -4597,6 +4622,11 @@ class HarnessRuntime(RuntimeCommands):
                         # cấp cắt ở trần output. Hàng `sessions` vẫn `completed` (giữ nguyên từ
                         # vựng trạng thái cũ), nhưng ranh giới lượt nói thẳng là `partial` và
                         # `delegate` đọc notice bền của phiên con để trả `partial` cho cha.
+                        if not calls:
+                            # W6.2.BIND: câu tổng hợp cuối không được dùng một whole-pass cũ để
+                            # chứng nhận claim mới. Chỉ ghi lại (notice) để eval/UI đọc; không chặn.
+                            for note in self.final_claim_notices(sid, text):
+                                self.store.emit(sid, 'work_notice', note)
                         partial = truncated_partial or answer_partial
                         close_turn('partial' if partial else 'completed', choice.get('finish_reason'), 0,
                                    response.get('usage'), extra={'partial': True} if partial else None)
@@ -4631,7 +4661,7 @@ class HarnessRuntime(RuntimeCommands):
                         fn = call['function']
                         args, error = parse_tool_arguments(fn.get('arguments'))
                         name = fn.get('name', '')
-                        self.store.emit(sid, 'tool_start', {'id': call['id'], 'name': name, 'args': args})
+                        self.store.emit(sid, 'tool_start', tool_recovery.start_payload(call['id'], name, args))
                         tools_run += 1
                         tool_started = time.time()
                         try:
@@ -4639,6 +4669,9 @@ class HarnessRuntime(RuntimeCommands):
                                 raise ValueError(error)
                             if name not in allowed_tools:
                                 raise PermissionError('Tool not permitted for this role: ' + name)
+                            if name in start_owner_tools and name not in tool_recovery.owner_tools(self.store, session):
+                                raise PermissionError('WORK_CAPABILITY_REVOKED: the owner removed ' + name +
+                                                      ' during this turn; it was not run')
                             result = await self.dispatch(session, name, args, call['id'])
                         except Exception as exc:
                             code, message = classify_failure(exc)
@@ -4651,6 +4684,10 @@ class HarnessRuntime(RuntimeCommands):
                                              message=log_message,
                                              durationMs=(time.time() - tool_started) * 1000, detail=log_detail)
                             result = {'is_error': True, 'error': message, 'errorCode': code}
+                            if isinstance(exc, PermissionError) and str(exc).startswith('WORK_CAPABILITY_REVOKED'):
+                                result['errorCode'] = 'WORK_CAPABILITY_REVOKED'
+                            if isinstance(getattr(exc, 'details', None), dict):
+                                result.update(exc.details)  # W7.2 field/action/hint/received
                         system_log.write('tool.end', session_id=sid, turn_id=steps_used, turn=turn_no,
                                          step=step + 1, tool=name,
                                          isError=bool(result.get('is_error')),
@@ -4667,9 +4704,11 @@ class HarnessRuntime(RuntimeCommands):
                         tool_content = text_result
                         if result.get('image'):
                             tool_content = [{'type': 'text', 'text': text_result}, {'type': 'image_url', 'image_url': {'url': 'data:' + result.get('mime', 'image/png') + ';base64,' + result['image']}}]
+                        # W7.2: tool_end is the commit point; a crash before the transcript save is
+                        # recovered by reusing this exact result instead of running the tool again.
+                        self.store.emit(sid, 'tool_end', {'id': call['id'], 'name': name, 'args': args, 'result': safe})
                         messages.append({'role': 'tool', 'tool_call_id': call['id'], 'name': name, 'content': tool_content})
                         self.store.save(sid, messages)
-                        self.store.emit(sid, 'tool_end', {'id': call['id'], 'name': name, 'args': args, 'result': safe})
                         # P3.1 — cùng một hàng `tool_end` mà cổng đọc, cộng số BƯỚC của lượt (P1.4
                         # đã bảo worker gắn số bước vào ảnh/bằng chứng; ở đây harness gắn số bước
                         # vào chính lời gọi, nên phép dò và cổng biết việc nào thuộc bước nào).
@@ -4806,6 +4845,9 @@ class HarnessRuntime(RuntimeCommands):
         sid, config = session['id'], session['config']
         current = self.store.get(sid)
         graph = getattr(self, 'work_graph', None)
+        # W8.A4.2 — cửa quyết định của phạm vi thi công: run artifact-only/chờ duyệt/đã duyệt/đã đóng
+        # đều không cho main sửa mã trực tiếp; con chỉ được ghi khi binding execute còn hiệu lực.
+        work_scope.check_tool(self, current, name, args)
         if current.get('parent_id') and graph and graph.feedback.yielded(sid):
             raise PermissionError('WORK_CHECKPOINT_YIELDED: wait for main before running more tools')
         plan_tools = plan_workflow.allowed_tools(self, current)
@@ -4873,7 +4915,11 @@ class HarnessRuntime(RuntimeCommands):
         if name == 'delegate_task':
             return await self.delegate(session, args)
         if name in WORK_TOOLS:
-            return await self.work_tool(session, name, args, call_id)
+            result = await self.work_tool(session, name, args, call_id)
+            # W8.A4.2 — lượt của main gắn vào run vừa resolve được, để mọi lời gọi sau trong cùng lượt
+            # đọc đúng phạm vi của run ấy (quyền của run khác hoặc của lượt trước không cấp thực thi).
+            work_scope.bind_tool(self, session, name, args, result)
+            return result
         if name in {'web_search', 'web_fetch', 'read_source', 'paper_citations'}:
             self.web_switch_notices(sid)
             return await self.web.run(name, args, sid, scope_id=self.root_session_id(sid))
@@ -4959,10 +5005,30 @@ class HarnessRuntime(RuntimeCommands):
         # chúng thì mọi ảnh chụp và mảnh bằng chứng rơi về bước `000` dù box đã đọc từ lâu.
         identity = {'turn': self.active_turn.get(sid), 'step': self.active_step.get(sid),
                     'tool_call_id': call_id}
+        # W8.A4.3: child của Build node chỉ chạy trong worktree của nó; khoá ghi tách theo root
+        # nên hai node độc lập ghi song song, còn checkout chung vẫn tuần tự như trước.
+        root = (binding.get('workspace') or {}).get('root')
+        if root:
+            identity['root'] = root
+        if name == 'verify_exec':
+            # W6.1.3: không ghi workspace nên không xếp hàng sau `writer_lock`; cổng
+            # WORK_CHECK_READ_ONLY ở trên cố ý không chặn công cụ này.
+            problem = verify_exec.arg_error(args)
+            if problem:
+                raise ValueError(problem)
+            result = await self.executor.execute(name, args, sid, **identity)
+            self.verify_exec_status = verify_exec.observed(result, self.verify_exec_status)
+            return result
         if name in {'file_write', 'file_edit_block', 'terminal_exec'}:
-            async with self.writer_lock:
+            async with self.writer_lock_for(root):
                 return await self.executor.execute(name, args, sid, **identity)
         return await self.executor.execute(name, args, sid, **identity)
+
+    def writer_lock_for(self, root=None):
+        if not root:
+            return self.writer_lock
+        locks = self.__dict__.setdefault('root_writer_locks', {})
+        return locks.setdefault(root, asyncio.Lock())
 
     JOURNAL_ROUTE_LIMIT = 200
 
@@ -5731,6 +5797,8 @@ class HarnessRuntime(RuntimeCommands):
             return await service.verify(current, args)
         if action == 'submit':
             return await service.submit(current, args, call_id)
+        if action == 'cleanup_worktrees':
+            return await service.worktrees.action(current, args)
         return service.graph(current, args)
 
     @staticmethod
@@ -5786,9 +5854,14 @@ class HarnessRuntime(RuntimeCommands):
             return work_graph.service(self).feedback.open_interview(session, args, call_id)
         questions = self.normalize_interview(args)
         run_id = str(args.get('runId') or '').strip() or None
-        if run_id is None and work_graph.enabled():
-            active = work_graph.service(self).active(sid)
+        if work_graph.enabled():
+            graph = work_graph.service(self)
+            active = graph.resolve(sid, run_id) if run_id else graph.active(sid)
             run_id = active['runId'] if active else None
+            if active and active['status'] not in work_graph.TERMINAL_STATUSES:
+                # W7.1: with an active run the card is a durable request (survives restart) and
+                # main yields; the answers come back as a new turn instead of a live future.
+                return graph.feedback.open_main_interview(session, args, call_id, run_id)
         decision_id = uuid.uuid4().hex[:16]
         options = [{'id': INTERVIEW_SUBMIT, 'label': 'Gửi câu trả lời', 'kind': 'approve'},
                    {'id': INTERVIEW_DECIDE, 'label': 'Để agent quyết định', 'kind': 'alternative'}]
@@ -6367,6 +6440,27 @@ class HarnessRuntime(RuntimeCommands):
         return 'PLAN_VERSION_TAKEN' in str(answer.get('error') or '') or \
             'PLAN_VERSION_TAKEN' in str(answer.get('code') or '')
 
+    def final_claim_notices(self, sid, text):
+        """W6.2.BIND — notice cho claim kỹ thuật không nằm trong tài liệu đã phản biện."""
+        if not text or not work_graph.enabled():
+            return []
+        try:
+            service = work_graph.service(self)
+            run = service.active(sid)
+        except Exception:
+            return []
+        if not run or run.get('status') != 'verified':
+            return []
+        try:
+            tokens = work_graph.final_claims_check(run, text)
+        except Exception:
+            return []
+        if not tokens:
+            return []
+        return [{'type': 'unreviewed_claims', 'runId': run['runId'], 'tokens': tokens[:20],
+                 'message': 'unreviewed_claims: claim kỹ thuật không có trong tài liệu đã phản biện; '
+                            'đánh dấu chưa kiểm hoặc ghi vào artifact chính thức trước.'}]
+
     def emit_plan_rejection(self, sid, registration, evaluation):
         """Lưu + phát bản chấm của một lần ghi **bị cổng cứng chặn**, rồi mới raise câu từ chối.
 
@@ -6719,6 +6813,14 @@ class HarnessRuntime(RuntimeCommands):
             raise PermissionError('Leaf agents cannot delegate')
         role = args.get('role')
         work = dict(work) if isinstance(work, dict) else None
+        if work:
+            # Nhánh do engine Work Graph giao: đường HỢP LỆ để vai ghi làm việc, nên cổng giao việc
+            # của lượt không áp — chỉ cần admission của node đích còn sống.
+            work_scope.check_execute_binding(self, session['id'], work)
+        else:
+            # W8.A4.2 — lượt đã gắn run (hoặc con thừa hưởng phạm vi ấy) không giao được cho vai GHI
+            # ngoài đường Work Graph: một nhánh `build` như thế là một nhánh sửa mã không có node.
+            work_scope.check_delegate(work_scope.resolve(self, session), role)
         controller = work_graph.service(self).continuations if work and work.get('controllerAction') else None
         if controller:
             controller.authorize_new(session['id'], work)
@@ -6896,6 +6998,13 @@ class HarnessRuntime(RuntimeCommands):
                 parent_id=session['id'], role=role, parent_tools=config['tools'])
             if controller:
                 controller.register_new(parent_id, work, child['id'])
+            if not work:
+                # W8.A4.2 — con thường/custom command thừa hưởng PHẠM VI của lượt chủ: phiên con không
+                # có `workIntent`/lượt riêng, nên terminal của nó phải đọc phạm vi này (thiếu khoá ⇒
+                # con cũ giữ `legacy`).
+                origin = work_scope.origin_for_child(self, session)
+                if origin:
+                    child['config'][work_scope.ORIGIN_KEY] = origin
             if review_target is not None:
                 child['config']['reviewTarget'] = review_target
             if research_question_id:

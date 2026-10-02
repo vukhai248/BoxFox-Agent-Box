@@ -5,7 +5,7 @@ import json
 import time
 import uuid
 from ..agent_core import research_runtime
-from ..agent_core import plan_workflow, work_graph
+from ..agent_core import plan_workflow, work_graph, work_scope
 from ..agent_core.limits import (STEER_MAX_PENDING, RESEARCH_MODE_BLOCK_MARKER,
                                  RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
                                  RESEARCH_HANDOFF_BLOCK_MARKER, RESEARCH_HANDOFF_BLOCK_END,
@@ -326,6 +326,8 @@ class RuntimeCommands:
                                    # P1 (§4): cùng luật cho hai khối của chế độ Design — mỗi khối
                                    # xuất hiện ĐÚNG MỘT lần trong prompt hệ thống.
                                    (DESIGN_MODE_BLOCK_MARKER, DESIGN_MODE_BLOCK_END),
+                                   # W8.A4.2 — khối phạm vi thi công của lượt, cùng luật một-lần.
+                                   (work_scope.BLOCK_MARKER, work_scope.BLOCK_END),
                                    (DESIGN_HANDOFF_BLOCK_MARKER, DESIGN_HANDOFF_BLOCK_END)):
             current = _strip_prompt_block(current, marker, end_marker)
         # Lượt đang dựng là `turn_text`: nếu lượt NÓI TÊN một run thì khối bàn giao phải là run ấy,
@@ -567,6 +569,15 @@ class RuntimeCommands:
         """
         # P1 (§7.9): trong chế độ Design, bốn kỹ năng design vào danh sách bật của LƯỢT này — cùng
         # đường với khối ENABLED SKILLS, nên nội dung chúng có mặt mà không phải sửa cấu hình phiên.
+        # W8.A4.2 — mọi lượt NGƯỜI DÙNG đi qua đây trước khi dựng prompt: bỏ phạm vi thi công của
+        # lượt trước. Giữ lại thì một lượt chat thường sau lượt gắn run vẫn bị khoá ghi, và khối
+        # WORK SCOPE cũ nằm lại trong prompt hệ thống (nó được gỡ rồi chèn lại theo hồ sơ của lượt).
+        work_scope.reset_user_turn(self, session['id'])
+        # `reset_user_turn` ghi thẳng vào store (bỏ binding của lượt trước + ý định slash đã tiêu), còn
+        # `session` ở đây là bản chụp TRƯỚC đó — `update_config` ngay dưới ghi cả config cũ nên sẽ trả
+        # lại đúng những khoá vừa bị bỏ (N2: ý định `/research <text>` sống sang lượt người dùng sau,
+        # khoá ghi vĩnh viễn). Đọc lại trước khi sửa.
+        session = self.store.get(session['id'])
         from ..agent_core.runtime import design_mode
         if design_mode(session)['on']:
             enabled = sorted(set(enabled) | (set(DESIGN_SKILLS) & set(self.catalog.items)))
@@ -604,6 +615,10 @@ class RuntimeCommands:
         """
         try:
             session = self.store.get(sid)
+            roles = ['design', 'build', 'testing'] if resolved.role == 'orchestrator' and 'claude-design' in resolved.skills else [resolved.role]
+            # W8.A4.2 — cổng phạm vi TRƯỚC pre-flight và trước khi tạo con: một custom command
+            # thuộc vai GHI (hoặc claude-code) trong lượt đã gắn run là đường sửa mã không có node.
+            work_scope.check_command(work_scope.resolve(self, session), roles, resolved.executor)
             if resolved.executor == 'claude-code':
                 # Pre-flight the CLI before creating any child: a missing CLI is a setup
                 # problem for the owner, not a failed subagent (HANDOFF §5.1).
@@ -612,7 +627,6 @@ class RuntimeCommands:
                 if probe.get('status') != 'ready':
                     reason = probe.get('reason') or 'Claude Code CLI is not ready inside the sandbox.'
                     raise ValueError('SETUP_REQUIRED: ' + reason)
-            roles = ['design', 'build', 'testing'] if resolved.role == 'orchestrator' and 'claude-design' in resolved.skills else [resolved.role]
             # Ngân sách thời gian của con = ngân sách của phiên. Đo sống 2026-09-20: phiên đặt
             # 600 giây vẫn chết `DEADLINE` vì con của lệnh nhận mặc định 180 giây, mà một lượt
             # `/claude-code` thật cần hơn thế — con dài hơn phiên là vô nghĩa, nên lấy đúng số
@@ -685,6 +699,9 @@ class RuntimeCommands:
         from ..sandbox.claude_executor import ClaudeExecutor
         sid = child['id']
         try:
+            # W8.A4.2 — kiểm lại lúc chạy: con có thể đã được tạo trước khi lượt gắn run, và đây
+            # là chỗ duy nhất CLI thật sự chạy trong workspace.
+            work_scope.check_command(work_scope.resolve(self, child), [child['role']], 'claude-code')
             adapter = ClaudeExecutor(self.executor.container)
             blocks = [self.skill_loader.read(child, skill)['content'] for skill in child['config']['skills']]
             async with self.writer_lock:

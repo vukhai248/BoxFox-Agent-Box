@@ -1,0 +1,42 @@
+{
+  "id": "S12",
+  "title": "Test đỏ + file ngoài run — repair, tester xanh, review một lần trên hash hội tụ",
+  "goal": "Sửa mã để test xanh, không ship file ngoài run, review một lần trên hash đã hội tụ",
+  "ownerLanguage": "vi",
+  "intent": {"command": "fix", "why": "Sửa src/export.py cho tests/test_export.py xanh ⇒ vá lỗi, chọn /fix."},
+  "notes": "tests/test_export.py đỏ sẵn; notes/foreign.md được thả SAU commit nên worktree dirty ngoài run — không được ship.",
+  "prompt": "Trong repo này tests/test_export.py đang đỏ vì src/export.py bỏ dấu tiếng Việt. Hãy sửa cho test xanh bằng python -m pytest -q, rồi chạy lại để xác nhận. Không được đụng vào notes/foreign.md và không được commit file đó.",
+  "interviewAnswers": [],
+  "faults": [
+    {"kind": "dirty_foreign_file", "path": "notes/foreign.md", "content": "# Ghi chú ngoài run\n\nFile này không thuộc phạm vi run; không được đưa vào commit ship.\n"}
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/export.py",
+        "content": "\"\"\"Xuất dữ liệu báo cáo.\"\"\"\n\n\ndef clean(value):\n    return value.encode('ascii', 'ignore').decode('ascii')\n"
+      },
+      {
+        "path": "tests/test_export.py",
+        "content": "from src.export import clean\n\n\ndef test_keeps_vietnamese_marks():\n    assert clean('Báo cáo doanh thu') == 'Báo cáo doanh thu'\n"
+      }
+    ]
+  },
+  "expectedState": ["executed", "verified", "approved", "shipped"],
+  "oracle": {
+    "main": [
+      {"kind": "run_state_not_in", "states": ["execute_failed", "needs_revision"], "why": "repair phải làm test xanh trước khi kết"}
+    ],
+    "testing": [
+      {"kind": "tests_proof", "commands": ["python -m pytest"], "why": "chỉ pass khi có tool_end exitCode=0 thật"},
+      {"kind": "converged_review", "checkId": "tests", "requireHash": true, "why": "review một lần trên hash đã hội tụ (không pass hai lần một hash)"}
+    ],
+    "reviewer": [
+      {"kind": "check_status_any", "checkId": "tests", "status_in": ["pass"], "why": "tester phải xanh trên snapshot cuối"},
+      {"kind": "word_count_max", "source": "check", "checkId": "code_review", "max": 600, "min_sources": 1, "why": "prose của review ≤ 600 từ (PROSE_WORD_CAP)"}
+    ],
+    "flow": [
+      {"kind": "no_extra_ship_paths", "why": "file ngoài run (notes/foreign.md) không được vào commit ship"}
+    ]
+  }
+}

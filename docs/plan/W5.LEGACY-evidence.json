@@ -1,0 +1,48 @@
+{
+  "schema": "boxfox-w5-legacy-evidence/1",
+  "branch": "vorflux/w7-contracts",
+  "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+  "scope": "W5.LEGACY: DB cũ (policy work-checks/9, không có verificationVersion) vẫn đọc được, check cũ không được tính pass, import giữ runId/revision, artifact sửa ngoài bị bắt, restart giữa reserved/admitted thành interrupted. Deterministic: không model/provider/UI.",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/work_graph.py": "725b787e8f421a996b28ed3a6311ca2dd17a8d3ea55c8527344eeb4a34ee1a08",
+    "backend/src/agentbox/agent_core/work_checks.py": "918fd1fb6220f1ea6a2d3ca2ff0865046cd204e15b38fba70c170bf22c09fe61",
+    "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+    "backend/src/agentbox/agent_core/work_artifacts.py": "4a79238b226caa2b7a1b73fcf071c85dc791eb49ea87274fad1209ffa825224d",
+    "backend/src/agentbox/agent_core/work_progress.py": "43076e95e0f5c124e2024acab10ea863ecf371a140a560da02ea8601dfdd0f38",
+    "scripts/eval/work_legacy_eval.py": "be795c6edb2057f87351e2c4d40addac0b91709cd00f4e512622387de0fac239"
+  },
+  "raw": {
+    "path": ".tmp/w7-legacy/results.json",
+    "sha256": "30a626b6948dc426d8a60ce77e56c61ee21ba122163539bb90ea36a8dccdf68e"
+  },
+  "currentVersion": "work-checks/10",
+  "legacyPolicyVersion": "work-checks/9",
+  "checks": {
+    "old_run_readable": {
+      "status": "drafting",
+      "verificationVersion": "legacy",
+      "hasLegacyReview": true
+    },
+    "legacy_verify_blocked": "WORK_LEGACY_CHECKS_REQUIRED",
+    "stale_policy_rejected": "WORK_CHECK_STALE: check policy or artifact policy binding changed",
+    "import_binding": {
+      "runId": "wr-legacy-0001",
+      "verificationVersion": "work-checks/10",
+      "revision": 6,
+      "legacyReviewKept": true
+    },
+    "fresh_binding": {
+      "runId": "wr-legacy-0001",
+      "version": 3,
+      "roundTrip": true
+    },
+    "corrupt_detected": "WORK_ARTIFACT_CORRUPT: stored content hash changed",
+    "restart_recovery": {
+      "status": "interrupted"
+    },
+    "status_index_matches_registry": true
+  },
+  "oracle": true,
+  "command": "python3 scripts/eval/work_legacy_eval.py --output .tmp/w7-legacy",
+  "note": "Probe/test chạy trong worktree trước khi commit; sourceManifest khớp byte với bản đã commit. commit trong results.json (raw) là commit nền 68ecdf04 vì thời điểm chạy chưa commit."
+}

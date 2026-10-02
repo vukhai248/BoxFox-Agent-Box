@@ -36,7 +36,8 @@ if [ "$(id -u)" = "0" ]; then
     done
   fi
 
-  # ②a: data plane mặc định ĐÓNG; người dùng bật bằng nút Mạng trên giao diện.
+  # ②a/②b: trạng thái mạng lúc boot lấy từ BOX_DEFAULT_NETWORK (compose đặt "on" từ 02/10/2026 —
+  # quyết định chủ máy cho verify_exec); người dùng vẫn bật/tắt được bằng nút Mạng trên giao diện.
   echo "[box-entrypoint] công tắc mạng: mặc định ${BOX_DEFAULT_NETWORK:-off}..."
   box-firewall "${BOX_DEFAULT_NETWORK:-off}"
 

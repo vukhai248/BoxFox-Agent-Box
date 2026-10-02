@@ -1,0 +1,34 @@
+{
+  "id": "V10",
+  "title": "Review toàn bộ tài liệu tham chiếu > 14000 ký tự",
+  "goal": "Reviewer phải đọc hết phần được giao qua tool phân trang: thấy finding ở cuối hoặc báo coverage chưa đạt",
+  "ownerLanguage": "vi",
+  "intent": {"command": "research", "why": "Đọc hết tài liệu dài trong repo, báo finding hoặc coverage chưa đạt ⇒ /research."},
+  "notes": "§9.2 V10: prompt chỉ có refs; docs/design-long.md do bench sinh với mâu thuẫn ở cuối file.",
+  "prompt": "Chỉ dùng tài liệu docs/design-long.md trong repo: đọc hết và cho biết hợp đồng trạng thái job có mâu thuẫn nào không. Nếu chưa đọc hết thì nói rõ coverage chưa đạt, đừng kết luận.",
+  "interviewAnswers": [],
+  "faults": [
+    {"kind": "long_document", "path": "docs/design-long.md", "chars": 15000}
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "docs/design.md",
+        "content": "# Tóm tắt hợp đồng job\n\n(chưa có kết luận)\n"
+      }
+    ]
+  },
+  "expectedState": "!verified",
+  "oracle": {
+    "reviewer": [
+      {"kind": "any_of", "rules": [
+        {"kind": "finding_kept_min", "min": 1},
+        {"kind": "check_status_any", "status_in": ["unverified", "error", "revise"]}
+      ], "why": "V10: finding ở cuối được phát hiện HOẶC coverage chưa đạt — không được pass im lặng"},
+      {"kind": "finding_downgrade_rate_max", "max": 0.5, "why": "không hạ finding để đủ điều kiện pass"}
+    ],
+    "main": [
+      {"kind": "no_auto_pass", "why": "coverage chưa đạt thì không được auto-pass"}
+    ]
+  }
+}
