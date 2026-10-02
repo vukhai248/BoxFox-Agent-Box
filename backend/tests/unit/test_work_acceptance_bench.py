@@ -16,6 +16,7 @@ Kiểm những điều dễ nói suông nhất:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 import sys
@@ -273,7 +274,8 @@ def test_gate_requires_22_of_24_and_zero_auto_pass_duplicates_leaks_and_provider
     leaked = _cell('S02', events=[
         {'kind': 'tool_end', 'sessionId': 'root',
          'data': {'name': 'terminal_exec', 'command': 'python -m pytest', 'exitCode': 0}},
-        {'kind': 'assistant', 'sessionId': 'root', 'data': {'final': True, 'text': 'Lỗi WORK_CHECK_UNAVAILABLE khi chạy.'}},
+        {'kind': 'assistant', 'sessionId': 'root',
+         'data': {'final': True, 'text': 'Lỗi WORK_CHECK_UNAVAILABLE khi chạy.'}},
     ])
     switched = _cell('S02', calls=[{'providerId': 'anthropic', 'modelId': 'claude-sonnet'}],
                      events=[{'kind': 'tool_end', 'sessionId': 'root',
@@ -324,7 +326,8 @@ def test_word_count_no_misdiagnosis_and_claim_labelling_rules():
                {'role': 'assistant', 'sessionId': 'root', 'text': 'Lỗi ACL: không có quyền.'}],
         checks=[{'checkId': 'c1', 'kind': 'code_review', 'stage': 'review', 'status': 'revise',
                  'output': long_review}],
-        artifacts=[{'artifactId': 'a-1', 'schema': 'plan', 'text': '```code\n' + ' '.join(['x'] * 900) + '\n```\nngắn gọn.'}],
+        artifacts=[{'artifactId': 'a-1', 'schema': 'plan',
+                     'text': '```code\n' + ' '.join(['x'] * 900) + '\n```\nngắn gọn.'}],
         config={'session': 'root'})
 
     ok, detail = bench.score_rule({'kind': 'word_count_max', 'source': 'turn', 'role': 'research',
@@ -370,6 +373,24 @@ def test_word_count_no_misdiagnosis_and_claim_labelling_rules():
     ok, detail = bench.score_rule({'kind': 'unreviewed_claims_labelled'},
                                   bench.build_bundle(config={'session': 'root'}))
     assert ok is True and 'no unreviewed_claims' in detail
+
+
+def test_pending_continuations_probe_never_raises():
+    class Broken:
+        @property
+        def continuations(self):
+            raise RuntimeError('chưa có bảng outbox')
+
+    assert bench._pending_continuations(Broken()) is False
+
+    class WithRows:
+        class continuations:  # noqa: N801 - giả lập service của work_graph
+            @staticmethod
+            def rows():
+                return [{'id': 'o-1'}]
+
+    assert bench._pending_continuations(WithRows()) is True
+    assert 'khởi động lại' in bench.RESTART_RESUME_PROMPT
 
 
 def test_expected_state_matches_lists_and_negation():
@@ -471,6 +492,27 @@ def test_config_hash_reads_the_policy_version_instead_of_hardcoding_it():
     assert len(info['sources']) >= 3
     assert all(len(value) == 64 for value in info['sources'].values())
     assert info['combined'] == bench.config_hash()['combined']
+
+
+def test_executor_snapshot_runs_and_other_commands_are_blocked(tmp_path):
+    from agentbox.agent_core import work_checks  # noqa: PLC0415 - chỉ có ở đường chạy thật
+
+    scenario = bench.load_scenario(bench.scenario_path('S12'))
+    bench.seed_workspace(tmp_path, scenario)
+    executor = bench.WorkspaceExecutor(tmp_path, scenario)
+
+    async def run(command):
+        return await executor.execute('terminal_exec', {'command': command, 'timeout': 90}, 'sid')
+
+    snapshot = asyncio.run(run(work_checks.SNAPSHOT_COMMAND))
+    assert snapshot['is_error'] is False and snapshot['exit_code'] == 0
+    doc = json.loads(snapshot['content'])
+    assert doc['schema'] == 'work-code/1' and len(doc['hash']) == 64
+
+    blocked = asyncio.run(run('rm -rf /'))
+    assert blocked['is_error'] is True and 'không chạy' in blocked['error']
+    pytest_run = asyncio.run(run('python -m pytest -q'))
+    assert pytest_run['exit_code'] == 1, 'workspace S12 cố ý đỏ trước khi repair'
 
 
 def test_ship_report_reads_the_commit_and_dirty_state(tmp_path):

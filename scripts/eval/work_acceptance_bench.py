@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -58,6 +59,11 @@ DEFAULT_MAX_STEPS = 80
 DEFAULT_RUN_DEADLINE = 45 * 60
 DRIVE_POLL_SECONDS = 2.0
 DRIVE_SETTLE_SECONDS = 6.0
+
+# Sau restart, lượt main cũ mất theo tiến trình: benchmark mô phỏng lượt kế tiếp của người dùng.
+RESTART_RESUME_PROMPT = ('Harness vừa khởi động lại khi run đang chờ câu trả lời. '
+                         'Tiếp tục run đang dở từ trạng thái bền trong DB — không làm lại từ đầu, '
+                         'và giữ nguyên child đã hỏi.')
 
 TERMINAL_RUN_STATUSES = ('shipped', 'cancelled', 'rejected')
 
@@ -1232,7 +1238,9 @@ class WorkspaceExecutor:
         if not allowed:
             return {'is_error': True, 'error': 'W10 fixture: chỉ cho phép lệnh test/snapshot/git đọc; '
                                                'không chạy: ' + command}
-        argv = [sys.executable, '-m', 'pytest', '-q'] if command.endswith('pytest -q') else command.split()
+        # `shlex` để lệnh snapshot (`python3 -c "import base64;exec(...)"`) không bị cắt sai chỗ trắng.
+        argv = [sys.executable, '-m', 'pytest', '-q'] if command.endswith('pytest -q') \
+            else shlex.split(command)
         proc = await asyncio.create_subprocess_exec(*argv, cwd=self.workspace,
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE)
@@ -1498,7 +1506,7 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
                              if fault['kind'] == 'answer_revision'), [])
     restart_fault = next((fault for fault in scenario.get('faults') or []
                           if fault['kind'] == 'restart_while_waiting'), None)
-    answered_by_request, revision_done, restarted = {}, False, False
+    answered_by_request, revision_done, restarted, resumed_main = {}, False, False, False
     notes = []
     task = rt.start(sid, scenario['prompt'])
     idle_since = None
@@ -1531,7 +1539,7 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
             if not choice:
                 continue
             try:
-                rt.settle(sid, card['decisionId'], choice)
+                rt.resolve_decision(sid, card['decisionId'], choice)
                 notes.append(f"autopilot: duyệt {card['decisionId']} → {choice}")
             except Exception as exc:
                 notes.append(f'settle {card["decisionId"]}: {type(exc).__name__}: {exc}')
@@ -1548,12 +1556,23 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
             if not supplied:
                 continue
             try:
-                graph.feedback.answer(sid, card['decisionId'], 'submit', supplied)
+                rt.resolve_decision(sid, card['decisionId'], 'submit', answers=supplied)
                 answered_by_request[request_id] = revision
                 notes.append(f"interview {request_id} r{revision}: trả lời {len(supplied)} câu")
             except Exception as exc:
                 notes.append(f'answer {card["decisionId"]}: {type(exc).__name__}: {exc}')
         live = [item for item in rt.tasks.values() if not item.done()]
+        # W7.1 sau restart: card sống sót nhưng lượt main cũ đã mất theo tiến trình, nên
+        # người dùng gửi một lượt mới để run đi tiếp — đúng thao tác thật sau khi khởi động lại.
+        if restarted and not resumed_main and not live and not cards \
+                and not _pending_continuations(graph):
+            try:
+                task = rt.start(sid, RESTART_RESUME_PROMPT)
+                notes.append('restart_while_waiting: mở lượt main mới để run đi tiếp')
+            except Exception as exc:
+                notes.append(f'resume sau restart: {type(exc).__name__}: {exc}')
+            resumed_main = True
+            live = [item for item in rt.tasks.values() if not item.done()]
         run = _current_run(graph, sid)
         status = (run or {}).get('status')
         if not live and not cards and (task.done() or status in TERMINAL_RUN_STATUSES
@@ -1577,6 +1596,14 @@ def _current_run(graph, sid):
     runs = graph.runs(sid, limit=20) or []
     return next((item for item in runs if item.get('status') not in TERMINAL_RUN_STATUSES), None) \
         or (runs[0] if runs else None)
+
+
+def _pending_continuations(graph):
+    """Còn job resume_child nào đang chờ không — dùng để không mở lượt main quá sớm."""
+    try:
+        return bool(graph.continuations.rows())
+    except Exception:
+        return False
 
 
 def _restart_session(rt, sid, notes):

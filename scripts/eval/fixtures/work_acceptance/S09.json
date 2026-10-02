@@ -3,7 +3,7 @@
   "title": "Restart khi đang chờ trả lời — thẻ còn, resume đúng child (W7.1)",
   "goal": "Harness khởi động lại giữa lúc chờ owner: thẻ interview sống sót và câu trả lời resume đúng child",
   "ownerLanguage": "vi",
-  "notes": "Khi có thẻ interview đang chờ, bench đóng DB/runtime rồi mở lại trên cùng DB/workspace trước khi trả lời.",
+  "notes": "Khi có thẻ interview đang chờ, bench đóng DB/runtime rồi mở lại trên cùng DB/workspace trước khi trả lời. Sau restart, lượt main cũ mất theo tiến trình nên bench mô phỏng lượt kế tiếp của người dùng (RESTART_RESUME_PROMPT) để run đi tiếp trên trạng thái bền.",
   "prompt": "Triển khai endpoint xuất CSV trong repo này. Nếu cần tôi quyết định về định dạng cột (dấu phẩy hay tab, có header hay không) thì hỏi tôi rồi làm tiếp; chạy python -m pytest -q sau khi xong.",
   "interviewAnswers": [
     {"text": "Dùng dấu phẩy và có header; tên cột giữ như trong tests."}
