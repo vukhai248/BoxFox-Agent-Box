@@ -1,6 +1,6 @@
 # Sửa độ tin cậy của Work Graph: điều phối linh hoạt, kiểm chứng theo nhiệm vụ và phỏng vấn có thể tiếp tục
 
-> Cập nhật 02/10/2026, chỉ nhánh **B**. Neo triển khai gần nhất **`1ddbce77`**: hàng đợi quyết định main tại 33.11; neo evidence `09ab9075`. A3.3f chống admission lặp đang kiểm tại **33.12**. A1/A2/A3.1/A3.2 và các phần A3.3 trước đã có checkpoint; **chưa hoàn tất W7/W8**: A4 reuse tester/isolation/integration và kiểm soát phạm vi thi công còn tiếp theo. Kiến trúc A đã được duyệt ở mục29. Mỗi kết quả chỉ chứng nhận đúng snapshot/phạm vi ghi trong checkpoint; W7.1/W7.2/W6.2/W6.1.3/W9 còn riêng.
+> Chốt checkpoint 02/10/2026 theo yêu cầu người dùng, chỉ nhánh **B**. Neo trước A4.1 **`49e1eb24`**: admission/progress tại33.12 đã kiểm; c-queue `1ddbce77`, evidence `09ab9075`. A4.1 cùng Testing child đã kiểm mục tiêu/native tại **33.13**. **Kết thúc goal ở checkpoint và bàn giao; W7/W8 chưa hoàn tất toàn bộ.** Danh sách W còn mở, thứ tự tiếp tục, giới hạn kiểm thử và điểm neo nằm tại **34**. Không tự chạy tiếp các W đã bàn giao.
 >
 > Quyết định mới của chủ dự án thay thế yêu cầu “mọi sub-agent đều có một lượt review giống nhau”: main chọn specialist và cách kiểm chứng phù hợp; backend bảo đảm các kiểm tra bắt buộc theo đầu ra, phạm vi thay đổi và rủi ro. Phần 6–9 cụ thể hóa chính sách này, chuẩn đầu ra và prompt cho coding agent.
 
@@ -15,7 +15,7 @@ Giữ main là chủ điều phối; chọn công việc và kiểm chứng theo
 Hai yêu cầu bạn đã chốt:
 
 - **Kiểm chứng bắt buộc được xác định theo nhiệm vụ**, không gắn một reviewer giống nhau vào mọi sub-agent. Khi một kiểm tra đã được xác định là bắt buộc, không được bỏ qua vì thiếu role, hết ngân sách hoặc bật Autopilot. Plan và thiết kế làm căn cứ triển khai cần phản biện độc lập; code cần kiểm thử; debug định tuyến có thể không cần semantic review riêng. Xem ma trận tại mục 6.
-- Khi một nhánh cần người dùng quyết định, **sub tự soạn bảng hỏi 1–3 câu và lưu checkpoint**. Main có thể mở nguyên bảng hỏi bằng ref; đề xuất quyền được giao trước để backend xuất bản trong phiên chính và tiếp tục đúng child nằm tại mục 29, chưa triển khai. Các nhánh độc lập tiếp tục chạy.
+- Khi một nhánh cần người dùng quyết định, **sub tự soạn bảng hỏi 1–3 câu và lưu checkpoint**. Main có thể mở nguyên bảng hỏi bằng ref; quyền được giao trước để backend xuất bản trong phiên chính và tiếp tục đúng child có checkpoint backend tại mục31–33. CUA/lịch sử legacy còn W7.1, không coi cơ chế này đã nghiệm thu mọi đường UI. Các nhánh độc lập tiếp tục chạy.
 
 Khảo sát trước ngày 01/10/2026 đã đọc code, SQLite của phiên thử nghiệm, hai tài liệu đính kèm và kiểm tra UI bằng CUA. Đợt W0–W2 ngày 01/10/2026 sửa validation/schema/hướng dẫn recovery và tách diagnostic qua code paths hiện có, chạy kiểm thử bằng fixture trên checkout B. Không mở phiên model/live CUA mới trong đợt này. Kết quả fixture kiểm chứng hành vi code, không chứng minh chất lượng plan do model thật sinh ra.
 
@@ -2379,7 +2379,7 @@ Helper/producer kéo lookup nhỏ thành 709–1493 từ và đưa nhiều quy�
 
 1. [x] **A3.3b input refs (đã kiểm tại 33.7/33.8):** dependency/input artifact closure, runId rõ trong context, phân biệt input phải đọc với output phải phán xét; giữ immutable refs và phạm vi API. Giữ childId receipt khi ghi helper artifact thất bại. Không suy generic file_read bị sandbox bởi artifact ACL.
 2. [x] Reconcile answer transaction → card event/history từ user action thật tại33.9; không dựng consent từ timeout/model. Shared decisions/conflicting options chọn routing c ở33.11, chưa nghiệm thu tại thời điểm checklist này; không tự sao chép consent giữa các child.
-3. [ ] Ba admission không tiến triển, main decision queue khi idle và crash/restart kết hợp. Notification và handoff không gọi main LLM; chỉ quyết định mới mới cần main.
+3. [x] Main decision queue tại33.11 và ba admission không tiến triển tại33.12 có test/restart/Stop receipts; chỉ quyết định mới gọi main, notification/handoff không relay. Crash kết hợp với resource isolation/integration còn A4; dấu tick này không chứng nhận mọi fault của toàn W7/W8.
 4. [x] Namespace origin-turn/session/run/node và đọc lịch sử cũ tại33.10; legacy giữ path cũ, run mới có tầng t-origin-id.
 5. [ ] **A4** sửa có điều kiện → cùng tester cũ retest trên code/hash mới; assignment fingerprint, touch-set/isolation/integration/ship đúng snapshot. Artifact-only không Build/PR; không mặc định Debug hoặc Review sau mọi role.
 
@@ -2568,3 +2568,90 @@ flowchart TD
 
 - [x] Export [evidence admission/progress](W8-A3.3-progress-evidence.json), giữ các failure và manifest từng source; không export hidden reasoning. Full selection loại test Gemini ghi cứng và tắt peer live opt-in trong process.
 - [x] Commit A3.3f theo `fix(work-progress): retain admission evidence and stop unproductive retries`; staged whitespace check phải đạt trước commit. A4 và toàn W7/W8 còn mở.
+
+
+### 33.13 A4.1 — cùng Testing child kiểm lại mã mới (chốt kiểm mục tiêu/native, 02/10/2026)
+
+**Neo đầu vào49e1eb24, nhánh B.** Đây là WG08 và phần retest của kiến trúc A. Không đổi UI/UX, provider, output profile, chính sách repair/Debug hoặc tạo pipeline theo role. Main/producer quality W6.2 vẫn ngoài patch.
+
+- [x] Chọn **tester gần nhất** của cùng owner/run/node/stage/tests/criteria/policy/scope, chỉ khi code hash thực đã đổi. Giữ child/context và artifact origin folder; refs/phiên bản mới cấp lượt budget theo profile hiện tại và trần cha. Giữ usage cộng dồn. Không dùng child ID/invocation/HEAD/artifact version làm bằng chứng mã mới.
+- [x] Scope/criteria/owner decisions hoặc policy đổi, lịch sử legacy chưa có binding mới, tester bị hủy/đang bận/yield/không hoàn tất thì không reuse ngầm; không tìm ngược một tester xanh cũ hơn để bỏ qua lần mới nhất. Các reviewer khác chưa tự reuse bởi patch này.
+- [x] Check record lưu testerAssignment, retestOf, previousArtifactId và admissionSeq; SQLite canonical lưu trước khi chờ slot. Same child đọc refs mới, bắt lệnh test và artifact-read trong admission mới. Command/read cũ không chứng minh pass.
+- [x] Sau chờ slot, kiểm lại code snapshot, run/assignment/kill switch/Stop và quyền tool/role hiện tại của cha. Mã đổi hoặc quyền thu hồi thì không mở lượt model/tools. Terminal làm đổi source trong check giữ superseded. Manual và preassigned handoff dùng chung đường này; notification/handoff vẫn0main relay.
+- [x] Tính lại short/long review budget từ input mới bằng profile hiện hữu14/24 bước, luôn kẹp trần cha; không tăng constants/token/time. Không giữ tool mà cha đã thu hồi.
+- [x] Source cuối **40passed/28.94s** tại `w8-retest-v7.*`, gồm21ca retest và19ca feedback: đỏ→xanh, xanh→đỏ, thiếu command/read mới, restart SQLite, scope/legacy/cancelled/latest unknown receipt, current owner ceiling8192/removal/tools, queued code/pause/Stop/disabled/terminal, side effect và preassigned handoff/replay0main/Debug. Đây là scripted-model + source bytes/snapshot fixture; không là kiểm chứng toàn DAG.
+
+**Lỗi khi làm và receipt:** V1 8pass/2fail: oracle dùng originTurn ở workBinding trong khi namespace nằm ở artifact; fixture child_finish không thể ghi đè ledger completed bằng cancelled. V2 92pass/1fail còn fixture gọi Stop trên task đã xong (Stop không hủy lịch sử completed); thay bằng một historical cancelled ledger rõ ràng. V3 7pass/8fail: guard slot đọc retestOf canonical trước khi doc đã lưu; sửa save check trước admission, không bỏ guard. V4 16pass; V5 17pass; V6 18pass. Các failure giữ receipt riêng; V2/V3 không chứng nhận source cuối.
+
+**Native snapshot trước hai guard cuối:** `red_to_green` và `green_to_red` đều oracle đạt,95.658s/106.188s,16calls Space Bunny/cap16000; mỗi ca giữ cùng Testing child, đọc artifact mới và tự chạy pytest trong lượt mới. Đỏ thực exit1, xanh thực exit0; root model attempts0. Fixture tạo Build handoff/phê duyệt và sửa file; không có native Build/main, user consent thật hoặc CUA/medical/SWE benchmark. Source cuối có lượt native riêng ở dưới.
+
+**Audit4 visible final và mọi tool:** verdict A1/C1 đúng từng lượt và không bắt producer nhúng output tester. Có2 terminal attempts bị fixture từ chối vì gộp lệnh đọc thư mục với test thay cho đúng command; sau đó tự dùng command được giao. Đây là ranh giới evaluator, chưa chứng minh các lệnh đọc bị chặn production. Một số prose phụ sai: csv.writer với StringIO không tự chọn UTF-8; U+1ED1 không phải `ồ` (U+1ED3); `H s` có3ký tự, không5. Giữ **W6.1.3**; verdict đúng không chứng nhận mọi câu. Chưa tuning prompt để làm đẹp kết quả.
+
+- [x] Target snapshot trước guard cuối **580passed/437.43s**; full snapshot đó **3002passed/2failed/20skipped/1deselected/1273.67s**. Hai lỗi integration: recorder `moov atom not found` và Chrome CDP timeout15000ms; giữ traceback, chưa quy nguyên nhân cho retest hoặc mạng. Source cuối chỉ có40test mục tiêu ở trên; không gán sweep trước cho source cuối.
+- [x] Native **source cuối** `w8-retest-final-native/results.json`: **2/2 oracle**,80.990s/191.188s,18provider calls đều OpenCode Space Bunny/cap16000; bốn final `stop`,0root completion. Mỗi ca đúng child cũ, snapshot mã đổi, admission/read proof/lệnh pytest mới, usage cộng dồn; đỏ→xanh và xanh→đỏ đúng test thực. Freeze52file không drift. Không có native main/Build hoặc CUA renderer.
+- [x] Dừng full sweep source cuối theo yêu cầu chốt của người dùng lúc08:29:18UTC/15:29:18giờ địa phương; chỉ dừng đúng helper/pytest đã xác minh. Receipt `w8-retest-final-full-interrupted.json` giữ PID/argv/source/log, **không có kết luận full-suite**. Không khởi chạy sweep thay thế.
+- [x] Export [evidence retest](W8-A4.1-retest-evidence.json), giữ source/receipt/lỗi/cả hai đợt native và visible finals; bỏ hidden reasoning. Commit A4.1 theo `fix(work-checks): reuse compatible testers with fresh snapshot proof`, chỉ staged files tại B và diff check phải đạt trước commit. Hash thực xem `git log -1` tại checkpoint bàn giao.
+
+**A4 còn bắt buộc:** scope lượt/assignment do backend sở hữu tại tool list + dispatch (root direct mutate vẫn có khoảng hở33.11); giới hạn Build/repair theo approval/scope, không Debug mặc định; branch trước ghi mã, touch-set/isolation; snapshot tích hợp và ship chỉ thay đổi run sở hữu. Code hiện dùng snapshot cả workspace và `git add -A -- .` (trừ `.plans/work`); chưa bảo đảm giữ check độc lập khi nhánh khác đổi file hoặc không đưa dirty changes ngoài run vào commit. Đọc code scheduler/ship xác nhận những cổng này còn thiếu; **không tick A4/W7/W8** nhờ retest đã chạy.
+
+
+```mermaid
+flowchart TD
+  B[Build lưu artifact và code snapshot] --> N[Thông báo main biết tiến độ]
+  B --> G{Testing đã được giao và đủ predicate?}
+  G -->|Có| T[Backend chạy Testing, không main relay]
+  G -->|Chưa| M[Main chọn check phù hợp]
+  T --> R[Receipt test trên snapshot đó]
+  R -->|Đỏ| D[Main hoặc assignment chọn repair; Debug khi cần điều tra]
+  D --> F[Code được sửa và có handoff mới]
+  F --> S{Scope/check kind giữ nguyên và mã thật đã đổi?}
+  S -->|Có, tester gần nhất còn hợp lệ| O[Cùng Testing child, refs và admission mới]
+  S -->|Scope khác hoặc tester không hợp lệ| C[Checker phù hợp mới, không kế thừa pass]
+  O --> P[Đọc input mới và chạy lại mọi lệnh test]
+  C --> P
+  P --> V[Chỉ receipt hiện tại quyết định pass/revise]
+```
+
+**Hai probe đã sửa trước freeze cuối:** selector từng bỏ qua check record mới nhất nếu nó chưa có childId/result, chọn ngược tester cũ; probe `w8-retest-latest-receipt-probe/results.json` xác nhận expectedReuse=false/actualReuse=true. Nay xét record gần nhất kể cả thiếu childId, không tìm ngược. Probe ceiling xác nhận parent8192 nhưng reused child16000; nay đồng bộ ceiling hiện tại, và xóa ceiling cũ khi cha gỡ. Ba ca mới nằm trong V7; không đổi profile mặc định16k/provider.
+
+**Audit bốn final source cuối:** verdict và A1/C1 đúng từng command/source; không bắt producer chạy thay tester. Hai shell attempts vượt command allowlist của fixture được sửa bằng đúng `python -m pytest -q`; pytest exit1 ở ca đỏ là bằng chứng mong đợi, không là provider failure. Prose phụ vẫn có lỗi: đếm sai số dòng source; suy từ StringIO sang byte-level; giải thích bằng `b'H s\xf3'[-2:]` không có trong code/output; dùng inventory fixture để nói toàn workspace chỉ ba file. Giữ W6.1.3, không coi verdict đúng là chứng nhận mọi câu hoặc tuning prompt tại checkpoint này.
+
+## 34. Bàn giao và kết thúc goal theo checkpoint — 02/10/2026
+
+**Quyết định người dùng:** “Chốt checkpoint, bàn giao phần còn lại sang W riêng và kết thúc goal”. Vì vậy goal kết thúc ở phạm vi checkpoint đã kiểm và bàn giao dưới đây. **Không đánh dấu toàn W7/W8 hoàn tất, không tuyên bố BoxFox đã ổn toàn bộ.** Các mục cũ có “đang kiểm/chưa triển khai” là nhật ký ở thời điểm ghi; bảng này là trạng thái bàn giao hiện tại.
+
+### 34.1 Phần đã có điểm neo
+
+| Phần | Đã bàn giao | Bằng chứng/giới hạn |
+|---|---|---|
+| W6.1/W6.5 | Có checkpoint reviewer contract/công tâm, đo output/budget, tách usage từng admission và cộng dồn. | Native chỉ Space Bunny; producer/checker16k. Helper lookup4096 được theo dõi riêng W6.5.3; chất lượng reviewer còn W6.1.3. Không gọi toàn rubric đạt từ unit xanh. |
+| W7 foundation, grant/ref, tiếp tục cùng child | Lưu câu hỏi/câu trả lời/checkpoint với ref; xuất bản theo quyền được main giao; giữ ownership/user-action/revision. | Mục30–33; cơ chế backend đã có test/native, renderer/lịch sử legacy còn W7.1. Không hỏi người dùng để lấy dữ kiện kỹ thuật có thể tự tra. |
+| W8 A2/A3 | Artifact namespace session/lượt/run; dependency/check inputs theo snapshot; handoff preassigned không main relay; notification, quyết định main/user tách riêng; main decision queue. | Native fixture chứng nhận từng cơ chế, không là native main điều phối một app lớn đến ship. Các cổng execution/isolation/integration ở dưới còn thiếu. |
+| W8 A3.3f | Ledger admission, proof/input thật, chống ba lượt không tiến triển, giữ usage/error qua restart. | Neo **49e1eb24**, mục33.12; target562/full2986 đạt trên source riêng50file. Không dùng số proof mới như chứng nhận plan đúng. |
+| W8 A4.1 | Cùng Testing child kiểm lại mã mới; lệnh/read proof mới; cập nhật scope/tools/budget/ceiling của cha sau slot; không nhận green cũ. | Mục33.13/evidence retest; source cuối52file:40test mục tiêu và2/2native đạt. Full source cuối bị dừng, không có verdict toàn suite. |
+
+### 34.2 Các W còn mở — chưa triển khai trong lần chốt này
+
+| W | Vấn đề và hiện trạng | Việc tiếp theo và checkpoint phải đạt |
+|---|---|---|
+| **W8.A4.2 — quyền execution theo assignment** | Probe33.11: root tool direct mutate đến synthetic executor trong run chỉ artifact; chưa có scope gate đầy đủ tại cả tool list và dispatch. Không thực sự sửa/cài mã production trong probe. | Backend sở hữu scope/grant; artifact-only từ chối sửa mã/install/Build qua direct/custom/delegation, kể cả replay/Stop/revoke. Run được phép Build chỉ thi công scope/hash đã duyệt; không khóa root vào một mode. Test cả đường list và dispatch trước native. |
+| **W8.A4.3 — touch-set và isolation** | Các nhánh dùng shared workspace; chưa có cơ chế sở hữu file/touch-set và checkout trước Build tương ứng. | Chốt thiết kế isolation dựa trên code hiện hành rồi mới sửa. Hai nhánh độc lập song song; nhánh đụng file phải serialize hoặc giải quyết conflict, không ghi đè; giữ dirty changes người dùng, recovery/cleanup kiểm được. |
+| **W8.A4.4 — integration snapshot và ship** | Snapshot cả workspace có thể stale nhánh khác; ship hiện `git add -A -- .` trừ `.plans/work`, có thể stage thay đổi không thuộc run. | Ownership/baseline và snapshot tích hợp đúng revision/hash; chỉ nhận code của run, chỉ ship đúng bản đã check/duyệt. Seed dirty file ngoài run rồi chứng minh không stage/commit nó. Test double-click/restart/invalidation; không ship ở goal đã kết thúc. |
+| **W8.A4.5 — repair có điều kiện và kiểm chứng tổng hợp** | Retest đã có; chưa chứng nhận toàn luồng main chọn sửa trực tiếp hoặc Debug điều tra theo findings rồi bàn giao tester. | Giữ a/b là notification/handoff, c mới là main decision. Có assignment đủ điều kiện thì backend chuyển tiếp; lỗi rõ có thể Build sửa, Debug chỉ khi cần. Chạy một ca có native main/Build/Testing và bản sửa, cùng Testing child; một nhánh chờ user không chặn nhánh độc lập. Không dựng pipeline cố định. |
+| **W7.1 — legacy history và CUA** | Thẻ mới transaction/history đã kiểm; legacy resolved-before-requested và pagination trên500events chưa nghiệm thu renderer. Interview main legacy cũng chưa được gán durable chỉ từ child flow. | Kiểm thẻ1–3câu trong chat/Decisions, trả lời từng phần giữ bảng hỏi/câu trả lời, reload/restart, duplicate/stale conflict, >500events. Expected: đúng run/request/revision, không mất history hoặc tự đoán timeout. Nếu cần đổi UI/reducer, trình riêng trước triển khai. |
+| **W7.2 — schema và recovery kết hợp** | work_report action/context/thiếu runId còn dễ dùng sai; crash sau tool có thể đã tác động được giữ interrupted nhưng chưa nghiệm thu recovery tổng hợp. | Action-specific schema/error chỉ đúng field và ref cần sửa; không alias mù consent/scope. Fault sau admission/tool/commit + Stop/revoke phải giữ receipt thật, không replay side effect. Reuse existing receipts trước khi gọi model mới. |
+| **W6.1.3 — reviewer phụ và proportional findings** | Core verdict có ca đúng nhưng prose sai line count/codepoint/encoding/byte semantics/inventory/language; ca cũ compact có findings chưa công tâm. | Adjudicate từng finding với source/test thật và scope; dùng corpus đã lưu, sửa reviewer ở checkpoint riêng. Không biến lỗi phụ thành chặn nếu không ảnh hưởng tiêu chí; không cho verdict đúng che lỗi prose. Chỉ chuyển lỗi sang producer/main khi có bằng chứng đúng tác nhân. |
+| **W6.2 — main/producer quality** | Đã thấy lookup120từ thành dossier dài, claim vượt nguồn, lựa chọn tool/format/language, tổng hợp bỏ finding. Chưa tuning trong A3/A4.1. | Phân loại depth/task, hợp đồng role/skill và nguồn; dùng output cũ đối chiếu trước. Research/Plan/Design phải đúng scope và chuẩn SWE khi liên quan; không sửa chồng reviewer hoặc DAG. Cần checkpoint được chốt riêng. |
+| **W6.5.3 — lookup helper cap/performance** | Helper purpose knowledge4096, producer/checker16000; hai helper đã `stop`, không có bằng chứng truncation. Suite thời gian biến động dưới tải không được kiểm soát. | Đo lookup dài/finishReason/usage/coverage và tải trước khi tăng cap/time; trần con bằng cha theo quyết định cũ. Không tự nâng vì thấy số4096. |
+| **W9 — recorder/CDP integration** | Full trước A4.1 cuối: recorder `moov atom not found`, CDP timeout dù websocket đã connect. Chưa xác định root cause, không gán là mất mạng. | Tách recorder stop/flush/ffmpeg và CDP attach dưới tải; expected file probe được khi báo hoàn tất, browser attach thực sự dùng được. Giữ failure/retry, không đổi sweep đỏ thành xanh từ một rerun pass. |
+
+### 34.3 Cách tiếp tục cho coding agent khác
+
+- [x] Ghi checklist, bằng chứng và checkpoint hiện tại; chỉ commit trong **B**. Checkout `D:/create/BoxFox-Agent-Box-B`; không chuyển sang main hoặc push/merge.
+- [x] Dừng full sweep còn chạy theo yêu cầu chốt; giữ log/receipt interrupted. Native A4.1 đã kết thúc, không mở model hoặc sweep mới để kéo dài goal.
+- [ ] Đọc29/33/34 và evidence của đúng source; chạy `git log -3`, `git status` ở B để lấy neo thực. Không lấy “completed goal” làm “completed W7/W8”.
+- [ ] Chọn **một W** có tiêu chí nghiệm thu rõ, chốt phạm vi trước sửa. Ưu tiên W8.A4.2 → W8.A4.3 → W8.A4.4; W8.A4.5 sau các cổng đó. W7.2/W9 có thể điều tra riêng; W7.1 chưa được phép đổi UI/UX.
+- [ ] Dùng test mục tiêu/fault probe và evidence cũ trước; native chỉ **OpenCode Space Bunny** khi cần kiểm hành vi model. Không tự thay provider hoặc output/budget để tô xanh.
+- [ ] Freeze source mỗi checkpoint, chạy test đúng đường sửa, đọc output thật và tool receipts; chỉ một sweep toàn backend ở lúc chốt nếu phù hợp. Khi phát sinh lỗi ngoài scope, ghi W riêng và bàn giao, không tự mở chuỗi sửa/sweep vô hạn.
+
+**Giới hạn thực tế khi bàn giao:** chưa có nghiệm thu CUA toàn luồng interview; chưa có native main điều phối từ yêu cầu app lớn đến code/ship; chưa chứng minh plan/research/design mọi prompt đạt SWE. Bản này có các phần cơ chế backend đã kiểm và các phần còn mở rõ ràng. Người dùng cần review/duyệt từng W tiếp theo trước khi mở lại việc, không có lịch tự tiếp tục sau khi đóng goal.

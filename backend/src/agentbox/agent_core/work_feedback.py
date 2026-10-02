@@ -531,6 +531,8 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
             feedback.graph.continuations.authorized(request, feedback.validate(request))
         if controller:
             await controller.after_slot(owner['id'], work)
+        if work.get('retestOf'):
+            await feedback.graph.checks.revalidate_retest(owner['id'], work)
         # The owner can lower limits while this admission waits for a slot.
         owner = rt.store.get(owner['id'])
         step_limit = min(effective.get('requestedMaxSteps', effective.get('effectiveMaxSteps', child['config']['maxSteps'])), owner['config']['maxSteps'])
@@ -538,6 +540,24 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         work = dict(work)
         work['admissionSeq'] = rt.store.db.execute('SELECT COALESCE(MAX(seq),0) FROM events WHERE session_id=?', (child_id,)).fetchone()[0]
         config = child['config']
+        if owner['config'].get('outputTokenCeiling') is not None:
+            config['outputTokenCeiling'] = owner['config']['outputTokenCeiling']
+        else:
+            config.pop('outputTokenCeiling', None)
+        if work.get('checkId'):
+            from .roles import work_check_tools
+            from . import work_budget
+            if not any(r['id'] == child['role'] and r.get('enabled', True) for r in owner['config']['subagents']):
+                raise FeedbackError('WORK_CHECK_UNAVAILABLE', 'checker was disabled while waiting for a slot')
+            config['tools'] = sorted(work_check_tools(child['role'], owner['config']['tools']))
+            if work.get('checkKind') == 'tests' and 'terminal_exec' not in config['tools']:
+                raise FeedbackError('WORK_CHECK_UNAVAILABLE', 'tests requires the current owner terminal permission')
+            request_budget = work_budget.requested(child['role'], work, None, 40,
+                effective.get('requestedDeadlineSeconds', config['deadlineSeconds']))
+            effective = effective | {'profile': request_budget['profile'],
+                'requestedMaxSteps': request_budget['maxSteps'], 'requestedDeadlineSeconds': request_budget['deadlineSeconds']}
+            step_limit = min(request_budget['maxSteps'], owner['config']['maxSteps'])
+            deadline = min(request_budget['deadlineSeconds'], owner['config']['deadlineSeconds'])
         turn_budget = effective | {'effectiveMaxSteps': step_limit, 'effectiveDeadlineSeconds': deadline,
             'clamped': step_limit < effective.get('requestedMaxSteps', step_limit)
                        or deadline < effective.get('requestedDeadlineSeconds', deadline)}

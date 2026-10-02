@@ -374,6 +374,69 @@ class Checks:
                     latest[record['kind']] = record
         return latest
 
+    def tester_assignment(self, run, node, stage, spec, criteria, meta):
+        """Scope, not an input/version identity. Only test checks may reuse a child."""
+        binding = meta['binding']
+        return work_policy.digest({'goal': run['goal'], 'node': node['id'], 'stage': stage,
+            'check': spec, 'criteria': criteria, 'policyHash': meta['binding'].get('policyHash'),
+            'scope': {k: binding.get(k) for k in ('nodeDefinition', 'owner', 'ownPlan', 'feedbackDecisions')},
+            'dependencies': {k: v.get('definition') for k, v in binding.get('dependencies', {}).items()}})
+
+    def retest_candidate(self, session, run, node, stage, spec, criteria, meta, current_id):
+        """Preserve the latest tester's context only for an actual new code body.
+
+        A cancelled/uncertain/currently active tester, changed scope or legacy
+        unbound receipt gets a new child; never fall back to an older green one.
+        """
+        if stage != 'execute' or spec['id'] != 'tests' or spec['executorRole'] != 'testing':
+            return None
+        prior = next((r for r in reversed(self.records(run['runId']))
+                      if r['nodeId'] == node['id'] and r['stage'] == stage and r['kind'] == 'tests'
+                      and r['checkId'] != current_id), None)
+        source = meta['binding'].get('codeSnapshot') or {}
+        if (not prior or not prior.get('childId')
+                or prior.get('testerAssignment') != self.tester_assignment(run, node, stage, spec, criteria, meta)
+                or not source.get('hash') or (prior.get('binding', {}).get('codeSnapshot') or {}).get('hash') == source['hash']
+                or prior['status'] not in ('pass', 'revise', 'unverified', 'superseded')):
+            return None
+        try:
+            child = self.graph.store.get(prior['childId'])
+        except KeyError:
+            return None
+        work = child['config'].get('workBinding') or {}
+        ledger = self.graph.store.child(child['id']) or {}
+        if (child.get('parent_id') != session['id'] or child['role'] != 'testing'
+                or child['status'] != 'completed' or ledger.get('status') != 'completed'
+                or work.get('checkId') != prior['checkId'] or work.get('runId') != run['runId']
+                or any(work.get(k) != v for k, v in {'nodeId': node['id'], 'stage': stage,
+                                                   'purpose': 'review', 'checkKind': 'tests'}.items())
+                or self.graph.feedback.yielded(child['id'])
+                or self.graph.rt.tasks.get(child['id']) and not self.graph.rt.tasks[child['id']].done()):
+            return None
+        return prior
+
+    async def revalidate_retest(self, owner, work):
+        """A slot wait may invalidate the new snapshot or the owner's assignment."""
+        def current():
+            from .work_graph import enabled
+            run = self.graph.resolve(owner, work['runId'])
+            doc = next((r for r in self.records(run['runId']) if r['checkId'] == work['checkId']), None)
+            node = next((n for n in run['nodes'] if n['id'] == work['nodeId']), None)
+            if (not enabled() or run['status'] in ('paused', 'cancelled', 'rejected', 'shipped')
+                    or not node or not doc or doc['status'] != 'running' or doc.get('retestOf') != work['retestOf']
+                    or self.graph.progress.get(work['progressAdmissionId'])['status'] != 'reserved'
+                    or node['stages'][work['stage']].get('artifact', {}).get('artifactId') != doc['artifactId']
+                    or any(doc['binding'].get(k) != v for k, v in self.binding(run, node, work['stage']).items())):
+                raise ValueError('WORK_RETEST_STALE: paused/stopped or assignment changed while waiting for slot')
+            self.graph.require_execution(run)
+            self.graph.require_planning_current(run)
+            return doc['binding'].get('codeSnapshot')
+        source = current()
+        if not source or await snapshot(self.graph, owner) != source:
+            raise ValueError('WORK_RETEST_STALE: code changed while waiting for slot')
+        if current() != source:
+            raise ValueError('WORK_RETEST_STALE: check binding changed during code inspection')
+
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
         # Bind the minimum transitive input set. Supporting snapshots are data,
@@ -503,6 +566,17 @@ class Checks:
             return doc | {'status': 'unverified', 'error': 'Exact code snapshot required.'}
         if source and await snapshot(graph, run['sessionId']) != source:
             return doc | {'status': 'superseded', 'error': 'Code changed before check.'}
+        previous_tester = None if whole else self.retest_candidate(session, run, node, stage, spec, criteria, targets[0], doc['checkId'])
+        if previous_tester:
+            doc.update(retestOf=previous_tester['checkId'], previousArtifactId=previous_tester['artifactId'])
+            self.save(doc)  # Slot/restart guards read the canonical retest assignment.
+            goal += work_prompts.choose(lang,
+                '\nRetest on a new code snapshot. Keep your previous investigation as context only; '
+                'read every new assigned artifact and run EVERY required command in this admission. '
+                'Earlier green results cannot establish this revision passes.',
+                '\nKiểm tra lại snapshot mã mới. Giữ điều tra trước làm ngữ cảnh; '
+                'đọc mọi artifact mới được giao và chạy lại TỪNG lệnh bắt buộc trong lượt này. '
+                'Kết quả xanh cũ không chứng minh bản sửa hiện tại đạt.')
         for retry in range(2):
             attempt_goal = goal
             if retry and doc.get('status') == 'error':
@@ -512,6 +586,8 @@ class Checks:
             result, text = await graph.spawn(session, run, None if whole else node, stage, 'review',
                                             spec['executorRole'], attempt_goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
+                                                           **({'resumeChildId': previous_tester['childId']} if previous_tester and not retry else {}),
+                                                           **({'retestOf': previous_tester['checkId']} if previous_tester and not retry else {}),
                                                            **({'inputManifestId': manifest['artifactId']} if manifest else {}),
                                                            'checkKind': spec['id'], 'budgetHints': hints,
                                                            **({'controllerAction': doc['controllerAction']} if doc.get('controllerAction') else {})})
@@ -526,6 +602,8 @@ class Checks:
                 'completed': complete(result), 'execution': work_budget.receipt(result),
                 **({'contractError': findings} if status == 'error' else {})})
             doc.update(childId=child_id, coverage=coverage, findings=findings, status=status)
+            if child_id:
+                doc['admissionSeq'] = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)
             if not complete(result):
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
             elif not all(graph.artifacts.covered(doc['checkId'], meta, child_id) for meta in metas):
@@ -716,6 +794,9 @@ class Checks:
                                         (run['runId'], key, request, doc['checkId']))
                     criteria = {f'A{i+1}': value for i, value in enumerate(node['acceptance'])}
                     criteria['C1'] = spec['criterion']
+                    if cid == 'tests' and stage == 'execute':
+                        doc['testerAssignment'] = self.tester_assignment(run, node, stage, spec, criteria, meta)
+                        self.save(doc)
                     try:
                         doc = await self.judge(session, run, node, stage, spec, [meta], criteria, doc)
                     except BaseException as exc:
