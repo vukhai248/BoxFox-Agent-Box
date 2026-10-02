@@ -522,6 +522,8 @@ class WorkGraph:
         self.feedback = work_feedback.Feedback(self)
         self.grants = work_grants.Grants(self)
         self.handoffs = work_handoffs.Handoffs(self)
+        from .work_progress import Progress
+        self.progress = Progress(self)
         from .work_decisions import Decisions
         self.decisions = Decisions(self)
         self.recover()
@@ -666,6 +668,7 @@ class WorkGraph:
                 'handoffs': self.handoffs.records(run['runId']),
                 'handoffActions': [json.loads(r['doc']) | {'status': r['status']} for r in self.handoffs.actions(run['runId'])],
                 'mainDecisions': self.decisions.records(run['runId']),
+                'progressAdmissions': self.progress.records(run['runId'], limit=30),
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],
@@ -984,6 +987,8 @@ class WorkGraph:
                 'Khi thiếu quyết định trong phạm vi, dùng work_report needs_user với 1–3 câu và decisionKeys tương ứng. Không hỏi ngoài các nhóm đã giao.')
         request = self.feedback.ready(work)
         resume_id = request['childId'] if request else work.pop('resumeChildId', None)
+        progress_id = await self.progress.reserve(session['id'], work, resume_id, request)
+        work['progressAdmissionId'] = progress_id
         waited = time.monotonic()
         while True:
             try:
@@ -1002,9 +1007,17 @@ class WorkGraph:
             except ValueError as exc:
                 # Parallel nodes and their knowledge requests share the fan-out slots: queue, do not fail.
                 if not str(exc).startswith('FANOUT_BUSY') or time.monotonic() - waited > FANOUT_RETRY_SECONDS:
+                    self.progress.finish(progress_id, interrupted=True)
                     raise
                 await asyncio.sleep(FANOUT_RETRY_PAUSE)
+            except BaseException:
+                self.progress.finish(progress_id, interrupted=True)
+                raise
         answer = self.child_answer(result.get('sessionId')) or str(result.get('summary') or '')
+        receipt = self.progress.finish(progress_id, result, answer)
+        result['progress'] = {k: receipt.get(k) for k in ('admissionId', 'streak', 'progressed', 'blocked')}
+        if receipt.get('blocked'):
+            result.update(status='partial', is_error=True, reason='WORK_NO_PROGRESS')
         return result, answer
 
     # ---- node execution with the review loop ------------------------------------------------- #
@@ -1103,7 +1116,8 @@ class WorkGraph:
             try:
                 result, answer = await self.spawn(session, run, node, stage, 'knowledge', item['role'], goal,
                     work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt,
-                    extra_binding={'controllerAction': controller_action, 'helperRole': item['role']} if controller_action else None)
+                    extra_binding={'helperRole': item['role'], 'lookupQuestion': item['question'],
+                        **({'controllerAction': controller_action} if controller_action else {})})
                 reads = work_checks.good_reads(self, result.get('sessionId'))
                 evidenced = work_checks.complete(result) and bool(answer.strip()) and bool(reads)
                 proofs = [work_feedback.evidence_signature(read) or {'kind': read['name'],
@@ -1219,7 +1233,9 @@ class WorkGraph:
             meta = await self.artifacts.put(run, node['id'], stage, output, binding, finalized, entry['producerId'])
             state.update(artifact=meta, output=output, outputChars=len(output))
             if not finalized:
-                state.update(status='failed', error='WORK_PRODUCER_INCOMPLETE: partial retained; retry/update before checks.')
+                state.update(status='failed', error=('WORK_NO_PROGRESS: inspect saved admissions and checkpoint; main must choose a new input/strategy.'
+                    if (produced.get('progress') or {}).get('blocked') else
+                    'WORK_PRODUCER_INCOMPLETE: partial retained; retry/update before checks.'))
                 state['checkpoint'] = {'childId': entry['producerId'], 'artifactId': meta['artifactId'],
                     'execution': entry['execution'], 'remaining': 'Producer incomplete; draft is not verifiable. '
                     'Inspect reason, owner ceiling and saved draft before retrying; same-child resume is not available yet.'}

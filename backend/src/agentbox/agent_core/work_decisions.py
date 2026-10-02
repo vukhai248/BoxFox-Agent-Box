@@ -144,6 +144,13 @@ class Decisions:
                 {'sourceStatus': row['status'], 'input': payload['input']},
                 {'workKey': row['id'], 'transitionId': payload['transitionId'], 'artifact': payload['artifact'],
                  'target': payload['target'], 'reason': str(payload.get('error') or '')[:1000]}, payload['createdAt'])
+        for doc in self.graph.progress.blocked():
+            self.enqueue(doc['ownerId'], doc['runId'], 'progress', doc['admissionId'],
+                {'admissionId': doc['admissionId'], 'assignmentHash': doc['assignmentHash']},
+                {'admissionId': doc['admissionId'], 'childId': doc['childId'], 'work': doc['work'],
+                 'streak': doc['streak'], 'outcome': doc['outcome'],
+                 'reason': 'WORK_ADMISSION_INTERRUPTED' if doc['status'] == 'interrupted' else 'WORK_NO_PROGRESS'},
+                doc['createdAt'])
         for row in self.db.execute("SELECT id FROM work_runs WHERE status NOT IN ('cancelled','rejected','shipped')").fetchall():
             run = self.graph.current(row['id'])
             for node in run['nodes']:
@@ -179,7 +186,10 @@ class Decisions:
             if run['status'] in CLOSED or owner.get('parent_id') or owner['role'] != 'orchestrator':
                 return False
             kind, ident = doc['kind'], doc['identity']
-            if kind == 'checks':
+            if kind == 'progress':
+                if not self.graph.progress.valid(self.graph.progress.get(ident['admissionId'])):
+                    return False
+            elif kind == 'checks':
                 node = next(n for n in run['nodes'] if n['id'] == ident['nodeId'])
                 state = node['stages'][ident['stage']]
                 if (not self.unassigned_checks(run, node, ident['stage'])

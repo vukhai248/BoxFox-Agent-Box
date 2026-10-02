@@ -2124,6 +2124,7 @@ class HarnessRuntime(RuntimeCommands):
     async def stop(self, sid):
         if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
             self.work_graph.decisions.cancel(sid)
+            self.work_graph.progress.cancel(sid)
             self.work_graph.feedback.cancel(sid)
             await self.work_graph.continuations.stop(sid)
         children = self.store.db.execute("SELECT id FROM sessions WHERE parent_id=? AND status IN ('running','awaiting_decision')", (sid,)).fetchall()
@@ -6877,6 +6878,7 @@ class HarnessRuntime(RuntimeCommands):
         try:
             if controller:
                 await controller.after_slot(parent_id, work)
+            if work:
                 config = self.store.get(parent_id)['config']
                 configured = next((r for r in config['subagents'] if r['id'] == role and r.get('enabled', True)), None)
                 if not configured:
@@ -7005,6 +7007,8 @@ class HarnessRuntime(RuntimeCommands):
         try:
             # T3 — `wallMs` đo đúng thời gian CON chạy, không tính lúc xếp hàng chờ slot.
             child_started = time.time()
+            if work and work.get('progressAdmissionId'):
+                work_graph.service(self).progress.attach(work['progressAdmissionId'], parent_id, work, child['id'])
             task = self.start(child['id'], child_prompt)
         except BaseException:
             self.release_child_slot(parent_id)

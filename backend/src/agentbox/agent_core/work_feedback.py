@@ -65,7 +65,9 @@ def input_snapshots(feedback, child_id, work):
                 or meta['binding'].get('purpose') == 'check_inputs'):
             continue
         source = meta['binding'].get('codeSnapshot')
-        if meta.get('producerId') == child_id:
+        # HEAD/criticalChanges are validation/risk metadata, not fresh code.
+        source = {'hash': source['hash']} if isinstance(source, dict) and source.get('hash') else None
+        if child_id is not None and meta.get('producerId') == child_id:
             if source:
                 values.append({'codeSnapshot': source})
         else:
@@ -553,6 +555,8 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         rt.track_child_slot(child_id, owner['id'])
         if controller:
             controller.register_new(owner['id'], work, child_id)
+        if work.get('progressAdmissionId'):
+            feedback.graph.progress.attach(work['progressAdmissionId'], owner['id'], work, child_id)
         task = rt.start(child_id, prompt, invocation_id='work-resume-' + uuid.uuid4().hex)
     except BaseException:
         rt.release_child_slot(owner['id'], child_id)
