@@ -7,8 +7,9 @@ lượt chat thường không gắn run và custom command ngoài run giữ hàn
 
 - Root: lượt gắn run khi (1) lượt bắt đầu với `config.workIntent` (`/plan|/research|/design`), (2) lượt
   là admission harness có `workDecisionBatch`, (3) trong lượt một tool `work_*` resolve được run của chính
-  phiên. Root KHÔNG BAO GIỜ tự sửa mã trong run: artifact-only, chờ duyệt, hay đã duyệt (sửa mã qua Build
-  node) đều chặn ghi trực tiếp.
+  phiên. Ý định slash chỉ thuộc MỘT lượt: lượt dùng nó được đánh dấu `spent`, và lượt người dùng kế tiếp
+  bỏ nó nếu không run nào ra đời từ đó (§1.2). Root KHÔNG BAO GIỜ tự sửa mã trong run: artifact-only, chờ
+  duyệt, hay đã duyệt (sửa mã qua Build node) đều chặn ghi trực tiếp.
 - Con có `workBinding`: chỉ producer execute của node thi công, run có `executionRequested`, đã duyệt và
   admission còn hiệu lực mới là `run_execute`.
 - Con thường/custom command mang `config.scopeOrigin` ghi lúc tạo; thiếu ⇒ `legacy` (con cũ).
@@ -111,19 +112,35 @@ LONE_AMPERSAND_RE = re.compile(r'(?<!&)&(?!&)')
 SEGMENT_SPLIT_RE = re.compile(r'&&|\|\||\|')
 
 
+def banned_option(word, banned):
+    """`word` có phải (hoặc mang) một tuỳ chọn bị cấm không?
+
+    Ba dạng phải khớp: `-O`, `--open-files-in-pager=rm` và dạng DÍNH LIỀN của tuỳ chọn ngắn —
+    `-O<cmd>`, `-oout.txt`. Dạng dính liền từng lọt lưới: `git grep -O'touch f' foo` được xếp là
+    `read` trong khi git thật sự CHẠY `<cmd>` (đã kiểm bằng receipt ở scratch repo). Tuỳ chọn dài
+    vẫn chỉ khớp `=`/đúng tên, để `--pre` không nuốt `--prefix` hay `--pretty`.
+    """
+    for b in banned:
+        if word == b or word.startswith(b + '='):
+            return True
+        if len(b) == 2 and b[0] == '-' and b[1] != '-' and word.startswith(b):
+            return True
+    return False
+
+
 def read_segment(words):
     head, rest = words[0], words[1:]
     if ASSIGNMENT_RE.match(head) or 'sudo' in words:
         return False
     if head in READ_COMMANDS:
         banned = READ_COMMAND_BANNED.get(head, ())
-        return not any(w == b or w.startswith(b + '=') for w in rest for b in banned)
+        return not any(banned_option(w, banned) for w in rest)
     if head == 'find':
         return not any(w in FIND_BANNED for w in rest)
     if head == 'cd':
         return len(rest) <= 1
     if head == 'git':
-        if not rest or any(w == b or w.startswith(b + '=') for w in rest for b in GIT_BANNED):
+        if not rest or any(banned_option(w, GIT_BANNED) for w in rest):
             return False
         sub, tail = rest[0], rest[1:]
         if sub in GIT_READ:
@@ -201,6 +218,7 @@ def begin_turn(rt, sid, turn, invocation_id=None):
     if work_graph.enabled():
         if config.get(work_graph.INTENT_CONFIG_KEY):
             binding = {'turn': turn, 'runId': None, 'reason': 'intent', 'intent': True}
+            mark_intent_spent(rt, sid, turn)
         graph = getattr(rt, 'work_graph', None)
         decisions = getattr(graph, 'decisions', None) if graph is not None else None
         if invocation_id and decisions is not None:
@@ -214,11 +232,47 @@ def begin_turn(rt, sid, turn, invocation_id=None):
     return binding
 
 
+def mark_intent_spent(rt, sid, turn):
+    """Ghi dấu ý định slash đã TIÊU vào lượt `turn` — lượt sau nó không còn hiệu lực (§1.2).
+
+    Không xoá ở đây: `work_graph.create` còn đọc `workIntent` trong chính lượt này để lấy goal/flow.
+    """
+    from . import work_graph
+    session = rt.store.get(sid)
+    config = session.get('config') or {}
+    intent = config.get(work_graph.INTENT_CONFIG_KEY)
+    if isinstance(intent, dict) and intent.get('spent') != turn:
+        intent['spent'] = turn
+        rt.store.update_config(sid, config)
+        return True
+    return False
+
+
+def drop_spent_intent(rt, sid):
+    """Bỏ ý định slash đã tiêu ở lượt TRƯỚC mà không ra run.
+
+    Ý định chỉ thuộc MỘT lượt: `/research <text>` ghi ý định rồi mới dựng lượt, nên nếu lượt ấy
+    không tạo run thì lượt người dùng kế tiếp phải trở lại `legacy` — không thì mọi lượt sau bị
+    khoá ghi vĩnh viễn bởi một ý định đã hết việc. Ý định VỪA đặt trong chính lượt đang mở chưa có
+    dấu `spent`, nên không bị xoá (thứ tự thật là `set_intent` → `reset_user_turn` → `start`).
+    """
+    from . import work_graph
+    session = rt.store.get(sid)
+    config = session.get('config') or {}
+    intent = config.get(work_graph.INTENT_CONFIG_KEY)
+    if isinstance(intent, dict) and intent.get('spent') is not None:
+        config.pop(work_graph.INTENT_CONFIG_KEY, None)
+        rt.store.update_config(sid, config)
+        return True
+    return False
+
+
 def reset_user_turn(rt, sid):
-    """Một tin nhắn người dùng mới (trước khi dựng prompt): binding của lượt trước hết hiệu lực."""
+    """Một tin nhắn người dùng mới (trước khi dựng prompt): binding + ý định đã tiêu hết hiệu lực."""
     session = rt.store.get(sid)
     if not session.get('parent_id'):
         store_binding(rt, sid, None)
+        drop_spent_intent(rt, sid)
 
 
 def bind_tool(rt, session, name, args, result):

@@ -573,6 +573,11 @@ class RuntimeCommands:
         # lượt trước. Giữ lại thì một lượt chat thường sau lượt gắn run vẫn bị khoá ghi, và khối
         # WORK SCOPE cũ nằm lại trong prompt hệ thống (nó được gỡ rồi chèn lại theo hồ sơ của lượt).
         work_scope.reset_user_turn(self, session['id'])
+        # `reset_user_turn` ghi thẳng vào store (bỏ binding của lượt trước + ý định slash đã tiêu), còn
+        # `session` ở đây là bản chụp TRƯỚC đó — `update_config` ngay dưới ghi cả config cũ nên sẽ trả
+        # lại đúng những khoá vừa bị bỏ (N2: ý định `/research <text>` sống sang lượt người dùng sau,
+        # khoá ghi vĩnh viễn). Đọc lại trước khi sửa.
+        session = self.store.get(session['id'])
         from ..agent_core.runtime import design_mode
         if design_mode(session)['on']:
             enabled = sorted(set(enabled) | (set(DESIGN_SKILLS) & set(self.catalog.items)))

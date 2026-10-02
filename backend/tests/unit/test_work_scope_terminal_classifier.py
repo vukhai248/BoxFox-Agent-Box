@@ -18,6 +18,13 @@ READ = [
     'grep -n classify backend/src/agentbox/agent_core/work_scope.py | head -3',
     'cd backend && ls',
     'git show --stat HEAD',
+    # Đối chứng cho F1/N1: tuỳ chọn dài KHÔNG được khớp tiền tố (--prefix/--pretty không phải --pre),
+    # và tuỳ chọn ngắn không bị cấm vẫn là đọc.
+    'git grep -n foo',
+    'git log --pretty=oneline -3',
+    'rg --prefix-check foo',
+    'tree -L 2 .',
+    'tree .',
 ]
 
 MUTATE = [
@@ -42,6 +49,15 @@ MUTATE = [
     'git diff --output=out.patch',
     'git log\nrm f',
     'rg --pre=./hook foo',
+    # F1 — dạng DÍNH LIỀN của tuỳ chọn ngắn: `git grep -O<cmd>` CHẠY `<cmd>`; `tree -o<file>` ghi file.
+    "git grep -O'touch f' foo",
+    'git grep -Orm foo',
+    'git grep -O rm foo',
+    'git grep --open-files-in-pager=rm foo',
+    'git grep --open-files-in-pager rm foo',
+    'git -ccore.x=y status',
+    'tree -oout.txt .',
+    'tree -o out.txt .',
     '',
     None,
     'ls "unterminated',

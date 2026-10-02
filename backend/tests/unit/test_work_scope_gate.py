@@ -50,7 +50,12 @@ def test_artifact_only_run_blocks_root_writes_and_install_before_the_executor(tm
                  ('file_edit_block', {'path': 'src/a.py', 'old_text': 'a', 'new_text': 'b'},
                   'WORK_SCOPE_ARTIFACT_ONLY'),
                  ('terminal_exec', {'command': 'pip install requests'}, 'WORK_SCOPE_TERMINAL_MUTATING'),
-                 ('terminal_exec', {'command': 'echo x > f'}, 'WORK_SCOPE_TERMINAL_MUTATING'))
+                 ('terminal_exec', {'command': 'echo x > f'}, 'WORK_SCOPE_TERMINAL_MUTATING'),
+                 # F1 (review): `git grep -O<cmd>` chạy `<cmd>` — phải bị chặn TRƯỚC executor, và
+                 # N1: `tree -oout.txt` (dạng dính) cũng là ghi.
+                 ('terminal_exec', {'command': "git grep -O'touch /var/tmp/gitpwn2/PWNED' foo"},
+                  'WORK_SCOPE_TERMINAL_MUTATING'),
+                 ('terminal_exec', {'command': 'tree -oout.txt .'}, 'WORK_SCOPE_TERMINAL_MUTATING'))
         for name, args, code in cases:
             with pytest.raises(PermissionError, match=code) as failure:
                 await root(rt, sid, name, args)
@@ -102,6 +107,76 @@ def test_slash_intent_blocks_writes_from_the_start_of_the_turn(tmp_path):
         with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
             await root(rt, sid, 'file_write', {'path': 'a.py', 'content': 'x'})
         assert not executor.calls
+    asyncio.run(check())
+
+
+def test_slash_intent_is_spent_by_its_turn_and_clears_on_the_next_user_turn(tmp_path):
+    """§1.2 — ý định slash chỉ thuộc MỘT lượt; lượt tiêu nó mà không ra run thì lượt sau về `legacy`."""
+    async def check():
+        store, rt, model, executor, sid = build(tmp_path)
+        wg.set_intent(rt, store.get(sid), 'research', 'nghiên cứu định dạng xuất')
+        # Thứ tự THẬT của `/research <text>`: ghi ý định → `_next_turn_skills` (reset) → `start`.
+        work_scope.reset_user_turn(rt, sid)
+        assert (store.get(sid)['config'] or {}).get('workIntent'), \
+            'ý định vừa đặt trong chính lượt này không được xoá'
+        work_scope.begin_turn(rt, sid, 1)
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'artifact_only'
+        with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
+            await root(rt, sid, 'file_write', {'path': 'a.py', 'content': 'x'})
+        # Lượt người dùng kế tiếp: ý định đã tiêu mà không ra run ⇒ hết hiệu lực, ghi lại được.
+        work_scope.reset_user_turn(rt, sid)
+        assert 'workIntent' not in (store.get(sid)['config'] or {})
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'legacy'
+        assert 'file_write' in rt.turn_profile(store.get(sid))['tools']
+        await root(rt, sid, 'file_write', {'path': 'a.py', 'content': 'x'})
+        assert executor.calls[-1] == ('file_write', {'path': 'a.py', 'content': 'x'})
+    asyncio.run(check())
+
+
+def test_intent_that_produced_a_run_keeps_the_gate_via_the_run_binding(tmp_path):
+    async def check():
+        store, rt, model, executor, sid = build(tmp_path)
+        wg.set_intent(rt, store.get(sid), 'research', 'nghiên cứu định dạng xuất')
+        work_scope.begin_turn(rt, sid, 1)
+        run = await created_run(rt, sid, goal='Research export formats')
+        # `create` tiêu ý định; cổng còn lại là binding theo RUN, không nhờ ý định.
+        assert 'workIntent' not in (store.get(sid)['config'] or {})
+        assert work_scope.turn_binding(rt, store.get(sid))['runId'] == run['runId']
+        with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
+            await root(rt, sid, 'file_write', {'path': 'a.py', 'content': 'x'})
+        # Lượt chat thường kế tiếp không gắn run (phương án C) — nhưng lượt gắn LẠI run thì vẫn bị khoá.
+        work_scope.reset_user_turn(rt, sid)
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'legacy'
+        work_scope.begin_turn(rt, sid, 2)
+        work_scope.bind_tool(rt, store.get(sid), 'work_graph', {'action': 'status'},
+                             {'runId': run['runId']})
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'artifact_only'
+        with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
+            await root(rt, sid, 'file_write', {'path': 'a.py', 'content': 'x'})
+        assert not [call for call in executor.calls if call[0] in WRITES]
+    asyncio.run(check())
+
+
+def test_next_turn_skills_does_not_resurrect_the_spent_intent(tmp_path):
+    """N2 (soát W8.A4.2): `_next_turn_skills` ghi lại config cũ SAU `reset_user_turn`.
+
+    Đo sống: nếu nó không đọc lại config thì `workIntent` vừa bị bỏ sống lại y nguyên, và mọi lượt
+    người dùng sau một `/research <text>` không ra run đều bị khoá ghi vĩnh viễn.
+    """
+    async def check():
+        store, rt, model, executor, sid = build(tmp_path)
+        wg.set_intent(rt, store.get(sid), 'research', 'nghiên cứu định dạng xuất')
+        # Lượt mang ý định: đúng đường thật — `_next_turn_skills` (reset) rồi `start`/`begin_turn`.
+        rt._next_turn_skills(store.get(sid), [], None, '/research nghiên cứu định dạng xuất')
+        work_scope.begin_turn(rt, sid, 1)
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'artifact_only'
+        # Lượt người dùng kế tiếp đi qua CÙNG đường đó: ý định phải biến mất, không được sống lại.
+        rt._next_turn_skills(store.get(sid), [], None, 'giờ viết code đi')
+        assert 'workIntent' not in (store.get(sid)['config'] or {}), \
+            '`_next_turn_skills` không được trả lại ý định đã tiêu'
+        work_scope.begin_turn(rt, sid, 2)
+        assert work_scope.resolve(rt, store.get(sid))['mode'] == 'legacy'
+        assert 'file_write' in rt.turn_profile(store.get(sid))['tools']
     asyncio.run(check())
 
 
