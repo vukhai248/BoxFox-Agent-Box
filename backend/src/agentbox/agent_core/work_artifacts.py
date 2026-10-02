@@ -13,6 +13,15 @@ REF_FIELDS = ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path',
 
 
 class Artifacts:
+    @staticmethod
+    def new_namespace(run):
+        # Root turn numbers are scoped to one owner. API-created runs without
+        # an active turn get a stable run-created origin, never the resume turn.
+        origin = run.get('originTurn')
+        value = {'owner': run['sessionId'], 'origin': origin if origin is not None else run['runId']}
+        key = hashlib.sha256(json.dumps(value, sort_keys=True).encode('utf-8')).hexdigest()[:20]
+        return {'version': 2, 'originTurnId': 't-' + key}
+
     def __init__(self, graph):
         self.graph = graph
         self.db = graph.db
@@ -34,7 +43,11 @@ class Artifacts:
         count = self.db.execute('SELECT COUNT(*) FROM work_artifacts WHERE run_id=?',
                                 (run['runId'],)).fetchone()[0] + 1
         owner = hashlib.sha256(run['sessionId'].encode()).hexdigest()[:20]
-        path = f'.plans/work/{owner}/{run["runId"]}/{node_id}/{stage}/v{count}-{aid}.md'
+        namespace = run.get('artifactNamespace')
+        if namespace is not None and namespace != self.new_namespace(run):
+            raise ValueError('WORK_ARTIFACT_NAMESPACE_INVALID: origin namespace must match the original run owner/turn')
+        prefix = f'.plans/work/{owner}/' + (namespace['originTurnId'] + '/' if namespace else '')
+        path = f'{prefix}{run["runId"]}/{node_id}/{stage}/v{count}-{aid}.md'
         # Only harness-generated ids enter the path; no model-provided paths are used.
         result = await self.graph.rt.executor.execute('file_write', {'path': path, 'content': text},
                                                        run['sessionId'])
@@ -44,7 +57,8 @@ class Artifacts:
                 'version': count, 'path': path, 'chars': len(text),
                 'contentHash': hashlib.sha256(text.encode('utf-8')).hexdigest(),
                 'status': 'finalized' if finalized else 'partial', 'producerId': producer_id,
-                'createdAt': time.time(), 'originTurn': self.graph.rt.active_turn.get(run['sessionId']), 'binding': binding}
+                'createdAt': time.time(), 'originTurn': run.get('originTurn'),
+                **({'originTurnId': namespace['originTurnId']} if namespace else {}), 'binding': binding}
         with self.db:
             self.db.execute('INSERT INTO work_artifacts VALUES(?,?,?,?,?)',
                             (aid, run['runId'], run['sessionId'], json.dumps(meta, ensure_ascii=False), text))

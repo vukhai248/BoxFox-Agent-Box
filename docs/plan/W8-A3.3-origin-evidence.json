@@ -1,0 +1,1949 @@
+{
+  "scope": "A3.3d immutable origin-turn namespace, B, no UI/provider/budget changes",
+  "anchor": "801720df",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/work_artifacts.py": "1d64ac5ceb75bec6cf287c7b3c59277a78943ed026eb7b703d7d86393dba0631",
+    "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+    "backend/src/agentbox/agent_core/work_checks.py": "fa7e623e2a0e806a0c6c4dfd3bb9b6248abdcab276ad8098c651bc558902000f",
+    "backend/src/agentbox/agent_core/work_continuations.py": "e313e479a29e6597f86c7f7174c51fb00572f2b568f8c3a17f6043222d0177fe",
+    "backend/src/agentbox/agent_core/work_feedback.py": "163cb940d3206b1d029a260b4eeb555068367b2f1d82236da72a02f816acbda7",
+    "backend/src/agentbox/agent_core/work_feedback_history.py": "1fe79f957c285a3f7d249ab6bc7b2cf0a55c66ed2fd4d957bb5b45561724fbdc",
+    "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+    "backend/src/agentbox/agent_core/work_graph.py": "09a76e231c182f15bce5102d726bfbb749fbd6406b4fc95f68943542de2c93f0",
+    "backend/src/agentbox/agent_core/work_handoffs.py": "ccafbaa20903bb4b32b25a19be254382fac63728547752ede7bb53d2caff2adf",
+    "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+    "backend/src/agentbox/agent_core/work_prompts.py": "883c3a7593d33f73509f776574f503864ea88cade2c3bf130b035ff3a29034cf",
+    "backend/src/agentbox/agent_core/runtime.py": "f7a27df53aac95d577eefbc9aa04e01c562fba65a182f77b8d3c3c0265b33fb6",
+    "backend/src/agentbox/agent_core/output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363",
+    "backend/src/agentbox/memory/session_store.py": "d4f7139ffc69ac0beec0698b3615dd88ac3046f0835495afdfdc36525e0d136c",
+    "scripts/eval/work_card_history_eval.py": "20b186c335be99c2191b21733c60393d0dd0d693f598e6a9a089afa8c75a001f",
+    "scripts/eval/work_feedback_eval.py": "320181d7228e1f02e3bb03c26744b95e0270f02cc45e3db06dc9dec7a5b3a5d5",
+    "scripts/eval/work_knowledge_eval.py": "06e32100a29ddc4922111da1e6cfb9608c50f5085b45884220dd8043c8cb03ce",
+    "scripts/eval/work_check_eval.py": "276eed71ca077fab48125565945d6c1fcc2494d18539e88d21b88eed4fa56f80",
+    "backend/tests/unit/test_work_card_history.py": "2df9c237d6e9da51f026c4d92b6b1aa4ab475841096626d62d7a9b6ce9112eb3",
+    "backend/tests/unit/test_work_index_freshness.py": "532014c6d942b46034fe044bc02185695b0c02aac090e1772a953e38dc46980c",
+    "backend/tests/unit/test_work_feedback_w7.py": "8b73e3cd368aa844e11ea652c97058623b01d801ae86769a22a033fb3b33e3de",
+    "backend/tests/unit/test_work_grants_w7.py": "9dfc0d62b0e7af1dd8104545de40d4ec81a677eb2c22f88b26aa0d01d970667f",
+    "backend/tests/unit/test_work_continuations_w7.py": "3de8db46571903f90ec82b48671350006a29ecf8970dfc574c66619c5563f777",
+    "backend/tests/unit/test_work_handoffs_w8.py": "e48ab9b8e23ff7053e5c4d045f70b42b75340950f2cf29b0db58eb65427b6853",
+    "backend/tests/unit/test_work_graph.py": "7cf44ee0639ca97ee866670db0b49025ca681844d860b00dae0898dcca5affc4",
+    "backend/tests/unit/test_work_origin_namespace.py": "0aa26eb2239504471c5b4052f742e3f8216a6eed1838c79c16e2678b7cdfd0b3"
+  },
+  "sourceDrift": [],
+  "tests": [
+    {
+      "prefix": ".tmp/work-checks/w8-a33-origin-v1",
+      "exit": 4,
+      "stats": {
+        "tests": 0.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 0.0,
+        "time": 0.003
+      },
+      "logTail": "\n- generated xml file: D:\\create\\BoxFox-Agent-Box-B\\.tmp\\work-checks\\w8-a33-origin-v1.xml -\nno tests ran in 0.11s\nERROR: file or directory not found: backend/tests/unit/test_work_artifacts.py\n\n"
+    },
+    {
+      "prefix": ".tmp/work-checks/w8-a33-origin-v2",
+      "exit": 0,
+      "stats": {
+        "tests": 54.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 0.0,
+        "time": 48.897
+      },
+      "logTail": "......................................................                   [100%]\n- generated xml file: D:\\create\\BoxFox-Agent-Box-B\\.tmp\\work-checks\\w8-a33-origin-v2.xml -\n54 passed in 49.03s\n"
+    },
+    {
+      "prefix": ".tmp/work-checks/w8-a33-origin-final-target",
+      "exit": 0,
+      "stats": {
+        "tests": 499.0,
+        "failures": 0.0,
+        "errors": 0.0,
+        "skipped": 0.0,
+        "time": 214.796
+      },
+      "logTail": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 43%]\n........................................................................ [ 57%]\n........................................................................ [ 72%]\n........................................................................ [ 86%]\n...................................................................      [100%]\n- generated xml file: D:\\create\\BoxFox-Agent-Box-B\\.tmp\\work-checks\\w8-a33-origin-final-target.xml -\n499 passed in 214.94s (0:03:34)\n"
+    }
+  ],
+  "probeBefore": {
+    "runOriginTurn": 1,
+    "firstArtifact": {
+      "artifactId": "a-e75c5d11f7c14b649229098d0aadefe8",
+      "runId": "w-37920e6b4c",
+      "nodeId": "P1",
+      "stage": "produce",
+      "version": 1,
+      "path": ".plans/work/8d1ddf1c62464ac37564/w-37920e6b4c/P1/produce/v1-a-e75c5d11f7c14b649229098d0aadefe8.md",
+      "chars": 13,
+      "contentHash": "50ee9f04064fc0a781fcec6dc5f1d814600157429f6d4620134dda0fe5667bb5",
+      "status": "finalized",
+      "producerId": null,
+      "createdAt": 1790908585.8923814,
+      "originTurn": 1,
+      "binding": {}
+    },
+    "continuedArtifact": {
+      "artifactId": "a-3a3066fca45b494aad837ad3726cbc0e",
+      "runId": "w-37920e6b4c",
+      "nodeId": "P1",
+      "stage": "produce",
+      "version": 2,
+      "path": ".plans/work/8d1ddf1c62464ac37564/w-37920e6b4c/P1/produce/v2-a-3a3066fca45b494aad837ad3726cbc0e.md",
+      "chars": 14,
+      "contentHash": "744d09ba3505a1b865914deef96728992514733b7c382bc3975686e98db64bcb",
+      "status": "finalized",
+      "producerId": null,
+      "createdAt": 1790908585.8929553,
+      "originTurn": 2,
+      "binding": {}
+    },
+    "metadataOriginStable": false,
+    "hasTurnNamespace": false,
+    "legacyReadable": true
+  },
+  "native": [
+    {
+      "repeat": 1,
+      "route": {
+        "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+        "modelId": "space-bunny-free"
+      },
+      "sourceManifest": {
+        "backend/src/agentbox/agent_core/work_artifacts.py": "1d64ac5ceb75bec6cf287c7b3c59277a78943ed026eb7b703d7d86393dba0631",
+        "backend/src/agentbox/agent_core/work_budget.py": "01849f1f63276ce4e01cab38f899b61ad5a0612dbe209b9eb0f687d840e14227",
+        "backend/src/agentbox/agent_core/work_checks.py": "fa7e623e2a0e806a0c6c4dfd3bb9b6248abdcab276ad8098c651bc558902000f",
+        "backend/src/agentbox/agent_core/work_continuations.py": "e313e479a29e6597f86c7f7174c51fb00572f2b568f8c3a17f6043222d0177fe",
+        "backend/src/agentbox/agent_core/work_feedback.py": "163cb940d3206b1d029a260b4eeb555068367b2f1d82236da72a02f816acbda7",
+        "backend/src/agentbox/agent_core/work_feedback_history.py": "1fe79f957c285a3f7d249ab6bc7b2cf0a55c66ed2fd4d957bb5b45561724fbdc",
+        "backend/src/agentbox/agent_core/work_grants.py": "18737ded0d570685406540b452f33424ebeb9af32ec869b01d75d8e6de65bceb",
+        "backend/src/agentbox/agent_core/work_graph.py": "09a76e231c182f15bce5102d726bfbb749fbd6406b4fc95f68943542de2c93f0",
+        "backend/src/agentbox/agent_core/work_handoffs.py": "ccafbaa20903bb4b32b25a19be254382fac63728547752ede7bb53d2caff2adf",
+        "backend/src/agentbox/agent_core/work_policy.py": "e227205a9b2d42e21e9e7ad0a99c855edd29f52477eef21664b09850135ea9e1",
+        "backend/src/agentbox/agent_core/work_prompts.py": "883c3a7593d33f73509f776574f503864ea88cade2c3bf130b035ff3a29034cf",
+        "backend/src/agentbox/agent_core/runtime.py": "f7a27df53aac95d577eefbc9aa04e01c562fba65a182f77b8d3c3c0265b33fb6",
+        "backend/src/agentbox/agent_core/output_policy.py": "e07da7a8e951aaa1c4c0060f343c0af8a10660c29329c23b4e18bea580aab363",
+        "backend/src/agentbox/memory/session_store.py": "d4f7139ffc69ac0beec0698b3615dd88ac3046f0835495afdfdc36525e0d136c",
+        "scripts/eval/work_card_history_eval.py": "20b186c335be99c2191b21733c60393d0dd0d693f598e6a9a089afa8c75a001f",
+        "scripts/eval/work_feedback_eval.py": "320181d7228e1f02e3bb03c26744b95e0270f02cc45e3db06dc9dec7a5b3a5d5",
+        "scripts/eval/work_knowledge_eval.py": "06e32100a29ddc4922111da1e6cfb9608c50f5085b45884220dd8043c8cb03ce",
+        "scripts/eval/work_check_eval.py": "276eed71ca077fab48125565945d6c1fcc2494d18539e88d21b88eed4fa56f80",
+        "backend/tests/unit/test_work_card_history.py": "2df9c237d6e9da51f026c4d92b6b1aa4ab475841096626d62d7a9b6ce9112eb3",
+        "backend/tests/unit/test_work_index_freshness.py": "532014c6d942b46034fe044bc02185695b0c02aac090e1772a953e38dc46980c",
+        "backend/tests/unit/test_work_feedback_w7.py": "8b73e3cd368aa844e11ea652c97058623b01d801ae86769a22a033fb3b33e3de",
+        "backend/tests/unit/test_work_grants_w7.py": "9dfc0d62b0e7af1dd8104545de40d4ec81a677eb2c22f88b26aa0d01d970667f",
+        "backend/tests/unit/test_work_continuations_w7.py": "3de8db46571903f90ec82b48671350006a29ecf8970dfc574c66619c5563f777",
+        "backend/tests/unit/test_work_handoffs_w8.py": "e48ab9b8e23ff7053e5c4d045f70b42b75340950f2cf29b0db58eb65427b6853",
+        "backend/tests/unit/test_work_graph.py": "7cf44ee0639ca97ee866670db0b49025ca681844d860b00dae0898dcca5affc4",
+        "backend/tests/unit/test_work_origin_namespace.py": "0aa26eb2239504471c5b4052f742e3f8216a6eed1838c79c16e2678b7cdfd0b3"
+      },
+      "fixtureSource": "Exporter chỉ xuất CSV, giữ Unicode. Người dùng mục tiêu và nơi triển khai chưa chốt.\n",
+      "scope": "Native child/questions; synthetic human selections; no root model/CUA/full DAG",
+      "first": {
+        "runId": "w-1f4171b1b3",
+        "status": "discovering",
+        "flow": "research",
+        "revision": 5,
+        "autopilot": false,
+        "nodes": [
+          {
+            "id": "R1",
+            "kind": "research",
+            "title": "Mô tả exporter",
+            "dependsOn": [],
+            "stages": {
+              "produce": "needs_user"
+            },
+            "artifacts": {
+              "produce": null
+            },
+            "policies": {
+              "produce": null
+            }
+          }
+        ],
+        "waves": [],
+        "issues": [],
+        "documents": [],
+        "handoffs": [],
+        "handoffActions": [],
+        "next": "Read work_report action=status. Open needs_user requests with interview(workRequestId,revision), or supply newly opened evidenceRefs for needs_evidence/checkpoint. Once ready, work_run/work_check continues the same child with fresh budget for new input; preserve its investigation and failure history.",
+        "phase": "discover",
+        "timedOut": false,
+        "blocked": [],
+        "budgetExhausted": false,
+        "outputs": [
+          {
+            "id": "R1",
+            "kind": "research",
+            "status": "needs_user",
+            "attempts": 1,
+            "verdicts": [
+              null
+            ],
+            "output": "",
+            "lastFindings": "",
+            "acceptedWithCaveats": false,
+            "artifact": null,
+            "policy": null,
+            "checkpoint": {
+              "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "runId": "w-1f4171b1b3",
+              "ownerId": "8d31a0129507472fa0d707b3bb869db0",
+              "childId": "1fe741f5d5404fbbb5cd148ed0b38124",
+              "originTurn": 1,
+              "revision": 1,
+              "kind": "needs_user",
+              "status": "needs_user",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                  "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                      "recommended": false
+                    }
+                  ]
+                },
+                {
+                  "id": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                  "options": [
+                    {
+                      "id": "offline",
+                      "label": "Offline",
+                      "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "cloud",
+                      "label": "Cloud",
+                      "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "answers": [],
+              "reason": "Cần chốt đúng hai quyết định của người dùng trước khi mô tả exporter CSV: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). docs/source.md:1 xác nhận rõ hai điểm này \"chưa chốt\".",
+              "artifact": {
+                "artifactId": "a-01062d711e894f0bab0feabe1bf19540",
+                "runId": "w-1f4171b1b3",
+                "nodeId": "R1",
+                "stage": "produce",
+                "version": 1,
+                "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v1-a-01062d711e894f0bab0feabe1bf19540.md",
+                "chars": 855,
+                "contentHash": "e22c569cdd4d44e8f88d31f106b7334f17702c7b8a37e3fc43f118aa9ad485e5",
+                "status": "partial",
+                "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+                "createdAt": 1790909294.7918732,
+                "originTurn": null,
+                "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+                "binding": {
+                  "checkpoint": true
+                }
+              },
+              "binding": {
+                "runId": "w-1f4171b1b3",
+                "nodeId": "R1",
+                "stage": "produce",
+                "purpose": "produce",
+                "attempt": 1,
+                "taskKind": "lookup",
+                "artifactIds": [],
+                "admissionSeq": 0
+              },
+              "fingerprint": "174aee3788575a724ce99d81982ae6dbdc9ea42e1fe750c9f3fe84404ff22920",
+              "createdAt": 1790909294.7927217,
+              "decisionKeys": [
+                "users",
+                "deploy"
+              ],
+              "grantId": "g-802be24f4d2c4c529ce315fc6c6e3b11",
+              "toolCallId": "call_01a0fa83268a749698cb2384",
+              "publication": "delegated",
+              "requiresMainYield": false,
+              "title": "Câu hỏi làm rõ",
+              "cardHistory": [
+                {
+                  "kind": "decision_requested",
+                  "payload": {
+                    "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+                    "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                    "kind": "interview",
+                    "question": "Câu hỏi làm rõ",
+                    "title": "Câu hỏi làm rõ",
+                    "questions": [
+                      {
+                        "id": "users",
+                        "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                        "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                        "options": [
+                          {
+                            "id": "doctor",
+                            "label": "Bác sĩ",
+                            "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                            "recommended": false
+                          },
+                          {
+                            "id": "nurse",
+                            "label": "Điều dưỡng",
+                            "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                            "recommended": false
+                          }
+                        ]
+                      },
+                      {
+                        "id": "deploy",
+                        "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                        "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                        "options": [
+                          {
+                            "id": "offline",
+                            "label": "Offline",
+                            "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                            "recommended": false
+                          },
+                          {
+                            "id": "cloud",
+                            "label": "Cloud",
+                            "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                            "recommended": false
+                          }
+                        ]
+                      }
+                    ],
+                    "options": [
+                      {
+                        "id": "submit",
+                        "label": "Gửi câu trả lời",
+                        "kind": "approve"
+                      },
+                      {
+                        "id": "decide",
+                        "label": "Để agent quyết định",
+                        "kind": "alternative"
+                      }
+                    ],
+                    "answers": [],
+                    "deadline": null,
+                    "defaultChoice": "decide",
+                    "toolCallId": "call_01a0fa83268a749698cb2384",
+                    "runId": "w-1f4171b1b3",
+                    "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                    "revision": 1,
+                    "durable": true,
+                    "resolved": false,
+                    "requiresMainYield": false
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "childId": "1fe741f5d5404fbbb5cd148ed0b38124",
+      "request": {
+        "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+        "runId": "w-1f4171b1b3",
+        "ownerId": "8d31a0129507472fa0d707b3bb869db0",
+        "childId": "1fe741f5d5404fbbb5cd148ed0b38124",
+        "originTurn": 1,
+        "revision": 3,
+        "kind": "needs_user",
+        "status": "consumed",
+        "questions": [
+          {
+            "id": "users",
+            "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+            "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+            "options": [
+              {
+                "id": "doctor",
+                "label": "Bác sĩ",
+                "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                "recommended": false
+              },
+              {
+                "id": "nurse",
+                "label": "Điều dưỡng",
+                "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                "recommended": false
+              }
+            ]
+          },
+          {
+            "id": "deploy",
+            "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+            "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+            "options": [
+              {
+                "id": "offline",
+                "label": "Offline",
+                "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                "recommended": false
+              },
+              {
+                "id": "cloud",
+                "label": "Cloud",
+                "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                "recommended": false
+              }
+            ]
+          }
+        ],
+        "answers": [
+          {
+            "questionId": "users",
+            "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+            "optionId": "nurse",
+            "answer": "Điều dưỡng",
+            "decidedBy": "user",
+            "confirmedAt": 1790909294.8217142,
+            "requestRevision": 1,
+            "source": "user_action"
+          },
+          {
+            "questionId": "deploy",
+            "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+            "optionId": "offline",
+            "answer": "Offline",
+            "decidedBy": "user",
+            "confirmedAt": 1790909295.2169733,
+            "requestRevision": 2,
+            "source": "user_action"
+          }
+        ],
+        "reason": "Cần chốt đúng hai quyết định của người dùng trước khi mô tả exporter CSV: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). docs/source.md:1 xác nhận rõ hai điểm này \"chưa chốt\".",
+        "artifact": {
+          "artifactId": "a-01062d711e894f0bab0feabe1bf19540",
+          "runId": "w-1f4171b1b3",
+          "nodeId": "R1",
+          "stage": "produce",
+          "version": 1,
+          "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v1-a-01062d711e894f0bab0feabe1bf19540.md",
+          "chars": 855,
+          "contentHash": "e22c569cdd4d44e8f88d31f106b7334f17702c7b8a37e3fc43f118aa9ad485e5",
+          "status": "partial",
+          "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+          "createdAt": 1790909294.7918732,
+          "originTurn": null,
+          "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+          "binding": {
+            "checkpoint": true
+          }
+        },
+        "binding": {
+          "runId": "w-1f4171b1b3",
+          "nodeId": "R1",
+          "stage": "produce",
+          "purpose": "produce",
+          "attempt": 1,
+          "taskKind": "lookup",
+          "artifactIds": [],
+          "admissionSeq": 0
+        },
+        "fingerprint": "174aee3788575a724ce99d81982ae6dbdc9ea42e1fe750c9f3fe84404ff22920",
+        "createdAt": 1790909294.7927217,
+        "decisionKeys": [
+          "users",
+          "deploy"
+        ],
+        "grantId": "g-802be24f4d2c4c529ce315fc6c6e3b11",
+        "toolCallId": "call_01a0fa83268a749698cb2384",
+        "publication": "delegated",
+        "requiresMainYield": false,
+        "title": "Câu hỏi làm rõ",
+        "cardHistory": [
+          {
+            "kind": "decision_requested",
+            "payload": {
+              "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+              "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                  "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                      "recommended": false
+                    }
+                  ]
+                },
+                {
+                  "id": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                  "options": [
+                    {
+                      "id": "offline",
+                      "label": "Offline",
+                      "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "cloud",
+                      "label": "Cloud",
+                      "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0fa83268a749698cb2384",
+              "runId": "w-1f4171b1b3",
+              "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "revision": 1,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          },
+          {
+            "kind": "decision_resolved",
+            "payload": {
+              "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+              "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                  "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                  "options": [
+                    {
+                      "id": "doctor",
+                      "label": "Bác sĩ",
+                      "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "nurse",
+                      "label": "Điều dưỡng",
+                      "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                      "recommended": false
+                    }
+                  ]
+                },
+                {
+                  "id": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                  "options": [
+                    {
+                      "id": "offline",
+                      "label": "Offline",
+                      "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "cloud",
+                      "label": "Cloud",
+                      "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790909294.8217142,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0fa83268a749698cb2384",
+              "runId": "w-1f4171b1b3",
+              "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "revision": 2,
+              "durable": true,
+              "resolved": true,
+              "requiresMainYield": false,
+              "status": "answered",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "remaining": true,
+              "reason": "user",
+              "resolvedAt": 1790909294.8221085
+            }
+          },
+          {
+            "kind": "decision_requested",
+            "payload": {
+              "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r2",
+              "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                  "options": [
+                    {
+                      "id": "offline",
+                      "label": "Offline",
+                      "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "cloud",
+                      "label": "Cloud",
+                      "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "users",
+                  "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                  "optionId": "nurse",
+                  "answer": "Điều dưỡng",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790909294.8217142,
+                  "requestRevision": 1,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0fa83268a749698cb2384",
+              "runId": "w-1f4171b1b3",
+              "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "revision": 2,
+              "durable": true,
+              "resolved": false,
+              "requiresMainYield": false
+            }
+          },
+          {
+            "kind": "decision_resolved",
+            "payload": {
+              "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r2",
+              "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+              "kind": "interview",
+              "question": "Câu hỏi làm rõ",
+              "title": "Câu hỏi làm rõ",
+              "questions": [
+                {
+                  "id": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                  "options": [
+                    {
+                      "id": "offline",
+                      "label": "Offline",
+                      "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                      "recommended": false
+                    },
+                    {
+                      "id": "cloud",
+                      "label": "Cloud",
+                      "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                      "recommended": false
+                    }
+                  ]
+                }
+              ],
+              "options": [
+                {
+                  "id": "submit",
+                  "label": "Gửi câu trả lời",
+                  "kind": "approve"
+                },
+                {
+                  "id": "decide",
+                  "label": "Để agent quyết định",
+                  "kind": "alternative"
+                }
+              ],
+              "answers": [
+                {
+                  "questionId": "deploy",
+                  "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                  "optionId": "offline",
+                  "answer": "Offline",
+                  "decidedBy": "user",
+                  "confirmedAt": 1790909295.2169733,
+                  "requestRevision": 2,
+                  "source": "user_action"
+                }
+              ],
+              "deadline": null,
+              "defaultChoice": "decide",
+              "toolCallId": "call_01a0fa83268a749698cb2384",
+              "runId": "w-1f4171b1b3",
+              "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "revision": 3,
+              "durable": true,
+              "resolved": true,
+              "requiresMainYield": false,
+              "status": "answered",
+              "choice": "submit",
+              "outcome": "answered",
+              "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+              "remaining": false,
+              "reason": "user",
+              "resolvedAt": 1790909295.2177093
+            }
+          }
+        ],
+        "resumedBinding": {
+          "runId": "w-1f4171b1b3",
+          "nodeId": "R1",
+          "stage": "produce",
+          "purpose": "produce",
+          "attempt": 1,
+          "taskKind": "lookup",
+          "artifactIds": [
+            "a-01062d711e894f0bab0feabe1bf19540"
+          ],
+          "controllerAction": "work-feedback-wr-e272b79d1adb42fab1e27e8dac0a750f-3",
+          "admissionSeq": 53
+        },
+        "resumedAt": 1790909295.236144
+      },
+      "status": "accepted",
+      "output": "## Trả lời\nExporter xuất **chỉ định dạng CSV** và **giữ nguyên Unicode** theo `docs/source.md:1`. Người dùng mục tiêu đã xác nhận là **Điều dưỡng** (quyết định `users`, `decidedBy: user`, requestRevision 1). Nơi triển khai đã xác nhận là **Offline** (quyết định `deploy`, `decidedBy: user`, requestRevision 2). Vì chạy Offline, file CSV được ghi ra máy/thư mục dùng chung, không qua tải xuống; do đó phải giữ Unicode đúng khi mở bằng Excel tiếng Việt.\n\n## Phạm vi và phương pháp\nNguồn đã mở: `docs/source.md` (file_read; nội dung: \"Exporter chỉ xuất CSV, giữ Unicode. Người dùng mục tiêu và nơi triển khai chưa chốt.\"). Không có nguồn ngoài; không tìm kiếm web. Câu trả lời lấy từ `work_report(action=\"read\", requestId=\"wr-e272b79d1adb42fab1e27e8dac0a750f\")`.\n\n## Dữ kiện đã xác minh\n- Lời nguồn (`docs/source.md:1`): chỉ CSV; giữ Unicode.\n- Quyết định người dùng, **không phải lời nguồn**: Điều dưỡng; Offline.\n\n## So sánh phương án\nLoại Bác sĩ và loại Cloud đã bị loại; không còn phương án cạnh tranh.\n\n## Bằng chứng trái chiều và khoảng trống\nKhông có. `docs/source.md:1` ghi hai mục này \"chưa chốt\", nay đã được người dùng chốt.\n\n## Khuyến nghị\nChỉ báo cáo, không viết mã. Không mở phạm vi triển khai.\n\n## Knowledge requests\n- none",
+      "firstAnswer": {
+        "status": "resolved",
+        "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+        "choice": "submit",
+        "outcome": "answered",
+        "answers": [
+          {
+            "questionId": "users",
+            "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+            "optionId": "nurse",
+            "answer": "Điều dưỡng",
+            "decidedBy": "user",
+            "confirmedAt": 1790909294.8217142,
+            "requestRevision": 1,
+            "source": "user_action"
+          }
+        ],
+        "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+        "revision": 2,
+        "remaining": true
+      },
+      "secondAnswer": {
+        "status": "resolved",
+        "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r2",
+        "choice": "submit",
+        "outcome": "answered",
+        "answers": [
+          {
+            "questionId": "deploy",
+            "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+            "optionId": "offline",
+            "answer": "Offline",
+            "decidedBy": "user",
+            "confirmedAt": 1790909295.2169733,
+            "requestRevision": 2,
+            "source": "user_action"
+          }
+        ],
+        "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+        "revision": 3,
+        "remaining": false
+      },
+      "beforeRestart": [
+        {
+          "seq": 48,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 1, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.7944684
+        },
+        {
+          "seq": 58,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_resolved",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": true, \"requiresMainYield\": false, \"status\": \"answered\", \"choice\": \"submit\", \"outcome\": \"answered\", \"requestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"remaining\": true, \"reason\": \"user\", \"resolvedAt\": 1790909294.8221085}",
+          "created": 1790909294.8226812
+        },
+        {
+          "seq": 59,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r2\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.8238277
+        }
+      ],
+      "afterRestart": [
+        {
+          "seq": 48,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 1, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.7944684
+        },
+        {
+          "seq": 58,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_resolved",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": true, \"requiresMainYield\": false, \"status\": \"answered\", \"choice\": \"submit\", \"outcome\": \"answered\", \"requestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"remaining\": true, \"reason\": \"user\", \"resolvedAt\": 1790909294.8221085}",
+          "created": 1790909294.8226812
+        },
+        {
+          "seq": 59,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r2\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.8238277
+        }
+      ],
+      "finalCardEvents": [
+        {
+          "seq": 48,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 1, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.7944684
+        },
+        {
+          "seq": 58,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_resolved",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r1\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"rationale\": \"docs/source.md:1 ghi \\\"Người dùng mục tiêu ... chưa chốt\\\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.\", \"options\": [{\"id\": \"doctor\", \"label\": \"Bác sĩ\", \"description\": \"Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.\", \"recommended\": false}, {\"id\": \"nurse\", \"label\": \"Điều dưỡng\", \"description\": \"Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.\", \"recommended\": false}]}, {\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": true, \"requiresMainYield\": false, \"status\": \"answered\", \"choice\": \"submit\", \"outcome\": \"answered\", \"requestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"remaining\": true, \"reason\": \"user\", \"resolvedAt\": 1790909294.8221085}",
+          "created": 1790909294.8226812
+        },
+        {
+          "seq": 59,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_requested",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r2\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"users\", \"question\": \"Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?\", \"optionId\": \"nurse\", \"answer\": \"Điều dưỡng\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909294.8217142, \"requestRevision\": 1, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 2, \"durable\": true, \"resolved\": false, \"requiresMainYield\": false}",
+          "created": 1790909294.8238277
+        },
+        {
+          "seq": 61,
+          "session_id": "8d31a0129507472fa0d707b3bb869db0",
+          "kind": "decision_resolved",
+          "payload": "{\"decisionId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f-r2\", \"sessionId\": \"8d31a0129507472fa0d707b3bb869db0\", \"kind\": \"interview\", \"question\": \"Câu hỏi làm rõ\", \"title\": \"Câu hỏi làm rõ\", \"questions\": [{\"id\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"rationale\": \"docs/source.md:1 ghi \\\"nơi triển khai chưa chốt\\\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.\", \"options\": [{\"id\": \"offline\", \"label\": \"Offline\", \"description\": \"Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.\", \"recommended\": false}, {\"id\": \"cloud\", \"label\": \"Cloud\", \"description\": \"Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.\", \"recommended\": false}]}], \"options\": [{\"id\": \"submit\", \"label\": \"Gửi câu trả lời\", \"kind\": \"approve\"}, {\"id\": \"decide\", \"label\": \"Để agent quyết định\", \"kind\": \"alternative\"}], \"answers\": [{\"questionId\": \"deploy\", \"question\": \"Exporter CSV được triển khai ở môi trường Offline hay Cloud?\", \"optionId\": \"offline\", \"answer\": \"Offline\", \"decidedBy\": \"user\", \"confirmedAt\": 1790909295.2169733, \"requestRevision\": 2, \"source\": \"user_action\"}], \"deadline\": null, \"defaultChoice\": \"decide\", \"toolCallId\": \"call_01a0fa83268a749698cb2384\", \"runId\": \"w-1f4171b1b3\", \"workRequestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"revision\": 3, \"durable\": true, \"resolved\": true, \"requiresMainYield\": false, \"status\": \"answered\", \"choice\": \"submit\", \"outcome\": \"answered\", \"requestId\": \"wr-e272b79d1adb42fab1e27e8dac0a750f\", \"remaining\": false, \"reason\": \"user\", \"resolvedAt\": 1790909295.2177093}",
+          "created": 1790909295.2185397
+        }
+      ],
+      "outbox": [
+        {
+          "id": "work-feedback-wr-e272b79d1adb42fab1e27e8dac0a750f-3",
+          "owner_id": "8d31a0129507472fa0d707b3bb869db0",
+          "request_id": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+          "status": "completed",
+          "doc": "{\"action\": \"resume_child\", \"runId\": \"w-1f4171b1b3\", \"stage\": \"produce\", \"requestRevision\": 3, \"childId\": \"1fe741f5d5404fbbb5cd148ed0b38124\", \"claimedAt\": 1790909295.2224922, \"finishedAt\": 1790909307.6262987}"
+        }
+      ],
+      "rootCompletionAttempts": 0,
+      "childCount": 1,
+      "activeSlots": [],
+      "telemetry": [
+        4,
+        2404
+      ],
+      "pendingCards": [],
+      "oracle": true,
+      "latencySeconds": 27.801,
+      "visibleOutputs": [
+        {
+          "child": {
+            "session_id": "1fe741f5d5404fbbb5cd148ed0b38124",
+            "parent_id": "8d31a0129507472fa0d707b3bb869db0",
+            "parent_turn": 0,
+            "spawn_step": 0,
+            "role": "research",
+            "goal": "Work Graph \"Mô tả exporter CSV theo người dùng và nơi triển khai được xác nhận; chỉ báo cáo, không viết mã.\" — nút R1 (research, produce).\nMục tiêu của người dùng: Mô tả exporter CSV theo người dùng và nơi triển khai được xác nhận; chỉ báo cáo, không viết mã.\n\nNhiệm vụ của bạn: Ca kiểm thử lớp bảo vệ hiếm: đọc docs/source.md, giữ CSV/Unicode. Thiếu hai quyết định của user: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). Gọi work_report action=needs_user với ĐÚNG HAI câu hỏi trong cùng card, decisionKeys=[\"users\",\"deploy\"], lưu checkpoint nguồn đã đọc. Không tự chọn. Khi được tiếp tục, đọc work_report action=read bằng requestId được giao để lấy câu trả lời đã lưu; không hỏi lại và không nghiên cứu lại định dạng. Final dưới 200 từ, báo đúng hai lựa chọn và CSV/Unicode, dẫn docs/source.md. Không triển khai mã.\n\nNghiệm thu (reviewer kiểm từng mục):\n- Đọc nguồn, báo đúng hai lựa chọn được xác nhận, giữ CSV và Unicode",
+            "status": "completed",
+            "reason": null,
+            "deliveries": [],
+            "waiting_for": [],
+            "waiting_since": null,
+            "started": 1790909295.2370355,
+            "finished": 1790909307.6164682,
+            "steps_used": 4,
+            "output_tokens": 2404,
+            "answer_chars": 1235
+          },
+          "route": {
+            "connectionId": "b7170755-0e1d-4f84-bcdf-b420b5064583",
+            "modelId": "space-bunny-free"
+          },
+          "maxTokens": 16000,
+          "workBudget": {
+            "profile": "lookup_or_execution",
+            "requestedMaxSteps": 40,
+            "effectiveMaxSteps": 16,
+            "requestedDeadlineSeconds": 900,
+            "effectiveDeadlineSeconds": 300,
+            "clamped": true
+          },
+          "workBinding": {
+            "runId": "w-1f4171b1b3",
+            "nodeId": "R1",
+            "stage": "produce",
+            "purpose": "produce",
+            "attempt": 1,
+            "taskKind": "lookup",
+            "artifactIds": [
+              "a-01062d711e894f0bab0feabe1bf19540"
+            ],
+            "controllerAction": "work-feedback-wr-e272b79d1adb42fab1e27e8dac0a750f-3",
+            "admissionSeq": 53
+          },
+          "visibleFinals": [
+            "## Trả lời\nExporter xuất **chỉ định dạng CSV** và **giữ nguyên Unicode** theo `docs/source.md:1`. Người dùng mục tiêu đã xác nhận là **Điều dưỡng** (quyết định `users`, `decidedBy: user`, requestRevision 1). Nơi triển khai đã xác nhận là **Offline** (quyết định `deploy`, `decidedBy: user`, requestRevision 2). Vì chạy Offline, file CSV được ghi ra máy/thư mục dùng chung, không qua tải xuống; do đó phải giữ Unicode đúng khi mở bằng Excel tiếng Việt.\n\n## Phạm vi và phương pháp\nNguồn đã mở: `docs/source.md` (file_read; nội dung: \"Exporter chỉ xuất CSV, giữ Unicode. Người dùng mục tiêu và nơi triển khai chưa chốt.\"). Không có nguồn ngoài; không tìm kiếm web. Câu trả lời lấy từ `work_report(action=\"read\", requestId=\"wr-e272b79d1adb42fab1e27e8dac0a750f\")`.\n\n## Dữ kiện đã xác minh\n- Lời nguồn (`docs/source.md:1`): chỉ CSV; giữ Unicode.\n- Quyết định người dùng, **không phải lời nguồn**: Điều dưỡng; Offline.\n\n## So sánh phương án\nLoại Bác sĩ và loại Cloud đã bị loại; không còn phương án cạnh tranh.\n\n## Bằng chứng trái chiều và khoảng trống\nKhông có. `docs/source.md:1` ghi hai mục này \"chưa chốt\", nay đã được người dùng chốt.\n\n## Khuyến nghị\nChỉ báo cáo, không viết mã. Không mở phạm vi triển khai.\n\n## Knowledge requests\n- none"
+          ],
+          "tools": [
+            {
+              "id": "call_01a0fa82f606767da421d80b",
+              "name": "file_read",
+              "args": {
+                "path": "docs/source.md"
+              },
+              "result": {
+                "content": "Exporter chỉ xuất CSV, giữ Unicode. Người dùng mục tiêu và nơi triển khai chưa chốt.\n",
+                "path": "docs/source.md",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0fa82f606767da421d80c",
+              "name": "codebase_glob",
+              "args": {
+                "pattern": "**/*"
+              },
+              "result": {
+                "content": "docs/source.md",
+                "fixture": true
+              }
+            },
+            {
+              "id": "call_01a0fa83268a749698cb2384",
+              "name": "work_report",
+              "args": {
+                "action": "needs_user",
+                "checkpoint": "ĐÃ ĐỌC NGUỒN (docs/source.md, file_read, fixture=true): \"Exporter chỉ xuất CSV, giữ Unicode. Người dùng mục tiêu và nơi triển khai chưa chốt.\"\n\nDỮ KIỆN ĐÃ XÁC MINH (không cần tra cứu lại):\n- Định dạng đầu ra: CHỈ CSV. (docs/source.md:1)\n- Bảng mã: GIỮ Unicode (không escape/không mất dấu tiếng Việt). (docs/source.md:1)\n- Người dùng mục tiêu: CHƯA CHỐT — cần user chọn Bác sĩ hoặc Điều dưỡng. (docs/source.md:1)\n- Nơi triển khai: CHƯA CHỐT — cần user chọn Offline hoặc Cloud. (docs/source.csv:1 — thực tế docs/source.md:1)\n\nKHÔNG nghiên cứu lại định dạng ở lần tiếp tục. KHÔNG tự chọn thay user.\nPhạm vi: chỉ báo cáo, không viết mã, không triển khai.\nKhi resume: dùng work_report(action=\"read\", requestId=<requestId được giao>) để lấy 2 câu trả lời đã lưu, rồi viết báo cáo cuối <200 từ báo đúng hai lựa chọn đã xác nhận + CSV/Unicode, dẫn docs/source.md.",
+                "reason": "Cần chốt đúng hai quyết định của người dùng trước khi mô tả exporter CSV: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). docs/source.md:1 xác nhận rõ hai điểm này \"chưa chốt\".",
+                "decisionKeys": [
+                  "users",
+                  "deploy"
+                ],
+                "questions": [
+                  {
+                    "id": "users",
+                    "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                    "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                    "options": [
+                      {
+                        "id": "doctor",
+                        "label": "Bác sĩ",
+                        "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật."
+                      },
+                      {
+                        "id": "nurse",
+                        "label": "Điều dưỡng",
+                        "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "deploy",
+                    "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                    "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                    "options": [
+                      {
+                        "id": "offline",
+                        "label": "Offline",
+                        "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt."
+                      },
+                      {
+                        "id": "cloud",
+                        "label": "Cloud",
+                        "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu."
+                      }
+                    ]
+                  }
+                ],
+                "runId": "w-1f4171b1b3"
+              },
+              "result": {
+                "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                "runId": "w-1f4171b1b3",
+                "ownerId": "8d31a0129507472fa0d707b3bb869db0",
+                "childId": "1fe741f5d5404fbbb5cd148ed0b38124",
+                "originTurn": 1,
+                "revision": 1,
+                "kind": "needs_user",
+                "status": "needs_user",
+                "questions": [
+                  {
+                    "id": "users",
+                    "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                    "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                    "options": [
+                      {
+                        "id": "doctor",
+                        "label": "Bác sĩ",
+                        "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                        "recommended": false
+                      },
+                      {
+                        "id": "nurse",
+                        "label": "Điều dưỡng",
+                        "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                        "recommended": false
+                      }
+                    ]
+                  },
+                  {
+                    "id": "deploy",
+                    "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                    "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                    "options": [
+                      {
+                        "id": "offline",
+                        "label": "Offline",
+                        "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                        "recommended": false
+                      },
+                      {
+                        "id": "cloud",
+                        "label": "Cloud",
+                        "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                        "recommended": false
+                      }
+                    ]
+                  }
+                ],
+                "answers": [],
+                "reason": "Cần chốt đúng hai quyết định của người dùng trước khi mô tả exporter CSV: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). docs/source.md:1 xác nhận rõ hai điểm này \"chưa chốt\".",
+                "artifact": {
+                  "artifactId": "a-01062d711e894f0bab0feabe1bf19540",
+                  "runId": "w-1f4171b1b3",
+                  "nodeId": "R1",
+                  "stage": "produce",
+                  "version": 1,
+                  "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v1-a-01062d711e894f0bab0feabe1bf19540.md",
+                  "chars": 855,
+                  "contentHash": "e22c569cdd4d44e8f88d31f106b7334f17702c7b8a37e3fc43f118aa9ad485e5",
+                  "status": "partial",
+                  "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+                  "createdAt": 1790909294.7918732,
+                  "originTurn": null,
+                  "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+                  "binding": {
+                    "checkpoint": true
+                  }
+                },
+                "binding": {
+                  "runId": "w-1f4171b1b3",
+                  "nodeId": "R1",
+                  "stage": "produce",
+                  "purpose": "produce",
+                  "attempt": 1,
+                  "taskKind": "lookup",
+                  "artifactIds": [],
+                  "admissionSeq": 0
+                },
+                "fingerprint": "174aee3788575a724ce99d81982ae6dbdc9ea42e1fe750c9f3fe84404ff22920",
+                "createdAt": 1790909294.7927217,
+                "decisionKeys": [
+                  "users",
+                  "deploy"
+                ],
+                "grantId": "g-802be24f4d2c4c529ce315fc6c6e3b11",
+                "toolCallId": "call_01a0fa83268a749698cb2384",
+                "publication": "delegated",
+                "requiresMainYield": false,
+                "title": "Câu hỏi làm rõ",
+                "cardHistory": [
+                  {
+                    "kind": "decision_requested",
+                    "payload": {
+                      "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+                      "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                      "kind": "interview",
+                      "question": "Câu hỏi làm rõ",
+                      "title": "Câu hỏi làm rõ",
+                      "questions": [
+                        {
+                          "id": "users",
+                          "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                          "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                          "options": [
+                            {
+                              "id": "doctor",
+                              "label": "Bác sĩ",
+                              "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "nurse",
+                              "label": "Điều dưỡng",
+                              "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                              "recommended": false
+                            }
+                          ]
+                        },
+                        {
+                          "id": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                          "options": [
+                            {
+                              "id": "offline",
+                              "label": "Offline",
+                              "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "cloud",
+                              "label": "Cloud",
+                              "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                              "recommended": false
+                            }
+                          ]
+                        }
+                      ],
+                      "options": [
+                        {
+                          "id": "submit",
+                          "label": "Gửi câu trả lời",
+                          "kind": "approve"
+                        },
+                        {
+                          "id": "decide",
+                          "label": "Để agent quyết định",
+                          "kind": "alternative"
+                        }
+                      ],
+                      "answers": [],
+                      "deadline": null,
+                      "defaultChoice": "decide",
+                      "toolCallId": "call_01a0fa83268a749698cb2384",
+                      "runId": "w-1f4171b1b3",
+                      "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "revision": 1,
+                      "durable": true,
+                      "resolved": false,
+                      "requiresMainYield": false
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "call_01a0fa83300b74bf9079c7e6",
+              "name": "work_report",
+              "args": {
+                "action": "read",
+                "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                "revision": 3,
+                "runId": "w-1f4171b1b3"
+              },
+              "result": {
+                "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                "runId": "w-1f4171b1b3",
+                "ownerId": "8d31a0129507472fa0d707b3bb869db0",
+                "childId": "1fe741f5d5404fbbb5cd148ed0b38124",
+                "originTurn": 1,
+                "revision": 3,
+                "kind": "needs_user",
+                "status": "resuming",
+                "questions": [
+                  {
+                    "id": "users",
+                    "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                    "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                    "options": [
+                      {
+                        "id": "doctor",
+                        "label": "Bác sĩ",
+                        "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                        "recommended": false
+                      },
+                      {
+                        "id": "nurse",
+                        "label": "Điều dưỡng",
+                        "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                        "recommended": false
+                      }
+                    ]
+                  },
+                  {
+                    "id": "deploy",
+                    "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                    "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                    "options": [
+                      {
+                        "id": "offline",
+                        "label": "Offline",
+                        "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                        "recommended": false
+                      },
+                      {
+                        "id": "cloud",
+                        "label": "Cloud",
+                        "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                        "recommended": false
+                      }
+                    ]
+                  }
+                ],
+                "answers": [
+                  {
+                    "questionId": "users",
+                    "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                    "optionId": "nurse",
+                    "answer": "Điều dưỡng",
+                    "decidedBy": "user",
+                    "confirmedAt": 1790909294.8217142,
+                    "requestRevision": 1,
+                    "source": "user_action"
+                  },
+                  {
+                    "questionId": "deploy",
+                    "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                    "optionId": "offline",
+                    "answer": "Offline",
+                    "decidedBy": "user",
+                    "confirmedAt": 1790909295.2169733,
+                    "requestRevision": 2,
+                    "source": "user_action"
+                  }
+                ],
+                "reason": "Cần chốt đúng hai quyết định của người dùng trước khi mô tả exporter CSV: ai dùng (Bác sĩ/Điều dưỡng) và nơi triển khai (Offline/Cloud). docs/source.md:1 xác nhận rõ hai điểm này \"chưa chốt\".",
+                "artifact": {
+                  "artifactId": "a-01062d711e894f0bab0feabe1bf19540",
+                  "runId": "w-1f4171b1b3",
+                  "nodeId": "R1",
+                  "stage": "produce",
+                  "version": 1,
+                  "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v1-a-01062d711e894f0bab0feabe1bf19540.md",
+                  "chars": 855,
+                  "contentHash": "e22c569cdd4d44e8f88d31f106b7334f17702c7b8a37e3fc43f118aa9ad485e5",
+                  "status": "partial",
+                  "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+                  "createdAt": 1790909294.7918732,
+                  "originTurn": null,
+                  "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+                  "binding": {
+                    "checkpoint": true
+                  }
+                },
+                "binding": {
+                  "runId": "w-1f4171b1b3",
+                  "nodeId": "R1",
+                  "stage": "produce",
+                  "purpose": "produce",
+                  "attempt": 1,
+                  "taskKind": "lookup",
+                  "artifactIds": [],
+                  "admissionSeq": 0
+                },
+                "fingerprint": "174aee3788575a724ce99d81982ae6dbdc9ea42e1fe750c9f3fe84404ff22920",
+                "createdAt": 1790909294.7927217,
+                "decisionKeys": [
+                  "users",
+                  "deploy"
+                ],
+                "grantId": "g-802be24f4d2c4c529ce315fc6c6e3b11",
+                "toolCallId": "call_01a0fa83268a749698cb2384",
+                "publication": "delegated",
+                "requiresMainYield": false,
+                "title": "Câu hỏi làm rõ",
+                "cardHistory": [
+                  {
+                    "kind": "decision_requested",
+                    "payload": {
+                      "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+                      "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                      "kind": "interview",
+                      "question": "Câu hỏi làm rõ",
+                      "title": "Câu hỏi làm rõ",
+                      "questions": [
+                        {
+                          "id": "users",
+                          "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                          "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                          "options": [
+                            {
+                              "id": "doctor",
+                              "label": "Bác sĩ",
+                              "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "nurse",
+                              "label": "Điều dưỡng",
+                              "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                              "recommended": false
+                            }
+                          ]
+                        },
+                        {
+                          "id": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                          "options": [
+                            {
+                              "id": "offline",
+                              "label": "Offline",
+                              "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "cloud",
+                              "label": "Cloud",
+                              "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                              "recommended": false
+                            }
+                          ]
+                        }
+                      ],
+                      "options": [
+                        {
+                          "id": "submit",
+                          "label": "Gửi câu trả lời",
+                          "kind": "approve"
+                        },
+                        {
+                          "id": "decide",
+                          "label": "Để agent quyết định",
+                          "kind": "alternative"
+                        }
+                      ],
+                      "answers": [],
+                      "deadline": null,
+                      "defaultChoice": "decide",
+                      "toolCallId": "call_01a0fa83268a749698cb2384",
+                      "runId": "w-1f4171b1b3",
+                      "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "revision": 1,
+                      "durable": true,
+                      "resolved": false,
+                      "requiresMainYield": false
+                    }
+                  },
+                  {
+                    "kind": "decision_resolved",
+                    "payload": {
+                      "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r1",
+                      "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                      "kind": "interview",
+                      "question": "Câu hỏi làm rõ",
+                      "title": "Câu hỏi làm rõ",
+                      "questions": [
+                        {
+                          "id": "users",
+                          "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                          "rationale": "docs/source.md:1 ghi \"Người dùng mục tiêu ... chưa chốt\". Người dùng Bác sĩ và Điều dưỡng khác nhau về thao tác và nhu cầu dữ liệu, nên mô tả exporter khác nhau.",
+                          "options": [
+                            {
+                              "id": "doctor",
+                              "label": "Bác sĩ",
+                              "description": "Xuất dữ liệu để xem/tra phẳng bệnh; cần cột chẩn đoán, kết luận, ngày cập nhật.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "nurse",
+                              "label": "Điều dưỡng",
+                              "description": "Xuất danh sách chăm sóc/bàn giao theo ca, giường; cần cột theo dõi, lịch, ca trực.",
+                              "recommended": false
+                            }
+                          ]
+                        },
+                        {
+                          "id": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                          "options": [
+                            {
+                              "id": "offline",
+                              "label": "Offline",
+                              "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "cloud",
+                              "label": "Cloud",
+                              "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                              "recommended": false
+                            }
+                          ]
+                        }
+                      ],
+                      "options": [
+                        {
+                          "id": "submit",
+                          "label": "Gửi câu trả lời",
+                          "kind": "approve"
+                        },
+                        {
+                          "id": "decide",
+                          "label": "Để agent quyết định",
+                          "kind": "alternative"
+                        }
+                      ],
+                      "answers": [
+                        {
+                          "questionId": "users",
+                          "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                          "optionId": "nurse",
+                          "answer": "Điều dưỡng",
+                          "decidedBy": "user",
+                          "confirmedAt": 1790909294.8217142,
+                          "requestRevision": 1,
+                          "source": "user_action"
+                        }
+                      ],
+                      "deadline": null,
+                      "defaultChoice": "decide",
+                      "toolCallId": "call_01a0fa83268a749698cb2384",
+                      "runId": "w-1f4171b1b3",
+                      "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "revision": 2,
+                      "durable": true,
+                      "resolved": true,
+                      "requiresMainYield": false,
+                      "status": "answered",
+                      "choice": "submit",
+                      "outcome": "answered",
+                      "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "remaining": true,
+                      "reason": "user",
+                      "resolvedAt": 1790909294.8221085
+                    }
+                  },
+                  {
+                    "kind": "decision_requested",
+                    "payload": {
+                      "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r2",
+                      "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                      "kind": "interview",
+                      "question": "Câu hỏi làm rõ",
+                      "title": "Câu hỏi làm rõ",
+                      "questions": [
+                        {
+                          "id": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                          "options": [
+                            {
+                              "id": "offline",
+                              "label": "Offline",
+                              "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "cloud",
+                              "label": "Cloud",
+                              "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                              "recommended": false
+                            }
+                          ]
+                        }
+                      ],
+                      "options": [
+                        {
+                          "id": "submit",
+                          "label": "Gửi câu trả lời",
+                          "kind": "approve"
+                        },
+                        {
+                          "id": "decide",
+                          "label": "Để agent quyết định",
+                          "kind": "alternative"
+                        }
+                      ],
+                      "answers": [
+                        {
+                          "questionId": "users",
+                          "question": "Người dùng mục tiêu của exporter CSV là Bác sĩ hay Điều dưỡng?",
+                          "optionId": "nurse",
+                          "answer": "Điều dưỡng",
+                          "decidedBy": "user",
+                          "confirmedAt": 1790909294.8217142,
+                          "requestRevision": 1,
+                          "source": "user_action"
+                        }
+                      ],
+                      "deadline": null,
+                      "defaultChoice": "decide",
+                      "toolCallId": "call_01a0fa83268a749698cb2384",
+                      "runId": "w-1f4171b1b3",
+                      "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "revision": 2,
+                      "durable": true,
+                      "resolved": false,
+                      "requiresMainYield": false
+                    }
+                  },
+                  {
+                    "kind": "decision_resolved",
+                    "payload": {
+                      "decisionId": "wr-e272b79d1adb42fab1e27e8dac0a750f-r2",
+                      "sessionId": "8d31a0129507472fa0d707b3bb869db0",
+                      "kind": "interview",
+                      "question": "Câu hỏi làm rõ",
+                      "title": "Câu hỏi làm rõ",
+                      "questions": [
+                        {
+                          "id": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "rationale": "docs/source.md:1 ghi \"nơi triển khai chưa chốt\". Offline và Cloud khác nhau về nơi lưu file, cách mở file CSV và giới hạn vận hành, nên mô tả khác nhau.",
+                          "options": [
+                            {
+                              "id": "offline",
+                              "label": "Offline",
+                              "description": "Chạy không mạng; file CSV ghi ra máy/thư mục dùng chung, giữ Unicode khi mở bằng Excel tiếng Việt.",
+                              "recommended": false
+                            },
+                            {
+                              "id": "cloud",
+                              "label": "Cloud",
+                              "description": "Chạy trên máy chủ; file CSV tải xuống qua trình duyệt, cần UTF-8 BOM để Excel đọc đúng dấu.",
+                              "recommended": false
+                            }
+                          ]
+                        }
+                      ],
+                      "options": [
+                        {
+                          "id": "submit",
+                          "label": "Gửi câu trả lời",
+                          "kind": "approve"
+                        },
+                        {
+                          "id": "decide",
+                          "label": "Để agent quyết định",
+                          "kind": "alternative"
+                        }
+                      ],
+                      "answers": [
+                        {
+                          "questionId": "deploy",
+                          "question": "Exporter CSV được triển khai ở môi trường Offline hay Cloud?",
+                          "optionId": "offline",
+                          "answer": "Offline",
+                          "decidedBy": "user",
+                          "confirmedAt": 1790909295.2169733,
+                          "requestRevision": 2,
+                          "source": "user_action"
+                        }
+                      ],
+                      "deadline": null,
+                      "defaultChoice": "decide",
+                      "toolCallId": "call_01a0fa83268a749698cb2384",
+                      "runId": "w-1f4171b1b3",
+                      "workRequestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "revision": 3,
+                      "durable": true,
+                      "resolved": true,
+                      "requiresMainYield": false,
+                      "status": "answered",
+                      "choice": "submit",
+                      "outcome": "answered",
+                      "requestId": "wr-e272b79d1adb42fab1e27e8dac0a750f",
+                      "remaining": false,
+                      "reason": "user",
+                      "resolvedAt": 1790909295.2177093
+                    }
+                  }
+                ],
+                "resumedBinding": {
+                  "runId": "w-1f4171b1b3",
+                  "nodeId": "R1",
+                  "stage": "produce",
+                  "purpose": "produce",
+                  "attempt": 1,
+                  "taskKind": "lookup",
+                  "artifactIds": [
+                    "a-01062d711e894f0bab0feabe1bf19540"
+                  ],
+                  "controllerAction": "work-feedback-wr-e272b79d1adb42fab1e27e8dac0a750f-3",
+                  "admissionSeq": 53
+                },
+                "resumedAt": 1790909295.236144
+              }
+            }
+          ],
+          "turns": [
+            {
+              "turn": 1,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 2,
+              "contextEstimate": 14497,
+              "stepsUsed": 1,
+              "toolsRun": 2,
+              "deadlineUsedMs": 2519,
+              "outputTokens": 63,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 1,
+              "step": 2,
+              "status": "needs_user",
+              "finishReason": "work_checkpoint",
+              "toolCalls": 1,
+              "contextEstimate": 17508,
+              "stepsUsed": 2,
+              "toolsRun": 3,
+              "deadlineUsedMs": 14942,
+              "outputTokens": 1293,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 2,
+              "step": 1,
+              "status": "tool_calls",
+              "finishReason": "tool_calls",
+              "toolCalls": 1,
+              "contextEstimate": 22960,
+              "stepsUsed": 1,
+              "toolsRun": 1,
+              "deadlineUsedMs": 1939,
+              "outputTokens": 120,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            },
+            {
+              "turn": 2,
+              "step": 2,
+              "status": "completed",
+              "finishReason": "stop",
+              "toolCalls": 0,
+              "contextEstimate": 24038,
+              "stepsUsed": 2,
+              "toolsRun": 1,
+              "deadlineUsedMs": 12369,
+              "gateMode": "warn",
+              "evidenceVerdict": "not_measurable",
+              "evidenceChecked": 0,
+              "evidenceMissing": 1,
+              "evidenceRepair": false,
+              "changedFiles": 0,
+              "artifacts": 0,
+              "outputTokens": 928,
+              "completionAttempts": 1,
+              "completionUsageComplete": true
+            }
+          ]
+        }
+      ],
+      "providerCalls": [
+        {
+          "native": true,
+          "maxTokens": 16000,
+          "latencySeconds": 2.485,
+          "requestId": "chatcmpl-20d7eb21-6e63-4a85-bcd7-d3e0e8573395",
+          "finishReason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 10804,
+            "completion_tokens": 63,
+            "total_tokens": 10867,
+            "prompt_tokens_details": {
+              "cached_tokens": 128
+            }
+          },
+          "advertisedTools": [
+            "file_read",
+            "codebase_glob",
+            "codebase_grep",
+            "browser_use",
+            "web_search",
+            "web_fetch",
+            "paper_citations",
+            "read_source",
+            "skills_list",
+            "skill_view",
+            "await_children",
+            "peer_read",
+            "ask_user",
+            "request_approval",
+            "source_add",
+            "source_list",
+            "source_verify",
+            "research_branch_report",
+            "research_status",
+            "work_report",
+            "work_artifact_read"
+          ]
+        },
+        {
+          "native": true,
+          "maxTokens": 16000,
+          "latencySeconds": 12.396,
+          "requestId": "chatcmpl-cd68f8bd-f5be-4550-a505-3e1f61177563",
+          "finishReason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 10959,
+            "completion_tokens": 1293,
+            "total_tokens": 12252,
+            "prompt_tokens_details": {
+              "cached_tokens": 10804
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 47
+            }
+          },
+          "advertisedTools": [
+            "file_read",
+            "codebase_glob",
+            "codebase_grep",
+            "browser_use",
+            "web_search",
+            "web_fetch",
+            "paper_citations",
+            "read_source",
+            "skills_list",
+            "skill_view",
+            "await_children",
+            "peer_read",
+            "ask_user",
+            "request_approval",
+            "source_add",
+            "source_list",
+            "source_verify",
+            "research_branch_report",
+            "research_status",
+            "work_report",
+            "work_artifact_read"
+          ]
+        },
+        {
+          "native": true,
+          "maxTokens": 16000,
+          "latencySeconds": 1.924,
+          "requestId": "chatcmpl-39e5d518-9ead-45ef-aeb1-d280881ece78",
+          "finishReason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 15258,
+            "completion_tokens": 120,
+            "total_tokens": 15378,
+            "prompt_tokens_details": {
+              "cached_tokens": 10959
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 31
+            }
+          },
+          "advertisedTools": [
+            "file_read",
+            "codebase_glob",
+            "codebase_grep",
+            "browser_use",
+            "web_search",
+            "web_fetch",
+            "paper_citations",
+            "read_source",
+            "skills_list",
+            "skill_view",
+            "await_children",
+            "peer_read",
+            "ask_user",
+            "request_approval",
+            "source_add",
+            "source_list",
+            "source_verify",
+            "research_branch_report",
+            "research_status",
+            "work_report",
+            "work_artifact_read"
+          ]
+        },
+        {
+          "native": true,
+          "maxTokens": 16000,
+          "latencySeconds": 10.415,
+          "requestId": "chatcmpl-ae3d943b-a6fd-4a51-a82d-f0c8048f7820",
+          "finishReason": "stop",
+          "usage": {
+            "prompt_tokens": 19944,
+            "completion_tokens": 928,
+            "total_tokens": 20872,
+            "prompt_tokens_details": {
+              "cached_tokens": 15258
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 350
+            }
+          },
+          "advertisedTools": [
+            "file_read",
+            "codebase_glob",
+            "codebase_grep",
+            "browser_use",
+            "web_search",
+            "web_fetch",
+            "paper_citations",
+            "read_source",
+            "skills_list",
+            "skill_view",
+            "await_children",
+            "peer_read",
+            "ask_user",
+            "request_approval",
+            "source_add",
+            "source_list",
+            "source_verify",
+            "research_branch_report",
+            "research_status",
+            "work_report",
+            "work_artifact_read"
+          ]
+        }
+      ],
+      "wordCount": 208
+    }
+  ],
+  "namespaceAudit": {
+    "namespace": {
+      "version": 2,
+      "originTurnId": "t-f0b2fa6dff8e3943b3b7"
+    },
+    "originTurn": null,
+    "artifacts": [
+      {
+        "artifactId": "a-01062d711e894f0bab0feabe1bf19540",
+        "runId": "w-1f4171b1b3",
+        "nodeId": "R1",
+        "stage": "produce",
+        "version": 1,
+        "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v1-a-01062d711e894f0bab0feabe1bf19540.md",
+        "chars": 855,
+        "contentHash": "e22c569cdd4d44e8f88d31f106b7334f17702c7b8a37e3fc43f118aa9ad485e5",
+        "status": "partial",
+        "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+        "createdAt": 1790909294.7918732,
+        "originTurn": null,
+        "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+        "binding": {
+          "checkpoint": true
+        }
+      },
+      {
+        "artifactId": "a-34570935cb56427d8aa508cd2e9f71b7",
+        "runId": "w-1f4171b1b3",
+        "nodeId": "R1",
+        "stage": "produce",
+        "version": 2,
+        "path": ".plans/work/cd781e8210af346c855e/t-f0b2fa6dff8e3943b3b7/w-1f4171b1b3/R1/produce/v2-a-34570935cb56427d8aa508cd2e9f71b7.md",
+        "chars": 1235,
+        "contentHash": "9b2192a7eb1a58a5a56a824e3752acdeab6bc0f10d45ea1ffa4f2a85f947efc3",
+        "status": "finalized",
+        "producerId": "1fe741f5d5404fbbb5cd148ed0b38124",
+        "createdAt": 1790909307.6208615,
+        "originTurn": null,
+        "originTurnId": "t-f0b2fa6dff8e3943b3b7",
+        "binding": {
+          "nodeDefinition": "d8242dcf3e7d46a3f496ac8c80c6ba7caf9340dfce34209965e98fda05c92346",
+          "dependencies": {},
+          "owner": "02f72204c70f61ba3a1f28349e905ad126f33bc6ac277ace407a5a21f5b62cf3",
+          "feedbackDecisions": "51ee3e2f05c2fbe421f5ceb85e20f0547ce861258b5a713f93df85e757042478",
+          "policyHash": "6cba053738dfe30cfd9a6625a2fd08cfbee685286034566fdcb1b84113178011"
+        }
+      }
+    ],
+    "sameFolder": true,
+    "hashValid": true,
+    "nativeOracle": true,
+    "finalWordCount": 208,
+    "workspaceFileHashesValid": true
+  },
+  "audits": [
+    "Native visible final/checkpoint/tools read; CSV/Unicode and Nurses/Offline preserved, no Build or root completion relay.",
+    "Checkpoint/final paths share the registered t-origin/run/node prefix; canonical text and actual UTF8 workspace files match hash.",
+    "Native final208 Markdown words; guide convention affects cap200. It adds unsupported claim Offline means shared/local folder and no download; offline web apps can still download. W6.2 producer follow-up, not a reviewer finding.",
+    "This lookup task had no required independent checker; accepted here is not evidence every content claim was independently reviewed.",
+    "Native one synthetic-human fixture verifies mechanism, not main/SWE/medical/UI quality or the full backend after namespace change.",
+    "Most recent full backend belongs to card anchor:2927passed/21skipped/1ffprobe failure, separate retry1passed; do not label it full certification of namespace changes."
+  ],
+  "remaining": [
+    "shared decisions/routing c",
+    "three unproductive admissions/main decision queue",
+    "combined crash/revoke/pause traces",
+    "A4 retest/isolation/integration/ship"
+  ]
+}

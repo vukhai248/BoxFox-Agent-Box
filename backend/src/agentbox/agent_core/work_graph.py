@@ -695,6 +695,7 @@ class WorkGraph:
                'originTurn': self.rt.active_turn.get(sid),
                'intent': intent or None, 'verificationVersion': work_policy.VERSION,
                'executionRequested': flow in ('fix', 'mixed') and intent.get('command') not in SLASH_FLOWS}
+        run['artifactNamespace'] = self.artifacts.new_namespace(run)
         run['executionRequested'] = self.execution_requested(session, run)
         if args.get('nodes'):
             self.apply_nodes(run, args['nodes'], replace=False)
