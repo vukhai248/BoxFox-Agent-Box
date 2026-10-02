@@ -704,7 +704,11 @@ def test_results_json_carries_gate_failures_and_per_role_latency(tmp_path):
         calls=[{'providerId': 'opencode', 'modelId': 'space-bunny-free', 'sessionId': 'root',
                 'tokensIn': 100, 'tokensOut': 20, 'wallMs': 900},
                {'providerId': 'opencode', 'modelId': 'space-bunny-free', 'sessionId': 'child-1',
-                'tokensIn': 40, 'tokensOut': 10, 'wallMs': 300}],
+                'tokensIn': 40, 'tokensOut': 10, 'wallMs': 300},
+               # W10.M2 (soát vòng 2): lượt gọi không rõ phiên gọi phải vào rổ `unknown`,
+               # không được thổi vào `main`.
+               {'providerId': 'opencode', 'modelId': 'space-bunny-free', 'sessionId': None,
+                'tokensIn': 7, 'tokensOut': 0, 'wallMs': 50}],
         config={'session': 'root'}, expected_state=scenario['expectedState'])
     cell = {'scenario': scenario, 'repeat': 1, 'bundle': bundle, 'validity': 'quality-valid',
             'wallTimeMs': 1500, 'calls': bundle['calls'], 'error': None}
@@ -715,7 +719,14 @@ def test_results_json_carries_gate_failures_and_per_role_latency(tmp_path):
                                extra={'manifest': {'commit': 'abc'}})
     results = json.loads(Path(path).read_text(encoding='utf-8'))
     assert results['schema'] == bench.RESULTS_SCHEMA
-    assert results['attempts'] == 1 and results['tokens'] == {'in': 140, 'out': 30}
+    assert results['attempts'] == 1 and results['tokens'] == {'in': 147, 'out': 30}
+    assert results['cells'][0]['callsWithoutSessionId'] == 1
+    assert results['roles']['unknown']['calls'] == 1
+    # Vòng soát 2 — metadata từng ô phải đi qua `write_results`, không chỉ nằm trong bundle.
+    row = results['cells'][0]
+    assert row['stateMatched'] is True and row['measurementInvalid'] is False
+    assert row['phaseNotReached'] == [] and 'budget' in row
+    assert results['gate']['measurementInvalid'] == 0
     assert results['cells'][0]['roleLatency']['research'] == {'calls': 1, 'tokensIn': 40,
                                                               'tokensOut': 10, 'wallMs': 300}
     assert results['roles']['research']['calls'] == 1
@@ -928,6 +939,10 @@ def test_rescore_rebuilds_scores_from_saved_bundles(tmp_path):
     assert merged['gate']['statePassed'] == 20
     assert merged['gate']['stateObserved'] == 22, 'stateObserved là số thô để đối chiếu, không dùng làm cổng'
     assert merged['gate']['ok'] is False
+    # Vòng soát 2 — `rescore_cells` cũng phải giữ metadata phép đo của từng ô.
+    for cell in merged['cells']:
+        assert cell['measurementInvalid'] is False and 'budget' in cell
+        assert isinstance(cell['phaseNotReached'], list)
 
 
 def test_rescore_requires_the_saved_bundles(tmp_path):
@@ -1251,3 +1266,95 @@ def test_executor_accepts_worktree_commands_and_verify_exec(tmp_path):
     bad = asyncio.run(executor.execute('verify_exec', {'language': 'brainfuck', 'code': 'x',
                                                        'claim': 'x'}, 'sid'))
     assert bad['is_error'] is True and 'VERIFY_EXEC_INVALID' in bad['error']
+
+
+def test_drive_session_types_a_note_for_a_free_text_option():
+    """P4 — lựa chọn `allowFreeText` thiếu chữ đã gõ thì runtime từ chối và lượt đứng im.
+
+    Đo được ở pilot S09 02/10/2026: root hỏi "có cài pytest không" với option tự nhập, driver
+    duyệt suông nên `resolve_decision` trả `DECISION_NOTE_REQUIRED` và không sự kiện nào đi tiếp.
+    """
+    seen = []
+
+    class FakeRt:
+        store = object()
+
+        def __init__(self):
+            self.tasks = {}
+
+        def start(self, sid, prompt):
+            return asyncio.get_event_loop().create_future()
+
+        def pending_for(self, sid):
+            if seen:  # runtime thật bỏ card sau khi trả lời; fake phải giống để vòng lặp không lặp lại
+                return []
+            return [{'kind': 'question', 'decisionId': 'q-1',
+                     'options': [{'id': 'install', 'kind': 'approve', 'allowFreeText': True,
+                                  'label': 'Cài pytest rồi chạy thật'}]}]
+
+        @staticmethod
+        def resolve_decision(sid, decision_id, choice, note=None, answers=None):
+            seen.append((decision_id, choice, note))
+
+    class FakeFeedback:
+        @staticmethod
+        async def pump(rt):
+            return []
+
+    class FakeGraph:
+        @staticmethod
+        def runs(sid, limit=20):
+            return [{'status': 'verified'}]
+
+        class continuations:
+            @staticmethod
+            def rows():
+                return []
+
+    handles = {'store': object(), 'graph': object(), 'rt': FakeRt()}
+    notes = asyncio.run(bench.drive_session(handles['rt'], FakeGraph(), FakeFeedback(), 'sid-1',
+                                            {'id': 'S01', 'prompt': 'p'}, deadline_seconds=1,
+                                            handles=handles))
+    assert seen == [('q-1', 'install', 'Cài pytest rồi chạy thật')], \
+        'lựa chọn tự nhập phải đi kèm chữ đã gõ, nếu không lượt không tiến được'
+    assert any('kèm chữ đã gõ' in note for note in notes)
+
+
+def test_terminal_fence_stops_wrappers_substitution_and_relative_escapes(tmp_path):
+    """Soát vòng 2 — hàng rào phép đo phải chặn cả lối đi vòng, không chỉ `rm` trần."""
+    scenario = bench.load_scenario(bench.scenario_path('S12'))
+    bench.seed_workspace(tmp_path, scenario)
+    executor = bench.WorkspaceExecutor(tmp_path, scenario)
+
+    async def run(command):
+        return await executor.execute('terminal_exec', {'command': command, 'timeout': 30}, 'sid')
+
+    for command in ('/bin/rm -rf x', 'echo $(rm -rf x)', 'echo `rm -rf x`',
+                    "bash -c 'rm -rf x'", 'sh -c "curl http://example.com"', 'cat ../outside.txt',
+                    'git -C ../.. status', 'rm -rf x', 'curl http://example.com'):
+        assert executor._terminal_problem(command), f'phải chặn: {command}'
+    for command in ('git -C . status --short', 'cd . && python -m pytest -q', 'pwd && ls -la',
+                    'find . -newermt 2026-01-01 -type f | tail -5'):
+        assert executor._terminal_problem(command) is None, f'không được chặn oan: {command}'
+    # `/workspace` của box thật được dịch về workspace của cell, không bị từ chối oan.
+    translated = asyncio.run(run('cd /workspace || cd ~; pwd'))
+    assert translated['is_error'] is False and str(tmp_path) in translated['content']
+
+
+def test_terminal_output_truncates_like_the_real_box(tmp_path):
+    """Soát vòng 2 — trần output phải khớp `sandbox/worker.py:220-226` (20.000 spill / 15.000 trả)."""
+    scenario = bench.load_scenario(bench.scenario_path('S12'))
+    bench.seed_workspace(tmp_path, scenario)
+    executor = bench.WorkspaceExecutor(tmp_path, scenario)
+
+    async def run(command):
+        return await executor.execute('terminal_exec', {'command': command, 'timeout': 30}, 'sid')
+
+    big = asyncio.run(run("python3 -c \"print('x' * 25000)\""))
+    marker = '\n[truncated; see artifact]'
+    assert big['is_error'] is False
+    assert big['content'].endswith(marker)
+    assert len(big['content']) == bench.WorkspaceExecutor.TERMINAL_CONTENT_CHARS + len(marker)
+    assert big['truncated'] is True and big['artifact'] is None
+    small = asyncio.run(run('echo ok'))
+    assert 'truncated' not in small and small['artifact'] is None

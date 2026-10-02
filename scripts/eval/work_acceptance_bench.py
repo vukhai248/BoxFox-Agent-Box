@@ -575,7 +575,7 @@ def score_rule(rule, bundle):
     if kind == 'check_status_any':
         picked = [doc for doc in checks if _check_matches(doc, rule)]
         statuses = [doc.get('status') for doc in picked]
-        if not picked and str(rule.get('when_no_check') or 'fail') == 'pass':
+        if not checks and str(rule.get('when_no_check') or 'fail') == 'pass':
             # H5.2 — pha kiểm chưa từng tới (ví dụ lượt bị cắt trước khi có run/check): luật
             # không áp dụng, nhưng phải KHAI BÁO rõ bằng `when_no_check` + `why`, không tự
             # động nới cho mọi ca. Tiền tố giúp cell ghi lại "pha chưa tới" thay vì coi là đạt.
@@ -596,7 +596,10 @@ def score_rule(rule, bundle):
         for doc in derived['feedback']:
             key = (str(doc.get('workRequestId') or doc.get('decisionId') or ''),
                    _int(doc.get('revision')))
-            rounds[key] = len(doc.get('questions') or []) + len(doc.get('answers') or [])
+            # Hai bản ghi cùng (workRequestId, revision) thì lấy vòng ĐÔNG câu hỏi nhất, không để
+            # bản ghi sau ghi đè bản ghi trước (H5.1).
+            rounds[key] = max(rounds.get(key, 0),
+                              len(doc.get('questions') or []) + len(doc.get('answers') or []))
         worst = max(rounds.values()) if rounds else 0
         return worst <= _int(rule['max']), \
             f'per-round max={worst} (max={rule["max"]}, rounds={len(rounds)}, total={sum(rounds.values())})'
@@ -1125,7 +1128,13 @@ def evaluate_run(cell, rubric):
 
 
 def _gate_verdict(gate):
-    """H5.5 — cổng phải đòi cả `passed` đủ ngưỡng, không chỉ state khớp + vài counter cứng."""
+    """H5.5 — cổng đòi CẢ HAI ngưỡng, cố ý chặt hơn tiêu chí state của kế hoạch.
+
+    Kế hoạch (dòng 413) chốt nghiệm thu theo state (≥22/24 lượt đúng state); H5.5 ghi thêm rằng
+    cổng cũ bỏ qua `passed` nên một lượt có state đúng mà luật rubric sai vẫn qua. Giữ cả hai
+    ngưỡng: `passed` (mọi luật đạt) và `statePassed` (state khớp + đo hợp lệ). Không nới lại —
+    nới là đổi tiêu chí đã chốt; nếu W10.F không đủ 22 thì đọc `reasons` để biết vì sao.
+    """
     reasons = []
     if not gate.get('denominator'):
         reasons.append('denominator=0')
@@ -1354,10 +1363,16 @@ class WorkspaceExecutor:
     # Lệnh snapshot thật của sản phẩm dài 2.793 ký tự (base64 nhồi trong `python3 -c`), nên trần
     # phải trên mức đó; vẫn chặn lệnh dài bất thường và lệnh nhiều dòng.
     TERMINAL_MAX_CHARS = 20000
-    TERMINAL_MAX_OUTPUT = 256 * 1024
+    # W10.M3 (soát vòng 2) — khớp `sandbox/worker.py:220-226`: box thật spill ra artifact khi quá
+    # 20.000 ký tự rồi chỉ trả 15.000 ký tự đầu kèm dấu `[truncated; see artifact]`. Fixture không
+    # có artifact nên ghi rõ chỗ đó, nhưng trần phải giống để model thấy cùng một lượng output.
+    TERMINAL_SPILL_CHARS = 20000
+    TERMINAL_CONTENT_CHARS = 15000
     TERMINAL_TIMEOUT_DEFAULT = 60
     TERMINAL_TIMEOUT_MAX = 120
-    VERIFY_OUTPUT_MAX = 64 * 1024
+    # Khớp `worker.py:235` (VERIFY_OUTPUT_MAX = 8000) — snippet thấy đúng trần như box thật.
+    VERIFY_OUTPUT_MAX = 8000
+    SHELL_WRAPPERS = frozenset({'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh'})
     TERMINAL_DENY = frozenset({
         'rm', 'rmdir', 'dd', 'mkfs', 'mount', 'umount', 'sudo', 'su', 'chown', 'chmod',
         'curl', 'wget', 'nc', 'ncat', 'netcat', 'ssh', 'scp', 'sftp', 'rsync', 'telnet',
@@ -1431,6 +1446,11 @@ class WorkspaceExecutor:
             return 'lệnh rỗng'
         if '\n' in command or len(command) > self.TERMINAL_MAX_CHARS:
             return f'lệnh quá dài hoặc nhiều dòng (> {self.TERMINAL_MAX_CHARS} ký tự)'
+        # Hàng rào phép đo KHÔNG phải sandbox bảo mật (xem `sandbox/worker.py` cho box thật), nên
+        # chặn thẳng các lối đi vòng rẻ tiền: thay thế lệnh, vỏ shell lồng, đường dẫn tương đối
+        # thoát workspace. Lệnh sản phẩm đo được (20 bundle W10) không dùng lối nào trong số này.
+        if '`' in command or '$(' in command:
+            return 'lệnh có thay thế lệnh (`…` hoặc `$(`): fixture không diễn giải shell lồng'
         try:
             words = shlex.split(command)
         except ValueError as exc:
@@ -1438,8 +1458,14 @@ class WorkspaceExecutor:
         for index, word in enumerate(words):
             if index == 0 and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', word):
                 continue  # tiền tố gán env (`BOXFOX_SNAPSHOT_BASE=… <lệnh>`)
-            if word in self.TERMINAL_DENY:
+            # So tên chương trình trần, không so cả đường dẫn: `/bin/rm` cũng là `rm`.
+            bare = word.rsplit('/', 1)[-1]
+            if bare in self.TERMINAL_DENY:
                 return f'không chạy lệnh bị chặn trong fixture: {word}'
+            if bare in self.SHELL_WRAPPERS and '-c' in words[index + 1:]:
+                return f'không chạy vỏ shell lồng (`{word} -c`)'
+            if word == '..' or word.startswith('../') or '/../' in word:
+                return f'không chạy lệnh thoát workspace bằng đường dẫn tương đối: {word}'
             if word.startswith('/') and not self._path_allowed(word):
                 return f'không chạy lệnh chạm đường dẫn ngoài workspace: {word}'
         return None
@@ -1475,6 +1501,9 @@ class WorkspaceExecutor:
         # Box thật chạy trong `/home/agent/workspace`; fixture chạy trong thư mục tạm của cell,
         # nên đường dẫn tuyệt đối của box được dịch về workspace trước khi kiểm phạm vi.
         command = command.replace('/home/agent/workspace', str(self.workspace))
+        # Lệnh thật hay mở đầu bằng `cd /workspace 2>/dev/null || cd ~`; dịch luôn `/workspace` để
+        # fixture không từ chối oan một lệnh mà box thật chạy được.
+        command = command.replace('/workspace', str(self.workspace))
         if command.startswith('python -m pytest'):
             command = f'{sys.executable} -m pytest' + command[len('python -m pytest'):]
         elif command.startswith('python3 -m pytest'):
@@ -1499,11 +1528,14 @@ class WorkspaceExecutor:
                                                      start_new_session=True)
         out, err, timed_out = await self._communicate(proc, timeout)
         content = (out + err).decode('utf-8', errors='replace')
-        truncated = len(content) > self.TERMINAL_MAX_OUTPUT
-        result = {'content': content[:self.TERMINAL_MAX_OUTPUT],
+        spilled = len(content) > self.TERMINAL_SPILL_CHARS
+        if spilled:
+            content = content[:self.TERMINAL_CONTENT_CHARS] + '\n[truncated; see artifact]'
+        result = {'content': content,
                   'exit_code': None if timed_out else proc.returncode,
-                  'is_error': timed_out or proc.returncode != 0}
-        if truncated:
+                  'is_error': timed_out or proc.returncode != 0,
+                  'artifact': None}
+        if spilled:
             result['truncated'] = True
         if timed_out:
             result['error'] = f'W10 fixture: lệnh vượt hạn {timeout:.0f}s trong workspace'
@@ -1979,9 +2011,16 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
                 or card.get('defaultChoice')
             if not choice:
                 continue
+            chosen = next((option for option in options if option.get('id') == choice), None) or {}
+            # P4 của runtime: lựa chọn `allowFreeText` bắt buộc kèm chữ đã gõ, thiếu thì
+            # `DECISION_NOTE_REQUIRED` và lượt đứng im tới hết hạn — đo được ở pilot S09 02/10/2026
+            # (root hỏi có cài pytest không, driver duyệt suông nên không có sự kiện nào đi tiếp).
+            note = str(chosen.get('label') or chosen.get('id') or '').strip() \
+                if chosen.get('allowFreeText') is True else None
             try:
-                rt.resolve_decision(sid, card['decisionId'], choice)
-                notes.append(f"autopilot: duyệt {card['decisionId']} → {choice}")
+                rt.resolve_decision(sid, card['decisionId'], choice, note=note)
+                notes.append(f"autopilot: duyệt {card['decisionId']} → {choice}"
+                             + (' (kèm chữ đã gõ)' if note else ''))
             except Exception as exc:
                 notes.append(f'settle {card["decisionId"]}: {type(exc).__name__}: {exc}')
         for card in interviews:
@@ -2176,7 +2215,14 @@ def _write_json(path, doc):
 
 
 def _rubric_role(role):
-    """Vai của phiên → vai của rubric: phiên gốc (orchestrator) tính là `main`."""
+    """Vai của phiên → vai của rubric: phiên gốc (orchestrator) tính là `main`.
+
+    W10.M2 (soát vòng 2) — phiên không xác định được (`sessionId` None) KHÔNG được gộp vào
+    `main`: gộp như vậy thổi phồng chi phí của vai chính bằng những lượt gọi không rõ nguồn.
+    Trả `unknown` để bảng vai nói đúng sự thật, và đếm riêng ở `callsWithoutSessionId`.
+    """
+    if role is None or role == '':
+        return 'unknown'
     return role if role in RUBRIC_ROLES else 'main'
 
 
@@ -2203,6 +2249,10 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
             total['calls'] += 1
         per_cell.append({'caseId': scenario['id'], 'repeat': item['repeat'],
                          'intent': intent_command(scenario),
+                         # W10.M2 (soát vòng 2) — lượt gọi không xác định được phiên gọi: đếm
+                         # riêng thay vì im lặng gộp vào vai `main`.
+                         'callsWithoutSessionId': sum(1 for call in calls
+                                                      if not call.get('sessionId')),
                          'expectedState': scenario['expectedState'],
                          'observedState': scored['observedState'],
                          'passed': scored['passed'], 'score': scored['score'],
@@ -2227,6 +2277,9 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
                           'rate': scoring['roles'][role]['rate']}
         per_role[role].update(role_totals.get(role) or {'calls': 0, 'tokensIn': 0, 'tokensOut': 0,
                                                         'wallMs': 0})
+    # W10.M2 (soát vòng 2) — rổ chi phí không rõ nguồn gọi, chỉ xuất hiện khi thật sự có lượt như vậy.
+    if role_totals.get('unknown'):
+        per_role['unknown'] = dict(role_totals['unknown'], rules=[], passed=None, rate=None)
     results = {'schema': RESULTS_SCHEMA, 'plan': plan, 'route': route,
                'configHash': plan['configHash'],
                'cells': per_cell, 'roles': per_role, 'gate': scoring['gate'],
