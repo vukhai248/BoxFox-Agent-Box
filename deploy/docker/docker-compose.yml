@@ -22,6 +22,17 @@ services:
     user: "0"             # entrypoint cần root để set iptables, tự hạ quyền sau
     cap_add:
       - NET_ADMIN         # chỉ để box-firewall đổi luật iptables
+    # W6.1.3 — verify_exec (reviewer chạy thử một đoạn python/node trong hộp kín bubblewrap):
+    # bubblewrap cần tạo user namespace, nhưng profile mặc định của Docker chặn việc này —
+    # đo trong container: "No permissions to create new namespace". Hai dòng dưới mở đúng
+    # đường đó cho container `box` (đã đo: bwrap chạy được).
+    # ĐÁNH ĐỔI có ý thức: container `box` mất lớp lọc syscall mặc định của Docker và lớp
+    # AppArmor. Box vẫn giữ namespace + quyền hạ xuống `agent` + box-firewall. Muốn quay lại
+    # mặc định an toàn hơn: xoá 2 dòng này — verify_exec tự báo VERIFY_EXEC_UNAVAILABLE
+    # (fail closed, không có đường chạy không cách ly).
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
     environment:
       # Quy tắc ②a: mặc định TẮT — người dùng bật bằng nút trên giao diện
       # (endpoint /__box/network của ide-proxy, mục 12.3.1)
