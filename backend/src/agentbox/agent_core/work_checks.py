@@ -348,6 +348,12 @@ class Checks:
                 or work_policy.digest({k: v for k, v in policy.items() if k != 'hash'}) != policy['hash']):
             return False
         latest = self.latest(run, node, stage)
+        try:
+            inputs = self.graph.artifacts.input_closure(run['runId'], [artifact])
+            for doc in latest.values():
+                self.graph.artifacts.validate_manifest(run, doc, inputs, [artifact['artifactId']])
+        except (ValueError, TypeError, KeyError):
+            return False
         for req in policy.get('required', []):
             if (req['id'] not in latest or latest[req['id']]['status'] != 'pass'
                     or latest[req['id']].get('inputVersion') != INPUTS_VERSION):
@@ -450,13 +456,49 @@ class Checks:
                               'reviewTargetArtifactIds': target_ids,
                               'inputArtifactIds': [meta['artifactId'] for meta in metas if meta['artifactId'] not in target_ids],
                               'check': spec}, ensure_ascii=False)
+        manifest = None
         if len(context) > 16000:
-            # Both spawn and delegate retain at most 16000 context characters.
-            # Do not admit a check with a silently cut JSON reference packet.
+            try:
+                manifest = await graph.artifacts.check_manifest(run, doc, metas, target_ids)
+            except (ValueError, TypeError, KeyError) as exc:
+                return doc | {'status': 'unverified', 'error': str(exc), 'finishedAt': time.time(), 'attempts': []}
+            doc['inputManifest'] = manifest
+            graph.checks.save(doc)  # Save the reference before admitting any checker.
+            context = json.dumps({'snapshots': [{k: manifest[k] for k in
+                    ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path', 'chars')}],
+                'runId': run['runId'], 'reviewTargetArtifactIds': target_ids,
+                'inputManifest': {k: manifest[k] for k in ('artifactId', 'version', 'contentHash', 'path', 'chars')},
+                'inputCount': len(metas), 'check': spec}, ensure_ascii=False)
+            goal += work_prompts.choose(lang,
+                '\nFirst read inputManifest completely using work_artifact_read pages. It contains the complete immutable '
+                'snapshot list, separating review targets from supporting inputs. Then read every referenced snapshot '
+                'and its remaining ranges. A manifest read is not a content read or semantic verification. '
+                'unreadArtifacts is only a limited list; use unreadArtifactCount and allAssignedArtifactsRead, '
+                'and the manifest for the full assignment. Do not infer a shorter scope from the limited list. '
+                'Batch at most 16 tool calls per model step, respecting the existing runtime ceiling. '
+                'A model-step budget counts completions, not individual tool calls. For example, 60 short artifact '
+                'reads fit in 4 batches of 15 calls, plus steps for manifest pages and long tails. '
+                'The original-source lookup cap does not cap assigned artifact reads. ALL assigned inputs are mandatory; '
+                'sampling apparently similar inputs cannot satisfy this contract. If insufficient budget, keep UNVERIFIED '
+                'and a checkpoint rather than declaring full coverage or VERDICT: ok.',
+                '\nĐầu tiên đọc hết inputManifest bằng các trang work_artifact_read. Nó chứa toàn bộ danh sách snapshot '
+                'bất biến, tách đích phản biện với input hỗ trợ. Sau đó đọc mọi snapshot và các range còn lại. '
+                'Đọc manifest không thay việc đọc nội dung hoặc chứng minh chất lượng. unreadArtifacts chỉ là danh sách '
+                'giới hạn; dùng unreadArtifactCount, allAssignedArtifactsRead và manifest cho toàn nhiệm vụ. '
+                'Không suy phạm vi nhỏ hơn từ danh sách giới hạn. '
+                'Mỗi bước model gom tối đa 16 tool calls theo trần runtime hiện có. '
+                'Ngân sách vòng model đếm lượt completion, không đếm từng tool call. Ví dụ 60 artifact ngắn có thể '
+                'đọc trong 4 batch mỗi batch 15 calls, cộng các vòng đọc trang manifest và đuôi input dài. '
+                'Trần tra cứu nguồn gốc không giới hạn việc đọc artifact được giao. MỌI input được giao đều bắt buộc; '
+                'lấy mẫu các input có vẻ giống nhau không đạt hợp đồng. Nếu thiếu ngân sách, giữ UNVERIFIED và checkpoint, '
+                'không tuyên bố đã đọc đủ hoặc VERDICT: ok.')
+            metas = [manifest] + metas
+        if len(context) > 16000:
+            # A large check definition is not a ref list and cannot be silently cut.
             return doc | {'status': 'unverified', 'error': 'WORK_CHECK_INPUT_CONTEXT_TOO_LARGE: '
-                          'bound refs exceed the existing context limit; checkpoint for main',
+                          'check definition still exceeds the existing context limit',
                           'finishedAt': time.time(), 'attempts': []}
-        source = metas[0]['binding'].get('codeSnapshot')
+        source = targets[0]['binding'].get('codeSnapshot')
         if spec['id'] in ('tests', 'code_review') and not source:
             return doc | {'status': 'unverified', 'error': 'Exact code snapshot required.'}
         if source and await snapshot(graph, run['sessionId']) != source:
@@ -470,6 +512,7 @@ class Checks:
             result, text = await graph.spawn(session, run, None if whole else node, stage, 'review',
                                             spec['executorRole'], attempt_goal, context, None, retry + 1,
                                             extra_binding={'checkId': doc['checkId'], 'artifactIds': [m['artifactId'] for m in metas],
+                                                           **({'inputManifestId': manifest['artifactId']} if manifest else {}),
                                                            'checkKind': spec['id'], 'budgetHints': hints,
                                                            **({'controllerAction': doc['controllerAction']} if doc.get('controllerAction') else {})})
             if result.get('request'):
@@ -571,6 +614,9 @@ class Checks:
         docs = [latest.get(d['kind']) for d in docs]
         if any(not d or d['status'] not in ('running','pass') for d in docs):
             return None
+        inputs = self.graph.artifacts.input_closure(run['runId'], [meta])
+        for doc in docs:
+            self.graph.artifacts.validate_manifest(run, doc, inputs, [meta['artifactId']])
         request = work_policy.digest({'node':node['id'],'stage':stage,'artifact':meta['artifactId'],'policy':policy['hash'],'ids':ids})
         for doc in docs:
             if not self.invocation_record(run['runId'],invocation+':'+doc['kind'],request):
@@ -641,6 +687,8 @@ class Checks:
                                          'current input verification with a new invocationId')
                     passed = None if receipt or recheck else self.passed_input(run, node, stage, meta, policy, spec, work_key)
                     if receipt or passed:
+                        inputs = graph.artifacts.input_closure(run['runId'], [meta])
+                        graph.artifacts.validate_manifest(run, receipt or passed, inputs, [meta['artifactId']])
                         source = meta['binding'].get('codeSnapshot')
                         if source and await snapshot(graph, run['sessionId']) != source:
                             raise ValueError('WORK_CHECK_STALE: code changed; old check receipt is not current proof')

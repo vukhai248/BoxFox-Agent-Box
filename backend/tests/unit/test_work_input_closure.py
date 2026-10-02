@@ -148,14 +148,12 @@ def test_own_plan_input_is_pinned_and_wrong_node_is_rejected(tmp_path):
     asyncio.run(check())
 
 
-def test_oversized_reference_packet_checkpoints_before_runtime_cuts_json(tmp_path):
+def test_oversized_check_definition_checkpoints_before_runtime_cuts_json(tmp_path):
     async def check():
         store, _, _, sid, graph, run, node, _, _, primary = await fixture(tmp_path)
-        # Deterministic limit probe, not a claim that a normal four-ref graph is large.
-        fake_inputs = [primary | {'artifactId': 'large-input-' + str(i), 'path': 'x' * 1000} for i in range(20)]
-        graph.artifacts.input_closure = lambda rid, targets: [primary] + fake_inputs
         result = await graph.checks.judge(store.get(sid), run, node, 'produce',
-            {'id': 'evidence', 'executorRole': 'research-review'}, [primary], {'C1': 'Check sources'}, {'checkId': 'large-input'})
+            {'id': 'evidence', 'executorRole': 'research-review', 'criterion': 'x' * 17000},
+            [primary], {'C1': 'Check sources'}, {'checkId': 'large-input'})
         assert result['status'] == 'unverified' and result['error'].startswith('WORK_CHECK_INPUT_CONTEXT_TOO_LARGE')
         assert not store.children_of(sid)
     asyncio.run(check())

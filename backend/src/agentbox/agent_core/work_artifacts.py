@@ -9,6 +9,7 @@ import time
 import uuid
 
 PAGE = 8000
+REF_FIELDS = ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path', 'chars')
 
 
 class Artifacts:
@@ -91,6 +92,12 @@ class Artifacts:
                     remaining.append({'artifactId': assigned_id, 'nodeId': assigned['nodeId'],
                                       'unreadOffset': unread, 'chars': assigned['chars']})
             result['unreadArtifacts'] = remaining
+            if binding.get('inputManifestId'):
+                # The complete immutable list lives in the paginated manifest.
+                # Don't reproduce a large ref packet in every content-page response.
+                result['unreadArtifactCount'] = len(remaining)
+                result['unreadListTruncated'] = len(remaining) > 12
+                result['unreadArtifacts'] = remaining[:12]
             result['allAssignedArtifactsRead'] = not remaining
             result['readingInstruction'] = 'Read unreadOffset next, even if nextOffset is null. Every assigned range is required.'
         return result
@@ -142,6 +149,47 @@ class Artifacts:
         for target in targets:
             visit(target['artifactId'], target)
         return list(targets) + [meta for meta in inputs if meta['artifactId'] not in {t['artifactId'] for t in targets}]
+
+    @staticmethod
+    def manifest_content(run, doc, metas, target_ids):
+        payload = {'schema': 'work-check-manifest/1', 'runId': run['runId'], 'checkId': doc['checkId'],
+                   'reviewTargetArtifactIds': target_ids,
+                   'inputArtifactIds': [m['artifactId'] for m in metas if m['artifactId'] not in target_ids],
+                   'snapshots': [{k: m[k] for k in REF_FIELDS} for m in metas]}
+        text = json.dumps(payload, ensure_ascii=False, indent=2) + '\n'
+        # Pin complete metadata/bindings, not only a list of ids or paths.
+        binding = {'purpose': 'check_inputs', 'checkId': doc['checkId'],
+                   'inputsHash': hashlib.sha256(json.dumps(metas, ensure_ascii=False, sort_keys=True).encode()).hexdigest()}
+        return text, binding
+
+    def validate_manifest(self, run, doc, metas, target_ids):
+        """A cached green receipt cannot bypass corrupt/rebound registry inputs."""
+        expected = doc.get('inputManifest')
+        if not expected:
+            return
+        meta, saved = self.get(run['runId'], expected['artifactId'])
+        text, binding = self.manifest_content(run, doc, metas, target_ids)
+        if meta != expected or meta['status'] != 'finalized' or meta['binding'] != binding or saved != text:
+            raise ValueError('WORK_INPUT_MANIFEST_CONFLICT: cached manifest no longer matches its input binding')
+
+    async def check_manifest(self, run, doc, metas, target_ids):
+        """Durable, replayable reference list for one check, never a semantic result."""
+        text, binding = self.manifest_content(run, doc, metas, target_ids)
+        rows = self.db.execute("SELECT id FROM work_artifacts WHERE run_id=? AND session_id=? "
+            "AND json_extract(metadata,'$.binding.purpose')='check_inputs' "
+            "AND json_extract(metadata,'$.binding.checkId')=?", (run['runId'], run['sessionId'], doc['checkId'])).fetchall()
+        if rows:
+            if len(rows) != 1:
+                raise ValueError('WORK_INPUT_MANIFEST_CONFLICT: multiple manifests for one check')
+            meta, saved = self.get(run['runId'], rows[0]['id'])
+            if meta['status'] != 'finalized' or meta['binding'] != binding or saved != text:
+                raise ValueError('WORK_INPUT_MANIFEST_CONFLICT: check input manifest changed')
+        else:
+            meta = await self.put(run, 'whole' if doc.get('nodeId') == 'whole' else metas[0]['nodeId'],
+                                  'check_inputs', text, binding, True)
+        if doc.get('inputManifest') and doc['inputManifest'] != meta:
+            raise ValueError('WORK_INPUT_MANIFEST_CONFLICT: saved reference differs from registry')
+        return meta
 
     def progress(self, check_id, meta, reader_id):
         """Contiguous audited prefix, scoped to this exact check/artifact/reader."""
