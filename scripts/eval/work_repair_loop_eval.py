@@ -197,9 +197,20 @@ async def main(args):
         row['pytestBeforeCheck'] = executor.forced
 
         executor.arm()  # mọi lệnh pytest của lượt kiểm thật đều thấy lệnh đỏ
-        red = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
-               'stage': 'execute', 'artifactId': first_artifact, 'checkIds': ['tests'],
-               'invocationId': uuid.uuid4().hex}))
+        try:
+            red = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
+                   'stage': 'execute', 'artifactId': first_artifact, 'checkIds': ['tests'],
+                   'invocationId': uuid.uuid4().hex}))
+        except ValueError as exc:
+            # Sản phẩm có thể từ chối mở kiểm (ví dụ `WORK_CHECK_STALE`/`WORK_CHECK_NOT_READY`); ghi
+            # nguyên văn rồi kết thúc lượt thay vì để traceback khó đọc.
+            row['redCheck'] = {'raised': str(exc)[:300]}
+            red = {}
+        if not red.get('checks'):
+            row['redCheck'] = {'empty': True, 'keys': sorted(red),
+                               'raw': json.loads(json.dumps({k: v for k, v in red.items() if k != 'checks'},
+                                                            ensure_ascii=False, default=str))}
+            raise AssertionError(f'WORK_CHECK_NOT_ADMITTED: {json.dumps(row["redCheck"], ensure_ascii=False)[:300]}')
         red_doc = red['checks'][0]
         repair = red.get('repair') or {}
         entry = repair.get('entry') or {}
@@ -232,9 +243,21 @@ async def main(args):
         # `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc; child thật hay bọc ống/`echo` nên lượt
         # đầu có thể `unverified`. Thử lại có giới hạn và ghi trung thực từng lượt, không nới luật.
         for attempt in range(1, 4):
-            green = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
-                     'stage': 'execute', 'artifactId': second_artifact, 'checkIds': ['tests'],
-                     'invocationId': uuid.uuid4().hex}))
+            # Lượt trước có thể đã `revise` và được định tuyến sửa ⇒ artifact đổi. Đọc lại artifact hiện
+            # hành từng lượt (đối tượng `run` của probe là ảnh chụp cũ) để không bị `WORK_CHECK_STALE`.
+            live = graph.find_node(graph.get(run['runId']), 'B1')['stages']['execute']
+            current_artifact = (live.get('artifact') or {}).get('artifactId')
+            if current_artifact and current_artifact != second_artifact:
+                row.setdefault('greenArtifacts', []).append({'attempt': attempt, 'was': second_artifact,
+                                                             'now': current_artifact})
+                second_artifact = current_artifact
+            try:
+                green = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
+                         'stage': 'execute', 'artifactId': second_artifact, 'checkIds': ['tests'],
+                         'invocationId': uuid.uuid4().hex}))
+            except ValueError as exc:
+                row.setdefault('greenChecks', []).append({'attempt': attempt, 'raised': str(exc)[:300]})
+                break
             if not green.get('checks'):
                 # Đo thật: sản phẩm trả về không có check nào — ghi nguyên văn rồi dừng vòng,
                 # không che bằng một IndexError khó đọc.
@@ -250,6 +273,11 @@ async def main(args):
                 'commands': [item.get('args', {}).get('command') for item
                              in work_checks.observations(graph, green_doc.get('childId'))
                              if item.get('name') == 'terminal_exec'][:12]})
+            if green.get('repair'):
+                # W8.A4.5: lượt kiểm thứ hai cũng có thể tự `revise` và được định tuyến sửa — ghi lại
+                # nguyên văn vì đây chính là cơ chế cần đo.
+                row.setdefault('greenRepairs', []).append(json.loads(json.dumps(green['repair'],
+                                                                                ensure_ascii=False, default=str)))
             if green_doc['status'] == 'pass':
                 break
         node = graph.find_node(graph.get(run['runId']), 'B1')

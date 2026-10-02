@@ -389,15 +389,78 @@
       },
       "calls": 49,
       "narrative": "Cùng dạng hỏng với lượt 3, nhưng lượt này CHỈ RA NGUYÊN NHÂN GỐC bằng lời của chính child kiểm thử: fixture trả kết quả CẮM SẴN cho MỌI lệnh chứa chuỗi `pytest` — kể cả `echo \"hello pytest world\"` cũng nhận đúng traceback đó. Child kết luận đúng là công cụ trả kết quả bịa, tự chạy lại pytest qua một script không chứa chữ `pytest` để lấy transcript thật (12 passed) rồi báo đạt. Vì lệnh test bắt buộc chưa từng chạy THÀNH CÔNG trong lượt kiểm, backend hạ `pass` → `unverified` (đúng luật), nên vòng sửa không được kích hoạt và `__integration__` vẫn `built: false`."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run5-16000",
+      "resultsSha256": "130ef6a8f8a2f415c39e381e4008bde3363c0c330f4f033e6620fb0a93852bd6",
+      "oracle": false,
+      "error": "ValueError: WORK_CHECK_STALE: use current artifactId from work_graph status",
+      "latencySeconds": 703.523,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "7780196c33564f1a940962e171373599",
+        "error": "WORK_FINDING_UNCITED: A5: F1 UNKNOWN_RECEIPT; A7: F2 UNKNOWN_RECEIPT. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-79c23c8d15444cbaa91e9276b5471bf8",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "revise",
+          "attempt": 1,
+          "childId": "5b2168231a8b4d198ceb450124e66b9a",
+          "error": null,
+          "commands": [
+            "cd /workspace 2>/dev/null || cd ~; pwd; ls -la; echo \"---\"; find / -name \"export.py\" -path \"*src*\" -not -path \"*/node_modules/*\" 2>/dev/null | head -50",
+            "pwd; ls -la",
+            "ls -la .boxfox/worktrees/w-fee248a9c3/n-B1",
+            "pwd",
+            "ls -la",
+            "cat -n src/export.py",
+            "ls -la src tests",
+            "git status --porcelain",
+            "git log --oneline -5",
+            "git show --stat 95fcb3d",
+            "git diff 19f37cf 95fcb3d",
+            "git rev-parse HEAD^{tree}"
+          ]
+        }
+      ],
+      "productStateFromDb": {
+        "node": "B1",
+        "status": "needs_checks",
+        "attempts": 2,
+        "repairs": [
+          {
+            "n": 1,
+            "class": "unclassified",
+            "reason": "no failing required command event",
+            "resumed": true,
+            "codeHash": "2854719b6e0bccf03df9e00286fe6b65bc1f233050b8b9c60c194900a73661aa"
+          }
+        ],
+        "round1Verdict": "revise"
+      },
+      "narrative": "Lượt này KHÁC hai lượt trước: lượt kiểm ĐẦU vẫn `unverified` nhưng lý do đổi thành `WORK_FINDING_UNCITED` (child báo finding chặn mà thiếu receipt hợp lệ), rồi lượt kiểm THỨ HAI trả `revise` thật ⇒ sản phẩm ĐÃ định tuyến sửa (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId` và `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết ở lượt thử thứ hai vì artifact đã đổi (`WORK_CHECK_STALE`) — đã vá để đọc lại artifact từng lượt."
     }
   ],
   "conclusion": {
     "status": "chưa nghiệm thu",
-    "reason": "Bốn lượt đã chạy đều `oracle=false`, mỗi lượt dừng ở một chỗ khác nhau và đều được lưu nguyên văn. Lượt 1 dừng vì trần output 4096 của fixture (đã khai báo núm); lượt 2 chạy đúng chuỗi đỏ→sửa→resume CHÍNH child cũ nhưng probe tự nổ `IndexError` khi `checks.tool` trả danh sách rỗng; lượt 3 và 4 không nổ nhưng KHÔNG kích hoạt được vòng sửa, và lượt 4 chỉ ra nguyên nhân gốc: cò đỏ của fixture trả kết quả cắm sẵn cho mọi lệnh chứa chuỗi `pytest` (kể cả `echo \"hello pytest world\"`), child kiểm thử phát hiện đúng là kết quả bịa nên tự kiểm lại bằng đường khác rồi báo đạt — backend hạ xuống `unverified` (đúng) và vòng sửa không chạy.",
+    "reason": "Sáu lượt đã chạy đều `oracle=false`, mỗi lượt dừng ở một chỗ khác nhau và đều được lưu nguyên văn. Lượt 1: trần output 4096 của fixture. Lượt 2: chạy đúng chuỗi đỏ→sửa→resume CHÍNH child cũ rồi probe tự nổ `IndexError` khi `checks.tool` trả danh sách rỗng. Lượt 3–4: cò đỏ cắm sẵn quá rộng (khớp mọi lệnh chứa `pytest`), child phát hiện và lách, check hạ `unverified`. Lượt 5: lượt kiểm đầu hạ `unverified` vì finding thiếu receipt (`WORK_FINDING_UNCITED`), nhưng lượt kiểm THỨ HAI trả `revise` thật và sản phẩm đã định tuyến sửa (`repairs` n=1, resume cùng child Build, ghim codeHash) — probe cũ chết vì artifact đổi. Chưa lượt nào đo trọn: đỏ ở lượt kiểm ĐẦU → sửa → resume → kiểm lại xanh → dựng `__integration__` và kiểm trên cây gộp.",
     "openItems": [
-      "CÒN PHẢI SỬA FIXTURE: cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`; kết quả cắm sẵn vừa bị model phát hiện là bịa, vừa chặn mọi lệnh test thành công nên check luôn hạ về `unverified` và vòng sửa không bao giờ mở. Cần chốt với chủ máy vì đây là đổi ngữ nghĩa của phép đo.",
-      "`__integration__` chưa từng đạt: các lượt 3/4 dựng được yêu cầu tích hợp nhưng `required: []` và `built: false`; chỉ đo được tests trên cây gộp khi node tích hợp được accepted.",
-      "Chưa có lượt nào vừa đỏ→sửa→resume-cùng-child vừa kết thúc xanh trong cùng một lần chạy."
+      "CÒN PHẢI SỬA FIXTURE (cần owner duyệt vì đổi ngữ nghĩa phép đo): cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`; kết quả cắm sẵn vừa bị model phát hiện là bịa, vừa chặn mọi lệnh test thành công nên lượt kiểm đầu không thể tự nhiên đỏ theo đường `test_proof`.",
+      "Phép đo cần nhìn đúng thứ tự thật: ở lượt 5 cơ chế sửa được kích hoạt bởi lượt kiểm THỨ HAI chứ không phải lượt đầu; probe phải ghi cả hai lượt và không giả định lượt đầu là đỏ.",
+      "`__integration__` chưa từng được dựng: các lượt đều dừng khi B1 chưa `accepted` (`required: []`, `built: false`); cần một lượt B1 xanh rồi mới đo được tests trên cây gộp."
     ]
   }
 }
