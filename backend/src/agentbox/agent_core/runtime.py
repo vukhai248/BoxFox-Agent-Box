@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow, work_graph, work_feedback
+from . import plan_workflow, work_graph, work_feedback, work_scope
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -2104,6 +2104,10 @@ class HarnessRuntime(RuntimeCommands):
             _log_turn_drift(sid, turn, counted)
             turn = counted
         self.active_turn[sid] = turn
+        # W8.A4.2 — gắn phạm vi thi công cho LƯỢT này: `/plan|/research|/design` (intent) hoặc lượt
+        # bơm của harness (batch quyết định). Lượt người dùng mới đã bỏ binding cũ ở
+        # `runtime_commands._next_turn_skills`.
+        work_scope.begin_turn(self, sid, turn, invocation_id)
         event = {'text': prompt, 'turn': turn}
         if invocation_id:
             event['invocationId'] = invocation_id
@@ -3646,6 +3650,14 @@ class HarnessRuntime(RuntimeCommands):
     def turn_profile(self, session, invocation_id=None):
         """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
 
+        W8.A4.2 — phạm vi thi công của lượt (`work_scope`) áp lên hồ sơ ngay tại đây: cổng quyết định
+        nằm ở `dispatch`, còn đây chỉ để model không phí bước gọi thứ sẽ bị từ chối.
+        """
+        return work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
+
+    def turn_profile_base(self, session, invocation_id=None):
+        """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
+
         `mode='research'` khi mode đang bật, HOẶC khi đây là lượt bơm `research-resume-*` (run chạy
         nền vẫn dùng hồ sơ research kể cả khi mode đã tắt). Bộ công cụ research = bộ công cụ phiên
         trừ các công cụ ghi (§5.2). `invocation_id` mặc định `None` để chỗ gọi chỉ cần biết mode có
@@ -4806,6 +4818,9 @@ class HarnessRuntime(RuntimeCommands):
         sid, config = session['id'], session['config']
         current = self.store.get(sid)
         graph = getattr(self, 'work_graph', None)
+        # W8.A4.2 — cửa quyết định của phạm vi thi công: run artifact-only/chờ duyệt/đã duyệt/đã đóng
+        # đều không cho main sửa mã trực tiếp; con chỉ được ghi khi binding execute còn hiệu lực.
+        work_scope.check_tool(self, current, name, args)
         if current.get('parent_id') and graph and graph.feedback.yielded(sid):
             raise PermissionError('WORK_CHECKPOINT_YIELDED: wait for main before running more tools')
         plan_tools = plan_workflow.allowed_tools(self, current)
@@ -4873,7 +4888,11 @@ class HarnessRuntime(RuntimeCommands):
         if name == 'delegate_task':
             return await self.delegate(session, args)
         if name in WORK_TOOLS:
-            return await self.work_tool(session, name, args, call_id)
+            result = await self.work_tool(session, name, args, call_id)
+            # W8.A4.2 — lượt của main gắn vào run vừa resolve được, để mọi lời gọi sau trong cùng lượt
+            # đọc đúng phạm vi của run ấy (quyền của run khác hoặc của lượt trước không cấp thực thi).
+            work_scope.bind_tool(self, session, name, args, result)
+            return result
         if name in {'web_search', 'web_fetch', 'read_source', 'paper_citations'}:
             self.web_switch_notices(sid)
             return await self.web.run(name, args, sid, scope_id=self.root_session_id(sid))
@@ -6719,6 +6738,14 @@ class HarnessRuntime(RuntimeCommands):
             raise PermissionError('Leaf agents cannot delegate')
         role = args.get('role')
         work = dict(work) if isinstance(work, dict) else None
+        if work:
+            # Nhánh do engine Work Graph giao: đường HỢP LỆ để vai ghi làm việc, nên cổng giao việc
+            # của lượt không áp — chỉ cần admission của node đích còn sống.
+            work_scope.check_execute_binding(self, session['id'], work)
+        else:
+            # W8.A4.2 — lượt đã gắn run (hoặc con thừa hưởng phạm vi ấy) không giao được cho vai GHI
+            # ngoài đường Work Graph: một nhánh `build` như thế là một nhánh sửa mã không có node.
+            work_scope.check_delegate(work_scope.resolve(self, session), role)
         controller = work_graph.service(self).continuations if work and work.get('controllerAction') else None
         if controller:
             controller.authorize_new(session['id'], work)
@@ -6896,6 +6923,13 @@ class HarnessRuntime(RuntimeCommands):
                 parent_id=session['id'], role=role, parent_tools=config['tools'])
             if controller:
                 controller.register_new(parent_id, work, child['id'])
+            if not work:
+                # W8.A4.2 — con thường/custom command thừa hưởng PHẠM VI của lượt chủ: phiên con không
+                # có `workIntent`/lượt riêng, nên terminal của nó phải đọc phạm vi này (thiếu khoá ⇒
+                # con cũ giữ `legacy`).
+                origin = work_scope.origin_for_child(self, session)
+                if origin:
+                    child['config'][work_scope.ORIGIN_KEY] = origin
             if review_target is not None:
                 child['config']['reviewTarget'] = review_target
             if research_question_id:
