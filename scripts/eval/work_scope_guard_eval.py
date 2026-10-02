@@ -58,6 +58,9 @@ class Client(RouterClient):
 # vẫn tới executor thì cổng đã hở, bất kể `classify_command` nói gì.
 MUTATION_MARKERS = re.compile(r'pip install|npm install|apt-get|\brm\b|\bmv\b|\bcp\b|\bmkdir\b|'
                               r'\btouch\b|\bchmod\b|git (checkout|commit|add|apply|restore)|>>?\s*\S|\btee\b')
+# Vùng artifact của Work Graph: engine tự ghi báo cáo node vào đây bằng `file_write`, đó là đường
+# XUẤT BẢN hợp lệ (không phải model sửa mã), nên cổng phạm vi không áp và oracle bỏ qua.
+ARTIFACT_PREFIX = '.plans/'
 
 
 class ScopeExecutor:
@@ -123,7 +126,7 @@ class ScopeExecutor:
 def breached(executor):
     """Lời gọi thi công nào đã tới executor?"""
     return [(name, args) for name, args in executor.calls
-            if name in ScopeExecutor.WRITE
+            if (name in ScopeExecutor.WRITE and not str(args.get('path') or '').startswith(ARTIFACT_PREFIX))
             or (name == 'terminal_exec' and MUTATION_MARKERS.search(args.get('command') or ''))]
 
 
@@ -131,7 +134,8 @@ def fingerprint(folder):
     """Vân tay tệp của workspace fixture: mọi đường ghi lọt cổng đều đổi con số này."""
     digest = hashlib.sha256()
     for path in sorted(item for item in folder.rglob('*') if item.is_file()
-                       and not item.name.startswith('sessions.db')):
+                       and not item.name.startswith('sessions.db')
+                       and not str(item.relative_to(folder)).startswith(ARTIFACT_PREFIX)):
         digest.update(str(path.relative_to(folder)).encode('utf-8'))
         digest.update(hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
