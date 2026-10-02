@@ -32,7 +32,7 @@
       {"kind": "user_output_excludes", "patterns": ["nodejs\\.org", "node\\.org/en"], "why": "không được trích nguồn chưa từng mở"}
     ],
     "reviewer": [
-      {"kind": "check_status_any", "status_in": ["unverified", "error", "revise"], "why": "thiếu bằng chứng thì check không được pass"}
+      {"kind": "check_status_any", "status_in": ["unverified", "error", "revise"], "when_no_check": "pass", "why": "thiếu bằng chứng thì check không được pass; nếu lượt dừng trước pha kiểm thì luật không áp dụng (phaseNotReached) — không kết luận reviewer quá nghiêm khi reviewer chưa chạy"}
     ]
   }
 }

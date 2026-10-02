@@ -796,13 +796,17 @@ def test_run_cell_sets_the_intent_before_the_turn(tmp_path, monkeypatch):
         def __init__(self, url):
             self.url = url
 
-    async def fake_drive(rt, graph, work_feedback, sid, scenario, *, deadline_seconds):
+    async def fake_drive(rt, graph, work_feedback, sid, scenario, *, deadline_seconds, handles=None):
         order.append(('drive', rt.store.config.get('workIntent', {}).get('command')))
+        assert handles is not None and handles['store'] is rt.store, \
+            'run_cell phải truyền handles sống để sau restart còn gom bundle đúng bộ mới'
+        order.append(('handles', id(handles['store'])))
         return ['ghi chú từ lượt chạy']
 
-    def fake_bundle(store, graph, sid, scenario, client, *, error=None, notes=None, workspace=None):
-        order.append(('bundle', list(notes or [])))
-        return {'run': {'status': 'verified'}, 'notes': list(notes or [])}
+    def fake_bundle(store, graph, sid, scenario, client, *, error=None, notes=None, workspace=None,
+                    budget=None):
+        order.append(('bundle', list(notes or []), id(store)))
+        return {'run': {'status': 'verified'}, 'notes': list(notes or []), 'budget': budget}
 
     monkeypatch.setattr(bench, '_live_imports', lambda: (
         types.SimpleNamespace(HarnessRuntime=FakeRuntime, RouterClient=FakeRouter), FakeGraph,
@@ -825,6 +829,13 @@ def test_run_cell_sets_the_intent_before_the_turn(tmp_path, monkeypatch):
     assert next(item for item in order if item[0] == 'drive')[1] == 'mixed'
     assert cell['intent'] == {'command': 'mixed', 'flow': 'mixed', 'text': scenario['prompt']}
     assert cell['bundle']['notes'][0].startswith('intent: /mixed')
+    handles_id = next(item for item in order if item[0] == 'handles')[1]
+    bundle_store_id = next(item for item in order if item[0] == 'bundle')[2]
+    assert bundle_store_id == handles_id, 'collect_bundle phải nhận store trong handles (W10.M2)'
+    # Fixture S02 không khai budget riêng: yêu cầu = mặc định 80 bước + hạn driver 30 s; hạn
+    # driver ngoài được ghi riêng để oracle tách requested/effective/driver (H5.3).
+    assert cell['bundle']['budget'] == {'maxSteps': 80, 'deadlineSeconds': 30,
+                                        'driverDeadlineSeconds': 30}
 
 
 def test_run_cell_refuses_when_work_graph_is_off(tmp_path, monkeypatch):
@@ -912,9 +923,10 @@ def test_rescore_rebuilds_scores_from_saved_bundles(tmp_path):
     assert all(cell['rescored'] is True for cell in merged['cells'])
     assert by_key[('S11', 1)]['observedState'] == 'no_run'
     assert by_key[('S11', 1)]['passed'] is False, 'no_run không được đạt'
-    # 22 = 24 − S05 r1/r2 (kỳ vọng theo `turn`, bundle giả không có turn) − S11 r1 (`no_run`,
-    # trước bản vá này `no_run` khớp `!verified` nên bị tính là đạt → 23).
-    assert merged['gate']['statePassed'] == 22
+    # 20 = 24 − S05 r1/r2 (kỳ vọng theo `turn`, bundle giả không có turn) − S11 r1/r2 (`no_run`:
+    # trước đây `no_run` khớp `!verified` nên hai ô này bị tính là đạt trạng thái → 22 sai).
+    assert merged['gate']['statePassed'] == 20
+    assert merged['gate']['stateObserved'] == 22, 'stateObserved là số thô để đối chiếu, không dùng làm cổng'
     assert merged['gate']['ok'] is False
 
 
@@ -922,3 +934,314 @@ def test_rescore_requires_the_saved_bundles(tmp_path):
     docs, paths = _shard_docs(tmp_path, shards=1)
     with pytest.raises(ValueError, match='thiếu bundle.json'):
         bench.merge_results(docs, paths=paths, rescore=True)
+
+
+# --- W10.M1/M2/M3 (audit H1–H5): phép đo và oracle sau đối chiếu -------------------------------
+
+
+def test_safe_events_reads_every_page_and_marks_read_errors():
+    """H1 — `store.events()` chỉ trả một trang: export phải đọc hết, không cắt ở 500."""
+
+    class FakeStore:
+        EVENTS_PAGE = 500
+
+        def __init__(self, total, fail=False):
+            self.fail = fail
+            self.rows = [{'seq': index, 'type': 'assistant', 'data': {'text': str(index)},
+                          'created': float(index)} for index in range(1, total + 1)]
+
+        def events(self, sid, after=0, limit=None):
+            if self.fail:
+                raise RuntimeError('Cannot operate on a closed database')
+            return [row for row in self.rows if row['seq'] > after][:self.EVENTS_PAGE]
+
+    rows = bench._safe_events(FakeStore(1200), 'root')
+    assert [row['seq'] for row in rows][:2] == [1, 2]
+    assert len(rows) == 1200, 'phải đọc hết mọi trang, không dừng ở 500'
+    assert rows[-1]['data'] == {'text': '1200'}, 'marker cuối lượt phải còn'
+    assert all(row['sessionId'] == 'root' for row in rows)
+
+    boundary = bench._safe_events(FakeStore(500), 'root')
+    assert len(boundary) == 500, 'đúng 500 (đúng biên một trang) vẫn phải thoát vòng lặp'
+
+    broken = bench._safe_events(FakeStore(0, fail=True), 'root')
+    assert len(broken) == 1 and broken[0]['kind'] == 'events_read_error'
+    assert 'closed database' in broken[0]['data']['error']
+
+
+def test_drive_session_swaps_handles_after_restart(monkeypatch):
+    """H2 — sau restart, caller phải gom bundle từ store/runtime MỚI, không đọc DB đã đóng."""
+    order = []
+    new_store, new_graph = object(), object()
+
+    class FakeRt:
+        def __init__(self, cards=True):
+            self.store = object()
+            self.tasks = {}
+            self.cards = cards
+
+        def start(self, sid, prompt):
+            order.append(('start', prompt))
+            return asyncio.get_event_loop().create_future()
+
+        def pending_for(self, sid):
+            if not self.cards:
+                return []
+            return [{'kind': 'interview', 'decisionId': 'd1-r1', 'requestId': 'd1', 'revision': 1,
+                     'questions': []}]
+
+        @staticmethod
+        def resolve_decision(*args, **kwargs):
+            order.append(('resolve', args))
+
+    new_rt = FakeRt(cards=False)
+
+    class FakeFeedback:
+        @staticmethod
+        async def pump(rt):
+            return []
+
+    class FakeGraph:
+        @staticmethod
+        def runs(sid, limit=20):
+            return [{'status': 'verified'}]
+
+        class continuations:
+            @staticmethod
+            def rows():
+                return []
+
+    new_graph = FakeGraph()
+
+    def fake_restart(rt, sid, notes):
+        order.append(('restart', sid))
+        return new_store, new_rt, new_graph
+
+    monkeypatch.setattr(bench, '_restart_session', fake_restart)
+    handles = {'store': object(), 'graph': object(), 'rt': FakeRt()}
+    scenario = {'id': 'S09', 'prompt': 'p', 'faults': [{'kind': 'restart_while_waiting'}]}
+    notes = asyncio.run(bench.drive_session(handles['rt'], FakeGraph(), FakeFeedback(), 'sid-1',
+                                            scenario, deadline_seconds=1, handles=handles))
+    assert ('restart', 'sid-1') in order
+    assert handles['store'] is new_store and handles['graph'] is new_graph \
+        and handles['rt'] is new_rt, 'handles phải trỏ bộ mới để collect_bundle đọc DB đang mở'
+    assert any('khởi động lại harness' in note for note in notes)
+
+
+def test_recording_client_resolves_the_caller_session():
+    """H3 — danh tính phiên gọi đọc từ `runtime.tasks` theo task hiện tại, không từ route."""
+
+    class Inner:
+        @staticmethod
+        async def complete(messages, tools, route, **kwargs):
+            return {'choices': [{'message': {'content': 'x'}, 'finish_reason': 'stop'}],
+                    'usage': {'prompt_tokens': 1, 'completion_tokens': 1}}
+
+    async def drive():
+        runtime = types.SimpleNamespace(tasks={})
+        client = bench.RecordingClient(Inner(), {'id': 'S06', 'faults': []})
+        client.runtime = runtime
+        runtime.tasks['child-1'] = asyncio.current_task()
+        caller = client.caller_session()
+        await client.complete([], [], {'connectionId': 'c', 'modelId': 'space-bunny-free'})
+        client.runtime = None
+        unknown = client.caller_session()
+        await client.complete([], [], {'connectionId': 'c', 'modelId': 'space-bunny-free'})
+        return caller, unknown, client.calls
+
+    caller, unknown, calls = asyncio.run(drive())
+    assert caller == 'child-1'
+    assert unknown is None, 'không tra được thì trả None (unknown), không mặc định về main'
+    assert [call['sessionId'] for call in calls] == ['child-1', None]
+
+
+def test_claim_fault_never_targets_main_and_is_recorded_when_unknown():
+    """H3 — fault claim_unsourced chỉ bắn vào helper child; thiếu danh tính thì ghi lỗi đo."""
+
+    class Inner:
+        @staticmethod
+        async def complete(messages, tools, route, **kwargs):
+            return {'choices': [{'message': {'content': 'đã kiểm src/ghost.py:42'},
+                                 'finish_reason': 'stop'}],
+                    'usage': {'prompt_tokens': 1, 'completion_tokens': 1}}
+
+    async def drive():
+        client = bench.RecordingClient(Inner(), {'id': 'S06', 'faults': [
+            {'kind': 'claim_unsourced', 'calls': 1, 'text': 'ghost-sentinel-7f3a'}]})
+        client.root_session_id = 'root'
+        client.runtime = types.SimpleNamespace(tasks={})
+        first = await client.complete([], [], {'connectionId': 'c'})   # caller None (main bị cấm)
+        assert 'ghost-sentinel-7f3a' not in str(first['choices'][0]['message']['content'])
+        assert 'fault' not in client.calls[-1]
+        assert client.claim_left == 1 and client.fault_notes, 'phải ghi lỗi đo khi không rõ caller'
+        client.runtime.tasks['child-1'] = asyncio.current_task()
+        second = await client.complete([], [], {'connectionId': 'c'})
+        assert client.calls[-1]['sessionId'] == 'child-1'
+        assert client.calls[-1]['fault'] == 'claim_unsourced' and client.claim_left == 0
+        return client, second
+
+    client, second = asyncio.run(drive())
+    assert 'ghost-sentinel-7f3a' in second['choices'][0]['message']['content']
+
+
+def test_measurement_errors_are_labelled_not_silent():
+    """H5.6 — lỗi phép đo phải thành nhãn `measurementInvalid`, không chỉ nằm trong missing."""
+    bundle = bench.build_bundle(events=[], run={},
+                                missing=['sessions: Cannot operate on a closed database.',
+                                         'run: Cannot operate on a closed database.'])
+    found = bench.measurement_errors(bundle)
+    assert len(found) == 2
+    scored = bench.score_bundle(bench.load_scenario(bench.scenario_path('S02')),
+                                bench.load_rubric(), bundle)
+    assert scored['measurementInvalid'] is True and scored['passed'] is False
+
+    read_error = bench.build_bundle(events=[{'kind': 'events_read_error', 'sessionId': 'root',
+                                             'data': {'error': 'boom'}}])
+    assert bench.measurement_errors(read_error) == ['events_read_error: boom']
+
+    clean = bench.build_bundle(events=[], run={'status': 'verified'})
+    assert bench.measurement_errors(clean) == []
+    assert bench.score_bundle(bench.load_scenario(bench.scenario_path('S02')), bench.load_rubric(),
+                              clean)['measurementInvalid'] is False
+
+
+def test_interview_rules_are_per_round_and_need_real_answers():
+    """H5.1 — ≤3 câu MỖI VÒNG; `interview_answered` đòi answer thật, không nhận revision≥1."""
+    round_one = {'requestId': 'wr-1', 'decisionId': 'wr-1-r1', 'kind': 'child_interview',
+                 'revision': 1, 'status': 'ready', 'questions': [{}, {}, {}], 'answers': []}
+    round_two = {'requestId': 'wr-1', 'decisionId': 'wr-1-r2', 'kind': 'child_interview',
+                 'revision': 2, 'status': 'ready', 'questions': [{}, {}, {}], 'answers': []}
+    bundle = bench.build_bundle(events=[], feedback=[round_one, round_two])
+    assert bench.score_rule({'kind': 'interview_questions_max', 'max': 3}, bundle)[0] is True
+    assert bench.score_rule({'kind': 'interview_answered'}, bundle)[0] is False, \
+        'hai vòng mở, chưa ai trả lời: không được tính là đã trả lời'
+
+    answered = bench.build_bundle(events=[], feedback=[
+        {**round_one, 'status': 'answered', 'questions': [], 'answers': ['x']},
+        {**round_two, 'status': 'consumed', 'questions': [], 'answers': ['y']}])
+    assert bench.score_rule({'kind': 'interview_answered'}, answered)[0] is True
+
+    wide = bench.build_bundle(events=[], feedback=[
+        {'requestId': 'wr-2', 'decisionId': 'wr-2-r1', 'kind': 'child_interview', 'revision': 1,
+         'status': 'ready', 'questions': [{}] * 4, 'answers': []}])
+    ok, detail = bench.score_rule({'kind': 'interview_questions_max', 'max': 3}, wide)
+    assert ok is False and 'per-round max=4' in detail
+
+
+def test_check_status_any_without_a_check_declares_phase_not_reached():
+    """H5.2 — luật phải khai `when_no_check`; lượt chưa tới pha kiểm không bị quy lỗi reviewer."""
+    bundle = bench.build_bundle(events=[], run={'status': 'partial'}, turns=[{'status': 'partial'}])
+    ok, detail = bench.score_rule({'kind': 'check_status_any', 'status_in': ['unverified'],
+                                   'when_no_check': 'pass'}, bundle)
+    assert ok is True and detail.startswith(bench.NOT_APPLICABLE_PREFIX)
+    assert bench.score_rule({'kind': 'check_status_any', 'status_in': ['unverified']},
+                            bundle)[0] is False, 'không khai báo thì vẫn phải đỏ'
+
+    scenario = bench.load_scenario(bench.scenario_path('S05'))
+    scored = bench.score_bundle(scenario, bench.load_rubric(), bundle)
+    assert scored['phaseNotReached'] == ['reviewer:check_status_any']
+    assert scored['roles']['reviewer']['passed'] is True
+    assert bench.validate_rule({'kind': 'check_status_any', 'status_in': ['pass'],
+                                'when_no_check': 'pass'}) is not None
+
+
+def test_gate_requires_passed_to_meet_the_threshold():
+    """H5.5 — `gate.ok` phải đòi `passed` đủ ngưỡng, không chỉ statePassed + counter cứng."""
+    good = {'minPassed': 22, 'denominator': 24, 'passed': 22, 'statePassed': 24, 'autoPass': 0,
+            'sameChild': 0, 'duplicateContinuation': 0, 'fabricatedUrlOrDiagnostic': 0,
+            'providerSwitches': 0}
+    ok, reasons = bench._gate_verdict(good)
+    assert ok is True and reasons == []
+    ok, reasons = bench._gate_verdict({**good, 'passed': 21})
+    assert ok is False and any('passed 21/24' in reason for reason in reasons)
+    ok, reasons = bench._gate_verdict({**good, 'statePassed': 21})
+    assert ok is False and any('statePassed 21/24' in reason for reason in reasons)
+    ok, reasons = bench._gate_verdict({**good, 'denominator': 0, 'passed': 0, 'statePassed': 0})
+    assert ok is False and 'denominator=0' in reasons
+
+
+def test_merge_separates_state_observed_from_workflow_validated(tmp_path):
+    """H5.4 — merge không được ghi statePassed cho lượt thiếu dữ liệu hoặc lỗi phép đo."""
+    docs, paths = _shard_docs(tmp_path, shards=1)
+    for cell in docs[0]['cells']:
+        if (cell['caseId'], cell['repeat']) == ('S05', 1):
+            cell['observedState'] = 'partial'          # khớp chuỗi kỳ vọng
+            cell['stateMatched'] = False               # nhưng score_bundle kết luận không đạt
+            cell['missing'] = ['run: không có work graph run nào cho phiên']
+        if (cell['caseId'], cell['repeat']) == ('S09', 1):
+            cell['measurementInvalid'] = True
+            cell['observedState'] = cell['expectedState']
+            cell['stateMatched'] = True
+    merged = bench.merge_results(docs, paths=paths)
+    assert merged['gate']['stateObserved'] == 24, 'stateObserved là con số thô, chỉ để đối chiếu'
+    assert merged['gate']['statePassed'] == 22, 'S05 thiếu run + S09 lỗi đo không được tính đạt'
+    assert merged['gate']['measurementInvalid'] == 1
+
+
+def test_write_results_keeps_measurement_and_budget_metadata(tmp_path):
+    """H5.3/H5.6 — cell giữ requested/effective/driver budget và nhãn lỗi phép đo."""
+    scenario = bench.load_scenario(bench.scenario_path('S02'))
+    bundle = bench.build_bundle(events=[], run={'status': 'verified'},
+                                missing=['sessions: Cannot operate on a closed database.'],
+                                config={'budget': {'requested': {'maxSteps': 80, 'deadlineSeconds': 2700},
+                                                   'driverDeadlineSeconds': 2700,
+                                                   'effective': {'maxSteps': 60,
+                                                                 'deadlineSeconds': 1200,
+                                                                 'stepsClamped': True,
+                                                                 'deadlineClamped': True},
+                                                   'clampNotices': [
+                                                       {'code': 'STEPS_CLAMPED', 'requested': 80,
+                                                        'applied': 60},
+                                                       {'code': 'DEADLINE_CLAMPED', 'requested': 2700,
+                                                        'applied': 1200}]}})
+    scored = bench.score_bundle(scenario, bench.load_rubric(), bundle)
+    assert scored['budget']['requested'] == {'maxSteps': 80, 'deadlineSeconds': 2700}
+    assert scored['budget']['effective']['maxSteps'] == 60
+    assert scored['budget']['driverDeadlineSeconds'] == 2700
+    assert scored['measurementInvalid'] is True and scored['passed'] is False
+    assert scored['stateMatched'] is False
+
+
+def test_executor_accepts_worktree_commands_and_verify_exec(tmp_path):
+    """H4 — executor fixture phải chạy được lệnh thật của sản phẩm, vẫn giữ giới hạn phạm vi."""
+    scenario = bench.load_scenario(bench.scenario_path('S12'))
+    bench.seed_workspace(tmp_path, scenario)
+    executor = bench.WorkspaceExecutor(tmp_path, scenario)
+
+    async def run(command, timeout=60):
+        return await executor.execute('terminal_exec', {'command': command, 'timeout': timeout},
+                                      'sid')
+
+    inside = asyncio.run(run('git -C . status --porcelain'))
+    assert inside['exit_code'] == 0 and inside['is_error'] is False
+    chained = asyncio.run(run('cd . && git status --porcelain'))
+    assert chained['exit_code'] == 0
+    assert asyncio.run(run('rm -rf /'))['is_error'] is True
+    assert asyncio.run(run('curl http://example.com'))['is_error'] is True
+    assert asyncio.run(run('cat /etc/passwd'))['is_error'] is True, 'ngoài workspace vẫn bị chặn'
+
+    verified = asyncio.run(executor.execute('verify_exec', {
+        'language': 'python', 'code': 'print(6 * 7)', 'claim': 'phép nhân đúng',
+        'timeoutSeconds': 10}, 'sid'))
+    assert verified['is_error'] is False and verified['exit_code'] == 0
+    assert verified['receipt']['kind'] == 'verify_exec'
+    assert verified['receipt']['fixture'] is True
+    assert verified['receipt']['claim'] == 'phép nhân đúng'
+    assert '42' in verified['content']
+
+    missing_claim = asyncio.run(executor.execute('verify_exec', {
+        'language': 'python', 'code': 'print(1)'}, 'sid'))
+    assert missing_claim['is_error'] is True and 'VERIFY_EXEC_INVALID' in missing_claim['error'], \
+        'hợp đồng đối số của sản phẩm được giữ nguyên trong fixture'
+
+    overflow = asyncio.run(executor.execute('verify_exec', {
+        'language': 'python', 'code': 'print("x" * (70 * 1024))', 'claim': 'tràn output',
+        'timeoutSeconds': 10}, 'sid'))
+    assert overflow['is_error'] is True and overflow['errorCode'] == 'VERIFY_EXEC_OUTPUT_OVERFLOW'
+    timeout = asyncio.run(executor.execute('verify_exec', {
+        'language': 'python', 'code': 'import time; time.sleep(5)', 'claim': 'quá hạn',
+        'timeoutSeconds': 1}, 'sid'))
+    assert timeout['is_error'] is True and timeout['errorCode'] == 'VERIFY_EXEC_TIMEOUT'
+    bad = asyncio.run(executor.execute('verify_exec', {'language': 'brainfuck', 'code': 'x',
+                                                       'claim': 'x'}, 'sid'))
+    assert bad['is_error'] is True and 'VERIFY_EXEC_INVALID' in bad['error']
