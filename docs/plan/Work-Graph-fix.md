@@ -2825,13 +2825,35 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 ### 37.4 Workflow triển khai và checkbox
 
 - [x] **P0a — phân tích mẫu:** đọc prompt, đối chiếu role/skill/giao việc; ghi điểm hữu ích và giới hạn ở trên. Đây là công việc tài liệu, chưa có test/model mới.
-- [ ] **P0b — inventory thực:** ghi source pin, prompt lắp cuối cùng của các đường Work Graph/delegate/custom/resume/check, role instructions, skill đã nạp, tools và scope hiệu lực. Bảo vệ bí mật; không lưu hidden reasoning. Nêu từng chỉ dẫn trùng/xung đột và bằng chứng đường gọi, tránh suy từ tên skill.
+- [x] **P0b — inventory thực:** ghi source pin, prompt lắp cuối cùng của các đường Work Graph/delegate/custom/resume/check, role instructions, skill đã nạp, tools và scope hiệu lực. Bảo vệ bí mật; không lưu hidden reasoning. Nêu từng chỉ dẫn trùng/xung đột và bằng chứng đường gọi, tránh suy từ tên skill. → **Đã giao 02/10/2026 (local):** [`W11-p0b-inventory.md`](W11-p0b-inventory.md) — 388 dòng, source pin `4e0923d` + SHA256 từng file nguồn, bảng đường lắp prompt (system prompt mọi phiên, producer/reviewer/knowledge Work Graph, delegate thường, resume, custom command, check), bảng role instructions/skills/tools, bảng scope hiệu lực theo trạng thái, và **7 nhóm chỉ dẫn trùng/xung đột kèm `file:line`**. Đọc tĩnh, chưa có trace runtime; mục 6 của file ghi rõ phần không kiểm chứng được. Bản sao ngoài repo: `/code/.generated_artifacts/w11-p0b-inventory.md`.
 - [ ] **P0c — thứ tự áp dụng chỉ dẫn:** đối chiếu owner assignment, role, skill và source tham khảo; làm rõ quyền do backend quyết định và requirement do owner xác nhận. Kiểm câu lệnh imperative từ role/skill có kéo dry-run thành edit, review thành tự apply hoặc feedback thành consent không; ghi xung đột để sửa đúng lớp, không thêm một system prompt cạnh tranh.
 - [ ] **P1 — thiết kế bản sửa nhỏ:** bảng current → proposed → lý do → test cho từng role cần sửa. Bắt đầu Simplify; kiểm chung Plan/Research/Design/Review để không tạo hai chuẩn. Tách yêu cầu nhiệm vụ khỏi hướng dẫn vai, tránh heading rỗng và không bắt test đã dự kiến phải là test đã chạy. Trình scope trước khi thi công; thay đổi scheduler/quyền/contract phải xin duyệt riêng.
 - [ ] **P2 — tinh chỉnh đúng lớp:** sửa prompt/adapter skill đã chọn trong phạm vi duyệt; giữ scope gates, artifact store, interview grants, budget và DAG. Không nâng token/time để che lỗi nội dung. Không xóa code theo prompt cleanup trong W này.
 - [ ] **P3 — test tất định:** mở rộng `test_work_prompt_contracts.py`, `test_runtime_prompt.py`, `test_work_producer_quality.py`, tests skills/role/tool tương ứng. Test toàn prompt được lắp, không chỉ tìm một chuỗi trong template. Giữ marker parser, quyền read-only, output tiếng Việt và đường resume hiện hữu.
 - [ ] **P4 — đánh giá đầu ra:** dùng corpus cũ còn đủ source/receipts để adjudicate trước; so baseline/candidate cùng task, source, tools, model Space Bunny và budgets. Chạy pilot ngắn theo vai trước, không mở 24 ca W10 trên bộ đo lỗi. Đọc final/artifact và receipts, không chỉ badge/word count. Báo failures/latency/usage và commit/config của cả hai nhóm; thiếu đo ghi rõ.
 - [ ] **P5 — chốt checkpoint:** chỉ tick phần có bằng chứng đạt; ghi phần chưa đạt và bước tiếp tục. Đối chiếu W6.1.3, W6.2, W6.2.BIND để không sửa chồng. Mỗi patch độc lập, report test thật; không commit/push khi chưa có quyền phù hợp của đợt triển khai.
+
+**Bằng chứng W11 lượt local 02/10/2026 (working tree, chưa commit):**
+
+| Bước | Trạng thái | Bằng chứng |
+|---|---|---|
+| P0a | Đạt (lượt trước) | Mục37.1–37.2; prompt Simplify nguyên văn ở mục37.1.1 |
+| P0b | **Đạt** | `docs/plan/W11-p0b-inventory.md` (388 dòng) + checklist trên |
+| P1 (nhánh Simplify) | Một phần | Bảng current → proposed bên dưới; các vai khác (Plan/Research/Design/Review) chưa làm bảng |
+| P2 (nhánh Simplify) | Một phần | `backend/src/agentbox/agent_core/roles.py` — `SIMPLIFY_INSTRUCTIONS` viết lại (mtime 20:44:17Z); không đổi tool set, skill, scheduler, quyền hay contract |
+| P3 (nhánh Simplify) | Một phần | Test mới `backend/tests/unit/test_work_simplify_prompt.py` (6 test, xanh); suite lân cận `test_work_prompt_contracts.py + test_runtime_prompt.py + test_work_simplify_prompt.py + test_plan_review_role.py` = **77 passed** |
+| P4/P5 | Chưa | Cần corpus/pilot riêng; vendor skill `simplify-code` và `AGENT.md` cũ vẫn nguyên |
+
+Bảng P1 cho nhánh Simplify (current → proposed → lý do → test):
+
+| # | Current (HEAD `4e0923d`, `roles.py`) | Proposed | Lý do | Test |
+|---|---|---|---|---|
+| 1 | `"4. Verify Tests: Run the existing test suite via terminal_exec to guarantee zero behavioral regressions."` (HEAD:roles.py:142) | `"4. Verify Honestly: run the targeted tests for the behaviour you touched when the tools and the environment allow; report the exact command, the before/after result, and every failure, skip or NOT RUN. A green suite does not prove zero regressions."` | Không thể "guarantee zero regressions" bằng một suite; trùng rubric reviewer `work_prompts.py:149` cho phép "NOT RUN" | `test_verification_is_honest_about_failures_skips_and_unrun_tests` |
+| 2 | `"### Verification Proof (test run output demonstrating 100% passing tests)"` (HEAD:roles.py:146) | `"### Verification Proof (exact commands with before/after output; failures, skips and NOT RUN stated plainly)"` | Ép "100% passing" tạo áp lực báo cáo sai khi baseline đỏ (ca mục37.5 dòng 2) | `test_the_old_impossible_claims_are_gone` |
+| 3 | Bước 3 cũ: `"Apply Streamlined Edits: Use file_edit_block"` không phân biệt nhiệm vụ khảo sát | `"3. Mode Follows The Assignment: apply edits with file_edit_block only when the assignment grants a write scope; a survey-only assignment reports findings with file:line and leaves the tree untouched."` | Ca "Simplify chỉ đọc/không có diff" (mục37.5 dòng 1) không được tự sửa | `test_edits_follow_the_assignment_and_survey_mode_leaves_the_tree_alone` |
+| 4 | Không có luật nào chống bỏ finding | `"Do not silently drop a blocking finding that carries evidence: adjudicate it with a reason and its source. An optional cleanup idea may be dropped when you say why."` | Đối trọng câu "drop weak or wrong suggestions silently" trong vendor `simplify-code/SKILL.md:195` (P0b §5.2) | `test_an_evidenced_blocking_finding_is_never_dropped_silently` |
+
+Ranh giới đã giữ: không sửa tool set `WRITE` của vai, không sửa `ROLE_SKILLS['simplify']`, không sửa vendor skill, không sửa `AGENT.md`, không đổi cơ chế `with_work_graph` (test `test_the_work_graph_note_still_lands_after_the_role_protocol` và `test_the_role_keeps_its_permissions_and_skill_wiring` ghim các bất biến này).
 
 ### 37.5 Các ca kiểm chứng và output đúng
 
@@ -2854,6 +2876,8 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 ## 38. W12.MODEL.METADATA — discovery adaptive cho model, thinking, giới hạn và chi phí
 
 **03/10/2026 — bổ sung theo bug user-confirmed và yêu cầu làm rõ của owner.** Tên draft trước là W12.MODEL.THINKING; đây là **cùng một W**, được chỉnh phạm vi thành metadata adaptive cho OpenCode và các provider khác. Space Bunny là ca tái hiện, không phải danh sách model để hardcode. Lượt local mới đọc code và cập nhật tài liệu, chưa sửa code, ping provider hoặc kiểm thử live.
+
+**02/10/2026 (UTC) — lượt local thứ hai đã thi công + kiểm chứng live.** Đã sửa lớp mất metadata trước UI, chạy lại discovery thật và gọi model thật để đo; chi tiết và bằng chứng ở khối cuối mục38.4. Các nhánh chưa đo (budget numeric, limits, pricing, retired/manual override) vẫn giữ trạng thái chưa tick.
 
 ### 38.1 Yêu cầu đã chốt và ca lỗi
 
@@ -2892,13 +2916,27 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 ### 38.4 Workflow và ranh giới triển khai
 
 - [x] **T0a — ghi nhận:** bug user-confirmed, phạm vi adaptive owner đã làm rõ, code paths và expected output; cập nhật prompt/bàn giao.
-- [ ] **T0b — inventory:** lập bảng từng provider đang được BoxFox hỗ trợ: discovery endpoint, nguồn metadata từng nhóm, freshness/manual/fallback, trường còn unknown. Space Bunny là ca lỗi đầu tiên; chọn thêm provider có payload khác để kiểm cơ chế chung, không yêu cầu gọi live toàn bộ model.
+- [x] **T0b — inventory:** lập bảng từng provider đang được BoxFox hỗ trợ: discovery endpoint, nguồn metadata từng nhóm, freshness/manual/fallback, trường còn unknown. Space Bunny là ca lỗi đầu tiên; chọn thêm provider có payload khác để kiểm cơ chế chung, không yêu cầu gọi live toàn bộ model. → **Đã giao 02/10/2026:** [`W12-metadata-inventory.md`](W12-metadata-inventory.md) — bảng 11 adapter user-addable (anthropic, antigravity/agy, claude, cline, codex, copilot/github, deepseek, gemini, openai+custom+14 gateway, opencode, openrouter) với cột: credential mode, discovery endpoint `file:line`, nguồn inventory/thinking/limits/pricing/capabilities, freshness/failure, unknown còn lại, và **dòng đầu tiên làm mất/mặc định metadata**. Ghi nhận: không provider nào có trường max-output trong model record (`common.mjs:155-173`); `copilot`/`opencode`/`openrouter` tự nuốt lỗi mạng và trả static với `stale:false`, còn `anthropic`/`gemini`/`openai`/`deepseek`/`antigravity` ném lỗi.
 - [ ] **T1 — chốt bản sửa nhỏ:** current → proposed → file/interface → nguồn → test. Tận dụng discovery/sync/pricing/thinking hiện có, fix mất metadata trước. Nếu cần thêm metadata contract hoặc kiểu điều khiển numeric budget chưa có UI tương ứng, trình riêng thay đổi và tradeoff trước khi triển khai; không âm thầm redesign.
 - [ ] **T2 — adaptive refresh:** model ID mới không cần code riêng; metadata đổi cập nhật atomically/có revision, giữ manual/selection khi hợp lệ; model/mức bị rút xử lý rõ. Giữ last-good khi lỗi với stale/error, bounded timeout/backoff/dedupe; không ping mọi provider mỗi render, không dùng completion tốn phí làm discovery mặc định.
 - [ ] **T3 — selection/request:** menu/điều khiển hiện hữu và session/request dùng đúng model metadata; phân biệt default/effort/budget/fixed/unknown, requested/effective và trần owner. Metadata giá không được làm đổi model hoặc budget mà user đã chọn; route pin/alias cùng contract.
 - [ ] **T4 — test đích không model:** fixture provider thay payload qua các lần refresh; non-curated ID, mức/budget/giá đổi, field missing/removed, model retired, manual override, stale failure, concurrent/revision, multi-connection/pin/alias, picker/persistence và outbound mapping. Đọc tests hiện có ở router `opencode`, `thinking-mapping`, `pricing`, `context-window`, model-sync/service; frontend `routeOptions`, picker, harnessThinking; runtime/session. Test meaningful theo lỗi/contracts, không chỉ snapshot chuỗi.
 - [ ] **T5 — kiểm live nhỏ:** lấy snapshot provider thật và xác minh ca Space Bunny; fixture phủ các provider/kiểu điều khiển khác. Một lượt model có mục tiêu nếu cần xác nhận payload/provider acceptance, OpenCode Space Bunny theo model kiểm thử đã chốt. Provider khác ưu tiên metadata API; nếu cần inference test làm thay model kiểm thử/chi phí thì trình riêng. CUA tối thiểu khi cần menu thật; không chạy DAG benchmark dài cho dropdown.
 - [ ] **T6 — bàn giao:** source/commit/config, metadata/provenance đã kiểm, patch, commands và actual/expected, failure/unknown và giới hạn. Chỉ tick phần đạt; không ghi adaptive hoàn tất chỉ vì Space Bunny có menu.
+
+**Bằng chứng lượt 02/10/2026 (working tree `vorflux/w10-w12-completion`, chưa commit; router đã chạy lại code vá):**
+
+- **Bản sửa (lớp đầu tiên làm mất metadata, không hardcode ID):**
+  - Mới `router/src/providers/opencode-capabilities.mjs`: registry bổ sung ngoài payload, có `pattern`/`thinkingType`/`thinkingLevels`/`defaultThinking`/`source`/`asOf`/`evidence`; `opencodeCapabilityFor(modelId)` trả `null` khi không khớp họ model (giữ `unknown`, không đoán).
+  - `router/src/providers/opencode.mjs`: `opencodeModelRow()` gộp payload + curated + registry và ghi **nguồn từng trường** (`fieldSources.inventory/name/thinking/contextWindow/pricing`, `thinkingSource`, `thinkingAsOf`, `thinkingEvidence`) thay vì gắn cả row `source:'live'`; `opencodeThinkingMetadata()` là hook adapter để `service.mjs modelThinking()` vá row đã lưu sau restart; `normalizeOpencodeReasoning()` nay đọc `thinkingLevel` (trường harness thật gửi) chứ không chỉ `reasoning_effort`, và bỏ cả hai khỏi payload gửi đi trước khi đặt `reasoning.effort`.
+  - `frontend/src/types/provider.ts`: thêm `fieldSources`/`thinkingSource`/`thinkingAsOf`/`thinkingEvidence`; `npx tsc --noEmit -p tsconfig.app.json` exit 0.
+  - Fixture test (không gọi model): `router/tests/opencode.test.mjs` (payload giữ metadata + nhãn nguồn; `space-bunny-free` → `['minimal','low','medium','high']`, `thinkingSource 'probe'`; `mystery-model-free` → `[]` + `unknown`; fallback static ghi `fieldSources.inventory='static'`), `router/tests/thinking-mapping.test.mjs` (level BoxFox lưu → `reasoning.effort`, không còn `thinkingLevel`/`reasoning_effort` đi tiếp), `router/tests/model-metadata.test.mjs` (row lưu cũ được vá theo registry; row có `fieldSources.thinking='live'` giữ nguyên). Lượt đích 3 file: **45 passed, 0 fail**.
+- **Kiểm live (cùng model kiểm thử đã chốt `opencode/space-bunny-free`):**
+  - Probe provider (`/var/tmp/w12-space-bunny-probe.json`, `/var/tmp/w12-level-probe.json`): `/zen/v1/responses` nhận `reasoning.effort`/`reasoning_effort` (`minimal|low|medium|high`) và trả `usage.completion_tokens_details.reasoning_tokens`; `muse-spark-1.2-contributor-free` không trả `reasoning_tokens` (giữ nhãn documented, không nâng thành probe).
+  - Sau khi restart router bằng code vá: row lưu được vá lúc boot; `POST /api/router/connections/d7e26488-65b0-4012-8009-589cd94b324b/models/refresh` (46 model, `discoveryState: ready`) trả row `space-bunny-free`: `thinkingType 'effort'`, `thinkingLevels ['minimal','low','medium','high']`, `thinkingSource 'probe'`, `thinkingAsOf '2026-10-02'`, `fieldSources.thinking 'probe'`, `fieldSources.name 'unknown'` (payload `/models` chỉ có `{id,object,created,owned_by}`). Proxy frontend `/api/router/state` thấy đúng các trường này.
+  - Gọi thật qua `/api/router/chat` (header admin): `(none)` → 235 ký tự reasoning / 93 reasoning tokens; `low` → 168 / 53; `high` → 203 / 63; cả ba 200. Nghĩa là mức chọn đi hết pipeline tới provider, không chỉ hiện nhãn.
+  - CUA tối thiểu (1 lượt, không mở DAG): picker tab **Single Models** hiện `space-bunny-free` với `Thinking: Minimal · Low · Medium (đang chọn) · High`. Ảnh: `/code/.generated_artifacts/images/w12-thinking-space-bunny-picker.png`.
+- **Chưa tick (còn thiếu bằng chứng):** T2 (model bị rút/đổi ID, last-good + stale/error, revision/dedupe riêng cho opencode), T3 (requested/effective cho budget/limits, pricing/usage), T4 (ma trận retired/manual override/stale/concurrency/persistence, frontend routeOptions/picker/persistence), T5 (provider khác + ca đối chứng âm), T6 (bàn giao sau khi có commit/config chốt).
 
 ### 38.5 Checkpoint kiểm chứng
 

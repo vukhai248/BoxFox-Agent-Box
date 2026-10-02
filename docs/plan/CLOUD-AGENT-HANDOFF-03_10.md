@@ -90,3 +90,16 @@ Gói có20bundle nhưng merged mới16/24: statePassed4/16, passed0/16, gatefals
 Mỗi checkpoint cập nhật **Work-Graph-fix.md**: source/commit, files, lệnh thật + kết quả, model/config, refs/version/hash, lỗi còn lại, bước tiếp tục. Chỉ tick phần kiểm được; giữ failure/cancelled/incomplete. Patch và commit nhỏ trên B theo quyền đợt làm việc; không `git add -A` vào WIP, không push/merge nếu chưa được yêu cầu. Nếu cần thay kiến trúc, trình current → proposed → tradeoff và chờ owner duyệt. Gửi tiến độ ngắn khi làm lâu.
 
 **Tình trạng file này:** tài liệu bàn giao; chưa triển khai các ô trống, chưa có test/model/CUA mới. Chi tiết quyết định và test cases nằm trong các file được dẫn ở trên.
+
+## 8. Trạng thái lượt local 02/10/2026 (UTC) — working tree, chưa commit
+
+Lượt này chạy trên branch `vorflux/w10-w12-completion` (tách từ B `4e0923d`). **Chưa commit, chưa push, chưa mở PR.** Chi tiết + bằng chứng ở Work-Graph-fix mục37 (W11) và mục38 (W12); tóm tắt:
+
+| Việc | Trạng thái | Bằng chứng chính |
+|---|---|---|
+| W10.M1/M2/M3 (phép đo) | Code + test trong working tree; đã đối chiếu 20 bundle thật | `scripts/eval/work_acceptance_bench.py`, `backend/tests/unit/test_work_acceptance_bench.py` (61 passed); rescore: S09 hết `Cannot operate on a closed database` và bị đánh `measurementInvalid`, `phaseNotReached` hiện cho S04/S05 |
+| W11.PROMPT | P0b đạt; nhánh Simplify (P1–P3) một phần; P4/P5 chưa | `docs/plan/W11-p0b-inventory.md`; `backend/src/agentbox/agent_core/roles.py`; `backend/tests/unit/test_work_simplify_prompt.py` (6 test) + suite lân cận 77 passed |
+| W12.MODEL.METADATA | T0b + T1 đạt, kiểm live đạt; T2–T6 chưa | `docs/plan/W12-metadata-inventory.md`; `router/src/providers/opencode-capabilities.mjs`; `router/src/providers/opencode.mjs`; ảnh picker `/code/.generated_artifacts/images/w12-thinking-space-bunny-picker.png` |
+| W6.1/W6.5.2/W7/W8 (A4.5.N, `__integration__`) | Vẫn mở | Mục33/34; audit §9; chưa có probe khép kín xanh |
+
+Phạm vi đã giữ: chỉ OpenCode `opencode/space-bunny-free` cho inference; không đổi UI/UX; không đổi kiến trúc/quyền/workflow; CUA chỉ 1 lượt cho picker.
