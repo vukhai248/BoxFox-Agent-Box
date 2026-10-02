@@ -1,0 +1,61 @@
+{
+  "schema": "boxfox-w1p-preflight-evidence/1",
+  "branch": "vorflux/w7-contracts",
+  "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+  "scope": "W1.P: preflight năng lực trước khi spawn/resume (role bị tắt, tool bị thu hồi, thiếu read tool, thiếu check) và chặn tool bị thu hồi ngay trước dispatch (WORK_CAPABILITY_REVOKED). Không tự bật role, không coi check thiếu là pass.",
+  "sourceManifest": {
+    "backend/src/agentbox/agent_core/work_checks.py": "918fd1fb6220f1ea6a2d3ca2ff0865046cd204e15b38fba70c170bf22c09fe61",
+    "backend/src/agentbox/agent_core/work_graph.py": "725b787e8f421a996b28ed3a6311ca2dd17a8d3ea55c8527344eeb4a34ee1a08",
+    "backend/src/agentbox/agent_core/work_feedback.py": "f0859f6144a4a796a6c448f1962541e77e56cc96e225c7f74974db6661fee520",
+    "backend/src/agentbox/agent_core/tool_contracts.py": "5663d00df213e1e2f0880c71662a307a036a1d33898f122fd96e8c68eaf8063c",
+    "backend/src/agentbox/agent_core/runtime.py": "d52d413c378a6ae766d3a4ecb1f076d1fca6d2845e4c31d4d4483c4397f003b1",
+    "backend/tests/unit/test_work_preflight.py": "05b020582da6f1c99f168d96af50d4ead3c03e4e44bc456191983deeefd3c306"
+  },
+  "checks": {
+    "capability_preflight": {
+      "codes": [
+        "WORK_CHECK_UNAVAILABLE",
+        "WORK_ROLE_UNAVAILABLE"
+      ]
+    },
+    "producerSpawn": {
+      "calledBefore": "progress.reserve()",
+      "noChildEventOnFailure": true,
+      "noUserEvent": true,
+      "noModelPrompt": true
+    },
+    "resumeChild": {
+      "recheckAfterSlotWait": true,
+      "suffix": "(changed while waiting for a slot)",
+      "checkKindTestsRequires": "terminal_exec"
+    },
+    "dispatchRevoke": {
+      "errorCode": "WORK_CAPABILITY_REVOKED",
+      "source": "owner switches recomputed per dispatch"
+    },
+    "controllerQueuedGrantRevoked": {
+      "error": "WORK_CONTINUATION_RIGHTS"
+    },
+    "roleDisabled": {
+      "reported": true,
+      "autoEnable": false
+    },
+    "missingCheck": {
+      "treatedAsPass": false
+    }
+  },
+  "unit": [
+    {
+      "path": "backend/tests/unit/test_work_preflight.py",
+      "passed": 5,
+      "skipped": 1,
+      "failed": 0,
+      "skippedReason": "test_verify_exec_unavailable_does_not_block_review_but_is_reported chờ track w6 (verify_exec chưa tồn tại ở nhánh này)"
+    }
+  ],
+  "open": [
+    "verify_exec thuộc track w6: case 'review vẫn chạy, finding hạ NUMERIC_UNVERIFIED' chưa chạy được ở nhánh này.",
+    "answer_knowledge() chưa nối capability_preflight (design §7 nêu; hiện read tool thiếu được báo ở đường spawn/resume)."
+  ],
+  "note": "Probe/test chạy trong worktree trước khi commit; sourceManifest khớp byte với bản đã commit. commit trong results.json (raw) là commit nền 68ecdf04 vì thời điểm chạy chưa commit."
+}

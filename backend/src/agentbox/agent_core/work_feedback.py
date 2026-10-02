@@ -12,9 +12,72 @@ from . import work_policy
 
 
 class FeedbackError(ValueError):
-    def __init__(self, code, message, status=409):
+    def __init__(self, code, message, status=409, details=None):
         super().__init__(code + ': ' + message)
         self.code, self.status = code, status
+        if details:
+            self.details = details
+
+
+# W7.2 — one tool, per-action contract. Checked before any other logic so the
+# model gets the exact field, a hint where the value comes from and the args it
+# actually sent. Never aliases: a missing requestId is not guessed from the only
+# open request, and a needs_user is never downgraded to a checkpoint.
+CHILD_ACTIONS = ('needs_user', 'needs_evidence', 'checkpoint', 'read')
+MAIN_ACTIONS = ('status', 'resume', 'cancel', 'read')
+ACTION_FIELDS = {
+    'needs_user': {'required': ('checkpoint', 'questions'), 'forbidden': ()},
+    'needs_evidence': {'required': ('checkpoint',), 'forbidden': ('questions', 'decisionKeys')},
+    'checkpoint': {'required': ('checkpoint',), 'forbidden': ('questions', 'decisionKeys')},
+    'status': {'required': ('runId',), 'forbidden': ('checkpoint',)},
+    'resume': {'required': ('requestId', 'revision'), 'forbidden': ('checkpoint', 'questions')},
+    'cancel': {'required': ('requestId', 'revision'), 'forbidden': ('checkpoint', 'questions')},
+    'read': {'required': ('requestId',), 'forbidden': ()},
+}
+FIELD_HINTS = {
+    'runId': "runId from work_graph(action='status') or the work_run/work_check result",
+    'requestId': "requestId from work_report(action='status', runId) or the work_feedback event",
+    'revision': "current revision from work_report(action='status', runId)",
+    'checkpoint': 'save your findings so far as checkpoint text (1..60000 characters)',
+    'questions': '1..3 questions, each with 2..4 options',
+}
+FORBIDDEN_HINTS = {
+    'questions': 'questions belong to needs_user; evidence requests use reason',
+    'checkpoint': 'checkpoint text belongs to a bound child report; main uses context',
+    'decisionKeys': 'decisionKeys belong to needs_user',
+}
+
+
+MAIN_INTERVIEW = 'main_interview'
+
+
+def _missing(value):
+    return value is None or isinstance(value, (str, list, dict)) and not (value.strip() if isinstance(value, str) else value)
+
+
+def check_action_fields(args, actor):
+    """Raise WORK_REPORT_ACTION / _FIELD_REQUIRED / _FIELD_FORBIDDEN, else None."""
+    from .tool_arg_errors import field_details
+    args = args if isinstance(args, dict) else {}
+    action = args.get('action')
+    allowed = CHILD_ACTIONS if actor == 'child' else MAIN_ACTIONS
+    if action not in allowed:
+        message = ('child uses needs_user, needs_evidence or checkpoint (or read for its own request)'
+                   if actor == 'child' else
+                   'main uses status, resume, cancel or read; ask the user with interview(workRequestId, revision)')
+        raise FeedbackError('WORK_REPORT_ACTION', message + f'; received action={action!r}', 400,
+                            field_details('action', action, args, 'allowed actions: ' + ', '.join(allowed)))
+    rule = ACTION_FIELDS[action]
+    for name in rule['required']:
+        if _missing(args.get(name)):
+            hint = FIELD_HINTS.get(name)
+            raise FeedbackError('WORK_REPORT_FIELD_REQUIRED', f'{name} required for action={action}'
+                                + (f'; hint: {hint}' if hint else ''), 400, field_details(name, action, args, hint))
+    for name in rule['forbidden']:
+        if name in args and not _missing(args.get(name)):
+            hint = FORBIDDEN_HINTS.get(name)
+            raise FeedbackError('WORK_REPORT_FIELD_FORBIDDEN', f'{name} not allowed for action={action}'
+                                + (f'; {hint}' if hint else ''), 400, field_details(name, action, args, hint))
 
 
 def service(rt):
@@ -147,7 +210,8 @@ class Feedback:
 
     def validate(self, doc):
         run = self.graph.current(doc['runId'])
-        if run['status'] in ('cancelled', 'rejected', 'shipped') or self.fingerprint(run, doc['binding']) != doc['fingerprint']:
+        main = doc.get('kind') == MAIN_INTERVIEW  # owner-level question: no node assignment to drift
+        if run['status'] in ('cancelled', 'rejected', 'shipped') or not main and self.fingerprint(run, doc['binding']) != doc['fingerprint']:
             pending = doc['status'] == 'needs_user'
             with self.db:
                 doc.update(status='stale')
@@ -161,11 +225,13 @@ class Feedback:
 
     async def report(self, session, args, call_id):
         binding = session['config'].get('workBinding') or {}
+        check_action_fields(args, 'child' if session.get('parent_id') else 'main')
         if args.get('action') == 'read':
             doc = self.get(args.get('requestId'),session.get('parent_id') or session['id'])
             if session.get('parent_id') and doc['childId'] != session['id']:
                 raise FeedbackError('WORK_REQUEST_SCOPE','child may read only its own checkpoint/answers',403)
             self.validate(doc)
+            self.record_main_interview(doc)
             return doc
         if not session.get('parent_id'):
             return self.main_action(session, args)
@@ -189,6 +255,10 @@ class Feedback:
         if kind == 'needs_user':
             from .work_grants import decision_keys
             keys = decision_keys(args.get('decisionKeys'),len(questions)) if 'decisionKeys' in args else [q['id'] for q in questions]
+            revoked = self.graph.grants.revoked(run, binding, keys) if 'decisionKeys' in args else None
+            if revoked:
+                raise FeedbackError('WORK_CAPABILITY_REVOKED', 'main revoked interview rights for '
+                                    + ', '.join(sorted(keys)) + '; report a checkpoint to main instead of asking the user', 403)
             grant = self.graph.grants.find(run,binding,keys)
         invocation = str(args.get('invocationId') or call_id or '')
         if not 1 <= len(invocation) <= 120:
@@ -274,6 +344,9 @@ class Feedback:
             self.graph.continuations.cancel_request(doc['requestId'])
             self.rt.store.emit(session['id'], 'work_feedback', doc)
             return doc
+        if doc['kind'] == MAIN_INTERVIEW:
+            raise FeedbackError('WORK_REPORT_ACTION', 'a main interview is answered by the owner on its card; '
+                                'read it with work_report(action="read", requestId)', 400)
         if args.get('action') != 'resume' or doc['kind'] == 'needs_user' and doc['status'] != 'interrupted':
             raise FeedbackError('WORK_REPORT_ACTION', 'main interviews needs_user via interview(workRequestId); resumes other checkpoints', 400)
         if doc['status'] not in ('waiting_main', 'ready', 'interrupted'):
@@ -341,6 +414,62 @@ class Feedback:
             self.save(doc)
         return card
 
+    def open_main_interview(self, session, args, call_id, run_id):
+        """W7.1 — main's own interview during an active run is a durable request, not a future.
+
+        The card survives restart through CardHistory; main yields and reads the answers later with
+        work_report(action='read', requestId). Answers go through `answer()` like a child request.
+        """
+        questions = self.rt.normalize_interview(args)
+        if len(questions) > 3:
+            raise FeedbackError('WORK_REPORT_INVALID', 'ask 1..3 questions per interview round', 400)
+        invocation = str(call_id or args.get('invocationId') or 'interview-' + uuid.uuid4().hex)[:120]
+        sid = session['id']
+        request_hash = work_policy.digest({k: v for k, v in args.items() if k != 'invocationId'})
+        old = self.db.execute('SELECT * FROM work_requests WHERE child_id=? AND invocation=?', (sid, invocation)).fetchone()
+        if old:
+            if old['request_hash'] != request_hash:
+                raise FeedbackError('WORK_REPORT_INVOCATION_CONFLICT', 'invocation already used with different content')
+            doc = json.loads(old['doc'])
+            self.history.reconcile(doc)
+            return self.card(doc)
+        binding = {'runId': run_id, 'nodeId': None, 'stage': 'main', 'purpose': MAIN_INTERVIEW}
+        doc = {'requestId': 'wr-' + uuid.uuid4().hex, 'runId': run_id, 'ownerId': sid, 'childId': sid,
+               'originTurn': self.rt.active_turn.get(sid), 'revision': 1, 'kind': MAIN_INTERVIEW,
+               'status': 'needs_user', 'questions': questions, 'answers': [], 'reason': '', 'artifact': None,
+               'binding': binding, 'fingerprint': work_policy.digest(binding), 'decisionKeys': [],
+               'toolCallId': call_id, 'publication': 'main', 'requiresMainYield': True,
+               'title': str(args.get('title') or '').strip()[:160] or 'Câu hỏi làm rõ', 'createdAt': time.time()}
+        with self.db:
+            self.db.execute('INSERT INTO work_requests VALUES(?,?,?,?,?,?,?)',
+                (doc['requestId'], run_id, sid, sid, invocation, request_hash, json.dumps(doc, ensure_ascii=False)))
+            card = self.card(doc)
+            self.history.record(doc, 'decision_requested', card)
+            self.history.event(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': card['decisionId']},
+                                                  'reason': 'decision_requested'})
+            self.save(doc)
+        return card | {'message': 'Interview card saved; this turn yields. The owner\'s answers arrive as a new '
+                       f'main turn: read work_report(action="read", requestId="{doc["requestId"]}").'}
+
+    def record_main_interview(self, doc):
+        """Keep `run['interviews']` (whole binding / owner digest) in step with the durable answers.
+
+        Idempotent: also called when main reads the request, which repairs a crash between the
+        answer commit and this run save.
+        """
+        if doc.get('kind') != MAIN_INTERVIEW or doc['status'] != 'answered':
+            return
+        try:
+            run = self.graph.current(doc['runId'])
+            if any(i.get('requestId') == doc['requestId'] for i in run.get('interviews', [])):
+                return
+            run.setdefault('interviews', []).append({'decisionId': doc['requestId'], 'requestId': doc['requestId'],
+                'status': 'resolved', 'answers': doc['answers'], 'at': round(time.time(), 3)})
+            self.graph.save(run, 'interview', f'{len(doc["answers"])} answers')
+        except Exception as exc:  # the answers stay durable on the request either way
+            from ..observability.system_log import system_log
+            system_log.write('work.interview.store_failed', level='warn', session_id=doc['ownerId'], message=str(exc)[:300])
+
     def card(self, doc):
         answered = {a['questionId'] for a in doc['answers']}
         return {'decisionId': doc['requestId'] + '-r' + str(doc['revision']), 'sessionId': doc['ownerId'],
@@ -403,7 +532,8 @@ class Feedback:
         doc['answers'].extend(values)
         doc['revision'] += 1
         done = len(doc['answers']) == len(doc['questions'])
-        doc['status'] = 'ready' if done else 'needs_user'
+        main = doc['kind'] == MAIN_INTERVIEW
+        doc['status'] = ('answered' if main else 'ready') if done else 'needs_user'
         result = {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': 'answered',
                   'answers': values, 'requestId': rid, 'revision': doc['revision'], 'remaining': not done}
         # Nothing that commits independently may be called inside this transaction.
@@ -418,7 +548,13 @@ class Feedback:
             self.save(doc)
             self.db.execute('INSERT INTO work_feedback_invocations VALUES(?,?,?,?)',
                 (owner, invocation, digest, json.dumps(result, ensure_ascii=False)))
-            if done:
+            if done and main:
+                job = {'action': 'main_decision', 'prompt': f'[Work Graph] The owner answered interview {rid}. '
+                       f'Read work_report(action="read", requestId="{rid}"); treat decidedBy=user answers as confirmed '
+                       'requirements and state agent-decided ones as assumptions, then continue the run.'}
+                self.db.execute('INSERT INTO work_feedback_outbox VALUES(?,?,?,?,?)',
+                    ('work-feedback-' + rid + '-' + str(doc['revision']), owner, rid, 'pending', json.dumps(job, ensure_ascii=False)))
+            elif done:
                 oid = 'work-feedback-' + rid + '-' + str(doc['revision'])
                 rights = next((g for g in self.graph.grants.records(run['runId'])
                                if g['grantId'] == doc.get('grantId')), None)
@@ -431,6 +567,8 @@ class Feedback:
                 self.db.execute('INSERT INTO work_feedback_outbox VALUES(?,?,?,?,?)',
                     (oid, owner, rid, 'pending', json.dumps(job, ensure_ascii=False)))
             self.history.event(owner, 'work_feedback', doc)
+        if done and main:
+            self.record_main_interview(doc)  # after commit: graph.save commits on its own
         if done:
             self.graph.continuations.wake(run['runId'])
         return result
@@ -544,14 +682,19 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
             config['outputTokenCeiling'] = owner['config']['outputTokenCeiling']
         else:
             config.pop('outputTokenCeiling', None)
+        # W1.P: the owner's CURRENT role/tool settings are checked again after the slot wait.
+        from .work_checks import capability_preflight
+        need = {'role': child['role'], 'check': bool(work.get('checkId'))}
+        if work.get('checkKind') == 'tests':
+            need['tools'] = {'terminal_exec'}
+        unavailable = capability_preflight(owner, need)
+        if unavailable:
+            code, _, message = unavailable.partition(': ')
+            raise FeedbackError(code, message + ' (changed while waiting for a slot)')
         if work.get('checkId'):
             from .roles import work_check_tools
             from . import work_budget
-            if not any(r['id'] == child['role'] and r.get('enabled', True) for r in owner['config']['subagents']):
-                raise FeedbackError('WORK_CHECK_UNAVAILABLE', 'checker was disabled while waiting for a slot')
             config['tools'] = sorted(work_check_tools(child['role'], owner['config']['tools']))
-            if work.get('checkKind') == 'tests' and 'terminal_exec' not in config['tools']:
-                raise FeedbackError('WORK_CHECK_UNAVAILABLE', 'tests requires the current owner terminal permission')
             request_budget = work_budget.requested(child['role'], work, None, 40,
                 effective.get('requestedDeadlineSeconds', config['deadlineSeconds']))
             effective = effective | {'profile': request_budget['profile'],

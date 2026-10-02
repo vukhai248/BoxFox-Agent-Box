@@ -985,6 +985,12 @@ class WorkGraph:
             args['context'] += '\n' + work_prompts.choose(lang,
                 'When blocked use work_report needs_user with 1..3 questions and matching decisionKeys. Do not ask outside these keys.',
                 'Khi thiếu quyết định trong phạm vi, dùng work_report needs_user với 1–3 câu và decisionKeys tương ứng. Không hỏi ngoài các nhóm đã giao.')
+        # W1.P: a disabled/missing role or revoked required tool is reported before any reservation,
+        # so the producer never spends a turn and no retry is consumed.
+        unavailable = work_checks.capability_preflight(self.rt.store.get(session['id']),
+                                                       work_checks.producer_need(role, stage, purpose))
+        if unavailable:
+            raise ValueError(unavailable)
         request = self.feedback.ready(work)
         resume_id = request['childId'] if request else work.pop('resumeChildId', None)
         progress_id = await self.progress.reserve(session['id'], work, resume_id, request)

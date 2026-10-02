@@ -1110,8 +1110,12 @@ def create_app(runtime):
         # bao nhiêu, đã nén mấy lần, hay `deadlineSeconds` đã bị hạ trần lúc tạo, mà không tải cả
         # transcript. Bốn khoá này đọc từ chính hàng đã lưu nên rẻ.
         journal_tail = runtime.journal_records(sid, limit=50)
+        # W7.1: a session can hold far more than one 500-event page. `hasMore`/`nextAfter` let a
+        # client walk the whole log; older clients that ignore them keep today's behaviour.
+        page = runtime.store.events_page(sid, int(request.query.get('after', '0')))
         return web.json_response({k: v for k, v in value.items() if k != 'messages'} |
-                                 {'events': runtime.store.events(sid, int(request.query.get('after', '0'))),
+                                 {'events': page['events'], 'hasMore': page['hasMore'],
+                                  'nextAfter': page['nextAfter'],
                                   'sessionMetrics': runtime.session_metrics(sid),
                                   # A9 (đợt 20): khối `journal` cộng thêm — chỗ đọc cũ không phải biết
                                   # tới nó, còn UI sau này có sẵn `records`/`lastSeq`/`degraded`.
