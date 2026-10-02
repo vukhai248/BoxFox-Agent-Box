@@ -152,6 +152,11 @@ def classify_failure(exc: BaseException) -> tuple[str, str]:
         )
 
     if isinstance(exc, PermissionError):
+        # W8.A4.2 — cổng phạm vi thi công mang mã RIÊNG của nó (`WORK_SCOPE_*`), không phải mã chung
+        # `TOOL_NOT_PERMITTED`: log/giao diện phải phân biệt "vai này không có quyền" với "run này
+        # không cho sửa mã", vì bước tiếp theo của hai ca khác nhau.
+        if reason.startswith('WORK_SCOPE_'):
+            return reason.split(':', 1)[0].strip(), reason
         return 'TOOL_NOT_PERMITTED', 'TOOL_NOT_PERMITTED: ' + reason
 
     if name in _UNREACHABLE_NAMES or isinstance(exc, (ConnectionError,)):
