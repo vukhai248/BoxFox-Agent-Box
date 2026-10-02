@@ -33,6 +33,10 @@ def child_budget(role, work=None, task_kind=None):
         return configured_budget('BOXFOX_WORK_CHECK_OUTPUT_TOKENS', WORK_CHECK_OUTPUT_TOKENS, {4096, 8192, 16000})
     if role in {'review', 'plan-review', 'research-review'}:
         return configured_budget('BOXFOX_REVIEW_OUTPUT_TOKENS', REVIEW_OUTPUT_TOKENS, {8192, 16000})
+    if work.get('purpose') == 'knowledge':
+        # W6.5.3: measurement-only override for nested lookup helpers. Unset keeps the
+        # historical profile (None -> request default DEFAULT_OUTPUT_TOKENS = 4096).
+        return configured_budget('BOXFOX_WORK_HELPER_OUTPUT_TOKENS', None, {DEFAULT_OUTPUT_TOKENS, 16000})
     if work and (work.get('purpose') != 'produce' or work.get('stage') != 'produce'):
         return None
     if role in {'plan', 'design'}:
