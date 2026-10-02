@@ -2655,3 +2655,16 @@ flowchart TD
 - [ ] Freeze source mỗi checkpoint, chạy test đúng đường sửa, đọc output thật và tool receipts; chỉ một sweep toàn backend ở lúc chốt nếu phù hợp. Khi phát sinh lỗi ngoài scope, ghi W riêng và bàn giao, không tự mở chuỗi sửa/sweep vô hạn.
 
 **Giới hạn thực tế khi bàn giao:** chưa có nghiệm thu CUA toàn luồng interview; chưa có native main điều phối từ yêu cầu app lớn đến code/ship; chưa chứng minh plan/research/design mọi prompt đạt SWE. Bản này có các phần cơ chế backend đã kiểm và các phần còn mở rõ ràng. Người dùng cần review/duyệt từng W tiếp theo trước khi mở lại việc, không có lịch tự tiếp tục sau khi đóng goal.
+
+## 35. Hợp nhất checkout sau bàn giao — 02/10/2026
+
+Người dùng yêu cầu merge B vào main, bỏ thư mục worktree thừa và giữ nhánh làm việc B. Đây là thao tác Git/checkout, không mở lại goal hoặc triển khai W mới. Mục34 giữ nguyên các phần chưa hoàn tất và giới hạn kiểm chứng.
+
+- Checkout dùng sau hợp nhất: **`D:/create/BoxFox-Agent-Box`, nhánh B**. Đường `D:/create/BoxFox-Agent-Box-B` trong nhật ký cũ là nơi chạy kiểm thử trước khi hợp nhất, không còn là checkout cho agent tiếp theo.
+- Main nhận lịch sử B bằng fast-forward khi xác minh main là ancestor, giữ toàn bộ33commit trước checkpoint d0bafe50 và commit tài liệu hợp nhất này. Không push/merge remote.
+- Raw logs, disposable SQLite/workspaces và script thử nghiệm của checkout B được giữ tại **`.tmp/archived-BoxFox-Agent-Box-B-20261002/`** trong checkout còn lại; các đường `.tmp/work-checks/...` cũ tra dưới thư mục archive này. Evidence đã commit ở `docs/plan/` vẫn là điểm vào chính.
+- Bản Work-Graph-fix cũ/untracked ở checkout main được giữ tại **`.tmp/worktree-consolidation-20261002/Work-Graph-fix-before-merge.md`**. Không dùng bản cũ thay mục34 của tài liệu hiện tại.
+- Thay đổi chưa commit có trước thao tác (HarnessFlowVisualizer.tsx và12file plan/log đã bị người dùng xóa) được stash có tên, khôi phục ở checkout cuối, giữ stash để dự phòng. Receipt local **`.tmp/worktree-consolidation-20261002/receipt.json`** ghi trạng thái/neo/stash/hash đối chiếu; không commit các thay đổi này vào checkpoint của agent.
+- Chỉ xóa Git worktree B sau khi giữ dữ liệu cần thiết và kiểm sạch tracked files. Không xóa checkout chính hoặc `.env`, không thay đổi UI/UX. Không coi hợp nhất Git là một lượt nghiệm thu runtime mới; test/evidence tại33.13/34 vẫn có giới hạn đã ghi.
+
+**Agent tiếp theo:** mở checkout còn lại, đọc mục34 rồi kiểm branch/status trước sửa. Working tree có thể còn các thay đổi của người dùng đã khôi phục; không reset/clean hoặc đưa chúng vào commit ngoài phạm vi. Trạng thái thực tế của consolidation đọc receipt local và `git worktree list`.
