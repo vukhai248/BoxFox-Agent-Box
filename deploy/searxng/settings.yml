@@ -1,7 +1,8 @@
 # BoxFox — cấu hình SearXNG tự host (phía HOST, KHÔNG chạy trong box).
 #
-# VÌ SAO nằm ngoài box: box không có mạng (`BOX_DEFAULT_NETWORK: "off"`), và mở mạng cho box là trái
-# thiết kế an toàn. Metasearch chạy trên host, chỉ văn bản đã trích đi qua ranh giới.
+# VÌ SAO nằm ngoài box: chính sách — metasearch chạy trên host, chỉ văn bản đã trích đi qua ranh giới
+# vào box. (Từ 02/10/2026 compose đặt `BOX_DEFAULT_NETWORK: "on"` cho verify_exec; box vẫn bật/tắt
+# được bằng nút Mạng, nhưng SearXNG ở host không phụ thuộc trạng thái đó.)
 #
 # Mặc định ở đây theo kế hoạch v2 §5.4.2. Chủ nhà sửa được: tắt một engine chỉ cần `disabled: true`
 # (hoặc bỏ nó khỏi danh sách). Chạy kèm `docker-compose.yml` trong cùng thư mục.

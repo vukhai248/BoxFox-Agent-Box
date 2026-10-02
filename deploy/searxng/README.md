@@ -1,8 +1,9 @@
 # SearXNG tự host cho BoxFox (P0b)
 
-Thư mục này chạy **SearXNG trên HOST** — không phải trong box. Box không có mạng
-(`BOX_DEFAULT_NETWORK: "off"`), nên mọi truy vấn ra Internet đi từ host và chỉ văn bản đã trích
-mới qua được ranh giới vào box.
+Thư mục này chạy **SearXNG trên HOST** — không phải trong box. Từ 02/10/2026 compose đặt
+`BOX_DEFAULT_NETWORK: "on"` (quyết định chủ máy, cho verify_exec/reviewer xác nhận nguồn), nên
+lý do giữ SearXNG ở host bây giờ là **chính sách**: truy vấn tìm kiếm đi từ host và chỉ văn bản
+đã trích mới qua ranh giới vào box, không phụ thuộc trạng thái mạng của box.
 
 Lớp tìm không khoá 10 bước (kế hoạch v2 §5.4.1) dùng SearXNG làm nguồn chính, gộp nhiều engine rồi
 xếp hạng lại để tiệm cận chất lượng Brave **mà không cần khoá nào**.
