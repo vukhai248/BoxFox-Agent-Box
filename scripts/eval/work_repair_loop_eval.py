@@ -21,14 +21,36 @@ import json
 import shutil
 import subprocess
 import time
+import traceback
 import uuid
 from pathlib import Path
 
 from work_check_eval import ROOT, HarnessRuntime, SessionStore
 from work_worktree_build_eval import Client, GitExecutor, git, make_repo, route_of, snapshot_source
+from agentbox.agent_core import output_policy
 from agentbox.agent_core import work_checks
 from agentbox.agent_core import work_graph as wg
 from agentbox.agent_core import work_worktrees
+
+# Cờ FIXTURE của probe (W8.A4.5.N), không phải thay đổi sản phẩm:
+# `output_policy.child_budget()` trả `None` cho vai build ⇒ con Build thừa hưởng mặc định 4096 token
+# output. Đo thật 02/10/2026: Space Bunny tiêu 3958/4096 token vào reasoning rồi
+# `PROVIDER_OUTPUT_TRUNCATED`; nút Build không hoàn tất draft nên checks từ chối mở
+# (`WORK_CHECK_NOT_READY`) và vòng sửa không có gì để đo. Probe nâng trần cho RIÊNG con Build trong
+# fixture này để đo được cơ chế phân loại/sửa/hội tụ; số đo 4096 giữ nguyên trong
+# `/var/tmp/w8-probe-run1-4096/results.json` và trong `fixtureKnobs` của kết quả.
+BUILD_CHILD_OUTPUT_TOKENS = 16000
+
+
+def raise_build_child_output_budget():
+    original = output_policy.child_budget
+
+    def patched(role, work=None, task_kind=None):
+        if role == 'build' and (work or {}).get('purpose') == 'produce':
+            return BUILD_CHILD_OUTPUT_TOKENS
+        return original(role, work, task_kind)
+
+    output_policy.child_budget = patched
 
 RED_TRACE = ('Traceback (most recent call last):\n'
              '  File "src/export.py", line 3, in export_markdown\n'
@@ -141,7 +163,12 @@ async def main(args):
     baseline = git(repo, 'rev-parse', 'HEAD')
 
     row = {'case': 'repair_loop_red_then_green', 'sourceManifest': frozen,
-           'scope': 'Native: Build produce → kiểm tests THẬT (đỏ do fixture) → phân loại + sửa → kiểm lại xanh'}
+           'scope': 'Native: Build produce → kiểm tests THẬT (đỏ do fixture) → phân loại + sửa → kiểm lại xanh',
+           'fixtureKnobs': {'buildChildOutputTokens': BUILD_CHILD_OUTPUT_TOKENS,
+                            'why': 'con Build mặc định 4096 token output; lượt chạy 4096 đo được '
+                                   'PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất',
+                            'unpatchedRun': '/var/tmp/w8-probe-run1-4096/results.json'}}
+    raise_build_child_output_budget()
     started = time.monotonic()
     store = SessionStore(folder.parent / 'repair_loop-sessions.db')
     client = Client(args.router)
@@ -208,6 +235,14 @@ async def main(args):
             green = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
                      'stage': 'execute', 'artifactId': second_artifact, 'checkIds': ['tests'],
                      'invocationId': uuid.uuid4().hex}))
+            if not green.get('checks'):
+                # Đo thật: sản phẩm trả về không có check nào — ghi nguyên văn rồi dừng vòng,
+                # không che bằng một IndexError khó đọc.
+                row.setdefault('greenChecks', []).append({'attempt': attempt, 'empty': True,
+                                                          'keys': sorted(green), 'raw': json.loads(json.dumps(
+                                                              {k: v for k, v in green.items() if k != 'checks'},
+                                                              ensure_ascii=False, default=str))})
+                break
             green_doc = green['checks'][0]
             row.setdefault('greenChecks', []).append({
                 'kind': green_doc['kind'], 'status': green_doc['status'], 'attempt': attempt,
@@ -248,6 +283,12 @@ async def main(args):
                             'nodeId': work_worktrees.INTEGRATION_NODE, 'stage': 'execute',
                             'artifactId': iartifact, 'checkIds': ['tests'],
                             'invocationId': uuid.uuid4().hex})
+                        if not out.get('checks'):
+                            # Cùng lý do như vòng xanh: `checks.tool` có thể trả danh sách rỗng
+                            # (đường replay/`inputConflicts`); ghi lại nguyên văn thay vì IndexError.
+                            integration_row.setdefault('checks', []).append(
+                                {'attempt': attempt, 'empty': True, 'keys': sorted(out)})
+                            continue
                         idoc = out['checks'][0]
                         integration_row.setdefault('checks', []).append({
                             'kind': idoc['kind'], 'status': idoc['status'], 'attempt': attempt,
@@ -306,15 +347,17 @@ async def main(args):
         row['oracle'] = (all(row['mechanism'].values()) and all(row['model'].values())
                          and all(row['integrationNative'].values()))
     except Exception as exc:
-        row.update(oracle=False, error=f'{type(exc).__name__}: {exc}')
+        row.update(oracle=False, error=f'{type(exc).__name__}: {exc}',
+                   traceback=traceback.format_exc()[-3000:])
     row.update(calls=client.calls, latencySeconds=round(time.monotonic() - started, 3))
     if rt is not None and sid:
         await rt.stop(sid)
     store.db.close()
     (output / 'results.json').write_bytes((json.dumps({'branch': branch, 'commit': commit,
         'sourceManifest': frozen, 'rows': [row]}, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
-    print(json.dumps({k: row.get(k) for k in ('case', 'oracle', 'mechanism', 'model', 'error',
-                                              'latencySeconds')}, ensure_ascii=False), flush=True)
+    print(json.dumps({k: row.get(k) for k in ('case', 'oracle', 'mechanism', 'model',
+                                              'integrationNative', 'error', 'latencySeconds')},
+                     ensure_ascii=False), flush=True)
     snapshot_source(frozen)
 
 
