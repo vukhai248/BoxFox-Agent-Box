@@ -512,6 +512,9 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
     step_limit = min(effective.get('requestedMaxSteps', effective.get('effectiveMaxSteps', child['config']['maxSteps'])), owner['config']['maxSteps'])
     deadline = min(effective.get('requestedDeadlineSeconds', effective.get('effectiveDeadlineSeconds', child['config']['deadlineSeconds'])), owner['config']['deadlineSeconds'])
     feedback = service(rt)
+    controller = feedback.graph.continuations if work.get('controllerAction') else None
+    if controller:
+        controller.authorize_new(owner['id'], work)
     fresh = {'snapshots': input_snapshots(feedback, child_id, work),
              'answers': [{k:a.get(k) for k in ('question', 'answer', 'decidedBy', 'note')} for a in (request or {}).get('answers', [])],
              'evidence': sorted([{k:v for k,v in p.items() if k != 'sourceSeq'} for p in (request or {}).get('evidenceProofs', [])], key=work_policy.digest)}
@@ -533,6 +536,8 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
                 raise FeedbackError('WORK_RESUME_BUSY', 'request already admitted or changed')
         if work.get('controllerOwned'):
             feedback.graph.continuations.authorized(request, feedback.validate(request))
+        if controller:
+            await controller.after_slot(owner['id'], work)
         # The owner can lower limits while this admission waits for a slot.
         owner = rt.store.get(owner['id'])
         step_limit = min(effective.get('requestedMaxSteps', effective.get('effectiveMaxSteps', child['config']['maxSteps'])), owner['config']['maxSteps'])
@@ -552,9 +557,11 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
             feedback.db.execute('INSERT INTO work_resume_inputs VALUES(?,?,?)', (child_id,input_hash,time.time()))
         # The legacy child ledger aggregates this identity; the event ledger keeps each turn.
         rt.store.db.execute("UPDATE children SET status='started',finished=NULL,started=?,parent_turn=? WHERE session_id=?",
-                            (time.time(), 0 if work.get('controllerOwned') else rt.active_turn.get(owner['id'], 0), child_id))
+                            (time.time(), 0 if controller or work.get('controllerOwned') else rt.active_turn.get(owner['id'], 0), child_id))
         rt.store.db.commit()
         rt.track_child_slot(child_id, owner['id'])
+        if controller:
+            controller.register_new(owner['id'], work, child_id)
         task = rt.start(child_id, prompt, invocation_id='work-resume-' + uuid.uuid4().hex)
     except BaseException:
         rt.release_child_slot(owner['id'], child_id)

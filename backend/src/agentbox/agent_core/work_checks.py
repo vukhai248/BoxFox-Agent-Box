@@ -366,6 +366,19 @@ class Checks:
 
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
+        # Helper outputs are immutable input data, never a prior verification.
+        # The independent checker reads them and reopens their original sources.
+        metas = list(metas)
+        seen = {meta['artifactId'] for meta in metas}
+        for primary in list(metas):
+            for aid in primary['binding'].get('lookupArtifactIds', []):
+                if aid in seen:
+                    continue
+                helper, _ = graph.artifacts.get(run['runId'], aid)
+                if helper['status'] != 'finalized' or helper['binding'].get('purpose') != 'knowledge':
+                    return doc | {'status': 'unverified', 'error': 'Lookup input must be a finalized owned knowledge artifact.'}
+                metas.append(helper)
+                seen.add(aid)
         unavailable = preflight(session, spec)
         if unavailable:
             return doc | {'status': 'unverified', 'error': unavailable, 'finishedAt': time.time(), 'attempts': []}
@@ -389,6 +402,12 @@ class Checks:
                 f'\nBudget: {effective_steps} model steps; batch tools and reserve time for the verdict.',
                 f'\nNgân sách: {effective_steps} vòng model; gom tool và dành thời gian viết kết luận.')
         goal += '\n' + contract(lang, criteria)
+        if any(meta['binding'].get('purpose') == 'knowledge' for meta in metas):
+            goal += work_prompts.choose(lang,
+                '\nKnowledge artifacts and their opened-evidence receipts are input data, not a semantic pass. '
+                'Reopen material original sources; do not accept claims just because a helper ran a tool.',
+                '\nArtifact tra cứu và receipt nguồn đã mở là dữ liệu đầu vào, không là kết luận đạt về nội dung. '
+                'Mở lại nguồn gốc quan trọng; helper đã chạy tool không tự chứng minh khẳng định đúng.')
         if spec['id'] == 'tests':
             goal += work_prompts.choose(lang,
                 '\nYou are the tester: run the required commands yourself. Your tool events and check report are the test evidence; '

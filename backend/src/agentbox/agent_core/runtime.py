@@ -6717,6 +6717,8 @@ class HarnessRuntime(RuntimeCommands):
         controller = work_graph.service(self).continuations if work and work.get('controllerAction') else None
         if controller:
             controller.authorize_new(session['id'], work)
+            if work.get('purpose') == 'knowledge' and role != work.get('helperRole'):
+                raise PermissionError('WORK_CONTROLLER_RIGHTS: helper role was not assigned')
         planning_run = None if work else plan_workflow.bound_run(self, self.store.get(session['id']))
         if planning_run is not None and role not in plan_workflow.ROLES:
             raise PermissionError('PLAN_DELEGATE_BLOCKED: Plan chỉ giao khảo sát/thiết kế/phản biện')
@@ -7034,6 +7036,10 @@ class HarnessRuntime(RuntimeCommands):
             answer = await task
         except asyncio.CancelledError:
             await self.stop(child['id'])
+            if controller:
+                # Run-owned helpers survive turn reaping, so their owning
+                # admission must close the existing ledger on cancellation.
+                self.close_detached_child(parent_id, child['id'], role, turn, step, echo_goal, task)
             raise
         child_rec = self.store.get(child['id'])
         status = child_rec['status']

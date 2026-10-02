@@ -165,7 +165,10 @@ def test_internal_knowledge_without_opened_evidence_stays_unverified(tmp_path):
     run = graph.create(rt.store.get(sid), {'goal': 'Research export formats', 'flow': 'research'})
     result = asyncio.run(graph.answer_knowledge(rt.store.get(sid), run, wg.normalize_node(RESEARCH),
                         'produce', [{'role': 'explore', 'question': 'Where is CSV declared?'}], 1))
-    assert result[0]['status'] == 'unverified' and result[0]['answer'].startswith('UNVERIFIED:')
+    assert result[0]['status'] == 'unverified' and result[0]['error'].startswith('UNVERIFIED:')
+    meta=result[0]['artifact']
+    assert meta['status']=='partial' and meta['binding']['observedEvidence']==[]
+    assert graph.artifacts.get(run['runId'],meta['artifactId'])[1]=='I know the source says CSV; no tools used.'
 
 
 def test_V01_research_candidate_plan_requires_plan_gate():

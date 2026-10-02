@@ -43,6 +43,11 @@ class Model:
         self.peak = 0
 
     async def complete(self, messages, tools, route, max_tokens=4096, on_thought=None, on_content=None):
+        if getattr(self, 'latest_assignment', False):
+            # Same-child continuations receive a new assignment/ref packet while
+            # retaining the old messages. This fixture reads fresh inputs too.
+            index = max(i for i,m in enumerate(messages) if m.get('role') == 'user')
+            messages = messages[index:]
         first = next((str(m.get('content') or '') for m in messages if m.get('role') == 'user'), '')
         kind = next((name for name, head in (('whole', WHOLE), ('review', REVIEW), ('knowledge', KNOW),
                                              ('produce', PRODUCE)) if head in first), 'main')
@@ -327,6 +332,7 @@ def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):
         return ok_script(kind, text)
 
     _, runtime, model, _, sid = build(tmp_path, script)
+    model.latest_assignment = True
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Upgrade the build tool'})
@@ -338,10 +344,15 @@ def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):
     kinds = [kind for kind, _ in model.prompts]
     assert kinds == ['produce', 'knowledge', 'produce']
     rerun = [text for kind, text in model.prompts if kind == 'produce'][1]
-    assert 'Answers to your knowledge requests' in rerun and 'The answer is 42' in rerun
+    assert 'Lookup artifacts for your knowledge requests' in rerun and 'The answer is 42' not in rerun
     run_doc = runtime.work_graph.get(out['runId'])
     knowledge = run_doc['nodes'][0]['stages']['produce']['rounds'][0]['knowledge']
     assert knowledge[0]['role'] == 'research' and knowledge[0]['childId']
+    assert knowledge[0]['artifact']['artifactId'] in rerun
+    assert knowledge[0]['artifact']['binding']['verification'] == 'unreviewed'
+    producer = run_doc['nodes'][0]['stages']['produce']['rounds'][0]
+    assert producer['initialProducerId'] == producer['producerId']
+    assert len(runtime.store.children_of(sid)) == 2
 
 
 def test_independent_nodes_run_in_parallel(tmp_path):

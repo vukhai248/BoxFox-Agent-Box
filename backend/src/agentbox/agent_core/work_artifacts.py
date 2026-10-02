@@ -73,7 +73,7 @@ class Artifacts:
         if offset < 0 or offset > len(text) or not 1 <= limit <= PAGE:
             raise ValueError(f'WORK_ARTIFACT_RANGE: offset 0..{len(text)}, limit 1..{PAGE}')
         end = min(len(text), offset + limit)
-        cid = binding.get('checkId')
+        cid = binding.get('checkId') or binding.get('inputReadId')
         if cid:
             with self.db:
                 self.db.execute('INSERT INTO work_artifact_reads VALUES(?,?,?,?,?,?)',

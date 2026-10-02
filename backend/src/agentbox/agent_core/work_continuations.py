@@ -110,11 +110,28 @@ class Continuations:
     def authorize_new(self, owner, work):
         """Validate real controller ownership before slot creation/start, including after waits."""
         action = self.admissions.get(work.get('controllerAction'))
-        if not action or action['task'] is not asyncio.current_task() or action['owner'] != owner:
+        task = asyncio.current_task()
+        scope = action if action and action['task'] is task else (action or {}).get('helpers', {}).get(task)
+        if not action or not scope or action['owner'] != owner:
             raise PermissionError('WORK_CONTROLLER_RIGHTS: no active backend admission')
-        if any(action[k] != work.get(k) for k in ('runId', 'nodeId', 'stage', 'purpose')):
+        if any(scope[k] != work.get(k) for k in ('runId', 'nodeId', 'stage', 'purpose')):
             raise PermissionError('WORK_CONTROLLER_RIGHTS: action scope mismatch')
+        if scope.get('helperRole') and scope['helperRole'] != work.get('helperRole'):
+            raise PermissionError('WORK_CONTROLLER_RIGHTS: helper role mismatch')
         run = self.graph.current(action['runId'])
+        if action.get('requestId'):
+            row = self.db.execute('SELECT * FROM work_feedback_outbox WHERE id=?', (work['controllerAction'],)).fetchone()
+            request = self.graph.feedback.get(action['requestId'])
+            if not row or row['status'] != 'claimed' or request['status'] not in ('ready', 'resuming', 'consumed'):
+                raise PermissionError('WORK_CONTROLLER_RIGHTS: answer admission no longer active')
+            self.graph.feedback.validate(request)
+            self.authorized(request, run)
+            if work['stage'] == 'execute':
+                self.graph.require_execution(run)
+                self.graph.require_planning_current(run)
+                if run['status'] not in ('approved', 'executing', 'executed'):
+                    raise PermissionError('WORK_CONTROLLER_RIGHTS: answer is not execution approval')
+            return action
         row = self.db.execute('SELECT * FROM work_handoff_actions WHERE id=?', (work['controllerAction'],)).fetchone()
         transition = json.loads(row['doc'])['transitionId'] if row else None
         assignment = next((h for h in self.graph.handoffs.records(run['runId']) if h['transitionId'] == transition), None)
@@ -123,15 +140,35 @@ class Continuations:
             raise PermissionError('WORK_CONTROLLER_RIGHTS: admission stopped, revoked or stale')
         return action
 
+    def helper_task(self, owner, action_id, role, operation):
+        """Only the owning producer task may register a bounded research/explore task."""
+        action = self.admissions.get(action_id) or {}
+        base = {k: action.get(k) for k in ('runId', 'nodeId', 'stage', 'purpose')}
+        self.authorize_new(owner, base | {'controllerAction': action_id})
+        if action.get('task') is not asyncio.current_task() or base['purpose'] != 'produce' or role not in ('research', 'explore'):
+            raise PermissionError('WORK_CONTROLLER_RIGHTS: helper must belong to the active producer')
+        scope = base | {'purpose': 'knowledge', 'helperRole': role}
+
+        async def execute():
+            task = asyncio.current_task()
+            action.setdefault('helpers', {})[task] = scope
+            try:
+                self.authorize_new(owner, scope | {'controllerAction': action_id})
+                return await operation()
+            finally:
+                action['helpers'].pop(task, None)
+        return asyncio.create_task(execute())
+
     def register_new(self, owner, work, child_id):
         action = self.authorize_new(owner, work)
         action['children'].add(child_id)
         self.children.add(child_id)
 
     async def after_slot(self, owner, work):
-        self.authorize_new(owner, work)
+        action = self.authorize_new(owner, work)
         row = self.db.execute('SELECT doc FROM work_handoff_actions WHERE id=?', (work['controllerAction'],)).fetchone()
-        source = json.loads(row['doc'])['input']['artifact']['binding'].get('codeSnapshot')
+        source = (action.get('codeSnapshot') if action.get('requestId') else
+                  json.loads(row['doc'])['input']['artifact']['binding'].get('codeSnapshot'))
         if source:
             from .work_checks import snapshot
             if await snapshot(self.graph, owner) != source:
@@ -142,10 +179,18 @@ class Continuations:
         doc = self.graph.feedback.get(row['request_id'])
         self.authorized(doc, run)
         self.children.add(doc['childId'])
+        self.admissions[row['id']] = {'task': asyncio.current_task(), 'owner': run['sessionId'],
+            'runId': run['runId'], 'nodeId': node['id'], 'stage': doc['binding']['stage'],
+            'purpose': 'produce', 'requestId': doc['requestId'], 'children': {doc['childId']}}
         try:
             state = node['stages'][doc['binding']['stage']]
+            if doc['binding']['stage'] == 'execute':
+                from .work_checks import snapshot
+                self.admissions[row['id']]['codeSnapshot'] = await snapshot(self.graph, session['id'])
+                if not self.admissions[row['id']]['codeSnapshot']:
+                    raise ValueError('WORK_CODE_SNAPSHOT_REQUIRED: answer continuation requires current code')
             await self.graph.run_stage(session, run, node, doc['binding']['stage'],
-                                       state.get('maxRounds', 3), controller_owned=True)
+                                       state.get('maxRounds', 3), controller_action=row['id'])
             status = self.graph.feedback.get(doc['requestId'])['status']
             self.finish(row['id'], 'completed' if status == 'consumed' else 'blocked',
                         state.get('error') if status != 'consumed' else None)
@@ -155,7 +200,8 @@ class Continuations:
         except (KeyError, ValueError) as exc:
             self.finish(row['id'], 'blocked', exc)
         finally:
-            self.children.discard(doc['childId'])
+            action = self.admissions.pop(row['id'], None)
+            self.children.difference_update(action['children'] if action else {doc['childId']})
 
     def inject(self, session, run, stage, only, running, limit):
         """Called only by the scheduler holding the canonical live run/lock."""
@@ -213,7 +259,7 @@ class Continuations:
                     return
                 _, run, node = value
                 self.graph.live[run_id] = run
-                self.graph.child_budget[run_id] = [1]
+                self.graph.child_budget[run_id] = [5]  # same child + <=3 lookups + same-child synthesis
                 try:
                     session = self.rt.store.get(row['owner_id'])
                     if node['stages'].get('execute') and json.loads(row['doc']).get('stage') == 'execute':
@@ -249,7 +295,7 @@ class Continuations:
             doc = self.graph.feedback.get(row['request_id'])
             if doc.get('grantId') == grant_id:
                 self.finish(row['id'], 'blocked', 'WORK_CONTINUATION_RIGHTS: main revoked this grant')
-                task = self.tasks.get(row['id'])
+                task = self.tasks.get(row['id']) or self.admissions.get(row['id'], {}).get('task')
                 if task:
                     task.cancel()
                 child_task = self.rt.tasks.get(doc['childId'])
@@ -267,7 +313,7 @@ class Continuations:
 
     def cancel_request(self, request_id):
         for row in self.db.execute('SELECT id FROM work_feedback_outbox WHERE request_id=?', (request_id,)):
-            task = self.tasks.get(row['id'])
+            task = self.tasks.get(row['id']) or self.admissions.get(row['id'], {}).get('task')
             if task:
                 task.cancel()
         doc = self.graph.feedback.get(request_id)

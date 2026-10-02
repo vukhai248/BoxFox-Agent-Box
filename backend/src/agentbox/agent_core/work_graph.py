@@ -642,7 +642,8 @@ class WorkGraph:
                     'attempt', 'producerId', 'reviewerId', 'verdict', 'error', 'at', 'reviewerRole',
                     'producerRole', 'execution')} | {'findings': bounded(item.get('findings'), 900),
                                         'knowledge': [{'role': k.get('role'), 'question': k.get('question'),
-                                                       'childId': k.get('childId'), 'status': k.get('status')}
+                                                       'childId': k.get('childId'), 'status': k.get('status'),
+                                                       'artifact': k.get('artifact'), 'execution': k.get('execution')}
                                                       for k in item.get('knowledge') or []]}
                     for item in state.get('rounds') or []]
             nodes.append({key: node[key] for key in ('id', 'kind', 'title', 'goal', 'dependsOn', 'acceptance',
@@ -1048,9 +1049,12 @@ class WorkGraph:
                                'Lượt trước bị reviewer yêu cầu sửa. Xử lý từng vấn đề chặn:'
                                if reviewed else 'Ngữ cảnh cho bản tiếp theo (đổi nhiệm vụ, dependency hoặc lỗi thực thi):'), feedback]
         if knowledge:
-            lines += ['', pick('Answers to your knowledge requests (from the harness):', 'Dữ kiện trả lời yêu cầu tra cứu (từ harness):')]
+            lines += ['', pick('Lookup artifacts for your knowledge requests. Read assigned refs; opened evidence is not a semantic approval:',
+                               'Artifact trả lời yêu cầu tra cứu. Đọc ref được giao; có bằng chứng đã mở không đồng nghĩa nội dung đã được nghiệm thu:')]
             for item in knowledge:
-                lines.append(f'- [{item["role"]}] {item["question"]}\n  {bounded(item.get("answer"), 2500)}')
+                lines.append(json.dumps({k:item.get(k) for k in ('role', 'question', 'status', 'error')}, ensure_ascii=False))
+            lines.append(json.dumps({'snapshots': [{k:item['artifact'][k] for k in ('artifactId', 'version', 'contentHash', 'path', 'chars')}
+                for item in knowledge if item.get('artifact', {}).get('status') == 'finalized']}, ensure_ascii=False))
         if stage == 'produce' and node['kind'] == PLAN_KIND:
             siblings = [f'{item["id"]}: {item["title"]}' for item in run['nodes']
                         if item['kind'] == PLAN_KIND and item['id'] != node['id']]
@@ -1079,7 +1083,7 @@ class WorkGraph:
         heading = pick(f'Output of {node["id"]} to review', f'Đầu ra {node["id"]} cần phản biện')
         return '\n'.join(lines), f'### {heading}\n{bounded(output, 14000)}'
 
-    async def answer_knowledge(self, session, run, node, stage, requests, attempt):
+    async def answer_knowledge(self, session, run, node, stage, requests, attempt, controller_action=None):
         async def one(item):
             lang = work_prompts.language(run['goal'])
             goal = work_prompts.choose(lang,
@@ -1087,13 +1091,36 @@ class WorkGraph:
                     f'Yêu cầu tra cứu từ nút Work Graph {node["id"]} ({node["kind"]}) trong "{run["title"]}". Trả lời đúng câu hỏi với bằng chứng (path:line hoặc URL + trích ngắn): ') + item['question']
             try:
                 result, answer = await self.spawn(session, run, node, stage, 'knowledge', item['role'], goal,
-                                                  work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt)
-                verified = work_checks.complete(result) and bool(work_checks.good_reads(self, result.get('sessionId')))
-                return item | {'childId': result.get('sessionId'), 'status': result.get('status') if verified else 'unverified',
-                               'answer': bounded(answer, 4000) if verified else 'UNVERIFIED: incomplete lookup or no opened evidence; do not rely on it'}
+                    work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt,
+                    extra_binding={'controllerAction': controller_action, 'helperRole': item['role']} if controller_action else None)
+                reads = work_checks.good_reads(self, result.get('sessionId'))
+                evidenced = work_checks.complete(result) and bool(answer.strip()) and bool(reads)
+                proofs = [work_feedback.evidence_signature(read) or {'kind': read['name'],
+                    'ref': 'search:' + work_policy.digest(read.get('args', {})),
+                    'contentHash': work_policy.digest(read['result']), 'args': read.get('args', {})} for read in reads]
+                binding = self.checks.binding(run, node, stage) | {'purpose': 'knowledge', 'lookupRole': item['role'],
+                    'question': item['question'], 'observedEvidence': proofs, 'verification': 'unreviewed',
+                    'execution': work_budget.receipt(result)}
+                meta = await self.artifacts.put(run, node['id'], 'knowledge', answer, binding,
+                                                evidenced, result.get('sessionId'))
+                return item | {'childId': result.get('sessionId'), 'status': result.get('status') if evidenced else 'unverified',
+                    'artifact': meta, 'execution': work_budget.receipt(result),
+                    'error': None if evidenced else 'UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it'}
             except Exception as exc:
-                return item | {'childId': None, 'status': 'failed', 'answer': f'UNAVAILABLE: {exc}'[:500]}
-        return list(await asyncio.gather(*(one(item) for item in requests)))
+                return item | {'childId': None, 'status': 'failed', 'error': f'UNAVAILABLE: {exc}'[:500]}
+        from . import work_budget
+        if controller_action:
+            tasks = [self.continuations.helper_task(session['id'], controller_action, item['role'],
+                                                    lambda item=item: one(item)) for item in requests]
+        else:
+            tasks = [asyncio.create_task(one(item)) for item in requests]
+        try:
+            return list(await asyncio.gather(*tasks))
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False, controller_action=None):
         """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
@@ -1134,12 +1161,36 @@ class WorkGraph:
                 return state['status']
             requests = parse_knowledge_requests(output) if work_checks.complete(produced) else []
             if requests:
-                answers = await self.answer_knowledge(session, run, node, stage, requests, attempt)
+                entry['initialProducerId'] = produced.get('sessionId')
+                checkpoint = await self.artifacts.put(run, node['id'], stage, output,
+                    self.checks.binding(run, node, stage) | {'checkpoint': True}, False, entry['initialProducerId'])
+                state['checkpoint'] = {'childId': entry['initialProducerId'], 'artifact': checkpoint,
+                                       'remaining': 'Lookup requested; partial is not accepted.'}
+                self.save(run, 'node_lookup_requested', node['id'])
+                answers = await self.answer_knowledge(session, run, node, stage, requests, attempt, controller_action)
                 entry['knowledge'] = answers
+                lookup_refs = [a['artifact']['artifactId'] for a in answers if a.get('artifact', {}).get('status') == 'finalized']
+                if not lookup_refs:
+                    state.update(status='failed', artifact=checkpoint, output=output, outputChars=len(output),
+                                 error='WORK_LOOKUP_UNVERIFIED: no fresh evidenced helper output; main must choose another strategy.')
+                    self.save(run, 'node_lookup_unverified', node['id'])
+                    return state['status']
                 role, goal = self.producer_goal(run, node, stage, state.get('feedback'), answers)
+                refs = list(dict.fromkeys((produced.get('work') or {}).get('artifactIds', []) + lookup_refs))
                 produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
-                    extra_binding={'controllerAction': controller_action} if controller_action else None)
+                    extra_binding={'resumeChildId': entry['initialProducerId'], 'artifactIds': refs,
+                        'inputReadId': 'lookup-' + uuid.uuid4().hex,
+                        **({'controllerAction': controller_action} if controller_action else
+                           {'controllerOwned': True} if controller_owned else {})})
                 entry['producerId'] = produced.get('sessionId')
+                entry['lookupContinuation'] = True
+                if produced.get('request'):
+                    request = produced['request']
+                    state.update(status='needs_user', requestId=request['requestId'], checkpoint=request,
+                                 error=None, outputChars=request['artifact']['chars'])
+                    entry['execution'] = work_budget.receipt(produced)
+                    self.save(run, 'node_needs_user', node['id'])
+                    return state['status']
             entry['execution'] = work_budget.receipt(produced)
             after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
             changed = before is not None and after is not None and before != after
@@ -1148,6 +1199,8 @@ class WorkGraph:
                                        code_risk=stage == 'execute' and bool((after or {}).get('criticalChanges') or declared_sensitive))
             state['policy'] = policy
             binding = self.checks.binding(run, node, stage) | {'policyHash': policy['hash']}
+            if entry.get('lookupContinuation'):
+                binding['lookupArtifactIds'] = lookup_refs
             if stage == 'execute':
                 binding['codeSnapshot'] = after
             finalized = work_checks.complete(produced) and bool(output.strip()) and not parse_knowledge_requests(output)
@@ -1158,6 +1211,10 @@ class WorkGraph:
                 state['checkpoint'] = {'childId': entry['producerId'], 'artifactId': meta['artifactId'],
                     'execution': entry['execution'], 'remaining': 'Producer incomplete; draft is not verifiable. '
                     'Inspect reason, owner ceiling and saved draft before retrying; same-child resume is not available yet.'}
+            elif entry.get('lookupContinuation') and not all(self.artifacts.covered(
+                    (produced.get('work') or {}).get('inputReadId'), self.artifacts.get(run['runId'], aid)[0],
+                    entry['producerId']) for aid in lookup_refs):
+                state.update(status='failed', error='WORK_LOOKUP_INPUT_UNREAD: producer did not read the new assigned lookup artifacts.')
             elif stage == 'execute' and (before is None or after is None):
                 state.update(status='failed', error='WORK_CODE_SNAPSHOT_REQUIRED: could not verify source changes.')
             elif policy['required']:
