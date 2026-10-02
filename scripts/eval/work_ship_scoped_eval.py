@@ -292,9 +292,18 @@ async def main(args):
                                       and log_after_second == log_after_first,
         }
         # --- oracle hành vi model ---
+        # Đếm theo TỪNG lần thử, không gộp: child kiểm thử hay chạy lệnh kèm ống nên `test_proof`
+        # (đòi khớp đúng câu lệnh) trả `unverified` ở lần đầu; oracle model ghi trung thực số lần
+        # thử và kết quả CUỐI của từng lượt kiểm.
+        attempts = {}
+        final = {}
+        for item in row.get('checks', []):
+            attempts[item['kind']] = attempts.get(item['kind'], 0) + 1
+            final[item['kind']] = item['status']
+        row['integrationCheckAttempts'] = attempts
         row['model'] = {
             'nodeCheckPassed': (row.get('nodeCheck') or {}).get('status') == 'pass',
-            'bothChecksPassed': [c['status'] for c in row.get('checks', [])] == ['pass', 'pass'],
+            'integrationChecksEventuallyPassed': final == {'tests': 'pass', 'code_review': 'pass'},
             'testerRanRealCommand': any('pytest' in (command or '') for command in
                                         [c for check in row.get('nodeChecks', []) for c in check['commands']]
                                         + ((row.get('checks') or [{}])[0].get('commands') or [])),

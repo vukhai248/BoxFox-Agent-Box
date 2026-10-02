@@ -161,6 +161,21 @@ def make_repo(folder, with_remote=None):
     return root
 
 
+EXPORT_SPEC = ('from src.export import export_markdown\n\n\n'
+               'def test_keeps_text():\n    assert export_markdown("Hồ sơ") == "Hồ sơ"\n')
+SLUG_SPEC = ('from src.slug import slugify\n\n\n'
+             'def test_strips_marks():\n    assert slugify("Hồ sơ") == "ho-so"\n')
+
+
+def write_spec_tests(repo, specs):
+    """Đặc tả cụ thể trong repo: thiếu nó, child thật hay xin quyết định thay vì viết tệp."""
+    (repo / 'tests').mkdir(exist_ok=True)
+    for name, body in specs:
+        (repo / 'tests' / name).write_text(body, encoding='utf-8')
+    git(repo, 'add', 'tests')
+    git(repo, 'commit', '-q', '-m', 'fixture tests')
+
+
 def route_of(state):
     return next(({'connectionId': c['id'], 'modelId': m['id']} for c in state['connections']
                  if c['providerId'] == 'opencode' and c.get('enabled') for m in c['models']
@@ -171,11 +186,13 @@ def build_nodes():
     return [
         {'id': 'B1', 'kind': 'build', 'title': 'Thêm hàm export_markdown',
          'goal': 'Viết src/export.py với hàm export_markdown(text) trả Markdown; chỉ sửa src/export.py. '
+                 'Đặc tả: tests/test_export.py (lệnh kiểm `python -m pytest -q`). '
                  'Dùng tool file_write để tạo tệp (đừng dựng heredoc dài trong terminal_exec).',
          'acceptance': ['src/export.py tồn tại và export_markdown chạy được'], 'tests': ['python -m pytest -q'],
          'files': ['src/export.py'], 'dependsOn': []},
         {'id': 'B2', 'kind': 'build', 'title': 'Thêm hàm slugify',
          'goal': 'Viết src/slug.py với hàm slugify(text) bỏ dấu tiếng Việt; chỉ sửa src/slug.py. '
+                 'Đặc tả: tests/test_slug.py (lệnh kiểm `python -m pytest -q`). '
                  'Dùng tool file_write để tạo tệp (đừng dựng heredoc dài trong terminal_exec).',
          'acceptance': ['src/slug.py tồn tại và slugify("Hồ sơ") == "ho-so"'], 'tests': ['python -m pytest -q'],
          'files': ['src/slug.py'], 'dependsOn': []},
@@ -185,6 +202,7 @@ def build_nodes():
 def touchset_nodes():
     return [{'id': 'B1', 'kind': 'build', 'title': 'Thêm hàm export_markdown',
              'goal': 'Viết src/export.py với hàm export_markdown(text) trả Markdown; chỉ sửa src/export.py. '
+                     'Đặc tả: tests/test_export.py (lệnh kiểm `python -m pytest -q`). '
                      'Dùng tool file_write để tạo tệp (đừng dựng heredoc dài trong terminal_exec).',
              'acceptance': ['src/export.py tồn tại và export_markdown chạy được'],
              'tests': ['python -m pytest -q'], 'files': ['src/export.py'], 'dependsOn': []}]
@@ -236,6 +254,7 @@ async def case_isolated(folder, route, frozen):
     """Hai nút Build song song trong repo thật: 1 nhánh run + 2 worktree nút."""
     folder.mkdir(parents=True, exist_ok=True)
     repo = make_repo(folder)
+    write_spec_tests(repo, [('test_export.py', EXPORT_SPEC), ('test_slug.py', SLUG_SPEC)])
     baseline = git(repo, 'rev-parse', 'HEAD')
     client, store, executor, rt, sid, graph, run = await setup(
         folder, route, build_nodes(), 'Thêm hai hàm tiện ích nhỏ, mỗi nút một tệp.')
@@ -277,6 +296,10 @@ async def case_isolated(folder, route, frozen):
                                                 .get('codeCommit') or {}) for n in run_doc['nodes']] if commit.get('nodeCommit')]
         node_root = {node['id']: graph.worktrees.code_root(run_doc, node)[0] for node in run_doc['nodes']}
         row['nodeRoots'] = node_root
+        # Quan sát (không tính vào oracle): tệp child tự tạo thêm ngoài `files` khai báo.
+        declared = {node['id']: set(node.get('files') or []) for node in run_doc['nodes']}
+        row['undeclaredCommitted'] = {c['node']: sorted(set(c['paths']) - declared.get(c['node'], set()))
+                                      for c in row['commits']}
         row['nodeFiles'] = {node_id: sorted(p.name for p in (folder / root / 'src').glob('*.py'))
                             for node_id, root in node_root.items() if root}
         child_calls = [call for call in executor.calls if call['name'] == 'terminal_exec' and call['sid'] != sid]
@@ -292,10 +315,14 @@ async def case_isolated(folder, route, frozen):
                                                         f'.boxfox/worktrees/{run["runId"]}/n-B2']
                                and len(set(node_root.values())) == 2,
             'nodeBranchesArePerNode': row['nodeBranches'] == [iso['branch'] + '--B1', iso['branch'] + '--B2'],
-            'checkpointOnlyDeclaredPaths': all(set(c['paths']) <= {'src/export.py'} if c['node'] == 'B1'
-                                               else set(c['paths']) <= {'src/slug.py'} for c in row['commits'])
-                                             and all(not any(p.startswith(('.plans', '.boxfox', '.generated_artifacts'))
-                                                             for p in c['paths']) for c in row['commits']),
+            'checkpointKeepsTheDeclaredWork': all(({'src/export.py'} & set(c['paths'])) if c['node'] == 'B1'
+                                                  else ({'src/slug.py'} & set(c['paths'])) for c in row['commits']),
+            # Thiết kế §2.3 dùng `git add -A` (trừ rác của harness), nên tệp NGOÀI danh sách khai báo
+            # vẫn thuộc run — ví dụ child tự viết test. Cái phải sạch là rác do harness sinh ra.
+            'checkpointSweepsNoHarnessJunk': all(
+                not any(p.startswith(('.plans', '.generated_artifacts', '.tmp', '.boxfox', '.pytest_cache',
+                                      '__pycache__')) or p.endswith(('.pyc', '.pyo')) for p in c['paths'])
+                for c in row['commits']),
             'ownerCheckoutUntouched': row['ownerHead'] == baseline and not row['ownerDirty'],
             'runBranchStillAtBaseline': row['runBranchHead'] == baseline and 'src/export.py' not in row['runTree'],
             'nodeCommitsSitOnTheirBranches': all(c['branch'].endswith('--' + c['node']) for c in row['commits']),
@@ -325,6 +352,8 @@ async def case_touchset(folder, route, frozen):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / 'src').mkdir(exist_ok=True)
     (folder / 'src' / 'app.py').write_text('def header():\n    return "chat"\n', encoding='utf-8')
+    (folder / 'tests').mkdir(exist_ok=True)
+    (folder / 'tests' / 'test_export.py').write_text(EXPORT_SPEC, encoding='utf-8')
     client, store, executor, rt, sid, graph, run = await setup(
         folder, route, touchset_nodes(), 'Thêm hàm export_markdown khi workspace không có git.')
     row = {'case': 'touchset_no_git', 'scope': 'Native Build ×1, workspace không git (touch-set fallback)',

@@ -26,6 +26,7 @@ from pathlib import Path
 
 from work_check_eval import ROOT, HarnessRuntime, SessionStore
 from work_worktree_build_eval import Client, GitExecutor, git, make_repo, route_of, snapshot_source
+from agentbox.agent_core import work_checks
 from agentbox.agent_core import work_graph as wg
 
 RED_TRACE = ('Traceback (most recent call last):\n'
@@ -41,27 +42,56 @@ def test_keeps_unicode():
     assert export_markdown("Hồ sơ") == "Hồ sơ"
 '''
 
+# Chín tiêu chí nghiệm thu: `work_budget` cấp ngân sách long-check (24 bước) khi criterionCount > 8.
+# Lượt kiểm tests đỏ cần thời gian điều tra thật; ngân sách short-check (14 bước) làm child hết bước
+# giữa chừng và check trả `error` thay vì `revise` (đo được ở lượt chạy trước của probe này).
+ACCEPTANCE = ['export_markdown("Hồ sơ") trả "Hồ sơ"',
+              'export_markdown("") trả ""',
+              'export_markdown giữ nguyên ký tự xuống dòng trong văn bản nhiều dòng',
+              'export_markdown không thêm tiêu đề hay khung bao ngoài nội dung',
+              'export_markdown nhận None và trả chuỗi rỗng thay vì lỗi',
+              'export_markdown giữ nguyên khoảng trắng bên trong một dòng',
+              'export_markdown bỏ khoảng trắng thừa ở đầu và cuối mỗi dòng',
+              'export_markdown giữ nguyên chữ số và dấu câu của văn bản gốc',
+              'export_markdown là hàm thuần, gọi hai lần cho cùng kết quả']
 NODE = {'id': 'B1', 'kind': 'build', 'title': 'Giữ dấu tiếng Việt khi export',
         'goal': 'Viết src/export.py sao cho export_markdown giữ nguyên dấu tiếng Việt; chỉ sửa src/export.py.',
-        'acceptance': ['export_markdown("Hồ sơ") trả "Hồ sơ"'], 'tests': ['python -m pytest -q'],
+        'acceptance': ACCEPTANCE, 'tests': ['python -m pytest -q'],
         'files': ['src/export.py'], 'dependsOn': []}
 
 
 class RepairExecutor(GitExecutor):
-    """Như `GitExecutor`, nhưng có thể lên cò ĐÚNG `red` lệnh pytest kế tiếp."""
+    """Như `GitExecutor`, nhưng khi được bật thì trả ĐỎ mọi lệnh pytest của child KIỂM THỬ.
 
-    def __init__(self, folder):
+    Cò phải nhắm theo VAI của phiên, không theo chuỗi lệnh: chính lệnh checkpoint của harness có
+    `':(exclude).pytest_cache'` nên khớp thô theo chuỗi 'pytest' sẽ bắn nhầm vào checkpoint
+    (`WORK_WORKTREE_CHECKPOINT_FAILED`) và bịt luôn đường sửa — đo được ở lượt chạy trước của probe
+    này. Child Build (vai `build`) vẫn chạy pytest THẬT nên tự kiểm được bản sửa của mình.
+    """
+
+    def __init__(self, folder, store=None):
         super().__init__(folder)
-        self.red = 0
+        self.store = store
+        self.armed = False
+        self.roles = {}
         self.forced = 0
 
-    def arm(self, count=1):
-        self.red += count
+    def arm(self):
+        self.armed = True
+
+    def disarm(self):
+        self.armed = False
+
+    def role(self, sid):
+        if sid not in self.roles:
+            row = self.store.db.execute('SELECT role FROM sessions WHERE id=?', (sid,)).fetchone() \
+                if self.store is not None else None
+            self.roles[sid] = row['role'] if row else None
+        return self.roles[sid]
 
     async def execute(self, name, args, sid, **identity):
         command = str((args or {}).get('command') or '')
-        if name == 'terminal_exec' and self.red > 0 and 'pytest' in command:
-            self.red -= 1
+        if name == 'terminal_exec' and self.armed and 'pytest' in command and self.role(sid) == 'testing':
             self.forced += 1
             self.calls.append({'name': name, 'args': dict(args), 'root': identity.get('root'),
                                'forcedRed': True})
@@ -114,7 +144,7 @@ async def main(args):
     started = time.monotonic()
     store = SessionStore(folder.parent / 'repair_loop-sessions.db')
     client = Client(args.router)
-    executor = RepairExecutor(folder)
+    executor = RepairExecutor(folder, store)
     rt = sid = None
     try:
         rt = HarnessRuntime(store, executor, client)
@@ -138,7 +168,7 @@ async def main(args):
         row['firstProducer'] = (node['stages']['execute'].get('rounds') or [{}])[-1].get('producerId')
         row['pytestBeforeCheck'] = executor.forced
 
-        executor.arm(1)  # lượt kiểm thật sắp chạy sẽ thấy lệnh đỏ
+        executor.arm()  # mọi lệnh pytest của lượt kiểm thật đều thấy lệnh đỏ
         red = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
                'stage': 'execute', 'artifactId': first_artifact, 'checkIds': ['tests'],
                'invocationId': uuid.uuid4().hex}))
@@ -167,15 +197,28 @@ async def main(args):
                                'sawFindings': bool(entry.get('findingsArtifactId')) and entry['findingsArtifactId']
                                    in json.dumps(child.get('config') or {}, ensure_ascii=False)}
 
+        executor.disarm()  # đã có vòng sửa: lượt kiểm thứ hai chạy pytest THẬT
         second_artifact = (state.get('artifact') or {}).get('artifactId')
-        green = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
-                 'stage': 'execute', 'artifactId': second_artifact, 'checkIds': ['tests'],
-                 'invocationId': uuid.uuid4().hex}))
-        green_doc = green['checks'][0]
+        if not second_artifact:
+            raise AssertionError(f'WORK_REPAIR_NO_DRAFT: status={state["status"]} error={state.get("error")}')
+        # `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc; child thật hay bọc ống/`echo` nên lượt
+        # đầu có thể `unverified`. Thử lại có giới hạn và ghi trung thực từng lượt, không nới luật.
+        for attempt in range(1, 4):
+            green = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
+                     'stage': 'execute', 'artifactId': second_artifact, 'checkIds': ['tests'],
+                     'invocationId': uuid.uuid4().hex}))
+            green_doc = green['checks'][0]
+            row.setdefault('greenChecks', []).append({
+                'kind': green_doc['kind'], 'status': green_doc['status'], 'attempt': attempt,
+                'childId': green_doc.get('childId'), 'error': green_doc.get('error'),
+                'commands': [item.get('args', {}).get('command') for item
+                             in work_checks.observations(graph, green_doc.get('childId'))
+                             if item.get('name') == 'terminal_exec'][:12]})
+            if green_doc['status'] == 'pass':
+                break
         node = graph.find_node(graph.get(run['runId']), 'B1')
         state = node['stages']['execute']
-        row['greenCheck'] = {'kind': green_doc['kind'], 'status': green_doc['status'], 'childId': green_doc.get('childId'),
-                             'error': green_doc.get('error')}
+        row['greenCheck'] = row['greenChecks'][-1]
         row['final'] = {'status': state['status'], 'attempts': state['attempts'],
                         'verdicts': [r.get('verdict') for r in state.get('rounds') or []],
                         'repairs': len(state.get('repairs') or [])}
