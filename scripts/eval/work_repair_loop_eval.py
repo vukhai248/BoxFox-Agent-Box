@@ -28,6 +28,7 @@ from work_check_eval import ROOT, HarnessRuntime, SessionStore
 from work_worktree_build_eval import Client, GitExecutor, git, make_repo, route_of, snapshot_source
 from agentbox.agent_core import work_checks
 from agentbox.agent_core import work_graph as wg
+from agentbox.agent_core import work_worktrees
 
 RED_TRACE = ('Traceback (most recent call last):\n'
              '  File "src/export.py", line 3, in export_markdown\n'
@@ -222,6 +223,56 @@ async def main(args):
         row['final'] = {'status': state['status'], 'attempts': state['attempts'],
                         'verdicts': [r.get('verdict') for r in state.get('rounds') or []],
                         'repairs': len(state.get('repairs') or [])}
+        # --- W8.A4.5.N: đo native node tổng hợp `__integration__` trên CHÍNH run này.
+        # Trước lượt này node ảo chưa từng được đo native; chỉ có code + policy. Đo bằng đường thật:
+        # `build_integration` dựng snapshot hợp nhất, rồi `checks.tool` mở child Testing THẬT trên
+        # đúng snapshot đó. Không tự sửa fixture để làm xanh.
+        integration_row = {'attempted': False, 'reason': None}
+        row['integration'] = integration_row
+        if state['status'] == 'accepted':
+            integration_row['attempted'] = True
+            try:
+                built = await graph.build_integration(session, run)
+                run = graph.get(run['runId'])
+                inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
+                istate = inode['stages']['execute'] if inode else {}
+                ipolicy = istate.get('policy') or {}
+                integration_row.update(built=bool(built), status=istate.get('status'),
+                                       required=[r['id'] for r in ipolicy.get('required', [])],
+                                       artifactId=(istate.get('artifact') or {}).get('artifactId'))
+                if built:
+                    iartifact = integration_row['artifactId']
+                    for attempt in range(1, 4):
+                        started_check = time.monotonic()
+                        out = await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'],
+                            'nodeId': work_worktrees.INTEGRATION_NODE, 'stage': 'execute',
+                            'artifactId': iartifact, 'checkIds': ['tests'],
+                            'invocationId': uuid.uuid4().hex})
+                        idoc = out['checks'][0]
+                        integration_row.setdefault('checks', []).append({
+                            'kind': idoc['kind'], 'status': idoc['status'], 'attempt': attempt,
+                            'childId': idoc.get('childId'), 'error': idoc.get('error'),
+                            'seconds': round(time.monotonic() - started_check, 3),
+                            'commands': [item.get('args', {}).get('command') for item
+                                         in work_checks.observations(graph, idoc.get('childId'))
+                                         if item.get('name') == 'terminal_exec'][:12]})
+                        if idoc['status'] == 'pass':
+                            break
+                    run = graph.get(run['runId'])
+                    inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
+                    istate = inode['stages']['execute']
+                    integration = run.get('integration') or {}
+                    integration_row['final'] = {'status': istate.get('status'),
+                                                'integrationStatus': integration.get('status'),
+                                                'checkIds': integration.get('checkIds'),
+                                                'head': integration.get('head'),
+                                                'treeHash': integration.get('treeHash'),
+                                                'runStatus': run.get('status')}
+            except Exception as exc:  # đo thật, ghi thật; không che lỗi
+                integration_row.update(error=f'{type(exc).__name__}: {exc}')
+        else:
+            integration_row['reason'] = f'node chưa accepted (status={state["status"]}); bỏ qua node tổng hợp'
+
         row['forcedRedCommands'] = executor.forced
         row['ownerHead'] = git(repo, 'rev-parse', 'HEAD')
         # --- oracle cơ chế: do code harness quyết ---
@@ -245,7 +296,15 @@ async def main(args):
             'secondCheckPassed': row['greenCheck']['status'] == 'pass',
             'nodeAccepted': row['final']['status'] == 'accepted',
         }
-        row['oracle'] = all(row['mechanism'].values()) and all(row['model'].values())
+        # --- oracle node tổng hợp (W8.A4.5.N): dựng snapshot hợp nhất + child Testing THẬT xanh trên đó ---
+        row['integrationNative'] = {
+            'built': bool(integration_row.get('built')),
+            'hasRealChild': any(c.get('childId') for c in (integration_row.get('checks') or [])),
+            'testsPassedOnMergedTree': bool((integration_row.get('checks') or [{}])[-1].get('status') == 'pass'),
+            'integrationChecked': (integration_row.get('final') or {}).get('integrationStatus') == 'checked',
+        }
+        row['oracle'] = (all(row['mechanism'].values()) and all(row['model'].values())
+                         and all(row['integrationNative'].values()))
     except Exception as exc:
         row.update(oracle=False, error=f'{type(exc).__name__}: {exc}')
     row.update(calls=client.calls, latencySeconds=round(time.monotonic() - started, 3))
