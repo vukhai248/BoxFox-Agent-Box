@@ -267,6 +267,12 @@ async def main(args):
         if state['status'] == 'accepted':
             integration_row['attempted'] = True
             try:
+                # `checks.tool`/`run_stage` làm việc trên bản sao đọc từ DB rồi ghi lại; đối tượng `run`
+                # của probe là ảnh chụp cũ nên `build_integration` sẽ thấy B1 còn `needs_checks` và trả
+                # False. Đọc lại bản mới nhất trước khi dựng node tổng hợp (lỗi phép đo, không phải lỗi sản phẩm).
+                run = graph.get(run['runId'])
+                integration_row['executeStatuses'] = {n['id']: n['stages']['execute']['status']
+                                                      for n in run['nodes'] if 'execute' in n['stages']}
                 built = await graph.build_integration(session, run)
                 run = graph.get(run['runId'])
                 inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
