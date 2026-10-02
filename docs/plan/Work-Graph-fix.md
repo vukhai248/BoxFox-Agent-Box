@@ -3094,7 +3094,15 @@ Bằng chứng đầy đủ: `docs/plan/W8.A4.5.N-repair-loop-native-evidence.js
 | 3 (`run3-16000`) | `redCheck unverified`, không mở vòng sửa, B1 `accepted` | con kiểm thử chạy được pytest thật nhưng không qua **đúng câu lệnh bắt buộc** trong lượt kiểm → backend hạ `pass`→`unverified` (đúng luật) |
 | 4 (`run4-16000`) | như lượt 3, **chỉ ra nguyên nhân gốc** | cò đỏ của fixture trả kết quả cắm sẵn cho **mọi** lệnh chứa chuỗi `pytest` (kể cả `echo "hello pytest world"`, `command -v pytest`); model phát hiện đúng là kết quả bịa, tự kiểm lại bằng script khác (12 passed thật) rồi báo đạt → `unverified` |
 
-**Kết luận trung thực:** cơ chế đỏ→sửa→resume-cùng-child đã chạy được một lần (lượt 2), nhưng chưa lượt nào vừa mở vòng sửa vừa kết thúc xanh, và node `__integration__` chưa từng được dựng (`built: false`) nên `oracle` vẫn `false`. **Cần owner duyệt một thay đổi ngữ nghĩa phép đo:** cò đỏ nên gieo **đỏ thật** (hạ `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn, nếu không mọi lệnh test thành công đều bị chặn và check luôn hạ về `unverified`.
+**Cập nhật cùng tối (lượt 5–7, sau khi vá phép đo của probe):**
+
+| Lượt | Kết cục | Ghi nhận |
+| --- | --- | --- |
+| 5 | `oracle=false`, probe nổ `WORK_CHECK_STALE` | lượt kiểm đầu `unverified` vì finding thiếu receipt (`WORK_FINDING_UNCITED`); **lượt kiểm THỨ HAI trả `revise` thật và sản phẩm đã định tuyến sửa** (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId`, `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết vì artifact đổi sau sửa → đã vá đọc lại artifact từng lượt |
+| 6 | probe nổ `KeyError` | ghi đúng hàng rào sản phẩm `WORK_CHECK_EXHAUSTED` (3 lượt mở kiểm/artifact); lỗi phép đo ở phần tính oracle, đã vá |
+| 7 | **lượt đầy đủ đầu tiên, không lỗi** | lượt kiểm đầu `unverified` (cò đỏ cắm sẵn), lượt kiểm thứ hai `pass` ⇒ B1 `accepted`; **node `__integration__` lần đầu được dựng native** (`built: true`, `required: [tests, code_review]`, artifact `a-36776aa3…`) và một child Testing THẬT chạy trên cây gộp (`cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q`, 151.1s) |
+
+**Kết luận trung thực:** nửa sau của W8.A4.5.N nay đã có bằng chứng native — node `__integration__` được dựng và kiểm trên cây gộp (2/4 tiêu chí `integrationNative`); nửa đầu (đỏ ở **lượt kiểm đầu** → phân loại → resume → kiểm lại xanh) vẫn chưa đạt vì lượt kiểm đầu không bao giờ tự đỏ với cò đỏ cắm sẵn của fixture. Hai tiêu chí `integrationNative` còn lại hỏng đúng theo hàng rào `test_proof`: child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc nên bị hạ `pass`→`unverified` (giữ nguyên luật, không nới). `oracle` vẫn `false`. **Cần owner duyệt một thay đổi ngữ nghĩa phép đo:** cò đỏ nên gieo **đỏ thật** (hạ `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn, nếu không lượt kiểm đầu không thể tự đỏ theo đường `test_proof` và vòng sửa không mở đúng chỗ cần đo. Việc còn lại của phép đo: chốt xem hàng rào `test_proof` (đòi đúng câu lệnh bắt buộc, không bọc ống/`echo`) là hành vi sản phẩm giữ nguyên hay là giới hạn của fixture cần khai báo.
 
 Hai lỗi phép đo đã tìm ra và sửa trong lượt này (không phải lỗi sản phẩm):
 

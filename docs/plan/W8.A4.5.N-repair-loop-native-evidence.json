@@ -452,15 +452,282 @@
         "round1Verdict": "revise"
       },
       "narrative": "Lượt này KHÁC hai lượt trước: lượt kiểm ĐẦU vẫn `unverified` nhưng lý do đổi thành `WORK_FINDING_UNCITED` (child báo finding chặn mà thiếu receipt hợp lệ), rồi lượt kiểm THỨ HAI trả `revise` thật ⇒ sản phẩm ĐÃ định tuyến sửa (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId` và `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết ở lượt thử thứ hai vì artifact đã đổi (`WORK_CHECK_STALE`) — đã vá để đọc lại artifact từng lượt."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run6-16000",
+      "resultsSha256": "a79bf3c0985f5c00b22ec4936485815463e7a66aca9efbeda2c745f1816a7eb5",
+      "oracle": false,
+      "error": "KeyError: 'status'",
+      "latencySeconds": 509.439,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "72ec8b6851004005a7d5b4329a7c8fa7",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-7b829a38445a4f8cba155c32a91b1813",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 1,
+          "childId": "38b350536447429cb3f7f6be29103608",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "pwd && ls -la && git -C . log --oneline -5 2>/dev/null | head -20 && git status --porcelain 2>/dev/null | head -20",
+            "cd \"$(pwd)\" && echo \"=== git rev-parse HEAD ===\" && git rev-parse HEAD && echo \"=== diff HEAD~1..HEAD --stat ===\" && git diff --stat HEAD~1 HEAD && echo \"=== cat -A? no: plain cat src/export.py ===\" && cat -n src/export.py && echo \"=== tests/test_export.py ===\" && cat -n tests/test_export.py && echo \"=== files ===\" && find . -path ./.git -prune -o -type f -print | sort",
+            "cd \"$(pwd)\" && python -V && echo \"=== MANDATORY: python -m pytest -q ===\" && python -m pytest -q; echo \"EXIT=$?\"",
+            "mkdir -p /tmp/work && cd \"$(pwd)\" && python - <<'PY' | tee /tmp/work/independent.txt\n# Independent criterion check, NOT using tests/test_export.py\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as em\nr = []\ndef chk(id_, cond, got, want=None):\n    r.append((\"PASS\" if cond else \"FAIL\", id_, repr(got), repr(want)))\n# A1\nchk(\"A1\", em(\"Hồ sơ\") == \"Hồ sơ\", em(\"Hồ sơ\"), \"Hồ sơ\")\n# A2\nchk(\"A2\", em(\"\") == \"\", em(\"\"), \"\")\n# A3 multiline\nt = \"Dòng một\\nDòng hai\\nDòng ba\"\nchk(\"A3\", em(t) == t, em(t), t)\n# A4 no heading/wrapper\nt4 = \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"\nout4 = em(t4)\nchk(\"A4\", out4 == t4 and not out4.startswith(\"#\") and \"---\" not in out4, out4, t4)\n# A5 None\ntry:\n    o5 = em(None); chk(\"A5\", o5 == \"\" and isinstance(o5, str), o5, \"\")\nexcept Exception as e:\n    chk(\"A5\", False, \"raised \" + repr(e), \"\")\n# A6 inner whitespace\nt6 = \"Điểm  số  và  khoảng    trắng\"\nchk(\"A6\", em(t6) == t6, em(t6), t6)\n# A7 strip ends\nt7 = \"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"\nchk(\"A7\", em(t7) == \"Dòng một\\nDòng hai\\nDòng ba\", em(t7), \"Dòng một\\nDòng hai\\nDòng ba\")\n# A8 digits + punctuation\nt8 = 'Ngày 12/03/2026, mức 99,5% — \"trích dẫn\" (ghi chú) #1'\nchk(\"A8\", em(t8) == t8, em(t8), t8)\n# A9 purity\nt9 = \"Sơ đồ  ổn\\nvà chuyển tiếp\"\na, b = em(t9), em(t9)\nchk(\"A9\", a == b and t9 == \"Sơ đồ  ổn\\nvà chuyển tiếp\", (a, b, t9), (t9, t9, t9))\nfor row in r: print(\" | \".join(row))\nprint(\"--- codepoints ---\")\ncp_in = [hex(ord(c)) for c in \"Hồ sơ\"]\ncp_out = [hex(ord(c)) for c in em(\"Hồ sơ\")]\nprint(\"in:\", cp_in, \"out:\", cp_out, \"equal:\", cp_in == cp_out)\nnfd = unicodedata.normalize(\"NFD\", \"Hồ sơ\")\nprint(\"NFD input stays NFD (no normalization):\", em(nfd) == nfd, \"| out codepoints:\", [hex(ord(c)) for c in em(nfd)])\nprint(\"CRLF:\", repr(em(\"A\\r\\nB\\r\")))\nprint(\"non-str int:\", repr(em(123)))\nprint(\"total FAIL:\", sum(1 for x in r if x[0]==\"FAIL\"))\nPY",
+            "cd \"$(pwd)\" && echo \"=== src/app.py ===\" && cat -n src/app.py && echo \"=== README.md ===\" && cat -n README.md && echo \"=== git diff HEAD~1 HEAD -- tests/test_export.py | head -60 ===\" && git diff HEAD~1 HEAD -- tests/test_export.py | head -60"
+          ]
+        },
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 2,
+          "childId": "7dd03a707ba8404cb211cc0d2a8e1d6d",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "cd \"$(pwd)\" && pwd && git rev-parse HEAD 2>&1 && git status --short 2>&1 && echo \"---BRANCH---\" && git branch --show-current 2>&1 && echo \"---WORKTREES---\" && git worktree list 2>&1",
+            "cd \"$(pwd)\" && ls -la && echo \"---FIND---\" && find . -path ./.git -prune -o -type f -print 2>/dev/null | sort",
+            "cd \"$(pwd)\" && python -m pytest -q; echo \"EXIT=$?\"",
+            "cd \"$(pwd)\" && echo \"=== DIFF STAT vs base a2dfc9a ===\" && git diff --stat a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== NAME-STATUS ===\" && git diff --name-status a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== COMMIT ===\" && git log --oneline -n 3 && echo \"=== BASE export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:src/export.py && echo \"=== BASE test_export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:tests/test_export.py",
+            "mkdir -p /tmp/work && cd \"$(pwd)\" && cat > /tmp/work/verify_crit.py <<'PY'\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as E\n\nfails=[]\ndef chk(cid, got, exp):\n    ok = got == exp\n    print((\"PASS\" if ok else \"FAIL\"), cid, \"got=\", repr(got), \"exp=\", repr(exp))\n    if not ok: fails.append(cid)\n\nchk(\"A1\", E(\"Hồ sơ\"), \"Hồ sơ\")\nchk(\"A2\", E(\"\"), \"\")\nchk(\"A3\", E(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A4\", E(\"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"), \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\")\nchk(\"A5\", E(None), \"\")\nchk(\"A6\", E(\"Điểm  số  và  khoảng    trắng\"), \"Điểm  số  và  khoảng    trắng\")\nchk(\"A7\", E(\"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A8\", E('12/03/2026, 99,5% — \"q\" (n) #1'), '12/03/2026, 99,5% — \"q\" (n) #1')\nt=\"Sơ đồ  ổn\\nvà chuyển tiếp\"\nr1,r2=E(t),E(t)\nchk(\"A9-determinism\", (r1,r2), (r1,r2))\nprint((\"PASS\" if r1==r2 else \"FAIL\"), \"A9-two-calls-equal\", repr(r1), repr(r2))\nprint((\"PASS\" if t==\"Sơ đồ  ổn\\nvà chuyển tiếp\" else \"FAIL\"), \"A9-input-unmutated\")\n\n# artifact numeric claims\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().split(\"\\n\")\nprint(\"LINE-COUNT export.py:\", len([l for l in src if True])-1 if src[-1]==\"\" else len(src))\nfor n in (12,35,36,37,38,40,41,43,44,45,47):\n    print(\"L%-3d %s\" % (n, src[n-1][:70]))\ncps=[hex(ord(c)) for c in E(\"Hồ sơ\")]\nprint(\"CODEPOINTS:\", cps, \"match-claim:\", cps==['0x48','0x1ed3','0x20','0x73','0x1a1'])\nnfd=unicodedata.normalize(\"NFD\",\"Hồ sơ\")\nprint(\"NFD-stays-NFD:\", unicodedata.normalize(\"NFD\",E(nfd))==E(nfd), \"is-NFD-out:\", unicodedata.is_normalized(\"NFD\",E(nfd)))\nprint(\"NFD-normalized-output:\", unicodedata.is_normalized(\"NFC\",E(nfd)))\n# extras\nprint(\"EXTRA interior-blank-lines:\", repr(E(\"A\\n\\nB\")))\nprint(\"EXTRA trailing-blank:\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"EXTRA leading-blank:\", repr(E(\"\\n\\nA\")))\nprint(\"EXTRA CRLF:\", repr(E(\"A\\r\\nB\")))\nprint(\"EXTRA BOM:\", repr(E(\"﻿Hồ sơ\")))\nprint(\"EXTRA tabs-inside:\", repr(E(\"a\\tb\")))\nprint(\"FAILS:\", fails)\nPY\npython /tmp/work/verify_crit.py; echo \"EXIT=$?\"",
+            "cd \"$(pwd)\" && python - <<'PY'\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().splitlines()\nprint(\"export.py total lines:\", len(src))\nfor i,l in enumerate(src,1):\n    print(\"%3d|%s\" % (i,l))\nPY",
+            "cd \"$(pwd)\" && python - <<'PY'\nimport sys; sys.path.insert(0,\".\")\nfrom src.export import export_markdown as E\nprint(\"trailing-NEWLINE  'A\\\\nB\\\\n' ->\", repr(E(\"A\\nB\\n\")))\nprint(\"trailing-BLANKS   'A\\\\nB\\\\n\\\\n\\\\n' ->\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"interior-BLANK    'A\\\\n\\\\nB' ->\", repr(E(\"A\\n\\nB\")))\nprint(\"interior-breaks   'A\\\\nB\\\\nC' ->\", repr(E(\"A\\nB\\nC\")))\nprint(\"strip+break       ' A \\\\n B ' ->\", repr(E(\" A \\n B \")))\nprint(\"non-str 123       ->\", repr(E(123)))\nprint(\"None              ->\", repr(E(None)))\nprint(\"empty             ->\", repr(E(\"\")))\nprint(\"viet NFC          ->\", repr(E(\"Hồ sơ\")))\nPY\necho \"=== COLLECT COUNT ===\"\npython -m pytest -q --collect-only 2>&1 | tail -3\necho \"=== base test_keeps_unicode unchanged? ===\"\ngit diff a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD -- tests/test_export.py | head -20"
+          ]
+        },
+        {
+          "attempt": 3,
+          "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
+        }
+      ],
+      "greenCheck": {
+        "attempt": 3,
+        "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
+      },
+      "final": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": 0
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": null,
+      "integration": {
+        "attempted": false,
+        "reason": "node chưa accepted (status=needs_checks); bỏ qua node tổng hợp"
+      },
+      "integrationNative": null,
+      "narrative": "Probe đã sống qua vòng thử lại và ghi đúng hàng rào sản phẩm: ba lượt mở kiểm trên cùng một artifact bị chặn bằng `WORK_CHECK_EXHAUSTED`; lượt ghi cuối không có `status` nên phần tính oracle nổ `KeyError` (lỗi phép đo, đã vá bằng `.get`)."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run7-16000",
+      "resultsSha256": "5b82c828ccb5ac002450ff50e9198b1d7c5cf4c41b89c3eb325d59932c2a27dc",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 1146.14,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "04510bdc39af4b52a88125e7266435b0",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-8cd3fd9a29484e69997172b8d7e5dbc3",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 1,
+          "childId": "9ae475abbdcd465e959bac9a7adb587f",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && pwd && git status --short && echo \"--- diff stat ---\" && git diff --stat && echo \"--- head ---\" && git rev-parse HEAD",
+            "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && echo \"=== python -m pytest -q ===\" && python -m pytest -q 2>&1 | tail -20; echo \"EXIT=$?\"",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== files changed in HEAD commit ===\" && git show --stat --oneline HEAD | head -20 && echo \"=== base version of src/export.py ===\" && git show 6b3c9927ef85420353267a67316c2753e95d0baf:src/export.py && echo \"=== files changed base..HEAD ===\" && git diff --name-only 6b3c9927ef85420353267a67316c2753e95d0baf..HEAD",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\n# -*- coding: utf-8 -*-\nimport sys, unicodedata\nfrom src.export import export_markdown as e\n\ndef chk(name, got, exp):\n    ok = got == exp\n    print((\"PASS \" if ok else \"FAIL \") + name + \" -> \" + repr(got) + (\"\" if ok else \"   EXPECTED \" + repr(exp)))\n    return ok\n\nres = {}\nres['A1'] = chk(\"A1 unicode\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A2'] = chk(\"A2 empty\", e(\"\"), \"\")\nres['A3'] = chk(\"A3 multiline-newline\", e(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nres['A4'] = chk(\"A4 no-wrapper\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A5'] = chk(\"A5 none\", e(None), \"\")\nres['A6'] = chk(\"A6 inner-space\", e(\"Hồ  sơ   nhân\"), \"Hồ  sơ   nhân\")\nres['A7'] = chk(\"A7 strip-edges\", e(\"  Hồ sơ  \\n  Bản lưu  \"), \"Hồ sơ\\nBản lưu\")\nres['A8'] = chk(\"A8 digits-punct\", e(\"Hồ sơ 2024: 3 trang, 50%.\"), \"Hồ sơ 2024: 3 trang, 50%.\")\nres['A9'] = chk(\"A9 purity-2x\", e(e(\"Hồ sơ\\nBản lưu\")), e(\"Hồ sơ\\nBản lưu\"))\nprint(\"ALL_ACCEPTED:\", all(res.values()), res)\n# supplementary observations (not acceptance-blocking)\nprint(\"INFO type-none:\", type(e(None)).__name__, \"| type-empty:\", type(e(\"\")).__name__)\nprint(\"INFO trailing-nl:\", repr(e(\"Hồ sơ\\n\")))\nprint(\"INFO leading-nl:\", repr(e(\"\\nHồ sơ\")))\nprint(\"INFO inner-only-spaces line:\", repr(e(\"a   b\")))\nprint(\"INFO nbsp-stripped:\", repr(e(\" Hồ sơ \")))\nprint(\"INFO crlf:\", repr(e(\"Hồ sơ\\r\\nBản lưu\")))\nprint(\"INFO int-input raises:\", end=\" \")\ntry:\n    e(5); print(\"no error\")\nexcept Exception as ex:\n    print(type(ex).__name__)\nprint(\"INFO codepoints A1 out:\", [hex(ord(c)) for c in e(\"Hồ sơ\")])\nprint(\"INFO codepoints A1 in :\", [hex(ord(c)) for c in \"Hồ sơ\"])\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\n# A4 rigorous: no prefix/suffix wrapper on multi-line + marker chars\ns = \"Hồ sơ\\nBản lưu\\n\\n***\"\nout = e(s)\nprint(\"A4 multiline-identity:\", out == s, repr(out))\nfor probe in [\"# Tiêu đề\", \"- mục\", \"`code`\", \"[link](u)\", \"> trích\", \"**bold**\", \"|a|b|\"]:\n    o = e(probe)\n    print(\"A4 identity %-14r -> %-20r %s\" % (probe, o, o == probe))\n# A1 byte-level: NFC vs NFD normalization equality (combining marks preserved, not stripped)\nimport unicodedata\nsrc = \"Hồ sơ\"\nout = e(src)\nprint(\"A1 bytes-identical:\", out.encode('utf-8') == src.encode('utf-8'))\nprint(\"A1 nfc(src)==out:\", unicodedata.normalize('NFC', src) == out)\nnfd_src = unicodedata.normalize('NFD', src)\nprint(\"A1 nfd-in == nfd-out:\", e(nfd_src) == nfd_src, \"combining marks kept:\", [hex(ord(c)) for c in e(nfd_src)][:4])\n# broader diacritic set\nfor w in [\"Nguyễn\", \"Đặng Thùy Trâm\", \"đ ẹ\", \"ỳ ỵ ự ữ\", \"Hà Nội\", \"TP. Hồ Chí Minh\"]:\n    print(\"A1 diacritic %-20r -> %r %s\" % (w, e(w), e(w) == w))\n# A5 not raising, and repeated None calls (purity across None)\nprint(\"A5 None x3:\", [e(None) for _ in range(3)])\n# A9: purity - same arg twice distinct calls, plus global state check\nimport src.export as m\na = e(\"  Hồ  sơ \\n Bản lưu \"); b = e(\"  Hồ  sơ \\n Bản lưu \")\nprint(\"A9 same-arg twice equal:\", a == b, repr(a))\nprint(\"A9 module globals:\", sorted(k for k in vars(m) if not k.startswith('__')))\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== doctest claim check ===\" && python -m doctest src/export.py -v 2>&1 | tail -3; echo \"=== file bytes: confirm no ascii-stripping escape calls ===\" && grep -nE \"encode|decode|ascii|latin|unidecode|normalize|\\.format|f\\\"|f'\" src/export.py || echo \"(none of encode/decode/ascii/latin/unidecode/normalize found)\"; echo \"=== wc -l src/export.py ===\" && wc -l src/export.py; echo \"=== working tree clean vs HEAD? ===\" && git status --porcelain src/export.py && echo \"(empty above = matches HEAD)\"",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\nsrc = \"\\u00a0Hồ sơ\\u00a0\"   # NBSP (U+00A0) ở hai đầu\nout = e(src)\nprint(\"NBSP input codepoints:\", [hex(ord(c)) for c in src])\nprint(\"NBSP output repr:\", repr(out), \"| kept NBSP:\", \"\\u00a0\" in out)\nsrc2 = \"\\u3000Hồ sơ\\u3000\"   # ideographic space U+3000\nprint(\"U+3000 output repr:\", repr(e(src2)))\nsrc3 = \"Hồ\\u00a0sơ\"          # NBSP bên trong dòng\nprint(\"inner NBSP kept:\", repr(e(src3)), e(src3) == src3)\nprint(\"strip default arg:\", repr(str.strip(\"\\u00a0x\\u3000\")))\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== total lines (last byte is newline?) ===\" && wc -l < src/export.py && tail -c 1 src/export.py | xxd && echo \"=== numbered lines 30-39 ===\" && nl -ba src/export.py | sed -n '30,39p' && echo \"=== does line 40 exist? ===\" && sed -n '40p' src/export.py | wc -c && echo \"=== git show --numstat base..HEAD ===\" && git show --numstat --format= HEAD",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== env claim ===\" && python -V && python -m pytest --version 2>&1 | head -2 && echo \"=== artifact claim: pytest --doctest-modules ===\" && python -m pytest -q --doctest-modules src/export.py 2>&1 | tail -3 && echo \"=== artifact claim: py_compile ===\" && python -m py_compile src/export.py && echo \"py_compile OK\""
+          ]
+        },
+        {
+          "kind": "tests",
+          "status": "pass",
+          "attempt": 2,
+          "childId": "88bc1d3e30fe4429a794c64a2c697235",
+          "error": null,
+          "commands": [
+            "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
+            "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+            "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+            "pwd",
+            "git rev-parse HEAD",
+            "git status --short",
+            "git diff --stat",
+            "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+            "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+            "python -m pytest -q",
+            "python3 -V",
+            "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
+          ]
+        }
+      ],
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 2,
+        "childId": "88bc1d3e30fe4429a794c64a2c697235",
+        "error": null,
+        "commands": [
+          "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
+          "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+          "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+          "pwd",
+          "git rev-parse HEAD",
+          "git status --short",
+          "git diff --stat",
+          "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+          "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+          "python -m pytest -q",
+          "python3 -V",
+          "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "executeStatuses": {
+          "B1": "accepted"
+        },
+        "built": true,
+        "status": "needs_checks",
+        "required": [
+          "tests",
+          "code_review"
+        ],
+        "artifactId": "a-36776aa343b74f81a1471c8227f7e5cf",
+        "checks": [
+          {
+            "kind": "tests",
+            "status": "unverified",
+            "attempt": 1,
+            "childId": "8017b714518d4c538999689ffa3660cd",
+            "error": "Missing actual successful required test command events.",
+            "seconds": 151.103,
+            "commands": [
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && echo \"---TREE---\" && git rev-parse HEAD^{tree} && echo \"---FILES---\" && find . -path ./.git -prune -o -type f -print | head -50",
+              "cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q 2>&1; echo \"EXIT=$?\"",
+              "pwd; echo \"---\"; ls -a; echo \"---BOXFOX---\"; ls -a .boxfox 2>/dev/null || echo \"no .boxfox here\"; echo \"---FIND WORKTREES---\"; find / -maxdepth 6 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
+              "pwd",
+              "find / -maxdepth 7 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
+              "git rev-parse HEAD",
+              "python -m pytest -q 2>&1",
+              "git status --short",
+              "cat src/export.py",
+              "git log --oneline -5",
+              "git branch -a -v",
+              "git rev-parse HEAD^{tree}"
+            ]
+          },
+          {
+            "kind": "tests",
+            "status": "unverified",
+            "attempt": 2,
+            "childId": "7a21a78ff5984a9fb1a89cf5d8809e2f",
+            "error": "No successfully opened original evidence.",
+            "seconds": 279.399,
+            "commands": [
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && git log --oneline -3 && echo \"--- tree ---\" && git rev-parse HEAD^{tree} && echo \"--- ls ---\" && ls -la && ls -la src tests",
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && cat src/export.py && echo \"=== tests ===\" && cat tests/test_export.py && echo \"=== app ===\" && cat src/app.py",
+              "pwd; ls -la; ls -la .boxfox/worktrees/ 2>&1 | head -20",
+              "ls .boxfox/worktrees",
+              "ls -a",
+              "git rev-parse HEAD",
+              "git status --short",
+              "git rev-parse HEAD^{tree}",
+              "git log --oneline -5",
+              "cat src/export.py",
+              "cat tests/test_export.py",
+              "python -m pytest -q"
+            ]
+          }
+        ],
+        "error": "ValueError: WORK_NO_PROGRESS: inspect saved admissions; main must change evidence/input or strategy"
+      },
+      "integrationNative": {
+        "built": true,
+        "hasRealChild": true,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt ĐẦY ĐỦ đầu tiên: probe chạy hết, không lỗi. Lượt kiểm đầu vẫn `unverified` (cò đỏ cắm sẵn), lượt kiểm thứ hai `pass` ⇒ B1 `accepted`. Nhờ vá \"đọc lại run\", `build_integration` chạy thật: node `__integration__` được dựng (`built: true`, `required: [tests, code_review]`, artifact `a-36776aa3…`) và một child Testing THẬT chạy trên cây gộp (`cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q`, 151.1s) — lần đầu tiên node tổng hợp được đo native. Child đó trả `unverified` (\"Missing actual successful required test command events\") nên `testsPassedOnMergedTree`/`integrationChecked` vẫn false: đúng hàng rào `test_proof` (child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc)."
     }
   ],
   "conclusion": {
     "status": "chưa nghiệm thu",
-    "reason": "Sáu lượt đã chạy đều `oracle=false`, mỗi lượt dừng ở một chỗ khác nhau và đều được lưu nguyên văn. Lượt 1: trần output 4096 của fixture. Lượt 2: chạy đúng chuỗi đỏ→sửa→resume CHÍNH child cũ rồi probe tự nổ `IndexError` khi `checks.tool` trả danh sách rỗng. Lượt 3–4: cò đỏ cắm sẵn quá rộng (khớp mọi lệnh chứa `pytest`), child phát hiện và lách, check hạ `unverified`. Lượt 5: lượt kiểm đầu hạ `unverified` vì finding thiếu receipt (`WORK_FINDING_UNCITED`), nhưng lượt kiểm THỨ HAI trả `revise` thật và sản phẩm đã định tuyến sửa (`repairs` n=1, resume cùng child Build, ghim codeHash) — probe cũ chết vì artifact đổi. Chưa lượt nào đo trọn: đỏ ở lượt kiểm ĐẦU → sửa → resume → kiểm lại xanh → dựng `__integration__` và kiểm trên cây gộp.",
+    "reason": "Bảy lượt đã chạy, `oracle=false` cả bảy, mỗi lượt dừng ở một chỗ khác nhau và đều lưu nguyên văn. Lượt 7 là lượt đầy đủ đầu tiên (không lỗi probe): lượt kiểm đầu vẫn không tự đỏ vì cò đỏ cắm sẵn của fixture, nhưng B1 đã `accepted` và **node `__integration__` lần đầu được dựng + kiểm native trên cây gộp** (2/4 tiêu chí `integrationNative`). Hai tiêu chí còn lại hỏng vì child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc nên `test_proof` hạ `pass`→`unverified` — đúng luật sản phẩm, không nới.",
     "openItems": [
-      "CÒN PHẢI SỬA FIXTURE (cần owner duyệt vì đổi ngữ nghĩa phép đo): cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`; kết quả cắm sẵn vừa bị model phát hiện là bịa, vừa chặn mọi lệnh test thành công nên lượt kiểm đầu không thể tự nhiên đỏ theo đường `test_proof`.",
-      "Phép đo cần nhìn đúng thứ tự thật: ở lượt 5 cơ chế sửa được kích hoạt bởi lượt kiểm THỨ HAI chứ không phải lượt đầu; probe phải ghi cả hai lượt và không giả định lượt đầu là đỏ.",
-      "`__integration__` chưa từng được dựng: các lượt đều dừng khi B1 chưa `accepted` (`required: []`, `built: false`); cần một lượt B1 xanh rồi mới đo được tests trên cây gộp."
+      "CÒN PHẢI SỬA FIXTURE (cần owner duyệt vì đổi ngữ nghĩa phép đo): cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`. Hệ quả đã đo: lượt kiểm ĐẦU không bao giờ tự đỏ theo đường `test_proof`, nên vòng sửa không mở ở đúng chỗ mà W8.A4.5.N cần đo.",
+      "Chưa lượt nào đo trọn chuỗi \"đỏ ở lượt kiểm đầu → phân loại → resume cùng child → kiểm lại xanh → node tổng hợp xanh\". Lượt 7 đã đo được nửa sau (B1 xanh + node tổng hợp dựng và kiểm native).",
+      "Hàng rào `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc, không bọc ống/`echo`; cả lượt kiểm B1 và lượt kiểm trên cây gộp đều bị hạ `unverified` vì lý do này. Cần chốt: đây là hành vi sản phẩm mong muốn (giữ nguyên) hay phép đo cần ghi rõ là giới hạn của fixture."
     ]
   }
 }
