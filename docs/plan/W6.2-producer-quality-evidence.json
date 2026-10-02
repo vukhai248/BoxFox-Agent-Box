@@ -1,6 +1,8 @@
 {
  "scope": "W6.2 producer/lookup quality + W6.2.BIND reviewedSet/final claims notice; branch vorflux/w6-review-quality; OpenCode Space Bunny; no UI/UX change",
- "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "commit": "b91de39e03e61a00b22590b221c04bba76969491",
+ "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "commitNote": "các dòng probe chạy trên cây làm việc dựa trên baseCommit; cây đó được commit thành commit (dòng probe vẫn ghi commit gốc tại thời điểm chạy)",
  "sourceManifest": {
   "backend/src/agentbox/agent_core/work_prompts.py": "3da58b4312ee55b56b5372b7bcb534630f1728410b8929be035ed7c7e240b67d",
   "backend/src/agentbox/agent_core/work_graph.py": "645473828778f2747f803339800dd0af65b7f76a178a3a3539d0537a50d9a37e",
@@ -107,9 +109,15 @@
   },
   "touched": {
    "test_journal_tools.py": "tool count 46 -> 47",
-   "test_runtime_info.py": "group union 46 -> 47"
+   "test_runtime_info.py": "group union 46 -> 47",
+   "test_work_graph.py": "workGraph group == 7 tools (verify_exec added)"
   },
-  "workSuite": "757 passed, 2311 deselected (baseline 724) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)"
+  "workSuite": "757 passed, 2311 deselected in 338.41s (baseline 724 on 68ecdf0) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)",
+  "touchedSuites": "183 passed in 92.55s (harness_runtime, journal_tools, runtime_info, work_checks, finding_citations, verify_exec, sandbox_verify_exec, producer_quality, work_graph)",
+  "probeScripts": {
+   "scripts/eval/work_finding_probe.py": "5 rows, oracle 2/5",
+   "scripts/eval/work_lookup_probe.py": "2 rows, strict oracle 0/1 on the lookup arm"
+  }
  },
  "openItems": [
   "The lookup arm still spent 22s and 3 model steps; the legacy arm 185s and more tool calls — the contract is shorter but the model still volunteers a meta sentence (\"Không có phương án hay khuyến nghị nào...\") that counts toward the 120-word cap.",

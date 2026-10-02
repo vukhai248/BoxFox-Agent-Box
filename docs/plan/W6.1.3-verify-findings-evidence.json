@@ -1,6 +1,8 @@
 {
  "scope": "W6.1.3 verify_exec + finding citations (review architecture A); branch vorflux/w6-review-quality; OpenCode Space Bunny; no UI/UX change",
- "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "commit": "b91de39e03e61a00b22590b221c04bba76969491",
+ "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "commitNote": "các dòng probe chạy trên cây làm việc dựa trên baseCommit; cây đó được commit thành commit (dòng probe vẫn ghi commit gốc tại thời điểm chạy)",
  "sourceManifest": {
   "backend/src/agentbox/agent_core/verify_exec.py": "7c3fb288f5871dee6d5079dc5f1ebf5371f9ec28e070309086054f8094829040",
   "backend/src/agentbox/agent_core/roles.py": "53b08ead260344c8fa6075ae98d4149f44651211a59321c18eb9b3ec1d0721c8",
@@ -745,9 +747,15 @@
   },
   "touched": {
    "test_journal_tools.py": "tool count 46 -> 47",
-   "test_runtime_info.py": "group union 46 -> 47"
+   "test_runtime_info.py": "group union 46 -> 47",
+   "test_work_graph.py": "workGraph group == 7 tools (verify_exec added)"
   },
-  "workSuite": "757 passed, 2311 deselected (baseline 724) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)"
+  "workSuite": "757 passed, 2311 deselected in 338.41s (baseline 724 on 68ecdf0) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)",
+  "touchedSuites": "183 passed in 92.55s (harness_runtime, journal_tools, runtime_info, work_checks, finding_citations, verify_exec, sandbox_verify_exec, producer_quality, work_graph)",
+  "probeScripts": {
+   "scripts/eval/work_finding_probe.py": "5 rows, oracle 2/5",
+   "scripts/eval/work_lookup_probe.py": "2 rows, strict oracle 0/1 on the lookup arm"
+  }
  },
  "openItems": [
   "work_policy.VERSION stays work-checks/10 (w8-isolation owns the bump to /11 and adds COMPATIBLE_VERSIONS); the new contract is gated by work_checks.INPUTS_VERSION work-check-inputs/2, which forces a fresh invocation for historical receipts (WORK_CHECK_RECEIPT_STALE). Main should bump VERSION to /11 at merge.",
