@@ -368,7 +368,9 @@ async def main(args):
         row['model'] = {
             'testerSawTheRedCommand': row['pytestBeforeCheck'] < row['forcedRedCommands'],
             'buildChildTouchedItsFile': bool(row['resumedChild']['wroteExport']),
-            'secondCheckPassed': row['greenCheck']['status'] == 'pass',
+            # Lượt ghi cuối có thể là một lượt bị sản phẩm TỪ CHỐI mở kiểm (không có `status`);
+            # đọc theo `.get` để không nổ `KeyError` khi phép đo gặp đúng hàng rào của sản phẩm.
+            'secondCheckPassed': (row['greenCheck'] or {}).get('status') == 'pass',
             'nodeAccepted': row['final']['status'] == 'accepted',
         }
         # --- oracle node tổng hợp (W8.A4.5.N): dựng snapshot hợp nhất + child Testing THẬT xanh trên đó ---
