@@ -1639,6 +1639,13 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
         cards = rt.pending_for(sid) or []
         interviews = [card for card in cards if card.get('kind') == 'interview']
         if restart_fault and not restarted and interviews:
+            # Dừng hẳn lượt cũ TRƯỚC khi đóng DB: task cũ còn sống sẽ ghi tiếp vào DB vừa đóng
+            # (`Cannot operate on a closed database`, thấy ở S09 r1) rồi chen cả vào DB mới.
+            stale = [item for item in rt.tasks.values() if not item.done()]
+            for item in stale:
+                item.cancel()
+            if stale:
+                await asyncio.gather(*stale, return_exceptions=True)
             store, rt, graph = _restart_session(rt, sid, notes)
             restarted = True
             notes.append('restart_while_waiting: đã khởi động lại harness giữa lúc chờ trả lời')

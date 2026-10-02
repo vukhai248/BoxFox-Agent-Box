@@ -305,3 +305,34 @@ def test_default_policy_is_bounded_by_max_rounds():
     assert work_repair.default_policy(1)['maxRepairs'] == 0
     assert work_repair.default_policy(0)['maxRepairs'] == 0
     assert work_repair.default_policy(3, 'main')['source'] == 'main'
+
+
+def test_unresumable_child_falls_back_to_a_fresh_child(tmp_path, monkeypatch):
+    """Design A4.5: child cũ không resume được (bận/đã yield) ⇒ child MỚI, ghi `repairChildReason`."""
+    runtime, service, sid = build_run(tmp_path, failing_test_model())
+    from agentbox.agent_core import work_feedback
+    real = work_feedback.resume_child
+    calls = {'n': 0, 'refused': 0}
+
+    async def flaky(rt, session, child_id, prompt, work, request):
+        calls['n'] += 1
+        if calls['n'] == 1:
+            calls['refused'] += 1
+            raise ValueError('WORK_RESUME_BUSY: child đang chạy')
+        return await real(rt, session, child_id, prompt, work, request)
+
+    monkeypatch.setattr(work_feedback, 'resume_child', flaky)
+
+    async def run():
+        return await execute_run(runtime, sid, [EXPLORE, PLAN, BUILD])
+
+    run_doc = asyncio.run(run())
+    state = stage_of(run_doc, 'B1')
+    assert calls['refused'] == 1, 'đúng một lần resume bị từ chối rồi hạ cấp'
+    assert run_doc['status'] == 'executed' and state['status'] == 'accepted'
+    repair = state['repairs'][0]
+    assert repair['resumed'] is False
+    assert 'not resumable' in str(repair['repairChildReason'])
+    producers = [item['producerId'] for item in state['rounds']]
+    assert producers[0] != producers[1], 'vòng sửa phải do child MỚI làm'
+    assert repair['buildChildId'] == producers[1]
