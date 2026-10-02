@@ -1,0 +1,217 @@
+{
+ "probe": "W8.A4.4 — snapshot theo run và ship chỉ mã của run, idempotent (probe thật)",
+ "script": "scripts/eval/work_ship_scoped_eval.py",
+ "howToRun": "python3 scripts/eval/work_ship_scoped_eval.py --router http://127.0.0.1:36219 --output .tmp/w8-probe-ship3 --manifest .tmp/work-checks/w8-isolation-manifest.json",
+ "branch": "vorflux/w8-isolation",
+ "commit": "b401a78468f177f3705437ecc63fa02efaad1ca4",
+ "commitAtStart": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "route": null,
+ "router": "http://127.0.0.1:36219",
+ "sources": {
+  "backend/src/agentbox/agent_core/runtime.py": "ada990fc1fe336d11eaa1f4e026499181e36236ebd90fe67a8ac95f862062c4a",
+  "backend/src/agentbox/agent_core/tool_contracts.py": "b9be004c145090585cfc48debcb1d0b567daa5cd710d2e756ee37e83946435db",
+  "backend/src/agentbox/agent_core/work_checks.py": "2e6ae1b47092c4feee41a3b81870160091d0d5bbdd071f23b26618090bbff608",
+  "backend/src/agentbox/agent_core/work_continuations.py": "270203c237c5cf0f3a4a5acf937937fd95d3228543ebf79964da1d062af8528c",
+  "backend/src/agentbox/agent_core/work_decisions.py": "b72a52473554daf31ab70cba6f2e7d8b57254401d1315a3ef64bfcccbfb7b23c",
+  "backend/src/agentbox/agent_core/work_graph.py": "9b4da319da2b750301df9ec32bda282db9a04778ccc08ff1223ee60463b00f58",
+  "backend/src/agentbox/agent_core/work_handoffs.py": "b13b089e2549ce65bb391ff7ec294de94c4078c2f579d1429a4cf722eba99386",
+  "backend/src/agentbox/agent_core/work_policy.py": "3bf662636406847aa35d5442697ba0acebaff781a3ede3a37bfc69d0d0fb2979",
+  "backend/src/agentbox/agent_core/work_progress.py": "f083664f439e37c5122fd6c96a44de51fcc7957e136a67b114aed88495f1dce8",
+  "backend/src/agentbox/agent_core/work_repair.py": "ea7ab3dd5df9e95846cecbf1c8378ea340a0e01228624be3a349e039069469d2",
+  "backend/src/agentbox/agent_core/work_worktrees.py": "df8bdd1981f9ae5bde5d43ffaf58b8e9ae1ff5213707685cdf4c4d12b343b8ef",
+  "backend/src/agentbox/sandbox/executor.py": "ccddefd49928c5ccf3087e48bb008d1b0e10b72465281273b0382faac5c16c07",
+  "backend/src/agentbox/sandbox/worker.py": "799b385ebe83d34ae8f2faf093ab27033cbdeba3a71d4e3cb9eabd4fdb70815a",
+  "backend/tests/unit/test_sandbox_worker_root.py": "080ede58fea4b868f2f63e46ba0a0a669a0e3c046a75667b2b58b6a2550efc7e",
+  "backend/tests/unit/test_work_converged_review.py": "46736e524daee3f54222c2b041f2676a3835f7feed3db2522aec0b19db90c744",
+  "backend/tests/unit/test_work_graph.py": "3e97f622100c108b6ef7487456c78811cc5a801e36a5639551ab6afaec6eb767",
+  "backend/tests/unit/test_work_repair_w8.py": "8620329ad1200bc17690cda90eeb066b233caba7552ee086833ead23ce40c348",
+  "backend/tests/unit/test_work_ship_scoped.py": "5c7ebf6f9f743aec1aaf2f76f2c53df919099e1105241eb38fb3ae6ae52d107f",
+  "backend/tests/unit/test_work_worktree.py": "41ab07474038410307172973a2dc99a359fc1f17a678df94dc6e231738c10e6c",
+  "scripts/eval/work_ship_scoped_eval.py": "01c83b5eac7b2d989ef5a27f6db0e331e81dfd18d884bbc2f0310204180fee26"
+ },
+ "rows": [
+  {
+   "case": "scoped_ship_dirty_owner",
+   "scope": "Fixture bàn giao Build; 2 lượt kiểm Space Bunny thật (tests + code_review); ship thật tới bare origin + gh shim",
+   "nodeRoot": ".boxfox/worktrees/w-a62fef7dc3/n-B1",
+   "artifact": "a-98ca55e3041644baa614d884d6b056df",
+   "nodeChecks": [
+    {
+     "kind": "tests",
+     "status": "unverified",
+     "attempt": 1,
+     "childId": "7a950100620d4ddda14565b836ab6009",
+     "error": "Missing actual successful required test command events.",
+     "commands": [
+      "pwd && ls -la && echo \"---GIT---\" && git -C . log --oneline -5 2>/dev/null; git status --porcelain 2>/dev/null | head -50",
+      "ls -la src tests; echo \"=== git show --stat ===\"; git show --stat HEAD; echo \"=== git diff base..HEAD ===\"; git diff 87b95cc6bee775d89f1fa783fc7fe8a4b35d548f..HEAD --stat; echo \"=== branch ===\"; git rev-parse HEAD; git rev-parse --abbrev-ref HEAD; git cat-file -p HEAD^{tree}",
+      "cd \"$(pwd)\" && python -m pytest -q",
+      "cd \"$(pwd)\" && echo \"TREE=$(git rev-parse HEAD^{tree})\" && echo \"BLOB src/export.py=$(git rev-parse HEAD:src/export.py)\" && echo \"--- diff worktree vs HEAD (phải rỗng) ---\" && git status --porcelain && echo \"--- đếm code point tiếng Việt ---\" && python -c \"\nfrom src.export import export_markdown\nt='Hồ sơ'\no=export_markdown(t)\nprint(repr(t), len(t), [hex(ord(c)) for c in t])\nprint(repr(o), len(o), [hex(ord(c)) for c in o])\nprint('equal:', o==t, 'type:', type(o).__name__)\nprint('empty:', repr(export_markdown('')))\n\""
+     ]
+    },
+    {
+     "kind": "tests",
+     "status": "pass",
+     "attempt": 2,
+     "childId": "5d131a511baa4bf7a84c5461377a2cac",
+     "error": null,
+     "commands": [
+      "cd /  2>/dev/null; ls -la; echo \"---PWD---\"; pwd",
+      "python -m pytest -q",
+      "git status",
+      "git diff --stat 87b95cc6bee775d89f1fa783fc7fe8a4b35d548f 1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4",
+      "python -c \"from src.export import export_markdown as f; s='Hồ sơ'; r=f(s); print(r==s, [hex(ord(c)) for c in r], len(r.encode('utf-8')))\"",
+      "git rev-parse HEAD",
+      "git show 1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4 --stat --oneline"
+     ]
+    }
+   ],
+   "nodeCheck": {
+    "kind": "tests",
+    "status": "pass",
+    "attempt": 2,
+    "childId": "5d131a511baa4bf7a84c5461377a2cac",
+    "error": null,
+    "commands": [
+     "cd /  2>/dev/null; ls -la; echo \"---PWD---\"; pwd",
+     "python -m pytest -q",
+     "git status",
+     "git diff --stat 87b95cc6bee775d89f1fa783fc7fe8a4b35d548f 1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4",
+     "python -c \"from src.export import export_markdown as f; s='Hồ sơ'; r=f(s); print(r==s, [hex(ord(c)) for c in r], len(r.encode('utf-8')))\"",
+     "git rev-parse HEAD",
+     "git show 1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4 --stat --oneline"
+    ]
+   },
+   "nodeStatus": "accepted",
+   "merged": true,
+   "isolationRow": {
+    "mode": "git",
+    "root": ".boxfox/worktrees/w-a62fef7dc3/main",
+    "branch": "boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef",
+    "baselineCommit": "87b95cc6bee775d89f1fa783fc7fe8a4b35d548f"
+   },
+   "integrationSnapshotProbe": {
+    "hash": "158203c2cfc68fb43bcf2b4ea1f085fac1f9ae355a013d751d346b8ba8850b93",
+    "head": "1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4",
+    "treeHash": "8c418e758435767b41bdab85747cd6b8fc4658e1",
+    "branch": "boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef",
+    "worktree": ".boxfox/worktrees/w-a62fef7dc3/main"
+   },
+   "integrationBuilt": true,
+   "integrationStage": {
+    "status": "needs_checks",
+    "error": null
+   },
+   "pytestEvidence": {
+    "ok": true,
+    "tail": ".                                                                        [100%]\n1 passed in 0.01s\nEXIT=0"
+   },
+   "integrationEvidence": {
+    "artifactId": "a-82e3cb3bcad74aebb99f5ee1aa1d2254",
+    "chars": 950
+   },
+   "checks": [
+    {
+     "kind": "tests",
+     "status": "pass",
+     "attempt": 1,
+     "childId": "96ff869c58704357b694e88bb008781e",
+     "error": null,
+     "commands": [
+      "cd .boxfox/worktrees/w-a62fef7dc3/main 2>/dev/null && pwd && git rev-parse HEAD && git rev-parse HEAD^{tree} && git status --porcelain && echo \"---FILES---\" && find . -path ./.git -prune -o -type f -print | sort",
+      "pwd; ls -la; echo \"---BOXFOX---\"; ls -la .boxfox 2>&1 | head -50",
+      "pwd; ls -la; echo \"---BOXFOX---\"; find .boxfox -maxdepth 3 -print 2>&1 | head -60",
+      "pwd",
+      "ls -la",
+      "git rev-parse HEAD",
+      "git rev-parse HEAD^{tree}",
+      "git status --porcelain",
+      "find . -path ./.git -prune -o -type f -print",
+      "python -m pytest -q",
+      "cat src/export.py",
+      "cat tests/test_export.py"
+     ]
+    },
+    {
+     "kind": "code_review",
+     "status": "pass",
+     "attempt": 1,
+     "childId": "2856d4c1b98741909d5e21fb8521b904",
+     "error": null,
+     "commands": []
+    }
+   ],
+   "runStatus": "executed",
+   "integration": {
+    "status": "checked",
+    "treeHash": "8c418e758435767b41bdab85747cd6b8fc4658e1",
+    "head": "1d0b332ca434044e18a18ed7ed5b3d5c8c4c67b4"
+   },
+   "integrationRepairs": [],
+   "ship": {
+    "status": "pr_opened",
+    "branch": "boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef",
+    "pushed": true,
+    "prUrl": "https://github.com/fixture/repo/pull/7",
+    "commit": "1d0b332ca434",
+    "treeHash": "8c418e758435767b41bdab85747cd6b8fc4658e1",
+    "shipKey": "ship-w-a62fef7dc3-8c418e758435767b41bdab85747cd6b8fc4658e1"
+   },
+   "ownedPaths": [
+    "src/export.py"
+   ],
+   "shipAgain": {
+    "status": "pr_opened",
+    "shipKey": "ship-w-a62fef7dc3-8c418e758435767b41bdab85747cd6b8fc4658e1",
+    "prUrl": "https://github.com/fixture/repo/pull/7",
+    "commit": "1d0b332ca434"
+   },
+   "ghCalls": {
+    "first": [
+     "auth status",
+     "pr view boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef --json url --jq .url",
+     "pr create --draft --title Thêm export_markdown giữ dấu tiếng Việt, ship nhánh run. --body-file .plans/work/them-export-markdown-giu-dau-tieng-viet/v1-pull-request.md --head boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef --base main"
+    ],
+    "second": [
+     "auth status",
+     "pr view boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef --json url --jq .url",
+     "pr create --draft --title Thêm export_markdown giữ dấu tiếng Việt, ship nhánh run. --body-file .plans/work/them-export-markdown-giu-dau-tieng-viet/v1-pull-request.md --head boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef --base main"
+    ]
+   },
+   "prBody": "# Thêm export_markdown giữ dấu tiếng Việt, ship nhánh run.\n\n## Summary\n\nThêm export_markdown giữ dấu tiếng Việt, ship nhánh run.\n\n## Work Graph\n\n- **B1** (build) Thêm hàm export_markdown — `accepted` (ok)\n\n## Branch\n\n- Branch: `boxfox/them-export-markdown-giu-dau-tieng-viet-a62fef` from `main` (87b95cc6bee7)\n- Worktree: `.boxfox/worktrees/w-a62fef7dc3/main`\n- The owner's uncommitted changes are not part of this branch.\n\n## Files owned by this run\n\n- `src/export.py`\n\n## Testing\n\n- [B1] python -m pytest -q\n",
+   "ownerDirty": [
+    "M README.md"
+   ],
+   "ownerHead": "87b95cc6bee775d89f1fa783fc7fe8a4b35d548f",
+   "mechanism": {
+    "runIsExecuted": true,
+    "pushedExactlyOnce": true,
+    "onePrCreated": true,
+    "pushedTreeIsCheckedTree": true,
+    "onlyRunOwnedPaths": true,
+    "ownerDirtyStaysOut": true,
+    "prBodyNamesOwnedFiles": true,
+    "secondShipIsIdempotent": true
+   },
+   "integrationCheckAttempts": {
+    "tests": 1,
+    "code_review": 1
+   },
+   "model": {
+    "nodeCheckPassed": true,
+    "integrationChecksEventuallyPassed": true,
+    "testerRanRealCommand": true
+   },
+   "oracle": true,
+   "latencySeconds": 450.976,
+   "raw": ".tmp/w8-probe-ship3/results.json (rows[0])"
+  }
+ ],
+ "oracle": true,
+ "note": "Chỉ Space Bunny (space-bunny-free). Oracle true: cây được đẩy ĐÚNG bằng cây đã check, chỉ đường dẫn thuộc run ([src/export.py]), tệp dirty của chủ repo (M README.md) không bị stage/commit, PR nháp nêu tên tệp của run, ship lần hai dùng lại bản ghi và không đẩy lại (log gh giống nhau từng dòng). Lượt kiểm của nút tổng hợp cần 2 lần thử vì child đầu bọc lệnh pytest trong ống — oracle ghi trung thực số lần thử qua khoá integrationCheckAttempts. Số đo tại commit b401a78, TRƯỚC khi gộp B.",
+ "afterMerge": {
+  "commit": "545b1ec230f3b0a365855fbb0383250466aac981",
+  "branch": "vorflux/w8-isolation",
+  "note": "Bằng chứng đo trước khi gộp B; sau khi gộp B tại 545b1ec230f3 bốn tệp test mới + 282 test ảnh hưởng + 970 test -k work đều xanh (chỉ còn 2 lỗi bwrap có sẵn từ trước)."
+ }
+}
