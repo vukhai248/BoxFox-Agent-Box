@@ -1,10 +1,16 @@
-"""W6.1.3 worker-level `verify_exec`: isolation, limits and honest failure.
+"""W6.1.3 worker-level `verify_exec`: isolation matrix, limits and honest failure.
+
+Chủ máy duyệt #6423 (02/10): snippet ĐỌC được repo (read-only), ghi scratch (/tmp/work, /tmp) và ra
+mạng (netns của box, theo công tắc firewall), nhưng KHÔNG sửa được repo; các namespace khác vẫn tách.
 
 Runs the worker function directly on the host. On a host without a working bubblewrap (no bwrap,
 userns blocked by seccomp/apparmor) every case skips — the tool must fail closed, never run
 unisolated. On this machine the host probe passes, so these are the real numbers.
 """
+import pathlib
 import shutil
+import socket
+import threading
 import time
 
 import pytest
@@ -31,17 +37,55 @@ def test_nfd_and_nfc_counts_differ():
     assert result['receipt']['outputHash'] == result['receipt']['outputHash']
 
 
-def test_workspace_is_not_writable_and_not_readable():
-    result = run("open('/home/agent/workspace/x','w').write('1')")
-    assert result['exit_code'] != 0 and 'workspace' in result['content']
-    hidden = run("import os;print(os.path.exists('/home/agent/workspace'))")
-    assert hidden['content'].strip() == 'False'
+def test_repository_is_readable_but_read_only():
+    source = str(pathlib.Path(worker.__file__).resolve())
+    read = run(f"print(open({source!r}).readline().strip()[:20])")
+    assert read['exit_code'] == 0 and read['content'].strip(), read
+    write = run(f"open({source!r},'a').write('x')")
+    assert write['exit_code'] != 0 and 'Read-only file system' in write['content'], write
 
 
-def test_no_network():
-    result = run("import socket;socket.create_connection(('1.1.1.1',80),timeout=3)")
-    assert result['exit_code'] != 0
-    assert 'Network is unreachable' in result['content'] or 'timed out' in result['content']
+def test_scratch_files_are_writable_and_reported():
+    result = run("open('/tmp/work/a.txt','w').write('hello');open('/tmp/b.txt','w').write('x');"
+                 "import os;print(sorted(os.listdir('/tmp/work')))")
+    assert result['exit_code'] == 0 and result['content'].strip() == "['a.txt']", result
+    receipt = result['receipt']
+    assert receipt['scratchRoot'] == worker.VERIFY_WORKDIR
+    assert receipt['scratch'] == [{'path': 'a.txt', 'bytes': 5}], receipt
+
+
+def test_argv_keeps_namespaces_without_hiding_the_repo():
+    argv = worker._verify_bwrap_argv('proc', '/tmp/scratch')
+    assert '--unshare-all' not in argv and '--unshare-net' not in argv
+    for flag in ('--unshare-user', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--unshare-cgroup'):
+        assert flag in argv, flag
+    assert str(worker.ROOT) not in argv, 'workspace must not be hidden any more'
+
+
+def test_network_reaches_a_local_listener():
+    """Snippet dùng netns của box: một listener trên loopback của máy phải nhận được kết nối."""
+    server = socket.socket()
+    server.bind(('127.0.0.1', 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    seen = []
+
+    def accept():
+        try:
+            conn, _ = server.accept()
+            seen.append(True)
+            conn.close()
+        except OSError:
+            pass
+
+    threading.Thread(target=accept, daemon=True).start()
+    try:
+        result = run(f"import socket;s=socket.create_connection(('127.0.0.1',{port}),timeout=3);"
+                     "print('connected')")
+    finally:
+        server.close()
+    assert result['exit_code'] == 0 and result['content'].strip() == 'connected', result
+    assert seen, 'snippet never reached the host listener'
 
 
 def test_timeout_kills_the_process_group_and_keeps_the_receipt():

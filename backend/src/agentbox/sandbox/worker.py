@@ -221,14 +221,18 @@ def shell(command, timeout=30, session='default'):
 
 
 # --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------
-# Không mạng (--unshare-all), workspace bị che bằng tmpfs rỗng, thư mục làm việc là một temp dir mới,
-# không có fallback chạy không cô lập: thiếu bwrap/userns thì fail closed VERIFY_EXEC_UNAVAILABLE.
+# Quyết định chủ máy 02/10 (duyệt #6423): reviewer được ĐỌC repo (read-only), ghi scratch và dùng MẠNG
+# (theo công tắc firewall của box), nhưng KHÔNG được sửa repo. Vì vậy: bỏ --unshare-net, giữ các
+# namespace còn lại, bỏ tmpfs che ROOT, giữ scratch = tmpfs /tmp + temp dir bind tại /tmp/work.
+# Không có fallback chạy không cô lập: thiếu bwrap/userns thì fail closed VERIFY_EXEC_UNAVAILABLE.
 VERIFY_OUTPUT_MAX = 8000
 VERIFY_TIMEOUT_DEFAULT, VERIFY_TIMEOUT_MAX = 10, 20
 VERIFY_AS_BYTES = 512 << 20
 VERIFY_FSIZE_BYTES = 8 << 20
 VERIFY_NPROC = 64
 VERIFY_WORKDIR = '/tmp/work'
+VERIFY_SCRATCH_MAX = 20          # số file scratch báo trong receipt
+VERIFY_SCRATCH_SCAN_MAX = 200    # trần số mục quét để snippet không làm treo phần thống kê
 _VERIFY_PROBE = None
 
 
@@ -243,19 +247,45 @@ def _verify_interpreter(language):
 
 
 def _verify_bwrap_argv(proc_mode, workdir=None):
-    argv = ['bwrap', '--die-with-parent', '--unshare-all', '--new-session', '--ro-bind', '/', '/',
-            '--dev', '/dev']
+    # Bỏ --unshare-net có chủ đích (quyết định 02/10): snippet dùng netns của box nên ra mạng được nếu
+    # công tắc firewall của box đang mở; các namespace khác vẫn tách. Liệt kê tường minh thay cho
+    # --unshare-all để không vô tình tách mạng trở lại khi bubblewrap đổi nghĩa cờ gộp.
+    argv = ['bwrap', '--die-with-parent', '--unshare-user', '--unshare-pid', '--unshare-ipc',
+            '--unshare-uts', '--unshare-cgroup', '--new-session', '--ro-bind', '/', '/', '--dev', '/dev']
     # Docker (seccomp/apparmor unconfined) cấm mount procfs mới trong userns lồng: khi đó che /proc bằng
     # tmpfs rỗng thay vì để lộ /proc của container (environ của các tiến trình cùng uid).
     argv += ['--proc', '/proc'] if proc_mode == 'proc' else ['--tmpfs', '/proc']
     argv += ['--tmpfs', '/tmp']
     if workdir is not None:
-        # `/` chỉ-đọc nên không tạo được `/work`; điểm gắn nằm trong tmpfs `/tmp` mới.
+        # `/` chỉ-đọc nên không tạo được `/work`; điểm gắn nằm trong tmpfs `/tmp` mới (đã thử --dir,
+        # --tmpfs và bind trước --ro-bind: đều lỗi "Can't mkdir /work: Read-only file system").
         argv += ['--bind', workdir, VERIFY_WORKDIR]
-    if ROOT.is_dir():
-        argv += ['--tmpfs', str(ROOT)]  # che workspace: không đọc, không ghi qua công cụ này
+    # KHÔNG che ROOT nữa: reviewer phải đọc được repo (read-only) để đối chiếu trích dẫn nguồn.
     argv += ['--chdir', VERIFY_WORKDIR if workdir is not None else '/', '--']
     return argv
+
+
+def _verify_scratch(workdir):
+    """File snippet đã tạo trong scratch bind: ([{path, bytes}], overflow).
+
+    Chỉ quét temp dir của CHÍNH lượt gọi (không quét cả /tmp). Có trần số mục để một snippet tạo cây
+    file khổng lồ không làm treo phần thống kê; file chỉ tồn tại tới khi receipt được ghi.
+    """
+    items, seen = [], 0
+    for dirpath, dirnames, filenames in os.walk(workdir):
+        dirnames.sort()
+        for name in sorted(filenames):
+            seen += 1
+            if seen > VERIFY_SCRATCH_SCAN_MAX:
+                return items[:VERIFY_SCRATCH_MAX], seen
+            full = os.path.join(dirpath, name)
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                continue
+            items.append({'path': os.path.relpath(full, workdir), 'bytes': size})
+    items.sort(key=lambda item: item['path'])
+    return items[:VERIFY_SCRATCH_MAX], max(0, len(items) - VERIFY_SCRATCH_MAX)
 
 
 def verify_probe(refresh=False):
@@ -342,6 +372,7 @@ def verify_exec(args):
     tmp = tempfile.mkdtemp(prefix='boxfox-verify-', dir='/tmp')
     started = time.monotonic()
     timed_out = False
+    scratch, scratch_overflow = [], 0
     try:
         argv = _verify_bwrap_argv(probe['procMode'], tmp) + _verify_launcher(language, timeout, interpreter, tail)
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -353,6 +384,7 @@ def verify_exec(args):
             timed_out = True
             os.killpg(proc.pid, signal.SIGKILL)
             out, err = proc.communicate()
+        scratch, scratch_overflow = _verify_scratch(tmp)  # phải quét TRƯỚC khi finally xoá temp dir
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     duration = int((time.monotonic() - started) * 1000)
@@ -366,7 +398,11 @@ def verify_exec(args):
     receipt = {'kind': 'verify_exec', 'language': language, 'interpreter': _verify_version(interpreter),
                'codeHash': _verify_digest(code), 'stdinHash': _verify_digest(stdin),
                'outputHash': _verify_digest(content), 'exitCode': exit_code, 'durationMs': duration,
-               'truncated': truncated, 'timedOut': timed_out, 'claim': claim, 'isolation': probe['procMode']}
+               'truncated': truncated, 'timedOut': timed_out, 'claim': claim, 'isolation': probe['procMode'],
+               # Scratch để finding trích được file đã tạo; repo là read-only nhưng ĐỌC được, mạng dùng
+               # netns của box (theo công tắc firewall).
+               'scratchRoot': VERIFY_WORKDIR, 'scratch': scratch,
+               **({'scratchOverflow': scratch_overflow} if scratch_overflow else {})}
     result = {'content': content, 'exit_code': exit_code, 'is_error': timed_out, 'receipt': receipt}
     if timed_out:
         # Hết giờ vẫn là một quan sát hợp lệ: is_error=true nhưng receipt được giữ.

@@ -16,6 +16,7 @@ import hashlib
 import json
 import fnmatch
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -166,10 +167,25 @@ async def main(args):
     if not route:
         raise SystemExit('OpenCode Space Bunny unavailable; no substitute')
     rows = []
+    if args.resume and (output / 'results.json').exists():
+        # Resume phải idempotent: gộp theo (case, attempt), bản ghi cuối thắng, thứ tự theo CASES.
+        by_key = {f"{row['case']}-{row['attempt']}": row
+                  for row in json.loads((output / 'results.json').read_text(encoding='utf8'))}
+        order = [f"{item['case']}-{attempt + 1}" for item in CASES for attempt in range(args.repeat)]
+        rows = [by_key[key] for key in order if key in by_key]
+    existing = {f"{row['case']}-{row['attempt']}": row for row in rows} if args.resume else {}
     chosen = [item for item in CASES if not args.cases or item['case'] in args.cases.split(',')]
     for case in chosen:
         for attempt in range(args.repeat):
             folder = output / f"{case['case']}-{attempt + 1}"
+            key = f"{case['case']}-{attempt + 1}"
+            if key in existing and existing[key].get('sourceManifest') == sources:
+                # --resume: giữ nguyên số đo cũ khi mã nguồn chưa đổi (không gọi model lại)
+                print(json.dumps({'resumed': key, 'oracle': existing[key].get('oracle')},
+                                 ensure_ascii=False), flush=True)
+                continue
+            if folder.exists():
+                shutil.rmtree(folder)  # chạy lại: dựng fixture sạch, nếu không `git commit` báo 'nothing to commit'
             (folder / 'src').mkdir(parents=True, exist_ok=True)
             (folder / 'docs').mkdir(parents=True, exist_ok=True)
             (folder / 'src/export.py').write_bytes(b"import csv, io\n\n\ndef export(value):\n    return value\n")
@@ -216,7 +232,8 @@ async def main(args):
                 row['attempts'] = doc.get('attempts')
             except Exception as exc:
                 row.update(oracle=False, error=str(exc))
-            row.update(latencySeconds=round(time.monotonic() - started, 3), calls=client.calls)
+            row.update(latencySeconds=round(time.monotonic() - started, 3), calls=client.calls,
+                       childId=doc.get('childId'))
             rows.append(row)
             (output / 'results.json').write_bytes(
                 (json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
@@ -225,6 +242,8 @@ async def main(args):
                              ensure_ascii=False), flush=True)
             await rt.stop(sid)
             store.db.close()
+    # Ghi lại kể cả khi mọi dòng đều được resume (giữ thứ tự chuẩn và bỏ bản ghi trùng).
+    (output / 'results.json').write_bytes((json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
     summary = {'rows': len(rows), 'oracle': sum(1 for row in rows if row.get('oracle')),
                'cases': {item['case']: sum(1 for row in rows if row['case'] == item['case'] and row.get('oracle'))
                          for item in chosen},
@@ -243,11 +262,14 @@ def rescore(output):
         store = SessionStore(folder / 'sessions.db')
         try:
             graph = wg.service(type('RT', (), {'store': store})())
-            doc = json.loads(list(store.db.execute("SELECT doc FROM work_checks"))[0][0])
+            # Chạy lại vào cùng thư mục để lại doc cũ trong sessions.db — luôn lấy doc MỚI NHẤT.
+            doc = json.loads(list(store.db.execute(
+                "SELECT doc FROM work_checks ORDER BY rowid DESC LIMIT 1"))[0][0])
             meta, _ = graph.artifacts.get(doc['runId'], doc['artifactId'])
             case = next(item for item in CASES if item['case'] == row['case'])
             tools = work_checks.observations(graph, doc.get('childId'))
             row.update(score(doc, tools, case, meta['artifactId'], meta['contentHash']))
+            row['childId'] = doc.get('childId')
             row['tools'] = [{'id': event.get('id'), 'name': event.get('name')} for event in tools]
         finally:
             store.db.close()
@@ -266,6 +288,8 @@ if __name__ == '__main__':
     parser.add_argument('--repeat', type=int, default=2)
     parser.add_argument('--cases', default='')
     parser.add_argument('--rescore', action='store_true')
+    parser.add_argument('--resume', action='store_true',
+                        help='giữ các dòng cũ trong results.json khi sourceManifest chưa đổi')
     arguments = parser.parse_args()
     if arguments.rescore:
         rescore(Path(arguments.output).resolve())

@@ -176,11 +176,13 @@ SCHEMAS = [
          'use separate calls such as **/*.py and **/*.ts, not **/*.{py,ts}.', {'pattern': STRING}),
     tool('codebase_grep', 'Find literal text in workspace files.', {'query': STRING, 'path': STRING}, ['query']),
     tool('terminal_exec', 'Run Bash inside the sandbox, never on the host. Returns exit code and output.', {'command': STRING, 'timeout': {'type': 'integer'}}, ['command']),
-    # W6.1.3 — reviewer thử một claim tính toán trong sandbox tạm (không mạng, workspace bị che).
+    # W6.1.3 — reviewer thử một claim trong sandbox tạm (repo chỉ-đọc nhưng ĐỌC được, scratch + mạng dùng được).
     tool('verify_exec',
          'Run a small python or node snippet to test ONE concrete claim (count, encoding, arithmetic, parser '
-         'behavior). Fresh temp dir, no network, workspace not writable. Returns a receipt; cite it as the tool '
-         'call id in evidenceRefs. Not for running project tests.',
+         'behavior, or whether a source/URL exists). The repository is mounted READ-ONLY but readable; you may '
+         'create scratch files (work dir /tmp/work, and /tmp) and reach the network (the box firewall switch '
+         'applies). You cannot modify the repository. Returns a receipt; cite its tool call id or '
+         'verify:<codeHash> in evidenceRefs. Not for running project tests.',
          {'language': {'type': 'string', 'enum': ['python', 'node']},
           'code': {'type': 'string', 'minLength': 1, 'maxLength': 8000},
           'stdin': {'type': 'string', 'maxLength': 8000},

@@ -1,14 +1,14 @@
 {
  "scope": "W6.2 producer/lookup quality + W6.2.BIND reviewedSet/final claims notice; branch vorflux/w6-review-quality; OpenCode Space Bunny; no UI/UX change",
- "commit": "b91de39e03e61a00b22590b221c04bba76969491",
+ "commit": "fe01f19369dacfe67d34ad7c5116f653881c80cf",
  "baseCommit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
  "commitNote": "các dòng probe chạy trên cây làm việc dựa trên baseCommit; cây đó được commit thành commit (dòng probe vẫn ghi commit gốc tại thời điểm chạy)",
  "sourceManifest": {
   "backend/src/agentbox/agent_core/work_prompts.py": "3da58b4312ee55b56b5372b7bcb534630f1728410b8929be035ed7c7e240b67d",
   "backend/src/agentbox/agent_core/work_graph.py": "645473828778f2747f803339800dd0af65b7f76a178a3a3539d0537a50d9a37e",
   "backend/src/agentbox/agent_core/work_policy.py": "09f2aad436cf50ba3561f5b6753fda13aa151e7f86d322918ee9c0ae4e8cb7c5",
-  "backend/src/agentbox/agent_core/runtime.py": "28a93e98a481bcf1b931a1d12fdf48d449f7b0389e198e2c98645e98ccefd455",
-  "backend/src/agentbox/agent_core/work_checks.py": "a2a0d9159d00debd7e98b615caa902205da8ff583af82814c03302c213ee50ab"
+  "backend/src/agentbox/agent_core/runtime.py": "4b51862cecd0d35929a15aac2240ca3ba9b10eca1beab440981ad41e20a4b990",
+  "backend/src/agentbox/agent_core/work_checks.py": "4b83f376d704a870fbafcd22b6ba5237c3287ba9fbe16487f392b718976486fe"
  },
  "deliverable": {
   "deliverable": {
@@ -102,20 +102,22 @@
  },
  "tests": {
   "newFiles": {
-   "test_work_finding_citations.py": 20,
+   "test_work_finding_citations.py": 21,
    "test_work_verify_exec.py": 6,
-   "test_sandbox_verify_exec.py": 7,
+   "test_sandbox_verify_exec.py": 9,
    "test_work_producer_quality.py": 7
   },
   "touched": {
    "test_journal_tools.py": "tool count 46 -> 47",
    "test_runtime_info.py": "group union 46 -> 47",
-   "test_work_graph.py": "workGraph group == 7 tools (verify_exec added)"
+   "test_work_graph.py": "workGraph group == 7 tools (verify_exec added)",
+   "test_plan_review_role.py": "plan-review tools == READ | VERIFY (#6423)",
+   "test_research_review_role.py": "research-review tools include verify_exec (#6423)"
   },
-  "workSuite": "757 passed, 2311 deselected in 338.41s (baseline 724 on 68ecdf0) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)",
-  "touchedSuites": "183 passed in 92.55s (harness_runtime, journal_tools, runtime_info, work_checks, finding_citations, verify_exec, sandbox_verify_exec, producer_quality, work_graph)",
+  "workSuite": "757 passed, 2 failed, 2312 deselected in 342.87s (baseline 724 on 68ecdf0); the 2 failures are test_claude_worker_router.py cases whose premise is \"the host has no working bwrap\" — this host now has working bwrap (installed for the verify_exec probe), so they fail for the environment, not for the code (they touch no file changed here)",
+  "touchedSuites": "201 passed in 94.65s (harness_runtime, journal_tools, runtime_info, work_checks, finding_citations, verify_exec, sandbox_verify_exec, producer_quality, work_graph, plan_review_role, research_review_role)",
   "probeScripts": {
-   "scripts/eval/work_finding_probe.py": "5 rows, oracle 2/5",
+   "scripts/eval/work_finding_probe.py": "6 rows, oracle 4/6, verifyExecCalls 0/6, downgrades 5/29 findings (3 UNKNOWN_RECEIPT + 2 SELF_REFUTED); pre-change: 5 rows, oracle 2/5, verifyExecCalls 0/5, downgrades 7/20",
    "scripts/eval/work_lookup_probe.py": "2 rows, strict oracle 0/1 on the lookup arm"
   }
  },

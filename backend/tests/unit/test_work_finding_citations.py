@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agentbox.agent_core import work_checks, work_graph, work_prompts
+from agentbox.agent_core import roles, tool_contracts, work_checks, work_graph, work_prompts
 from test_work_graph import build, ok_script
 from test_work_checks import setup, start
 
@@ -229,3 +229,20 @@ def test_review_contract_describes_findings_and_caps():
         assert 'verify:<codeHash>' in contract
         tail = work_prompts.review_tail(lang)
         assert ('ghi chú' in tail) if lang == 'vi' else ('note' in tail.lower())
+
+
+def test_review_contract_demands_tool_call_ids_and_verify_exec():
+    """Quyết định #6423: ref phải là toolCallId trong chính lượt (hoặc verify:<codeHash>), không phải prose."""
+    for lang in ('en', 'vi'):
+        contract = work_checks.contract(lang, CRITERIA)
+        assert 'toolCallId' in contract, lang
+        assert 'verify_exec' in contract, lang
+        assert 'file_read:src/x.py' in contract, lang          # ví dụ ref SAI bị hạ cấp
+    instructions = roles.REVIEW_INSTRUCTIONS + roles.RESEARCH_REVIEW_INSTRUCTIONS + roles.WORK_REVIEWER_NOTE
+    assert 'toolCallId' in instructions and 'verify:<codeHash>' in instructions
+    # verify_exec giờ đọc được repo (read-only), ghi scratch và ra mạng — prompt phải nói đúng quyền đó.
+    assert 'READ-ONLY on the repository' in instructions
+    assert '/tmp/work' in instructions
+    schema = next(item for item in tool_contracts.SCHEMAS if item['function']['name'] == 'verify_exec')
+    description = schema['function']['description']
+    assert 'READ-ONLY but readable' in description and 'scratch' in description and 'network' in description
