@@ -52,6 +52,21 @@ RECORDS_ROOT = CAPTURE_ROOT / "records"
 MAX_SCREEN_PIXELS = 4096 * 4096
 MAX_CONCURRENT_RECORDS = 2
 MAX_RECORD_SECONDS = 600
+# W9 (recording-finalization): MP4 thường chỉ ghi `moov` khi ffmpeg kết thúc êm; bị SIGKILL là
+# mất `moov` ("moov atom not found"). MP4 phân mảnh (`empty_moov` + fragment theo keyframe, GOP
+# 2 giây, flush mỗi packet) vẫn đọc được tới fragment cuối khi ffmpeg bị kill. Đo trong box
+# (deploy/docker/tests/probe_recorder.py): SIGSTOP ffmpeg → SIGINT không tác dụng → SIGKILL sau
+# 20 s → bản cũ trả `ok` với file 48 byte không probe được, đúng chữ ký lỗi sweep đã lưu.
+RECORD_GOP_SECONDS = 2
+RECORD_MOVFLAGS = "+frag_keyframe+empty_moov+default_base_moof"
+# Ngân sách dừng (giây). Harness chờ HTTP tối đa 40 s (`sandbox/executor.py`), nên tổng
+# SIGINT + SIGTERM + SIGKILL + ffprobe phải nằm dưới mức đó.
+RECORD_STOP_SIGINT_WAIT = 15
+RECORD_STOP_SIGTERM_WAIT = 5
+RECORD_STOP_SIGKILL_WAIT = 5
+# stderr của ffmpeg (trước đây DEVNULL nên mất chẩn đoán) vào file ngoài workspace người dùng.
+FFMPEG_LOG_DIR = Path(os.environ.get("BOXFOX_FFMPEG_LOG_DIR", "/tmp/boxfox-ffmpeg"))
+FFMPEG_LOG_TAIL_CHARS = 800
 CDP_ENDPOINT = "http://127.0.0.1:9222"
 BROWSER_CAPTURE_BIN = Path(os.environ.get("BROWSER_CAPTURE_BIN", "/usr/local/bin/browser_capture.py"))
 
@@ -997,12 +1012,12 @@ def _count_active_records() -> int:
     return len(_active_x11_records())
 
 
-def _video_duration_sec(path) -> float | None:
-    """Đo thời lượng video THỰC bằng ffprobe, không dùng wall-clock.
+def _probe_video(path) -> dict:
+    """Kiểm file video bằng ffprobe: `{verified, playable, duration, error}`.
 
-    Wall-clock sai với bản ghi tự dừng bằng `-t`: ffmpeg thoát sau N giây nhưng
-    agent có thể reap muộn (hàng chục giây), khiến `durationSec` bị thổi phồng.
-    Trả về None khi không đọc được (fallback wall-clock ở `_record_finished_entry`).
+    `verified=False` khi KHÔNG chạy được ffprobe (thiếu gosu/ffprobe, quá hạn) — khi đó không
+    biết file tốt hay hỏng. `verified=True, playable=False` là ffprobe ĐÃ chạy và từ chối file
+    (ví dụ "moov atom not found"): bản ghi chưa hoàn tất, không được báo `ok`.
     """
     try:
         proc = _run_as_agent(
@@ -1010,28 +1025,85 @@ def _video_duration_sec(path) -> float | None:
              "format=duration", "-of", "csv=p=0", str(path)],
             timeout=10,
         )
-        text = (proc.stdout or "").strip()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"verified": False, "playable": None, "duration": None,
+                "error": f"{type(exc).__name__}: {exc}"[:FFMPEG_LOG_TAIL_CHARS]}
+    text = (proc.stdout or "").strip()
+    try:
         value = float(text)
-        return value if value > 0 else None
-    except (ValueError, OSError, subprocess.TimeoutExpired):
+    except ValueError:
+        value = None
+    duration = value if value is not None and value > 0 else None
+    error = (proc.stderr or "").strip()[:FFMPEG_LOG_TAIL_CHARS] if isinstance(proc.stderr, str) else ""
+    returncode = proc.returncode if isinstance(proc.returncode, int) else 0
+    playable = returncode == 0 and duration is not None
+    return {"verified": True, "playable": playable, "duration": duration,
+            "error": error or (None if playable else f"ffprobe exit {returncode}, output {text[:80]!r}")}
+
+
+def _video_duration_sec(path) -> float | None:
+    """Đo thời lượng video THỰC bằng ffprobe, không dùng wall-clock.
+
+    Wall-clock sai với bản ghi tự dừng bằng `-t`: ffmpeg thoát sau N giây nhưng
+    agent có thể reap muộn (hàng chục giây), khiến `durationSec` bị thổi phồng.
+    Trả về None khi không đọc được.
+    """
+    return _probe_video(path)["duration"]
+
+
+def _ffmpeg_log_tail(entry: dict) -> str | None:
+    log_path = entry.get("ffmpegLog")
+    if not log_path:
         return None
+    try:
+        text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return text[-FFMPEG_LOG_TAIL_CHARS:].strip() or None
 
 
 def _record_finished_entry(entry: dict) -> dict:
     path = Path(entry["path"])
-    duration = _video_duration_sec(path)
-    if duration is None:
-        started_at = float(entry.get("startedAt", time.time()))
-        duration = max(0.0, time.time() - started_at)
-    return {
+    probe = _probe_video(path)
+    duration = probe["duration"]
+    item = {
         "recordingId": entry["recordingId"],
         "kind": entry["kind"],
         "target": entry.get("target"),
         "path": entry["path"],
-        "durationSec": round(float(duration), 2),
+        "durationSec": None,
         "sizeBytes": _file_size(path),
         "finished": True,
+        "verified": probe["verified"],
     }
+    process = entry.get("process")
+    returncode = getattr(process, "returncode", None)
+    if isinstance(returncode, int):
+        item["exitCode"] = returncode
+    if entry.get("stopSignals"):
+        item["stopSignals"] = list(entry["stopSignals"])
+    if probe["verified"] and not probe["playable"]:
+        # ffprobe đã chạy và từ chối file: KHÔNG lấy wall-clock làm thời lượng (đó là thứ khiến
+        # bản cũ trả `durationSec: 24.01` cho một file 2 giây không đọc được).
+        item.update({
+            "ok": False,
+            "errorCode": "RECORDING_INCOMPLETE",
+            "error": ("Bản ghi không đọc được (ffprobe từ chối file); không có video hoàn tất. "
+                      + (probe["error"] or "")).strip(),
+        })
+        tail = _ffmpeg_log_tail(entry)
+        if tail:
+            item["ffmpegLog"] = tail
+        return item
+    if duration is None:
+        # ffprobe không chạy được: không kiểm được, giữ ước lượng wall-clock và nói rõ `verified`.
+        started_at = float(entry.get("startedAt", time.time()))
+        duration = max(0.0, time.time() - started_at)
+    item["durationSec"] = round(float(duration), 2)
+    if returncode == -signal.SIGKILL:
+        # MP4 phân mảnh vẫn đọc được tới fragment cuối, nhưng đuôi (≤ 1 GOP) có thể mất.
+        item["forcedKill"] = True
+    return item
 
 
 def _remember_finished(item: dict) -> None:
@@ -1058,17 +1130,44 @@ def _reap_finished_records() -> None:
             reaped.append(entry)
     for entry in reaped:
         finished = _record_finished_entry(entry)
+        finished.setdefault("ok", True)
         _remember_finished(finished)
         _index_record(finished, entry)
 
 
-def _spawn_ffmpeg(args: list[str]) -> subprocess.Popen:
-    # DEVNULL (không PIPE) để ffmpeg không thể block vì đầy pipe khi chạy dài.
-    return subprocess.Popen(
-        _as_agent_argv(["ffmpeg", "-loglevel", "error", "-y", *args]),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+def _spawn_ffmpeg(args: list[str], log_path: Path | None = None) -> subprocess.Popen:
+    # Không PIPE để ffmpeg không thể block vì đầy pipe khi chạy dài: stderr vào file log (nếu
+    # mở được) hoặc DEVNULL. `-nostdin`: ffmpeg không đọc stdin kế thừa của ide-proxy.
+    stderr = subprocess.DEVNULL
+    handle = None
+    if log_path is not None:
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = open(log_path, "ab")
+            stderr = handle
+        except OSError:
+            handle = None
+    try:
+        return subprocess.Popen(
+            _as_agent_argv(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", *args]),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr,
+        )
+    finally:
+        if handle is not None:
+            handle.close()
+
+
+def _record_output_args(framerate: int, max_duration: int, path: Path) -> list[str]:
+    """Đuôi argv ffmpeg chung cho record window/screen: encoder + MP4 phân mảnh + `-t`."""
+    return [
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+        "-g", str(max(1, framerate * RECORD_GOP_SECONDS)),
+        "-movflags", RECORD_MOVFLAGS, "-flush_packets", "1",
+        "-t", str(max_duration),
+        str(path),
+    ]
 
 
 def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: str = None) -> dict:
@@ -1096,6 +1195,8 @@ def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: st
             status_code=501,
         )
 
+    record_id = _new_record_id()
+    log_path = FFMPEG_LOG_DIR / f"{record_id}.log"
     with _X11_LOCK:
         if _count_active_records() >= MAX_CONCURRENT_RECORDS:
             raise _conflict(
@@ -1111,10 +1212,8 @@ def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: st
                 "-window_id", win["id"], "-video_size", f"{win['w']}x{win['h']}",
                 "-i", DISPLAY,
                 "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                "-t", str(max_duration),
-                str(path),
-            ])
+                *_record_output_args(framerate, max_duration, path),
+            ], log_path)
             target = {"kind": "window", "windowId": win["id"]}
         elif kind == "screen":
             width, height = screen_size()
@@ -1124,15 +1223,12 @@ def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: st
                 "-f", "x11grab", "-framerate", str(framerate),
                 "-video_size", f"{width}x{height}", "-i", DISPLAY,
                 "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                "-t", str(max_duration),
-                str(path),
-            ])
+                *_record_output_args(framerate, max_duration, path),
+            ], log_path)
             target = {"kind": "screen"}
         else:
             raise _invalid("kind phải là window/tab/screen")
 
-    record_id = _new_record_id()
     _register(record_id, {
         "recordingId": record_id,
         "kind": kind,
@@ -1145,6 +1241,7 @@ def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: st
         "session": _session_id(session),
         "step": step,
         "toolCallId": tool_call_id,
+        "ffmpegLog": str(log_path),
     })
     return {
         "ok": True,
@@ -1156,35 +1253,54 @@ def record_start(spec: dict, *, session: str = None, step=None, tool_call_id: st
     }
 
 
-def record_stop(recording_id: str) -> dict:
-    with _RECORDS_LOCK:
-        entry = _RECORDS.get(recording_id)
-    if not entry:
-        raise _not_found("Không tìm thấy recordingId đang chạy")
-
-    proc: subprocess.Popen = entry["process"]
+def _signal_and_wait(proc: subprocess.Popen, sig, timeout: float, sent: list, started: float) -> bool:
+    """Gửi `sig` rồi chờ tối đa `timeout` giây; True khi tiến trình đã thoát."""
     try:
-        proc.send_signal(signal.SIGINT)
+        proc.send_signal(sig)
+        sent.append({"signal": signal.Signals(sig).name, "atSec": round(time.monotonic() - started, 3)})
     except (ProcessLookupError, AttributeError, OSError):
         pass
     try:
-        proc.wait(timeout=20)
+        proc.wait(timeout=timeout)
+        return True
     except subprocess.TimeoutExpired:
-        # Hết đường mềm (SIGINT) thì dùng đường cứng rồi mới chờ lần cuối.
-        try:
-            proc.send_signal(signal.SIGKILL)
-        except (ProcessLookupError, AttributeError, OSError):
-            pass
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            raise CaptureError("Không dừng được tiến trình ffmpeg.", status_code=500)
+        return False
+
+
+def record_stop(recording_id: str) -> dict:
+    with _RECORDS_LOCK:
+        entry = _RECORDS.get(recording_id)
+        finished = _FINISHED_RECORDS.get(recording_id)
+    if not entry:
+        if finished:
+            # Đã tự thoát (hết `-t`) và bị reap trước lời stop: trả đúng kết quả đã kiểm thay vì
+            # 404, để chủ phiên không kẹt quyền sở hữu một bản ghi không còn chạy.
+            return {**finished, "alreadyFinished": True}
+        raise _not_found("Không tìm thấy recordingId đang chạy")
+
+    proc: subprocess.Popen = entry["process"]
+    sent: list[dict] = []
+    started = time.monotonic()
+    exited = proc.poll() is not None
+    # Đường mềm SIGINT (ffmpeg ghi trailer), rồi SIGTERM, cuối cùng SIGKILL. MP4 phân mảnh nên
+    # cả khi phải kill, file vẫn đọc được tới fragment cuối; `_record_finished_entry` kiểm lại.
+    for sig, wait in ((signal.SIGINT, RECORD_STOP_SIGINT_WAIT),
+                      (signal.SIGTERM, RECORD_STOP_SIGTERM_WAIT),
+                      (signal.SIGKILL, RECORD_STOP_SIGKILL_WAIT)):
+        if exited:
+            break
+        exited = _signal_and_wait(proc, sig, wait, sent, started)
+    if not exited:
+        raise CaptureError("Không dừng được tiến trình ffmpeg.", status_code=500)
+    entry["stopSignals"] = sent
+    entry["stopSec"] = round(time.monotonic() - started, 3)
 
     with _RECORDS_LOCK:
         _RECORDS.pop(recording_id, None)
 
     result = _record_finished_entry(entry)
-    result["ok"] = True
+    result.setdefault("ok", True)
+    result["stopSec"] = entry["stopSec"]
     _remember_finished(result)
     _index_record(result, entry)
     return result

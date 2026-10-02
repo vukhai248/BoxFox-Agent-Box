@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 
 ROOT = Path('/home/agent/workspace').resolve()
@@ -252,11 +253,102 @@ def _pointer_click(args, *click_args) -> list:
     return ['xdotool', 'click', *click_args]
 
 
+# W9 (CDP attach): cổng 9222 mở KHÔNG có nghĩa CDP dùng được. Khi một tab đang chạy vòng lặp JS
+# trên main thread, `connect_over_cdp` phải khởi tạo CHÍNH trang đó nên bị chặn cho tới khi vòng lặp
+# kết thúc — đo trong box (`deploy/docker/tests/probe_cdp_attach.py`): vòng lặp 40 s giữ attach 59,2 s,
+# nên trần 15 s cũ nổ "Timeout 15000ms exceeded" dù websocket đã kết nối (đúng chữ ký lỗi sweep
+# W8-A4.1: `<ws connected> ws://127.0.0.1:9222/devtools/browser/...`). Ba lớp ở đây tách lỗi khỏi
+# mạng: chờ `/json/version` trả JSON trước khi attach; attach theo NGÂN SÁCH có thử lại; quét marker
+# từng trang bằng `wait_for_function` (có trần) để một trang treo không chặn cả lượt gọi.
+CDP_PORT = 9222
+CDP_ENDPOINT = 'http://127.0.0.1:9222'
+# Trần chờ CDP trả JSON sau khi cổng mở (Chromium còn dựng profile/target khi cổng đã nghe).
+# Đo trong box: khởi động lạnh trả `/json/version` sau 0,19 s, nên 15 s là rộng rãi.
+CDP_READY_TIMEOUT = 15.0
+# Mỗi lần attach 35 s, tối đa 2 lần. Trần 15 s cũ quá sát: khi có một tab bận JS, attach mất ĐÚNG
+# ~59,2 s (đo 4 mức vòng lặp 10/20/40/90 s — không phụ thuộc độ dài vòng lặp, giống một trần phía
+# Chromium), nên lần thử thứ hai bắt được ca đó. Tổng ngân sách: 15 (chờ CDP) + 70 (attach) + 25
+# (`page.goto`) = 110 s, vẫn dưới trần 140 s của `docker exec` (`sandbox/executor.py`).
+CDP_ATTACH_ATTEMPTS = 2
+CDP_ATTACH_ATTEMPT_TIMEOUT_MS = 35000
+# Trần cho một lần đọc `window.name` của một trang.
+CDP_PAGE_MARKER_TIMEOUT_MS = 5000
+
+
+def cdp_http_json(path, timeout=2.0):
+    """JSON từ endpoint HTTP của CDP (`/json/version`, `/json/list`) — thuần stdlib."""
+    with urllib.request.urlopen(CDP_ENDPOINT + path, timeout=timeout) as response:
+        return json.loads(response.read().decode('utf-8', 'replace'))
+
+
+def cdp_ready(deadline):
+    """CDP đã trả JSON chưa (cổng TCP mở là chưa đủ để attach)."""
+    while True:
+        try:
+            cdp_http_json('/json/version', timeout=1.0)
+            return True
+        except Exception:  # noqa: BLE001 - cổng chưa mở / Chromium còn dựng profile / HTTP chưa nghe
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.2)
+
+
+def cdp_attach(pw):
+    """`connect_over_cdp` theo ngân sách: thử lại một lần, lỗi nêu ĐÚNG bước đã hỏng.
+
+    Trả `(browser, {'attempts', 'attachSec'})`. Không gán lỗi attach cho mạng: đo được nguyên nhân
+    là một trang bận JS giữ quá trình khởi tạo trang, nên thử lại có ý nghĩa.
+    """
+    started = time.monotonic()
+    last = None
+    for attempt in range(1, CDP_ATTACH_ATTEMPTS + 1):
+        try:
+            client = pw.chromium.connect_over_cdp(CDP_ENDPOINT, timeout=CDP_ATTACH_ATTEMPT_TIMEOUT_MS)
+        except Exception as exc:  # noqa: BLE001 - Playwright ném Error/TimeoutError khác nhau theo bản
+            last = exc
+            continue
+        return client, {'attempts': attempt, 'attachSec': round(time.monotonic() - started, 3)}
+    raise ValueError('BROWSER_CDP_ATTACH_TIMEOUT: connect_over_cdp ' + CDP_ENDPOINT + ' failed after '
+                     + str(CDP_ATTACH_ATTEMPTS) + ' attempts x ' + str(CDP_ATTACH_ATTEMPT_TIMEOUT_MS // 1000)
+                     + 's (a page blocked by a long-running script can hold this open; retry after it '
+                       'finishes): ' + str(last)[:300])
+
+
+def page_has_marker(page, marker):
+    """`window.name` của trang có bằng marker của phiên không — CÓ TRẦN thời gian.
+
+    `page.evaluate` không nhận `timeout` và không dùng `set_default_timeout`, nên một trang đang bận
+    JS sẽ chặn cả lượt gọi cho tới khi harness cắt ở 140 s. `wait_for_function` có trần do driver
+    Playwright giữ, nên trang treo chỉ bị coi là "không phải trang của phiên" rồi đi tiếp.
+    """
+    try:
+        page.wait_for_function('(value) => window.name === value', arg=marker,
+                               timeout=CDP_PAGE_MARKER_TIMEOUT_MS)
+        return True
+    except Exception:  # noqa: BLE001 - hết trần (trang bận) hoặc trang đã đóng
+        return False
+
+
+def page_set_marker(page, marker):
+    """Đặt `window.name` của trang = marker, cũng CÓ TRẦN (lý do như `page_has_marker`).
+
+    Hàm JS trả `true` ngay nên `wait_for_function` chỉ gọi nó một lần; hết trần (trang bận JS) thì
+    trả False. Điều hướng trong cùng tab vốn giữ `window.name`, nên bước này chỉ để chống chệch.
+    """
+    try:
+        page.wait_for_function('(value) => { window.name = value; return true; }', arg=marker,
+                               timeout=CDP_PAGE_MARKER_TIMEOUT_MS)
+        return True
+    except Exception:  # noqa: BLE001 - hết trần (trang bận) hoặc trang đã đóng
+        return False
+
+
 def browser(args, session):
     from playwright.sync_api import sync_playwright
     action = args.get('action', 'snapshot')
+    started = time.monotonic()
     try:
-        with socket.create_connection(('127.0.0.1', 9222), timeout=1):
+        with socket.create_connection(('127.0.0.1', CDP_PORT), timeout=1):
             pass
     except OSError:
         if action != 'navigate':
@@ -265,29 +357,39 @@ def browser(args, session):
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         for _ in range(40):
             try:
-                with socket.create_connection(('127.0.0.1', 9222), timeout=0.2):
+                with socket.create_connection(('127.0.0.1', CDP_PORT), timeout=0.2):
                     break
             except OSError:
                 time.sleep(0.2)
         else:
             raise ValueError('Sandbox Chromium failed to start CDP')
+    if not cdp_ready(time.monotonic() + CDP_READY_TIMEOUT):
+        raise ValueError('BROWSER_CDP_NOT_READY: port ' + str(CDP_PORT) + ' is open but /json/version did '
+                         'not answer within ' + str(int(CDP_READY_TIMEOUT)) + 's')
     with sync_playwright() as pw:
-        client = pw.chromium.connect_over_cdp('http://127.0.0.1:9222', timeout=15000)
-        context = client.contexts[0]
+        client, attach = cdp_attach(pw)
+        attach['readySec'] = round(time.monotonic() - started, 3)
+        context = client.contexts[0] if client.contexts else None
+        if context is None:
+            raise ValueError('BROWSER_CDP_NO_CONTEXT: Chromium has no browser context to use')
         marker = 'boxfox-harness-' + session
-        page = next((p for p in context.pages if p.evaluate('window.name') == marker), None)
+        page = next((p for p in context.pages if page_has_marker(p, marker)), None)
         if page is None:
             if action != 'navigate':
                 raise ValueError('No browser page for this session. Navigate first.')
             page = context.new_page()
-            page.evaluate('(v) => window.name = v', marker)
+            if not page_set_marker(page, marker):
+                raise ValueError('BROWSER_MARKER_FAILED: could not tag the new browser page for this session')
         page.set_default_timeout(10000)
         if action == 'navigate':
             url = args['url']
             if not url.startswith(('http://', 'https://')):
                 raise ValueError('Only http/https browser URLs are allowed')
             page.goto(url, wait_until='domcontentloaded', timeout=25000)
-            page.evaluate('(v) => window.name = v', marker)
+            # KHÔNG `page.evaluate` ở đây: trang vừa điều hướng có thể đang bận JS (vòng lặp trên main
+            # thread) và `evaluate` không có trần → giữ cả lượt gọi tới khi harness cắt ở 140 s. Hỏng
+            # bước đặt lại marker cũng KHÔNG làm hỏng lượt điều hướng đã xong.
+            attach['markerSet'] = page_set_marker(page, marker)
         elif action in {'click', 'fill'}:
             ref = args.get('ref', '')
             if not re.fullmatch(r'[a-f0-9]{8}-\d+', ref):
@@ -306,7 +408,7 @@ def browser(args, session):
             output.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(output))
             return {'content': 'Browser screenshot captured', 'artifact': str(output.relative_to(ROOT)),
-                    'image': base64.b64encode(output.read_bytes()).decode(), 'mime': 'image/png'}
+                    'image': base64.b64encode(output.read_bytes()).decode(), 'mime': 'image/png', 'attach': attach}
         elif action != 'snapshot':
             raise ValueError('Unknown browser action')
         nonce = uuid.uuid4().hex[:8]
@@ -314,7 +416,8 @@ def browser(args, session):
             const ref = nonce + '-' + i; e.setAttribute('data-boxfox-ref',ref);
             return {ref,tag:e.tagName,text:(e.innerText||e.getAttribute('aria-label')||e.getAttribute('placeholder')||'').slice(0,180)};
         })''', nonce)
-        return {'url': page.url, 'title': page.title(), 'content': page.locator('body').inner_text()[:12000], 'elements': elements}
+        return {'url': page.url, 'title': page.title(), 'content': page.locator('body').inner_text()[:12000],
+                'elements': elements, 'attach': attach}
 
 
 # P1.4 (đợt 23) — BẰNG CHỨNG TẠI GỐC: mỗi lần ghi tệp để lại một mảnh kiểm chứng được, sinh
