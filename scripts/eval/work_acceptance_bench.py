@@ -1306,12 +1306,14 @@ class RecordingClient:
         self.claim_left = int((self.claim_fault or {}).get('calls', 1))
 
     async def complete(self, messages, tools, route, **kwargs):
+        started = time.monotonic()
         response = await self.inner.complete(messages, tools, route, **kwargs)
         usage = response.get('usage') or {}
         call = {'providerId': self.providers.get(route.get('connectionId')),
                 'modelId': route.get('modelId'), 'connectionId': route.get('connectionId'),
                 'sessionId': route.get('sessionId'),
-                'tokensIn': usage.get('prompt_tokens'), 'tokensOut': usage.get('completion_tokens')}
+                'tokensIn': usage.get('prompt_tokens'), 'tokensOut': usage.get('completion_tokens'),
+                'wallMs': int((time.monotonic() - started) * 1000)}
         if self.length_fault and self.length_left > 0:
             self.length_left -= 1
             choices = response.get('choices') or [{}]
@@ -1458,6 +1460,7 @@ def collect_bundle(store, graph, sid, scenario, client, *, error=None, notes=Non
     ship = ship_report(workspace, run) if workspace else {}
     bundle = build_bundle(events=events, run=run, checks=checks, feedback=feedback, turns=turns,
                           children=children, artifacts=artifacts, calls=client.calls,
+                          child_sessions={session['id']: session.get('role') for session in sessions},
                           config={'faults': scenario.get('faults') or [], 'session': sid,
                                   'ship': ship},
                           expected_state=scenario['expectedState'], missing=missing,
@@ -1707,15 +1710,32 @@ def _write_json(path, doc):
     return path
 
 
+def _rubric_role(role):
+    """Vai của phiên → vai của rubric: phiên gốc (orchestrator) tính là `main`."""
+    return role if role in RUBRIC_ROLES else 'main'
+
+
 def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
     """results.json: model, commit, config hash, attempts, budget, token/latency theo lượt và vai."""
     per_cell = []
     per_role = {}
+    role_totals = {}
     for index, item in enumerate(cells):
         scenario, bundle = item['scenario'], item['bundle']
         run = bundle.get('run') or {}
         calls = item.get('calls') or []
         scored = scoring['cells'][index]
+        by_role = {}
+        for call in calls:
+            role = _rubric_role((bundle.get('childSessions') or {}).get(call.get('sessionId')))
+            row = by_role.setdefault(role, {'calls': 0, 'tokensIn': 0, 'tokensOut': 0, 'wallMs': 0})
+            total = role_totals.setdefault(role, {'calls': 0, 'tokensIn': 0, 'tokensOut': 0, 'wallMs': 0})
+            for key, value in (('tokensIn', call.get('tokensIn')), ('tokensOut', call.get('tokensOut')),
+                               ('wallMs', call.get('wallMs'))):
+                row[key] += int(value or 0)
+                total[key] += int(value or 0)
+            row['calls'] += 1
+            total['calls'] += 1
         per_cell.append({'caseId': scenario['id'], 'repeat': item['repeat'],
                          'expectedState': scenario['expectedState'],
                          'observedState': scored['observedState'],
@@ -1724,13 +1744,15 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
                          'runStatus': run.get('status'), 'wallTimeMs': item.get('wallTimeMs'),
                          'tokensIn': sum(call.get('tokensIn') or 0 for call in calls),
                          'tokensOut': sum(call.get('tokensOut') or 0 for call in calls),
-                         'modelCalls': len(calls),
+                         'modelCalls': len(calls), 'roleLatency': by_role,
                          'steps': len([turn for turn in bundle.get('turns') or [] if turn.get('status')]),
                          'children': len(bundle.get('children') or [])})
     for role in RUBRIC_ROLES:
         per_role[role] = {'rules': scoring['roles'][role]['rules'],
                           'passed': scoring['roles'][role]['passed'],
                           'rate': scoring['roles'][role]['rate']}
+        per_role[role].update(role_totals.get(role) or {'calls': 0, 'tokensIn': 0, 'tokensOut': 0,
+                                                        'wallMs': 0})
     results = {'schema': RESULTS_SCHEMA, 'plan': plan, 'route': route,
                'configHash': plan['configHash'],
                'cells': per_cell, 'roles': per_role, 'gate': scoring['gate'],

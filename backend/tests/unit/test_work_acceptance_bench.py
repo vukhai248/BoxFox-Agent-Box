@@ -494,6 +494,41 @@ def test_config_hash_reads_the_policy_version_instead_of_hardcoding_it():
     assert info['combined'] == bench.config_hash()['combined']
 
 
+def test_results_json_carries_gate_failures_and_per_role_latency(tmp_path):
+    rubric = bench.load_rubric()
+    scenario = bench.load_scenario(bench.scenario_path('S02'))
+    bundle = bench.build_bundle(
+        events=[{'kind': 'tool_end', 'sessionId': 'root',
+                 'data': {'name': 'terminal_exec', 'command': 'python -m pytest', 'exitCode': 0}}],
+        run={'status': 'verified'},
+        checks=[{'checkId': 'c1', 'kind': 'tests', 'stage': 'execute', 'status': 'pass'}],
+        artifacts=_plan_artifact(),
+        child_sessions={'root': 'orchestrator', 'child-1': 'research'},
+        calls=[{'providerId': 'opencode', 'modelId': 'space-bunny-free', 'sessionId': 'root',
+                'tokensIn': 100, 'tokensOut': 20, 'wallMs': 900},
+               {'providerId': 'opencode', 'modelId': 'space-bunny-free', 'sessionId': 'child-1',
+                'tokensIn': 40, 'tokensOut': 10, 'wallMs': 300}],
+        config={'session': 'root'}, expected_state=scenario['expectedState'])
+    cell = {'scenario': scenario, 'repeat': 1, 'bundle': bundle, 'validity': 'quality-valid',
+            'wallTimeMs': 1500, 'calls': bundle['calls'], 'error': None}
+    scoring = bench.evaluate_run([cell], rubric)
+    plan = bench.build_plan([scenario], repeats=1, out_root=tmp_path, repo_dir=bench.REPO_DIR,
+                            budget_usd=None, with_v=False)
+    path = bench.write_results(tmp_path, plan, [cell], scoring, route={'providerId': 'opencode'},
+                               extra={'manifest': {'commit': 'abc'}})
+    results = json.loads(Path(path).read_text(encoding='utf-8'))
+    assert results['schema'] == bench.RESULTS_SCHEMA
+    assert results['attempts'] == 1 and results['tokens'] == {'in': 140, 'out': 30}
+    assert results['cells'][0]['roleLatency']['research'] == {'calls': 1, 'tokensIn': 40,
+                                                              'tokensOut': 10, 'wallMs': 300}
+    assert results['roles']['research']['calls'] == 1
+    assert results['roles']['main']['calls'] == 1
+    assert results['roles']['main']['wallMs'] == 900
+    assert results['gate']['denominator'] == 1 and results['failures'] == []
+    assert results['configHash']['policyVersion'] == bench.policy_version()
+    assert results['manifest']['commit'] == 'abc'
+
+
 def test_executor_snapshot_runs_and_other_commands_are_blocked(tmp_path):
     from agentbox.agent_core import work_checks  # noqa: PLC0415 - chỉ có ở đường chạy thật
 
