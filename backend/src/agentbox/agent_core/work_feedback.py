@@ -87,9 +87,17 @@ def service(rt):
 def evidence_signature(event):
     """Successful opened content, not its event ID/time or a path alone."""
     result, args = event.get('result') or {}, event.get('args') or {}
+    name = event.get('name')
+    if name == 'verify_exec' and isinstance(result, dict):
+        # W6.1.3: a receipt proves a computation, never an opened source. A timeout is still an
+        # observation (is_error with receipt); an unavailable sandbox has no receipt.
+        receipt = result.get('receipt')
+        if not isinstance(receipt, dict) or not receipt.get('codeHash') or not receipt.get('outputHash'):
+            return None
+        return {'ref': 'verify:' + str(receipt['codeHash']), 'kind': 'verify_exec',
+                'contentHash': receipt['outputHash'], 'range': None}
     if not isinstance(result, dict) or result.get('is_error'):
         return None
-    name = event.get('name')
     if name in ('web_fetch', 'read_source'):
         quality = result.get('quality')
         if quality is not None:

@@ -175,8 +175,47 @@ Phân biệt quyết định người dùng với tiền đề kỹ thuật tron
 KẾT THÚC bằng đúng một dòng `VERDICT: ok` hoặc `VERDICT: revise`, không có chữ phía sau. Giữ nguyên marker này."""
 
 
-def deliverable(kind, lang='en'):
-    return (DELIVERABLES_VI if lang == 'vi' else DELIVERABLES_EN).get(kind)
+# W6.2 — đầu ra theo taskKind/depth: tra cứu ngắn, research brief không có phương án/khuyến nghị.
+LOOKUP_ANSWER_WORDS = 120
+RESEARCH_BRIEF_WORDS = 400
+DELIVERABLE_LOOKUP = {
+    'en': """Deliverable (Markdown, in the owner's language):
+## Answer — at most 120 words; the direct answer only.
+## Sources opened — one line per path:line or URL with its tool call id/ref.
+## Unverified — claims you could not open a source for; may be empty.
+No options, recommendation or plan.""",
+    'vi': """Đầu ra Markdown bằng tiếng Việt có dấu:
+## Trả lời — tối đa 120 từ; chỉ câu trả lời trực tiếp.
+## Nguồn đã mở — mỗi dòng một path:line hoặc URL kèm tool call id/ref.
+## Chưa kiểm — khẳng định chưa mở được nguồn; có thể để trống.
+Không có phương án, khuyến nghị hay kế hoạch.""",
+}
+DELIVERABLE_RESEARCH_BRIEF = {
+    'en': """Deliverable (Markdown, in the owner's language), at most 400 words in total:
+## Answer — direct answer, 2–5 sentences.
+## Verified facts — each fact with its opened URL/path and short quote.
+## Gaps — unopened sources, contrary evidence and open owner decisions; label UNVERIFIED.
+No options compared and no recommendation section.""",
+    'vi': """Đầu ra Markdown bằng tiếng Việt có dấu, tổng cộng tối đa 400 từ:
+## Trả lời — trả lời trực tiếp trong 2–5 câu.
+## Dữ kiện đã xác minh — từng dữ kiện kèm URL/path đã mở và trích ngắn.
+## Khoảng trống — nguồn chưa mở, bằng chứng trái chiều, quyết định chờ người dùng; ghi UNVERIFIED.
+Không có mục so sánh phương án và không có mục khuyến nghị.""",
+}
+PROPORTIONAL_NOTE = {'en': '\nLength follows the scope; do not add empty sections.',
+                     'vi': '\nĐộ dài theo phạm vi; không thêm mục rỗng.'}
+
+
+def deliverable(kind, lang='en', task_kind=None, depth=None):
+    key = 'vi' if lang == 'vi' else 'en'
+    if task_kind == 'lookup':
+        return DELIVERABLE_LOOKUP[key]
+    if kind == 'research' and depth == 'brief':
+        return DELIVERABLE_RESEARCH_BRIEF[key]
+    text = (DELIVERABLES_VI if lang == 'vi' else DELIVERABLES_EN).get(kind)
+    if text and kind in ('plan', 'design'):
+        text += PROPORTIONAL_NOTE[key]
+    return text
 
 
 def rubric(kind, lang='en'):
@@ -217,7 +256,11 @@ def review_tail(lang='en'):
         'Thiếu chứng minh claim bắt buộc có thể chặn, nhưng chưa chứng minh claim ngược lại. '
         'Chỉ trích nguyên văn có trong nguồn đã mở. Ưu tiên sửa tối thiểu có bằng chứng; tránh '
         'ví dụ tùy chọn và lời khuyên triển khai không cần để kết luận nghiệm thu. Phân biệt artifact đúng với '
-        'nhiệm vụ mâu thuẫn: coverage có revise (kể cả target=criterion) thì cuối phải VERDICT: revise. ')
+        'nhiệm vụ mâu thuẫn: coverage có revise (kể cả target=criterion) thì cuối phải VERDICT: revise. ') + choose(lang,
+        '\nA wrong side remark that does not change any criterion outcome is a note, not a blocking finding. '
+        'At most 8 findings, each claim at most 300 characters; cite receipts, not memory. ',
+        '\nMột nhận xét bên lề sai nhưng không đổi kết quả tiêu chí nào là ghi chú, không phải finding chặn. '
+        'Tối đa 8 finding, mỗi claim tối đa 300 ký tự; trích receipt, không trích trí nhớ. ')
 
 
 def child_contract(purpose, lang='en'):
@@ -232,7 +275,10 @@ def child_contract(purpose, lang='en'):
             'rồi đúng một dòng cuối VERDICT: ok hoặc VERDICT: revise. Chỉ prose là chưa hoàn tất. '
             'Kiểm định dạng trước khi gửi; không để coverage hoặc verdict chỉ trong suy nghĩ. ')
     if purpose == 'knowledge' and lang == 'vi':
-        return '\n\nTrả lời tra cứu bằng tiếng Việt có dấu: dữ kiện liên quan, bằng chứng đã đọc, kiểm chứng thực hiện và giới hạn. Giữ nguyên path/URL/identifier/trích dẫn. Không bịa nguồn hoặc quyết định của người dùng.'
+        return ('\n\nTrả lời tra cứu bằng tiếng Việt có dấu: dữ kiện liên quan, bằng chứng đã đọc, kiểm chứng thực hiện và giới hạn. Giữ nguyên path/URL/identifier/trích dẫn. Không bịa nguồn hoặc quyết định của người dùng.'
+                '\n' + DELIVERABLE_LOOKUP['vi'])
+    if purpose == 'knowledge':
+        return '\n\n' + DELIVERABLE_LOOKUP['en']
     if purpose != 'produce':
         return None
     return choose(lang, """\n\nWork Graph result contract: put the full deliverable in your final answer for the independent reviewer. Stay within the assignment and acceptance. Factual claims need opened path:line/URL or real command output. Label inference, proposals and unresolved owner decisions explicitly; do not invent evidence or user confirmation. Reasoning may be English; final text follows the owner, preserving identifiers/quotes.

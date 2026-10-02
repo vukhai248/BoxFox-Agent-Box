@@ -60,7 +60,8 @@ def test_the_two_journal_tools_are_advertised_and_held_by_the_orchestrator_only(
     names = {schema['function']['name'] for schema in SCHEMAS}
     assert {'journal_write', 'journal_brief'} <= names
     assert {'journal_write', 'journal_brief'} <= ORCHESTRATOR_TOOLS
-    assert len(ORCHESTRATOR_TOOLS) == 46
+    # W6.1.3: thêm `verify_exec` để reviewer con thừa hưởng được (46 → 47).
+    assert len(ORCHESTRATOR_TOOLS) == 47
     assert 'work_report' in names & ORCHESTRATOR_TOOLS
     for role in ('build', 'explore', 'review', 'testing'):
         assert not ({'journal_write', 'journal_brief'} & allowed_tools(role)), \

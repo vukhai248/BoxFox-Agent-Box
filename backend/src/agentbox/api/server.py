@@ -411,7 +411,18 @@ def create_app(runtime):
     app.on_cleanup.append(stop_research_continuations)
 
     async def health(request):
-        return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION})
+        # W6.1.3: `?probe=verify` chạy probe bwrap trong box; mặc định chỉ trả lần quan sát gần nhất
+        # (health phải rẻ, không docker exec mỗi lần gọi).
+        if request.query.get('probe') == 'verify':
+            from ..agent_core import verify_exec
+            try:
+                answer = await runtime.executor.execute('verify_exec_probe', {'refresh': True}, 'health')
+            except Exception as exc:  # box không chạy: báo thật, không giả là có isolation
+                answer = {'available': False, 'reason': str(exc)[:300]}
+            runtime.verify_exec_status = verify_exec.observed(answer, getattr(runtime, 'verify_exec_status', None))
+        return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION,
+                                  'verifyExec': getattr(runtime, 'verify_exec_status', None)
+                                  or {'available': None, 'reason': 'not probed yet'}})
 
     async def catalog(request):
         return web.json_response({'roles': [{'id': r.id, 'name': r.name, 'instructions': r.instructions, 'tools': sorted(r.tools)} for r in ROLES.values()], 'skills': runtime.catalog.list(runtime.commands.settings()['enabled'])})

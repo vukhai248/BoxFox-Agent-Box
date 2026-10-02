@@ -67,6 +67,8 @@ WORK_NODE = {'type': 'object', 'properties': {
     'taskKind': {'type': 'string', 'enum': ['lookup','diagnostic','deliverable','implementation']},
     'artifactKind': {'type': 'string', 'enum': ['knowledge','diagnostic','research','design','plan','patch','test_report']},
     'risk': {'type': 'string', 'enum': ['normal','consequential']},
+    'depth': {'type': 'string', 'enum': ['brief','standard','full'],
+              'description': 'optional deliverable depth; brief research = answer, verified facts, gaps only'},
     'title': STRING,
     'goal': {'type': 'string', 'description': 'the complete, self-contained assignment for the specialist'},
     'dependsOn': {'type': 'array', 'items': STRING,
@@ -174,6 +176,18 @@ SCHEMAS = [
          'use separate calls such as **/*.py and **/*.ts, not **/*.{py,ts}.', {'pattern': STRING}),
     tool('codebase_grep', 'Find literal text in workspace files.', {'query': STRING, 'path': STRING}, ['query']),
     tool('terminal_exec', 'Run Bash inside the sandbox, never on the host. Returns exit code and output.', {'command': STRING, 'timeout': {'type': 'integer'}}, ['command']),
+    # W6.1.3 — reviewer thử một claim tính toán trong sandbox tạm (không mạng, workspace bị che).
+    tool('verify_exec',
+         'Run a small python or node snippet to test ONE concrete claim (count, encoding, arithmetic, parser '
+         'behavior). Fresh temp dir, no network, workspace not writable. Returns a receipt; cite it as the tool '
+         'call id in evidenceRefs. Not for running project tests.',
+         {'language': {'type': 'string', 'enum': ['python', 'node']},
+          'code': {'type': 'string', 'minLength': 1, 'maxLength': 8000},
+          'stdin': {'type': 'string', 'maxLength': 8000},
+          'claim': {'type': 'string', 'minLength': 1, 'maxLength': 300,
+                    'description': 'the one claim this snippet checks'},
+          'timeoutSeconds': {'type': 'integer', 'minimum': 1, 'maximum': 20}},
+         ['language', 'code', 'claim']),
     tool('computer_screen_capture',
          'Capture the actual sandbox display; returns an image and artifact. Pass target to shoot ONE '
          'browser tab or window instead of the whole screen, and a short caption naming the finished '

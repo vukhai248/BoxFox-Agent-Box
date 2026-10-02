@@ -8,7 +8,7 @@ import uuid
 
 from . import work_policy, work_prompts
 
-INPUTS_VERSION = 'work-check-inputs/1'
+INPUTS_VERSION = 'work-check-inputs/2'  # W6.1.3: findings/citation contract
 
 SNAPSHOT_SCRIPT = '''import hashlib,json,os,re,subprocess
 p=subprocess.run(['git','ls-files','-co','--exclude-standard','-z'],capture_output=True,check=True)
@@ -186,6 +186,172 @@ def parse_report(text, required, *, require_target=False):
     return status, coverage, raw
 
 
+# --- W6.1.3: finding/citation contract và self-challenge ------------------------------------------
+FINDING_LIMIT = 8
+FINDING_CLAIM_MAX = 300
+FINDING_REFS_MAX = 6
+PROSE_WORD_CAP = 600
+COUNTER_OUTCOMES = ('refuted', 'confirmed', 'not_run')
+NUMERIC_CLAIM_RE = re.compile(
+    r'(\d[\d.,]*)\s*(?:-\s*)?(?:chars?|characters?|bytes?|code[ -]?points?|words?|lines?|ký tự|byte|từ|dòng)\b',
+    re.I)
+COMPUTE_TOOLS = ('verify_exec', 'terminal_exec')
+SOURCE_TOOLS = ('file_read', 'web_fetch', 'read_source', 'codebase_grep', 'work_artifact_read')
+
+
+def report_json(raw):
+    """The last fenced json object of a report, or {} (legacy/prose reports stay parseable)."""
+    blocks = re.findall(r'```json\s*\n(.*?)\n```', str(raw or ''), re.S)
+    try:
+        value = json.loads(blocks[-1]) if blocks else {}
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def prose_words(raw):
+    """Words outside fenced blocks and the VERDICT line: the contract's 600-word cap is a metric."""
+    text = re.sub(r'```.*?```', ' ', str(raw or ''), flags=re.S)
+    text = re.sub(r'^\s*VERDICT: (?:ok|revise)\s*$', ' ', text, flags=re.M)
+    return len(re.findall(r'\S+', text))
+
+
+def receipt_index(graph, child_id, admission_seq, artifacts):
+    """ref -> observed content text ('' when none) for refs valid in THIS admission only."""
+    from .work_feedback import evidence_signature
+    index = {}
+    for event in observations(graph, child_id, after=admission_seq or 0):
+        result = event.get('result') if isinstance(event.get('result'), dict) else {}
+        name = event.get('name')
+        receipt = result.get('receipt') if name == 'verify_exec' else None
+        # A failed tool proves nothing, except a verify_exec timeout: that is still an observation.
+        if result.get('is_error') and not isinstance(receipt, dict):
+            continue
+        text = str(result.get('content') or result.get('text') or result.get('output') or '')
+        entry = {'kind': name, 'text': text}
+        if event.get('id'):
+            index[str(event['id'])] = entry
+        signature = evidence_signature(event)
+        if signature:
+            index.setdefault(signature['ref'], entry)
+    for meta in artifacts or []:
+        ref = f"artifact:{meta.get('artifactId')}@{meta.get('contentHash')}"
+        text = ''
+        try:
+            _, text = graph.artifacts.get(meta['runId'], meta['artifactId'])
+        except (KeyError, ValueError, TypeError, AttributeError):
+            continue  # an unknown or corrupt snapshot is not a valid receipt
+        index[ref] = {'kind': 'work_artifact_read', 'text': text}
+    return index
+
+
+def finding_problem(item, required, scope_kind, receipts):
+    """None when a blocking finding stands; otherwise the downgrade reason."""
+    refs = item.get('evidenceRefs')
+    if scope_kind == 'node' and item.get('scope') == 'run':
+        return 'SCOPE_RUN_IN_NODE_REVIEW'
+    if item.get('criterionId') not in required:
+        return 'CRITERION_UNKNOWN'
+    if not isinstance(refs, list) or not refs or not all(isinstance(r, str) and r.strip() for r in refs):
+        return 'NO_RECEIPT'
+    if any(ref not in receipts for ref in refs):
+        return 'UNKNOWN_RECEIPT'
+    for number in NUMERIC_CLAIM_RE.findall(item['claim']):
+        computed = any(receipts[ref]['kind'] in COMPUTE_TOOLS for ref in refs)
+        sourced = any(receipts[ref]['kind'] in SOURCE_TOOLS and number in receipts[ref]['text'] for ref in refs)
+        if not computed and not sourced:
+            return 'NUMERIC_UNVERIFIED'
+    counter = item.get('counterCheck')
+    if (not isinstance(counter, dict) or counter.get('outcome') not in COUNTER_OUTCOMES
+            or not isinstance(counter.get('strongest'), str) or not counter['strongest'].strip()):
+        return 'NO_COUNTERCHECK'
+    if counter['outcome'] == 'confirmed':
+        return 'SELF_REFUTED'  # the strongest objection held, yet the finding still claims to block
+    if counter['outcome'] == 'refuted' and (not isinstance(counter.get('checkedBy'), str)
+                                           or not counter['checkedBy'].strip()):
+        return 'NO_COUNTERCHECK'  # "refuted" must name what refuted it (receipt id or source)
+    return None
+
+
+def validate_findings(graph, child_id, admission_seq, raw, required, scope_kind, artifacts):
+    """Backend check of the findings block; the model's VERDICT alone never blocks.
+
+    Returns {'findings': n, 'blocking': [ids], 'notes': [ids], 'downgraded': [{findingId, reason}],
+    'items': [...]}. Called right after parse_report() and before the existing gates.
+    """
+    items = report_json(raw).get('findings')
+    items = items if isinstance(items, list) else []
+    receipts = receipt_index(graph, child_id, admission_seq, artifacts) if child_id else {}
+    blocking, notes, downgraded, kept = [], [], [], []
+    for position, item in enumerate(items):
+        fid = str(item.get('id') or f'F{position + 1}') if isinstance(item, dict) else f'F{position + 1}'
+        if position >= FINDING_LIMIT:
+            downgraded.append({'findingId': fid, 'reason': 'FINDING_LIMIT'})
+            continue
+        if (not isinstance(item, dict) or item.get('severity') not in ('blocking', 'note')
+                or item.get('scope', 'node') not in ('node', 'run')
+                or not isinstance(item.get('claim'), str) or not item['claim'].strip()
+                or len(item['claim']) > FINDING_CLAIM_MAX
+                or isinstance(item.get('evidenceRefs'), list) and len(item['evidenceRefs']) > FINDING_REFS_MAX):
+            downgraded.append({'findingId': fid, 'reason': 'MALFORMED'})
+            continue
+        kept.append(item | {'id': fid})
+        if item['severity'] == 'note':
+            notes.append(fid)  # a side remark never blocks
+            continue
+        reason = finding_problem(item, required, scope_kind, receipts)
+        if reason:
+            downgraded.append({'findingId': fid, 'reason': reason})
+            notes.append(fid)
+        else:
+            blocking.append(fid)
+    return {'findings': len(items), 'blocking': blocking, 'notes': notes, 'downgraded': downgraded,
+            'items': kept}
+
+
+def apply_findings(raw, status, coverage, analysis):
+    """Re-derive status: only a valid blocking finding (or an evidenced criterion conflict) revises.
+
+    A report that never declares `findings` keeps the old semantics (policy-10 records and legacy
+    fixtures stay readable); the stricter rule applies to the new contract.
+
+    Returns (status, coverage, uncitedError|None).
+    """
+    if status == 'error' or not isinstance(report_json(raw).get('findings'), list):
+        return status, coverage, None
+    by_id = {item['id']: item for item in analysis['items']}
+    valid = set(analysis['blocking'])
+    reasons = {d['findingId']: d['reason'] for d in analysis['downgraded']}
+    uncited, updated = [], []
+    for entry in coverage:
+        entry = dict(entry)
+        if entry['status'] == 'revise' and entry.get('target', 'artifact') != 'criterion':
+            linked = entry.get('findingIds')
+            linked = [str(x) for x in linked] if isinstance(linked, list) and linked else \
+                [fid for fid, item in by_id.items() if item.get('criterionId') == entry['id']]
+            if not any(fid in valid for fid in linked):
+                entry['status'] = 'unverified'
+                entry['findingError'] = 'WORK_FINDING_UNCITED'
+                uncited.append((entry['id'], [(fid, reasons.get(fid, 'NOT_BLOCKING')) for fid in linked]))
+        updated.append(entry)
+    verdict = re.findall(r'^\s*VERDICT: (ok|revise)\s*$', str(raw or ''), re.M)[-1:] or ['revise']
+    statuses = {entry['status'] for entry in updated}
+    if 'revise' in statuses or verdict[0] == 'revise' and valid:
+        new = 'revise'
+    elif verdict[0] == 'revise' or 'unverified' in statuses:
+        new = 'unverified'
+    else:
+        new = 'pass'
+    error = None
+    if status == 'revise' and new != 'revise':
+        detail = '; '.join(f"{cid}: " + (', '.join(f'{fid} {why}' for fid, why in pairs) or 'no linked finding')
+                           for cid, pairs in uncited) or 'VERDICT: revise without a valid blocking finding'
+        error = ('WORK_FINDING_UNCITED: ' + detail + '. A blocking finding needs criterionId, 1-6 evidenceRefs '
+                 'from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; '
+                 'numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.')
+    return new, updated, error
+
+
 def input_conflicts(coverage, criteria):
     """An evidenced conflict in main's assignment, not a request to falsify the artifact."""
     return [{'id': item['id'], 'requirement': criteria[item['id']], 'evidence': item['evidence']}
@@ -203,7 +369,8 @@ def contract(lang, criteria):
         'Kiểm cả bằng chứng gốc; đọc artifact chưa chứng minh dữ kiện đúng. Không sửa source. '
         'Với test, chạy ĐÚNG lệnh bắt buộc; không bịa pass khi thiếu output tool. ')
     skeleton = {'coverage': [{'id': key, 'status': 'unverified', 'target': 'artifact',
-                             'evidence': '<reference or finding>'} for key in criteria]}
+                             'evidence': '<reference or finding>'} for key in criteria],
+                'findings': []}
     return head + work_prompts.choose(lang,
         '\nKeep findings under 600 words. Do not rewrite the deliverable or add scope. Snapshot hashes are checked by the backend; do not spend steps recomputing them. ',
         '\nFinding dưới 600 từ. Không viết lại sản phẩm hoặc thêm phạm vi. Backend kiểm hash snapshot; không tốn bước tính lại hash. ') + work_prompts.choose(lang,
@@ -228,7 +395,25 @@ def contract(lang, criteria):
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
         '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
         'Ví dụ tiền đề bị bác bỏ: {"id":"A1","status":"revise","target":"criterion","evidence":"Nguồn đã mở bác tiền đề; main sửa A1, không viết lại artifact đúng."}. '
-        'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + '\n' + json.dumps(skeleton, ensure_ascii=False)
+        'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + work_prompts.choose(lang,
+        '\nFindings (same json object, at most 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
+        '"scope":"node|run","claim":"<=300 chars","evidenceRefs":["<tool call id>","verify:<codeHash>",'
+        '"artifact:<artifactId>@<contentHash>"],"counterCheck":{"strongest":"best objection to this finding",'
+        '"checkedBy":"<tool call id>","outcome":"refuted|confirmed|not_run"},"impact":"...","fix":"..."}. '
+        'A revise coverage entry lists its findingIds. The backend keeps a blocking finding only when every evidenceRef '
+        'was observed in THIS review (1-6 refs), criterionId is assigned, counterCheck is present and not confirmed, '
+        'and a numeric count/encoding/byte claim cites verify_exec/terminal_exec or an opened source containing that '
+        'number; otherwise it becomes a note and the criterion is UNVERIFIED, not revise. '
+        'In a node review a run-level gap is scope=run (a note for main).',
+        '\nFinding (cùng object json, tối đa 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
+        '"scope":"node|run","claim":"<=300 ký tự","evidenceRefs":["<tool call id>","verify:<codeHash>",'
+        '"artifact:<artifactId>@<contentHash>"],"counterCheck":{"strongest":"phản biện mạnh nhất với finding",'
+        '"checkedBy":"<tool call id>","outcome":"refuted|confirmed|not_run"},"impact":"...","fix":"..."}. '
+        'Coverage revise ghi findingIds. Backend chỉ giữ finding chặn khi mọi evidenceRef được quan sát trong CHÍNH '
+        'lượt review này (1-6 ref), criterionId thuộc tiêu chí được giao, có counterCheck và outcome không phải confirmed, '
+        'và claim số đếm/encoding/byte trích verify_exec/terminal_exec hoặc nguồn đã mở chứa đúng con số đó; nếu không, '
+        'finding thành ghi chú và tiêu chí thành UNVERIFIED, không phải revise. '
+        'Trong review một nút, khoảng trống cấp run ghi scope=run (ghi chú cho main).') + '\n' + json.dumps(skeleton, ensure_ascii=False)
 
 
 READ_TOOLS = frozenset({'file_read', 'web_fetch', 'read_source', 'codebase_grep'})
@@ -630,12 +815,27 @@ class Checks:
             child_id = result.get('sessionId')
             status, coverage, findings = parse_report(text, criteria, require_target=True)
             doc.pop('error', None)
+            admission = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0) \
+                if child_id else 0
+            analysis = validate_findings(graph, child_id, admission, findings if status != 'error' else '',
+                                         criteria, 'run' if whole else 'node', metas)
+            status, coverage, uncited = apply_findings(findings, status, coverage, analysis)
+            if uncited and not retry:
+                status = 'error'  # the existing retry receives the finding ids and reasons
             doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
                 'completed': complete(result), 'execution': work_budget.receipt(result),
-                **({'contractError': findings} if status == 'error' else {})})
-            doc.update(childId=child_id, coverage=coverage, findings=findings, status=status)
+                'findings': analysis['findings'], 'blocking': len(analysis['blocking']),
+                'downgraded': analysis['downgraded'],
+                **({'overLimit': True} if prose_words(text) > PROSE_WORD_CAP else {}),
+                **({'contractError': 'WORK_FINDING_UNCITED'} if uncited else
+                   {'contractError': findings} if status == 'error' else {})})
+            doc.update(childId=child_id, coverage=coverage, findings=findings, status=status,
+                       blocking=analysis['blocking'], downgraded=analysis['downgraded'],
+                       findingNotes=analysis['notes'])
+            if uncited:
+                doc['error'] = uncited
             if child_id:
-                doc['admissionSeq'] = (graph.store.get(child_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)
+                doc['admissionSeq'] = admission
             if not complete(result):
                 doc.update(status='error', error='Reviewer incomplete/provider failure.')
             elif not all(graph.artifacts.covered(doc['checkId'], meta, child_id) for meta in metas):

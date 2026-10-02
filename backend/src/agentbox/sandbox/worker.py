@@ -220,6 +220,161 @@ def shell(command, timeout=30, session='default'):
             'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact}
 
 
+# --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------
+# Không mạng (--unshare-all), workspace bị che bằng tmpfs rỗng, thư mục làm việc là một temp dir mới,
+# không có fallback chạy không cô lập: thiếu bwrap/userns thì fail closed VERIFY_EXEC_UNAVAILABLE.
+VERIFY_OUTPUT_MAX = 8000
+VERIFY_TIMEOUT_DEFAULT, VERIFY_TIMEOUT_MAX = 10, 20
+VERIFY_AS_BYTES = 512 << 20
+VERIFY_FSIZE_BYTES = 8 << 20
+VERIFY_NPROC = 64
+VERIFY_WORKDIR = '/tmp/work'
+_VERIFY_PROBE = None
+
+
+def _verify_digest(text):
+    return 'sha256:' + hashlib.sha256((text or '').encode('utf-8', errors='replace')).hexdigest()
+
+
+def _verify_interpreter(language):
+    fixed = {'python': '/usr/bin/python3', 'node': '/opt/node/bin/node'}[language]
+    found = fixed if os.access(fixed, os.X_OK) else shutil.which('python3' if language == 'python' else 'node')
+    return found
+
+
+def _verify_bwrap_argv(proc_mode, workdir=None):
+    argv = ['bwrap', '--die-with-parent', '--unshare-all', '--new-session', '--ro-bind', '/', '/',
+            '--dev', '/dev']
+    # Docker (seccomp/apparmor unconfined) cấm mount procfs mới trong userns lồng: khi đó che /proc bằng
+    # tmpfs rỗng thay vì để lộ /proc của container (environ của các tiến trình cùng uid).
+    argv += ['--proc', '/proc'] if proc_mode == 'proc' else ['--tmpfs', '/proc']
+    argv += ['--tmpfs', '/tmp']
+    if workdir is not None:
+        # `/` chỉ-đọc nên không tạo được `/work`; điểm gắn nằm trong tmpfs `/tmp` mới.
+        argv += ['--bind', workdir, VERIFY_WORKDIR]
+    if ROOT.is_dir():
+        argv += ['--tmpfs', str(ROOT)]  # che workspace: không đọc, không ghi qua công cụ này
+    argv += ['--chdir', VERIFY_WORKDIR if workdir is not None else '/', '--']
+    return argv
+
+
+def verify_probe(refresh=False):
+    """Cached isolation probe: {available, reason, procMode}."""
+    global _VERIFY_PROBE
+    if _VERIFY_PROBE is not None and not refresh:
+        return _VERIFY_PROBE
+    if not shutil.which('bwrap'):
+        _VERIFY_PROBE = {'available': False, 'reason': 'bwrap not installed', 'procMode': None}
+        return _VERIFY_PROBE
+    reason = None
+    for mode in ('proc', 'tmpfs'):
+        try:
+            done = subprocess.run(_verify_bwrap_argv(mode) + ['true'], capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            reason = str(exc)[:300]
+            continue
+        if done.returncode == 0:
+            _VERIFY_PROBE = {'available': True, 'reason': None, 'procMode': mode}
+            return _VERIFY_PROBE
+        reason = (done.stderr or b'').decode('utf-8', errors='replace').strip()[:300] or f'exit {done.returncode}'
+    _VERIFY_PROBE = {'available': False, 'reason': reason, 'procMode': None}
+    return _VERIFY_PROBE
+
+
+# Giới hạn đặt BÊN TRONG user namespace mới, ngay trước execv: RLIMIT_NPROC đặt ở ngoài sẽ đếm mọi
+# thread cùng uid trên máy (trong Docker không thấy được qua /proc của container) và làm clone() của
+# bwrap hỏng EAGAIN; trong namespace mới nó chỉ đếm tiến trình của snippet.
+VERIFY_LAUNCHER = (
+    'import os,resource,sys\n'
+    'cpu,nproc,fsize,space=map(int,sys.argv[1:5])\n'
+    'resource.setrlimit(resource.RLIMIT_NPROC,(nproc,nproc))\n'
+    'resource.setrlimit(resource.RLIMIT_FSIZE,(fsize,fsize))\n'
+    'resource.setrlimit(resource.RLIMIT_CPU,(cpu,cpu+1))\n'
+    'space and resource.setrlimit(resource.RLIMIT_AS,(space,space))\n'
+    'os.execv(sys.argv[5],sys.argv[5:])\n')
+
+
+def _verify_launcher(language, timeout, interpreter, tail):
+    launcher = _verify_interpreter('python')
+    # V8 giữ trước vùng địa chỉ lớn nên node không khởi động dưới RLIMIT_AS 512 MiB;
+    # node bị chặn heap bằng --max-old-space-size thay vào đó.
+    space = VERIFY_AS_BYTES if language == 'python' else 0
+    return [launcher, '-I', '-c', VERIFY_LAUNCHER, str(timeout), str(VERIFY_NPROC), str(VERIFY_FSIZE_BYTES),
+            str(space), interpreter, *tail]
+
+
+def _verify_version(interpreter):
+    try:
+        done = subprocess.run([interpreter, '--version'], capture_output=True, text=True, timeout=5)
+        return ((done.stdout or '') + (done.stderr or '')).strip()[:80] or interpreter
+    except (OSError, subprocess.TimeoutExpired):
+        return interpreter
+
+
+def verify_exec(args):
+    import tempfile
+    language, code, claim = args.get('language'), args.get('code'), args.get('claim')
+    stdin = args.get('stdin') or ''
+    if language not in ('python', 'node'):
+        raise ValueError('VERIFY_EXEC_INVALID: language must be one of python|node')
+    for field, value, limit in (('code', code, 8000), ('claim', claim, 300)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f'VERIFY_EXEC_INVALID: {field} must be a non-empty string')
+        if len(value) > limit:
+            raise ValueError(f'VERIFY_EXEC_INVALID: {field} exceeds {limit} characters')
+    if not isinstance(stdin, str) or len(stdin) > 8000:
+        raise ValueError('VERIFY_EXEC_INVALID: stdin must be a string of at most 8000 characters')
+    requested = args.get('timeoutSeconds') or VERIFY_TIMEOUT_DEFAULT
+    if isinstance(requested, bool) or not isinstance(requested, int) or requested < 1:
+        raise ValueError('VERIFY_EXEC_INVALID: timeoutSeconds must be an integer 1-20')
+    timeout = min(VERIFY_TIMEOUT_MAX, requested)
+    probe = verify_probe()
+    if not probe['available']:
+        return {'is_error': True, 'errorCode': 'VERIFY_EXEC_UNAVAILABLE',
+                'error': 'VERIFY_EXEC_UNAVAILABLE: no working bubblewrap isolation in the box (' +
+                         str(probe['reason']) + '); see README sandbox/bwrap. No unisolated fallback.'}
+    interpreter = _verify_interpreter(language)
+    if not interpreter:
+        return {'is_error': True, 'errorCode': 'VERIFY_EXEC_UNAVAILABLE',
+                'error': f'VERIFY_EXEC_UNAVAILABLE: {language} interpreter not found'}
+    tail = ['-I', '-c', code] if language == 'python' else \
+        ['--max-old-space-size=256', '--input-type=module', '-e', code]
+    tmp = tempfile.mkdtemp(prefix='boxfox-verify-', dir='/tmp')
+    started = time.monotonic()
+    timed_out = False
+    try:
+        argv = _verify_bwrap_argv(probe['procMode'], tmp) + _verify_launcher(language, timeout, interpreter, tail)
+        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                start_new_session=True,
+                                env={'PATH': '/usr/bin:/bin:/opt/node/bin', 'LANG': 'C.UTF-8', 'HOME': VERIFY_WORKDIR})
+        try:
+            out, err = proc.communicate(stdin.encode('utf-8'), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            os.killpg(proc.pid, signal.SIGKILL)
+            out, err = proc.communicate()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    duration = int((time.monotonic() - started) * 1000)
+    stdout = out.decode('utf-8', errors='replace')
+    stderr = err.decode('utf-8', errors='replace')
+    truncated = len(stdout) > VERIFY_OUTPUT_MAX or len(stderr) > VERIFY_OUTPUT_MAX
+    content = stdout[:VERIFY_OUTPUT_MAX]
+    if stderr:
+        content += ('\n' if content and not content.endswith('\n') else '') + '[stderr]\n' + stderr[:VERIFY_OUTPUT_MAX]
+    exit_code = None if timed_out else proc.returncode
+    receipt = {'kind': 'verify_exec', 'language': language, 'interpreter': _verify_version(interpreter),
+               'codeHash': _verify_digest(code), 'stdinHash': _verify_digest(stdin),
+               'outputHash': _verify_digest(content), 'exitCode': exit_code, 'durationMs': duration,
+               'truncated': truncated, 'timedOut': timed_out, 'claim': claim, 'isolation': probe['procMode']}
+    result = {'content': content, 'exit_code': exit_code, 'is_error': timed_out, 'receipt': receipt}
+    if timed_out:
+        # Hết giờ vẫn là một quan sát hợp lệ: is_error=true nhưng receipt được giữ.
+        result.update(errorCode='VERIFY_EXEC_TIMEOUT',
+                      error=f'VERIFY_EXEC_TIMEOUT: snippet exceeded {timeout}s; process group stopped')
+    return result
+
+
 def _pointer_move(x: int, y: int) -> None:
     """Đưa con trỏ tới (x, y) rồi CHỜ nó tới nơi — không dùng `mousemove --sync`.
 
@@ -1302,6 +1457,10 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None):
         return {'content': '\n'.join(results)}
     if name == 'terminal_exec':
         return shell(args['command'], args.get('timeout', 30), session)
+    if name == 'verify_exec':
+        return verify_exec(args)
+    if name == 'verify_exec_probe':
+        return {'content': 'verify_exec isolation probe', **verify_probe(refresh=bool(args.get('refresh')))}
     if name == 'browser_use':
         return browser(args, session)
     if name == 'computer_use':
