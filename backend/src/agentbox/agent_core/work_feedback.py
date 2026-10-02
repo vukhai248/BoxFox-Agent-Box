@@ -61,7 +61,8 @@ def input_snapshots(feedback, child_id, work):
     values = []
     for aid in work.get('artifactIds', []):
         meta, _ = feedback.graph.artifacts.get(work['runId'], aid)
-        if meta['status'] != 'finalized' or meta['binding'].get('checkpoint'):
+        if (meta['status'] != 'finalized' or meta['binding'].get('checkpoint')
+                or meta['binding'].get('purpose') == 'check_inputs'):
             continue
         source = meta['binding'].get('codeSnapshot')
         if meta.get('producerId') == child_id:
@@ -90,6 +91,9 @@ class Feedback:
                 child_id TEXT NOT NULL, input_hash TEXT NOT NULL, created REAL NOT NULL,
                 PRIMARY KEY(child_id,input_hash));
         ''')
+        from .work_feedback_history import CardHistory
+        self.history = CardHistory(self)
+        self.history.recover()
 
     def get(self, rid, owner=None):
         row = self.db.execute('SELECT * FROM work_requests WHERE id=?', (rid,)).fetchone()
@@ -106,9 +110,10 @@ class Feedback:
             'SELECT doc FROM work_requests WHERE run_id=? ORDER BY rowid', (run_id,))]
 
     def opened(self, sid, child_id, after=None, before=None):
-        """Exclude self-written artifacts, even if opened using file_read."""
+        """Exclude self-written artifacts and input indices, including file copies."""
         own = [json.loads(r['metadata']) for r in self.db.execute(
-            "SELECT metadata FROM work_artifacts WHERE json_extract(metadata,'$.producerId')=?", (child_id,))]
+            "SELECT metadata FROM work_artifacts WHERE json_extract(metadata,'$.producerId')=? "
+            "OR json_extract(metadata,'$.binding.purpose')='check_inputs'", (child_id,))]
         own_refs = {m['path'].replace('\\', '/').removeprefix('./') for m in own}
         own_refs.update('artifact:' + m['artifactId'] for m in own)
         rows = self.db.execute("SELECT seq,created,payload FROM events WHERE session_id=? AND kind='tool_end' ORDER BY seq", (sid,))
@@ -144,9 +149,9 @@ class Feedback:
             pending = doc['status'] == 'needs_user'
             with self.db:
                 doc.update(status='stale')
+                if pending:
+                    self.resolve_card(doc, 'assignment_changed')
                 self.save(doc)
-            if pending:
-                self.resolve_card(doc, 'assignment_changed')
             raise FeedbackError('WORK_REQUEST_STALE', 'assignment changed or run closed; inspect the saved checkpoint')
         for aid in doc['binding'].get('artifactIds', []):
             self.graph.artifacts.get(run['runId'], aid)
@@ -246,6 +251,7 @@ class Feedback:
             saved = json.loads(old['result'])
             if saved['runId'] != run['runId']:
                 raise FeedbackError('WORK_REQUEST_UNKNOWN', 'request is from another run', 404)
+            self.history.reconcile(self.get(saved['requestId'], session['id']))
             return saved
         doc = self.get(args.get('requestId'), session['id'])
         if doc['runId'] != run['runId']:
@@ -258,11 +264,12 @@ class Feedback:
                 doc.update(status='cancelled', revision=doc['revision'] + 1)
                 self.save(doc)
                 self.db.execute("UPDATE work_feedback_outbox SET status='cancelled' WHERE request_id=? AND status IN ('pending','claimed')", (doc['requestId'],))
+                if pending_card:
+                    self.resolve_card(doc, 'session_cancelled', card=pending_card)
+                    self.save(doc)
                 self.db.execute('INSERT INTO work_feedback_invocations VALUES(?,?,?,?)',
                     (session['id'], invocation, digest, json.dumps(doc, ensure_ascii=False)))
             self.graph.continuations.cancel_request(doc['requestId'])
-            if pending_card:
-                self.resolve_card(doc, 'session_cancelled', card=pending_card)
             self.rt.store.emit(session['id'], 'work_feedback', doc)
             return doc
         if args.get('action') != 'resume' or doc['kind'] == 'needs_user' and doc['status'] != 'interrupted':
@@ -313,6 +320,7 @@ class Feedback:
         if doc['kind'] != 'needs_user' or doc['status'] not in ('waiting_main', 'needs_user'):
             raise FeedbackError('WORK_REQUEST_NOT_READY', 'request is not waiting for an interview')
         if doc['status'] == 'needs_user':
+            self.history.reconcile(doc)
             return self.card(doc)
         conflict = self.decision_conflict(doc)
         if conflict:
@@ -324,11 +332,11 @@ class Feedback:
             doc.update(status='needs_user', questions=questions, toolCallId=call_id,
                        publication='delegated' if automatic else 'main',requiresMainYield=not automatic,
                        title=str(args.get('title') or 'Câu hỏi làm rõ')[:160])
+            card = self.card(doc)
+            self.history.record(doc, 'decision_requested', card)
+            self.history.event(session['id'], 'ui_intent', {'tab': 'decisions', 'target': {'requestId': card['decisionId']},
+                                                          'reason': 'decision_requested'})
             self.save(doc)
-        card = self.card(doc)
-        self.rt.store.emit(session['id'], 'decision_requested', card)
-        self.rt.store.emit(session['id'], 'ui_intent', {'tab': 'decisions', 'target': {'requestId': card['decisionId']},
-                                                       'reason': 'decision_requested'})
         return card
 
     def card(self, doc):
@@ -338,18 +346,21 @@ class Feedback:
                 'questions': [q for q in doc['questions'] if q['id'] not in answered],
                 'options': [{'id': 'submit', 'label': 'Gửi câu trả lời', 'kind': 'approve'},
                             {'id': 'decide', 'label': 'Để agent quyết định', 'kind': 'alternative'}],
-                'answers': doc['answers'], 'deadline': None, 'defaultChoice': 'decide',
+                'answers': json.loads(json.dumps(doc['answers'])), 'deadline': None, 'defaultChoice': 'decide',
                 'toolCallId': doc.get('toolCallId'), 'runId': doc['runId'], 'workRequestId': doc['requestId'],
                 'revision': doc['revision'], 'durable': True, 'resolved': False,
                 'requiresMainYield':doc.get('requiresMainYield',True)}
 
     def pending(self, owner):
-        return [self.card(json.loads(r['doc'])) for r in self.db.execute(
-            'SELECT doc FROM work_requests WHERE owner_id=?', (owner,)) if json.loads(r['doc'])['status'] == 'needs_user']
+        docs = [json.loads(r['doc']) for r in self.db.execute(
+            'SELECT doc FROM work_requests WHERE owner_id=?', (owner,))]
+        for doc in docs:
+            self.history.reconcile(doc)
+        return [self.card(doc) for doc in docs if doc['status'] == 'needs_user']
 
     def resolve_card(self, doc, reason, *, card=None):
         """Close the existing UI contract without inventing an answer/consent."""
-        self.rt.store.emit(doc['ownerId'], 'decision_resolved', (card or self.card(doc)) | {
+        self.history.record(doc, 'decision_resolved', (card or self.card(doc)) | {
             'status': 'cancelled', 'resolved': True, 'outcome': 'cancelled', 'reason': reason,
             'choice': None, 'resolvedAt': time.time()})
 
@@ -367,6 +378,7 @@ class Feedback:
         if old:
             if old['request_hash'] != digest:
                 raise FeedbackError('WORK_REQUEST_INVOCATION_CONFLICT', 'invocation reused with different answers')
+            self.history.reconcile(self.get(rid, owner))
             return json.loads(old['result'])
         doc = self.get(rid, owner)
         run = self.validate(doc)
@@ -394,6 +406,13 @@ class Feedback:
                   'answers': values, 'requestId': rid, 'revision': doc['revision'], 'remaining': not done}
         # Nothing that commits independently may be called inside this transaction.
         with self.db:
+            # The old question round, its answer and any remaining round share
+            # the answer/receipt/job transaction; a failed event rolls it back.
+            self.history.record(doc, 'decision_requested', old_card)
+            self.history.record(doc, 'decision_resolved', old_card | result | {
+                'status': 'answered', 'resolved': True, 'reason': 'user', 'resolvedAt': time.time()})
+            if not done:
+                self.history.record(doc, 'decision_requested', self.card(doc))
             self.save(doc)
             self.db.execute('INSERT INTO work_feedback_invocations VALUES(?,?,?,?)',
                 (owner, invocation, digest, json.dumps(result, ensure_ascii=False)))
@@ -409,13 +428,7 @@ class Feedback:
                         'New answers allow fresh owner-clamped turn budget; preserve lifetime usage and child identity.'})
                 self.db.execute('INSERT INTO work_feedback_outbox VALUES(?,?,?,?,?)',
                     (oid, owner, rid, 'pending', json.dumps(job, ensure_ascii=False)))
-        # The route receipt uses `resolved`; the existing transcript contract
-        # accepts `answered`. Sending the receipt status made reload show pending.
-        self.rt.store.emit(owner, 'decision_resolved', old_card | result | {
-            'status': 'answered', 'resolved': True, 'reason': 'user', 'resolvedAt': time.time()})
-        if not done:
-            self.rt.store.emit(owner, 'decision_requested', self.card(doc))
-        self.rt.store.emit(owner, 'work_feedback', doc)
+            self.history.event(owner, 'work_feedback', doc)
         if done:
             self.graph.continuations.wake(run['runId'])
         return result
@@ -448,18 +461,15 @@ class Feedback:
             self.save(current)
 
     def cancel(self, owner):
-        cards = []
         with self.db:
             for row in self.db.execute('SELECT doc FROM work_requests WHERE owner_id=?', (owner,)).fetchall():
                 doc = json.loads(row['doc'])
                 if doc['status'] not in ('consumed', 'stale', 'cancelled'):
                     if doc['status'] == 'needs_user':
-                        cards.append(doc.copy())
+                        self.resolve_card(doc, 'session_cancelled')
                     doc['status'] = 'cancelled'
                     self.save(doc)
             self.db.execute("UPDATE work_feedback_outbox SET status='cancelled' WHERE owner_id=? AND status IN ('pending','claimed')", (owner,))
-        for doc in cards:
-            self.resolve_card(doc, 'session_cancelled')
 
 
 async def pump(rt):
