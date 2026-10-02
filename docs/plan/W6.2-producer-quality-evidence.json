@@ -1,0 +1,119 @@
+{
+ "scope": "W6.2 producer/lookup quality + W6.2.BIND reviewedSet/final claims notice; branch vorflux/w6-review-quality; OpenCode Space Bunny; no UI/UX change",
+ "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "sourceManifest": {
+  "backend/src/agentbox/agent_core/work_prompts.py": "3da58b4312ee55b56b5372b7bcb534630f1728410b8929be035ed7c7e240b67d",
+  "backend/src/agentbox/agent_core/work_graph.py": "645473828778f2747f803339800dd0af65b7f76a178a3a3539d0537a50d9a37e",
+  "backend/src/agentbox/agent_core/work_policy.py": "09f2aad436cf50ba3561f5b6753fda13aa151e7f86d322918ee9c0ae4e8cb7c5",
+  "backend/src/agentbox/agent_core/runtime.py": "28a93e98a481bcf1b931a1d12fdf48d449f7b0389e198e2c98645e98ccefd455",
+  "backend/src/agentbox/agent_core/work_checks.py": "a2a0d9159d00debd7e98b615caa902205da8ff583af82814c03302c213ee50ab"
+ },
+ "deliverable": {
+  "deliverable": {
+   "lookup": "Answer <=120 words + Sources opened + Unverified; no options or recommendation",
+   "researchBrief": "research node with depth=brief: Answer, Verified facts, Gaps, <=400 words, no options section",
+   "depth": "node.depth validated against work_policy.DEPTHS = ('brief','standard','full')",
+   "proportionalNote": "plan/design deliverables append a proportional note (findings <=8, claim <=300 chars)"
+  },
+  "unsourcedClaim": "answer_knowledge(): a claim naming a path/URL that was not opened marks the binding verification='unverified' and error='WORK_CLAIM_UNSOURCED: <path>'",
+  "reviewedSet": "finish_verify() on verdict ok writes run['reviewedSet'] = {wholeBinding, artifacts[], claims[], reviewedAt, verdict}; result() returns stale=true when the whole binding or a reviewed artifact hash changed",
+  "finalClaims": "runtime.final_claim_notices() at main turn end emits work_notice {type:'unreviewed_claims'} (non-blocking) for tokens outside reviewedSet.claims that carry no 'chưa kiểm/unverified' label",
+  "mainLanguage": "SOP section G requires the owner-facing commentary in the owner language (Vietnamese with accents)"
+ },
+ "nativeProbe": {
+  "script": "scripts/eval/work_lookup_probe.py",
+  "design": "A/B on the same fixture: legacy arm = node without taskKind (pre-W6.2 behaviour), lookup arm = taskKind=lookup; 1 run each",
+  "rows": [
+   {
+    "case": "legacy",
+    "attempt": 1,
+    "status": "accepted",
+    "producerStatus": "accepted",
+    "totalWords": 1050,
+    "answerWords": 1050,
+    "hasSources": false,
+    "optionsSection": false,
+    "oracle": null,
+    "latencySeconds": 185.234
+   },
+   {
+    "case": "lookup",
+    "attempt": 1,
+    "status": "accepted",
+    "producerStatus": "accepted",
+    "totalWords": 254,
+    "answerWords": 122,
+    "hasSources": true,
+    "optionsSection": false,
+    "oracle": false,
+    "latencySeconds": 22.106
+   }
+  ],
+  "summary": {
+   "rows": 2,
+   "oracle": 0,
+   "lookup": [
+    {
+     "totalWords": 254,
+     "answerWords": 122,
+     "hasSources": true,
+     "optionsSection": false,
+     "oracle": false
+    }
+   ],
+   "legacy": [
+    {
+     "totalWords": 1050,
+     "answerWords": 1050,
+     "hasSources": false,
+     "optionsSection": false
+    }
+   ],
+   "contractWords": {
+    "legacy": 71,
+    "lookup": 60
+   }
+  },
+  "oracleNote": "strict raw count: the Answer part (everything before the sources heading) must be <=120 words; the lookup arm measured 122 raw / 119 without headings, so the strict oracle fails by 2 words while the shape (sections, length class) matches the contract.",
+  "sectionDiff": {
+   "legacy": [
+    "Phát hiện",
+    "Bằng chứng",
+    "Hợp đồng và nơi gọi",
+    "Rủi ro và điều chưa rõ"
+   ],
+   "lookup": [
+    "Trả lời",
+    "Nguồn đã mở",
+    "Chưa kiểm",
+    "Knowledge requests"
+   ]
+  }
+ },
+ "mechanism": {
+  "deliverableContractWords": {
+   "legacy_explore_vi": 71,
+   "lookup_vi": 60
+  },
+  "oracle": "lookup arm: Answer <=120 words, a sources-opened section, no options/recommendation section",
+  "result": "legacy 1050 words / no sources section vs lookup 254 words total (122 raw in the Answer part, 119 without headings) with Nguồn đã mở + Chưa kiểm and no options section; the strict 120-word count fails by 2 words, the section shape and the length class match the contract"
+ },
+ "tests": {
+  "newFiles": {
+   "test_work_finding_citations.py": 20,
+   "test_work_verify_exec.py": 6,
+   "test_sandbox_verify_exec.py": 7,
+   "test_work_producer_quality.py": 7
+  },
+  "touched": {
+   "test_journal_tools.py": "tool count 46 -> 47",
+   "test_runtime_info.py": "group union 46 -> 47"
+  },
+  "workSuite": "757 passed, 2311 deselected (baseline 724) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)"
+ },
+ "openItems": [
+  "The lookup arm still spent 22s and 3 model steps; the legacy arm 185s and more tool calls — the contract is shorter but the model still volunteers a meta sentence (\"Không có phương án hay khuyến nghị nào...\") that counts toward the 120-word cap.",
+  "work_policy.VERSION stays work-checks/10 (w8-isolation owns /11 + COMPATIBLE_VERSIONS); main should bump at merge.",
+  "reviewedSet claims are the technical token set of the reviewed artifacts; a token that only appears in the final commentary with a \"chưa kiểm\" label in the same paragraph is accepted by design (test covers it)."
+ ]
+}

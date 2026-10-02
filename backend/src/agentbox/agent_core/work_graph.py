@@ -104,6 +104,66 @@ def service(rt):
 def now():
     return round(time.time(), 3)
 
+# --- W6.2/W6.2.BIND: claim kỹ thuật trong câu trả lời -------------------------------------------------
+CLAIM_PATH_RE = re.compile(r'(?:https?://[^\s`)\]]+|\b[\w.@-]+(?:/[\w.@-]+)+)')
+CLAIM_CALL_RE = re.compile(r'\b[A-Za-z_][\w.]*\(\)')
+CLAIM_CODE_RE = re.compile(r'\b[A-Z][A-Z0-9_]{5,}\b')
+UNVERIFIED_LABEL_RE = re.compile(r"chưa kiểm|unverified|not verified", re.I)
+
+
+def norm_claim(token):
+    return re.sub(r'\s+', ' ', str(token or '').strip().lower()).rstrip('.,;:`')
+
+
+def claim_tokens(text):
+    """Path/URL, `name()`, số có đơn vị và mã lỗi `[A-Z_]{6,}` trong một đoạn văn."""
+    body = str(text or '')
+    tokens = [match.group(0) for match in CLAIM_PATH_RE.finditer(body)]
+    tokens += [match.group(0) for match in CLAIM_CALL_RE.finditer(body)]
+    tokens += [match.group(0) for match in CLAIM_CODE_RE.finditer(body)]
+    tokens += [match.group(0) for match in work_checks.NUMERIC_CLAIM_RE.finditer(body)]
+    return {token.strip() for token in tokens if token.strip()}
+
+
+def final_claims_check(run, text):
+    """Tokens kỹ thuật của câu tổng hợp cuối không nằm trong tài liệu đã phản biện.
+
+    Chỉ ghi lại để eval/UI đọc; không chặn câu trả lời và không gọi reviewer. Token trong đoạn có
+    nhãn "chưa kiểm/unverified" được bỏ qua — đó chính là cách khai báo hợp lệ.
+    """
+    known = set((run.get('reviewedSet') or {}).get('claims') or [])
+    flagged, seen = [], set()
+    for paragraph in re.split(r'\n\s*\n', str(text or '')):
+        if UNVERIFIED_LABEL_RE.search(paragraph):
+            continue
+        for token in sorted(claim_tokens(paragraph)):
+            key = norm_claim(token)
+            if key in known or key in seen:
+                continue
+            seen.add(key)
+            flagged.append(token)
+    return flagged
+
+
+def claim_sources(answer, reads):
+    """Path/URL được nhắc trong câu trả lời nhưng không khớp một nguồn đã mở có nội dung."""
+    opened = set()
+    for read in reads or []:
+        proof = work_feedback.evidence_signature(read)
+        if not proof:
+            continue
+        ref = norm_claim(proof['ref'])
+        opened.add(ref)
+        opened.add(ref.split(':', 1)[0])  # `docs/a.md:12` và `docs/a.md` là cùng một nguồn
+    unsourced = []
+    for match in CLAIM_PATH_RE.finditer(str(answer or '')):
+        token = match.group(0).strip()
+        key = norm_claim(token)
+        if key in opened or key.split(':', 1)[0] in opened:
+            continue
+        unsourced.append(token)
+    return unsourced
+
 
 def slugify(text, limit=40):
     raw = str(text or '').replace('đ', 'd').replace('Đ', 'D')
@@ -246,7 +306,8 @@ def normalize_node(raw, existing=None):
     if len(goal) < 20:
         raise ValueError(f'WORK_NODE_INVALID: node {node_id}: `goal` must be a complete, self-contained '
                          'assignment (at least 20 characters)')
-    for field, choices in (('taskKind', work_policy.TASKS), ('artifactKind', work_policy.ARTIFACTS), ('risk', work_policy.RISKS)):
+    for field, choices in (('taskKind', work_policy.TASKS), ('artifactKind', work_policy.ARTIFACTS),
+                           ('risk', work_policy.RISKS), ('depth', work_policy.DEPTHS)):
         value = raw.get(field, base.get(field))
         if value is not None and value not in choices:
             raise ValueError(f'WORK_NODE_INVALID: {field} must be one of {choices}')
@@ -255,7 +316,7 @@ def normalize_node(raw, existing=None):
             'acceptance': clean_list(raw.get('acceptance', base.get('acceptance')), 'acceptance', 64),
             'tests': clean_list(raw.get('tests', base.get('tests')), 'tests'),
             'files': clean_list(raw.get('files', base.get('files')), 'files', 40, 300)}
-    for field in ('taskKind', 'artifactKind', 'risk'):
+    for field in ('taskKind', 'artifactKind', 'risk', 'depth'):
         if raw.get(field, base.get(field)) is not None:
             node[field] = raw.get(field, base.get(field))
     if node_id in node['dependsOn']:
@@ -873,7 +934,8 @@ class WorkGraph:
         out = {'runId': run['runId'], 'status': run['status'], 'flow': run['flow'], 'revision': run['revision'],
                'autopilot': view['autopilot'], 'nodes': summary, 'waves': view['waves'], 'issues': view['issues'],
                'documents': view['documents'], 'handoffs': view['handoffs'],
-               'handoffActions': view['handoffActions'], 'next': self.next_step(run)}
+               'handoffActions': view['handoffActions'], 'next': self.next_step(run),
+               'reviewedSet': run.get('reviewedSet'), 'stale': self.stale_review(run)}
         if message:
             out['message'] = message
         return out
@@ -1119,18 +1181,22 @@ class WorkGraph:
                     extra_binding={'helperRole': item['role'], 'lookupQuestion': item['question'],
                         **({'controllerAction': controller_action} if controller_action else {})})
                 reads = work_checks.good_reads(self, result.get('sessionId'))
-                evidenced = work_checks.complete(result) and bool(answer.strip()) and bool(reads)
+                unsourced = claim_sources(answer, reads)
+                evidenced = (work_checks.complete(result) and bool(answer.strip()) and bool(reads)
+                             and not unsourced)
                 proofs = [work_feedback.evidence_signature(read) or {'kind': read['name'],
                     'ref': 'search:' + work_policy.digest(read.get('args', {})),
                     'contentHash': work_policy.digest(read['result']), 'args': read.get('args', {})} for read in reads]
                 binding = self.checks.binding(run, node, stage) | {'purpose': 'knowledge', 'lookupRole': item['role'],
-                    'question': item['question'], 'observedEvidence': proofs, 'verification': 'unreviewed',
+                    'question': item['question'], 'observedEvidence': proofs,
+                    'verification': 'unverified' if unsourced else 'unreviewed',
                     'execution': work_budget.receipt(result)}
                 meta = await self.artifacts.put(run, node['id'], 'knowledge', answer, binding,
                                                 evidenced, result.get('sessionId'))
                 return item | {'childId': result.get('sessionId'), 'status': result.get('status') if evidenced else 'unverified',
                     'artifact': meta, 'execution': work_budget.receipt(result),
-                    'error': None if evidenced else 'UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it'}
+                    'error': ('WORK_CLAIM_UNSOURCED: ' + unsourced[0]) if unsourced else
+                             None if evidenced else 'UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it'}
             except Exception as exc:
                 return item | {'childId': (result or {}).get('sessionId'), 'status': 'failed',
                     'execution': work_budget.receipt(result or {}), 'error': f'UNAVAILABLE: {exc}'[:500]}
@@ -1173,7 +1239,9 @@ class WorkGraph:
             before = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
             role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
             context = '\n\n'.join(p for p in (self.interview_context(run), self.dependency_context(run, node, stage)) if p)
-            expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role, work_prompts.language(run['goal']))
+            expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role,
+                                              work_prompts.language(run['goal']), node.get('taskKind'),
+                                              node.get('depth'))
             produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
                 extra_binding={'controllerAction': controller_action} if controller_action else
                               {'controllerOwned': True} if controller_owned else None)
@@ -1637,6 +1705,41 @@ class WorkGraph:
             review.update(status=verdict, binding=whole_binding)
             return await self.finish_verify(sid, run, review, produce, verdict, findings, doc.get('coverage', []))
 
+    def reviewed_set(self, run):
+        """W6.2.BIND — tài liệu đã được whole-pass chứng nhận, kèm hash tại thời điểm đó."""
+        produce = [n for n in run['nodes'] if 'produce' in n['stages']]
+        artifacts, claims = [], set()
+        for node in produce:
+            meta = node['stages']['produce'].get('artifact')
+            if not meta:
+                continue
+            artifacts.append({'artifactId': meta['artifactId'], 'contentHash': meta['contentHash']})
+            try:
+                _, text = self.artifacts.get(run['runId'], meta['artifactId'])
+            except (KeyError, ValueError, TypeError):
+                continue
+            claims |= {norm_claim(token) for token in claim_tokens(text)}
+        # `claims` là token kỹ thuật của đúng bộ tài liệu đã phản biện: `final_claims_check` là hàm
+        # thuần, không đọc DB ở cuối lượt main (W6.2.BIND).
+        return {'wholeBinding': self.whole_binding(run), 'artifacts': artifacts,
+                'claims': sorted(claims)[:600], 'reviewedAt': now(), 'verdict': 'ok'}
+
+    def stale_review(self, run):
+        """True when the reviewed set no longer matches the live graph or a reviewed artifact changed."""
+        reviewed = run.get('reviewedSet')
+        if not reviewed:
+            return False
+        if reviewed.get('wholeBinding') != self.whole_binding(run):
+            return True
+        for item in reviewed.get('artifacts') or []:
+            try:
+                meta, _ = self.artifacts.get(run['runId'], item['artifactId'])
+            except (KeyError, ValueError, TypeError):
+                return True
+            if meta.get('contentHash') != item.get('contentHash') or meta.get('status') != 'finalized':
+                return True
+        return False
+
     def whole_binding(self, run):
         return work_policy.digest({'goal': run['goal'], 'interviews': run.get('interviews'),
             'checkInputsVersion': work_checks.INPUTS_VERSION,
@@ -1667,6 +1770,7 @@ class WorkGraph:
                 raise
             run['documents'] = documents
             run['status'] = 'verified'
+            run['reviewedSet'] = self.reviewed_set(run)
             self.save(run, 'verified')
         else:
             for node_id, reason in targets.items():

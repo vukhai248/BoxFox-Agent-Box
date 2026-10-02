@@ -1,0 +1,757 @@
+{
+ "scope": "W6.1.3 verify_exec + finding citations (review architecture A); branch vorflux/w6-review-quality; OpenCode Space Bunny; no UI/UX change",
+ "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "sourceManifest": {
+  "backend/src/agentbox/agent_core/verify_exec.py": "7c3fb288f5871dee6d5079dc5f1ebf5371f9ec28e070309086054f8094829040",
+  "backend/src/agentbox/agent_core/roles.py": "53b08ead260344c8fa6075ae98d4149f44651211a59321c18eb9b3ec1d0721c8",
+  "backend/src/agentbox/agent_core/tool_contracts.py": "aa90d72953ed44056957d63500762ee63e25da4760e938c2fc3bdc5252ce2220",
+  "backend/src/agentbox/agent_core/tool_groups.py": "2997fa8226c044cee18196bdbbef8f5db7194355243e4d8dbd3dcea0c5d1afad",
+  "backend/src/agentbox/agent_core/runtime.py": "28a93e98a481bcf1b931a1d12fdf48d449f7b0389e198e2c98645e98ccefd455",
+  "backend/src/agentbox/agent_core/work_checks.py": "a2a0d9159d00debd7e98b615caa902205da8ff583af82814c03302c213ee50ab",
+  "backend/src/agentbox/agent_core/work_feedback.py": "c4bebdfe79df1571bf46c8c235fe53c193c139108d8943efe7454a2cd4b2f524",
+  "backend/src/agentbox/agent_core/work_graph.py": "645473828778f2747f803339800dd0af65b7f76a178a3a3539d0537a50d9a37e",
+  "backend/src/agentbox/agent_core/work_policy.py": "09f2aad436cf50ba3561f5b6753fda13aa151e7f86d322918ee9c0ae4e8cb7c5",
+  "backend/src/agentbox/agent_core/work_prompts.py": "3da58b4312ee55b56b5372b7bcb534630f1728410b8929be035ed7c7e240b67d",
+  "backend/src/agentbox/sandbox/worker.py": "0f767a657851e28e9b13dc7712100667920b689f03d16d98afcc9aceef60ea40",
+  "backend/src/agentbox/api/server.py": "c45284fc82d6f9dec9346f28e7faf6e9bab9f4d80347c4ca0ed0c28e5249fd41"
+ },
+ "mechanismAudit": {
+  "verify_exec": {
+   "schema": "language python|node; code<=8000; stdin<=8000; claim<=300; timeoutSeconds 1-20",
+   "isolation": "bwrap --die-with-parent --unshare-all --ro-bind / / --dev /dev [--proc /proc|--tmpfs /proc] --tmpfs /tmp --bind <tmp> /tmp/work --chdir /tmp/work; launcher sets RLIMIT_NPROC=64, RLIMIT_FSIZE=8MiB, RLIMIT_CPU, RLIMIT_AS=512MiB (python only); output<=8000 chars; killpg on timeout",
+   "hostProbe": {
+    "available": true,
+    "reason": null,
+    "procMode": "proc"
+   },
+   "hostMatrix": [
+    {
+     "case": "nfd-count",
+     "language": "python",
+     "output": "3",
+     "exitCode": 0,
+     "isError": false
+    },
+    {
+     "case": "node-nfd-count",
+     "language": "node",
+     "output": "3",
+     "exitCode": 0,
+     "isError": false
+    },
+    {
+     "case": "timeout-2s",
+     "language": "python",
+     "output": "",
+     "exitCode": null,
+     "isError": true,
+     "errorCode": "VERIFY_EXEC_TIMEOUT",
+     "durationMs": 2002
+    },
+    {
+     "case": "output-100k",
+     "language": "python",
+     "truncated": true,
+     "exitCode": 0
+    },
+    {
+     "case": "no-network",
+     "language": "python",
+     "output": "blocked OSError",
+     "exitCode": 0
+    },
+    {
+     "case": "unavailable",
+     "note": "no bwrap on PATH -> VERIFY_EXEC_UNAVAILABLE, no fallback (unit test)"
+    }
+   ],
+   "dockerFinding": "inside a plain docker container (only cap_add NET_ADMIN, like deploy/docker/docker-compose.yml) bwrap fails: default seccomp/apparmor -> 'No permissions to create new namespace'; seccomp=unconfined -> 'Failed to make / slave: Permission denied'; seccomp+apparmor unconfined -> works with --tmpfs /proc (procMode 'tmpfs'). So verify_exec fails closed (VERIFY_EXEC_UNAVAILABLE) on the current production compose until security_opt seccomp:unconfined + apparmor:unconfined (and unprivileged userns allowed) are added.",
+   "health": "GET /health?probe=verify refreshes runtime.verifyExecStatus; /health always returns verifyExec"
+  },
+  "findingContract": {
+   "corpus": "backend/tests/fixtures/work_review_corpus/ (15 cases)",
+   "downgradeReasons": [
+    "NO_RECEIPT",
+    "UNKNOWN_RECEIPT",
+    "SCOPE_RUN_IN_NODE_REVIEW",
+    "CRITERION_UNKNOWN",
+    "NUMERIC_UNVERIFIED",
+    "NO_COUNTERCHECK",
+    "SELF_REFUTED"
+   ],
+   "uncitedRevise": "coverage entry revise whose findings were all downgraded -> status 'unverified' + contractError WORK_FINDING_UNCITED; a revise with no valid blocking finding cannot pass",
+   "knownNuance": "a coverage entry with target=criterion keeps 'revise' (it is routed to main as inputConflicts, the W6.1.1 contract) even when its linked findings were downgraded; in that case the check status can stay 'revise' with blocking=[] and no contractError",
+   "legacy": "reports without a findings list keep the old semantics (policy-10 records and legacy fixtures)"
+  }
+ },
+ "nativeProbe": {
+  "script": "scripts/eval/work_finding_probe.py",
+  "router": "http://127.0.0.1:36219 (shared disposable router, scripts/eval/work_budget_router.mjs)",
+  "model": "opencode/space-bunny-free",
+  "design": "3 cases x 2 runs; fixture artifact, no main model, no Build; reviewer tools include verify_exec (real bwrap on the host)",
+  "oracle": "every surviving blocking finding cites a receipt observed in THIS admission; a numeric claim cites a verify_exec receipt; a true finding stays blocking; a false one never blocks",
+  "rows": [
+   {
+    "case": "nfd-count",
+    "attempt": 1,
+    "branch": "vorflux/w6-review-quality",
+    "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+    "status": "revise",
+    "findings": 6,
+    "downgraded": [
+     {
+      "findingId": "F2",
+      "reason": "UNKNOWN_RECEIPT"
+     },
+     {
+      "findingId": "F3",
+      "reason": "UNKNOWN_RECEIPT"
+     }
+    ],
+    "cited": true,
+    "numericCited": false,
+    "behaviour": true,
+    "verifyExecCalls": 0,
+    "oracle": false,
+    "latencySeconds": 359.31,
+    "attempts": [
+     {
+      "childId": "1fcc8b658b2f4827862607e0e43b354a",
+      "status": "error",
+      "completed": false,
+      "execution": {
+       "status": "partial",
+       "reason": "PROVIDER_STREAM_INTERRUPTED",
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 4,
+       "outputTokens": 1015,
+       "wallMs": 196665,
+       "toolCalls": 6
+      },
+      "findings": 0,
+      "blocking": 0,
+      "downgraded": [],
+      "overLimit": true,
+      "contractError": "Missing single final VERDICT line."
+     },
+     {
+      "childId": "ee75c612abda4679a4afb5cb452fbc0c",
+      "status": "revise",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 4,
+       "outputTokens": 10453,
+       "wallMs": 162588,
+       "toolCalls": 6
+      },
+      "findings": 6,
+      "blocking": 1,
+      "downgraded": [
+       {
+        "findingId": "F2",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F3",
+        "reason": "UNKNOWN_RECEIPT"
+       }
+      ],
+      "overLimit": true
+     }
+    ],
+    "blockingCount": 1,
+    "toolCalls": [
+     {
+      "id": "call_01a0fc8be9907216bee6d06b",
+      "name": "work_artifact_read"
+     },
+     {
+      "id": "call_01a0fc8c154876239cb16832",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc8c154876239cb16833",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc8c2b25741c8bb51ae2",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc8c2b25741c8bb51ae3",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc8c2b25741c8bb51ae4",
+      "name": "file_read"
+     }
+    ],
+    "verifyCalls": []
+   },
+   {
+    "case": "nfd-count",
+    "attempt": 2,
+    "branch": "vorflux/w6-review-quality",
+    "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+    "status": "error",
+    "findings": 0,
+    "downgraded": [],
+    "cited": true,
+    "numericCited": true,
+    "behaviour": false,
+    "verifyExecCalls": 0,
+    "oracle": false,
+    "latencySeconds": 288.094,
+    "attempts": [
+     {
+      "childId": "9bb997407b584322a988d11c54007c33",
+      "status": "error",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 5,
+       "outputTokens": 13384,
+       "wallMs": 186941,
+       "toolCalls": 6
+      },
+      "findings": 2,
+      "blocking": 0,
+      "downgraded": [
+       {
+        "findingId": "F2",
+        "reason": "UNKNOWN_RECEIPT"
+       }
+      ],
+      "contractError": "WORK_FINDING_UNCITED"
+     },
+     {
+      "childId": "de3d498c9c8248a8a2b1c56b5040adc1",
+      "status": "error",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 6,
+       "outputTokens": 8165,
+       "wallMs": 101100,
+       "toolCalls": 9
+      },
+      "findings": 0,
+      "blocking": 0,
+      "downgraded": [],
+      "contractError": "Invalid JSON coverage; every assigned id needs status and evidence. Revised A criteria must explicitly set target=artifact or target=criterion."
+     }
+    ],
+    "blockingCount": 0,
+    "toolCalls": [
+     {
+      "id": "call_iqwqXYNeDM8d2Ftc7OipOeRR",
+      "name": "work_artifact_read"
+     },
+     {
+      "id": "call_hefyqGmh4KbpAXFAxLsDiMJX",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_uhe3bmOx7tAkFyzZJWPyDQsW",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_DIna01rciqO3DUKyhEtet3vB",
+      "name": "file_read"
+     },
+     {
+      "id": "call_AcF06IpK8XFRVHXDF0rEBFB3",
+      "name": "file_read"
+     },
+     {
+      "id": "call_kcUvZos9jmK5caCuOsC59A52",
+      "name": "file_read"
+     },
+     {
+      "id": "call_SgpBkvnZqxqbPfZvQTYBAtkn",
+      "name": "file_read"
+     },
+     {
+      "id": "call_auiyMtWK3B6lJEWiBl6vUTFs",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_rn3yBxLeeZRfKlIyzJEY1Mb8",
+      "name": "codebase_grep"
+     }
+    ],
+    "verifyCalls": []
+   },
+   {
+    "case": "csv-error-type",
+    "attempt": 1,
+    "branch": "vorflux/w6-review-quality",
+    "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+    "status": "revise",
+    "findings": 6,
+    "downgraded": [
+     {
+      "findingId": "F2",
+      "reason": "UNKNOWN_RECEIPT"
+     },
+     {
+      "findingId": "F3",
+      "reason": "UNKNOWN_RECEIPT"
+     },
+     {
+      "findingId": "F4",
+      "reason": "UNKNOWN_RECEIPT"
+     }
+    ],
+    "cited": true,
+    "numericCited": true,
+    "behaviour": true,
+    "verifyExecCalls": 0,
+    "oracle": true,
+    "latencySeconds": 128.178,
+    "attempts": [
+     {
+      "childId": "82631b7c065e4e3fa6d3a391a06f4e83",
+      "status": "revise",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 6,
+       "outputTokens": 8460,
+       "wallMs": 128141,
+       "toolCalls": 8
+      },
+      "findings": 6,
+      "blocking": 1,
+      "downgraded": [
+       {
+        "findingId": "F2",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F3",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F4",
+        "reason": "UNKNOWN_RECEIPT"
+       }
+      ],
+      "overLimit": true
+     }
+    ],
+    "blockingCount": 1,
+    "toolCalls": [
+     {
+      "id": "call_01a0fc92ca49700d819004ec",
+      "name": "work_artifact_read"
+     },
+     {
+      "id": "call_01a0fc92fbcf76078d74df2d",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc92fbcf76078d74df2e",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc9304577514a9541269",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc9304577514a954126a",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc930bd372cc9aaec416",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc930bd372cc9aaec417",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc930fa2764c89a7c077",
+      "name": "file_read"
+     }
+    ],
+    "verifyCalls": []
+   },
+   {
+    "case": "csv-error-type",
+    "attempt": 2,
+    "branch": "vorflux/w6-review-quality",
+    "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+    "status": "revise",
+    "findings": 4,
+    "downgraded": [
+     {
+      "findingId": "F1",
+      "reason": "UNKNOWN_RECEIPT"
+     },
+     {
+      "findingId": "F3",
+      "reason": "UNKNOWN_RECEIPT"
+     }
+    ],
+    "cited": true,
+    "numericCited": true,
+    "behaviour": false,
+    "verifyExecCalls": 0,
+    "oracle": false,
+    "latencySeconds": 118.209,
+    "attempts": [
+     {
+      "childId": "d00839b9aac74ce6af4012e5a1121185",
+      "status": "revise",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 6,
+       "outputTokens": 7540,
+       "wallMs": 118172,
+       "toolCalls": 8
+      },
+      "findings": 4,
+      "blocking": 0,
+      "downgraded": [
+       {
+        "findingId": "F1",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F3",
+        "reason": "UNKNOWN_RECEIPT"
+       }
+      ]
+     }
+    ],
+    "blockingCount": 0,
+    "toolCalls": [
+     {
+      "id": "call_01a0fc94c2cb730299563cbd",
+      "name": "work_artifact_read"
+     },
+     {
+      "id": "call_01a0fc94dd9f727188c2407c",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc94dd9f727188c2407d",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc94e68b72ef9956fdca",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc94e68b72ef9956fdcb",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc94f29570d989766084",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc94f29570d989766085",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc94fa487548bb5c8559",
+      "name": "file_read"
+     }
+    ],
+    "verifyCalls": []
+   },
+   {
+    "case": "side-remark",
+    "attempt": 1,
+    "branch": "vorflux/w6-review-quality",
+    "commit": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+    "status": "unverified",
+    "findings": 4,
+    "downgraded": [],
+    "cited": true,
+    "numericCited": true,
+    "behaviour": true,
+    "verifyExecCalls": 0,
+    "oracle": true,
+    "latencySeconds": 402.401,
+    "attempts": [
+     {
+      "childId": "8a9c6329e6fe4b769d096778ba96d011",
+      "status": "error",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 7,
+       "outputTokens": 16035,
+       "wallMs": 221545,
+       "toolCalls": 9
+      },
+      "findings": 5,
+      "blocking": 0,
+      "downgraded": [
+       {
+        "findingId": "F1",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F2",
+        "reason": "UNKNOWN_RECEIPT"
+       },
+       {
+        "findingId": "F3",
+        "reason": "UNKNOWN_RECEIPT"
+       }
+      ],
+      "contractError": "WORK_FINDING_UNCITED"
+     },
+     {
+      "childId": "8536b90b8b364a52800254ab038c3932",
+      "status": "unverified",
+      "completed": true,
+      "execution": {
+       "status": "completed",
+       "reason": null,
+       "budget": {
+        "profile": "review_short",
+        "requestedMaxSteps": 14,
+        "effectiveMaxSteps": 14,
+        "requestedDeadlineSeconds": 900,
+        "effectiveDeadlineSeconds": 900,
+        "clamped": false
+       },
+       "stepsUsed": 6,
+       "outputTokens": 12308,
+       "wallMs": 180803,
+       "toolCalls": 10
+      },
+      "findings": 4,
+      "blocking": 0,
+      "downgraded": []
+     }
+    ],
+    "blockingCount": 0,
+    "toolCalls": [
+     {
+      "id": "call_function_okpvhzmenlir_1",
+      "name": "work_artifact_read"
+     },
+     {
+      "id": "call_01a0fc9a61d87415ba41ab1c",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc9a61d87415ba41ab1d",
+      "name": "codebase_glob"
+     },
+     {
+      "id": "call_01a0fc9a676371bbbed7e43f",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc9a676371bbbed7e440",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc9a676371bbbed7e441",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc9a73b873e192ac0e2f",
+      "name": "file_read"
+     },
+     {
+      "id": "call_01a0fc9a73b873e192ac0e30",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc9b388a715dacd66467",
+      "name": "codebase_grep"
+     },
+     {
+      "id": "call_01a0fc9b388a715dacd66468",
+      "name": "codebase_grep"
+     }
+    ],
+    "verifyCalls": []
+   }
+  ],
+  "summary": {
+   "rows": 5,
+   "oracle": 2,
+   "verifyExecCalls": 0,
+   "downgradedTotal": 7,
+   "survivingBlocking": 2
+  },
+  "honestFailures": [
+   "Space Bunny never called verify_exec in any run, although the tool was in the child tool list (session config) — the model-behaviour half of the oracle fails.",
+   "The model cited prose refs (\"codebase_grep:NFD\", \"file_read:src/export.py\") instead of tool call ids; the backend downgraded those findings (UNKNOWN_RECEIPT), which is the mechanism working.",
+   "One run (nfd-count #2) ended in status error (provider stream interruption / deadline), so it carries no verdict.",
+   "csv-error-type premise: Python 3.12 does NOT raise csv.Error for a NUL inside a str for csv.reader (measured with verify_exec: ['a\\x00b'] parses fine); the surviving finding is about the artifact citing \"đúng như tài liệu mô tả\" while docs/source.md names no exception."
+  ]
+ },
+ "producerQuality": {
+  "deliverable": {
+   "lookup": "Answer <=120 words + Sources opened + Unverified; no options or recommendation",
+   "researchBrief": "research node with depth=brief: Answer, Verified facts, Gaps, <=400 words, no options section",
+   "depth": "node.depth validated against work_policy.DEPTHS = ('brief','standard','full')",
+   "proportionalNote": "plan/design deliverables append a proportional note (findings <=8, claim <=300 chars)"
+  },
+  "unsourcedClaim": "answer_knowledge(): a claim naming a path/URL that was not opened marks the binding verification='unverified' and error='WORK_CLAIM_UNSOURCED: <path>'",
+  "reviewedSet": "finish_verify() on verdict ok writes run['reviewedSet'] = {wholeBinding, artifacts[], claims[], reviewedAt, verdict}; result() returns stale=true when the whole binding or a reviewed artifact hash changed",
+  "finalClaims": "runtime.final_claim_notices() at main turn end emits work_notice {type:'unreviewed_claims'} (non-blocking) for tokens outside reviewedSet.claims that carry no 'chưa kiểm/unverified' label",
+  "mainLanguage": "SOP section G requires the owner-facing commentary in the owner language (Vietnamese with accents)"
+ },
+ "lookupProbe": {
+  "script": "scripts/eval/work_lookup_probe.py",
+  "design": "A/B on the same fixture: legacy arm = node without taskKind (pre-W6.2 behaviour), lookup arm = taskKind=lookup; 1 run each",
+  "rows": [
+   {
+    "case": "legacy",
+    "attempt": 1,
+    "status": "accepted",
+    "producerStatus": "accepted",
+    "totalWords": 1050,
+    "answerWords": 1050,
+    "hasSources": false,
+    "optionsSection": false,
+    "oracle": null,
+    "latencySeconds": 185.234
+   },
+   {
+    "case": "lookup",
+    "attempt": 1,
+    "status": "accepted",
+    "producerStatus": "accepted",
+    "totalWords": 254,
+    "answerWords": 122,
+    "hasSources": true,
+    "optionsSection": false,
+    "oracle": false,
+    "latencySeconds": 22.106
+   }
+  ],
+  "summary": {
+   "rows": 2,
+   "oracle": 0,
+   "lookup": [
+    {
+     "totalWords": 254,
+     "answerWords": 122,
+     "hasSources": true,
+     "optionsSection": false,
+     "oracle": false
+    }
+   ],
+   "legacy": [
+    {
+     "totalWords": 1050,
+     "answerWords": 1050,
+     "hasSources": false,
+     "optionsSection": false
+    }
+   ],
+   "contractWords": {
+    "legacy": 71,
+    "lookup": 60
+   }
+  },
+  "oracleNote": "strict raw count: the Answer part (everything before the sources heading) must be <=120 words; the lookup arm measured 122 raw / 119 without headings, so the strict oracle fails by 2 words while the shape (sections, length class) matches the contract.",
+  "sectionDiff": {
+   "legacy": [
+    "Phát hiện",
+    "Bằng chứng",
+    "Hợp đồng và nơi gọi",
+    "Rủi ro và điều chưa rõ"
+   ],
+   "lookup": [
+    "Trả lời",
+    "Nguồn đã mở",
+    "Chưa kiểm",
+    "Knowledge requests"
+   ]
+  }
+ },
+ "tests": {
+  "newFiles": {
+   "test_work_finding_citations.py": 20,
+   "test_work_verify_exec.py": 6,
+   "test_sandbox_verify_exec.py": 7,
+   "test_work_producer_quality.py": 7
+  },
+  "touched": {
+   "test_journal_tools.py": "tool count 46 -> 47",
+   "test_runtime_info.py": "group union 46 -> 47"
+  },
+  "workSuite": "757 passed, 2311 deselected (baseline 724) with the 2 environment-dependent test_claude_worker_router.py cases deselected (they fail on 68ecdf0 too when the host has bwrap)"
+ },
+ "openItems": [
+  "work_policy.VERSION stays work-checks/10 (w8-isolation owns the bump to /11 and adds COMPATIBLE_VERSIONS); the new contract is gated by work_checks.INPUTS_VERSION work-check-inputs/2, which forces a fresh invocation for historical receipts (WORK_CHECK_RECEIPT_STALE). Main should bump VERSION to /11 at merge.",
+  "Production docker compose needs security_opt seccomp:unconfined + apparmor:unconfined (and unprivileged userns) or verify_exec stays VERIFY_EXEC_UNAVAILABLE.",
+  "Model behaviour: Space Bunny still objects without running verify_exec; the corpus + prompt carry the contract, but the W10 benchmark should track the downgrade rate (>30% of correct findings downgraded => prompt work)."
+ ]
+}

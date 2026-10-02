@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow, work_graph, work_feedback
+from . import plan_workflow, verify_exec, work_graph, work_feedback
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -189,7 +189,7 @@ Responses that only state intentions without action are strictly prohibited."""
 
 EXECUTION_DISCIPLINE_GUIDANCE = """# Execution Discipline & Mandatory Tool Use
 NEVER answer these from memory, mental computation, or hallucination — ALWAYS use a tool:
-- Arithmetic, math, calculations -> terminal_exec (e.g. python -c "...")
+- Arithmetic, math, calculations -> terminal_exec (e.g. python -c "..."); reviewers: verify_exec
 - Hashes, checksums, encodings -> terminal_exec (e.g. sha256sum, base64)
 - Current time, date, environment variables -> terminal_exec
 - System state: OS, memory, processes, ports -> terminal_exec
@@ -221,7 +221,7 @@ D. Interview only on real ambiguity after exploring: `interview(questions=[{id, 
    For a specifically assigned Work Graph node, `work_graph(action='grant', nodeId, stage, purpose, decisionKeys, publishInterview, resumeOnAnswers, revision, invocationId)` grants 1-3 owner-intent decision keys. The child drafts its questions; backend publication/continuation uses the root grant without another main model relay. Without a grant use `interview(workRequestId, revision)` to publish its saved questions by ref. Notifications are progress, not a mandatory decision turn. A revoked/stale grant or changed check binding requires your decision; no grant permits Build for an artifact-only request.
 E. Plan: add plan nodes P1..Pn (kind plan) — one per independently shippable slice, each with acceptance, tests (each entry is an exact runnable command; describe expected results in acceptance/the document) and dependsOn on the discovery nodes it needs and on the sibling plans it must follow. `work_run(phase='discover')` again saves sub-plans. Main starts plan_review and any required critique through work_check before whole verification.
 F. Verify: `work_graph(action='verify')` — the whole-plan reviewer checks coverage, dependencies, order, tests and risk; on revise the named nodes are re-run. On ok the harness writes `.plans/work/<slug>/` (master plan + one file per sub-plan).
-G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead.
+G. Approve: `work_graph(action='submit')` shows the owner the approval card (Autopilot on ⇒ approved at once). Plan/research/design-only requests cannot execute, even with Autopilot; answer the owner with the verified findings and the document paths instead. The final answer cites the reviewed documents by path/version; any new technical decision or claim not in them is labeled 'chưa kiểm' (unverified) or written into the official artifact first, which invalidates the review. Commentary to the owner is in the owner's language; Vietnamese with accents.
 H. Execute: `work_run(phase='execute')` runs the DAG wave by wave (parallel inside a wave); main starts tests and any required code_review using work_check with stage=execute on that exact artifact/code snapshot. Testing failures go to main for Debug/repair/retest; a source edit by a tester invalidates the check. A node that is not accepted leaves the run `execute_failed`: `work_graph(action='retry', nodeIds=[...])` re-runs it with the findings. Then `work_ship` creates the branch, the commit and the PR description (push/PR only when a remote and credentials exist).
 I. Every tool result carries `next` — follow it. A tool error names the field and the rule: fix that input once, never resend identical arguments. Report honestly what was accepted, rejected or not verified.
 The legacy direct-delegation protocol below still applies to small tasks and to follow-up questions about a finished run.
@@ -1715,6 +1715,8 @@ class HarnessRuntime(RuntimeCommands):
         # `FANOUT_BUSY` mà không phải ngồi chờ 30 s.
         self.fanout_queue_wait = FANOUT_QUEUE_WAIT_SECONDS
         self.writer_lock = asyncio.Lock()
+        # W6.1.3: lần quan sát gần nhất về isolation của verify_exec, cho GET /api/agent/health.
+        self.verify_exec_status = dict(verify_exec.UNPROBED)
         # web_search / web_fetch run on the HOST: the box has no Internet (only loopback).
         self.web = WebTools(snapshot_store=store)
 
@@ -4597,6 +4599,11 @@ class HarnessRuntime(RuntimeCommands):
                         # cấp cắt ở trần output. Hàng `sessions` vẫn `completed` (giữ nguyên từ
                         # vựng trạng thái cũ), nhưng ranh giới lượt nói thẳng là `partial` và
                         # `delegate` đọc notice bền của phiên con để trả `partial` cho cha.
+                        if not calls:
+                            # W6.2.BIND: câu tổng hợp cuối không được dùng một whole-pass cũ để
+                            # chứng nhận claim mới. Chỉ ghi lại (notice) để eval/UI đọc; không chặn.
+                            for note in self.final_claim_notices(sid, text):
+                                self.store.emit(sid, 'work_notice', note)
                         partial = truncated_partial or answer_partial
                         close_turn('partial' if partial else 'completed', choice.get('finish_reason'), 0,
                                    response.get('usage'), extra={'partial': True} if partial else None)
@@ -4959,6 +4966,15 @@ class HarnessRuntime(RuntimeCommands):
         # chúng thì mọi ảnh chụp và mảnh bằng chứng rơi về bước `000` dù box đã đọc từ lâu.
         identity = {'turn': self.active_turn.get(sid), 'step': self.active_step.get(sid),
                     'tool_call_id': call_id}
+        if name == 'verify_exec':
+            # W6.1.3: không ghi workspace nên không xếp hàng sau `writer_lock`; cổng
+            # WORK_CHECK_READ_ONLY ở trên cố ý không chặn công cụ này.
+            problem = verify_exec.arg_error(args)
+            if problem:
+                raise ValueError(problem)
+            result = await self.executor.execute(name, args, sid, **identity)
+            self.verify_exec_status = verify_exec.observed(result, self.verify_exec_status)
+            return result
         if name in {'file_write', 'file_edit_block', 'terminal_exec'}:
             async with self.writer_lock:
                 return await self.executor.execute(name, args, sid, **identity)
@@ -6366,6 +6382,27 @@ class HarnessRuntime(RuntimeCommands):
             return False
         return 'PLAN_VERSION_TAKEN' in str(answer.get('error') or '') or \
             'PLAN_VERSION_TAKEN' in str(answer.get('code') or '')
+
+    def final_claim_notices(self, sid, text):
+        """W6.2.BIND — notice cho claim kỹ thuật không nằm trong tài liệu đã phản biện."""
+        if not text or not work_graph.enabled():
+            return []
+        try:
+            service = work_graph.service(self)
+            run = service.active(sid)
+        except Exception:
+            return []
+        if not run or run.get('status') != 'verified':
+            return []
+        try:
+            tokens = work_graph.final_claims_check(run, text)
+        except Exception:
+            return []
+        if not tokens:
+            return []
+        return [{'type': 'unreviewed_claims', 'runId': run['runId'], 'tokens': tokens[:20],
+                 'message': 'unreviewed_claims: claim kỹ thuật không có trong tài liệu đã phản biện; '
+                            'đánh dấu chưa kiểm hoặc ghi vào artifact chính thức trước.'}]
 
     def emit_plan_rejection(self, sid, registration, evaluation):
         """Lưu + phát bản chấm của một lần ghi **bị cổng cứng chặn**, rồi mới raise câu từ chối.

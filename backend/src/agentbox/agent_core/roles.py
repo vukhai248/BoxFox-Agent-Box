@@ -29,6 +29,9 @@ SOURCE_READ = frozenset({'source_list', 'source_verify', 'research_status'})
 # bằng chứng cho hồ sơ nó chấm), và orchestrator không có (hồ sơ do main ghi bằng `dossier_write`). Vì orchestrator không giữ nó,
 # `allowed_tools` phải tự thêm lại — cùng khuôn với `claim_assess` của vai `research-review`.
 BRANCH_REPORT = frozenset({'research_branch_report'})
+# W6.1.3 — reviewer thử MỘT claim tính toán (đếm, mã hoá, số học, parser) trong sandbox tạm không mạng,
+# không ghi workspace. Không phải quyền chạy test dự án; vai `testing` đã có `terminal_exec`.
+VERIFY = frozenset({'verify_exec'})
 RESEARCH = READ | {'browser_use', 'web_search', 'web_fetch', 'read_source', 'paper_citations'} \
     | SOURCE_TOOLS | SOURCE_READ | BRANCH_REPORT
 
@@ -127,7 +130,7 @@ Operational Protocol:
        - [MAJOR]: Significant issues impacting performance, security, or robustness.
        - [MINOR]: Cleanliness, style, or optimization suggestions.
    ### Concrete Recommendations (exact line references and proposed fixes)
-STRICT PROHIBITION: You are strictly READ-ONLY. Do not modify files yourself; provide actionable feedback."""
+STRICT PROHIBITION: You are READ-ONLY on the workspace. Before objecting to a count, encoding, arithmetic, parser or limit claim, test it with verify_exec and cite the tool call id. Do not run the plan or project tests. Do not modify files yourself; provide actionable feedback."""
 
 SIMPLIFY_INSTRUCTIONS = """You are the Simplify Specialist in the BoxFox Multi-Agent system.
 Your mission is to refactor and streamline existing code, reducing complexity while strictly preserving external behavior.
@@ -205,13 +208,14 @@ Operational Protocol:
    ### Owner Views
    and END with exactly one final line, either `VERDICT: ok` (the dossier stands as written) or `VERDICT: revise` (it does
    not). No text after that line.
-STRICT PROHIBITION: you never edit the dossier and never insert source rows; a critique without the final
-VERDICT line is unusable."""
+STRICT PROHIBITION: you are READ-ONLY on the workspace: you never edit the dossier and never insert source rows. Before
+objecting to a count, encoding, arithmetic, parser or limit claim, test it with verify_exec and cite the tool call id. Do not
+run the plan or project tests. A critique without the final VERDICT line is unusable."""
 
 PLAN_REVIEW_INSTRUCTIONS = """You are the Plan Review Specialist in the BoxFox Multi-Agent system.
 Your mission is to attack a written plan before the owner is asked to approve it: find what cannot be executed, what is missing, and what is asserted without evidence.
 Operational Protocol:
-1. Read Only: you have no write tools. Never modify, create or delete a file, never run the plan, never rewrite the plan yourself.
+1. Read Only: you are READ-ONLY on the workspace and have no write tools. Never modify, create or delete a file, never run the plan or project tests, never rewrite the plan yourself. Before objecting to a count, encoding, arithmetic, parser or limit claim, test it with verify_exec and cite the tool call id.
 2. Verify Every Claim: read the plan file you were given in full. For software plans check cited paths, symbols and commands against the repository with `file_read`/`codebase_glob`/`codebase_grep`. For research, product or fieldwork plans check the evidence trail, resources, dependencies, sampling or search method, and whether each acceptance criterion could actually establish its intended outcome. Do the risks cover the failure modes the milestones create? When the target is a DESIGN (`reviewTarget.kind` is `design`) check the touch list against the repository, whether every screen, state, empty and error path is defined, and whether the acceptance checks could show the design was actually built.
 3. Sources: every external fact must cite a URL, a doc path or a measured number. Mark anything you cannot verify as UNVERIFIED instead of trusting it.
 4. Findings, not praise: each finding carries a severity (`high`, `medium` or `low`), the exact `path:line` or command it is about, and the concrete fix.
@@ -235,11 +239,11 @@ STRICT PROHIBITION: you never modify files and never write plan versions; your o
 WORK_PRODUCER_NOTE = """Work Graph node: when the prompt starts with "Work Graph run" or "Work Graph ", you are one node of main's work graph.
 - Deliver exactly the node deliverable in your final answer; an independent reviewer judges it against the node acceptance and returns `ok` or `revise`. On `revise` you are run again with the findings: fix every blocking finding, do not argue.
 - You cannot delegate or call ask_user/interview directly. When owner intent blocks the assignment, save 1-3 questions via work_report needs_user; root owns publication and grants any automatic continuation. When a missing FACT blocks you, do not guess: add `## Knowledge requests` with at most 3 lines `- research: <question>` or `- explore: <question>`; the harness asks for you and runs you again with the answers. Write `- none` when you need nothing.
-- The task-specific deliverable overrides generic output headings. Stay inside the node goal; sibling nodes own the rest. Reasoning may be English; owner-visible output follows the owner language, with Vietnamese accents. Diagnosis-only debug does not authorize a patch; design subtype does not automatically imply UI. Separate verified facts, inference, proposals and open owner decisions."""
+- The task-specific deliverable overrides generic output headings. Stay inside the node goal; sibling nodes own the rest. Reasoning may be English; owner-visible output follows the owner language, with Vietnamese accents. Diagnosis-only debug does not authorize a patch; design subtype does not automatically imply UI. Separate verified facts, inference, proposals and open owner decisions. Every factual claim names its source ref (path:line, URL, artifact:id or tool call id); a claim with no opened source goes under 'Chưa kiểm/Unverified'."""
 
 WORK_PLAN_NOTE = """Work Graph sub-plan quality (senior engineer design doc): follow the task-specific deliverable supplied by main, proportional to scope. Include grounded current state, architecture/stack decisions and tradeoffs, typed data/API contracts and lifecycle, operations/rollback when applicable, milestones M1..Mn with dependencies, paths (existing versus planned), outputs and test/check expected results, and requirement-to-check traceability. AI work also needs baseline, grounding, evaluation data/split/scoring/calibration, fallback and cost/latency. Label proposals and unresolved owner decisions; unrelated old plans are not requirements. Proposed tests are not already executed tests. Do NOT call `write_plan` for a Work Graph node — the harness writes the documents after the whole-plan review."""
 
-WORK_REVIEWER_NOTE = """Work Graph review: when the prompt starts with "Independent review of Work Graph node" or "Whole-plan review of Work Graph run", or the Vietnamese equivalents "Phản biện độc lập nút Work Graph" / "Phản biện toàn kế hoạch Work Graph", the output under review is in your context (there is no reviewTarget file). The task-specific rubric and final VERDICT format override generic report headings. Run tests only if tools and task permit; otherwise report NOT RUN. Open the cited paths/URLs yourself, check each acceptance item and the rubric, list blocking findings with evidence and the exact fix, and END with exactly one line `VERDICT: ok` or `VERDICT: revise`. In a whole-plan review add one line `REVISE <nodeId>: <fix>` for each sub-plan that must change."""
+WORK_REVIEWER_NOTE = """Work Graph review: when the prompt starts with "Independent review of Work Graph node" or "Whole-plan review of Work Graph run", or the Vietnamese equivalents "Phản biện độc lập nút Work Graph" / "Phản biện toàn kế hoạch Work Graph", the output under review is in your context (there is no reviewTarget file). The task-specific rubric and final VERDICT format override generic report headings. Run tests only if tools and task permit; otherwise report NOT RUN. verify_exec is for checking a claim, not for running project tests. Open the cited paths/URLs yourself, check each acceptance item and the rubric, list blocking findings with evidence and the exact fix, and END with exactly one line `VERDICT: ok` or `VERDICT: revise`. In a whole-plan review add one line `REVISE <nodeId>: <fix>` for each sub-plan that must change."""
 
 WORK_EXEC_REVIEWER_NOTE = """Work Graph execution review: for "Independent review of Work Graph node" or "Phản biện độc lập nút Work Graph", verify the reported change by running the named tests when your available tools and task permit; otherwise mark NOT RUN. Do NOT edit source files; END with exactly one line `VERDICT: ok` or `VERDICT: revise`."""
 
@@ -272,11 +276,11 @@ ROLES = {r.id: r for r in [
     # Vòng 25 (D-33): người phản biện ĐỘC LẬP của một bản kế hoạch đã ghi. Chỉ-đọc, không có
     # write_plan, và không nằm trong bộ công cụ của bất kỳ vai con nào khác — chỉ orchestrator
     # delegate được vai này (xem tool_contracts.delegate_task).
-    Role('plan-review', 'Plan review', PLAN_REVIEW_INSTRUCTIONS, READ, ('codebase-inspection',)),
+    Role('plan-review', 'Plan review', PLAN_REVIEW_INSTRUCTIONS, READ | VERIFY, ('codebase-inspection',)),
     Role('design', 'Design', DESIGN_INSTRUCTIONS, READ, ('design-md',)),
     Role('build', 'Build', BUILD_INSTRUCTIONS, WRITE),
     Role('debug', 'Debug', DEBUG_INSTRUCTIONS, WRITE, ('systematic-debugging',)),
-    Role('review', 'Review', REVIEW_INSTRUCTIONS, READ, ('requesting-code-review',)),
+    Role('review', 'Review', REVIEW_INSTRUCTIONS, READ | VERIFY, ('requesting-code-review',)),
     Role('simplify', 'Simplify', SIMPLIFY_INSTRUCTIONS, WRITE, ('simplify-code',)),
     Role('testing', 'Testing', TESTING_INSTRUCTIONS, WRITE | VISUAL, ('test-driven-development',)),
     Role('research', 'Research', RESEARCH_INSTRUCTIONS, RESEARCH, ('grounded-citations', 'research-team')),
@@ -285,7 +289,7 @@ ROLES = {r.id: r for r in [
     # đang soi) và không có `dossier_write` (nó không sửa hồ sơ). Thêm ở CUỐI danh sách để không
     # đảo thứ tự `ROLES` mà test đang ghim.
     Role('research-review', 'Research Review', RESEARCH_REVIEW_INSTRUCTIONS,
-         READ | SOURCE_READ | {'web_search', 'web_fetch', 'read_source', 'paper_citations',
+         READ | SOURCE_READ | VERIFY | {'web_search', 'web_fetch', 'read_source', 'paper_citations',
                                'claim_assess'}),
 ]}
 ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_scope', 'write_plan', 'plan_verify',
@@ -307,7 +311,8 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        'research_scope',
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
-                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview'} | PEER
+                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview'} | PEER \
+    | VERIFY  # W6.1.3: thiếu ở cha thì `allowed_tools` cắt mất của reviewer con (46 → 47 công cụ).
 
 
 def allowed_tools(role, parent=None):
@@ -342,6 +347,9 @@ def work_check_tools(role, parent):
     """
     tools = set(allowed_tools(role, parent))
     tools |= set(parent) & {'web_search', 'web_fetch', 'read_source'}
+    if role in ('review', 'plan-review', 'research-review'):
+        # Owner switches still win: re-added only when the parent session has it.
+        tools |= set(parent) & VERIFY
     tools.add('work_artifact_read')
     tools.add('work_report')
     return tools - {'file_write', 'file_edit_block', 'write_plan'}
