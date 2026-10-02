@@ -189,6 +189,27 @@ class Decisions:
             if kind == 'progress':
                 if not self.graph.progress.valid(self.graph.progress.get(ident['admissionId'])):
                     return False
+            elif kind in ('repair_decision_required', 'integration_conflict', 'touchset_violation',
+                          'repo_ambiguous'):
+                # W8.A4.3-A4.5: valid while the referenced node/run is still in the failing state.
+                if kind == 'repo_ambiguous':
+                    if run.get('isolation'):
+                        return False
+                    if run['status'] not in ('approved', 'executing'):
+                        return False
+                else:
+                    node = self.graph.find_node(run, ident.get('nodeId'))
+                    state = ((node or {}).get('stages') or {}).get(ident.get('stage') or 'execute') or {}
+                    if not node or state.get('status') != ident.get('status'):
+                        return False
+                    if (state.get('artifact') or {}).get('artifactId') != ident.get('artifactId'):
+                        return False
+                    if kind == 'repair_decision_required' and len(state.get('repairs') or []) != ident.get('repairs'):
+                        return False
+                    if kind == 'integration_conflict' and (run.get('integration') or {}).get('status') != 'conflict':
+                        return False
+                    if kind == 'touchset_violation' and not state.get('touchViolation'):
+                        return False
             elif kind == 'checks':
                 node = next(n for n in run['nodes'] if n['id'] == ident['nodeId'])
                 state = node['stages'][ident['stage']]

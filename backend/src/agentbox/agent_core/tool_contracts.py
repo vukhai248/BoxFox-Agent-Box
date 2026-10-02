@@ -668,15 +668,25 @@ SCHEMAS = [
          'target={kind:node,nodeId:...,stage:...} with required_checks_passed; revision and invocationId required. '
          'Backend dispatches eligible refs and independently notifies main; no main relay turn. '
          'revoke_handoff uses transitionId and assignment revision. No implied Build/Debug or automatic repair. '
-         'Grants cover owner intent only, never permission to implement an artifact-only request.',
+         'Grants cover owner intent only, never permission to implement an artifact-only request. '
+         'set_repair sets the bounded repair policy (maxRepairs <= maxRounds-1, debug=never|when_unclassified|'
+         'always_first, revision, invocationId); cleanup_worktrees removes the clean worktrees of a closed run.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
-                                                'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff']},
+                                                'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff',
+                                                'set_repair', 'cleanup_worktrees']},
           'runId': STRING, 'goal': STRING, 'title': STRING,
           'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
                    'description': 'what the owner asked for; plan+research/design is `mixed`'},
           'nodes': {'type': 'array', 'maxItems': 24, 'items': WORK_NODE},
           'nodeIds': {'type': 'array', 'items': STRING},
           'nodeId': STRING, 'stage': {'type':'string','enum':['produce','execute']},
+          'maxRepairs': {'type': 'integer', 'minimum': 0, 'maximum': 3,
+                         'description': 'set_repair: bounded automatic repairs per execution node'},
+          'debug': {'type': 'string', 'enum': ['never', 'when_unclassified', 'always_first'],
+                    'description': 'set_repair: when an unclassified red test gets a read-only Debug diagnosis first'},
+          'paths': {'type': 'array', 'items': STRING,
+                    'description': 'work_ship on a pre-isolation run: the exact files this run owns'},
+          'repoPath': STRING,
           'purpose': {'type':'string','enum':['produce','review']}, 'checkKind': STRING,
           'decisionKeys': {'type':'array','minItems':1,'maxItems':3,'items':STRING},
           'publishInterview': {'type':'boolean'}, 'resumeOnAnswers': {'type':'boolean'},
@@ -697,6 +707,7 @@ SCHEMAS = [
          'phase=execute requires execution scope plus owner approval or Autopilot; artifact-only requests cannot execute.',
          {'runId': STRING, 'phase': {'type': 'string', 'enum': ['discover','execute']},
           'nodeIds': {'type': 'array', 'items': STRING},
+          'repoPath': STRING,
           'maxRounds': {'type': 'integer', 'minimum': 1, 'maximum': 4}}, ['phase']),
     tool('work_check',
          'Main inspects draft artifact refs, then starts minimum checks (evidence/critique/plan/design/tests/code review). '

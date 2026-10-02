@@ -3304,7 +3304,7 @@ class HarnessRuntime(RuntimeCommands):
                 files.append({'path': relative, 'bytes': bytes_, 'mtime': mtime})
         return files
 
-    async def probe_workspace(self, sid, started, step_no=None, turn_no=None, budget=None):
+    async def probe_workspace(self, sid, started, step_no=None, turn_no=None, budget=None, root=None):
         """P3.2 — MỘT lệnh `find` cố định: lượt này có đổi tệp nào trong workspace không?
 
         Lệnh do harness soạn, chỉ nội suy epoch của lượt (container dùng chung đồng hồ với host) và
@@ -3318,6 +3318,10 @@ class HarnessRuntime(RuntimeCommands):
         scope = str(sid or '')[:8] or 'unknown'
         command = evidence_gate.EVIDENCE_PROBE_COMMAND.format(epoch=int(started),
                                                              limit=EVIDENCE_PROBE_MAX_FILES)
+        if root:
+            # W8.A4.3: lượt của node ghi trong worktree của nó — phép dò phải đo ĐÚNG cây đó, nếu
+            # không thì mọi thay đổi thật đều nằm ngoài tầm nhìn và cổng bằng chứng báo "không đổi".
+            command = command.replace('cd /home/agent/workspace ', f'cd /home/agent/workspace/{root} ', 1)
         # Trần của phép dò không được dài hơn phần đời còn lại của lượt: một phép dò vượt hạn chót
         # sẽ xoá luôn câu trả lời mà nó đang định kiểm chứng.
         remaining = self.seconds_left(budget) if budget is not None else None
@@ -3326,7 +3330,8 @@ class HarnessRuntime(RuntimeCommands):
         limit = _clamp_timeout(EVIDENCE_PROBE_TIMEOUT_SECONDS, remaining, 1)
         try:
             answer = await asyncio.wait_for(
-                self.executor.execute('terminal_exec', {'command': command}, sid), limit)
+                self.executor.execute('terminal_exec', {'command': command}, sid,
+                                      **({'root': root} if root else {})), limit)
         except asyncio.TimeoutError:
             return {'ok': False, 'error': 'timeout', 'files': []}
         except Exception as exc:
@@ -4081,7 +4086,9 @@ class HarnessRuntime(RuntimeCommands):
                 profile = evidence_gate.classify_turn(turn_calls)
                 probe = None
                 if profile.needs_probe:
-                    probe = await self.probe_workspace(sid, started, step_no, turn_no, budget)
+                    work = (self.store.get(sid).get('config') or {}).get('workBinding') or {}
+                    probe = await self.probe_workspace(sid, started, step_no, turn_no, budget,
+                                                       (work.get('workspace') or {}).get('root'))
                 fragments = evidence_gate.artifacts_from_calls(turn_calls)
                 verdict = evidence_gate.assess(text, profile, probe, fragments, mode=mode)
                 repaired = False
@@ -4959,10 +4966,21 @@ class HarnessRuntime(RuntimeCommands):
         # chúng thì mọi ảnh chụp và mảnh bằng chứng rơi về bước `000` dù box đã đọc từ lâu.
         identity = {'turn': self.active_turn.get(sid), 'step': self.active_step.get(sid),
                     'tool_call_id': call_id}
+        # W8.A4.3: child của Build node chỉ chạy trong worktree của nó; khoá ghi tách theo root
+        # nên hai node độc lập ghi song song, còn checkout chung vẫn tuần tự như trước.
+        root = (binding.get('workspace') or {}).get('root')
+        if root:
+            identity['root'] = root
         if name in {'file_write', 'file_edit_block', 'terminal_exec'}:
-            async with self.writer_lock:
+            async with self.writer_lock_for(root):
                 return await self.executor.execute(name, args, sid, **identity)
         return await self.executor.execute(name, args, sid, **identity)
+
+    def writer_lock_for(self, root=None):
+        if not root:
+            return self.writer_lock
+        locks = self.__dict__.setdefault('root_writer_locks', {})
+        return locks.setdefault(root, asyncio.Lock())
 
     JOURNAL_ROUTE_LIMIT = 200
 
@@ -5731,6 +5749,8 @@ class HarnessRuntime(RuntimeCommands):
             return await service.verify(current, args)
         if action == 'submit':
             return await service.submit(current, args, call_id)
+        if action == 'cleanup_worktrees':
+            return await service.worktrees.action(current, args)
         return service.graph(current, args)
 
     @staticmethod
