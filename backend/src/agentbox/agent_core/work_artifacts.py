@@ -95,6 +95,54 @@ class Artifacts:
             result['readingInstruction'] = 'Read unreadOffset next, even if nextOffset is null. Every assigned range is required.'
         return result
 
+    def input_closure(self, run_id, targets):
+        """Resolve only immutable inputs bound to these targets, never every run artifact."""
+        inputs, seen, visiting = [], set(), set()
+
+        def visit(aid, expected=None, relation=None):
+            if aid in visiting:
+                raise ValueError('WORK_ARTIFACT_INPUT_CYCLE: bound input references form a cycle')
+            meta, _ = self.get(run_id, aid)
+            if expected is not None and meta != expected:
+                raise ValueError('WORK_ARTIFACT_INPUT_CHANGED: metadata differs from the immutable registry')
+            if meta['status'] != 'finalized':
+                raise ValueError('WORK_ARTIFACT_INPUT_PARTIAL: a bound input is not finalized')
+            if relation == 'lookup' and meta['binding'].get('purpose') != 'knowledge':
+                raise ValueError('WORK_ARTIFACT_INPUT_KIND: lookup ref must name a knowledge artifact')
+            if aid in seen:
+                return meta
+            seen.add(aid)
+            visiting.add(aid)
+            inputs.append(meta)
+            binding = meta['binding']
+            for ref in binding.get('lookupArtifactIds', []):
+                visit(ref, relation='lookup')
+            for node_id, dependency in binding.get('dependencies', {}).items():
+                ref = dependency.get('artifact')
+                if not ref:
+                    continue
+                source = visit(ref)
+                if source['nodeId'] != node_id or (dependency.get('definition') and
+                        source['binding'].get('nodeDefinition') != dependency['definition']):
+                    raise ValueError('WORK_ARTIFACT_INPUT_BINDING: dependency snapshot does not match its binding')
+            if binding.get('ownPlan'):
+                plan = visit(binding['ownPlan'])
+                if plan['nodeId'] != meta['nodeId'] or plan['stage'] != 'produce':
+                    raise ValueError('WORK_ARTIFACT_INPUT_BINDING: ownPlan must name this node plan snapshot')
+            visiting.remove(aid)
+            return meta
+
+        # Preserve targets first: caller uses the primary code snapshot separately.
+        for target in targets:
+            registered, _ = self.get(run_id, target['artifactId'])
+            if registered != target:
+                raise ValueError('WORK_ARTIFACT_INPUT_CHANGED: target differs from the immutable registry')
+            if registered['status'] != 'finalized':
+                raise ValueError('WORK_ARTIFACT_INPUT_PARTIAL: review target is not finalized')
+        for target in targets:
+            visit(target['artifactId'], target)
+        return list(targets) + [meta for meta in inputs if meta['artifactId'] not in {t['artifactId'] for t in targets}]
+
     def progress(self, check_id, meta, reader_id):
         """Contiguous audited prefix, scoped to this exact check/artifact/reader."""
         admission = (self.graph.store.get(reader_id)['config'].get('workBinding') or {}).get('admissionSeq', 0)

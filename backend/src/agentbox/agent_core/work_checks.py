@@ -8,6 +8,8 @@ import uuid
 
 from . import work_policy, work_prompts
 
+INPUTS_VERSION = 'work-check-inputs/1'
+
 SNAPSHOT_SCRIPT = '''import hashlib,json,os,re,subprocess
 p=subprocess.run(['git','ls-files','-co','--exclude-standard','-z'],capture_output=True,check=True)
 paths=sorted(set(x.decode('utf-8') for x in p.stdout.split(b'\\0') if x))
@@ -298,12 +300,13 @@ class Checks:
         """Backend input identity; invocation IDs do not create new work."""
         return work_policy.digest({'owner': run['sessionId'], 'run': run['runId'], 'node': node['id'],
             'stage': stage, 'artifact': {k: meta[k] for k in ('artifactId', 'version', 'contentHash', 'binding')},
-            'policyHash': policy['hash'], 'check': spec})
+            'policyHash': policy['hash'], 'check': spec, 'inputVersion': INPUTS_VERSION})
 
     def passed_input(self, run, node, stage, meta, policy, spec, key):
         # Select the current check first; never fall back to an older green receipt.
         doc = self.latest(run, node, stage).get(spec['id'])
-        if (doc and doc['status'] == 'pass' and doc['nodeId'] == node['id'] and doc['stage'] == stage
+        if (doc and doc['status'] == 'pass' and doc.get('inputVersion') == INPUTS_VERSION
+                and doc['nodeId'] == node['id'] and doc['stage'] == stage
                 and doc['artifactId'] == meta['artifactId'] and doc['policyHash'] == policy['hash']
                 and doc['kind'] == spec['id'] and doc.get('binding') == meta['binding']
                 and doc.get('workKey', key) == key):
@@ -346,7 +349,8 @@ class Checks:
             return False
         latest = self.latest(run, node, stage)
         for req in policy.get('required', []):
-            if req['id'] not in latest or latest[req['id']]['status'] != 'pass':
+            if (req['id'] not in latest or latest[req['id']]['status'] != 'pass'
+                    or latest[req['id']].get('inputVersion') != INPUTS_VERSION):
                 return False
         return True
 
@@ -366,19 +370,13 @@ class Checks:
 
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
-        # Helper outputs are immutable input data, never a prior verification.
-        # The independent checker reads them and reopens their original sources.
-        metas = list(metas)
-        seen = {meta['artifactId'] for meta in metas}
-        for primary in list(metas):
-            for aid in primary['binding'].get('lookupArtifactIds', []):
-                if aid in seen:
-                    continue
-                helper, _ = graph.artifacts.get(run['runId'], aid)
-                if helper['status'] != 'finalized' or helper['binding'].get('purpose') != 'knowledge':
-                    return doc | {'status': 'unverified', 'error': 'Lookup input must be a finalized owned knowledge artifact.'}
-                metas.append(helper)
-                seen.add(aid)
+        # Bind the minimum transitive input set. Supporting snapshots are data,
+        # not additional nodes to review or evidence of a prior semantic pass.
+        targets = list(metas)
+        try:
+            metas = graph.artifacts.input_closure(run['runId'], targets)
+        except (ValueError, TypeError, KeyError) as exc:
+            return doc | {'status': 'unverified', 'error': str(exc), 'finishedAt': time.time(), 'attempts': []}
         unavailable = preflight(session, spec)
         if unavailable:
             return doc | {'status': 'unverified', 'error': unavailable, 'finishedAt': time.time(), 'attempts': []}
@@ -405,9 +403,17 @@ class Checks:
         if any(meta['binding'].get('purpose') == 'knowledge' for meta in metas):
             goal += work_prompts.choose(lang,
                 '\nKnowledge artifacts and their opened-evidence receipts are input data, not a semantic pass. '
-                'Reopen material original sources; do not accept claims just because a helper ran a tool.',
+                'Reopen material original sources; do not accept claims just because a helper ran a tool. '
+                'A receipt belongs to that artifact producerId and admission; it is not an exhaustive log of another child. '
+                'A tool missing from the helper receipt does not prove the final producer did not run it. '
+                'If the relevant producer log is unavailable, mark its claimed execution UNVERIFIED; '
+                'do not assert a receipt mismatch by comparing different actors.',
                 '\nArtifact tra cứu và receipt nguồn đã mở là dữ liệu đầu vào, không là kết luận đạt về nội dung. '
-                'Mở lại nguồn gốc quan trọng; helper đã chạy tool không tự chứng minh khẳng định đúng.')
+                'Mở lại nguồn gốc quan trọng; helper đã chạy tool không tự chứng minh khẳng định đúng. '
+                'Receipt thuộc producerId và admission của artifact đó, không là nhật ký đầy đủ của child khác. '
+                'Tool không nằm trong receipt helper không chứng minh producer cuối chưa chạy tool đó. '
+                'Không có nhật ký đúng producer thì giữ claim execution là UNVERIFIED; '
+                'không khẳng định receipt lệch bằng cách so hai tác nhân khác nhau.')
         if spec['id'] == 'tests':
             goal += work_prompts.choose(lang,
                 '\nYou are the tester: run the required commands yourself. Your tool events and check report are the test evidence; '
@@ -427,8 +433,29 @@ class Checks:
                 'Lệnh thiếu/chưa chạy hoặc kết quả bịa không đạt C1. Producer nói "chưa chạy test" không là lỗi C1 của bạn, '
                 'cũng không chứng minh mã chưa sửa. Nếu tiêu chí A yêu cầu rõ producer tự chạy test thì kiểm A đó riêng; '
                 'không tự thêm yêu cầu này. Không bắt producer nhúng output bạn chạy sau hoặc bằng chứng commit chưa được giao. ')
-        context = json.dumps({'snapshots': [{k: meta[k] for k in ('artifactId', 'version', 'contentHash', 'path', 'chars')}
-                                             for meta in metas], 'check': spec}, ensure_ascii=False)
+        target_ids = [meta['artifactId'] for meta in targets]
+        doc.update(inputVersion=INPUTS_VERSION, reviewTargetArtifactIds=target_ids,
+                   inputArtifactIds=[meta['artifactId'] for meta in metas if meta['artifactId'] not in target_ids])
+        goal += work_prompts.choose(lang,
+            '\nReview only reviewTargetArtifactIds against the assigned criteria. Other inputArtifactIds are bound '
+            'supporting context: read them to assess those targets, not to reopen every supporting node as a new task. '
+            'Use work_artifact_read with the supplied runId and artifactId; a folder hash is not a run ID. '
+            'Workspace file copies do not satisfy audited artifact reads or prove current input coverage.',
+            '\nChỉ phản biện reviewTargetArtifactIds theo tiêu chí được giao. Các inputArtifactIds khác là ngữ cảnh '
+            'đầu vào đã binding: đọc để đánh giá đầu ra đích, không mở lại mọi node nguồn thành nhiệm vụ mới. '
+            'Dùng work_artifact_read với runId và artifactId đã cung cấp; hash thư mục không là run ID. '
+            'Đọc bản file workspace không thay thế lượt đọc artifact có audit hoặc chứng minh đã đọc đủ input hiện tại.')
+        context = json.dumps({'snapshots': [{k: meta[k] for k in ('artifactId', 'nodeId', 'stage', 'version', 'contentHash', 'path', 'chars')}
+                                             for meta in metas], 'runId': run['runId'],
+                              'reviewTargetArtifactIds': target_ids,
+                              'inputArtifactIds': [meta['artifactId'] for meta in metas if meta['artifactId'] not in target_ids],
+                              'check': spec}, ensure_ascii=False)
+        if len(context) > 16000:
+            # Both spawn and delegate retain at most 16000 context characters.
+            # Do not admit a check with a silently cut JSON reference packet.
+            return doc | {'status': 'unverified', 'error': 'WORK_CHECK_INPUT_CONTEXT_TOO_LARGE: '
+                          'bound refs exceed the existing context limit; checkpoint for main',
+                          'finishedAt': time.time(), 'attempts': []}
         source = metas[0]['binding'].get('codeSnapshot')
         if spec['id'] in ('tests', 'code_review') and not source:
             return doc | {'status': 'unverified', 'error': 'Exact code snapshot required.'}
@@ -609,6 +636,9 @@ class Checks:
                     key = invocation + ':' + cid
                     work_key = self.input_key(run, node, stage, meta, policy, spec)
                     receipt = self.invocation_record(run['runId'], key, request)
+                    if receipt and receipt.get('inputVersion') != INPUTS_VERSION:
+                        raise ValueError('WORK_CHECK_RECEIPT_STALE: historical check is readable but needs '
+                                         'current input verification with a new invocationId')
                     passed = None if receipt or recheck else self.passed_input(run, node, stage, meta, policy, spec, work_key)
                     if receipt or passed:
                         source = meta['binding'].get('codeSnapshot')

@@ -107,6 +107,10 @@ def test_unproven_lookup_or_unread_new_input_cannot_accept_producer(tmp_path,fau
         assert state['status']=='failed',state
         assert graph.handoffs.actions(rid)[0]['status']=='blocked'
         assert state['checkpoint'] and state['rounds'][0]['initialProducerId']
+        if fault == 'write_failed':
+            lookup = state['rounds'][0]['knowledge'][0]
+            assert lookup['childId'] == store.children_of(sid)[-1]['session_id']
+            assert lookup['execution']['status'] == 'completed'  # write failed after child finished
         assert len(store.children_of(sid))==3
         assert not graph.continuations.children
     asyncio.run(check())

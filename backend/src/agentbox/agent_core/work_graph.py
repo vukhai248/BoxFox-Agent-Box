@@ -841,6 +841,12 @@ class WorkGraph:
                                     record.update(previousStatus=record['status'], status='superseded')
                                     self.checks.save(record)
                             changed = True
+                        elif (state['status'] == 'accepted' and state.get('policy', {}).get('required')
+                              and not self.checks.valid(run, node, stage)):
+                            # Keep the immutable output and historical verdict, but
+                            # don't let stage_done release dependents on an old gate.
+                            state.update(status='needs_checks', error='WORK_CHECKS_STALE: '
+                                         'historical checks do not satisfy the current input contract')
         review = run.get('review') or {}
         if review.get('binding') and review['binding'] != self.whole_binding(run):
             run.setdefault('reviewHistory', []).append(review)
@@ -1089,6 +1095,7 @@ class WorkGraph:
             goal = work_prompts.choose(lang,
                     f'Knowledge request from Work Graph node {node["id"]} ({node["kind"]}) in run "{run["title"]}". Answer precisely with evidence (path:line or URL + quote): ',
                     f'Yêu cầu tra cứu từ nút Work Graph {node["id"]} ({node["kind"]}) trong "{run["title"]}". Trả lời đúng câu hỏi với bằng chứng (path:line hoặc URL + trích ngắn): ') + item['question']
+            result = None
             try:
                 result, answer = await self.spawn(session, run, node, stage, 'knowledge', item['role'], goal,
                     work_prompts.choose(lang, 'Owner goal: ', 'Mục tiêu của người dùng: ') + run['goal'], None, attempt,
@@ -1107,7 +1114,8 @@ class WorkGraph:
                     'artifact': meta, 'execution': work_budget.receipt(result),
                     'error': None if evidenced else 'UNVERIFIED: incomplete lookup or no opened original evidence; do not rely on it'}
             except Exception as exc:
-                return item | {'childId': None, 'status': 'failed', 'error': f'UNAVAILABLE: {exc}'[:500]}
+                return item | {'childId': (result or {}).get('sessionId'), 'status': 'failed',
+                    'execution': work_budget.receipt(result or {}), 'error': f'UNAVAILABLE: {exc}'[:500]}
         from . import work_budget
         if controller_action:
             tasks = [self.continuations.helper_task(session['id'], controller_action, item['role'],
@@ -1611,6 +1619,7 @@ class WorkGraph:
 
     def whole_binding(self, run):
         return work_policy.digest({'goal': run['goal'], 'interviews': run.get('interviews'),
+            'checkInputsVersion': work_checks.INPUTS_VERSION,
             'nodes': [{k: v for k,v in n.items() if k != 'stages'} for n in run['nodes']],
             'artifacts': [n['stages']['produce'].get('artifact', {}).get('artifactId') for n in run['nodes'] if 'produce' in n['stages']]})
 
