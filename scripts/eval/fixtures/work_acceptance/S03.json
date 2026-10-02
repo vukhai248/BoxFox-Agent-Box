@@ -1,0 +1,37 @@
+{
+  "id": "S03",
+  "title": "Phiên cũ thiếu role mới (plan-review) — W1.P",
+  "goal": "Preflight chặn trước producer khi role plan-review bị tắt",
+  "ownerLanguage": "vi",
+  "notes": "Config bỏ role plan-review ⇒ check plan_review phải báo WORK_CHECK_UNAVAILABLE và không được thi công.",
+  "prompt": "Lập kế hoạch rồi triển khai endpoint xuất CSV báo cáo doanh thu trong repo này, và chạy python -m pytest -q sau khi code xong.",
+  "interviewAnswers": [],
+  "faults": [
+    {"kind": "missing_role", "role": "plan-review"}
+  ],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/reports.py",
+        "content": "\"\"\"Xuất báo cáo doanh thu (bản khung).\"\"\"\n\n\ndef export_csv(rows):\n    return ''\n"
+      },
+      {
+        "path": "tests/test_reports.py",
+        "content": "from src.reports import export_csv\n\n\ndef test_export_has_header():\n    assert export_csv([]).splitlines()[0] == 'date,revenue'\n"
+      }
+    ]
+  },
+  "expectedState": ["drafting", "discovering", "needs_revision", "cancelled"],
+  "expectedStateSource": "run",
+  "oracle": {
+    "main": [
+      {"kind": "event_code_seen", "code": "WORK_CHECK_UNAVAILABLE", "min": 1, "why": "W1.P: thiếu role mới phải báo trước khi tiêu lượt con"},
+      {"kind": "no_execute_stage", "why": "dừng trước producer/thi công khi capability thiếu"},
+      {"kind": "run_state_not_in", "states": ["executing", "executed", "execute_failed", "shipped"], "why": "không được chạy thi công"},
+      {"kind": "no_misdiagnosis", "code": "WORK_CHECK_UNAVAILABLE", "patterns": ["\\bACL\\b", "không có quyền", "permission denied", "thiếu quyền truy cập"], "why": "thiếu role/tool không phải lỗi phân quyền — không được quy sai nguyên nhân cho user"}
+    ],
+    "flow": [
+      {"kind": "no_diagnostic_leak", "why": "mã lỗi nội bộ không được rò ra câu trả lời cho user"}
+    ]
+  }
+}

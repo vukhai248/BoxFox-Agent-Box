@@ -1,0 +1,51 @@
+{
+  "id": "S01",
+  "title": "Prompt y tế mơ hồ + trả lời interview",
+  "goal": "API tra cứu lịch hẹn theo mã bệnh nhân, đã chốt các quyết định qua interview",
+  "ownerLanguage": "vi",
+  "notes": "Prompt thiếu 3 quyết định quan trọng (định dạng mã, giới hạn, phân quyền) ⇒ main phải hỏi ≤ 3 câu rồi mới làm.",
+  "prompt": "Phòng khám của tôi cần một API tra cứu lịch hẹn theo mã bệnh nhân. Hãy lập kế hoạch ngắn rồi triển khai trong repo này, và chạy python -m pytest -q để xác nhận. Nếu thiếu thông tin quan trọng thì hỏi tôi trước khi làm.",
+  "interviewAnswers": [
+    {"text": "Mã bệnh nhân là chuỗi 8 ký tự chữ và số, không phân biệt hoa thường."},
+    {"text": "Trả tối đa 100 lịch hẹn, sắp xếp theo giờ hẹn giảm dần; mã không tồn tại thì trả 404."},
+    {"text": "Không cần phân quyền chi tiết, chỉ cần mã hợp lệ."}
+  ],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/appointments.py",
+        "content": "\"\"\"Tra cứu lịch hẹn theo mã bệnh nhân (bản khung, chưa có logic).\"\"\"\n\n\ndef appointments_for(patient_id, rows):\n    return []\n"
+      },
+      {
+        "path": "tests/test_appointments.py",
+        "content": "from src.appointments import appointments_for\n\n\ndef test_returns_rows_for_known_patient():\n    rows = [{'patientId': 'AB12CD34', 'doctor': 'Lan', 'startAt': '2026-01-01T09:00:00Z',\n             'status': 'booked'}]\n    assert appointments_for('ab12cd34', rows) == rows\n"
+      },
+      {
+        "path": "docs/notes.md",
+        "content": "# Ghi chú phòng khám\n\n- Dữ liệu lịch hẹn hiện nằm trong bảng `appointments` của dịch vụ cũ.\n- Mã bệnh nhân do quầy tiếp nhận cấp, in trên thẻ.\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "interview_questions_max", "max": 3, "why": "prompt mơ hồ: chỉ được hỏi tối đa 3 câu quan trọng"},
+      {"kind": "interview_answered", "why": "interview đã định trước phải được trả lời và dùng"},
+      {"kind": "child_count_max", "max": 8, "why": "việc nhỏ: không fan-out quá 8 child"}
+    ],
+    "producer": [
+      {"kind": "artifact_regex_any", "patterns": ["src/[\\w./-]+\\.py:\\d+", "python -m pytest"], "why": "plan phải có acceptance cụ thể (file:dòng hoặc lệnh test)"}
+    ],
+    "reviewer": [
+      {"kind": "check_status_any", "status_in": ["pass"], "why": "việc khép kín: check cuối phải pass"}
+    ],
+    "testing": [
+      {"kind": "tests_proof", "commands": ["python -m pytest"], "why": "chỉ pass khi có tool_end exitCode=0 thật"}
+    ],
+    "flow": [
+      {"kind": "no_fabricated_url", "why": "0 URL bịa trong output cho user"},
+      {"kind": "no_duplicate_continuation", "why": "một request/revision chỉ resume một lần"}
+    ]
+  }
+}
