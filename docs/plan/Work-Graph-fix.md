@@ -2850,3 +2850,166 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 **Thước đo:** hoàn thành acceptance theo scope, claim có nguồn hỗ trợ thật, mức tự thêm quyết định, lỗi tool và sửa lỗi, review false-positive/false-negative được adjudicate, coverage đọc input, test thực, ngân sách/latency theo caller đã xác định. Số dòng xóa, số heading, độ dài prompt hay điểm tổng không thay nghiệm thu. Ngưỡng định lượng mới chỉ là đề xuất đến khi có baseline và phạm vi được duyệt.
 
 **Quan hệ với việc đang mở:** M1–M3 của W10 phải làm đúng phép đo trước khi dùng W10 để đánh giá P4; W6.Q xử lý sự công tâm reviewer trước khi gán lỗi cho producer/main; W11 thuộc phần prompt/skill producer, không sửa scheduler W8. Có thể làm inventory/test prompt độc lập từ sớm, nhưng không kết luận chất lượng từ bundle thiếu events. W10.F dùng source cuối đã freeze của các patch thực sự đã được chốt.
+
+## 38. W12.MODEL.METADATA — discovery adaptive cho model, thinking, giới hạn và chi phí
+
+**03/10/2026 — bổ sung theo bug user-confirmed và yêu cầu làm rõ của owner.** Tên draft trước là W12.MODEL.THINKING; đây là **cùng một W**, được chỉnh phạm vi thành metadata adaptive cho OpenCode và các provider khác. Space Bunny là ca tái hiện, không phải danh sách model để hardcode. Lượt local mới đọc code và cập nhật tài liệu, chưa sửa code, ping provider hoặc kiểm thử live.
+
+### 38.1 Yêu cầu đã chốt và ca lỗi
+
+- Owner yêu cầu BoxFox lấy danh sách model cùng thinking, budget và chi phí từ nguồn provider phù hợp, vì provider thay model thường xuyên. Model mới/đổi khả năng phải đi qua cùng cơ chế, không cần thêm từng ID vào code chỉ để hiện thinking.
+- Bug user đã xác nhận: chọn **Space Bunny Free / OpenCode** trong BoxFox không hiện lựa chọn thinking. Ảnh tham chiếu `codex-clipboard-f1e8c6f4-ba1d-4c3f-82a4-84995e4664a1.png` có Default/Low/Medium/High/Extra high/Max. Giữ ảnh làm ca tham chiếu; cloud xác minh bộ mức/payload provider thật, không suy rộng sang mọi model.
+- Muse Spark có thể là ngoại lệ user nhớ. Kiểm theo từng model/connection; không hỏi lại để xác nhận triệu chứng đã báo.
+- “Ping” ở đây là gọi API discovery/metadata được provider hỗ trợ, không phải ICMP hoặc một completion chạy rồi đoán capability. `/models` không mặc định chứa đủ thinking/budget/pricing cho mọi provider.
+- “Budget” trong W này là điều khiển thinking bằng token và giới hạn model/request (context/input/output/reasoning khi có). Quota/hạn mức tài khoản và ngân sách do người dùng đặt là lớp riêng, có nguồn và đơn vị riêng; không thay maxSteps/deadline/budget W6.5 hoặc cấp thêm budget cho sub-agent.
+
+### 38.2 Metadata adaptive cần được kiểm chứng
+
+| Nhóm | Dữ liệu cần lấy/đối chiếu | Hành vi khi thiếu hoặc thay đổi |
+|---|---|---|
+| Inventory | Model ID thật, provider/connection/endpoint, tên, trạng thái routable/retired, source và lần sync | Model mới xuất hiện qua refresh; model bị rút không tiếp tục được trình là đang sẵn sàng. Giữ cấu hình/refs cũ theo contract, không tự đổi sang model khác |
+| Thinking | Có reasoning không; điều khiển effort, numeric token budget, fixed/không tùy chỉnh; levels/default/range nếu có | Hiển thị đúng kiểu điều khiển hiện có phù hợp khả năng. Unknown khác unsupported; không hardcode Low/Medium/High/Max cho mọi model hoặc coi không có levels là không reasoning |
+| Limits | Context window, max input/output, phạm vi thinking budget, các ràng buộc giữa output/reasoning tokens nếu nguồn công bố | Phân biệt maximum provider, requested và effective theo cấu hình owner. Trường không có nguồn giữ unknown, không biến default nội bộ thành provider maximum |
+| Pricing | Input/output/cache read/cache write hoặc thành phần provider thực sự công bố; currency/unit, scope/conditions, nguồn và mốc hiệu lực | Giá không biết không thành 0/free; giá per-token và per-million được chuẩn hóa đúng. Khả năng gọi model free không tự chứng minh giá/quota của mọi route |
+| Usage/cost | Usage và cost provider trả thật so với estimate theo price snapshot | Giữ cơ sở giá của lượt đã chạy; refresh giá mới không tính lại lịch sử bằng giá mới. Không coi bảng giá hoặc menu thinking là bằng chứng chi phí thực đã áp dụng |
+| Freshness | Source từng trường, fetched/as-of khi có, stale/error, snapshot/revision | Không gắn toàn bộ row source=live nếu chỉ tên model lấy live còn levels/giá lấy static. Refresh thất bại giữ dữ liệu cuối với trạng thái cũ/lỗi đúng |
+
+**Nguồn:** ưu tiên dữ liệu đúng provider/endpoint/connection/model từ discovery/metadata API; nếu API thiếu trường thì dùng nguồn chính thức/registry/config được xác minh và có provenance/freshness riêng. Manual override của user giữ nhãn manual và được xử lý theo contract hiện có. Không hứa ping một endpoint sẽ lấy được mọi trường; không xóa fallback hữu ích, nhưng fallback không được che mất metadata mới hoặc tự được nâng thành live/verified.
+
+### 38.3 Đối chiếu code đã có và dấu hiệu cần điều tra
+
+1. `router/src/providers/opencode.mjs`: curated metadata thinking có cho Muse Spark; model non-curated trong `discover()` gọi `modelRecord(item.id, item.name || item.id)` mà không truyền metadata từ item. Đây là **dấu hiệu mất metadata trước UI**; kiểm payload/registry/variants thực tế, không vá bằng thêm riêng ID Space Bunny.
+2. `router/src/providers/common.mjs`: đã có `modelThinking`, `thinkingFromDiscovery`, kiểu effort/budget/fixed/none và chuẩn hóa context/levels. Kiểm adapter nào bảo toàn dữ liệu và adapter nào bỏ trường hoặc mặc định none khi khả năng chưa biết. Enum/metadata có trong code chưa chứng minh numeric thinking budget đã đi hết UI/request.
+3. `router/src/service.mjs`: đã có discover dedupe, revision guard, merge model records, manual override/pricing và stale/degraded khi lỗi; có API `POST /api/router/connections/{id}/models/refresh`. Kiểm giá trị thiếu so với giá trị bị provider gỡ/đổi, manual precedence và source từng trường, model removal/alias handling. Không lấy dòng có source=live làm chứng nhận tất cả metadata trong dòng.
+4. `router/src/model-sync.mjs`: đã có scheduler, interval mặc định6giờ, chống run chồng và timeout discovery. Kiểm scheduler thực được khởi động, eligibility/auth/anonymous connections (OpenCode), refresh thủ công, data stale và hành vi sau restart. Không tạo scheduler thứ hai hoặc chốt chu kỳ mới chỉ vì mục tiêu adaptive; đề xuất khi evidence cho thấy cần.
+5. `router/src/context-window.mjs`, `router/src/pricing.mjs`: đã có nguồn reported/documented/manual, giá từ ping và cost accounting. Bảng documented/static có thể hữu ích khi API thiếu hoặc trả sai; kiểm freshness/conflict/precedence, không để bảng cũ thắng dữ liệu mới mà không có lý do. Schema budget/max-output đầy đủ và nguồn từng trường có thể còn thiếu; xác nhận interface trước khi bổ sung.
+6. `frontend/src/lib/routeOptions.ts`: levels nhóm provider là giao giữa connections; pin dùng đúng connection, alias theo target. Không đổi giao thành hợp để hiện mức không hợp lệ ở một route; kiểm metadata thiếu/khác phiên bản thay vì giả định tất cả connection đồng nhất.
+7. `frontend/src/components/chat/HarnessModelPicker.tsx`: selector hiện khi `thinkingLevels.length > 1`; đọc cùng `frontend/src/lib/harnessThinking.ts`, `frontend/src/store/providerStore.ts`, `frontend/src/store/harnessStore.ts`, `frontend/src/components/panels/ChatPanel.tsx` và `frontend/src/types/provider.ts`. Kiểm mất field, store/refresh/persistence và nguồn options ở cả prop/live path; không chỉ sửa điều kiện render.
+8. `backend/src/agentbox/agent_core/runtime.py` và provider generate/mapping: kiểm modelMetadata/route, validate lựa chọn, spelling payload effort/token budget và endpoint Responses/chat-completions. Default phải có nghĩa omit/provider default rõ ràng; một tên label trong UI không tự là giá trị native provider.
+
+**Phương pháp:** theo một snapshot thật qua provider → adapter → service/state → route options/store → picker → session/runtime → outbound request; chỉ rõ lớp đầu tiên làm mất/đổi dữ liệu. Kiểm riêng freshness và runtime enforcement khi snapshot thay đổi giữa chọn và gửi. Đây là hướng điều tra static, chưa là kết luận nguyên nhân đầy đủ của bug.
+
+### 38.4 Workflow và ranh giới triển khai
+
+- [x] **T0a — ghi nhận:** bug user-confirmed, phạm vi adaptive owner đã làm rõ, code paths và expected output; cập nhật prompt/bàn giao.
+- [ ] **T0b — inventory:** lập bảng từng provider đang được BoxFox hỗ trợ: discovery endpoint, nguồn metadata từng nhóm, freshness/manual/fallback, trường còn unknown. Space Bunny là ca lỗi đầu tiên; chọn thêm provider có payload khác để kiểm cơ chế chung, không yêu cầu gọi live toàn bộ model.
+- [ ] **T1 — chốt bản sửa nhỏ:** current → proposed → file/interface → nguồn → test. Tận dụng discovery/sync/pricing/thinking hiện có, fix mất metadata trước. Nếu cần thêm metadata contract hoặc kiểu điều khiển numeric budget chưa có UI tương ứng, trình riêng thay đổi và tradeoff trước khi triển khai; không âm thầm redesign.
+- [ ] **T2 — adaptive refresh:** model ID mới không cần code riêng; metadata đổi cập nhật atomically/có revision, giữ manual/selection khi hợp lệ; model/mức bị rút xử lý rõ. Giữ last-good khi lỗi với stale/error, bounded timeout/backoff/dedupe; không ping mọi provider mỗi render, không dùng completion tốn phí làm discovery mặc định.
+- [ ] **T3 — selection/request:** menu/điều khiển hiện hữu và session/request dùng đúng model metadata; phân biệt default/effort/budget/fixed/unknown, requested/effective và trần owner. Metadata giá không được làm đổi model hoặc budget mà user đã chọn; route pin/alias cùng contract.
+- [ ] **T4 — test đích không model:** fixture provider thay payload qua các lần refresh; non-curated ID, mức/budget/giá đổi, field missing/removed, model retired, manual override, stale failure, concurrent/revision, multi-connection/pin/alias, picker/persistence và outbound mapping. Đọc tests hiện có ở router `opencode`, `thinking-mapping`, `pricing`, `context-window`, model-sync/service; frontend `routeOptions`, picker, harnessThinking; runtime/session. Test meaningful theo lỗi/contracts, không chỉ snapshot chuỗi.
+- [ ] **T5 — kiểm live nhỏ:** lấy snapshot provider thật và xác minh ca Space Bunny; fixture phủ các provider/kiểu điều khiển khác. Một lượt model có mục tiêu nếu cần xác nhận payload/provider acceptance, OpenCode Space Bunny theo model kiểm thử đã chốt. Provider khác ưu tiên metadata API; nếu cần inference test làm thay model kiểm thử/chi phí thì trình riêng. CUA tối thiểu khi cần menu thật; không chạy DAG benchmark dài cho dropdown.
+- [ ] **T6 — bàn giao:** source/commit/config, metadata/provenance đã kiểm, patch, commands và actual/expected, failure/unknown và giới hạn. Chỉ tick phần đạt; không ghi adaptive hoàn tất chỉ vì Space Bunny có menu.
+
+### 38.5 Checkpoint kiểm chứng
+
+| Ca | Expected output |
+|---|---|
+| Provider thêm model ID chưa từng có trong code | Sau refresh model có trong inventory và metadata đi đủ pipeline; không sửa bảng ID để route/selector hoạt động |
+| Space Bunny và model hỗ trợ nhiều efforts | Selector có đúng mức đã xác minh; lựa chọn/Default phản ánh payload thực, không chỉ hiện nhãn |
+| Provider đổi/removes level hoặc đổi numeric budget/limits | Snapshot mới cập nhật; giá trị lưu cũ không hợp lệ được xử lý đúng contract và runtime không gửi sai. Không tự nâng budget owner |
+| Effort / token budget / fixed / unsupported / unknown | Giữ đúng khả năng; không đồng nhất numeric budget với các mức effort. Trường thiếu là unknown hoặc hạn chế được ghi, không tự thành unsupported/free |
+| Giá thay đổi, cache price thiếu hoặc khác đơn vị | Giá mới có source/as-of/unit đúng; thiếu giữ unknown; estimate khác reported cost. Usage cũ giữ price basis tại lúc chạy |
+| API chỉ trả tên/ID, không trả thinking hoặc giá | Dùng nguồn bổ sung hợp lệ hoặc báo unknown; không giả provenance live/verified hoặc đoán từ tên model |
+| Refresh lỗi/429/auth, chồng lượt, restart | Last-good có stale/error, không xoá selection/cấu hình vô cớ; bounded retry/dedupe, không áp response cũ lên revision mới |
+| Nhóm nhiều connection, pin/alias, manual override | Metadata đúng route đích; giao capability không bị mở rộng sai; manual source không bị ping ghi đè hoặc được gán thành reported |
+| Model bị gỡ/thay ID | Không tiếp tục advertise là model có sẵn; không tự remap tên tương tự. Lịch sử session/usage còn đọc được và alias/selection xử lý theo contract |
+
+### 38.6 Prompt hợp nhất cho cloud agent, gồm checkpoint và W12
+
+Owner yêu cầu **một prompt duy nhất** thay cho prompt tiếp nhận và prompt bổ sung rời nhau. Khối dưới đây thay thế cả hai: đủ read-first/scope/kiến trúc/kiểm chứng của bản bàn giao và nội dung W12 để cloud đang dùng repo cũ chép vào file canonical trước khi thi công.
+
+````text
+Bạn tiếp nhận dự án BoxFox từ checkpoint, không có ký ức hội thoại trước. Nhiệm vụ là hoàn thiện các W còn mở trong bản bàn giao và thực hiện W mới về model metadata adaptive dưới đây. Đọc, xác định phạm vi, sửa code và kiểm chứng; không chỉ viết kế hoạch rồi dừng.
+
+1. ĐỌC VÀ XÁC MINH TRƯỚC KHI SỬA
+
+Đọc đầu tiên docs/plan/CLOUD-AGENT-HANDOFF-03_10.md. Đây chỉ là bản chỉ dẫn; trước khi quyết định hoặc sửa, phải đọc:
+- docs/plan/Work-Graph-fix.md: mục27–29,30–36,37; mục38 nếu đã có, cùng phần chi tiết của W đang xử lý.
+- docs/plan/cloud-pr-audit-03_10.md, đặc biệt mục9.
+- docs/plan/cloud-w10-bundle-audit-03_10.json.
+- docs/plan/handoff-03_10.md và review-simplify-03_10.md.
+- Source, callers, tests, evidence và raw bundle của từng vấn đề liên quan.
+
+Xác minh repo/remote, branch, HEAD và working tree thật. Chỉ làm trên B, bảo toàn WIP người dùng và tránh sửa chồng task đang chạy. Nếu file audit/bundle không có trong clone, báo đúng file cần và xin cung cấp; không đoán nội dung. Tiếp tục phần độc lập làm được trong lúc chờ.
+
+Ở lượt đầu báo ngắn: local/cloud đã làm gì; phần chỉ có code so với phần đã kiểm chứng; các W còn mở và nguyên nhân xác nhận; phạm vi patch, files và tests tiếp theo. Đối chiếu source hiện tại, không xem nhãn Xong hoặc checkbox lịch sử là nghiệm thu toàn luồng.
+
+2. CÔNG VIỆC VÀ THỨ TỰ THỰC HIỆN
+
+Hoàn thiện phần còn lại W6.1/W6.5/W7/W8 và các W/checkpoint liên quan W9/W10/W11 theo tài liệu và phạm vi đã duyệt. Phần đã có checkpoint đạt thì giữ bằng chứng, không làm lại vô cớ.
+
+- Ưu tiên W10.M1/M2/M3: pagination events, collect đúng store/runtime sau restart, caller identity/fault injection, executor parity và oracle. Đọc audit để tái lập; không coi mọi no_run là lỗi model. Sửa phép đo trước khi chạy benchmark dài.
+- Tiếp tục W8.A4.5.N: repair có điều kiện, retest snapshot mới bằng Testing child tương thích, kiểm __integration__; fixture phải đúng trước native probe.
+- W6.Q/W6.1: adjudicate reviewer bằng source, acceptance và phản chứng; kiểm cả verdict và prose. Chỉ quy lỗi main/producer sau khi xác định finding công tâm. Đối chiếu W6.2.BIND để claim mới trong tổng hợp không kế thừa whole-pass cũ.
+- W11.PROMPT: đọc prompt Simplify nguyên văn và phân tích ở mục37; báo phạm vi tinh chỉnh prompt/skill, tận dụng hợp đồng hiện có và kiểm output theo vai. W11 áp dụng cho Explore, Research, Plan, Design, Build, Testing, Debug, Simplify và Review; Simplify là mẫu đầu tiên để đối chiếu, mỗi vai cần prompt, skill và tiêu chí đánh giá phù hợp nhiệm vụ. Không sao chép quyền/HEAD/baseline cũ, không ép mọi nhiệm vụ thành plan đầy đủ.
+- Thực hiện W12 bên dưới như task riêng theo dependency/rủi ro; nó bổ sung công việc, không thay các W trước. Inventory/tests độc lập có thể làm sớm.
+- W10.F chỉ chạy khi phép đo đúng: freeze product/oracle/config/budget hiệu lực, test đích và pilot nhỏ trước, rồi bộ nghiệm thu theo plan. Rescore dữ liệu cũ không thay chạy sản phẩm sau patch.
+
+Báo phạm vi sửa rồi tiếp tục các bug và việc đã được giao trong kiến trúc đã duyệt. Nếu phát hiện cần thay kiến trúc/quyền/workflow hoặc mở phạm vi mới, trình current → proposed → tradeoff và chờ tôi duyệt phần thay đổi đó.
+
+3. GHI W MỚI VÀO PLAN TRƯỚC KHI THI CÔNG
+
+Repo bạn nhận có thể chưa có cập nhật W12 từ local. Chép nguyên khối Markdown sau vào docs/plan/Work-Graph-fix.md, rồi thêm link/trạng thái vào file bàn giao hiện có. Nếu cùng W này đã tồn tại thì cập nhật tại đó, không tạo bản trùng. Nếu ID W12 đã dùng cho việc khác, dùng ID W tiếp theo và ghi mapping rõ trong báo cáo. Giữ checklist và tick theo bằng chứng.
+
+```markdown
+## W12.MODEL.METADATA — discovery adaptive cho model, thinking, budget và chi phí
+
+**Yêu cầu owner, 03/10/2026. Trạng thái: cần thực hiện và kiểm chứng.**
+
+### Vấn đề và mục tiêu
+
+User đã xác nhận chọn Space Bunny Free của OpenCode trong BoxFox không hiện lựa chọn thinking. Ảnh tham chiếu ứng dụng khác có Default/Low/Medium/High/Extra high/Max; Muse Spark có thể là ngoại lệ user nhớ. Space Bunny là ca tái hiện, không phải model duy nhất cần sửa.
+
+BoxFox phải adaptive với OpenCode và các provider khác vì model/khả năng/giá thay đổi thường xuyên: gọi discovery/metadata API phù hợp để lấy model và các trường được công bố, cập nhật theo nguồn/thời điểm. Model ID mới không cần thêm thủ công vào code để selector hoạt động. Không hardcode cùng bộ thinking cho mọi model.
+
+### Nội dung phải giải quyết
+
+1. Inventory theo provider/connection/endpoint: model ID thật, availability, model mới/bị rút và alias/selection liên quan.
+2. Thinking: reasoning capability, kiểu effort/numeric token budget/fixed, levels/default/range thực. Thiếu metadata là unknown, không tự thành unsupported. Default phải có payload semantics đúng; chọn mức đi hết store/session/runtime/provider request.
+3. Budget/limits: context/input/output/reasoning token limits nếu có nguồn; tách requested/effective/provider maximum. Quota tài khoản, user budget và budget bước/thời gian Work Graph là các lớp khác, không tự thay đổi.
+4. Pricing/cost: input/output/cache và điều kiện provider thực sự công bố, currency/unit/source/as-of; chuẩn hóa đơn vị, phân biệt price/estimated cost/provider-reported cost. Unknown không thành 0/free; refresh giá không tính lại usage lịch sử bằng giá mới.
+5. Provenance/freshness từng trường: metadata API hiện tại, nguồn chính thức/registry/config khi API thiếu, manual override và static fallback có nguồn rõ. Không gắn cả row là live/verified khi chỉ model ID lấy live. Không giả định một lần ping /models lấy đủ mọi trường.
+6. Refresh/cache: tận dụng cơ chế hiện có; timeout/backoff/dedupe/revision đúng, giữ last-good với stale/error khi thất bại; metadata mới cập nhật đúng. Không gọi completion tốn phí cho mọi model để discovery hoặc ping mọi provider mỗi render.
+
+### Đọc code trước
+
+- router/src/providers/opencode.mjs và adapters liên quan, providers/common.mjs.
+- router/src/service.mjs, server.mjs, model-sync.mjs, pricing.mjs, context-window.mjs.
+- frontend/src/lib/routeOptions.ts, harnessThinking.ts; store/providerStore.ts, store/harnessStore.ts.
+- frontend/src/components/chat/HarnessModelPicker.tsx; components/panels/ChatPanel.tsx; types/provider.ts.
+- backend/src/agentbox/agent_core/runtime.py, model client/provider payload mapping và tests tương ứng.
+
+Dấu hiệu static cần đối chiếu: OpenCode curated metadata có cho Muse Spark; discovery non-curated gọi modelRecord mà không truyền metadata item. Picker chỉ hiện selector nếu có nhiều thinkingLevels; routeOptions giao levels giữa connections. Đây là hướng điều tra, chưa là kết luận đầy đủ. Fix lớp mất dữ liệu, không thêm riêng Space Bunny để che lỗi.
+
+### Checklist và nghiệm thu
+
+- [ ] M0: Theo dữ liệu provider → adapter/state → options/store/picker → session/runtime → request; xác định nguồn/unknown và lớp lỗi. Kiểm discovery/scheduler hiện có, kể cả connection anonymous như OpenCode.
+- [ ] M1: Sửa metadata/refresh trong hợp đồng hiện hữu; giữ manual overrides và quyền/routing. Contract hoặc kiểu điều khiển UI mới phải trình scope/tradeoff để owner duyệt trước.
+- [ ] M2: Khôi phục selection/default/persistence/payload; kiểm group nhiều connections, pin/alias, đổi model/reload. Không gộp effort với numeric budget; runtime không gửi mức sai.
+- [ ] M3: Fixture tests provider thêm/gỡ ID, đổi levels/budget/giá, thiếu/gỡ trường, stale/error/429/auth, refresh chồng/revision, manual overrides, đơn vị/pricing history và request mapping. Model mới hoạt động không cần patch danh sách ID.
+- [ ] M4: Test API/component/commands trước; metadata live phù hợp và pilot OpenCode Space Bunny có mục tiêu khi cần xác minh request/provider acceptance. CUA tối thiểu khi cần menu thật. Không cần DAG dài cho dropdown hoặc inference mọi provider.
+- [ ] M5: Báo patch/files/source/commit/config, actual/expected, evidence, failures/unknown và phần chưa kiểm; cập nhật checklist. Chỉ tick adaptive đạt khi cơ chế đổi model/metadata và request được kiểm, không chỉ khi một menu đã hiện.
+
+Giữ UI/UX hiện hữu và kiến trúc đã duyệt. W này khôi phục capability/selection và metadata adaptive; không tự thay DAG, model kiểm thử hoặc ngân sách agent. Giới hạn nguồn/khả năng thật phải báo rõ, không đoán dữ liệu để làm xanh.
+```
+
+4. GIỮ KIẾN TRÚC VÀ QUYẾT ĐỊNH ĐÃ DUYỆT
+
+- Main điều phối linh hoạt; không pipeline cố định theo role và không bắt mọi sub qua cùng kiểu Review/Debug.
+- Thông báo main và handoff đã được giao có thể độc lập; không bắt thêm lượt main model relay. Tách notification, handoff, main decision và user decision.
+- Dùng artifact refs/version/hash/binding và code snapshot đúng. Produced không đồng nghĩa accepted; retry không tạo hai lượt thực thi/check.
+- Retest cùng Testing child khi tương thích, với read/test proof mới trên code mới. Fallback child mới chỉ khi cần theo contract, ghi lý do; không dùng pass cũ.
+- Interview/checkpoint/grants/user-action/revision/idempotency theo plan đã duyệt. Sub soạn câu hỏi; publication/continuation theo quyền, không tự đoán answer từ timeout.
+- Budget theo owner: child≤parent; fresh admission khi có input/code/evidence thực mới, giữ lifetime usage/errors; chống ba lượt không tiến triển; thời gian user suy nghĩ không tiêu compute.
+- Review công tâm, mở nguồn và phản chứng; finding phải bám requirement/scope. Chỉ tuning main/producer theo lỗi đã xác định, không bỏ finding hợp lệ để làm xanh.
+
+5. KIỂM THỬ VÀ CHECKPOINT
+
+Giữ UI/UX. W12 được phép khôi phục selector hiện hữu và metadata/mapping/request liên quan; redesign/kiểu điều khiển mới cần duyệt như trên.
+
+Model inference kiểm thử chỉ dùng OpenCode opencode/space-bunny-free. Provider khác có thể kiểm discovery/metadata API và fixtures; nếu cần inference model khác hoặc chi phí mới thì trình riêng. Ưu tiên unit/fixture/component/API và corpus cũ còn đủ source/receipts; CUA chỉ khi thực sự cần. Không chạy lại24ca trên harness còn lỗi hoặc đổi model để làm đẹp kết quả.
+
+Mỗi checkpoint cập nhật Work-Graph-fix và bàn giao: commit/source, files/patch, lệnh và test thật, model/config/requested-effective budget, evidence refs/hashes, failures, phần chưa đạt và bước tiếp theo. Chỉ tick phần đã kiểm; phân biệt lỗi sản phẩm/provider/phép đo, giữ failures trong thống kê. Không coi test xanh hoặc review badge là chứng nhận mọi claim SWE/AI.
+
+Báo tiến độ ngắn khi làm lâu. Không tự mở goal dài hoặc push/merge. Nếu chưa hoàn tất một W, ghi rõ checkpoint và nguyên nhân, tiếp tục phần độc lập còn làm được; không tuyên bố toàn bộ hoàn tất khi còn check chưa đạt.
+````
