@@ -231,6 +231,10 @@ class SandboxExecutor:
                     raise ValueError('No recording owned by this session')
                 data = await self.request('/__box/record/stop', {'recordingId': rid})
                 self.recordings.pop(session, None)
+                if isinstance(data, dict) and data.get('ok') is False:
+                    # W9: box đã dừng ffmpeg nhưng file không probe được (`RECORDING_INCOMPLETE`).
+                    # Đánh dấu hỏng để model/harness không coi đó là một video đã lưu.
+                    data = {**data, 'is_error': True}
                 return data
             raise ValueError('Unknown recording action')
         # Worker executes inside Docker; no interpolation of model text into the host shell.

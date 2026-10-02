@@ -1,0 +1,1329 @@
+{
+  "item": "W9",
+  "title": "Recorder \"moov atom not found\" + Chrome CDP attach timeout 15000ms",
+  "branch": "vorflux/w9-recorder",
+  "base": "B@68ecdf0",
+  "headCommit": "3b3ffa600e844ac5d48a62bb1926bebaa8a1a31a",
+  "date": "2026-10-02",
+  "host": {
+    "note": "probe chạy trong container agentbox-box-w9 (image agentbox-sandbox:w9probe) trên máy này; 4 CPU, 15 GB RAM; ffmpeg trong box + ffmpeg 6.1.1-3ubuntu5 trên host"
+  },
+  "sourceManifest": {
+    "files": {
+      "deploy/docker/capture.py": "3e3a804399c2455a50f2ae40152481604e49ef42b4251f17d12e100bfb1f3fac",
+      "deploy/docker/tests/probe_recorder.py": "344a32cf7e64cdced1301f367092688c9fc2be1500ade07df258067227cad510",
+      "deploy/docker/tests/probe_cdp_attach.py": "380092678e2a9917fc5f8f45d25c439e1f0defb06343c8e0c5d7ebc36e678603",
+      "deploy/docker/tests/validate_worker_cdp.py": "0ee63bc30f7a33a1225ae2ac574078db7f52d1529cd817b0b1b169d5c0be4bf5",
+      "deploy/docker/tests/test_capture_record_stop.py": "65f96a3416dcdfae863ee5ad87c004e7b84c9c534f4f35bb14288be2e98a2b36",
+      "backend/src/agentbox/sandbox/worker.py": "21c379a9696f6ad68da95a9a7565b4a3b720bdf936fba6e1a3fe40a82c0eda3c",
+      "backend/src/agentbox/sandbox/executor.py": "3120b5209cc70ca087d18f69413db4cd1cdfb34a830826af45e9667e2d279dc8",
+      "backend/tests/unit/test_sandbox_worker_cdp_attach.py": "fb2dfdcdae1c29ffcb88c2990378bf5940404fa02d482b19f2a9af97a694127d",
+      "backend/tests/unit/test_sandbox_executor_recording_incomplete.py": "8d1550f69be1f3fd470b5e35a9bc422a20fde2a2ae34579580b78bb1859c7046",
+      "docs/plan/W9.UI-runbook.md": "2c7670246bfc5700832af5bb4aa018b035f6604f1d2ac89486638bae81d7767e"
+    },
+    "manifestHash": "7fc29b0bc99a30002c6523be7dcaa2d128ded201710fbc3ef14d4eacec95d1c1"
+  },
+  "recorder": {
+    "before": {
+      "label": "before-b68ecdf0",
+      "captureDir": "/usr/local/bin",
+      "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+      "nproc": 4,
+      "summary": {
+        "total": 40,
+        "playable": 30,
+        "killed": 10,
+        "honestStop": 30,
+        "maxStopSec": 20.303
+      },
+      "byMode": {
+        "load0/stop3": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.154,
+          "sizeBytesMin": 109725,
+          "sizeBytesMax": 109725
+        },
+        "load0/stop60": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.154,
+          "sizeBytesMin": 552439,
+          "sizeBytesMax": 553195
+        },
+        "load0/auto": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.041,
+          "sizeBytesMin": 138019,
+          "sizeBytesMax": 138202
+        },
+        "load0/hang": {
+          "runs": 5,
+          "playable": 0,
+          "killed": 5,
+          "honest": 0,
+          "stopSecMax": 20.055,
+          "sizeBytesMin": 48,
+          "sizeBytesMax": 48
+        },
+        "load4/stop3": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.231,
+          "sizeBytesMin": 108879,
+          "sizeBytesMax": 108879
+        },
+        "load4/stop60": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.263,
+          "sizeBytesMin": 552195,
+          "sizeBytesMax": 553129
+        },
+        "load4/auto": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.121,
+          "sizeBytesMin": 137968,
+          "sizeBytesMax": 138100
+        },
+        "load4/hang": {
+          "runs": 5,
+          "playable": 0,
+          "killed": 5,
+          "honest": 0,
+          "stopSecMax": 20.303,
+          "sizeBytesMin": 48,
+          "sizeBytesMax": 48
+        }
+      },
+      "hangRuns": [
+        {
+          "load": 0,
+          "rep": 0,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.044,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5fea69a26780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.04,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 1,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.045,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5d56d2768780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.04,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 2,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.055,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x60169fd41780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.06,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 3,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.044,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5d0405527780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.04,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 4,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.048,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x64e17a770780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.04,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 0,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.224,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x631f53340780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.23,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 1,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.241,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5c4632ce5780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.24,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 2,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.218,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5b95baa67780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.22,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 3,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.303,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5a3a5c65a780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.3,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 4,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.212,
+          "sizeBytes": 48,
+          "ffprobeOk": false,
+          "ffprobeError": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x60274aedd780] moov atom not found\n/home/agent/workspace/.generated_artifacts/captures/scree",
+          "signals": [
+            "SIGINT",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 23.23,
+            "forcedKill": null,
+            "exitCode": null,
+            "verified": null
+          },
+          "stopError": null
+        }
+      ]
+    },
+    "after": {
+      "label": "after-b68ecdf0",
+      "captureDir": "/tmp/w9new",
+      "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+      "nproc": 4,
+      "summary": {
+        "total": 40,
+        "playable": 40,
+        "killed": 10,
+        "honestStop": 40,
+        "maxStopSec": 20.175
+      },
+      "byMode": {
+        "load0/stop3": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.21,
+          "sizeBytesMin": 155519,
+          "sizeBytesMax": 155658
+        },
+        "load0/stop60": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.163,
+          "sizeBytesMin": 1667896,
+          "sizeBytesMax": 1871301
+        },
+        "load0/auto": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.046,
+          "sizeBytesMin": 172107,
+          "sizeBytesMax": 172558
+        },
+        "load0/hang": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 5,
+          "honest": 5,
+          "stopSecMax": 20.062,
+          "sizeBytesMin": 67143,
+          "sizeBytesMax": 67582
+        },
+        "load4/stop3": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.306,
+          "sizeBytesMin": 116511,
+          "sizeBytesMax": 116932
+        },
+        "load4/stop60": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.367,
+          "sizeBytesMin": 1666210,
+          "sizeBytesMax": 1712085
+        },
+        "load4/auto": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 0,
+          "honest": 5,
+          "stopSecMax": 0.146,
+          "sizeBytesMin": 172115,
+          "sizeBytesMax": 172427
+        },
+        "load4/hang": {
+          "runs": 5,
+          "playable": 5,
+          "killed": 5,
+          "honest": 5,
+          "stopSecMax": 20.175,
+          "sizeBytesMin": 66769,
+          "sizeBytesMax": 67488
+        }
+      },
+      "hangRuns": [
+        {
+          "load": 0,
+          "rep": 0,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.052,
+          "sizeBytes": 67345,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 1,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.05,
+          "sizeBytes": 67143,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 2,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.052,
+          "sizeBytes": 67162,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 3,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.051,
+          "sizeBytes": 67582,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 0,
+          "rep": 4,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.062,
+          "sizeBytes": 67329,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 0,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.155,
+          "sizeBytes": 67344,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 1,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.167,
+          "sizeBytes": 67000,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 2,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.146,
+          "sizeBytes": 67349,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 3,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.158,
+          "sizeBytes": 66769,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        },
+        {
+          "load": 4,
+          "rep": 4,
+          "returncode": -9,
+          "killed": true,
+          "stopElapsedSec": 20.175,
+          "sizeBytes": 67488,
+          "ffprobeOk": true,
+          "ffprobeError": "",
+          "signals": [
+            "SIGINT",
+            "SIGTERM",
+            "SIGKILL"
+          ],
+          "stopResult": {
+            "ok": true,
+            "errorCode": null,
+            "durationSec": 2.0,
+            "forcedKill": true,
+            "exitCode": -9,
+            "verified": true
+          },
+          "stopError": null
+        }
+      ]
+    },
+    "change": [
+      "capture.py: MP4 phân mảnh (-movflags +frag_keyframe+empty_moov+default_base_moof, -g 2 s, -flush_packets 1) nên file vẫn có dữ liệu đọc được khi ffmpeg bị SIGKILL.",
+      "record_stop: SIGINT(15 s) → SIGTERM(5 s) → SIGKILL(5 s) thay cho SIGINT(20 s) → SIGKILL, có `stopSignals`/`stopSec`, không gửi tín hiệu cho tiến trình đã thoát.",
+      "record_stop: ffprobe trước khi trả kết quả; file không probe được → ok:false + errorCode RECORDING_INCOMPLETE + durationSec null (bỏ wall-clock che lỗi).",
+      "executor.py: ok:false ⇒ is_error:true để model/harness không coi là video đã lưu.",
+      "record_stop khi bản ghi đã bị reap: trả bản ghi đã xong (alreadyFinished) thay vì 404."
+    ],
+    "rootCause": "SIGINT không làm ffmpeg thoát trong 20 s (treo I/O/encoder — mô phỏng bằng SIGSTOP) ⇒ SIGKILL; MP4 thường chỉ ghi `moov` lúc kết thúc nên file còn 48 byte, ffprobe báo \"moov atom not found\", mà record_stop vẫn trả ok với durationSec theo đồng hồ treo tường (~20 s cho bản ghi 2 s) — đúng chữ ký đã lưu ở W7-A3.3/W8-A4.1.",
+    "notProven": "Vì sao ffmpeg không thoát sau SIGINT trên máy Windows của sweep thì CHƯA chứng minh được: trong box, SIGINT luôn thoát trong 0,15–0,26 s (kể cả khi bận 4 CPU). Ca treo ở đây là mô phỏng (SIGSTOP) để dựng lại chữ ký, không phải nguyên nhân gốc.",
+    "whatRemains": "Chạy lại sweep trên máy host thật (Windows) để xác nhận; nếu còn ca SIGKILL thì file phân mảnh vẫn đọc được và bản ghi được đánh dấu đúng (forcedKill) thay vì báo ok giả."
+  },
+  "cdp": {
+    "before": {
+      "label": "before-b68ecdf0",
+      "runs": [
+        {
+          "scenario": "cold",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.154,
+            "jsonVersion": 0.191,
+            "jsonList": 0.195,
+            "connectOverCdp": 0.424,
+            "contexts0": 0.424,
+            "evaluateAll": 0.431
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.229
+        },
+        {
+          "scenario": "cold",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.152,
+            "jsonVersion": 0.208,
+            "jsonList": 0.218,
+            "connectOverCdp": 0.489,
+            "contexts0": 0.489,
+            "evaluateAll": 0.494
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.271
+        },
+        {
+          "scenario": "cold",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.151,
+            "jsonVersion": 0.189,
+            "jsonList": 0.199,
+            "connectOverCdp": 0.426,
+            "contexts0": 0.426,
+            "evaluateAll": 0.432
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.227
+        },
+        {
+          "scenario": "warm",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.194,
+            "contexts0": 0.194,
+            "evaluateAll": 0.199
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.193
+        },
+        {
+          "scenario": "warm",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.189,
+            "contexts0": 0.189,
+            "evaluateAll": 0.194
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.188
+        },
+        {
+          "scenario": "warm",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.189,
+            "contexts0": 0.189,
+            "evaluateAll": 0.193
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.188
+        },
+        {
+          "scenario": "tabs20",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.007,
+            "jsonList": 0.008,
+            "connectOverCdp": 0.387,
+            "contexts0": 0.387,
+            "evaluateAll": 0.474
+          },
+          "targets": {
+            "page": 21
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.379
+        },
+        {
+          "scenario": "tabs20",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.009,
+            "jsonList": 0.015,
+            "connectOverCdp": 0.428,
+            "contexts0": 0.428,
+            "evaluateAll": 0.506
+          },
+          "targets": {
+            "page": 21
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.413
+        },
+        {
+          "scenario": "tabs20",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.001,
+            "jsonVersion": 0.011,
+            "jsonList": 0.016,
+            "connectOverCdp": 0.4,
+            "contexts0": 0.4,
+            "evaluateAll": 0.499
+          },
+          "targets": {
+            "page": 21
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.384
+        },
+        {
+          "scenario": "busy",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 59.219,
+            "contexts0": 59.219,
+            "evaluateAll": 59.234
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 59.218
+        },
+        {
+          "scenario": "busy",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 59.222,
+            "contexts0": 59.222,
+            "evaluateAll": 59.242
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 59.221
+        },
+        {
+          "scenario": "busy",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 59.229,
+            "contexts0": 59.229,
+            "evaluateAll": 59.26
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 59.228
+        },
+        {
+          "scenario": "recorder",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.189,
+            "contexts0": 0.189,
+            "evaluateAll": 0.193
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.188
+        },
+        {
+          "scenario": "recorder",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.192,
+            "contexts0": 0.192,
+            "evaluateAll": 0.198
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.191
+        },
+        {
+          "scenario": "recorder",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.001,
+            "connectOverCdp": 0.21,
+            "contexts0": 0.21,
+            "evaluateAll": 0.214
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.209
+        },
+        {
+          "scenario": "load4",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.004,
+            "connectOverCdp": 0.876,
+            "contexts0": 0.876,
+            "evaluateAll": 0.91
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.872
+        },
+        {
+          "scenario": "load4",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.002,
+            "jsonList": 0.003,
+            "connectOverCdp": 0.508,
+            "contexts0": 0.508,
+            "evaluateAll": 0.515
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.505
+        },
+        {
+          "scenario": "load4",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.002,
+            "jsonList": 0.004,
+            "connectOverCdp": 0.551,
+            "contexts0": 0.551,
+            "evaluateAll": 0.57
+          },
+          "targets": {
+            "page": 1
+          },
+          "wouldTimeout15s": false,
+          "attachSec": 0.547
+        },
+        {
+          "scenario": "busy+recorder+load4",
+          "rep": 0,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.002,
+            "jsonList": 0.003,
+            "connectOverCdp": 58.218,
+            "contexts0": 58.218,
+            "evaluateAll": 58.245
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 58.215
+        },
+        {
+          "scenario": "busy+recorder+load4",
+          "rep": 1,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.004,
+            "connectOverCdp": 58.22,
+            "contexts0": 58.22,
+            "evaluateAll": 58.24
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 58.216
+        },
+        {
+          "scenario": "busy+recorder+load4",
+          "rep": 2,
+          "error": null,
+          "marks": {
+            "socketOpen": 0.0,
+            "jsonVersion": 0.001,
+            "jsonList": 0.003,
+            "connectOverCdp": 58.219,
+            "contexts0": 58.219,
+            "evaluateAll": 58.242
+          },
+          "targets": {
+            "page": 2
+          },
+          "wouldTimeout15s": true,
+          "attachSec": 58.216
+        }
+      ]
+    },
+    "busySweep": {
+      "loopSeconds": {
+        "10s": 10,
+        "20s": 20,
+        "90s": 90,
+        "cdp-before(busy)": 40
+      },
+      "attachSec": {
+        "40s(probe cdp-before)": [
+          59.218,
+          59.221,
+          59.228
+        ],
+        "10s": [
+          59.205,
+          59.23
+        ],
+        "20s": [
+          59.198,
+          59.252
+        ],
+        "90s": [
+          59.197,
+          59.225
+        ]
+      }
+    },
+    "validation": {
+      "busyMs": 30000,
+      "pagesAtStart": 2,
+      "shortAttach": {
+        "ok": false,
+        "sec": 3.004,
+        "error": "TimeoutError: BrowserType.connect_over_cdp: Timeout 3000ms exceeded.\nCall log:\n  - <ws preparing> retrieving websocket url from http://127.0.0.1:9222\n  -   - <ws connecting> "
+      },
+      "longAttach": {
+        "ok": true,
+        "sec": 55.491
+      },
+      "markerRead": [
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "status": "timeout",
+          "sec": 3.004
+        },
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "status": "timeout",
+          "sec": 3.002
+        }
+      ],
+      "markerWrite": [
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "status": "ok",
+          "sec": 0.004
+        },
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "status": "ok",
+          "sec": 0.004
+        }
+      ],
+      "windowNameAfter": [
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "name": "w9-marker"
+        },
+        {
+          "url": "http://127.0.0.1:8899/busy.html",
+          "name": "w9-marker"
+        }
+      ],
+      "totalSec": 64.695
+    },
+    "workerBefore": {
+      "label": "before-old-worker",
+      "runs": [
+        {
+          "kind": "worker",
+          "sec": 15.33,
+          "isError": true,
+          "error": "BrowserType.connect_over_cdp: Timeout 15000ms exceeded.\nCall log:\n  - <ws preparing> retrieving websocket url from http://127.0.0.1:9222\n  -   - <ws connecting> ws://127.0.0.1:9222/devtools/browser/30141671-7475-4b0c-80d7-2fcd32a0ffce\n  -   - <ws connected> ws://127.0.0.1:9222/devtools/browser/30141671-7475-4b0c-80d7-2fcd32a0ffce\n",
+          "errorCode": null,
+          "title": null,
+          "attach": null,
+          "scenario": "busy+worker",
+          "rep": 0
+        },
+        {
+          "kind": "worker",
+          "sec": 15.447,
+          "isError": true,
+          "error": "BrowserType.connect_over_cdp: Timeout 15000ms exceeded.\nCall log:\n  - <ws preparing> retrieving websocket url from http://127.0.0.1:9222\n  -   - <ws connecting> ws://127.0.0.1:9222/devtools/browser/30141671-7475-4b0c-80d7-2fcd32a0ffce\n  -   - <ws connected> ws://127.0.0.1:9222/devtools/browser/30141671-7475-4b0c-80d7-2fcd32a0ffce\n",
+          "errorCode": null,
+          "title": null,
+          "attach": null,
+          "scenario": "busy+worker",
+          "rep": 1
+        }
+      ]
+    },
+    "workerAfter": {
+      "label": "after-b68ecdf0",
+      "runs": [
+        {
+          "kind": "worker",
+          "sec": 5.522,
+          "isError": false,
+          "error": "",
+          "errorCode": null,
+          "title": "W9 fixture",
+          "attach": {
+            "attempts": 1,
+            "attachSec": 0.031,
+            "readySec": 0.241,
+            "markerSet": true
+          },
+          "scenario": "worker",
+          "rep": 0
+        },
+        {
+          "kind": "worker",
+          "sec": 5.562,
+          "isError": false,
+          "error": "",
+          "errorCode": null,
+          "title": "W9 fixture",
+          "attach": {
+            "attempts": 1,
+            "attachSec": 0.031,
+            "readySec": 0.282,
+            "markerSet": true
+          },
+          "scenario": "worker",
+          "rep": 1
+        },
+        {
+          "kind": "worker",
+          "sec": 69.395,
+          "isError": false,
+          "error": "",
+          "errorCode": null,
+          "title": "W9 fixture",
+          "attach": {
+            "attempts": 2,
+            "attachSec": 58.707,
+            "readySec": 59.101,
+            "markerSet": true
+          },
+          "scenario": "busy+worker",
+          "rep": 0
+        },
+        {
+          "kind": "worker",
+          "sec": 69.428,
+          "isError": false,
+          "error": "",
+          "errorCode": null,
+          "title": "W9 fixture",
+          "attach": {
+            "attempts": 2,
+            "attachSec": 58.892,
+            "readySec": 59.115,
+            "markerSet": true
+          },
+          "scenario": "busy+worker",
+          "rep": 1
+        }
+      ]
+    },
+    "change": [
+      "worker.py browser(): chờ `/json/version` trả JSON (không chỉ cổng TCP mở) trước khi attach.",
+      "worker.py browser(): attach theo ngân sách — 2 lần × 35 s, lỗi trả BROWSER_CDP_ATTACH_TIMEOUT kèm endpoint và gợi ý (một trang bận script có thể giữ attach).",
+      "worker.py browser(): đọc/ghi marker phiên bằng `wait_for_function` (có trần 5 s) thay cho `page.evaluate` (không có trần) — tab bận JS bị bỏ qua thay vì chặn cả lượt gọi.",
+      "worker.py browser(): trả `attach` (attempts/attachSec/readySec/markerSet) để lượt gọi sau có bằng chứng đo được."
+    ],
+    "rootCause": "Một tab đang chạy vòng lặp JS trên main thread làm `connect_over_cdp` mất ĐÚNG ~59 s (đo 4 mức vòng lặp 10/20/40/90 s — không phụ thuộc độ dài, giống một trần phía Chromium/Playwright), trong khi trần cũ là 15 s ⇒ \"Timeout 15000ms exceeded\" dù websocket đã kết nối. Tái hiện nguyên văn bằng worker CŨ trong box (workerBefore).",
+    "notProven": "Cơ chế bên trong giữ attach ~59 s (Chromium hay Playwright, và mốc bắt đầu đếm) chưa xác định; chỉ đo được là hằng số ~55–59 s, không phụ thuộc độ dài vòng lặp JS.",
+    "whatRemains": "Tab bận JS vô hạn vẫn làm attach hết ngân sách 70 s rồi báo lỗi có mã; muốn tự phục hồi thì phải đóng/khởi động lại tab — chưa làm vì Chromium trong box cũng là trình duyệt desktop của người dùng."
+  },
+  "tests": {
+    "unit": [
+      {
+        "file": "deploy/docker/tests/test_capture_record_stop.py",
+        "command": "python3 -m pytest deploy/docker/tests/test_capture_record_stop.py -q -p no:cacheprovider",
+        "result": "15 passed (2 ca dùng ffmpeg thật: file phân mảnh vẫn probe được sau SIGKILL)",
+        "counts": {
+          "passed": 15,
+          "failed": 0
+        }
+      },
+      {
+        "file": "backend/tests/unit/test_sandbox_worker_cdp_attach.py",
+        "command": "python3 -m pytest backend/tests/unit/test_sandbox_worker_cdp_attach.py -q -p no:cacheprovider",
+        "result": "12 passed",
+        "counts": {
+          "passed": 12,
+          "failed": 0
+        }
+      },
+      {
+        "file": "backend/tests/unit/test_sandbox_executor_recording_incomplete.py",
+        "command": "python3 -m pytest backend/tests/unit/test_sandbox_executor_recording_incomplete.py -q -p no:cacheprovider",
+        "result": "3 passed",
+        "counts": {
+          "passed": 3,
+          "failed": 0
+        }
+      }
+    ],
+    "suites": [
+      {
+        "suite": "deploy/docker/tests (toàn bộ)",
+        "command": "python3 -m pytest deploy/docker/tests -q -p no:cacheprovider",
+        "result": "516 passed in 56.52s",
+        "counts": {
+          "passed": 516,
+          "failed": 0
+        }
+      },
+      {
+        "suite": "sandbox/capture liên quan",
+        "command": "python3 -m pytest backend/tests/unit/test_sandbox_worker_cdp_attach.py backend/tests/unit/test_sandbox_executor_recording_incomplete.py backend/tests/unit/test_capture_session_identity.py backend/tests/unit/test_sandbox_executor_desktop_note.py backend/tests/unit/test_sandbox_worker_computer_use.py backend/tests/unit/test_sandbox_worker_desktop_floor.py backend/tests/unit/test_sandbox_worker_pointer.py -q -p no:cacheprovider",
+        "result": "47 passed in 4.35s (15 test mới + 32 test cũ)",
+        "counts": {
+          "passed": 47,
+          "failed": 0
+        }
+      },
+      {
+        "suite": "backend/tests -k work (sweep chốt)",
+        "command": "python3 -m pytest backend/tests -q -k work -p no:cacheprovider",
+        "result": "2 failed, 734 passed, 2307 deselected in 337.44s",
+        "baseline": "B@68ecdf0: 2 failed, 722 passed (cùng 2 lỗi môi trường bwrap: test_claude_worker_router.py::test_probe_keeps_the_account_path_when_no_router_is_configured, ::test_readonly_roles_still_require_bubblewrap — không liên quan thay đổi W9)",
+        "counts": {
+          "passed": 734,
+          "failed": 2,
+          "new": 12
+        }
+      }
+    ],
+    "native": [
+      {
+        "name": "repro.py (route thật /__box/record/start|stop qua SandboxExecutor)",
+        "result": "stop 0.18 s, durationSec 2.0, verified true, ffprobe đọc được (1280x800, 2.000000)"
+      },
+      {
+        "name": "repro_hang.py (SIGSTOP ffmpeg rồi stop qua route thật)",
+        "result": "SIGINT→SIGTERM(15 s)→SIGKILL(20 s), exitCode -9, forcedKill true, ok true, durationSec 2.0, ffprobe OK (2.000000)"
+      }
+    ],
+    "note": "Trong probe 'after', cả 40 lượt đều probe được (kể cả 10 lượt bị SIGKILL) nên nhánh ok:false/RECORDING_INCOMPLETE không xuất hiện tự nhiên; nhánh đó được khoá bằng unit test với đúng chữ ký sweep (SIGKILL + 'moov atom not found') và bằng 10 lượt đỏ của probe 'before'."
+  },
+  "residualRisks": [
+    "Bản ghi phân mảnh tăng kích thước file (3 s: ~155 KB so với ~109 KB bản cũ) — chấp nhận để đổi lấy khả năng đọc được sau SIGKILL.",
+    "Tab bận JS vô hạn: `browser_use` báo BROWSER_CDP_ATTACH_TIMEOUT sau ~70 s, không tự đóng tab.",
+    "CDP HTTP của `deploy/docker/browser_capture.py` (route chụp tab) không nằm trong phạm vi lượt này."
+  ]
+}
