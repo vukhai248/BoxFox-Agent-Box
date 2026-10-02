@@ -1,0 +1,758 @@
+{
+  "schema": "boxfox-cloud-handoff-local-audit/1",
+  "date": "2026-10-03",
+  "branch": "B",
+  "localCommit": "6732f9342c5d838bc49493f93641fdbb2ec0b350",
+  "cloudHeadObserved": "95a968f783aec0bacdec9c5f9c3fda64323772c3",
+  "productCommitReported": "46ed557a2d901fbf3b3ea4cb897158701c6a3512",
+  "oracleCommitReported": "3f2ff6aea652bfc5f40597ff0e4d1ceae0f7aa57",
+  "method": "Read-only JSON aggregation and static source review. No new model, CUA, application test, or rescore run.",
+  "bundleRoot": "D:/create/BoxFox-Agent-Box/docs/w10-handoff-03_10",
+  "bundleCount": 20,
+  "scoredCells": 16,
+  "observedStateCounts": [
+    {
+      "Name": "discovering",
+      "Count": 1
+    },
+    {
+      "Name": "needs_revision",
+      "Count": 1
+    },
+    {
+      "Name": "no_check",
+      "Count": 2
+    },
+    {
+      "Name": "no_run",
+      "Count": 10
+    },
+    {
+      "Name": "partial",
+      "Count": 2
+    }
+  ],
+  "reportedGate": {
+    "minPassed": 22,
+    "denominator": 16,
+    "passed": 0,
+    "statePassed": 4,
+    "stateRate": 0.25,
+    "autoPass": 0,
+    "sameChild": 4,
+    "duplicateContinuation": 0,
+    "fabricatedUrlOrDiagnostic": 0,
+    "providerSwitches": 0,
+    "ok": false
+  },
+  "missingScoredCells": [
+    "S01-r1",
+    "S01-r2",
+    "S02-r1",
+    "S02-r2",
+    "S11-r1",
+    "S11-r2",
+    "S12-r1",
+    "S12-r2"
+  ],
+  "callCount": 647.0,
+  "callsWithoutSessionId": 647.0,
+  "sessionsAtFirstPageLimit": 57,
+  "pageLimitedSessions": [
+    {
+      "case": "S11-r2",
+      "sessionId": "1efb0792eac94beebbb5f8f28e5b7137",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "461df303ae974b638d013244138e2163",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "59de0a337a8348fe900a2ab2c4344b6d",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "5c658e27e51341acaffcad085f63bbcd",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "6fa6929edc1d42388c749028ea55cb5e",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "71e51ee36a4a4c7fa47c2f9a8a486814",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "8a39b309cd7f404bbe69dceda268706c",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "a0709aee5bdc4b2386b08ec0d4dd1498",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "b23e0a1218c0460a9cb3b13c23e3db66",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "b8555d276dcf4b1db9624fd256a359cb",
+      "events": 500
+    },
+    {
+      "case": "S11-r2",
+      "sessionId": "c5aff53b9b13422ca916ee6e03654a2a",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "1df7813660e3454ba5082d4029ad98e4",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "27e335c906fc42a8be17529acdbf57f5",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "3eb49f1a33c64f7291dfad445595bcee",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "43d87301db2b4b17841a206f58380fc7",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "6525e757013d4ad6b26e513fbbc31933",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "764511caea1a4e08a52835c08a6f6c34",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "76cbb7ec80b54e82be59b6d6eb68ed1c",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "8446dcb3298e41609ef290f12a1c70aa",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "9114eb132c714890a711b817044f0fb6",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "afdf8ce06e104704acc235be84329610",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "be3c6a6f01f948ef998815ce187e87eb",
+      "events": 500
+    },
+    {
+      "case": "S11-r1",
+      "sessionId": "c537a6a1089f4c8bb243ae085d4aad89",
+      "events": 500
+    },
+    {
+      "case": "S10-r2",
+      "sessionId": "3c14effde74246ed957f635d372fe66f",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "0f7d5241e0be4a4db76ddbb0c351a096",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "150f61c915c94683b8e0d1822c64c1c7",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "b30616a922ce44dd985d0c55d75c7b47",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "c6874b511b894b94b1fedea2d46cf214",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "f294c526421f431091e6a81e5a716c3b",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "f4c0436fc59940ab9aca7ddf35a8251e",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "f7009de7b3c54796bb85542e6cbdcdf4",
+      "events": 500
+    },
+    {
+      "case": "S01-r2",
+      "sessionId": "f8efedc916b0495981be507963c8853b",
+      "events": 500
+    },
+    {
+      "case": "S01-r1",
+      "sessionId": "0e781c95fe4a48759d4b433bdabc57e8",
+      "events": 500
+    },
+    {
+      "case": "S01-r1",
+      "sessionId": "312da82cbb314b8fb6d6690ea59196bb",
+      "events": 500
+    },
+    {
+      "case": "S01-r1",
+      "sessionId": "b144d89cea384584aaf8ce9627c263e2",
+      "events": 500
+    },
+    {
+      "case": "S10-r1",
+      "sessionId": "e76461f8f4d24659929f7e067dedc874",
+      "events": 500
+    },
+    {
+      "case": "S08-r2",
+      "sessionId": "86dcbc27075a49eaa1e3626d7c0c4b67",
+      "events": 500
+    },
+    {
+      "case": "S07-r2",
+      "sessionId": "205960b2d87a4175a8302b93409d5a31",
+      "events": 500
+    },
+    {
+      "case": "S07-r2",
+      "sessionId": "51ecc9e8828044c29625a8e9efab9e3c",
+      "events": 500
+    },
+    {
+      "case": "S07-r2",
+      "sessionId": "f418559b678f423ea43c9cf953421836",
+      "events": 500
+    },
+    {
+      "case": "S03-r2",
+      "sessionId": "1d79101234274299b84bd94e142dad45",
+      "events": 500
+    },
+    {
+      "case": "S03-r2",
+      "sessionId": "74dcdfcc631d465ab41c417063d9385d",
+      "events": 500
+    },
+    {
+      "case": "S03-r2",
+      "sessionId": "7a3dbd8701a84518b82552db4ca98a4e",
+      "events": 500
+    },
+    {
+      "case": "S03-r2",
+      "sessionId": "813d0c96d8134c0c951f791c8ebfaf74",
+      "events": 500
+    },
+    {
+      "case": "S03-r2",
+      "sessionId": "82486c173bb54acdbe41a5e4e0e354db",
+      "events": 500
+    },
+    {
+      "case": "S08-r1",
+      "sessionId": "43ea83780d394c438013ef3661a0abc5",
+      "events": 500
+    },
+    {
+      "case": "S07-r1",
+      "sessionId": "3c2e04273e76424890945d64ba8dfe3c",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "0ef6de5e3c0f489b8033500d7e39a79b",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "402caaed11cc4eab8826fcebda5cfacb",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "4a1099b0cdce4b9dae9bc7008b61cb00",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "835cb14f543944a69eb1a6184cb872a4",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "886842584354494483bed9cdbf9d3fa2",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "ac00281d814c47ec92036f696679299a",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "b60d990cea7d418a8802f3825700d123",
+      "events": 500
+    },
+    {
+      "case": "S03-r1",
+      "sessionId": "ff127e110a0c47fb86dab1f0a46512ca",
+      "events": 500
+    },
+    {
+      "case": "S04-r1",
+      "sessionId": "885331d9b7bf4b9f8363868cb15c721d",
+      "events": 500
+    },
+    {
+      "case": "S04-r2",
+      "sessionId": "2f1935dc54fd401db269135aca5e61eb",
+      "events": 500
+    }
+  ],
+  "artifactHashChecks": {
+    "total": 30,
+    "mismatches": []
+  },
+  "cases": [
+    {
+      "case": "S01-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s1/runs/S01-r1/bundle.json",
+      "bundleSha256": "fa00d5d0a933f13708171dc91fca98f5c10d9f8de1bb61ba97ac05d93266c829",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 1500,
+      "callCount": 33,
+      "callsWithoutSessionId": 33,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)",
+        "interview 0ad3ff4222f2417d r0: trả lời 3 câu",
+        "autopilot: duyệt 71c1336656924957 → approve"
+      ]
+    },
+    {
+      "case": "S01-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s1/runs/S01-r2/bundle.json",
+      "bundleSha256": "aa556ecd6caeb9d903c4a67efc32087f1f5c22be8995cb1ebd616cbce0952fa3",
+      "validity": "quality-valid",
+      "runStatus": "needs_revision",
+      "eventCount": 4000,
+      "callCount": 77,
+      "callsWithoutSessionId": 77,
+      "artifactCount": 4,
+      "checks": [
+        {
+          "kind": "plan_review",
+          "status": "pass",
+          "error": null
+        },
+        {
+          "kind": "whole",
+          "status": "error",
+          "error": "Reviewer incomplete/provider failure."
+        },
+        {
+          "kind": "whole",
+          "status": "error",
+          "error": "Reviewer incomplete/provider failure."
+        }
+      ],
+      "missing": [],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)",
+        "interview 755049f7645c4683 r0: trả lời 3 câu",
+        "interview 3b66225c63dc4f15 r0: trả lời 2 câu"
+      ]
+    },
+    {
+      "case": "S03-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s2/runs/S03-r1/bundle.json",
+      "bundleSha256": "50e45272b08e897552a3a77e432ed3663117fd4b6b8ea1df5e3b83dbaefd9573",
+      "validity": "quality-valid",
+      "runStatus": "discovering",
+      "eventCount": 4000,
+      "callCount": 75,
+      "callsWithoutSessionId": 75,
+      "artifactCount": 4,
+      "checks": [],
+      "missing": [],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S03-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s2/runs/S03-r2/bundle.json",
+      "bundleSha256": "478a7a6b9b4b09e97bd48dab5332848153e8f8cf391447f289e8ba9ed9b22ebb",
+      "validity": "quality-valid",
+      "runStatus": "needs_revision",
+      "eventCount": 2500,
+      "callCount": 42,
+      "callsWithoutSessionId": 42,
+      "artifactCount": 4,
+      "checks": [],
+      "missing": [],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S04-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s2/runs/S04-r1/bundle.json",
+      "bundleSha256": "853721c8ae3982fa47be722f9d174a6dfa210946c48f888738b529964356b098",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 6,
+      "callsWithoutSessionId": 6,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S04-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s2/runs/S04-r2/bundle.json",
+      "bundleSha256": "315de18dec0098e378e4f7e9a946191af546d20a54f74b2cc7726a49f2288ca7",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 8,
+      "callsWithoutSessionId": 8,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S05-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s3/runs/S05-r1/bundle.json",
+      "bundleSha256": "7652dcd2e0a88f0df0ec1af9935678c4e456f0206710f6f7715e0fc62b25c1e7",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 16,
+      "callCount": 1,
+      "callsWithoutSessionId": 1,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S05-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s3/runs/S05-r2/bundle.json",
+      "bundleSha256": "946325efabf5b0db1b8342884ff82676e85f5ed388a3e0adc21d6f65aeae4c42",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 16,
+      "callCount": 1,
+      "callsWithoutSessionId": 1,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S06-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s3/runs/S06-r1/bundle.json",
+      "bundleSha256": "9ce4d0af76481b1fb4da584822c2d00710226089bfe833a702fa0c258b819ade",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 328,
+      "callCount": 4,
+      "callsWithoutSessionId": 4,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S06-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s3/runs/S06-r2/bundle.json",
+      "bundleSha256": "15ed6a07b58a9f78f39987bb9aa18d7f3832fab4cf31b1efa2e38babfd6b000d",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 447,
+      "callCount": 4,
+      "callsWithoutSessionId": 4,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S07-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s4/runs/S07-r1/bundle.json",
+      "bundleSha256": "5a2752152d23ad0dede1da4adc36c686f9b99202389213fbaa96ac28ad26ae76",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 9,
+      "callsWithoutSessionId": 9,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /research → flow research (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S07-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s4/runs/S07-r2/bundle.json",
+      "bundleSha256": "81eeea1cf634d34d22d2c7f619d61bf46911cb46f29ecc778695b7661b2e0dd1",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 1500,
+      "callCount": 32,
+      "callsWithoutSessionId": 32,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /research → flow research (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S08-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s4/runs/S08-r1/bundle.json",
+      "bundleSha256": "862a79fa74f664f5a36c2a4b95787a39fec3b7a5f31c0ea654b0eb84a3e23e04",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 8,
+      "callsWithoutSessionId": 8,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /plan → flow plan (chủ nhà yêu cầu việc)",
+        "interview dee590af20a94b5a r0: trả lời 4 câu",
+        "interview 0ee210a7f3e44ede r0: trả lời 3 câu"
+      ]
+    },
+    {
+      "case": "S08-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s4/runs/S08-r2/bundle.json",
+      "bundleSha256": "40487a496e539ff55b7f9fa9e5c29cd4e736525c2f46a2d212efcc36e702c7a5",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 6,
+      "callsWithoutSessionId": 6,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /plan → flow plan (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S09-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s5/runs/S09-r1/bundle.json",
+      "bundleSha256": "96487a6afd60fed004a9129d4bb8d6ecd465bee9860d78c6e705c4f2ac70d336",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 0,
+      "callCount": 29,
+      "callsWithoutSessionId": 29,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "sessions: Cannot operate on a closed database.",
+        "run: Cannot operate on a closed database.",
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)",
+        "restart_while_waiting: đã khởi động lại harness giữa lúc chờ trả lời",
+        "restart_while_waiting: mở lượt main mới để run đi tiếp",
+        "autopilot: duyệt efdcbb95c2714ca5 → approve"
+      ]
+    },
+    {
+      "case": "S09-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s5/runs/S09-r2/bundle.json",
+      "bundleSha256": "381aeb703201c9144792f6cd79eb8e89cd13f0c3ded9f258458b362ac8b7a8d7",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 0,
+      "callCount": 88,
+      "callsWithoutSessionId": 88,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "sessions: Cannot operate on a closed database.",
+        "run: Cannot operate on a closed database.",
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /mixed → flow mixed (chủ nhà yêu cầu việc)",
+        "restart_while_waiting: đã khởi động lại harness giữa lúc chờ trả lời",
+        "interview wr-80f029411902467099b5da96bcbea9f9 r1: trả lời 3 câu",
+        "interview wr-1764aef4376e4a5785c11f1c7f97cf47 r1: trả lời 1 câu",
+        "deadline: lượt chạm hạn wall-clock"
+      ]
+    },
+    {
+      "case": "S10-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s5/runs/S10-r1/bundle.json",
+      "bundleSha256": "ec293e3f25e1b70335d44ddb81f42fbd2dbcf19d1bfb22ef241c5b140dbf4798",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 10,
+      "callsWithoutSessionId": 10,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /plan → flow plan (chủ nhà yêu cầu việc)",
+        "interview d367bb3e86cf4eec r0: trả lời 3 câu"
+      ]
+    },
+    {
+      "case": "S10-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s5/runs/S10-r2/bundle.json",
+      "bundleSha256": "955805c26a0f9945e178d470197c6174b5f25b2c7c8891697250734303752737",
+      "validity": "quality-valid",
+      "runStatus": null,
+      "eventCount": 500,
+      "callCount": 5,
+      "callsWithoutSessionId": 5,
+      "artifactCount": 0,
+      "checks": [],
+      "missing": [
+        "run: không có work graph run nào cho phiên"
+      ],
+      "notes": [
+        "intent: /plan → flow plan (chủ nhà yêu cầu việc)"
+      ]
+    },
+    {
+      "case": "S11-r1",
+      "path": "docs/w10-handoff-03_10/shards/w10-s6/runs/S11-r1/bundle.json",
+      "bundleSha256": "7fd75a76d1493b315cf289139c221fe2d25d8cda67555187d72d86a10335d30c",
+      "validity": "quality-valid",
+      "runStatus": "discovering",
+      "eventCount": 6000,
+      "callCount": 96,
+      "callsWithoutSessionId": 96,
+      "artifactCount": 10,
+      "checks": [
+        {
+          "kind": "design_review",
+          "status": "error",
+          "error": ""
+        }
+      ],
+      "missing": [],
+      "notes": [
+        "intent: /design → flow design (chủ nhà yêu cầu việc)",
+        "interview wr-c577281fa99945318b273bebf1093ffe r1: trả lời 3 câu",
+        "deadline: lượt chạm hạn wall-clock"
+      ]
+    },
+    {
+      "case": "S11-r2",
+      "path": "docs/w10-handoff-03_10/shards/w10-s6/runs/S11-r2/bundle.json",
+      "bundleSha256": "8c640265614361ccc541f1a2b17e2ce954dfaa2262e74f3c611aa3935f55b5ed",
+      "validity": "quality-valid",
+      "runStatus": "discovering",
+      "eventCount": 5500,
+      "callCount": 113,
+      "callsWithoutSessionId": 113,
+      "artifactCount": 8,
+      "checks": [
+        {
+          "kind": "design_review",
+          "status": "superseded",
+          "error": null
+        },
+        {
+          "kind": "design_review",
+          "status": "error",
+          "error": ""
+        }
+      ],
+      "missing": [],
+      "notes": [
+        "intent: /design → flow design (chủ nhà yêu cầu việc)",
+        "deadline: lượt chạm hạn wall-clock"
+      ]
+    }
+  ]
+}

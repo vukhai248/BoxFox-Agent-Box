@@ -2684,3 +2684,169 @@ Người dùng yêu cầu merge B vào main, bỏ thư mục worktree thừa và
 - Chỉ xóa Git worktree B sau khi giữ dữ liệu cần thiết và kiểm sạch tracked files. Không xóa checkout chính hoặc `.env`, không thay đổi UI/UX. Không coi hợp nhất Git là một lượt nghiệm thu runtime mới; test/evidence tại33.13/34 vẫn có giới hạn đã ghi.
 
 **Agent tiếp theo:** mở checkout còn lại, đọc mục34 rồi kiểm branch/status trước sửa. Working tree có thể còn các thay đổi của người dùng đã khôi phục; không reset/clean hoặc đưa chúng vào commit ngoài phạm vi. Trạng thái thực tế của consolidation đọc receipt local và `git worktree list`.
+
+## 36. Đối chiếu PR cloud và gói nghiệm thu — 03/10/2026
+
+Đây là cập nhật tracking sau yêu cầu **đọc và đánh giá**, không mở lại goal đã đóng hoặc triển khai các W mới. Báo cáo đầy đủ: [cloud-pr-audit-03_10.md, mục 9](cloud-pr-audit-03_10.md#9-cập-nhật-sau-khi-nhận-gói-w10-handoff-03_10); receipt đếm/hash: [cloud-w10-bundle-audit-03_10.json](cloud-w10-bundle-audit-03_10.json).
+
+### 36.1 Checkpoint đã làm
+
+- [x] Fetch/đồng bộ origin/main sang **B**, push origin/B tại `6732f934`. Giữ nguyên 14 thay đổi có sẵn của người dùng. Không sửa runtime hoặc UI/UX trong lượt audit.
+- [x] Đọc PR cloud #1 và PR tích hợp #5, code và evidence W6–W10. Hai PR đã merge; local B vẫn ở `6732f934`.
+- [x] Nhận gói `docs/w10-handoff-03_10`: **20 bundle**, 16 ô đã chấm, hai report partial, log sáu shard và dữ liệu repair. Kiểm hash nội dung **30 artifact**, tất cả khớp.
+- [x] Đọc diff cloud B đến `95a968f`: ba commit sau `3f2ff6ae` chỉ thêm `--merge --partial`, report/evidence và cập nhật handoff; **không có bản vá runtime mới**. Chưa tự nhập các commit này vào local B.
+- [ ] Nhận S02/S12 và kết quả shard 1/6 đầy đủ. Gói hiện không chứa DB từng lượt; cần export events đầy đủ hoặc DB fixture để khôi phục các trang bị thiếu.
+
+**Chưa nghiệm thu toàn luồng:** W10 partial ghi statePassed **4/16**, passed **0/16**, gate false. JSON có **10/16 no_run**, không phải 8/16 như phần giải thích report cloud. Hai lượt S09 bị lỗi đọc DB đã đóng; không dùng run rỗng của chúng để kết luận main không create. W8.A4.5 vẫn oracle false (fixture trigger sai, rerun dừng giữa đường); `__integration__` chưa probe native. Reviewer probe riêng W6.1.3 còn false-positive 2/2, oracle 4/6; không gộp với W10 lỗi executor.
+
+### 36.2 Việc mới phát hiện trong bộ đo — chưa sửa code
+
+| Checkpoint | Lỗi/giới hạn đã đối chiếu | Tiêu chí trước khi tick |
+|---|---|---|
+| **W10.M1 — export toàn bộ events** | `_safe_events()` chỉ lấy trang đầu tối đa500/session; 57 session trong gói chạm trần. Thiếu final/receipt/interview có thể làm sai cả fail và counter zero. | Export phân trang đủ seq/count; fixture >500 events thấy marker cuối. Xin dữ liệu gốc rồi mới rescore; không tự tạo events hoặc lặp model để bù lỗi export. |
+| **W10.M2 — restart và caller identity** | S09 collect store/graph cũ sau restart; 647/647 model call không có sessionId. S06 tiêm claim giả vào main thay vì helper; usage theo vai không tin cậy. | Caller đọc runtime/store mới; giữ request/child trace. Fault child không rơi vào root; role metrics gắn đúng ID hoặc ghi unknown. Lỗi phép đo giữ trong mẫu số và phân loại riêng. |
+| **W10.M3 — executor/oracle parity** | Fixture từ chối verify_exec (6 receipt trong gói), whitelist terminal không đáp ứng commands worktree mới. Một số oracle sai nghĩa interview theo vòng/answers, partial trước khi có check và state-vs-quality gate. Budget yêu cầu80/2700 nhưng effective60/1200. | Test ngắn cho tool/commands trong workspace riêng; các oracle có positive/negative control; giữ scope guard. Report requested/effective/driver riêng; gate phản ánh đúng tiêu chí đã chốt, không nới để làm xanh. |
+| **W8.A4.5.N — native repair hội tụ** | Code đã giao; probe đúng Build child nhưng chưa kết thúc xanh, chưa đo node tổng hợp. | Sau khi fixture đúng: đỏ→sửa→tester cũ kiểm lại trên hash mới; ca Debug có điều kiện và `__integration__`; tránh lặp sweep24ô chỉ để đo một nhánh repair. |
+| **W6.Q — công tâm reviewer và chất lượng producer/main** | Giữ các phần W6.1.3/W6.2/W6.2.BIND còn mở; một plan S01 dài có cấu trúc nhưng whole review error, còn quyết định/contract cần làm rõ. | Review-first và adjudicate finding với source/acceptance; chỉ chuyển lỗi sang producer/main khi xác nhận tác nhân. Không dùng độ dài hoặc nhãn finalized để nhận là SWE đạt. |
+| **W10.F — nghiệm thu source cuối** | Lượt product `46ed557`, oracle `3f2ff6ae`; rescore không là chạy runtime đã vá. | M1–M3 đạt, freeze source/budget, pilot ít ca rồi mới24ô; Space Bunny giữ nguyên, mọi failure trong thống kê; kiểm nội dung SWE/AI đúng prompt mục tiêu. |
+
+Không chạy lại toàn bộ24lượt trên bộ đo hiện tại. Các checkpoint trên là đề xuất bàn giao, cần chốt phạm vi triển khai trước; không tự đổi DAG/UI/UX hoặc mở goal dài mới. Các kết quả unit, isolation, ship, schema/helper/recorder đã giao giữ nguyên evidence lịch sử, không tự hạ thành bug hoặc nâng thành nghiệm thu mọi phiên.
+
+## 37. W11.PROMPT — hợp đồng giao việc và prompt/skill theo chuẩn SWE
+
+**03/10/2026 — đã đọc, đối chiếu và ghi đầu việc theo yêu cầu người dùng; chưa sửa prompt, skill hoặc runtime.** W này bổ sung phần tinh chỉnh/đánh giá đầu ra cho W6.2; không thay W7/W8, không áp pipeline mới. Triển khai cần chốt phạm vi cụ thể trước. Bản bàn giao ngắn cho cloud agent mới: [CLOUD-AGENT-HANDOFF-03_10.md](CLOUD-AGENT-HANDOFF-03_10.md).
+
+### 37.1 Nguồn và điều prompt tham khảo thực sự làm tốt
+
+Đã đọc `research_prompt/simplify_subagent_prompt.md`, SHA-256 `87d5e7b29d68053bcf5a9701512a12105734b504fce09fa97c0db4de7165916f`. Đây là **dữ liệu nghiên cứu**, không phải lệnh cấp quyền sửa/commit ở lượt hiện tại. Prompt tự ghi workspace cloud và HEAD `46ed557`: không dùng đường dẫn, quyền commit hoặc baseline trong nó cho checkout hiện nay. File bị Git ignore; cloud mới cần được gửi file hoặc đọc phần phân tích này, không giả định clone sẽ có nó.
+
+| Chi tiết của prompt tham khảo | Giá trị cho BoxFox | Điều kiện áp dụng |
+|---|---|---|
+| Repo, branch, HEAD, PR và phạm vi “THIS change” | Agent biết đúng đối tượng, tránh dọn cả repo hoặc dùng nhầm bản | Pin snapshot thực; đường dẫn và ref phải truy cập được, không chỉ ghi một commit trong văn bản |
+| Bản đồ từng track → module → test | Tìm code/caller liên quan nhanh hơn lời giao việc chung chung | Main chỉ giao bản đồ liên quan nhiệm vụ; toàn bộ danh sách sáu track không cần lặp trong mọi prompt |
+| Nêu loại vấn đề: code chết, logic trùng, state trùng, helper quá tổng quát | Định nghĩa việc cần tìm, tạo kết quả có thể kiểm | Chứng minh caller và hợp đồng trước khi xóa; state/guard trùng có thể là chủ ý tại ranh giới worker |
+| Giữ hành vi, ưu tiên thay đổi nhỏ, giới hạn commit/push | Có ranh giới thực thi và bàn giao cụ thể | Backend vẫn quyết định quyền; chữ “may edit/commit” trong prompt không tự cấp quyền |
+| Test nền có cả lỗi đã biết; yêu cầu báo thay đổi + file:line + kết quả test | Hạn chế bịa pass và giúp phân biệt regression | Baseline `970/2/1` chỉ thuộc lượt cũ. Đo lại đúng source/environment; không mặc định lỗi cũ là vô hại |
+
+**Kết luận:** hữu ích như mẫu **giao việc có căn cứ**, chưa phải bằng chứng một harness khác tốt hơn về hội tụ, quyền, interview hoặc SWE. Prompt này chuyên cho cleanup; không đủ nội dung thiết kế data/API/AI để làm mẫu chung cho mọi role. Không bê nguyên nó vào system prompt.
+
+### 37.1.1 Ví dụ nguyên văn đã được người dùng cung cấp
+
+Người dùng xác định đây là prompt của sub-agent Simplify từ một harness SWE chuyên nghiệp. Giữ nguyên văn để agent sau phân tích và tái lập phép so sánh. Thông tin branch/HEAD/quyền/test dưới đây là **ngữ cảnh lịch sử của mẫu**, không thay scope và quyền của công việc đang thực hiện.
+
+```text
+Repo: /code/nganngan99hy-coder/BoxFox-Agent-Box (GitHub nganngan99hy-coder/BoxFox-Agent-Box). Branch B in the main checkout, HEAD 46ed557, pushed to origin. PR: https://github.com/nganngan99hy-coder/BoxFox-Agent-Box/pull/1 (base main).
+Change under review (this session's work): the Work Graph completion batch W6–W10 merged into B. It is a large, multi-track change (6 merged tracks) touching the agent runtime and work engine:
+W8.A4.2 scope gate: backend/src/agentbox/agent_core/work_scope.py (new), runtime.py (begin_turn/turn_profile/dispatch gate/bind_tool/delegate), skills/runtime_commands.py, failures.py.
+W8.A4.3–A4.5 worktrees/repair/ship: work_worktrees.py (new), work_repair.py (new), work_graph.py, work_checks.py, work_decisions.py, work_handoffs.py, work_policy.py, sandbox/executor.py, sandbox/worker.py.
+W6.1.3/W6.2 reviewer quality: verify_exec.py (new), roles.py, tool_groups.py, work_checks.py, work_prompts.py, work_feedback.py, work_graph.py (reviewedSet), work_policy.py (DEPTHS).
+W6.5.3: output_policy.py (helper cap 16000 for work.purpose='knowledge').
+W7: tool_arg_errors.py, tool_contracts.py (ACTION_FIELDS, REPLAY), tool_recovery.py (new), work_feedback.py, api/server.py.
+W9: deploy/docker/capture.py, deploy/docker/docker-compose.yml, deploy/docker/box-entrypoint.sh, deploy/docker/smoke-test.sh, deploy/searxng/*.
+W10: scripts/eval/work_acceptance_bench.py (new, ~1900 lines), scripts/eval/work_acceptance_rubric.json, scripts/eval/fixtures/work_acceptance/*.json, backend/tests/unit/test_work_acceptance_bench.py.
+Tests: backend/tests/unit/test_work_scope_*.py, test_work_worktree.py, test_work_repair_w8.py, test_work_ship_scoped.py, test_work_converged_review.py, test_work_verify_exec.py, test_sandbox_verify_exec.py, test_work_finding_citations.py, test_work_producer_quality.py, test_work_helper_budget.py, test_work_report_schema.py, test_work_tool_replay.py, test_work_preflight.py.
+Task: look for real simplification opportunities introduced by THIS change — duplicated logic between the new modules and existing ones, dead branches left behind after the merges (especially in runtime.py and work_graph.py where several tracks touched the same code), over-general helpers used once, redundant state kept in parallel, and copy-pasted validation. Prefer deleting code over restructuring, and do not touch behavior. Verify with python3 -m pytest backend/tests -q -k work (baseline on this HEAD: 970 passed / 2 failed / 1 skipped; the 2 failures are test_claude_worker_router.py environment cases — they are pre-existing, not regressions).
+Working tree: /code/nganngan99hy-coder/BoxFox-Agent-Box on branch B; you may edit and commit directly on B (commit message in Vietnamese, matching repo style), or leave uncommitted changes and report them — say which. Do not push. Report: what you simplified (with file:line), what you deliberately left alone, and the test result after your change.
+```
+
+### 37.1.2 Phân tích kỹ cấu trúc giao việc
+
+**Đây là một bản giao việc theo tình huống, bổ sung cho system prompt của role.** Điểm đáng học không nằm ở việc viết tiếng Anh hoặc có nhiều đường dẫn, mà ở việc agent nhận đủ thông tin để bắt đầu điều tra đúng chỗ, sửa trong ranh giới và chứng minh kết quả.
+
+1. **Định danh đối tượng:** repo, checkout, branch, HEAD và PR phân biệt nơi có thể đọc/sửa với nguồn tham khảo. Khi nhiều nhánh/track vừa merge, cụm này giúp không đem kết luận từ source cũ sang bản mới. BoxFox có run/node/workBinding và worktree, nhưng phải kiểm prompt cùng tools có nhìn đúng root/base/snapshot hay chỉ nhận tên dự án. Commit trong chữ không thay việc kiểm tree/hash thật sau mỗi sửa.
+2. **Giải thích thay đổi:** “large, multi-track change” cho biết rủi ro ở điểm nối sau merge; danh sách track dẫn agent tới runtime, work_graph và hợp đồng liên quan. Đây là hướng dẫn điều tra, không buộc sửa tất cả các file. BoxFox có `node.files`/dependency refs; nên phân biệt **files cần đọc**, **files dự kiến sửa** và **files được phép sửa**. Không dùng một touch list làm cả ba hoặc coi list này là toàn bộ quyền ghi.
+3. **Nêu loại kết quả cần tìm:** duplicated logic/dead branches/over-general helpers/redundant state/copy-pasted validation là các giả thuyết kiểm được. Chúng cụ thể hơn “hãy tối ưu code”. Tuy nhiên helper chỉ có một caller chưa chắc thừa; validation lặp có thể bảo vệ trust boundary; nhánh chưa thấy call có thể là recovery/replay/legacy. Mỗi đề xuất xóa phải truy callers, đường worker/deploy, lịch sử và hợp đồng, không chọn chỉ vì khớp từ khóa.
+4. **Giới hạn vào patch:** “introduced by THIS change” chống drift sang cleanup toàn repo. Main phải cấp change ref/snapshot có thể đọc; child phân biệt lỗi mới với vấn đề nền. BoxFox đang có goal/acceptance/files, nhưng nhiệm vụ main viết quá chung vẫn có thể khiến sub mở rộng scope dù mẫu deliverable tốt. Đây là vấn đề chất lượng giao việc cần đo, không suy ra scheduler phải đổi.
+5. **Bất biến hành vi:** “do not touch behavior” đặt mục tiêu cho Simplify. Trước khi sửa phải xác định public API, return/error semantics, side effects, persistence/replay, hashes/bindings và ownership nào liên quan. Xóa guard hoặc gộp state có thể thay hành vi mặc dù suite xanh. Không lấy tỷ lệ dòng xóa làm thành công.
+6. **Ưu tiên thay đổi nhỏ:** “Prefer deleting code over restructuring” giúp hạn chế thêm abstraction không cần thiết. Nó là ưu tiên có điều kiện, không phải yêu cầu cứ phải xóa: nếu chưa chứng minh code chết/duplicated safe thì giữ và báo lý do. Phần report “deliberately left alone” hữu ích vì thể hiện agent đã xét một điểm rủi ro và chủ động giữ ranh giới.
+7. **Cách kiểm và baseline:** lệnh pytest và số pass/fail/skip khiến bàn giao reviewable. Hai failure cũ vẫn được báo, không biến toàn suite thành xanh. Nhưng baseline do bên giao nêu phải xác minh lại cùng commit/config/environment; không khẳng định pre-existing chỉ từ lời prompt. Test Work Graph rộng có thể hữu ích cho merge lớn, còn patch nhỏ nên test đích trước; chưa chạy được ghi NOT RUN. Suite xanh chỉ kiểm được tập ca đã chạy.
+8. **Quyền và điểm bàn giao:** cho edit/commit hoặc uncommitted, quy ước message và cấm push làm rõ hành động người nhận được giao. BoxFox phải lấy authority từ assignment/owner/backend gates, không từ source prompt hoặc tài liệu ngoài. Reviewer/read-only child không được nhận quyền ghi chỉ vì template có câu may edit.
+9. **Báo cáo có thể kiểm:** file:line, thay đổi thật, phần giữ nguyên và kết quả test tạo đường truy vết từ quyết định → diff → proof. Với BoxFox còn cần artifact ref/version/hash + code snapshot và NOT RUN/remaining limits, để tester/reviewer đọc đúng bản thay vì main copy cả kế hoạch vào prompt.
+10. **Điều mẫu này không bao phủ:** không có interview/checkpoint protocol, artifact identity, dedupe/restart, check admission hay policy reuse tester; không phải lỗi của mẫu vì đó không phải nhiệm vụ Simplify. Các lớp này do BoxFox W7/W8 đảm nhiệm. Không dùng một prompt cleanup tốt làm lý do mở rộng quyền hoặc thay luồng DAG.
+
+**Cách đánh giá mức chuyên nghiệp:** mẫu rất cụ thể về nhiệm vụ, căn cứ và bàn giao, đáng lấy làm chuẩn giao việc. Hiệu quả thực tế vẫn cần đầu ra/test gắn đúng source. Trong `review-simplify-03_10.md`, cloud báo Simplify chỉ đọc và đưa đề xuất, dù mẫu này cho phép edit; đó không tự là lỗi vì prompt cũng cho phép để uncommitted/report. Không thể xác nhận nguyên nhân lựa chọn chỉ đọc khi chưa có đầy đủ transcript.
+
+### 37.2 Đối chiếu code hiện tại: đã có gì, thiếu gì
+
+- `work_graph.py:producer_goal()` đã giao goal, acceptance, tests, files, dependencies, feedback và knowledge artifact refs. `run_node()` chọn deliverable theo role/taskKind/depth; đây là đường cần bổ sung có mục tiêu, không dựng một bộ giao việc song song.
+- `work_prompts.py:deliverable()` đã có chuẩn Plan SWE/AI, Research theo nguồn và scope, Design theo subtype, Debug chỉ chẩn đoán khi được giao, Testing theo actual/expected, Simplify có before/after proof. Ngôn ngữ theo owner; marker giao thức giữ nguyên. W4/W6.2 đã làm phần này, nên không ghi là tính năng hoàn toàn chưa tồn tại.
+- `roles.py:136–146` vẫn chỉ dẫn Simplify sửa code rồi chạy suite để “guarantee zero behavioral regressions” và báo “100% passing tests”. Test xanh không bảo đảm hết regression; baseline đỏ và assignment chỉ khảo sát phải được báo đúng. Cần điều chỉnh vai theo nhiệm vụ thực, tránh áp lực bỏ failure để đạt mẫu báo cáo.
+- `simplify-code/SKILL.md` của vendor hướng dẫn bốn reviewer, full diff và áp sửa; cũng có nhánh fallback khi child không được delegate và chế độ dry-run. Role child không được delegate, main sở hữu routing. Skill không bắt buộc mâu thuẫn trong mọi lần chạy, nhưng có thể kéo một nhiệm vụ nhỏ thành nhiều việc hoặc gây nhiễu quyền. **Chưa có trace chứng minh skill này được nạp/gây lỗi trong ca đang xét.** `ROLE_SKILLS['simplify']` có nó; child nhận giao của mapping với skills được bật (`runtime.py`, đường tạo child). Phải kiểm prompt thực tế và skill đã mở trước khi kết luận.
+- Skill còn cho “drop weak or wrong suggestions silently”. Trong BoxFox, phân biệt một đề xuất cleanup tùy chọn với **finding chặn đã có bằng chứng**: không để producer/main xóa finding hợp lệ chỉ vì không đồng ý. Adjudication cần lý do/source/receipt theo hợp đồng W6 đã có; nếu finding sai thì ghi điều bác bỏ nó, không biến im lặng thành review pass. Đây là điểm cần thích nghi skill, chưa phải bằng chứng đường bỏ finding đang xảy ra do skill này.
+- `AGENT.md` còn ghi mọi child qua reviewer và child không hỏi owner. Đối chiếu quyết định mới tại mục27–29 và `with_work_graph()` có needs_user/grant; không dùng doc cũ để đảo ngược kiến trúc đã duyệt.
+- `docs/plan/review-simplify-03_10.md` §2 là **đề xuất dọn code trên source cũ**, chưa được áp dụng. W11 cải thiện giao việc/đánh giá; không tự thực hiện các refactor đó. Danh sách junk-path/regex/hash có khác biệt có thể là hợp đồng, không xóa chỉ để giảm dòng.
+
+### 37.2.1 BoxFox đang cách mẫu giao việc này ở đâu?
+
+| Chiều đối chiếu | BoxFox hiện tại | Khoảng cần kiểm/tinh chỉnh trong W11 |
+|---|---|---|
+| Bản mã và phạm vi | Backend có workBinding/worktrees/scope gate; producer nhận files/tests/dependencies | Kiểm root/snapshot/ref thật đến từng tool và prompt resume; không lặp commit cũ hoặc để agent đọc workspace khác |
+| Nhiệm vụ cụ thể | `producer_goal()` nhận nội dung main đưa vào node.goal/acceptance | Main cần nêu bài toán, invariants và đầu ra cụ thể như mẫu; heading tốt không sửa được acceptance sai/mơ hồ. Ghi lỗi main riêng sau adjudication |
+| Tài liệu cần đọc | Dependency và knowledge qua artifact snapshot refs, work_artifact_read | Nêu refs bắt buộc và phần coverage cần đọc; producer/reviewer phải mở thật. Không chỉ gửi tên folder hoặc chép full plan vào prompt |
+| Ngữ cảnh thay đổi | Có expected touch list và feedback theo pha | Xác định change under review và contract/callers liên quan; không coi feedback đổi node là reviewer reject hoặc ép một node bao hết owner goal |
+| Phương pháp theo role | Đã có deliverable/rubric theo vai, taskKind/depth | Role/skill phải thống nhất với nhiệm vụ. Đặc biệt Simplify hiện còn imperative sửa/test100%; Research brief/lookup không bị kéo thành dossier/plan |
+| Quyền | Tool list/dispatch guards đã có; diagnostic/check có tool set khác | Prompt phản ánh scope hiệu lực, không chỉ nói “không sửa” nhưng chứa workflow skill luôn apply. Không tăng quyền bằng template |
+| Baseline/check evidence | Có test receipts/read proof/check bindings | Truy nguồn baseline và lệnh đúng environment; failure nền/NOT RUN không thành pass. Khắc phục harness W10 trước khi lấy counters làm chứng nhận |
+| Đầu ra/bàn giao | Artifact version/hash; main short report và backend handoff | Output theo nhiệm vụ, lý do giữ nguyên và verification gaps; summary không thêm claim ngoài artifact được kiểm |
+| Chống drift/lặp | Scope/progress gates, owner budget, grants và checkpoint | Tinh chỉnh chỉ dẫn khi tiếp tục; không quay lại từ đầu, bịa answer hoặc mở thêm nhánh không có dữ kiện mới |
+
+**Nhận định tại snapshot này:** BoxFox đã có nhiều lớp giao việc và quyền mạnh hơn một prompt đơn lẻ; phần đáng cải thiện là mức cụ thể của assignment, độ nhất quán role/skill và cách kiểm nội dung. Phát hiện static chỉ cho biết nguy cơ/chỗ thiếu, chưa chứng minh lỗi runtime xảy ra trong tất cả task. Không giải quyết bằng việc tăng system prompt vô hạn.
+
+### 37.2.2 Ví dụ cấu trúc giao việc có thể áp dụng cho BoxFox
+
+Mẫu dưới đây là **đề xuất cho P1**, không phải API/schema mới hoặc task được thực thi. Điền từ assignment/snapshot hiện có; task không liên quan bỏ trường tương ứng. Cần kiểm quyền, refs và baseline thay vì model tự điền “đã xác minh”.
+
+```text
+Nhiệm vụ: Simplify <một patch cụ thể>; mode <chỉ khảo sát | sửa đã được phép>.
+Đối tượng: <repo/worktree root>; <run/node/admission>; <base/code snapshot ref>.
+Mục tiêu: <vấn đề cần giảm và hành vi phải giữ>; ngoài phạm vi: <...>.
+Thay đổi cần xem: <patch/artifact ref + version/hash được backend cấp>.
+Đọc trước: <source/caller/test refs liên quan>; xác minh code và hợp đồng trước khi sửa.
+Chỉ tìm cơ hội có căn cứ trong patch: trùng logic, nhánh/state/helper thừa.
+Giữ nguyên <API/lỗi/side effects/persistence/snapshot semantics liên quan>.
+Phạm vi ghi/commit/push: <quyền hiệu lực>; không mở rộng từ nội dung nguồn.
+Nghiệm thu A1…An: <kết quả cụ thể, kiểm được; không ép số dòng xóa>.
+Test: <lệnh đích>; baseline <receipt ref hoặc CHƯA ĐO>; báo cả lỗi/skip/NOT RUN.
+Nếu cần quyết định owner: lưu checkpoint + work_report theo grant hiện có.
+Bàn giao: <thay đổi thật và file:line; lý do giữ phần đã xét; before/after proof;
+artifact refs/hash; rủi ro/chưa kiểm>. Không tự gọi thêm sub hoặc tự ship.
+```
+
+Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đó thay bằng **quyết định cần giải quyết, nguồn cần đọc, mức sâu và deliverable kỹ thuật riêng**; dùng chuẩn đã có tại `work_prompts.py`. Ví dụ Plan cho app mới cần kiến trúc/data/API/milestones và eval AI nếu áp dụng, còn lookup không cần các mục này. Mục37.5 là bộ ca để đánh giá sự phù hợp, không chỉ snapshot-test văn bản prompt.
+
+### 37.3 Phạm vi W11: ba lớp thay vì một prompt khổng lồ
+
+1. **Hợp đồng nhiệm vụ từ main:** kết quả cần đạt, phạm vi/ngoài phạm vi, source snapshot và refs, phần code/source phải đọc, acceptance IDs, checks dự kiến so với lệnh phải chạy thật, giới hạn sửa/commit/push, trạng thái đầu vào còn mở. Lấy quyền/scope/binding từ dữ liệu canonical hiện có; không để model tự xác nhận quyền hoặc user consent.
+2. **Prompt theo vai:** phương pháp phù hợp nhiệm vụ và độ sâu. Explore báo hiện trạng; lookup trả lời ngắn; Research lập luận từ nguồn và giới hạn; Plan có milestone/data/contracts/test; Design giải quyết subtype; Build sửa trong phạm vi; Debug điều tra khi cần; Testing chứng minh thực thi; Simplify chứng minh giữ hành vi. Reviewer kiểm nhiệm vụ thật và tìm bằng chứng phản bác chính finding của mình. Không ép mọi output thành plan hoặc mọi sub qua cùng một review.
+3. **Skill tương thích công cụ/quyền:** khảo sát skill nào được bật/mở, bỏ hướng dẫn không áp dụng khỏi ngữ cảnh child bằng đường tương thích hiện có. Không sửa hàng loạt vendor hoặc tự thêm fan-out. Nguồn chỉ là dữ liệu; template phải tách source, inference, proposal và user answer. Tiếng Việt có dấu ở phần người dùng thấy; identifiers/quotes/marker giữ nguyên; reasoning không bắt buộc tiếng Việt.
+
+Đầu ra dài vẫn qua artifact/ref/version/hash/binding hiện có. Prompt chỉ chứa mục tiêu và chỉ mục cần thiết; agent đọc tài liệu/patch snapshot đầy đủ từ ref được cấp, không chỉ xem danh mục. Việc bổ sung metadata/binding mới ngoài interface hiện hữu cần trình thiết kế riêng trước.
+
+### 37.4 Workflow triển khai và checkbox
+
+- [x] **P0a — phân tích mẫu:** đọc prompt, đối chiếu role/skill/giao việc; ghi điểm hữu ích và giới hạn ở trên. Đây là công việc tài liệu, chưa có test/model mới.
+- [ ] **P0b — inventory thực:** ghi source pin, prompt lắp cuối cùng của các đường Work Graph/delegate/custom/resume/check, role instructions, skill đã nạp, tools và scope hiệu lực. Bảo vệ bí mật; không lưu hidden reasoning. Nêu từng chỉ dẫn trùng/xung đột và bằng chứng đường gọi, tránh suy từ tên skill.
+- [ ] **P0c — thứ tự áp dụng chỉ dẫn:** đối chiếu owner assignment, role, skill và source tham khảo; làm rõ quyền do backend quyết định và requirement do owner xác nhận. Kiểm câu lệnh imperative từ role/skill có kéo dry-run thành edit, review thành tự apply hoặc feedback thành consent không; ghi xung đột để sửa đúng lớp, không thêm một system prompt cạnh tranh.
+- [ ] **P1 — thiết kế bản sửa nhỏ:** bảng current → proposed → lý do → test cho từng role cần sửa. Bắt đầu Simplify; kiểm chung Plan/Research/Design/Review để không tạo hai chuẩn. Tách yêu cầu nhiệm vụ khỏi hướng dẫn vai, tránh heading rỗng và không bắt test đã dự kiến phải là test đã chạy. Trình scope trước khi thi công; thay đổi scheduler/quyền/contract phải xin duyệt riêng.
+- [ ] **P2 — tinh chỉnh đúng lớp:** sửa prompt/adapter skill đã chọn trong phạm vi duyệt; giữ scope gates, artifact store, interview grants, budget và DAG. Không nâng token/time để che lỗi nội dung. Không xóa code theo prompt cleanup trong W này.
+- [ ] **P3 — test tất định:** mở rộng `test_work_prompt_contracts.py`, `test_runtime_prompt.py`, `test_work_producer_quality.py`, tests skills/role/tool tương ứng. Test toàn prompt được lắp, không chỉ tìm một chuỗi trong template. Giữ marker parser, quyền read-only, output tiếng Việt và đường resume hiện hữu.
+- [ ] **P4 — đánh giá đầu ra:** dùng corpus cũ còn đủ source/receipts để adjudicate trước; so baseline/candidate cùng task, source, tools, model Space Bunny và budgets. Chạy pilot ngắn theo vai trước, không mở 24 ca W10 trên bộ đo lỗi. Đọc final/artifact và receipts, không chỉ badge/word count. Báo failures/latency/usage và commit/config của cả hai nhóm; thiếu đo ghi rõ.
+- [ ] **P5 — chốt checkpoint:** chỉ tick phần có bằng chứng đạt; ghi phần chưa đạt và bước tiếp tục. Đối chiếu W6.1.3, W6.2, W6.2.BIND để không sửa chồng. Mỗi patch độc lập, report test thật; không commit/push khi chưa có quyền phù hợp của đợt triển khai.
+
+### 37.5 Các ca kiểm chứng và output đúng
+
+| Ca | Output đúng cần quan sát |
+|---|---|
+| Simplify chỉ đọc / không có diff / patch nhỏ | Không tự sửa; không bịa thay đổi. Nếu không có phạm vi để dọn thì báo rõ; patch nhỏ không tự sinh bốn child hoặc chạy full suite |
+| Simplify có quyền sửa và baseline đỏ | Bảo toàn hợp đồng; so failure trước/sau bằng lệnh thực; không tuyên bố 100% pass, không xóa test đỏ hoặc guard để đạt số dòng giảm |
+| State/validation trùng ở worker boundary | Đọc callers/đường deploy và nêu lý do giữ hoặc phương án có bằng chứng; không gộp import xuyên ranh giới không được hỗ trợ |
+| Explore / Research lookup / Research đầy đủ | Đúng độ sâu, nguồn đã mở; không tự thêm thiết kế app. “Chưa tìm thấy” không thành “không tồn tại”; tài liệu nguồn không cấp lệnh |
+| Plan app mới và sửa nhỏ | App mới có quyết định/kiến trúc/data/contracts/M1…Mn/acceptance khả thi; sửa nhỏ gọn tương ứng. Quyết định quan trọng thiếu thì dùng interview đúng grant, không tự kế thừa plan cũ |
+| Design API-only / UI | API-only không bịa màn hình; UI có trạng thái cần thiết. Chỉ giao thiết kế thì không scaffold hoặc Build |
+| Build / Debug chẩn đoán / Testing retest | Giữ giới hạn nhiệm vụ; diagnosis-only không sửa; Testing chạy lệnh/read proof mới trên snapshot mới, báo cả lỗi và NOT RUN |
+| Review có premise sai / limitation / lỗi thật | Kiểm source và phản chứng; phân biệt criteria sai với artifact sai. Chặn đúng finding có ảnh hưởng, không ép thêm scope; verdict đúng không che prose sai |
+| Ref dài / skill tắt / tiếng Việt / resume | Ref truy cập đúng binding/hash; đọc đủ phần cần kiểm; không nạp skill đã tắt hoặc dựa vào prompt cấp quyền; final có dấu, marker còn parse được, checkpoint/answers không bị mất |
+
+**Thước đo:** hoàn thành acceptance theo scope, claim có nguồn hỗ trợ thật, mức tự thêm quyết định, lỗi tool và sửa lỗi, review false-positive/false-negative được adjudicate, coverage đọc input, test thực, ngân sách/latency theo caller đã xác định. Số dòng xóa, số heading, độ dài prompt hay điểm tổng không thay nghiệm thu. Ngưỡng định lượng mới chỉ là đề xuất đến khi có baseline và phạm vi được duyệt.
+
+**Quan hệ với việc đang mở:** M1–M3 của W10 phải làm đúng phép đo trước khi dùng W10 để đánh giá P4; W6.Q xử lý sự công tâm reviewer trước khi gán lỗi cho producer/main; W11 thuộc phần prompt/skill producer, không sửa scheduler W8. Có thể làm inventory/test prompt độc lập từ sớm, nhưng không kết luận chất lượng từ bundle thiếu events. W10.F dùng source cuối đã freeze của các patch thực sự đã được chốt.
