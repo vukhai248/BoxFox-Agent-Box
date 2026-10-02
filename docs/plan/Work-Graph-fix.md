@@ -2647,7 +2647,7 @@ flowchart TD
 
 ### 34.3 Cách tiếp tục cho coding agent khác
 
-- [x] Ghi checklist, bằng chứng và checkpoint hiện tại; chỉ commit trong **B**. Checkout `D:/create/BoxFox-Agent-Box-B`; không chuyển sang main hoặc push/merge.
+- [x] Ghi checklist, bằng chứng và checkpoint hiện tại; nhánh làm việc **B**. Checkout hiện tại **`D:/create/BoxFox-Agent-Box`**, sau consolidation ở35; đường có hậu tố-B chỉ còn trong nhật ký cũ. Main/B đã merge và push theo yêu cầu riêng của người dùng, không là quyền tự ship sản phẩm.
 - [x] Dừng full sweep còn chạy theo yêu cầu chốt; giữ log/receipt interrupted. Native A4.1 đã kết thúc, không mở model hoặc sweep mới để kéo dài goal.
 - [ ] Đọc29/33/34 và evidence của đúng source; chạy `git log -3`, `git status` ở B để lấy neo thực. Không lấy “completed goal” làm “completed W7/W8”.
 - [ ] Chọn **một W** có tiêu chí nghiệm thu rõ, chốt phạm vi trước sửa. Ưu tiên W8.A4.2 → W8.A4.3 → W8.A4.4; W8.A4.5 sau các cổng đó. W7.2/W9 có thể điều tra riêng; W7.1 chưa được phép đổi UI/UX.
@@ -2656,12 +2656,28 @@ flowchart TD
 
 **Giới hạn thực tế khi bàn giao:** chưa có nghiệm thu CUA toàn luồng interview; chưa có native main điều phối từ yêu cầu app lớn đến code/ship; chưa chứng minh plan/research/design mọi prompt đạt SWE. Bản này có các phần cơ chế backend đã kiểm và các phần còn mở rõ ràng. Người dùng cần review/duyệt từng W tiếp theo trước khi mở lại việc, không có lịch tự tiếp tục sau khi đóng goal.
 
+### 34.4 Đối chiếu các checkbox lịch sử — bổ sung bàn giao, 02/10/2026
+
+Rà tất cả checkbox chưa tick trong nhật ký W0–W8 cho thấy bảng34.2 có các nhóm chính nhưng chưa gọi tên đủ các việc dưới đây. Đây là bổ sung tracking, không triển khai code/UI hoặc mở lại goal. Agent tiếp theo phải đọc trạng thái mới nhất và evidence; checkbox cũ ghi “W7 chưa code”, “W4–W10 chưa làm” không chứng minh các phần đã có checkpoint hiện vẫn chưa triển khai.
+
+| Mục cần bàn giao rõ | Việc cần làm / liên hệ | Expected và giới hạn |
+|---|---|---|
+| **W1.P — preflight role/tool** | Đối chiếu việc kiểm capability trước producer trên cấu hình phiên cũ/role tắt/tool thu hồi; nối W8.A4.2/W7.2. Có guards khi spawn/resume/check nhưng chưa chứng nhận mọi đường được phát hiện trước khi producer tốn lượt. Không mặc định thiếu guard chỉ từ checkbox cũ. | Check bắt buộc thiếu role/tool báo đúng nguyên nhân trước việc không thể hoàn tất; không tự bật role hoặc coi missing check là pass. Test manual/controller/queued grant/revoke, đọc code và receipt hiện tại trước sửa. |
+| **W2.UI / W9.UI — inspector, badges, panel và rollout** | Phần UI cũ ngoài interview W7.1: đổi child/reset content-loading; completed khác reviewed; artifact/version/file links; render/copy/export UTF-8; Research/Design/Plan/Work Graph dùng đúng trạng thái backend; compatibility/pilot/rollback. Giữ tên W9.UI để không nhầm W9 recorder/CDP ở34.2. | CUA: đổi child nhanh không hiện kết quả cũ; partial/error không có badge reviewed/ready; link mở đúng artifact/version; copy/export giữ URL và dấu tiếng Việt, không chèn diagnostic. API/client cũ báo capability đúng. Chỉ ghi runbook trước; cần duyệt riêng nếu phải đổi UI/UX. |
+| **W5.LEGACY — migration/export/recovery toàn luồng** | Registry/version/hash/namespace/read refs đã có checkpoint. Bổ sung nghiệm thu import/tiếp tục plan cũ, migration và crash reconciliation/export/index; không gán toàn W5 chưa làm. | Legacy đọc được, giữ lịch sử/identity/hash và consent thật; bản cũ không tự được nhãn đạt chuẩn/check mới. Import/tiếp tục tạo binding đúng run/revision, file lỗi hoặc registry/file lệch không dùng cached pass. Export/index tham chiếu đúng bản; restart không mất draft hoặc giả ready. Kiểm coverage hiện có trước thêm migration mới. |
+| **W6.2.BIND — claim mới trong tổng hợp main** | Whole binding hiện bám goal/interview/node/produce artifact; chưa chứng nhận mọi claim main thêm sau whole review cũng thuộc bản đã kiểm. Tách khỏi lỗi prose reviewer W6.1.3, nối W6.2 và W8.A4.4. | Main thêm quyết định/claim kỹ thuật quan trọng phải có nguồn và nằm trong artifact chính thức/version/hash được kiểm; không dùng một whole-pass cũ để chứng nhận chat summary mới. Sửa nội dung chính thức invalidates đúng review/approval; giải thích không thay nội dung không tự tăng version. Không khóa mọi câu trả lời chat vào reviewer. |
+| **W10 — nghiệm thu tổng hợp** | Bộ12kịch bản cố định chạy2lần, cộng ca V/folder đã ghi ở mục5/9/12; đánh giá Plan/Research/Design/main và flow integration. Kết hợp W8.A4.5, W7.1, W9.UI và lỗi integration W9. | Ghi model/commit/config/usage/latency và từng failure; không loại lượt lỗi khỏi mẫu. Đánh giá nội dung SWE, grounding, coverage, dependency, scope và interview; không lấy unit hoặc native fixture nhỏ làm benchmark toàn hệ thống. Session/DB/workspace riêng, OpenCode Space Bunny; chốt phạm vi/ngân sách trước chạy, không mở sweep hoặc native dài vô hạn. |
+
+**Việc lịch sử đã được xử lý, không đưa lại thành bug còn mở:** `clean_list` hiện trả lỗi rõ khi vượt trần, acceptance nhận tối đa64mục (`work_graph.py:205–255`); không còn âm thầm cắt20mục như checkbox ở16.8. Artifact refs/manifest/namespace, same-child feedback, shared continuation và ledger chống lặp có checkpoint30–33. Các failure suite/provider trên source cũ giữ làm lịch sử; không dùng chúng để kết luận source hiện tại còn cùng lỗi hoặc tự tick toàn hệ thống đạt.
+
+**Cách dùng bảng bàn giao:** bảng34.2 và34.4 là danh mục hiện hành; mục34.1 chỉ phần đã có bằng chứng. W mới ở34.4 phải rà code/test/evidence trước khi quyết định cần sửa, vì đây có phần thiếu nghiệm thu chứ chưa xác nhận bug. Đọc thêm35 để dùng đúng checkout và tìm raw receipts đã archive. Không tự sửa UI/UX, đổi model hoặc thi công các W chưa được chốt phạm vi.
+
 ## 35. Hợp nhất checkout sau bàn giao — 02/10/2026
 
 Người dùng yêu cầu merge B vào main, bỏ thư mục worktree thừa và giữ nhánh làm việc B. Đây là thao tác Git/checkout, không mở lại goal hoặc triển khai W mới. Mục34 giữ nguyên các phần chưa hoàn tất và giới hạn kiểm chứng.
 
 - Checkout dùng sau hợp nhất: **`D:/create/BoxFox-Agent-Box`, nhánh B**. Đường `D:/create/BoxFox-Agent-Box-B` trong nhật ký cũ là nơi chạy kiểm thử trước khi hợp nhất, không còn là checkout cho agent tiếp theo.
-- Main nhận lịch sử B bằng fast-forward khi xác minh main là ancestor, giữ toàn bộ33commit trước checkpoint d0bafe50 và commit tài liệu hợp nhất này. Không push/merge remote.
+- Main nhận lịch sử B bằng fast-forward khi xác minh main là ancestor, giữ toàn bộ33commit trước checkpoint d0bafe50 và commit tài liệu hợp nhất. Main/B đã được push lên origin theo yêu cầu người dùng sau consolidation; trạng thái remote đối chiếu bằng `git ls-remote`, không lấy mốc ghi nhật ký làm HEAD hiện tại.
 - Raw logs, disposable SQLite/workspaces và script thử nghiệm của checkout B được giữ tại **`.tmp/archived-BoxFox-Agent-Box-B-20261002/`** trong checkout còn lại; các đường `.tmp/work-checks/...` cũ tra dưới thư mục archive này. Evidence đã commit ở `docs/plan/` vẫn là điểm vào chính.
 - Bản Work-Graph-fix cũ/untracked ở checkout main được giữ tại **`.tmp/worktree-consolidation-20261002/Work-Graph-fix-before-merge.md`**. Không dùng bản cũ thay mục34 của tài liệu hiện tại.
 - Thay đổi chưa commit có trước thao tác (HarnessFlowVisualizer.tsx và12file plan/log đã bị người dùng xóa) được stash có tên, khôi phục ở checkout cuối, giữ stash để dự phòng. Receipt local **`.tmp/worktree-consolidation-20261002/receipt.json`** ghi trạng thái/neo/stash/hash đối chiếu; không commit các thay đổi này vào checkpoint của agent.
