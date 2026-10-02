@@ -2107,6 +2107,9 @@ class HarnessRuntime(RuntimeCommands):
         event = {'text': prompt, 'turn': turn}
         if invocation_id:
             event['invocationId'] = invocation_id
+            graph = getattr(self, 'work_graph', None)
+            if graph and getattr(graph, 'decisions', None):
+                event.update(graph.decisions.admission_metadata(sid, invocation_id))
         if btw:
             event['btw'] = True
         if checked_attachments:
@@ -2120,6 +2123,7 @@ class HarnessRuntime(RuntimeCommands):
 
     async def stop(self, sid):
         if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
+            self.work_graph.decisions.cancel(sid)
             self.work_graph.feedback.cancel(sid)
             await self.work_graph.continuations.stop(sid)
         children = self.store.db.execute("SELECT id FROM sessions WHERE parent_id=? AND status IN ('running','awaiting_decision')", (sid,)).fetchall()

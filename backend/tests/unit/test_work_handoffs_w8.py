@@ -110,7 +110,10 @@ def test_failed_check_requires_main_decision_does_not_auto_retry_or_debug(tmp_pa
         for _ in range(3):
             await work_feedback.pump(rt)
         await drain(graph)
-        assert len(model.prompts)==2
+        await rt.tasks[sid]
+        await asyncio.sleep(0)
+        assert [k for k,_ in model.prompts]==['produce','review','main']
+        assert len(store.children_of(sid))==2  # decision, never an implicit retry/Debug
         assert any(e['type']=='work_notice' and e['data'].get('type')=='main_decision_required' for e in store.events(sid))
     asyncio.run(check())
 

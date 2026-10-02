@@ -1,6 +1,6 @@
 # Sửa độ tin cậy của Work Graph: điều phối linh hoạt, kiểm chứng theo nhiệm vụ và phỏng vấn có thể tiếp tục
 
-> Bản cập nhật v2 — 02/10/2026. Trạng thái mới nhất: neo B **`7b55e7cc`** cho W7 foundation A1 (mục 30); A2 grant/card/ref đang sửa dở, chưa commit (mục 31); direct continuation và W8 chưa triển khai. Chủ dự án đã duyệt lựa chọn A ở mục 29. Các checkpoint trước đó là lịch sử của đúng snapshot được ghi, không chứng nhận patch hiện tại.
+> Cập nhật 02/10/2026, chỉ nhánh **B**. Neo gần nhất **`cd3de77e`**: artifact namespace session/lượt/run đã kiểm tại mục 33.10; card/history `801720df`, manifest/cache `896b573b`. A3.3e hàng đợi main decision đang kiểm tại **33.11**. A1/A2/A3.1/A3.2 và các phần A3.3 trước đã có checkpoint; **chưa hoàn tất W7/W8**: còn chống ba admission không tiến triển và A4 reuse tester/isolation/integration. Kiến trúc A đã được duyệt ở mục29. Mỗi kết quả chỉ chứng nhận đúng snapshot/phạm vi ghi trong checkpoint; giới hạn W7.1/W7.2/W6.2/W9 còn riêng.
 >
 > Quyết định mới của chủ dự án thay thế yêu cầu “mọi sub-agent đều có một lượt review giống nhau”: main chọn specialist và cách kiểm chứng phù hợp; backend bảo đảm các kiểm tra bắt buộc theo đầu ra, phạm vi thay đổi và rủi ro. Phần 6–9 cụ thể hóa chính sách này, chuẩn đầu ra và prompt cho coding agent.
 
@@ -2378,9 +2378,9 @@ Helper/producer kéo lookup nhỏ thành 709–1493 từ và đưa nhiều quy�
 **Phần tiếp theo bắt buộc, vẫn chưa tick:**
 
 1. [x] **A3.3b input refs (đã kiểm tại 33.7/33.8):** dependency/input artifact closure, runId rõ trong context, phân biệt input phải đọc với output phải phán xét; giữ immutable refs và phạm vi API. Giữ childId receipt khi ghi helper artifact thất bại. Không suy generic file_read bị sandbox bởi artifact ACL.
-2. [ ] Reconcile answer transaction → card event/history từ user action thật; shared decision followers/conflicting options; không dựng consent từ timeout hoặc mô hình.
+2. [x] Reconcile answer transaction → card event/history từ user action thật tại33.9; không dựng consent từ timeout/model. Shared decisions/conflicting options chọn routing c ở33.11, chưa nghiệm thu tại thời điểm checklist này; không tự sao chép consent giữa các child.
 3. [ ] Ba admission không tiến triển, main decision queue khi idle và crash/restart kết hợp. Notification và handoff không gọi main LLM; chỉ quyết định mới mới cần main.
-4. [ ] Namespace origin-turn/session/run/node và khả năng đọc lịch sử cũ; path hiện vẫn owner/run/node/stage, chưa có tầng lượt.
+4. [x] Namespace origin-turn/session/run/node và đọc lịch sử cũ tại33.10; legacy giữ path cũ, run mới có tầng t-origin-id.
 5. [ ] **A4** sửa có điều kiện → cùng tester cũ retest trên code/hash mới; assignment fingerprint, touch-set/isolation/integration/ship đúng snapshot. Artifact-only không Build/PR; không mặc định Debug hoặc Review sau mọi role.
 
 ### 33.7 A3.3b — tập input của reviewer và cổng lịch sử (02/10/2026)
@@ -2428,7 +2428,7 @@ Helper/producer kéo lookup nhỏ thành 709–1493 từ và đưa nhiều quy�
 
 **Đối chiếu thời gian suite:** so hai lượt source khác nhau, 449 ca Work chung cộng 104.633→190.695s; 2452 ca khác cộng 470.576→731.474s; ca mới cộng 40.257s. Ca CUA navigation không sửa cũng tăng 14.304→30.013s. Tải/chạy đồng thời không được kiểm soát, nên chưa quy chênh lệch cho cache guard hoặc kết luận performance không đổi. Receipt `w8-a33-manifest-suite-time-observation.json` được giữ trong evidence; đo có kiểm soát thuộc checkpoint ngân sách/performance tiếp theo.
 
-### 33.9 A3.3c — card/history atomic và freshness của chỉ mục (đang kiểm, 02/10/2026)
+### 33.9 A3.3c — card/history atomic và freshness của chỉ mục (đã có checkpoint, 02/10/2026)
 
 **Neo manifest/cache: `896b573b`, nhánh B.** Chỉ sửa backend lưu trạng thái, không sửa UI/UX/provider/profile hoặc prompt main/producer. Source cuối của checkpoint này đã freeze 25 file tại `w7-a33-card-certified-source.json`; target/full/native đang chạy, chưa coi là chứng nhận.
 
@@ -2454,7 +2454,7 @@ Helper/producer kéo lookup nhỏ thành 709–1493 từ và đưa nhiều quy�
 
 **Probe namespace kế tiếp:** run.originTurn1 nhưng artifact tiếp tục khi root lượt2 có originTurn2, folder không có tầng t-ID; artifact cũ vẫn đọc được. `origin-turn-before4/results.json` giữ metadata/hash/path đầy đủ. Ba setup probe trước thiếu title/goal-length/tests nên bị schema từ chối, không tính thành lỗi sản phẩm. Namespace ID là định danh session/lượt, không mã hóa nội dung; giữ folder của run và đường đọc legacy.
 
-### 33.10 A3.3d — namespace session/lượt/run bền vững (đang kiểm, 02/10/2026)
+### 33.10 A3.3d — namespace session/lượt/run bền vững (đã có checkpoint, 02/10/2026)
 
 **Neo card/history: `801720df`, nhánh B.** Thực hiện phần namespace độc lập trước các thay đổi điều phối khó hơn; không nối pipeline, không đổi UI/UX hoặc ngân sách/provider. Run mới có namespace version2 do backend tạo; model không được chọn origin ID/path.
 
@@ -2466,3 +2466,63 @@ Helper/producer kéo lookup nhỏ thành 709–1493 từ và đưa nhiều quy�
 - [x] [Evidence namespace](W8-A3.3-origin-evidence.json) + commit riêng theo `fix(work-artifacts): pin session turn namespaces across continuation`. Shared decisions/routing c, chống ba admission không tiến triển, main decision queue/crash kết hợp và A4 vẫn còn; không tick toàn W7/W8.
 
 **Audit namespace cuối:** hai artifact checkpoint/final thực có cùng t-origin/run/node prefix, SHA canonical và file workspace UTF-8 đúng; không dời legacy, 26 hash source không drift. Native không tool error, cap16000, một child/root completion0; final208 từ. Ca lookup này không có required checker, nên accepted không là chứng nhận độc lập mọi kết luận. Producer thêm claim Offline đồng nghĩa thư mục máy/chia sẻ và không tải xuống; nguồn/user chỉ chốt CSV/Unicode, Điều dưỡng/Offline, chưa chốt UX. Đây là suy luận vượt căn cứ (offline web app vẫn có download), ghi W6.2, không sửa main/producer ở checkpoint namespace. Full mới nhất vẫn là source card trước sửa namespace (2927pass/21skip/1ffprobe đỏ, recheck1pass); không đổi thành full namespace xanh.
+
+### 33.11 A3.3e — hàng đợi quyết định của main và routing shared decisions (đang kiểm, 02/10/2026)
+
+**Neo namespace thực tế `cd3de77e`, nhánh B.** Tiếp tục kiến trúc A, giữ UI/UX, model/provider, output/step/time profile và quyền thi công. Không mặc định role pipeline hoặc chuyển mọi thông báo thành lượt main. Scope checkpoint là c-queue; chống ba admission không tiến triển và A4 còn riêng.
+
+**Khoảng hở đã đọc từ code:** `handoff/continuation` blocked/interrupted chỉ phát work_notice; request waiting_main hoặc decision_conflict chỉ phát work_feedback. `work_feedback.pump` cũ chỉ mở main từ outbox trả lời manual. Vì vậy event “main_decision_required” không tự bảo đảm có một lượt main khi main rảnh; restart cũng không có admission ledger thống nhất cho các nguồn c này.
+
+- [x] `work_decisions.py` lưu decision identity, batch admission, stop marker trong SQLite. Reconcile từ request/action canonical, không phụ thuộc event đã phát. Nguồn c: checkpoint cần xử lý; bảng hỏi chưa có quyền/conflicting decisionKey; continuation/handoff blocked hoặc interrupted còn hiệu lực; required check chưa được main giao. Notification/completed handoff, publish có grant và direct continuation không nằm trong c-queue.
+- [x] Khi main rảnh, gom tối đa8 refs cùng owner/run vào một batch; không chép body/whole-plan/questions vào prompt. Root đọc request/artifact bằng API rồi quyết định. Main busy/awaiting_decision, run paused/đang có lock hoặc kill switch thì giữ pending; không chạy model để đợi. Nhánh có assignment hợp lệ vẫn chuyển tiếp độc lập.
+- [x] Request revision/fingerprint hoặc assignment/input/policy đổi, đã publish/cancel/đã giao check thì pending c không còn cần thiết, được supersede. Admission có CAS toàn batch + invocation receipt; claim chưa start có thể phục hồi, đã có thể chạy tool thì giữ interrupted và không replay mù. Callback muộn không ghi đè cancelled; Stop có marker để nguồn c cũ không tự mọc lại từ scan.
+- [x] Manual-answer outbox cũ nhập cùng queue; receipt đã start theo invocation cũ không mở lượt thứ hai. Granted answer vẫn tiếp tục child trực tiếp. User event của lượt queue có `origin=harness/workDecisionBatch`; không ghi answer/approval hoặc giả xác nhận của user.
+- [x] Shared decisions chọn nhánh **routing cho main** đã có trong29.5: cùng decisionKey còn hiệu lực, dù câu chữ giống nhau, không tự suy tương đương hoặc copy answer sang child khác. Giữ card/request gốc; request mới waiting_main mang conflictingRequestId. Main mở/hủy request bằng ref, không cần viết lại bảng hỏi. Chưa thêm follower tự động/semantic merge; đây là lựa chọn bảo thủ trong phương án đã duyệt, không bỏ kiểm duplicate/conflict.
+- [x] Label **delivered** chỉ nghĩa lượt model main kết thúc bình thường; không chứng nhận main đã giải quyết yêu cầu, artifact đạt check hoặc user consent. Request vẫn giữ canonical status thực. Nếu main không có quyết định hữu ích thì queue không tự gọi lặp cùng input; chủ dự án/main có thể tiếp tục bằng hành động rõ.
+- [x] Test V2 **83 passed/34.82s**, V3 queue25passed/9.85s, V4 queue+feedback/continuation/handoff **94 passed/40.57s**. V1 có một fixture options chỉ1 lựa chọn bị normalize_interview từ chối; sửa fixture thành2, không nới schema sản phẩm. Test cũ chỉ đếm hai child prompts đã sửa để await đúng lượt main thứ ba; vẫn assert chỉ2 children và không checker retry/Debug.
+- [x] Patch đã tự phát hiện recovery event bị thiếu: state lưu revision3 nhưng event cuối revision2 vì view gọi decisions trước khi service khởi tạo. Probe recovery-before đầu chỉ nhìn state nên pass; tăng oracle so cả event thì **1failed/25deselected**, giữ receipt. Khởi tạo Decisions trước WorkGraph.recover; không đổi recorder/UI.
+- [x] Hồi quy toàn Work trên freeze49file `w8-main-queue-certified-source.json`: **528 passed/149.41s**, exit0. Native OpenCode Space Bunny2 lượt **root thật**, checkpoint/questions sub synthetic: cả2 mở đúng2 câu bằng ref sau restart SQLite và mất notification; replay không thêm lượt model, không lưu answer hoặc cho Build. Chưa claim full main/sub/DAG/SWE/medical benchmark hay renderer/CUA. Full backend đang chạy, chưa có kết luận.
+- [x] Export [evidence c-queue](W8-A3.3-main-decisions-evidence.json), audit visible output/tool receipts/hash drift; commit riêng theo `fix(work-decisions): persist scoped main decisions without relay turns`. Các lỗi quality producer/main/reviewer giữ theo W6.2/W6.1.3, không tuning thêm để làm đẹp oracle. Hash neo thực bổ sung ở checkpoint sau.
+
+```mermaid
+flowchart TD
+  S[Sub lưu output hoặc checkpoint] --> N[Thông báo tiến độ cho main: a]
+  S --> P{Đã giao handoff và đủ predicate?}
+  P -->|Có| H[Backend chuyển refs đúng binding: b]
+  P -->|Thiếu check/quyết định mới| C[Lưu main decision: c]
+  S --> Q{Sub cần user và có grant đúng scope?}
+  Q -->|Có, decisionKey không conflict| U[Backend mở card của root: d]
+  Q -->|Thiếu grant hoặc conflict| C
+  U --> A{Có user-action answer đủ và scope còn đúng?}
+  A -->|Có grant resume| R[Cùng child tiếp tục, không main relay]
+  A -->|Cần main quyết định| C
+  C --> I{Main rảnh, run còn hiệu lực?}
+  I -->|Busy/paused| W[Giữ SQLite pending]
+  I -->|Đã xử lý/scope đổi| X[Superseded, không mở lượt]
+  I -->|Có| M[Main đọc refs và chọn hướng]
+  M --> D[Interview / nghiên cứu / retry có chủ đích / repair được phép / giữ checkpoint]
+```
+
+**Phần tiếp theo vẫn bắt buộc:** durable progress/error signatures qua3 admission không tiến triển; crash/stop/revoke kết hợp lâu dài; **A4** conditional repair vs Debug, cùng Testing child retest bắt buộc proof mới trên code/hash mới, touch-set/isolation và integration/ship snapshot. Không tick W7/W8 từ một c-queue đã chạy. W7.1 lịch sử UI legacy/pagination, W7.2 schema action-specific, W6.2 chất lượng producer/main và W9 recording-finalization vẫn là follow-up riêng.
+
+**Native và phản chứng giữ nguyên:** `w8-main-queue-native/results.json` ghi oracle nghiêm **1/2** (22.411s /19.848s). Oracle này cấm mọi terminal_exec, kể cả lệnh đọc. Lượt2 thử `pwd/ls/git log`, fixture chỉ cho pytest nên từ chối; không có install/build/sửa mã. Audit tách riêng thấy cơ chế card/admission đúng **2/2**; không đổi result ban đầu thành2/2 xanh toàn bộ. Main profile output cả9call là4096 hiện hữu; không phải producer Research/Plan/Design bị tụt cap16k.
+
+| Lượt | Đối chiếu tool và assistant visible | Phân loại |
+|---|---|---|
+| 1 | work_artifact_read thiếu runId bị WORK_ARTIFACT_UNKNOWN. Main suy sai thành checkpoint bị ACL chặn/root không được đọc; lượt2 dùng đúng runId đọc chính loại ref đó thành công. Main sau đó đọc workspace file và mở card đúng câu/options; không có final vì finish needsUser. | **W7.2**: error/schema cần chỉ rõ runId; **W6.2**: main diễn giải lỗi thành quyền cấm khi chưa xác minh. Không phải reviewer bỏ sót và không nới scope đọc để làm đẹp native. |
+| 2 | Đã đọc canonical artifact đúng ref, thử lệnh đọc thư mục/Git bị fixture chặn; gọi plan_scope status cho Work Graph run nhưng legacy Plan mode chưa bật, backend từ chối PLAN_MODE_REQUIRED. Sau đó đọc docs/source.md và mở card đúng bằng ref, không gửi questions inline. | **W6.2**: gọi công cụ dư/lẫn legacy workflow, không lỗi c-queue hoặc chứng minh lệnh đọc Git bị chặn production. |
+| Cả2 | Không đoán người dùng/Offline; không đổi nội dung/options card, không Build, một root user event có origin=harness, một batch delivered. Một số commentary visible còn tiếng Anh; không có assistant final ở lượt hỏi. Inventory là fixture allowlist. | Theo dõi độ rõ/ngôn ngữ main ở W6.2; không tuyên bố repo production chỉ có docs/source.md. |
+
+Đã đọc assistant visible trước interview và toàn bộ tool receipts. Không export hidden reasoning; `visibleOutputs` helper rỗng vì lọc final, nên evidence phải giữ assistant text final=false cùng finish needsUser sau khi bỏ thought fields. Synthetic child không chạy provider, không có bác sĩ/user thật hoặc dữ liệu y tế. Hai lượt này chỉ kiểm cơ chế handoff c→main→card; không chứng nhận nội dung medical/SWE.
+
+**Probe quyền phải nối trong A4, chưa xử lý tại c-queue:** `w8-main-artifact-guard-probe/results.json` dùng **executor giả** (không ghi file/cài package thật). Root dispatch trực tiếp file_write và terminal_exec pip install đều tới executor trong run flow=research/executionRequested=false. Đây là khoảng hở hiện hữu của dispatch root: cổng Work Graph chặn phase execute/assignment Build nhưng không bao phủ mọi tool trực tiếp của main. Queue không tự cấp quyền mới, nhưng cũng chưa bổ sung cổng này. **Không tuyên bố artifact-only đã an toàn trên mọi đường** hoặc chỉ “native không gọi Build” là đủ chứng nhận. A4 phải kiểm cả tool list và dispatch theo scope lượt/assignment do backend tạo; giữ main đa năng, không khóa toàn session theo role/mode. Lượt c cần binding đúng run; quyền từ run khác, prompt model hoặc approval Plan không cấp thực thi. Cần ca phản chứng direct tools, delegation/custom command và run đang chờ duyệt; lệnh đọc hợp lệ phải được đánh giá riêng với lệnh mutate, không dùng một ban terminal trong evaluator thay hợp đồng sản phẩm. Nếu refinement làm đổi phạm vi quyền đã duyệt, trình cụ thể trước khi nối.
+
+**Full đầu đã xong nhưng phạm vi model phải ghi sai sót:** `w8-main-queue-final-full.*` **2965passed/21skipped/651.57s**, exit0; recorder test cũng pass lần này, không xóa failure W9 của snapshot trước. Audit sau sweep phát hiện test legacy `test_agent_turn_with_live_router` ghi cứng `antigravity/gemini-3.6-flash-low`: đã thử request, HTTP503 rồi skip. Đây là **lỗi chọn suite của coding agent**, trái giới hạn chỉ Space Bunny; không tuyên bố toàn sweep chỉ gọi Space Bunny. Không có kết quả thành công từ model đó trong JUnit; không đổi provider/model config của dự án. Native riêng A3.3e vẫn đúng OpenCode Space Bunny (9call), oracle nghiêm1/2 và cơ chế card2/2 như trên.
+
+Đang chạy lại cùng49hash source bằng `pytest backend/tests --deselect=backend/tests/integration/test_agent_turn_live_llm.py::test_agent_turn_with_live_router`, đặt BOXFOX_LIVE_PEER_MESH=0 trong riêng process test để không bật ca opt-in model khác. Không sửa test/provider hoặc giấu lượt cũ. Sweep mới phải báo riêng số deselect/skip và kết quả thật; test Gemini được loại vì constraint, không xem là pass. Các sweep tiếp theo trong goal phải dùng selection này hoặc đã xác minh mọi live test chỉ chọn Space Bunny trước khi chạy.
+
+**Sweep đúng selection kết thúc:** `w8-main-queue-scoped-full.*` **2965passed/20skipped/1deselected/637.06s**, exit0;49hash không drift. Không dùng 1deselected làm pass hoặc xóa HTTP503 của lượt chọn suite sai ở trên. Không thêm một lượt CUA thủ công; suite CLI hiện hữu có integration navigation/recording trong Docker, không kiểm renderer của root interview.
+
+**Vá display cuối sau sweep:** frontend hiện render userEvent.data.text trực tiếp; Runtime.start dùng prompt model làm text event. Queue mới vì vậy đưa hướng dẫn Harness + JSON refs ra chat. `Decisions.admission_metadata` nay thay *text event của admission hợp lệ* bằng thông báo BoxFox ngắn, còn session.messages/prompt model giữ nguyên refs. Không đổi renderer/UI/UX hoặc event type/turn/invocation, không áp cho lượt user thường hay batch owner khác. Target Work + stream + plan API và native2 lượt đang kiểm lại trên freeze cuối; **full ở đoạn trên thuộc source trước key display này**, không ghi lại thành full của source cuối. Hai file khác hash: work_decisions và test_work_main_decisions (thêm oracle event ngắn/model vẫn đủ refs);47file khác giữ byte-identical. Evidence cuối phải chứa cả hai manifest và từng kết quả đúng snapshot.
+
+**Source cuối:** target Work + stream + Plan API **555passed/190.12s**, exit0; freeze49file không drift. Native display cuối **2/2 oracle nghiêm**,16.424s/27.151s,7provider call đều OpenCode Space Bunny, output4096 profile main hiện hữu. Event chat chỉ thông báo ngắn, model vẫn đủ refs; mỗi lượt1batch,2questions giữ nội dung/options, no answers, replay0call, no Build. Lượt1 mở canonical artifact + work_report read, ghi journal và dùng nguyên questions inline; lượt2 thiếu runId một lần, tự sửa đúng, mở canonical/file copy rồi interview bằng ref không chép questions. Không sửa main prompt/skill, vẫn giữ lỗi runId (**W7.2**) và commentary/journal tiếng Anh (**W6.2**). Không có assistant final: finish needsUser. Đã đọc mọi assistant visible và tool receipt ở cả4lượt native; hidden reasoning bỏ khỏi export. Full source trước display vẫn2965/20skip/1deselect như trên, không lấy source khác làm chứng nhận source cuối.

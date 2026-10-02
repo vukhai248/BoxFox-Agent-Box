@@ -522,6 +522,8 @@ class WorkGraph:
         self.feedback = work_feedback.Feedback(self)
         self.grants = work_grants.Grants(self)
         self.handoffs = work_handoffs.Handoffs(self)
+        from .work_decisions import Decisions
+        self.decisions = Decisions(self)
         self.recover()
         self.continuations = work_continuations.Continuations(self)
 
@@ -663,6 +665,7 @@ class WorkGraph:
                 'grants': self.grants.records(run['runId']),
                 'handoffs': self.handoffs.records(run['runId']),
                 'handoffActions': [json.loads(r['doc']) | {'status': r['status']} for r in self.handoffs.actions(run['runId'])],
+                'mainDecisions': self.decisions.records(run['runId']),
                 'documents': run.get('documents') or [], 'approval': run.get('approval'),
                 'interviews': [{key: item.get(key) for key in ('decisionId', 'status', 'answers', 'at')}
                                for item in run.get('interviews') or []],

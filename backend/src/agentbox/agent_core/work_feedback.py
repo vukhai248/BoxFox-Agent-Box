@@ -483,28 +483,9 @@ async def pump(rt):
         return
     feedback = service(rt)
     feedback.graph.handoffs.dispatch()
-    rows = feedback.db.execute("SELECT * FROM work_feedback_outbox WHERE status='pending'").fetchall()
-    for row in rows:
-        try:
-            if json.loads(row['doc']).get('action') == 'resume_child':
-                feedback.graph.continuations.kick(row)
-                continue
-            doc = feedback.get(row['request_id'], row['owner_id'])
-            feedback.validate(doc)
-            sid = row['owner_id']
-            if rt.store.get(sid)['status'] in ('running', 'awaiting_decision') or (rt.tasks.get(sid) and not rt.tasks[sid].done()):
-                continue
-            admitted = feedback.db.execute("SELECT 1 FROM events WHERE session_id=? AND kind='user' AND json_extract(payload,'$.invocationId')=?",
-                                           (sid, row['id'])).fetchone()
-            status = 'interrupted' if admitted else 'admitted'
-            if not admitted:
-                rt.start(sid, json.loads(row['doc'])['prompt'], invocation_id=row['id'])
-            with feedback.db:
-                feedback.db.execute('UPDATE work_feedback_outbox SET status=? WHERE id=?', (status, row['id']))
-        except (KeyError, ValueError) as exc:
-            with feedback.db:
-                feedback.db.execute("UPDATE work_feedback_outbox SET status='blocked',doc=? WHERE id=?",
-                                    (json.dumps({'error': str(exc)}), row['id']))
+    for row in feedback.graph.continuations.rows():
+        feedback.graph.continuations.kick(row)
+    feedback.graph.decisions.pump()
 
 
 async def resume_child(rt, owner, child_id, prompt, work, request=None):
