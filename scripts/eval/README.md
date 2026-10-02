@@ -121,3 +121,56 @@ thời gian render nên tính lại được từ dữ liệu thô; `--verify` s
   S5 cần danh sách tệp trong workspace). S3/S6/S7 chỉ đo được bằng **proxy** vì nhật ký có tên tool và
   `isError` nhưng **không có tham số tool** — mọi proxy đều ghi rõ trong mã.
 - Chưa chạy lượt nào ⇒ mọi chỉ số chất lượng vẫn là **chưa đo**.
+
+## 7. W10 — benchmark nghiệm thu Work Graph (S01–S12)
+
+`work_acceptance_bench.py` là giàn nghiệm thu Work Graph của §10 (kế hoạch chất lượng) và §5.3 +
+§9.2 của [`docs/plan/Work-Graph-fix.md`](../../docs/plan/Work-Graph-fix.md): **12 kịch bản S01–S12 ×
+2 lần lặp = 24 lượt**, cổng đạt **≥ 22/24** theo `expectedState`, cộng bốn điều kiện cứng bằng 0
+(auto-pass, trùng continuation, URL bịa/rò diagnostic, đổi provider).
+
+```bash
+python3 scripts/eval/work_acceptance_bench.py                          # dry-run: in kế hoạch 24 lượt
+python3 scripts/eval/work_acceptance_bench.py --out /var/tmp/w10       # ghi thêm plan.json
+python3 scripts/eval/work_acceptance_bench.py --with-v                 # thêm 5 ca tuỳ chọn (34 lượt)
+python3 scripts/eval/work_acceptance_bench.py --cases S03,S11          # chạy một phần
+BOXFOX_EVAL_ALLOW_SPEND=1 python3 scripts/eval/work_acceptance_bench.py \
+    --execute --budget-usd 20 --out ~/BoxFox/eval-runs/work-acceptance/2026-10-02
+```
+
+| Tệp | Việc |
+|---|---|
+| `work_acceptance_bench.py` | cửa vào duy nhất: dry-run mặc định, `--execute` khi đủ hai khoá của §2 + biến kết nối |
+| `work_acceptance_rubric.json` | trọng số 6 vai (main 3, producer 3, research 2, reviewer 3, testing 3, flow 2) + luật nền `baseline` |
+| `fixtures/work_acceptance/S01.json…S12.json` | 12 kịch bản bắt buộc, mỗi tệp có `oracle` theo vai + `faults` |
+| `fixtures/work_acceptance/V06,V07,V10,V13,V14.json` | 5 ca tuỳ chọn của §9.2, chỉ nạp khi `--with-v` |
+
+Cơ chế tiêm lỗi (`faults`) chạy trong tiến trình, không sửa repo: `search_error`, `output_length`,
+`dirty_foreign_file`, `missing_role`, `restart_while_waiting`, `answer_revision`, `long_document`,
+`claim_unsourced`. Mỗi lượt có session, `sessions.db` và workspace git riêng (dưới
+`<out>/runs/<ca>-r<lần>/`), chạy trong worktree đang mở.
+
+Chấm điểm là **oracle tất định** trên event/artifact/report — không gọi giám khảo LLM, nên chạy lại
+cho cùng kết quả. `results.json` (`schema: work-acceptance-v1`) ghi: `plan`, `route`, `configHash`
+(băm `work_policy.py`/`work_checks.py`/`work_graph.py`/`runtime.py` + `work_policy.VERSION` +
+các knob `BOXFOX_WORK_*`), `cells` (expectedState/observedState/luật hỏng từng lượt), `roles`,
+`gate`, `failures` (mọi lượt hỏng vẫn nằm trong mẫu số), `tokens`, `wallTimeMs`, `cost`, `attempts`,
+`manifest`. `runs/<ca>-r<lần>/bundle.json` giữ nguyên bằng chứng thô để soi lại.
+
+Cổng provider: chỉ nhận `opencode` / `space-bunny-free`; router trả provider khác thì dừng với
+`OpenCode space-bunny-free unavailable; no provider substitution` và **không** thay thế model.
+
+### Mã thoát
+
+| Mã | Nghĩa |
+|---|---|
+| 0 | dry-run xong, hoặc `--execute` xong và **cổng đạt** |
+| 1 | `--execute` xong nhưng **cổng chưa đạt** (kết quả vẫn được ghi, kể cả khi chưa đạt) |
+| 2 | sai cách dùng (ví dụ `--cases` có id lạ) |
+| 3 | cổng chi tiêu từ chối (thiếu `BOXFOX_EVAL_ALLOW_SPEND=1` hoặc thiếu ngân sách) |
+| 4 | thiếu biến kết nối — dừng trước khi chạy lượt nào |
+| 6 | router không có `opencode`/`space-bunny-free` — dừng trước khi tiêu token |
+
+Hai tệp bằng chứng của §10 (`docs/plan/W10-acceptance-evidence.json`, `docs/plan/W10-acceptance-report.md`)
+**chưa có**: chúng chỉ được ghi sau lượt chạy thật. Trạng thái hiện tại: giàn đã dựng, **chưa chạy
+24 lượt thật, chưa tiêu đồng nào**.

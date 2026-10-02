@@ -1,0 +1,31 @@
+{
+  "id": "V06",
+  "title": "Lookup đơn giản — check tối thiểu, không reviewer thừa",
+  "goal": "Câu hỏi tra cứu một symbol phải được trả lời gọn, không spawn reviewer không cần thiết",
+  "ownerLanguage": "vi",
+  "notes": "§9.2 V06: consumer check đủ; trần child thấp để bắt fan-out thừa.",
+  "prompt": "Trong repo này, hàm nào chịu trách nhiệm xuất CSV báo cáo và nó nằm ở file:dòng nào? Trả lời ngắn gọn, đọc file để xác nhận chứ đừng đoán.",
+  "interviewAnswers": [],
+  "faults": [],
+  "workspace": {
+    "files": [
+      {
+        "path": "src/reports.py",
+        "content": "\"\"\"Báo cáo doanh thu.\"\"\"\n\n\ndef export_csv(rows):\n    return 'date,revenue\\n'\n"
+      }
+    ]
+  },
+  "expectedState": "verified",
+  "oracle": {
+    "main": [
+      {"kind": "child_count_max", "max": 3, "why": "V06: tra cứu đơn giản không fan-out"},
+      {"kind": "check_count_max", "max": 2, "why": "V06: check tối thiểu hoặc consumer check đủ"}
+    ],
+    "research": [
+      {"kind": "report_regex_any", "patterns": ["src/reports\\.py:\\d+"], "why": "trả lời phải trỏ đúng file:dòng đã đọc"}
+    ],
+    "flow": [
+      {"kind": "no_fabricated_url", "why": "0 URL bịa trong output cho user"}
+    ]
+  }
+}
