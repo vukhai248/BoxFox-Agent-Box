@@ -450,7 +450,11 @@ def test_ship_in_a_git_repository_commits_on_a_local_branch(tmp_path):
     assert shipped['ship']['status'] == 'local' and shipped['ship']['commit'] == 'abc1234'
     assert shipped['ship']['branch'] == 'boxfox/add-an-export-button'
     commands = [args['command'] for name, args in executor.calls if name == 'terminal_exec']
-    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") for command in commands if 'git ' in command)
+    # Legacy/touch-set ship stays scoped to repoPath; the only extra read is the isolation probe
+    # (W8.A4.3) that decides whether the workspace root itself is the repository.
+    probe = 'cd . && t=$(git rev-parse --show-toplevel'
+    assert all(command.startswith("cd 'BoxFox-Agent-Box' && ") or command.startswith(probe)
+               for command in commands if 'git ' in command)
     # An existing branch is reused, never reset with `-B`; plan artifacts stay out of the commit.
     assert any("git checkout 'boxfox/add-an-export-button' || git checkout -b 'boxfox/add-an-export-button'"
                in command for command in commands)

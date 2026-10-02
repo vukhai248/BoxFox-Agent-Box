@@ -404,9 +404,18 @@ def binding_scope(rt, owner_id, work):
     if run.get('sessionId') != owner_id:
         return scope('artifact_only', run_id, f'run {run_id} belongs to another session and grants nothing')
     node = next((n for n in run.get('nodes', []) if n.get('id') == work.get('nodeId')), None)
+    if node is None and work.get('nodeId'):
+        # W8.A4.5: nút tổng hợp là nút ẢO — không nằm trong `run['nodes']`, nhưng vòng sửa của nó
+        # chạy một child Build trên nhánh run, nên phải được xét như nút build chứ không phải
+        # assignment chỉ-sinh-artifact. Thiếu nhánh này, mọi vòng sửa ở nút tổng hợp bị cổng
+        # WORK_SCOPE_ARTIFACT_ONLY chặn (`run_stage` bắt lỗi thành `status: failed`).
+        from .work_worktrees import INTEGRATION_NODE
+        if work['nodeId'] == INTEGRATION_NODE:
+            node = graph.integration_node(run)
+    kind = (node or {}).get('kind')
     executes = (work.get('purpose') == 'produce' and work.get('stage') == 'execute' and node is not None
-                and node.get('kind') in EXECUTE_NODE_KINDS
-                and (node['kind'] != 'debug' or (work.get('taskKind') or node.get('taskKind')) == 'implementation'))
+                and kind in EXECUTE_NODE_KINDS
+                and (kind != 'debug' or (work.get('taskKind') or node.get('taskKind')) == 'implementation'))
     base = run_reason(run)
     if not executes or base['mode'] in ('closed', 'artifact_only'):
         if base['mode'] == 'closed':

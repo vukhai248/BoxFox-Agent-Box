@@ -31,6 +31,9 @@ import uuid
 from copy import deepcopy
 
 from . import work_prompts, work_policy, work_artifacts, work_checks, work_feedback, work_grants, work_continuations, work_handoffs
+from . import work_repair
+from .work_worktrees import INTEGRATION_NODE, IsolationError, Worktrees, git_mode
+from . import work_worktrees
 
 WORK_GRAPH_ENV = 'BOXFOX_WORK_GRAPH'
 MARKER = '=== WORK GRAPH ==='
@@ -583,6 +586,7 @@ class WorkGraph:
         self.feedback = work_feedback.Feedback(self)
         self.grants = work_grants.Grants(self)
         self.handoffs = work_handoffs.Handoffs(self)
+        self.worktrees = Worktrees(self)
         from .work_progress import Progress
         self.progress = Progress(self)
         from .work_decisions import Decisions
@@ -631,6 +635,75 @@ class WorkGraph:
     def busy(self, run):
         lock = self.locks.get(run['runId'])
         return lock is not None and lock.locked()
+
+    # ---- nodes (W8.A4.4: the run branch is one extra, virtual node) --------------------------- #
+
+    def all_nodes(self, run):
+        """Real nodes plus the virtual `__integration__` node of a git-isolated run."""
+        nodes = list(run['nodes'])
+        if git_mode(run) and isinstance(run.get('integration'), dict):
+            nodes.append(self.integration_node(run))
+        return nodes
+
+    def find_node(self, run, node_id):
+        for node in run['nodes']:
+            if node['id'] == node_id:
+                return node
+        if node_id == INTEGRATION_NODE and git_mode(run) and isinstance(run.get('integration'), dict):
+            return self.integration_node(run)
+        return None
+
+    def integration_node(self, run):
+        """The merged run branch as a node: `execute` checks the integration snapshot, never a worktree."""
+        integration = run.setdefault('integration', {'nodes': {}, 'checkIds': []})
+        state = integration.setdefault('stage', new_stage())
+        integration.setdefault('nodes', {})
+        accepted = [n['id'] for n in run['nodes']
+                    if n['stages'].get('execute', {}).get('status') in ('accepted', 'revise')]
+        # `kind` is a real kind: a repair round on the run branch runs a Build child, so every
+        # role/prompt/derive lookup must find 'build' here (there is no 'integrate' role).
+        return {'id': INTEGRATION_NODE, 'kind': 'build', 'title': 'Integrated run branch',
+                'goal': 'Verify the merged changes of this run on one exact snapshot of the run branch.',
+                'acceptance': ['Every required test passes on the integrated snapshot.'],
+                'tests': sorted({t for n in run['nodes'] for t in (n.get('tests') or [])}),
+                'files': [], 'dependsOn': accepted, 'risk': 'normal', 'taskKind': None,
+                'artifactKind': 'patch', 'depth': 'standard', 'stages': {'execute': state}}
+
+    def workspace_of(self, run, node):
+        """`{root, branch, base}` of the node worktree, or None outside git isolation."""
+        if not git_mode(run):
+            return None
+        root, base = self.worktrees.code_root(run, node)
+        if not root:
+            return None
+        row = self.worktrees.row(self.worktrees.node_ident(run, node))
+        return {'root': root, 'branch': (row or {}).get('branch'), 'base': base}
+
+    def raise_issue(self, run, kind, node_id, stage, message, extra=None):
+        """Queue a durable main decision (source c). It records a reference; it never starts work."""
+        node = self.find_node(run, node_id) if node_id else None
+        state = ((node or {}).get('stages') or {}).get(stage) or {}
+        identity = {'kind': kind, 'nodeId': node_id, 'stage': stage, 'revision': run.get('revision'),
+                    'artifactId': (state.get('artifact') or {}).get('artifactId'),
+                    'repairs': len(state.get('repairs') or []),
+                    'status': state.get('status'),
+                    'treeHash': (run.get('integration') or {}).get('treeHash')}
+        payload = {'kind': kind, 'nodeId': node_id, 'stage': stage,
+                   'reason': str(message)[:1000], **(extra or {})}
+        ident = self.decisions.enqueue(run['sessionId'], run['runId'], kind,
+                                      f'{node_id or "run"}:{stage}:{kind}', identity, payload, time.time())
+        self.save(run, 'main_decision', kind)
+        return ident
+
+    def execute_status(self, run):
+        """`executed` needs every execute node accepted AND the integration record checked."""
+        stages = [n['stages']['execute'] for n in run['nodes'] if 'execute' in n['stages']]
+        if not stages or not all(s['status'] == 'accepted' for s in stages):
+            return None
+        if not git_mode(run):
+            return 'executed'
+        integration = run.get('integration') or {}
+        return 'executed' if integration.get('status') == 'checked' else 'approved'
 
     # ---- storage --------------------------------------------------------------------------- #
 
@@ -866,6 +939,10 @@ class WorkGraph:
             return self.result(self.retry(run, set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))))
         if action == 'validate':
             return self.result(run) | {'valid': not graph_issues(run['nodes'])}
+        if action == 'set_repair':
+            policy = work_repair.set_policy(run, args, MAX_ROUNDS_CEILING)
+            self.save(run, 'repair_policy', work_repair.describe(run))
+            return self.result(run, 'Repair policy: ' + work_repair.describe(run)) | {'repairPolicy': policy}
         if action == 'cancel':
             run['status'] = 'cancelled'
             return self.result(self.save(run, 'cancelled'))
@@ -954,7 +1031,7 @@ class WorkGraph:
             return ('Main: correct the conflicting node goal/acceptance with work_graph action=update before '
                     'retrying checks or production. Preserve facts in the artifact; the assignment needs correction: '
                     + str(conflicts))
-        needs = [(n['id'], stage, s['artifact']['artifactId']) for n in run['nodes'] for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
+        needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
         if not run['nodes']:
@@ -989,6 +1066,17 @@ class WorkGraph:
                     'work_graph action=retry nodeIds=[...] to run them again with the findings, or '
                     'action=update to change the plan (then verify and approval again), or report to the owner.')
         if status in ('approved', 'executing'):
+            if git_mode(run):
+                integration = run.get('integration') or {}
+                if integration.get('status') == 'conflict':
+                    return ('Main: the run branch has an integration conflict; repair the named node on the new base '
+                            '(work_graph action=retry) or change the plan, then work_run phase=execute again.')
+                pending = [n['id'] for n in run['nodes'] if n['stages'].get('execute', {}).get('status')
+                           in ('pending', 'revise')]
+                if pending:
+                    return f'Call work_run phase=execute (pending: {", ".join(pending)}).'
+                return ('Call work_check action=start with nodeId="__integration__" and the artifactId from work_graph '
+                        'status to test/review the integrated run branch, then work_ship.')
             return 'Call work_run phase=execute.'
         if status == 'executed':
             return 'Call work_ship to create the branch, commit and PR description, then report.'
@@ -1220,7 +1308,8 @@ class WorkGraph:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False, controller_action=None):
+    async def run_stage(self, session, run, node, stage, max_rounds, controller_owned=False, controller_action=None,
+                        repair=None):
         """Produce ONE draft; main dispatches checks and chooses the repair/routing step."""
         from . import work_budget
         state = node['stages'][stage]
@@ -1241,16 +1330,49 @@ class WorkGraph:
         entry = {'attempt': attempt, 'producerRole': node['kind'], 'at': now(), 'knowledge': []}
         state['rounds'].append(entry)
         self.save(run, 'node_started', f'{node["id"]}:{stage}')
+        touchset = (run.get('isolation') or {}).get('mode') == 'touchset' and stage == 'execute'
+        dirty_before = None
+        dirty_after = None
         try:
-            before = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
+            workspace = None
+            if stage == 'execute':
+                workspace = await self.ensure_workspace(run, node, session['id'])
+                if touchset:
+                    await self.worktrees.lock_touchset(run, node)
+                    dirty_before = await self.worktrees.dirty_manifest(session['id'])
+            root = (workspace or {}).get('root')
+            base = (workspace or {}).get('base')
+            before = await self.code_identity(run, run['sessionId'], root, base) if stage == 'execute' else None
             role, goal = self.producer_goal(run, node, stage, state.get('feedback'), [])
             context = '\n\n'.join(p for p in (self.interview_context(run), self.dependency_context(run, node, stage)) if p)
             expect = work_prompts.deliverable(node['kind'] if stage == 'produce' else role,
                                               work_prompts.language(run['goal']), node.get('taskKind'),
                                               node.get('depth'))
+            repair_binding = {}
+            if repair:
+                # W8.A4.5: a clear red test resumes the SAME Build child in the SAME worktree.
+                repair_binding['repairOf'] = repair.get('repairOf')
+                if repair.get('resumeChildId'):
+                    repair_binding['resumeChildId'] = repair['resumeChildId']
+                if repair.get('extraArtifactIds'):
+                    repair_binding['artifactIds'] = list(dict.fromkeys(repair['extraArtifactIds']))
+                if repair.get('debugOnly'):
+                    repair_binding['diagnosticOnly'] = True
+            # W8.A4.3: every execute admission names the tree it writes in, so `reserve` can
+            # snapshot the same root; repair/controller flags layer on top instead of replacing it.
+            extra = ({'workspace': workspace} if workspace else {})
+            if repair:
+                extra.update(repair_binding)
+            elif controller_action:
+                extra['controllerAction'] = controller_action
+            elif controller_owned:
+                extra['controllerOwned'] = True
             produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
-                extra_binding={'controllerAction': controller_action} if controller_action else
-                              {'controllerOwned': True} if controller_owned else None)
+                extra_binding=extra or None)
+            if repair:
+                entry['repairOf'] = repair.get('repairOf')
+                if repair.get('resumeChildId') and produced.get('sessionId') != repair['resumeChildId']:
+                    entry['repairChildReason'] = 'previous child was not resumable; a fresh child kept the same worktree'
             entry['producerId'] = produced.get('sessionId')
             if produced.get('request'):
                 request = produced['request']
@@ -1280,6 +1402,7 @@ class WorkGraph:
                 produced, output = await self.spawn(session, run, node, stage, 'produce', role, goal, context, expect, attempt,
                     extra_binding={'resumeChildId': entry['initialProducerId'], 'artifactIds': refs,
                         'inputReadId': 'lookup-' + uuid.uuid4().hex,
+                        **({'workspace': workspace} if workspace else {}),
                         **({'controllerAction': controller_action} if controller_action else
                            {'controllerOwned': True} if controller_owned else {})})
                 entry['producerId'] = produced.get('sessionId')
@@ -1292,17 +1415,42 @@ class WorkGraph:
                     self.save(run, 'node_needs_user', node['id'])
                     return state['status']
             entry['execution'] = work_budget.receipt(produced)
-            after = await work_checks.snapshot(self, run['sessionId']) if stage == 'execute' else None
+            commit = None
+            if workspace:
+                # W8.A4.3: commit the producer's work in its own worktree; the owner's checkout is untouched.
+                commit = await self.worktrees.checkpoint(run, node, attempt, session['id'])
+                if node['id'] == INTEGRATION_NODE:
+                    integration = run.setdefault('integration', {})
+                    integration.update(head=commit['nodeCommit'], treeHash=commit['treeHash'],
+                                       status='pending', snapshot=None, needsTests=True, at=now())
+            if touchset:
+                dirty_after = await self.worktrees.dirty_manifest(session['id'])
+                violations = self.worktrees.touch_violations(node, dirty_before, dirty_after)
+                if violations:
+                    state.update(status='failed', touchViolation=violations[:20],
+                                 error='WORK_TOUCHSET_VIOLATION: this run has no git repository, so it may only '
+                                       'change its declared files. Outside the touch set: ' + ', '.join(violations[:8])
+                                       + '. Main decides keep or revert.')
+                    self.raise_issue(run, 'touchset_violation', node['id'], stage, state['error'],
+                                     {'paths': violations[:20], 'allowed': self.worktrees.touch_paths(node)})
+                    self.save(run, 'node_failed', node['id'])
+                    return state['status']
+            after = await self.code_identity(run, run['sessionId'], root, base) if stage == 'execute' else None
             changed = before is not None and after is not None and before != after
             declared_sensitive = any(re.search(r'api|schema|auth|migration|contract|concurr|lock', path, re.I) for path in node['files'])
-            policy = work_policy.derive(run, node, stage, output, changed,
-                                       code_risk=stage == 'execute' and bool((after or {}).get('criticalChanges') or declared_sensitive))
+            # The virtual integration node keeps its own (converged) policy after a repair.
+            policy = (work_policy.integration(run) if node['id'] == INTEGRATION_NODE else
+                      work_policy.derive(run, node, stage, output, changed,
+                                         code_risk=stage == 'execute' and bool((after or {}).get('criticalChanges') or declared_sensitive)))
             state['policy'] = policy
             binding = self.checks.binding(run, node, stage) | {'policyHash': policy['hash']}
             if entry.get('lookupContinuation'):
                 binding['lookupArtifactIds'] = lookup_refs
             if stage == 'execute':
                 binding['codeSnapshot'] = after
+                if commit:
+                    binding['codeCommit'] = commit
+                    binding['workspace'] = workspace
             finalized = work_checks.complete(produced) and bool(output.strip()) and not parse_knowledge_requests(output)
             meta = await self.artifacts.put(run, node['id'], stage, output, binding, finalized, entry['producerId'])
             state.update(artifact=meta, output=output, outputChars=len(output))
@@ -1317,7 +1465,7 @@ class WorkGraph:
                     (produced.get('work') or {}).get('inputReadId'), self.artifacts.get(run['runId'], aid)[0],
                     entry['producerId']) for aid in lookup_refs):
                 state.update(status='failed', error='WORK_LOOKUP_INPUT_UNREAD: producer did not read the new assigned lookup artifacts.')
-            elif stage == 'execute' and (before is None or after is None):
+            elif stage == 'execute' and not touchset and (before is None or after is None):
                 state.update(status='failed', error='WORK_CODE_SNAPSHOT_REQUIRED: could not verify source changes.')
             elif policy['required']:
                 state['status'] = 'needs_checks'
@@ -1338,6 +1486,9 @@ class WorkGraph:
             raise
         except Exception as exc:
             state.update(status='failed', error=str(exc)[:500])
+        finally:
+            if touchset:
+                self.worktrees.release_touchset(run, node)
         state['finishedAt'] = now()
         self.save(run, 'artifact_ready' if state['status'] == 'needs_checks' else 'node_' + state['status'], node['id'])
         return state['status']
@@ -1376,6 +1527,11 @@ class WorkGraph:
         if stage == 'execute':
             self.require_execution(run)
             self.require_planning_current(run)
+            await self.ensure_isolation(session, run, args)
+            # W8.A4.4: hợp nhất nốt những nút đã nghiệm thu ở lượt trước TRƯỚC khi so cây —
+            # nếu không, một nút vừa được duyệt sẽ bị coi là "cây đã đổi" ngay lượt sau.
+            if git_mode(run) and await self.integrate_nodes(session, run):
+                await self.build_integration(session, run)
             await self.require_code_current(run)
             if run['status'] == 'execute_failed':
                 raise ValueError('WORK_EXECUTE_FAILED: some execution nodes were not accepted; call work_graph '
@@ -1407,9 +1563,45 @@ class WorkGraph:
                 self.child_budget.pop(run['runId'], None)
                 self.live.pop(run['runId'], None)
 
+    async def ensure_workspace(self, run, node, sid):
+        """`{root, branch, base}` for this node, or None when the run is not git-isolated."""
+        if not git_mode(run):
+            return None
+        workspace = await self.worktrees.ensure_node(run, node, sid)
+        await self.worktrees.recover_merges(run, sid)
+        return workspace
+
     def require_execution(self, run):
         if not run.get('executionRequested'):
             raise ValueError('WORK_REQUIREMENTS_ONLY: owner requested an artifact, not code execution; Autopilot cannot expand scope.')
+
+    async def code_identity(self, run, sid, root=None, base=None):
+        """W8.A4.3: a touch-set run is identified by the shared dirty manifest, a git run by its
+        scoped worktree snapshot. A workspace that answers neither yields None; the caller decides
+        (`run_stage` keeps going, an execution admission refuses)."""
+        if (run.get('isolation') or {}).get('mode') == 'touchset':
+            manifest = await self.worktrees.dirty_manifest(sid)
+            if manifest:
+                # Cùng hình dạng với `work_checks.snapshot` để mọi cổng so sánh dùng chung một kiểu.
+                return {'schema': manifest.get('schema'), 'hash': work_policy.digest(manifest),
+                        'head': manifest.get('head'), 'criticalChanges': False}
+        return await work_checks.snapshot(self, sid, root, base)
+
+    async def ensure_isolation(self, session, run, args):
+        """W8.A4.3: resolve the repository and create the run worktree once per execution run."""
+        try:
+            isolation = await self.worktrees.ensure_run(run, args, session['id'])
+        except IsolationError as exc:
+            message = str(exc)
+            if message.startswith('WORK_REPO_AMBIGUOUS'):
+                self.raise_issue(run, 'repo_ambiguous', None, 'execute', message,
+                                 {'repoPath': args.get('repoPath'), 'next': 'work_run phase=execute repoPath=...'})
+                self.save(run, 'repo_ambiguous')
+            raise
+        if isolation.get('mode') == 'git' and (isolation.get('userDirty') or {}).get('count'):
+            self.save(run, 'owner_changes_outside_run',
+                      f'{isolation["userDirty"]["count"]} uncommitted owner file(s) stay outside this run')
+        return isolation
 
     def require_planning_current(self, run):
         producers = [n for n in run['nodes'] if 'produce' in n['stages']]
@@ -1420,6 +1612,28 @@ class WorkGraph:
             raise ValueError('WORK_NOT_VERIFIED: owner decisions, artifacts or graph checks are stale/missing')
 
     async def require_code_current(self, run):
+        if git_mode(run):
+            # W8.A4.4: the run branch, not the owner's checkout, is what checks are bound to.
+            integration = run.setdefault('integration', {'nodes': {}, 'checkIds': []})
+            for node in run['nodes']:
+                state = node['stages'].get('execute', {})
+                if state.get('status') != 'accepted':
+                    continue
+                commit = ((state.get('artifact') or {}).get('binding', {}).get('codeCommit') or {}).get('nodeCommit')
+                if not commit or integration.get('nodes', {}).get(node['id']) != commit:
+                    integration.update(status='stale', snapshot=None, at=now())
+                    raise ValueError('WORK_CODE_STALE: an accepted node is not integrated into the run branch; '
+                                     'call work_run phase=execute to finish integration, then re-check.')
+            if not integration.get('snapshot'):
+                return
+            current = await self.worktrees.integration_snapshot(run, run['sessionId'])
+            if (not current.get('hash') or current['hash'] != integration['snapshot'].get('hash')
+                    or current.get('treeHash') != integration.get('treeHash')):
+                integration.update(status='stale', at=now())
+                self.save(run, 'code_checks_stale', 'integration')
+                raise ValueError('WORK_CODE_STALE: the run branch changed after its checks; re-run the '
+                                 'integration check before execute/ship.')
+            return
         current = None
         for node in run['nodes']:
             state = node['stages'].get('execute', {})
@@ -1438,6 +1652,12 @@ class WorkGraph:
         self.require_execution(run)
         run['approval'] = {'status': 'approved', 'by': 'autopilot', 'at': now()}
         run['status'] = 'approved'
+        self.set_repair_default(run)
+
+    def set_repair_default(self, run):
+        """W8.A4.5: the bounded repair policy is fixed at approval, not by a red test."""
+        if not run.get('repairPolicy'):
+            run['repairPolicy'] = work_repair.default_policy(MAX_ROUNDS_DEFAULT, 'default')
 
     @contextlib.contextmanager
     def budget_paused(self, sid):
@@ -1459,6 +1679,98 @@ class WorkGraph:
                 except RuntimeError:
                     pass
 
+    def touchset_busy(self, run, node, stage, running):
+        """W8.A4.3 fallback: without git, overlapping declared files run one after another."""
+        if stage != 'execute' or (run.get('isolation') or {}).get('mode') != 'touchset':
+            return False
+        mine = self.worktrees.touch_paths(node)
+        if not mine:
+            return False
+        for other in running:
+            theirs = self.worktrees.touch_paths(next(n for n in run['nodes'] if n['id'] == other))
+            if any(a == b or a.startswith(b + '/') or b.startswith(a + '/') for a in mine for b in theirs):
+                return True
+        return False
+
+    async def integrate_nodes(self, session, run):
+        """W8.A4.4: merge every accepted execute node into the run branch under one lock."""
+        changed = False
+        for node in run['nodes']:
+            state = node['stages'].get('execute', {})
+            if state.get('status') != 'accepted':
+                continue
+            commit = ((state.get('artifact') or {}).get('binding', {}).get('codeCommit') or {}).get('nodeCommit')
+            if not commit or (run.get('integration') or {}).get('nodes', {}).get(node['id']) == commit:
+                continue
+            try:
+                await self.worktrees.integrate(run, node, session['id'])
+                changed = True
+            except IsolationError as exc:
+                state.update(status='integration_conflict', error=str(exc)[:500])
+                self.raise_issue(run, 'integration_conflict', node['id'], 'execute', str(exc),
+                                 {'paths': self.worktrees.touch_paths(node),
+                                  'next': 'repair the node on the new run-branch base (work_graph action=retry) '
+                                          'or change the plan'})
+                self.save(run, 'integration_conflict', node['id'])
+        return changed
+
+    async def integration_artifact(self, run, snapshot, policy, session):
+        """W8.A4.5: the artifact the converged gate reviews must publish the tree it claims.
+
+        The review child is read-only (no terminal) and the run worktree sits under a git-excluded
+        path, so a reviewer cannot re-run the tests or browse the merged files by itself. The
+        producer therefore publishes the identity of the merged tree, the files this run owns, the
+        diff stat, and the verbatim output of every required test command. Best effort: a blocked or
+        failing command is reported exactly as it came back instead of failing the integration.
+        """
+        sid = session.get('id')
+        lines = ['Integrated run branch ' + str(snapshot['head'])[:12] + ' (tree ' + str(snapshot['treeHash'])[:12] + ')',
+                 '', '### Merged tree identity', '',
+                 f"- run branch: `{snapshot['branch']}`", f"- head: `{snapshot['head']}`",
+                 f"- tree: `{snapshot['treeHash']}`", f"- worktree: `{snapshot['worktree']}`"]
+        owned = await self.worktrees.owned_paths(run, sid)
+        lines.append('- files owned by this run: ' + (', '.join(f'`{path}`' for path in owned) if owned else '(none)'))
+        stat, _ = await self.worktrees.diff_text(run, sid)
+        if stat.strip():
+            lines += ['', '### Diff stat', '', '```', stat.strip()[-3000:], '```']
+        for command in [str(item).strip() for item in (policy.get('tests') or []) if str(item).strip()]:
+            proof = f'cd {snapshot["worktree"]} && {command} 2>&1; echo "EXIT=$?"'
+            ok, out = await self.worktrees.sh(sid, proof, 900)
+            code = out.rsplit('EXIT=', 1)[-1].strip() if 'EXIT=' in out else 'unknown'
+            lines += ['', f'### Verbatim test evidence — `{command}`', '',
+                      f'`{proof}` → exit `{code}` (executor ok={ok})', '', '```', out[-4000:], '```']
+        return '\n'.join(lines)
+
+    async def build_integration(self, session, run):
+        """W8.A4.4/A4.5: one converged check on the merged run branch before `executed`."""
+        integration = run.setdefault('integration', {'nodes': {}, 'checkIds': []})
+        stages = [n['stages']['execute'] for n in run['nodes'] if 'execute' in n['stages']]
+        if not stages or not all(s['status'] == 'accepted' for s in stages):
+            return False
+        node = self.integration_node(run)
+        state = node['stages']['execute']
+        if state.get('status') in ('accepted', 'needs_checks', 'revise'):
+            return False
+        snapshot = await self.worktrees.integration_snapshot(run, session['id'])
+        if not snapshot.get('hash') or not snapshot.get('treeHash'):
+            state.update(status='failed', error='WORK_CODE_SNAPSHOT_REQUIRED: cannot read the integrated run branch')
+            return False
+        policy = work_policy.integration(run)
+        binding = self.checks.binding(run, node, 'execute') | {'policyHash': policy['hash'],
+            'codeSnapshot': snapshot['snapshot'],
+            'workspace': {'root': snapshot['worktree'], 'branch': snapshot['branch'],
+                          'base': run['isolation']['baselineCommit']}}
+        meta = await self.artifacts.put(run, INTEGRATION_NODE, 'execute',
+            await self.integration_artifact(run, snapshot, policy, session), binding, True, None)
+        state.update(status='needs_checks' if policy['required'] else 'accepted', attempts=max(1, state['attempts']),
+                     artifact=meta, policy=policy, rounds=state.get('rounds') or [{'attempt': 1, 'producerRole': 'build',
+                     'at': now(), 'knowledge': [], 'producerId': None}],
+                     output='', outputChars=0, error=None, startedAt=state.get('startedAt') or now())
+        integration.update(status='checking' if policy['required'] else 'checked', head=snapshot['head'],
+                           treeHash=snapshot['treeHash'], snapshot=snapshot['snapshot'], at=now())
+        self.save(run, 'integration_ready', str(snapshot['treeHash'])[:12])
+        return True
+
     async def schedule_nodes(self, session, run, stage, max_rounds, only, limit):
         started = time.monotonic()
         running = {}
@@ -1479,6 +1791,11 @@ class WorkGraph:
                     dispatched.update(running)
                     for node in ready_nodes(run, stage, only or None):
                         if node['id'] in dispatched or len(running) >= limit:
+                            continue
+                        if stage == 'execute' and git_mode(run) and node['stages'][stage]['status'] == 'revise' \
+                                and node['stages'][stage].get('repairs'):
+                            continue  # W8.A4.5: a routed repair already owns the next round.
+                        if self.touchset_busy(run, node, stage, running):
                             continue
                         dispatched.add(node['id'])
                         running[node['id']] = asyncio.ensure_future(
@@ -1508,9 +1825,12 @@ class WorkGraph:
         blocked = blocked_nodes(run, stage)
         statuses = {node['id']: node['stages'][stage]['status'] for node in run['nodes'] if stage in node['stages']}
         if stage == 'execute':
+            if git_mode(run):
+                await self.integrate_nodes(session, run)
+                await self.build_integration(session, run)
             if all(value == 'accepted' for value in statuses.values()):
-                run['status'] = 'executed'
-            elif any(value in ('rejected', 'failed') for value in statuses.values()):
+                run['status'] = self.execute_status(run) or 'approved'
+            elif any(value in ('rejected', 'failed', 'integration_conflict') for value in statuses.values()):
                 run['status'] = 'execute_failed'
             else:
                 run['status'] = 'approved'  # timed out or out of budget: work_run phase=execute continues
@@ -1840,6 +2160,7 @@ class WorkGraph:
             run['approval'] = {'status': 'approved', 'by': 'owner', 'at': now(),
                                'decisionId': outcome.get('decisionId')}
             run['status'] = 'approved'
+            self.set_repair_default(run)
             self.save(run, 'approved', 'owner')
             message = 'The owner approved. Call work_run phase=execute.'
         else:
@@ -1866,6 +2187,109 @@ class WorkGraph:
         if run['status'] != 'executed':
             raise ValueError(f'WORK_NOT_EXECUTED: run is {run["status"]}; ship only after every execution node '
                              'is accepted')
+        if git_mode(run):
+            return await self.ship_isolated(session, run, args)
+        return await self.ship_legacy(session, run, args)
+
+    async def ship_isolated(self, session, run, args):
+        """W8.A4.4: push the run branch only. The owner's checkout and dirty files are never touched."""
+        sid, iso = session['id'], run['isolation']
+        integration = run.get('integration') or {}
+        if integration.get('status') != 'checked':
+            raise ValueError('WORK_SHIP_STALE: the integrated run branch has no passing check yet; call work_check '
+                             'action=start with nodeId="__integration__" first')
+        branch = str(args.get('branch') or iso['branch']).strip()
+        if not re.fullmatch(r'[A-Za-z0-9._/-]{1,100}', branch) or '..' in branch or branch.startswith('-'):
+            raise ValueError('WORK_BRANCH_INVALID: branch may use letters, digits, ., _, / and - only')
+        title = str(args.get('title') or run['title']).strip()[:120]
+        # W8.A4.4: danh sách tệp thuộc run phải có TRƯỚC khi dựng thân PR (nó nằm trong thân).
+        owned = await self.worktrees.owned_paths(run, sid)
+        body = str(args.get('body') or '').strip() or self.pr_body(run, owned)
+        doc = await self.write_document(sid, run, 'pull-request', f'# {title}\n\n{body}\n', f'PR — {title}')
+        steps = []
+
+        async def sh(command, timeout=180):
+            result = await self.rt.executor.execute('terminal_exec', {'command': command, 'timeout': timeout}, sid)
+            text = str((result or {}).get('content') or (result or {}).get('output') or '')
+            code = (result or {}).get('exitCode', (result or {}).get('exit_code'))
+            failed = bool((result or {}).get('is_error')) or (code not in (None, 0))
+            steps.append({'command': command.split(' && ')[0][:160], 'ok': not failed, 'output': text[-600:]})
+            return not failed, text
+
+        def not_shipped(status, message, extra=None):
+            run['ship'] = {'status': status, 'branch': branch, 'prFile': doc['path'], 'steps': steps,
+                           'worktree': iso['root'], 'treeHash': integration.get('treeHash'), 'at': now()} | (extra or {})
+            self.save(run, 'ship_' + status)
+            return self.result(run, message) | {'ship': run['ship']}
+
+        ok, dirty = await self.worktrees.git(sid, iso['root'], 'status --porcelain=v1 --untracked-files=all')
+        # Bỏ qua đúng loại rác mà `snapshot()` bỏ qua: lượt chạy nào chạy test cũng để lại
+        # `__pycache__/`/`.pytest_cache/`, nếu tính là bẩn thì không run nào ship được.
+        dirty = '\n'.join(line for line in dirty.splitlines() if line and not work_worktrees.junk(line))
+        if not ok or dirty:
+            return not_shipped('worktree_dirty', 'The run worktree has uncommitted changes; ship would not match the '
+                                                 'checked tree. Run work_run phase=execute (or clean it) and re-check.',
+                               {'dirty': dirty.splitlines()[:20]})
+        current = await self.worktrees.integration_snapshot(run, sid)
+        if (not current.get('treeHash') or current['treeHash'] != integration.get('treeHash')
+                or current.get('hash') != (integration.get('snapshot') or {}).get('hash')):
+            raise ValueError('WORK_SHIP_STALE: the run branch no longer matches the checked snapshot; re-run the '
+                             'integration check before shipping.')
+        key = f'ship-{run["runId"]}-{integration["treeHash"]}'
+        record = self.worktrees.ship_record(key)
+        if record and record['status'] == 'done' and record.get('result'):
+            run['ship'] = record['result']
+            run['status'] = 'shipped'
+            self.save(run, 'shipped', 'idempotent')
+            return self.result(run, 'Shipped (already done for this tree): ' + run['ship']['status']) | {'ship': run['ship']}
+        if record and record['status'] == 'started':
+            raise ValueError('WORK_SHIP_IN_PROGRESS: another work_ship call owns this exact tree; read work_graph '
+                             'status for its result instead of shipping twice')
+        claim = {'branch': branch, 'head': current.get('head'), 'treeHash': integration['treeHash'],
+                 'ownedPaths': owned, 'pushed': False, 'prUrl': None, 'steps': [], 'startedAt': now()}
+        if not self.worktrees.ship_claim(key, run['runId'], claim):
+            raise ValueError('WORK_SHIP_IN_PROGRESS: another work_ship call owns this exact tree; read work_graph '
+                             'status for its result instead of shipping twice')
+        pushed, pr_url, sha = False, None, str(current.get('head'))[:12]
+        async with self.rt.writer_lock:
+            # An interrupted ship may already have pushed or opened the PR: never repeat those steps.
+            has_remote, _ = await sh(f"git -C '{iso['root']}' remote get-url origin")
+            if has_remote and args.get('push', True):
+                _, remote_ref = await sh(f"git -C '{iso['root']}' ls-remote origin refs/heads/{branch}")
+                already = str(current.get('head')) in remote_ref
+                if already:
+                    pushed = True
+                else:
+                    pushed, out = await sh(f"GIT_TERMINAL_PROMPT=0 git -C '{iso['root']}' push -u origin "
+                                           f"HEAD:refs/heads/{branch}")
+                    if not pushed:
+                        self.worktrees.ship_finish(key, 'failed', claim | {'steps': steps, 'finishedAt': now()})
+                        return not_shipped('push_failed', 'git push failed; read ship.steps, fix the remote or the '
+                                                          'branch, and call work_ship again.', {'pushed': False})
+                has_gh, _ = await sh('command -v gh && gh auth status')
+                if has_gh:
+                    existing, out = await sh(f"gh pr view '{branch}' --json url --jq .url")
+                    match = re.search(r'https://\S+/pull/\d+', out)
+                    if existing and match:
+                        pr_url = match.group(0)
+                    else:
+                        created, out = await sh(f"gh pr create --draft --title '{title.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}' "
+                                                f"--body-file '{doc['path']}' --head '{branch}' "
+                                                f"--base '{iso.get('baselineBranch') or 'HEAD'}'")
+                        match = re.search(r'https://\S+/pull/\d+', out)
+                        pr_url = match.group(0) if created and match else None
+        run['ship'] = {'status': 'pr_opened' if pr_url else ('pushed' if pushed else 'local'),
+                       'branch': branch, 'commit': sha, 'pushed': pushed, 'prUrl': pr_url, 'prFile': doc['path'],
+                       'ownedPaths': owned, 'treeHash': integration['treeHash'], 'shipKey': key,
+                       'worktree': iso['root'], 'steps': steps, 'at': now()}
+        run['status'] = 'shipped'
+        self.worktrees.ship_finish(key, 'done', claim | {'result': run['ship'], 'steps': steps, 'finishedAt': now()})
+        self.save(run, 'shipped', run['ship']['status'])
+        return self.result(run, 'Shipped: ' + run['ship']['status']) | {'ship': run['ship']}
+
+    async def ship_legacy(self, session, run, args):
+        """Pre-isolation runs (and touch-set runs) keep the shared checkout, with an explicit path scope."""
+        sid = session['id']
         branch = str(args.get('branch') or f'boxfox/{run["slug"]}').strip()
         if not re.fullmatch(r'[A-Za-z0-9._/-]{1,100}', branch) or '..' in branch or branch.startswith('-'):
             raise ValueError('WORK_BRANCH_INVALID: branch may use letters, digits, ., _, / and - only')
@@ -1881,6 +2305,16 @@ class WorkGraph:
         prefix = f"cd '{repo}' && " if repo else ''
         # The PR file path is workspace-relative; commands run inside repoPath.
         body_file = '../' * len([part for part in repo.split('/') if part not in ('', '.')]) + doc['path']
+        # A legacy run shares the owner's checkout: it must name the paths it owns (no `-A`, no globs).
+        legacy = (run.get('isolation') or {}).get('mode') == 'legacy'
+        paths = [str(p).strip().strip('/') for p in (args.get('paths') or []) if str(p).strip().strip('/')]
+        if legacy and not paths:
+            raise ValueError('WORK_SHIP_LEGACY_SCOPE_REQUIRED: this run was created before worktree isolation, so '
+                             'its changes live in the shared checkout. Call work_ship with paths=[the files this '
+                             'run owns] (relative, no globs) so unrelated owner changes are never committed.')
+        for path in paths:
+            if path.startswith('/') or '..' in path.split('/') or any(c in path for c in '*?['):
+                raise ValueError('WORK_SHIP_LEGACY_SCOPE_REQUIRED: paths must be relative files without globs')
         steps = []
 
         async def sh(command, timeout=120):
@@ -1910,7 +2344,8 @@ class WorkGraph:
             if not ok:
                 return not_shipped('checkout_failed', f'git could not switch to branch {branch}; read ship.steps, '
                                                       'fix the working tree, and call work_ship again.')
-            ok, _ = await sh("git add -A -- . ':(exclude).plans/work'")
+            ok, _ = await sh("git add -- " + ' '.join("'" + path + "'" for path in paths) if legacy
+                             else "git add -A -- . ':(exclude).plans/work'")
             if not ok:
                 return not_shipped('add_failed', 'git add failed; read ship.steps and call work_ship again.')
             committed, commit_out = await sh(f"git -c user.name='BoxFox' -c user.email='boxfox@localhost' "
@@ -1938,12 +2373,20 @@ class WorkGraph:
         self.save(run, 'shipped', run['ship']['status'])
         return self.result(run, 'Shipped: ' + run['ship']['status']) | {'ship': run['ship']}
 
-    def pr_body(self, run):
+    def pr_body(self, run, owned=None):
         lines = ['## Summary', '', run['goal'], '', '## Work Graph', '']
         for node in run['nodes']:
             stage = node['stages'].get('execute') or node['stages'].get('produce')
             verdicts = ' → '.join(item.get('verdict') or '?' for item in stage['rounds']) or 'not run'
             lines.append(f'- **{node["id"]}** ({node["kind"]}) {node["title"]} — `{stage["status"]}` ({verdicts})')
+        iso = run.get('isolation') or {}
+        if iso.get('mode') == 'git':
+            lines += ['', '## Branch', '', f'- Branch: `{iso.get("branch")}` from `{iso.get("baselineBranch")}` '
+                      f'({str(iso.get("baselineCommit"))[:12]})', f'- Worktree: `{iso.get("root")}`',
+                      '- The owner\'s uncommitted changes are not part of this branch.']
+            owned = owned if owned is not None else (run.get('ship') or {}).get('ownedPaths')
+            if owned:
+                lines += ['', '## Files owned by this run', ''] + [f'- `{path}`' for path in owned[:200]]
         lines += ['', '## Testing', '']
         for node in run['nodes']:
             for test in node['tests']:
@@ -1979,12 +2422,24 @@ class WorkGraph:
             lines.append(f'Owner request: {bounded(intent.get("text"), 1500)}')
         if run is not None:
             counts = {}
-            for node in run['nodes']:
+            for node in self.all_nodes(run):
                 for name, state in node['stages'].items():
                     counts[state['status']] = counts.get(state['status'], 0) + 1
             lines.append(f'Active run {run["runId"]} "{run["title"]}" flow={run["flow"]} status={run["status"]} '
                          f'nodes={len(run["nodes"])} stages={json.dumps(counts, ensure_ascii=False)} '
                          f'autopilot={"on" if autopilot_on(session) else "off"}.')
+            iso = run.get('isolation') or {}
+            if iso.get('mode') == 'git':
+                lines.append(f'Isolation: this run builds in branch `{iso["branch"]}` at worktree `{iso["root"]}`. '
+                             'Paths in assignments and tests are relative to the repository root (`'
+                             f'{iso.get("repoPath") or "."}`), never to the owner checkout. Commit/push is done by '
+                             'the harness; do not run git add/commit in the owner checkout.')
+                if (iso.get('userDirty') or {}).get('count'):
+                    lines.append(f'The owner has {iso["userDirty"]["count"]} uncommitted file(s): your uncommitted '
+                                 'changes are not part of this run, and the run never commits them.')
+            elif iso.get('mode') == 'touchset':
+                lines.append('Isolation: no git repository in the workspace, so this run writes to the shared '
+                             'workspace and may only change the files its nodes declare.')
             lines.append('Next: ' + self.next_step(run))
             if run['status'] in DRIVING_STATUSES:
                 lines.append('Keep this turn going: make the next tool call now. End the turn only for an '

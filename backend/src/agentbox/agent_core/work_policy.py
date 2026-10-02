@@ -6,6 +6,8 @@ import re
 from . import work_prompts
 
 VERSION = 'work-checks/10'
+# A stored record stays valid across the version bump that only adds fields (W8.A4.5 `deferred`).
+COMPATIBLE_VERSIONS = ('work-checks/10', 'work-checks/11')
 TASKS = ('lookup', 'diagnostic', 'deliverable', 'implementation')
 ARTIFACTS = ('knowledge', 'diagnostic', 'research', 'design', 'plan', 'patch', 'test_report')
 RISKS = ('normal', 'consequential')
@@ -32,6 +34,16 @@ def research_only(run):
     return run['flow'] == 'research' and bool(producers) and all(
         n['stages']['produce'].get('policy', {}).get('artifactKind') in ('knowledge', 'research')
         for n in producers)
+
+
+def git_isolated(run):
+    """True only for a run that builds in its own branch/worktree (W8.A4.3)."""
+    iso = run.get('isolation') or {}
+    return int(iso.get('version') or 0) >= 1 and iso.get('mode') == 'git'
+
+
+def version_ok(version):
+    return version in COMPATIBLE_VERSIONS
 
 
 def derive(run, node, stage, text='', changed=False, code_risk=False):
@@ -85,6 +97,30 @@ def derive(run, node, stage, text='', changed=False, code_risk=False):
             'Challenge inference and recommendation against owner constraints; valid citations alone do not establish correctness.')
     policy = {'version': VERSION, 'artifactKind': artifact, 'risk': risk,
               'rationale': 'Minimum from task/artifact, owner goal and observed source changes.',
-              'required': checks}
+              'required': checks, 'deferred': []}
+    if artifact == 'patch' and git_isolated(run):
+        # W8.A4.5: one converged review on the integrated run branch, not per node worktree.
+        policy['deferred'] = ['code_review']
+        policy['required'] = [c for c in checks if c['id'] != 'code_review']
+    policy['hash'] = digest(policy)
+    return policy
+
+
+def integration(run):
+    """Policy of the virtual `__integration__` node: tests (and one review) on the merged tree."""
+    integration = run.get('integration') or {}
+    accepted = [n for n in run['nodes'] if n['stages'].get('execute', {}).get('status') == 'accepted']
+    tests = sorted({t for n in accepted for t in (n.get('tests') or [])})
+    review = any((n['stages']['execute'].get('policy') or {}).get('risk') == 'consequential' for n in accepted)
+    checks = []
+    if integration.get('needsTests') or any(n.get('tests') for n in accepted):
+        checks.append({'id': 'tests', 'executorRole': 'testing',
+                       'criterion': 'Execute every required test on this exact integrated snapshot; report failures honestly.'})
+    if review or any((n['stages']['execute'].get('policy') or {}).get('deferred') for n in accepted):
+        checks.append({'id': 'code_review', 'executorRole': 'review',
+                       'criterion': 'Review behavior, contracts, data safety and edge cases in the actual merged patch.'})
+    policy = {'version': VERSION, 'artifactKind': 'patch', 'risk': 'consequential' if review else 'normal',
+              'rationale': 'Converged verification of the integrated run branch (W8.A4.4/A4.5).',
+              'required': checks, 'deferred': [], 'integration': True, 'tests': tests}
     policy['hash'] = digest(policy)
     return policy

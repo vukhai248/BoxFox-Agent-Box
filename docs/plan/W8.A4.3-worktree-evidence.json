@@ -1,0 +1,246 @@
+{
+ "probe": "W8.A4.3 — nhánh + worktree theo run/node, touch-set fallback (probe thật, 2 ca)",
+ "script": "scripts/eval/work_worktree_build_eval.py",
+ "howToRun": "python3 scripts/eval/work_worktree_build_eval.py --router http://127.0.0.1:36219 --output .tmp/w8-probe-worktree10 --manifest .tmp/work-checks/w8-isolation-manifest.json",
+ "branch": "vorflux/w8-isolation",
+ "commit": "b401a78468f177f3705437ecc63fa02efaad1ca4",
+ "commitAtStart": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "route": null,
+ "router": "http://127.0.0.1:36219",
+ "sources": {
+  "backend/src/agentbox/agent_core/runtime.py": "ada990fc1fe336d11eaa1f4e026499181e36236ebd90fe67a8ac95f862062c4a",
+  "backend/src/agentbox/agent_core/tool_contracts.py": "b9be004c145090585cfc48debcb1d0b567daa5cd710d2e756ee37e83946435db",
+  "backend/src/agentbox/agent_core/work_checks.py": "2e6ae1b47092c4feee41a3b81870160091d0d5bbdd071f23b26618090bbff608",
+  "backend/src/agentbox/agent_core/work_continuations.py": "270203c237c5cf0f3a4a5acf937937fd95d3228543ebf79964da1d062af8528c",
+  "backend/src/agentbox/agent_core/work_decisions.py": "b72a52473554daf31ab70cba6f2e7d8b57254401d1315a3ef64bfcccbfb7b23c",
+  "backend/src/agentbox/agent_core/work_graph.py": "9b4da319da2b750301df9ec32bda282db9a04778ccc08ff1223ee60463b00f58",
+  "backend/src/agentbox/agent_core/work_handoffs.py": "b13b089e2549ce65bb391ff7ec294de94c4078c2f579d1429a4cf722eba99386",
+  "backend/src/agentbox/agent_core/work_policy.py": "3bf662636406847aa35d5442697ba0acebaff781a3ede3a37bfc69d0d0fb2979",
+  "backend/src/agentbox/agent_core/work_progress.py": "f083664f439e37c5122fd6c96a44de51fcc7957e136a67b114aed88495f1dce8",
+  "backend/src/agentbox/agent_core/work_repair.py": "ea7ab3dd5df9e95846cecbf1c8378ea340a0e01228624be3a349e039069469d2",
+  "backend/src/agentbox/agent_core/work_worktrees.py": "df8bdd1981f9ae5bde5d43ffaf58b8e9ae1ff5213707685cdf4c4d12b343b8ef",
+  "backend/src/agentbox/sandbox/executor.py": "ccddefd49928c5ccf3087e48bb008d1b0e10b72465281273b0382faac5c16c07",
+  "backend/src/agentbox/sandbox/worker.py": "799b385ebe83d34ae8f2faf093ab27033cbdeba3a71d4e3cb9eabd4fdb70815a",
+  "backend/tests/unit/test_sandbox_worker_root.py": "080ede58fea4b868f2f63e46ba0a0a669a0e3c046a75667b2b58b6a2550efc7e",
+  "backend/tests/unit/test_work_converged_review.py": "46736e524daee3f54222c2b041f2676a3835f7feed3db2522aec0b19db90c744",
+  "backend/tests/unit/test_work_graph.py": "3e97f622100c108b6ef7487456c78811cc5a801e36a5639551ab6afaec6eb767",
+  "backend/tests/unit/test_work_repair_w8.py": "8620329ad1200bc17690cda90eeb066b233caba7552ee086833ead23ce40c348",
+  "backend/tests/unit/test_work_ship_scoped.py": "5c7ebf6f9f743aec1aaf2f76f2c53df919099e1105241eb38fb3ae6ae52d107f",
+  "backend/tests/unit/test_work_worktree.py": "41ab07474038410307172973a2dc99a359fc1f17a678df94dc6e231738c10e6c",
+  "scripts/eval/work_worktree_build_eval.py": "34cbcb51373def728cb216f4c25a673a70ea84f2240b9d710143aefcb2959782"
+ },
+ "rows": [
+  {
+   "case": "isolated_two_nodes",
+   "scope": "Native Build ×2 trong worktree thật; fixture cấp run/node",
+   "isolation": {
+    "mode": "git",
+    "branch": "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c",
+    "root": ".boxfox/worktrees/w-bc7d8c9d51/main",
+    "baselineCommit": "cb865435ded911891fe71a16323496582c442c24",
+    "repoPath": "repo"
+   },
+   "stageStatus": {
+    "B1": "needs_checks",
+    "B2": "needs_checks"
+   },
+   "nodes": [
+    {
+     "id": "B1",
+     "status": "needs_checks",
+     "attempts": 1,
+     "error": null,
+     "codeCommit": {
+      "nodeCommit": "1afe5943b21dc16b21fa5c43ef8fd1d9f708f128",
+      "treeHash": "be3bf318aba2df2ecc0fa0053103ef6906874dce",
+      "branch": "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B1",
+      "base": "cb865435ded911891fe71a16323496582c442c24",
+      "paths": [
+       "src/export.py"
+      ]
+     },
+     "output": "## Thay đổi\n\n**Tệp tạo mới: `src/export.py`** (3 dòng, không sửa tệp nào khác)\n\n```python\ndef export_markdown(text):\n    \"\"\"Trả về nội dung văn bản dưới dạng Markdown (giữ nguyên văn bản đầu vào).\"\"\"\n    return text\n```\n\nBằng chứng: `git status --short` sau khi dọn `__pycache__` → `?? src/export.py` (duy nhất); `src/export.py:1-3` đọc qua `file_read` khớp nội dung trên.\n\n**Ghi chú về đường dẫn tạo tệp:** nút B1 được giao `file_write`, nhưng trong lượt chạy này `file_write` không được expose (toolset chỉ có `terminal_exec`, `file_read`, `codebase_glob`, `codebase_grep`, `work_artifact_read`). Đ"
+    },
+    {
+     "id": "B2",
+     "status": "needs_checks",
+     "attempts": 1,
+     "error": null,
+     "codeCommit": {
+      "nodeCommit": "77f60363e7201fbc40d60aae46bfbf935bab4944",
+      "treeHash": "5d970a28cee2faf1b1911f2b4380593ad2ef8bc0",
+      "branch": "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B2",
+      "base": "cb865435ded911891fe71a16323496582c442c24",
+      "paths": [
+       "src/slug.py"
+      ]
+     },
+     "output": "## Thay đổi — file và chỉnh sửa trong sub-plan được duyệt\n\n**Tệp duy nhất được tạo: `src/slug.py`** (tệp mới, 738 byte). Không sửa bất kỳ tệp nào đang được git theo dõi: `git diff --stat` rỗng, `git status --short` chỉ hiện `?? src/slug.py` (cùng `__pycache__` do pytest sinh ra).\n\n| Mục nghiệm thu | Kết quả |\n|---|---|\n| `src/slug.py` tồn tại | ✅ `ls -la src/slug.py` → `-rw-r--r-- 1 ubuntu ubuntu 738 Oct 2 15:23 src/slug.py` |\n| `slugify(\"Hồ sơ\") == \"ho-so\"` | ✅ Kiểm chạy trực tiếp: in ra `'ho-so'`, assert không nổ |\n\nNội dung đầy đủ của `src/slug.py`:\n\n```python\n\"\"\"Tạo slug thân thiện URL từ "
+    }
+   ],
+   "worktreeCount": 4,
+   "runWorktrees": [
+    ".boxfox/worktrees/w-bc7d8c9d51/main",
+    ".boxfox/worktrees/w-bc7d8c9d51/n-B1",
+    ".boxfox/worktrees/w-bc7d8c9d51/n-B2"
+   ],
+   "branches": [
+    "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c",
+    "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B1",
+    "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B2",
+    "main"
+   ],
+   "nodeBranches": [
+    "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B1",
+    "boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B2"
+   ],
+   "runBranchHead": "cb865435ded911891fe71a16323496582c442c24",
+   "runTree": [
+    "README.md",
+    "src/app.py",
+    "tests/test_export.py",
+    "tests/test_slug.py"
+   ],
+   "ownerHead": "cb865435ded911891fe71a16323496582c442c24",
+   "ownerDirty": [],
+   "commits": [
+    {
+     "node": "B1",
+     "paths": [
+      "src/export.py"
+     ],
+     "tree": "be3bf318aba2df2ecc0fa0053103ef6906874dce",
+     "branch": "+ boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B1"
+    },
+    {
+     "node": "B2",
+     "paths": [
+      "src/slug.py"
+     ],
+     "tree": "5d970a28cee2faf1b1911f2b4380593ad2ef8bc0",
+     "branch": "+ boxfox/them-hai-ham-tien-ich-nho-moi-nut-mot-te-bc7d8c--B2"
+    }
+   ],
+   "nodeRoots": {
+    "B1": ".boxfox/worktrees/w-bc7d8c9d51/n-B1",
+    "B2": ".boxfox/worktrees/w-bc7d8c9d51/n-B2"
+   },
+   "undeclaredCommitted": {
+    "B1": [],
+    "B2": []
+   },
+   "nodeFiles": {
+    "B1": [
+     "app.py",
+     "export.py"
+    ],
+    "B2": [
+     "app.py",
+     "slug.py"
+    ]
+   },
+   "childRoots": [
+    ".boxfox/worktrees/w-bc7d8c9d51/n-B1",
+    ".boxfox/worktrees/w-bc7d8c9d51/n-B2"
+   ],
+   "mechanism": {
+    "oneBranchOneRunWorktree": true,
+    "twoNodeWorktrees": true,
+    "nodeBranchesArePerNode": true,
+    "checkpointKeepsTheDeclaredWork": true,
+    "checkpointSweepsNoHarnessJunk": true,
+    "ownerCheckoutUntouched": true,
+    "runBranchStillAtBaseline": true,
+    "nodeCommitsSitOnTheirBranches": true,
+    "bothProduced": true,
+    "childCommandsScopedToWorktree": true
+   },
+   "model": {
+    "eachWroteItsOwnFile": true
+   },
+   "oracle": true,
+   "children": [
+    {
+     "session_id": "9fa9aa4e77614ceb9242c310a2932ae4",
+     "role": "build",
+     "status": "completed",
+     "reason": null,
+     "steps_used": 11,
+     "output_tokens": 3192,
+     "answer_chars": 3761
+    },
+    {
+     "session_id": "22c9bcb62fa34caaac5c92a0f02250ac",
+     "role": "build",
+     "status": "completed",
+     "reason": null,
+     "steps_used": 11,
+     "output_tokens": 8248,
+     "answer_chars": 6981
+    }
+   ],
+   "latencySeconds": 145.956,
+   "raw": ".tmp/w8-probe-worktree10/results.json (rows[0])"
+  },
+  {
+   "case": "touchset_no_git",
+   "scope": "Native Build ×1, workspace không git (touch-set fallback)",
+   "isolation": {
+    "mode": "touchset",
+    "reason": "no git repository in the workspace"
+   },
+   "fixtureWroteDeclaredFile": false,
+   "stageStatus": "needs_checks",
+   "declared": [
+    "src/export.py"
+   ],
+   "changed": [
+    "src/export.py"
+   ],
+   "violations": [],
+   "violationsIfDeclaredElsewhere": [
+    "src/export.py"
+   ],
+   "checkpoint": null,
+   "stageError": null,
+   "rows": [],
+   "executorRoots": [
+    "None"
+   ],
+   "file": "\"\"\"Export helpers for workspaces that have no git repository.\"\"\"\n\n__all__ = [\"export_markdown\"]\n\n\ndef export_markdown(text: str) -> str:\n    \"\"\"Render ``text`` as Markdown.\n\n    Workspaces without git cannot rely on version-control tooling to store\n    the conversation transcript, so this is the fallback exporter: it takes\n    the plain ``text`` and returns the Markdown document unchanged.\n\n    Ar",
+   "mechanism": {
+    "modeIsTouchset": true,
+    "noWorktreeRows": true,
+    "noCheckpointCommit": true,
+    "manifestSeesTheEdit": true,
+    "noViolationForDeclaredFile": true,
+    "violationForAnotherDeclaration": true,
+    "admittedWithoutGitSnapshot": true
+   },
+   "model": {
+    "wroteDeclaredFile": true
+   },
+   "oracle": true,
+   "children": [
+    {
+     "session_id": "306e763c2cf946209151fa51a4b024cb",
+     "role": "build",
+     "status": "completed",
+     "reason": null,
+     "steps_used": 8,
+     "output_tokens": 3349,
+     "answer_chars": 3604
+    }
+   ],
+   "latencySeconds": 65.024,
+   "raw": ".tmp/w8-probe-worktree10/results.json (rows[1])"
+  }
+ ],
+ "oracle": true,
+ "note": "Chỉ Space Bunny (space-bunny-free) qua router dùng chung; fixture tự dựng, không phiên/DB sản phẩm. Hai ca đều oracle true: chế độ git (một nhánh run + một worktree mỗi nút, checkpoint chỉ chứa việc đã khai, không quét rác harness) và chế độ touch-set (không worktree, không commit, manifest thấy đúng sửa đổi, vi phạm ngoài khai báo bị bắt). Số đo tại commit b401a78, TRƯỚC khi gộp B; sau khi gộp B tại 545b1ec bốn tệp test mới và toàn bộ `-k work` vẫn xanh.",
+ "afterMerge": {
+  "commit": "545b1ec230f3b0a365855fbb0383250466aac981",
+  "branch": "vorflux/w8-isolation",
+  "note": "Bằng chứng đo trước khi gộp B; sau khi gộp B tại 545b1ec230f3 bốn tệp test mới + 282 test ảnh hưởng + 970 test -k work đều xanh (chỉ còn 2 lỗi bwrap có sẵn từ trước)."
+ }
+}

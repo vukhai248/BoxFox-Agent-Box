@@ -1,0 +1,134 @@
+{
+ "probe": "W8.A4.5 — vòng sửa có điều kiện + cổng review hội tụ (probe thật, CHƯA hội tụ đủ)",
+ "script": "scripts/eval/work_repair_loop_eval.py",
+ "howToRun": "python3 scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:36219 --output .tmp/w8-probe-repair3 --manifest .tmp/work-checks/w8-isolation-manifest.json",
+ "branch": "vorflux/w8-isolation",
+ "commit": "b401a78468f177f3705437ecc63fa02efaad1ca4",
+ "commitAtStart": "68ecdf04f5208ae1cf5e04ef79d290ae6a368c51",
+ "route": null,
+ "router": "http://127.0.0.1:36219",
+ "sources": {
+  "backend/src/agentbox/agent_core/runtime.py": "ada990fc1fe336d11eaa1f4e026499181e36236ebd90fe67a8ac95f862062c4a",
+  "backend/src/agentbox/agent_core/tool_contracts.py": "b9be004c145090585cfc48debcb1d0b567daa5cd710d2e756ee37e83946435db",
+  "backend/src/agentbox/agent_core/work_checks.py": "2e6ae1b47092c4feee41a3b81870160091d0d5bbdd071f23b26618090bbff608",
+  "backend/src/agentbox/agent_core/work_continuations.py": "270203c237c5cf0f3a4a5acf937937fd95d3228543ebf79964da1d062af8528c",
+  "backend/src/agentbox/agent_core/work_decisions.py": "b72a52473554daf31ab70cba6f2e7d8b57254401d1315a3ef64bfcccbfb7b23c",
+  "backend/src/agentbox/agent_core/work_graph.py": "9b4da319da2b750301df9ec32bda282db9a04778ccc08ff1223ee60463b00f58",
+  "backend/src/agentbox/agent_core/work_handoffs.py": "b13b089e2549ce65bb391ff7ec294de94c4078c2f579d1429a4cf722eba99386",
+  "backend/src/agentbox/agent_core/work_policy.py": "3bf662636406847aa35d5442697ba0acebaff781a3ede3a37bfc69d0d0fb2979",
+  "backend/src/agentbox/agent_core/work_progress.py": "f083664f439e37c5122fd6c96a44de51fcc7957e136a67b114aed88495f1dce8",
+  "backend/src/agentbox/agent_core/work_repair.py": "ea7ab3dd5df9e95846cecbf1c8378ea340a0e01228624be3a349e039069469d2",
+  "backend/src/agentbox/agent_core/work_worktrees.py": "df8bdd1981f9ae5bde5d43ffaf58b8e9ae1ff5213707685cdf4c4d12b343b8ef",
+  "backend/src/agentbox/sandbox/executor.py": "ccddefd49928c5ccf3087e48bb008d1b0e10b72465281273b0382faac5c16c07",
+  "backend/src/agentbox/sandbox/worker.py": "799b385ebe83d34ae8f2faf093ab27033cbdeba3a71d4e3cb9eabd4fdb70815a",
+  "backend/tests/unit/test_sandbox_worker_root.py": "080ede58fea4b868f2f63e46ba0a0a669a0e3c046a75667b2b58b6a2550efc7e",
+  "backend/tests/unit/test_work_converged_review.py": "46736e524daee3f54222c2b041f2676a3835f7feed3db2522aec0b19db90c744",
+  "backend/tests/unit/test_work_graph.py": "3e97f622100c108b6ef7487456c78811cc5a801e36a5639551ab6afaec6eb767",
+  "backend/tests/unit/test_work_repair_w8.py": "8620329ad1200bc17690cda90eeb066b233caba7552ee086833ead23ce40c348",
+  "backend/tests/unit/test_work_ship_scoped.py": "5c7ebf6f9f743aec1aaf2f76f2c53df919099e1105241eb38fb3ae6ae52d107f",
+  "backend/tests/unit/test_work_worktree.py": "41ab07474038410307172973a2dc99a359fc1f17a678df94dc6e231738c10e6c",
+  "scripts/eval/work_repair_loop_eval.py": "7da047788dcf9b1467a4726b1032121c0d85be8748063d223bbb54ad6dbe57b6"
+ },
+ "rows": [
+  {
+   "case": "repair_loop_red_then_green",
+   "scope": "Native: Build produce → kiểm tests THẬT (đỏ do fixture) → phân loại + sửa → kiểm lại xanh",
+   "isolation": {
+    "mode": "git",
+    "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-d4985d",
+    "root": ".boxfox/worktrees/w-d4985de273/main"
+   },
+   "firstStatus": "needs_checks",
+   "firstArtifact": "a-15d5bdd1425442ef8e1f1e009e7f6fb2",
+   "firstProducer": "f58a78dd4c784e8e80f50f9d2a363c31",
+   "pytestBeforeCheck": 0,
+   "redCheck": {
+    "kind": "tests",
+    "status": "revise",
+    "childId": "709efe5fa10a4ebcaf8677246e426913",
+    "error": null,
+    "repairAction": "stopped"
+   },
+   "repair": {
+    "n": 1,
+    "checkId": "c-053561f7752442a69603548838da18bf",
+    "class": "clear",
+    "reason": "required command failed with a trace into tracked files",
+    "debugChildId": null,
+    "debugArtifactId": null,
+    "buildChildId": "f58a78dd4c784e8e80f50f9d2a363c31",
+    "resumed": true,
+    "codeHash": null,
+    "at": 1790955792.7617419,
+    "findingsArtifactId": "a-e0764b57b3bf424c921efa39bdb5d24e",
+    "repairChildReason": null,
+    "status": "failed"
+   },
+   "afterRepair": {
+    "status": "failed",
+    "attempts": 2,
+    "artifactId": null,
+    "verdicts": [
+     "revise",
+     null
+    ],
+    "repairs": [
+     {
+      "n": 1,
+      "checkId": "c-053561f7752442a69603548838da18bf",
+      "class": "clear",
+      "reason": "required command failed with a trace into tracked files",
+      "debugChildId": null,
+      "debugArtifactId": null,
+      "buildChildId": "f58a78dd4c784e8e80f50f9d2a363c31",
+      "resumed": true,
+      "codeHash": null,
+      "at": 1790955792.7617419,
+      "findingsArtifactId": "a-e0764b57b3bf424c921efa39bdb5d24e",
+      "repairChildReason": null,
+      "status": "failed"
+     }
+    ]
+   },
+   "resumedChild": {
+    "id": "f58a78dd4c784e8e80f50f9d2a363c31",
+    "parent": "ae7c5a6f9a944983acf5185adf65b4fb",
+    "tools": [
+     "terminal_exec",
+     "codebase_glob",
+     "file_read",
+     "file_read",
+     "file_read",
+     "file_read",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "file_read",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec",
+     "terminal_exec"
+    ],
+    "wroteExport": true,
+    "sawFindings": true
+   },
+   "oracle": false,
+   "error": "ValueError: WORK_CHECK_NOT_READY: producer must finish the current draft before checks",
+   "latencySeconds": 675.313,
+   "raw": ".tmp/w8-probe-repair3/results.json (rows[0])"
+  }
+ ],
+ "oracle": false,
+ "note": "Chỉ Space Bunny (space-bunny-free). oracle=false và đây là số đo TRUNG THỰC: check đỏ đã trả revise (không còn error), harness phân loại clear, ghi một mục sửa, resume ĐÚNG child Build cũ với findings, child có sửa tệp của nút — nhưng lượt checkpoint sau đó hỏng vì CÒ CỦA CHÍNH PROBE khớp thô chuỗi pytest nên bắn nhầm vào lệnh checkpoint (lệnh này chứa :(exclude).pytest_cache). Lỗi thuộc fixture probe, đã vá ở commit ac7a9a7 (cò theo VAI của phiên); lượt chạy lại bị dừng để ưu tiên gộp B theo yêu cầu. Vì vậy cơ chế phân loại/resume CHƯA có một lượt đo khép kín — ghi rõ là việc còn mở, không nhận là đã nghiệm thu.",
+ "afterMerge": {
+  "commit": "545b1ec230f3b0a365855fbb0383250466aac981",
+  "branch": "vorflux/w8-isolation",
+  "note": "Bằng chứng đo trước khi gộp B; sau khi gộp B tại 545b1ec230f3 bốn tệp test mới + 282 test ảnh hưởng + 970 test -k work đều xanh (chỉ còn 2 lỗi bwrap có sẵn từ trước)."
+ }
+}

@@ -20,6 +20,11 @@ import urllib.request
 import uuid
 
 ROOT = Path('/home/agent/workspace').resolve()
+# W8.A4.3: workspace cố định; `ROOT` chỉ đổi theo từng yêu cầu khi harness gửi worktree của run/node.
+WORKSPACE = ROOT
+# True khi yêu cầu hiện tại đã thu hẹp ROOT vào worktree của một run/node (W8.A4.3).
+_SCOPED = False
+WORKTREE_ROOT_RE = re.compile(r'^\.boxfox/worktrees/w-[0-9a-f]{10}/(main|n-[A-Za-z0-9_.-]{1,64})$')
 
 # F6 (đợt 8): Xvnc chạy `-AcceptSetDesktopSize` nên client RFB kéo được framebuffer nhỏ
 # đi (tester từng thấy 286x311) — toạ độ bấm sau đó trỏ sai mà không ai báo. Giữ auto-fit
@@ -212,10 +217,11 @@ def shell(command, timeout=30, session='default'):
     output = output.decode('utf-8', errors='replace')
     artifact = None
     if len(output) > 20000:
-        file = path('.generated_artifacts/tools/' + uuid.uuid4().hex + '.txt')
-        file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(output, encoding='utf-8')
-        artifact = str(file.relative_to(ROOT))
+        # W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
+        spilled = WORKSPACE / '.generated_artifacts/tools/' + uuid.uuid4().hex + '.txt'
+        spilled.parent.mkdir(parents=True, exist_ok=True)
+        spilled.write_text(output, encoding='utf-8')
+        artifact = str(spilled.relative_to(WORKSPACE))
     return {'content': output[:15000] + ('\n[truncated; see artifact]' if artifact else ''),
             'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact}
 
@@ -1395,7 +1401,26 @@ if _session_ops is not None:
     SESSION_OPS = tuple(_session_ops.OPS)
 
 
-def execute(name, args, session, turn=None, step=None, tool_call_id=None):
+def select_root(root, name):
+    """W8.A4.3: một yêu cầu chỉ thấy đúng worktree được giao; mọi `path()` kiểm theo ROOT này."""
+    global ROOT, _SCOPED
+    if root is None:
+        # Chỉ trả ROOT về workspace khi yêu cầu TRƯỚC đã thu hẹp nó — nhờ vậy các bài kiểm
+        # cũ (trỏ `worker.ROOT` vào tmp) và các op không theo worktree vẫn chạy y như trước.
+        if _SCOPED:
+            ROOT, _SCOPED = WORKSPACE, False
+        return
+    if not isinstance(root, str) or not WORKTREE_ROOT_RE.fullmatch(root):
+        raise ValueError('WORK_SCOPE_OUTSIDE_WORKTREE: root is not a BoxFox run/node worktree')
+    target = (WORKSPACE / root).resolve()
+    if not target.is_relative_to(WORKSPACE) or not (target / '.git').is_file():
+        raise ValueError('WORK_SCOPE_OUTSIDE_WORKTREE: worktree is missing or not a git worktree')
+    if name.startswith('design_') or name == 'write_plan':
+        raise ValueError('WORK_SCOPE_OUTSIDE_WORKTREE: ' + name + ' is not available inside a run worktree')
+    ROOT, _SCOPED = target, True
+
+
+def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=None):
     """Cửa vào DUY NHẤT của worker: một op, một payload JSON vào, một kết quả JSON ra.
 
     `turn`/`step`/`tool_call_id` do **harness** đặt trong payload (P1.4) — KHÔNG bao giờ
@@ -1403,6 +1428,7 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None):
     `numbers` và trong tên tệp); `turn`/`tool_call_id` đi cùng payload để worker và hai
     route capture/ghi hình dùng chung một hợp đồng định danh (`deploy/docker/ide-proxy.py`).
     """
+    select_root(root, name)
     capture = {'session': session, 'step': step, 'tool': name}
     if name == '__skill_readiness':
         package = Path(args['basePath']).resolve()
@@ -1557,6 +1583,7 @@ if __name__ == '__main__':
         request = json.load(sys.stdin)
         print(json.dumps(execute(request['name'], request['args'], request['session'],
                                  turn=request.get('turn'), step=request.get('step'),
-                                 tool_call_id=request.get('toolCallId')), ensure_ascii=False))
+                                 tool_call_id=request.get('toolCallId'), root=request.get('root')),
+                         ensure_ascii=False))
     except Exception as exc:
         print(json.dumps({'is_error': True, 'error': str(exc)}))

@@ -74,7 +74,9 @@ class Progress:
             'evidence': sorted([{k: v for k, v in p.items() if k != 'sourceSeq'}
                 for p in (request or {}).get('evidenceProofs', [])], key=work_policy.digest)}
         if work.get('stage') == 'execute' and work.get('purpose') == 'produce':
-            code = await work_checks.snapshot(self.graph, owner)
+            # W8.A4.3: an execution admission is bound to the tree the child actually writes in.
+            workspace = work.get('workspace') or {}
+            code = await self.graph.code_identity(run, owner, workspace.get('root'), workspace.get('base'))
             if not code:
                 raise ValueError('WORK_CODE_SNAPSHOT_REQUIRED: failed code inspection cannot admit a fresh execution turn')
             inputs['codeHash'] = code['hash']
