@@ -32,7 +32,7 @@ nằm ở cổng review mới và trần tài nguyên: finding chặn đã kiể
 
 | # | Mức | Phát hiện | Trạng thái |
 |---|---|---|---|
-| F1 | HIGH | `apply_findings` chỉ suy lại status từ coverage + dòng `VERDICT:`, nên finding chặn hợp lệ + coverage toàn pass + `VERDICT: ok` ⇒ `status: pass` (đã tái lập) | **Đã vá** (`3b23fa3`, fixture `blocking-ignored-by-pass-verdict.json`) |
+| F1 | HIGH | `apply_findings` chỉ suy lại status từ coverage + dòng `VERDICT:`, nên finding chặn hợp lệ + coverage toàn pass + `VERDICT: ok` ⇒ `status: pass` (đã tái lập) | **Đã vá** (`3b23fa3`, fixture `blocking-ignored-by-pass-verdict.json`); bản vá còn sót một đường — xem `1bd238f` |
 | F2 | HIGH | `verify_exec` đệm stdout/stderr vô hạn qua `proc.communicate()`: VmHWM 20 MB → 920 MB từ snippet 3 dòng ghi 300 MB; `RLIMIT_FSIZE` không áp cho pipe | **Đã vá** (`3b23fa3`: trần 1 MiB, kill khi tràn, `outputOverflow`) |
 | F3 | MED-HIGH | Snippet node vượt trần bộ nhớ: `RLIMIT_AS` chỉ áp cho python; `Buffer.alloc` 32 × 128 MiB chạy tới cùng (`DONE total MiB 4096`, exit 0) | **Đã vá** (`3b23fa3`: `RLIMIT_DATA` 2 GiB cho node) |
 | F4 | MED | Blast radius của `security_opt` bị mô tả hẹp; `BOX_DEFAULT_NETWORK: "on"` đổi egress toàn box; comment "không mạng" cũ; bước 7 smoke-test báo lỗi giả sau rollback | **Đã vá** (`3b23fa3`: comment đầy đủ, smoke-test đọc biến môi trường) |
@@ -102,5 +102,6 @@ Tổng khoảng 40 dòng xoá thuần, không đổi hành vi.
 | `5fabda9` | Oracle W10 đọc đúng payload `tool_end`, `no_auto_pass` theo `kind`, `no_run` không khớp `!verified`, `_missing_bundle` được dùng, `tool_recovery` so `argsHash`, sửa docstring `shard_cells` |
 | `c8b55ed` | `--rescore`: chấm lại 24 lượt từ `bundle.json` đã lưu, không chạy lại model |
 | `8f24be7` | Test fallback child mới của repair; bench dừng hẳn task runtime cũ trước khi restart (S09 từng ném `Cannot operate on a closed database`) |
+| `1bd238f` | **F1 còn sót** (do `test-workgraph` tìm khi kiểm chứng lại): cổng retry `status = error` áp cho cả `WORK_FINDING_IGNORED`, nên lượt thử mới có thể bỏ finding đã kiểm rồi cho artifact pass (tái lập end-to-end, e2e 8/12 → 12/12). Nay chỉ `WORK_FINDING_UNCITED` mới retry; kèm test `test_retry_gate_only_fires_for_an_uncited_report` |
 
 Mọi phát hiện của ba review đều ở trạng thái **đã vá**; các mục §2 của simplify vẫn **chưa áp dụng** (đề xuất PR riêng).

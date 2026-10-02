@@ -5,13 +5,13 @@ Kết quả review + simplify chi tiết nằm ở [`review-simplify-03_10.md`](
 
 ## 1. Trạng thái hiện tại (một khối)
 
-- Repo: `/code/nganngan99hy-coder/BoxFox-Agent-Box`, nhánh `B`, HEAD `8f24be7`, đã push `origin/B`.
+- Repo: `/code/nganngan99hy-coder/BoxFox-Agent-Box`, nhánh `B`, HEAD `1bd238f`, đã push `origin/B`.
 - PR: https://github.com/nganngan99hy-coder/BoxFox-Agent-Box/pull/1 — base `main`, diff base `68ecdf0`, đang OPEN (không draft).
 - Kế hoạch đã duyệt: `/code/.plans/v2-work-graph-completion.md` (plan_id 1253). Design: `w8-exec-design.md`, `quality-recovery-design.md`.
 - Đã gộp đủ 6 track: W8.A4.2, W8.A4.3–A4.5, W7.1/W7.2, W6.1.3/W6.2, W6.5.3, W9, W10 (harness), W1.P, W5.LEGACY.
 - Review vòng 2 (3 miền) và simplify đã trả kết quả; **mọi phát hiện của review đã vá**; simplify là báo cáo chỉ đọc, **chưa áp dụng**.
 - Đang chạy: (a) subagent `test-workgraph` (testing), (b) benchmark W10 thật — shard 1 và 6 còn chạy, shard 2/3/4/5 đã xong.
-- Test nền: `python3 -m pytest backend/tests -q -k work` → **988 passed, 2 failed, 1 skipped** (2 lỗi là ca môi trường có tiền đề "host không có bwrap", tái hiện cả trên `68ecdf0`). Một lượt chạy lại toàn bộ đang thực hiện trên HEAD `8f24be7` để chốt số cuối.
+- Test nền: `python3 -m pytest backend/tests -q -k work` → **988 passed, 2 failed, 1 skipped** (2 lỗi là ca môi trường có tiền đề "host không có bwrap", tái hiện cả trên `68ecdf0`). Lượt chạy lại toàn bộ trên HEAD `8f24be7` đã xong với đúng con số đó (988/2/1); sau `1bd238f` cần chạy lại lần cuối trước khi chốt.
 
 ## 2. Tiến độ theo hạng mục kế hoạch
 
@@ -36,9 +36,10 @@ Kết quả review + simplify chi tiết nằm ở [`review-simplify-03_10.md`](
 2. **Ô `no_run` vẫn làm hỏng các bộ đếm cứng**: `same_child_continuation` fail khi không có continuation nào ⇒ `gate.sameChild` > 0 dù không có vi phạm an toàn thật. Giữ nguyên ngữ nghĩa theo thiết kế §10 ("100% same-child"), nhưng phải chú thích khi đọc kết quả.
 3. **Lệch commit của bằng chứng**: 24 lượt chạy trên mã sản phẩm `46ed557`; các bản vá review vòng 2 (`3b23fa3` trở đi) chưa có trong mã đã chạy. Oracle thì được chấm lại bằng `--rescore` (không chạy lại model). Phải ghi rõ trong báo cáo W10.
 4. **W8.A4.5 còn mở**: chưa có vòng probe khép kín sau bản vá trigger (`ac7a9a7`) và sau khi gộp `B`; đường repair ở node ảo `__integration__` chưa đo.
-5. **Chưa bump `work_policy.VERSION`** lên `work-checks/11` (xem mục Out-of-Scope trong PR).
-6. **`security_opt` + `BOX_DEFAULT_NETWORK: "on"`** là đánh đổi đã được duyệt, gỡ 2 dòng là fail-closed trở lại.
-7. **S09 restart**: bench cũ từng ném `Cannot operate on a closed database`; đã vá ở `8f24be7` (huỷ + await task cũ trước khi đóng DB) nhưng lượt S09 của lần chạy này vẫn dùng mã cũ.
+5. **F1 còn sót một đường** (đã vá `1bd238f`): cổng retry `status = error` áp cho cả `WORK_FINDING_IGNORED` — test-workgraph tái lập end-to-end và vá; cần review lại đường này khi rảnh.
+6. **Chưa bump `work_policy.VERSION`** lên `work-checks/11` (xem mục Out-of-Scope trong PR).
+7. **`security_opt` + `BOX_DEFAULT_NETWORK: "on"`** là đánh đổi đã được duyệt, gỡ 2 dòng là fail-closed trở lại.
+8. **S09 restart**: bench cũ từng ném `Cannot operate on a closed database`; đã vá ở `8f24be7` (huỷ + await task cũ trước khi đóng DB) nhưng lượt S09 của lần chạy này vẫn dùng mã cũ.
 
 ## 4. Việc còn lại (theo thứ tự)
 
@@ -77,6 +78,7 @@ kết quả: `/var/tmp/w10-s{1..6}/results.json` + `runs/<ca>-r<n>/bundle.json` 
 ## 6. Bản đồ commit (nhánh `B`)
 
 ```
+1bd238f fix(work-graph): WORK_FINDING_IGNORED không đi qua đường retry 'error' (F1 còn sót, test-workgraph tìm)
 8f24be7 test(w8-repair): con không resume được thì rơi về con mới; bench dừng lượt cũ trước khi restart
 c8b55ed feat(w10-bench): --rescore chấm lại từ bundle đã lưu
 5fabda9 fix(w10-bench): oracle đọc đúng payload tool_end, no_auto_pass theo kind, no_run không đạt '!verified'
@@ -95,6 +97,6 @@ Mốc tick kế hoạch: `90b49b2` (W8.A4.2), `ab2a7e9` (W7.2/W7.1/W1.P/W5.LEGAC
 | `review-sandbox` | Ship with mitigations, 6/10 Medium | F1–F6 — đã vá hết |
 | `review-contracts` | Ship with mitigations, 5/10 Medium | F1–F5 — đã vá hết |
 | `simplify-workgraph` | Báo cáo chỉ đọc | ~40 dòng xoá + 5 mục gộp; chưa áp dụng |
-| `test-workgraph` | **Đang chạy** | sẽ bổ sung mục này khi xong |
+| `test-workgraph` | **Đang chạy** (đã tìm + vá một lỗ còn sót của F1) | e2e 8/12 → 12/12; full suite 988/2/1; xem `1bd238f` |
 
 Chi tiết đầy đủ (từng finding, mức, trạng thái, commit vá): [`review-simplify-03_10.md`](./review-simplify-03_10.md).
