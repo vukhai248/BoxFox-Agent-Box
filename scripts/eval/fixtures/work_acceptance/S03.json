@@ -3,8 +3,9 @@
   "title": "Phiên cũ thiếu role mới (plan-review) — W1.P",
   "goal": "Preflight chặn trước producer khi role plan-review bị tắt",
   "ownerLanguage": "vi",
-  "notes": "Config bỏ role plan-review ⇒ check plan_review phải báo WORK_CHECK_UNAVAILABLE và không được thi công.",
-  "prompt": "Lập kế hoạch rồi triển khai endpoint xuất CSV báo cáo doanh thu trong repo này, và chạy python -m pytest -q sau khi code xong.",
+  "intent": {"command": "mixed", "why": "Xin triển khai endpoint rồi chạy pytest ⇒ cần luồng thi công để preflight thiếu role plan-review chặn thật; câu mở đầu `Triển khai` để executionRequested=True."},
+  "notes": "Config bỏ role plan-review ⇒ check plan_review phải báo WORK_CHECK_UNAVAILABLE và không được thi công. Câu mở đầu đổi thành `Triển khai` để `execution_requested` của W8 đọc đúng yêu cầu thi công (nếu không, run bị xếp artifact-only và preflight không bị thử thật).",
+  "prompt": "Triển khai endpoint xuất CSV báo cáo doanh thu trong repo này; lập kế hoạch trước rồi code, và chạy python -m pytest -q sau khi xong.",
   "interviewAnswers": [],
   "faults": [
     {"kind": "missing_role", "role": "plan-review"}

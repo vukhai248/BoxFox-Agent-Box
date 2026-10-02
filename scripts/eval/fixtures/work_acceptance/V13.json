@@ -3,6 +3,7 @@
   "title": "Không có check đệ quy — testing/reviewer trả hoàn chỉnh",
   "goal": "Kết quả check hoàn chỉnh được xác minh bằng contract/snapshot, không sinh chuỗi reviewer-of-reviewer",
   "ownerLanguage": "vi",
+  "intent": {"command": "fix", "why": "Sửa src/export.py giữ dấu tiếng Việt, test xanh, không đổi hành vi khác ⇒ /fix."},
   "notes": "§9.2 V13: trần check để bắt chuỗi đệ quy vô hạn.",
   "prompt": "Sửa src/export.py để giữ dấu tiếng Việt và làm tests/test_export.py xanh bằng python -m pytest -q; không đổi hành vi khác.",
   "interviewAnswers": [],

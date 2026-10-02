@@ -42,6 +42,10 @@ RESULTS_SCHEMA = 'work-acceptance-v1'
 SCENARIO_IDS = tuple(f'S{index:02d}' for index in range(1, 13))
 V_CASE_IDS = ('V06', 'V07', 'V10', 'V13', 'V14')
 ALL_CASE_IDS = SCENARIO_IDS + V_CASE_IDS
+# Ý định của chủ nhà (`config.workIntent`) — bản sao của `work_graph.FLOWS`. Thiếu ý định thì lượt
+# root ở `legacy`, root tự sửa mã và KHÔNG run nào được dựng (bằng chứng S02: work_runs=0 → oracle
+# `no_run`). Test `test_intent_commands_match_work_graph_flows` ghim hai bên khớp nhau.
+INTENT_COMMANDS = ('plan', 'research', 'design', 'fix', 'mixed')
 REPEATS = 2
 DEADLINE_SECONDS = 45 * 60            # §10: mỗi lượt có deadline wall-clock (ví dụ 45 phút)
 GATE_MIN_PASSED = 22                  # §10: ≥ 22/24 lượt đạt expectedState
@@ -104,6 +108,38 @@ def scenario_path(code, directory=None):
     return Path(directory or FIXTURE_DIR) / f'{code}.json'
 
 
+def normalize_intent(value, field):
+    """Chuẩn hoá `intent` của fixture: `{"command": "mixed", "why": "..."}`.
+
+    `why` là bắt buộc: mỗi ca phải nói được vì sao chọn luồng ấy, để lượt chạy thật không bị
+    đọc như một lựa chọn tuỳ tiện.
+    """
+    if not isinstance(value, dict):
+        raise ValueError(f'{field}: phải là object {{"command": ..., "why": ...}}')
+    command = str(value.get('command') or '').strip().lower()
+    if command not in INTENT_COMMANDS:
+        raise ValueError(f'{field}.command: phải thuộc {list(INTENT_COMMANDS)} (nhận {command!r})')
+    unknown = set(value) - {'command', 'why'}
+    if unknown:
+        raise ValueError(f'{field}: có khóa lạ {sorted(unknown)}')
+    why = str(value.get('why') or '').strip()
+    if len(why) < 20:
+        raise ValueError(f'{field}.why: phải nêu vì sao chọn luồng này (≥ 20 ký tự)')
+    return {'command': command, 'why': why}
+
+
+def scenario_intent(scenario):
+    """Intent đã chuẩn hoá của fixture; thiếu là lỗi fixture, không im lặng lấy mặc định."""
+    intent = scenario.get('intent')
+    if not isinstance(intent, dict) or intent.get('command') not in INTENT_COMMANDS:
+        raise ValueError(f"{scenario.get('id')}: fixture thiếu `intent` hợp lệ — xem validate_scenario")
+    return intent
+
+
+def intent_command(scenario):
+    return scenario_intent(scenario)['command']
+
+
 def validate_scenario(doc, stem='<memory>'):
     """Kiểm schema fixture; ném ValueError với đường dẫn trường cụ thể khi sai."""
     where = str(stem)
@@ -140,6 +176,9 @@ def validate_scenario(doc, stem='<memory>'):
         bad('ownerLanguage', "phải là 'vi' hoặc 'en'")
     if doc.get('autopilot') is False:
         bad('autopilot', 'W10 chỉ chạy kịch bản autopilot (bỏ trường nếu muốn mặc định true)')
+    if 'intent' not in doc:
+        bad('intent', 'là trường bắt buộc — thiếu ý định thì lượt root ở `legacy` và mọi ca thành `no_run`')
+    doc['intent'] = normalize_intent(doc.get('intent'), f'{where}.intent')
 
     answers = doc.get('interviewAnswers', [])
     if not isinstance(answers, list):
@@ -1068,8 +1107,31 @@ def scenario_budget(scenario, *, deadline_seconds=DEADLINE_SECONDS, max_steps=DE
             'deadlineSeconds': int(budget.get('deadlineSeconds') or deadline_seconds)}
 
 
+def parse_shard(value):
+    """`--shard I/N` → `(I, N)`; sai định dạng là lỗi cách dùng."""
+    parts = str(value or '').strip().split('/')
+    if len(parts) != 2 or not all(part.strip().isdigit() for part in parts):
+        raise ValueError(f'--shard phải có dạng I/N (nhận {value!r})')
+    index, count = (int(part) for part in parts)
+    if not 1 <= count <= 64:
+        raise ValueError(f'--shard: N phải trong 1..64 (nhận {count})')
+    if not 1 <= index <= count:
+        raise ValueError(f'--shard: I phải trong 1..{count} (nhận {index})')
+    return index, count
+
+
+def shard_cells(cells, index, count):
+    """Chia `cells` thành `count` shard liên tiếp; hai lần lặp của cùng ca nằm chung một shard."""
+    if count < 1 or not 1 <= index <= count:
+        raise ValueError(f'shard {index}/{count} không hợp lệ')
+    size, extra = divmod(len(cells), count)
+    start = (index - 1) * size + min(index - 1, extra)
+    end = start + size + (1 if index <= extra else 0)
+    return list(cells[start:end])
+
+
 def build_plan(scenarios, *, repeats=REPEATS, out_root=DEFAULT_OUT_ROOT, repo_dir=REPO_DIR,
-               budget_usd=None, with_v=False, env=None):
+               budget_usd=None, with_v=False, env=None, shard=None):
     """Kế hoạch bất biến trước khi chạy: 24 lượt (+V), deadline từng lượt, không quét mở."""
     cells = []
     for scenario in scenarios:
@@ -1080,19 +1142,26 @@ def build_plan(scenarios, *, repeats=REPEATS, out_root=DEFAULT_OUT_ROOT, repo_di
                 'expectedState': scenario['expectedState'], 'goal': scenario.get('goal', ''),
                 'expectedStateSource': scenario.get('expectedStateSource', 'run'),
                 'ownerLanguage': scenario.get('ownerLanguage', 'vi'),
+                'intent': intent_command(scenario),
                 'maxSteps': budget['maxSteps'], 'deadlineSeconds': budget['deadlineSeconds'],
                 'isolation': 'session mới + DB riêng + workspace riêng',
                 'workspace': [entry['path'] for entry in (scenario.get('workspace') or {}).get('files', [])],
                 'faults': [fault['kind'] for fault in scenario.get('faults') or []],
                 'oracleRules': sum(len(rules) for rules in (scenario.get('oracle') or {}).values()),
             })
-    return {'schema': RESULTS_SCHEMA + '/plan', 'mode': 'execute' if _execute_requested() else 'dry-run',
+    total = len(cells)
+    if shard:
+        cells = shard_cells(cells, shard[0], shard[1])
+    plan = {'schema': RESULTS_SCHEMA + '/plan', 'mode': 'execute' if _execute_requested() else 'dry-run',
             'createdAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'repo': str(repo_dir), 'commit': manifest_mod.repo_state(repo_dir).get('commit'),
             'configHash': config_hash(repo_dir, env), 'provider': PROVIDER_ID, 'model': MODEL_ID,
             'repeats': repeats, 'cellCount': len(cells), 'withV': bool(with_v),
             'cases': [scenario['id'] for scenario in scenarios],
             'budgetUsd': budget_usd, 'outRoot': str(out_root), 'cells': cells}
+    if shard:
+        plan['shard'] = {'index': shard[0], 'count': shard[1], 'cellsTotal': total}
+    return plan
 
 
 def _execute_requested():
@@ -1105,20 +1174,27 @@ def render_plan(plan):
              f"  policy    : {plan['configHash']['policyVersion']} "
              f"(combined {plan['configHash']['combined'][:12]})",
              f"  provider  : {plan['provider']} / {plan['model']} (không thay thế)",
-             f"  lượt      : {plan['cellCount']} = {len(plan['cases'])} kịch bản × {plan['repeats']} lần",
-             f"  ngân sách : {plan['budgetUsd'] if plan['budgetUsd'] is not None else '(chưa đặt)'} USD",
-             f"  kết quả   : {plan['outRoot']}",
-             '  kịch bản  :']
+             f"  lượt      : {plan['cellCount']} = {len(plan['cases'])} kịch bản × {plan['repeats']} lần"]
+    if plan.get('shard'):
+        shard = plan['shard']
+        lines.append(f"  shard     : {shard['index']}/{shard['count']} "
+                     f"({plan['cellCount']}/{shard['cellsTotal']} lượt của kế hoạch đầy đủ)")
+    lines += [f"  ngân sách : {plan['budgetUsd'] if plan['budgetUsd'] is not None else '(chưa đặt)'} USD",
+              f"  kết quả   : {plan['outRoot']}",
+              '  kịch bản  :']
     for cell in plan['cells']:
         faults = ','.join(cell['faults']) or '-'
         expected = cell['expectedState']
         expected = '|'.join(expected) if isinstance(expected, list) else expected
-        lines.append(f"    {cell['caseId']} r{cell['repeat']}: expected={expected:<24}"
+        lines.append(f"    {cell['caseId']} r{cell['repeat']}: intent=/{cell['intent']:<8}"
+                     f" expected={expected:<24}"
                      f" src={cell['expectedStateSource']:<5} steps≤{cell['maxSteps']:<4}"
                      f" deadline={cell['deadlineSeconds']}s faults={faults} rules={cell['oracleRules']}")
     lines.append('  chế độ dry-run: không mở socket, không gọi model. '
                  'Chạy thật: BOXFOX_EVAL_ALLOW_SPEND=1 python3 scripts/eval/work_acceptance_bench.py '
-                 '--execute --budget-usd <N> [--out DIR]')
+                 '--execute --budget-usd <N> [--out DIR] [--shard I/N]')
+    lines.append('  cảnh báo  : thiếu `intent` (hoặc BOXFOX_WORK_GRAPH=off) thì root ở `legacy`, '
+                 'không run nào được dựng và mọi lượt thành `no_run`.')
     return '\n'.join(lines)
 
 
@@ -1371,6 +1447,14 @@ def _live_imports():
     from agentbox.agent_core import work_feedback, work_graph  # noqa: PLC0415
     from agentbox.memory import session_store  # noqa: PLC0415
     return runtime_mod, work_graph, work_feedback, session_store
+
+
+def require_work_graph():
+    """Bench chỉ có nghĩa khi Work Graph bật: `BOXFOX_WORK_GRAPH=off` trả mọi lượt về `legacy`."""
+    _, work_graph, _, _ = _live_imports()
+    if not work_graph.enabled():
+        raise ValueError('BOXFOX_WORK_GRAPH=off: mọi lượt sẽ là `no_run` — bật Work Graph trước khi chạy bench')
+    return work_graph
 
 
 def _descendants(store, root):
@@ -1631,6 +1715,8 @@ def _restart_session(rt, sid, notes):
 async def run_cell(scenario, repeat, *, out_dir, route, router_url, deadline_seconds):
     """Một lượt: workspace riêng + DB riêng + session riêng; trả bundle đã gom để chấm."""
     runtime_mod, work_graph, work_feedback, session_store = _live_imports()
+    if not work_graph.enabled():
+        raise ValueError('BOXFOX_WORK_GRAPH=off: mọi lượt sẽ là `no_run` — bật Work Graph trước khi chạy bench')
     cell_dir = Path(out_dir) / 'runs' / f"{scenario['id']}-r{repeat}"
     cell_dir.mkdir(parents=True, exist_ok=True)
     workspace = cell_dir / 'workspace'
@@ -1649,6 +1735,10 @@ async def run_cell(scenario, repeat, *, out_dir, route, router_url, deadline_sec
     session = rt.create(config)
     sid = session['id']
     client.root_session_id = sid
+    # Đường chạy thật: chủ nhà PHẢI yêu cầu việc trước lượt (`/plan|/research|/design <text>` ghi
+    # `config.workIntent`; harness mô phỏng bằng chính `work_graph.set_intent`). Thiếu ý định thì
+    # `work_scope` giữ root ở `legacy`, root tự sửa mã và không run nào ra đời (S02: work_runs=0).
+    intent = work_graph.set_intent(rt, session, intent_command(scenario), scenario['prompt'])
     started = time.time()
     error = None
     try:
@@ -1657,6 +1747,7 @@ async def run_cell(scenario, repeat, *, out_dir, route, router_url, deadline_sec
     except Exception as exc:
         error = f'{type(exc).__name__}: {exc}'
         notes = []
+    notes = [f"intent: /{intent['command']} → flow {intent['flow']} (chủ nhà yêu cầu việc)"] + list(notes)
     bundle = collect_bundle(store, graph, sid, scenario, client, error=error, notes=notes,
                             workspace=workspace)
     try:
@@ -1668,7 +1759,7 @@ async def run_cell(scenario, repeat, *, out_dir, route, router_url, deadline_sec
                                          'errorCode': None if bundle['run'] else 'NO_RUN'})
     return {'scenario': scenario, 'repeat': repeat, 'bundle': bundle, 'error': error,
             'startedAt': started, 'wallTimeMs': wall_ms, 'validity': validity,
-            'calls': client.calls, 'cellDir': str(cell_dir)}
+            'calls': client.calls, 'cellDir': str(cell_dir), 'intent': intent}
 
 
 # --------------------------------------------------------------------------- main
@@ -1681,6 +1772,11 @@ def parse_args(argv=None):
     parser.add_argument('--out', default=None, help='thư mục kết quả (mặc định ~/BoxFox/eval-runs/...)')
     parser.add_argument('--repeats', type=int, default=REPEATS)
     parser.add_argument('--cases', default=None, help='danh sách id, ví dụ S01,S02 (mặc định S01–S12)')
+    parser.add_argument('--shard', default=None,
+                        help='chỉ chạy một phần của kế hoạch: I/N (1-based), ví dụ 2/4 cho tiến trình song song')
+    parser.add_argument('--merge', default=None,
+                        help='gộp results.json của các shard: danh sách thư mục/tệp, ví dụ s1,s2,s3 '
+                             '(cần --out; không chạy model)')
     parser.add_argument('--with-v', action='store_true', help='thêm V06/V07/V10/V13/V14 (§9.2)')
     parser.add_argument('--deadline-seconds', type=int, default=DEADLINE_SECONDS)
     parser.add_argument('--max-steps', type=int, default=DEFAULT_MAX_STEPS)
@@ -1737,9 +1833,12 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
             row['calls'] += 1
             total['calls'] += 1
         per_cell.append({'caseId': scenario['id'], 'repeat': item['repeat'],
+                         'intent': intent_command(scenario),
                          'expectedState': scenario['expectedState'],
                          'observedState': scored['observedState'],
                          'passed': scored['passed'], 'score': scored['score'],
+                         'failedRules': {role: list((scored['roles'].get(role) or {}).get('failed') or [])
+                                         for role in RUBRIC_ROLES},
                          'validity': item.get('validity'), 'error': item.get('error'),
                          'runStatus': run.get('status'), 'wallTimeMs': item.get('wallTimeMs'),
                          'tokensIn': sum(call.get('tokensIn') or 0 for call in calls),
@@ -1769,17 +1868,182 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
     return _write_json(Path(out_dir) / 'results.json', results)
 
 
+# --------------------------------------------------------------------------- gộp shard
+def results_path(directory):
+    """`results.json` của một shard: nhận cả thư mục shard lẫn đường dẫn tệp."""
+    path = Path(directory)
+    if path.is_dir():
+        path = path / 'results.json'
+    if not path.is_file():
+        raise ValueError(f'không thấy results.json: {path}')
+    return path
+
+
+def load_results(directories):
+    """Đọc results.json của từng shard; trả cả đường dẫn để báo lỗi và ghi vết gộp."""
+    docs, paths = [], []
+    for directory in directories:
+        path = results_path(directory)
+        try:
+            doc = json.loads(path.read_text(encoding='utf-8'))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'{path}: JSON hỏng ({exc})') from exc
+        docs.append(doc)
+        paths.append(path)
+    return docs, paths
+
+
+def _plan_identity(plan):
+    return {'commit': plan.get('commit'), 'provider': plan.get('provider'), 'model': plan.get('model'),
+            'repeats': plan.get('repeats'), 'cases': plan.get('cases'),
+            'configHash': (plan.get('configHash') or {}).get('combined')}
+
+
+def merge_results(docs, *, paths=None):
+    """Gộp results.json của các shard: từ chối trùng/thiếu/khác cấu hình, cộng token, tính lại cổng."""
+    if not docs:
+        raise ValueError('cần ít nhất một results.json để gộp')
+    labels = [str(path) for path in (paths or [])] or [str(index) for index in range(len(docs))]
+    for label, doc in zip(labels, docs):
+        if not isinstance(doc, dict) or doc.get('schema') != RESULTS_SCHEMA:
+            raise ValueError(f'{label}: schema phải là {RESULTS_SCHEMA}')
+    first = docs[0]
+    identity = _plan_identity(first.get('plan') or {})
+    if not identity['cases']:
+        raise ValueError(f'{labels[0]}: plan thiếu `cases` — chạy lại shard bằng harness hiện tại')
+    for label, doc in zip(labels[1:], docs[1:]):
+        other = _plan_identity(doc.get('plan') or {})
+        if other != identity:
+            raise ValueError(f'{label}: khác cấu hình với shard đầu ({other} != {identity}) — không gộp được')
+    cells, seen = [], {}
+    for label, doc in zip(labels, docs):
+        for cell in doc.get('cells') or []:
+            if 'failedRules' not in cell:
+                raise ValueError(f'{label}: results.json cũ thiếu `failedRules` — chạy lại shard bằng '
+                                 'harness hiện tại rồi mới gộp')
+            key = (str(cell.get('caseId')), int(cell.get('repeat') or 0))
+            if key in seen:
+                raise ValueError(f'trùng lượt {key[0]} r{key[1]} ({seen[key]} và {label})')
+            seen[key] = label
+            cells.append(cell)
+    plan = dict(first.get('plan') or {})
+    plan_cells = {}
+    for doc in docs:
+        for cell in (doc.get('plan') or {}).get('cells') or []:
+            plan_cells[(str(cell.get('caseId')), int(cell.get('repeat') or 0))] = cell
+    expected = {(case, repeat) for case in plan['cases']
+                for repeat in range(1, int(plan.get('repeats') or REPEATS) + 1)}
+    missing = sorted(expected - set(seen))
+    extra = sorted(set(seen) - expected)
+    if missing or extra:
+        raise ValueError(f'gộp thiếu/lạ lượt: thiếu={missing} lạ={extra}')
+    cells.sort(key=lambda cell: (str(cell.get('caseId')), int(cell.get('repeat') or 0)))
+    order = [(str(cell.get('caseId')), int(cell.get('repeat') or 0)) for cell in cells]
+    absent = [key for key in order if key not in plan_cells]
+    if absent:
+        raise ValueError(f'plan của shard thiếu lượt {absent}')
+    for cell in cells:
+        key = (str(cell.get('caseId')), int(cell.get('repeat') or 0))
+        if cell.get('intent') != plan_cells[key].get('intent'):
+            raise ValueError(f"{key[0]} r{key[1]}: intent lệch giữa kết quả ({cell.get('intent')}) và "
+                             f"plan ({plan_cells[key].get('intent')}) — fixture đã đổi giữa các shard")
+    plan['cells'] = [plan_cells[key] for key in order]
+    plan['cellCount'] = len(plan['cells'])
+    plan.pop('shard', None)
+    plan['shards'] = labels
+    roles = {}
+    for role in RUBRIC_ROLES:
+        rules = passed = 0
+        totals = {'calls': 0, 'tokensIn': 0, 'tokensOut': 0, 'wallMs': 0}
+        for doc in docs:
+            row = (doc.get('roles') or {}).get(role) or {}
+            rules += int(row.get('rules') or 0)
+            passed += int(row.get('passed') or 0)
+            for key in totals:
+                totals[key] += int(row.get(key) or 0)
+        roles[role] = {'rules': rules, 'passed': passed,
+                       'rate': round(passed / rules, 4) if rules else 1.0, **totals}
+
+    def hard(kind):
+        return sum(list(kinds).count(kind) for cell in cells
+                   for kinds in (cell.get('failedRules') or {}).values())
+
+    state_passed = sum(1 for cell in cells
+                       if state_matches(cell.get('observedState'), cell.get('expectedState')))
+    gate = {'minPassed': GATE_MIN_PASSED, 'denominator': len(cells),
+            'passed': sum(1 for cell in cells if cell.get('passed')),
+            'statePassed': state_passed,
+            'stateRate': round(state_passed / len(cells), 4) if cells else 0.0,
+            'autoPass': hard('no_auto_pass'), 'sameChild': hard('same_child_continuation'),
+            'duplicateContinuation': hard('no_duplicate_continuation'),
+            'fabricatedUrlOrDiagnostic': hard('no_fabricated_url') + hard('no_diagnostic_leak'),
+            'providerSwitches': hard('provider_unchanged')}
+    gate['ok'] = (gate['denominator'] > 0 and gate['statePassed'] >= GATE_MIN_PASSED
+                  and gate['autoPass'] == 0 and gate['sameChild'] == 0
+                  and gate['duplicateContinuation'] == 0
+                  and gate['fabricatedUrlOrDiagnostic'] == 0
+                  and gate['providerSwitches'] == 0)
+    failures = [{'caseId': cell.get('caseId'), 'repeat': cell.get('repeat'),
+                 'observedState': cell.get('observedState'), 'expectedState': cell.get('expectedState'),
+                 'score': cell.get('score'), 'error': cell.get('error')}
+                for cell in cells if not cell.get('passed')]
+    manifest = dict(first.get('manifest') or {})
+    manifest.update(mergedFrom=labels, shards=len(docs))
+    return {'schema': RESULTS_SCHEMA, 'plan': plan, 'route': first.get('route'),
+            'configHash': first.get('configHash'), 'cells': cells, 'roles': roles, 'gate': gate,
+            'failures': failures,
+            'tokens': {'in': sum(int(cell.get('tokensIn') or 0) for cell in cells),
+                       'out': sum(int(cell.get('tokensOut') or 0) for cell in cells)},
+            'wallTimeMs': sum(int(cell.get('wallTimeMs') or 0) for cell in cells),
+            'cost': manifest_mod.cost_from_entries(
+                [{'tokensIn': int(cell.get('tokensIn') or 0), 'tokensOut': int(cell.get('tokensOut') or 0),
+                  'wallTimeMs': cell.get('wallTimeMs'), 'steps': cell.get('steps')} for cell in cells]),
+            'attempts': len(cells), 'manifest': manifest, 'mergedFrom': labels}
+
+
+def merge_main(args):
+    """`--merge`: gộp results.json của các shard thành kết quả cuối + cổng; không gọi model."""
+    if not args.out:
+        print('lỗi cách dùng: --merge cần --out DIR để ghi results.json đã gộp', file=sys.stderr)
+        return EXIT_USAGE
+    directories = [item.strip() for item in str(args.merge).split(',') if item.strip()]
+    if not directories:
+        print('lỗi cách dùng: --merge cần danh sách thư mục shard', file=sys.stderr)
+        return EXIT_USAGE
+    out_root = Path(args.out)
+    try:
+        docs, paths = load_results(directories)
+        for path in paths:
+            if out_root == path.parent or out_root in path.parents:
+                raise ValueError(f'--out {out_root} nằm trong chính shard {path.parent} — chọn thư mục khác')
+        merged = merge_results(docs, paths=paths)
+    except ValueError as exc:
+        print(f'lỗi cách dùng: {exc}', file=sys.stderr)
+        return EXIT_USAGE
+    path = _write_json(out_root / 'results.json', merged)
+    print(f'gộp {len(docs)} shard → {len(merged["cells"])} lượt')
+    print(render_gate(merged))
+    print('results.json (gộp) →', path)
+    return EXIT_OK if merged['gate']['ok'] else 1
+
+
 def main(argv=None):
     args = parse_args(argv)
+    if args.merge:
+        if args.execute or args.shard or args.cases or args.with_v:
+            print('lỗi cách dùng: --merge không đi cùng --execute/--shard/--cases/--with-v', file=sys.stderr)
+            return EXIT_USAGE
+        return merge_main(args)
     try:
         scenarios = selected_scenarios(args)
+        shard = parse_shard(args.shard) if args.shard else None
     except ValueError as exc:
         print(f'lỗi cách dùng: {exc}', file=sys.stderr)
         return EXIT_USAGE
     out_root = Path(args.out) if args.out else DEFAULT_OUT_ROOT / time.strftime('%Y%m%d-%H%M%S')
     plan = build_plan(scenarios, repeats=args.repeats, out_root=out_root,
                       repo_dir=Path(args.repo_dir), budget_usd=args.budget_usd,
-                      with_v=args.with_v)
+                      with_v=args.with_v, shard=shard)
     print(render_plan(plan))
     if not args.execute:
         if args.out or args.plan_only:
@@ -1794,6 +2058,11 @@ def main(argv=None):
         print('Thiếu biến kết nối: ' + ', '.join(item['name'] for item in missing)
               + ' — không chạy benchmark.', file=sys.stderr)
         return EXIT_CONNECTION
+    try:
+        require_work_graph()
+    except ValueError as exc:
+        print(f'lỗi cách dùng: {exc}', file=sys.stderr)
+        return EXIT_USAGE
     router_url = args.router_url or os.environ.get('BOXFOX_ROUTER_BASE_URL', 'http://127.0.0.1:3101')
     try:
         state = net.request_json(router_url.rstrip('/') + '/api/router/state',
@@ -1804,22 +2073,25 @@ def main(argv=None):
         return EXIT_PROVIDER
     print(f"route: {route['providerId']}/{route['modelId']} connection={route['connectionId']}")
     _write_json(out_root / 'plan.json', plan)
+    by_id = {scenario['id']: scenario for scenario in scenarios}
     cells = []
-    for scenario in scenarios:
-        for repeat in range(1, args.repeats + 1):
-            cell = asyncio.run(run_cell(scenario, repeat, out_dir=out_root, route=route,
-                                        router_url=router_url,
-                                        deadline_seconds=args.deadline_seconds))
-            cells.append(cell)
-            print(f"  {scenario['id']} r{repeat}: state={(cell['bundle'].get('run') or {}).get('status')}"
-                  f" validity={cell['validity']} {cell['wallTimeMs']}ms")
-            _write_json(out_root / 'runs' / f"{scenario['id']}-r{repeat}" / 'bundle.json',
-                        {'bundle': cell['bundle'], 'validity': cell['validity'],
-                         'error': cell['error']})
+    for planned in plan['cells']:
+        scenario, repeat = by_id[planned['caseId']], planned['repeat']
+        cell = asyncio.run(run_cell(scenario, repeat, out_dir=out_root, route=route,
+                                    router_url=router_url,
+                                    deadline_seconds=args.deadline_seconds))
+        cells.append(cell)
+        print(f"  {scenario['id']} r{repeat}: intent=/{cell['intent']['command']}"
+              f" state={(cell['bundle'].get('run') or {}).get('status')}"
+              f" validity={cell['validity']} {cell['wallTimeMs']}ms")
+        _write_json(out_root / 'runs' / f"{scenario['id']}-r{repeat}" / 'bundle.json',
+                    {'bundle': cell['bundle'], 'validity': cell['validity'],
+                     'error': cell['error'], 'intent': cell['intent']})
     rubric = load_rubric(args.rubric)
     scoring = evaluate_run(cells, rubric)
     path = write_results(out_root, plan, cells, scoring, route=route,
-                         extra={'manifest': manifest_mod.build_manifest(
+                         extra={'shard': plan.get('shard'),
+                                'manifest': manifest_mod.build_manifest(
                              benchmark_name='work-acceptance', benchmark_version=RESULTS_SCHEMA,
                              repo_dir=Path(args.repo_dir),
                              fixture_ids=[scenario['id'] for scenario in scenarios],
@@ -1830,6 +2102,9 @@ def main(argv=None):
                              extra={'configHash': plan['configHash'], 'withV': args.with_v})})
     print(render_gate(scoring))
     print('results.json →', path)
+    if plan.get('shard'):
+        print(f"shard {plan['shard']['index']}/{plan['shard']['count']} — gộp bằng: "
+              f"python3 scripts/eval/work_acceptance_bench.py --merge <dir1,dir2,...> --out <dir-gộp>")
     return EXIT_OK if scoring['gate']['ok'] else 1
 
 

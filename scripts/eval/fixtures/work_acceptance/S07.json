@@ -3,6 +3,7 @@
   "title": "Research cần user giữa chừng — cùng child tiếp tục",
   "goal": "Child hỏi owner giữa việc research; sau khi trả lời, chính child đó chạy tiếp (W7.1)",
   "ownerLanguage": "vi",
+  "intent": {"command": "research", "why": "Câu hỏi nghiên cứu nhiều tiêu chí, phải hỏi chủ nhà rồi cùng child chạy tiếp ⇒ /research."},
   "notes": "Prompt mời hỏi khi cần chọn hướng; câu trả lời đến từ fixture, không phải người thật.",
   "prompt": "Nghiên cứu giúp tôi nên chọn SQLite hay Postgres cho dịch vụ nhỏ chạy một máy, rồi viết kết luận vào docs/db-choice.md kèm lý do và giới hạn. Tiêu chí do tôi quyết: nếu cần chọn giữa hai hướng thì hỏi tôi trước khi kết luận.",
   "interviewAnswers": [

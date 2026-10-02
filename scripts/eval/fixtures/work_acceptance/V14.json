@@ -3,6 +3,7 @@
   "title": "User chỉ xin plan — Autopilot không được Build/PR",
   "goal": "Yêu cầu chỉ-cần-kế-hoạch phải dừng ở artifact plan, không thi công và không mở PR",
   "ownerLanguage": "vi",
+  "intent": {"command": "plan", "why": "Chủ nhà chỉ xin bản kế hoạch, cấm code/PR ⇒ /plan (artifact-only)."},
   "notes": "§9.2 V14: autopilot bật nhưng yêu cầu chỉ là requirements ⇒ không Build/PR.",
   "prompt": "Tôi chỉ cần bản kế hoạch cho API xuất CSV báo cáo doanh thu (mục tiêu, hợp đồng, milestone, test, rủi ro) ghi vào docs/plan-csv.md. Đừng viết code, đừng mở PR, đừng triển khai gì cả.",
   "interviewAnswers": [],

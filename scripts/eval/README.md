@@ -134,15 +134,45 @@ python3 scripts/eval/work_acceptance_bench.py                          # dry-run
 python3 scripts/eval/work_acceptance_bench.py --out /var/tmp/w10       # ghi thêm plan.json
 python3 scripts/eval/work_acceptance_bench.py --with-v                 # thêm 5 ca tuỳ chọn (34 lượt)
 python3 scripts/eval/work_acceptance_bench.py --cases S03,S11          # chạy một phần
+python3 scripts/eval/work_acceptance_bench.py --out /var/tmp/s2 --shard 2/3   # 8/24 lượt của kế hoạch
 BOXFOX_EVAL_ALLOW_SPEND=1 python3 scripts/eval/work_acceptance_bench.py \
     --execute --budget-usd 20 --out ~/BoxFox/eval-runs/work-acceptance/2026-10-02
+python3 scripts/eval/work_acceptance_bench.py --merge /var/tmp/s1,/var/tmp/s2,/var/tmp/s3 \
+    --out ~/BoxFox/eval-runs/work-acceptance/2026-10-02-merged      # gộp kết quả các shard
 ```
+
+**Chia shard để chạy song song.** `--shard I/N` cắt kế hoạch thành `N` phần theo thứ tự và chỉ chạy
+phần `I` (1-based); hai lần lặp của cùng một ca luôn nằm chung một shard, và `plan.json` ghi lại
+`shard {index, count, cellsTotal}`. Chạy mỗi shard trong một tiến trình với `--out` riêng, rồi gộp
+bằng `--merge <dir1,dir2,...>` (nhận cả thư mục lẫn đường dẫn `results.json`, cần `--out` khác các
+shard, **không** gọi model):
+
+```bash
+for i in 1 2 3 4; do
+  BOXFOX_EVAL_ALLOW_SPEND=1 python3 scripts/eval/work_acceptance_bench.py --execute --budget-usd 5 \
+      --shard $i/4 --out /var/tmp/w10-s$i &
+done; wait
+python3 scripts/eval/work_acceptance_bench.py --merge /var/tmp/w10-s1,/var/tmp/w10-s2,/var/tmp/w10-s3,/var/tmp/w10-s4 \
+    --out /var/tmp/w10-merged
+```
+
+`--merge` từ chối khi các shard khác cấu hình (`configHash`/số lần lặp/danh sách ca), khi trùng lượt,
+khi thiếu hoặc lạ lượt so với `plan.cases × repeats`, khi `intent` giữa kết quả và plan lệch nhau, và
+khi `results.json` cũ thiếu `failedRules` — gặp các trường hợp đó phải chạy lại shard bằng harness hiện
+tại. Kết quả gộp ghi `mergedFrom`/`manifest.shards`, cộng token theo từng vai và **tính lại cổng** như
+một lượt chạy liền mạch.
+
+**Intent là bắt buộc.** Mỗi fixture khai `"intent": {"command": "plan|research|design|fix|mixed",
+"why": "..."}`, và mỗi lượt gọi `work_graph.set_intent(...)` trước lượt root để mô phỏng chủ nhà bấm
+Work / gõ slash. Thiếu `intent` (hoặc `BOXFOX_WORK_GRAPH=off`) thì `work_scope` giữ root ở `legacy`,
+root tự sửa mã, **không run nào được dựng** và mọi ca thành `no_run` — S02 với prompt cũ cho
+`work_runs=0` đúng như vậy. `--execute` cũng dừng sớm với lỗi cách dùng khi Work Graph đang tắt.
 
 | Tệp | Việc |
 |---|---|
 | `work_acceptance_bench.py` | cửa vào duy nhất: dry-run mặc định, `--execute` khi đủ hai khoá của §2 + biến kết nối |
 | `work_acceptance_rubric.json` | trọng số 6 vai (main 3, producer 3, research 2, reviewer 3, testing 3, flow 2) + luật nền `baseline` |
-| `fixtures/work_acceptance/S01.json…S12.json` | 12 kịch bản bắt buộc, mỗi tệp có `oracle` theo vai + `faults` |
+| `fixtures/work_acceptance/S01.json…S12.json` | 12 kịch bản bắt buộc, mỗi tệp có `intent` (luồng chủ nhà yêu cầu), `oracle` theo vai + `faults` |
 | `fixtures/work_acceptance/V06,V07,V10,V13,V14.json` | 5 ca tuỳ chọn của §9.2, chỉ nạp khi `--with-v` |
 
 Cơ chế tiêm lỗi (`faults`) chạy trong tiến trình, không sửa repo: `search_error`, `output_length`,
@@ -166,7 +196,7 @@ Cổng provider: chỉ nhận `opencode` / `space-bunny-free`; router trả prov
 |---|---|
 | 0 | dry-run xong, hoặc `--execute` xong và **cổng đạt** |
 | 1 | `--execute` xong nhưng **cổng chưa đạt** (kết quả vẫn được ghi, kể cả khi chưa đạt) |
-| 2 | sai cách dùng (ví dụ `--cases` có id lạ) |
+| 2 | sai cách dùng (`--cases` id lạ, `--shard` sai định dạng, `--merge` thiếu `--out`/thiếu lượt, Work Graph đang tắt) |
 | 3 | cổng chi tiêu từ chối (thiếu `BOXFOX_EVAL_ALLOW_SPEND=1` hoặc thiếu ngân sách) |
 | 4 | thiếu biến kết nối — dừng trước khi chạy lượt nào |
 | 6 | router không có `opencode`/`space-bunny-free` — dừng trước khi tiêu token |

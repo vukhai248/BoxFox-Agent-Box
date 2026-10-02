@@ -3,6 +3,7 @@
   "title": "User đổi ý sau checkpoint — revision mới, không trùng continuation",
   "goal": "Câu trả lời đổi ý tạo revision mới của cùng request, không ghi đè và không resume hai lần",
   "ownerLanguage": "vi",
+  "intent": {"command": "plan", "why": "Chỉ cần tài liệu kế hoạch di trú, không thi công ⇒ /plan (artifact-only)."},
   "notes": "Vòng hỏi thứ hai dùng bộ trả lời khác (đổi ý) ⇒ revision phải tăng, không được tạo continuation trùng.",
   "prompt": "Lập kế hoạch di trú schema theo hai giai đoạn cho dịch vụ nhỏ, ghi vào docs/migration.md. Nếu cần tôi quyết định giữ hay bỏ cột cũ thì hỏi; còn điểm nào mơ hồ thì hỏi tiếp cho rõ.",
   "interviewAnswers": [

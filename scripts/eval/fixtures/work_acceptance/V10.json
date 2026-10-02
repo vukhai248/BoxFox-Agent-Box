@@ -3,6 +3,7 @@
   "title": "Review toàn bộ tài liệu tham chiếu > 14000 ký tự",
   "goal": "Reviewer phải đọc hết phần được giao qua tool phân trang: thấy finding ở cuối hoặc báo coverage chưa đạt",
   "ownerLanguage": "vi",
+  "intent": {"command": "research", "why": "Đọc hết tài liệu dài trong repo, báo finding hoặc coverage chưa đạt ⇒ /research."},
   "notes": "§9.2 V10: prompt chỉ có refs; docs/design-long.md do bench sinh với mâu thuẫn ở cuối file.",
   "prompt": "Chỉ dùng tài liệu docs/design-long.md trong repo: đọc hết và cho biết hợp đồng trạng thái job có mâu thuẫn nào không. Nếu chưa đọc hết thì nói rõ coverage chưa đạt, đừng kết luận.",
   "interviewAnswers": [],

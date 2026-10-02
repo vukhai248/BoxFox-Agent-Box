@@ -3,6 +3,7 @@
   "title": "Lookup đơn giản — check tối thiểu, không reviewer thừa",
   "goal": "Câu hỏi tra cứu một symbol phải được trả lời gọn, không spawn reviewer không cần thiết",
   "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Tra cứu symbol trong repo: fixture đo consumer check + trần child; /research fast-path có thể trả lời trực tiếp nên chọn mixed."},
   "notes": "§9.2 V06: consumer check đủ; trần child thấp để bắt fan-out thừa.",
   "prompt": "Trong repo này, hàm nào chịu trách nhiệm xuất CSV báo cáo và nó nằm ở file:dòng nào? Trả lời ngắn gọn, đọc file để xác nhận chứ đừng đoán.",
   "interviewAnswers": [],
