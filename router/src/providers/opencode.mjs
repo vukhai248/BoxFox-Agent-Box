@@ -688,10 +688,18 @@ export function opencodeThinkingMetadata(model = {}) {
   const curated = OPENCODE_MODELS.find(m => m.id === model?.id) || null;
   const source = curated?.thinkingLevels?.length ? curated : opencodeCapabilityFor(model?.id);
   if (!source) return {};
+  // Vòng soát 2 (F2) — trả CẢ provenance, không chỉ giá trị: hàng được vá lúc khởi động
+  // trước đây vẫn mang `source: 'live'` mà không nói trường thinking đến từ đâu, đúng lớp
+  // nhầm lẫn W12 dựng ra để đóng.
+  const label = source.source || (curated ? 'documented' : 'unknown');
   return {
     thinkingType: source.thinkingType,
     thinkingLevels: [...source.thinkingLevels],
     defaultThinking: source.defaultThinking ?? null,
+    thinkingSource: label,
+    ...(source.asOf ? { thinkingAsOf: source.asOf } : {}),
+    ...(source.evidence ? { thinkingEvidence: source.evidence } : {}),
+    fieldSources: { thinking: label },
   };
 }
 

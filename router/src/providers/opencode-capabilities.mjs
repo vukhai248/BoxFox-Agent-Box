@@ -45,13 +45,16 @@ export const OPENCODE_CAPABILITY_REGISTRY = Object.freeze([
   Object.freeze({
     // Họ `muse-spark*`: đã có trong bảng curated (EFFORT_LEVELS); mục này giữ
     // cùng nguồn cho các biến thể mới của họ mà bảng curated chưa liệt kê.
+    // Vòng soát 2 (F3): bằng chứng chỉ là HỢP ĐỒNG (provider nhận tham số), chưa đo
+    // `reasoning_tokens` trả về cho họ này — biến thể tương lai có thể nhận `effort`
+    // mà không sinh reasoning. Vì vậy mức ở đây là "đã gửi được", không phải "đã chạy".
     pattern: /^muse-spark(?:[-.]|$)/i,
     thinkingType: 'effort',
     thinkingLevels: EFFORT_LEVELS,
     defaultThinking: null,
     source: 'documented',
     asOf: OPENCODE_PROBE_AS_OF,
-    evidence: 'OpenCode Zen /responses: reasoning: {effort, summary} được chấp nhận (đo 2026-09-21, tests/opencode.test.mjs)',
+    evidence: 'chỉ xác nhận hợp đồng: /responses nhận reasoning: {effort, summary} (fixture 2026-09-21, tests/opencode.test.mjs); chưa đo reasoning_tokens trả về cho họ này',
   }),
 ]);
 
