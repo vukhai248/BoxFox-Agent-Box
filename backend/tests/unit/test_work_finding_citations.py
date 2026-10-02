@@ -246,3 +246,22 @@ def test_review_contract_demands_tool_call_ids_and_verify_exec():
     schema = next(item for item in tool_contracts.SCHEMAS if item['function']['name'] == 'verify_exec')
     description = schema['function']['description']
     assert 'READ-ONLY but readable' in description and 'scratch' in description and 'network' in description
+
+
+def test_retry_gate_only_fires_for_an_uncited_report(tmp_path):
+    """`Checks.start_locked` retries (`status='error'`) only for `WORK_FINDING_UNCITED`.
+
+    A kept blocking finding under an all-pass verdict yields `WORK_FINDING_IGNORED`: the finding is
+    valid and the backend overrides the verdict to `revise`. Routing that through the retry let a
+    fresh attempt drop the finding and pass the artifact (review vòng 2, F1 — found again end-to-end
+    while testing). An invalid `revise` (no valid blocking finding) must still earn the retry.
+    """
+    ignored = run_corpus_case(tmp_path / 'ignored',
+                              json.loads((CORPUS / 'blocking-ignored-by-pass-verdict.json').read_text()))
+    assert ignored['status'] == 'revise'
+    assert str(ignored['uncited']).startswith('WORK_FINDING_IGNORED')
+
+    uncited = run_corpus_case(tmp_path / 'uncited',
+                              json.loads((CORPUS / 'no-receipt.json').read_text()))
+    assert uncited['status'] == 'unverified'
+    assert str(uncited['uncited']).startswith('WORK_FINDING_UNCITED')

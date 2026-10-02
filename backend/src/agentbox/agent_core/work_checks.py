@@ -880,8 +880,12 @@ class Checks:
             analysis = validate_findings(graph, child_id, admission, findings if status != 'error' else '',
                                          criteria, 'run' if whole else 'node', metas)
             status, coverage, uncited = apply_findings(findings, status, coverage, analysis)
-            if uncited and not retry:
-                status = 'error'  # the existing retry receives the finding ids and reasons
+            if uncited and not retry and str(uncited).startswith('WORK_FINDING_UNCITED'):
+                # Only an INVALID report (revise without a valid blocking finding) earns a retry with the
+                # reasons. `WORK_FINDING_IGNORED` is the opposite case: the finding is valid and the backend
+                # overrides the verdict to `revise`; turning that into `error` let a fresh attempt drop the
+                # finding and pass the artifact (review vòng 2, F1 — reproduced end-to-end).
+                status = 'error'
             doc.setdefault('attempts', []).append({'childId': child_id, 'status': status,
                 'completed': complete(result), 'execution': work_budget.receipt(result),
                 'findings': analysis['findings'], 'blocking': len(analysis['blocking']),
