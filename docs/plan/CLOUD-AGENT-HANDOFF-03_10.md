@@ -91,15 +91,19 @@ Mỗi checkpoint cập nhật **Work-Graph-fix.md**: source/commit, files, lện
 
 **Tình trạng file này:** tài liệu bàn giao; chưa triển khai các ô trống, chưa có test/model/CUA mới. Chi tiết quyết định và test cases nằm trong các file được dẫn ở trên.
 
-## 8. Trạng thái lượt local 02/10/2026 (UTC) — working tree, chưa commit
+## 8. Trạng thái lượt local 02/10/2026 (UTC, tối) — branch `vorflux/w10-w12-completion`
 
-Lượt này chạy trên branch `vorflux/w10-w12-completion` (tách từ B `4e0923d`). **Chưa commit, chưa push, chưa mở PR.** Chi tiết + bằng chứng ở Work-Graph-fix mục37 (W11) và mục38 (W12); tóm tắt:
+Branch `vorflux/w10-w12-completion` tách từ B `4e0923d`, **17 commit**, working tree sạch. **Chưa push, chưa mở PR** (chờ yêu cầu). Chi tiết + bằng chứng ở Work-Graph-fix **mục 39** (mục 37 W11, mục 38 W12 giữ nguyên):
 
 | Việc | Trạng thái | Bằng chứng chính |
 |---|---|---|
-| W10.M1/M2/M3 (phép đo) | Code + test trong working tree; đã đối chiếu 20 bundle thật | `scripts/eval/work_acceptance_bench.py`, `backend/tests/unit/test_work_acceptance_bench.py` (61 passed); rescore: S09 hết `Cannot operate on a closed database` và bị đánh `measurementInvalid`, `phaseNotReached` hiện cho S04/S05 |
-| W11.PROMPT | P0b đạt; nhánh Simplify (P1–P3) một phần; P4/P5 chưa | `docs/plan/W11-p0b-inventory.md`; `backend/src/agentbox/agent_core/roles.py`; `backend/tests/unit/test_work_simplify_prompt.py` (6 test) + suite lân cận 77 passed |
-| W12.MODEL.METADATA | T0b + T1 đạt, kiểm live đạt; T2–T6 chưa | `docs/plan/W12-metadata-inventory.md`; `router/src/providers/opencode-capabilities.mjs`; `router/src/providers/opencode.mjs`; ảnh picker `/code/.generated_artifacts/images/w12-thinking-space-bunny-picker.png` |
-| W6.1/W6.5.2/W7/W8 (A4.5.N, `__integration__`) | Vẫn mở | Mục33/34; audit §9; chưa có probe khép kín xanh |
+| W10.M1/M2/M3 (phép đo) | **Đã commit + xác minh dữ liệu thật** | `dd69edf`, `c731318`; `test_work_acceptance_bench.py` 64 passed; lượt S09 pilot3: `missing: []`, `measurementInvalid: false`, bundle 48 596 event = DB, 92/92 lượt gọi có `sessionId`, ngân sách requested/effective + clampNotices |
+| W12.MODEL.METADATA | Đã commit + kiểm live | `f2f2260`, `3265475`, `e62c0f7`; router `npm test` 257 passed; ảnh picker `w12-thinking-space-bunny-picker.png` |
+| W11.PROMPT | P0b + nhánh Simplify đã commit; P0c và câu vendor/`AGENT.md` chờ owner | `9d5ab04`, `182a974`; `docs/plan/W11-p0b-inventory.md` |
+| W8.A4.5.N (`__integration__`) | **Một nửa có bằng chứng native**; `oracle` vẫn `false` | `3d6fd2f`, `346430f`, `473e6ad`, `500665a`, `664f25e`, `6f7ea56`, `1f53f9e`; 7 lượt probe, bằng chứng `docs/plan/W8.A4.5.N-repair-loop-native-evidence.json`; lượt 7: node `__integration__` dựng thật + child Testing chạy trên cây gộp |
+| S09 pilot (kịch bản) | **Chưa đạt** (giữ trong thống kê) | Work-Graph-fix 39.7: root dừng ở `discovering`, chưa tới bước hỏi/thi công trong 45 phút |
+| W6.1 C4/C5, W6.Q, W6.2.BIND, W6.5.2, W7.1 UI, W7.2, W9.UI, W10.F | Vẫn mở | Work-Graph-fix 39.5/39.6; W6.5.2 đã có tracing bằng mã (ngân sách per-call) |
 
-Phạm vi đã giữ: chỉ OpenCode `opencode/space-bunny-free` cho inference; không đổi UI/UX; không đổi kiến trúc/quyền/workflow; CUA chỉ 1 lượt cho picker.
+Phạm vi đã giữ: chỉ OpenCode `opencode/space-bunny-free` cho inference; không đổi UI/UX; không đổi kiến trúc/quyền/workflow; không push/merge.
+
+**Hai việc cần owner quyết trước khi làm tiếp:** (1) cò đỏ của fixture W8.A4.5.N nên gieo đỏ thật thay vì trả traceback cắm sẵn (đổi ngữ nghĩa phép đo); (2) câu vendor `simplify-code/SKILL.md` dòng 195 và `AGENT.md:12/:20` so với §27–29.
