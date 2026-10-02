@@ -3,6 +3,7 @@
   "title": "Helper trả path chưa mở — WORK_CLAIM_UNSOURCED, không được dùng",
   "goal": "Câu trả lời của helper có claim kỹ thuật không căn cứ thì phải bị gắn cờ và không được dùng",
   "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Tra cứu module/dòng trong repo: fixture cần child research + WORK_CLAIM_UNSOURCED; /research fast-path có thể trả lời trực tiếp nên chọn mixed."},
   "notes": "Client bơm một câu claim bịa vào câu trả lời cuối của child ('ghost-sentinel-7f3a') — W6.2 phải phát WORK_CLAIM_UNSOURCED, và marker không được xuất hiện trong câu trả lời cho user.",
   "prompt": "Nhờ bạn tra cứu giúp: module nào trong repo chịu trách nhiệm xuất báo cáo và nó nằm ở dòng nào? Nếu không mở được file thì đừng khẳng định, hãy nói rõ chưa kiểm chứng.",
   "interviewAnswers": [],

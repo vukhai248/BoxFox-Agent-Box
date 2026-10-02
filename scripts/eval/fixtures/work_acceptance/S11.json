@@ -3,6 +3,7 @@
   "title": "Tài liệu dài > 14000 ký tự, mâu thuẫn ở cuối — reviewer partial không pass",
   "goal": "Reviewer phải đọc hết tài liệu dài và thấy mâu thuẫn ở cuối; output bị cắt thì check không được pass",
   "ownerLanguage": "vi",
+  "intent": {"command": "design", "why": "Thiết kế lại hợp đồng trạng thái job + review độc lập bản thiết kế ⇒ /design (artifact-only)."},
   "notes": "docs/design-long.md do bench sinh (≥ 15000 ký tự) với mâu thuẫn DONE/FAILED ở đoạn cuối cùng.",
   "prompt": "Đọc docs/design-long.md và thiết kế lại hợp đồng trạng thái job cho thống nhất trong docs/design.md; review độc lập bản thiết kế trước khi tôi duyệt.",
   "interviewAnswers": [],

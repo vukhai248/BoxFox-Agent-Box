@@ -3,6 +3,7 @@
   "title": "Output bị cắt (finish_reason=length) — partial, không auto-pass",
   "goal": "Lượt bị cắt vì hết token phải mang trạng thái partial và không được tính là đạt",
   "ownerLanguage": "vi",
+  "intent": {"command": "mixed", "why": "Triển khai endpoint kèm pytest ⇒ luồng thi công (mixed)."},
   "notes": "Hai phản hồi model đầu tiên bị cắt còn 240 ký tự với finish_reason=length.",
   "prompt": "Triển khai endpoint GET /api/reports/revenue trả JSON {total, rows:[{date,revenue}]} trong repo này; giới hạn 500 dòng, sắp xếp date tăng dần; chạy python -m pytest -q và báo kết quả.",
   "interviewAnswers": [],

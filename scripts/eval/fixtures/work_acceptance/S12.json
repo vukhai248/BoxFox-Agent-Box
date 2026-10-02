@@ -3,6 +3,7 @@
   "title": "Test đỏ + file ngoài run — repair, tester xanh, review một lần trên hash hội tụ",
   "goal": "Sửa mã để test xanh, không ship file ngoài run, review một lần trên hash đã hội tụ",
   "ownerLanguage": "vi",
+  "intent": {"command": "fix", "why": "Sửa src/export.py cho tests/test_export.py xanh ⇒ vá lỗi, chọn /fix."},
   "notes": "tests/test_export.py đỏ sẵn; notes/foreign.md được thả SAU commit nên worktree dirty ngoài run — không được ship.",
   "prompt": "Trong repo này tests/test_export.py đang đỏ vì src/export.py bỏ dấu tiếng Việt. Hãy sửa cho test xanh bằng python -m pytest -q, rồi chạy lại để xác nhận. Không được đụng vào notes/foreign.md và không được commit file đó.",
   "interviewAnswers": [],

@@ -3,6 +3,7 @@
   "title": "Knowledge quan trọng — evidence + critique theo policy",
   "goal": "Quyết định kiến trúc/pháp lý lớn phải qua evidence và critique trước khi chốt, giữ caveat",
   "ownerLanguage": "vi",
+  "intent": {"command": "research", "why": "Đánh giá rủi ro cần evidence + critique trước khi chốt ⇒ /research."},
   "notes": "§9.2 V07: provenance và caveat không được mất khi chốt khuyến nghị.",
   "prompt": "Chúng tôi định lưu dữ liệu bệnh nhân trong SQLite trên một máy và gửi log truy cập ra dịch vụ bên thứ ba. Hãy đánh giá rủi ro trước khi chốt: nêu rõ điều gì chưa kiểm chứng được và giới hạn của kết luận.",
   "interviewAnswers": [],

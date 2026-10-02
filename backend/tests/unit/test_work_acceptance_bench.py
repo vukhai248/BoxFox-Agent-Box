@@ -20,6 +20,7 @@ import asyncio
 import json
 import socket
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,66 @@ def test_fixture_validation_rejects_malformed_documents(tmp_path):
         bench.validate_scenario(broken, 'S02.json')
 
 
+def test_every_fixture_declares_an_intent_with_a_reason():
+    for scenario in bench.load_scenarios(with_v=True):
+        intent = bench.scenario_intent(scenario)
+        assert intent['command'] in bench.INTENT_COMMANDS
+        assert len(intent['why']) >= 20, f'{scenario["id"]}: lý do chọn intent quá ngắn'
+
+
+def test_fixture_validation_requires_a_usable_intent():
+    good = bench.load_scenario(bench.scenario_path('S02'))
+    broken = json.loads(json.dumps(good))
+    broken.pop('intent')
+    with pytest.raises(ValueError, match='intent là trường bắt buộc'):
+        bench.validate_scenario(broken, 'S02.json')
+    broken = json.loads(json.dumps(good))
+    broken['intent'] = {'command': 'deploy', 'why': 'triển khai thẳng lên máy chủ thật luôn cho nhanh'}
+    with pytest.raises(ValueError, match='phải thuộc'):
+        bench.validate_scenario(broken, 'S02.json')
+    broken = json.loads(json.dumps(good))
+    broken['intent'] = {'command': 'mixed'}
+    with pytest.raises(ValueError, match='why'):
+        bench.validate_scenario(broken, 'S02.json')
+    broken = json.loads(json.dumps(good))
+    broken['intent'] = {'command': 'mixed', 'why': 'chủ nhà xin triển khai endpoint kèm test thật', 'extra': 1}
+    with pytest.raises(ValueError, match='khóa lạ'):
+        bench.validate_scenario(broken, 'S02.json')
+    normalised = bench.normalize_intent({'command': 'FIX', 'why': 'ca sửa lỗi giữ nguyên hành vi khác'},
+                                        'S12.json intent')
+    assert normalised == {'command': 'fix', 'why': 'ca sửa lỗi giữ nguyên hành vi khác'}
+    with pytest.raises(ValueError, match='object'):
+        bench.normalize_intent(['mixed'], 'S02.intent')
+
+
+def test_intent_commands_match_work_graph_flows():
+    from agentbox.agent_core import work_graph  # noqa: PLC0415
+
+    assert bench.INTENT_COMMANDS == work_graph.FLOWS
+
+
+def test_code_cases_request_execution_and_tests_proof_cases_are_executable():
+    """Lượt ở `legacy` (hoặc artifact-only) thì root tự sửa mã và không run nào ra đời.
+
+    S02 với prompt cũ cho `work_runs=0` ⇒ oracle chấm `no_run` 0/1. Fixture phải chọn intent sao cho
+    `execution_requested` trả True ở đúng những ca cần thi công thật.
+    """
+    from agentbox.agent_core import work_graph  # noqa: PLC0415
+
+    for scenario in bench.load_scenarios(with_v=True):
+        command = bench.intent_command(scenario)
+        run = {'flow': command, 'intent': {'command': command}, 'goal': scenario['prompt']}
+        session = {'messages': [{'role': 'user', 'content': scenario['prompt']}]}
+        # Hàm thuần: `self` không được dùng, gọi không gắn instance cho khỏi dựng WorkGraph thật.
+        executable = work_graph.WorkGraph.execution_requested(None, session, run)
+        if command in ('fix', 'mixed'):
+            assert executable is True, f'{scenario["id"]}: intent /{command} nhưng run bị xếp artifact-only'
+        needs_tests = any(rule['kind'] == 'tests_proof'
+                          for rules in scenario['oracle'].values() for rule in rules)
+        if needs_tests:
+            assert executable is True, f'{scenario["id"]}: oracle cần tests_proof nhưng run không được thi công'
+
+
 def test_rubric_loads_with_baseline_and_catalog():
     rubric = bench.load_rubric()
     assert set(rubric['roles']) == set(bench.RUBRIC_ROLES)
@@ -113,6 +174,147 @@ def test_provider_guard_refuses_substitution_with_the_exact_message(state):
         bench.select_route(state)
     assert str(excinfo.value).startswith(bench.PROVIDER_GUARD_MESSAGE)
     assert bench.PROVIDER_GUARD_MESSAGE == 'OpenCode space-bunny-free unavailable; no provider substitution'
+
+
+# --------------------------------------------------------------------------- shard / gộp shard
+def test_shards_cover_every_planned_cell_without_overlap(tmp_path):
+    full = bench.build_plan(bench.load_scenarios(), out_root=tmp_path)
+    keys = [(cell['caseId'], cell['repeat']) for cell in full['cells']]
+    assert len(keys) == 24
+    for count in (1, 2, 3, 5, 7):
+        seen = []
+        for index in range(1, count + 1):
+            shard = bench.shard_cells(full['cells'], index, count)
+            assert shard, f'shard {index}/{count} rỗng'
+            seen += [(cell['caseId'], cell['repeat']) for cell in shard]
+        assert sorted(seen) == sorted(keys), f'{count} shard không phủ đủ 24 lượt'
+        assert len(seen) == len(set(seen)), f'{count} shard bị trùng lượt'
+    assert bench.parse_shard('2/4') == (2, 4)
+    for bad in ('0/4', '5/4', '4', 'a/b', '2/0', '1/65', '2/4/6'):
+        with pytest.raises(ValueError):
+            bench.parse_shard(bad)
+
+
+def test_shard_dry_run_keeps_both_repeats_together(tmp_path):
+    assert bench.main(['--out', str(tmp_path), '--shard', '2/3']) == bench.EXIT_OK
+    plan = json.loads((tmp_path / 'plan.json').read_text(encoding='utf-8'))
+    assert plan['cellCount'] == 8
+    assert plan['shard'] == {'index': 2, 'count': 3, 'cellsTotal': 24}
+    assert [cell['caseId'] for cell in plan['cells']] \
+        == ['S05', 'S05', 'S06', 'S06', 'S07', 'S07', 'S08', 'S08']
+    assert all(cell['intent'] in bench.INTENT_COMMANDS for cell in plan['cells'])
+    assert bench.main(['--out', str(tmp_path), '--shard', '4/3']) == bench.EXIT_USAGE
+
+
+def _observed_state(expected):
+    if isinstance(expected, list):
+        return expected[0]
+    return 'needs_revision' if expected.startswith('!') else expected
+
+
+def _shard_docs(tmp_path, *, shards=3, bad=(), hard=None):
+    """results.json giả cho từng shard: đủ trường `merge_results` cần, không dựng bundle."""
+    scenarios = bench.load_scenarios()
+    docs, paths = [], []
+    for index in range(1, shards + 1):
+        plan = bench.build_plan(scenarios, out_root=tmp_path / f'shard{index}', shard=(index, shards))
+        cells = []
+        for cell in plan['cells']:
+            key = (cell['caseId'], cell['repeat'])
+            failed = {role: [] for role in bench.RUBRIC_ROLES}
+            if hard and key == (hard[0], hard[1]):
+                failed[hard[2]].append(hard[3])
+            observed = 'no_run' if key in bad else _observed_state(cell['expectedState'])
+            state_ok = bench.state_matches(observed, cell['expectedState'])
+            cells.append({'caseId': cell['caseId'], 'repeat': cell['repeat'], 'intent': cell['intent'],
+                          'expectedState': cell['expectedState'], 'observedState': observed,
+                          'passed': state_ok and not any(failed.values()),
+                          'score': 100.0 if state_ok else 0.0, 'failedRules': failed,
+                          'validity': 'quality-valid', 'error': None, 'runStatus': observed,
+                          'wallTimeMs': 1000, 'tokensIn': 10, 'tokensOut': 5, 'modelCalls': 1,
+                          'roleLatency': {}, 'steps': 3, 'children': 1})
+        roles = {role: {'rules': 4, 'passed': 4, 'rate': 1.0, 'calls': 2, 'tokensIn': 20,
+                        'tokensOut': 10, 'wallMs': 2000} for role in bench.RUBRIC_ROLES}
+        doc = {'schema': bench.RESULTS_SCHEMA, 'plan': plan, 'route': {'providerId': 'opencode'},
+               'configHash': plan['configHash'], 'cells': cells, 'roles': roles, 'gate': {},
+               'failures': [], 'tokens': {'in': 240, 'out': 120}, 'wallTimeMs': 24000,
+               'cost': {}, 'attempts': len(cells), 'manifest': {'benchmark': 'work-acceptance'}}
+        path = bench._write_json(tmp_path / f'shard{index}' / 'results.json', doc)
+        docs.append(doc)
+        paths.append(path)
+    return docs, paths
+
+
+def test_merge_of_three_shards_rebuilds_the_full_gate(tmp_path):
+    docs, paths = _shard_docs(tmp_path)
+    merged = bench.merge_results(docs, paths=paths)
+    assert [cell['caseId'] for cell in merged['cells']] == sorted(cell['caseId'] for cell in merged['cells'])
+    assert [(cell['caseId'], cell['repeat']) for cell in merged['cells']][:2] == [('S01', 1), ('S01', 2)]
+    assert merged['attempts'] == 24 and merged['plan']['cellCount'] == 24
+    assert 'shard' not in merged['plan'] and merged['plan']['shards'] == [str(path) for path in paths]
+    assert merged['mergedFrom'] == [str(path) for path in paths]
+    assert merged['manifest']['shards'] == 3
+    assert merged['roles']['main'] == {'rules': 12, 'passed': 12, 'rate': 1.0, 'calls': 6,
+                                       'tokensIn': 60, 'tokensOut': 30, 'wallMs': 6000}
+    assert merged['tokens'] == {'in': 240, 'out': 120}
+    assert merged['gate']['denominator'] == 24 and merged['gate']['statePassed'] == 24
+    assert merged['gate']['ok'] is True and merged['failures'] == []
+
+
+def test_merged_gate_fails_on_two_misses_or_any_hard_counter(tmp_path):
+    docs, paths = _shard_docs(tmp_path, bad={('S07', 1), ('S12', 2)})
+    merged = bench.merge_results(docs, paths=paths)
+    assert merged['gate']['statePassed'] == 22 and merged['gate']['ok'] is True
+    assert {item['caseId'] for item in merged['failures']} == {'S07', 'S12'}
+    docs, paths = _shard_docs(tmp_path, bad={('S07', 1), ('S12', 2), ('S02', 1)})
+    assert bench.merge_results(docs, paths=paths)['gate']['ok'] is False
+    for role, kind, field in (('flow', 'no_duplicate_continuation', 'duplicateContinuation'),
+                              ('main', 'no_auto_pass', 'autoPass'),
+                              ('research', 'no_fabricated_url', 'fabricatedUrlOrDiagnostic'),
+                              ('reviewer', 'same_child_continuation', 'sameChild'),
+                              ('testing', 'provider_unchanged', 'providerSwitches')):
+        docs, paths = _shard_docs(tmp_path, shards=1, hard=('S02', 1, role, kind))
+        merged = bench.merge_results(docs, paths=paths)
+        assert merged['gate'][field] == 1 and merged['gate']['ok'] is False, kind
+        assert merged['gate']['statePassed'] == 24, kind
+
+
+def test_merge_refuses_duplicates_missing_shards_and_stale_results(tmp_path):
+    docs, paths = _shard_docs(tmp_path)
+    with pytest.raises(ValueError, match='trùng lượt S01 r1'):
+        bench.merge_results([docs[0], docs[0]], paths=paths[:2])
+    with pytest.raises(ValueError, match='gộp thiếu/lạ lượt'):
+        bench.merge_results(docs[:2], paths=paths[:2])
+    stale = json.loads(json.dumps(docs[0]))
+    for cell in stale['cells']:
+        cell.pop('failedRules')
+    with pytest.raises(ValueError, match='thiếu `failedRules`'):
+        bench.merge_results([stale, docs[1], docs[2]], paths=paths)
+    drifted = json.loads(json.dumps(docs[1]))
+    drifted['plan']['configHash'] = {'policyVersion': 'work-checks/11', 'combined': 'x' * 64}
+    with pytest.raises(ValueError, match='khác cấu hình'):
+        bench.merge_results([docs[0], drifted, docs[2]], paths=paths)
+    relabelled = json.loads(json.dumps(docs[1]))
+    relabelled['cells'][0]['intent'] = 'research'
+    with pytest.raises(ValueError, match='intent lệch'):
+        bench.merge_results([docs[0], relabelled, docs[2]], paths=paths)
+    with pytest.raises(ValueError, match='schema'):
+        bench.merge_results([{'schema': 'khác'}, docs[1]], paths=paths[:2])
+
+
+def test_merge_cli_writes_the_merged_results(tmp_path, capsys):
+    docs, paths = _shard_docs(tmp_path)
+    code = bench.main(['--merge', ','.join(str(path.parent) for path in paths),
+                       '--out', str(tmp_path / 'merged')])
+    assert code == bench.EXIT_OK
+    out = capsys.readouterr().out
+    assert 'gộp 3 shard → 24 lượt' in out and 'cổng đạt: ĐẠT' in out
+    merged = json.loads((tmp_path / 'merged' / 'results.json').read_text(encoding='utf-8'))
+    assert merged['attempts'] == 24 and merged['gate']['ok'] is True
+    assert bench.main(['--merge', str(paths[0].parent)]) == bench.EXIT_USAGE
+    assert bench.main(['--merge', str(paths[0].parent), '--out', str(paths[0].parent)]) == bench.EXIT_USAGE
+    assert bench.main(['--merge', str(paths[0].parent), '--out', str(tmp_path / 'x'),
+                       '--shard', '1/2']) == bench.EXIT_USAGE
 
 
 # --------------------------------------------------------------------------- dry-run / chi tiền
@@ -556,3 +758,93 @@ def test_ship_report_reads_the_commit_and_dirty_state(tmp_path):
     report = bench.ship_report(tmp_path, {'ship': {}})
     assert report['branch']
     assert 'notes/foreign.md' in report['dirty']
+
+
+def test_run_cell_sets_the_intent_before_the_turn(tmp_path, monkeypatch):
+    """`set_intent` phải chạy trước `rt.start`: `work_scope.begin_turn` mới thấy `config.workIntent`."""
+    order = []
+
+    class FakeGraph:
+        @staticmethod
+        def enabled():
+            return True
+
+        @staticmethod
+        def service(rt):
+            return FakeGraph()
+
+        @staticmethod
+        def set_intent(rt, session, command, text):
+            order.append(('set_intent', command, text))
+            rt.store.update_config(session['id'], {'workIntent': {'command': command}})
+            return {'command': command, 'flow': command, 'text': text}
+
+    class FakeStore:
+        def __init__(self, path):
+            self.path = path
+            self.config = {}
+            self.db = types.SimpleNamespace(close=lambda: order.append(('close',)))
+
+        def update_config(self, sid, config):
+            order.append(('update_config', sid))
+            self.config = dict(config)
+
+    class FakeRuntime:
+        def __init__(self, store, executor, client):
+            self.store, self.executor, self.client = store, executor, client
+
+        def create(self, config):
+            order.append(('create',))
+            return {'id': 'sess-1', 'config': dict(config)}
+
+    class FakeRouter:
+        def __init__(self, url):
+            self.url = url
+
+    async def fake_drive(rt, graph, work_feedback, sid, scenario, *, deadline_seconds):
+        order.append(('drive', rt.store.config.get('workIntent', {}).get('command')))
+        return ['ghi chú từ lượt chạy']
+
+    def fake_bundle(store, graph, sid, scenario, client, *, error=None, notes=None, workspace=None):
+        order.append(('bundle', list(notes or [])))
+        return {'run': {'status': 'verified'}, 'notes': list(notes or [])}
+
+    monkeypatch.setattr(bench, '_live_imports', lambda: (
+        types.SimpleNamespace(HarnessRuntime=FakeRuntime, RouterClient=FakeRouter), FakeGraph,
+        types.SimpleNamespace(), types.SimpleNamespace(SessionStore=FakeStore)))
+    monkeypatch.setattr(bench, 'seed_workspace', lambda *args, **kwargs: None)
+    monkeypatch.setattr(bench, 'RecordingClient', lambda *args, **kwargs: types.SimpleNamespace(calls=[]))
+    monkeypatch.setattr(bench, 'WorkspaceExecutor', lambda *args, **kwargs: None)
+    monkeypatch.setattr(bench, 'drive_session', fake_drive)
+    monkeypatch.setattr(bench, 'collect_bundle', fake_bundle)
+    monkeypatch.setattr(bench.runner, 'classify_validity', lambda *args, **kwargs: 'invalid')
+    scenario = bench.load_scenario(bench.scenario_path('S02'))
+    cell = asyncio.run(bench.run_cell(scenario, 2, out_dir=tmp_path,
+                                      route={'connectionId': 'conn-1', 'providerId': 'opencode'},
+                                      router_url='http://127.0.0.1:1', deadline_seconds=30))
+    steps = [item[0] for item in order if item[0] in ('set_intent', 'drive')]
+    assert steps == ['set_intent', 'drive'], 'intent phải được đặt TRƯỚC lượt chạy'
+    assert len([item for item in order if item[0] == 'set_intent']) == 1
+    intent_call = next(item for item in order if item[0] == 'set_intent')
+    assert (intent_call[1], intent_call[2]) == ('mixed', scenario['prompt'])
+    assert next(item for item in order if item[0] == 'drive')[1] == 'mixed'
+    assert cell['intent'] == {'command': 'mixed', 'flow': 'mixed', 'text': scenario['prompt']}
+    assert cell['bundle']['notes'][0].startswith('intent: /mixed')
+
+
+def test_run_cell_refuses_when_work_graph_is_off(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench, '_live_imports', lambda: (
+        types.SimpleNamespace(), types.SimpleNamespace(enabled=lambda: False),
+        types.SimpleNamespace(), types.SimpleNamespace()))
+    scenario = bench.load_scenario(bench.scenario_path('S02'))
+    with pytest.raises(ValueError, match='BOXFOX_WORK_GRAPH=off'):
+        asyncio.run(bench.run_cell(scenario, 1, out_dir=tmp_path, route={'connectionId': 'c'},
+                                   router_url='http://127.0.0.1:1', deadline_seconds=30))
+
+
+def test_require_work_graph_stops_the_execute_path(monkeypatch, capsys):
+    monkeypatch.setattr(bench, '_live_imports', lambda: (
+        types.SimpleNamespace(), types.SimpleNamespace(enabled=lambda: False),
+        types.SimpleNamespace(), types.SimpleNamespace()))
+    with pytest.raises(ValueError, match='no_run'):
+        bench.require_work_graph()

@@ -3,6 +3,7 @@
   "title": "Plan nhiều heading thiếu design/acceptance — plan_review revise",
   "goal": "Review phải bắt lỗi plan thiếu thiết kế/acceptance và giữ finding có căn cứ",
   "ownerLanguage": "vi",
+  "intent": {"command": "plan", "why": "Kế hoạch phải qua plan_review trước khi chủ nhà duyệt ⇒ /plan (artifact-only)."},
   "notes": "docs/plan-input.md là bản nháp nhiều mục nhưng thiếu hợp đồng dữ liệu, phân quyền và tiêu chí nghiệm thu.",
   "prompt": "Dùng docs/plan-input.md làm đầu vào, lập kế hoạch triển khai API xuất CSV cho báo cáo doanh thu. Kế hoạch phải qua review độc lập trước khi tôi duyệt.",
   "interviewAnswers": [],
