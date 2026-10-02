@@ -3051,3 +3051,67 @@ Mỗi checkpoint cập nhật Work-Graph-fix và bàn giao: commit/source, files
 
 Báo tiến độ ngắn khi làm lâu. Không tự mở goal dài hoặc push/merge. Nếu chưa hoàn tất một W, ghi rõ checkpoint và nguyên nhân, tiếp tục phần độc lập còn làm được; không tuyên bố toàn bộ hoàn tất khi còn check chưa đạt.
 ````
+
+## 39. Lượt local 02/10/2026 (tối) — W10.M1–M3, W11.PROMPT, W12 và probe W8.A4.5.N
+
+**Trạng thái: tiếp tục, chưa tick W nào mới.** Branch `vorflux/w10-w12-completion`, 11 commit trên nền `4e0923d`; chưa push. Số liệu dưới đây lấy từ lượt chạy thật trên máy local, bundle/DB thô còn nguyên tại `/var/tmp/w8-probe-run{1..4}-*` và `/var/tmp/w10-pilot*`.
+
+### 39.1 W10.M1/M2/M3 — sửa phép đo trước khi dùng W10 để đánh giá (commit `dd69edf`, siết `c731318`)
+
+| Hạng mục | Trước (đo được) | Sau | Bằng chứng |
+| --- | --- | --- | --- |
+| H1 events chỉ đọc trang đầu | `store.events(sid)` dừng ở `EVENTS_PAGE=500`; 57 phiên trong bộ W10 bị cắt, 14 ô mất output cuối/tool_end/receipt/câu trả lời | đọc hết theo `events_page` + `hasMore`/`nextAfter`, ghi lỗi đọc vào `missing` thay vì im lặng | DB 1200 event đọc đủ 1200 |
+| H2 restart đọc DB đã đóng | `drive_session()` trả `notes` nhưng `run_cell()` vẫn dùng `store/graph` cũ → S09 r1/r2 `missing: sessions: Cannot operate on a closed database.` | trả và dùng lại `store, rt, graph` mới; lỗi cũ chỉ còn là sự kiện có kiểm soát | S09-r1/r2 nay `measInv: true`; lượt đóng DB chỉ sinh một `events_read_error` với `ProgrammingError: Cannot operate on a closed database.` |
+| H3 danh tính người gọi | 647/647 lời gọi model trong 20 bundle có `sessionId: null`; `RecordingClient` đọc `route.get('sessionId')` mà route thật không có → thống kê vai mặc định về main; S06 tiêm `ghost-sentinel-7f3a` vào **main** | lấy `sessionId` từ ngữ cảnh thật; gọi không rõ chủ vào rổ `unknown`, thêm `callsWithoutSessionId` từng ô | test `results_json_carries_gate_failures_and_per_role_latency`: `roles['unknown'].calls == 1`, `callsWithoutSessionId == 1`, `tokens == {'in': 147, 'out': 30}` |
+| H4 executor lệch sản phẩm | `WorkspaceExecutor.execute()` không hiểu `verify_exec`; allowlist chỉ cho `snapshot`, `python -m pytest`, `git status`, `git diff` → chặn `git -C …`, `cd … && …`, checkpoint/merge của worktree thật | thêm `verify_exec`, dịch `/workspace`, cho `git -C`/`cd … && …` trong phạm vi ô, chặn thay thế lệnh/`..`/wrapper `-c` | test `terminal_fence_stops_wrappers_substitution_and_relative_escapes` (9 lệnh chặn, 5 lệnh cho qua) |
+| H4b trần output sai | fixture cắt ở `256 KiB` trong khi box thật cắt ở 20 000 ký tự (trả 15 000 + cờ `truncated`), `verify_exec` 8000 | khớp `worker.py:235` | test `terminal_output_truncates_like_the_real_box` |
+| H5 oracle sai | `interview_questions_max` cộng dồn cả run thay vì ≤3 **mỗi vòng**; `interview_answered` đạt khi revision≥1 dù không có câu trả lời; `merge_results()` tự tính lại `statePassed`; `gate.ok` không đòi `passed` đạt ngưỡng; ngân sách xin 80 bước/2700s nhưng hiệu lực 60/1200s | sửa từng luật, ghi `budget.requested` vs `budget.effective` + `clampNotices`; giữ **cả** ngưỡng `passed` và `statePassed` (ghi rõ trong docstring là cố ý, không nới) | S04/S05 `phaseNotReached ['reviewer:check_status_any']` |
+
+**Còn mở:** lượt S09 pilot3 (chạy lại bằng mã đã vá, `BOXFOX_EVAL_ALLOW_SPEND=1`, `--budget-usd 0.5`) đang chạy; kết quả sẽ vào 39.7.
+
+### 39.2 W12.MODEL.METADATA — giữ metadata và để mức thinking đi hết tới provider (commit `f2f2260`, `3265475`, `e62c0f7`)
+
+- Discovery OpenCode trước đây bỏ toàn bộ metadata payload (`/zen/v1/models` chỉ có `{id, object, created, owned_by}`) và để `thinkingType: 'none'`, `thinkingLevels: []`; `normalizeOpencodeReasoning` xoá `thinkingLevel` — đúng trường harness gửi — nên mức đã chọn không tới provider.
+- Nay: giữ metadata discovery, thêm `thinkingSource`/`thinkingAsOf`/`thinkingEvidence` + `fieldSources` từng trường; giữ context window/giá payload khi thiếu khối reasoning; hàng vá lúc khởi động ghim nguồn và không ghi đè nguồn `probe` bằng `documented`.
+- Bằng chứng sống: ảnh `w12-thinking-space-bunny-picker.png` — tab Single Models lọc `space-bunny`, dòng `OpenCode Free · space-bunny-free`, 6 kết nối `ready`, và hàng **Thinking: Minimal · Low · Medium (đang chọn) · High**.
+- Bằng chứng hẹp: registry `muse-spark` chỉ còn khẳng định "hợp đồng được chấp nhận", không claim đã đo `reasoning_tokens` trả về.
+- Test: `router/tests/model-metadata.test.mjs` + `npm test` **257 passed**.
+
+### 39.3 W11.PROMPT — vai Simplify theo nhiệm vụ, xác minh trung thực (commit `9d5ab04`, `182a974`)
+
+- Bỏ khỏi prompt vai Simplify các câu "bảo đảm không hồi quy hành vi"/"100% test xanh" vốn mâu thuẫn với rubric cho phép "NOT RUN"; nay yêu cầu nói thẳng phần chưa chạy và không bỏ finding có bằng chứng.
+- Inventory P0b 388 dòng đã giao tại `docs/plan/W11-p0b-inventory.md` (bản sao trong `/code/.generated_artifacts/w11-p0b-inventory.md`).
+- **Chưa làm (cần owner duyệt current → proposed → tradeoff):** câu trong vendor `simplify-code/SKILL.md` dòng 195 ("drop weak or wrong suggestions silently") và `AGENT.md:12/:20` vẫn chèn chính sách cũ vào mọi system prompt, trái §27–29.
+
+### 39.4 W8.A4.5.N — bốn lượt probe native, `oracle=false` cả bốn (commit `3d6fd2f`, `346430f`, `473e6ad`, `500665a`)
+
+Bằng chứng đầy đủ: `docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (lưu cả 4 lượt, hash `results.json`, lý do chưa nghiệm thu).
+
+| Lượt | Kết cục | Nguyên nhân dừng |
+| --- | --- | --- |
+| 1 (`run1-4096`) | `error: ValueError: WORK_CHECK_NOT_READY` | trần output 4096 của con Build → `PROVIDER_OUTPUT_TRUNCATED` (3958 token reasoning), bản nháp không hoàn tất; đã khai báo núm `BUILD_CHILD_OUTPUT_TOKENS=16000` |
+| 2 (`run2-16000`) | đỏ→sửa→resume **đúng child cũ** chạy được, rồi probe tự nổ `IndexError` | `checks.tool` trả `checks: []` (đường `inputConflicts`) mà probe đọc `checks[0]`; đã thêm chốt ghi nguyên văn |
+| 3 (`run3-16000`) | `redCheck unverified`, không mở vòng sửa, B1 `accepted` | con kiểm thử chạy được pytest thật nhưng không qua **đúng câu lệnh bắt buộc** trong lượt kiểm → backend hạ `pass`→`unverified` (đúng luật) |
+| 4 (`run4-16000`) | như lượt 3, **chỉ ra nguyên nhân gốc** | cò đỏ của fixture trả kết quả cắm sẵn cho **mọi** lệnh chứa chuỗi `pytest` (kể cả `echo "hello pytest world"`, `command -v pytest`); model phát hiện đúng là kết quả bịa, tự kiểm lại bằng script khác (12 passed thật) rồi báo đạt → `unverified` |
+
+**Kết luận trung thực:** cơ chế đỏ→sửa→resume-cùng-child đã chạy được một lần (lượt 2), nhưng chưa lượt nào vừa mở vòng sửa vừa kết thúc xanh, và node `__integration__` chưa từng được dựng (`built: false`) nên `oracle` vẫn `false`. **Cần owner duyệt một thay đổi ngữ nghĩa phép đo:** cò đỏ nên gieo **đỏ thật** (hạ `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn, nếu không mọi lệnh test thành công đều bị chặn và check luôn hạ về `unverified`.
+
+Hai lỗi phép đo đã tìm ra và sửa trong lượt này (không phải lỗi sản phẩm):
+
+- `checks.tool` trả `checks: []` khi `state['inputConflicts']` còn hiệu lực (`work_checks.py:1076`) — đây là tín hiệu sản phẩm hợp lệ ("bản nháp mới chưa kiểm được vì xung đột đầu vào của vòng trước chưa giải quyết"), probe phải đọc `inputConflicts` thay vì `checks[0]`.
+- `build_integration` nhận **đối tượng `run` cũ** của probe (mọi thao tác của sản phẩm chạy trên bản sao đọc từ DB rồi ghi lại) nên thấy B1 còn `needs_checks` và trả `False`; đã đọc lại `graph.get(runId)` trước khi gọi và ghi `executeStatuses` để lần sau thấy ngay stage nào chặn.
+
+### 39.5 W6.5.2 — tracing ngân sách (đọc mã, không sửa)
+
+Xác nhận đúng như ghi chú W6.5.2: `WORK_CHILDREN_PER_RUN_CALL=72` được đặt lại ở **mỗi lời gọi** `work_run`/`schedule_nodes` (`work_graph.py:1565`, xoá ở `:1571`) và `WORK_RUN_MAX_SECONDS=3600` đo từ `started` của chính lời gọi đó (`:1783`, `:1792`). Các nhánh continuation tự cấp ngân sách riêng `[8]` (`work_continuations.py:250`) và `[5]` (`:263`), `work_checks.start_locked` cấp `[8]` (`work_checks.py:1051`). Vì vậy tổng thời gian/số con của **cả đời run** có thể vượt 3600s và 72 con mà không có lỗi mạng hay timeout nào. Chưa sửa bộ đếm/scheduler; đây là dữ kiện để chốt cơ chế sau.
+
+### 39.6 Việc còn mở (giữ nguyên, không tự mở rộng)
+
+- W6.1 C4/C5, W6.Q, W6.2.BIND, W6.5.2 (chốt cơ chế sau tracing), W7.1 UI (renderer/lịch sử legacy — không được đổi UI/UX khi chưa duyệt), W7.2 `decisionKeys`, W9.UI.
+- W11 P0c/P1/P2 cho các vai còn lại và hai câu vendor/`AGENT.md` nêu ở 39.3.
+- W10.F chỉ chạy sau khi M1–M3 được xác nhận bằng lượt pilot 39.7.
+- Không push/merge khi chưa được yêu cầu.
+
+### 39.7 Kết quả lượt S09 pilot3 (chạy lại sau khi vá phép đo)
+
+_(đang chạy — sẽ ghi kết quả, gồm cả lượt lỗi, vào đây)_
