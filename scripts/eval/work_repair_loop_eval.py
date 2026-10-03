@@ -296,7 +296,7 @@ async def main(args):
                                    'PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất. '
                                    'Lượt 15 đo thêm: con `debug` hết TRẦN BƯỚC (24) giữa chừng ⇒ '
                                    'STEP_BUDGET_EXHAUSTED ⇒ `complete()` false ⇒ WORK_REPAIR_UNDIAGNOSED ⇒ nút '
-                                   '`rejected`; nút fixture nâng phiên lên trần engine hiện hành (60 bước/1200 s) '
+                                   '`rejected`; nút fixture nâng phiên lên trần engine hiện hành (từ #6457: 400 bước/7200 s, con 200 bước/3600 s) '
                                    'để đo cơ chế sửa thay vì đo trần bước.',
                             'unpatchedRun': '/var/tmp/w8-probe-run1-4096/results.json'}}
     raise_build_child_output_budget()

@@ -3113,6 +3113,8 @@ Hai lỗi phép đo đã tìm ra và sửa trong lượt này (không phải l�
 
 Xác nhận đúng như ghi chú W6.5.2: `WORK_CHILDREN_PER_RUN_CALL=72` được đặt lại ở **mỗi lời gọi** `work_run`/`schedule_nodes` (`work_graph.py:1565`, xoá ở `:1571`) và `WORK_RUN_MAX_SECONDS=3600` đo từ `started` của chính lời gọi đó (`:1783`, `:1792`). Các nhánh continuation tự cấp ngân sách riêng `[8]` (`work_continuations.py:250`) và `[5]` (`:263`), `work_checks.start_locked` cấp `[8]` (`work_checks.py:1051`). Vì vậy tổng thời gian/số con của **cả đời run** có thể vượt 3600s và 72 con mà không có lỗi mạng hay timeout nào. Chưa sửa bộ đếm/scheduler; đây là dữ kiện để chốt cơ chế sau.
 
+**Cập nhật #6457 (03/10/2026) — đã chốt cơ chế, xem §39.11:** chủ nhà chốt "đo trước, rồi mới siết trần cứng", nên (1) trần mỗi lời gọi nâng lên `WORK_CHILDREN_PER_RUN_CALL=256` / `WORK_RUN_MAX_SECONDS=21600`, (2) thêm bộ đếm **tham vấn** `lifetime` (`work_graph.lifetime()`: `calls`/`children`/`seconds` tích luỹ qua các lời gọi, ghi vào kết quả `work_run` ở khoá `lifetime` + event `run_lifetime`) để đo tổng đời run thật trước khi đặt bất kỳ trần cứng nào. Bộ đếm này KHÔNG chặn gì; nó chỉ trả lời câu W6.5.2 bằng số liệu.
+
 ### 39.6 Việc còn mở (giữ nguyên, không tự mở rộng)
 
 - W6.1 C4/C5, W6.Q, W6.2.BIND, W6.5.2 (chốt cơ chế sau tracing), W7.1 UI (renderer/lịch sử legacy — không được đổi UI/UX khi chưa duyệt), W7.2 `decisionKeys`, W9.UI.

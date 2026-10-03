@@ -231,7 +231,8 @@ def test_stuck_criteria_escalates_only_after_two_repairs():
     doc['coverage'][0]['target'] = 'artifact'
     doc['status'] = 'pass'
     assert work_checks.stuck_criteria({'repairs': [{'n': 1}, {'n': 2}]}, doc, criteria) == []
-    # Tiêu chí C/G (không nằm trong acceptance) không sinh xung đột.
+    # Tiêu chí C/G (không nằm trong acceptance) không sinh xung đột: `judge()` dựng tập A từ
+    # `node['acceptance']` trước khi gọi, vì `criteria` ở đó còn có `C1` của chính lượt kiểm.
     doc['status'] = 'revise'
     doc['coverage'][0]['id'] = 'C1'
     assert work_checks.stuck_criteria({'repairs': [{'n': 1}, {'n': 2}]}, doc, criteria) == []

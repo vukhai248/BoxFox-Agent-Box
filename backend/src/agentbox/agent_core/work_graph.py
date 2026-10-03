@@ -1065,9 +1065,10 @@ class WorkGraph:
         conflicts = [(n['id'], stage, s['inputConflicts']) for n in run['nodes']
                      for stage, s in n['stages'].items() if s.get('inputConflicts')]
         if conflicts:
-            return ('Main: correct the conflicting node goal/acceptance with work_graph action=update before '
-                    'retrying checks or production. Preserve facts in the artifact; the assignment needs correction: '
-                    + str(conflicts))
+            return ('Main: settle the assignment question first. If the node goal/acceptance really is wrong, '
+                    'correct it with work_graph action=update (new draft, fresh checks). If the label was wrong '
+                    'and the current draft stands, clear the barrier with work_graph action=resolve — it keeps the '
+                    'draft, its artifact and its history. Then retry checks or production: ' + str(conflicts))
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1140,7 +1141,7 @@ class WorkGraph:
                 return data.get('text') or ''
         return ''
 
-    def lifetime(self, run, used=None, seconds=None):
+    def lifetime(self, run, calls=0, children=0, seconds=0.0):
         """Bộ đếm cộng dồn của cả đời run (W6.5.2, quyết định #6457) — chỉ để đo, KHÔNG chặn.
 
         `work_run` đặt lại `child_budget` ở MỖI lời gọi (72 con cũ, 256 con mới) và đồng hồ
@@ -1149,10 +1150,9 @@ class WorkGraph:
         tài liệu run để lượt sau đọc được; nó không chặn và không làm hỏng lượt chạy nào.
         """
         lifetime = run.setdefault('lifetime', {'calls': 0, 'children': 0, 'seconds': 0.0})
-        if used:
-            lifetime['children'] = int(lifetime.get('children') or 0) + max(0, int(used))
-        if seconds:
-            lifetime['seconds'] = round(float(lifetime.get('seconds') or 0.0) + max(0.0, float(seconds)), 3)
+        lifetime['calls'] += int(calls)
+        lifetime['children'] += int(children)
+        lifetime['seconds'] = round(lifetime['seconds'] + float(seconds), 3)
         return lifetime
 
     async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt, extra_binding=None):
@@ -1615,8 +1615,7 @@ class WorkGraph:
             self.live[run['runId']] = run
             self.save(run, 'run_started', phase)
             self.child_budget[run['runId']] = [WORK_CHILDREN_PER_RUN_CALL]
-            lifetime = self.lifetime(run)
-            lifetime['calls'] = int(lifetime.get('calls') or 0) + 1
+            self.lifetime(run, calls=1)
             limit = max(1, int(self.rt.fanout_limit(session.get('config'))))
             try:
                 with self.budget_paused(sid):
@@ -1909,7 +1908,7 @@ class WorkGraph:
         out['budgetExhausted'] = bool(budget is not None and budget[0] <= 0)
         # W6.5.2 (#6457): bộ đếm CỘNG DỒN toàn đời run. Chỉ báo cáo — không chặn gì; số thật ở
         # đây là đầu vào để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
-        out['lifetime'] = dict(self.lifetime(run, used=(WORK_CHILDREN_PER_RUN_CALL - budget[0]) if budget else 0,
+        out['lifetime'] = dict(self.lifetime(run, children=(WORK_CHILDREN_PER_RUN_CALL - budget[0]) if budget else 0,
                                              seconds=time.monotonic() - started))
         self.save(run, 'run_lifetime', json.dumps(out['lifetime'])[:300])
         out['outputs'] = [{'id': node['id'], 'kind': node['kind'], 'status': node['stages'][stage]['status'],

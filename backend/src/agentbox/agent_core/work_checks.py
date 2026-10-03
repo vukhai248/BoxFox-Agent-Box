@@ -411,7 +411,7 @@ def stuck_criteria(state, doc, criteria, limit=2):
         if item.get('status') == 'revise' and item.get('target', 'artifact') != 'criterion' \
                 and item.get('id') in criteria:
             out.append({'id': item['id'], 'requirement': criteria[item['id']],
-                        'evidence': item.get('evidence') or item.get('findingError') or '',
+                        'evidence': item.get('evidence') or '',
                         'source': 'stuck_criteria'})
     return out
 
@@ -938,7 +938,10 @@ class Checks:
         if source and await snapshot_of(graph, run['sessionId'], source) != source:
             doc.update(status='superseded', error='Source changed during check (including terminal side effects).')
         # `node` là None ở lượt duyệt TOÀN kế hoạch: chỉ lượt kiểm gắn nút mới có vòng sửa để đếm.
-        stuck = stuck_criteria(node['stages'][stage], doc, criteria) if node else []
+        # `criteria` ở đây còn có `C1` (tiêu chí của chính lượt kiểm), không phải tiêu chí nghiệm thu —
+        # leo thang chỉ áp cho A*, nên dựng lại đúng tập A từ `node['acceptance']` như ở `start()`.
+        acceptance = {f'A{i+1}': value for i, value in enumerate(node['acceptance'])} if node else {}
+        stuck = stuck_criteria(node['stages'][stage], doc, acceptance) if node else []
         doc['inputConflicts'] = (input_conflicts(doc.get('coverage', []), criteria)
                                  if doc['status'] == 'revise' else []) + stuck
         doc['finishedAt'] = time.time()
