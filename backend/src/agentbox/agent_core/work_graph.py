@@ -1185,22 +1185,36 @@ class WorkGraph:
                 return data.get('text') or ''
         return ''
 
-    def lifetime(self, run, calls=0, children=0, seconds=0.0):
+    def lifetime(self, run, calls=0, children=0, seconds=0.0, childSeconds=0.0):
         """Bộ đếm cộng dồn của cả đời run (W6.5.2, quyết định #6457) — chỉ để đo, KHÔNG chặn.
 
         `work_run` đặt lại `child_budget` ở MỖI lời gọi (72 con cũ, 256 con mới) và đồng hồ
         `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có thể vượt cả hai mà
         không có lỗi nào. Bộ đếm này ghi lại số thật (số lời gọi, số con, tổng giây) vào chính
         tài liệu run để lượt sau đọc được; nó không chặn và không làm hỏng lượt chạy nào.
+
+        `children`/`childSeconds` được đếm ở `spawn()` — cửa duy nhất sinh con của run — nên con
+        của `work_check`/`work_repair` cũng vào sổ, không chỉ con trong lời gọi `work_run`
+        (finding #10). `seconds` là giây của chính các lời gọi vào graph; `childSeconds` là giây
+        của các con, cộng riêng để không trộn hai phép đo.
         """
-        lifetime = run.setdefault('lifetime', {'calls': 0, 'children': 0, 'seconds': 0.0})
+        lifetime = run.setdefault('lifetime', {'calls': 0, 'children': 0, 'seconds': 0.0,
+                                               'childSeconds': 0.0})
+        lifetime.setdefault('childSeconds', 0.0)
         lifetime['calls'] += int(calls)
         lifetime['children'] += int(children)
         lifetime['seconds'] = round(lifetime['seconds'] + float(seconds), 3)
+        lifetime['childSeconds'] = round(lifetime['childSeconds'] + float(childSeconds), 3)
         return lifetime
 
     async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt, extra_binding=None):
-        """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer."""
+        """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer.
+
+        Cửa duy nhất sinh con của run (produce/kiểm/knowledge/debug), nên đây cũng là chỗ duy nhất
+        ghi sổ `lifetime`: mỗi con cộng một lượt và giây chạy thật của nó. Nhờ vậy con sinh từ
+        `work_check`/`work_repair` cũng được đếm (finding #10), không chỉ con trong `work_run`.
+        """
+        child_started = time.monotonic()
         budget = self.child_budget.get(run['runId'])
         if budget is not None:
             if budget[0] <= 0:
@@ -1278,6 +1292,7 @@ class WorkGraph:
         result['progress'] = {k: receipt.get(k) for k in ('admissionId', 'streak', 'progressed', 'blocked')}
         if receipt.get('blocked'):
             result.update(status='partial', is_error=True, reason='WORK_NO_PROGRESS')
+        self.lifetime(run, children=1, childSeconds=time.monotonic() - child_started)
         return result, answer
 
     # ---- node execution with the review loop ------------------------------------------------- #
@@ -1987,8 +2002,8 @@ class WorkGraph:
         out['budgetExhausted'] = bool(budget is not None and budget[0] <= 0)
         # W6.5.2 (#6457): bộ đếm CỘNG DỒN toàn đời run. Chỉ báo cáo — không chặn gì; số thật ở
         # đây là đầu vào để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
-        out['lifetime'] = dict(self.lifetime(run, children=(WORK_CHILDREN_PER_RUN_CALL - budget[0]) if budget else 0,
-                                             seconds=time.monotonic() - started))
+        # `children`/`childSeconds` do `spawn()` cộng (finding #10), nên không cộng lại ở đây.
+        out['lifetime'] = dict(self.lifetime(run, seconds=time.monotonic() - started))
         self.save(run, 'run_lifetime', json.dumps(out['lifetime'])[:300])
         out['outputs'] = [{'id': node['id'], 'kind': node['kind'], 'status': node['stages'][stage]['status'],
                            'attempts': node['stages'][stage]['attempts'],

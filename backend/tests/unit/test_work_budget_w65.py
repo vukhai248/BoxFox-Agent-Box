@@ -147,3 +147,18 @@ def test_partial_checkpoint_retains_real_reason_refs_and_budget_after_restart(tm
         assert current['checkpoint'] == checkpoint
         assert current['artifact']['status'] == 'partial'
     asyncio.run(run())
+
+
+def test_budget_eval_driver_reads_owner_limits_from_the_limits_module():
+    """#9: driver đo ngân sách không được chép số cũ (60/1200) — phải đọc trần thật ở `limits.py`.
+
+    Bản trước ghi cứng `maxSteps:60`/`deadlineSeconds:1200` (thời trước #6457) nên mọi lượt đo sau
+    khi trần đổi vẫn chạy dưới một ngân sách không còn tồn tại, và cột `ownerSteps` trong kết quả
+    nói sai thực tế. Bài này giữ hợp đồng đó: số của driver phải theo hằng số, kèm nguồn.
+    """
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[3] / 'scripts/eval/work_budget_eval.py').read_text(encoding='utf-8')
+    assert "'maxSteps':60" not in source and "'deadlineSeconds':1200" not in source, 'số cũ 60/1200 còn trong driver'
+    assert "'maxSteps':OWNER_STEPS" in source and "'deadlineSeconds':OWNER_DEADLINE" in source
+    assert 'limits_module.MAX_STEPS_DEFAULT' in source and 'limits_module.DEADLINE_DEFAULT_SECONDS' in source
+    assert "'limitsSource':'agentbox.agent_core.limits'" in source, 'kết quả đo phải ghi nguồn số ngân sách'

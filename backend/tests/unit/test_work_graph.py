@@ -970,6 +970,38 @@ def test_run_lifetime_counts_calls_children_and_seconds_across_calls(tmp_path):
     assert [node['id'] for node in saved['nodes']] == ['E1', 'P1']
 
 
+def test_work_check_children_also_enter_the_lifetime_counter(tmp_path):
+    """#10: con sinh ngoài `work_run` (kiểm/sửa) cũng phải vào sổ `lifetime`.
+
+    Bộ đếm cũ chỉ cộng số con theo hiệu ngân sách của từng lời gọi `work_run`, nên con của
+    `work_check`/`work_repair` — đường main gọi sau khi `work_run` đã trả — không được đếm: một run
+    dài có thể tiêu hàng chục con mà sổ đời run vẫn đứng yên. Nay `spawn()` là chỗ duy nhất ghi sổ.
+    """
+    store, runtime, model, _, sid = build(tmp_path)
+    research = {'id': 'R1', 'kind': 'research', 'title': 'Compare approaches',
+                'goal': 'Compare two export formats using the provided evidence',
+                'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
+
+    async def run():
+        await raw_tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Compare the two approaches',
+                                                    'flow': 'research'})
+        await raw_tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [research]})
+        draft = await raw_tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        node = draft['nodes'][0]
+        before = dict(wg.service(runtime).get(draft['runId'])['lifetime'])
+        await raw_tool(runtime, sid, 'work_check', {'action': 'start', 'runId': draft['runId'], 'nodeId': node['id'],
+                                                    'stage': 'produce',
+                                                    'artifactId': node['artifacts']['produce']['artifactId'],
+                                                    'invocationId': uuid.uuid4().hex})
+        return draft['runId'], before, dict(wg.service(runtime).get(draft['runId'])['lifetime'])
+
+    rid, before, after = asyncio.run(run())
+    assert after['children'] > before['children'], 'con của work_check phải cộng vào sổ đời run'
+    assert after['childSeconds'] > before['childSeconds'] > 0, 'giây của con được đo riêng ở childSeconds'
+    saved = runtime.work_graph.get(rid)
+    assert saved['lifetime']['children'] == after['children'], 'sổ nằm trên tài liệu run để lượt sau đọc'
+
+
 def test_the_model_can_discover_the_resolve_action(tmp_path):
     """#6456(b): hàng rào chỉ mở được nếu mô hình BIẾT có đường mở.
 
