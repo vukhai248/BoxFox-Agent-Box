@@ -3503,8 +3503,10 @@ Báo cáo đầy đủ: [`W6.Q-adjudication.md`](W6.Q-adjudication.md) (244 dòn
 - FU1/FU3/FU4/FU6/FU7 (nửa phép đo) giao subagent, không gọi model, cây làm việc ghi ở lượt kế tiếp.
 - FU8/FU9/FU10 đã ghi vào §34.2 và §34.4 (điều kiện badge W6.2.BIND; hai trục version; rút claim "tổng hợp bỏ finding" vì không có receipt).
 
-#### 39.17.5 Bộ W10.F đang chạy — neo
+#### 39.17.5 Bộ W10.F — lần 1 (3 shard) bị vô hiệu vì nhiễu tải, lần 2 chạy tuần tự
 
-- Lệnh: `/var/tmp/run-w10f-full.sh /var/tmp/w10f-full 3`; commit neo **`6eb8e93`**; bắt đầu **2026-10-03T08:55:19Z**; 3 shard song song (`--shard i/3`), 17 ca × 2 lượt = 34 ô, `--budget-usd 0.5`, `--deadline-seconds 2700`, `--max-steps 80`, cổng `minPassed 22` (#6472). Kết quả gộp ở `/var/tmp/w10f-full/` (`freeze.txt`, `shard-*.log`, `merge.log`).
-- Mọi commit sau `6eb8e93` KHÔNG nằm trong phép đo này; đọc `freeze.txt` trước khi trích số.
+- **Lần 1 (đã dừng, giữ log):** `/var/tmp/run-w10f-full.sh /var/tmp/w10f-full 3`, commit `6eb8e93`, bắt đầu 08:55:19Z, 3 shard song song, 17 ca × 2 = 34 ô, `--deadline-seconds 2700`. Sau 65 phút: 10/34 ô, **0 ô đạt**, nhiều ô bị hạn driver cắt khi còn `drafting`/`discovering`.
+- **Vì sao vô hiệu:** ba shard dùng chung MỘT route miễn phí nên latency mỗi lời gọi tăng ~3,4 lần — đo trực tiếp cùng ca S12: median 4,2 s → 14,2 s, p90 21,5 s → 64,5 s, max 44,6 s → 172,1 s, tổng thời gian gọi 599 s → 2 577 s. Ô bị hạn 2 700 s cắt trước khi hội tụ, nên "0/10 đạt" là **nhiễu phép đo**, không phải kết quả sản phẩm. Log giữ nguyên ở `/var/tmp/w10f-full-3shards-aborted/` (không trộn vào thống kê lần 2).
+- **Lần 2 (đang chạy):** `/var/tmp/run-w10f-seq.sh /var/tmp/w10f-seq`, **tuần tự 1 tiến trình**, commit neo **`6adbe78`**, bắt đầu **2026-10-03T10:00:58Z**, cùng 17 ca × 2 = 34 ô, `--budget-usd 0.5`, `--deadline-seconds 1800`, `--max-steps 80`, cổng `minPassed 22` (#6472). Đây mới là phép đo để trích số.
+- Mọi commit sau `6adbe78` KHÔNG nằm trong phép đo này; đọc `freeze.txt` trước khi trích số.
 - C4/C5 của W6.1 (#6477, phương án A) chạy SAU khi bộ này xong, trên cùng cây đã vá.
