@@ -1,7 +1,7 @@
 {
   "probe": "W8.A4.5.N — nút tổng hợp __integration__ sau vòng sửa hội tụ (đo native, oracle CÒN FALSE)",
   "script": "scripts/eval/work_repair_loop_eval.py",
-  "howToRun": "PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101 --output .tmp/w8-probe-red5 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json",
+  "howToRun": "PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101 --output .tmp/w8-probe-red7 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json",
   "branch": "vorflux/w10-w12-completion",
   "baseCommit": "4e0923dae902c50906651773c584bfa8ccaaf3c2",
   "probeCommits": [
@@ -13,7 +13,8 @@
     "144443b",
     "0a3801e",
     "1e87b87",
-    "913b57d"
+    "913b57d",
+    "74d6ca0"
   ],
   "model": "opencode/space-bunny-free (không thay thế)",
   "why": "W8.A4.5.N: sau khi fixture được vá (trigger không còn khớp `.pytest_cache`), phải chứng minh bằng một lượt native rằng: Build tạo bản nháp → check tests THẬT đỏ → main chọn sửa → CHÍNH Testing child cũ kiểm lại trên hash mới → xanh → node tổng hợp `__integration__` được dựng và kiểm tests trên cây đã gộp. Chỉ khi cả ba nhóm đều đạt thì `oracle` mới true.",
@@ -1722,7 +1723,7 @@
       "oracle": false,
       "error": null,
       "latencySeconds": 603.39,
-      "commit": null,
+      "commit": "74d6ca0",
       "realRed": {
         "seeded": 1,
         "proof": {
