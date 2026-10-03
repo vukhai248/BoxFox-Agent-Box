@@ -981,13 +981,38 @@ class WorkGraph:
                 # Ghi vết lên chính hồ sơ lượt kiểm: nếu không, lượt kiểm kế tiếp của một loại khác
                 # dựng lại hàng rào từ bản ghi cũ và `resolve` coi như bị hoàn tác.
                 self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note)
+        # W10: hàng rào "mã đã đổi" cũng phải có đường xoá. Khi mọi lượt kiểm của stage đều bị từ
+        # chối (`superseded`) vì cây mã đổi, stage bị kẹt ở needs_checks: `work_run` không chạy lại
+        # (chỉ chạy stage pending/revise), `retry` từ chối (nút không rejected/failed), và chỉ còn
+        # `action=update` — đường duy nhất xoá luôn bản nháp. Đường này giữ bản nháp, trả stage về
+        # sản xuất để dựng bản mới trên cây hiện tại.
+        for node in run['nodes']:
+            if ids and node['id'] not in ids:
+                continue
+            names = [only_stage] if only_stage else list(node['stages'])
+            for stage in names:
+                state = node['stages'].get(stage)
+                if not state or state['status'] not in ('needs_checks', 'revise'):
+                    continue
+                latest = [doc for doc in self.checks.latest(run, node, stage).values() if doc]
+                if not latest or any(doc.get('status') != 'superseded' for doc in latest):
+                    continue
+                cleared.append({'nodeId': node['id'], 'stage': stage, 'conflicts': state.get('inputConflicts') or [],
+                                'codeMoved': state.get('codeMoved')})
+                state['inputConflicts'] = []
+                state.update(status='pending', error=None)
+                self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note or 'code moved')
         if not cleared:
-            raise ValueError('WORK_NO_CONFLICT: no input conflict to resolve for the given nodes/stage')
+            raise ValueError('WORK_NO_CONFLICT: no input conflict or refused-check barrier to resolve for the '
+                             'given nodes/stage')
         self.save(run, 'input_conflicts_resolved', json.dumps(cleared, ensure_ascii=False)[:600])
-        message = ('Cleared %d input conflict(s); the draft is kept. '
-                   % sum(len(item['conflicts']) for item in cleared)) + \
+        message = ('Cleared %d input conflict(s) and %d refused-check barrier(s); the draft is kept. '
+                   % (sum(len(item['conflicts']) for item in cleared),
+                      sum(1 for item in cleared if item.get('codeMoved') is not None))) + \
             ('A stage that is still open (needs_checks/revise) continues with the next work_run/check; '
-             'a rejected/failed stage needs work_graph action=retry first.') + (f' Note: {note}' if note else '')
+             'a stage returned to pending needs work_run phase=execute to produce a fresh draft on the '
+             'current code; a rejected/failed stage needs work_graph action=retry first.') + \
+            (f' Note: {note}' if note else '')
         return self.result(run, message) | {'resolved': cleared}
 
     def retry(self, run, ids):
@@ -1004,8 +1029,16 @@ class WorkGraph:
                                                           'rounds': state.get('rounds') or []}
                     reset.append(f'{node["id"]}:{name}')
         if not reset:
+            # W10: nút kẹt ở needs_checks vì mã đã đổi KHÔNG phải lỗi "không có gì để chạy lại" —
+            # thông báo cũ để main hết đường và rò mã nội bộ ra chủ sở hữu (đo ở W10.F ca S12).
+            stuck = [(node['id'], name) for node in run['nodes'] for name, state in node['stages'].items()
+                     if state.get('codeMoved') is not None or state.get('status') in ('needs_checks', 'revise')]
             raise ValueError('WORK_NOTHING_TO_RETRY: no rejected or failed stage'
-                             + (' among ' + ', '.join(sorted(ids)) if ids else ''))
+                             + (' among ' + ', '.join(sorted(ids)) if ids else '')
+                             + '. A stage that is open or blocked by a moved tree has two paths: '
+                               'work_graph action=resolve (clears the barrier and returns the stage to '
+                               'production, keeping the draft) or work_run phase=execute (produce again on '
+                               'the current code). Open stages now: ' + str(stuck[:6]))
         if run['status'] == 'execute_failed':
             run['status'] = 'approved'
         elif run['status'] == 'needs_revision':
@@ -1074,6 +1107,12 @@ class WorkGraph:
                     'correct it with work_graph action=update (new draft, fresh checks). If the label was wrong '
                     'and the current draft stands, clear the barrier with work_graph action=resolve — it keeps the '
                     'draft, its artifact and its history. Then retry checks or production: ' + str(conflicts))
+        moved = [(n['id'], stage, s.get('codeMoved')) for n in self.all_nodes(run) for stage, s in n['stages'].items()
+                 if s.get('codeMoved') is not None and s['status'] in ('pending', 'needs_checks', 'revise')]
+        if moved:
+            return ('Main: the tree moved inside these nodes\' declared files, so their current drafts cannot be '
+                    'checked: ' + str(moved[:4]) + '. Call work_graph action=resolve to clear the barrier (the draft '
+                    'and its history are kept), then work_run phase=execute to produce a fresh draft on the current code.')
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1490,6 +1529,9 @@ class WorkGraph:
                                        status='pending', snapshot=None, needsTests=True, at=now())
             if touchset:
                 dirty_after = await self.worktrees.dirty_manifest(session['id'])
+                if dirty_after:
+                    # W10: ghim phần cây nút này sở hữu để lượt kiểm sau biết mã đổi trong hay ngoài phạm vi.
+                    dirty_after = dirty_after | {'declared': work_checks.declared_map(self, node, dirty_after)}
                 violations = self.worktrees.touch_violations(node, dirty_before, dirty_after)
                 if violations:
                     state.update(status='failed', touchViolation=violations[:20],
@@ -1501,7 +1543,12 @@ class WorkGraph:
                     self.save(run, 'node_failed', node['id'])
                     return state['status']
             after = await self.code_identity(run, run['sessionId'], root, base) if stage == 'execute' else None
-            changed = before is not None and after is not None and before != after
+            if touchset and after and (dirty_after or {}).get('declared'):
+                # W10: bản ghim giữ phần khai báo của nút để quyết định ghim lại/không ở lượt kiểm.
+                after['declared'] = dirty_after['declared']
+            # So theo schema+hash: bản ghim W10 mang thêm phần `declared` nên so cả dict sẽ luôn "đổi".
+            changed = (before is not None and after is not None
+                       and not work_checks.same_identity(before, after))
             declared_sensitive = any(re.search(r'api|schema|auth|migration|contract|concurr|lock', path, re.I) for path in node['files'])
             # The virtual integration node keeps its own (converged) policy after a repair.
             policy = (work_policy.integration(run) if node['id'] == INTEGRATION_NODE else
@@ -1645,13 +1692,38 @@ class WorkGraph:
         """W8.A4.3: a touch-set run is identified by the shared dirty manifest, a git run by its
         scoped worktree snapshot. A workspace that answers neither yields None; the caller decides
         (`run_stage` keeps going, an execution admission refuses)."""
-        if (run.get('isolation') or {}).get('mode') == 'touchset':
-            manifest = await self.worktrees.dirty_manifest(sid)
-            if manifest:
-                # Cùng hình dạng với `work_checks.snapshot` để mọi cổng so sánh dùng chung một kiểu.
-                return {'schema': manifest.get('schema'), 'hash': work_policy.digest(manifest),
-                        'head': manifest.get('head'), 'criticalChanges': False}
-        return await work_checks.snapshot(self, sid, root, base)
+        # W10: một đầu đọc duy nhất (`work_checks.identity_of`) để bản ghim và mọi cổng so sánh
+        # luôn cùng schema — trước đây binding `work-dirty/1` bị đem so với ảnh chụp git.
+        return await work_checks.identity_of(self, sid, None, (run.get('isolation') or {}).get('mode'),
+                                             root=root, base=base)
+
+    async def rebind_artifact(self, run, node, stage, meta, current, trail):
+        """W10 quyết định A: ghim lại bản nháp vào cây hiện tại khi mã chỉ đổi NGOÀI file của nút.
+
+        Bản nháp, policy và lịch sử được giữ; vết `codeRebound` nằm ngay trên artifact nên người
+        duyệt sau thấy được vì sao hash đổi. Không có đường này thì nút đứng mãi ở `needs_checks`.
+        """
+        state = node['stages'][stage]
+        binding = meta.setdefault('binding', {})
+        binding['codeSnapshot'] = current
+        binding['codeRebound'] = trail
+        self.artifacts.update(meta)
+        if (state.get('artifact') or {}).get('artifactId') == meta.get('artifactId'):
+            state['artifact'] = meta
+        self.save(run, 'artifact_rebound',
+                  f'{node["id"]}:{stage} {str(trail.get("from"))[:12]}→{str(trail.get("to"))[:12]}')
+
+    def stage_needs_rebuild(self, run, node, stage, moved):
+        """W10: mã đổi ĐÚNG vào file nút khai báo ⇒ trả stage về sản xuất, giữ lịch sử vòng.
+
+        Không xoá gì: artifact cũ vẫn đọc được trong registry, `rounds` còn nguyên. Chỉ trạng thái
+        đổi để `work_run phase=execute` dựng bản nháp mới trên cây hiện tại.
+        """
+        state = node['stages'][stage]
+        state.update(status='pending', codeMoved=sorted(moved or [])[:20] or ['<unmeasurable>'],
+                     error='WORK_CHECK_CODE_MOVED: the tree moved inside this node\'s declared files; '
+                           'produce a fresh draft on the current code (work_run phase=execute).')
+        self.save(run, 'code_moved', f'{node["id"]}:{stage} ' + ', '.join(state['codeMoved'][:6]))
 
     async def ensure_isolation(self, session, run, args):
         """W8.A4.3: resolve the repository and create the run worktree once per execution run."""
@@ -1701,13 +1773,15 @@ class WorkGraph:
                                  'integration check before execute/ship.')
             return
         current = None
+        mode = (run.get('isolation') or {}).get('mode')
         for node in run['nodes']:
             state = node['stages'].get('execute', {})
             if state.get('status') == 'accepted':
                 if current is None:
-                    current = await work_checks.snapshot(self, run['sessionId'])
+                    current = await work_checks.identity_of(self, run['sessionId'], None, mode)
                 expected = state.get('artifact', {}).get('binding', {}).get('codeSnapshot')
-                if not current or expected != current or not self.checks.valid(run, node, 'execute'):
+                if not current or not work_checks.same_identity(expected, current) \
+                        or not self.checks.valid(run, node, 'execute'):
                     state.update(status='revise', feedback='Integrated source changed: preserve valid changes, inspect current code and produce a fresh handoff for testing.',
                                  error='WORK_CODE_STALE: re-produce/re-test the current integrated snapshot.')
                     run['status'] = 'approved'

@@ -701,7 +701,9 @@ SCHEMAS = [
          'set_repair sets the bounded repair policy (maxRepairs <= maxRounds-1, debug=never|when_unclassified|'
          'always_first, revision, invocationId); cleanup_worktrees removes the clean worktrees of a closed run. '
          'resolve clears the recorded input conflicts of nodeIds (optional stage) once main has settled the '
-         'assignment question; unlike update it keeps the current draft, its artifact and its history.',
+         'assignment question, and clears a refused-check barrier (a stage whose every check was superseded '
+         'because the tree moved), returning that stage to pending so work_run phase=execute can produce a '
+         'fresh draft on the current code; unlike update it keeps the current draft, its artifact and its history.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
                                                 'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff',
                                                 'set_repair', 'cleanup_worktrees', 'resolve']},

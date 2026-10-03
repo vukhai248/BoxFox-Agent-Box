@@ -2,7 +2,7 @@
 import asyncio
 import hashlib
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -151,3 +151,25 @@ def test_existing_document_keeps_utf8_content_hash_and_nested_path(tmp_path):
     assert emitted['bytes'] == len(raw)
     assert emitted['contentHash'] == hashlib.sha256(raw).hexdigest()
     assert json.loads(json.dumps(emitted, ensure_ascii=False))['title'] == 'Kế hoạch'
+
+
+def test_agent_identity_text_matches_the_current_policy():
+    """W11 P0c: `AGENT.md` đi NGUYÊN VĂN vào system prompt của mọi phiên (kể cả con).
+
+    Câu cũ ở đây từng mô tả một thiết kế khác (mọi con đều có reviewer; con không bao giờ hỏi
+    chủ) và đảo ngược quyết định §27–29 — plan đã yêu cầu không dùng doc cũ để đảo kiến trúc.
+    """
+    text = (Path(__file__).resolve().parents[3] / 'AGENT.md').read_text(encoding='utf-8')
+    assert 'never asks the owner' not in text
+    assert 'work_report' in text and 'needs_user' in text
+    assert 'Every child output in a Work Graph goes to an independent reviewer' not in text
+    assert 'work_policy.derive' in text and 'converged tree' in text
+
+
+def test_simplify_skill_keeps_dropped_findings_visible():
+    """W11 P0c: skill vendor không được dặn bỏ gợi ý "âm thầm" — mọi kết luận cần bằng chứng."""
+    path = (Path(__file__).resolve().parents[2] / 'src' / 'agentbox' / 'vendor' / 'hermes' / 'skills'
+            / 'software-development' / 'simplify-code' / 'SKILL.md')
+    text = path.read_text(encoding='utf-8')
+    assert 'drop weak or wrong suggestions silently' not in text
+    assert 'never drop a suggestion silently' in text

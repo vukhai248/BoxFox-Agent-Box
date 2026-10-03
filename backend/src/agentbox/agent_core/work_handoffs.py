@@ -249,7 +249,7 @@ class Handoffs:
                 return
             doc, source, dest, meta = value
             snapshot = meta['binding'].get('codeSnapshot')
-            if snapshot and await work_checks.snapshot_of(self.graph, run['sessionId'], snapshot) != snapshot:
+            if snapshot and await work_checks.identity_changed(self.graph, run['sessionId'], snapshot):
                 raise ValueError('WORK_HANDOFF_STALE: code snapshot changed before admission')
             # Revocation/stop may occur during the snapshot read.
             if not self.inspect(row, run):

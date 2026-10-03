@@ -192,7 +192,9 @@ Wait for all four to return (batch mode returns them together).
    when two findings target the same line or the same underlying mechanism,
    collapse them into one.
 2. **Discard false positives** — you have the most context; you don't have to
-   argue with a reviewer, just drop weak or wrong suggestions silently.
+   argue with a reviewer, but never drop a suggestion silently: record every dropped
+   finding with one line of evidence (file:line or command output) in the summary, and
+   keep unresolved disagreements as open questions instead of hiding them.
 3. **Resolve conflicts.** Reviewers can disagree (Reviewer 1: "use existing
    util X"; Reviewer 3: "X is slow, inline it"). Default resolution order:
    **correctness > the user's stated focus > readability/reuse > micro-perf.**

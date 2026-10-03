@@ -170,8 +170,8 @@ class Continuations:
         source = (action.get('codeSnapshot') if action.get('requestId') else
                   json.loads(row['doc'])['input']['artifact']['binding'].get('codeSnapshot'))
         if source:
-            from .work_checks import snapshot_of
-            if await snapshot_of(self.graph, owner, source) != source:
+            from .work_checks import identity_changed
+            if await identity_changed(self.graph, owner, source):
                 raise ValueError('WORK_HANDOFF_STALE: code changed while queued for a child slot')
         self.authorize_new(owner, work)
 
