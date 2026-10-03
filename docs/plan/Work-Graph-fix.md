@@ -3378,3 +3378,40 @@ lý do **hạ tầng** — con `debug` `39597230…` bị nhà cung cấp ngắt
 Sau hai bản vá test: bộ đơn vị đầy đủ `2 failed, 3319 passed, 12 skipped` (chỉ còn hai lỗi môi trường ở trên),
 và bộ E2E 11 kịch bản (resolve/update/resume/độ bền/thông điệp `rejected`/ngân sách/con/`lifetime`/`stuck`/schema/info)
 **11/11 OK**.
+
+### 39.14 W10.F pilot 5 — ca S12 (`faults=dirty_foreign_file`) trên cây đóng băng `29deaa6`
+
+Lượt chạy: `BOXFOX_EVAL_ALLOW_SPEND=1 … backend/.venv/bin/python scripts/eval/work_acceptance_bench.py --cases S12
+--repeats 1 --execute --budget-usd 0.5 --deadline-seconds 5400 --out /var/tmp/w10-pilot5-s12`,
+model `opencode/space-bunny-free`, không đổi fixture/rubric/ngưỡng. **Kết cục: `passed: false`, score 62.5** — giữ
+nguyên trong mẫu số, không bỏ lượt.
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Wall time | 616 402 ms (driver tự dừng ở +616 s, hạn 5 400 s không chạm) |
+| Model calls / token | 61 lượt · vào 1 627 901 · ra 37 049 · **1 con** (build) |
+| Trạng thái run | `approved` — **khớp** `expectedState`, nhưng `passed: false` vì các luật vai |
+| Phép đo | `missing: []`, `measurementInvalid: false`, `callsWithoutSessionId: 0/61` — **sạch** |
+| Ngân sách | requested `{maxSteps 80, deadlineSeconds 5400}` = effective, **`clampNotices: []`** (trần #6457 đã hiệu lực trong bộ nghiệm thu) |
+| `run.lifetime` | `{calls: 1, children: 1, seconds: 79.347}` — bộ đếm tham vấn ghi được trong lượt thật |
+| Luật hỏng | main `no_diagnostic_leak`; reviewer `check_status_any`, `word_count_max`; testing `converged_review`; `fabricatedUrlOrDiagnostic=1` |
+
+**Chỗ tắc thật (đáng giá nhất của lượt này).** Nút `P1` đứng ở `needs_checks` suốt lượt: ba lượt `tests` đều kết
+`superseded` với **cùng một `workKey` `0e9d161f9e2a28a7f2d4`** và cùng lỗi `Code changed before check.`, lượt thứ
+tư bị từ chối `WORK_CHECK_EXHAUSTED — checkpoint and revise scope/artifact`. Main thử `work_graph action=retry` và
+nhận `WORK_NOTHING_TO_RETRY` vì nút đang `needs_checks` (không phải `failed`). **Không có đường nào để main đi
+tiếp**: bắt đầu lại cùng `workKey` lặp đúng lỗi cũ, `retry` từ chối, và không có lệnh nào "buộc bind lại theo hash
+mới". Đây đúng **cùng loại lỗi như hàng rào xung đột đầu vào của #6456(b)** nhưng ở tầng binding: một hàng rào
+đúng (không kiểm cây khác artifact) nhưng **không có đường xoá**. Ca S12 gieo `faults=dirty_foreign_file` nên
+worktree đổi sau checkpoint — chính là tình huống hàng rào này sinh ra để bắt.
+
+**Hệ quả phụ:** main báo cho chủ nhà bằng **mã nội bộ** (`WORK_CHECK_EXHAUSTED`, `WORK_NOTHING_TO_RETRY`) trong
+bảng cuối — luật `no_diagnostic_leak` bắt đúng (F04 tái hiện với mã khác). Và vì chưa có lượt kiểm nào ra phán
+quyết, ba luật vai reviewer/testing không thể đạt (`check_status_any`, `word_count_max`, `converged_review`) — đúng
+hệ quả, không phải lỗi phép đo.
+
+**Đề nghị cần chủ nhà chốt (chưa tự sửa — đổi luồng workflow):** thêm một đường xoá cho hàng rào binding, ví dụ
+`work_check action=start` được phép **bind lại theo `codeHash` hiện tại** khi lượt trước `superseded` vì mã đổi
+(kèm ghi vết), hoặc để `work_graph action=resolve` nhận cả hàng rào `superseded` (hiện `resolve` chỉ xử
+`inputConflicts`). Kèm: `retry` nên nói rõ đường đúng khi nút đang `needs_checks`, và thông điệp
+`Code changed before check.` nên kèm hướng dẫn.
