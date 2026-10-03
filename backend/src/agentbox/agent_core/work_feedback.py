@@ -774,5 +774,8 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         result['request'] = checkpoint
     rt.store.child_finish(child_id, status, reason=result['reason'], steps_used=lifetime_steps,
                           output_tokens=lifetime_tokens, answer_chars=len(answer or ''))
+    # H3 — lượt chạy lại cũng đóng con: chiếu kết cục vào attempt đang mở (nạp muộn, tránh vòng nhập).
+    from . import task_surface
+    task_surface.project_child(rt, child_id)
     rt.store.emit(owner['id'], 'child', result)
     return result

@@ -2277,6 +2277,11 @@ async def cancel_child(rt, session, args):
                 'reason': row.get('reason')}
     await rt.stop(target)
     closed = rt.store.child_close_once(target, 'cancelled', reason='OWNER_CANCELLED')
+    if closed:
+        # H3 — huỷ nhánh là một bộ đóng con: chiếu biên nhận vào attempt đang mở (nạp muộn để
+        # tránh vòng nhập `task_surface` → `research_runtime`).
+        from . import task_surface
+        task_surface.project_child(rt, target)
     # Chỉ thị giữa lượt chỉ xếp cho phiên GỐC, nên vòng lặp này thường không có gì để bỏ; giữ lại để
     # một nhánh đã đóng không bao giờ giữ chỉ thị của chủ nhà trong hàng chờ của mình.
     for steer in rt.store.claim_steers(target, limit=STEER_MAX_PENDING):

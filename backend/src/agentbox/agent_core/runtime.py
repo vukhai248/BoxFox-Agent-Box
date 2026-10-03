@@ -58,6 +58,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
 from . import plan_workflow, verify_exec, work_graph, work_feedback, work_scope, execution_kernel
+from . import task_surface
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -2198,6 +2199,8 @@ class HarnessRuntime(RuntimeCommands):
                 status, reason = 'failed', 'SESSION_GONE'
             self.store.child_finish(child_id, status, reason=reason, steps_used=steps_used,
                                     output_tokens=output_tokens, answer_chars=answer_chars)
+            # H3 — con `wait=false` tự xong: chiếu kết cục vào attempt đang mở của task (nếu có).
+            task_surface.project_child(self, child_id)
             # T11 — con `wait=false` tự xong cũng phải giao hàng: nếu không, người nhận khai trong
             # `deliverTo` chờ một biên nhận không bao giờ tới (chỉ `main` đọc được event này).
             try:
@@ -2276,6 +2279,8 @@ class HarnessRuntime(RuntimeCommands):
                 steps, tokens = self.store.child_usage_from_events(child_id)
                 self.store.child_finish(child_id, 'failed', reason=reason, steps_used=steps,
                                         output_tokens=tokens)
+                # H3 — người dọn T7 cũng là một bộ đóng con: chiếu kết cục vào attempt đang mở.
+                task_surface.project_child(self, child_id)
                 session = self.store.get(child_id)
                 if session['status'] in ('running', 'idle'):
                     self.store.save(child_id, session['messages'], 'cancelled')
@@ -3659,7 +3664,13 @@ class HarnessRuntime(RuntimeCommands):
         W8.A4.2 — phạm vi thi công của lượt (`work_scope`) áp lên hồ sơ ngay tại đây: cổng quyết định
         nằm ở `dispatch`, còn đây chỉ để model không phí bước gọi thứ sẽ bị từ chối.
         """
-        return work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
+        profile = work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
+        if not task_surface.enabled():
+            # H3 — công tắc giết của bề mặt task, áp ở ĐÚNG một chỗ cho MỌI hồ sơ lượt (main,
+            # research, design, plan): tắt thì bốn công cụ `task_*` không được quảng cáo, kể cả
+            # khi tên đã nằm trong `config['tools']` từ một phiên cũ.
+            profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
+        return profile
 
     def turn_profile_base(self, session, invocation_id=None):
         """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
@@ -4914,6 +4925,13 @@ class HarnessRuntime(RuntimeCommands):
             return await self.await_children(session, args)
         if name == 'delegate_task':
             return await self.delegate(session, args)
+        if name in task_surface.TASK_TOOLS:
+            # H3 — bề mặt task (plan v1 §4). Cổng ở đây là hàng rào cuối: phiên tạo lúc công tắc còn
+            # bật rồi công tắc tắt giữa chừng vẫn bị từ chối, không "chạy tạm".
+            if not task_surface.enabled():
+                raise PermissionError(f'TASK_SURFACE_OFF: {name} is unavailable while '
+                                      f'{task_surface.SWITCH} is off')
+            return await task_surface.handle(self, current, name, args)
         if name in WORK_TOOLS:
             result = await self.work_tool(session, name, args, call_id)
             # W8.A4.2 — lượt của main gắn vào run vừa resolve được, để mọi lời gọi sau trong cùng lượt
@@ -6816,6 +6834,17 @@ class HarnessRuntime(RuntimeCommands):
                          children=[row['child_id'] for row in claimed])
         return len(claimed)
 
+    @staticmethod
+    def _task_receipt(opened):
+        """H3 — phần task của kết quả `delegate_task`: danh tính, không phải quyền."""
+        receipt = {'taskKey': opened['taskKey'], 'taskId': opened['taskId'], 'runId': opened['runId'],
+                   'revision': opened['revision']}
+        if opened.get('attempt'):
+            receipt['attempt'] = {'attemptId': opened['attempt']['attemptId'],
+                                  'attemptSeq': opened['attempt']['attemptSeq'],
+                                  'status': opened['attempt']['status']}
+        return receipt
+
     async def delegate(self, session, args, work=None):
         """Spawn one specialist child. `work` is set only by the Work Graph engine (never by the model):
         such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
@@ -6987,6 +7016,10 @@ class HarnessRuntime(RuntimeCommands):
             child_deadline = min(CHILD_DEADLINE_SECONDS, live_ceiling,
                                  tier_limits['childSeconds'])
         output_budget = output_policy.child_budget(role, work, task_kind)
+        # H3 — lời gọi mang hợp đồng task (`args['task']`) tạo hàng task BỀN trước khi con tồn tại,
+        # để lượt sau còn đọc được ý định kể cả khi tiến trình chết giữa chừng. Không có hợp đồng,
+        # hoặc công tắc tắt ⇒ `None`, hành vi cũ nguyên vẹn. Ghi task KHÔNG cấp quyền chạy.
+        opened = task_surface.open_delegate(self, session, args)
         await self.acquire_child_slot(parent_id)
         try:
             if controller:
@@ -7110,6 +7143,10 @@ class HarnessRuntime(RuntimeCommands):
             # và `wait=false` không có nghĩa gì khi không có `await_children` để đọc kết quả sau.
             deliver_to, wait = [], True
         self.store.child_start(child['id'], parent_id, turn, step, role, echo_goal)
+        if opened is not None:
+            # Con đã được admit và hàng sổ con đang mở: đây mới là lúc ghi attempt. Hợp đồng lệch
+            # vai đã bị chặn ở `open_delegate`, còn `_child` của kho task kiểm lại chủ/vai.
+            opened['attempt'] = task_surface.bind_attempt(self, session, opened, child['id'])
         self.store.emit(parent_id, 'child', {
             'sessionId': child['id'],
             'role': role,
@@ -7156,8 +7193,12 @@ class HarnessRuntime(RuntimeCommands):
             # đóng sổ con khi nó tự xong (kèm nhả slot).
             task.add_done_callback(lambda finished, cid=child['id'], pid=parent_id, who=deliver_to: \
                                    self.close_detached_child(pid, cid, role, turn, step, echo_goal, finished, who))
-            return {'status': 'started', 'sessionId': child['id'], 'role': role,
-                    'turn': turn, 'step': step, 'deliverTo': deliver_to}
+            started = {'status': 'started', 'sessionId': child['id'], 'role': role,
+                       'turn': turn, 'step': step, 'deliverTo': deliver_to}
+            if opened is not None:
+                # H3 — main cần `taskId`/`taskKey` để `task_get`/`task_send`/`task_abandon` sau này.
+                started['task'] = self._task_receipt(opened)
+            return started
         task.add_done_callback(lambda _task, pid=parent_id, cid=child['id']:
                                self.release_child_slot(pid, cid))
         try:
@@ -7233,8 +7274,12 @@ class HarnessRuntime(RuntimeCommands):
         final_reason = result.get('reason') or last_error
         self.store.child_finish(child['id'], status, reason=final_reason, steps_used=steps_used,
                                 output_tokens=output_tokens, answer_chars=len(answer_text))
+        # H3 — con `wait=true` xong: chiếu kết cục vào attempt đang mở của task (nếu có).
+        task_surface.project_child(self, child['id'])
         result.update({'stepsUsed': steps_used, 'outputTokens': output_tokens,
                        'answerChars': len(answer_text), 'wallMs': wall_ms})
+        if opened is not None:
+            result['task'] = self._task_receipt(opened)
         if final_reason and 'reason' not in result:
             result['reason'] = final_reason
         # T11 — giao kết quả cho những người nhận đã khai, rồi mang biên nhận vào event kết thúc:
