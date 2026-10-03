@@ -1325,7 +1325,8 @@ def test_drive_session_records_a_zero_question_card_once():
 
     Pilot4 S09 02/10/2026: yêu cầu `wr-f1b6ad…` (kind `needs_evidence`) không có câu hỏi nào nên
     `_pending_answer` trả `[]`; lượt dừng ở +517 s mà `bundle['notes']` rỗng, phải mở DB mới biết
-    lý do. Ghi chú này phải xuất hiện đúng MỘT lần dù vòng lặp quét thẻ nhiều lần.
+    lý do. Ghi chú này phải xuất hiện đúng MỘT lần dù vòng lặp quét thẻ nhiều lần, và khi không
+    còn gì khác trả lời được thì lượt phải KẾT THÚC CHỜ (không quay vòng tới hạn driver).
     """
     seen = []
 
@@ -1371,6 +1372,9 @@ def test_drive_session_records_a_zero_question_card_once():
     assert seen == [], 'thẻ 0 câu hỏi thì không được bịa câu trả lời'
     hits = [note for note in notes if 'không có câu hỏi' in note]
     assert len(hits) == 1 and 'wr-x' in hits[0], f'phải ghi chú đúng một lần: {notes}'
+    assert any('kết thúc chờ' in note for note in notes), f'phải kết thúc chờ: {notes}'
+    assert not any(note.startswith('deadline') for note in notes), \
+        'thẻ 0 câu hỏi là hết thứ trả lời được — không đứng im tới hạn driver'
 
 
 def test_terminal_fence_stops_wrappers_substitution_and_relative_escapes(tmp_path):
@@ -1392,6 +1396,36 @@ def test_terminal_fence_stops_wrappers_substitution_and_relative_escapes(tmp_pat
     # `/workspace` của box thật được dịch về workspace của cell, không bị từ chối oan.
     translated = asyncio.run(run('cd /workspace || cd ~; pwd'))
     assert translated['is_error'] is False and str(tmp_path) in translated['content']
+
+
+def test_terminal_fence_allows_the_isolation_probe_and_checks_inside_substitutions(tmp_path):
+    """W10.M3/S12 — hàng rào cũ chặn MỌI `$(…)` nên phép dò cô lập thật bị từ chối oan.
+
+    Hệ quả đo được ở pilot 5: fixture từ chối `t=$(git rev-parse --show-toplevel …) && …`, sản phẩm
+    kết luận "không có git trong workspace" và run ghi `isolation.mode='touchset'` cho một workspace
+    LÀ gốc git. Fixture chạy lệnh qua shell thật (`create_subprocess_shell`), nên thay thế lệnh là
+    cú pháp hợp lệ; hàng rào phải kiểm phần lồng bằng cùng bộ luật thay vì từ chối cả lệnh.
+    """
+    scenario = bench.load_scenario(bench.scenario_path('S12'))
+    bench.seed_workspace(tmp_path, scenario)
+    executor = bench.WorkspaceExecutor(tmp_path, scenario)
+
+    probe = ('t=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$t" ] && [ "$t" = "$(pwd -P)" ] '
+             '&& echo workspace-is-repo')
+    assert executor._terminal_problem(probe) is None, 'phép dò cô lập thật không được bị chặn'
+    for command in ('git diff --name-only $(git rev-parse HEAD~1 2>/dev/null || echo HEAD)',
+                    'cd $(pwd) && echo ok', 'printf \'%s\' "$(date +%s)"'):
+        assert executor._terminal_problem(command) is None, f'không được chặn oan: {command}'
+    # Phần lồng vẫn qua đúng bộ luật: chặn chương trình bị cấm, đường dẫn ngoài workspace và vỏ lồng.
+    for command in ('echo $(rm -rf x)', 'echo `rm -rf x`', 'echo $(curl http://example.com)',
+                    'echo `cat /etc/passwd`', 'echo $(bash -c "rm -rf x")',
+                    'echo $(echo $(rm -rf x))'):
+        assert executor._terminal_problem(command), f'phải chặn: {command}'
+    # Lệnh thật vẫn chạy được: thay thế lệnh được shell diễn giải, không phải bị từ chối.
+    async def run(command):
+        return await executor.execute('terminal_exec', {'command': command, 'timeout': 30}, 'sid')
+    result = asyncio.run(run('echo $(git rev-parse --is-inside-work-tree 2>/dev/null)'))
+    assert result['is_error'] is False and 'true' in result['content'], result
 
 
 def test_terminal_output_truncates_like_the_real_box(tmp_path):
