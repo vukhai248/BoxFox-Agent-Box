@@ -867,3 +867,463 @@ lợi ích, chi phí và cách đo.
 Thứ tự đề xuất: **A1 → A2 → C6 → A3 → A6**, rồi tới nhóm B. A1 và A2 là hai sửa nhỏ nhưng chặn
 nguyên nhân gần của phần lớn lượt hỏng; C6 là tối ưu rẻ nhất (chỉ đổi mặc định); A6 là việc lớn nhất
 và nên làm sau khi A1/A2 ổn định số đo.
+
+---
+
+## 12. Prompt chi tiết — từng vai, hai bên
+
+Phần này đối chiếu **văn bản prompt thật**: bên BoxFox trích từ mã nguồn trong repo này; bên
+Vorflux mô tả cấu trúc + ví dụ thật từ phiên làm việc. Không dán nguyên văn prompt hệ thống của
+Vorflux (bản đầy đủ dài và phần lớn là quy ước nội bộ); chỗ nào cần thì trích ngắn.
+
+### 12.1 Prompt hệ thống của phiên main
+
+**BoxFox** (`runtime.py`, hàm dựng prompt) ghép theo thứ tự cố định:
+
+```text
+<IDENTITY>                       ← từ AGENT.md ở gốc repo, hoặc hằng IDENTITY
+=== ASSIGNED ROLE: MAIN ===      ← role.upper()
+<role_instructions>              ← ROLES[role].instructions (hoặc orchestrator_guidance())
+<required research skills>       ← nội dung ĐẦY ĐỦ của skill bắt buộc theo vai
+=== ENABLED SKILLS (Load full content via skill_view before executing complex workflows) ===
+- id: mô tả ngắn                  ← catalog.prompt(skills): chỉ id + description
+=== ANSWER LENGTH ===
+<ANSWER_LENGTH_HINT>
+<ANSWER_EVIDENCE_LINE>           ← CHỈ phiên chính; phiên con không nhận dòng này
+=== OWNER-CONFIGURED DIRECTIVES ===
+<config['instructions']>         ← chỉ khi chủ nhà có cấu hình
+```
+
+Bốn điểm đáng chú ý: (a) skill bắt buộc theo vai được **nạp nguyên văn** vào prompt, còn skill
+thường chỉ hiện **id + mô tả** (nạp sau bằng `skill_view`); (b) phiên con **không** nhận dòng bằng
+chứng của chủ nhà — nó trả theo `CHILD_RESULT_CONTRACT`; (c) phần `OWNER-CONFIGURED DIRECTIVES`
+đứng **cuối** prompt (ưu tiên thấp nhất theo thứ tự đọc); (d) lời dặn của người dùng không có khe
+riêng ở giữa.
+
+**Vorflux (tôi)** ghép theo nhóm, không theo một thứ tự cứng, và **không có "role instructions"**
+cho phiên chính — tôi luôn là chính tôi. Các nhóm (§9.1) trộn: định danh, giọng văn, an toàn, bộ
+nhớ, môi trường, điều phối con, quy trình, định dạng đầu ra, danh mục công cụ, vòng đời.
+Khác biệt cốt lõi: BoxFox **gán vai cho phiên** rồi nạp văn bản của vai; Vorflux **không gán vai
+cho phiên chính** — vai chỉ tồn tại ở tác vụ con (`agent_type`).
+
+### 12.2 Vai `plan` — BoxFox nói gì, tôi làm gì
+
+**BoxFox** (`roles.py`, `PLAN_INSTRUCTIONS`) — trích:
+
+> "You are the Plan Specialist… When bound to ACTIVE MODE: PLAN, return proposed architecture,
+> decisions and missing questions to the main session. **Only the main session interviews the user
+> and writes the official Plan document.**"
+> "…return a structured Markdown report with: ### Implementation Milestones (ordered, with assigned
+> specialist roles) / ### Files to Modify / Create / ### Verification / Acceptance Criteria
+> (**REQUIRED: at least one observable check and its expected result**…) / ### Risks / Limitations"
+> "**Document Gate**: `write_plan` refuses a plan without those sections and writes NOTHING on
+> refusal… In a Work Graph node you must NOT call `write_plan` at all: the harness writes the
+> documents after the whole-plan review. A command you have not run is a planned check, not a result
+> — label it as planned."
+
+Cơ chế kèm theo: `plan_scope` (root-owned: status/update/ask/confirm/switch), `plan-review` là vai
+phản biện độc lập bắt buộc, `plan_verify` ghi verdict `ok|revise`, và cổng
+`PLAN_APPROVAL_UNVERIFIED` chặn duyệt khi chưa có verdict.
+
+**Vorflux (tôi)**: không có vai `plan` cho phiên chính. Khi người dùng xin kế hoạch, tôi đọc skill
+`planning-workflow` rồi viết một file plan (mục tiêu, phạm vi, các bước, tiêu chí nghiệm thu, rủi
+ro), gửi bằng `plan submit` kèm tiêu đề; phiên **dừng** cho tới khi người dùng duyệt
+(`plan approve`) hoặc yêu cầu sửa. Kế hoạch đổi phạm vi thì phải làm lại và duyệt lại. Nếu cần
+thiết kế trước, tôi giao subagent `design` và gửi kèm mockup trong cùng lần duyệt
+(`--design-file-paths`, `--design-plan-file-path`). Khi cần một bản kế hoạch *kỹ thuật* để tham
+khảo, tôi giao subagent `plan`.
+
+So sánh gọn: BoxFox tách **ba** thứ (plan_scope của root, sub-plan của vai plan, verdict của
+plan-review) và ghi thành máy trạng thái; Vorflux gộp vào **một** đường (tôi viết → người dùng
+duyệt) và không có verdict bắt buộc. Đổi lại, BoxFox không thể "quên" bước phản biện; Vorflux có
+thể — tôi chỉ phản biện khi tự thấy cần hoặc khi người dùng yêu cầu.
+
+### 12.3 Vai `design`
+
+**BoxFox** (`DESIGN_INSTRUCTIONS`) yêu cầu: kiến trúc & hợp đồng dữ liệu (TypeScript/Python type
+signatures), cây thành phần & luồng UX, đánh đổi; cấm viết mã sản xuất.
+**Vorflux**: subagent `design` tạo **mockup HTML/CSS** trong `/code/.plans/designs/` + một
+`design-plan.json`, để người dùng xem trong lần duyệt plan; mockup là **file xem được**, không chỉ
+là văn bản mô tả. Đây là điểm Vorflux mạnh hơn về "nhìn thấy trước", còn BoxFox mạnh hơn về ràng
+buộc hợp đồng dữ liệu.
+
+### 12.4 Vai `build`
+
+**BoxFox** (`BUILD_INSTRUCTIONS`) — trích: "Inspect Before Editing… Surgical Edits… **NEVER leave
+placeholder comments like '// TODO' or stub implementations**… Pre-verification: Verify syntax or
+run local compilation checks where feasible… **STRICT PROHIBITION: Never claim that unrun tests
+have passed.**"
+**Vorflux**: tôi **tự làm** một việc triển khai duy nhất (chỉ giao subagent `build` khi cần chia
+nhiều việc song song), rồi bắt buộc đi qua chuỗi: simplify → review (tối đa 2 vòng) → testing →
+test report. Ràng buộc "không được nói test đã pass khi chưa chạy" của BoxFox nằm ở prompt vai;
+của tôi nằm ở **luật trình bày bằng chứng** (báo cáo phải có lệnh đã chạy + đầu ra).
+
+### 12.5 Vai `review`
+
+**BoxFox** (`REVIEW_INSTRUCTIONS` + `REVIEW_TAIL_VI`) — trích hai luật đắt giá nhất:
+
+> "A blocking finding MUST cite the toolCallId of a call you made in THIS review (or a
+> `verify:<codeHash>` signature); a prose reference such as "file_read:src/x.py" is not evidence
+> and the finding is downgraded."
+
+> "Trước khi chặn, chỉ rõ yêu cầu được giao, đọc đoạn artifact và nguồn gốc liên quan, xét bằng
+> chứng mạnh nhất có thể bác bỏ chính finding của bạn… Nghi ngờ chưa có bằng chứng giữ UNVERIFIED,
+> không gọi là lỗi đã xác nhận… Tối đa 8 finding, mỗi claim tối đa 300 ký tự; trích receipt, không
+> trích trí nhớ."
+
+**Vorflux**: subagent `review` đọc diff và trả nhận xét + **chấm rủi ro**; tôi là người quyết định
+sửa gì. Không có luật "receipt bắt buộc" — nghĩa là Vorflux dễ nhận finding không có bằng chứng
+hơn. **Mượn được ngay**: luật receipt + trần 8 finding/300 ký tự, vì nó rẻ và chặn được review
+kiểu cảm tính.
+
+### 12.6 Vai `testing`
+
+**BoxFox** (`TESTING_INSTRUCTIONS`) — trích: "Formulate Test Matrix… Execute Automated Tests… Visual
+& UI Verification: use `browser_use` or `computer_screen_capture`… **STRICT PROHIBITION: NEVER
+fabricate test results. If a test fails, report the failure honestly with the raw error output.**"
+Ngoài ra hợp đồng `produce` bắt buộc: dữ kiện cần `path:line`/URL đã mở hoặc output lệnh thực.
+**Vorflux**: subagent `testing` (là loại **duy nhất** được hỏi ngược người dùng qua
+`ask_non_blocking_question`) lập test plan → dựng môi trường → chờ lệnh → chạy → trả báo cáo có
+`OVERALL STATUS`, `TESTING COVERAGE: x/y`, artifact trong `/code/.generated_artifacts/`; tôi
+**không được tự viết Test Report**. Khác biệt: BoxFox cấm bịa bằng lời dặn; Vorflux cấm bằng
+**quy trình** (report do bên khác viết, tôi chỉ submit).
+
+### 12.7 Hợp đồng kết quả con — hai bên viết khác nhau
+
+**BoxFox** (`CHILD_RESULT_CONTRACT`, nối vào **mọi** prompt con, ≤1200 ký tự):
+
+> "Result contract (the parent needs exactly this back). Your own budget is at most 200 steps and
+> 3600 s, clamped by the parent; plan for it. / ## Findings / ## Evidence / ## Verification
+> performed / ## Limitations & open questions / **An unevidenced claim is a failure, not an
+> answer.** / If you run out of steps or time… answer with the four-part diagnosis instead… a
+> `partial` answer with that diagnosis is worth far more to the parent than an empty failure."
+
+Kèm theo, theo `taskKind`/`depth`: nhánh tra cứu có trần **120 từ** cho mục Trả lời (luật đếm:
+thân mục, không tính dòng tiêu đề), research brief **400 từ**, và mỗi vai có **deliverable** riêng
+(EN/VI) + **rubric** riêng. Vai `review` phải trả một object `coverage` trong fenced json và dòng
+cuối `VERDICT: ok|revise`.
+
+**Vorflux**: hợp đồng nằm ở **tham số tôi viết khi giao việc** — `description` (WHAT + bối cảnh) và
+`instructions` (HOW, chỉ khi cần ghi đè), cộng `output_schema` nếu bật workflow mode (con ghi JSON
+vào `/code/.plans/workflow/results/<task_id>.json`, kết thúc bằng `RESULT_FILE: <path>`). Trần nội
+dung: mô tả ngắn, kết quả trả về là văn bản tự do trừ khi có schema.
+
+Khác biệt thật: BoxFox **áp** hợp đồng bằng mã cho mọi con; Vorflux **thương lượng** hợp đồng bằng
+lời của tôi cho từng việc. BoxFox chắc hơn; Vorflux linh hoạt hơn.
+
+### 12.8 Bảng đối chiếu prompt theo vai
+
+| Vai | BoxFox: prompt vai (nguồn) | Vorflux: cơ chế tương ứng | Ghi chú |
+|---|---|---|---|
+| main | `orchestrator_guidance()` + SOP A–I | luật nền tảng + quy trình (không có SOP nghiệp vụ) | BoxFox chi tiết hơn |
+| explore | `EXPLORE_INSTRUCTIONS` — 4 mục output, read-only | subagent `explore` + luật tìm mã trong prompt | tương đương |
+| plan | `PLAN_INSTRUCTIONS` + `plan_scope` + `plan-review`/`plan_verify` | tôi viết plan + `plan submit`; subagent `plan` khi cần | BoxFox nhiều cổng hơn |
+| design | `DESIGN_INSTRUCTIONS` (hợp đồng dữ liệu) | subagent `design` → mockup HTML + `design-plan.json` | Vorflux "nhìn thấy" hơn |
+| build | `BUILD_INSTRUCTIONS` (cấm TODO/stub) | tôi tự làm; build subagent khi chia việc | tương đương |
+| debug | `DEBUG_INSTRUCTIONS` (tái hiện → nguyên nhân → sửa nhỏ) | subagent `debug` | tương đương |
+| review | `REVIEW_INSTRUCTIONS` + receipt + trần 8 finding | subagent `review` + chấm rủi ro | BoxFox chặt hơn |
+| simplify | `SIMPLIFY_INSTRUCTIONS` (giữ hành vi) | subagent `simplify` | tương đương |
+| testing | `TESTING_INSTRUCTIONS` (cấm bịa) | subagent `testing` + test-report | Vorflux chặt hơn về quy trình |
+| research | `RESEARCH_INSTRUCTIONS` + ledger + `research_branch_report` | không có vai research ở nền tảng; tôi dùng `web_search`/`read` trực tiếp | BoxFox mạnh hơn hẳn |
+| plan-review | vai riêng, kết thúc `VERDICT:` | không có | BoxFox mạnh hơn |
+| research-review | vai riêng, 3 mode critique/evidence/coverage | không có | BoxFox mạnh hơn |
+
+---
+
+## 13. Tôi giao việc cho sub-agent bằng cách nào?
+
+Không phải "nhập prompt bừa". Có **bảy trường** và một vòng đời. Bảng dưới là hợp đồng `add_task`
+mà tôi phải điền:
+
+| Trường | Bắt buộc | Vai trò | Ví dụ (rút từ phiên này) |
+|---|---|---|---|
+| `task_id` | có | định danh duy nhất trong phiên, dùng lại được khi cần nối tiếp | `test-6456-6457` |
+| `title` | có | nhãn 3–6 từ cho UI, **không** chứa đường dẫn/tên nhánh | "Kiểm thử hồi quy ngân sách" |
+| `description` | có | WHAT + toàn bộ bối cảnh con cần để tự chạy | xem ví dụ dưới |
+| `instructions` | không | HOW — chỉ khi cần ghi đè quy trình mặc định | "Không sửa mã sản phẩm; chỉ chạy kiểm thử" |
+| `agent_type` | không | 8 loại: explore/plan/design/build/debug/review/simplify/testing | `testing` |
+| `output_schema` | không | JSON Schema cho kết quả (workflow mode) | schema báo cáo rủi ro |
+| `phase` / `component` | không | nhãn nhóm việc và nhãn hiển thị | `phase=verify`, `component=Backend` |
+
+Vòng đời: `add_task` trả về **ngay** (`task_id`) → tôi tiếp tục việc khác → `list_tasks` xem trạng
+thái → `wait_any_task_result` chờ kết quả → `send_message_to_task` gửi tiếp (kể cả đánh thức task
+đã xong) → `cancel_task`/`abandon_blocked_task` dừng khi cần.
+
+**Ví dụ thật (rút gọn) — task kiểm thử #6456/#6457:**
+
+```text
+task_id: test-6456-6457
+title:   Kiểm thử hồi quy ngân sách
+type:    testing
+description: "Kiểm thử E2E hai thay đổi #6456 (ngân sách trẻ) và #6457 (sửa vòng native) trên
+  nhánh vorflux/w10-w12-completion. Repo đã checkout sẵn tại /code/...; nhánh đã push.
+  Bối cảnh: (a) #6456 đổi cách tính ngân sách trẻ; (b) #6457 sửa vòng sửa lỗi native.
+  Yêu cầu: dựng kịch bản chạy trên bề mặt tool thật, không gọi model; lưu bằng chứng vào
+  /code/.generated_artifacts/; chạy pytest các tệp bị ảnh hưởng + toàn bộ suite."
+instructions: "Bắt đầu bằng test plan và dựng môi trường; chờ lệnh của tôi trước khi chạy."
+```
+
+Sau khi chạy, tôi nhận về: báo cáo văn bản có `OVERALL STATUS: PASSED`, `TESTING COVERAGE: 11/11`,
+các artifact (`results-final-*.json`, log pytest, script E2E 470 dòng). Tôi **không** tự viết Test
+Report — tôi submit nó bằng `test-report submit`.
+
+**Điểm khác BoxFox `delegate_task`:**
+
+| Khía cạnh | BoxFox `delegate_task` | Vorflux `add_task` |
+|---|---|---|
+| Định danh | không có id do cha đặt (con sinh id nội bộ) | `task_id` do tôi đặt, dùng lại được |
+| Vai | 11 vai cố định, gán bằng enum `role` | 8 loại, gán bằng `agent_type` |
+| Đầu ra | `expect` — cha **bắt buộc** khai hình dạng kết quả | mô tả tự do; schema là tuỳ chọn |
+| Chờ | `wait=true/false` + `deliverTo` + `await_children` | `wait_any_task_result` (không chặn lúc giao) |
+| Nối tiếp | cha gửi lại việc mới | `send_message_to_task` vào **chính** task đó |
+| Hỏi ngược | con không hỏi được (trừ research branch report) | chỉ `testing` có `ask_non_blocking_question` |
+| Trần | 200 bước / 3600 s mỗi con, fan-out 3–6 | `timeout_seconds` mỗi task; không trần bước |
+| Bằng chứng | `CHILD_RESULT_CONTRACT` bắt buộc 4 mục | tôi quy định trong `description` |
+
+**Cách tôi chọn loại và viết mô tả (thực tế trong phiên này):**
+
+1. Việc đọc hiểu repo → `explore`, mô tả nêu rõ **câu hỏi cần trả lời** và **giới hạn** (không
+   sửa file, chỉ đọc).
+2. Việc viết mã đã chốt phạm vi → `build`, mô tả nêu **tệp đích + hợp đồng + test phải chạy**.
+3. Việc chẩn đoán → `debug`, mô tả nêu **triệu chứng + cách tái hiện**.
+4. Kiểm tra độc lập → `review` (kèm yêu cầu **chấm rủi ro**) hoặc `simplify` (chỉ giảm phức tạp).
+5. Xác minh cuối → `testing`, mô tả nêu **kịch bản, bề mặt thật, nơi lưu bằng chứng**.
+6. Kế hoạch/thiết kế → `plan`/`design`, mô tả nêu **ràng buộc và định dạng đầu ra mong muốn**.
+
+Bốn luật tôi tự giữ: (a) mỗi task một mục tiêu; (b) bối cảnh con không tự lấy được thì **nhét vào
+mô tả**; (c) không giao việc mà tôi có thể tự làm nhanh hơn; (d) ghi rõ **cái không được làm**
+(ví dụ: không sửa mã sản phẩm, không commit).
+
+---
+
+## 14. Hai chế độ máy (cloud/self-host vs máy người dùng) — cần gì để làm
+
+### 14.1 Hai chế độ là gì
+
+| | **Chế độ A — cloud/self-host** (hiện tại) | **Chế độ B — máy người dùng** (kiểu Codex/Claude Code) |
+|---|---|---|
+| Runtime ở đâu | server/VPS, agent chạy trong Docker container | tiến trình trên máy người dùng (desktop app) |
+| Workspace | nằm trên máy chủ, người dùng xem qua web/VNC | **repo thật của người dùng** trên đĩa của họ |
+| Ranh giới an toàn | container là ranh giới thật | **không có container**; ranh giới là OS + quy tắc của app |
+| Mạng | box không ra Internet; tool host mới ra | máy người dùng có mạng thật; phải tự chặn egress |
+| Bí mật | khoá nằm trên máy chủ, không mount vào box | khoá nằm trên máy người dùng (keyring OS) |
+| Ai trả tiền model | chủ máy chủ hoặc khoá của người dùng | khoá của người dùng, hoặc Ollama local |
+
+Kế hoạch sản phẩm (`docs/plan/agent-box-plan.md`) đã ghi **câu hỏi mở §214**: "Mức cloud nào chấp
+nhận được khi định vị local-first: chỉ self-host, hybrid hay hosted control plane?" — đây chính là
+quyết định phải chốt trước khi làm chế độ B. ADR-0001 trong repo đã định nghĩa **ba lựa chọn cô
+lập shell** cho vấn đề này: (1) worker ngắn hạn với mount riêng; (2) sandbox tiến trình trong
+desktop; (3) shell toàn workspace + approval/audit.
+
+### 14.2 Cái gì giữ nguyên, cái gì phải đổi
+
+**Giữ nguyên (không phụ thuộc nơi chạy):** Work Graph và máy trạng thái; 11 vai + `ROLE_SKILLS`;
+hợp đồng kết quả con; `work_prompts`; checks/rubric; `lifetime`; router đa nhà cung cấp.
+**Phải đổi:** lớp *cưỡng chế* (sandbox → ranh giới OS), *đường dẫn* (mount ảo → đường dẫn thật),
+*vòng đời tiến trình* (container dài hạn → tiến trình có thể bị người dùng tắt), *bí mật*
+(máy chủ → máy người dùng), *cập nhật* (deploy → auto-update), và *test matrix* (nhân đôi theo hệ
+điều hành).
+
+### 14.3 Sáu nhóm việc phải làm
+
+**1) Đóng gói và phân phối.** Chọn vỏ: Electron/Tauri (khuyến nghị Tauri nếu muốn nhẹ) hoặc CLI
+trước, GUI sau. Phải bundling runtime (Python + Node) hoặc yêu cầu cài; ký số (macOS notarization,
+Windows code signing); kênh cập nhật (stable/beta) + rollback; chế độ chạy không cần Docker.
+*Nghiệm thu:* cài trên máy sạch (Win/macOS/Linux) trong ≤10 phút, mở được repo thật, chạy một task
+nhỏ.
+
+**2) Ranh giới thực thi (isolation).** Trên máy người dùng, ba lựa chọn của ADR-0001 áp lại khác:
+worker-mount riêng khó vì phải dựng filesystem ảo; **khả thi nhất là (2) sandbox tiến trình**:
+macOS `sandbox-exec`/seatbelt, Linux `bwrap`/`landlock`, Windows Job Objects + AppContainer. Nếu
+không làm được, phải rơi về (3) shell toàn workspace + approval/audit — và **phải nói rõ trong
+tuyên bố bảo mật** rằng không có path-scoped isolation. *Nghiệm thu:* bộ spike của ADR-0001
+(sibling write, symlink race, host sentinel, secret không mount, process con, egress) chạy trên cả
+ba hệ điều hành.
+
+**3) Quyền, phê duyệt và hoàn tác.** Áp lại Plan/Act + grant lên môi trường thật, thêm ba thứ mới:
+(a) **allow-list theo đường dẫn** (workspace root được ghi; `~/.ssh`, `~/.aws`, keychain, `.env`
+ngoài workspace bị chặn cứng); (b) **checkpoint git trước mỗi lần ghi** để có undo thật; (c) **thang
+tin cậy** chống mệt mỏi phê duyệt — dữ liệu trong kế hoạch: Claude Code sinh khoảng **100 lần xin
+phép mỗi giờ**, và hệ quả thường là người dùng bấm đồng ý theo phản xạ hoặc tắt bảo vệ bằng
+`--dangerously-skip-permissions`. *Nghiệm thu:* đo số lần hỏi/giờ trên 3 kịch bản thật; mục tiêu
+dưới 20 lần/giờ mà không mất mốc chặn quan trọng.
+
+**4) Bí mật và mô hình.** Khoá API nằm ở keyring OS, không ghi ra file cấu hình dạng chữ; router
+chạy cục bộ (`127.0.0.1`) và **chỉ** nhận kết nối từ app; hỗ trợ Ollama local cho chế độ không
+mạng (ghi chú của kế hoạch: model 7B cần ~8 GB RAM — máy yếu thì phải hạ model hoặc dùng cloud).
+*Nghiệm thu:* quét đĩa không thấy khoá dạng chữ; tắt mạng vẫn chạy được task đọc/ghi file với model
+local.
+
+**5) Đồng bộ và chế độ lai.** Nếu giữ cả hai chế độ, phải định nghĩa: định danh workspace (repo
+nào), chiều đồng bộ (đẩy artifact/event lên hay giữ tại chỗ), chính sách dữ liệu (cái gì **được**
+rời máy), và chế độ lai khả dĩ (plan trên cloud, act trên máy người dùng). Đây là chỗ câu hỏi §214
+của kế hoạch phải được trả lời trước. *Nghiệm thu:* một task bắt đầu ở A, chuyển sang B, không mất
+artifact/check nào.
+
+**6) Vận hành.** Telemetry tối thiểu + opt-in; crash report có mã hoá; offline mode; ma trận test
+theo 3 hệ điều hành; tài liệu "cái gì chạy ở đâu" cho người dùng cuối. *Nghiệm thu:* chạy bộ
+acceptance hiện có trên cả hai chế độ và so kết quả.
+
+### 14.4 Thứ tự đề xuất
+
+1. Chốt câu hỏi §214 (self-host / hybrid / hosted) — **quyết định sản phẩm, không phải kỹ thuật**.
+2. Viết ADR mới: "local execution isolation" chọn giữa ba lựa chọn ADR-0001 cho máy người dùng.
+3. Spike sandbox trên 3 hệ điều hành (2–3 tuần) — nếu thất bại, hạ cấp tuyên bố bảo mật và đi tiếp.
+4. Đóng gói + auto-update + keyring.
+5. Cổng quyền mới (allow-list, checkpoint, thang tin cậy).
+6. Chế độ lai + đồng bộ.
+
+### 14.5 Rủi ro riêng của chế độ B
+
+- **Prompt injection từ file local** trở nên nguy hiểm hơn: file trong repo người dùng là dữ liệu
+  không tin cậy, nhưng cùng máy với khoá và tài liệu riêng.
+- **Rò rỉ bí mật**: không còn container để chặn; phải chặn bằng allow-list đường dẫn + egress.
+- **Người dùng tắt bảo vệ**: cần chế độ "tin cậy workspace" có ghi log, không im lặng.
+- **Phân mảnh hành vi**: hai chế độ có thể lệch nhau; phải có **capability matrix** theo chế độ và
+  test chung một bộ acceptance.
+- **Chi phí test ×2–3**: ma trận theo hệ điều hành; không có đường tắt.
+
+---
+
+## 15. Sơ đồ luồng
+
+### 15.1 BoxFox — vòng chạy chính
+
+```mermaid
+flowchart TB
+  U[Chu nha: muc tieu] --> M[main: SOP A-I]
+  M --> C{Co Work Graph?}
+  C -->|khong| L[Duong legacy: 5 pha giao viec]
+  C -->|co| G[work_graph create]
+  G --> D[discovering: giao con nghien cuu]
+  D --> P[drafting: sub-plan moi nut]
+  P --> PR[plan-review + plan_verify]
+  PR -->|revise| P
+  PR -->|ok| AP{Chu nha duyet}
+  AP -->|sua| P
+  AP -->|duyet| EX[executing: chay theo wave DAG]
+  EX --> PD[produce: vai con lam artifact]
+  PD --> CK[checks: evidence + critique]
+  CK -->|revise| PD
+  CK -->|ok| VF[verified]
+  VF --> SH[work_ship: branch/commit/PR]
+  CK -->|het luot| NF[node_failed]
+  NF --> RT[work_graph retry]
+  RT --> EX
+```
+
+### 15.2 BoxFox — máy trạng thái Work Graph
+
+```mermaid
+stateDiagram-v2
+  [*] --> drafting
+  drafting --> discovering
+  discovering --> verifying
+  verifying --> needs_revision
+  needs_revision --> verifying
+  verifying --> awaiting_approval
+  awaiting_approval --> approved
+  approved --> executing
+  executing --> executed
+  executing --> execute_failed
+  execute_failed --> executing: retry
+  drafting --> cancelled
+  verifying --> cancelled
+```
+
+### 15.3 BoxFox — một vòng giao việc và kiểm tra
+
+```mermaid
+sequenceDiagram
+  participant M as main
+  participant R as vai con (produce)
+  participant K as check (evidence/critique)
+  participant G as Work Graph
+  M->>G: add node + acceptance
+  M->>R: delegate_task(role, goal, context, expect)
+  R->>G: work_report (artifact)
+  G->>K: check tren dung snapshot
+  K-->>G: ok / revise + finding
+  G-->>M: checks_finished
+  M->>R: sua theo finding (vong 2)
+  M->>G: retry / resolve / ship
+```
+
+### 15.4 Vorflux — vòng chạy chính
+
+```mermaid
+flowchart TB
+  U[Chu nha: yeu cau] --> A[agent chinh: toi]
+  A --> P{Can ke hoach?}
+  P -->|co| PL[plan submit -> nguoi dung duyet]
+  PL --> W[thuc thi]
+  P -->|khong| W
+  W --> T[add_task: giao sub-agent]
+  T --> N[task engine: hang doi + phien con]
+  N --> S[sub-agent chay tren cung may]
+  S --> RS[ket qua + artifact]
+  RS --> RV[review / simplify / testing]
+  RV --> PR[PR + test report + canvas]
+```
+
+### 15.5 Vorflux — vòng đời một task con
+
+```mermaid
+sequenceDiagram
+  participant A as agent chinh
+  participant E as task engine
+  participant S as sub-agent
+  A->>E: add_task(task_id, title, description, agent_type)
+  E-->>A: task_id (tra ve ngay)
+  E->>S: tao phien con + prompt rieng
+  S->>S: chay doc lap, khong thay chat cua toi
+  S-->>E: ket qua (van ban hoac JSON theo output_schema)
+  A->>E: list_tasks / wait_any_task_result
+  E-->>A: ket qua + trang thai
+  A->>E: send_message_to_task (neu can sua)
+  E->>S: danh thuc task, gui tiep
+```
+
+### 15.6 Vorflux — đánh thức phiên chính
+
+```mermaid
+flowchart LR
+  J[job nen: chinh tien trinh cho] --> W{Job ket thuc?}
+  W -->|co| N[thong bao job hoan tat]
+  N --> A[phien chinh thuc day, doc ket qua]
+  W -->|het watchdog| N
+  X[nohup ... and] -.->|tach roi, KHONG danh thuc| A
+```
+
+### 15.7 So sánh trách nhiệm hai bên
+
+```mermaid
+flowchart TB
+  subgraph BOX[BoxFox - trong san pham]
+    B1[main + SOP] --> B2[Work Graph: trang thai, check, grant]
+    B2 --> B3[vai con 11 loai, quyen giao tap hop]
+    B2 --> B4[artifact + event + SQLite]
+  end
+  subgraph VOR[Vorflux - nen tang]
+    V1[agent chinh] --> V2[task engine: hang doi + phien con]
+    V2 --> V3[8 loai sub-agent]
+    V1 --> V4[plan / PR / test-report / canvas / memory]
+  end
+  B2 -.->|khong phu thuoc| V2
+```
+
+### 15.8 Hai chế độ máy (nếu làm chế độ B)
+
+```mermaid
+flowchart TB
+  subgraph A[Che do A: cloud/self-host]
+    A1[Docker container] --> A2[workspace tren may chu]
+    A3[tool host] --> A4[Internet that]
+  end
+  subgraph B[Che do B: may nguoi dung]
+    B1[Desktop app + runtime] --> B2[repo that tren dia]
+    B3[sandbox OS: seatbelt/bwrap/AppContainer] --> B2
+    B4[keyring OS + router cuc bo] --> B5[model cloud hoac Ollama]
+  end
+  A -.->|capability matrix| B
+```
