@@ -50,7 +50,11 @@ def raise_build_child_output_budget():
     original = output_policy.child_budget
 
     def patched(role, work=None, task_kind=None):
-        if role == 'build' and (work or {}).get('purpose') == 'produce':
+        # `build` (bản sửa) và `debug` (chẩn đoán của vòng sửa) đều phải gửi một câu trả lời cuối DÀI;
+        # mặc định 4096 token output làm câu trả lời bị `PROVIDER_OUTPUT_TRUNCATED` ⇒ `complete()` false
+        # ⇒ sản phẩm trả `WORK_REPAIR_UNDIAGNOSED` và nút bị `rejected` (đo ở lượt 13). Đây là nút FIXTURE
+        # đã ghi trong `fixtureKnobs`, không phải thay đổi sản phẩm.
+        if role in ('build', 'debug') and (work or {}).get('purpose') == 'produce':
             return BUILD_CHILD_OUTPUT_TOKENS
         return original(role, work, task_kind)
 
@@ -436,16 +440,38 @@ async def main(args):
             integration_row['attempted'] = True
             try:
                 # `checks.tool`/`run_stage` làm việc trên bản sao đọc từ DB rồi ghi lại; đối tượng `run`
-                # của probe là ảnh chụp cũ nên `build_integration` sẽ thấy B1 còn `needs_checks` và trả
-                # False. Đọc lại bản mới nhất trước khi dựng node tổng hợp (lỗi phép đo, không phải lỗi sản phẩm).
+                # của probe là ảnh chụp cũ nên đọc lại bản mới nhất trước khi hợp nhất.
                 run = graph.get(run['runId'])
                 integration_row['executeStatuses'] = {n['id']: n['stages']['execute']['status']
                                                       for n in run['nodes'] if 'execute' in n['stages']}
-                built = await graph.build_integration(session, run)
+                # Sản phẩm CHỈ hợp nhất nút đã nghiệm thu vào nhánh run trong `work_graph
+                # action=run phase=execute` (`integrate_nodes` → `build_integration`), và chính nó có
+                # hàng rào `WORK_CODE_STALE: an accepted node is not integrated into the run branch`.
+                # Gọi thẳng `build_integration` (đo ở lượt 12) dựng artifact trên cây CHƯA hợp nhất nên
+                # node tổng hợp kiểm nhầm cây nền — lỗi phép đo, không phải lỗi sản phẩm. Đi đúng
+                # đường main: gọi `work_graph action=run phase=execute`, ghi nguyên văn nếu bị chặn.
+                try:
+                    run_out = await graph.run(session, {'phase': 'execute', 'runId': run['runId']})
+                    integration_row['runCall'] = {'status': (run_out or {}).get('status')}
+                except Exception as exc:
+                    integration_row['runCall'] = {'raised': f'{type(exc).__name__}: {exc}'[:300]}
                 run = graph.get(run['runId'])
+                integration = run.get('integration') or {}
+                accepted = {n['id']: ((n['stages']['execute'].get('artifact') or {}).get('binding', {})
+                                      .get('codeCommit') or {}).get('nodeCommit')
+                            for n in run['nodes'] if 'execute' in n['stages']}
+                branch_root = folder / str((run.get('isolation') or {}).get('root') or '')
+                integration_row['merge'] = {
+                    'nodes': dict(integration.get('nodes') or {}), 'head': integration.get('head'),
+                    'treeHash': integration.get('treeHash'), 'status': integration.get('status'),
+                    'baseline': (run.get('isolation') or {}).get('baselineCommit'), 'acceptedCommits': accepted,
+                    'branchHead': (git(str(branch_root), 'rev-parse', 'HEAD', check=False) or None)
+                    if branch_root.is_dir() else None}
                 inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
                 istate = inode['stages']['execute'] if inode else {}
                 ipolicy = istate.get('policy') or {}
+                built = (istate.get('status') in ('needs_checks', 'accepted')
+                         and bool((istate.get('artifact') or {}).get('artifactId')))
                 integration_row.update(built=bool(built), status=istate.get('status'),
                                        required=[r['id'] for r in ipolicy.get('required', [])],
                                        artifactId=(istate.get('artifact') or {}).get('artifactId'))
@@ -528,8 +554,10 @@ async def main(args):
             'secondCheckPassed': (row['greenCheck'] or {}).get('status') == 'pass',
             'nodeAccepted': row['final']['status'] == 'accepted',
         }
-        # --- oracle node tổng hợp (W8.A4.5.N): dựng snapshot hợp nhất + child Testing THẬT xanh trên đó ---
+        # --- oracle node tổng hợp (W8.A4.5.N): hợp nhất thật + child Testing THẬT xanh trên cây đó ---
         row['integrationNative'] = {
+            # Nút tổng hợp chỉ có nghĩa khi nhánh run THẬT SỰ chứa commit của nút đã nghiệm thu.
+            'mergedIntoRunBranch': bool((integration_row.get('merge') or {}).get('nodes')),
             'built': bool(integration_row.get('built')),
             'hasRealChild': any(c.get('childId') for c in (integration_row.get('checks') or [])),
             'testsPassedOnMergedTree': any(c.get('kind') == 'tests' and c.get('status') == 'pass'

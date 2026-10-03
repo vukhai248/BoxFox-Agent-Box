@@ -3230,3 +3230,40 @@ không phải vì phép đo mất dữ liệu; `same_child_continuation` hỏng 
   đã thêm ghi chú chẩn đoán vào `bundle['notes']` để lần sau thấy ngay lý do đứng.
 - Nút `explore` thiếu `terminal_exec` là hành vi sản phẩm đúng như thiết kế; nếu muốn S09 tự chạy `pytest` thì phải
   đổi kịch bản sang nút thi công, không nới quyền cho explore.
+
+### 39.10 W8.A4.5.N — cò đỏ THẬT: các lượt 8–12 (commit `144443b`, `0a3801e`, `1e87b87`, `913b57d`)
+
+Owner đã duyệt hướng "gieo đỏ thật" (#6451) và chốt **không nới luật `test_proof`** (#6452). Fixture nay hạ cấp
+`src/export.py` trong worktree nút NGAY TRƯỚC lệnh checkpoint của harness, để chính harness commit bản lỗi vào
+`codeSnapshot` của artifact (gieo sau đó thì sản phẩm trả `superseded`, không đỏ). Bằng chứng đầy đủ:
+`docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (8 lượt, hash `results.json` từng lượt).
+
+| Lượt | Kết cục | Ghi nhận |
+| --- | --- | --- |
+| 8 | probe dừng ngay sau lượt sản xuất, `FIXTURE_RED_NOT_SEEDED` | `work_worktrees.path` là đường dẫn **tương đối** (`.boxfox/worktrees/<run>/n-B1`); `Path(tương đối)` trỏ vào gốc repo nên `seed_real_red` return im lặng, commit giữ bản xanh. Đã giải theo gốc fixture, ghi `realRed.errors`, và dừng lượt nếu gieo hụt |
+| 9 | `oracle=false`; **nửa đầu đạt bằng chứng native** | Commit `0eef30b boxfox(w-fe1d0a8288): B1 attempt 1` chứa `return text.upper()`; `python -m pytest -q` chạy thật ngay sau khi gieo trả exit=1 (1 failed); lượt kiểm đầu **`revise`** thật (`class=clear`, "required command failed with a trace into tracked files"), sản phẩm **resume ĐÚNG con Build cũ** và tạo artifact v3 trên hash mới `997e4d7c…`. Chỗ tắc: lượt kiểm đỏ đánh dấu tiêu chí A1 `target=criterion` ⇒ backend coi là **xung đột đầu vào** và `work_checks.py:1076` chặn mọi lượt kiểm/sản xuất tiếp cho tới khi main sửa nhiệm vụ (`work_graph action=update`) — đường xoá duy nhất, nhưng đổi định nghĩa nút làm stage reset và mất bản nháp vừa sửa |
+| 10 | `oracle=false` **nhưng ba nhóm gần đạt**: B1 `accepted`, `__integration__` `built: true`, child Testing THẬT chạy `python -m pytest -q` trên cây gộp **`pass`** (95.7 s) | Lượt kiểm ĐẦU chỉ `unverified` (`WORK_FINDING_UNCITED: … SELF_REFUTED`) rồi lượt sau mới `revise` ⇒ probe cũ đọc nhầm lượt đầu nên mọi tiêu chí `mechanism` sai; `buildChildTouchedItsFile` sai vì tóm tắt con resume lấy từ mục rỗng; `integrationChecked` sai vì probe chỉ mở `tests` trong khi node tổng hợp yêu cầu `[tests, code_review]`. Đã vá cả ba (commit `1e87b87`) |
+| 11 | `oracle=false`; **`mechanism` 8/8 và `model` 5/5 lần đầu cùng xanh** | Cùng một lượt: gieo đỏ thật (commit `…B1 attempt 1` chứa `text.upper()`), lượt kiểm đầu `unverified` (`UNKNOWN_RECEIPT`) rồi lượt sau **`revise`** với `class=clear`, sản phẩm **resume ĐÚNG con Build cũ** trên hash mã mới, kiểm lại `pass`, B1 `accepted`. Chỗ tắc duy nhất còn lại: mở `[tests, code_review]` trong MỘT lời gọi bị từ chối — `WORK_REVIEW_NOT_CONVERGED: the integrated run branch must pass its tests on this exact snapshot before code_review; start tests first, then review the same artifact.` Đã sửa ở `913b57d`: mở kiểm node tổng hợp **lần lượt theo `required`** |
+| 12 | `oracle=false`; nửa đầu vẫn 8/8 + 5/5; node tổng hợp **kiểm NHẦM CÂY** | Probe gọi thẳng `graph.build_integration` mà bỏ qua `integrate_nodes`, nên nhánh run vẫn ở commit nền `b08426e` và artifact tổng hợp tự ghi `files owned by this run: (none)`. Child Testing THẬT tự bắt đúng: `git merge-base --is-ancestor 40d810f HEAD` → exit 1, `git show HEAD:src/export.py` = bản nền `return text`, rồi trả `revise` — hành vi ĐÚNG của sản phẩm. Sản phẩm còn có hàng rào riêng cho đúng tình huống này ở `work_graph.py:1633`: `WORK_CODE_STALE: an accepted node is not integrated into the run branch; call work_run phase=execute to finish integration, then re-check.` Đây là lỗi PHÉP ĐO (sản phẩm chỉ hợp nhất trong `work_graph action=run phase=execute`, `work_graph.py:1538-1542` và `:1837-1838`); đã sửa: probe đi đúng đường main rồi mới mở kiểm node tổng hợp |
+| 13 | `oracle=false`; **vòng sửa chết vì nút FIXTURE**, nút B1 `rejected` sau 1 lượt nên node tổng hợp không được dựng | Con Testing chạy lệnh bắt buộc ở dạng **bọc** `python -m pytest -q; echo "EXIT=$?"` ⇒ bộ phân loại trả `class=unclassified` ("no failing required command event") — đúng luật sản phẩm (#6452). Sản phẩm mở con `debug` chẩn đoán chỉ-đọc; con này mở ĐÚNG bằng chứng (`file_read src/export.py` → `return text.upper()`) nhưng câu trả lời cuối dài quá 4096 token output nên bị `PROVIDER_OUTPUT_TRUNCATED` (partial) ⇒ `work_checks.complete()` false ⇒ `WORK_REPAIR_UNDIAGNOSED: Debug opened no evidence; main decides` ⇒ nút `rejected`. Nút FIXTURE `BUILD_CHILD_OUTPUT_TOKENS` trước chỉ áp cho vai `build`; đã mở rộng cho cả vai `debug` (cùng loại câu trả lời cuối dài). Lỗi PHÉP ĐO: sản phẩm làm đúng (phân loại → debug → escalate khi chẩn đoán không hoàn tất) |
+
+**Dữ kiện sản phẩm rút ra (không tự sửa):**
+
+- Bộ phân loại chỉ thấy "lệnh bắt buộc thất bại" khi child chạy **đúng câu lệnh trần**: lượt 10 child chạy
+  `python -m pytest -q; echo "EXITCODE=$?"` nên `class=unclassified` ("no failing required command event") và
+  sản phẩm mở thêm con `debug`; lượt 9 child chạy trần nên `class=clear`. Cùng một luật với `test_proof` (#6452).
+- Lượt kiểm đầu có thể bị hạ `unverified` vì findings thiếu receipt (`WORK_FINDING_UNCITED`, `SELF_REFUTED`) —
+  lượt sau trên CÙNG artifact mới `revise`. Đo "lượt đỏ" theo lượt kiểm đầu là sai.
+- Xung đột đầu vào (`inputConflicts`) là hàng rào bền vững: chỉ `work_graph action=update` xoá được, và đổi định
+  nghĩa nút làm stage reset. **Cần owner quyết** xem một tiêu chí bị artifact vi phạm có nên bị ghi thành xung đột
+  tiêu chí hay chỉ là `target=artifact` (hiện con kiểm thử tự chọn nhãn; nhãn `criterion` kéo theo chu trình duyệt lại).
+- **Hợp nhất nhánh run chỉ xảy ra trong `work_graph action=run phase=execute`** (`integrate_nodes` → `build_integration`,
+  `work_graph.py:1538-1542` và `:1837-1838`). `build_integration` một mình KHÔNG hợp nhất; nếu bị gọi trên cây chưa
+  hợp nhất thì artifact tổng hợp tự ghi `files owned by this run: (none)` và mọi kết luận "cây gộp xanh" là sai.
+  Sản phẩm có hàng rào riêng: `work_graph.py:1633` trả `WORK_CODE_STALE: an accepted node is not integrated into the
+  run branch; call work_run phase=execute to finish integration, then re-check.`
+- **Node tổng hợp đòi THỨ TỰ**: `tests` phải `pass` trên ĐÚNG snapshot trước, rồi mới mở `code_review` trên cùng
+  artifact (`work_repair.converged`, `WORK_REVIEW_NOT_CONVERGED`). Mở cả hai trong một lời gọi luôn bị từ chối.
+- Artifact tổng hợp (`integration_artifact`) tự công bố danh tính cây gộp (head/tree/branch/worktree), tệp thuộc run,
+  diff stat và output NGUYÊN VĂN của mọi lệnh test bắt buộc — nhờ vậy con kiểm thử đối chiếu được và đã tự bác đúng
+  lượt 12 khi cây chưa hợp nhất.

@@ -1,1145 +1,1895 @@
 {
- "probe": "W8.A4.5.N — nút tổng hợp __integration__ sau vòng sửa hội tụ (đo native, oracle CÒN FALSE)",
- "script": "scripts/eval/work_repair_loop_eval.py",
- "howToRun": "PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101 --output .tmp/w8-probe-red3 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json",
- "branch": "vorflux/w10-w12-completion",
- "baseCommit": "4e0923dae902c50906651773c584bfa8ccaaf3c2",
- "probeCommits": [
-  "3d6fd2f",
-  "346430f",
-  "500665a",
-  "664f25e",
-  "6f7ea56",
-  "144443b",
-  "0a3801e"
- ],
- "model": "opencode/space-bunny-free (không thay thế)",
- "why": "W8.A4.5.N: sau khi fixture được vá (trigger không còn khớp `.pytest_cache`), phải chứng minh bằng một lượt native rằng: Build tạo bản nháp → check tests THẬT đỏ → main chọn sửa → CHÍNH Testing child cũ kiểm lại trên hash mới → xanh → node tổng hợp `__integration__` được dựng và kiểm tests trên cây đã gộp. Chỉ khi cả ba nhóm đều đạt thì `oracle` mới true.",
- "criteria": {
-  "mechanism": [
-   "oneRepairEntry",
-   "classified",
-   "debugOnlyWhenUnclassified",
-   "resumedSameChild",
-   "freshArtifactAfterRepair",
-   "findingsBoundToChild",
-   "codeHashPinned",
-   "redCheckIsRevise"
+  "probe": "W8.A4.5.N — nút tổng hợp __integration__ sau vòng sửa hội tụ (đo native, oracle CÒN FALSE)",
+  "script": "scripts/eval/work_repair_loop_eval.py",
+  "howToRun": "PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101 --output .tmp/w8-probe-red5 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json",
+  "branch": "vorflux/w10-w12-completion",
+  "baseCommit": "4e0923dae902c50906651773c584bfa8ccaaf3c2",
+  "probeCommits": [
+    "3d6fd2f",
+    "346430f",
+    "500665a",
+    "664f25e",
+    "6f7ea56",
+    "144443b",
+    "0a3801e",
+    "1e87b87",
+    "913b57d"
   ],
-  "model": [
-   "seedIsRealRed",
-   "testerSawTheRedCommand",
-   "buildChildTouchedItsFile",
-   "secondCheckPassed",
-   "nodeAccepted"
-  ],
-  "integrationNative": [
-   "built",
-   "hasRealChild",
-   "testsPassedOnMergedTree",
-   "integrationChecked"
-  ],
-  "oracle": "cả ba nhóm đều true",
-  "note": "Tên khoá lấy đúng theo mã probe (scripts/eval/work_repair_loop_eval.py:341-345); bản trước ghi nhầm `testsPassedOnGreenTree`."
- },
- "fixtureKnobs": {
-  "buildChildOutputTokens": 16000,
-  "why": "con Build mặc định 4096 token output; lượt 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất — núm này chỉ nới trần output cho con Build produce trong fixture, không sửa sản phẩm",
-  "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json",
-  "disclosedIn": "row.fixtureKnobs của từng results.json"
- },
- "runs": [
-  {
-   "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
-   "resultsSha256": "c51d2169b6850f88d97a11e1b71f5e3e258cf33144265fa5226f74e6f589588d",
-   "rawDir": "/var/tmp/w8-probe-run1-4096",
-   "oracle": false,
-   "error": "ValueError: WORK_CHECK_NOT_READY: producer must finish the current draft before checks",
-   "latencySeconds": 100.279,
-   "firstStatus": "failed",
-   "redCheck": null,
-   "repair": null,
-   "resumedChild": null,
-   "afterRepair": null,
-   "greenCheck": null,
-   "final": null,
-   "integration": null,
-   "mechanism": null,
-   "model": null,
-   "integrationNative": null,
-   "fixtureKnobs": null,
-   "pytestBeforeCheck": 0,
-   "forcedRedCommands": null,
-   "ownerHead": null,
-   "isolation": {
-    "mode": "git",
-    "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-d77647",
-    "root": ".boxfox/worktrees/w-d776477ace/main"
-   },
-   "calls": 15,
-   "narrative": "Trần output mặc định 4096 token của fixture làm con Build bị cắt (PROVIDER_OUTPUT_TRUNCATED, 3958 token reasoning), nên `checks.tool` từ chối: WORK_CHECK_NOT_READY — chưa có bản nháp hoàn tất để kiểm. Giữ làm mốc đối chứng cho núm 16000."
+  "model": "opencode/space-bunny-free (không thay thế)",
+  "why": "W8.A4.5.N: sau khi fixture được vá (trigger không còn khớp `.pytest_cache`), phải chứng minh bằng một lượt native rằng: Build tạo bản nháp → check tests THẬT đỏ → main chọn sửa → CHÍNH Testing child cũ kiểm lại trên hash mới → xanh → node tổng hợp `__integration__` được dựng và kiểm tests trên cây đã gộp. Chỉ khi cả ba nhóm đều đạt thì `oracle` mới true.",
+  "criteria": {
+    "mechanism": [
+      "oneRepairEntry",
+      "classified",
+      "debugOnlyWhenUnclassified",
+      "resumedSameChild",
+      "freshArtifactAfterRepair",
+      "findingsBoundToChild",
+      "codeHashPinned",
+      "redCheckIsRevise"
+    ],
+    "model": [
+      "seedIsRealRed",
+      "testerSawTheRedCommand",
+      "buildChildTouchedItsFile",
+      "secondCheckPassed",
+      "nodeAccepted"
+    ],
+    "integrationNative": [
+      "mergedIntoRunBranch",
+      "built",
+      "hasRealChild",
+      "testsPassedOnMergedTree",
+      "integrationChecked"
+    ],
+    "oracle": "cả ba nhóm đều true",
+    "note": "Tên khoá lấy đúng theo mã probe (scripts/eval/work_repair_loop_eval.py:341-345); bản trước ghi nhầm `testsPassedOnGreenTree`."
   },
-  {
-   "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
-   "resultsSha256": "c7db934e2ae980606ad5390dbbd7c9823a5bed462df0b8372b8ced9a31dd1720",
-   "rawDir": "/var/tmp/w8-probe-run2-16000",
-   "oracle": false,
-   "error": "IndexError: list index out of range",
-   "latencySeconds": 293.466,
-   "firstStatus": "needs_checks",
-   "redCheck": {
-    "kind": "tests",
-    "status": "revise",
-    "childId": "6bbec24ef3d04c998ef6ad857da438ee",
-    "error": null,
-    "repairAction": "retest"
-   },
-   "repair": {
-    "n": 1,
-    "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
-    "class": "clear",
-    "reason": "required command failed with a trace into tracked files",
-    "debugChildId": null,
-    "debugArtifactId": null,
-    "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
-    "resumed": true,
-    "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
-    "at": 1790976847.6721373,
-    "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
-    "repairChildReason": null,
-    "status": "needs_checks"
-   },
-   "resumedChild": {
-    "id": "ac9164d9240d4fdba9cab6a08032eb88",
-    "parent": "7fb0e024579c4f8a9642dbe267facfbf",
-    "tools": [
-     "codebase_glob",
-     "terminal_exec",
-     "file_read",
-     "file_read",
-     "file_read",
-     "file_read",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec"
-    ],
-    "wroteExport": true,
-    "sawFindings": true
-   },
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 2,
-    "artifactId": "a-2c81f94b2efc4321822b9094a65885be",
-    "verdicts": [
-     "revise",
-     null
-    ],
-    "repairs": [
-     {
-      "n": 1,
-      "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
-      "class": "clear",
-      "reason": "required command failed with a trace into tracked files",
-      "debugChildId": null,
-      "debugArtifactId": null,
-      "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
-      "resumed": true,
-      "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
-      "at": 1790976847.6721373,
-      "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
-      "repairChildReason": null,
-      "status": "needs_checks"
-     }
-    ]
-   },
-   "greenCheck": null,
-   "final": null,
-   "integration": null,
-   "mechanism": null,
-   "model": null,
-   "integrationNative": null,
-   "fixtureKnobs": {
+  "fixtureKnobs": {
     "buildChildOutputTokens": 16000,
-    "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
-    "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
-   },
-   "pytestBeforeCheck": 0,
-   "forcedRedCommands": null,
-   "ownerHead": null,
-   "isolation": {
-    "mode": "git",
-    "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-f9e51d",
-    "root": ".boxfox/worktrees/w-f9e51d0f2f/main"
-   },
-   "calls": 37,
-   "narrative": "Chuỗi đỏ→sửa chạy đúng: check tests đỏ `revise` (child 6bbec24e), `work_repair` phân loại `clear`/`retest`, resume CHÍNH child Build ac9164d9 (có đọc findings, có ghi export), nhưng probe tự nổ `IndexError: list index out of range` ở lần `checks.tool` xanh thứ hai khi phản hồi không có khoá `checks` — lỗi của probe, không phải của sản phẩm."
+    "why": "con Build mặc định 4096 token output; lượt 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất — núm này chỉ nới trần output cho con Build produce trong fixture, không sửa sản phẩm",
+    "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json",
+    "disclosedIn": "row.fixtureKnobs của từng results.json"
   },
-  {
-   "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
-   "resultsSha256": "e6bb0fa3acfbaaa839ffa733f37751636e93f82dd69afbcf31b51e07055515d8",
-   "rawDir": "/var/tmp/w8-probe-run3-16000",
-   "oracle": false,
-   "error": null,
-   "latencySeconds": 465.186,
-   "firstStatus": "needs_checks",
-   "redCheck": {
-    "kind": "tests",
-    "status": "unverified",
-    "childId": "e495ea2bb5d948b7b7581521a086169f",
-    "error": "Missing actual successful required test command events.",
-    "repairAction": null
-   },
-   "repair": {},
-   "resumedChild": {
-    "id": null,
-    "parent": null,
-    "tools": [],
-    "wroteExport": false,
-    "sawFindings": false
-   },
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "artifactId": "a-20b946658e164c238f23a348f0a939a2",
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": null
-   },
-   "greenCheck": {
-    "kind": "tests",
-    "status": "pass",
-    "attempt": 2,
-    "childId": "d313cad627a44b2fbeee429c41e5eaa8",
-    "error": null,
-    "commands": [
-     "cd /workspace 2>/dev/null || cd .; pwd; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; echo \"--- pytest ---\"; python -m pytest -q 2>&1; echo \"EXIT=$?\"",
-     "cd /workspace 2>/dev/null || cd .; echo \"--- numbered src/export.py ---\"; cat -n src/export.py | sed -n '1,60p'",
-     "python -m pytest -q",
-     "git rev-parse HEAD",
-     "python -c \"\nfrom src.export import export_markdown as f\nprint('A1', repr(f('Hồ sơ')), f('Hồ sơ')=='Hồ sơ')\nprint('A2', repr(f('')), f('')=='')\nprint('A3', repr(f('A\\nB\\nC')), repr(f('X\\n\\nY')))\nprint('A4', repr(f('Nội dung')), f('Nội dung')=='Nội dung')\nprint('A5', repr(f(None)), f(None)=='')\nprint('A6', repr(f('Hồ  sơ  bệnh')), repr(f('a\\tb')))\nprint('A7', repr(f('  Dòng một  \\n\\tDòng hai\\t ')))\nprint('A8', repr(f('Ngày 12/03/2025, hồ sơ số 007: (A-1), 50%.')))\nprint('A9', f('  Hồ sơ  \\n  bệnh  ')==f('  Hồ sơ  \\n  bệnh  '))\nprint('type', type(f(None)).__name__, type(f('x')).__name__)\n\"",
-     "git status --short",
-     "git diff --name-only 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f",
-     "python -c \"\nimport unicodedata, importlib\nfrom src.export import export_markdown as f\ns='Hồ sơ'\nnfd=unicodedata.normalize('NFD', s)\nprint('A1 nfd_in', [hex(ord(c)) for c in nfd])\nprint('A1 nfd_out', [hex(ord(c)) for c in f(nfd)], f(nfd)==nfd)\nprint('A1 precomp_cps', [hex(ord(c)) for c in f(s)])\nt='A\\nB\\n'\nprint('A3 trailing_nl', repr(f(t)), f(t)==t)\nbig='Tiếng Việt: đ, Đ, ạ, ệ, ữ, ớ, ỳ — 100%!\\n  x  '\nr1=f(big); r2=f(big)\nprint('A9', r1==r2, repr(r1))\nprint('A9 repeat_nc', len(f(big.split(chr(10))[0]))>0)\nprint('nonascii_eq', f('Việt')=='Việt')\n\"",
-     "git diff 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f -- tests/test_export.py"
-    ]
-   },
-   "final": {
-    "status": "accepted",
-    "attempts": 1,
-    "verdicts": [
-     "ok"
-    ],
-    "repairs": 0
-   },
-   "integration": {
-    "attempted": true,
-    "reason": null,
-    "built": false,
-    "status": "pending",
-    "required": [],
-    "artifactId": null
-   },
-   "mechanism": {
-    "oneRepairEntry": false,
-    "classified": false,
-    "debugOnlyWhenUnclassified": true,
-    "resumedSameChild": false,
-    "freshArtifactAfterRepair": false,
-    "findingsBoundToChild": false,
-    "codeHashPinned": false,
-    "redCheckIsRevise": false
-   },
-   "model": {
-    "testerSawTheRedCommand": true,
-    "buildChildTouchedItsFile": false,
-    "secondCheckPassed": true,
-    "nodeAccepted": true
-   },
-   "integrationNative": {
-    "built": false,
-    "hasRealChild": false,
-    "testsPassedOnMergedTree": false,
-    "integrationChecked": false
-   },
-   "fixtureKnobs": {
-    "buildChildOutputTokens": 16000,
-    "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
-    "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
-   },
-   "pytestBeforeCheck": 0,
-   "forcedRedCommands": 7,
-   "ownerHead": "6c67252890c4dfc67319b3df65981e9bb17f275a",
-   "isolation": {
-    "mode": "git",
-    "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-196646",
-    "root": ".boxfox/worktrees/w-196646fdea/main"
-   },
-   "calls": 44,
-   "narrative": "Không nổ (guard mới ghi lại phản hồi rỗng). Chuỗi thực tế: check đầu trả `unverified` với lý do \"Missing actual successful required test command events\" vì model báo `pass` trong khi lệnh test bắt buộc đã đỏ — backend hạ đúng, nhưng vì không có `revise` nên vòng sửa không chạy; lượt kiểm lại (injection đã tắt) xanh và node được accepted. `integration` được yêu cầu nhưng `required: []`/`built: false` nên nhóm native vẫn false."
-  },
-  {
-   "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
-   "resultsSha256": "65f3bf31c2ffe1d29eb4ed63a945bebdf3c431466880af4945ac5bb54fd830c2",
-   "rawDir": "/var/tmp/w8-probe-run4-16000",
-   "oracle": false,
-   "error": null,
-   "latencySeconds": 731.34,
-   "firstStatus": "needs_checks",
-   "redCheck": {
-    "kind": "tests",
-    "status": "unverified",
-    "childId": "f2ae142ccae7466da9693f5f4ac30507",
-    "error": "Missing actual successful required test command events.",
-    "repairAction": null
-   },
-   "repair": {},
-   "resumedChild": {
-    "id": null,
-    "parent": null,
-    "tools": [],
-    "wroteExport": false,
-    "sawFindings": false
-   },
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "artifactId": "a-b496ae4f53a34828b3331bdf28222f60",
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": null
-   },
-   "greenCheck": {
-    "kind": "tests",
-    "status": "pass",
-    "attempt": 1,
-    "childId": "5fb1701a2f0a4c3fb9ba6f7d9de18d16",
-    "error": null,
-    "commands": [
-     "cd /home/user 2>/dev/null; pwd; ls -la; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; python -m pytest -q 2>&1 | tail -20",
-     "cd /home/user 2>/dev/null; echo \"=== git diff --stat vs base ea7b1eba ===\"; git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b 2>&1; echo; echo \"=== files in HEAD tree ===\"; git show --stat --oneline HEAD 2>&1 | head -20; echo; echo \"=== cat src/app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
-     "pwd; ls -la; git rev-parse HEAD; git status --short; python --version; python -m pytest -q",
-     "git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD; echo \"=== app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
-     "python -m pytest -q",
-     "git rev-parse HEAD && git status --short && python --version",
-     "python3 -c \"\nfrom src.export import export_markdown as e\nr=[]\ndef chk(n,got,want):\n    r.append(('PASS' if got==want else 'FAIL',n,repr(got),repr(want)))\nchk('A1 unicode',e('Hồ sơ'),'Hồ sơ')\nchk('A2 empty',e(''),'')\nchk('A3 multiline',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba')\nchk('A3b interior blanks',e('Mở đầu\\n\\nKết luận'),'Mở đầu\\n\\nKết luận')\nchk('A4 no wrapper',e('# sẵn có'),'# sẵn có')\nchk('A4b no fence',e('a\\nb'),'a\\nb')\nchk('A5 None',e(None),'')\nchk('A6 inner spaces',e('a  b   c'),'a  b   c')\nchk('A7 outer trim',e('  a  \\n\\tb\\t  '),'a\\nb')\nchk('A8 digits punct',e('15,5% — 007; A/B, C&D!'),'15,5% — 007; A/B, C&D!')\nchk('A9 pure x2',e('  x \\n\\n y '),e('  x \\n\\n y '))\nfor s in r: print(s)\nprint('TOTAL',sum(1 for x in r if x[0]=='PASS'),'/',len(r))\n\"",
-     "git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:src/export.py && echo \"=== BASE TEST FILE ===\" && git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:tests/test_export.py && echo \"=== BASE TREE ===\" && git ls-tree -r --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b",
-     "git branch -a; echo \"=== log all ===\"; git log --all --oneline; echo \"=== diff name-only base..HEAD ===\"; git diff --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD",
-     "python3 -c \"\nfrom src.export import export_markdown as e\nprint('leading blank lines:',repr(e('\\n\\nA\\nB\\n\\n')))\nprint('CRLF:',repr(e('A\\r\\nB')))\nprint('CR only:',repr(e('A\\rB')))\nprint('NBSP edge:',repr(e('\\u00a0A\\u00a0')))\nprint('multi-space inner:',repr(e('a \\t b')))\n\"",
-     "python3 -c \"\nimport unicodedata as u\nfrom src.export import export_markdown as e\ns='Hồ sơ Đề án'\no=e(s)\nprint('in cps ',[hex(ord(c)) for c in s])\nprint('out cps',[hex(ord(c)) for c in o])\nprint('equal codepoints:', [ord(c) for c in s]==[ord(c) for c in o])\nprint('in form',u.normalize('NFC',s)==s and 'NFC' or 'NFD','| out form',u.normalize('NFC',o)==o and 'NFC' or 'NFD')\nprint('no replacement char:', '\\ufffd' not in o)\nprint('combining marks kept:', sum(1 for c in o if u.combining(c)))\n\"",
-     "python -m pytest -q --collect-only | tail -18; echo \"exit=$?\""
-    ]
-   },
-   "final": {
-    "status": "accepted",
-    "attempts": 1,
-    "verdicts": [
-     "ok"
-    ],
-    "repairs": 0
-   },
-   "integration": {
-    "attempted": true,
-    "reason": null,
-    "built": false,
-    "status": "pending",
-    "required": [],
-    "artifactId": null
-   },
-   "mechanism": {
-    "oneRepairEntry": false,
-    "classified": false,
-    "debugOnlyWhenUnclassified": true,
-    "resumedSameChild": false,
-    "freshArtifactAfterRepair": false,
-    "findingsBoundToChild": false,
-    "codeHashPinned": false,
-    "redCheckIsRevise": false
-   },
-   "model": {
-    "testerSawTheRedCommand": true,
-    "buildChildTouchedItsFile": false,
-    "secondCheckPassed": true,
-    "nodeAccepted": true
-   },
-   "integrationNative": {
-    "built": false,
-    "hasRealChild": false,
-    "testsPassedOnMergedTree": false,
-    "integrationChecked": false
-   },
-   "fixtureKnobs": {
-    "buildChildOutputTokens": 16000,
-    "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
-    "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
-   },
-   "pytestBeforeCheck": 0,
-   "forcedRedCommands": 9,
-   "ownerHead": "ea7b1eba0e628e7f8eda718be30217a1faafc52b",
-   "isolation": {
-    "mode": "git",
-    "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe0688",
-    "root": ".boxfox/worktrees/w-fe0688bcdf/main"
-   },
-   "calls": 49,
-   "narrative": "Cùng dạng hỏng với lượt 3, nhưng lượt này CHỈ RA NGUYÊN NHÂN GỐC bằng lời của chính child kiểm thử: fixture trả kết quả CẮM SẴN cho MỌI lệnh chứa chuỗi `pytest` — kể cả `echo \"hello pytest world\"` cũng nhận đúng traceback đó. Child kết luận đúng là công cụ trả kết quả bịa, tự chạy lại pytest qua một script không chứa chữ `pytest` để lấy transcript thật (12 passed) rồi báo đạt. Vì lệnh test bắt buộc chưa từng chạy THÀNH CÔNG trong lượt kiểm, backend hạ `pass` → `unverified` (đúng luật), nên vòng sửa không được kích hoạt và `__integration__` vẫn `built: false`."
-  },
-  {
-   "rawDir": "/var/tmp/w8-probe-run5-16000",
-   "resultsSha256": "130ef6a8f8a2f415c39e381e4008bde3363c0c330f4f033e6620fb0a93852bd6",
-   "oracle": false,
-   "error": "ValueError: WORK_CHECK_STALE: use current artifactId from work_graph status",
-   "latencySeconds": 703.523,
-   "redCheck": {
-    "kind": "tests",
-    "status": "unverified",
-    "childId": "7780196c33564f1a940962e171373599",
-    "error": "WORK_FINDING_UNCITED: A5: F1 UNKNOWN_RECEIPT; A7: F2 UNKNOWN_RECEIPT. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
-    "repairAction": null
-   },
-   "repair": {},
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "artifactId": "a-79c23c8d15444cbaa91e9276b5471bf8",
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": null
-   },
-   "greenChecks": [
+  "runs": [
     {
-     "kind": "tests",
-     "status": "revise",
-     "attempt": 1,
-     "childId": "5b2168231a8b4d198ceb450124e66b9a",
-     "error": null,
-     "commands": [
-      "cd /workspace 2>/dev/null || cd ~; pwd; ls -la; echo \"---\"; find / -name \"export.py\" -path \"*src*\" -not -path \"*/node_modules/*\" 2>/dev/null | head -50",
-      "pwd; ls -la",
-      "ls -la .boxfox/worktrees/w-fee248a9c3/n-B1",
-      "pwd",
-      "ls -la",
-      "cat -n src/export.py",
-      "ls -la src tests",
-      "git status --porcelain",
-      "git log --oneline -5",
-      "git show --stat 95fcb3d",
-      "git diff 19f37cf 95fcb3d",
-      "git rev-parse HEAD^{tree}"
-     ]
-    }
-   ],
-   "productStateFromDb": {
-    "node": "B1",
-    "status": "needs_checks",
-    "attempts": 2,
-    "repairs": [
-     {
-      "n": 1,
-      "class": "unclassified",
-      "reason": "no failing required command event",
-      "resumed": true,
-      "codeHash": "2854719b6e0bccf03df9e00286fe6b65bc1f233050b8b9c60c194900a73661aa"
-     }
-    ],
-    "round1Verdict": "revise"
-   },
-   "narrative": "Lượt này KHÁC hai lượt trước: lượt kiểm ĐẦU vẫn `unverified` nhưng lý do đổi thành `WORK_FINDING_UNCITED` (child báo finding chặn mà thiếu receipt hợp lệ), rồi lượt kiểm THỨ HAI trả `revise` thật ⇒ sản phẩm ĐÃ định tuyến sửa (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId` và `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết ở lượt thử thứ hai vì artifact đã đổi (`WORK_CHECK_STALE`) — đã vá để đọc lại artifact từng lượt."
-  },
-  {
-   "rawDir": "/var/tmp/w8-probe-run6-16000",
-   "resultsSha256": "a79bf3c0985f5c00b22ec4936485815463e7a66aca9efbeda2c745f1816a7eb5",
-   "oracle": false,
-   "error": "KeyError: 'status'",
-   "latencySeconds": 509.439,
-   "redCheck": {
-    "kind": "tests",
-    "status": "unverified",
-    "childId": "72ec8b6851004005a7d5b4329a7c8fa7",
-    "error": "Missing actual successful required test command events.",
-    "repairAction": null
-   },
-   "repair": {},
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "artifactId": "a-7b829a38445a4f8cba155c32a91b1813",
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": null
-   },
-   "greenChecks": [
-    {
-     "kind": "tests",
-     "status": "unverified",
-     "attempt": 1,
-     "childId": "38b350536447429cb3f7f6be29103608",
-     "error": "Missing actual successful required test command events.",
-     "commands": [
-      "pwd && ls -la && git -C . log --oneline -5 2>/dev/null | head -20 && git status --porcelain 2>/dev/null | head -20",
-      "cd \"$(pwd)\" && echo \"=== git rev-parse HEAD ===\" && git rev-parse HEAD && echo \"=== diff HEAD~1..HEAD --stat ===\" && git diff --stat HEAD~1 HEAD && echo \"=== cat -A? no: plain cat src/export.py ===\" && cat -n src/export.py && echo \"=== tests/test_export.py ===\" && cat -n tests/test_export.py && echo \"=== files ===\" && find . -path ./.git -prune -o -type f -print | sort",
-      "cd \"$(pwd)\" && python -V && echo \"=== MANDATORY: python -m pytest -q ===\" && python -m pytest -q; echo \"EXIT=$?\"",
-      "mkdir -p /tmp/work && cd \"$(pwd)\" && python - <<'PY' | tee /tmp/work/independent.txt\n# Independent criterion check, NOT using tests/test_export.py\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as em\nr = []\ndef chk(id_, cond, got, want=None):\n    r.append((\"PASS\" if cond else \"FAIL\", id_, repr(got), repr(want)))\n# A1\nchk(\"A1\", em(\"Hồ sơ\") == \"Hồ sơ\", em(\"Hồ sơ\"), \"Hồ sơ\")\n# A2\nchk(\"A2\", em(\"\") == \"\", em(\"\"), \"\")\n# A3 multiline\nt = \"Dòng một\\nDòng hai\\nDòng ba\"\nchk(\"A3\", em(t) == t, em(t), t)\n# A4 no heading/wrapper\nt4 = \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"\nout4 = em(t4)\nchk(\"A4\", out4 == t4 and not out4.startswith(\"#\") and \"---\" not in out4, out4, t4)\n# A5 None\ntry:\n    o5 = em(None); chk(\"A5\", o5 == \"\" and isinstance(o5, str), o5, \"\")\nexcept Exception as e:\n    chk(\"A5\", False, \"raised \" + repr(e), \"\")\n# A6 inner whitespace\nt6 = \"Điểm  số  và  khoảng    trắng\"\nchk(\"A6\", em(t6) == t6, em(t6), t6)\n# A7 strip ends\nt7 = \"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"\nchk(\"A7\", em(t7) == \"Dòng một\\nDòng hai\\nDòng ba\", em(t7), \"Dòng một\\nDòng hai\\nDòng ba\")\n# A8 digits + punctuation\nt8 = 'Ngày 12/03/2026, mức 99,5% — \"trích dẫn\" (ghi chú) #1'\nchk(\"A8\", em(t8) == t8, em(t8), t8)\n# A9 purity\nt9 = \"Sơ đồ  ổn\\nvà chuyển tiếp\"\na, b = em(t9), em(t9)\nchk(\"A9\", a == b and t9 == \"Sơ đồ  ổn\\nvà chuyển tiếp\", (a, b, t9), (t9, t9, t9))\nfor row in r: print(\" | \".join(row))\nprint(\"--- codepoints ---\")\ncp_in = [hex(ord(c)) for c in \"Hồ sơ\"]\ncp_out = [hex(ord(c)) for c in em(\"Hồ sơ\")]\nprint(\"in:\", cp_in, \"out:\", cp_out, \"equal:\", cp_in == cp_out)\nnfd = unicodedata.normalize(\"NFD\", \"Hồ sơ\")\nprint(\"NFD input stays NFD (no normalization):\", em(nfd) == nfd, \"| out codepoints:\", [hex(ord(c)) for c in em(nfd)])\nprint(\"CRLF:\", repr(em(\"A\\r\\nB\\r\")))\nprint(\"non-str int:\", repr(em(123)))\nprint(\"total FAIL:\", sum(1 for x in r if x[0]==\"FAIL\"))\nPY",
-      "cd \"$(pwd)\" && echo \"=== src/app.py ===\" && cat -n src/app.py && echo \"=== README.md ===\" && cat -n README.md && echo \"=== git diff HEAD~1 HEAD -- tests/test_export.py | head -60 ===\" && git diff HEAD~1 HEAD -- tests/test_export.py | head -60"
-     ]
+      "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
+      "resultsSha256": "c51d2169b6850f88d97a11e1b71f5e3e258cf33144265fa5226f74e6f589588d",
+      "rawDir": "/var/tmp/w8-probe-run1-4096",
+      "oracle": false,
+      "error": "ValueError: WORK_CHECK_NOT_READY: producer must finish the current draft before checks",
+      "latencySeconds": 100.279,
+      "firstStatus": "failed",
+      "redCheck": null,
+      "repair": null,
+      "resumedChild": null,
+      "afterRepair": null,
+      "greenCheck": null,
+      "final": null,
+      "integration": null,
+      "mechanism": null,
+      "model": null,
+      "integrationNative": null,
+      "fixtureKnobs": null,
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": null,
+      "ownerHead": null,
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-d77647",
+        "root": ".boxfox/worktrees/w-d776477ace/main"
+      },
+      "calls": 15,
+      "narrative": "Trần output mặc định 4096 token của fixture làm con Build bị cắt (PROVIDER_OUTPUT_TRUNCATED, 3958 token reasoning), nên `checks.tool` từ chối: WORK_CHECK_NOT_READY — chưa có bản nháp hoàn tất để kiểm. Giữ làm mốc đối chứng cho núm 16000."
     },
     {
-     "kind": "tests",
-     "status": "unverified",
-     "attempt": 2,
-     "childId": "7dd03a707ba8404cb211cc0d2a8e1d6d",
-     "error": "Missing actual successful required test command events.",
-     "commands": [
-      "cd \"$(pwd)\" && pwd && git rev-parse HEAD 2>&1 && git status --short 2>&1 && echo \"---BRANCH---\" && git branch --show-current 2>&1 && echo \"---WORKTREES---\" && git worktree list 2>&1",
-      "cd \"$(pwd)\" && ls -la && echo \"---FIND---\" && find . -path ./.git -prune -o -type f -print 2>/dev/null | sort",
-      "cd \"$(pwd)\" && python -m pytest -q; echo \"EXIT=$?\"",
-      "cd \"$(pwd)\" && echo \"=== DIFF STAT vs base a2dfc9a ===\" && git diff --stat a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== NAME-STATUS ===\" && git diff --name-status a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== COMMIT ===\" && git log --oneline -n 3 && echo \"=== BASE export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:src/export.py && echo \"=== BASE test_export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:tests/test_export.py",
-      "mkdir -p /tmp/work && cd \"$(pwd)\" && cat > /tmp/work/verify_crit.py <<'PY'\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as E\n\nfails=[]\ndef chk(cid, got, exp):\n    ok = got == exp\n    print((\"PASS\" if ok else \"FAIL\"), cid, \"got=\", repr(got), \"exp=\", repr(exp))\n    if not ok: fails.append(cid)\n\nchk(\"A1\", E(\"Hồ sơ\"), \"Hồ sơ\")\nchk(\"A2\", E(\"\"), \"\")\nchk(\"A3\", E(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A4\", E(\"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"), \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\")\nchk(\"A5\", E(None), \"\")\nchk(\"A6\", E(\"Điểm  số  và  khoảng    trắng\"), \"Điểm  số  và  khoảng    trắng\")\nchk(\"A7\", E(\"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A8\", E('12/03/2026, 99,5% — \"q\" (n) #1'), '12/03/2026, 99,5% — \"q\" (n) #1')\nt=\"Sơ đồ  ổn\\nvà chuyển tiếp\"\nr1,r2=E(t),E(t)\nchk(\"A9-determinism\", (r1,r2), (r1,r2))\nprint((\"PASS\" if r1==r2 else \"FAIL\"), \"A9-two-calls-equal\", repr(r1), repr(r2))\nprint((\"PASS\" if t==\"Sơ đồ  ổn\\nvà chuyển tiếp\" else \"FAIL\"), \"A9-input-unmutated\")\n\n# artifact numeric claims\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().split(\"\\n\")\nprint(\"LINE-COUNT export.py:\", len([l for l in src if True])-1 if src[-1]==\"\" else len(src))\nfor n in (12,35,36,37,38,40,41,43,44,45,47):\n    print(\"L%-3d %s\" % (n, src[n-1][:70]))\ncps=[hex(ord(c)) for c in E(\"Hồ sơ\")]\nprint(\"CODEPOINTS:\", cps, \"match-claim:\", cps==['0x48','0x1ed3','0x20','0x73','0x1a1'])\nnfd=unicodedata.normalize(\"NFD\",\"Hồ sơ\")\nprint(\"NFD-stays-NFD:\", unicodedata.normalize(\"NFD\",E(nfd))==E(nfd), \"is-NFD-out:\", unicodedata.is_normalized(\"NFD\",E(nfd)))\nprint(\"NFD-normalized-output:\", unicodedata.is_normalized(\"NFC\",E(nfd)))\n# extras\nprint(\"EXTRA interior-blank-lines:\", repr(E(\"A\\n\\nB\")))\nprint(\"EXTRA trailing-blank:\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"EXTRA leading-blank:\", repr(E(\"\\n\\nA\")))\nprint(\"EXTRA CRLF:\", repr(E(\"A\\r\\nB\")))\nprint(\"EXTRA BOM:\", repr(E(\"﻿Hồ sơ\")))\nprint(\"EXTRA tabs-inside:\", repr(E(\"a\\tb\")))\nprint(\"FAILS:\", fails)\nPY\npython /tmp/work/verify_crit.py; echo \"EXIT=$?\"",
-      "cd \"$(pwd)\" && python - <<'PY'\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().splitlines()\nprint(\"export.py total lines:\", len(src))\nfor i,l in enumerate(src,1):\n    print(\"%3d|%s\" % (i,l))\nPY",
-      "cd \"$(pwd)\" && python - <<'PY'\nimport sys; sys.path.insert(0,\".\")\nfrom src.export import export_markdown as E\nprint(\"trailing-NEWLINE  'A\\\\nB\\\\n' ->\", repr(E(\"A\\nB\\n\")))\nprint(\"trailing-BLANKS   'A\\\\nB\\\\n\\\\n\\\\n' ->\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"interior-BLANK    'A\\\\n\\\\nB' ->\", repr(E(\"A\\n\\nB\")))\nprint(\"interior-breaks   'A\\\\nB\\\\nC' ->\", repr(E(\"A\\nB\\nC\")))\nprint(\"strip+break       ' A \\\\n B ' ->\", repr(E(\" A \\n B \")))\nprint(\"non-str 123       ->\", repr(E(123)))\nprint(\"None              ->\", repr(E(None)))\nprint(\"empty             ->\", repr(E(\"\")))\nprint(\"viet NFC          ->\", repr(E(\"Hồ sơ\")))\nPY\necho \"=== COLLECT COUNT ===\"\npython -m pytest -q --collect-only 2>&1 | tail -3\necho \"=== base test_keeps_unicode unchanged? ===\"\ngit diff a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD -- tests/test_export.py | head -20"
-     ]
-    },
-    {
-     "attempt": 3,
-     "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
-    }
-   ],
-   "greenCheck": {
-    "attempt": 3,
-    "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
-   },
-   "final": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": 0
-   },
-   "mechanism": {
-    "oneRepairEntry": false,
-    "classified": false,
-    "debugOnlyWhenUnclassified": true,
-    "resumedSameChild": false,
-    "freshArtifactAfterRepair": false,
-    "findingsBoundToChild": false,
-    "codeHashPinned": false,
-    "redCheckIsRevise": false
-   },
-   "model": null,
-   "integration": {
-    "attempted": false,
-    "reason": "node chưa accepted (status=needs_checks); bỏ qua node tổng hợp"
-   },
-   "integrationNative": null,
-   "narrative": "Probe đã sống qua vòng thử lại và ghi đúng hàng rào sản phẩm: ba lượt mở kiểm trên cùng một artifact bị chặn bằng `WORK_CHECK_EXHAUSTED`; lượt ghi cuối không có `status` nên phần tính oracle nổ `KeyError` (lỗi phép đo, đã vá bằng `.get`)."
-  },
-  {
-   "rawDir": "/var/tmp/w8-probe-run7-16000",
-   "resultsSha256": "5b82c828ccb5ac002450ff50e9198b1d7c5cf4c41b89c3eb325d59932c2a27dc",
-   "oracle": false,
-   "error": null,
-   "latencySeconds": 1146.14,
-   "redCheck": {
-    "kind": "tests",
-    "status": "unverified",
-    "childId": "04510bdc39af4b52a88125e7266435b0",
-    "error": "Missing actual successful required test command events.",
-    "repairAction": null
-   },
-   "repair": {},
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 1,
-    "artifactId": "a-8cd3fd9a29484e69997172b8d7e5dbc3",
-    "verdicts": [
-     "unverified"
-    ],
-    "repairs": null
-   },
-   "greenChecks": [
-    {
-     "kind": "tests",
-     "status": "unverified",
-     "attempt": 1,
-     "childId": "9ae475abbdcd465e959bac9a7adb587f",
-     "error": "Missing actual successful required test command events.",
-     "commands": [
-      "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && pwd && git status --short && echo \"--- diff stat ---\" && git diff --stat && echo \"--- head ---\" && git rev-parse HEAD",
-      "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && echo \"=== python -m pytest -q ===\" && python -m pytest -q 2>&1 | tail -20; echo \"EXIT=$?\"",
-      "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== files changed in HEAD commit ===\" && git show --stat --oneline HEAD | head -20 && echo \"=== base version of src/export.py ===\" && git show 6b3c9927ef85420353267a67316c2753e95d0baf:src/export.py && echo \"=== files changed base..HEAD ===\" && git diff --name-only 6b3c9927ef85420353267a67316c2753e95d0baf..HEAD",
-      "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\n# -*- coding: utf-8 -*-\nimport sys, unicodedata\nfrom src.export import export_markdown as e\n\ndef chk(name, got, exp):\n    ok = got == exp\n    print((\"PASS \" if ok else \"FAIL \") + name + \" -> \" + repr(got) + (\"\" if ok else \"   EXPECTED \" + repr(exp)))\n    return ok\n\nres = {}\nres['A1'] = chk(\"A1 unicode\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A2'] = chk(\"A2 empty\", e(\"\"), \"\")\nres['A3'] = chk(\"A3 multiline-newline\", e(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nres['A4'] = chk(\"A4 no-wrapper\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A5'] = chk(\"A5 none\", e(None), \"\")\nres['A6'] = chk(\"A6 inner-space\", e(\"Hồ  sơ   nhân\"), \"Hồ  sơ   nhân\")\nres['A7'] = chk(\"A7 strip-edges\", e(\"  Hồ sơ  \\n  Bản lưu  \"), \"Hồ sơ\\nBản lưu\")\nres['A8'] = chk(\"A8 digits-punct\", e(\"Hồ sơ 2024: 3 trang, 50%.\"), \"Hồ sơ 2024: 3 trang, 50%.\")\nres['A9'] = chk(\"A9 purity-2x\", e(e(\"Hồ sơ\\nBản lưu\")), e(\"Hồ sơ\\nBản lưu\"))\nprint(\"ALL_ACCEPTED:\", all(res.values()), res)\n# supplementary observations (not acceptance-blocking)\nprint(\"INFO type-none:\", type(e(None)).__name__, \"| type-empty:\", type(e(\"\")).__name__)\nprint(\"INFO trailing-nl:\", repr(e(\"Hồ sơ\\n\")))\nprint(\"INFO leading-nl:\", repr(e(\"\\nHồ sơ\")))\nprint(\"INFO inner-only-spaces line:\", repr(e(\"a   b\")))\nprint(\"INFO nbsp-stripped:\", repr(e(\" Hồ sơ \")))\nprint(\"INFO crlf:\", repr(e(\"Hồ sơ\\r\\nBản lưu\")))\nprint(\"INFO int-input raises:\", end=\" \")\ntry:\n    e(5); print(\"no error\")\nexcept Exception as ex:\n    print(type(ex).__name__)\nprint(\"INFO codepoints A1 out:\", [hex(ord(c)) for c in e(\"Hồ sơ\")])\nprint(\"INFO codepoints A1 in :\", [hex(ord(c)) for c in \"Hồ sơ\"])\nPYEOF",
-      "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\n# A4 rigorous: no prefix/suffix wrapper on multi-line + marker chars\ns = \"Hồ sơ\\nBản lưu\\n\\n***\"\nout = e(s)\nprint(\"A4 multiline-identity:\", out == s, repr(out))\nfor probe in [\"# Tiêu đề\", \"- mục\", \"`code`\", \"[link](u)\", \"> trích\", \"**bold**\", \"|a|b|\"]:\n    o = e(probe)\n    print(\"A4 identity %-14r -> %-20r %s\" % (probe, o, o == probe))\n# A1 byte-level: NFC vs NFD normalization equality (combining marks preserved, not stripped)\nimport unicodedata\nsrc = \"Hồ sơ\"\nout = e(src)\nprint(\"A1 bytes-identical:\", out.encode('utf-8') == src.encode('utf-8'))\nprint(\"A1 nfc(src)==out:\", unicodedata.normalize('NFC', src) == out)\nnfd_src = unicodedata.normalize('NFD', src)\nprint(\"A1 nfd-in == nfd-out:\", e(nfd_src) == nfd_src, \"combining marks kept:\", [hex(ord(c)) for c in e(nfd_src)][:4])\n# broader diacritic set\nfor w in [\"Nguyễn\", \"Đặng Thùy Trâm\", \"đ ẹ\", \"ỳ ỵ ự ữ\", \"Hà Nội\", \"TP. Hồ Chí Minh\"]:\n    print(\"A1 diacritic %-20r -> %r %s\" % (w, e(w), e(w) == w))\n# A5 not raising, and repeated None calls (purity across None)\nprint(\"A5 None x3:\", [e(None) for _ in range(3)])\n# A9: purity - same arg twice distinct calls, plus global state check\nimport src.export as m\na = e(\"  Hồ  sơ \\n Bản lưu \"); b = e(\"  Hồ  sơ \\n Bản lưu \")\nprint(\"A9 same-arg twice equal:\", a == b, repr(a))\nprint(\"A9 module globals:\", sorted(k for k in vars(m) if not k.startswith('__')))\nPYEOF",
-      "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== doctest claim check ===\" && python -m doctest src/export.py -v 2>&1 | tail -3; echo \"=== file bytes: confirm no ascii-stripping escape calls ===\" && grep -nE \"encode|decode|ascii|latin|unidecode|normalize|\\.format|f\\\"|f'\" src/export.py || echo \"(none of encode/decode/ascii/latin/unidecode/normalize found)\"; echo \"=== wc -l src/export.py ===\" && wc -l src/export.py; echo \"=== working tree clean vs HEAD? ===\" && git status --porcelain src/export.py && echo \"(empty above = matches HEAD)\"",
-      "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\nsrc = \"\\u00a0Hồ sơ\\u00a0\"   # NBSP (U+00A0) ở hai đầu\nout = e(src)\nprint(\"NBSP input codepoints:\", [hex(ord(c)) for c in src])\nprint(\"NBSP output repr:\", repr(out), \"| kept NBSP:\", \"\\u00a0\" in out)\nsrc2 = \"\\u3000Hồ sơ\\u3000\"   # ideographic space U+3000\nprint(\"U+3000 output repr:\", repr(e(src2)))\nsrc3 = \"Hồ\\u00a0sơ\"          # NBSP bên trong dòng\nprint(\"inner NBSP kept:\", repr(e(src3)), e(src3) == src3)\nprint(\"strip default arg:\", repr(str.strip(\"\\u00a0x\\u3000\")))\nPYEOF",
-      "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== total lines (last byte is newline?) ===\" && wc -l < src/export.py && tail -c 1 src/export.py | xxd && echo \"=== numbered lines 30-39 ===\" && nl -ba src/export.py | sed -n '30,39p' && echo \"=== does line 40 exist? ===\" && sed -n '40p' src/export.py | wc -c && echo \"=== git show --numstat base..HEAD ===\" && git show --numstat --format= HEAD",
-      "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== env claim ===\" && python -V && python -m pytest --version 2>&1 | head -2 && echo \"=== artifact claim: pytest --doctest-modules ===\" && python -m pytest -q --doctest-modules src/export.py 2>&1 | tail -3 && echo \"=== artifact claim: py_compile ===\" && python -m py_compile src/export.py && echo \"py_compile OK\""
-     ]
-    },
-    {
-     "kind": "tests",
-     "status": "pass",
-     "attempt": 2,
-     "childId": "88bc1d3e30fe4429a794c64a2c697235",
-     "error": null,
-     "commands": [
-      "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
-      "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
-      "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
-      "pwd",
-      "git rev-parse HEAD",
-      "git status --short",
-      "git diff --stat",
-      "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
-      "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
-      "python -m pytest -q",
-      "python3 -V",
-      "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
-     ]
-    }
-   ],
-   "greenCheck": {
-    "kind": "tests",
-    "status": "pass",
-    "attempt": 2,
-    "childId": "88bc1d3e30fe4429a794c64a2c697235",
-    "error": null,
-    "commands": [
-     "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
-     "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
-     "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
-     "pwd",
-     "git rev-parse HEAD",
-     "git status --short",
-     "git diff --stat",
-     "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
-     "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
-     "python -m pytest -q",
-     "python3 -V",
-     "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
-    ]
-   },
-   "final": {
-    "status": "accepted",
-    "attempts": 1,
-    "verdicts": [
-     "ok"
-    ],
-    "repairs": 0
-   },
-   "mechanism": {
-    "oneRepairEntry": false,
-    "classified": false,
-    "debugOnlyWhenUnclassified": true,
-    "resumedSameChild": false,
-    "freshArtifactAfterRepair": false,
-    "findingsBoundToChild": false,
-    "codeHashPinned": false,
-    "redCheckIsRevise": false
-   },
-   "model": {
-    "testerSawTheRedCommand": true,
-    "buildChildTouchedItsFile": false,
-    "secondCheckPassed": true,
-    "nodeAccepted": true
-   },
-   "integration": {
-    "attempted": true,
-    "reason": null,
-    "executeStatuses": {
-     "B1": "accepted"
-    },
-    "built": true,
-    "status": "needs_checks",
-    "required": [
-     "tests",
-     "code_review"
-    ],
-    "artifactId": "a-36776aa343b74f81a1471c8227f7e5cf",
-    "checks": [
-     {
-      "kind": "tests",
-      "status": "unverified",
-      "attempt": 1,
-      "childId": "8017b714518d4c538999689ffa3660cd",
-      "error": "Missing actual successful required test command events.",
-      "seconds": 151.103,
-      "commands": [
-       "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && echo \"---TREE---\" && git rev-parse HEAD^{tree} && echo \"---FILES---\" && find . -path ./.git -prune -o -type f -print | head -50",
-       "cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q 2>&1; echo \"EXIT=$?\"",
-       "pwd; echo \"---\"; ls -a; echo \"---BOXFOX---\"; ls -a .boxfox 2>/dev/null || echo \"no .boxfox here\"; echo \"---FIND WORKTREES---\"; find / -maxdepth 6 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
-       "pwd",
-       "find / -maxdepth 7 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
-       "git rev-parse HEAD",
-       "python -m pytest -q 2>&1",
-       "git status --short",
-       "cat src/export.py",
-       "git log --oneline -5",
-       "git branch -a -v",
-       "git rev-parse HEAD^{tree}"
-      ]
-     },
-     {
-      "kind": "tests",
-      "status": "unverified",
-      "attempt": 2,
-      "childId": "7a21a78ff5984a9fb1a89cf5d8809e2f",
-      "error": "No successfully opened original evidence.",
-      "seconds": 279.399,
-      "commands": [
-       "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && git log --oneline -3 && echo \"--- tree ---\" && git rev-parse HEAD^{tree} && echo \"--- ls ---\" && ls -la && ls -la src tests",
-       "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && cat src/export.py && echo \"=== tests ===\" && cat tests/test_export.py && echo \"=== app ===\" && cat src/app.py",
-       "pwd; ls -la; ls -la .boxfox/worktrees/ 2>&1 | head -20",
-       "ls .boxfox/worktrees",
-       "ls -a",
-       "git rev-parse HEAD",
-       "git status --short",
-       "git rev-parse HEAD^{tree}",
-       "git log --oneline -5",
-       "cat src/export.py",
-       "cat tests/test_export.py",
-       "python -m pytest -q"
-      ]
-     }
-    ],
-    "error": "ValueError: WORK_NO_PROGRESS: inspect saved admissions; main must change evidence/input or strategy"
-   },
-   "integrationNative": {
-    "built": true,
-    "hasRealChild": true,
-    "testsPassedOnMergedTree": false,
-    "integrationChecked": false
-   },
-   "narrative": "Lượt ĐẦY ĐỦ đầu tiên: probe chạy hết, không lỗi. Lượt kiểm đầu vẫn `unverified` (cò đỏ cắm sẵn), lượt kiểm thứ hai `pass` ⇒ B1 `accepted`. Nhờ vá \"đọc lại run\", `build_integration` chạy thật: node `__integration__` được dựng (`built: true`, `required: [tests, code_review]`, artifact `a-36776aa3…`) và một child Testing THẬT chạy trên cây gộp (`cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q`, 151.1s) — lần đầu tiên node tổng hợp được đo native. Child đó trả `unverified` (\"Missing actual successful required test command events\") nên `testsPassedOnMergedTree`/`integrationChecked` vẫn false: đúng hàng rào `test_proof` (child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc)."
-  },
-  {
-   "rawDir": "/var/tmp/w8-probe-run9-realred-16000",
-   "resultsSha256": "a0768fa5648577245e0a4b94ee7a287fe0ee2582c7cb906a1e7d8445d9d57c50",
-   "oracle": false,
-   "error": null,
-   "latencySeconds": 352.949,
-   "commit": "bcc478ddd7504d619a75081990ca3c49c6ef4f3e",
-   "realRed": {
-    "seeded": 1,
-    "path": "/code/i3abyxinhdepqua-lang/BoxFox-Agent-Box/.tmp/w8-probe-red2/repair_loop/.boxfox/worktrees/w-fe1d0a8288/n-B1/src/export.py",
-    "proof": {
-     "exitCode": 1,
-     "tail": [
-      "FAILED tests/test_export.py::test_strips_surrounding_whitespace_per_line - As...",
-      "FAILED tests/test_export.py::test_keeps_digits_and_punctuation - AssertionErr...",
-      "FAILED tests/test_export.py::test_is_pure_function - AssertionError: assert '...",
-      "8 failed, 1 passed in 0.03s"
-     ]
-    },
-    "errors": []
-   },
-   "redCheck": {
-    "kind": "tests",
-    "status": "revise",
-    "childId": "6d0603d6c7fc45bfb53e345c56faa800",
-    "error": null,
-    "repairAction": "retest",
-    "commands": [
-     "cd /code/i3abyxinhdepqua-lang/BoxFox-Agent-Box 2>/dev/null || cd .; pwd; echo \"--- find worktree ---\"; ls -la .boxfox/worktrees/ 2>&1 | head -40",
-     "find / -maxdepth 8 -type d -name \"w-fe1d0a8288\" 2>/dev/null | head -20",
-     "pwd; ls -la; find . -maxdepth 4 -type d 2>/dev/null | head -50",
-     "find / -maxdepth 6 -type d -name \".boxfox\" 2>/dev/null | head -20; echo \"---plans---\"; find / -maxdepth 8 -path \"*worktrees*\" -type d 2>/dev/null | head -20",
-     "find / -maxdepth 9 -type d -path \"*w-fe1d0a8288*\" 2>/dev/null | head -20",
-     "pwd && ls -la && find . -maxdepth 4 2>/dev/null | head -60",
-     "python -m pytest -q",
-     "echo \"=== pwd ===\"; pwd; echo \"=== wc -l src/export.py ===\"; wc -l src/export.py; echo \"=== cat -n src/export.py ===\"; cat -n src/export.py",
-     "echo \"=== git status ===\"; git status --porcelain; echo \"=== git log ===\"; git log --oneline -3; echo \"=== git diff HEAD~1 --stat ===\"; git diff HEAD~1 HEAD --stat; echo \"=== HEAD ===\"; git rev-parse HEAD",
-     "echo \"=== git diff HEAD~1 HEAD -- src/export.py ===\"; git diff HEAD~1 HEAD -- src/export.py; echo \"=== git show HEAD:src/export.py ===\"; git show HEAD:src/export.py; echo \"=== git show HEAD~1:src/export.py ===\"; git show HEAD~1:src/export.py",
-     "echo \"=== git show HEAD:tests/test_export.py | wc -l ===\"; git show HEAD:tests/test_export.py | wc -l; echo \"=== head of committed tests ===\"; git show HEAD:tests/test_export.py | head -12; echo \"=== treeHash ===\"; git rev-parse HEAD^{tree}",
-     "python -c \"\nimport sys, hashlib, subprocess\nsys.path.insert(0,'.')\nfrom src.export import export_markdown as e\ncases = [('A1 unicode','Hồ sơ'),('A2 empty',''),('A3 nl','Dòng một\\nDòng hai'),('A4 nohdr','Hồ sơ'),('A6 inner','Hồ  sơ   a'),('A7 strip','   Hồ sơ   '),('A8 digits','Hồ sơ 2024: 3, #1!')]\nfor n,v in cases:\n    try: print(n,'->',repr(e(v)))\n    except Exception as ex: print(n,'-> RAISED',type(ex).__name__,ex)\ntry: print('A5 None ->',repr(e(None)))\nexcept Exception as ex: print('A5 None -> RAISED',type(ex).__name__,ex)\na=e('Hồ sơ'); b=e('Hồ sơ'); print('A9 pure two calls equal:', a==b, repr(a), repr(b))\n\""
-    ]
-   },
-   "repair": {
-    "n": 1,
-    "checkId": "c-a32b21a6f33e4761a528cdddd31e7cb1",
-    "class": "clear",
-    "reason": "required command failed with a trace into tracked files",
-    "debugChildId": null,
-    "debugArtifactId": null,
-    "buildChildId": "83565b07b48548e4afd2d0fcc341d07b",
-    "resumed": true,
-    "codeHash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
-    "at": 1790993046.6115375,
-    "findingsArtifactId": "a-307f20c9d3804725a72cd73922e820e2",
-    "repairChildReason": null,
-    "status": "needs_checks"
-   },
-   "resumedChild": {
-    "id": "83565b07b48548e4afd2d0fcc341d07b",
-    "parent": "3639fc2529f14d738a6b7043f9a570f9",
-    "tools": [
-     "codebase_glob",
-     "terminal_exec",
-     "file_read",
-     "file_read",
-     "file_read",
-     "file_read",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "file_read",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec",
-     "terminal_exec"
-    ],
-    "wroteExport": true,
-    "sawFindings": true
-   },
-   "afterRepair": {
-    "status": "needs_checks",
-    "attempts": 2,
-    "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
-    "verdicts": [
-     "revise",
-     null
-    ],
-    "repairs": [
-     {
-      "n": 1,
-      "checkId": "c-a32b21a6f33e4761a528cdddd31e7cb1",
-      "class": "clear",
-      "reason": "required command failed with a trace into tracked files",
-      "debugChildId": null,
-      "debugArtifactId": null,
-      "buildChildId": "83565b07b48548e4afd2d0fcc341d07b",
-      "resumed": true,
-      "codeHash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
-      "at": 1790993046.6115375,
-      "findingsArtifactId": "a-307f20c9d3804725a72cd73922e820e2",
-      "repairChildReason": null,
-      "status": "needs_checks"
-     }
-    ]
-   },
-   "greenChecks": [
-    {
-     "attempt": 1,
-     "empty": true,
-     "keys": [
-      "autopilot",
-      "checks",
-      "documents",
-      "flow",
-      "handoffActions",
-      "handoffs",
-      "inputConflicts",
-      "issues",
-      "next",
-      "nodes",
-      "reviewedSet",
-      "revision",
-      "runId",
-      "stale",
-      "status",
-      "waves"
-     ],
-     "raw": {
-      "runId": "w-fe1d0a8288",
-      "status": "approved",
-      "flow": "fix",
-      "revision": 8,
-      "autopilot": false,
-      "nodes": [
-       {
-        "id": "B1",
-        "kind": "build",
-        "title": "Giữ dấu tiếng Việt khi export",
-        "dependsOn": [],
-        "stages": {
-         "execute": "needs_checks"
-        },
-        "artifacts": {
-         "execute": {
-          "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
-          "runId": "w-fe1d0a8288",
-          "nodeId": "B1",
-          "stage": "execute",
-          "version": 3,
-          "path": ".plans/work/e77d3d3fb7a89290b163/t-41b08bf02508247cd545/w-fe1d0a8288/B1/execute/v3-a-b64e23ab3cf348ee942ff775c600d046.md",
-          "chars": 4098,
-          "contentHash": "dc1357dc3387ee0bce027fd3b8c1bb8d5719366bc1112b16fd67a712943df552",
-          "status": "finalized",
-          "producerId": "83565b07b48548e4afd2d0fcc341d07b",
-          "createdAt": 1790993112.6090426,
-          "originTurn": null,
-          "originTurnId": "t-41b08bf02508247cd545",
-          "binding": {
-           "nodeDefinition": "783b40bf3cd218c7b0f580b1883f9b42f55ccda42a6e0aa4f6087d0679c776ef",
-           "dependencies": {},
-           "owner": "fa18853624f2a82cae7dd59be6ef9e2906531dc99e44f43c60e85c6a1c3ae3f1",
-           "policyHash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8",
-           "codeSnapshot": {
-            "schema": "work-code/1",
-            "hash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
-            "head": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
-            "criticalChanges": false,
-            "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
-            "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
-           },
-           "codeCommit": {
-            "nodeCommit": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
-            "treeHash": "ae193667684e859af2ce868632eeb5140ca7eb59",
-            "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
-            "base": "1179802b88f2818733ebdda503b2202b7a86bd6b",
-            "paths": [
-             "src/export.py",
-             "tests/test_export.py"
-            ]
-           },
-           "workspace": {
-            "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
-            "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
-            "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
-           }
-          }
-         }
-        },
-        "policies": {
-         "execute": {
-          "version": "work-checks/10",
-          "artifactKind": "patch",
-          "risk": "normal",
-          "rationale": "Minimum from task/artifact, owner goal and observed source changes.",
-          "required": [
-           {
-            "id": "tests",
-            "executorRole": "testing",
-            "criterion": "Chạy từng lệnh test bắt buộc trên đúng snapshot mã; báo lỗi trung thực."
-           }
-          ],
-          "deferred": [
-           "code_review"
-          ],
-          "hash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8"
-         }
-        }
-       }
-      ],
-      "waves": [
-       [
-        "B1"
-       ]
-      ],
-      "issues": [],
-      "documents": [],
-      "handoffs": [],
-      "handoffActions": [],
-      "next": "Main: correct the conflicting node goal/acceptance with work_graph action=update before retrying checks or production. Preserve facts in the artifact; the assignment needs correction: [('B1', 'execute', [{'id': 'A1', 'requirement': 'export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"', 'evidence': \"export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'.\"}])]",
-      "reviewedSet": null,
-      "stale": false,
-      "inputConflicts": [
-       {
-        "id": "A1",
-        "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
-        "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
-       }
-      ]
-     }
-    }
-   ],
-   "greenCheck": {
-    "attempt": 1,
-    "empty": true,
-    "keys": [
-     "autopilot",
-     "checks",
-     "documents",
-     "flow",
-     "handoffActions",
-     "handoffs",
-     "inputConflicts",
-     "issues",
-     "next",
-     "nodes",
-     "reviewedSet",
-     "revision",
-     "runId",
-     "stale",
-     "status",
-     "waves"
-    ],
-    "raw": {
-     "runId": "w-fe1d0a8288",
-     "status": "approved",
-     "flow": "fix",
-     "revision": 8,
-     "autopilot": false,
-     "nodes": [
-      {
-       "id": "B1",
-       "kind": "build",
-       "title": "Giữ dấu tiếng Việt khi export",
-       "dependsOn": [],
-       "stages": {
-        "execute": "needs_checks"
-       },
-       "artifacts": {
-        "execute": {
-         "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
-         "runId": "w-fe1d0a8288",
-         "nodeId": "B1",
-         "stage": "execute",
-         "version": 3,
-         "path": ".plans/work/e77d3d3fb7a89290b163/t-41b08bf02508247cd545/w-fe1d0a8288/B1/execute/v3-a-b64e23ab3cf348ee942ff775c600d046.md",
-         "chars": 4098,
-         "contentHash": "dc1357dc3387ee0bce027fd3b8c1bb8d5719366bc1112b16fd67a712943df552",
-         "status": "finalized",
-         "producerId": "83565b07b48548e4afd2d0fcc341d07b",
-         "createdAt": 1790993112.6090426,
-         "originTurn": null,
-         "originTurnId": "t-41b08bf02508247cd545",
-         "binding": {
-          "nodeDefinition": "783b40bf3cd218c7b0f580b1883f9b42f55ccda42a6e0aa4f6087d0679c776ef",
-          "dependencies": {},
-          "owner": "fa18853624f2a82cae7dd59be6ef9e2906531dc99e44f43c60e85c6a1c3ae3f1",
-          "policyHash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8",
-          "codeSnapshot": {
-           "schema": "work-code/1",
-           "hash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
-           "head": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
-           "criticalChanges": false,
-           "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
-           "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
-          },
-          "codeCommit": {
-           "nodeCommit": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
-           "treeHash": "ae193667684e859af2ce868632eeb5140ca7eb59",
-           "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
-           "base": "1179802b88f2818733ebdda503b2202b7a86bd6b",
-           "paths": [
-            "src/export.py",
-            "tests/test_export.py"
-           ]
-          },
-          "workspace": {
-           "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
-           "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
-           "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
-          }
-         }
-        }
-       },
-       "policies": {
-        "execute": {
-         "version": "work-checks/10",
-         "artifactKind": "patch",
-         "risk": "normal",
-         "rationale": "Minimum from task/artifact, owner goal and observed source changes.",
-         "required": [
+      "commit": "182a97451c2cd11adf7808ef553181b7d140e882",
+      "resultsSha256": "c7db934e2ae980606ad5390dbbd7c9823a5bed462df0b8372b8ced9a31dd1720",
+      "rawDir": "/var/tmp/w8-probe-run2-16000",
+      "oracle": false,
+      "error": "IndexError: list index out of range",
+      "latencySeconds": 293.466,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "childId": "6bbec24ef3d04c998ef6ad857da438ee",
+        "error": null,
+        "repairAction": "retest"
+      },
+      "repair": {
+        "n": 1,
+        "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
+        "class": "clear",
+        "reason": "required command failed with a trace into tracked files",
+        "debugChildId": null,
+        "debugArtifactId": null,
+        "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
+        "resumed": true,
+        "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
+        "at": 1790976847.6721373,
+        "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
+        "repairChildReason": null,
+        "status": "needs_checks"
+      },
+      "resumedChild": {
+        "id": "ac9164d9240d4fdba9cab6a08032eb88",
+        "parent": "7fb0e024579c4f8a9642dbe267facfbf",
+        "tools": [
+          "codebase_glob",
+          "terminal_exec",
+          "file_read",
+          "file_read",
+          "file_read",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec"
+        ],
+        "wroteExport": true,
+        "sawFindings": true
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "artifactId": "a-2c81f94b2efc4321822b9094a65885be",
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": [
           {
-           "id": "tests",
-           "executorRole": "testing",
-           "criterion": "Chạy từng lệnh test bắt buộc trên đúng snapshot mã; báo lỗi trung thực."
+            "n": 1,
+            "checkId": "c-ee5cfd6e97ff43cb95d513ed760bd86d",
+            "class": "clear",
+            "reason": "required command failed with a trace into tracked files",
+            "debugChildId": null,
+            "debugArtifactId": null,
+            "buildChildId": "ac9164d9240d4fdba9cab6a08032eb88",
+            "resumed": true,
+            "codeHash": "ddcd904f834d60f19e566a44fb514f9f6d14b640a35a5fe66302b14231dc5162",
+            "at": 1790976847.6721373,
+            "findingsArtifactId": "a-7243b541fbba4bb09d5020333d3f998d",
+            "repairChildReason": null,
+            "status": "needs_checks"
           }
-         ],
-         "deferred": [
-          "code_review"
-         ],
-         "hash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8"
-        }
-       }
-      }
-     ],
-     "waves": [
-      [
-       "B1"
-      ]
-     ],
-     "issues": [],
-     "documents": [],
-     "handoffs": [],
-     "handoffActions": [],
-     "next": "Main: correct the conflicting node goal/acceptance with work_graph action=update before retrying checks or production. Preserve facts in the artifact; the assignment needs correction: [('B1', 'execute', [{'id': 'A1', 'requirement': 'export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"', 'evidence': \"export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'.\"}])]",
-     "reviewedSet": null,
-     "stale": false,
-     "inputConflicts": [
-      {
-       "id": "A1",
-       "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
-       "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
-      }
-     ]
-    }
-   },
-   "final": {
-    "status": "needs_checks",
-    "attempts": 2,
-    "verdicts": [
-     "revise",
-     null
-    ],
-    "repairs": 1
-   },
-   "mechanism": {
-    "oneRepairEntry": true,
-    "classified": true,
-    "debugOnlyWhenUnclassified": true,
-    "resumedSameChild": true,
-    "freshArtifactAfterRepair": true,
-    "findingsBoundToChild": true,
-    "codeHashPinned": true,
-    "redCheckIsRevise": true
-   },
-   "model": {
-    "seedIsRealRed": true,
-    "testerSawTheRedCommand": true,
-    "buildChildTouchedItsFile": true,
-    "secondCheckPassed": false,
-    "nodeAccepted": false
-   },
-   "integration": {
-    "attempted": false,
-    "reason": "node chưa accepted (status=needs_checks); bỏ qua node tổng hợp"
-   },
-   "integrationNative": {
-    "built": false,
-    "hasRealChild": false,
-    "testsPassedOnMergedTree": false,
-    "integrationChecked": false
-   },
-   "inputConflict": [
+        ]
+      },
+      "greenCheck": null,
+      "final": null,
+      "integration": null,
+      "mechanism": null,
+      "model": null,
+      "integrationNative": null,
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": null,
+      "ownerHead": null,
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-f9e51d",
+        "root": ".boxfox/worktrees/w-f9e51d0f2f/main"
+      },
+      "calls": 37,
+      "narrative": "Chuỗi đỏ→sửa chạy đúng: check tests đỏ `revise` (child 6bbec24e), `work_repair` phân loại `clear`/`retest`, resume CHÍNH child Build ac9164d9 (có đọc findings, có ghi export), nhưng probe tự nổ `IndexError: list index out of range` ở lần `checks.tool` xanh thứ hai khi phản hồi không có khoá `checks` — lỗi của probe, không phải của sản phẩm."
+    },
     {
-     "id": "A1",
-     "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
-     "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
+      "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
+      "resultsSha256": "e6bb0fa3acfbaaa839ffa733f37751636e93f82dd69afbcf31b51e07055515d8",
+      "rawDir": "/var/tmp/w8-probe-run3-16000",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 465.186,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "e495ea2bb5d948b7b7581521a086169f",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-20b946658e164c238f23a348f0a939a2",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 2,
+        "childId": "d313cad627a44b2fbeee429c41e5eaa8",
+        "error": null,
+        "commands": [
+          "cd /workspace 2>/dev/null || cd .; pwd; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; echo \"--- pytest ---\"; python -m pytest -q 2>&1; echo \"EXIT=$?\"",
+          "cd /workspace 2>/dev/null || cd .; echo \"--- numbered src/export.py ---\"; cat -n src/export.py | sed -n '1,60p'",
+          "python -m pytest -q",
+          "git rev-parse HEAD",
+          "python -c \"\nfrom src.export import export_markdown as f\nprint('A1', repr(f('Hồ sơ')), f('Hồ sơ')=='Hồ sơ')\nprint('A2', repr(f('')), f('')=='')\nprint('A3', repr(f('A\\nB\\nC')), repr(f('X\\n\\nY')))\nprint('A4', repr(f('Nội dung')), f('Nội dung')=='Nội dung')\nprint('A5', repr(f(None)), f(None)=='')\nprint('A6', repr(f('Hồ  sơ  bệnh')), repr(f('a\\tb')))\nprint('A7', repr(f('  Dòng một  \\n\\tDòng hai\\t ')))\nprint('A8', repr(f('Ngày 12/03/2025, hồ sơ số 007: (A-1), 50%.')))\nprint('A9', f('  Hồ sơ  \\n  bệnh  ')==f('  Hồ sơ  \\n  bệnh  '))\nprint('type', type(f(None)).__name__, type(f('x')).__name__)\n\"",
+          "git status --short",
+          "git diff --name-only 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f",
+          "python -c \"\nimport unicodedata, importlib\nfrom src.export import export_markdown as f\ns='Hồ sơ'\nnfd=unicodedata.normalize('NFD', s)\nprint('A1 nfd_in', [hex(ord(c)) for c in nfd])\nprint('A1 nfd_out', [hex(ord(c)) for c in f(nfd)], f(nfd)==nfd)\nprint('A1 precomp_cps', [hex(ord(c)) for c in f(s)])\nt='A\\nB\\n'\nprint('A3 trailing_nl', repr(f(t)), f(t)==t)\nbig='Tiếng Việt: đ, Đ, ạ, ệ, ữ, ớ, ỳ — 100%!\\n  x  '\nr1=f(big); r2=f(big)\nprint('A9', r1==r2, repr(r1))\nprint('A9 repeat_nc', len(f(big.split(chr(10))[0]))>0)\nprint('nonascii_eq', f('Việt')=='Việt')\n\"",
+          "git diff 6c67252890c4dfc67319b3df65981e9bb17f275a 74658d5ece38dfdbb596bcc4a749c2fdbcdf9c1f -- tests/test_export.py"
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "built": false,
+        "status": "pending",
+        "required": [],
+        "artifactId": null
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integrationNative": {
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": 7,
+      "ownerHead": "6c67252890c4dfc67319b3df65981e9bb17f275a",
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-196646",
+        "root": ".boxfox/worktrees/w-196646fdea/main"
+      },
+      "calls": 44,
+      "narrative": "Không nổ (guard mới ghi lại phản hồi rỗng). Chuỗi thực tế: check đầu trả `unverified` với lý do \"Missing actual successful required test command events\" vì model báo `pass` trong khi lệnh test bắt buộc đã đỏ — backend hạ đúng, nhưng vì không có `revise` nên vòng sửa không chạy; lượt kiểm lại (injection đã tắt) xanh và node được accepted. `integration` được yêu cầu nhưng `required: []`/`built: false` nên nhóm native vẫn false."
+    },
+    {
+      "commit": "3265475a2aa573daf03f5ba481a09908bc505438",
+      "resultsSha256": "65f3bf31c2ffe1d29eb4ed63a945bebdf3c431466880af4945ac5bb54fd830c2",
+      "rawDir": "/var/tmp/w8-probe-run4-16000",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 731.34,
+      "firstStatus": "needs_checks",
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "f2ae142ccae7466da9693f5f4ac30507",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-b496ae4f53a34828b3331bdf28222f60",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 1,
+        "childId": "5fb1701a2f0a4c3fb9ba6f7d9de18d16",
+        "error": null,
+        "commands": [
+          "cd /home/user 2>/dev/null; pwd; ls -la; echo \"--- git ---\"; git rev-parse HEAD 2>&1; git status --short 2>&1; echo \"--- python ---\"; python --version 2>&1; python -m pytest -q 2>&1 | tail -20",
+          "cd /home/user 2>/dev/null; echo \"=== git diff --stat vs base ea7b1eba ===\"; git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b 2>&1; echo; echo \"=== files in HEAD tree ===\"; git show --stat --oneline HEAD 2>&1 | head -20; echo; echo \"=== cat src/app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
+          "pwd; ls -la; git rev-parse HEAD; git status --short; python --version; python -m pytest -q",
+          "git diff --stat ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD; echo \"=== app.py ===\"; cat src/app.py; echo \"=== README ===\"; cat README.md",
+          "python -m pytest -q",
+          "git rev-parse HEAD && git status --short && python --version",
+          "python3 -c \"\nfrom src.export import export_markdown as e\nr=[]\ndef chk(n,got,want):\n    r.append(('PASS' if got==want else 'FAIL',n,repr(got),repr(want)))\nchk('A1 unicode',e('Hồ sơ'),'Hồ sơ')\nchk('A2 empty',e(''),'')\nchk('A3 multiline',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba')\nchk('A3b interior blanks',e('Mở đầu\\n\\nKết luận'),'Mở đầu\\n\\nKết luận')\nchk('A4 no wrapper',e('# sẵn có'),'# sẵn có')\nchk('A4b no fence',e('a\\nb'),'a\\nb')\nchk('A5 None',e(None),'')\nchk('A6 inner spaces',e('a  b   c'),'a  b   c')\nchk('A7 outer trim',e('  a  \\n\\tb\\t  '),'a\\nb')\nchk('A8 digits punct',e('15,5% — 007; A/B, C&D!'),'15,5% — 007; A/B, C&D!')\nchk('A9 pure x2',e('  x \\n\\n y '),e('  x \\n\\n y '))\nfor s in r: print(s)\nprint('TOTAL',sum(1 for x in r if x[0]=='PASS'),'/',len(r))\n\"",
+          "git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:src/export.py && echo \"=== BASE TEST FILE ===\" && git show ea7b1eba0e628e7f8eda718be30217a1faafc52b:tests/test_export.py && echo \"=== BASE TREE ===\" && git ls-tree -r --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b",
+          "git branch -a; echo \"=== log all ===\"; git log --all --oneline; echo \"=== diff name-only base..HEAD ===\"; git diff --name-only ea7b1eba0e628e7f8eda718be30217a1faafc52b HEAD",
+          "python3 -c \"\nfrom src.export import export_markdown as e\nprint('leading blank lines:',repr(e('\\n\\nA\\nB\\n\\n')))\nprint('CRLF:',repr(e('A\\r\\nB')))\nprint('CR only:',repr(e('A\\rB')))\nprint('NBSP edge:',repr(e('\\u00a0A\\u00a0')))\nprint('multi-space inner:',repr(e('a \\t b')))\n\"",
+          "python3 -c \"\nimport unicodedata as u\nfrom src.export import export_markdown as e\ns='Hồ sơ Đề án'\no=e(s)\nprint('in cps ',[hex(ord(c)) for c in s])\nprint('out cps',[hex(ord(c)) for c in o])\nprint('equal codepoints:', [ord(c) for c in s]==[ord(c) for c in o])\nprint('in form',u.normalize('NFC',s)==s and 'NFC' or 'NFD','| out form',u.normalize('NFC',o)==o and 'NFC' or 'NFD')\nprint('no replacement char:', '\\ufffd' not in o)\nprint('combining marks kept:', sum(1 for c in o if u.combining(c)))\n\"",
+          "python -m pytest -q --collect-only | tail -18; echo \"exit=$?\""
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "built": false,
+        "status": "pending",
+        "required": [],
+        "artifactId": null
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integrationNative": {
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "fixtureKnobs": {
+        "buildChildOutputTokens": 16000,
+        "why": "con Build mặc định 4096 token output; lượt chạy 4096 đo được PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất",
+        "unpatchedRun": "/var/tmp/w8-probe-run1-4096/results.json"
+      },
+      "pytestBeforeCheck": 0,
+      "forcedRedCommands": 9,
+      "ownerHead": "ea7b1eba0e628e7f8eda718be30217a1faafc52b",
+      "isolation": {
+        "mode": "git",
+        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe0688",
+        "root": ".boxfox/worktrees/w-fe0688bcdf/main"
+      },
+      "calls": 49,
+      "narrative": "Cùng dạng hỏng với lượt 3, nhưng lượt này CHỈ RA NGUYÊN NHÂN GỐC bằng lời của chính child kiểm thử: fixture trả kết quả CẮM SẴN cho MỌI lệnh chứa chuỗi `pytest` — kể cả `echo \"hello pytest world\"` cũng nhận đúng traceback đó. Child kết luận đúng là công cụ trả kết quả bịa, tự chạy lại pytest qua một script không chứa chữ `pytest` để lấy transcript thật (12 passed) rồi báo đạt. Vì lệnh test bắt buộc chưa từng chạy THÀNH CÔNG trong lượt kiểm, backend hạ `pass` → `unverified` (đúng luật), nên vòng sửa không được kích hoạt và `__integration__` vẫn `built: false`."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run5-16000",
+      "resultsSha256": "130ef6a8f8a2f415c39e381e4008bde3363c0c330f4f033e6620fb0a93852bd6",
+      "oracle": false,
+      "error": "ValueError: WORK_CHECK_STALE: use current artifactId from work_graph status",
+      "latencySeconds": 703.523,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "7780196c33564f1a940962e171373599",
+        "error": "WORK_FINDING_UNCITED: A5: F1 UNKNOWN_RECEIPT; A7: F2 UNKNOWN_RECEIPT. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-79c23c8d15444cbaa91e9276b5471bf8",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "revise",
+          "attempt": 1,
+          "childId": "5b2168231a8b4d198ceb450124e66b9a",
+          "error": null,
+          "commands": [
+            "cd /workspace 2>/dev/null || cd ~; pwd; ls -la; echo \"---\"; find / -name \"export.py\" -path \"*src*\" -not -path \"*/node_modules/*\" 2>/dev/null | head -50",
+            "pwd; ls -la",
+            "ls -la .boxfox/worktrees/w-fee248a9c3/n-B1",
+            "pwd",
+            "ls -la",
+            "cat -n src/export.py",
+            "ls -la src tests",
+            "git status --porcelain",
+            "git log --oneline -5",
+            "git show --stat 95fcb3d",
+            "git diff 19f37cf 95fcb3d",
+            "git rev-parse HEAD^{tree}"
+          ]
+        }
+      ],
+      "productStateFromDb": {
+        "node": "B1",
+        "status": "needs_checks",
+        "attempts": 2,
+        "repairs": [
+          {
+            "n": 1,
+            "class": "unclassified",
+            "reason": "no failing required command event",
+            "resumed": true,
+            "codeHash": "2854719b6e0bccf03df9e00286fe6b65bc1f233050b8b9c60c194900a73661aa"
+          }
+        ],
+        "round1Verdict": "revise"
+      },
+      "narrative": "Lượt này KHÁC hai lượt trước: lượt kiểm ĐẦU vẫn `unverified` nhưng lý do đổi thành `WORK_FINDING_UNCITED` (child báo finding chặn mà thiếu receipt hợp lệ), rồi lượt kiểm THỨ HAI trả `revise` thật ⇒ sản phẩm ĐÃ định tuyến sửa (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId` và `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết ở lượt thử thứ hai vì artifact đã đổi (`WORK_CHECK_STALE`) — đã vá để đọc lại artifact từng lượt."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run6-16000",
+      "resultsSha256": "a79bf3c0985f5c00b22ec4936485815463e7a66aca9efbeda2c745f1816a7eb5",
+      "oracle": false,
+      "error": "KeyError: 'status'",
+      "latencySeconds": 509.439,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "72ec8b6851004005a7d5b4329a7c8fa7",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-7b829a38445a4f8cba155c32a91b1813",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 1,
+          "childId": "38b350536447429cb3f7f6be29103608",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "pwd && ls -la && git -C . log --oneline -5 2>/dev/null | head -20 && git status --porcelain 2>/dev/null | head -20",
+            "cd \"$(pwd)\" && echo \"=== git rev-parse HEAD ===\" && git rev-parse HEAD && echo \"=== diff HEAD~1..HEAD --stat ===\" && git diff --stat HEAD~1 HEAD && echo \"=== cat -A? no: plain cat src/export.py ===\" && cat -n src/export.py && echo \"=== tests/test_export.py ===\" && cat -n tests/test_export.py && echo \"=== files ===\" && find . -path ./.git -prune -o -type f -print | sort",
+            "cd \"$(pwd)\" && python -V && echo \"=== MANDATORY: python -m pytest -q ===\" && python -m pytest -q; echo \"EXIT=$?\"",
+            "mkdir -p /tmp/work && cd \"$(pwd)\" && python - <<'PY' | tee /tmp/work/independent.txt\n# Independent criterion check, NOT using tests/test_export.py\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as em\nr = []\ndef chk(id_, cond, got, want=None):\n    r.append((\"PASS\" if cond else \"FAIL\", id_, repr(got), repr(want)))\n# A1\nchk(\"A1\", em(\"Hồ sơ\") == \"Hồ sơ\", em(\"Hồ sơ\"), \"Hồ sơ\")\n# A2\nchk(\"A2\", em(\"\") == \"\", em(\"\"), \"\")\n# A3 multiline\nt = \"Dòng một\\nDòng hai\\nDòng ba\"\nchk(\"A3\", em(t) == t, em(t), t)\n# A4 no heading/wrapper\nt4 = \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"\nout4 = em(t4)\nchk(\"A4\", out4 == t4 and not out4.startswith(\"#\") and \"---\" not in out4, out4, t4)\n# A5 None\ntry:\n    o5 = em(None); chk(\"A5\", o5 == \"\" and isinstance(o5, str), o5, \"\")\nexcept Exception as e:\n    chk(\"A5\", False, \"raised \" + repr(e), \"\")\n# A6 inner whitespace\nt6 = \"Điểm  số  và  khoảng    trắng\"\nchk(\"A6\", em(t6) == t6, em(t6), t6)\n# A7 strip ends\nt7 = \"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"\nchk(\"A7\", em(t7) == \"Dòng một\\nDòng hai\\nDòng ba\", em(t7), \"Dòng một\\nDòng hai\\nDòng ba\")\n# A8 digits + punctuation\nt8 = 'Ngày 12/03/2026, mức 99,5% — \"trích dẫn\" (ghi chú) #1'\nchk(\"A8\", em(t8) == t8, em(t8), t8)\n# A9 purity\nt9 = \"Sơ đồ  ổn\\nvà chuyển tiếp\"\na, b = em(t9), em(t9)\nchk(\"A9\", a == b and t9 == \"Sơ đồ  ổn\\nvà chuyển tiếp\", (a, b, t9), (t9, t9, t9))\nfor row in r: print(\" | \".join(row))\nprint(\"--- codepoints ---\")\ncp_in = [hex(ord(c)) for c in \"Hồ sơ\"]\ncp_out = [hex(ord(c)) for c in em(\"Hồ sơ\")]\nprint(\"in:\", cp_in, \"out:\", cp_out, \"equal:\", cp_in == cp_out)\nnfd = unicodedata.normalize(\"NFD\", \"Hồ sơ\")\nprint(\"NFD input stays NFD (no normalization):\", em(nfd) == nfd, \"| out codepoints:\", [hex(ord(c)) for c in em(nfd)])\nprint(\"CRLF:\", repr(em(\"A\\r\\nB\\r\")))\nprint(\"non-str int:\", repr(em(123)))\nprint(\"total FAIL:\", sum(1 for x in r if x[0]==\"FAIL\"))\nPY",
+            "cd \"$(pwd)\" && echo \"=== src/app.py ===\" && cat -n src/app.py && echo \"=== README.md ===\" && cat -n README.md && echo \"=== git diff HEAD~1 HEAD -- tests/test_export.py | head -60 ===\" && git diff HEAD~1 HEAD -- tests/test_export.py | head -60"
+          ]
+        },
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 2,
+          "childId": "7dd03a707ba8404cb211cc0d2a8e1d6d",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "cd \"$(pwd)\" && pwd && git rev-parse HEAD 2>&1 && git status --short 2>&1 && echo \"---BRANCH---\" && git branch --show-current 2>&1 && echo \"---WORKTREES---\" && git worktree list 2>&1",
+            "cd \"$(pwd)\" && ls -la && echo \"---FIND---\" && find . -path ./.git -prune -o -type f -print 2>/dev/null | sort",
+            "cd \"$(pwd)\" && python -m pytest -q; echo \"EXIT=$?\"",
+            "cd \"$(pwd)\" && echo \"=== DIFF STAT vs base a2dfc9a ===\" && git diff --stat a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== NAME-STATUS ===\" && git diff --name-status a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD && echo \"=== COMMIT ===\" && git log --oneline -n 3 && echo \"=== BASE export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:src/export.py && echo \"=== BASE test_export.py ===\" && git show a2dfc9a9f4608f461298f19f397c8d633c939902:tests/test_export.py",
+            "mkdir -p /tmp/work && cd \"$(pwd)\" && cat > /tmp/work/verify_crit.py <<'PY'\nimport sys, unicodedata\nsys.path.insert(0, \".\")\nfrom src.export import export_markdown as E\n\nfails=[]\ndef chk(cid, got, exp):\n    ok = got == exp\n    print((\"PASS\" if ok else \"FAIL\"), cid, \"got=\", repr(got), \"exp=\", repr(exp))\n    if not ok: fails.append(cid)\n\nchk(\"A1\", E(\"Hồ sơ\"), \"Hồ sơ\")\nchk(\"A2\", E(\"\"), \"\")\nchk(\"A3\", E(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A4\", E(\"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\"), \"Hồ sơ\\n\\n- Mục 1\\n- Mục 2\")\nchk(\"A5\", E(None), \"\")\nchk(\"A6\", E(\"Điểm  số  và  khoảng    trắng\"), \"Điểm  số  và  khoảng    trắng\")\nchk(\"A7\", E(\"  Dòng một  \\n\\tDòng hai\\t\\n   Dòng ba   \"), \"Dòng một\\nDòng hai\\nDòng ba\")\nchk(\"A8\", E('12/03/2026, 99,5% — \"q\" (n) #1'), '12/03/2026, 99,5% — \"q\" (n) #1')\nt=\"Sơ đồ  ổn\\nvà chuyển tiếp\"\nr1,r2=E(t),E(t)\nchk(\"A9-determinism\", (r1,r2), (r1,r2))\nprint((\"PASS\" if r1==r2 else \"FAIL\"), \"A9-two-calls-equal\", repr(r1), repr(r2))\nprint((\"PASS\" if t==\"Sơ đồ  ổn\\nvà chuyển tiếp\" else \"FAIL\"), \"A9-input-unmutated\")\n\n# artifact numeric claims\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().split(\"\\n\")\nprint(\"LINE-COUNT export.py:\", len([l for l in src if True])-1 if src[-1]==\"\" else len(src))\nfor n in (12,35,36,37,38,40,41,43,44,45,47):\n    print(\"L%-3d %s\" % (n, src[n-1][:70]))\ncps=[hex(ord(c)) for c in E(\"Hồ sơ\")]\nprint(\"CODEPOINTS:\", cps, \"match-claim:\", cps==['0x48','0x1ed3','0x20','0x73','0x1a1'])\nnfd=unicodedata.normalize(\"NFD\",\"Hồ sơ\")\nprint(\"NFD-stays-NFD:\", unicodedata.normalize(\"NFD\",E(nfd))==E(nfd), \"is-NFD-out:\", unicodedata.is_normalized(\"NFD\",E(nfd)))\nprint(\"NFD-normalized-output:\", unicodedata.is_normalized(\"NFC\",E(nfd)))\n# extras\nprint(\"EXTRA interior-blank-lines:\", repr(E(\"A\\n\\nB\")))\nprint(\"EXTRA trailing-blank:\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"EXTRA leading-blank:\", repr(E(\"\\n\\nA\")))\nprint(\"EXTRA CRLF:\", repr(E(\"A\\r\\nB\")))\nprint(\"EXTRA BOM:\", repr(E(\"﻿Hồ sơ\")))\nprint(\"EXTRA tabs-inside:\", repr(E(\"a\\tb\")))\nprint(\"FAILS:\", fails)\nPY\npython /tmp/work/verify_crit.py; echo \"EXIT=$?\"",
+            "cd \"$(pwd)\" && python - <<'PY'\nsrc=open(\"src/export.py\",encoding=\"utf-8\").read().splitlines()\nprint(\"export.py total lines:\", len(src))\nfor i,l in enumerate(src,1):\n    print(\"%3d|%s\" % (i,l))\nPY",
+            "cd \"$(pwd)\" && python - <<'PY'\nimport sys; sys.path.insert(0,\".\")\nfrom src.export import export_markdown as E\nprint(\"trailing-NEWLINE  'A\\\\nB\\\\n' ->\", repr(E(\"A\\nB\\n\")))\nprint(\"trailing-BLANKS   'A\\\\nB\\\\n\\\\n\\\\n' ->\", repr(E(\"A\\nB\\n\\n\\n\")))\nprint(\"interior-BLANK    'A\\\\n\\\\nB' ->\", repr(E(\"A\\n\\nB\")))\nprint(\"interior-breaks   'A\\\\nB\\\\nC' ->\", repr(E(\"A\\nB\\nC\")))\nprint(\"strip+break       ' A \\\\n B ' ->\", repr(E(\" A \\n B \")))\nprint(\"non-str 123       ->\", repr(E(123)))\nprint(\"None              ->\", repr(E(None)))\nprint(\"empty             ->\", repr(E(\"\")))\nprint(\"viet NFC          ->\", repr(E(\"Hồ sơ\")))\nPY\necho \"=== COLLECT COUNT ===\"\npython -m pytest -q --collect-only 2>&1 | tail -3\necho \"=== base test_keeps_unicode unchanged? ===\"\ngit diff a2dfc9a9f4608f461298f19f397c8d633c939902 HEAD -- tests/test_export.py | head -20"
+          ]
+        },
+        {
+          "attempt": 3,
+          "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
+        }
+      ],
+      "greenCheck": {
+        "attempt": 3,
+        "raised": "WORK_CHECK_EXHAUSTED: three starts for this artifact/check; checkpoint and revise scope/artifact"
+      },
+      "final": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": 0
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": null,
+      "integration": {
+        "attempted": false,
+        "reason": "node chưa accepted (status=needs_checks); bỏ qua node tổng hợp"
+      },
+      "integrationNative": null,
+      "narrative": "Probe đã sống qua vòng thử lại và ghi đúng hàng rào sản phẩm: ba lượt mở kiểm trên cùng một artifact bị chặn bằng `WORK_CHECK_EXHAUSTED`; lượt ghi cuối không có `status` nên phần tính oracle nổ `KeyError` (lỗi phép đo, đã vá bằng `.get`)."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run7-16000",
+      "resultsSha256": "5b82c828ccb5ac002450ff50e9198b1d7c5cf4c41b89c3eb325d59932c2a27dc",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 1146.14,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "04510bdc39af4b52a88125e7266435b0",
+        "error": "Missing actual successful required test command events.",
+        "repairAction": null
+      },
+      "repair": {},
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-8cd3fd9a29484e69997172b8d7e5dbc3",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 1,
+          "childId": "9ae475abbdcd465e959bac9a7adb587f",
+          "error": "Missing actual successful required test command events.",
+          "commands": [
+            "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && pwd && git status --short && echo \"--- diff stat ---\" && git diff --stat && echo \"--- head ---\" && git rev-parse HEAD",
+            "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && echo \"=== python -m pytest -q ===\" && python -m pytest -q 2>&1 | tail -20; echo \"EXIT=$?\"",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== files changed in HEAD commit ===\" && git show --stat --oneline HEAD | head -20 && echo \"=== base version of src/export.py ===\" && git show 6b3c9927ef85420353267a67316c2753e95d0baf:src/export.py && echo \"=== files changed base..HEAD ===\" && git diff --name-only 6b3c9927ef85420353267a67316c2753e95d0baf..HEAD",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\n# -*- coding: utf-8 -*-\nimport sys, unicodedata\nfrom src.export import export_markdown as e\n\ndef chk(name, got, exp):\n    ok = got == exp\n    print((\"PASS \" if ok else \"FAIL \") + name + \" -> \" + repr(got) + (\"\" if ok else \"   EXPECTED \" + repr(exp)))\n    return ok\n\nres = {}\nres['A1'] = chk(\"A1 unicode\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A2'] = chk(\"A2 empty\", e(\"\"), \"\")\nres['A3'] = chk(\"A3 multiline-newline\", e(\"Dòng một\\nDòng hai\\nDòng ba\"), \"Dòng một\\nDòng hai\\nDòng ba\")\nres['A4'] = chk(\"A4 no-wrapper\", e(\"Hồ sơ\"), \"Hồ sơ\")\nres['A5'] = chk(\"A5 none\", e(None), \"\")\nres['A6'] = chk(\"A6 inner-space\", e(\"Hồ  sơ   nhân\"), \"Hồ  sơ   nhân\")\nres['A7'] = chk(\"A7 strip-edges\", e(\"  Hồ sơ  \\n  Bản lưu  \"), \"Hồ sơ\\nBản lưu\")\nres['A8'] = chk(\"A8 digits-punct\", e(\"Hồ sơ 2024: 3 trang, 50%.\"), \"Hồ sơ 2024: 3 trang, 50%.\")\nres['A9'] = chk(\"A9 purity-2x\", e(e(\"Hồ sơ\\nBản lưu\")), e(\"Hồ sơ\\nBản lưu\"))\nprint(\"ALL_ACCEPTED:\", all(res.values()), res)\n# supplementary observations (not acceptance-blocking)\nprint(\"INFO type-none:\", type(e(None)).__name__, \"| type-empty:\", type(e(\"\")).__name__)\nprint(\"INFO trailing-nl:\", repr(e(\"Hồ sơ\\n\")))\nprint(\"INFO leading-nl:\", repr(e(\"\\nHồ sơ\")))\nprint(\"INFO inner-only-spaces line:\", repr(e(\"a   b\")))\nprint(\"INFO nbsp-stripped:\", repr(e(\" Hồ sơ \")))\nprint(\"INFO crlf:\", repr(e(\"Hồ sơ\\r\\nBản lưu\")))\nprint(\"INFO int-input raises:\", end=\" \")\ntry:\n    e(5); print(\"no error\")\nexcept Exception as ex:\n    print(type(ex).__name__)\nprint(\"INFO codepoints A1 out:\", [hex(ord(c)) for c in e(\"Hồ sơ\")])\nprint(\"INFO codepoints A1 in :\", [hex(ord(c)) for c in \"Hồ sơ\"])\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\n# A4 rigorous: no prefix/suffix wrapper on multi-line + marker chars\ns = \"Hồ sơ\\nBản lưu\\n\\n***\"\nout = e(s)\nprint(\"A4 multiline-identity:\", out == s, repr(out))\nfor probe in [\"# Tiêu đề\", \"- mục\", \"`code`\", \"[link](u)\", \"> trích\", \"**bold**\", \"|a|b|\"]:\n    o = e(probe)\n    print(\"A4 identity %-14r -> %-20r %s\" % (probe, o, o == probe))\n# A1 byte-level: NFC vs NFD normalization equality (combining marks preserved, not stripped)\nimport unicodedata\nsrc = \"Hồ sơ\"\nout = e(src)\nprint(\"A1 bytes-identical:\", out.encode('utf-8') == src.encode('utf-8'))\nprint(\"A1 nfc(src)==out:\", unicodedata.normalize('NFC', src) == out)\nnfd_src = unicodedata.normalize('NFD', src)\nprint(\"A1 nfd-in == nfd-out:\", e(nfd_src) == nfd_src, \"combining marks kept:\", [hex(ord(c)) for c in e(nfd_src)][:4])\n# broader diacritic set\nfor w in [\"Nguyễn\", \"Đặng Thùy Trâm\", \"đ ẹ\", \"ỳ ỵ ự ữ\", \"Hà Nội\", \"TP. Hồ Chí Minh\"]:\n    print(\"A1 diacritic %-20r -> %r %s\" % (w, e(w), e(w) == w))\n# A5 not raising, and repeated None calls (purity across None)\nprint(\"A5 None x3:\", [e(None) for _ in range(3)])\n# A9: purity - same arg twice distinct calls, plus global state check\nimport src.export as m\na = e(\"  Hồ  sơ \\n Bản lưu \"); b = e(\"  Hồ  sơ \\n Bản lưu \")\nprint(\"A9 same-arg twice equal:\", a == b, repr(a))\nprint(\"A9 module globals:\", sorted(k for k in vars(m) if not k.startswith('__')))\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== doctest claim check ===\" && python -m doctest src/export.py -v 2>&1 | tail -3; echo \"=== file bytes: confirm no ascii-stripping escape calls ===\" && grep -nE \"encode|decode|ascii|latin|unidecode|normalize|\\.format|f\\\"|f'\" src/export.py || echo \"(none of encode/decode/ascii/latin/unidecode/normalize found)\"; echo \"=== wc -l src/export.py ===\" && wc -l src/export.py; echo \"=== working tree clean vs HEAD? ===\" && git status --porcelain src/export.py && echo \"(empty above = matches HEAD)\"",
+            "cd \"$(git rev-parse --show-toplevel)\" && python - <<'PYEOF'\nfrom src.export import export_markdown as e\nsrc = \"\\u00a0Hồ sơ\\u00a0\"   # NBSP (U+00A0) ở hai đầu\nout = e(src)\nprint(\"NBSP input codepoints:\", [hex(ord(c)) for c in src])\nprint(\"NBSP output repr:\", repr(out), \"| kept NBSP:\", \"\\u00a0\" in out)\nsrc2 = \"\\u3000Hồ sơ\\u3000\"   # ideographic space U+3000\nprint(\"U+3000 output repr:\", repr(e(src2)))\nsrc3 = \"Hồ\\u00a0sơ\"          # NBSP bên trong dòng\nprint(\"inner NBSP kept:\", repr(e(src3)), e(src3) == src3)\nprint(\"strip default arg:\", repr(str.strip(\"\\u00a0x\\u3000\")))\nPYEOF",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== total lines (last byte is newline?) ===\" && wc -l < src/export.py && tail -c 1 src/export.py | xxd && echo \"=== numbered lines 30-39 ===\" && nl -ba src/export.py | sed -n '30,39p' && echo \"=== does line 40 exist? ===\" && sed -n '40p' src/export.py | wc -c && echo \"=== git show --numstat base..HEAD ===\" && git show --numstat --format= HEAD",
+            "cd \"$(git rev-parse --show-toplevel)\" && echo \"=== env claim ===\" && python -V && python -m pytest --version 2>&1 | head -2 && echo \"=== artifact claim: pytest --doctest-modules ===\" && python -m pytest -q --doctest-modules src/export.py 2>&1 | tail -3 && echo \"=== artifact claim: py_compile ===\" && python -m py_compile src/export.py && echo \"py_compile OK\""
+          ]
+        },
+        {
+          "kind": "tests",
+          "status": "pass",
+          "attempt": 2,
+          "childId": "88bc1d3e30fe4429a794c64a2c697235",
+          "error": null,
+          "commands": [
+            "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
+            "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+            "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+            "pwd",
+            "git rev-parse HEAD",
+            "git status --short",
+            "git diff --stat",
+            "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+            "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+            "python -m pytest -q",
+            "python3 -V",
+            "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
+          ]
+        }
+      ],
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 2,
+        "childId": "88bc1d3e30fe4429a794c64a2c697235",
+        "error": null,
+        "commands": [
+          "ls -d .boxfox/worktrees/*/ 2>/dev/null; echo \"---PWD---\"; pwd; echo \"---WT---\"; ls -la .boxfox/worktrees/w-75f1a5b18d/n-B1 2>/dev/null",
+          "set -x; pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+          "pwd; git rev-parse HEAD; git rev-parse --show-toplevel; git status --short; git diff --stat; echo \"=== python avail ===\"; command -v python; command -v python3; python3 -V; python3 -m pytest --version",
+          "pwd",
+          "git rev-parse HEAD",
+          "git status --short",
+          "git diff --stat",
+          "git diff --stat 6b3c9927ef85420353267a67316c2753e95d0baf 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+          "git show --stat --oneline 25964ec7d6c62f72efed8a2a8ed4cbb933c6297a",
+          "python -m pytest -q",
+          "python3 -V",
+          "python3 -c \"import sys; sys.path.insert(0,'.'); from src.export import export_markdown as e; checks=[('A1',e('Hồ sơ'),'Hồ sơ'),('A2',e(''),''),('A3',e('Dòng một\\nDòng hai\\nDòng ba'),'Dòng một\\nDòng hai\\nDòng ba'),('A4',e('# Tiêu đề\\n\\nNội dung 1'),'# Tiêu đề\\n\\nNội dung 1'),('A5',e(None),''),('A6',e('Hồ  sơ   nhân'),'Hồ  sơ   nhân'),('A7',e('  Hồ sơ  \\n  Bản lưu  '),'Hồ sơ\\nBản lưu'),('A8',e('Hồ sơ 2024: 3 trang, 50%.'),'Hồ sơ 2024: 3 trang, 50%.'),('A9',e('  Hồ  sơ \\n Bản lưu  '),e('  Hồ  sơ \\n Bản lưu  '))]; print(chr(10).join(('PASS' if a==x else 'FAIL')+' '+n+' got='+repr(a)+' exp='+repr(x) for n,a,x in checks))\""
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 1,
+        "verdicts": [
+          "ok"
+        ],
+        "repairs": 0
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "executeStatuses": {
+          "B1": "accepted"
+        },
+        "built": true,
+        "status": "needs_checks",
+        "required": [
+          "tests",
+          "code_review"
+        ],
+        "artifactId": "a-36776aa343b74f81a1471c8227f7e5cf",
+        "checks": [
+          {
+            "kind": "tests",
+            "status": "unverified",
+            "attempt": 1,
+            "childId": "8017b714518d4c538999689ffa3660cd",
+            "error": "Missing actual successful required test command events.",
+            "seconds": 151.103,
+            "commands": [
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && echo \"---TREE---\" && git rev-parse HEAD^{tree} && echo \"---FILES---\" && find . -path ./.git -prune -o -type f -print | head -50",
+              "cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q 2>&1; echo \"EXIT=$?\"",
+              "pwd; echo \"---\"; ls -a; echo \"---BOXFOX---\"; ls -a .boxfox 2>/dev/null || echo \"no .boxfox here\"; echo \"---FIND WORKTREES---\"; find / -maxdepth 6 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
+              "pwd",
+              "find / -maxdepth 7 -type d -name \"w-75f1a5b18d\" 2>/dev/null | head -20",
+              "git rev-parse HEAD",
+              "python -m pytest -q 2>&1",
+              "git status --short",
+              "cat src/export.py",
+              "git log --oneline -5",
+              "git branch -a -v",
+              "git rev-parse HEAD^{tree}"
+            ]
+          },
+          {
+            "kind": "tests",
+            "status": "unverified",
+            "attempt": 2,
+            "childId": "7a21a78ff5984a9fb1a89cf5d8809e2f",
+            "error": "No successfully opened original evidence.",
+            "seconds": 279.399,
+            "commands": [
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && pwd && git rev-parse HEAD && git status --short && git log --oneline -3 && echo \"--- tree ---\" && git rev-parse HEAD^{tree} && echo \"--- ls ---\" && ls -la && ls -la src tests",
+              "cd .boxfox/worktrees/w-75f1a5b18d/main 2>/dev/null && cat src/export.py && echo \"=== tests ===\" && cat tests/test_export.py && echo \"=== app ===\" && cat src/app.py",
+              "pwd; ls -la; ls -la .boxfox/worktrees/ 2>&1 | head -20",
+              "ls .boxfox/worktrees",
+              "ls -a",
+              "git rev-parse HEAD",
+              "git status --short",
+              "git rev-parse HEAD^{tree}",
+              "git log --oneline -5",
+              "cat src/export.py",
+              "cat tests/test_export.py",
+              "python -m pytest -q"
+            ]
+          }
+        ],
+        "error": "ValueError: WORK_NO_PROGRESS: inspect saved admissions; main must change evidence/input or strategy"
+      },
+      "integrationNative": {
+        "built": true,
+        "hasRealChild": true,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt ĐẦY ĐỦ đầu tiên: probe chạy hết, không lỗi. Lượt kiểm đầu vẫn `unverified` (cò đỏ cắm sẵn), lượt kiểm thứ hai `pass` ⇒ B1 `accepted`. Nhờ vá \"đọc lại run\", `build_integration` chạy thật: node `__integration__` được dựng (`built: true`, `required: [tests, code_review]`, artifact `a-36776aa3…`) và một child Testing THẬT chạy trên cây gộp (`cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q`, 151.1s) — lần đầu tiên node tổng hợp được đo native. Child đó trả `unverified` (\"Missing actual successful required test command events\") nên `testsPassedOnMergedTree`/`integrationChecked` vẫn false: đúng hàng rào `test_proof` (child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc)."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run9-realred-16000",
+      "resultsSha256": "a0768fa5648577245e0a4b94ee7a287fe0ee2582c7cb906a1e7d8445d9d57c50",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 352.949,
+      "commit": "bcc478ddd7504d619a75081990ca3c49c6ef4f3e",
+      "realRed": {
+        "seeded": 1,
+        "path": "/code/i3abyxinhdepqua-lang/BoxFox-Agent-Box/.tmp/w8-probe-red2/repair_loop/.boxfox/worktrees/w-fe1d0a8288/n-B1/src/export.py",
+        "proof": {
+          "exitCode": 1,
+          "tail": [
+            "FAILED tests/test_export.py::test_strips_surrounding_whitespace_per_line - As...",
+            "FAILED tests/test_export.py::test_keeps_digits_and_punctuation - AssertionErr...",
+            "FAILED tests/test_export.py::test_is_pure_function - AssertionError: assert '...",
+            "8 failed, 1 passed in 0.03s"
+          ]
+        },
+        "errors": []
+      },
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "childId": "6d0603d6c7fc45bfb53e345c56faa800",
+        "error": null,
+        "repairAction": "retest",
+        "commands": [
+          "cd /code/i3abyxinhdepqua-lang/BoxFox-Agent-Box 2>/dev/null || cd .; pwd; echo \"--- find worktree ---\"; ls -la .boxfox/worktrees/ 2>&1 | head -40",
+          "find / -maxdepth 8 -type d -name \"w-fe1d0a8288\" 2>/dev/null | head -20",
+          "pwd; ls -la; find . -maxdepth 4 -type d 2>/dev/null | head -50",
+          "find / -maxdepth 6 -type d -name \".boxfox\" 2>/dev/null | head -20; echo \"---plans---\"; find / -maxdepth 8 -path \"*worktrees*\" -type d 2>/dev/null | head -20",
+          "find / -maxdepth 9 -type d -path \"*w-fe1d0a8288*\" 2>/dev/null | head -20",
+          "pwd && ls -la && find . -maxdepth 4 2>/dev/null | head -60",
+          "python -m pytest -q",
+          "echo \"=== pwd ===\"; pwd; echo \"=== wc -l src/export.py ===\"; wc -l src/export.py; echo \"=== cat -n src/export.py ===\"; cat -n src/export.py",
+          "echo \"=== git status ===\"; git status --porcelain; echo \"=== git log ===\"; git log --oneline -3; echo \"=== git diff HEAD~1 --stat ===\"; git diff HEAD~1 HEAD --stat; echo \"=== HEAD ===\"; git rev-parse HEAD",
+          "echo \"=== git diff HEAD~1 HEAD -- src/export.py ===\"; git diff HEAD~1 HEAD -- src/export.py; echo \"=== git show HEAD:src/export.py ===\"; git show HEAD:src/export.py; echo \"=== git show HEAD~1:src/export.py ===\"; git show HEAD~1:src/export.py",
+          "echo \"=== git show HEAD:tests/test_export.py | wc -l ===\"; git show HEAD:tests/test_export.py | wc -l; echo \"=== head of committed tests ===\"; git show HEAD:tests/test_export.py | head -12; echo \"=== treeHash ===\"; git rev-parse HEAD^{tree}",
+          "python -c \"\nimport sys, hashlib, subprocess\nsys.path.insert(0,'.')\nfrom src.export import export_markdown as e\ncases = [('A1 unicode','Hồ sơ'),('A2 empty',''),('A3 nl','Dòng một\\nDòng hai'),('A4 nohdr','Hồ sơ'),('A6 inner','Hồ  sơ   a'),('A7 strip','   Hồ sơ   '),('A8 digits','Hồ sơ 2024: 3, #1!')]\nfor n,v in cases:\n    try: print(n,'->',repr(e(v)))\n    except Exception as ex: print(n,'-> RAISED',type(ex).__name__,ex)\ntry: print('A5 None ->',repr(e(None)))\nexcept Exception as ex: print('A5 None -> RAISED',type(ex).__name__,ex)\na=e('Hồ sơ'); b=e('Hồ sơ'); print('A9 pure two calls equal:', a==b, repr(a), repr(b))\n\""
+        ]
+      },
+      "repair": {
+        "n": 1,
+        "checkId": "c-a32b21a6f33e4761a528cdddd31e7cb1",
+        "class": "clear",
+        "reason": "required command failed with a trace into tracked files",
+        "debugChildId": null,
+        "debugArtifactId": null,
+        "buildChildId": "83565b07b48548e4afd2d0fcc341d07b",
+        "resumed": true,
+        "codeHash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
+        "at": 1790993046.6115375,
+        "findingsArtifactId": "a-307f20c9d3804725a72cd73922e820e2",
+        "repairChildReason": null,
+        "status": "needs_checks"
+      },
+      "resumedChild": {
+        "id": "83565b07b48548e4afd2d0fcc341d07b",
+        "parent": "3639fc2529f14d738a6b7043f9a570f9",
+        "tools": [
+          "codebase_glob",
+          "terminal_exec",
+          "file_read",
+          "file_read",
+          "file_read",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec"
+        ],
+        "wroteExport": true,
+        "sawFindings": true
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": [
+          {
+            "n": 1,
+            "checkId": "c-a32b21a6f33e4761a528cdddd31e7cb1",
+            "class": "clear",
+            "reason": "required command failed with a trace into tracked files",
+            "debugChildId": null,
+            "debugArtifactId": null,
+            "buildChildId": "83565b07b48548e4afd2d0fcc341d07b",
+            "resumed": true,
+            "codeHash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
+            "at": 1790993046.6115375,
+            "findingsArtifactId": "a-307f20c9d3804725a72cd73922e820e2",
+            "repairChildReason": null,
+            "status": "needs_checks"
+          }
+        ]
+      },
+      "greenChecks": [
+        {
+          "attempt": 1,
+          "empty": true,
+          "keys": [
+            "autopilot",
+            "checks",
+            "documents",
+            "flow",
+            "handoffActions",
+            "handoffs",
+            "inputConflicts",
+            "issues",
+            "next",
+            "nodes",
+            "reviewedSet",
+            "revision",
+            "runId",
+            "stale",
+            "status",
+            "waves"
+          ],
+          "raw": {
+            "runId": "w-fe1d0a8288",
+            "status": "approved",
+            "flow": "fix",
+            "revision": 8,
+            "autopilot": false,
+            "nodes": [
+              {
+                "id": "B1",
+                "kind": "build",
+                "title": "Giữ dấu tiếng Việt khi export",
+                "dependsOn": [],
+                "stages": {
+                  "execute": "needs_checks"
+                },
+                "artifacts": {
+                  "execute": {
+                    "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
+                    "runId": "w-fe1d0a8288",
+                    "nodeId": "B1",
+                    "stage": "execute",
+                    "version": 3,
+                    "path": ".plans/work/e77d3d3fb7a89290b163/t-41b08bf02508247cd545/w-fe1d0a8288/B1/execute/v3-a-b64e23ab3cf348ee942ff775c600d046.md",
+                    "chars": 4098,
+                    "contentHash": "dc1357dc3387ee0bce027fd3b8c1bb8d5719366bc1112b16fd67a712943df552",
+                    "status": "finalized",
+                    "producerId": "83565b07b48548e4afd2d0fcc341d07b",
+                    "createdAt": 1790993112.6090426,
+                    "originTurn": null,
+                    "originTurnId": "t-41b08bf02508247cd545",
+                    "binding": {
+                      "nodeDefinition": "783b40bf3cd218c7b0f580b1883f9b42f55ccda42a6e0aa4f6087d0679c776ef",
+                      "dependencies": {},
+                      "owner": "fa18853624f2a82cae7dd59be6ef9e2906531dc99e44f43c60e85c6a1c3ae3f1",
+                      "policyHash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8",
+                      "codeSnapshot": {
+                        "schema": "work-code/1",
+                        "hash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
+                        "head": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
+                        "criticalChanges": false,
+                        "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
+                        "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
+                      },
+                      "codeCommit": {
+                        "nodeCommit": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
+                        "treeHash": "ae193667684e859af2ce868632eeb5140ca7eb59",
+                        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
+                        "base": "1179802b88f2818733ebdda503b2202b7a86bd6b",
+                        "paths": [
+                          "src/export.py",
+                          "tests/test_export.py"
+                        ]
+                      },
+                      "workspace": {
+                        "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
+                        "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
+                        "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
+                      }
+                    }
+                  }
+                },
+                "policies": {
+                  "execute": {
+                    "version": "work-checks/10",
+                    "artifactKind": "patch",
+                    "risk": "normal",
+                    "rationale": "Minimum from task/artifact, owner goal and observed source changes.",
+                    "required": [
+                      {
+                        "id": "tests",
+                        "executorRole": "testing",
+                        "criterion": "Chạy từng lệnh test bắt buộc trên đúng snapshot mã; báo lỗi trung thực."
+                      }
+                    ],
+                    "deferred": [
+                      "code_review"
+                    ],
+                    "hash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8"
+                  }
+                }
+              }
+            ],
+            "waves": [
+              [
+                "B1"
+              ]
+            ],
+            "issues": [],
+            "documents": [],
+            "handoffs": [],
+            "handoffActions": [],
+            "next": "Main: correct the conflicting node goal/acceptance with work_graph action=update before retrying checks or production. Preserve facts in the artifact; the assignment needs correction: [('B1', 'execute', [{'id': 'A1', 'requirement': 'export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"', 'evidence': \"export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'.\"}])]",
+            "reviewedSet": null,
+            "stale": false,
+            "inputConflicts": [
+              {
+                "id": "A1",
+                "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
+                "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
+              }
+            ]
+          }
+        }
+      ],
+      "greenCheck": {
+        "attempt": 1,
+        "empty": true,
+        "keys": [
+          "autopilot",
+          "checks",
+          "documents",
+          "flow",
+          "handoffActions",
+          "handoffs",
+          "inputConflicts",
+          "issues",
+          "next",
+          "nodes",
+          "reviewedSet",
+          "revision",
+          "runId",
+          "stale",
+          "status",
+          "waves"
+        ],
+        "raw": {
+          "runId": "w-fe1d0a8288",
+          "status": "approved",
+          "flow": "fix",
+          "revision": 8,
+          "autopilot": false,
+          "nodes": [
+            {
+              "id": "B1",
+              "kind": "build",
+              "title": "Giữ dấu tiếng Việt khi export",
+              "dependsOn": [],
+              "stages": {
+                "execute": "needs_checks"
+              },
+              "artifacts": {
+                "execute": {
+                  "artifactId": "a-b64e23ab3cf348ee942ff775c600d046",
+                  "runId": "w-fe1d0a8288",
+                  "nodeId": "B1",
+                  "stage": "execute",
+                  "version": 3,
+                  "path": ".plans/work/e77d3d3fb7a89290b163/t-41b08bf02508247cd545/w-fe1d0a8288/B1/execute/v3-a-b64e23ab3cf348ee942ff775c600d046.md",
+                  "chars": 4098,
+                  "contentHash": "dc1357dc3387ee0bce027fd3b8c1bb8d5719366bc1112b16fd67a712943df552",
+                  "status": "finalized",
+                  "producerId": "83565b07b48548e4afd2d0fcc341d07b",
+                  "createdAt": 1790993112.6090426,
+                  "originTurn": null,
+                  "originTurnId": "t-41b08bf02508247cd545",
+                  "binding": {
+                    "nodeDefinition": "783b40bf3cd218c7b0f580b1883f9b42f55ccda42a6e0aa4f6087d0679c776ef",
+                    "dependencies": {},
+                    "owner": "fa18853624f2a82cae7dd59be6ef9e2906531dc99e44f43c60e85c6a1c3ae3f1",
+                    "policyHash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8",
+                    "codeSnapshot": {
+                      "schema": "work-code/1",
+                      "hash": "997e4d7cf0b16ab408a80219d89daf629a9b88b75c3f6c0fe487c4bb1bf84c52",
+                      "head": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
+                      "criticalChanges": false,
+                      "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
+                      "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
+                    },
+                    "codeCommit": {
+                      "nodeCommit": "c7acb77e291f68269d9ee97a52e861ce4e4ed55b",
+                      "treeHash": "ae193667684e859af2ce868632eeb5140ca7eb59",
+                      "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
+                      "base": "1179802b88f2818733ebdda503b2202b7a86bd6b",
+                      "paths": [
+                        "src/export.py",
+                        "tests/test_export.py"
+                      ]
+                    },
+                    "workspace": {
+                      "root": ".boxfox/worktrees/w-fe1d0a8288/n-B1",
+                      "branch": "boxfox/giu-dau-tieng-viet-khi-export-markdown-fe1d0a--B1",
+                      "base": "1179802b88f2818733ebdda503b2202b7a86bd6b"
+                    }
+                  }
+                }
+              },
+              "policies": {
+                "execute": {
+                  "version": "work-checks/10",
+                  "artifactKind": "patch",
+                  "risk": "normal",
+                  "rationale": "Minimum from task/artifact, owner goal and observed source changes.",
+                  "required": [
+                    {
+                      "id": "tests",
+                      "executorRole": "testing",
+                      "criterion": "Chạy từng lệnh test bắt buộc trên đúng snapshot mã; báo lỗi trung thực."
+                    }
+                  ],
+                  "deferred": [
+                    "code_review"
+                  ],
+                  "hash": "f59bea28c47b89f51085549fcfcfbd4c38433b2e16b0fb1fb5bbb5178f6845e8"
+                }
+              }
+            }
+          ],
+          "waves": [
+            [
+              "B1"
+            ]
+          ],
+          "issues": [],
+          "documents": [],
+          "handoffs": [],
+          "handoffActions": [],
+          "next": "Main: correct the conflicting node goal/acceptance with work_graph action=update before retrying checks or production. Preserve facts in the artifact; the assignment needs correction: [('B1', 'execute', [{'id': 'A1', 'requirement': 'export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"', 'evidence': \"export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'.\"}])]",
+          "reviewedSet": null,
+          "stale": false,
+          "inputConflicts": [
+            {
+              "id": "A1",
+              "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
+              "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
+            }
+          ]
+        }
+      },
+      "final": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": 1
+      },
+      "mechanism": {
+        "oneRepairEntry": true,
+        "classified": true,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": true,
+        "freshArtifactAfterRepair": true,
+        "findingsBoundToChild": true,
+        "codeHashPinned": true,
+        "redCheckIsRevise": true
+      },
+      "model": {
+        "seedIsRealRed": true,
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": true,
+        "secondCheckPassed": false,
+        "nodeAccepted": false
+      },
+      "integration": {
+        "attempted": false,
+        "reason": "node chưa accepted (status=needs_checks); bỏ qua node tổng hợp"
+      },
+      "integrationNative": {
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "inputConflict": [
+        {
+          "id": "A1",
+          "requirement": "export_markdown(\"Hồ sơ\") trả \"Hồ sơ\"",
+          "evidence": "export_markdown('Hồ sơ') returns 'HỒ SƠ' on bound snapshot (tool call: python -c probe). Node commit 0eef30b regressed base1179802 'return text' -> 'text.upper()'."
+        }
+      ],
+      "narrative": "Lượt 9 — cò đỏ THẬT chạy được (owner duyệt #6451). Fixture hạ cấp src/export.py trong worktree nút ngay trước lệnh checkpoint nên chính harness commit bản lỗi: commit 0eef30b chứa `return text.upper()`, và lệnh `python -m pytest -q` chạy thật ngay sau khi gieo trả exit=1 (1 failed). Lượt kiểm đầu `revise` THẬT (8 failed, 1 passed), bộ phân loại ghi class=clear với lý do \"required command failed with a trace into tracked files\", sản phẩm resume ĐÚNG con Build cũ và tạo artifact v3 trên hash mã mới 997e4d7c… ⇒ nửa đầu của W8.A4.5.N có bằng chứng native. Chỗ tắc còn lại là hàng rào sản phẩm: lượt kiểm đỏ đánh dấu tiêu chí A1 `target=criterion` (bằng chứng: code trả \"HỒ SƠ\") nên backend coi là XUNG ĐỘT ĐẦU VÀO, và `work_checks.py:1076` chặn mọi lượt kiểm/sản xuất tiếp cho tới khi main sửa lại nhiệm vụ (`work_graph action=update`) — đường xoá xung đột duy nhất, nhưng đổi định nghĩa nút làm stage reset và mất bản nháp vừa sửa. Probe đọc nguyên văn xung đột (`inputConflict`) rồi ghi lại thay vì che."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run10-realred-16000",
+      "resultsSha256": "e5c3c70074fe302f3e6c087df993c3241f4608eddc38e6aed6f615c56640b450",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 1218.354,
+      "commit": "0a3801ea4d8a9b904c7c79c489082079402aae19",
+      "realRed": {
+        "seeded": 1,
+        "proof": {
+          "exitCode": 1,
+          "tail": [
+            "FAILED tests/test_export.py::test_strips_outer_spaces_of_each_line - Assertio...",
+            "FAILED tests/test_export.py::test_keeps_digits_and_punctuation - AssertionErr...",
+            "FAILED tests/test_export.py::test_is_pure_function - AssertionError: assert '...",
+            "9 failed, 1 passed in 0.03s"
+          ]
+        },
+        "errors": []
+      },
+      "firstCheck": null,
+      "redCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "70032cfc30844c7ea6da820fb9f8cd56",
+        "error": "WORK_FINDING_UNCITED: A1: F1 SELF_REFUTED; A5: F2 SELF_REFUTED, F5 NOT_BLOCKING; A6: F3 SELF_REFUTED; A7: F4 SELF_REFUTED. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
+        "repairAction": null,
+        "commands": [
+          "pwd; echo \"---\"; ls -la; echo \"--- git ---\"; git -C . rev-parse --abbrev-ref HEAD 2>/dev/null; git rev-parse HEAD 2>/dev/null",
+          "pwd",
+          "git --no-pager log --oneline -3",
+          "git --no-pager diff --stat HEAD",
+          "git --no-pager show --stat HEAD",
+          "python -m pytest -q",
+          "python -c \"\nimport sys\nfrom src.export import export_markdown as f\nprint('A1', repr(f('Hồ sơ')))\nprint('A2', repr(f('')))\ntry:\n    print('A5', repr(f(None)))\nexcept Exception as e:\n    print('A5 EXC', type(e).__name__, e)\nprint('A3', repr(f('Dòng một\\nDòng hai')))\nprint('A4 wrap', repr(f('Hồ sơ')))\nprint('A6', repr(f('Hồ  sơ   nhân  vật')))\nprint('A7', repr(f('   Hồ sơ   \\n\\tSơ ơi\\t')))\nprint('A8', repr(f('Năm 2024, hồ sơ số 12/5.')))\nt='  Hồ  sơ  \\nSơ ơi'\nprint('A9', f(t)==f(t), repr(f(t)))\n\"",
+          "wc -l src/export.py && cat src/export.py && echo '=== git status ===' && git status --short && echo '=== show HEAD diff of export.py ===' && git --no-pager show HEAD -- src/export.py",
+          "python -c \"\nfrom src.export import export_markdown as f\nr=f('Hồ sơ')\nprint('A4 head#', r.startswith('#'), 'hr---', '---' in r, 'backslash', chr(92) in r)\nprint('A3 newline kept', repr(f('A'+chr(10)+'B')))\nimport inspect; print('src lines', len(inspect.getsource(f).splitlines()))\n\" && python -m pytest -q --collect-only | tail -3",
+          "git --no-pager show 2502b62:src/export.py; echo '=== base tests ==='; git --no-pager show 2502b62 --stat -- tests/test_export.py; echo '=== grep splitlines/isinstance in tree ==='; grep -rn \"splitlines\\|isinstance\" src tests || echo NONE"
+        ]
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 1,
+        "artifactId": "a-e3b51cdae2124dbba6935b133e6d2058",
+        "verdicts": [
+          "unverified"
+        ],
+        "repairs": null
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "revise",
+          "attempt": 1,
+          "childId": "b5ae93eb27b94bd0843ae19cb294723e",
+          "error": null
+        },
+        {
+          "kind": "tests",
+          "status": "unverified",
+          "attempt": 2,
+          "childId": "b5ae93eb27b94bd0843ae19cb294723e",
+          "error": "Missing actual successful required test command events."
+        },
+        {
+          "kind": "tests",
+          "status": "pass",
+          "attempt": 3,
+          "childId": "f7b4eb5fbb1a4726b9c07b0a1f97b94f",
+          "error": null
+        }
+      ],
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 3,
+        "childId": "f7b4eb5fbb1a4726b9c07b0a1f97b94f",
+        "error": null
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 2,
+        "verdicts": [
+          "revise",
+          "ok"
+        ],
+        "repairs": 1
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": false
+      },
+      "model": {
+        "seedIsRealRed": true,
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "executeStatuses": {
+          "B1": "accepted"
+        },
+        "built": true,
+        "status": "needs_checks",
+        "required": [
+          "tests",
+          "code_review"
+        ],
+        "artifactId": "a-3e58456246c84e258c02af3257a4742a",
+        "final": {
+          "status": "needs_checks",
+          "integrationStatus": "checking",
+          "checkIds": [],
+          "head": "2502b6207e41152021fee8e257e076a2303ba7cb",
+          "treeHash": "baaf249660db513be596a4cacbc9ceb2b1be29d8",
+          "runStatus": "approved"
+        }
+      },
+      "integrationNative": {
+        "built": true,
+        "hasRealChild": true,
+        "testsPassedOnMergedTree": true,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt 10 — đỏ thật, và lần đầu B1 accepted + node __integration__ kiểm tests THẬT trên cây gộp xanh (95.7 s). Nhưng oracle vẫn false vì HAI LỖI PHÉP ĐO: (a) lượt kiểm ĐẦU của probe chỉ `unverified` — findings bị hạ vì thiếu receipt (`WORK_FINDING_UNCITED … SELF_REFUTED`) — rồi lượt kiểm sau trên CÙNG artifact mới `revise` và mở vòng sửa; probe cũ đọc lượt đầu nên cả 8 tiêu chí mechanism sai (dù `greenRepairs` chứng minh đúng: `class=unclassified`, `resumed=true`, `buildChildId` = producer lượt đầu, `codeHash` ghim, artifact mới a-d34f7d2f…); (b) node tổng hợp yêu cầu `[tests, code_review]` nhưng probe chỉ mở `tests` nên `integrationChecked` không thể đạt. Đã vá cả ba (commit 1e87b87)."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run11-realred-16000",
+      "resultsSha256": "f886471bde4b992442a79be1dfbee3da9fc976afaf7fd2a47eac07c1ecc5028a",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 1002.961,
+      "commit": "1e87b8733aa84c222741ef3d1ed39c99b8863216",
+      "realRed": {
+        "seeded": 1,
+        "proof": {
+          "exitCode": 1,
+          "tail": [
+            "FAILED tests/test_export.py::test_strips_leading_and_trailing_whitespace_per_line",
+            "FAILED tests/test_export.py::test_keeps_digits_and_punctuation - AssertionErr...",
+            "FAILED tests/test_export.py::test_is_pure_function_same_result_twice - Assert...",
+            "12 failed, 2 passed in 0.04s"
+          ]
+        },
+        "errors": []
+      },
+      "firstCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "268d696b611b47a1806cbc405acaa629",
+        "error": "WORK_FINDING_UNCITED: A1: F1 UNKNOWN_RECEIPT; A3: F1 UNKNOWN_RECEIPT; A5: F2 UNKNOWN_RECEIPT; A6: F1 UNKNOWN_RECEIPT; A7: F1 UNKNOWN_RECEIPT; A8: F1 UNKNOWN_RECEIPT. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
+        "repairAction": null,
+        "commands": [
+          "cd /workspace 2>/dev/null || cd ~; pwd; ls -la",
+          "pwd; ls -la .boxfox/worktrees/w-0e5f44b37f/n-B1",
+          "find .boxfox/worktrees/w-0e5f44b37f/n-B1 -type f | head -50",
+          "pwd",
+          "ls -la",
+          "ls -la src tests",
+          "wc -c src/export.py src/app.py",
+          "cat -A src/export.py",
+          "git status --porcelain=v1",
+          "git rev-parse HEAD",
+          "git show --stat HEAD",
+          "git show HEAD:src/export.py"
+        ]
+      },
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "attempt": 1,
+        "childId": "950d54c6703641b68998569b84d06f44",
+        "error": null,
+        "artifactId": "a-db325f9bd2644091808d4719f865de5a",
+        "commands": [
+          "cd /workspace 2>/dev/null || cd \"$(pwd)\"; pwd; ls -la; echo \"--- find worktrees ---\"; ls -la .boxfox/worktrees 2>/dev/null || echo \"NO .boxfox/worktrees\"",
+          "pwd; ls -la; echo \"--- worktrees ---\"; ls -la .boxfox/worktrees/w-0e5f44b37f 2>/dev/null || echo NO_WORKTREE",
+          "find . -name export.py -not -path \"*/node_modules/*\"; echo \"--- git ---\"; git log --oneline -5; git status --short",
+          "pwd",
+          "git show --stat HEAD",
+          "cat -n src/export.py",
+          "ls -la; echo ---; cat -n tests/test_export.py",
+          "python -m pytest -q",
+          "cat -n src/app.py; echo \"--- README ---\"; cat README.md; echo \"--- tree ---\"; find . -type f -not -path \"./.git/*\" -not -name \"*.pyc\"",
+          "git diff efcb771bd00648691369375212bcbd920fdcace0 4327a8c67a6d4f4f6da0f849a1fb8b07ad7c29a2 -- src/export.py",
+          "python -m pytest -v",
+          "git show efcb771bd00648691369375212bcbd920fdcace0:tests/test_export.py | cat -n"
+        ],
+        "repairAction": "retest"
+      },
+      "repair": {
+        "n": 1,
+        "checkId": "c-ccb7d59e59d6424b85bea8d6e8c550fa",
+        "class": "clear",
+        "reason": "required command failed with a trace into tracked files",
+        "debugChildId": null,
+        "debugArtifactId": null,
+        "buildChildId": "a774127547f84502923d1aad6ace39e2",
+        "resumed": true,
+        "codeHash": "3ba725b2a596f5431627241b45fe80f2fc389f80d8815193f3f38ee8955b2e09",
+        "at": 1790996294.8878407,
+        "findingsArtifactId": "a-b8e86010567942e89d68adf1725ec26a",
+        "repairChildReason": null,
+        "status": "needs_checks"
+      },
+      "resumedChild": {
+        "id": "a774127547f84502923d1aad6ace39e2",
+        "parent": "e01e02a695544ea3b4c9ebf5dc138f69",
+        "tools": [
+          "codebase_glob",
+          "terminal_exec",
+          "file_read",
+          "file_read",
+          "file_read",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec"
+        ],
+        "wroteExport": true,
+        "sawFindings": true
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "artifactId": "a-395804025d8b47a38f409039803d9006",
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": [
+          {
+            "n": 1,
+            "checkId": "c-ccb7d59e59d6424b85bea8d6e8c550fa",
+            "class": "clear",
+            "reason": "required command failed with a trace into tracked files",
+            "debugChildId": null,
+            "debugArtifactId": null,
+            "buildChildId": "a774127547f84502923d1aad6ace39e2",
+            "resumed": true,
+            "codeHash": "3ba725b2a596f5431627241b45fe80f2fc389f80d8815193f3f38ee8955b2e09",
+            "at": 1790996294.8878407,
+            "findingsArtifactId": "a-b8e86010567942e89d68adf1725ec26a",
+            "repairChildReason": null,
+            "status": "needs_checks"
+          }
+        ]
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "revise",
+          "attempt": 1,
+          "childId": "950d54c6703641b68998569b84d06f44",
+          "error": null,
+          "artifactId": "a-db325f9bd2644091808d4719f865de5a"
+        },
+        {
+          "kind": "tests",
+          "status": "pass",
+          "attempt": 2,
+          "childId": "950d54c6703641b68998569b84d06f44",
+          "error": null,
+          "artifactId": "a-395804025d8b47a38f409039803d9006"
+        }
+      ],
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 2,
+        "childId": "950d54c6703641b68998569b84d06f44",
+        "error": null,
+        "artifactId": "a-395804025d8b47a38f409039803d9006"
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 2,
+        "verdicts": [
+          "revise",
+          "ok"
+        ],
+        "repairs": 1
+      },
+      "mechanism": {
+        "oneRepairEntry": true,
+        "classified": true,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": true,
+        "freshArtifactAfterRepair": true,
+        "findingsBoundToChild": true,
+        "codeHashPinned": true,
+        "redCheckIsRevise": true
+      },
+      "model": {
+        "seedIsRealRed": true,
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": true,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "executeStatuses": {
+          "B1": "accepted"
+        },
+        "built": true,
+        "status": "needs_checks",
+        "required": [
+          "tests",
+          "code_review"
+        ],
+        "artifactId": "a-6e1c92abd34648d380d1acb5dccc5322",
+        "error": "ValueError: WORK_REVIEW_NOT_CONVERGED: the integrated run branch must pass its tests on this exact snapshot before code_review; start tests first, then review the same artifact."
+      },
+      "integrationNative": {
+        "built": true,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt 11 — ĐẠT cả 8/8 tiêu chí mechanism và 5/5 tiêu chí model lần đầu: đỏ thật (`class=clear`, \"required command failed with a trace into tracked files\") → resume ĐÚNG con Build cũ → artifact mới → kiểm lại xanh → B1 accepted. Chỉ còn nhóm `integrationNative`: probe mở `[tests, code_review]` cùng lượt nên sản phẩm từ chối đúng luật `WORK_REVIEW_NOT_CONVERGED` (\"tests phải xanh trên đúng snapshot hợp nhất trước\"); đã vá thứ tự mở kiểm (commit 913b57d) và chạy lượt 12. Ghi chú: lượt kiểm đầu vẫn `unverified` (`UNKNOWN_RECEIPT`) rồi lượt sau mới `revise` — hàng rào receipt là hệ thống, không phải ngẫu nhiên của một lượt."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run12-realred-16000",
+      "resultsSha256": "f9c84dcd89c43c8808f384db50746a2385b74ac52406a8734cd49577540f6020",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 1244.441,
+      "commit": "913b57d",
+      "realRed": {
+        "seeded": 1,
+        "proof": {
+          "exitCode": 1,
+          "tail": [
+            "tests/test_export.py:5: AssertionError",
+            "=========================== short test summary info ============================",
+            "FAILED tests/test_export.py::test_keeps_unicode - AssertionError: assert 'HỒ ...",
+            "1 failed in 0.02s"
+          ]
+        },
+        "errors": []
+      },
+      "firstCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "childId": "63e289f2b5b949f8baaa06a2c6b59025",
+        "error": null,
+        "repairAction": "retest",
+        "commands": [
+          "pwd; ls -la; echo \"---- git ----\"; git -C . rev-parse HEAD 2>&1; git -C . status --porcelain 2>&1 | head -50",
+          "ls -la .boxfox/worktrees/ 2>&1; echo \"---- n-B1 ----\"; ls -la .boxfox/worktrees/w-e78f601431/n-B1 2>&1 | head -30",
+          "python -m pytest -q",
+          "python -c \"\nfrom src.export import export_markdown as e\ncases = [('A1','Hồ sơ'), ('A2',''), ('A3','dòng một\\ndòng hai'), ('A4','# tiêu đề\\nnội dung'), ('A6','a   b\\tc'), ('A7','   dòng một   \\n  dòng hai  '), ('A8','abc 123 !?'), ('A9','Hồ sơ')]\nfor k,v in cases:\n    try:\n        print(k, repr(e(v)))\n    except Exception as ex:\n        print(k, 'EXC', type(ex).__name__, ex)\ntry:\n    print('A5', repr(e(None)))\nexcept Exception as ex:\n    print('A5', 'EXC', type(ex).__name__, ex)\nprint('A9-twice', repr(e('Hồ sơ')), repr(e('Hồ sơ')), e('Hồ sơ')==e('Hồ sơ'))\n\"",
+          "git rev-parse HEAD",
+          "git show --stat --oneline HEAD",
+          "git diff --stat b08426e1095942f1bd60c116a801d486f8ea3d0f HEAD",
+          "git diff b08426e1095942f1bd60c116a801d486f8ea3d0f HEAD -- src/export.py"
+        ]
+      },
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "childId": "63e289f2b5b949f8baaa06a2c6b59025",
+        "error": null,
+        "repairAction": "retest",
+        "commands": [
+          "pwd; ls -la; echo \"---- git ----\"; git -C . rev-parse HEAD 2>&1; git -C . status --porcelain 2>&1 | head -50",
+          "ls -la .boxfox/worktrees/ 2>&1; echo \"---- n-B1 ----\"; ls -la .boxfox/worktrees/w-e78f601431/n-B1 2>&1 | head -30",
+          "python -m pytest -q",
+          "python -c \"\nfrom src.export import export_markdown as e\ncases = [('A1','Hồ sơ'), ('A2',''), ('A3','dòng một\\ndòng hai'), ('A4','# tiêu đề\\nnội dung'), ('A6','a   b\\tc'), ('A7','   dòng một   \\n  dòng hai  '), ('A8','abc 123 !?'), ('A9','Hồ sơ')]\nfor k,v in cases:\n    try:\n        print(k, repr(e(v)))\n    except Exception as ex:\n        print(k, 'EXC', type(ex).__name__, ex)\ntry:\n    print('A5', repr(e(None)))\nexcept Exception as ex:\n    print('A5', 'EXC', type(ex).__name__, ex)\nprint('A9-twice', repr(e('Hồ sơ')), repr(e('Hồ sơ')), e('Hồ sơ')==e('Hồ sơ'))\n\"",
+          "git rev-parse HEAD",
+          "git show --stat --oneline HEAD",
+          "git diff --stat b08426e1095942f1bd60c116a801d486f8ea3d0f HEAD",
+          "git diff b08426e1095942f1bd60c116a801d486f8ea3d0f HEAD -- src/export.py"
+        ]
+      },
+      "repair": {
+        "n": 1,
+        "checkId": "c-3d65a0c4738e4763993d41e25a21dcc5",
+        "class": "clear",
+        "reason": "required command failed with a trace into tracked files",
+        "debugChildId": null,
+        "debugArtifactId": null,
+        "buildChildId": "58caeaa53ced4f1fbe6c30c148bdb5f5",
+        "resumed": true,
+        "codeHash": "4acdc6124777d47c6ac7c136e0ef68fb8ae94c42eba3a2d2af653b80605595c1",
+        "at": 1790997142.8449717,
+        "findingsArtifactId": "a-e4fe6c30e91b4b30a58fd2c7d8df7aec",
+        "repairChildReason": null,
+        "status": "needs_checks"
+      },
+      "resumedChild": {
+        "id": "58caeaa53ced4f1fbe6c30c148bdb5f5",
+        "parent": "ea9c8f1feece42bebb9d4accbd452657",
+        "tools": [
+          "terminal_exec",
+          "codebase_glob",
+          "file_read",
+          "file_read",
+          "file_read",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "file_read",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "terminal_exec",
+          "codebase_grep"
+        ],
+        "wroteExport": true,
+        "sawFindings": true
+      },
+      "afterRepair": {
+        "status": "needs_checks",
+        "attempts": 2,
+        "artifactId": "a-0a6af068994d40208b2c3cd9f2ce9acd",
+        "verdicts": [
+          "revise",
+          null
+        ],
+        "repairs": 1
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "pass",
+          "attempt": 1,
+          "childId": "63e289f2b5b949f8baaa06a2c6b59025",
+          "error": null,
+          "artifactId": "a-0a6af068994d40208b2c3cd9f2ce9acd",
+          "commands": [
+            "git rev-parse HEAD",
+            "python -m pytest -q",
+            "python -c \"\nfrom src.export import export_markdown as e\nr=lambda x: repr(x)\nprint('A1', r(e('Hồ sơ')))\nprint('A2', r(e('')))\nprint('A3', r(e('dòng một\\ndòng hai\\ndòng ba')))\nprint('A4', r(e('# Tiêu đề\\n\\n- Mục 1\\n- Mục 2')))\nprint('A5', r(e(None)))\nprint('A6', r(e('a   b\\tc')))\nprint('A7', r(e('   dòng một   \\n  dòng hai  ')))\nprint('A8', r(e('Bản 123, văn bản!?')))\nprint('A9', e('Hồ sơ')==e('Hồ sơ'), e(None)==e(None), e('  a  \\n b ')==e('  a  \\n b '))\nprint('A3-trailing-nl', r(e('dòng một\\n')))\nprint('A7-crlf', r(e('a  \\r\\n  b  ')))\nprint('A6-nbsp', r(e('a  b')))\n\"",
+            "git diff b08426e1095942f1bd60c116a801d486f8ea3d0f 40d810f935236f1fee3199cd166b332852845ed3 --stat",
+            "git log --oneline b08426e1095942f1bd60c116a801d486f8ea3d0f..40d810f935236f1fee3199cd166b332852845ed3",
+            "git cat-file -t 5ae5f7be8ab7a52b576bb6cf17bf850bb20e956e",
+            "grep -n \"\" src/export.py",
+            "python -c \"\nimport src.export as m\nprint(sorted(n for n in dir(m) if not n.startswith('__')))\n\"",
+            "grep -rn \"export_markdown\" .",
+            "git status --porcelain"
+          ]
+        }
+      ],
+      "greenCheck": {
+        "kind": "tests",
+        "status": "pass",
+        "attempt": 1,
+        "childId": "63e289f2b5b949f8baaa06a2c6b59025",
+        "error": null,
+        "artifactId": "a-0a6af068994d40208b2c3cd9f2ce9acd",
+        "commands": [
+          "git rev-parse HEAD",
+          "python -m pytest -q",
+          "python -c \"\nfrom src.export import export_markdown as e\nr=lambda x: repr(x)\nprint('A1', r(e('Hồ sơ')))\nprint('A2', r(e('')))\nprint('A3', r(e('dòng một\\ndòng hai\\ndòng ba')))\nprint('A4', r(e('# Tiêu đề\\n\\n- Mục 1\\n- Mục 2')))\nprint('A5', r(e(None)))\nprint('A6', r(e('a   b\\tc')))\nprint('A7', r(e('   dòng một   \\n  dòng hai  ')))\nprint('A8', r(e('Bản 123, văn bản!?')))\nprint('A9', e('Hồ sơ')==e('Hồ sơ'), e(None)==e(None), e('  a  \\n b ')==e('  a  \\n b '))\nprint('A3-trailing-nl', r(e('dòng một\\n')))\nprint('A7-crlf', r(e('a  \\r\\n  b  ')))\nprint('A6-nbsp', r(e('a  b')))\n\"",
+          "git diff b08426e1095942f1bd60c116a801d486f8ea3d0f 40d810f935236f1fee3199cd166b332852845ed3 --stat",
+          "git log --oneline b08426e1095942f1bd60c116a801d486f8ea3d0f..40d810f935236f1fee3199cd166b332852845ed3",
+          "git cat-file -t 5ae5f7be8ab7a52b576bb6cf17bf850bb20e956e",
+          "grep -n \"\" src/export.py",
+          "python -c \"\nimport src.export as m\nprint(sorted(n for n in dir(m) if not n.startswith('__')))\n\"",
+          "grep -rn \"export_markdown\" .",
+          "git status --porcelain"
+        ]
+      },
+      "final": {
+        "status": "accepted",
+        "attempts": 2,
+        "verdicts": [
+          "revise",
+          "ok"
+        ],
+        "repairs": 1
+      },
+      "mechanism": {
+        "oneRepairEntry": true,
+        "classified": true,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": true,
+        "freshArtifactAfterRepair": true,
+        "findingsBoundToChild": true,
+        "codeHashPinned": true,
+        "redCheckIsRevise": true
+      },
+      "model": {
+        "seedIsRealRed": true,
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": true,
+        "secondCheckPassed": true,
+        "nodeAccepted": true
+      },
+      "integration": {
+        "attempted": true,
+        "reason": null,
+        "executeStatuses": {
+          "B1": "accepted"
+        },
+        "built": true,
+        "status": "needs_checks",
+        "required": [
+          "tests",
+          "code_review"
+        ],
+        "artifactId": "a-2683c402a5f442b99791a65730d6ebe1",
+        "final": {
+          "status": "rejected",
+          "integrationStatus": "checking",
+          "checkIds": [],
+          "head": "b08426e1095942f1bd60c116a801d486f8ea3d0f",
+          "treeHash": "baaf249660db513be596a4cacbc9ceb2b1be29d8",
+          "runStatus": "approved"
+        },
+        "checks": [
+          {
+            "kind": "tests",
+            "status": "revise",
+            "attempt": 1,
+            "childId": "ba3ac6eb86cf4fb8b647a3c55d77d185",
+            "error": null,
+            "seconds": 784.665
+          },
+          {
+            "kind": "tests",
+            "attempt": 2,
+            "raised": "WORK_CHECK_NOT_READY: producer must finish the current draft before checks"
+          },
+          {
+            "kind": "code_review",
+            "attempt": 1,
+            "raised": "WORK_CHECK_NOT_READY: producer must finish the current draft before checks"
+          }
+        ],
+        "mergeAbsent": {
+          "reason": "probe gọi thẳng graph.build_integration nên integrate_nodes không chạy (work_graph.py:1538-1542)",
+          "integrationNodes": {},
+          "runBranchHead": "b08426e1095942f1bd60c116a801d486f8ea3d0f",
+          "runBranchHeadIsBaseline": true,
+          "acceptedNodeCommit": "40d810f935236f1fee3199cd166b332852845ed3",
+          "runBranchContainsAcceptedCommit": false,
+          "verifiedBy": "git merge-base --is-ancestor 40d810f HEAD -> exit 1; git show HEAD:src/export.py -> \"def export_markdown(text): return text\""
+        }
+      },
+      "integrationNative": {
+        "built": true,
+        "hasRealChild": true,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt 12 — nửa đầu vẫn xanh (8/8 `mechanism`, 5/5 `model`; lượt kiểm đầu đã `revise` với `class=clear` ngay lần đầu, resume ĐÚNG con Build cũ) nhưng node tổng hợp đo NHẦM CÂY: probe gọi thẳng `graph.build_integration` mà bỏ qua `integrate_nodes`, nên nhánh run vẫn đứng ở commit nền `b08426e` và artifact tổng hợp tự ghi `files owned by this run: (none)`. Child Testing THẬT đã tự bắt đúng lỗi này (`git merge-base --is-ancestor 40d810f HEAD` → exit 1; `git show HEAD:src/export.py` = bản nền `return text`) rồi trả `revise` — hành vi ĐÚNG của sản phẩm. Sản phẩm còn có hàng rào riêng cho đúng tình huống này: `work_graph.py:1633` `WORK_CODE_STALE: an accepted node is not integrated into the run branch; call work_run phase=execute to finish integration, then re-check.` Lỗi thuộc PHÉP ĐO: sản phẩm chỉ hợp nhất nút đã nghiệm thu trong `work_graph action=run phase=execute` (`work_graph.py:1538-1542` và `:1837-1838`). Probe đã sửa ở lượt 13: gọi đúng đường main (`work_graph action=run phase=execute`) rồi mới mở kiểm node tổng hợp theo thứ tự tests → code_review."
+    },
+    {
+      "rawDir": "/var/tmp/w8-probe-run13-realred-16000",
+      "resultsSha256": "51c16d232bc34ba9088a7169ddc174bf5e447c1632336db9f7d48fbf198b7a51",
+      "oracle": false,
+      "error": null,
+      "latencySeconds": 603.39,
+      "commit": null,
+      "realRed": {
+        "seeded": 1,
+        "proof": {
+          "exitCode": 1,
+          "tail": [
+            "FAILED tests/test_export.py::test_keeps_internal_spaces_within_a_line - Asser...",
+            "FAILED tests/test_export.py::test_strips_leading_and_trailing_whitespace_each_line",
+            "FAILED tests/test_export.py::test_keeps_digits_and_punctuation - AssertionErr...",
+            "7 failed, 2 passed in 0.03s"
+          ]
+        },
+        "errors": []
+      },
+      "firstCheck": {
+        "kind": "tests",
+        "status": "unverified",
+        "childId": "8b249749e1be4695be8ec8230edf51dd",
+        "error": "WORK_FINDING_UNCITED: A1: F1 SELF_REFUTED, F5 SELF_REFUTED, F6 SELF_REFUTED; A3: F4 SELF_REFUTED, F5 SELF_REFUTED; A4: F4 SELF_REFUTED, F5 SELF_REFUTED; A5: F2 SELF_REFUTED, F5 SELF_REFUTED; A6: F4 SELF_REFUTED, F5 SELF_REFUTED; A7: F3 SELF_REFUTED, F5 SELF_REFUTED; A8: F4 SELF_REFUTED, F5 SELF_REFUTED. A blocking finding needs criterionId, 1-6 evidenceRefs from THIS review (tool call ids, verify:<codeHash>, artifact:<id>@<contentHash>) and a counterCheck; numeric claims need a verify_exec/terminal_exec receipt or an opened source containing the number.",
+        "repairAction": null,
+        "commands": [
+          "cd /workspace 2>/dev/null || cd ~; pwd; ls -la",
+          "ls -la .boxfox/worktrees/",
+          "find . -maxdepth 3 -name \"export.py\" -not -path \"*/node_modules/*\"",
+          "pwd; ls -la",
+          "pwd",
+          "find / -maxdepth 6 -type d -name \"w-3099f8dbe6\" 2>/dev/null",
+          "ls -la",
+          "find . -maxdepth 3 -not -path \"./.git/*\" -not -name \".git\"",
+          "cat -A src/export.py | head -40",
+          "cat src/export.py",
+          "git --no-pager status --short",
+          "git --no-pager log --oneline -5"
+        ]
+      },
+      "redCheck": {
+        "kind": "tests",
+        "status": "revise",
+        "attempt": 1,
+        "childId": "3e4bdeb703c840bcaa32663fdce19f85",
+        "error": null,
+        "artifactId": "a-ee9b3e3552c24e4997e145d9b2ef3ad4",
+        "repairAction": "main",
+        "commands": [
+          "cd /workspace 2>/dev/null || cd ~; pwd; ls -la",
+          "pwd && ls -la && ls -la .boxfox/worktrees/w-3099f8dbe6/n-B1 2>/dev/null || find / -type d -name \"n-B1\" -maxdepth 8 2>/dev/null | head -5",
+          "find . -name \"export.py\" -o -name \"test_export.py\" | head -20",
+          "python -m pytest -q; echo \"EXIT=$?\"",
+          "git --no-pager status --short; echo \"---HEAD---\"; git rev-parse HEAD; echo \"---DIFF STAT---\"; git --no-pager diff --stat",
+          "echo \"=== src/export.py in HEAD commit ===\"; git --no-pager show HEAD:src/export.py; echo \"=== git diff HEAD -- src/export.py ===\"; git --no-pager diff HEAD -- src/export.py; echo \"(end diff)\"; echo \"=== treeHash check ===\"; git --no-pager rev-parse HEAD^{tree}",
+          "python -c \"\nfrom src.export import export_markdown as f\nprint('A1 Hồ sơ      ->', repr(f('Hồ sơ')))\nprint('A2 empty      ->', repr(f('')))\nprint('A3 multiline  ->', repr(f('Dòng một\\nDòng hai')))\nprint('A5 None       ->', end=' ')\ntry:\n    print(repr(f(None)))\nexcept Exception as e:\n    print('RAISED', type(e).__name__, e)\nprint('A6 inner sp   ->', repr(f('Hồ  sơ  chuẩn')))\nprint('A7 strip      ->', repr(f('  Hồ sơ  \\n  bảo hiểm  ')))\nprint('A8 digits     ->', repr(f('Hồ sơ 2024, đúng!')))\nprint('A9 purity     ->', f('  Hồ sơ  \\n  bảo hiểm  '), '==', f(f('  Hồ sơ  \\n  bảo hiểm  ')))\nprint('A4 no wrapper ->', repr(f('Hồ sơ')))\n\"",
+          "echo \"=== HEAD:tests/test_export.py (wc -l) ===\"; git --no-pager show HEAD:tests/test_export.py | wc -l; echo \"=== diff base..HEAD --stat ===\"; git --no-pager diff 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f..HEAD --stat; echo \"(end)\"; echo \"=== log ===\"; git --no-pager log --oneline -5; echo \"=== ls src tests ===\"; ls -la src tests",
+          "echo \"=== BASE 46ad8ca:src/export.py ===\"; git --no-pager show 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f:src/export.py; echo \"=== BASE..HEAD diff for src/export.py ===\"; git --no-pager diff 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f..HEAD -- src/export.py; echo \"(end)\"; echo \"=== base treeHash vs HEAD treeHash ===\"; git rev-parse 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f^{tree}",
+          "echo \"=== worktree vs HEAD (any uncommitted producer edit?) ===\"; git --no-pager diff HEAD --stat; echo \"(none above = worktree == HEAD)\"; echo \"=== byte-level check of source file ===\"; python -c \"\nimport pathlib\nb = pathlib.Path('src/export.py').read_bytes()\nprint('src/export.py bytes =', len(b))\nt = pathlib.Path('tests/test_export.py').read_bytes().decode('utf-8')\nprint('tests decode utf-8 OK, chars =', len(t))\nprint('Hồ sơ present in tests =', 'Hồ sơ' in t)\nimport unicodedata\nprint('precomposed Hồ sơ in tests =', 'Hồ sơ' in t)\n\"",
+          "echo \"=== re-run mandatory command, plain ===\"; python -m pytest -q 2>&1 | tail -3; echo \"EXIT=${PIPESTATUS[0]}\""
+        ]
+      },
+      "repair": {},
+      "resumedChild": {
+        "id": null,
+        "parent": null,
+        "tools": [],
+        "wroteExport": false,
+        "sawFindings": false
+      },
+      "afterRepair": {
+        "status": "rejected",
+        "attempts": 1,
+        "artifactId": "a-ee9b3e3552c24e4997e145d9b2ef3ad4",
+        "verdicts": [
+          "revise"
+        ],
+        "repairs": [
+          {
+            "n": 1,
+            "checkId": "c-a85d03c806584305963c6ab3f8db2749",
+            "class": "unclassified",
+            "reason": "no failing required command event",
+            "debugChildId": "513270fde4244e2aa6cf78dfc0d031eb",
+            "debugArtifactId": null,
+            "buildChildId": null,
+            "resumed": null,
+            "codeHash": null,
+            "at": 1790999044.1471505
+          }
+        ]
+      },
+      "greenChecks": [
+        {
+          "kind": "tests",
+          "status": "revise",
+          "attempt": 1,
+          "childId": "3e4bdeb703c840bcaa32663fdce19f85",
+          "error": null,
+          "artifactId": "a-ee9b3e3552c24e4997e145d9b2ef3ad4",
+          "commands": [
+            "cd /workspace 2>/dev/null || cd ~; pwd; ls -la",
+            "pwd && ls -la && ls -la .boxfox/worktrees/w-3099f8dbe6/n-B1 2>/dev/null || find / -type d -name \"n-B1\" -maxdepth 8 2>/dev/null | head -5",
+            "find . -name \"export.py\" -o -name \"test_export.py\" | head -20",
+            "python -m pytest -q; echo \"EXIT=$?\"",
+            "git --no-pager status --short; echo \"---HEAD---\"; git rev-parse HEAD; echo \"---DIFF STAT---\"; git --no-pager diff --stat",
+            "echo \"=== src/export.py in HEAD commit ===\"; git --no-pager show HEAD:src/export.py; echo \"=== git diff HEAD -- src/export.py ===\"; git --no-pager diff HEAD -- src/export.py; echo \"(end diff)\"; echo \"=== treeHash check ===\"; git --no-pager rev-parse HEAD^{tree}",
+            "python -c \"\nfrom src.export import export_markdown as f\nprint('A1 Hồ sơ      ->', repr(f('Hồ sơ')))\nprint('A2 empty      ->', repr(f('')))\nprint('A3 multiline  ->', repr(f('Dòng một\\nDòng hai')))\nprint('A5 None       ->', end=' ')\ntry:\n    print(repr(f(None)))\nexcept Exception as e:\n    print('RAISED', type(e).__name__, e)\nprint('A6 inner sp   ->', repr(f('Hồ  sơ  chuẩn')))\nprint('A7 strip      ->', repr(f('  Hồ sơ  \\n  bảo hiểm  ')))\nprint('A8 digits     ->', repr(f('Hồ sơ 2024, đúng!')))\nprint('A9 purity     ->', f('  Hồ sơ  \\n  bảo hiểm  '), '==', f(f('  Hồ sơ  \\n  bảo hiểm  ')))\nprint('A4 no wrapper ->', repr(f('Hồ sơ')))\n\"",
+            "echo \"=== HEAD:tests/test_export.py (wc -l) ===\"; git --no-pager show HEAD:tests/test_export.py | wc -l; echo \"=== diff base..HEAD --stat ===\"; git --no-pager diff 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f..HEAD --stat; echo \"(end)\"; echo \"=== log ===\"; git --no-pager log --oneline -5; echo \"=== ls src tests ===\"; ls -la src tests",
+            "echo \"=== BASE 46ad8ca:src/export.py ===\"; git --no-pager show 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f:src/export.py; echo \"=== BASE..HEAD diff for src/export.py ===\"; git --no-pager diff 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f..HEAD -- src/export.py; echo \"(end)\"; echo \"=== base treeHash vs HEAD treeHash ===\"; git rev-parse 46ad8ca1bb4a0a33b04cbb8159d6da3698e53f3f^{tree}",
+            "echo \"=== worktree vs HEAD (any uncommitted producer edit?) ===\"; git --no-pager diff HEAD --stat; echo \"(none above = worktree == HEAD)\"; echo \"=== byte-level check of source file ===\"; python -c \"\nimport pathlib\nb = pathlib.Path('src/export.py').read_bytes()\nprint('src/export.py bytes =', len(b))\nt = pathlib.Path('tests/test_export.py').read_bytes().decode('utf-8')\nprint('tests decode utf-8 OK, chars =', len(t))\nprint('Hồ sơ present in tests =', 'Hồ sơ' in t)\nimport unicodedata\nprint('precomposed Hồ sơ in tests =', 'Hồ sơ' in t)\n\"",
+            "echo \"=== re-run mandatory command, plain ===\"; python -m pytest -q 2>&1 | tail -3; echo \"EXIT=${PIPESTATUS[0]}\""
+          ]
+        },
+        {
+          "attempt": 2
+        }
+      ],
+      "greenCheck": {
+        "attempt": 2
+      },
+      "greenRepairs": [
+        {
+          "action": "main",
+          "reason": "WORK_REPAIR_UNDIAGNOSED"
+        }
+      ],
+      "final": {
+        "status": "rejected",
+        "attempts": 1,
+        "verdicts": [
+          "revise"
+        ],
+        "repairs": 1
+      },
+      "mechanism": {
+        "oneRepairEntry": false,
+        "classified": false,
+        "debugOnlyWhenUnclassified": true,
+        "resumedSameChild": false,
+        "freshArtifactAfterRepair": false,
+        "findingsBoundToChild": false,
+        "codeHashPinned": false,
+        "redCheckIsRevise": true
+      },
+      "model": {
+        "seedIsRealRed": true,
+        "testerSawTheRedCommand": true,
+        "buildChildTouchedItsFile": false,
+        "secondCheckPassed": false,
+        "nodeAccepted": false
+      },
+      "integration": {
+        "attempted": false,
+        "reason": "node chưa accepted (status=rejected); bỏ qua node tổng hợp"
+      },
+      "integrationNative": {
+        "mergedIntoRunBranch": false,
+        "built": false,
+        "hasRealChild": false,
+        "testsPassedOnMergedTree": false,
+        "integrationChecked": false
+      },
+      "narrative": "Lượt 13 — phép đo ĐI ĐÚNG đường hợp nhất (đã thêm `work_graph action=run phase=execute` trước khi mở kiểm node tổng hợp) nhưng vòng sửa chết vì nút FIXTURE: con Testing chạy lệnh bắt buộc ở dạng BỌC `python -m pytest -q; echo \"EXIT=$?\"` nên bộ phân loại trả `class=unclassified` (\"no failing required command event\") — đúng luật sản phẩm (#6452). Sản phẩm mở con `debug` (513270fde424…) chẩn đoán chỉ-đọc; con này mở đúng bằng chứng (`file_read src/export.py` thấy `return text.upper()`) nhưng câu trả lời cuối dài quá 4096 token output nên bị `PROVIDER_OUTPUT_TRUNCATED` (partial) ⇒ `work_checks.complete()` false ⇒ sản phẩm ghi `WORK_REPAIR_UNDIAGNOSED: Debug opened no evidence; main decides` và nút B1 thành `rejected` (1 lượt), nên node tổng hợp không được dựng. Nút FIXTURE `BUILD_CHILD_OUTPUT_TOKENS` trước đây chỉ áp cho vai `build`; đã mở rộng cho cả vai `debug` (cùng loại câu trả lời cuối dài) và ghi vào `fixtureKnobs`. Đây là lỗi PHÉP ĐO, không phải lỗi sản phẩm: sản phẩm làm đúng (phân loại → debug → escalate khi chẩn đoán không hoàn tất)."
     }
-   ],
-   "narrative": "Lượt 9 — cò đỏ THẬT chạy được (owner duyệt #6451). Fixture hạ cấp src/export.py trong worktree nút ngay trước lệnh checkpoint nên chính harness commit bản lỗi: commit 0eef30b chứa `return text.upper()`, và lệnh `python -m pytest -q` chạy thật ngay sau khi gieo trả exit=1 (1 failed). Lượt kiểm đầu `revise` THẬT (8 failed, 1 passed), bộ phân loại ghi class=clear với lý do \"required command failed with a trace into tracked files\", sản phẩm resume ĐÚNG con Build cũ và tạo artifact v3 trên hash mã mới 997e4d7c… ⇒ nửa đầu của W8.A4.5.N có bằng chứng native. Chỗ tắc còn lại là hàng rào sản phẩm: lượt kiểm đỏ đánh dấu tiêu chí A1 `target=criterion` (bằng chứng: code trả \"HỒ SƠ\") nên backend coi là XUNG ĐỘT ĐẦU VÀO, và `work_checks.py:1076` chặn mọi lượt kiểm/sản xuất tiếp cho tới khi main sửa lại nhiệm vụ (`work_graph action=update`) — đường xoá xung đột duy nhất, nhưng đổi định nghĩa nút làm stage reset và mất bản nháp vừa sửa. Probe đọc nguyên văn xung đột (`inputConflict`) rồi ghi lại thay vì che."
+  ],
+  "conclusion": {
+    "status": "chưa nghiệm thu",
+    "reason": "Bảy lượt đã chạy, `oracle=false` cả bảy, mỗi lượt dừng ở một chỗ khác nhau và đều lưu nguyên văn. Lượt 7 là lượt đầy đủ đầu tiên (không lỗi probe): lượt kiểm đầu vẫn không tự đỏ vì cò đỏ cắm sẵn của fixture, nhưng B1 đã `accepted` và **node `__integration__` lần đầu được dựng + kiểm native trên cây gộp** (2/4 tiêu chí `integrationNative`). Hai tiêu chí còn lại hỏng vì child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc nên `test_proof` hạ `pass`→`unverified` — đúng luật sản phẩm, không nới.",
+    "openItems": [
+      "CÒN PHẢI SỬA FIXTURE (cần owner duyệt vì đổi ngữ nghĩa phép đo): cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`. Hệ quả đã đo: lượt kiểm ĐẦU không bao giờ tự đỏ theo đường `test_proof`, nên vòng sửa không mở ở đúng chỗ mà W8.A4.5.N cần đo.",
+      "Chưa lượt nào đo trọn chuỗi \"đỏ ở lượt kiểm đầu → phân loại → resume cùng child → kiểm lại xanh → node tổng hợp xanh\". Lượt 7 đã đo được nửa sau (B1 xanh + node tổng hợp dựng và kiểm native).",
+      "Hàng rào `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc, không bọc ống/`echo`; cả lượt kiểm B1 và lượt kiểm trên cây gộp đều bị hạ `unverified` vì lý do này. Cần chốt: đây là hành vi sản phẩm mong muốn (giữ nguyên) hay phép đo cần ghi rõ là giới hạn của fixture."
+    ]
   }
- ],
- "conclusion": {
-  "status": "chưa nghiệm thu",
-  "reason": "Bảy lượt đã chạy, `oracle=false` cả bảy, mỗi lượt dừng ở một chỗ khác nhau và đều lưu nguyên văn. Lượt 7 là lượt đầy đủ đầu tiên (không lỗi probe): lượt kiểm đầu vẫn không tự đỏ vì cò đỏ cắm sẵn của fixture, nhưng B1 đã `accepted` và **node `__integration__` lần đầu được dựng + kiểm native trên cây gộp** (2/4 tiêu chí `integrationNative`). Hai tiêu chí còn lại hỏng vì child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc nên `test_proof` hạ `pass`→`unverified` — đúng luật sản phẩm, không nới.",
-  "openItems": [
-   "CÒN PHẢI SỬA FIXTURE (cần owner duyệt vì đổi ngữ nghĩa phép đo): cò đỏ nên gieo ĐỎ THẬT (hạ cấp `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn cho mọi lệnh chứa `pytest`. Hệ quả đã đo: lượt kiểm ĐẦU không bao giờ tự đỏ theo đường `test_proof`, nên vòng sửa không mở ở đúng chỗ mà W8.A4.5.N cần đo.",
-   "Chưa lượt nào đo trọn chuỗi \"đỏ ở lượt kiểm đầu → phân loại → resume cùng child → kiểm lại xanh → node tổng hợp xanh\". Lượt 7 đã đo được nửa sau (B1 xanh + node tổng hợp dựng và kiểm native).",
-   "Hàng rào `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc, không bọc ống/`echo`; cả lượt kiểm B1 và lượt kiểm trên cây gộp đều bị hạ `unverified` vì lý do này. Cần chốt: đây là hành vi sản phẩm mong muốn (giữ nguyên) hay phép đo cần ghi rõ là giới hạn của fixture."
-  ]
- }
 }
