@@ -1,8 +1,9 @@
 """W8.A4.5 — probe thật: check đỏ được phân loại, sửa CÓ ĐIỀU KIỆN, rồi hội tụ ở vòng hai.
 
 Fixture: repo git thật trong `.tmp/` + executor chạy `bash -lc` tại worktree nút. Executor được
-"lên cò" đúng MỘT lệnh pytest đỏ (kèm traceback trỏ vào `src/export.py` đã track) ngay trước lượt
-kiểm thật của nút Build. Nhờ vậy:
+"lên cò" để **gieo đỏ THẬT** vào worktree nút ngay trước lệnh checkpoint của harness: nó hạ cấp
+`src/export.py` xuống `return text.upper()`, rồi chính harness `git add -A` + commit bản đó thành
+commit của lượt sản xuất. Nhờ vậy:
 
 - lượt kiểm `tests` (child Space Bunny THẬT) đỏ và mang bằng chứng lệnh đỏ;
 - harness phân loại (`clear` hay `unclassified`), ghi một mục sửa, và chỉ mở child Debug khi
@@ -17,7 +18,10 @@ Chạy: `python3 scripts/eval/work_repair_loop_eval.py --router <url> --output .
 """
 import argparse
 import asyncio
+import collections
+import hashlib
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -52,11 +56,21 @@ def raise_build_child_output_budget():
 
     output_policy.child_budget = patched
 
-RED_TRACE = ('Traceback (most recent call last):\n'
-             '  File "src/export.py", line 3, in export_markdown\n'
-             '    return text.upper()\n'
-             'AssertionError: assert "hồ sơ" == "Hồ sơ"\n'
-             '1 failed, 1 passed in 0.11s\n')
+# W8.A4.5.N — "cò đỏ THẬT" (owner duyệt 03/10/2026). Bản cũ trả traceback CẮM SẴN cho mọi lệnh
+# chứa chuỗi 'pytest' (kể cả `echo "hello pytest world"`): model phát hiện đúng là kết quả bịa,
+# tự chạy pytest bằng đường khác, thấy xanh thật rồi báo đạt — nên luật `test_proof` không bao
+# giờ cho lượt kiểm đầu tự đỏ và `oracle` của W8.A4.5.N không thể đạt (7 lượt probe 02/10).
+#
+# Nay fixture hạ cấp THẬT `src/export.py` trong worktree nút NGAY TRƯỚC lệnh checkpoint của
+# harness, để chính harness commit bản lỗi đó thành commit của lượt sản xuất:
+#   - bản ghi của harness (commit + `codeSnapshot`) mang đúng lỗi đã gieo ⇒ lượt kiểm đầu KHÔNG
+#     bị `superseded` ("Code changed before check") mà đỏ vì chạy pytest THẬT trên cây thật;
+#   - traceback trỏ vào tệp đã track ⇒ bộ phân loại thấy 'trace into tracked files' → `revise`;
+#   - vòng sửa chỉ còn một đường: sửa `src/export.py` rồi kiểm lại xanh.
+REAL_RED_SOURCE = 'def export_markdown(text):\n    return text.upper()\n'
+# Lệnh checkpoint của harness: `cd '<root>' && git add -A … commit … -m 'boxfox(<runId>): B1 attempt 1'`
+CHECKPOINT_MARK = re.compile(r"boxfox\((?P<run>[^)]+)\): (?P<node>[^ ]+) attempt (?P<attempt>\d+)")
+CD_PREFIX = re.compile(r"^cd (?P<root>'(?:[^']*)'|\S+) && ")
 
 TEST_FILE = '''from src.export import export_markdown
 
@@ -84,20 +98,22 @@ NODE = {'id': 'B1', 'kind': 'build', 'title': 'Giữ dấu tiếng Việt khi ex
 
 
 class RepairExecutor(GitExecutor):
-    """Như `GitExecutor`, nhưng khi được bật thì trả ĐỎ mọi lệnh pytest của child KIỂM THỬ.
+    """Như `GitExecutor`, nhưng khi được bật thì GIEO đỏ THẬT vào worktree nút lúc harness checkpoint.
 
-    Cò phải nhắm theo VAI của phiên, không theo chuỗi lệnh: chính lệnh checkpoint của harness có
-    `':(exclude).pytest_cache'` nên khớp thô theo chuỗi 'pytest' sẽ bắn nhầm vào checkpoint
-    (`WORK_WORKTREE_CHECKPOINT_FAILED`) và bịt luôn đường sửa — đo được ở lượt chạy trước của probe
-    này. Child Build (vai `build`) vẫn chạy pytest THẬT nên tự kiểm được bản sửa của mình.
+    Mọi lệnh của child vẫn chạy THẬT (không còn kết quả cắm sẵn): lượt kiểm đỏ vì `python -m
+    pytest -q` thật sự thất bại trên cây đã bị hạ cấp. Việc gieo chỉ xảy ra MỘT lần và chỉ đúng
+    lúc harness `git add -A` + commit lượt sản xuất, nên nó nằm trong `codeSnapshot` của artifact
+    — nếu gieo sau đó, sản phẩm sẽ trả `superseded` ("Code changed before check") chứ không đỏ.
     """
 
     def __init__(self, folder, store=None):
         super().__init__(folder)
         self.store = store
         self.armed = False
+        self.seeded = 0
+        self.seeds = []
         self.roles = {}
-        self.forced = 0
+        self.pytestByRole = collections.Counter()
 
     def arm(self):
         self.armed = True
@@ -112,13 +128,35 @@ class RepairExecutor(GitExecutor):
             self.roles[sid] = row['role'] if row else None
         return self.roles[sid]
 
+    def seed_real_red(self, command, sid):
+        """Hạ cấp `src/export.py` trong worktree nút rồi để checkpoint của harness commit nó."""
+        match = CD_PREFIX.match(command)
+        if not match:
+            return
+        root = Path(match.group('root').strip("'"))
+        target = root / 'src' / 'export.py'
+        if not target.is_file():
+            return
+        before = target.read_text(encoding='utf-8')
+        target.write_text(REAL_RED_SOURCE, encoding='utf-8')
+        proof = subprocess.run(['bash', '-lc', 'python -m pytest -q'], cwd=str(root),
+                               capture_output=True, text=True, timeout=300)
+        self.seeded += 1
+        self.seeds.append({'root': str(root), 'path': str(target), 'sid': sid,
+                           'role': self.role(sid),
+                           'before': before, 'after': REAL_RED_SOURCE,
+                           'sha256': hashlib.sha256(REAL_RED_SOURCE.encode()).hexdigest(),
+                           'proof': {'exitCode': proof.returncode,
+                                     'tail': (proof.stdout + proof.stderr).strip().splitlines()[-4:]},
+                           'at': round(time.time(), 3)})
+
     async def execute(self, name, args, sid, **identity):
         command = str((args or {}).get('command') or '')
-        if name == 'terminal_exec' and self.armed and 'pytest' in command and self.role(sid) == 'testing':
-            self.forced += 1
-            self.calls.append({'name': name, 'args': dict(args), 'root': identity.get('root'),
-                               'forcedRed': True})
-            return {'content': RED_TRACE, 'exit_code': 1, 'is_error': True}
+        if name == 'terminal_exec' and self.armed and not self.seeded \
+                and CHECKPOINT_MARK.search(command):
+            self.seed_real_red(command, sid)
+        if name == 'terminal_exec' and 'pytest' in command and self.role(sid) in ('build', 'testing'):
+            self.pytestByRole[self.role(sid)] += 1
         return await super().execute(name, args, sid, **identity)
 
 
@@ -189,14 +227,20 @@ async def main(args):
         iso = await graph.ensure_isolation(session, run, {})
         row['isolation'] = {k: iso.get(k) for k in ('mode', 'branch', 'root')}
         node = run['nodes'][0]
+        # W8.A4.5.N — lên cò TRƯỚC lượt sản xuất: đỏ được gieo vào đúng lúc harness checkpoint lượt
+        # sản xuất, nên nó nằm trong `codeSnapshot` của artifact (gieo sau đó ⇒ `superseded`).
+        executor.arm()
         row['firstStatus'] = await graph.run_stage(session, run, node, 'execute', 3)
+        executor.disarm()
         node = graph.find_node(graph.get(run['runId']), 'B1')
         first_artifact = (node['stages']['execute'].get('artifact') or {}).get('artifactId')
         row['firstArtifact'] = first_artifact
         row['firstProducer'] = (node['stages']['execute'].get('rounds') or [{}])[-1].get('producerId')
-        row['pytestBeforeCheck'] = executor.forced
+        row['realRed'] = {'seeded': executor.seeded, 'seeds': executor.seeds}
+        row['pytestRuns'] = dict(executor.pytestByRole)
+        # Số lệnh pytest THẬT child Build tự chạy trước lượt kiểm (không phải lệnh cắm sẵn như bản cũ).
+        row['pytestBeforeCheck'] = sum(executor.pytestByRole.values())
 
-        executor.arm()  # mọi lệnh pytest của lượt kiểm thật đều thấy lệnh đỏ
         try:
             red = (await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'], 'nodeId': 'B1',
                    'stage': 'execute', 'artifactId': first_artifact, 'checkIds': ['tests'],
@@ -215,7 +259,11 @@ async def main(args):
         repair = red.get('repair') or {}
         entry = repair.get('entry') or {}
         row['redCheck'] = {'kind': red_doc['kind'], 'status': red_doc['status'], 'childId': red_doc.get('childId'),
-                           'error': red_doc.get('error'), 'repairAction': repair.get('action')}
+                           'error': red_doc.get('error'), 'repairAction': repair.get('action'),
+                           # Lệnh THẬT child kiểm thử đã chạy ở lượt đỏ (không còn kết quả cắm sẵn).
+                           'commands': [item.get('args', {}).get('command') for item
+                                        in work_checks.observations(graph, red_doc.get('childId'))
+                                        if item.get('name') == 'terminal_exec'][:12]}
         row['repair'] = entry
         node = graph.find_node(graph.get(run['runId']), 'B1')
         state = node['stages']['execute']
@@ -236,7 +284,6 @@ async def main(args):
                                'sawFindings': bool(entry.get('findingsArtifactId')) and entry['findingsArtifactId']
                                    in json.dumps(child.get('config') or {}, ensure_ascii=False)}
 
-        executor.disarm()  # đã có vòng sửa: lượt kiểm thứ hai chạy pytest THẬT
         second_artifact = (state.get('artifact') or {}).get('artifactId')
         if not second_artifact:
             raise AssertionError(f'WORK_REPAIR_NO_DRAFT: status={state["status"]} error={state.get("error")}')
@@ -348,7 +395,8 @@ async def main(args):
         else:
             integration_row['reason'] = f'node chưa accepted (status={state["status"]}); bỏ qua node tổng hợp'
 
-        row['forcedRedCommands'] = executor.forced
+        row['redSeeds'] = executor.seeded
+        row['pytestRuns'] = dict(executor.pytestByRole)
         row['ownerHead'] = git(repo, 'rev-parse', 'HEAD')
         # --- oracle cơ chế: do code harness quyết ---
         entry = row['repair'] or {}
@@ -365,8 +413,15 @@ async def main(args):
             'redCheckIsRevise': row['redCheck']['status'] == 'revise' and bool(row['redCheck']['childId']),
         }
         # --- oracle hành vi model ---
+        real_red = row.get('realRed') or {}
+        seeds = real_red.get('seeds') or []
         row['model'] = {
-            'testerSawTheRedCommand': row['pytestBeforeCheck'] < row['forcedRedCommands'],
+            # Cò đỏ phải là THẬT: đúng một lần gieo, và chính lượt chạy `python -m pytest -q` ngay
+            # sau khi gieo phải thất bại (không còn traceback cắm sẵn).
+            'seedIsRealRed': bool(real_red.get('seeded') == 1 and seeds
+                                  and (seeds[0].get('proof') or {}).get('exitCode') not in (0, None)),
+            'testerSawTheRedCommand': any('pytest' in str(command)
+                                          for command in (row['redCheck'].get('commands') or [])),
             'buildChildTouchedItsFile': bool(row['resumedChild']['wroteExport']),
             # Lượt ghi cuối có thể là một lượt bị sản phẩm TỪ CHỐI mở kiểm (không có `status`);
             # đọc theo `.get` để không nổ `KeyError` khi phép đo gặp đúng hàng rào của sản phẩm.
