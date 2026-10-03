@@ -63,8 +63,12 @@ MAX_ROUNDS_DEFAULT = 3
 MAX_ROUNDS_CEILING = 4
 MAX_GRAPH_REVIEWS = 3
 KNOWLEDGE_MAX = 3
-WORK_CHILDREN_PER_RUN_CALL = 72
-WORK_RUN_MAX_SECONDS = 3600.0
+# Quyết định chủ nhà #6457 (03/10/2026): ngân sách MỖI LỜI GỌI nâng 72 → 256 con và
+# 3600 → 21600 s (6 h) để việc dài kiểu Devin không bị cắt; trần vẫn giữ vì đây là trần CỦA
+# MỘT LỜI GỌI, còn `lifetime` bên dưới đếm cộng dồn toàn đời run (chỉ báo cáo, chưa chặn —
+# số thật sẽ chốt trần cứng ở W6.5.2).
+WORK_CHILDREN_PER_RUN_CALL = 256
+WORK_RUN_MAX_SECONDS = 21600.0
 OUTPUT_MAX_CHARS = 20000
 CONTEXT_MAX_CHARS = 15000
 FINDINGS_MAX_CHARS = 3000
@@ -918,12 +922,14 @@ class WorkGraph:
             return self.result(run)
         if run['status'] in TERMINAL_STATUSES:
             raise ValueError(f'WORK_RUN_CLOSED: run {run["runId"]} is {run["status"]}; create a new run')
-        if action in ('add', 'update', 'remove', 'retry', 'cancel') and self.busy(run):
+        if action in ('add', 'update', 'remove', 'retry', 'cancel', 'resolve') and self.busy(run):
             raise ValueError('WORK_RUN_BUSY: work_run is running for this run; wait for it to return')
         if action in ('add', 'update'):
             self.apply_nodes(run, args.get('nodes'), replace=action == 'update')
             return self.result(self.save(run, action, ','.join(str((n or {}).get('id')) for n in args['nodes']
                                                                 if isinstance(n, dict))))
+        if action == 'resolve':
+            return self.resolve_conflicts(run, args)
         if action == 'remove':
             ids = set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))
             if not ids:
@@ -947,6 +953,42 @@ class WorkGraph:
             run['status'] = 'cancelled'
             return self.result(self.save(run, 'cancelled'))
         raise ValueError(f'WORK_ACTION_INVALID: action {action!r} is not supported here')
+
+    def resolve_conflicts(self, run, args):
+        """#6456(b): xác nhận/xoá xung đột đầu vào mà KHÔNG phá bản nháp.
+
+        `action=update` xoá được xung đột nhưng đặt lại stage (`new_stage()`), tức mất
+        artifact/policy/bản nháp vừa sửa — đo ở W8.A4.5.N lượt 9/12: chỉ cần con kiểm dán nhãn
+        `criterion` là cả vòng sửa bị chặn, rồi công sửa cũng mất. Đường này giữ nguyên trạng thái
+        stage, chỉ bỏ danh sách xung đột (có ghi nhật ký) để lượt kiểm/sản xuất kế tiếp chạy tiếp
+        trên chính bản nháp đó. Sản phẩm không tự phán tiêu chí đúng hay sai: nếu artifact vẫn vi
+        phạm, lượt kiểm sau đỏ lại và vòng sửa tiếp tục.
+        """
+        only_stage = str(args.get('stage') or '').strip() or None
+        ids = set(clean_list(args.get('nodeIds'), 'nodeIds', MAX_NODES, 32))
+        note = str(args.get('note') or '').strip()[:500]
+        cleared = []
+        for node in run['nodes']:
+            if ids and node['id'] not in ids:
+                continue
+            names = [only_stage] if only_stage else list(node['stages'])
+            for stage in names:
+                state = node['stages'].get(stage)
+                if not state or not state.get('inputConflicts'):
+                    continue
+                cleared.append({'nodeId': node['id'], 'stage': stage, 'conflicts': state['inputConflicts']})
+                state['inputConflicts'] = []
+                # Ghi vết lên chính hồ sơ lượt kiểm: nếu không, lượt kiểm kế tiếp của một loại khác
+                # dựng lại hàng rào từ bản ghi cũ và `resolve` coi như bị hoàn tác.
+                self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note)
+        if not cleared:
+            raise ValueError('WORK_NO_CONFLICT: no input conflict to resolve for the given nodes/stage')
+        self.save(run, 'input_conflicts_resolved', json.dumps(cleared, ensure_ascii=False)[:600])
+        message = ('Cleared %d input conflict(s); the draft is kept. '
+                   % sum(len(item['conflicts']) for item in cleared)) + \
+            ('A stage that is still open (needs_checks/revise) continues with the next work_run/check; '
+             'a rejected/failed stage needs work_graph action=retry first.') + (f' Note: {note}' if note else '')
+        return self.result(run, message) | {'resolved': cleared}
 
     def retry(self, run, ids):
         """Re-open rejected/failed stages (all, or `ids`) with their last findings as feedback."""
@@ -1028,9 +1070,10 @@ class WorkGraph:
         conflicts = [(n['id'], stage, s['inputConflicts']) for n in run['nodes']
                      for stage, s in n['stages'].items() if s.get('inputConflicts')]
         if conflicts:
-            return ('Main: correct the conflicting node goal/acceptance with work_graph action=update before '
-                    'retrying checks or production. Preserve facts in the artifact; the assignment needs correction: '
-                    + str(conflicts))
+            return ('Main: settle the assignment question first. If the node goal/acceptance really is wrong, '
+                    'correct it with work_graph action=update (new draft, fresh checks). If the label was wrong '
+                    'and the current draft stands, clear the barrier with work_graph action=resolve — it keeps the '
+                    'draft, its artifact and its history. Then retry checks or production: ' + str(conflicts))
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1102,6 +1145,20 @@ class WorkGraph:
             if data.get('final'):
                 return data.get('text') or ''
         return ''
+
+    def lifetime(self, run, calls=0, children=0, seconds=0.0):
+        """Bộ đếm cộng dồn của cả đời run (W6.5.2, quyết định #6457) — chỉ để đo, KHÔNG chặn.
+
+        `work_run` đặt lại `child_budget` ở MỖI lời gọi (72 con cũ, 256 con mới) và đồng hồ
+        `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có thể vượt cả hai mà
+        không có lỗi nào. Bộ đếm này ghi lại số thật (số lời gọi, số con, tổng giây) vào chính
+        tài liệu run để lượt sau đọc được; nó không chặn và không làm hỏng lượt chạy nào.
+        """
+        lifetime = run.setdefault('lifetime', {'calls': 0, 'children': 0, 'seconds': 0.0})
+        lifetime['calls'] += int(calls)
+        lifetime['children'] += int(children)
+        lifetime['seconds'] = round(lifetime['seconds'] + float(seconds), 3)
+        return lifetime
 
     async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt, extra_binding=None):
         """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer."""
@@ -1563,6 +1620,7 @@ class WorkGraph:
             self.live[run['runId']] = run
             self.save(run, 'run_started', phase)
             self.child_budget[run['runId']] = [WORK_CHILDREN_PER_RUN_CALL]
+            self.lifetime(run, calls=1)
             limit = max(1, int(self.rt.fanout_limit(session.get('config'))))
             try:
                 with self.budget_paused(sid):
@@ -1853,6 +1911,11 @@ class WorkGraph:
         out['blocked'] = blocked
         budget = self.child_budget.get(run['runId'])
         out['budgetExhausted'] = bool(budget is not None and budget[0] <= 0)
+        # W6.5.2 (#6457): bộ đếm CỘNG DỒN toàn đời run. Chỉ báo cáo — không chặn gì; số thật ở
+        # đây là đầu vào để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
+        out['lifetime'] = dict(self.lifetime(run, children=(WORK_CHILDREN_PER_RUN_CALL - budget[0]) if budget else 0,
+                                             seconds=time.monotonic() - started))
+        self.save(run, 'run_lifetime', json.dumps(out['lifetime'])[:300])
         out['outputs'] = [{'id': node['id'], 'kind': node['kind'], 'status': node['stages'][stage]['status'],
                            'attempts': node['stages'][stage]['attempts'],
                            'verdicts': [item.get('verdict') for item in node['stages'][stage]['rounds']],

@@ -69,6 +69,26 @@ test('OpenRouter: effort levels become reasoning.effort, auto/none send nothing'
   assert.equal(calls.every(call => !('thinkingLevel' in call)), true);
 });
 
+test('W12/OpenCode: the level BoxFox stores as thinkingLevel reaches the provider as reasoning.effort', async () => {
+  // The harness sends `thinkingLevel` (already checked against the model's published
+  // levels); the Responses endpoint refuses `reasoning_effort` in the body and only
+  // accepts `reasoning: {effort, summary}`. Before the fix the adapter deleted
+  // `thinkingLevel` without ever reading it, so a chosen level never left BoxFox.
+  const { calls, fetchImpl } = recorder(() => sse({ type: 'response.completed', response: { output: [] } }));
+  const adapter = createProviders({ fetchImpl }).opencode;
+  const body = level => ({ model: 'space-bunny-free', messages, stream: true, ...(level ? { thinkingLevel: level } : {}) });
+  await collect(adapter.generate({ connection: { endpoint: 'https://opencode.ai' }, credentials: {}, body: body('high') }));
+  await collect(adapter.generate({ connection: { endpoint: 'https://opencode.ai' }, credentials: {}, body: body('none') }));
+  await collect(adapter.generate({ connection: { endpoint: 'https://opencode.ai' }, credentials: {}, body: body(undefined) }));
+  assert.deepEqual(calls[0].reasoning, { effort: 'high', summary: 'auto' });
+  assert.equal('thinkingLevel' in calls[0], false, 'the router-internal field is not forwarded');
+  assert.equal('reasoning_effort' in calls[0], false, 'the endpoint refuses this spelling');
+  for (const call of calls.slice(1)) {
+    assert.equal('reasoning' in call, false, 'none/absent means the provider default, no thinking field');
+    assert.equal('thinkingLevel' in call, false);
+  }
+});
+
 test('Anthropic: budget thinking maps low/medium/high to 2048/8192/16384', async () => {
   const { calls, fetchImpl } = recorder(anthropicResponse);
   const adapter = createProviders({ fetchImpl }).anthropic;

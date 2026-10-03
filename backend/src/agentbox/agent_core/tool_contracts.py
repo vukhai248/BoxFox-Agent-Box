@@ -699,10 +699,12 @@ SCHEMAS = [
          'revoke_handoff uses transitionId and assignment revision. No implied Build/Debug or automatic repair. '
          'Grants cover owner intent only, never permission to implement an artifact-only request. '
          'set_repair sets the bounded repair policy (maxRepairs <= maxRounds-1, debug=never|when_unclassified|'
-         'always_first, revision, invocationId); cleanup_worktrees removes the clean worktrees of a closed run.',
+         'always_first, revision, invocationId); cleanup_worktrees removes the clean worktrees of a closed run. '
+         'resolve clears the recorded input conflicts of nodeIds (optional stage) once main has settled the '
+         'assignment question; unlike update it keeps the current draft, its artifact and its history.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
                                                 'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff',
-                                                'set_repair', 'cleanup_worktrees']},
+                                                'set_repair', 'cleanup_worktrees', 'resolve']},
           'runId': STRING, 'goal': STRING, 'title': STRING,
           'flow': {'type': 'string', 'enum': ['plan', 'research', 'design', 'fix', 'mixed'],
                    'description': 'what the owner asked for; plan+research/design is `mixed`'},

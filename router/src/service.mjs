@@ -176,6 +176,16 @@ export class ProviderService {
         // provider rules, a row the user declared keeps its number, and an
         // unknown row keeps what the payload said (or null — never a guess).
         const fromProvider = typeof provider?.thinkingMetadata === 'function' ? provider.thinkingMetadata(m) : null;
+        // Vòng soát 2 (F2) — adapter bổ sung có thể khai provenance cho trường nó vừa vá
+        // (`thinkingSource`/`thinkingAsOf`/`fieldSources`); `modelThinking` không mang các
+        // khoá này nên phải ghim riêng, nếu không hàng vá xong vẫn tự nhận là dữ liệu live.
+        if (fromProvider?.thinkingSource && m.thinkingSource !== fromProvider.thinkingSource) {
+          m.thinkingSource = fromProvider.thinkingSource;
+          if (fromProvider.thinkingAsOf) m.thinkingAsOf = fromProvider.thinkingAsOf;
+          if (fromProvider.thinkingEvidence) m.thinkingEvidence = fromProvider.thinkingEvidence;
+          m.fieldSources = { ...(m.fieldSources || {}), ...(fromProvider.fieldSources || {}) };
+          modified = true;
+        }
         const manualNumber = m.contextWindowSource === 'manual' ? m.contextWindow : null;
         const normalized = modelThinking({
           ...m,

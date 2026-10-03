@@ -19,16 +19,23 @@ INSTRUCTIONS_MAX_CHARS = 12000
 # (trước là 10 / 120). Số đo vòng 21: việc vừa phải xong ở 8 bước, việc dài 27 bước; con chạm
 # 10 bước / 120 s thì trả `answerChars = 0` (BUG-42), nên ngân sách con là chỗ chữa chính.
 # `300 s` của con là **trần**, không phải bảo đảm — `runtime.delegate()` vẫn `min()` theo cha.
-MAX_STEPS_DEFAULT = 40
-MAX_STEPS_MAX = 60
+# Quyết định chủ nhà #6457 (03/10/2026) — "để RẤT LỚN vì chuyên chạy dài" (kiểu Devin: con gọi
+# hàng trăm lượt, một tiếng hoặc hơn), nhưng vẫn CÓ TRẦN: đo ở W8.A4.5.N lượt 15 cho thấy trần
+# bước của phiên cha (24) cắt con `debug` giữa chừng (`STEP_BUDGET_EXHAUSTED`) ⇒ `complete()` false
+# ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`, tức trần bước đang chặn thẳng tính năng sửa. Bộ số
+# mới: phiên chính 40 → **120** bước (trần 60 → **400**), trần thời gian 600 → **1800 s** (trần
+# 1200 → **7200 s**); con **200 bước / 3600 s**. Trần vẫn giữ vì mọi phiên đều có checkpoint và
+# continuation để đi tiếp qua phiên mới — "chạy dài" là đi tiếp có kiểm soát, không phải vô hạn.
+MAX_STEPS_DEFAULT = 120
+MAX_STEPS_MAX = 400
 # Vòng 25 (D-35) — đo sống: một lượt lập kế hoạch CƠ BẢN chết ở 210 s trước cả `write_plan` khi
 # mặc định là 180 s, và một lượt khác ở 622 s vẫn `partial` (chưa xong). Lượt lập kế hoạch đầu
 # tiên không có dấu vết tất định nào để nhận ra TRƯỚC khi nó chạy, nên nâng toàn cục; phần nới
 # theo sự kiện (`PLAN_TURN_EXTENSION_SECONDS`) chỉ để lượt kịp đi hết vòng phản biện.
-DEADLINE_DEFAULT_SECONDS = 600
-DEADLINE_MAX_SECONDS = 1200
-CHILD_MAX_STEPS = 40
-CHILD_DEADLINE_SECONDS = 900
+DEADLINE_DEFAULT_SECONDS = 1800
+DEADLINE_MAX_SECONDS = 7200
+CHILD_MAX_STEPS = 200
+CHILD_DEADLINE_SECONDS = 3600
 
 # Trần BYTE của một request mà router chấp nhận, và phần byte của request không nằm trong
 # `messages` (prompt vai + schema công cụ). Bộ nén phải biết cả hai: trên cửa sổ 1M, ngưỡng
@@ -68,7 +75,7 @@ MAX_TAIL_TOKEN_FLOOR = 8_000
 # thuộc về hai nguyên nhân của lượt đó, không phải chính sách mới.
 
 # C1 — "kẹp âm thầm" hạn chót. Người dùng đặt `deadlineSeconds: 900`, `runtime.create()` kẹp
-# về `DEADLINE_MAX_SECONDS` (600) mà không có event, không có dòng log, không có trường nào
+# về `DEADLINE_MAX_SECONDS` (lúc đo là 600; từ #6457 là 7200) mà không có event, không có dòng log, không có trường nào
 # trong payload phiên: con số 900 trên giao diện là con số engine CHƯA BAO GIỜ dùng. Mã notice
 # dưới đây là tên duy nhất của sự việc đó trong transcript.
 DEADLINE_CLAMP_NOTICE_CODE = 'DEADLINE_CLAMPED'
@@ -107,7 +114,7 @@ FANOUT_PER_PARENT_MAX = 6
 FANOUT_GLOBAL_CEILING = 8
 # Hết chỗ chờ quá ngần này thì trả lỗi tool cho model — một lượt không bao giờ treo vì hết slot.
 FANOUT_QUEUE_WAIT_SECONDS = 30
-# Chặn vòng lặp sinh con trong MỘT lượt (một lượt 40 bước có thể gọi `delegate_task` 40 lần).
+# Chặn vòng lặp sinh con trong MỘT lượt (một lượt 120 bước có thể gọi `delegate_task` 120 lần).
 CHILDREN_PER_TURN_MAX = 18
 FANOUT_BUSY_CODE = 'FANOUT_BUSY'
 CHILDREN_PER_TURN_CODE = 'CHILDREN_PER_TURN_EXHAUSTED'
@@ -143,11 +150,14 @@ PEER_DELIVER_MAX = 4
 # công tắc phải có tác dụng ngay mà không cần khởi động lại. `off` (hoặc rỗng) ⇒ hành vi y
 # hệt bản trước đợt 2.
 # T10 — Watchdog: ba lưới an toàn cuối của sổ con, và ba lý do chúng ghi vào sổ.
-# `CHILD_WALL_MAX_SECONDS = 900` rộng hơn hẳn trần thời gian của MỘT con (`CHILD_DEADLINE_SECONDS`
-# = 300): watchdog chỉ được huỷ con đã vượt xa mọi ngưỡng hợp lệ, nếu không nó thành kẻ giết việc
-# đang chạy tốt. Nhịp quét thưa (10 s) vì mỗi nhịp là một giao dịch trên SQLite dùng chung.
+# `CHILD_WALL_MAX_SECONDS` phải rộng hơn hẳn trần thời gian của MỘT con (`CHILD_DEADLINE_SECONDS`):
+# watchdog chỉ được huỷ con đã vượt xa mọi ngưỡng hợp lệ, nếu không nó thành kẻ giết việc đang chạy
+# tốt. #6457 nâng trần con lên 3600 s nên trần tường suy ra TỪ trần con (3600 + 900 = 4500 s); để
+# nguyên 1200 s cũ là biến watchdog thành người cắt việc dài mà #6457 vừa mở. Nhịp quét thưa (10 s)
+# vì mỗi nhịp là một giao dịch trên SQLite dùng chung.
 WATCHDOG_TICK_SECONDS = 10
-CHILD_WALL_MAX_SECONDS = 1200
+CHILD_WALL_MAX_GRACE_SECONDS = 900
+CHILD_WALL_MAX_SECONDS = CHILD_DEADLINE_SECONDS + CHILD_WALL_MAX_GRACE_SECONDS
 # Hàng `started` còn sót lại từ lần chạy TRƯỚC (tiến trình bị giết): thao tác tool không được chạy
 # lại, nên không hồi sinh — đóng nó bằng `RESTART`, cùng luật với `UPDATE sessions SET
 # status='interrupted'` lúc mở DB.

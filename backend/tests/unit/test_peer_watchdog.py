@@ -258,3 +258,15 @@ def test_bon_luat_dung_chung_mot_nhip(tmp_path):
     assert store.child(waiting_child)['status'] == 'started'
     assert store.child(old_child)['status'] == 'failed'
     store.close()
+
+
+def test_tran_tuong_cua_watchdog_rong_hon_tran_cua_mot_con():
+    """#6457: watchdog chỉ được huỷ con đã vượt xa mọi ngưỡng hợp lệ.
+
+    Nếu `CHILD_WALL_MAX_SECONDS` nhỏ hơn `CHILD_DEADLINE_SECONDS` (bản #6457 đầu tiên để 1200 s so
+    với trần con 3600 s), mọi con chạy dài HỢP LỆ đều bị đóng `WATCHDOG_TIMEOUT` — đúng thứ mà #6457
+    vừa mở đường. Trần tường phải suy ra từ trần con, không được là một số cứng độc lập.
+    """
+    from agentbox.agent_core import limits
+    assert limits.CHILD_WALL_MAX_SECONDS > limits.CHILD_DEADLINE_SECONDS
+    assert limits.CHILD_WALL_MAX_SECONDS >= limits.CHILD_DEADLINE_SECONDS + 300

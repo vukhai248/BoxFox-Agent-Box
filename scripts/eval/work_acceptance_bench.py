@@ -21,6 +21,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -330,7 +331,7 @@ RULE_SPECS = {
     'event_code_absent': {'required': ('code',), 'optional': ()},
     'event_kind_seen': {'required': ('eventKind',), 'optional': ('min',)},
     'turn_status_any': {'required': ('status_in',), 'optional': ()},
-    'check_status_any': {'required': ('status_in',), 'optional': ('checkId',)},
+    'check_status_any': {'required': ('status_in',), 'optional': ('checkId', 'when_no_check')},
     'check_count_max': {'required': ('max',), 'optional': ('checkId',)},
     'check_count_min': {'required': ('min',), 'optional': ('checkId',)},
     'interview_questions_max': {'required': ('max',), 'optional': ()},
@@ -529,6 +530,9 @@ def _missing_bundle(bundle):
 
 
 # --------------------------------------------------------------------------- chấm điểm
+NOT_APPLICABLE_PREFIX = 'không áp dụng:'
+
+
 def score_rule(rule, bundle):
     """Trả (passed, detail). Mọi luật đều tất định; không gọi model, không đọc mạng."""
     kind = rule['kind']
@@ -571,6 +575,12 @@ def score_rule(rule, bundle):
     if kind == 'check_status_any':
         picked = [doc for doc in checks if _check_matches(doc, rule)]
         statuses = [doc.get('status') for doc in picked]
+        if not checks and str(rule.get('when_no_check') or 'fail') == 'pass':
+            # H5.2 — pha kiểm chưa từng tới (ví dụ lượt bị cắt trước khi có run/check): luật
+            # không áp dụng, nhưng phải KHAI BÁO rõ bằng `when_no_check` + `why`, không tự
+            # động nới cho mọi ca. Tiền tố giúp cell ghi lại "pha chưa tới" thay vì coi là đạt.
+            return True, (f'{NOT_APPLICABLE_PREFIX} chưa có check nào (pha kiểm chưa tới) — '
+                          'luật khai báo when_no_check=pass')
         return any(status in rule['status_in'] for status in statuses), f'check statuses={statuses}'
     if kind in ('check_count_max', 'check_count_min'):
         picked = [doc for doc in checks if _check_matches(doc, rule)]
@@ -579,13 +589,28 @@ def score_rule(rule, bundle):
             return count <= _int(rule['max']), f'checks={count}'
         return count >= _int(rule['min']), f'checks={count}'
     if kind == 'interview_questions_max':
-        total = sum(len(doc.get('questions') or []) for doc in derived['feedback'])
-        return total <= _int(rule['max']), f'questions={total}'
+        # H5.1 — yêu cầu là 1–3 câu MỖI VÒNG, không phải ≤3 suốt run. Gộp theo
+        # (workRequestId, revision): `questions` của card là phần CHƯA trả lời, nên tổng
+        # câu hỏi một vòng = questions + answers.
+        rounds = {}
+        for doc in derived['feedback']:
+            key = (str(doc.get('workRequestId') or doc.get('decisionId') or ''),
+                   _int(doc.get('revision')))
+            # Hai bản ghi cùng (workRequestId, revision) thì lấy vòng ĐÔNG câu hỏi nhất, không để
+            # bản ghi sau ghi đè bản ghi trước (H5.1).
+            rounds[key] = max(rounds.get(key, 0),
+                              len(doc.get('questions') or []) + len(doc.get('answers') or []))
+        worst = max(rounds.values()) if rounds else 0
+        return worst <= _int(rule['max']), \
+            f'per-round max={worst} (max={rule["max"]}, rounds={len(rounds)}, total={sum(rounds.values())})'
     if kind == 'interview_answered':
+        # H5.1 — revision≥1 KHÔNG phải bằng chứng đã trả lời (request mở ra đã là r1). Phải có
+        # answer thật từ user và không còn câu hỏi treo.
         docs = [doc for doc in derived['feedback'] if doc.get('kind') != 'main_interview']
-        ok = bool(docs) and all(doc.get('status') in ('answered', 'ready', 'consumed')
-                                or _int(doc.get('revision')) >= 1 for doc in docs)
-        return ok, f"statuses={[doc.get('status') for doc in docs]}"
+        ok = bool(docs) and all((doc.get('answers') or []) and not (doc.get('questions') or [])
+                                for doc in docs)
+        return ok, (f"answers={[len(doc.get('answers') or []) for doc in docs]} "
+                    f"pending={[len(doc.get('questions') or []) for doc in docs]}")
     if kind == 'same_child_continuation':
         rows = _continuation_rows(bundle)
         bad_rows = [row for row in rows if not row['same']]
@@ -993,6 +1018,23 @@ def _no_extra_ship_paths(bundle):
     return not extra, f'foreign={sorted(foreign)} shipped={sorted(files)[:8]} extra={extra}'
 
 
+MEASUREMENT_MARKERS = ('Cannot operate on a closed database', 'events_read_error',
+                       'no such table', 'database is locked', 'unable to open database')
+
+
+def measurement_errors(bundle):
+    """Lỗi phép đo (H5.6): bundle vẫn vào mẫu số nhưng phải được nhãn là lỗi harness."""
+    found = []
+    for item in bundle.get('missing') or []:
+        text = str(item)
+        if any(marker.lower() in text.lower() for marker in MEASUREMENT_MARKERS):
+            found.append(text)
+    for event in bundle.get('events') or []:
+        if event.get('kind') == 'events_read_error':
+            found.append('events_read_error: ' + str((event.get('data') or {}).get('error')))
+    return found
+
+
 def score_bundle(scenario, rubric, bundle):
     """Chấm một lượt: rubric nền theo vai + oracle riêng của kịch bản; lượt lỗi vẫn vào mẫu số."""
     by_role = {}
@@ -1004,6 +1046,7 @@ def score_bundle(scenario, rubric, bundle):
         for rule in rules:
             ok, detail = score_rule(rule, bundle)
             results.append({'kind': rule['kind'], 'passed': bool(ok), 'detail': detail,
+                            'notApplicable': detail.startswith(NOT_APPLICABLE_PREFIX),
                             'why': rule.get('why', '')})
         weight = RUBRIC_WEIGHTS[role]
         if results:
@@ -1015,6 +1058,7 @@ def score_bundle(scenario, rubric, bundle):
     observed = observe_state(bundle, scenario.get('expectedStateSource', 'run'))
     expected = scenario['expectedState']
     missing = _missing_bundle(bundle)
+    measurement = measurement_errors(bundle)
     state_ok = state_matches(observed, expected)
     if missing:
         # Không có run thì không lượt nào chứng minh được điều gì — kể cả `!verified`
@@ -1022,10 +1066,19 @@ def score_bundle(scenario, rubric, bundle):
         state_ok = False
     elif observed == 'no_run' and str(expected).startswith('!'):
         state_ok = False
+    if measurement:
+        # H5.6 — lỗi phép đo (DB đóng, đọc events lỗi) thì không được KẾT LUẬN trạng thái:
+        # lượt vẫn ở trong mẫu số nhưng mang nhãn lỗi harness, không phải lỗi model.
+        state_ok = False
     score = round(100.0 * passed_total / weight_total, 2) if weight_total else 0.0
     return {'role': None, 'observedState': observed, 'expectedState': expected,
             'expectedStateSource': scenario.get('expectedStateSource', 'run'),
             'missing': bundle.get('missing') or [], 'stateMatched': state_ok,
+            'measurementInvalid': bool(measurement), 'measurementErrors': measurement,
+            'phaseNotReached': sorted({f'{role}:{item["kind"]}'
+                                       for role, doc in by_role.items()
+                                       for item in doc['rules'] if item.get('notApplicable')}),
+            'budget': (bundle.get('config') or {}).get('budget'),
             'passed': bool(state_ok and weight_total and passed_total == weight_total),
             'score': score, 'roles': by_role}
 
@@ -1058,6 +1111,7 @@ def evaluate_run(cell, rubric):
         'passed': len(passed),
         'statePassed': len(state_passed),
         'stateRate': round(len(state_passed) / denominator, 4) if denominator else 0.0,
+        'measurementInvalid': len([item for item in cells if item.get('measurementInvalid')]),
         'autoPass': _count_rule_failures(cells, 'no_auto_pass'),
         'sameChild': _count_rule_failures(cells, 'same_child_continuation'),
         'duplicateContinuation': _count_rule_failures(cells, 'no_duplicate_continuation'),
@@ -1065,16 +1119,36 @@ def evaluate_run(cell, rubric):
                                       + _count_rule_failures(cells, 'no_diagnostic_leak')),
         'providerSwitches': _count_rule_failures(cells, 'provider_unchanged'),
     }
-    gate['ok'] = (denominator > 0 and gate['statePassed'] >= GATE_MIN_PASSED
-                  and gate['autoPass'] == 0 and gate['sameChild'] == 0
-                  and gate['duplicateContinuation'] == 0
-                  and gate['fabricatedUrlOrDiagnostic'] == 0
-                  and gate['providerSwitches'] == 0)
+    gate['ok'], gate['reasons'] = _gate_verdict(gate)
     failures = [{'caseId': item['caseId'], 'repeat': item['repeat'], 'observedState': item['observedState'],
                  'expectedState': item['expectedState'], 'score': item['score'],
                  'error': item.get('error')} for item in cells if not item['passed']]
     return {'schema': RESULTS_SCHEMA + '/scoring', 'gate': gate, 'roles': roles,
             'cells': cells, 'failures': failures}
+
+
+def _gate_verdict(gate):
+    """H5.5 — cổng đòi CẢ HAI ngưỡng, cố ý chặt hơn tiêu chí state của kế hoạch.
+
+    Kế hoạch (dòng 413) chốt nghiệm thu theo state (≥22/24 lượt đúng state); H5.5 ghi thêm rằng
+    cổng cũ bỏ qua `passed` nên một lượt có state đúng mà luật rubric sai vẫn qua. Giữ cả hai
+    ngưỡng: `passed` (mọi luật đạt) và `statePassed` (state khớp + đo hợp lệ). Không nới lại —
+    nới là đổi tiêu chí đã chốt; nếu W10.F không đủ 22 thì đọc `reasons` để biết vì sao.
+    """
+    reasons = []
+    if not gate.get('denominator'):
+        reasons.append('denominator=0')
+    if gate.get('passed', 0) < gate.get('minPassed', GATE_MIN_PASSED):
+        reasons.append(f"passed {gate.get('passed')}/{gate.get('denominator')} < "
+                       f"minPassed {gate.get('minPassed')}")
+    if gate.get('statePassed', 0) < gate.get('minPassed', GATE_MIN_PASSED):
+        reasons.append(f"statePassed {gate.get('statePassed')}/{gate.get('denominator')} < "
+                       f"minPassed {gate.get('minPassed')}")
+    for key in ('autoPass', 'sameChild', 'duplicateContinuation', 'fabricatedUrlOrDiagnostic',
+                'providerSwitches'):
+        if gate.get(key):
+            reasons.append(f'{key}={gate[key]}')
+    return (not reasons), reasons
 
 
 def _count_rule_failures(cells, kind):
@@ -1285,6 +1359,30 @@ def seed_workspace(workspace, scenario):
 class WorkspaceExecutor:
     """Executor của lượt: chạy thật trong workspace riêng, không chạm repo chính, không ra mạng."""
 
+    # W10.M3 — hàng rào của phép đo: lệnh sản phẩm được chạy, lệnh phá hoại/ra mạng thì không.
+    # Lệnh snapshot thật của sản phẩm dài 2.793 ký tự (base64 nhồi trong `python3 -c`), nên trần
+    # phải trên mức đó; vẫn chặn lệnh dài bất thường và lệnh nhiều dòng.
+    TERMINAL_MAX_CHARS = 20000
+    # W10.M3 (soát vòng 2) — khớp `sandbox/worker.py:220-226`: box thật spill ra artifact khi quá
+    # 20.000 ký tự rồi chỉ trả 15.000 ký tự đầu kèm dấu `[truncated; see artifact]`. Fixture không
+    # có artifact nên ghi rõ chỗ đó, nhưng trần phải giống để model thấy cùng một lượng output.
+    TERMINAL_SPILL_CHARS = 20000
+    TERMINAL_CONTENT_CHARS = 15000
+    TERMINAL_TIMEOUT_DEFAULT = 60
+    TERMINAL_TIMEOUT_MAX = 120
+    # Khớp `worker.py:235` (VERIFY_OUTPUT_MAX = 8000) — snippet thấy đúng trần như box thật.
+    VERIFY_OUTPUT_MAX = 8000
+    SHELL_WRAPPERS = frozenset({'bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh'})
+    TERMINAL_DENY = frozenset({
+        'rm', 'rmdir', 'dd', 'mkfs', 'mount', 'umount', 'sudo', 'su', 'chown', 'chmod',
+        'curl', 'wget', 'nc', 'ncat', 'netcat', 'ssh', 'scp', 'sftp', 'rsync', 'telnet',
+        'apt', 'apt-get', 'dpkg', 'pip', 'pip3', 'npm', 'npx', 'pnpm', 'yarn', 'docker',
+        'podman', 'systemctl', 'service', 'kill', 'pkill', 'killall', 'reboot', 'shutdown',
+        'crontab', 'nc.traditional',
+    })
+    SYSTEM_PATH_ALLOW = ('/bin', '/sbin', '/usr', '/lib', '/lib64', '/opt', '/dev/null',
+                         '/dev/stdin', '/dev/stdout', '/dev/stderr')
+
     def __init__(self, workspace, scenario):
         self.workspace = Path(workspace).resolve()
         self.scenario = scenario
@@ -1331,26 +1429,194 @@ class WorkspaceExecutor:
                             matches.append(f'{relative}:{number}: {line}')
             return {'content': '\n'.join(matches), 'matches': matches[:200]}
         if name == 'terminal_exec':
-            return await self.terminal(args)
+            return await self.terminal(args, root=identity.get('root'))
+        if name == 'verify_exec':
+            return await self.verify_exec(args)
         return {'is_error': True, 'error': 'W10 fixture: công cụ không thuộc lượt: ' + str(name)}
 
-    async def terminal(self, args):
+    def _terminal_problem(self, command):
+        """None nếu lệnh được chạy; ngược lại câu lý do (W10.M3).
+
+        Fixture phải chạy được ĐÚNG các lệnh sản phẩm dùng trong workspace riêng (`git -C …`,
+        `cd … && …`, snapshot/dirty, phép dò bằng chứng) nhưng vẫn đóng phạm vi: không thoát
+        workspace, không ra mạng, không lệnh phá hoại. Đây là hàng rào của phép đo, không phải
+        sandbox bảo mật.
+        """
+        if not command:
+            return 'lệnh rỗng'
+        if '\n' in command or len(command) > self.TERMINAL_MAX_CHARS:
+            return f'lệnh quá dài hoặc nhiều dòng (> {self.TERMINAL_MAX_CHARS} ký tự)'
+        # Hàng rào phép đo KHÔNG phải sandbox bảo mật (xem `sandbox/worker.py` cho box thật), nên
+        # chặn thẳng các lối đi vòng rẻ tiền: thay thế lệnh, vỏ shell lồng, đường dẫn tương đối
+        # thoát workspace. Lệnh sản phẩm đo được (20 bundle W10) không dùng lối nào trong số này.
+        if '`' in command or '$(' in command:
+            return 'lệnh có thay thế lệnh (`…` hoặc `$(`): fixture không diễn giải shell lồng'
+        try:
+            words = shlex.split(command)
+        except ValueError as exc:
+            return f'không phân tích được lệnh: {exc}'
+        for index, word in enumerate(words):
+            if index == 0 and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', word):
+                continue  # tiền tố gán env (`BOXFOX_SNAPSHOT_BASE=… <lệnh>`)
+            # So tên chương trình trần, không so cả đường dẫn: `/bin/rm` cũng là `rm`.
+            bare = word.rsplit('/', 1)[-1]
+            if bare in self.TERMINAL_DENY:
+                return f'không chạy lệnh bị chặn trong fixture: {word}'
+            if bare in self.SHELL_WRAPPERS and '-c' in words[index + 1:]:
+                return f'không chạy vỏ shell lồng (`{word} -c`)'
+            if word == '..' or word.startswith('../') or '/../' in word:
+                return f'không chạy lệnh thoát workspace bằng đường dẫn tương đối: {word}'
+            if word.startswith('/') and not self._path_allowed(word):
+                return f'không chạy lệnh chạm đường dẫn ngoài workspace: {word}'
+        return None
+
+    def _path_allowed(self, raw):
+        cleaned = raw.rstrip('/') or '/'
+        if cleaned == str(self.workspace) or cleaned.startswith(str(self.workspace) + '/'):
+            return True
+        if cleaned.startswith(self.SYSTEM_PATH_ALLOW):
+            return True
+        # Toolchain của chính fixture (venv đang chạy bench) — không phải dữ liệu người dùng,
+        # nhưng vẫn phải khai báo tường minh vì `python -m pytest` được dịch sang sys.executable.
+        toolchain = {str(Path(sys.executable).parent), str(Path(sys.prefix))}
+        return any(cleaned == item or cleaned.startswith(item.rstrip('/') + '/')
+                   for item in toolchain)
+
+    @staticmethod
+    async def _communicate(proc, timeout, stdin=None):
+        """Chờ tiến trình con tới hạn; quá hạn thì giết cả nhóm rồi vẫn lấy output ra."""
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=timeout)
+            return out, err, False
+        except asyncio.TimeoutError:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                proc.kill()
+            out, err = await proc.communicate()
+            return out, err, True
+
+    async def terminal(self, args, *, root=None):
         command = str(args.get('command') or '').strip()
-        allowed = command == work_checks_snapshot_command() or command.startswith('python -m pytest') \
-            or command.startswith('python3 -m pytest') or command.startswith('git status') \
-            or command.startswith('git diff')
-        if not allowed:
-            return {'is_error': True, 'error': 'W10 fixture: chỉ cho phép lệnh test/snapshot/git đọc; '
-                                               'không chạy: ' + command}
-        # `shlex` để lệnh snapshot (`python3 -c "import base64;exec(...)"`) không bị cắt sai chỗ trắng.
-        argv = [sys.executable, '-m', 'pytest', '-q'] if command.endswith('pytest -q') \
-            else shlex.split(command)
-        proc = await asyncio.create_subprocess_exec(*argv, cwd=self.workspace,
+        # Box thật chạy trong `/home/agent/workspace`; fixture chạy trong thư mục tạm của cell,
+        # nên đường dẫn tuyệt đối của box được dịch về workspace trước khi kiểm phạm vi.
+        command = command.replace('/home/agent/workspace', str(self.workspace))
+        # Lệnh thật hay mở đầu bằng `cd /workspace 2>/dev/null || cd ~`; dịch luôn `/workspace` để
+        # fixture không từ chối oan một lệnh mà box thật chạy được.
+        command = command.replace('/workspace', str(self.workspace))
+        if command.startswith('python -m pytest'):
+            command = f'{sys.executable} -m pytest' + command[len('python -m pytest'):]
+        elif command.startswith('python3 -m pytest'):
+            command = f'{sys.executable} -m pytest' + command[len('python3 -m pytest'):]
+        problem = self._terminal_problem(command)
+        if problem:
+            return {'is_error': True,
+                    'error': 'W10 fixture: chỉ cho phép lệnh bounded trong workspace; ' + problem
+                             + ' — không chạy: ' + command}
+        timeout = args.get('timeout')
+        timeout = float(timeout) if isinstance(timeout, (int, float)) and not isinstance(timeout, bool) \
+            else self.TERMINAL_TIMEOUT_DEFAULT
+        timeout = max(1.0, min(float(timeout), self.TERMINAL_TIMEOUT_MAX))
+        cwd = self.path(root) if root else self.workspace
+        env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': str(self.workspace),
+               'LANG': 'C.UTF-8', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null',
+               'GIT_AUTHOR_NAME': 'BoxFox', 'GIT_AUTHOR_EMAIL': 'boxfox@local',
+               'GIT_COMMITTER_NAME': 'BoxFox', 'GIT_COMMITTER_EMAIL': 'boxfox@local'}
+        proc = await asyncio.create_subprocess_shell(command, cwd=cwd, env=env,
+                                                     stdout=asyncio.subprocess.PIPE,
+                                                     stderr=asyncio.subprocess.PIPE,
+                                                     start_new_session=True)
+        out, err, timed_out = await self._communicate(proc, timeout)
+        content = (out + err).decode('utf-8', errors='replace')
+        spilled = len(content) > self.TERMINAL_SPILL_CHARS
+        if spilled:
+            content = content[:self.TERMINAL_CONTENT_CHARS] + '\n[truncated; see artifact]'
+        result = {'content': content,
+                  'exit_code': None if timed_out else proc.returncode,
+                  'is_error': timed_out or proc.returncode != 0,
+                  'artifact': None}
+        if spilled:
+            result['truncated'] = True
+        if timed_out:
+            result['error'] = f'W10 fixture: lệnh vượt hạn {timeout:.0f}s trong workspace'
+        return result
+
+    async def verify_exec(self, args):
+        """`verify_exec` của fixture (W10.M3): cùng hợp đồng đối số/kết quả với worker thật.
+
+        Chạy python/node trong workspace với hạn thời gian và trần output; receipt ghi rõ
+        `isolation: fixture-subprocess` để không ai đọc nhầm thành bwrap của box thật.
+        """
+        try:
+            from agentbox.agent_core import verify_exec as verify_contract  # noqa: PLC0415
+        except Exception:
+            verify_contract = None
+        if verify_contract is not None:
+            problem = verify_contract.arg_error(args)
+            if problem:
+                return {'is_error': True, 'error': problem}
+        language = args.get('language')
+        code = str(args.get('code') or '')
+        stdin = str(args.get('stdin') or '')
+        claim = str(args.get('claim') or '')
+        requested = args.get('timeoutSeconds') or 10
+        timeout = max(1, min(int(requested), 20))
+        interpreter = shutil.which('python3' if language == 'python' else 'node')
+        if not interpreter:
+            return {'is_error': True, 'errorCode': 'VERIFY_EXEC_UNAVAILABLE',
+                    'error': f'VERIFY_EXEC_UNAVAILABLE: {language} interpreter not found in fixture'}
+        scratch = self.workspace / '.boxfox' / 'verify-scratch'
+        if scratch.exists():
+            shutil.rmtree(scratch, ignore_errors=True)
+        scratch.mkdir(parents=True, exist_ok=True)
+        argv = [interpreter, '-I', '-c', code] if language == 'python' else \
+            [interpreter, '--max-old-space-size=256', '--input-type=module', '-e', code]
+        env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': str(scratch),
+               'LANG': 'C.UTF-8'}
+        started = time.monotonic()
+        proc = await asyncio.create_subprocess_exec(*argv, cwd=self.workspace, env=env,
+                                                    stdin=asyncio.subprocess.PIPE,
                                                     stdout=asyncio.subprocess.PIPE,
-                                                    stderr=asyncio.subprocess.PIPE)
-        out, err = await proc.communicate()
-        return {'content': (out + err).decode('utf-8', errors='replace'),
-                'exit_code': proc.returncode, 'is_error': proc.returncode != 0}
+                                                    stderr=asyncio.subprocess.PIPE,
+                                                    start_new_session=True)
+        out, err, timed_out = await self._communicate(proc, timeout, stdin.encode('utf-8'))
+        duration = int((time.monotonic() - started) * 1000)
+        stdout = out.decode('utf-8', errors='replace')
+        stderr = err.decode('utf-8', errors='replace')
+        overflow = len(stdout) > self.VERIFY_OUTPUT_MAX or len(stderr) > self.VERIFY_OUTPUT_MAX
+        content = stdout[:self.VERIFY_OUTPUT_MAX]
+        if stderr:
+            content += ('\n' if content and not content.endswith('\n') else '') + '[stderr]\n' \
+                + stderr[:self.VERIFY_OUTPUT_MAX]
+        created = sorted(path.relative_to(scratch).as_posix()
+                         for path in scratch.rglob('*') if path.is_file())[:20]
+        receipt = {'kind': 'verify_exec', 'language': language,
+                   'interpreter': self._interpreter_version(interpreter, language),
+                   'codeHash': hashlib.sha256(code.encode('utf-8')).hexdigest(),
+                   'stdinHash': hashlib.sha256(stdin.encode('utf-8')).hexdigest(),
+                   'outputHash': hashlib.sha256(content.encode('utf-8')).hexdigest(),
+                   'exitCode': None if timed_out else proc.returncode, 'durationMs': duration,
+                   'truncated': overflow, 'timedOut': timed_out, 'claim': claim,
+                   'isolation': 'fixture-subprocess', 'fixture': True,
+                   'scratchRoot': str(scratch), 'scratch': created}
+        result = {'content': content, 'exit_code': None if timed_out else proc.returncode,
+                  'is_error': timed_out or overflow, 'receipt': receipt}
+        if overflow:
+            result.update(errorCode='VERIFY_EXEC_OUTPUT_OVERFLOW',
+                          error=f'VERIFY_EXEC_OUTPUT_OVERFLOW: snippet vượt {self.VERIFY_OUTPUT_MAX} bytes')
+        if timed_out:
+            result.update(errorCode='VERIFY_EXEC_TIMEOUT',
+                          error=f'VERIFY_EXEC_TIMEOUT: snippet vượt {timeout}s trong fixture')
+        return result
+
+    @staticmethod
+    def _interpreter_version(interpreter, language):
+        try:
+            proc = subprocess.run([interpreter, '--version'], capture_output=True, text=True,
+                                  timeout=5, check=False)
+            return (proc.stdout or proc.stderr).strip().splitlines()[0][:80]
+        except Exception:
+            return f'{language}:{interpreter}'
 
     async def cleanup(self, sid):
         return None
@@ -1402,6 +1668,9 @@ class RecordingClient:
         self.providers = dict(providers or {})
         self.calls = []
         self.root_session_id = None
+        # W10.M2 — runtime đang chạy (đổi sau restart); dùng để tra phiên gọi thật theo task.
+        self.runtime = None
+        self.fault_notes = []
         self.length_fault = next((fault for fault in scenario.get('faults') or []
                                   if fault['kind'] == 'output_length'), None)
         self.length_left = int((self.length_fault or {}).get('calls', 1))
@@ -1409,13 +1678,35 @@ class RecordingClient:
                                  if fault['kind'] == 'claim_unsourced'), None)
         self.claim_left = int((self.claim_fault or {}).get('calls', 1))
 
+    def caller_session(self):
+        """Phiên thật đang gọi model: task asyncio hiện tại ↔ `runtime.tasks` (W10.M2).
+
+        Route thật không mang `sessionId` (647/647 call trong gói W10 là null), nên đọc
+        `route.get('sessionId')` là sai. Không tra được thì trả `None` (unknown) — KHÔNG mặc
+        định về main, vì fault injection nhắm sai vai sẽ tạo bằng chứng giả.
+        """
+        runtime = self.runtime
+        if runtime is None:
+            return None
+        try:
+            task = asyncio.current_task()
+        except RuntimeError:
+            return None
+        if task is None:
+            return None
+        for sid, item in list(getattr(runtime, 'tasks', {}).items()):
+            if item is task:
+                return sid
+        return None
+
     async def complete(self, messages, tools, route, **kwargs):
         started = time.monotonic()
         response = await self.inner.complete(messages, tools, route, **kwargs)
         usage = response.get('usage') or {}
+        caller = self.caller_session()
         call = {'providerId': self.providers.get(route.get('connectionId')),
                 'modelId': route.get('modelId'), 'connectionId': route.get('connectionId'),
-                'sessionId': route.get('sessionId'),
+                'sessionId': caller,
                 'tokensIn': usage.get('prompt_tokens'), 'tokensOut': usage.get('completion_tokens'),
                 'wallMs': int((time.monotonic() - started) * 1000)}
         if self.length_fault and self.length_left > 0:
@@ -1427,7 +1718,8 @@ class RecordingClient:
             message['tool_calls'] = []
             choices[0]['finish_reason'] = 'length'
             call['fault'] = 'output_length'
-        if self.claim_fault and self.claim_left > 0 and route.get('sessionId') != self.root_session_id:
+        if self.claim_fault and self.claim_left > 0 and caller != self.root_session_id \
+                and caller is not None:
             choices = response.get('choices') or [{}]
             message = choices[0].setdefault('message', {})
             if not message.get('tool_calls') and message.get('content'):
@@ -1438,6 +1730,11 @@ class RecordingClient:
                     self.claim_fault.get('text')
                     or 'Đã xác minh src/ghost.py:42 — mã ghost-sentinel-7f3a hoạt động đúng.')
                 call['fault'] = 'claim_unsourced'
+        elif self.claim_fault and self.claim_left > 0 and caller is None:
+            note = ('claim_unsourced: không xác định được phiên gọi (task lạ) — bỏ qua để '
+                    'không nhắm sai main')
+            if note not in self.fault_notes:
+                self.fault_notes.append(note)
         call['finishReason'] = ((response.get('choices') or [{}])[0]).get('finish_reason')
         self.calls.append(call)
         return response
@@ -1499,15 +1796,34 @@ def _descendants(store, root):
 
 
 def _safe_events(store, sid):
+    """Toàn bộ events của một phiên, không chỉ trang đầu (W10.M1).
+
+    `SessionStore.events()` trả tối đa `EVENTS_PAGE` (500) hàng, nên một lần gọi là mất
+    đuôi: final, tool_end, receipt, câu trả lời interview… Đuôi mất làm mọi oracle sau đó
+    chấm sai (57 phiên trong gói W10 dính cap). Trang tiếp cho tới khi hết; lỗi đọc không
+    được im lặng trả rỗng — trả một marker để bundle còn thấy phép đo hỏng.
+    """
+    rows, after = [], 0
     try:
+        while True:
+            page = store.events_page(sid, after)
+            rows.extend(page['events'] or [])
+            if not page.get('hasMore'):
+                break
+            next_after = page.get('nextAfter')
+            if next_after is None or int(next_after) <= int(after):
+                break
+            after = int(next_after)
         return [{'seq': row.get('seq'), 'kind': row.get('type'), 'data': row.get('data'),
                  'created': row.get('created'), 'sessionId': sid}
-                for row in store.events(sid) or []]
-    except Exception:
-        return []
+                for row in rows]
+    except Exception as exc:
+        return [{'seq': None, 'kind': 'events_read_error', 'sessionId': sid,
+                 'data': {'error': f'{type(exc).__name__}: {exc}'}, 'created': None}]
 
 
-def collect_bundle(store, graph, sid, scenario, client, *, error=None, notes=None, workspace=None):
+def collect_bundle(store, graph, sid, scenario, client, *, error=None, notes=None, workspace=None,
+                   budget=None):
     """Đọc sự thật của lượt từ DB/run/check/feedback — đầu vào duy nhất của oracle."""
     missing = []
     try:
@@ -1570,15 +1886,44 @@ def collect_bundle(store, graph, sid, scenario, client, *, error=None, notes=Non
     children = [{'id': session['id'], 'role': session.get('role'), 'parentId': session.get('parent_id')}
                 for session in sessions if session['id'] != sid]
     ship = ship_report(workspace, run) if workspace else {}
+    # H5.3 — ngân sách phải tách requested/effective/driver: fixture xin 80 bước/2.700 s nhưng
+    # engine kẹp còn 60/1.200 s; driver ngoài chạy hạn riêng. Không gộp ba con số làm một.
+    requested_budget = dict(budget or scenario_budget(scenario))
+    effective, session_row = {}, {}
+    try:
+        session_row = store.get(sid) or {}
+    except Exception as exc:
+        missing.append(f'session: {exc}')
+    saved = session_row.get('config')
+    if isinstance(saved, str):
+        try:
+            saved = json.loads(saved)
+        except ValueError:
+            saved = {}
+    if isinstance(saved, dict):
+        effective = {key: saved.get(key) for key in ('maxSteps', 'deadlineSeconds', 'stepsClamped',
+                                                     'deadlineClamped') if key in saved}
+    clamps = [{'code': data.get('code'), 'requested': data.get('requested'),
+               'applied': data.get('applied')}
+              for event in events if event.get('kind') == 'notice'
+              for data in [event.get('data') or {}]
+              if data.get('code') in ('STEPS_CLAMPED', 'DEADLINE_CLAMPED')]
+    budget_doc = {'requested': requested_budget,
+                  'driverDeadlineSeconds': (budget or {}).get('driverDeadlineSeconds'),
+                  'effective': effective, 'clampNotices': clamps}
     bundle = build_bundle(events=events, run=run, checks=checks, feedback=feedback, turns=turns,
                           children=children, artifacts=artifacts, calls=client.calls,
                           child_sessions={session['id']: session.get('role') for session in sessions},
                           config={'faults': scenario.get('faults') or [], 'session': sid,
-                                  'ship': ship},
+                                  'ship': ship, 'budget': budget_doc},
                           expected_state=scenario['expectedState'], missing=missing,
                           continuations=outbox)
     if error:
         bundle['missing'].append(f'turn: {error}')
+    for note in getattr(client, 'fault_notes', []) or []:
+        bundle['missing'].append(f'fault: {note}')
+    if getattr(client, 'claim_fault', None) and getattr(client, 'claim_left', 0) > 0:
+        bundle['missing'].append('fault: claim_unsourced chưa bắn (không có lượt con nào trả lời)')
     bundle['notes'] = list(notes or [])
     return bundle
 
@@ -1612,8 +1957,13 @@ def _pending_answer(card, pool):
     return supplied
 
 
-async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_seconds):
-    """Vòng đời một lượt: chạy tới trạng thái cuối, trả lời interview, chịu fault, không tự bịa."""
+async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_seconds, handles):
+    """Vòng đời một lượt: chạy tới trạng thái cuối, trả lời interview, chịu fault, không tự bịa.
+
+    `handles` (W10.M2) là dict sống mà người gọi giữ: sau restart giữa lượt, store/runtime/graph
+    trong đó được thay bằng bộ MỚI. `run_cell` phải gom bundle từ đúng bộ đang mở, không đọc lại
+    DB đã đóng (`Cannot operate on a closed database` — S09 r1/r2).
+    """
     deadline = time.monotonic() + float(scenario_budget(scenario, deadline_seconds=deadline_seconds)
                                         ['deadlineSeconds'])
     answers = list(scenario.get('interviewAnswers') or [])
@@ -1622,6 +1972,7 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
     restart_fault = next((fault for fault in scenario.get('faults') or []
                           if fault['kind'] == 'restart_while_waiting'), None)
     answered_by_request, revision_done, restarted, resumed_main = {}, False, False, False
+    empty_cards = set()
     notes = []
     task = rt.start(sid, scenario['prompt'])
     idle_since = None
@@ -1647,6 +1998,7 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
             if stale:
                 await asyncio.gather(*stale, return_exceptions=True)
             store, rt, graph = _restart_session(rt, sid, notes)
+            handles.update({'store': store, 'graph': graph, 'rt': rt})
             restarted = True
             notes.append('restart_while_waiting: đã khởi động lại harness giữa lúc chờ trả lời')
             continue
@@ -1660,9 +2012,16 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
                 or card.get('defaultChoice')
             if not choice:
                 continue
+            chosen = next((option for option in options if option.get('id') == choice), None) or {}
+            # P4 của runtime: lựa chọn `allowFreeText` bắt buộc kèm chữ đã gõ, thiếu thì
+            # `DECISION_NOTE_REQUIRED` và lượt đứng im tới hết hạn — đo được ở pilot S09 02/10/2026
+            # (root hỏi có cài pytest không, driver duyệt suông nên không có sự kiện nào đi tiếp).
+            note = str(chosen.get('label') or chosen.get('id') or '').strip() \
+                if chosen.get('allowFreeText') is True else None
             try:
-                rt.resolve_decision(sid, card['decisionId'], choice)
-                notes.append(f"autopilot: duyệt {card['decisionId']} → {choice}")
+                rt.resolve_decision(sid, card['decisionId'], choice, note=note)
+                notes.append(f"autopilot: duyệt {card['decisionId']} → {choice}"
+                             + (' (kèm chữ đã gõ)' if note else ''))
             except Exception as exc:
                 notes.append(f'settle {card["decisionId"]}: {type(exc).__name__}: {exc}')
         for card in interviews:
@@ -1676,6 +2035,13 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
                 revision_done = True
             supplied = _pending_answer(card, pool)
             if not supplied:
+                # Thẻ 0 câu hỏi (vd `needs_evidence` của con) thì driver KHÔNG có gì để gửi:
+                # ghi lại lý do đứng thay vì lặng im — pilot4 (02/10) dừng ở +517 s với `notes`
+                # rỗng nên phải đi đọc DB mới biết vì sao.
+                if (request_id, revision) not in empty_cards:
+                    empty_cards.add((request_id, revision))
+                    notes.append(f'interview {request_id} r{revision}: thẻ không có câu hỏi '
+                                 '(questions=0) — driver không thể trả lời; chờ main xử lý')
                 continue
             try:
                 rt.resolve_decision(sid, card['decisionId'], 'submit', answers=supplied)
@@ -1744,6 +2110,9 @@ def _restart_session(rt, sid, notes):
     fresh_store.w10_path = Path(path)
     fresh = runtime_mod.HarnessRuntime(fresh_store, executor, client)
     fresh.web = rt.web
+    if hasattr(client, 'runtime'):
+        # W10.M2 — caller identity phải đọc runtime ĐANG chạy, kể cả sau restart.
+        client.runtime = fresh
     return fresh_store, fresh, work_graph.service(fresh)
 
 
@@ -1770,30 +2139,39 @@ async def run_cell(scenario, repeat, *, out_dir, route, router_url, deadline_sec
     session = rt.create(config)
     sid = session['id']
     client.root_session_id = sid
+    client.runtime = rt
     # Đường chạy thật: chủ nhà PHẢI yêu cầu việc trước lượt (`/plan|/research|/design <text>` ghi
     # `config.workIntent`; harness mô phỏng bằng chính `work_graph.set_intent`). Thiếu ý định thì
     # `work_scope` giữ root ở `legacy`, root tự sửa mã và không run nào ra đời (S02: work_runs=0).
     intent = work_graph.set_intent(rt, session, intent_command(scenario), scenario['prompt'])
     started = time.time()
     error = None
+    # W10.M2 — gom bundle từ store/graph HIỆN HÀNH: restart giữa lượt thay bộ này trong `handles`.
+    handles = {'store': store, 'graph': graph, 'rt': rt}
     try:
         notes = await drive_session(rt, graph, work_feedback, sid, scenario,
-                                    deadline_seconds=deadline_seconds)
+                                    deadline_seconds=deadline_seconds, handles=handles)
     except Exception as exc:
         error = f'{type(exc).__name__}: {exc}'
         notes = []
     notes = [f"intent: /{intent['command']} → flow {intent['flow']} (chủ nhà yêu cầu việc)"] + list(notes)
-    bundle = collect_bundle(store, graph, sid, scenario, client, error=error, notes=notes,
-                            workspace=workspace)
+    bundle = collect_bundle(handles['store'], handles['graph'], sid, scenario, client, error=error,
+                            notes=notes, workspace=workspace,
+                            budget={**budget, 'driverDeadlineSeconds': deadline_seconds})
     try:
-        store.db.close()
+        handles['store'].db.close()
     except Exception:
         pass
     wall_ms = int((time.time() - started) * 1000)
+    # H5.6 — lượt hỏng phép đo (DB đóng, đọc events lỗi) không được dán nhãn quality-valid:
+    # nó vẫn nằm trong mẫu số nhưng là lỗi harness, không phải lỗi model.
+    measurement = measurement_errors(bundle)
     validity = runner.classify_validity({'status': bundle['run'].get('status'),
-                                         'errorCode': None if bundle['run'] else 'NO_RUN'})
+                                         'errorCode': None if bundle['run'] else 'NO_RUN',
+                                         'harnessBug': bool(measurement)})
     return {'scenario': scenario, 'repeat': repeat, 'bundle': bundle, 'error': error,
             'startedAt': started, 'wallTimeMs': wall_ms, 'validity': validity,
+            'measurementInvalid': bool(measurement), 'measurementErrors': measurement,
             'calls': client.calls, 'cellDir': str(cell_dir), 'intent': intent}
 
 
@@ -1845,7 +2223,14 @@ def _write_json(path, doc):
 
 
 def _rubric_role(role):
-    """Vai của phiên → vai của rubric: phiên gốc (orchestrator) tính là `main`."""
+    """Vai của phiên → vai của rubric: phiên gốc (orchestrator) tính là `main`.
+
+    W10.M2 (soát vòng 2) — phiên không xác định được (`sessionId` None) KHÔNG được gộp vào
+    `main`: gộp như vậy thổi phồng chi phí của vai chính bằng những lượt gọi không rõ nguồn.
+    Trả `unknown` để bảng vai nói đúng sự thật, và đếm riêng ở `callsWithoutSessionId`.
+    """
+    if role is None or role == '':
+        return 'unknown'
     return role if role in RUBRIC_ROLES else 'main'
 
 
@@ -1872,9 +2257,19 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
             total['calls'] += 1
         per_cell.append({'caseId': scenario['id'], 'repeat': item['repeat'],
                          'intent': intent_command(scenario),
+                         # W10.M2 (soát vòng 2) — lượt gọi không xác định được phiên gọi: đếm
+                         # riêng thay vì im lặng gộp vào vai `main`.
+                         'callsWithoutSessionId': sum(1 for call in calls
+                                                      if not call.get('sessionId')),
                          'expectedState': scenario['expectedState'],
                          'observedState': scored['observedState'],
                          'passed': scored['passed'], 'score': scored['score'],
+                         'stateMatched': scored.get('stateMatched'),
+                         'missing': scored.get('missing') or [],
+                         'phaseNotReached': scored.get('phaseNotReached') or [],
+                         'measurementInvalid': bool(item.get('measurementInvalid')
+                                                    or scored.get('measurementInvalid')),
+                         'budget': scored.get('budget'),
                          'failedRules': {role: list((scored['roles'].get(role) or {}).get('failed') or [])
                                          for role in RUBRIC_ROLES},
                          'validity': item.get('validity'), 'error': item.get('error'),
@@ -1890,6 +2285,9 @@ def write_results(out_dir, plan, cells, scoring, *, route, extra=None):
                           'rate': scoring['roles'][role]['rate']}
         per_role[role].update(role_totals.get(role) or {'calls': 0, 'tokensIn': 0, 'tokensOut': 0,
                                                         'wallMs': 0})
+    # W10.M2 (soát vòng 2) — rổ chi phí không rõ nguồn gọi, chỉ xuất hiện khi thật sự có lượt như vậy.
+    if role_totals.get('unknown'):
+        per_role['unknown'] = dict(role_totals['unknown'], rules=[], passed=None, rate=None)
     results = {'schema': RESULTS_SCHEMA, 'plan': plan, 'route': route,
                'configHash': plan['configHash'],
                'cells': per_cell, 'roles': per_role, 'gate': scoring['gate'],
@@ -1955,10 +2353,13 @@ def rescore_cells(cells, labels, *, rubric=None, scenarios_dir=None):
             scenarios[case_id] = load_scenario(scenario_path(case_id, scenarios_dir))
         scored = score_bundle(scenarios[case_id], rubric, bundle)
         cell.update(observedState=scored['observedState'], expectedState=scenarios[case_id]['expectedState'],
-                    passed=scored['passed'], score=scored['score'],
+                    passed=scored['passed'], score=scored['score'], stateMatched=scored.get('stateMatched'),
                     failedRules={role: list((scored['roles'].get(role) or {}).get('failed') or [])
                                  for role in RUBRIC_ROLES},
-                    missing=scored['missing'], rescored=True)
+                    missing=scored['missing'], rescored=True,
+                    phaseNotReached=scored.get('phaseNotReached') or [],
+                    measurementInvalid=bool(scored.get('measurementInvalid')),
+                    budget=scored.get('budget'))
         rescored += 1
     return rescored
 
@@ -2043,21 +2444,37 @@ def merge_results(docs, *, paths=None, rescore=False, scenarios_dir=None):
         return sum(list(kinds).count(kind) for cell in cells
                    for kinds in (cell.get('failedRules') or {}).values())
 
-    state_passed = sum(1 for cell in cells
-                       if state_matches(cell.get('observedState'), cell.get('expectedState')))
+    # H5.4 — hai con số khác nghĩa: `stateObserved` là state khớp chuỗi kỳ vọng;
+    # `statePassed` (workflow-validated) chỉ tính khi bundle không thiếu phần bắt buộc và
+    # không lỗi phép đo — cùng luật với `score_bundle` (trước đây merge tính lại kiểu khác,
+    # nên S05 được ghi statePassed dù không có run).
+    def _state_validated(cell):
+        if cell.get('measurementInvalid'):
+            return False
+        if cell.get('missing'):
+            return False
+        # `stateMatched` là kết luận của `score_bundle` (đã bao gồm luật no_run/missing) — dùng
+        # lại đúng kết luận đó, chỉ tính lại khi gặp results.json cũ chưa có trường này.
+        if cell.get('stateMatched') is not None:
+            return bool(cell['stateMatched'])
+        if cell.get('observedState') == 'no_run':
+            return False
+        return state_matches(cell.get('observedState'), cell.get('expectedState'))
+
+    state_observed = sum(1 for cell in cells
+                         if state_matches(cell.get('observedState'), cell.get('expectedState')))
+    state_passed = sum(1 for cell in cells if _state_validated(cell))
     gate = {'minPassed': GATE_MIN_PASSED, 'denominator': len(cells),
             'passed': sum(1 for cell in cells if cell.get('passed')),
+            'stateObserved': state_observed,
             'statePassed': state_passed,
             'stateRate': round(state_passed / len(cells), 4) if cells else 0.0,
+            'measurementInvalid': sum(1 for cell in cells if cell.get('measurementInvalid')),
             'autoPass': hard('no_auto_pass'), 'sameChild': hard('same_child_continuation'),
             'duplicateContinuation': hard('no_duplicate_continuation'),
             'fabricatedUrlOrDiagnostic': hard('no_fabricated_url') + hard('no_diagnostic_leak'),
             'providerSwitches': hard('provider_unchanged')}
-    gate['ok'] = (gate['denominator'] > 0 and gate['statePassed'] >= GATE_MIN_PASSED
-                  and gate['autoPass'] == 0 and gate['sameChild'] == 0
-                  and gate['duplicateContinuation'] == 0
-                  and gate['fabricatedUrlOrDiagnostic'] == 0
-                  and gate['providerSwitches'] == 0)
+    gate['ok'], gate['reasons'] = _gate_verdict(gate)
     failures = [{'caseId': cell.get('caseId'), 'repeat': cell.get('repeat'),
                  'observedState': cell.get('observedState'), 'expectedState': cell.get('expectedState'),
                  'score': cell.get('score'), 'error': cell.get('error')}

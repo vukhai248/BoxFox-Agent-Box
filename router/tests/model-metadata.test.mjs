@@ -212,6 +212,41 @@ test('a stored row picks up the shipped table, and a row outside the table keeps
   assert.equal(JSON.stringify(restarted.connection(account.id).models), before, 'normalization is idempotent');
 });
 
+test('W12: stored OpenCode rows are repaired from the verified registry, payload rows are left alone', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'boxfox-opencode-metadata-'));
+  const store = new RouterStore({ dataDir: dir });
+  t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+  const registry = providers(async () => json({ data: [] }));
+  const service = new ProviderService({ store, providers: registry });
+  const account = service.create({ providerId: 'opencode', name: 'OpenCode Zen', endpoint: 'https://opencode.ai', apiKey: 'test-only-key' });
+  const legacy = store.get('connection', account.id);
+  // Rows as they were stored before the fix: the free tier publishes no thinking
+  // metadata, so every non-curated id was flattened to `thinkingType: 'none'`.
+  legacy.models = [
+    { id: 'space-bunny-free', name: 'space-bunny-free', source: 'live', capabilities: {}, enabled: true, thinkingType: 'none', thinkingLevels: [], contextWindow: null },
+    { id: 'gateway-unknown-free', name: 'gateway-unknown-free', source: 'live', capabilities: {}, enabled: true, thinkingType: 'none', thinkingLevels: [] },
+    { id: 'payload-reasoner-free', name: 'Payload Reasoner', source: 'live', capabilities: {}, enabled: true, thinkingType: 'effort', thinkingLevels: ['low'], fieldSources: { thinking: 'live' } },
+  ];
+  store.put('connection', legacy);
+
+  const restarted = new ProviderService({ store, providers: registry });
+  const models = restarted.connection(account.id).models;
+  assertContract(models);
+  const row = id => models.find(model => model.id === id);
+  assert.equal(row('space-bunny-free').thinkingType, 'effort');
+  assert.deepEqual(row('space-bunny-free').thinkingLevels, ['minimal', 'low', 'medium', 'high']);
+  // Vòng soát 2 (F2): hàng vá lúc khởi động phải khai nguồn của trường thinking, không
+  // được tiếp tục tự nhận là dữ liệu live.
+  assert.equal(row('space-bunny-free').thinkingSource, 'probe');
+  assert.equal(row('space-bunny-free').thinkingAsOf, '2026-10-02');
+  assert.match(row('space-bunny-free').thinkingEvidence, /probe/);
+  assert.equal(row('space-bunny-free').fieldSources.thinking, 'probe');
+  assert.equal(row('gateway-unknown-free').thinkingSource, undefined,
+    'no source means no provenance claim either');
+  assert.equal(row('gateway-unknown-free').thinkingLevels.length, 0, 'no evidence means no invented levels');
+  assert.deepEqual(row('payload-reasoner-free').thinkingLevels, ['low'], 'levels the payload published are not overwritten by a supplementary source');
+});
+
 test('stored rows are normalized to the contract without inventing provider data', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'boxfox-metadata-test-'));
   const store = new RouterStore({ dataDir: dir });

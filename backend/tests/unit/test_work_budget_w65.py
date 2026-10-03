@@ -1,4 +1,8 @@
-"""W6.5 profiles, truthful clamps and metadata after long streamed responses."""
+"""W6.5 profiles, truthful clamps and metadata after long streamed responses.
+
+Số trong đây là số của #6457 (03/10/2026): nhà sản xuất 200 bước/3600 s, kiểm ngắn 40, kiểm dài 80.
+Trần phiên (`limits.py`) là 120/400 bước và 1800/7200 s; con luôn bị kẹp theo trần phiên cha.
+"""
 import asyncio
 import json
 
@@ -13,8 +17,8 @@ from test_delegation_contract import FixtureExecutor, FixtureModel, answer, call
 
 
 @pytest.mark.parametrize('role,task,expected', [
-    ('research', 'deliverable', 60), ('plan', 'deliverable', 60),
-    ('design', 'deliverable', 60), ('research', 'lookup', 40),
+    ('research', 'deliverable', 200), ('plan', 'deliverable', 200),
+    ('design', 'deliverable', 200), ('research', 'lookup', 40),
     ('explore', 'lookup', 40), ('debug', 'diagnostic', 40), ('build', 'implementation', 40),
 ])
 def test_profiles_do_not_raise_lookup_or_execution_budget(role, task, expected):
@@ -29,12 +33,12 @@ def test_profiles_do_not_raise_lookup_or_execution_budget(role, task, expected):
 ])
 def test_short_and_long_review_cap(hints, long):
     profile = work_budget.requested('plan-review', {'purpose': 'review', 'budgetHints': hints}, None, 40, 900)
-    assert profile['maxSteps'] == (24 if long else 14)
+    assert profile['maxSteps'] == (80 if long else 40)
     assert profile['deadlineSeconds'] == 900
 
 
 @pytest.mark.parametrize('owner_steps,owner_seconds,expected_steps,expected_seconds', [
-    (60, 1200, 60, 900), (40, 600, 40, 600), (12, 60, 12, 60),
+    (60, 1200, 60, 1200), (40, 600, 40, 600), (12, 60, 12, 60),
 ])
 def test_actual_producer_child_respects_owner_and_reports_clamps(tmp_path, owner_steps, owner_seconds, expected_steps, expected_seconds):
     store, rt, _, _, sid = build(tmp_path, values={'maxSteps': owner_steps, 'deadlineSeconds': owner_seconds})
@@ -42,21 +46,21 @@ def test_actual_producer_child_respects_owner_and_reports_clamps(tmp_path, owner
     child = store.get(store.children_of(sid)[0]['session_id'])
     budget = child['config']['workBudget']
     assert (child['config']['maxSteps'], child['config']['deadlineSeconds']) == (expected_steps, expected_seconds)
-    assert budget['requestedMaxSteps'] == 60
+    assert budget['requestedMaxSteps'] == 200
     assert budget['effectiveMaxSteps'] == expected_steps
-    assert budget['clamped'] == (expected_steps < 60 or expected_seconds < 900)
+    assert budget['clamped'] == (expected_steps < 200 or expected_seconds < 3600)
     assert child['config']['maxTokens'] == 16000
     assert store.get(sid)['config']['maxSteps'] == owner_steps
 
 
-def test_checker_prompt_uses_effective_budget_and_short_check_stays_14(tmp_path):
+def test_checker_prompt_uses_effective_budget_and_short_check_profile(tmp_path):
     store, rt, model, _, sid = build(tmp_path, values={'maxSteps': 12})
     async def run():
         _, draft = await setup(rt, sid)
         await start(rt, sid, draft)
     asyncio.run(run())
     child = store.get(store.children_of(sid)[-1]['session_id'])
-    assert child['config']['workBudget']['requestedMaxSteps'] == 14
+    assert child['config']['workBudget']['requestedMaxSteps'] == 40
     assert child['config']['maxSteps'] == 12
     assert 'Budget: 12 model steps' in model.prompts[-1][1]
 
@@ -137,7 +141,7 @@ def test_partial_checkpoint_retains_real_reason_refs_and_budget_after_restart(tm
         assert output['status'] == 'failed'
         assert checkpoint['artifactId'] == output['artifact']['artifactId']
         assert checkpoint['execution']['reason'] == 'PROVIDER_OUTPUT_TRUNCATED'
-        assert checkpoint['execution']['budget']['requestedMaxSteps'] == 60
+        assert checkpoint['execution']['budget']['requestedMaxSteps'] == 200
         restarted = wg.WorkGraph(rt)
         current = restarted.get(rid)['nodes'][0]['stages']['produce']
         assert current['checkpoint'] == checkpoint

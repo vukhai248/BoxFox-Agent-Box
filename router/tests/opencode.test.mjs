@@ -321,6 +321,93 @@ test('discovery enables only the ids that answer without a credential', async ()
   assert.deepEqual(curated.thinkingLevels, ['minimal', 'low', 'medium', 'high']);
 });
 
+test('W12: discovery keeps payload metadata and labels every field with its source', async () => {
+  // Payload shape a gateway can return (OpenRouter-style). The old mapping kept
+  // only the id and stamped the whole row `live`, dropping reasoning/context/price.
+  const payload = {
+    data: [
+      {
+        id: 'gateway-reasoner-free',
+        name: 'Gateway Reasoner Free',
+        context_length: 128000,
+        reasoning: { supported_efforts: ['low', 'medium'], default_effort: 'medium' },
+        pricing: { prompt: '0.0000005', completion: '0.0000015' },
+      },
+      { id: 'space-bunny-free', object: 'model' },
+      { id: 'mystery-model-free', object: 'model' },
+    ],
+  };
+  const adapter = createProviders({ fetchImpl: async () => json(payload) }).opencode;
+  const { models } = await adapter.discover({ connection, credentials: {} });
+
+  const published = models.find(model => model.id === 'gateway-reasoner-free');
+  assert.equal(published.name, 'Gateway Reasoner Free', 'the payload name is kept, not replaced by the id');
+  assert.deepEqual(published.thinkingLevels, ['low', 'medium']);
+  assert.equal(published.contextWindow, 128000);
+  assert.equal(published.thinkingSource, 'live');
+  assert.deepEqual(published.fieldSources,
+    { inventory: 'live', name: 'live', thinking: 'live', contextWindow: 'reported', pricing: 'ping' });
+
+  // Space Bunny is not in the curated table; the supplementary registry supplies
+  // the verified control and the row must NOT claim it as live provider data.
+  const space = models.find(model => model.id === 'space-bunny-free');
+  assert.deepEqual(space.thinkingLevels, ['minimal', 'low', 'medium', 'high']);
+  assert.equal(space.thinkingType, 'effort');
+  assert.equal(space.thinkingSource, 'probe');
+  assert.equal(space.thinkingAsOf, '2026-10-02');
+  assert.match(space.thinkingEvidence, /probe/);
+  assert.equal(space.fieldSources.thinking, 'probe', 'registry data is never labelled live');
+  assert.equal(space.fieldSources.name, 'unknown', 'the payload publishes no name');
+  assert.equal(space.fieldSources.pricing, 'unknown');
+
+  // A model nobody has evidence for stays unknown: no invented levels, and no
+  // "unsupported" claim either — the row just carries no thinking control.
+  const mystery = models.find(model => model.id === 'mystery-model-free');
+  assert.deepEqual(mystery.thinkingLevels, []);
+  assert.equal(mystery.thinkingSource, 'unknown');
+  assert.equal(mystery.fieldSources.thinking, 'unknown');
+});
+
+test('W12: a payload context window and price survive even without a reasoning block', async () => {
+  // The old mapping only read the payload when it declared thinking, so a gateway
+  // that publishes `context_length` (or a price) but no reasoning block lost both,
+  // and `fieldSources.pricing` still claimed `ping`. Data and label must agree.
+  const payload = {
+    data: [
+      { id: 'ctx-only-free', object: 'model', context_length: 64000 },
+      { id: 'priced-free', object: 'model', pricing: { prompt: '0.0000005', completion: '0.0000015' } },
+      { id: 'junk-price-free', object: 'model', pricing: { prompt: 'free', completion: 'free' } },
+    ],
+  };
+  const adapter = createProviders({ fetchImpl: async () => json(payload) }).opencode;
+  const { models } = await adapter.discover({ connection, credentials: {} });
+
+  const ctx = models.find(model => model.id === 'ctx-only-free');
+  assert.equal(ctx.contextWindow, 64000, 'a published context window is not dropped with the reasoning block');
+  assert.equal(ctx.fieldSources.contextWindow, 'reported');
+  assert.deepEqual(ctx.thinkingLevels, [], 'no reasoning block still means no thinking control');
+  assert.equal(ctx.thinkingSource, 'unknown');
+
+  const priced = models.find(model => model.id === 'priced-free');
+  assert.equal(priced.pricing?.source, 'ping', 'a parsed payload price is attached, not only labelled');
+  assert.equal(priced.pricing?.input, 0.5);
+  assert.equal(priced.fieldSources.pricing, 'ping');
+  assert.equal(priced.fieldSources.contextWindow, 'unknown');
+
+  const junk = models.find(model => model.id === 'junk-price-free');
+  assert.equal(junk.pricing, undefined, 'an unparseable price is not invented');
+  assert.equal(junk.fieldSources.pricing, 'unknown', 'and the label does not claim a source it does not have');
+});
+
+test('W12: the curated static fallback labels its own fields', async () => {
+  const adapter = createProviders({ fetchImpl: async () => { throw new Error('offline'); } }).opencode;
+  const { models } = await adapter.discover({ connection, credentials: {} });
+  const curated = models.find(model => model.id === 'muse-spark-1.2-contributor-free');
+  assert.equal(curated.source, 'static');
+  assert.equal(curated.fieldSources.inventory, 'static');
+  assert.equal(curated.fieldSources.thinking, 'documented');
+});
+
 test('a discovery failure falls back to the curated static list', async () => {
   const adapter = createProviders({ fetchImpl: async () => { throw new Error('offline'); } }).opencode;
   const { models } = await adapter.discover({ connection, credentials: {} });

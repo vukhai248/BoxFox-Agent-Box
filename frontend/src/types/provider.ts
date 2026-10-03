@@ -45,6 +45,19 @@ export interface ProviderModel {
   /** Số nhà cung cấp đã công bố, chỉ có khi khác số đang dùng (để đối chiếu). */
   contextWindowReported?: number | null;
   upstreamModelId?: string; thinkingLevel?: string | null; quotaFamily?: 'gemini' | 'claude_gpt' | null; probeStatus?: 'registry' | 'passed' | 'fallback'; lastProbedAt?: string | null;
+  /**
+   * W12 — nguồn của TỪNG trường metadata, dùng đúng từ vựng đã có trong router:
+   * `live` (payload provider), `documented` (bảng curated/tài liệu), `probe` (số đo của
+   * router, có mốc), `static` (danh sách dự phòng khi discovery hỏng), `reported`
+   * (context window lấy từ payload), `ping` (giá lấy từ endpoint models), `unknown`.
+   * `source` của hàng chỉ nói nguồn inventory; đọc trường này trước khi coi một giá trị
+   * là dữ liệu provider vừa công bố.
+   */
+  fieldSources?: Partial<Record<'inventory' | 'name' | 'thinking' | 'contextWindow' | 'pricing', 'live' | 'documented' | 'probe' | 'static' | 'reported' | 'ping' | 'unknown'>>;
+  /** Nguồn của `thinkingLevels` (trùng `fieldSources.thinking`), kèm mốc và bằng chứng khi không phải dữ liệu live. */
+  thinkingSource?: 'live' | 'documented' | 'probe' | 'unknown';
+  thinkingAsOf?: string | null;
+  thinkingEvidence?: string | null;
   health?: 'unknown' | 'ready' | 'unavailable' | 'rate_limited' | 'slow' | 'failed'
   lastProbe?: { status: 'passed' | 'failed'; httpStatus: number; latencyMs: number; testedAt: string; error: string | null }
   capabilities: Record<'streaming' | 'tools' | 'vision', CapabilityEvidence> & { reasoning?: CapabilityEvidence }

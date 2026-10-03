@@ -789,13 +789,14 @@ def test_fanout_busy_is_queued_not_a_failed_node(tmp_path, monkeypatch):
 
 def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp_path, monkeypatch):
     _, runtime, model, _, sid = build(tmp_path)
+    original_budget = wg.WORK_CHILDREN_PER_RUN_CALL
     monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 1)
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
         await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
         first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
-        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 72)
+        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', original_budget)
         second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
         return first, second
 
@@ -938,3 +939,64 @@ def test_main_keeps_driving_an_active_run_without_the_turn_recap(tmp_path, monke
     assert not wg.driving(runtime, dict(session, parent_id='parent'))
     monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
     assert not wg.driving(runtime, session)
+
+
+def test_run_lifetime_counts_calls_children_and_seconds_across_calls(tmp_path):
+    """#6457/W6.5.2: `lifetime` là bộ đếm THAM VẤN cả đời run — đo trước, chưa siết trần cứng nào.
+
+    Trần mỗi lời gọi (`WORK_CHILDREN_PER_RUN_CALL`/`WORK_RUN_MAX_SECONDS`) không phải ngân sách suốt
+    run, nên tổng đời run phải đọc được ở chính tài liệu run: `work_run` trả `lifetime` và ghi event
+    `run_lifetime`. Bộ đếm này không chặn gì; nó chỉ trả lời W6.5.2 bằng số thật.
+    """
+    store, runtime, model, _, sid = build(tmp_path)
+
+    async def run():
+        created = await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button',
+                                                          'flow': 'plan'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        return created['runId'], first, second
+
+    rid, first, second = asyncio.run(run())
+    assert first['lifetime']['calls'] == 1, 'mỗi lời gọi work_run đếm một lần'
+    assert second['lifetime']['calls'] == 2, 'bộ đếm phải cộng dồn qua các lời gọi, không đặt lại'
+    assert second['lifetime']['children'] >= first['lifetime']['children'] >= 1, 'con đã dùng phải cộng dồn'
+    assert second['lifetime']['seconds'] >= first['lifetime']['seconds'] > 0, 'giây phải cộng dồn và dương'
+    saved = runtime.work_graph.get(rid)
+    assert saved['lifetime'] == second['lifetime'], 'số trả về là số đã ghi vào tài liệu run'
+    assert 'run_lifetime' in [item['event'] for item in saved['history']]
+    # Không chặn: lượt gọi vẫn chạy đủ việc dù bộ đếm đã tích luỹ.
+    assert [node['id'] for node in saved['nodes']] == ['E1', 'P1']
+
+
+def test_the_model_can_discover_the_resolve_action(tmp_path):
+    """#6456(b): hàng rào chỉ mở được nếu mô hình BIẾT có đường mở.
+
+    Đo lượt 14–16: cả ba lượt kiểm đỏ đều kẹt ở `inputConflicts` và mô hình không có cách nào gỡ.
+    Engine nhận `action=resolve`, nhưng hợp đồng công cụ (enum + mô tả) và câu `next` mới là chỗ mô
+    hình đọc — thiếu hai chỗ đó thì đường mở coi như không tồn tại.
+    """
+    from agentbox.agent_core import tool_contracts
+
+    schema = next(item['function'] for item in tool_contracts.SCHEMAS
+                  if item['function']['name'] == 'work_graph')
+    assert 'resolve' in schema['parameters']['properties']['action']['enum']
+    assert 'resolve clears the recorded input conflicts' in schema['description']
+
+    _, runtime, _, _, sid = build(tmp_path)
+    conflict = {'id': 'A1', 'requirement': 'Keep the exact owner constraints', 'evidence': 'reviewer evidence'}
+    state = {'status': 'revise', 'attempts': 1, 'rounds': [], 'output': 'draft text', 'outputChars': 10,
+             'feedback': '', 'knowledge': [], 'error': None, 'startedAt': None, 'finishedAt': None,
+             'artifact': {'artifactId': 'a-1'}, 'inputConflicts': [conflict]}
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button', 'flow': 'plan'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        document = runtime.work_graph.get(runtime.work_graph.active(sid)['runId'])
+        document['nodes'][0]['stages']['produce'] = state
+        runtime.work_graph.save(document)
+        return runtime.work_graph.next_step(runtime.work_graph.get(document['runId']))
+
+    guidance = asyncio.run(run())
+    assert 'action=resolve' in guidance and 'action=update' in guidance
