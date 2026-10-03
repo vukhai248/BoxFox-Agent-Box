@@ -451,30 +451,35 @@ async def main(args):
                                        artifactId=(istate.get('artifact') or {}).get('artifactId'))
                 if built:
                     iartifact = integration_row['artifactId']
-                    for attempt in range(1, 4):
-                        started_check = time.monotonic()
-                        out = await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'],
-                            'nodeId': work_worktrees.INTEGRATION_NODE, 'stage': 'execute',
-                            'artifactId': iartifact,
-                            'checkIds': integration_row.get('required') or ['tests'],
-                            'invocationId': uuid.uuid4().hex})
-                        if not out.get('checks'):
-                            # Cùng lý do như vòng xanh: `checks.tool` có thể trả danh sách rỗng
-                            # (đường replay/`inputConflicts`); ghi lại nguyên văn thay vì IndexError.
-                            integration_row.setdefault('checks', []).append(
-                                {'attempt': attempt, 'empty': True, 'keys': sorted(out)})
-                            continue
-                        # Node tổng hợp yêu cầu nhiều loại kiểm (tests + code_review); ghi HẾT các
-                        # bản ghi trả về trong lượt này thay vì chỉ bản đầu.
-                        docs = out['checks']
-                        for idoc in docs:
+                    # Sản phẩm đòi THỨ TỰ trên node tổng hợp: `tests` phải xanh trên đúng snapshot hợp
+                    # nhất TRƯỚC, rồi mới mở `code_review` trên cùng artifact (`WORK_REVIEW_NOT_CONVERGED`
+                    # khi mở cả hai cùng lượt — đo được ở lượt 11). Vì vậy mở lần lượt theo `required`.
+                    for cid in (integration_row.get('required') or ['tests']):
+                        for attempt in range(1, 4):
+                            started_check = time.monotonic()
+                            try:
+                                out = await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'],
+                                    'nodeId': work_worktrees.INTEGRATION_NODE, 'stage': 'execute',
+                                    'artifactId': iartifact, 'checkIds': [cid],
+                                    'invocationId': uuid.uuid4().hex})
+                            except ValueError as exc:
+                                integration_row.setdefault('checks', []).append(
+                                    {'kind': cid, 'attempt': attempt, 'raised': str(exc)[:300]})
+                                break
+                            if not out.get('checks'):
+                                # Cùng lý do như vòng xanh: `checks.tool` có thể trả danh sách rỗng
+                                # (đường replay/`inputConflicts`); ghi lại nguyên văn thay vì IndexError.
+                                integration_row.setdefault('checks', []).append(
+                                    {'kind': cid, 'attempt': attempt, 'empty': True, 'keys': sorted(out)})
+                                continue
+                            idoc = out['checks'][0]
                             integration_row.setdefault('checks', []).append({
                                 'kind': idoc['kind'], 'status': idoc['status'], 'attempt': attempt,
                                 'childId': idoc.get('childId'), 'error': idoc.get('error'),
                                 'seconds': round(time.monotonic() - started_check, 3),
                                 'commands': check_commands(graph, idoc.get('childId'))})
-                        if all(idoc['status'] == 'pass' for idoc in docs):
-                            break
+                            if idoc['status'] == 'pass':
+                                break
                     run = graph.get(run['runId'])
                     inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
                     istate = inode['stages']['execute']
