@@ -102,6 +102,10 @@ def permission_view(rt, session):
     if scope['mode'] not in ('legacy', 'run_execute', 'read_only_check'):
         blocked = work_scope.MUTATING_TOOLS | work_scope.DESIGN_MUTATING
         tools = [name for name in tools if name not in blocked]
+    # `adaptiveEnabled` states one fact: the adaptive engine is actually in effect for this
+    # session (policy + switch + live graph + a canonical binding). A policy session whose scope
+    # downgraded to `artifact_only` is not enabled, so the field never contradicts `admitted`.
+    admitted = bool(policy) and not restricted
     return {
         'schema': 'boxfox-permission-view/1',
         'sessionId': current['id'], 'ownerId': parent_id or current['id'],
@@ -109,6 +113,6 @@ def permission_view(rt, session):
         'toolsNote': 'owner switchboard after the scope filter; terminal commands are decided per call',
         'enforcement': 'application',
         'filesystemIsolation': 'unverified', 'networkIsolation': 'unverified',
-        'adaptiveEnabled': bool(policy and enabled() and work_scope._graph(rt) is not None),
-        'admitted': bool(policy) and not restricted,
+        'adaptiveEnabled': admitted,
+        'admitted': admitted,
     }

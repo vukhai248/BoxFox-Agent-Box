@@ -647,6 +647,66 @@ def test_active_index_survives_a_stale_waiting_input_schema(tmp_path):
         ''')
         TaskService(store, lambda owner_id, run_id: None)
         sql = store.db.execute("SELECT sql FROM sqlite_master WHERE name='harness_task_active'").fetchone()['sql']
-        assert 'waiting_input' not in sql
+        assert 'closed_at IS NULL' in sql and sql.count('waiting_input') == 1
+    finally:
+        store.close()
+
+
+def test_parked_open_attempt_still_blocks_a_second_attempt(repo):
+    """The unique index must keep covering a parked-open attempt, not only `running` ones."""
+    store, service, owner, _, _, _ = repo
+    task = create(repo)
+    sid = child(repo)
+    first = attempt(repo, task, sid)
+    store.child_wait(sid, ['main'], since=123.0)
+    parked = service.project_attempt(owner, 'run-1', task['taskKey'], first['attemptId'])
+    assert parked['status'] == 'waiting_input' and parked['closedAt'] is None
+    assert service.get(owner, 'run-1', task['taskKey'])['state'] == 'waiting_input'
+    # A resume reopens the child, but this row was never closed: it must still block a new one.
+    with store.db:
+        store.db.execute('UPDATE children SET started=started+1, waiting_since=NULL WHERE session_id=?', (sid,))
+    current = service.get(owner, 'run-1', task['taskKey'])
+    error('TASK_ATTEMPT_CONFLICT',
+          lambda: service.record_attempt(owner, 'run-1', task['taskKey'], invocation_id='inv-resume',
+                                         expected_revision=current['revision'], session_id=sid,
+                                         admission_id='admission-2', capability_epoch=1))
+    store.child_wait(sid, ['main'], since=124.0)
+    error('TASK_ATTEMPT_BINDING',
+          lambda: service.project_attempt(owner, 'run-1', task['taskKey'], first['attemptId']))
+
+
+def test_open_projection_never_carries_a_stale_close_reason(repo):
+    """A resumed child keeps `children.reason`; the open attempt must not show it."""
+    store, service, owner, _, _, _ = repo
+    task = create(repo)
+    sid = child(repo)
+    first = attempt(repo, task, sid)
+    store.child_close_once(sid, 'needs_user', 'Which export format?')
+    service.project_attempt(owner, 'run-1', task['taskKey'], first['attemptId'])
+    with store.db:
+        store.db.execute("UPDATE children SET status='started', finished=NULL, started=started+1"
+                         ' WHERE session_id=?', (sid,))
+    assert store.child(sid)['reason'] == 'Which export format?'
+    current = service.get(owner, 'run-1', task['taskKey'])
+    second = attempt(repo, current, sid, invocation='inv-resume', admission='admission-2')
+    view = service.project_attempt(owner, 'run-1', task['taskKey'], second['attemptId'])
+    assert view['status'] == 'running' and view['reason'] is None
+    assert service.attempts(owner, 'run-1', task['taskKey'])['items'][0]['reason'] in (None, 'Which export format?')
+
+
+def test_missing_required_column_fails_closed(tmp_path):
+    store = SessionStore(tmp_path / 'narrow.db')
+    try:
+        store.db.executescript('''
+            CREATE TABLE harness_tasks (
+                task_key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, run_id TEXT NOT NULL,
+                owner_id TEXT NOT NULL, controller_id TEXT NOT NULL, task_alias TEXT NOT NULL,
+                contract_hash TEXT NOT NULL, contract_json TEXT NOT NULL, state TEXT NOT NULL,
+                acceptance_state TEXT NOT NULL, control_state TEXT, abandoned_at REAL,
+                abandon_reason TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL);
+        ''')
+        with pytest.raises(ContractError) as exc:
+            TaskService(store, lambda owner_id, run_id: None)
+        assert exc.value.code == 'TASK_SCHEMA_UNSUPPORTED'
     finally:
         store.close()

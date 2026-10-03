@@ -6,6 +6,11 @@ Graph shape); merely supplying an owner or controller ID confers no authority.
 Reads never reconcile, authorize refs, grant rights, or accept deliverables.
 Only explicit projection reads children, whose existing closer remains sole
 owner of execution state. A resumed legacy child may reuse its session ID.
+
+Contract for callers: `_write` serializes check-and-write only when it owns the
+transaction. A caller that is already inside a transaction must hold a write lock
+(`BEGIN IMMEDIATE`); otherwise a concurrent commit surfaces as `SQLITE_BUSY`, not
+as a canonical conflict code.
 """
 from contextlib import contextmanager
 import json
@@ -20,9 +25,10 @@ from .work_policy import digest
 
 RECORD_SCHEMA_VERSION = 1
 PAGE_LIMIT = 100
-# Only a running attempt blocks a new one in the unique index; a parked `needs_user` child is a
-# closed snapshot that a legacy resume supersedes with a fresh attempt (same session ID, new
-# started stamp). `ATTEMPT_OPEN` = rows a projection may still update (`closed_at IS NULL`).
+# An ACTIVE attempt blocks a new one: `running`, or a parked-open `waiting_input` row without a
+# `closed_at` (child still started, waiting for input). A projected `needs_user` snapshot has
+# `closed_at` set, so it stops blocking and a legacy resume supersedes it with a fresh attempt
+# (same session ID, new started stamp). `ATTEMPT_OPEN` = rows a projection may still update.
 ATTEMPT_OPEN = ('running', 'waiting_input')
 CHILD_OUTCOMES = {'completed': 'succeeded', 'partial': 'partial', 'failed': 'failed',
                   'interrupted': 'interrupted', 'cancelled': 'cancelled',
@@ -82,9 +88,9 @@ class TaskService:
                 provenance_json TEXT NOT NULL, started_at REAL NOT NULL, closed_at REAL,
                 UNIQUE(session_id, attempt_seq));
             CREATE UNIQUE INDEX IF NOT EXISTS harness_task_active ON harness_task_attempts(task_key)
-                WHERE status IN ('running');
+                WHERE status='running' OR (status='waiting_input' AND closed_at IS NULL);
             CREATE UNIQUE INDEX IF NOT EXISTS harness_session_active ON harness_task_attempts(session_id)
-                WHERE status IN ('running');
+                WHERE status='running' OR (status='waiting_input' AND closed_at IS NULL);
             CREATE TABLE IF NOT EXISTS harness_task_messages (
                 message_id TEXT NOT NULL, schema_version INTEGER NOT NULL,
                 task_key TEXT NOT NULL REFERENCES harness_tasks(task_key), sender_id TEXT NOT NULL,
@@ -99,14 +105,18 @@ class TaskService:
         ''')
         # These two tables first shipped in this change, so a stale predicate from an earlier
         # build is refreshed here instead of silently keeping the parked-attempt dead end.
+        # The active predicate must still cover a parked-open attempt (`waiting_input` with no
+        # `closed_at`); only a projected `needs_user` snapshot stops blocking a new attempt.
         for name, table in (('harness_task_active', 'task_key'),
                             ('harness_session_active', 'session_id')):
             row = self.db.execute("SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
                                   (name,)).fetchone()
-            if row is not None and 'waiting_input' in (row['sql'] or ''):
-                self.db.execute(f'DROP INDEX {name}')
+            if row is None or 'closed_at' in (row['sql'] or ''):
+                continue
+            with self.db:
+                self.db.execute(f'DROP INDEX IF EXISTS {name}')
                 self.db.execute(f'CREATE UNIQUE INDEX {name} ON harness_task_attempts({table}) '
-                                "WHERE status IN ('running')")
+                                "WHERE status='running' OR (status='waiting_input' AND closed_at IS NULL)")
 
     @contextmanager
     def _write(self):

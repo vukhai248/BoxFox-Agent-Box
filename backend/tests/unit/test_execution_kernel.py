@@ -281,3 +281,26 @@ def test_view_keeps_the_owner_switchboard_for_legacy_sessions(environment):
     assert view['scope']['mode'] == 'legacy'
     assert 'file_write' in view['tools']
     assert view['admitted'] is False and view['adaptiveEnabled'] is False
+
+
+def test_view_does_not_claim_adaptive_is_enabled_for_a_downgraded_scope(environment, monkeypatch):
+    """Switch on + live graph, but a `legacy` scope still means the engine is not in effect."""
+    runtime, sid = environment
+    current = policy_session(runtime, sid)
+    monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
+    view = execution_kernel.permission_view(runtime, current)
+    assert view['scope']['mode'] == 'artifact_only'
+    assert view['adaptiveEnabled'] is False and view['admitted'] is False
+
+
+def test_view_claims_adaptive_only_when_a_binding_is_admitted(environment, monkeypatch):
+    runtime, sid = environment
+    current = policy_session(runtime, sid)
+    monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
+    monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
+    view = execution_kernel.permission_view(runtime, current)
+    assert view['scope']['mode'] == 'run_execute'
+    assert view['adaptiveEnabled'] is True and view['admitted'] is True
+    assert 'file_write' in view['tools']
