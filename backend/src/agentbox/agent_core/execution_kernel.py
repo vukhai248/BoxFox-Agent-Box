@@ -36,6 +36,22 @@ def _fresh(rt, session):
         raise PermissionError('HARNESS_SESSION_UNKNOWN: canonical session is unavailable') from exc
 
 
+def _injected_tools(rt, current):
+    """Names this turn's profile adds beyond the session's own switchboard.
+
+    The runtime deliberately injects a few tools (`plan_scope`, the wired design tools) that
+    never appear in `config.tools`; the owner check must not report those as revoked. An
+    unavailable profile keeps the deny (fail closed), never an empty-tool free pass.
+    """
+    configured = set((current.get('config') or {}).get('tools') or [])
+    try:
+        profile = rt.turn_profile(current) or {}
+        tools = profile.get('tools') or []
+    except Exception:
+        return set()
+    return set(tools) - configured
+
+
 def guard_tool(rt, session, name, args):
     """Run the canonical scope guard first; return a view, never a grant."""
     current = _fresh(rt, session)
@@ -49,25 +65,21 @@ def guard_tool(rt, session, name, args):
             rt.store.get(parent_id)
         except KeyError as exc:
             raise PermissionError('HARNESS_OWNER_UNKNOWN: no owner, no adaptive effect') from exc
-    if name not in tool_recovery.owner_tools(rt.store, current):
+    if name not in tool_recovery.owner_tools(rt.store, current) and name not in _injected_tools(rt, current):
         raise PermissionError('WORK_CAPABILITY_REVOKED: the current owner no longer permits ' + name)
     # The new switch cannot use BOXFOX_WORK_GRAPH=off to fall through to legacy.
     if not enabled() or work_scope._graph(rt) is None:
-        restricted = work_scope.scope('artifact_only', scope.get('runId'),
-                                      'adaptive admission is disabled or unavailable')
-        work_scope.check_tool(rt, current, name, args, current=restricted)
-        if name == 'delegate_task':
-            work_scope.check_delegate(restricted, (args or {}).get('role'))
-        return restricted
-    if scope.get('mode') == 'legacy':
+        reason = 'adaptive admission is disabled or unavailable'
+    elif scope.get('mode') == 'legacy':
         # An enabled flag without canonical execution bindings is not authority.
-        restricted = work_scope.scope('artifact_only', scope.get('runId'),
-                                      'adaptive request has no canonical execution binding')
-        work_scope.check_tool(rt, current, name, args, current=restricted)
-        if name == 'delegate_task':
-            work_scope.check_delegate(restricted, (args or {}).get('role'))
-        return restricted
-    return scope
+        reason = 'adaptive request has no canonical execution binding'
+    else:
+        return scope
+    restricted = work_scope.scope('artifact_only', scope.get('runId'), reason)
+    work_scope.check_tool(rt, current, name, args, current=restricted)
+    if name == 'delegate_task':
+        work_scope.check_delegate(restricted, (args or {}).get('role'))
+    return restricted
 
 
 def permission_view(rt, session):
@@ -81,14 +93,22 @@ def permission_view(rt, session):
         except KeyError as exc:
             raise PermissionError('HARNESS_OWNER_UNKNOWN: canonical parent is unavailable') from exc
     scope = work_scope.resolve(rt, current)
-    if policy and (not enabled() or work_scope._graph(rt) is None or scope['mode'] == 'legacy'):
+    restricted = bool(policy) and (not enabled() or work_scope._graph(rt) is None
+                                   or scope['mode'] == 'legacy')
+    if restricted:
         scope = work_scope.scope('artifact_only', scope.get('runId'),
                                 'adaptive execution is not admitted')
+    tools = sorted(tool_recovery.owner_tools(rt.store, current))
+    if scope['mode'] not in ('legacy', 'run_execute', 'read_only_check'):
+        blocked = work_scope.MUTATING_TOOLS | work_scope.DESIGN_MUTATING
+        tools = [name for name in tools if name not in blocked]
     return {
         'schema': 'boxfox-permission-view/1',
         'sessionId': current['id'], 'ownerId': parent_id or current['id'],
-        'scope': dict(scope), 'tools': sorted(tool_recovery.owner_tools(rt.store, current)),
+        'scope': dict(scope), 'tools': tools,
+        'toolsNote': 'owner switchboard after the scope filter; terminal commands are decided per call',
         'enforcement': 'application',
         'filesystemIsolation': 'unverified', 'networkIsolation': 'unverified',
         'adaptiveEnabled': bool(policy and enabled() and work_scope._graph(rt) is not None),
+        'admitted': bool(policy) and not restricted,
     }

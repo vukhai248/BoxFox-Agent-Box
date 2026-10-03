@@ -20,9 +20,13 @@ from .work_policy import digest
 
 RECORD_SCHEMA_VERSION = 1
 PAGE_LIMIT = 100
-ACTIVE = ('running', 'waiting_input')
+# Only a running attempt blocks a new one in the unique index; a parked `needs_user` child is a
+# closed snapshot that a legacy resume supersedes with a fresh attempt (same session ID, new
+# started stamp). `ATTEMPT_OPEN` = rows a projection may still update (`closed_at IS NULL`).
+ATTEMPT_OPEN = ('running', 'waiting_input')
 CHILD_OUTCOMES = {'completed': 'succeeded', 'partial': 'partial', 'failed': 'failed',
-                  'interrupted': 'interrupted', 'cancelled': 'cancelled'}
+                  'interrupted': 'interrupted', 'cancelled': 'cancelled',
+                  'needs_user': 'waiting_input'}
 
 
 def encode(value):
@@ -47,10 +51,15 @@ class TaskService:
         if not callable(resolve_run):
             raise TypeError('resolve_run(owner_id, run_id) is mandatory')
         self.store, self.db, self.resolve_run = store, store.db, resolve_run
-        for table in ('harness_tasks', 'harness_task_attempts', 'harness_task_messages', 'harness_invocations'):
+        for table, required in (
+                ('harness_tasks', ('task_key', 'schema_version', 'run_id', 'owner_id', 'task_alias', 'revision')),
+                ('harness_task_attempts', ('attempt_id', 'schema_version', 'task_key', 'session_id',
+                                           'attempt_seq', 'admission_id', 'status')),
+                ('harness_task_messages', ('message_id', 'schema_version', 'task_key', 'request_hash')),
+                ('harness_invocations', ('owner_id', 'invocation_id', 'schema_version', 'request_hash'))):
             columns = {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}
-            if columns and 'schema_version' not in columns:
-                invalid('schemaVersion', f'{table} has no record schema marker', 'TASK_SCHEMA_UNSUPPORTED')
+            if columns and not set(required) <= columns:
+                invalid('schemaVersion', f'{table} does not match the record schema', 'TASK_SCHEMA_UNSUPPORTED')
         # No global user_version and no backfill/recovery of any legacy record.
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS harness_tasks (
@@ -73,9 +82,9 @@ class TaskService:
                 provenance_json TEXT NOT NULL, started_at REAL NOT NULL, closed_at REAL,
                 UNIQUE(session_id, attempt_seq));
             CREATE UNIQUE INDEX IF NOT EXISTS harness_task_active ON harness_task_attempts(task_key)
-                WHERE status IN ('running','waiting_input');
+                WHERE status IN ('running');
             CREATE UNIQUE INDEX IF NOT EXISTS harness_session_active ON harness_task_attempts(session_id)
-                WHERE status IN ('running','waiting_input');
+                WHERE status IN ('running');
             CREATE TABLE IF NOT EXISTS harness_task_messages (
                 message_id TEXT NOT NULL, schema_version INTEGER NOT NULL,
                 task_key TEXT NOT NULL REFERENCES harness_tasks(task_key), sender_id TEXT NOT NULL,
@@ -88,11 +97,24 @@ class TaskService:
                 run_id TEXT NOT NULL, request_hash TEXT NOT NULL, result_json TEXT NOT NULL,
                 PRIMARY KEY(owner_id,invocation_id));
         ''')
+        # These two tables first shipped in this change, so a stale predicate from an earlier
+        # build is refreshed here instead of silently keeping the parked-attempt dead end.
+        for name, table in (('harness_task_active', 'task_key'),
+                            ('harness_session_active', 'session_id')):
+            row = self.db.execute("SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                                  (name,)).fetchone()
+            if row is not None and 'waiting_input' in (row['sql'] or ''):
+                self.db.execute(f'DROP INDEX {name}')
+                self.db.execute(f'CREATE UNIQUE INDEX {name} ON harness_task_attempts({table}) '
+                                "WHERE status IN ('running')")
 
     @contextmanager
     def _write(self):
-        # Serialize check-and-write across SQLite connections, including dedupe
-        # and expected revision. Do not commit a caller's enclosing transaction.
+        # Serialize check-and-write across SQLite connections, including dedupe and expected
+        # revision. Inside a caller's transaction a savepoint keeps the caller's atomicity but
+        # takes no new write lock: such callers must already hold it (BEGIN IMMEDIATE), because
+        # a concurrent commit is then resolved by the constraint re-check, not by the lock.
+        # Never commit a caller's enclosing transaction.
         if self.db.in_transaction:
             self.db.execute('SAVEPOINT harness_task_write')
             try:
@@ -199,6 +221,11 @@ class TaskService:
                                  1, contract.contract_hash, contract.payload_json, 'queued', 'unverified',
                                  None, None, None, now, now))
             except sqlite3.IntegrityError:
+                # A concurrent caller may have committed this invocation; replay its receipt
+                # instead of misreporting an alias conflict.
+                cached = self._cached(owner_id, run_id, invocation, request_hash)
+                if cached is not None:
+                    return cached
                 invalid('taskId', 'alias already exists in this run', 'TASK_ALIAS_CONFLICT')
             result = self._view(self._task(owner_id, run_id, key), contract=True)
             return self._remember(owner_id, run_id, invocation, request_hash, result)
@@ -255,9 +282,20 @@ class TaskService:
                 result = self._message_view(old)
             else:
                 self._expected(task, expected_revision)
-                self.db.execute('INSERT INTO harness_task_messages VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                                (message_id, RECORD_SCHEMA_VERSION, task_key, sender_id, expected_revision,
-                                 kind, encode(payload), request_hash, 'received', time.time(), None))
+                try:
+                    self.db.execute('INSERT INTO harness_task_messages VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                                    (message_id, RECORD_SCHEMA_VERSION, task_key, sender_id, expected_revision,
+                                     kind, encode(payload), request_hash, 'received', time.time(), None))
+                except sqlite3.IntegrityError:
+                    # A concurrent caller may have committed this message ID; the row is the
+                    # authority, so replay it when the payload matches and reject a mismatch.
+                    old = self.db.execute('SELECT * FROM harness_task_messages WHERE task_key=? AND message_id=?',
+                                          (task_key, message_id)).fetchone()
+                    if old is None:
+                        raise
+                    schema(old)
+                    if old['request_hash'] != request_hash:
+                        invalid('messageId', 'message ID reused with different payload', 'TASK_MESSAGE_CONFLICT')
                 result = self._message_view(self.db.execute(
                     'SELECT * FROM harness_task_messages WHERE task_key=? AND message_id=?',
                     (task_key, message_id)).fetchone())
@@ -298,8 +336,9 @@ class TaskService:
             self._expected(task, expected_revision)
             if task['abandoned_at'] is not None:
                 invalid('taskKey', 'task already abandoned', 'TASK_ABANDONED')
-            active = self.db.execute("SELECT * FROM harness_task_attempts WHERE task_key=? "
-                                     "AND status IN ('running','waiting_input')", (task_key,)).fetchone()
+            active = self.db.execute('SELECT * FROM harness_task_attempts WHERE task_key=? '
+                                     'AND status IN (?,?) AND closed_at IS NULL',
+                                     (task_key, *ATTEMPT_OPEN)).fetchone()
             if active is not None:
                 schema(active)
             now = time.time()
@@ -336,8 +375,8 @@ class TaskService:
         self._run(owner_id, run_id)
         identifier(admission_id, 'admissionId')
         revision(expected_revision)
-        if type(capability_epoch) is not int or capability_epoch < 0:
-            invalid('capabilityEpoch', 'expected a nonnegative integer')
+        if type(capability_epoch) is not int or capability_epoch < 1:
+            invalid('capabilityEpoch', 'expected a positive integer, not a boolean')
         request_hash = digest({'action': 'record_attempt', 'runId': run_id, 'taskKey': task_key,
                                'expectedRevision': expected_revision, 'sessionId': session_id,
                                'admissionId': admission_id, 'capabilityEpoch': capability_epoch})
@@ -369,6 +408,9 @@ class TaskService:
                                  capability_epoch, task['contract_hash'], task['revision'], 'running', None,
                                  '[]', encode(provenance), child['started'], None))
             except sqlite3.IntegrityError:
+                cached = self._cached(owner_id, run_id, invocation_id, request_hash)
+                if cached is not None:
+                    return cached
                 invalid('admissionId', 'active attempt or admission reuse', 'TASK_ATTEMPT_CONFLICT')
             self.db.execute("UPDATE harness_tasks SET state='running', revision=revision+1, updated_at=? "
                             'WHERE task_key=?', (time.time(), task_key))
@@ -392,8 +434,11 @@ class TaskService:
     def project_attempt(self, owner_id, run_id, task_key, attempt_id, *, result_refs=None):
         """Explicit, idempotent child projection. Does not close/reopen the child.
 
-        Closed snapshots remain immutable even after the canonical session is
-        reused. Unknown/missing execution receipts fail closed, never accepted.
+        A `needs_user` close is a closed `waiting_input` snapshot (`closed_at` set); the legacy
+        resume reopens the same child with a new started stamp and supersedes it with a fresh
+        attempt. Closed snapshots stay immutable even after the canonical session is reused; a
+        parked child (`waiting_since` set, still started) keeps its row open. Unknown/missing
+        execution receipts fail closed, never accepted.
         """
         self._run(owner_id, run_id)
         identifier(attempt_id, 'attemptId')
@@ -408,7 +453,9 @@ class TaskService:
             inputs = refs(result_refs, 'resultRefs') if result_refs is not None else json.loads(row['result_refs_json'])
             if len(inputs) > PAGE_LIMIT:
                 invalid('resultRefs', 'too many references')
-            if row['status'] not in ACTIVE:
+            if row['status'] not in ATTEMPT_OPEN or row['closed_at'] is not None:
+                # A closed snapshot (including a projected `needs_user` park) is immutable: a
+                # legacy resume supersedes it with a fresh attempt, never by rewriting this row.
                 if inputs != json.loads(row['result_refs_json']):
                     invalid('resultRefs', 'closed attempt snapshot is immutable', 'TASK_ATTEMPT_CLOSED')
                 return self._attempt_view(row)
@@ -422,12 +469,14 @@ class TaskService:
                 status = CHILD_OUTCOMES.get(child['status'])
                 if status is None or child['finished'] is None:
                     invalid('status', 'unsupported or incomplete child close receipt', 'TASK_CHILD_NOT_TERMINAL')
+            # A resumed child keeps the previous close reason; never show it on an open attempt.
+            reason = child['reason'] if child['status'] != 'started' else None
             result_json = encode(inputs)
             if (row['status'], row['reason'], row['result_refs_json'], row['closed_at']) == (
-                    status, child['reason'], result_json, child['finished']):
+                    status, reason, result_json, child['finished']):
                 return self._attempt_view(row)
             self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, result_refs_json=?, closed_at=? '
-                            'WHERE attempt_id=?', (status, child['reason'], result_json, child['finished'], attempt_id))
+                            'WHERE attempt_id=?', (status, reason, result_json, child['finished'], attempt_id))
             if task['abandoned_at'] is None:
                 self.db.execute('UPDATE harness_tasks SET state=?, revision=revision+1, updated_at=? WHERE task_key=?',
                                 (status, time.time(), task_key))

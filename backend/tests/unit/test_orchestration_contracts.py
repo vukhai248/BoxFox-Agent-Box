@@ -149,3 +149,32 @@ def test_lifecycle_acceptance_and_artifact_states_are_distinct():
     assert 'succeeded' in TASK_STATES and 'accepted' not in TASK_STATES
     assert 'accepted' in ACCEPTANCE_STATES and 'succeeded' not in ACCEPTANCE_STATES
     assert 'finalized' in ARTIFACT_STATES and 'cancel_requested' not in TASK_STATES
+
+
+@pytest.mark.parametrize('field,value', [
+    ('goal', 'x' * 12001),
+    ('deliverable', {'kind': 'k' * 201, 'format': 'markdown',
+                     'evidence': ['file_line'], 'acceptance': ['Cite it.']}),
+    ('deliverable', {'kind': 'knowledge', 'format': 'f' * 201,
+                     'evidence': ['file_line'], 'acceptance': ['Cite it.']}),
+    ('deliverable', {'kind': 'knowledge', 'format': 'markdown', 'evidence': [], 'acceptance': ['Cite it.']}),
+    ('deliverable', {'kind': 'knowledge', 'format': 'markdown', 'evidence': ['file_line'], 'acceptance': []}),
+    ('deliverable', {'kind': 'knowledge', 'format': 'markdown',
+                     'evidence': ['file_line'] * 101, 'acceptance': ['Cite it.']}),
+    ('deliverable', {'kind': 'knowledge', 'format': 'markdown',
+                     'evidence': ['e' * 2001], 'acceptance': ['Cite it.']}),
+    ('scope', {'read': ['backend/src'] * 101, 'write': [], 'externalSources': 'none'}),
+    ('scope', {'read': ['r' * 2001], 'write': [], 'externalSources': 'none'}),
+    ('inputs', [{'artifactId': 'wa-1', 'version': 1, 'contentHash': 'a' * 64,
+                 'kind': 'k' * 201}]),
+    ('dependsOn', ['task-%d' % i for i in range(101)]),
+])
+def test_unbounded_contract_text_fails_closed(field, value):
+    with pytest.raises(ContractError):
+        TaskContract.parse(request(**{field: value}))
+
+
+def test_contract_text_at_the_limit_is_accepted():
+    contract = TaskContract.parse(request(goal='x' * 12000))
+    assert len(contract.payload['goal']) == 12000
+    assert contract.payload['deliverable']['kind'] == 'knowledge'

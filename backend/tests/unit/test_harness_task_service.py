@@ -54,11 +54,12 @@ def child(repo, *, owner=None, role='explore'):
     return sid
 
 
-def attempt(repo, task, sid, *, invocation='inv-attempt', admission='admission-1', expected=None):
+def attempt(repo, task, sid, *, invocation='inv-attempt', admission='admission-1', expected=None,
+            epoch=1):
     _, service, owner, _, _, _ = repo
     return service.record_attempt(owner, 'run-1', task['taskKey'], invocation_id=invocation,
                                   expected_revision=task['revision'] if expected is None else expected,
-                                  session_id=sid, admission_id=admission, capability_epoch=0)
+                                  session_id=sid, admission_id=admission, capability_epoch=epoch)
 
 
 def send(repo, task, **updates):
@@ -552,3 +553,100 @@ def test_two_connections_duplicate_create_has_one_record_and_same_receipt(repo):
         assert counts(store)['harness_tasks'] == counts(store)['harness_invocations'] == 1
     finally:
         other.close()
+
+
+def test_needs_user_close_projects_and_a_resume_opens_a_new_attempt(repo):
+    """The checkpoint/resume flow: a `needs_user` child must project, then admit a fresh attempt."""
+    store, service, owner, _, _, _ = repo
+    task = create(repo)
+    sid = child(repo)
+    first = attempt(repo, task, sid)
+    store.child_close_once(sid, 'needs_user', 'Which export format?')
+    view = service.project_attempt(owner, 'run-1', task['taskKey'], first['attemptId'])
+    assert view['status'] == 'waiting_input' and view['reason'] == 'Which export format?'
+    assert view['closedAt'] is not None
+    assert service.get(owner, 'run-1', task['taskKey'])['state'] == 'waiting_input'
+    # A closed snapshot stays immutable even after the canonical child is reopened.
+    with store.db:
+        store.db.execute("UPDATE children SET status='started', finished=NULL, started=started+1"
+                         ' WHERE session_id=?', (sid,))
+    assert service.project_attempt(owner, 'run-1', task['taskKey'], first['attemptId']) == view
+    current = service.get(owner, 'run-1', task['taskKey'])
+    second = attempt(repo, current, sid, invocation='inv-resume', admission='admission-2')
+    assert second['attemptSeq'] == 2 and second['status'] == 'running'
+    assert second['reason'] is None  # a stale close reason must never ride on an open attempt
+    assert second['startedAt'] == store.child(sid)['started']
+    assert service.get(owner, 'run-1', task['taskKey'])['state'] == 'running'
+    items = service.attempts(owner, 'run-1', task['taskKey'])['items']
+    assert {item['status'] for item in items} == {'waiting_input', 'running'}
+
+
+def test_capability_epoch_must_be_a_positive_integer(repo):
+    store, service, owner, _, _, _ = repo
+    task = create(repo)
+    sid = child(repo)
+    for bad in (0, -1, True, 1.0, '1', None):
+        error('HARNESS_CONTRACT_INVALID',
+              lambda bad=bad: attempt(repo, task, sid, epoch=bad))
+    assert service.get(owner, 'run-1', task['taskKey'])['state'] == 'queued'
+
+
+def test_two_connections_never_leak_raw_integrity_errors(repo):
+    """A second connection must get a canonical code, never `sqlite3.IntegrityError`."""
+    store, service, owner, _, _, _ = repo
+    path = store.db.execute('PRAGMA database_list').fetchone()['file']
+    other_store = SessionStore(Path(path))
+    try:
+        runs = {'run-1': {'runId': 'run-1', 'sessionId': owner}}
+        other = TaskService(other_store, lambda owner_id, run_id: copy.deepcopy(runs.get(run_id)))
+        task = create(repo)
+        sid = child(repo)
+        attempt(repo, task, sid)
+        with store.db:
+            store.db.execute('UPDATE children SET started=started+1 WHERE session_id=?', (sid,))
+        current = other.get(owner, 'run-1', task['taskKey'])
+        error('TASK_ATTEMPT_CONFLICT',
+              lambda: other.record_attempt(owner, 'run-1', task['taskKey'], invocation_id='inv-other',
+                                           expected_revision=current['revision'], session_id=sid,
+                                           admission_id='admission-other', capability_epoch=1))
+        error('TASK_ALIAS_CONFLICT',
+              lambda: other.create(owner, 'run-1', request(invocationId='inv-other-create'), controller_id=owner))
+    finally:
+        other_store.close()
+
+
+def test_one_active_attempt_per_child_session_across_tasks(repo):
+    """A second task may not bind a child that was never reopened for it."""
+    store, service, owner, _, _, _ = repo
+    first = create(repo)
+    second = create(repo, taskId='second-task', invocationId='inv-create-2',
+                    goal='Second goal for the same child session.')
+    sid = child(repo)
+    attempt(repo, first, sid)
+    current = service.get(owner, 'run-1', second['taskKey'])
+    error('TASK_ATTEMPT_BINDING',
+          lambda: service.record_attempt(owner, 'run-1', second['taskKey'], invocation_id='inv-second',
+                                         expected_revision=current['revision'], session_id=sid,
+                                         admission_id='admission-2', capability_epoch=1))
+    assert service.get(owner, 'run-1', second['taskKey'])['state'] == 'queued'
+
+
+def test_active_index_survives_a_stale_waiting_input_schema(tmp_path):
+    """A database written by the previous schema must be repaired, not re-used as-is."""
+    store = SessionStore(tmp_path / 'stale.db')
+    try:
+        store.db.executescript('''
+            CREATE TABLE IF NOT EXISTS harness_task_attempts (
+                attempt_id TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, task_key TEXT NOT NULL,
+                session_id TEXT NOT NULL, attempt_seq INTEGER NOT NULL, admission_id TEXT NOT NULL,
+                capability_epoch INTEGER NOT NULL, contract_hash TEXT NOT NULL, task_revision INTEGER NOT NULL,
+                status TEXT NOT NULL, reason TEXT, result_refs_json TEXT NOT NULL, provenance_json TEXT NOT NULL,
+                started_at REAL NOT NULL, closed_at REAL);
+            CREATE UNIQUE INDEX harness_task_active ON harness_task_attempts(task_key)
+                WHERE status IN ('running','waiting_input');
+        ''')
+        TaskService(store, lambda owner_id, run_id: None)
+        sql = store.db.execute("SELECT sql FROM sqlite_master WHERE name='harness_task_active'").fetchone()['sql']
+        assert 'waiting_input' not in sql
+    finally:
+        store.close()

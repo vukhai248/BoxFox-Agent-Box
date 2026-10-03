@@ -22,6 +22,10 @@ MODES = frozenset({'read_only', 'workspace_write'})
 ALIAS = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,119}\Z')
 IDENTITY = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}\Z')
 HASH = re.compile(r'[a-f0-9]{64}\Z')
+GOAL_MAX = 12000
+SHORT_TEXT_MAX = 200
+LIST_MAX = 100
+LIST_ITEM_MAX = 2000
 
 
 class ContractError(ValueError):
@@ -57,17 +61,21 @@ def object_fields(value, field, required, optional=()):
     return value
 
 
-def text(value, field):
+def text(value, field, limit=None):
     if not isinstance(value, str) or not value.strip() or '\x00' in value:
         invalid(field, 'expected nonempty text without NUL')
+    if limit is not None and len(value) > limit:
+        invalid(field, f'expected text of at most {limit} characters')
     return value
 
 
-def string_list(value, field, *, nonempty=False):
+def string_list(value, field, *, nonempty=False, limit=None, item_limit=None):
     if not isinstance(value, list) or (nonempty and not value):
         invalid(field, 'expected a list' + (' with at least one entry' if nonempty else ''))
+    if limit is not None and len(value) > limit:
+        invalid(field, f'expected at most {limit} entries')
     for item in value:
-        text(item, field)
+        text(item, field, item_limit)
     if len(value) != len(set(value)):
         invalid(field, 'duplicate entries')
     return list(value)
@@ -82,13 +90,15 @@ def input_ref(value, field='inputRef'):
     if 'ownerId' in ref:
         identifier(ref['ownerId'], field + '.ownerId')
     if 'kind' in ref:
-        text(ref['kind'], field + '.kind')
+        text(ref['kind'], field + '.kind', SHORT_TEXT_MAX)
     return dict(ref)
 
 
 def refs(value, field='inputs'):
     if not isinstance(value, list):
         invalid(field, 'expected artifact references')
+    if len(value) > LIST_MAX:
+        invalid(field, f'expected at most {LIST_MAX} references')
     result = [input_ref(item, field) for item in value]
     identities = [(item['artifactId'], item['version']) for item in result]
     if len(identities) != len(set(identities)):
@@ -99,7 +109,7 @@ def refs(value, field='inputs'):
 def scope(value):
     result = object_fields(value, 'scope', ('read', 'write', 'externalSources'))
     for field in ('read', 'write'):
-        paths = string_list(result[field], 'scope.' + field)
+        paths = string_list(result[field], 'scope.' + field, limit=LIST_MAX, item_limit=LIST_ITEM_MAX)
         for path in paths:
             # Task paths are workspace-relative selectors, not host writable roots.
             if (path.startswith('/') or '\\' in path or ':' in path
@@ -113,10 +123,12 @@ def scope(value):
 def deliverable(value):
     fields = ('kind', 'format', 'evidence', 'acceptance')
     result = object_fields(value, 'deliverable', fields)
-    text(result['kind'], 'deliverable.kind')
-    text(result['format'], 'deliverable.format')
-    string_list(result['evidence'], 'deliverable.evidence', nonempty=True)
-    string_list(result['acceptance'], 'deliverable.acceptance', nonempty=True)
+    text(result['kind'], 'deliverable.kind', SHORT_TEXT_MAX)
+    text(result['format'], 'deliverable.format', SHORT_TEXT_MAX)
+    string_list(result['evidence'], 'deliverable.evidence', nonempty=True,
+                limit=LIST_MAX, item_limit=LIST_ITEM_MAX)
+    string_list(result['acceptance'], 'deliverable.acceptance', nonempty=True,
+                limit=LIST_MAX, item_limit=LIST_ITEM_MAX)
     return dict(result)
 
 
@@ -159,7 +171,7 @@ class TaskContract:
         identifier(request['invocationId'], 'invocationId')
         if not isinstance(request['role'], str) or request['role'] not in ROLES:
             invalid('role', 'expected a registered specialist role')
-        text(request['goal'], 'goal')
+        text(request['goal'], 'goal', GOAL_MAX)
         if not isinstance(request['intent'], str) or request['intent'] not in INTENTS:
             invalid('intent', 'explicit supported intent required')
         if not isinstance(request['mode'], str) or request['mode'] not in MODES:
@@ -172,7 +184,7 @@ class TaskContract:
         normalized['scope'] = scope(request['scope'])
         normalized['deliverable'] = deliverable(request['deliverable'])
         normalized['budget'] = allocation(request['budget'])
-        dependencies = string_list(request['dependsOn'], 'dependsOn')
+        dependencies = string_list(request['dependsOn'], 'dependsOn', limit=LIST_MAX, item_limit=LIST_ITEM_MAX)
         for dependency in dependencies:
             identifier(dependency, 'dependsOn', alias=True)
         if request['taskId'] in dependencies:

@@ -23,6 +23,20 @@ ROOT_FIELDS = ('schema', 'contextEpoch', 'intentRef', 'taskContractRef',
                'recentEventCursor', 'loadedSkillRefs', 'providerMetadataRef')
 
 
+def _nodes(value, path):
+    """Yield `(path, node)` for every object node in document order.
+
+    Shared by pin checking and gap reporting so both see exactly the same walk.
+    """
+    if isinstance(value, dict):
+        yield path, value
+        for key, item in value.items():
+            yield from _nodes(item, path + '.' + key)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from _nodes(item, f'{path}[{i}]')
+
+
 def _choice(value, field, choices):
     if not isinstance(value, str) or value not in choices:
         invalid(field, f'expected one of {choices}')
@@ -211,21 +225,13 @@ class ContextBundle:
                 invalid('loadedSkillRefs', 'duplicate skill ID')
             seen.add(skill['skillId'])
         pins = {}
-
-        def check_pins(value):
-            if isinstance(value, dict):
-                if 'artifactId' in value:
-                    key = (value['artifactId'], value['version'])
-                    pin = (value['contentHash'], value['provenance'])
-                    if key in pins and pins[key] != pin:
-                        invalid('context', 'conflicting hash/provenance for the same artifact version')
-                    pins[key] = pin
-                for item in value.values():
-                    check_pins(item)
-            elif isinstance(value, list):
-                for item in value:
-                    check_pins(item)
-        check_pins(root)
+        for _, node in _nodes(root, 'context'):
+            if 'artifactId' in node:
+                key = (node['artifactId'], node['version'])
+                pin = (node['contentHash'], node['provenance'])
+                if key in pins and pins[key] != pin:
+                    invalid('context', 'conflicting hash/provenance for the same artifact version')
+                pins[key] = pin
         try:
             snapshot = json.dumps(root, ensure_ascii=False, sort_keys=True,
                                   separators=(',', ':'), allow_nan=False)
@@ -256,17 +262,9 @@ class ContextBundle:
     def manifest_gaps(self):
         """Report visible missing/partial data. Never fetch or silently drop it."""
         root, gaps = self.payload, []
-
-        def walk(value, path):
-            if isinstance(value, dict):
-                if 'artifactId' in value and value['status'] != 'available':
-                    gaps.append(ContextGap('ref_unavailable', path, value['status'] + ': ' + value['reason']))
-                for key, item in value.items():
-                    walk(item, path + '.' + key)
-            elif isinstance(value, list):
-                for i, item in enumerate(value):
-                    walk(item, f'{path}[{i}]')
-        walk(root, 'context')
+        for path, node in _nodes(root, 'context'):
+            if 'artifactId' in node and node['status'] != 'available':
+                gaps.append(ContextGap('ref_unavailable', path, node['status'] + ': ' + node['reason']))
         for i, item in enumerate(root['unresolvedConflicts']):
             gaps.append(ContextGap('conflict_unresolved', f'unresolvedConflicts[{i}]', item['artifactId']))
         for i, item in enumerate(root['checkpoints']['readCoverage']):
