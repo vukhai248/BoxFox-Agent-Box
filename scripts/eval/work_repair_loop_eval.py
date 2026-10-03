@@ -112,6 +112,7 @@ class RepairExecutor(GitExecutor):
         self.armed = False
         self.seeded = 0
         self.seeds = []
+        self.seedErrors = []
         self.roles = {}
         self.pytestByRole = collections.Counter()
 
@@ -129,13 +130,23 @@ class RepairExecutor(GitExecutor):
         return self.roles[sid]
 
     def seed_real_red(self, command, sid):
-        """Hạ cấp `src/export.py` trong worktree nút rồi để checkpoint của harness commit nó."""
+        """Hạ cấp `src/export.py` trong worktree nút rồi để checkpoint của harness commit nó.
+
+        `work_worktrees` ghi `path` của worktree dưới dạng TƯƠNG ĐỐI (`.boxfox/worktrees/...`), nên
+        phải giải theo gốc fixture — lượt chạy đầu của bản này gieo hụt vì `Path(tương đối)` trỏ
+        vào gốc repo (không có tệp) rồi `return` im lặng; nay ghi lại lỗi thay vì bỏ qua.
+        """
         match = CD_PREFIX.match(command)
         if not match:
+            self.seedErrors.append({'why': 'không đọc được thư mục worktree từ lệnh checkpoint',
+                                    'command': command[:200]})
             return
-        root = Path(match.group('root').strip("'"))
+        raw = match.group('root').strip("'")
+        root = Path(raw) if Path(raw).is_absolute() else (self.folder / raw).resolve()
         target = root / 'src' / 'export.py'
         if not target.is_file():
+            self.seedErrors.append({'why': 'không thấy src/export.py trong worktree nút',
+                                    'root': str(root), 'path': str(target)})
             return
         before = target.read_text(encoding='utf-8')
         target.write_text(REAL_RED_SOURCE, encoding='utf-8')
@@ -236,7 +247,14 @@ async def main(args):
         first_artifact = (node['stages']['execute'].get('artifact') or {}).get('artifactId')
         row['firstArtifact'] = first_artifact
         row['firstProducer'] = (node['stages']['execute'].get('rounds') or [{}])[-1].get('producerId')
-        row['realRed'] = {'seeded': executor.seeded, 'seeds': executor.seeds}
+        row['realRed'] = {'seeded': executor.seeded, 'seeds': executor.seeds,
+                          'errors': executor.seedErrors}
+        if executor.seeded != 1:
+            # Cò đỏ là điều kiện tiên quyết của phép đo: gieo hụt thì mọi số phía sau vô nghĩa,
+            # dừng ngay thay vì đốt thêm chục phút để ra một `oracle=false` không nói lên gì.
+            raise AssertionError('FIXTURE_RED_NOT_SEEDED: ' + json.dumps(
+                {'seeded': executor.seeded, 'errors': executor.seedErrors},
+                ensure_ascii=False)[:300])
         row['pytestRuns'] = dict(executor.pytestByRole)
         # Số lệnh pytest THẬT child Build tự chạy trước lượt kiểm (không phải lệnh cắm sẵn như bản cũ).
         row['pytestBeforeCheck'] = sum(executor.pytestByRole.values())
