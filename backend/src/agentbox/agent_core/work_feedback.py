@@ -262,8 +262,12 @@ class Feedback:
         keys, grant = [], None
         if kind == 'needs_user':
             from .work_grants import decision_keys
+            if 'decisionKeys' not in args and self.graph.grants.any_for(run, binding):
+                raise FeedbackError('WORK_DECISION_KEYS_INVALID',
+                                    'main granted interview rights for this node/stage; send 1..3 decisionKeys '
+                                    'matching the grant (omit them only when no grant exists)', 400)
             keys = decision_keys(args.get('decisionKeys'),len(questions)) if 'decisionKeys' in args else [q['id'] for q in questions]
-            revoked = self.graph.grants.revoked(run, binding, keys) if 'decisionKeys' in args else None
+            revoked = self.graph.grants.revoked(run, binding, keys)
             if revoked:
                 raise FeedbackError('WORK_CAPABILITY_REVOKED', 'main revoked interview rights for '
                                     + ', '.join(sorted(keys)) + '; report a checkpoint to main instead of asking the user', 403)

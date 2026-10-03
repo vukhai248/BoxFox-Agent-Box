@@ -51,6 +51,17 @@ class Grants:
         return next((g for g in reversed(self.records(run['runId'])) if self.valid(g,run,binding)
                      and set(keys) <= set(g['decisionKeys'])), None)
 
+    def any_for(self, run, binding):
+        """#6475 — có grant nào (kể cả vừa bị thu hồi) trỏ đúng node/stage/purpose/checkKind không.
+
+        Dùng để bắt buộc `decisionKeys` trên `needs_user`: khi main đã giao quyền hỏi cho đúng ô
+        này thì con KHÔNG được bỏ trường khoá quyết định — bỏ đi là im lặng rơi khỏi đường grant
+        (mất kiểm tra thu hồi, mất khớp câu hỏi với quyền, card thiếu khoá).
+        """
+        return any(g.get('status') in ('active', 'revoked')
+                   and all(g.get(k) == binding.get(k) for k in ('nodeId', 'stage', 'purpose', 'checkKind'))
+                   for g in self.records(run['runId']))
+
     def revoked(self, run, binding, keys):
         """W1.P — the latest grant covering these keys, when main revoked it mid-turn.
 

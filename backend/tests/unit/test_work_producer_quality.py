@@ -118,3 +118,47 @@ def test_final_claims_check_accepts_labeled_unverified_claim(tmp_path):
     text = ('New numbers were not part of the review.\n\n'
             'chưa kiểm: WORK_NEW_CODE_123 and docs/other.md:3 appear in a new proposal.\n')
     assert wg.final_claims_check(run, text) == []
+
+
+def test_reviewed_set_reports_a_truncated_claim_set_instead_of_cutting_silently(tmp_path, monkeypatch):
+    """#6474: chạm trần token claim thì phải nói ra, không cắt im lặng.
+
+    Badge W6.2.BIND chỉ là tập token; nếu tập bị cắt ở 600 mà không ghi gì thì lượt đọc sau tưởng
+    "mọi token đều đã kiểm" trong khi một phần chưa từng vào bộ đã phản biện.
+    """
+    _, runtime, _, _, sid = build(tmp_path)
+    out = verified_run(runtime, sid)
+    graph = runtime.work_graph
+    run = graph.get(out['runId'])
+    full = graph.reviewed_set(run)
+    assert full['claimsTruncated'] is False and full['claimsTotal'] == len(full['claims'])
+    real = wg.claim_tokens
+    monkeypatch.setattr(wg, 'claim_tokens', lambda text: set(real(text)) | {'WORK_A_1', 'WORK_B_2'})
+    monkeypatch.setattr(wg, 'CLAIM_TOKENS_MAX', 2)
+    cut = graph.reviewed_set(run)
+    assert cut['claimsTruncated'] is True
+    assert cut['claimsTotal'] > 2 and len(cut['claims']) == 2, 'vẫn cắt để giữ trần, nhưng phải khai'
+
+
+def test_final_claim_notices_fire_before_the_run_is_verified(tmp_path):
+    """#6474: notice claim chưa kiểm không chỉ nổ khi graph đã `verified`.
+
+    Main trả lời giữa lượt hoặc sau `needs_revision` cũng phải thấy tín hiệu; notice KHÔNG chặn
+    câu trả lời, nên phát sớm không khoá chat.
+    """
+    _, runtime, _, _, sid = build(tmp_path)
+    out = verified_run(runtime, sid)
+    graph = runtime.work_graph
+    assert runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.')
+    run = graph.get(out['runId'])
+    run['status'] = 'needs_revision'
+    graph.save(run, 'test_status_move')
+    notices = runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.')
+    assert notices and notices[0]['type'] == 'unreviewed_claims'
+    assert 'WORK_NEW_CODE_123' in notices[0]['tokens']
+    assert notices[0]['truncated'] is False
+    # Không có reviewedSet (chưa từng whole-pass) thì im lặng — không có gì để so.
+    empty = graph.get(out['runId'])
+    empty.pop('reviewedSet')
+    graph.save(empty, 'test_no_review')
+    assert runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.') == []

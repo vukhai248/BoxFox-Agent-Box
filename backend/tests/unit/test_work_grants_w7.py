@@ -170,3 +170,26 @@ def test_auto_card_does_not_force_unrelated_main_progress_turn_to_yield(tmp_path
         assert len(rt.pending_for(sid))==1
         assert rt.client.calls>=2
     asyncio.run(run_test())
+
+
+def test_granted_node_must_send_decision_keys_on_needs_user(tmp_path):
+    """#6475: đã có grant cho đúng ô thì `needs_user` không được bỏ `decisionKeys`.
+
+    Bỏ trường này là rơi im lặng khỏi đường grant: không kiểm thu hồi, không khớp câu hỏi với
+    quyền đã giao, card thiếu khoá quyết định. Không có grant thì đường dự phòng (main trả lời)
+    vẫn chạy như cũ.
+    """
+    async def run_test():
+        store, rt, graph, run, sid, cid = setup(tmp_path)
+        child = store.get(cid)
+        # Chưa có grant: needs_user không khoá vẫn lưu được để main trả lời.
+        first = await graph.feedback.report(child, {'action': 'needs_user', 'checkpoint': 'Cần chốt phạm vi',
+                                                    'questions': QUESTIONS, 'invocationId': 'no-grant'}, 'tool-ng')
+        assert first['decisionKeys'] == []
+        assert first['status'] == 'waiting_main'
+        # Có grant cho đúng node/stage/purpose: thiếu decisionKeys phải bị chặn đúng mã.
+        grant(graph, store, sid, run)
+        with pytest.raises(work_feedback.FeedbackError, match='WORK_DECISION_KEYS_INVALID'):
+            await graph.feedback.report(child, {'action': 'needs_user', 'checkpoint': 'Cần chốt phạm vi',
+                                                'questions': QUESTIONS, 'invocationId': 'granted-no-keys'}, 'tool-g')
+    asyncio.run(run_test())

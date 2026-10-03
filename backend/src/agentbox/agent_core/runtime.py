@@ -6441,7 +6441,12 @@ class HarnessRuntime(RuntimeCommands):
             'PLAN_VERSION_TAKEN' in str(answer.get('code') or '')
 
     def final_claim_notices(self, sid, text):
-        """W6.2.BIND — notice cho claim kỹ thuật không nằm trong tài liệu đã phản biện."""
+        """W6.2.BIND — notice cho claim kỹ thuật không nằm trong tài liệu đã phản biện.
+
+        #6474: notice phát khi ĐÃ CÓ `reviewedSet`, không chỉ khi graph `verified` — main trả lời
+        giữa lượt (hoặc sau `needs_revision`) cũng phải thấy claim mới chưa được kiểm. Vẫn KHÔNG
+        chặn câu trả lời: đây là tín hiệu để main đánh dấu chưa kiểm hoặc đưa claim vào artifact.
+        """
         if not text or not work_graph.enabled():
             return []
         try:
@@ -6449,7 +6454,8 @@ class HarnessRuntime(RuntimeCommands):
             run = service.active(sid)
         except Exception:
             return []
-        if not run or run.get('status') != 'verified':
+        reviewed = (run or {}).get('reviewedSet') or {}
+        if not run or not reviewed.get('claims'):
             return []
         try:
             tokens = work_graph.final_claims_check(run, text)
@@ -6457,9 +6463,14 @@ class HarnessRuntime(RuntimeCommands):
             return []
         if not tokens:
             return []
+        message = ('unreviewed_claims: claim kỹ thuật không có trong tài liệu đã phản biện; '
+                   'đánh dấu chưa kiểm hoặc ghi vào artifact chính thức trước.')
+        if reviewed.get('claimsTruncated'):
+            message += (f" (tập claim đã bị cắt ở {work_graph.CLAIM_TOKENS_MAX}"
+                        f"/{reviewed.get('claimsTotal')} token)")
         return [{'type': 'unreviewed_claims', 'runId': run['runId'], 'tokens': tokens[:20],
-                 'message': 'unreviewed_claims: claim kỹ thuật không có trong tài liệu đã phản biện; '
-                            'đánh dấu chưa kiểm hoặc ghi vào artifact chính thức trước.'}]
+                 'truncated': bool(reviewed.get('claimsTruncated')),
+                 'claimsTotal': reviewed.get('claimsTotal'), 'message': message}]
 
     def emit_plan_rejection(self, sid, registration, evaluation):
         """Lưu + phát bản chấm của một lần ghi **bị cổng cứng chặn**, rồi mới raise câu từ chối.

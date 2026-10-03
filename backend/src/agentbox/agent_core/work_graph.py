@@ -72,6 +72,9 @@ WORK_RUN_MAX_SECONDS = 21600.0
 OUTPUT_MAX_CHARS = 20000
 CONTEXT_MAX_CHARS = 15000
 FINDINGS_MAX_CHARS = 3000
+# #6474: trần token claim của `reviewedSet`. Chạm trần thì ghi lại `claimsTotal`/`claimsTruncated`
+# thay vì cắt im lặng — badge không được nói "đã kiểm" cho một tập bị cắt mà không nói gì.
+CLAIM_TOKENS_MAX = 600
 HISTORY_MAX = 120
 WORK_SKILL = 'work-graph-planning'
 REVIEW_MAX_STEPS = 14
@@ -2192,7 +2195,13 @@ class WorkGraph:
             return await self.finish_verify(sid, run, review, produce, verdict, findings, doc.get('coverage', []))
 
     def reviewed_set(self, run):
-        """W6.2.BIND — tài liệu đã được whole-pass chứng nhận, kèm hash tại thời điểm đó."""
+        """W6.2.BIND — tài liệu đã được whole-pass chứng nhận, kèm hash tại thời điểm đó.
+
+        `claims` là TẬP TOKEN kỹ thuật của đúng bộ tài liệu đã phản biện, không phải bản chứng
+        nhận ngữ nghĩa/đơn vị/phiên bản: badge chỉ nói "token này có mặt trong tài liệu đã kiểm".
+        Chạm trần `CLAIM_TOKENS_MAX` thì ghi `claimsTotal`/`claimsTruncated` để lượt đọc sau biết
+        tập đã bị cắt (#6474) — trước đây cắt im lặng ở 600.
+        """
         produce = [n for n in run['nodes'] if 'produce' in n['stages']]
         artifacts, claims = [], set()
         for node in produce:
@@ -2208,7 +2217,9 @@ class WorkGraph:
         # `claims` là token kỹ thuật của đúng bộ tài liệu đã phản biện: `final_claims_check` là hàm
         # thuần, không đọc DB ở cuối lượt main (W6.2.BIND).
         return {'wholeBinding': self.whole_binding(run), 'artifacts': artifacts,
-                'claims': sorted(claims)[:600], 'reviewedAt': now(), 'verdict': 'ok'}
+                'claims': sorted(claims)[:CLAIM_TOKENS_MAX], 'claimsTotal': len(claims),
+                'claimsTruncated': len(claims) > CLAIM_TOKENS_MAX,
+                'reviewedAt': now(), 'verdict': 'ok'}
 
     def stale_review(self, run):
         """True when the reviewed set no longer matches the live graph or a reviewed artifact changed."""
