@@ -57,7 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
 from . import plan_quality, research_review, research_runtime
-from . import plan_workflow, verify_exec, work_graph, work_feedback, work_scope
+from . import plan_workflow, verify_exec, work_graph, work_feedback, work_scope, execution_kernel
 from .plan_quality import check_plan_quality
 from .roles import ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
@@ -4847,7 +4847,7 @@ class HarnessRuntime(RuntimeCommands):
         graph = getattr(self, 'work_graph', None)
         # W8.A4.2 — cửa quyết định của phạm vi thi công: run artifact-only/chờ duyệt/đã duyệt/đã đóng
         # đều không cho main sửa mã trực tiếp; con chỉ được ghi khi binding execute còn hiệu lực.
-        work_scope.check_tool(self, current, name, args)
+        execution_kernel.guard_tool(self, current, name, args)
         if current.get('parent_id') and graph and graph.feedback.yielded(sid):
             raise PermissionError('WORK_CHECKPOINT_YIELDED: wait for main before running more tools')
         plan_tools = plan_workflow.allowed_tools(self, current)
