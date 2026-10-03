@@ -3334,3 +3334,47 @@ mitigations"). Các phát hiện và trạng thái:
 | 9 | `scripts/eval/work_budget_eval.py` còn tạo phiên 60 bước/1200 s nên không còn đo mặc định mới | THẤP | **Còn mở** — chỉ ảnh hưởng phép đo cũ, không ảnh hưởng sản phẩm |
 | 10 | `lifetime` chỉ đếm con/giây trong `work_run`, bỏ sót con do `work_check`/`work_repair` sinh ra | INFO | **Còn mở, có chủ ý**: bộ đếm là tham vấn; muốn nó thành căn cứ đặt trần cứng thì phải mở rộng phạm vi trước |
 
+
+### 39.13 Bản ghi CHUẨN của W8.A4.5.N — lượt 19 (`oracle=true` + qua cổng đóng băng nguồn)
+
+Lượt chạy: `PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101
+--output .tmp/w8-probe-red12 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json`, trên cây **đóng băng**
+`29deaa6` (nhánh `vorflux/w10-w12-completion`, 20 tệp trong manifest, `mismatch: []` trước và sau lượt).
+
+| Tầng oracle | Kết quả |
+| --- | --- |
+| `mechanism` | **8/8** — `oneRepairEntry`, `classified`, `debugOnlyWhenUnclassified`, `resumedSameChild`, `freshArtifactAfterRepair`, `findingsBoundToChild`, `codeHashPinned`, `redCheckIsRevise` |
+| `model` | **5/5** — `seedIsRealRed` (gieo 1 lần, `python -m pytest -q` ngay sau đó exit≠0), `testerSawTheRedCommand`, `buildChildTouchedItsFile`, `secondCheckPassed`, `nodeAccepted` |
+| `integrationNative` | **5/5** — `mergedIntoRunBranch`, `built`, `hasRealChild`, `testsPassedOnMergedTree`, `integrationChecked` |
+| `oracle` | **true** · `error: null` · `latencySeconds: 1846.103` |
+
+**Chuỗi đo được:** lượt kiểm đầu `revise` (con Testing thật) → phân loại `class=clear` ("required command failed with
+a trace into tracked files") → main **resume CHÍNH con Build đầu** (`58964399…`, `resumed: true`) kèm findings của
+người soát (`a-2088af61…`) → artifact mới + `codeHash c02fd92d…` ghim → lượt kiểm xanh `pass` → nút `accepted` →
+hợp nhất vào nhánh run (`head d856bfed…`) → child Testing THẬT chạy `[tests, code_review]` **lần lượt** trên cây đã
+hợp nhất, `integrationStatus: checked`. Lượt này **không cần con `debug`** (`debugChildId: null`) — đúng luật
+"debug chỉ khi `unclassified`" — nên đây là đường **resume-trực-tiếp**, bổ sung cho đường **debug** đã đạt ở lượt 17.
+
+**Vì sao lượt này là bản ghi chuẩn (khác lượt 17 và 18):** lượt 17 cũng `oracle=true` nhưng trượt cổng
+`snapshot_source` (`AssertionError: source drift`) vì nguồn bị sửa giữa lượt; lượt 18 trên cây đóng băng hỏng vì
+lý do **hạ tầng** — con `debug` `39597230…` bị nhà cung cấp ngắt stream (`PROVIDER_STREAM_INTERRUPTED`, 13 bước)
+⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`. Lượt 19 trên cùng cây đóng băng vừa đạt đủ ba tầng oracle vừa giữ
+được cổng đóng băng (tiến trình thoát 0, `snapshot_source` không báo drift). Bằng chứng đầy đủ:
+`docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (18 lượt; lượt 19 có `resultsSha256`).
+
+**Hai dấu hiệu hạ tầng cần theo dõi (không phải lỗi sản phẩm):** con Testing `fa72544a…` của lượt 19 cũng bị
+`PROVIDER_STREAM_INTERRUPTED` (21 bước) — sản phẩm đã mở lại lượt kiểm khác và vẫn xanh; và bộ đếm
+`run.lifetime` vẫn `null` trên tài liệu run vì lượt probe không gọi `work_run` sau khi run được ghi.
+
+**Bốn test đỏ của lượt chạy đủ trên `b9c0b25` — đã xử lý xong ở `29deaa6`:**
+
+| Test | Nguyên nhân | Xử lý |
+| --- | --- | --- |
+| `test_peer_slot_lifecycle.py::test_watchdog_huy_con_qua_han_chi_nha_mot_slot` | Tuổi con viết cứng `1 300 s`, nay **thấp hơn** trần tường 4 500 s nên watchdog không còn đóng | Suy tuổi từ `CHILD_WALL_MAX_SECONDS + 100` (nhập hằng số) |
+| `test_session_length_payload.py::test_deadline_clamp_flag_is_visible_in_the_session_payload` | Yêu cầu `1 500 s`, nay **thấp hơn** trần 7 200 s nên không có cờ `deadlineClamped` | Nâng yêu cầu lên `9 000 s` |
+| `test_terminal_tools.py::test_terminal_exec_echo` | Chạy `Write-Output` (PowerShell) trên bash ⇒ exit 127 | **Lỗi môi trường có sẵn**: chạy lại trên worktree sạch của `origin/main` cũng đỏ y hệt |
+| `test_web_tools.py::test_the_dispatcher_sends_web_tools_to_the_host_not_the_box` | `runtime.store` giả thiếu `.db`; dòng đọc `.db` thuộc commit `6b44be3`/`0e4ce660`, trước bản vá | **Lỗi môi trường có sẵn**: đỏ y hệt trên `origin/main` |
+
+Sau hai bản vá test: bộ đơn vị đầy đủ `2 failed, 3319 passed, 12 skipped` (chỉ còn hai lỗi môi trường ở trên),
+và bộ E2E 11 kịch bản (resolve/update/resume/độ bền/thông điệp `rejected`/ngân sách/con/`lifetime`/`stuck`/schema/info)
+**11/11 OK**.
