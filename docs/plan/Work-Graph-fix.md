@@ -3415,3 +3415,45 @@ hệ quả, không phải lỗi phép đo.
 (kèm ghi vết), hoặc để `work_graph action=resolve` nhận cả hàng rào `superseded` (hiện `resolve` chỉ xử
 `inputConflicts`). Kèm: `retry` nên nói rõ đường đúng khi nút đang `needs_checks`, và thông điệp
 `Code changed before check.` nên kèm hướng dẫn.
+
+### 39.15. Chủ nhà chốt #6469–#6473 (03/10/2026) và bản vá W10/W11 đã thi công
+
+Năm câu hỏi phỏng vấn (`/code/.generated_artifacts/interview-w12-round2.json`) đã được chủ nhà trả lời; đây là bản ghi quyết định và phần đã làm theo đúng quyết định đó.
+
+| # | Câu hỏi | Chủ nhà chốt |
+|---|---|---|
+| 6469 | Đường xoá hàng rào binding `Code changed before check.` | **A — rebind có điều kiện + resolve**: mã đổi NGOÀI file nút khai báo thì ghim lại artifact theo mã hiện tại và chạy kiểm, ghi vết `reboundFrom/To`; mã đổi ĐÚNG vào file nút khai báo thì trả stage về `pending` để producer chạy lại trên mã mới (giữ lịch sử/vòng). `work_graph action=resolve` cũng xoá được hàng rào này. |
+| 6470 | `stuck_criteria` có mở sang stage `produce` không | **Có — đếm số vòng producer**: sau 2 vòng producer vẫn đỏ cùng một tiêu chí thì mở `inputConflicts` để main xem lại phân công. |
+| 6471 | Câu chữ vendor (`AGENT.md`, `simplify-code/SKILL.md:195`) | **Sửa cả hai + test prompt contract**. |
+| 6472 | Phạm vi W10.F | **Bộ đầy đủ 17 ca** (S01–S12 + V06/V07/V10/V13/V14), cổng `minPassed 22`, chạy nền. |
+| 6473 | Ưu tiên W6 | **W6.Q trước** (adjudicate bằng chứng đã có, không gọi model), rồi mới C4 live. |
+
+#### 39.15.1 Hai nguyên nhân gốc của ca S12 (§39.14)
+
+1. **Lỗi phép đo (bench, W10.M3).** `_terminal_problem` trong `scripts/eval/work_acceptance_bench.py` từ chối mọi lệnh chứa `$(`. Lệnh dò cô lập thật của sản phẩm là `t=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$t" ] && [ "$t" = "$(pwd -P)" ] && echo workspace-is-repo`, nên nó bị fixture từ chối ⇒ sản phẩm kết luận "không có git trong workspace" và run ghi `isolation.mode='touchset'` dù workspace LÀ gốc repo. **Đã vá:** fixture chạy lệnh bằng `create_subprocess_shell` (đúng như box thật) nên thay thế lệnh là cú pháp hợp lệ; hàng rào nay kiểm **phần lồng** bằng cùng bộ luật (`_substitutions`, trần 4 lớp) thay vì từ chối cả lệnh — `echo $(rm -rf x)`, ``echo `cat /etc/passwd` ``, `echo $(bash -c …)` vẫn bị chặn, còn phép dò cô lập và các lệnh sản phẩm thật chạy được. Bài kiểm mới `test_terminal_fence_allows_the_isolation_probe_and_checks_inside_substitutions` ghim cả hai chiều; `test_work_acceptance_bench.py` = **66 passed**.
+2. **Lỗi sản phẩm (gốc thật).** Ở chế độ `touchset`, artifact được ghim bằng dirty manifest (`work-dirty/1`), nhưng mọi cổng so sánh lại đọc cây bằng ảnh chụp git (`work-code/1`) — hai schema không bao giờ bằng nhau, nên MỌI lượt kiểm bị `superseded` với `Code changed before check.`; nút đứng mãi ở `needs_checks`, `work_run` không chạy lại (chỉ chạy stage `pending`/`revise`), và `retry` từ chối vì nút không `rejected`/`failed`. Hệ quả: **một run trong workspace không phải git repo không bao giờ qua được kiểm**, và main chỉ còn `action=update` — đường duy nhất xoá luôn bản nháp.
+
+#### 39.15.2 Bản vá W10 đã thi công (`9b2fcac`, 8 tệp)
+
+- `work_checks.identity_of(graph, sid, source, mode=None, root=None, base=None)` là **đầu đọc duy nhất** theo schema của chính bản ghim (`work-dirty/1` → dirty manifest + `declared`; còn lại → `work-code/1`); so sánh luôn bằng `same_identity` (schema + hash), không so cả dict. Áp cho cả 8 cổng: check start, retest, feedback, continuation, handoff, `busy_receipt`, receipt/recheck, và `work_graph.require_code_current`.
+- `binding_gate(...)` + `declared_map(...)`: mã đổi **ngoài** file nút khai báo ⇒ `graph.rebind_artifact(...)` ghim lại bản nháp, ghi vết `codeRebound` (giữ artifact, policy, lịch sử, số vòng); mã đổi **đúng vào** file nút khai báo ⇒ `graph.stage_needs_rebuild(...)` đặt `status='pending'`, `codeMoved=[...]`, lỗi `WORK_CHECK_CODE_MOVED`, để `work_run phase=execute` dựng bản mới. Không đo được (bản ghim cũ thiếu `declared`, hoặc ảnh chụp git thiếu `changed`) thì **fail-closed** — coi như `moved`, trả về sản xuất.
+- `work_graph action=resolve` xoá được hàng rào refused-check (stage `needs_checks`/`revise` mà mọi lượt kiểm mới nhất đều `superseded`) mà **không mất bản nháp**; `retry` và `next_step` chỉ đúng đường xoá khi không còn gì để reset.
+- Ảnh chụp git nay kể tên tệp đã đổi (`changed`, tối đa 200) để quyết định ghim lại có căn cứ.
+- `stuck_criteria` mở sang stage `produce` theo #6470: execute+git đếm `repairs`, mọi stage khác (kể cả `produce`) đếm `rounds`.
+- 7 bài kiểm mới: `backend/tests/unit/test_work_code_binding_w10.py` (7 passed in 5.33s) — ghim đúng schema, ghim lại khi mã đổi ngoài phạm vi, trả về sản xuất khi mã đổi trong phạm vi, `resolve` mở hàng rào, `retry`/`next_step` nói đúng đường, `stuck_criteria` leo thang sau các vòng producer.
+- Suite lân cận sau khi vá: `test_work_checks.py` + `test_work_retest_w8.py` + `test_work_repair_w8.py` + `test_work_handoffs_w8.py` + `test_work_admission_w8.py` + `test_work_converged_review.py` + `test_work_graph.py` + `test_work_checks_remaining.py` + `test_work_checks_w61.py` = **84 passed in 62.85s**.
+- Lỗi hồi quy bắt được trong lúc vá: `code_identity` đánh rơi `root`/`base` làm `work_progress.reserve` từ chối lượt execute của `P1` (`WORK_CODE_SNAPSHOT_REQUIRED: failed code inspection cannot admit a fresh execution turn`) — đã sửa bằng cách truyền thẳng `root=`/`base=` xuống `identity_of`.
+
+#### 39.15.3 Bản vá W11 P0c (theo #6471)
+
+- `AGENT.md:12`: bỏ câu "a child ... never asks the owner"; câu mới nói con lưu câu hỏi bằng `work_report` (`needs_user`) và main trả lời hoặc phát hành qua thẻ phỏng vấn.
+- `AGENT.md:20`: bỏ câu "Every child output in a Work Graph goes to an independent reviewer"; câu mới nói kiểm chứng theo artifact/rủi ro qua `work_policy.derive` và code review git để tới cây hội tụ.
+- `vendor/hermes/skills/software-development/simplify-code/SKILL.md` (Phase 3, mục 2): không còn dặn bỏ gợi ý "âm thầm"; mọi finding bị bỏ phải kèm một dòng bằng chứng.
+- 2 bài kiểm hợp đồng mới trong `backend/tests/unit/test_work_prompt_contracts.py` (44 passed) đọc thẳng `AGENT.md` và file skill để câu cũ không quay lại.
+
+#### 39.15.4 Còn lại của lượt này
+
+- Phép đo bench cho `$(...)`: **đã vá** (xem 39.15.1). Fixture/driver S09 (thẻ interview 0 câu hỏi): `w10-s09-fixture-driver` (đang chạy), sẽ commit cùng lượt.
+- W10.F bộ đầy đủ 17 ca (#6472): chỉ chạy sau khi phép đo S12 được vá; mọi thất bại giữ trong thống kê.
+- W6.Q adjudication (#6473): `w6q-adjudication` (đang chạy) — bằng chứng có sẵn, không gọi model.
+- W11 P0c/P1/P2/P3 cho các vai còn lại: `w11-p0c-p3-roles` (đang chạy), chỉ sửa câu chữ prompt + test, không đụng quyền/scheduler.
