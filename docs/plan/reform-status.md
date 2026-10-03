@@ -31,11 +31,12 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H3.1 | Lỗi: chưa có đường nối `task_service` vào runtime (chỉ test import) | ✅ | `task_surface.py` + wiring: `turn_profile` gỡ công cụ khi tắt, `dispatch` từ chối, hook `project_child` ở 4 bộ đóng con, `delegate_task` tạo task + ghi attempt |
 | H3.2 | Lỗi: `task_get/send/abandon` đưa `taskId` (alias) thẳng vào khoá backend ⇒ mọi lời gọi theo alias chết `TASK_UNKNOWN` | ✅ | `TaskService.key_for` tra alias trong run; test `task_get` theo `taskId` |
 | H3.3 | Lỗi: kết quả `delegate_task` gọi `_task_receipt` thiếu `self` ⇒ `TURN_FAILED_NAMEERROR` ngay ở bước giao việc có hợp đồng | ✅ | test `test_delegate_with_a_contract_creates_the_task_and_binds_the_attempt` bắt được; đã sửa `self._task_receipt` |
-| H4 | Job nền qua nhiều lượt: ownership, outbox, cursor, wake lock, reconcile sau restart | 🔄 | `harness_jobs.py` (đang dựng) |
-| H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | 🔄 | `context_bundle.py` (79 test); `skill_spec.py` (đang dựng) |
-| H6 | Phân bổ và hạch toán: sổ usage, price certainty, reservation/settlement | 🔄 | `usage_ledger.py` (đang dựng) |
-| H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | 🔄 | `research_owner.py` (đang dựng) |
-| H8 | Main thích ứng: progress signal, loop guard, effort, chọn nhánh | 🔄 | `adaptive_main.py` (đang dựng) |
+| H4 | Job nền qua nhiều lượt: ownership, outbox, cursor, wake lock, reconcile sau restart | ✅ | `harness_jobs.py` (50 test); `HarnessJobs(store, confirm_executor=None)` fail closed |
+| H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (106 test) |
+| H6 | Phân bổ và hạch toán: sổ usage, price certainty, reservation/settlement | ✅ | `usage_ledger.py` (46 test); giá lạ là `None`, không phải 0 |
+| H6.1 | Lỗi: `observed_at` nằm trong hash idempotency của `record` ⇒ retry y hệt bị `USAGE_CALL_CONFLICT` oan | ✅ | bỏ mốc sổ khỏi hash; test `test_record_replay_and_conflict` ghim đường thử lại |
+| H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | ✅ | `research_owner.py` (51 test); intent do main viết không thành canonical |
+| H8 | Main thích ứng: progress signal, loop guard, effort, chọn nhánh | ✅ | `adaptive_main.py` (75 test); mọi quyết định kèm `reason` + `evidenceRefs` |
 | H9 | Suite v2 theo outcomes/invariants + compatibility | ⬜ | — |
 | H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⬜ | — |
 | H10.1 | Calibration sống (model/route/ngân sách thật) | ⛔ | Cần consent tài chính riêng; chưa tiêu |
