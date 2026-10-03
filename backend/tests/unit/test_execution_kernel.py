@@ -217,13 +217,26 @@ def test_live_graph_without_switch_still_reports_restricted_view(environment, mo
 # --------------------------------------------------------------------------- #
 
 def test_mode_injected_tools_are_not_reported_as_revoked(environment):
+    """`plan_scope`/`design_scope` never appear in `config.tools`; the owner check must exempt them."""
     runtime, sid = environment
     current = policy_session(runtime, sid)
-    runtime.turn_profile = lambda session: {'mode': 'design', 'tools': TOOLS + ['design_write'], 'promptBlock': ''}
-    with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
-        execution_kernel.guard_tool(runtime, current, 'design_write', {'path': 'x'})
     runtime.turn_profile = lambda session: {'mode': 'plan', 'tools': TOOLS + ['plan_scope'], 'promptBlock': ''}
     assert execution_kernel.guard_tool(runtime, current, 'plan_scope', {'action': 'status'})['mode'] == 'artifact_only'
+    runtime.turn_profile = lambda session: {'mode': 'design',
+                                            'tools': TOOLS + ['design_scope'], 'promptBlock': ''}
+    assert execution_kernel.guard_tool(runtime, current, 'design_scope', {'action': 'status'})['mode'] == 'artifact_only'
+
+
+def test_injected_design_tool_survives_the_owner_check_when_admitted(environment, monkeypatch):
+    """With a live binding the scope gate stands aside, so only the exemption can save this call."""
+    runtime, sid = environment
+    current = policy_session(runtime, sid)
+    runtime.turn_profile = lambda session: {'mode': 'design',
+                                            'tools': TOOLS + ['design_write'], 'promptBlock': ''}
+    monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
+    monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
+    assert execution_kernel.guard_tool(runtime, current, 'design_write', {'path': 'x'})['mode'] == 'run_execute'
 
 
 def test_tools_outside_the_owner_switchboard_and_the_turn_profile_are_revoked(environment):
