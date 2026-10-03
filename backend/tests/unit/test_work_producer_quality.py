@@ -20,6 +20,18 @@ def test_lookup_deliverable_is_short_contract_vi_en():
     assert '## Trả lời' in knowledge and '## Nguồn đã mở' in knowledge
 
 
+def test_lookup_answer_cap_names_the_one_counting_rule():
+    """FU5 (W6.Q): trần 120 từ phải nói rõ cách đếm — thân mục, không tính dòng tiêu đề.
+
+    Đếm thô (kể cả `## Trả lời`) từng cho 122 và bị đọc là vượt trần, trong khi đúng luật là 119.
+    """
+    vi = work_prompts.deliverable('research', 'vi', task_kind='lookup')
+    en = work_prompts.deliverable('research', 'en', task_kind='lookup')
+    assert 'không tính dòng tiêu đề' in vi
+    assert 'heading lines do not count' in en
+    assert work_prompts.LOOKUP_ANSWER_COUNT_RULE in ('body of the Answer section, Markdown heading lines excluded',)
+
+
 def test_research_brief_depth_omits_options_section():
     brief = work_prompts.deliverable('research', 'vi', depth='brief')
     assert all(head in brief for head in ('## Trả lời', '## Dữ kiện đã xác minh', '## Khoảng trống'))
