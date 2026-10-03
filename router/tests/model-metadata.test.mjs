@@ -174,8 +174,11 @@ test('curated catalogs no longer claim a live inventory', async () => {
   }
   const openrouter = providers(async () => { throw new Error('offline'); }).openrouter;
   assert.equal((await openrouter.discover({ connection, credentials })).models.every(model => model.source === 'static'), true);
+  // W12/T2: opencode không còn tự nuốt lỗi dò — bảng curated của nó là `fallbackModels`
+  // cho nhánh catch của service (connection chưa có hàng nào để giữ), và cũng nhãn static.
   const opencode = providers(async () => { throw new Error('offline'); }).opencode;
-  assert.equal((await opencode.discover({ connection, credentials })).models.every(model => model.source === 'static'), true);
+  await assert.rejects(() => opencode.discover({ connection, credentials }), /offline/);
+  assert.equal(opencode.fallbackModels.every(model => model.source === 'static'), true);
 });
 
 test('a stored row picks up the shipped table, and a row outside the table keeps its own number', async t => {

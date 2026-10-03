@@ -400,19 +400,22 @@ test('W12: a payload context window and price survive even without a reasoning b
 });
 
 test('W12: the curated static fallback labels its own fields', async () => {
+  // `fallbackModels` là bảng service seed khi connection CHƯA có hàng nào để giữ
+  // (nhánh catch của `service.discover`). Nó phải tự nói nguồn của mình.
   const adapter = createProviders({ fetchImpl: async () => { throw new Error('offline'); } }).opencode;
-  const { models } = await adapter.discover({ connection, credentials: {} });
-  const curated = models.find(model => model.id === 'muse-spark-1.2-contributor-free');
+  assert.deepEqual(adapter.fallbackModels.map(model => model.id), ['muse-spark-1.2-contributor-free', 'muse-spark-1.3-contributor-free']);
+  const curated = adapter.fallbackModels.find(model => model.id === 'muse-spark-1.2-contributor-free');
   assert.equal(curated.source, 'static');
   assert.equal(curated.fieldSources.inventory, 'static');
   assert.equal(curated.fieldSources.thinking, 'documented');
 });
 
-test('a discovery failure falls back to the curated static list', async () => {
+test('a discovery failure is raised, not swallowed, so the service can keep last-good', async () => {
+  // W12/T2: bản cũ nuốt lỗi rồi trả bảng curated `stale: false`, nên một lần 429/offline
+  // thay mất inventory live mà không có `stale`/`error` nào. Lỗi phải nổi lên
+  // `ProviderService.#discover` để nhánh catch ở đó giữ last-good và ghi lại thất bại.
   const adapter = createProviders({ fetchImpl: async () => { throw new Error('offline'); } }).opencode;
-  const { models } = await adapter.discover({ connection, credentials: {} });
-  assert.deepEqual(models.map(model => model.id), ['muse-spark-1.2-contributor-free', 'muse-spark-1.3-contributor-free']);
-  assert.ok(models.every(model => model.source === 'static' && model.enabled));
+  await assert.rejects(() => adapter.discover({ connection, credentials: {} }), /offline/);
 });
 
 test('helpers keep their shape on odd input', () => {
