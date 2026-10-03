@@ -3457,3 +3457,19 @@ Năm câu hỏi phỏng vấn (`/code/.generated_artifacts/interview-w12-round2.
 - W10.F bộ đầy đủ 17 ca (#6472): chỉ chạy sau khi phép đo S12 được vá; mọi thất bại giữ trong thống kê.
 - W6.Q adjudication (#6473): `w6q-adjudication` (đang chạy) — bằng chứng có sẵn, không gọi model.
 - W11 P0c/P1/P2/P3 cho các vai còn lại: `w11-p0c-p3-roles` (đang chạy), chỉ sửa câu chữ prompt + test, không đụng quyền/scheduler.
+
+### 39.16 W6.Q — adjudication reviewer/producer/main trên corpus đã lưu (quyết định #6473)
+
+Báo cáo đầy đủ: [`W6.Q-adjudication.md`](W6.Q-adjudication.md) (244 dòng, chỉ đọc corpus — không gọi model, không chạy live, không sửa sản phẩm).
+
+**Kết quả:** 60 dòng adjudication trong 8 nhóm bằng chứng — **35 `chưa công tâm`**, **15 `công tâm`**, **10 `không kết luận được`**. Theo tác nhân: reviewer 33, measurement 13, main 8, producer 6.
+
+- Lỗi reviewer nhiều nhất nhưng phần lớn ở **câu chữ/severity/scope**, không phải định tuyến verdict: 8/8 verdict theo policy 10 đúng, `criterionConflictRouted`/`producerRetryBlocked` đúng, không có lượt pass giả.
+- Lỗi producer/main ít hơn nhưng nặng hơn: sai đơn vị và sai mốc version trong bản tổng hợp cuối (G2/G3); pass giả ở T7 lan sang P3 (E6→E13); main gọi finding đã bị bác là "thật" ở design-repeat2 (F12/F13).
+- **W6.2.BIND chủ yếu là lỗ hổng sản phẩm:** binding là **tập token** (`work_graph.py:2194`, cắt `[:600]`), `final_claims_check` thuần và không chặn (`work_graph.py:135`), thông báo chỉ nổ khi `status == 'verified'` (`runtime.py:6452`) — không kiểm ngữ nghĩa/đơn vị/version.
+- Phần đo của W6.2.BIND: S01-r2 **không có whole-pass nào** (cả hai lượt `whole` đều `error`); bundle gốc `docs/w10-handoff-03_10/` không có trong repo; ảnh chụp whole không ghim môi trường đích.
+- Không dùng độ dài/nhãn `finalized` làm bằng chứng ở bất kỳ dòng nào; plan S01 13 537 ký tự được ghi là **chưa qua whole-pass**, và không có kết luận chất lượng/khả thi nào cho ứng dụng y tế/pháp lý.
+
+**Theo dõi đề xuất (chỉ việc có bằng chứng xác nhận):** FU1 bổ sung khai báo cho fixture đối chứng (dialect/quoting/lineterminator); FU2 giữ prompt `verify_exec`, theo dõi `verifyExecCalls` + tỉ lệ hạ cấp ở W10; FU3 oracle số phải có ≥1 claim số sống sót hoặc ghi `N/A`; FU4 sửa tiền đề `csv-error-type` (NUL trong `str` không ném lỗi trên 3.12); FU5 chốt một luật đếm cho lookup (122 raw / 119 không heading / trần 120); FU6 gom phản ví dụ prose thành corpus nhỏ; FU7 ghi số từ reviewer vào báo cáo mỗi lượt; FU8 ghi giới hạn thật của badge vào hợp đồng W6.2.BIND; FU9 `work_policy.VERSION` vẫn `work-checks/10` trong khi `INPUTS_VERSION='work-check-inputs/2'` tham gia binding — việc soát hợp đồng cho W10; FU10 triệu chứng "tổng hợp bỏ finding" chưa có receipt (thêm run + finding id hoặc bỏ khỏi danh sách "observed").
+
+**Hai lỗ hổng không thể đóng từ corpus:** raw `.tmp/work-checks/w61-*`/`w611-*`/`w612-*`/`w613-*` đã mất, và bằng chứng probe không có trường `raw` — nên một số claim chỉ còn tựa vào bản tóm tắt trong `docs/plan/*.json`.
