@@ -587,3 +587,283 @@ CLAIM_TOKENS_MAX = 600           (trần tập claim của reviewedSet, #6474)
 2. `checks` — kind/status từng lượt kiểm; `revise` là bị trả về.
 3. `lifetime` — `calls`, `children`, `seconds`, `childSeconds` (chi phí thật của nút).
 4. Bộ đếm mã lỗi trong event của phiên con — cho biết hỏng vì luật sản phẩm hay vì provider.
+
+---
+
+## 8. "Task engine" là gì, và main của BoxFox có phải chỉ là LLM?
+
+### 8.1 Task engine của nền tảng Vorflux
+
+Task engine là **tầng chạy nền của nền tảng**, không phải model và không phải prompt. Nó giữ bốn thứ:
+
+| Thành phần | Việc nó làm | Tôi thấy nó qua đâu |
+|---|---|---|
+| Hàng đợi task | nhận `add_task` và trả về ngay (`task_id`), không chặn vòng lặp của tôi | `add_task` trả `task_id` tức thì |
+| Quản lý phiên con | mỗi task là **một agent session thật**, chạy song song trên **cùng máy**, cùng checkout | mô tả công cụ: "share this machine and this conversation" |
+| Trạng thái + kho kết quả | giữ tiến độ, kết quả cuối, và cho phép gửi tiếp vào task đã xong | `list_tasks`, `wait_any_task_result`, `send_message_to_task` |
+| Kênh đánh thức | đưa kết quả nền trở lại phiên chính | `wait_any_job_result`, thông báo job hoàn tất |
+
+Tôi chỉ nhìn thấy task engine **qua hợp đồng công cụ và hành vi**, không thấy mã của nó. Ví dụ hành vi
+đã gặp trong phiên này: job nền `3227052d` báo `completed` sau **3 giây** vì tôi bọc `nohup … &`
+bên trong — nghĩa là task engine coi "lệnh đã trả về" là "việc đã xong". Bài học: muốn được đánh
+thức thì **chính tiến trình chờ** phải là thân của job, không được tách rời.
+
+Bốn đặc điểm cần nhớ:
+
+1. **Bất đối xứng.** Task engine là thứ *chạy* con; tôi là thứ *ra lệnh* cho nó. Nó không có luật
+   nghiệp vụ (không biết "check", "grant", "review" là gì).
+2. **Không có máy trạng thái nghiệp vụ.** Trạng thái nó giữ là trạng thái *kỹ thuật* (đang chạy,
+   xong, lỗi, bị huỷ), không phải `drafting → verified`.
+3. **Con không điều khiển được con.** Subagent không có `add_task`; chỉ main có. Con cũng không
+   fork được.
+4. **Kết quả trả về là văn bản**, trừ khi tôi khai `output_schema` (workflow mode) — khi đó con phải
+   ghi JSON vào `/code/.plans/workflow/results/<task_id>.json` và kết thúc bằng dòng
+   `RESULT_FILE: <path>`.
+
+### 8.2 Main của BoxFox có phải "chỉ là LLM"?
+
+**Không.** Đọc mã cho thấy main của BoxFox là một agent đầy đủ, và ở vài mặt còn bị ràng buộc chặt
+hơn tôi:
+
+| Tiêu chí "là agent" | BoxFox main | Vorflux (tôi) |
+|---|---|---|
+| Vòng lặp model ↔ tool | có (`runtime.py` + 55 công cụ) | có |
+| Bộ nhớ ngoài vòng lặp | **Work Graph** (SQLite: node, artifact, check, grant) | task engine + file + memory |
+| Kế hoạch nhiều bước | SOP pha A–I bắt buộc | hướng dẫn + plan approval |
+| Trần bước | 120 (trần 400) | không có trần bước công bố |
+| Trần thời gian | 1800 s (trần 7200) | `timeout_seconds` mỗi task; cost limit cho automation |
+| Trần token ra | **4096 mặc định**, 16 000 cho một số vai | không đặt trần token |
+| Cổng duyệt của người dùng | card duyệt + `plan_verify` + `PLAN_APPROVAL_UNVERIFIED` | plan approval + xác nhận qua chat |
+| Tự sửa lỗi | `retry` nút sau `execute_failed`, vòng `revise` trong check | gửi lại task, vòng review tối đa 2 |
+| Phân quyền | quyền con = cha ∩ vai, nút kiểm chỉ-đọc | mô tả bằng hướng dẫn, không cưỡng chế bằng mã |
+
+Nói cách khác: khác biệt **không phải** "LLM thường vs agent". Khác biệt là **luật nằm ở đâu**:
+
+- BoxFox: luật nằm **trong sản phẩm**, viết thành mã, mọi bước đều có mã lỗi ⇒ tất định, kiểm toán
+  được, nhưng cứng.
+- Vorflux: luật nằm **ở nền tảng + hướng dẫn**, tôi tự giữ mạch ⇒ linh hoạt, mở rộng nhanh, nhưng
+  không tái lập máy móc được một lượt chạy.
+
+### 8.3 Vậy "nâng main lên ngang agent" nghĩa là gì?
+
+Không phải thêm vòng lặp tool (đã có). Ba việc thật cần làm, theo thứ tự:
+
+1. **Cho main một task engine riêng** — hiện main ôm cả Work Graph lẫn việc gọi con; tách ra một
+   hàng đợi task có vòng đời (`list/wait/send/cancel`) giúp main không phải chờ đồng bộ và không mất
+   kết quả khi bị cắt.
+2. **Cho main khả năng phục hồi** — retry khi lỗi hạ tầng (hiện chỉ khi phản hồi rỗng), và trần token
+   ra theo vai (hiện 4096 cho mọi vai sản xuất).
+3. **Cho main hợp đồng kết quả** — schema tuỳ chọn cho đầu ra của con, để kiểm bằng máy thay vì đọc
+   bằng mắt.
+
+---
+
+## 9. Chi tiết nền tảng Vorflux: prompt, skill, tool, phương pháp
+
+Phần này mô tả **cấu trúc và luật**, không dán nguyên văn prompt hệ thống (bản nguyên văn dài và
+phần lớn là quy ước nội bộ). Chỗ nào có số liệu thì lấy từ chính phiên này.
+
+### 9.1 Prompt — 9 nhóm khối, khoảng 35 khối
+
+| Nhóm | Khối tiêu biểu | Luật rút ra (có thể mượn) |
+|---|---|---|
+| A. Định danh & giọng | identity; communication style (ASD-STE100: câu ≤25 từ, thể chủ động); thinking; độ dài trả lời | quy định *độ dài* và *giọng* thành luật viết, không để model tự chọn |
+| B. An toàn & dữ liệu | production data safety; GitHub credentials (dùng credential helper, cấm đi tìm token); secrets catalog | nói rõ **nguồn** của bí mật, cấm tự đi tìm |
+| C. Bộ nhớ | sơ đồ `/memory/` (knowledge, user-preferences, sessions, testing, setup-learnings, scripts, automations); `mark_important_memory`; knowledge index | bộ nhớ có **thư mục chuẩn + luật đọc/ghi**; cấm ghi bừa ra gốc |
+| D. Môi trường | ngày giờ hiện tại (chống đoán); danh sách repo đã clone; thứ tự ưu tiên file hướng dẫn (root → nested); luật tìm mã (rg, hẹp trước, `-l`/`-c`); preview URL; browser-state | **tiêm dữ kiện môi trường** thay vì để model tự dò |
+| E. Điều phối con | 8 loại sub-agent; tham số `add_task`; vòng đời `list/wait/send/cancel/abandon`; khác biệt fork vs subagent; luật "một task implementation thì tự làm" | hợp đồng giao việc có **tham số tường minh** và **luật khi nào không giao** |
+| F. Quy trình | planning workflow; quality phase transition; simplify review; testing + presenting evidence; post-merge PR impact; git/PR operations; out-of-scope feedback | mỗi pha có **cổng** (plan phải duyệt; PR phải có Test Report) |
+| G. Giao tiếp | canvas (một canvas/bài trả lời, cùng `canvas_id` = bản mới); artifact sharing; preamble; interim updates; asking questions (1–5 câu hỏi có lựa chọn) | đầu ra có **định dạng**, câu hỏi có **cấu trúc** |
+| H. Công cụ | danh sách tool; catalog `vflux_exec`; danh sách skill | công cụ được mô tả kèm **điều kiện dùng** |
+| I. Vòng đời | compaction mode (chỉ kích hoạt bằng đúng câu lệnh hệ thống) | có cơ chế **nén ngữ cảnh** tường minh |
+
+Điểm đáng chú ý: prompt của tôi **không** chứa SOP nghiệp vụ kiểu A–I. Nó chứa *luật quy trình* và
+*định dạng đầu ra*; phần "làm gì" do tôi tự suy từ yêu cầu. BoxFox làm ngược lại: SOP nghiệp vụ rất
+chi tiết, còn luật trình bày thì mỏng. **Mượn 30% ở đây = thêm nhóm G (định dạng đầu ra + câu hỏi có
+cấu trúc) và nhóm D (tiêm dữ kiện môi trường) cho main.**
+
+### 9.2 Skill — 14 skill hệ thống
+
+| Skill | Dùng khi | Nội dung cốt lõi |
+|---|---|---|
+| `pr-tour` | cần tour PR tương tác | inventory → detail → publish; curation chỉ dùng ID |
+| `android-testing` | thử app Android | ADB + Redroid, build APK, QR cài máy thật |
+| `browser-testing` | thử UI web | agent-browser CLI, snapshot theo ref, video |
+| `planning-workflow` | viết/duyệt plan | submit → duyệt → thực thi; đổi phạm vi phải làm lại plan |
+| `ios-testing` | build/test iOS | đẩy lên macOS fleet qua CodeBuild |
+| `electron-testing` | thử app Electron | XFCE + DISPLAY, HTTP + browser |
+| `whoami` | hỏi "bạn làm được gì" | bảng năng lực |
+| `agent-reliability` | chẩn đoán agent hỏng | taxonomy lỗi tool, quy lỗi model hay harness |
+| `risk-assessment` | chấm rủi ro PR | thang điểm + định dạng |
+| `git-pr-workflow` | **bắt buộc trước mọi thao tác git/PR** | branch, commit, PR, review |
+| `file-access-requests` | cần file không đọc được | gửi yêu cầu cấp quyền, không chặn |
+| `secrets-catalog` | thiếu credential | liệt kê secret, cách xin |
+| `web-preview` | preview web | expose backend, repoint frontend, allow-list host |
+| `canvas-spec` | trước lần vẽ canvas đầu tiên | toàn bộ từ vựng canvas v2 |
+
+Cơ chế: skill là **file markdown đọc theo nhu cầu** (progressive disclosure), không nạp sẵn. So với
+BoxFox: BoxFox gán skill theo vai (`ROLE_SKILLS`) + có `sha256`/`basePath`/`linkedFiles` — chặt hơn.
+Vorflux rộng hơn: main đọc bất cứ skill nào, bất cứ lúc nào, và **một skill có thể là "cổng bắt buộc"**
+(`git-pr-workflow` phải đọc trước khi push). **Mượn: thêm khái niệm "skill bắt buộc theo hành động"
+cho main, giữ nguyên cách gán skill theo vai của BoxFox.**
+
+### 9.3 Tool — 23 tool của tôi + 61 lệnh `vflux_exec` trong 19 nhóm
+
+Tool trực tiếp (23):
+
+| Nhóm | Tool |
+|---|---|
+| Shell & file | `bash_execute`, `edit_file`, `read`, `write_file`* |
+| Job nền | `job`, `wait_any_job_result` |
+| Git/repo | `list-git-repositories`, `resolve-git-repository-path` |
+| Subagent | `add_task`, `list_tasks`, `wait_any_task_result`, `send_message_to_task`, `cancel_task`, `abandon_blocked_task` |
+| Kế hoạch việc | `add_todos`, `update_todo`, `list_todos` |
+| Trình bày | `render_canvas`, `pr_tour` |
+| Khác | `web_search`, `mark_important_memory`, `report_infrastructure_issue`, `complete_without_response` |
+
+\* `write_file` xuất hiện trong bộ tool của phiên khi cần ghi file mới dung lượng lớn.
+
+`vflux_exec` — 19 nhóm, 61 lệnh: `blueprint` (6), `session` (9, gồm `fork`, `message-user`,
+`scope-feedback`), `plan` (3), `workflow-script` (2), `memory-snippet` (1), `test-report` (1),
+`merge-queue` (6), `port expose` (1), `secret` (2), `file-access` (1), `ask_user` (1), `schedule` (1),
+`automation` (1), `ios-build` (7), `artifact` (2), `pr` (8), `jira` (5), `repo` (2), `context7` (2).
+
+Ba điểm khác BoxFox đáng chú ý:
+
+1. **Vòng đời task là công cụ hạng nhất** — `list/wait/send/cancel/abandon`. BoxFox có
+   `peer_read`/`await_children` cho con, nhưng main không có bộ "quản lý task" tương đương.
+2. **Job nền có watchdog** — `job` + `wait_any_job_result` là cặp "chạy dài" và "đánh thức".
+3. **Todo list** — `add_todos/update_todo/list_todos` giữ kế hoạch ngắn hạn ngoài ngữ cảnh.
+
+### 9.4 Phương pháp — 15 quy trình đang chạy
+
+| # | Phương pháp | Cách làm | BoxFox tương đương | Nên mượn |
+|---|---|---|---|---|
+| 1 | Duyệt plan | `plan submit` → chờ → `plan approve` → thực thi | card duyệt + `plan_verify` | đã có |
+| 2 | PR | branch `vorflux/…`, draft PR, body theo mẫu, review/simplify | `work_ship` tạo branch/commit/PR | một phần |
+| 3 | Test Report | 1 report/chu kỳ, có `status` + `coverage x/y`, kèm artifact | chưa có tầng báo cáo | **nên mượn** |
+| 4 | Simplify | subagent `simplify` sau khi viết mã | vai `simplify` | đã có |
+| 5 | Review | tối đa 2 vòng; reviewer chấm rủi ro | vai `review` + checks | đã có |
+| 6 | Out-of-scope | `scope-feedback surface`, ghi vào PR, không chặn | `needs_user` + finding | một phần |
+| 7 | Bộ nhớ | `/memory/*` + `mark_important_memory` + search session cũ | SQLite + `journal_*` | một phần |
+| 8 | Job nền + đánh thức | job phải là **chính** tiến trình chờ | chưa có | **nên mượn** |
+| 9 | Fork | tách việc độc lập thành phiên riêng (≤10/giờ) | chưa có | tuỳ |
+| 10 | `workflow_mode` | con ghi JSON theo `output_schema`, kết thúc `RESULT_FILE:` | hợp đồng văn bản | **nên mượn** |
+| 11 | Canvas | 1 canvas/bài trả lời; cùng id = bản mới | `canvas_draw` | đã có |
+| 12 | Design subagent | mockup HTML + `design-plan.json` + duyệt kèm plan | `design_report` + skill design | đã có |
+| 13 | Lịch & automation | `schedule create`, `automation create` (có cost limit) | chưa có | tuỳ |
+| 14 | Cổng bắt buộc | skill `git-pr-workflow` phải đọc trước khi push | SOP pha A–I | đã có (mạnh hơn) |
+| 15 | Nén ngữ cảnh | compaction tường minh | `COMPRESSION_THRASH_SECONDS` | đã có |
+
+### 9.5 Cái tôi không có mà BoxFox có (đừng mượn nhầm)
+
+- **Máy trạng thái nghiệp vụ** và **kiểm tra trên đúng snapshot** — đây là thế mạnh riêng của BoxFox.
+- **Grant/lease** cho hành động nguy hiểm.
+- **Fan-out có slot** (`FANOUT_PER_PARENT_MAX`, `FANOUT_GLOBAL_CEILING`, `FANOUT_QUEUE_WAIT_SECONDS`).
+- **Chạy trong sandbox của người dùng cuối** (Docker desktop, code-server, VNC).
+- **Đa nhà cung cấp qua router** với khoá luân phiên (6 connection).
+
+---
+
+## 10. Đánh giá BoxFox hiện tại trên thang 100
+
+### 10.1 Cách chấm
+
+Mười tiêu chí, mỗi tiêu chí 10 điểm. Điểm lấy từ **bằng chứng trong phiên này**: mã đã đọc, bộ đo
+W10.F (7 ô tuần tự đã xong + các pilot), bộ test đơn vị, ảnh chụp UI. Không chấm theo cảm nhận.
+
+### 10.2 Bảng điểm
+
+| # | Tiêu chí | Điểm | Bằng chứng | Cách nâng |
+|---|---|---|---|---|
+| 1 | Kiến trúc & mô hình thực thi | **9**/10 | Work Graph + harness + sandbox Docker; `docs/` dày; event/artifact/check có mã | giữ |
+| 2 | Điều phối đa agent | **8**/10 | 11 vai; quyền con = cha ∩ vai; fan-out slot 3/6/8; thiếu vòng đời task cho main | thêm task engine (§8.3) |
+| 3 | Hoàn thành task end-to-end | **5**/10 | 7 ô tuần tự: 0 ô về `verified` (`needs_revision` ×3, `discovering` ×3, `drafting` ×1); 1 ô S12 chạy đơn lẻ đạt `approved` | A1+A2+A3 ở §11 |
+| 4 | Ổn định & phục hồi lỗi | **4**/10 | chỉ retry khi phản hồi rỗng; `PROVIDER_STREAM_INTERRUPTED` tới 209 lần/ô; 4 lượt kiểm rồi `WORK_CHECK_EXHAUSTED` | A2, A4 |
+| 5 | Ngân sách & chi phí | **6**/10 | trần cứng tốt (120 bước/1800 s); nhưng 4096 token cho mọi vai sản xuất; một ô tốn 82 k token suy luận | A1, C1–C6 |
+| 6 | Quan sát & kiểm toán | **9**/10 | event stream, `lifetime` (calls/children/seconds), hash artifact, checks theo kind/status | giữ |
+| 7 | An toàn & phân quyền | **9**/10 | quyền ngoài model; nút kiểm chỉ-đọc; `DECISION_UNAVAILABLE`; sandbox là ranh giới thật | giữ |
+| 8 | UI/UX | **7**/10 | provider ring 6 khoá, picker có `Thinking: Minimal/Low/Medium/High`; nhưng 3 test frontend đỏ, W7.1 UI acceptance chưa chạy | B1–B7 |
+| 9 | Chất lượng kỹ thuật & test | **8**/10 | 3319 passed / 2 lỗi môi trường; bench 66 test; harness đo được | giữ + sửa 2 lỗi môi trường |
+| 10 | Tài liệu & bàn giao | **9**/10 | `docs/plan` + evidence JSON + handoff + báo cáo W11 | giữ |
+| | **Tổng** | **74/100** | | |
+
+### 10.3 Nếu coi như người dùng lần đầu
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Ấn tượng đầu | **mạnh (8/10)**: UI sạch, cấu hình provider/khoá rõ ràng, model picker hiện cả mức suy luận |
+| Có mượt không? | luồng cấu hình mượt; luồng chạy việc **không mượt** khi gặp lỗi hạ tầng — người dùng chỉ thấy "đang chạy" rồi "needs revision" |
+| Có xong việc không? | có lúc xong (S12 `approved`), nhưng tỷ lệ xong trên bộ đầy đủ đang thấp vì hai lỗi cấu hình phía sản phẩm + provider chặn luồng |
+| Lỗi có hiểu được không? | sau #6474/#6475 thì mã nội bộ bớt lộ; nhưng `WORK_SCOPE_TERMINAL_MUTATING` vẫn xuất hiện 6–29 lần/ô mà người dùng không thấy lý do |
+| Có đáng tiền không? | phần **kiến trúc + kiểm toán** thì có; phần **tỷ lệ hoàn thành** cần sửa trước khi bán |
+
+### 10.4 Điểm "hot" (nên giữ và khoe)
+
+1. **Work Graph + check trên đúng snapshot** — hiếm sản phẩm nào làm; nó là bằng chứng "agent không
+   tự ký duyệt bài của mình".
+2. **Quyền con = cha ∩ vai, cưỡng chế bằng mã** — vượt mức "dặn dò" của đa số harness.
+3. **Event stream + `lifetime`** — nhìn được chi phí thật của từng nút.
+4. **Router đa nhà cung cấp + vòng khoá** — 6 khoá luân phiên, đổi route không cần sửa mã agent.
+5. **Sandbox thật** — Docker desktop + code-server + VNC + browser, không phải mô phỏng.
+
+### 10.5 Điểm trừ (theo mức độ)
+
+1. **Trần token ra 4096 cho vai sản xuất** — nguyên nhân gần của phần lớn lượt hỏng sớm.
+2. **Không retry khi luồng bị ngắt giữa chừng** — `PROVIDER_STREAM_INTERRUPTED` không được xử lý.
+3. **Trạng thái cuối khó hiểu với người dùng** — `needs_revision` / `discovering` không nói *vì sao*.
+4. **`WORK_SCOPE_TERMINAL_MUTATING` xuất hiện dày** — luật đúng nhưng bị kích hoạt nhiều, gợi ý con
+   đang cố ghi sau khi phạm vi đã chốt (cần xem lại hợp đồng nhắc việc).
+5. **Hai test đỏ môi trường** (`test_terminal_tools`, `test_web_tools`) — không chặn nhưng làm mờ
+   tín hiệu CI.
+
+---
+
+## 11. Backlog nâng cấp lần 3 (gợi ý ~30% mượn từ Vorflux)
+
+Ba nhóm: **A. Agent core** (mượn nhiều nhất), **B. UI/UX**, **C. Tối ưu token**. Mỗi mục có tệp đích,
+lợi ích, chi phí và cách đo.
+
+### A. Agent core
+
+| # | Việc | Tệp đích | Lợi ích | Cách đo |
+|---|---|---|---|---|
+| A1 | Trần token ra **theo vai**: thêm nhánh `produce` (explore/build/testing/debug) 8192–16 000 | `output_policy.py` | cắt `PROVIDER_OUTPUT_TRUNCATED` | đếm mã này trước/sau trên cùng bộ W10.F |
+| A2 | **Retry một lần** khi luồng bị ngắt giữa chừng mà phần đã sinh không đủ hợp đồng | adapter router (`agent_core/…`) | cắt `PROVIDER_STREAM_INTERRUPTED` | tỷ lệ ô về `verified` |
+| A3 | Hợp đồng kết quả **có schema tuỳ chọn** cho con (như `workflow_mode`) | `work_prompts.py` + validator | bớt `WORK_FINDING_UNCITED`; kiểm bằng máy | số finding thiếu trích dẫn |
+| A4 | **Câu hỏi chặn có cấu trúc** từ con → main chuyển tiếp (giữ luật cấm con hỏi trực tiếp) | `runtime.py` (child contract) | bớt vòng lặp main ↔ con | số vòng `revise` mỗi nút |
+| A5 | `peer_read` đọc thêm **artifact** của phiên bạn (có `peer_safe_data`) | `runtime.py` | vai kiểm tự lấy bằng chứng | số lần phải chuyển artifact thủ công |
+| A6 | **Task engine cho main**: bảng `tasks` + lệnh `task_list/wait/send/cancel` | mới, cạnh `work_graph.py` | main không chặn, không mất kết quả khi bị cắt | thời gian main rảnh; số kết quả thất lạc |
+| A7 | **Job nền có watchdog** cho việc dài (hiện `terminal_exec` chặn vòng lặp) | `runtime.py` + tool mới | chạy dài không giữ slot model | số việc dài chạy được song song |
+| A8 | **Todo list** cho main (`add/update/list`) | tool mới | kế hoạch ngắn hạn ngoài ngữ cảnh | — |
+
+### B. UI/UX
+
+| # | Việc | Lợi ích | Cách đo |
+|---|---|---|---|
+| B1 | Mỗi lượt `revise`/`error` hiện **lý do người đọc được** thay vì mã | người dùng hiểu vì sao hỏng | khảo sát 5 lượt chạy |
+| B2 | Card có **nút hành động**: retry nút, xem log con, mở artifact | bớt phải hỏi agent | số thao tác/lượt |
+| B3 | Timeline kiểu `lifetime` (calls/children/seconds) cho người dùng | thấy chi phí thật | — |
+| B4 | Cảnh báo ngân sách sớm (80% deadline/bước) | tránh chờ vô ích 30 phút | số lượt hết giờ |
+| B5 | Banner trạng thái provider ("đang bị ngắt luồng") | phân biệt lỗi sản phẩm với lỗi nhà cung cấp | — |
+| B6 | Empty/error state + i18n (nếu chưa có) | trải nghiệm đầu | — |
+| B7 | Xem artifact inline (diff, markdown, ảnh) | giảm vòng tải file | — |
+
+### C. Tối ưu token / chi phí
+
+| # | Việc | Số liệu hiện tại | Mục tiêu |
+|---|---|---|---|
+| C1 | Đo `lifetime` mỗi ô bằng script sẵn có (`/var/tmp/w10f-lifetime.py`) | S01 r1: calls 2, children 5, 383 s | có bảng theo ô trước mọi tối ưu |
+| C2 | Đo **thành phần prompt** mỗi call (hệ thống / skill / lịch sử) | prompt median 18 339 token | xác định phần nén được |
+| C3 | Nạp skill **theo bước** thay vì theo vai | — | giảm prompt mỗi call |
+| C4 | Ngưỡng nén theo **token thật**, không chỉ theo phút (`COMPRESSION_THRASH_SECONDS=300`) | — | bớt nén thừa |
+| C5 | Ghim prefix / cache prompt nếu router hỗ trợ | — | giảm chi phí lặp |
+| C6 | Đặt `thinkingLevel` mặc định theo vai: produce = `low`, plan/research = `medium` | router có `thinkingLevels=[minimal…high]`, hiện chạy mặc định nhà cung cấp | cắt phần suy luận (S01 r1: 82 k/110 k token là reasoning) |
+| C7 | Fan-out có kiểm soát tải: 3 shard làm latency ×3,4 | đã đo: median 4,2 s → 14,2 s | giữ tuần tự khi đo, song song khi sản xuất |
+| C8 | Tắt bớt research cho ô không cần | — | giảm 1–2 con/ô |
+
+### Cách dùng backlog này
+
+Thứ tự đề xuất: **A1 → A2 → C6 → A3 → A6**, rồi tới nhóm B. A1 và A2 là hai sửa nhỏ nhưng chặn
+nguyên nhân gần của phần lớn lượt hỏng; C6 là tối ưu rẻ nhất (chỉ đổi mặc định); A6 là việc lớn nhất
+và nên làm sau khi A1/A2 ổn định số đo.
