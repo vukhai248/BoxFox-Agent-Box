@@ -19,7 +19,7 @@ import time
 import uuid
 
 from .orchestration_contracts import (
-    MESSAGE_KINDS, TASK_STATES, TaskContract, identifier, invalid, refs, revision, text,
+    MESSAGE_KINDS, SHORT_TEXT_MAX, TASK_STATES, TaskContract, identifier, invalid, refs, revision, text,
 )
 from .work_policy import digest
 
@@ -240,6 +240,16 @@ class TaskService:
             result = self._view(self._task(owner_id, run_id, key), contract=True)
             return self._remember(owner_id, run_id, invocation, request_hash, result)
 
+    def key_for(self, owner_id, run_id, task_alias):
+        """Khoá backend của một `taskId` (alias trong run) — bề mặt model không thấy `task-<uuid>`."""
+        self._run(owner_id, run_id)
+        text(task_alias, 'taskId', SHORT_TEXT_MAX)
+        row = self.db.execute('SELECT task_key FROM harness_tasks WHERE run_id=? AND owner_id=? '
+                              'AND task_alias=?', (run_id, owner_id, task_alias)).fetchone()
+        if row is None:
+            invalid('taskId', 'unknown task alias in this run', 'TASK_UNKNOWN')
+        return self._task(owner_id, run_id, row['task_key'])['task_key']
+
     def get(self, owner_id, run_id, task_key):
         self._run(owner_id, run_id)
         return self._view(self._task(owner_id, run_id, task_key), contract=True)
@@ -427,6 +437,52 @@ class TaskService:
             result = self._attempt_view(self.db.execute('SELECT * FROM harness_task_attempts WHERE attempt_id=?',
                                                        (attempt_id,)).fetchone())
             return self._remember(owner_id, run_id, invocation_id, request_hash, result)
+
+    def close_attempt(self, session_id, status, reason=None):
+        """Chiếu kết cục của MỘT con vào attempt đang mở của nó, theo `session_id`.
+
+        Đây là đường dành cho bộ đóng con hiện có (`child_finish`/`cancel_child`/`reap`): người
+        đóng không biết `taskKey` cũng không biết run, nhưng attempt thì gắn với đúng một
+        `session_id`. Hàm KHÔNG đóng/mở lại con, không cấp quyền, không đọc artifact — nó chỉ
+        chép lại biên nhận mà `SessionStore` đã ghi.
+
+        Trả `None` khi con này chưa từng được gắn vào task nào (đường cũ) — người gọi không phải
+        phân nhánh. Con đã đóng mà attempt đã là snapshot đóng thì giữ nguyên (bất biến).
+        """
+        if status not in CHILD_OUTCOMES:
+            return None
+        row = self.db.execute('SELECT * FROM harness_task_attempts WHERE session_id=? '
+                              "AND status IN ('running','waiting_input') AND closed_at IS NULL "
+                              'ORDER BY attempt_seq DESC LIMIT 1', (session_id,)).fetchone()
+        if row is None:
+            return None
+        schema(row)
+        task = self.db.execute('SELECT * FROM harness_tasks WHERE task_key=?', (row['task_key'],)).fetchone()
+        if task is None:
+            return None
+        schema(task)
+        if task['abandoned_at'] is not None:
+            # Task đã bỏ: không hồi sinh trạng thái; attempt vẫn đóng để không treo hàng mở.
+            self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
+                            'WHERE attempt_id=?', (CHILD_OUTCOMES[status], reason, time.time(), row['attempt_id']))
+            return self._attempt_view(self.db.execute('SELECT * FROM harness_task_attempts WHERE attempt_id=?',
+                                                      (row['attempt_id'],)).fetchone())
+        child = self.store.child(session_id)
+        if child is None or child['finished'] is None or child['started'] != row['started_at']:
+            # Con chưa đóng thật, hoặc đã được mở lại (lượt mới): không đoán — để `project_attempt`
+            # của lượt sau làm việc đó với đúng biên nhận của nó.
+            return None
+        projected = CHILD_OUTCOMES[child['status']] if child['status'] in CHILD_OUTCOMES else None
+        if projected is None:
+            return None
+        with self._write():
+            self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
+                            'WHERE attempt_id=?',
+                            (projected, child['reason'], child['finished'], row['attempt_id']))
+            self.db.execute('UPDATE harness_tasks SET state=?, revision=revision+1, updated_at=? '
+                            'WHERE task_key=?', (projected, time.time(), row['task_key']))
+        return self._attempt_view(self.db.execute('SELECT * FROM harness_task_attempts WHERE attempt_id=?',
+                                                  (row['attempt_id'],)).fetchone())
 
     def attempts(self, owner_id, run_id, task_key, *, after=None, limit=20):
         self._run(owner_id, run_id)

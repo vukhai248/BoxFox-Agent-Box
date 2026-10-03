@@ -52,6 +52,16 @@ def _injected_tools(rt, current):
     return set(tools) - configured
 
 
+def capability_epoch(rt, current):
+    """Epoch of the owner's capability set that an admission is made under.
+
+    Exactly one source mints this number, and callers never invent their own. No epoch minting
+    exists yet: every admission today belongs to epoch 1 (the owner's current, un-revoked set).
+    The adaptive policy work replaces this body; until then it stays a single, testable seam.
+    """
+    return 1
+
+
 def guard_tool(rt, session, name, args):
     """Run the canonical scope guard first; return a view, never a grant."""
     current = _fresh(rt, session)

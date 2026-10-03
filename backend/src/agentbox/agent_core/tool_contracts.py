@@ -1,10 +1,23 @@
 """Only tools with an executable v0 adapter are advertised."""
 
+import os
+
 from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
 # `roles` → `tool_contracts` → `roles` sẽ làm hỏng lúc nạp mô-đun. Tên là hợp đồng, không phải bản sao.
 PEER_TOOLS = frozenset({'peer_read', 'await_children'})
+
+# H3 — bốn công cụ bề mặt task. Cùng lý do như `PEER_TOOLS`: định nghĩa tại đây để `schemas_for`
+# không phải nhập `task_surface` (module đó nhập `research_runtime`). Công tắc đọc thẳng từ môi
+# trường; `task_surface.TASK_TOOLS` phải khớp tập này (có test ghim).
+TASK_SURFACE_TOOLS = frozenset({'task_list', 'task_get', 'task_send', 'task_abandon'})
+TASK_SURFACE_SWITCH = 'BOXFOX_TASK_SURFACE'
+
+
+def task_surface_enabled(env=None):
+    """Công tắc bề mặt task: chỉ `on` mới bật (mặc định TẮT)."""
+    return str((env if env is not None else os.environ.get(TASK_SURFACE_SWITCH)) or '').strip().lower() == 'on'
 
 
 def tool(name, description, properties, required=()):
@@ -795,6 +808,33 @@ SCHEMAS = [
          'lập. Khối bàn giao nói rõ phần chủ nhà ĐÃ xác nhận và phần agent GIẢ ĐỊNH.',
          {'summary': STRING, 'labels': {'type': 'array', 'items': STRING},
           'nextSteps': {'type': 'array', 'items': STRING}, 'designId': STRING}, ['summary']),
+    # H3 — bề mặt task (plan v1 §4). Bốn công cụ chỉ được QUẢNG CÁO khi `BOXFOX_TASK_SURFACE=on`
+    # (cổng ở `schemas_for` + `turn_profile_base` + `dispatch`), nên phiên cũ không thấy gì mới.
+    tool('task_list',
+         'Liệt kê task của run hiện tại theo trang: trạng thái, attempt, số message chưa đọc và ref '
+         'kết quả. Phiên con chỉ thấy task gắn với chính nó. Không trả hidden reasoning hay toàn '
+         'transcript.',
+         {'runId': STRING, 'status': STRING, 'cursor': STRING, 'limit': {'type': 'integer'}},
+         []),
+    tool('task_get',
+         'Đọc MỘT task: hợp đồng hiệu lực, các attempt, trạng thái, biên nhận đóng child và message '
+         'đã gửi. Dùng `taskId` (alias trong run) hoặc `taskKey` (khoá backend).',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING}, []),
+    tool('task_send',
+         'Gửi một message bền vững vào task: kind=information|clarification|scope_proposal. Ack nghĩa '
+         'là ĐÃ NHẬN, không phải con đã đọc; scope_proposal KHÔNG tự tăng quyền hay đổi approval. '
+         'Trùng messageId với payload khác bị từ chối.',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING, 'messageId': STRING,
+          'invocationId': STRING, 'expectedRevision': {'type': 'integer'}, 'kind': STRING,
+          'body': STRING, 'inputRefs': {'type': 'array', 'items': STRING}},
+         ['messageId', 'invocationId', 'kind', 'body']),
+    tool('task_abandon',
+         'Kết thúc NHU CẦU với một task (khác với dừng thực thi): đánh dấu main không còn tiêu thụ mục '
+         'tiêu. Nếu còn attempt đang mở thì yêu cầu huỷ qua đúng đường cancel_child và trả biên nhận. '
+         'Không xoá artifact/check/usage và không hoàn tiền đã dùng.',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING, 'invocationId': STRING,
+          'expectedRevision': {'type': 'integer'}, 'reason': STRING},
+         ['invocationId', 'expectedRevision', 'reason']),
 ]
 
 
@@ -826,7 +866,10 @@ def schemas_for(names):
     T13 — `BOXFOX_PEER_MESH=off` là công tắc GIẾT của cả mesh, nên nó chặn ở đây nữa: một phiên
     được tạo lúc mesh còn bật rồi công tắc tắt giữa chừng cũng không được nhận lược đồ của hai
     công cụ peer. Kiểm ở tầng thấp nhất là kiểm không thể quên.
+    H3 — cùng khuôn cho bề mặt task: `BOXFOX_TASK_SURFACE=off` (mặc định) gỡ bốn công cụ `task_*`.
     """
     if not peer_mesh_enabled():
         names = set(names) - PEER_TOOLS
+    if not task_surface_enabled():
+        names = set(names) - TASK_SURFACE_TOOLS
     return [s for s in SCHEMAS if s['function']['name'] in names]

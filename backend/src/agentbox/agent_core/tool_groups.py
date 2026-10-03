@@ -59,6 +59,10 @@ TOOL_GROUPS = [
     {'key': 'questionsApprovals',
      'tools': ['ask_user', 'request_approval', 'interview'],
      'alwaysOn': True},
+    # H3 — bề mặt task (plan v1 §4). Nhóm TẮT mặc định: chỉ có tên khi `BOXFOX_TASK_SURFACE=on`.
+    {'key': 'taskSurface',
+     'tools': ['task_list', 'task_get', 'task_send', 'task_abandon'],
+     'alwaysOn': False},
 ]
 
 

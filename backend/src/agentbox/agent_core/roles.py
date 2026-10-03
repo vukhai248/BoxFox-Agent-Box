@@ -315,7 +315,10 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        'research_scope',
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
-                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview'} | PEER \
+                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview',
+                                       # H3 — bề mặt task (plan v1 §4): chỉ orchestrator thấy; công
+                                       # tắc `BOXFOX_TASK_SURFACE` quyết định có quảng cáo hay không.
+                                       'task_list', 'task_get', 'task_send', 'task_abandon'} | PEER \
     | VERIFY  # W6.1.3: thiếu ở cha thì `allowed_tools` cắt mất của reviewer con (46 → 47 công cụ).
 
 
