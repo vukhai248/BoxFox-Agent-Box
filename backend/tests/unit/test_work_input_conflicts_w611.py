@@ -105,7 +105,8 @@ def test_input_conflict_is_durable_blocks_retries_and_needs_changed_acceptance(t
         checked = await start(rt, sid, draft, invocationId='conflict')
         assert checked['nodes'][0]['stages']['produce'] == 'revise'
         assert checked['checks'][0]['inputConflicts'][0]['requirement'] == RESEARCH['acceptance'][0]
-        assert 'correct the conflicting' in checked['next']
+        assert 'action=update' in checked['next'] and 'correct it' in checked['next']
+        assert 'action=resolve' in checked['next']
         count = len(store.children_of(sid))
         # Replayed invocation and new attempts cannot silently override the conflict.
         for invocation in ('conflict', 'new-check'):
@@ -203,6 +204,13 @@ def test_resolve_clears_the_conflict_and_keeps_the_draft(tmp_path):
         # Hàng rào đã mở: work_run chạy lại được thay vì trả `inputConflicts`.
         again = await raw_tool(rt, sid, 'work_run', {'phase': 'discover'})
         assert not again.get('inputConflicts')
+        # Xoá phải BỀN: hồ sơ lượt kiểm cũ mang cờ đã xử lý, nên lượt kiểm kế tiếp của một loại khác
+        # không dựng lại hàng rào từ bản ghi cũ (nếu không, `resolve` bị hoàn tác ngầm).
+        run_doc = rt.work_graph.get(rid)
+        assert rt.work_graph.checks.pending_conflicts(run_doc, run_doc['nodes'][0], 'produce') == []
+        marked = [r for r in rt.work_graph.checks.records(rid) if r.get('inputConflictsResolved')]
+        assert marked, 'phải có vết trên chính hồ sơ lượt kiểm'
+        assert 'WORK_NO_CONFLICT' not in json.dumps(marked)
         # Xoá lần hai không có gì để xoá ⇒ nói thẳng ra, không im lặng thành công.
         with pytest.raises(ValueError, match='WORK_NO_CONFLICT'):
             await raw_tool(rt, sid, 'work_graph', {'action': 'resolve', 'nodeIds': ['R1']})

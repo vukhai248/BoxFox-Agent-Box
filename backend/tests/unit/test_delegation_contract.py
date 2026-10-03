@@ -131,16 +131,16 @@ def test_child_prompt_carries_the_result_contract_and_the_parents_expected_shape
 
 
 def test_child_budget_is_clamped_by_the_parent_and_by_the_engine_ceiling(tmp_path):
-    """B6 — con 40 bước / 420 s (vòng 25: 300 → 420), nhưng KHÔNG BAO GIỜ vượt cha (`min()` giữ nguyên).
+    """B6 — con 200 bước / 3600 s (#6457), nhưng KHÔNG BAO GIỜ vượt cha (`min()` giữ nguyên).
 
-    `420 s` là **trần**, không phải bảo đảm: lượt cha nào có hạn chót nhỏ hơn thì kẹp con xuống
-    theo cha. Vòng 25 nâng hạn chót mặc định của cha lên 600 s (D-35), nên lượt mặc định cho con
-    đúng trần 420 s — vẫn là quyết định của CHA, không phải của con.
+    `200`/`3600` là **trần**, không phải bảo đảm: lượt cha nào có hạn chót/bước nhỏ hơn thì kẹp con
+    xuống theo cha. Cha mặc định 120 bước/1800 s, nên lượt mặc định cho con đúng 120/1800 — vẫn là
+    quyết định của CHA, không phải của con.
     """
     cases = [
-        ({'maxSteps': 60, 'deadlineSeconds': 900}, 40, 900),
+        ({'maxSteps': 60, 'deadlineSeconds': 900}, 60, 900),
         ({'maxSteps': 12, 'deadlineSeconds': 60}, 12, 60),
-        ({}, 40, 600),
+        ({}, 120, 1800),
     ]
     for parent_values, steps, seconds in cases:
         _, _, child = run_delegation(tmp_path / f"p{steps}-{seconds}", delegate_args(),

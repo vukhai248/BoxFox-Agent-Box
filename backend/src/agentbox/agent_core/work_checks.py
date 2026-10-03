@@ -403,6 +403,10 @@ def stuck_criteria(state, doc, criteria, limit=2):
     `criterion` (đo ở W8.A4.5.N lượt 14–16: coverage sai hợp đồng, `UNKNOWN_RECEIPT`, `SELF_REFUTED`).
     Luật này KHÔNG phụ thuộc nhãn của con kiểm: quá `limit` vòng sửa trên cùng một tiêu chí thì main
     phải xem lại định nghĩa nhiệm vụ thay vì sửa artifact lần thứ ba.
+
+    Phạm vi: `state['repairs']` chỉ được ghi cho stage `execute` của run có worktree git
+    (`work_repair.route`), nên hiện chỉ node triển khai mới tự leo thang. Stage `produce` không có
+    `repairs` — đó là giới hạn đã biết, cần chủ nhà chốt trước khi mở sang `rounds`.
     """
     if doc.get('status') != 'revise' or len(state.get('repairs') or []) < limit:
         return []
@@ -735,6 +739,28 @@ class Checks:
             raise ValueError('WORK_RETEST_STALE: code changed while waiting for slot')
         if current() != source:
             raise ValueError('WORK_RETEST_STALE: check binding changed during code inspection')
+
+    def pending_conflicts(self, run, node, stage):
+        """Xung đột đầu vào còn hiệu lực cho stage này.
+
+        Hồ sơ lượt kiểm đã được main `resolve` (`inputConflictsResolved`) thì KHÔNG dựng lại hàng
+        rào: nếu không, `resolve` bị chính lượt kiểm kế tiếp của một loại khác hoàn tác, và main kẹt
+        vòng resolve → check → conflict.
+        """
+        return [item for record in self.latest(run, node, stage).values()
+                if not record.get('inputConflictsResolved')
+                for item in record.get('inputConflicts', [])]
+
+    def mark_conflicts_resolved(self, run_id, node_id, stage, note=''):
+        """Ghi vết lên chính hồ sơ lượt kiểm: hàng rào đã được main xác nhận xử lý."""
+        marked = 0
+        for record in self.records(run_id):
+            if (record.get('nodeId') == node_id and record.get('stage') == stage
+                    and record.get('inputConflicts') and not record.get('inputConflictsResolved')):
+                record['inputConflictsResolved'] = {'at': time.time(), 'note': note[:200]}
+                self.save(record)
+                marked += 1
+        return marked
 
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
@@ -1146,8 +1172,7 @@ class Checks:
                                             if r['status'] == 'revise'))
         else:
             state['status'] = 'needs_checks'
-        state['inputConflicts'] = [item for record in self.latest(run, node, stage).values()
-                                  for item in record.get('inputConflicts', [])]
+        state['inputConflicts'] = self.pending_conflicts(run, node, stage)
         if records:
             doc = records[-1]
             state['rounds'][-1].update(reviewerId=doc.get('childId'),

@@ -978,11 +978,16 @@ class WorkGraph:
                     continue
                 cleared.append({'nodeId': node['id'], 'stage': stage, 'conflicts': state['inputConflicts']})
                 state['inputConflicts'] = []
+                # Ghi vết lên chính hồ sơ lượt kiểm: nếu không, lượt kiểm kế tiếp của một loại khác
+                # dựng lại hàng rào từ bản ghi cũ và `resolve` coi như bị hoàn tác.
+                self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note)
         if not cleared:
             raise ValueError('WORK_NO_CONFLICT: no input conflict to resolve for the given nodes/stage')
         self.save(run, 'input_conflicts_resolved', json.dumps(cleared, ensure_ascii=False)[:600])
-        message = ('Cleared %d input conflict(s); the draft is kept and the next work_run/check continues '
-                   'on it.' % sum(len(item['conflicts']) for item in cleared)) + (f' Note: {note}' if note else '')
+        message = ('Cleared %d input conflict(s); the draft is kept. '
+                   % sum(len(item['conflicts']) for item in cleared)) + \
+            ('A stage that is still open (needs_checks/revise) continues with the next work_run/check; '
+             'a rejected/failed stage needs work_graph action=retry first.') + (f' Note: {note}' if note else '')
         return self.result(run, message) | {'resolved': cleared}
 
     def retry(self, run, ids):

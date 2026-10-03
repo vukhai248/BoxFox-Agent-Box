@@ -3315,3 +3315,22 @@ Kèm **bộ đếm cộng dồn toàn đời run** (`work_graph.lifetime`, chỉ
 ngân sách con ở MỖI lời gọi và đồng hồ `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có
 thể vượt cả hai mà không có lỗi nào; số thật (số lời gọi, số con, tổng giây) được ghi vào tài liệu run và trả
 trong `out['lifetime']` để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
+
+### 39.12. Vòng soát #6456/#6457 (03/10/2026) — phát hiện và cách xử lý
+
+Soát mã bản vá ở `508bf86` (một vòng `simplify` + một vòng `review` có chấm rủi ro 6/10 "ship with
+mitigations"). Các phát hiện và trạng thái:
+
+| # | Phát hiện | Mức | Xử lý |
+| --- | --- | --- | --- |
+| 1 | `limits.CHILD_WALL_MAX_SECONDS` để nguyên 1200 s trong khi #6457 nâng trần con lên 3600 s ⇒ watchdog đóng mọi con chạy quá 1200 s là `failed/WATCHDOG_TIMEOUT`, tức cắt đúng loại việc dài mà #6457 vừa mở | CAO | Đã sửa: trần tường **suy ra** từ trần con (`CHILD_DEADLINE_SECONDS + CHILD_WALL_MAX_GRACE_SECONDS = 4500`), kèm test bất biến trong `test_peer_watchdog.py` |
+| 2 | `resolve` không có trong hợp đồng công cụ (enum + mô tả) và câu `next` chỉ đường `update` ⇒ hàng rào #6456(b) không thể được gọi | CAO | Đã sửa ở `2fef164`: enum + mô tả + câu `next` hai đường, kèm test chống tái phát |
+| 3 | `stuck_criteria` leo thang nhầm cả `C1` (tiêu chí của chính lượt kiểm) | CAO | Đã sửa ở `2fef164`: dựng lại tập A từ `node['acceptance']` |
+| 4 | 16 test còn đỏ vì bám số cũ (60/14/24, 40/900) | CAO | Đã sửa: `test_work_budget_w65.py`, `test_work_retest_w8.py`, `test_delegation_contract.py` cập nhật theo #6457 |
+| 5 | `stuck_criteria` chỉ chạy được ở stage `execute` (chỉ nơi đó mới có `repairs`) | VỪA | **Giữ nguyên có ghi chú**: mở sang `rounds` của stage `produce` là đổi ngữ nghĩa, cần chủ nhà chốt trước |
+| 6 | `resolve` không bền: lượt kiểm kế tiếp của loại khác dựng lại hàng rào từ hồ sơ cũ | VỪA | Đã sửa: `mark_conflicts_resolved` ghi cờ lên chính hồ sơ, `pending_conflicts` bỏ qua hồ sơ đã xử lý |
+| 7 | Câu trả lời của `resolve` hứa quá mức khi stage đã `rejected`/`failed` | THẤP | Đã sửa: nói rõ stage còn mở thì đi tiếp, stage đã đóng thì phải `retry` trước |
+| 8 | Số cũ trong chú thích (`limits.py`, `work_repair_loop_eval.py`) | THẤP | Đã sửa |
+| 9 | `scripts/eval/work_budget_eval.py` còn tạo phiên 60 bước/1200 s nên không còn đo mặc định mới | THẤP | **Còn mở** — chỉ ảnh hưởng phép đo cũ, không ảnh hưởng sản phẩm |
+| 10 | `lifetime` chỉ đếm con/giây trong `work_run`, bỏ sót con do `work_check`/`work_repair` sinh ra | INFO | **Còn mở, có chủ ý**: bộ đếm là tham vấn; muốn nó thành căn cứ đặt trần cứng thì phải mở rộng phạm vi trước |
+
