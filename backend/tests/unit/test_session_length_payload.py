@@ -109,8 +109,8 @@ def test_deadline_clamp_flag_is_visible_in_the_session_payload(tmp_path):
 
     store2 = SessionStore(tmp_path / 'sessions2.db')
     runtime2 = HarnessRuntime(store2, FixtureExecutor(), FixtureModel([answer('xong')]))
-    # Vòng 25 (M8) nâng trần lên 1200 s ⇒ con số "quá trần" phải lớn hơn trần MỚI.
-    clamped = runtime2.create({'skills': [], 'connectionId': 'c1', 'deadlineSeconds': 1500})
+    # #6457 nâng trần lên 7200 s ⇒ con số "quá trần" phải lớn hơn trần MỚI (không phải 1500 cũ).
+    clamped = runtime2.create({'skills': [], 'connectionId': 'c1', 'deadlineSeconds': 9000})
     assert clamped['config']['deadlineClamped'] is True, 'config đã nằm trong payload GET'
     assert runtime2.session_metrics(clamped['id'])['deadlineClamped'] is True
     store.close()

@@ -21,7 +21,7 @@ import time
 
 import pytest
 
-from agentbox.agent_core.limits import (FANOUT_GLOBAL_CEILING, FANOUT_PER_PARENT_DEFAULT,
+from agentbox.agent_core.limits import (CHILD_WALL_MAX_SECONDS, FANOUT_GLOBAL_CEILING, FANOUT_PER_PARENT_DEFAULT,
                                        WATCHDOG_TIMEOUT_REASON)
 from agentbox.agent_core.peer_watchdog import PeerWatchdog
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -101,8 +101,9 @@ def test_watchdog_huy_con_qua_han_chi_nha_mot_slot(tmp_path):
         # mốc `started` của con là dữ liệu, nên đẩy lùi nó là đủ để chạm luật 1.
         store.save(sid, sessions[0]['messages'], 'running')
         aged = children[0]['sessionId']
+        # Tuổi phải quá trần TƯỜNG hiện hành (#6457: 4500 s), không phải con số 1 300 cũ.
         store.db.execute('UPDATE children SET started=? WHERE session_id=?',
-                         (time.time() - 1_300, aged))
+                         (time.time() - (CHILD_WALL_MAX_SECONDS + 100), aged))
         watchdog = PeerWatchdog(store, runtime=runtime)
         watchdog.first_scan = False   # luật 4 (RESTART) chỉ đúng ở nhịp ĐẦU của một tiến trình
 
