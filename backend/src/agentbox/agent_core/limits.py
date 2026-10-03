@@ -19,16 +19,23 @@ INSTRUCTIONS_MAX_CHARS = 12000
 # (trước là 10 / 120). Số đo vòng 21: việc vừa phải xong ở 8 bước, việc dài 27 bước; con chạm
 # 10 bước / 120 s thì trả `answerChars = 0` (BUG-42), nên ngân sách con là chỗ chữa chính.
 # `300 s` của con là **trần**, không phải bảo đảm — `runtime.delegate()` vẫn `min()` theo cha.
-MAX_STEPS_DEFAULT = 40
-MAX_STEPS_MAX = 60
+# Quyết định chủ nhà #6457 (03/10/2026) — "để RẤT LỚN vì chuyên chạy dài" (kiểu Devin: con gọi
+# hàng trăm lượt, một tiếng hoặc hơn), nhưng vẫn CÓ TRẦN: đo ở W8.A4.5.N lượt 15 cho thấy trần
+# bước của phiên cha (24) cắt con `debug` giữa chừng (`STEP_BUDGET_EXHAUSTED`) ⇒ `complete()` false
+# ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`, tức trần bước đang chặn thẳng tính năng sửa. Bộ số
+# mới: phiên chính 40 → **120** bước (trần 60 → **400**), trần thời gian 600 → **1800 s** (trần
+# 1200 → **7200 s**); con **200 bước / 3600 s**. Trần vẫn giữ vì mọi phiên đều có checkpoint và
+# continuation để đi tiếp qua phiên mới — "chạy dài" là đi tiếp có kiểm soát, không phải vô hạn.
+MAX_STEPS_DEFAULT = 120
+MAX_STEPS_MAX = 400
 # Vòng 25 (D-35) — đo sống: một lượt lập kế hoạch CƠ BẢN chết ở 210 s trước cả `write_plan` khi
 # mặc định là 180 s, và một lượt khác ở 622 s vẫn `partial` (chưa xong). Lượt lập kế hoạch đầu
 # tiên không có dấu vết tất định nào để nhận ra TRƯỚC khi nó chạy, nên nâng toàn cục; phần nới
 # theo sự kiện (`PLAN_TURN_EXTENSION_SECONDS`) chỉ để lượt kịp đi hết vòng phản biện.
-DEADLINE_DEFAULT_SECONDS = 600
-DEADLINE_MAX_SECONDS = 1200
-CHILD_MAX_STEPS = 40
-CHILD_DEADLINE_SECONDS = 900
+DEADLINE_DEFAULT_SECONDS = 1800
+DEADLINE_MAX_SECONDS = 7200
+CHILD_MAX_STEPS = 200
+CHILD_DEADLINE_SECONDS = 3600
 
 # Trần BYTE của một request mà router chấp nhận, và phần byte của request không nằm trong
 # `messages` (prompt vai + schema công cụ). Bộ nén phải biết cả hai: trên cửa sổ 1M, ngưỡng

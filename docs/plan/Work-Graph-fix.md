@@ -3267,3 +3267,49 @@ Owner đã duyệt hướng "gieo đỏ thật" (#6451) và chốt **không nớ
 - Artifact tổng hợp (`integration_artifact`) tự công bố danh tính cây gộp (head/tree/branch/worktree), tệp thuộc run,
   diff stat và output NGUYÊN VĂN của mọi lệnh test bắt buộc — nhờ vậy con kiểm thử đối chiếu được và đã tự bác đúng
   lượt 12 khi cây chưa hợp nhất.
+
+### 39.11. Chủ nhà chốt #6454–#6457 (03/10/2026) — kiến trúc leo thang + trần ngân sách
+
+**Bối cảnh đo được.** Ba lượt probe liên tiếp (14, 15, 16) đều `oracle=false` vì lý do KHÁC nhau, và cả ba
+đều chỉ vào hai chỗ: (a) một NHÃN do con kiểm tự chọn có thể chặn cả vòng sửa; (b) TRẦN BƯỚC/THỜI GIAN cắt
+con giữa chừng. Lượt 14: con kiểm trả coverage sai hợp đồng (`Invalid JSON coverage; every assigned id needs
+status and evidence. Revised A criteria must explicitly set target=artifact or target=criterion.`) rồi lượt sau
+`UNKNOWN_RECEIPT` ⇒ `WORK_NO_PROGRESS`. Lượt 15: phiên cha 24 bước ⇒ con `debug` `STEP_BUDGET_EXHAUSTED`
+(`steps_used 22`, `status=partial`) ⇒ `complete()` false ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ B1 `rejected`. Lượt 16:
+lượt kiểm đầu `unverified` vì `WORK_FINDING_UNCITED` (mọi finding đều `UNKNOWN_RECEIPT`), lượt kế `SELF_REFUTED`.
+
+**#6454 → #6456 (kiến trúc).** Chủ nhà yêu cầu tra cứu thực tiễn tốt nhất rồi chốt. Kết luận tra cứu: tách
+*lỗi ĐỊNH NGHĨA nhiệm vụ* (phải hỏi owner) khỏi *lỗi TRIỂN KHAI* (vòng sửa tự lo); escalation phải là một
+**trạng thái chờ hạng nhất** — ghi lý do có cấu trúc, GIỮ tiến độ, resume đúng chỗ, có đường hết hạn; mẫu
+`retry / escalate / quarantine` của spec-drift; "long-running = đi tiếp có kiểm soát", không phải vô hạn.
+Nguồn: O'Reilly *Why AI coding agents still need clear specs*, VS Code agent best practices, tài liệu
+trạng thái agent (waiting/blocked/resume), Anthropic *effective harnesses for long-running agents*.
+
+Chủ nhà chốt **kiến trúc đầy đủ** (#6456), ba nhánh:
+- **(a) Thu hẹp nghĩa nhãn `criterion`**: chỉ dành cho tiêu chí MƠ HỒ / MÂU THUẪN / KHÔNG KIỂM ĐƯỢC (cần main
+  làm rõ); "code vi phạm một tiêu chí RÕ RÀNG" luôn là `target=artifact` và đi theo vòng sửa. Sửa ở prompt +
+  hợp đồng output của con kiểm.
+- **(b) Hàng rào là TRẠNG THÁI CHỜ, không phá tiến độ**: đường xác nhận/xoá xung đột GIỮ `artifact`/`policy`/
+  bản nháp để resume đúng chỗ, thay vì `new_stage()` (`work_graph.py:886-890`).
+- **(c) Tự leo thang**: CÙNG một tiêu chí đỏ `revise` sau 2 lượt sửa ⇒ nâng thành xung đột (bắt đúng ca
+  "spec vs implementation" mà nhãn của con kiểm bỏ sót).
+
+Tradeoff đã báo: nhiều code + test nhất (work_checks, work_graph, prompt/hợp đồng con kiểm, các file test
+chạm hằng số), đổi hành vi workflow nên cần một vòng test hồi quy đầy đủ. Đổi lại: repair loop không thể bị
+vô hiệu hoá bởi một lựa chọn nhãn, owner vẫn nhận tín hiệu spec, không mất công sửa.
+
+**#6455 → #6457 (ngân sách).** Chủ nhà: "nên để RẤT LỚN vì chuyên chạy dài (kiểu Devin: con gọi hàng trăm
+lượt, một tiếng hoặc hơn)", chốt **bộ số đề xuất — rất lớn nhưng vẫn có trần**:
+
+| Chỗ | Cũ | Mới |
+| --- | --- | --- |
+| `limits.MAX_STEPS_DEFAULT` / `MAX_STEPS_MAX` | 40 / 60 | **120 / 400** |
+| `limits.DEADLINE_DEFAULT_SECONDS` / `DEADLINE_MAX_SECONDS` | 600 / 1200 | **1800 / 7200** |
+| `limits.CHILD_MAX_STEPS` / `CHILD_DEADLINE_SECONDS` | 40 / 900 | **200 / 3600** |
+| `work_budget.PRODUCER_STEPS` / `SHORT_REVIEW_STEPS` / `LONG_REVIEW_STEPS` | 60 / 14 / 24 | **200 / 40 / 80** |
+| `work_graph.WORK_CHILDREN_PER_RUN_CALL` / `WORK_RUN_MAX_SECONDS` | 72 / 3600 | **256 / 21600** |
+
+Kèm **bộ đếm cộng dồn toàn đời run** (`work_graph.lifetime`, chỉ báo cáo — không chặn): `work_run` đặt lại
+ngân sách con ở MỖI lời gọi và đồng hồ `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có
+thể vượt cả hai mà không có lỗi nào; số thật (số lời gọi, số con, tổng giây) được ghi vào tài liệu run và trả
+trong `out['lifetime']` để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).

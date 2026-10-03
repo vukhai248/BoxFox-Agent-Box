@@ -396,6 +396,26 @@ def apply_findings(raw, status, coverage, analysis):
     return new, updated, error
 
 
+def stuck_criteria(state, doc, criteria, limit=2):
+    """#6456(c): cùng một tiêu chí vẫn `revise` sau ≥ `limit` lượt sửa ⇒ nâng thành xung đột đầu vào.
+
+    Con kiểm có thể cứ `revise` mãi trên một tiêu chí bất khả thi/mâu thuẫn mà không dán nhãn
+    `criterion` (đo ở W8.A4.5.N lượt 14–16: coverage sai hợp đồng, `UNKNOWN_RECEIPT`, `SELF_REFUTED`).
+    Luật này KHÔNG phụ thuộc nhãn của con kiểm: quá `limit` vòng sửa trên cùng một tiêu chí thì main
+    phải xem lại định nghĩa nhiệm vụ thay vì sửa artifact lần thứ ba.
+    """
+    if doc.get('status') != 'revise' or len(state.get('repairs') or []) < limit:
+        return []
+    out = []
+    for item in doc.get('coverage') or []:
+        if item.get('status') == 'revise' and item.get('target', 'artifact') != 'criterion' \
+                and item.get('id') in criteria:
+            out.append({'id': item['id'], 'requirement': criteria[item['id']],
+                        'evidence': item.get('evidence') or item.get('findingError') or '',
+                        'source': 'stuck_criteria'})
+    return out
+
+
 def input_conflicts(coverage, criteria):
     """An evidenced conflict in main's assignment, not a request to falsify the artifact."""
     return [{'id': item['id'], 'requirement': criteria[item['id']], 'evidence': item['evidence']}
@@ -424,21 +444,25 @@ def contract(lang, criteria):
         '\ncodeSnapshot.hash nhận diện nội dung cây mã; head nhận diện commit Git, criticalChanges là tín hiệu rủi ro. '
         'Head trùng hoặc criticalChanges=false không chứng minh cây mã chưa đổi. '
         'Test chỉ chứng minh assertion/input thực đã chạy; không suy ra quoting/encoding/field rỗng chưa kiểm. ') + work_prompts.choose(lang,
-        '\nJudge the EXACT wording of each criterion. When an A criterion contains a disproved technical premise, '
-        'use status=revise, target=criterion and evidence naming the conflict and correction for main. '
+        '\nJudge the EXACT wording of each criterion. target=criterion means THE CRITERION ITSELF is wrong: '
+        'its wording is ambiguous, contradicts another requirement, or rests on a premise no implementation can satisfy. '
+        'Only then use status=revise, target=criterion, with evidence naming the conflict and the correction for main. '
+        'When the criterion is clear and the artifact merely does not satisfy it, use status=revise with target=artifact: '
+        'that is an implementation failure, and the repair loop fixes it — never label a failing artifact criterion. '
         'Keep a factually correct artifact intact; do not silently replace the criterion and mark it pass. '
-        'Every coverage entry explicitly includes target. Other findings use target=artifact; '
-        'target=criterion is not for C/G rubrics. ',
-        '\nKiểm ĐÚNG nội dung từng tiêu chí. Tiêu chí A có tiền đề kỹ thuật bị nguồn bác bỏ phải ghi '
+        'Every coverage entry explicitly includes target. target=criterion is not for C/G rubrics. ',
+        '\nKiểm ĐÚNG nội dung từng tiêu chí. target=criterion nghĩa là CHÍNH TIÊU CHÍ sai: câu chữ mơ hồ, '
+        'mâu thuẫn với yêu cầu khác, hoặc dựa trên tiền đề không artifact nào thoả được. Chỉ khi đó mới ghi '
         'status=revise, target=criterion và evidence nêu mâu thuẫn/sửa tiêu chí cho main. '
+        'Khi tiêu chí RÕ RÀNG mà artifact không đạt, ghi status=revise với target=artifact: đó là lỗi triển khai '
+        'và vòng sửa lo — tuyệt đối không dán nhãn criterion cho một artifact hỏng. '
         'Giữ artifact đúng dữ kiện; không âm thầm đổi nghĩa tiêu chí rồi ghi pass. '
-        'Mỗi coverage entry ghi rõ target. Finding khác dùng target=artifact; '
-        'target=criterion không áp dụng rubric C/G. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
+        'Mỗi coverage entry ghi rõ target. target=criterion không áp dụng rubric C/G. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
         '\nReturn findings and a fenced json object {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"specific reference or finding"}]}. '
-        'Example for a disproved premise: {"id":"A1","status":"revise","target":"criterion","evidence":"Opened source refutes the premise; main must correct A1, not rewrite the correct artifact."}. '
+        'Example for a criterion no artifact can satisfy: {"id":"A1","status":"revise","target":"criterion","evidence":"A1 rests on a premise the opened source refutes; no artifact can satisfy A1 as written, so main must correct A1."}. '
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
         '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
-        'Ví dụ tiền đề bị bác bỏ: {"id":"A1","status":"revise","target":"criterion","evidence":"Nguồn đã mở bác tiền đề; main sửa A1, không viết lại artifact đúng."}. '
+        'Ví dụ tiêu chí không artifact nào thoả được: {"id":"A1","status":"revise","target":"criterion","evidence":"Tiền đề của A1 bị nguồn đã mở bác; không artifact nào thoả A1 như đang viết, main phải sửa A1."}. '
         'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + work_prompts.choose(lang,
         '\nFindings (same json object, at most 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
         '"scope":"node|run","claim":"<=300 chars","evidenceRefs":["<tool call id>","verify:<codeHash>",'
@@ -913,7 +937,10 @@ class Checks:
                 break
         if source and await snapshot_of(graph, run['sessionId'], source) != source:
             doc.update(status='superseded', error='Source changed during check (including terminal side effects).')
-        doc['inputConflicts'] = input_conflicts(doc.get('coverage', []), criteria) if doc['status'] == 'revise' else []
+        # `node` là None ở lượt duyệt TOÀN kế hoạch: chỉ lượt kiểm gắn nút mới có vòng sửa để đếm.
+        stuck = stuck_criteria(node['stages'][stage], doc, criteria) if node else []
+        doc['inputConflicts'] = (input_conflicts(doc.get('coverage', []), criteria)
+                                 if doc['status'] == 'revise' else []) + stuck
         doc['finishedAt'] = time.time()
         return doc
 

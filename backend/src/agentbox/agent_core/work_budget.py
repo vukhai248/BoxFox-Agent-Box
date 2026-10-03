@@ -5,9 +5,12 @@ while 60 completed it. Long checks need more than 14 steps; increasing to
 40 did not establish that skipped artifact ranges become verified.
 """
 
-PRODUCER_STEPS = 60
-SHORT_REVIEW_STEPS = 14
-LONG_REVIEW_STEPS = 24
+# Quyết định chủ nhà #6457 (03/10/2026): ngân sách Work Graph nâng theo trần phiên mới
+# (`limits.py`: 120/400 bước, 1800/7200 s, con 200 bước/3600 s) để việc dài không bị cắt giữa
+# chừng. Số cũ 60/14/24 đo ở lượt 15 W8.A4.5.N: con `debug` hết bước ⇒ nút bị `rejected`.
+PRODUCER_STEPS = 200
+SHORT_REVIEW_STEPS = 40
+LONG_REVIEW_STEPS = 80
 LARGE_ARTIFACT_CHARS = 32000
 MANY_CRITERIA = 8
 

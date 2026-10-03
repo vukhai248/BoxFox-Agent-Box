@@ -44,6 +44,13 @@ from agentbox.agent_core import work_worktrees
 # fixture này để đo được cơ chế phân loại/sửa/hội tụ; số đo 4096 giữ nguyên trong
 # `/var/tmp/w8-probe-run1-4096/results.json` và trong `fixtureKnobs` của kết quả.
 BUILD_CHILD_OUTPUT_TOKENS = 16000
+# Trần phiên của engine (`limits.MAX_STEPS_MAX`/`DEADLINE_MAX_SECONDS`). Con `debug` nhận ngân sách
+# `lookup_or_execution` = `min(CHILD_MAX_STEPS, trần bước của PHIÊN CHA)`, nên phiên cha 24 bước làm
+# con chẩn đoán hết bước giữa chừng (đo ở lượt 15: `STEP_BUDGET_EXHAUSTED`, steps_used 22 ⇒
+# `WORK_REPAIR_UNDIAGNOSED`). Từ #6457 engine là 400 bước/7200 s và con 200 bước/3600 s; fixture
+# chạy ở ĐÚNG trần mới để phép đo không bị cắt bởi trần bước.
+SESSION_MAX_STEPS = 400
+SESSION_DEADLINE_SECONDS = 7200
 
 
 def raise_build_child_output_budget():
@@ -284,8 +291,13 @@ async def main(args):
     row = {'case': 'repair_loop_red_then_green', 'sourceManifest': frozen,
            'scope': 'Native: Build produce → kiểm tests THẬT (đỏ do fixture) → phân loại + sửa → kiểm lại xanh',
            'fixtureKnobs': {'buildChildOutputTokens': BUILD_CHILD_OUTPUT_TOKENS,
+                            'sessionMaxSteps': SESSION_MAX_STEPS, 'sessionDeadlineSeconds': SESSION_DEADLINE_SECONDS,
                             'why': 'con Build mặc định 4096 token output; lượt chạy 4096 đo được '
-                                   'PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất',
+                                   'PROVIDER_OUTPUT_TRUNCATED (3958 token reasoning) nên draft không hoàn tất. '
+                                   'Lượt 15 đo thêm: con `debug` hết TRẦN BƯỚC (24) giữa chừng ⇒ '
+                                   'STEP_BUDGET_EXHAUSTED ⇒ `complete()` false ⇒ WORK_REPAIR_UNDIAGNOSED ⇒ nút '
+                                   '`rejected`; nút fixture nâng phiên lên trần engine hiện hành (60 bước/1200 s) '
+                                   'để đo cơ chế sửa thay vì đo trần bước.',
                             'unpatchedRun': '/var/tmp/w8-probe-run1-4096/results.json'}}
     raise_build_child_output_budget()
     started = time.monotonic()
@@ -296,7 +308,7 @@ async def main(args):
     try:
         rt = HarnessRuntime(store, executor, client)
         sid = rt.create({**{k: route[k] for k in ('connectionId', 'modelId')}, 'skills': [],
-                         'maxSteps': 24, 'deadlineSeconds': 600})['id']
+                         'maxSteps': SESSION_MAX_STEPS, 'deadlineSeconds': SESSION_DEADLINE_SECONDS})['id']
         executor.harness.add(sid)
         graph = wg.service(rt)
         session = store.get(sid)
@@ -426,7 +438,8 @@ async def main(args):
                 break
         node = graph.find_node(graph.get(run['runId']), 'B1')
         state = node['stages']['execute']
-        row['greenCheck'] = row['greenChecks'][-1]
+        # Vòng xanh có thể rỗng (chưa từng mở được lượt kiểm nào) — đọc theo `.get`.
+        row['greenCheck'] = (row.get('greenChecks') or [{}])[-1]
         row['final'] = {'status': state['status'], 'attempts': state['attempts'],
                         'verdicts': [r.get('verdict') for r in state.get('rounds') or []],
                         'repairs': len(state.get('repairs') or [])}
@@ -526,6 +539,10 @@ async def main(args):
         row['ownerHead'] = git(repo, 'rev-parse', 'HEAD')
         # --- oracle cơ chế: do code harness quyết ---
         entry = row['repair'] or {}
+        # Lượt kiểm đỏ có thể KHÔNG tồn tại (child trả coverage sai hợp đồng ⇒ `error`, không mở
+        # vòng sửa) nên `redCheck` là `{}`; đọc theo `.get` để phép đo ghi đúng "không có lượt đỏ"
+        # thay vì nổ `KeyError` và che mất kết cục thật của lượt chạy.
+        red_check = row.get('redCheck') or {}
         row['mechanism'] = {
             'oneRepairEntry': len(state.get('repairs') or []) == 1 and entry.get('n') == 1,
             'classified': entry.get('class') in ('clear', 'unclassified'),
@@ -534,9 +551,9 @@ async def main(args):
             'freshArtifactAfterRepair': bool(entry.get('buildChildId'))
                                         and row['afterRepair']['artifactId'] not in (None, first_artifact)
                                         and entry.get('status') in ('needs_checks', 'accepted'),
-            'findingsBoundToChild': bool(row['resumedChild']['sawFindings']),
+            'findingsBoundToChild': bool((row.get('resumedChild') or {}).get('sawFindings')),
             'codeHashPinned': bool(entry.get('codeHash')),
-            'redCheckIsRevise': row['redCheck']['status'] == 'revise' and bool(row['redCheck']['childId']),
+            'redCheckIsRevise': red_check.get('status') == 'revise' and bool(red_check.get('childId')),
         }
         # --- oracle hành vi model ---
         real_red = row.get('realRed') or {}
@@ -547,12 +564,12 @@ async def main(args):
             'seedIsRealRed': bool(real_red.get('seeded') == 1 and seeds
                                   and (seeds[0].get('proof') or {}).get('exitCode') not in (0, None)),
             'testerSawTheRedCommand': any('pytest' in str(command)
-                                          for command in (row['redCheck'].get('commands') or [])),
-            'buildChildTouchedItsFile': bool(row['resumedChild']['wroteExport']),
+                                          for command in (red_check.get('commands') or [])),
+            'buildChildTouchedItsFile': bool((row.get('resumedChild') or {}).get('wroteExport')),
             # Lượt ghi cuối có thể là một lượt bị sản phẩm TỪ CHỐI mở kiểm (không có `status`);
             # đọc theo `.get` để không nổ `KeyError` khi phép đo gặp đúng hàng rào của sản phẩm.
-            'secondCheckPassed': (row['greenCheck'] or {}).get('status') == 'pass',
-            'nodeAccepted': row['final']['status'] == 'accepted',
+            'secondCheckPassed': (row.get('greenCheck') or {}).get('status') == 'pass',
+            'nodeAccepted': (row.get('final') or {}).get('status') == 'accepted',
         }
         # --- oracle node tổng hợp (W8.A4.5.N): hợp nhất thật + child Testing THẬT xanh trên cây đó ---
         row['integrationNative'] = {

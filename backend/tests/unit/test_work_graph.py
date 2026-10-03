@@ -789,13 +789,14 @@ def test_fanout_busy_is_queued_not_a_failed_node(tmp_path, monkeypatch):
 
 def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp_path, monkeypatch):
     _, runtime, model, _, sid = build(tmp_path)
+    original_budget = wg.WORK_CHILDREN_PER_RUN_CALL
     monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 1)
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
         await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
         first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
-        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 72)
+        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', original_budget)
         second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
         return first, second
 

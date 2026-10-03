@@ -72,9 +72,9 @@ def test_a_clamped_deadline_is_reported_once(tmp_path):
         async with TestServer(create_app(runtime)) as server:
             async with ClientSession(headers=HEADERS) as http:
                 url = str(server.make_url('/api/agent/sessions'))
-                # Vòng 25 (M8) nâng trần lên 1200 s, nên con số "quá trần" phải lớn hơn trần MỚI:
-                # xin 1500 để chắc chắn bị kẹp, thay vì 900 (nay nằm trong khoảng hợp lệ).
-                async with http.post(url, json={'skills': [], 'deadlineSeconds': 1500}) as resp:
+                # #6457 nâng trần lên 7200 s, nên con số "quá trần" phải lớn hơn trần MỚI:
+                # xin 9000 để chắc chắn bị kẹp (1500 của bản cũ nay nằm trong khoảng hợp lệ).
+                async with http.post(url, json={'skills': [], 'deadlineSeconds': 9000}) as resp:
                     assert resp.status == 201
                     payload = await resp.json()
                 sid = payload['id']
@@ -85,7 +85,7 @@ def test_a_clamped_deadline_is_reported_once(tmp_path):
                 assert again['config']['deadlineClamped'] is True
             clamped = notices(store, sid, DEADLINE_CLAMP_NOTICE_CODE)
             assert len(clamped) == 1, 'một lần kẹp, một notice'
-            assert clamped[0]['requested'] == 1500 and clamped[0]['applied'] == DEADLINE_MAX_SECONDS
+            assert clamped[0]['requested'] == 9000 and clamped[0]['applied'] == DEADLINE_MAX_SECONDS
             assert clamped[0]['message'].startswith(DEADLINE_CLAMP_NOTICE_CODE + ':')
             assert runtime.session_metrics(sid)['deadlineClamped'] is True
 
