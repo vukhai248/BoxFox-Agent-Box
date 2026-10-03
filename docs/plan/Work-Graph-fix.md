@@ -3142,3 +3142,32 @@ Lệnh: `BOXFOX_EVAL_ALLOW_SPEND=1 BOXFOX_ROUTER_KEY=bf_local_pilot BOXFOX_HARNE
 - Đối chiếu lượt pilot2 (trước khi vá, bị dừng tay): root hỏi chủ nhà ở giây 2 289 và câu hỏi nói `python -m pytest -q` chưa chạy được vì máy chưa cài pytest; driver chọn phương án có `allowFreeText` mà không kèm `note` nên `DECISION_NOTE_REQUIRED` chặn run (đã vá). Lượt 3 hỏng theo cùng kiểu "root quá chậm trước bước hỏi", không phải hồi quy do bản vá.
 
 **Kết luận:** lớp phép đo đã đúng; lỗi còn lại là chất lượng sản phẩm (root xoay plan/plan-review quá lâu, chưa tới bước hỏi/thi công, và môi trường worktree của sản phẩm thiếu pytest theo chính câu hỏi ở lượt 2). **Chưa chạy W10.F**; các lượt lỗi được giữ nguyên trong mẫu số.
+
+### 39.8 Nguyên nhân treo của S09 (điều tra theo yêu cầu owner, 03/10/2026)
+
+Owner yêu cầu xác nhận **nguyên nhân treo** trước khi chạy lại dài hơn: "vẫn research", "lag do model", hay "sub và review đá nhau mãi không cho ra". Kết quả điều tra trên DB/bundle của lượt pilot3 (2 700 s, 10 child, 2 191 257 token vào / 229 549 token ra):
+
+| Child | Vai | Bắt đầu | Kết thúc | Thời lượng |
+| --- | --- | --- | --- | --- |
+| `8491e145` | explore | +117 s | +196 s | 79 s |
+| `1c8f222b` | plan (P1 v2) | +196 s | +375 s | 178 s |
+| `0162e5d6` | plan-review | +387 s | +683 s | 296 s — **VERDICT: revise** (F1 chặn) |
+| `cb4f0b20` | plan (v3) | +707 s | +903 s | 197 s |
+| `3a8041c3` | plan (bản gọn v4) | +947 s | +1 012 s | 66 s |
+| `f645f373` | plan-review | +1 016 s | +1 452 s | 437 s — **VERDICT: revise** (pytest **NOT RUN**) |
+| `0d496918` | plan (v5) | +1 489 s | +1 591 s | 103 s |
+| `d0d4fbe3` | plan-review | +1 605 s | +2 121 s | 516 s — **VERDICT: revise** (v5 vượt trần 6 000 ký tự) |
+| `bf45cfe4` | plan-review | +2 121 s | +2 600 s | 479 s — 4 điểm sửa **đúng**, nhưng thiếu dòng `VERDICT:` |
+| `972aa7c3` | plan-review | +2 613 s | +2 700 s | 87 s — bị huỷ khi hết hạn driver |
+
+**Kết luận: không phải treo vì rảnh, cũng không phải còn research.** Research xong ở +196 s; các child chạy **nối đuôi liên tục** suốt 2 700 s, tổng 97 lượt `completion_attempt`, mỗi vòng review 5–9 phút. Đây đúng là **plan ↔ plan-review đá nhau** (4 plan + 5 plan-review), và nguyên nhân nằm ở ba tầng:
+
+1. **Tầng provider (model free):** 3 × `PROVIDER_STREAM_INTERRUPTED` và 4 × `PROVIDER_OUTPUT_TRUNCATED` — vòng review bị cắt giữa dòng nên mất `VERDICT:`; chính root tự báo: *"review lỗi hạ tầng, không phải lỗi plan … mỗi vòng 8–9 phút và đều hỏng ở tầng provider"*.
+2. **Luật bằng chứng của sản phẩm:** 21 × `SELF_REFUTED` và 3 × `WORK_FINDING_UNCITED` — finding chặn không đủ receipt hợp lệ nên bị bác, khiến lượt review không kết luận được thay vì trả `revise/ok`.
+3. **Môi trường:** sandbox của sản phẩm **không có pytest** (`ModuleNotFoundError`), nên câu lệnh nghiệm thu `python -m pytest -q` trong chính prompt S09 không thể chạy; reviewer ghi `NOT RUN` và plan cứ bị sửa lại vì tiêu chí nghiệm thu không thoả được.
+
+**Hành động:** chạy lại S09 với hạn driver dài hơn (`--deadline-seconds 5400`, vẫn `--budget-usd 0.5`, cùng model `opencode/space-bunny-free`, không đổi fixture/rubric) — kết quả ghi ở 39.9. Đây là phép đo "chạy lâu hơn có hội tụ không", không thay đổi ngưỡng cổng đạt.
+
+### 39.9 Kết quả lượt S09 pilot4 (hạn 5 400 s)
+
+_(đang chạy — sẽ ghi kết quả, gồm cả lượt lỗi, vào đây)_
