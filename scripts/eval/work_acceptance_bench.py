@@ -1972,6 +1972,7 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
     restart_fault = next((fault for fault in scenario.get('faults') or []
                           if fault['kind'] == 'restart_while_waiting'), None)
     answered_by_request, revision_done, restarted, resumed_main = {}, False, False, False
+    empty_cards = set()
     notes = []
     task = rt.start(sid, scenario['prompt'])
     idle_since = None
@@ -2034,6 +2035,13 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
                 revision_done = True
             supplied = _pending_answer(card, pool)
             if not supplied:
+                # Thẻ 0 câu hỏi (vd `needs_evidence` của con) thì driver KHÔNG có gì để gửi:
+                # ghi lại lý do đứng thay vì lặng im — pilot4 (02/10) dừng ở +517 s với `notes`
+                # rỗng nên phải đi đọc DB mới biết vì sao.
+                if (request_id, revision) not in empty_cards:
+                    empty_cards.add((request_id, revision))
+                    notes.append(f'interview {request_id} r{revision}: thẻ không có câu hỏi '
+                                 '(questions=0) — driver không thể trả lời; chờ main xử lý')
                 continue
             try:
                 rt.resolve_decision(sid, card['decisionId'], 'submit', answers=supplied)

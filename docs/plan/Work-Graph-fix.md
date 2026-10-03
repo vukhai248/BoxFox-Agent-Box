@@ -3168,6 +3168,65 @@ Owner yêu cầu xác nhận **nguyên nhân treo** trước khi chạy lại d�
 
 **Hành động:** chạy lại S09 với hạn driver dài hơn (`--deadline-seconds 5400`, vẫn `--budget-usd 0.5`, cùng model `opencode/space-bunny-free`, không đổi fixture/rubric) — kết quả ghi ở 39.9. Đây là phép đo "chạy lâu hơn có hội tụ không", không thay đổi ngưỡng cổng đạt.
 
-### 39.9 Kết quả lượt S09 pilot4 (hạn 5 400 s)
+### 39.9 Kết quả lượt S09 pilot4 (hạn driver 5 400 s)
 
-_(đang chạy — sẽ ghi kết quả, gồm cả lượt lỗi, vào đây)_
+Lượt chạy: `--cases S09 --repeats 1 --execute --budget-usd 0.5 --deadline-seconds 5400 --out /var/tmp/w10-pilot4`,
+cùng model `opencode/space-bunny-free`, không đổi fixture/rubric/ngưỡng cổng.
+
+**Số đo (đã kiểm phép đo sạch):**
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Wall time | 517 013 ms — **không chạm hạn 5 400 s**, lượt tự dừng ở +517 s |
+| Model calls / token | 44 lượt · vào 849 537 · ra 40 072 |
+| Child | 3 (đều `explore`), không có plan/review |
+| Trạng thái run | `discovering` (kỳ vọng `verified`), score 71.43 |
+| `missing` / `measurementInvalid` | `[]` / `false` — phép đo sạch |
+| `callsWithoutSessionId` | 0/44 (W10.M2 giữ nguyên tác dụng) |
+| Ngân sách | requested `{maxSteps 80, deadlineSeconds 5400}` + `driverDeadlineSeconds: 5400`; effective `{60, 1200}` kèm `DEADLINE_CLAMPED` (5400→1200) và `STEPS_CLAMPED` (80→60) |
+| Luật hỏng | main `event_kind_seen`, `interview_answered`; flow `same_child_continuation` |
+
+**Dòng thời gian (mốc so với lúc tạo run):**
+
+| Mốc | Sự kiện |
+| --- | --- |
+| +20 s | `run_started discover`; `E1:produce`, `E2:produce` |
+| +75 s | `E1` accepted |
+| +120 s | `E2` **needs_user** — child `3cbca790` xin bằng chứng: *"Acceptance #2 (báo cáo fail thật kèm output pytest thực tế) đòi chạy lệnh, nhưng node explore này không được cấp `terminal_exec` và `skills_list` trả về rỗng — không thể tự tạo bằng chứng chạy thật mà không bịa."* |
+| +193 s | Main mở lượt mới (run_started → run_finished ngay) |
+| +244 s | `E2:produce` lần hai |
+| +315 s | `E2` **failed** |
+| +357 s | main `update E2` |
+| +359 s | `E2:produce` lần ba |
+| +381 s | `E2` **accepted** → `run_finished {E1: accepted, E2: accepted}` |
+| +517 s | Driver hết thời gian chờ yên (settle) và thoát; run vẫn `discovering` |
+
+**Vì sao không đạt (ba nguyên nhân, đều là thật đo được):**
+
+1. **Cò `restart_while_waiting` không bao giờ bắn.** Fault chỉ bắn khi `rt.pending_for(sid)` trả về thẻ interview.
+   Yêu cầu duy nhất của lượt (`wr-f1b6ad6935e94aa5b8f6aa05fbc4fe11`, kind `needs_evidence`, revision 2) đã ở trạng thái
+   **`consumed`**: main tự xử lý bằng cách resume chính child đó (hai lần `E2:produce`), nên nó không còn là thẻ chờ.
+   Không có thẻ chờ ⇒ không restart, không có sự kiện `decision_requested`, không có câu trả lời nào được ghi.
+2. **Đề bài S09 mâu thuẫn với chính fixture của nó.** Prompt giả định chủ nhà phải quyết định định dạng cột, nhưng
+   `tests/test_reports.py` trong workspace đã khoá định dạng (`'date,revenue'` ⇒ phẩy + header). Child chứng minh
+   bằng `verify_exec` (receipt thật) rằng *"2 câu hỏi main định hỏi chủ sở hữu ĐÃ ĐƯỢC test trả lời, không cần hỏi"*
+   và từ chối hỏi — đúng hành vi, nhưng làm luật `event_kind_seen(decision_requested)` không thể đạt.
+3. **Nút `explore` không có kênh chạy lệnh.** Child tự khai không được cấp `terminal_exec`; main chạy hộ bằng
+   `verify_exec` rồi child mới chốt được artifact (accepted ở +381 s).
+
+**Kết luận:** lớp phép đo vẫn sạch (`missing: []`, `measurementInvalid: false`, đủ `sessionId`), hạn driver 5 400 s
+đã đi vào `plan.json`/`results.json`, nhưng S09 vẫn chưa tới `verified` và lượt tự dừng ở +517 s sau khi cả hai nút
+được nhận. Hai luật `event_kind_seen`/`interview_answered` hỏng vì **không có cuộc hỏi–đáp nào của chủ nhà diễn ra**,
+không phải vì phép đo mất dữ liệu; `same_child_continuation` hỏng vì `rows=0` (không có continuation nào để chấm).
+Đây là lỗi **thiết kế kịch bản + khoảng trống của driver**, không phải lỗi W10.M1–M3.
+
+**Việc còn mở (ghi để không trôi):**
+
+- `derived.feedback` gom **mọi** bản ghi `work_requests` bất kể trạng thái, còn `work_feedback.card()` luôn trả
+  `resolved: false` — nên oracle đọc một thẻ mà runtime đã `consumed`. Cần tách "thẻ đã hiện cho chủ nhà" khỏi
+  "yêu cầu con đã được main xử lý" trước khi dùng lại hai luật này (đổi ngữ nghĩa phép đo ⇒ cần owner duyệt).
+- Fixture S09 nên bỏ chi tiết định dạng đã bị test khoá, hoặc đổi câu hỏi sang thứ test không trả lời được.
+- Driver chưa có nhánh cho thẻ interview **0 câu hỏi** (`_pending_answer` trả `[]` nên không bao giờ trả lời được);
+  đã thêm ghi chú chẩn đoán vào `bundle['notes']` để lần sau thấy ngay lý do đứng.
+- Nút `explore` thiếu `terminal_exec` là hành vi sản phẩm đúng như thiết kế; nếu muốn S09 tự chạy `pytest` thì phải
+  đổi kịch bản sang nút thi công, không nới quyền cho explore.

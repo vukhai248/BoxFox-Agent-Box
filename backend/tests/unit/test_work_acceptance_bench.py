@@ -1320,6 +1320,59 @@ def test_drive_session_types_a_note_for_a_free_text_option():
     assert any('kèm chữ đã gõ' in note for note in notes)
 
 
+def test_drive_session_records_a_zero_question_card_once():
+    """Thẻ interview 0 câu hỏi (`needs_evidence` của con) — driver không có gì để gửi.
+
+    Pilot4 S09 02/10/2026: yêu cầu `wr-f1b6ad…` (kind `needs_evidence`) không có câu hỏi nào nên
+    `_pending_answer` trả `[]`; lượt dừng ở +517 s mà `bundle['notes']` rỗng, phải mở DB mới biết
+    lý do. Ghi chú này phải xuất hiện đúng MỘT lần dù vòng lặp quét thẻ nhiều lần.
+    """
+    seen = []
+
+    class FakeRt:
+        store = object()
+
+        def __init__(self):
+            self.tasks = {}
+
+        def start(self, sid, prompt):
+            return asyncio.get_event_loop().create_future()
+
+        def pending_for(self, sid):
+            return [{'kind': 'interview', 'decisionId': 'wr-x-r2', 'requestId': 'wr-x',
+                     'revision': 2, 'questions': [],
+                     'options': [{'id': 'submit', 'kind': 'approve'},
+                                 {'id': 'decide', 'kind': 'alternative'}],
+                     'defaultChoice': 'decide'}]
+
+        @staticmethod
+        def resolve_decision(sid, decision_id, choice, note=None, answers=None):
+            seen.append((decision_id, choice))
+
+    class FakeFeedback:
+        @staticmethod
+        async def pump(rt):
+            return []
+
+    class FakeGraph:
+        @staticmethod
+        def runs(sid, limit=20):
+            return [{'status': 'discovering'}]
+
+        class continuations:
+            @staticmethod
+            def rows():
+                return []
+
+    handles = {'store': object(), 'graph': object(), 'rt': FakeRt()}
+    notes = asyncio.run(bench.drive_session(handles['rt'], FakeGraph(), FakeFeedback(), 'sid-1',
+                                            {'id': 'S09', 'prompt': 'p'}, deadline_seconds=1,
+                                            handles=handles))
+    assert seen == [], 'thẻ 0 câu hỏi thì không được bịa câu trả lời'
+    hits = [note for note in notes if 'không có câu hỏi' in note]
+    assert len(hits) == 1 and 'wr-x' in hits[0], f'phải ghi chú đúng một lần: {notes}'
+
+
 def test_terminal_fence_stops_wrappers_substitution_and_relative_escapes(tmp_path):
     """Soát vòng 2 — hàng rào phép đo phải chặn cả lối đi vòng, không chỉ `rm` trần."""
     scenario = bench.load_scenario(bench.scenario_path('S12'))
