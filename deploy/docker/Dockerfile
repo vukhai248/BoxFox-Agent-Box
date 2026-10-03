@@ -222,6 +222,15 @@ RUN printf '%s\n' \
 # aiohttp ở lớp riêng để không phá cache của các lớp nặng khi chỉnh bridge.
 RUN apt-get update && apt-get install -y --no-install-recommends python3-aiohttp \
     && rm -rf /var/lib/apt/lists/*
+# --- Lớp 4.7.1: khung test cho lượt thi công -------------------------------
+# Node thi công chạy chính câu lệnh nghiệm thu của repo trong worktree (`python -m pytest -q`).
+# Đo thật ở lượt S09 pilot3 02/10/2026 (docs/plan/Work-Graph-fix.md §39.8): box KHÔNG có
+# pytest, nên `python -m pytest -q` trả `ModuleNotFoundError`; reviewer chỉ ghi được `NOT RUN` và
+# plan cứ bị sửa lại vì tiêu chí nghiệm thu không thoả được. Cài bằng gói apt vì Ubuntu 24.04
+# chặn `pip install` toàn cục (PEP 668) — gói apt nằm sẵn trên đường `sys.path` của python3 hệ
+# thống, đúng thứ `python -m pytest` trong worktree gọi tới.
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pytest \
+    && rm -rf /var/lib/apt/lists/*
 COPY tty-bridge.py /usr/local/bin/tty-bridge.py
 COPY box-services.sh /usr/local/bin/box-services.sh
 COPY box-power /usr/local/sbin/box-power
