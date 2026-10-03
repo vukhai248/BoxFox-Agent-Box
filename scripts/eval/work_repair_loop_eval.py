@@ -171,6 +171,29 @@ class RepairExecutor(GitExecutor):
         return await super().execute(name, args, sid, **identity)
 
 
+def check_commands(graph, child_id, limit=12):
+    return [item.get('args', {}).get('command') for item
+            in work_checks.observations(graph, child_id)
+            if item.get('name') == 'terminal_exec'][:limit]
+
+
+def child_summary(store, entry):
+    """Tóm tắt con đã được resume để sửa: công cụ đã dùng, có đụng `export.py`, có thấy findings."""
+    child_id = (entry or {}).get('buildChildId')
+    child = store.get(child_id) if child_id else {}
+    events = tool_events(store, child_id)
+    return {'id': child_id, 'parent': child.get('parent_id'),
+            'tools': [item.get('name') for item in events][:20],
+            'wroteExport': any(
+                item.get('name') in ('file_write', 'file_edit_block')
+                and 'export.py' in json.dumps(item.get('args') or {}, ensure_ascii=False)
+                or item.get('name') == 'terminal_exec'
+                and 'export.py' in str((item.get('args') or {}).get('command') or '')
+                for item in events),
+            'sawFindings': bool((entry or {}).get('findingsArtifactId'))
+                and (entry or {})['findingsArtifactId'] in json.dumps(child.get('config') or {}, ensure_ascii=False)}
+
+
 def tool_events(store, child_id):
     if not child_id:
         return []
@@ -183,6 +206,49 @@ def tool_events(store, child_id):
         except (TypeError, ValueError):
             continue
     return out
+
+
+async def adjudicate_input_conflicts(graph, session, run, conflicts):
+    """Đóng vai main xử lý xung đột đầu vào theo đúng đường sản phẩm chỉ định.
+
+    Sản phẩm không có hành động "bác xung đột": `next` của `work_graph` chỉ nói main phải sửa lại
+    nhiệm vụ bằng `action=update`, và đó cũng là đường DUY NHẤT xoá `state['inputConflicts']`
+    (`work_graph.py:886-890`). Đổi định nghĩa nút làm stage reset (mất bản nháp đã sửa) nên probe
+    ghi nguyên văn xung đột + tiêu chí cũ/mới rồi mới đổi, và ghi rõ đây là bước do driver làm thay
+    owner (duyệt lại), không phải sản phẩm tự làm.
+    """
+    live = graph.get(run['runId'])
+    node = graph.find_node(live, 'B1')
+    acceptance = list(node['acceptance'])
+    fixed = []
+    for item in conflicts:
+        requirement = item.get('requirement')
+        if requirement in acceptance:
+            index = acceptance.index(requirement)
+            acceptance[index] = f'{requirement} (giữ nguyên cả chữ hoa/thường)'
+            fixed.append({'id': item.get('id'), 'was': requirement, 'now': acceptance[index],
+                          'evidence': item.get('evidence')})
+    if not fixed:
+        return {'done': False, 'reason': 'không tiêu chí nào trong xung đột khớp danh sách nghiệm thu',
+                'conflicts': conflicts, 'acceptance': acceptance}
+    nodes = [json.loads(json.dumps(n, ensure_ascii=False)) for n in live['nodes']]
+    for item in nodes:
+        if item['id'] == 'B1':
+            item['acceptance'] = acceptance
+    try:
+        graph.graph(session, {'action': 'update', 'runId': run['runId'], 'nodes': nodes})
+    except ValueError as exc:
+        return {'done': False, 'reason': f'action=update bị từ chối: {exc}', 'fixed': fixed}
+    after = graph.get(run['runId'])
+    after['status'] = 'approved'          # driver làm thay bước owner duyệt lại sau khi sửa nhiệm vụ
+    after['executionRequested'] = True
+    graph.set_repair_default(after)
+    graph.save(after, 'probe_readjudicated')
+    node = graph.find_node(after, 'B1')
+    produced = await graph.run_stage(session, after, node, 'execute', 3)
+    return {'done': True, 'fixed': fixed, 'conflicts': conflicts, 'acceptance': acceptance,
+            'productionStatus': produced,
+            'state': {k: node['stages']['execute'].get(k) for k in ('status', 'attempts', 'error')}}
 
 
 async def main(args):
@@ -276,12 +342,12 @@ async def main(args):
         red_doc = red['checks'][0]
         repair = red.get('repair') or {}
         entry = repair.get('entry') or {}
-        row['redCheck'] = {'kind': red_doc['kind'], 'status': red_doc['status'], 'childId': red_doc.get('childId'),
-                           'error': red_doc.get('error'), 'repairAction': repair.get('action'),
-                           # Lệnh THẬT child kiểm thử đã chạy ở lượt đỏ (không còn kết quả cắm sẵn).
-                           'commands': [item.get('args', {}).get('command') for item
-                                        in work_checks.observations(graph, red_doc.get('childId'))
-                                        if item.get('name') == 'terminal_exec'][:12]}
+        # Lượt kiểm ĐẦU có thể chỉ `unverified` (findings bị hạ vì thiếu receipt) rồi lượt sau mới
+        # `revise`; giữ nguyên văn lượt đầu ở `firstCheck` và chỉ nhận "lượt đỏ" khi có mục sửa.
+        row['firstCheck'] = {'kind': red_doc['kind'], 'status': red_doc['status'], 'childId': red_doc.get('childId'),
+                             'error': red_doc.get('error'), 'repairAction': repair.get('action'),
+                             'commands': check_commands(graph, red_doc.get('childId'))}
+        row['redCheck'] = dict(row['firstCheck']) if entry else {}
         row['repair'] = entry
         node = graph.find_node(graph.get(run['runId']), 'B1')
         state = node['stages']['execute']
@@ -289,25 +355,15 @@ async def main(args):
                               'artifactId': (state.get('artifact') or {}).get('artifactId'),
                               'verdicts': [r.get('verdict') for r in state.get('rounds') or []],
                               'repairs': state.get('repairs')}
-        resumed_child = entry.get('buildChildId')
-        child = store.get(resumed_child) if resumed_child else {}
-        row['resumedChild'] = {'id': resumed_child, 'parent': child.get('parent_id'),
-                               'tools': [item.get('name') for item in tool_events(store, resumed_child)][:20],
-                               'wroteExport': any(
-                                   item.get('name') in ('file_write', 'file_edit_block')
-                                   and 'export.py' in json.dumps(item.get('args') or {}, ensure_ascii=False)
-                                   or item.get('name') == 'terminal_exec'
-                                   and 'export.py' in str((item.get('args') or {}).get('command') or '')
-                                   for item in tool_events(store, resumed_child)),
-                               'sawFindings': bool(entry.get('findingsArtifactId')) and entry['findingsArtifactId']
-                                   in json.dumps(child.get('config') or {}, ensure_ascii=False)}
+        row['resumedChild'] = child_summary(store, entry)
 
         second_artifact = (state.get('artifact') or {}).get('artifactId')
         if not second_artifact:
             raise AssertionError(f'WORK_REPAIR_NO_DRAFT: status={state["status"]} error={state.get("error")}')
+        adjudicated = False
         # `test_proof` đòi child chạy ĐÚNG câu lệnh bắt buộc; child thật hay bọc ống/`echo` nên lượt
         # đầu có thể `unverified`. Thử lại có giới hạn và ghi trung thực từng lượt, không nới luật.
-        for attempt in range(1, 4):
+        for attempt in range(1, 5):
             # Lượt trước có thể đã `revise` và được định tuyến sửa ⇒ artifact đổi. Đọc lại artifact hiện
             # hành từng lượt (đối tượng `run` của probe là ảnh chụp cũ) để không bị `WORK_CHECK_STALE`.
             live = graph.find_node(graph.get(run['runId']), 'B1')['stages']['execute']
@@ -324,6 +380,15 @@ async def main(args):
                 row.setdefault('greenChecks', []).append({'attempt': attempt, 'raised': str(exc)[:300]})
                 break
             if not green.get('checks'):
+                conflicts = green.get('inputConflicts') or []
+                if conflicts and not adjudicated:
+                    # Xung đột đầu vào: lượt kiểm đỏ đã ghi "tiền đề của tiêu chí A* bị bác bỏ" và sản
+                    # phẩm chặn mọi lượt kiểm/sản xuất tiếp cho tới khi main sửa lại nhiệm vụ
+                    # (`work_checks.py:1076`). Đây là đường có thật, không phải lỗi phép đo; probe đóng
+                    # vai main đi đúng đường đó rồi đo tiếp.
+                    row['adjudication'] = await adjudicate_input_conflicts(graph, session, run, conflicts)
+                    adjudicated = True
+                    continue
                 # Đo thật: sản phẩm trả về không có check nào — ghi nguyên văn rồi dừng vòng,
                 # không che bằng một IndexError khó đọc.
                 row.setdefault('greenChecks', []).append({'attempt': attempt, 'empty': True,
@@ -332,17 +397,27 @@ async def main(args):
                                                               ensure_ascii=False, default=str))})
                 break
             green_doc = green['checks'][0]
-            row.setdefault('greenChecks', []).append({
-                'kind': green_doc['kind'], 'status': green_doc['status'], 'attempt': attempt,
-                'childId': green_doc.get('childId'), 'error': green_doc.get('error'),
-                'commands': [item.get('args', {}).get('command') for item
-                             in work_checks.observations(graph, green_doc.get('childId'))
-                             if item.get('name') == 'terminal_exec'][:12]})
+            record = {'kind': green_doc['kind'], 'status': green_doc['status'], 'attempt': attempt,
+                      'childId': green_doc.get('childId'), 'error': green_doc.get('error'),
+                      'artifactId': second_artifact,
+                      'commands': check_commands(graph, green_doc.get('childId'))}
+            row.setdefault('greenChecks', []).append(record)
             if green.get('repair'):
-                # W8.A4.5: lượt kiểm thứ hai cũng có thể tự `revise` và được định tuyến sửa — ghi lại
-                # nguyên văn vì đây chính là cơ chế cần đo.
-                row.setdefault('greenRepairs', []).append(json.loads(json.dumps(green['repair'],
-                                                                                ensure_ascii=False, default=str)))
+                # W8.A4.5: lượt kiểm có thể tự `revise` và được định tuyến sửa — ghi lại nguyên văn vì
+                # đây chính là cơ chế cần đo.
+                repair_doc = json.loads(json.dumps(green['repair'], ensure_ascii=False, default=str))
+                row.setdefault('greenRepairs', []).append(repair_doc)
+                if not row.get('repair'):
+                    # Lượt ĐỎ thật đầu tiên. Đo theo lượt thật sự mở vòng sửa, không theo lượt kiểm
+                    # đầu tiên: lượt đầu có thể chỉ `unverified` (findings bị hạ vì thiếu receipt).
+                    row['repair'] = repair_doc.get('entry') or {}
+                    row['redCheck'] = dict(record, repairAction=repair_doc.get('action'))
+                    live_state = graph.find_node(graph.get(run['runId']), 'B1')['stages']['execute']
+                    row['afterRepair'] = {'status': live_state['status'], 'attempts': live_state['attempts'],
+                                          'artifactId': (live_state.get('artifact') or {}).get('artifactId'),
+                                          'verdicts': [r.get('verdict') for r in live_state.get('rounds') or []],
+                                          'repairs': live_state.get('repairs')}
+                    row['resumedChild'] = child_summary(store, row['repair'])
             if green_doc['status'] == 'pass':
                 break
         node = graph.find_node(graph.get(run['runId']), 'B1')
@@ -380,7 +455,8 @@ async def main(args):
                         started_check = time.monotonic()
                         out = await graph.checks.tool(session, {'action': 'start', 'runId': run['runId'],
                             'nodeId': work_worktrees.INTEGRATION_NODE, 'stage': 'execute',
-                            'artifactId': iartifact, 'checkIds': ['tests'],
+                            'artifactId': iartifact,
+                            'checkIds': integration_row.get('required') or ['tests'],
                             'invocationId': uuid.uuid4().hex})
                         if not out.get('checks'):
                             # Cùng lý do như vòng xanh: `checks.tool` có thể trả danh sách rỗng
@@ -388,15 +464,16 @@ async def main(args):
                             integration_row.setdefault('checks', []).append(
                                 {'attempt': attempt, 'empty': True, 'keys': sorted(out)})
                             continue
-                        idoc = out['checks'][0]
-                        integration_row.setdefault('checks', []).append({
-                            'kind': idoc['kind'], 'status': idoc['status'], 'attempt': attempt,
-                            'childId': idoc.get('childId'), 'error': idoc.get('error'),
-                            'seconds': round(time.monotonic() - started_check, 3),
-                            'commands': [item.get('args', {}).get('command') for item
-                                         in work_checks.observations(graph, idoc.get('childId'))
-                                         if item.get('name') == 'terminal_exec'][:12]})
-                        if idoc['status'] == 'pass':
+                        # Node tổng hợp yêu cầu nhiều loại kiểm (tests + code_review); ghi HẾT các
+                        # bản ghi trả về trong lượt này thay vì chỉ bản đầu.
+                        docs = out['checks']
+                        for idoc in docs:
+                            integration_row.setdefault('checks', []).append({
+                                'kind': idoc['kind'], 'status': idoc['status'], 'attempt': attempt,
+                                'childId': idoc.get('childId'), 'error': idoc.get('error'),
+                                'seconds': round(time.monotonic() - started_check, 3),
+                                'commands': check_commands(graph, idoc.get('childId'))})
+                        if all(idoc['status'] == 'pass' for idoc in docs):
                             break
                     run = graph.get(run['runId'])
                     inode = graph.find_node(run, work_worktrees.INTEGRATION_NODE)
@@ -450,7 +527,8 @@ async def main(args):
         row['integrationNative'] = {
             'built': bool(integration_row.get('built')),
             'hasRealChild': any(c.get('childId') for c in (integration_row.get('checks') or [])),
-            'testsPassedOnMergedTree': bool((integration_row.get('checks') or [{}])[-1].get('status') == 'pass'),
+            'testsPassedOnMergedTree': any(c.get('kind') == 'tests' and c.get('status') == 'pass'
+                                            for c in (integration_row.get('checks') or [])),
             'integrationChecked': (integration_row.get('final') or {}).get('integrationStatus') == 'checked',
         }
         row['oracle'] = (all(row['mechanism'].values()) and all(row['model'].values())
