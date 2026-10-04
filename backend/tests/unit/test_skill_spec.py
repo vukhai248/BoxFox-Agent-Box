@@ -404,18 +404,24 @@ def test_revalidate_rejects_unknown_previous_fields_and_bad_inputs():
 
 def test_registry_creates_required_tables_and_columns(registry):
     required = {
-        'harness_skills': ('skill_id', 'version', 'revision', 'state', 'spec_hash', 'spec_json',
-                           'provenance_json', 'review_json', 'created_at', 'updated_at'),
+        'harness_skills': ('skill_id', 'version', 'schema_version', 'revision', 'state',
+                           'spec_hash', 'spec_json', 'provenance_json', 'review_json',
+                           'created_at', 'updated_at'),
         'harness_skill_reviews': ('review_id', 'skill_id', 'version', 'reviewer_id', 'verdict',
                                   'notes', 'created_at'),
         'harness_skill_pins': ('pin_id', 'skill_id', 'version', 'attempt_id', 'session_id',
-                               'created_at'),
+                               'created_at', 'updated_at', 'replaced_version'),
         'harness_skill_invocations': ('scope', 'invocation_id', 'operation', 'request_hash',
                                       'result_json', 'created_at'),
     }
     for table, columns in required.items():
         actual = {row['name'] for row in registry.db.execute(f'PRAGMA table_info({table})')}
         assert set(columns) <= actual, table
+    shapes = {tuple(row['name'] for row in registry.db.execute(f'PRAGMA index_info({index["name"]})'))
+              for index in registry.db.execute('PRAGMA index_list(harness_skill_pins)')
+              if index['unique']}
+    assert ('skill_id', 'attempt_id') in shapes
+    assert ('skill_id', 'version', 'attempt_id') not in shapes
 
 
 @pytest.mark.parametrize('ddl', [
@@ -450,6 +456,87 @@ def test_registry_adds_state_reason_to_a_legacy_table(tmp_path):
         assert 'state_reason' in columns
     finally:
         session_store.close()
+
+
+def test_registry_upgrades_a_pre_schema_version_table_in_place(tmp_path):
+    session_store = SessionStore(tmp_path / 'sessions.db')
+    try:
+        session_store.db.executescript('''
+            CREATE TABLE harness_skills (
+                skill_id TEXT NOT NULL, version INTEGER NOT NULL, revision INTEGER NOT NULL,
+                state TEXT NOT NULL, spec_hash TEXT NOT NULL, spec_json TEXT NOT NULL,
+                provenance_json TEXT NOT NULL, review_json TEXT NOT NULL,
+                created_at REAL NOT NULL, updated_at REAL NOT NULL,
+                PRIMARY KEY(skill_id, version));''')
+        session_store.db.execute(
+            'INSERT INTO harness_skills VALUES(?,?,?,?,?,?,?,?,?,?)',
+            ('legacy-skill', 1, 1, 'draft', 'hash',
+             '{"id":"legacy-skill","title":"Legacy skill"}', '{}', '{}', 1.0, 1.0))
+        registry = SkillRegistry(session_store)
+        row = session_store.db.execute('SELECT schema_version FROM harness_skills').fetchone()
+        assert row['schema_version'] == 1
+        view = registry.get('legacy-skill', 1)
+        assert view['schemaVersion'] == 1 and view['title'] == 'Legacy skill'
+    finally:
+        session_store.close()
+
+
+def test_legacy_pin_table_upgrades_to_one_pin_per_attempt(tmp_path):
+    session_store = SessionStore(tmp_path / 'sessions.db')
+    try:
+        session_store.db.executescript('''
+            CREATE TABLE harness_skill_pins (
+                pin_id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, version INTEGER NOT NULL,
+                attempt_id TEXT NOT NULL, session_id TEXT NOT NULL, created_at REAL NOT NULL,
+                UNIQUE(skill_id, version, attempt_id));''')
+        session_store.db.executemany(
+            'INSERT INTO harness_skill_pins VALUES(?,?,?,?,?,?)',
+            [('pin-a', 'boxfox-web-preview', 1, 'attempt-1', 'session-1', 1.0),
+             ('pin-b', 'boxfox-web-preview', 2, 'attempt-1', 'session-1', 2.0),
+             ('pin-c', 'skill-b', 1, 'attempt-1', 'session-1', 3.0)])
+        registry = SkillRegistry(session_store)
+        pins = registry.pins(attempt_id='attempt-1')
+        assert [(pin['skillId'], pin['version']) for pin in pins] == [
+            ('boxfox-web-preview', 2), ('skill-b', 1)]
+        newest = next(pin for pin in pins if pin['skillId'] == 'boxfox-web-preview')
+        assert newest['pinId'] == 'pin-b' and newest['replacedVersion'] == 1
+        assert newest['createdAt'] == 2.0 and newest['updatedAt'] == 2.0
+        shapes = {tuple(row['name'] for row in
+                        session_store.db.execute(f'PRAGMA index_info({index["name"]})'))
+                  for index in session_store.db.execute('PRAGMA index_list(harness_skill_pins)')
+                  if index['unique']}
+        assert ('skill_id', 'attempt_id') in shapes
+        assert ('skill_id', 'version', 'attempt_id') not in shapes
+    finally:
+        session_store.close()
+
+
+def test_unknown_record_schema_version_fails_closed(registry):
+    proposed(registry)
+    registry.db.execute('UPDATE harness_skills SET schema_version=2')
+    error('SKILL_SCHEMA_UNSUPPORTED', lambda: registry.get('boxfox-web-preview', 1))
+    error('SKILL_SCHEMA_UNSUPPORTED', lambda: registry.list())
+    error('SKILL_SCHEMA_UNSUPPORTED', lambda: registry.enable('boxfox-web-preview', 1, 1))
+
+
+def test_corrupt_record_json_fails_closed(registry):
+    proposed(registry)
+    registry.db.execute("UPDATE harness_skills SET spec_json='{'")
+    error('SKILL_RECORD_CORRUPT', lambda: registry.get('boxfox-web-preview', 1))
+    error('SKILL_RECORD_CORRUPT', lambda: registry.list())
+    registry.db.execute("UPDATE harness_skills SET spec_json='[]'")
+    error('SKILL_RECORD_CORRUPT', lambda: registry.get('boxfox-web-preview', 1))
+    registry.db.execute("UPDATE harness_skills SET spec_json='{}', review_json='{'")
+    error('SKILL_RECORD_CORRUPT', lambda: registry.get('boxfox-web-preview', 1))
+    error('SKILL_RECORD_CORRUPT',
+          lambda: registry.enable('boxfox-web-preview', 1, 1))
+
+
+def test_corrupt_invocation_receipt_fails_closed(registry):
+    proposed(registry)
+    registry.db.execute("UPDATE harness_skill_invocations SET result_json='{'")
+    error('SKILL_RECORD_CORRUPT',
+          lambda: registry.propose(spec(), 'owner-1', 'inv-boxfox-web-preview-1'))
 
 
 def test_propose_writes_a_draft_row_without_enabling(registry):
@@ -577,6 +664,48 @@ def test_enable_records_a_pin_for_the_active_attempt(registry):
     error('SKILL_SPEC_INVALID',
           lambda: registry.enable('boxfox-web-preview', 1, view['revision'],
                                   attempt_id='attempt-1'))
+
+
+def test_enable_replaces_the_pin_for_the_same_attempt(registry):
+    first = proposed(registry)
+    approved(registry, 'boxfox-web-preview', 1)
+    registry.enable('boxfox-web-preview', 1, first['revision'],
+                    attempt_id='attempt-1', session_id='session-1')
+    second = proposed(registry, version=2, goal='An improved preview procedure.')
+    approved(registry, 'boxfox-web-preview', 2)
+    registry.enable('boxfox-web-preview', 2, second['revision'],
+                    attempt_id='attempt-1', session_id='session-1')
+    pins = registry.pins(attempt_id='attempt-1')
+    assert len(pins) == 1 and pins[0]['version'] == 2
+    assert pins[0]['replacedVersion'] == 1
+    assert pins[0]['createdAt'] <= pins[0]['updatedAt']
+    assert registry.db.execute('SELECT COUNT(*) FROM harness_skill_pins').fetchone()[0] == 1
+
+
+def test_enable_same_version_twice_keeps_one_pin_without_replacement(registry):
+    view = proposed(registry)
+    approved(registry, 'boxfox-web-preview', 1)
+    first = registry.enable('boxfox-web-preview', 1, view['revision'],
+                            attempt_id='attempt-1', session_id='session-1')
+    registry.enable('boxfox-web-preview', 1, first['revision'],
+                    attempt_id='attempt-1', session_id='session-1')
+    pins = registry.pins(attempt_id='attempt-1')
+    assert len(pins) == 1 and pins[0]['version'] == 1
+    assert pins[0]['replacedVersion'] is None
+
+
+def test_one_attempt_keeps_one_version_per_skill(registry):
+    enabled(registry, version=1)
+    enabled(registry, version=2)
+    enabled(registry, id='skill-b')
+    registry.pin('boxfox-web-preview', 1, 'attempt-1', 'session-1')
+    registry.pin('boxfox-web-preview', 2, 'attempt-1', 'session-1')
+    registry.pin('skill-b', 1, 'attempt-1', 'session-1')
+    pins = registry.pins(attempt_id='attempt-1')
+    assert sorted((pin['skillId'], pin['version']) for pin in pins) == [
+        ('boxfox-web-preview', 2), ('skill-b', 1)]
+    assert registry.pins(skill_id='boxfox-web-preview') == [
+        pin for pin in pins if pin['skillId'] == 'boxfox-web-preview']
 
 
 def test_enable_does_not_mutate_a_pinned_active_attempt_skill(registry):

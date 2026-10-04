@@ -209,6 +209,41 @@ def test_claim_replays_the_same_invocation(own):
     assert count(store, 'harness_research_controls') == 1, 'replay không ghi thêm biên nhận'
 
 
+def test_claim_rechecks_the_invocation_inside_the_write_transaction(own, tmp_path):
+    """Đua hai kết nối: cache trước giao dịch của B trượt, A ghi cùng invocation, rồi B mới vào ghi.
+
+    Thiếu re-check trong giao dịch, B sẽ ném `RESEARCH_REVISION_CONFLICT` dù cùng invocation + payload;
+    hợp đồng "cùng invocation + payload ⇒ replay" đòi B trả đúng kết quả A đã ghi.
+    """
+    store, owner = own
+    other_store = SessionStore(tmp_path / 'sessions.sqlite')
+    other = ResearchOwnership(other_store)
+    assign(store, owner)
+    real_cached = other._cached
+    seen = []
+
+    def miss_once(run_id, invocation_id, request_hash, conflict_code):
+        seen.append(invocation_id)
+        if len(seen) == 1:
+            # Cache trước giao dịch của B trượt; A ghi cùng invocation + payload rồi mới nhả.
+            owner.claim(RUN, LEAD, 1, 'inv-claim')
+            return None
+        return real_cached(run_id, invocation_id, request_hash, conflict_code)
+
+    other._cached = miss_once
+    try:
+        replay = other.claim(RUN, LEAD, 1, 'inv-claim')
+    finally:
+        other_store.close()
+    assert seen == ['inv-claim', 'inv-claim'], 'B phải re-check trong giao dịch ghi'
+    assert (replay['revision'], replay['controllerId']) == (2, LEAD)
+    assert owner.get(RUN)['revision'] == 2, 'chỉ một nhịp tăng revision'
+    claim_receipts = store.db.execute(
+        'SELECT COUNT(*) FROM harness_research_invocations WHERE run_id=? AND invocation_id=?',
+        (RUN, 'inv-claim')).fetchone()[0]
+    assert claim_receipts == 1, 'B phát lại, không ghi thêm biên nhận'
+
+
 def test_claim_rejects_a_reused_invocation_with_a_different_request(own):
     store, owner = own
     assign(store, owner)

@@ -4,6 +4,8 @@ Mỗi test bám một bất biến trong H6: unknown ≠ 0, consent/ceiling fail
 idempotent theo call_key/invocation, reasoning/cache tách khe, settle/release và
 reconcile không viết lại lịch sử, schema lạ bị từ chối.
 """
+import json
+
 import pytest
 
 from agentbox.agent_core.orchestration_contracts import ContractError
@@ -217,6 +219,22 @@ def test_child_inherits_consent_and_currency_must_match(ledger):
     assert allocation_count(store) == 2
 
 
+def test_child_consent_must_match_parent(ledger):
+    store, ledger = ledger
+    reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
+    error('USAGE_FIELD_INVALID',
+          lambda: reserve(ledger, allocation_id='child-1', parent_id='alloc-1',
+                          consent_ref='consent-2', reservation={'amount': 0.5}))
+    assert allocation_count(store) == 1
+    inherited = reserve(ledger, allocation_id='child-2', parent_id='alloc-1', consent_ref=None,
+                        reservation={'amount': 0.5})
+    assert inherited['consentRef'] == 'consent-1'
+    repeated = reserve(ledger, allocation_id='child-3', parent_id='alloc-1',
+                       reservation={'amount': 0.5})
+    assert repeated['consentRef'] == 'consent-1'
+    assert allocation_count(store) == 3
+
+
 def test_child_of_closed_parent_rejected(ledger):
     store, ledger = ledger
     reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
@@ -373,6 +391,85 @@ def test_settle_and_release_idempotent_by_invocation(ledger):
           lambda: ledger.release('alloc-1', 0.1, 'done', invocation_id='release-1'))
 
 
+def test_settle_replays_any_earlier_invocation(ledger):
+    _, ledger = ledger
+    reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
+    ledger.settle('alloc-1', {'amount': 0.4}, invocation_id='settle-A')
+    ledger.settle('alloc-1', {'amount': 0.6}, invocation_id='settle-B')
+    replay = ledger.settle('alloc-1', {'amount': 0.4}, invocation_id='settle-A')
+    assert replay['consumed']['amount'] == 0.4      # không viết lại số đã chốt
+    assert replay['consumed']['lateAmount'] == 0.2
+    error('USAGE_INVOCATION_CONFLICT',
+          lambda: ledger.settle('alloc-1', {'amount': 0.5}, invocation_id='settle-A'))
+    assert ledger.get_allocation('alloc-1')['consumed']['amount'] == 0.4
+
+
+def test_release_replays_any_earlier_invocation(ledger):
+    _, ledger = ledger
+    reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
+    ledger.release('alloc-1', 0.4, 'first', invocation_id='release-A')
+    ledger.release('alloc-1', 0.2, 'second', invocation_id='release-B')
+    replay = ledger.release('alloc-1', 0.4, 'first', invocation_id='release-A')
+    assert replay['consumed']['releasedAmount'] == 0.6
+    assert len(replay['consumed']['releases']) == 2
+    error('USAGE_INVOCATION_CONFLICT',
+          lambda: ledger.release('alloc-1', 0.3, 'first', invocation_id='release-A'))
+    assert ledger.get_allocation('alloc-1')['consumed']['releasedAmount'] == 0.6
+
+
+def test_parent_settle_rejects_while_child_holds_budget(ledger):
+    store, ledger = ledger
+    reserve(ledger, reservation={'amount': 10.0, 'ceiling': 10.0})
+    reserve(ledger, allocation_id='child-1', parent_id='alloc-1',
+            reservation={'amount': 6.0, 'ceiling': 6.0})
+    error('USAGE_SETTLE_EXCEEDS', lambda: ledger.settle('alloc-1', {'amount': 10.0}))
+    row = store.db.execute('SELECT consumed_json, state FROM harness_allocations '
+                           'WHERE allocation_id=?', ('alloc-1',)).fetchone()
+    stored = json.loads(row['consumed_json'])
+    assert stored['amount'] is None and stored['releasedAmount'] == 0.0
+    assert stored['invocations'] == {} and stored['releases'] == []
+    assert row['state'] == 'reserved'
+    error('USAGE_SETTLE_EXCEEDS', lambda: ledger.settle('alloc-1', {'amount': 4.01}))
+    root = ledger.settle('alloc-1', {'amount': 4.0})
+    assert root['consumed']['amount'] == 4.0 and root['remaining'] == 0.0
+    child = ledger.settle('child-1', {'amount': 6.0})
+    assert child['consumed']['amount'] == 6.0
+    error('USAGE_SETTLE_EXCEEDS', lambda: ledger.settle('alloc-1', {'amount': 4.01}))
+
+
+def test_parent_release_cannot_free_held_child_budget(ledger):
+    _, ledger = ledger
+    reserve(ledger, reservation={'amount': 10.0, 'ceiling': 10.0})
+    reserve(ledger, allocation_id='child-1', parent_id='alloc-1',
+            reservation={'amount': 6.0, 'ceiling': 6.0})
+    error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 4.01, 'too much'))
+    released = ledger.release('alloc-1', 4.0, 'parent shrink')
+    assert released['consumed']['releasedAmount'] == 4.0 and released['remaining'] == 0.0
+    error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 0.01, 'again'))
+    # con trả lại phần chưa dùng thì cha mở lại đúng phần đó, không hơn
+    ledger.settle('child-1', {'amount': 2.0})
+    ledger.release('child-1', 4.0, 'child done')
+    assert ledger.get_allocation('alloc-1')['remaining'] == 4.0
+    closed = ledger.release('alloc-1', 4.0, 'parent done')
+    assert closed['remaining'] == 0.0
+    error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 0.01, 'again'))
+
+
+def test_view_remaining_matches_child_reserve_admission(ledger):
+    _, ledger = ledger
+    reserve(ledger, reservation={'amount': 10.0, 'ceiling': 10.0})
+    reserve(ledger, allocation_id='child-1', parent_id='alloc-1',
+            reservation={'amount': 6.0, 'ceiling': 6.0})
+    assert ledger.get_allocation('alloc-1')['remaining'] == 4.0
+    admitted = reserve(ledger, allocation_id='child-2', parent_id='alloc-1',
+                       reservation={'amount': 4.0, 'ceiling': 4.0})
+    assert admitted['remaining'] == 4.0
+    assert ledger.get_allocation('alloc-1')['remaining'] == 0.0
+    error('USAGE_CEILING_EXCEEDED',
+          lambda: reserve(ledger, allocation_id='child-3', parent_id='alloc-1',
+                          reservation={'amount': 0.01}))
+
+
 def test_settle_exceeds_reservation_blocked(ledger):
     store, ledger = ledger
     reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
@@ -514,6 +611,48 @@ def test_calls_pagination_and_filters(ledger):
         ledger.calls(OWNER, limit=101)
     with pytest.raises(ContractError):
         ledger.calls(OWNER, cursor='../bad')
+
+
+def test_corrupt_allocation_json_fails_closed(ledger):
+    store, ledger = ledger
+    reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
+    store.db.execute("UPDATE harness_allocations SET consumed_json='not-json' "
+                     "WHERE allocation_id='alloc-1'")
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.get_allocation('alloc-1'))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.unsettled(OWNER))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.settle('alloc-1', {'amount': 0.1}))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.release('alloc-1', 0.1, 'x'))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.reconcile(OWNER))
+    store.db.execute("UPDATE harness_allocations SET consumed_json='{}', reservation_json='not-json' "
+                     "WHERE allocation_id='alloc-1'")
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.get_allocation('alloc-1'))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.settle('alloc-1', {'amount': 0.1}))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.release('alloc-1', 0.1, 'x'))
+
+
+def test_corrupt_child_json_fails_closed_through_parent_hold(ledger):
+    store, ledger = ledger
+    reserve(ledger, reservation={'amount': 1.0, 'ceiling': 1.0})
+    reserve(ledger, allocation_id='child-1', parent_id='alloc-1', reservation={'amount': 0.5})
+    store.db.execute("UPDATE harness_allocations SET reservation_json='not-json' "
+                     "WHERE allocation_id='child-1'")
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.get_allocation('child-1'))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.get_allocation('alloc-1'))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.unsettled(OWNER))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.reconcile(OWNER))
+
+
+def test_corrupt_usage_json_fails_closed(ledger):
+    store, ledger = ledger
+    record(ledger, 'call-1', input_tokens=1, cached_tokens={'read': 2})
+    store.db.execute("UPDATE harness_usage SET requested_json='not-json' WHERE call_key='call-1'")
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.calls(OWNER))
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.reconcile(OWNER))
+    error('USAGE_RECORD_CORRUPT',
+          lambda: record(ledger, 'call-1', input_tokens=1, cached_tokens={'read': 2}))
+    store.db.execute("UPDATE harness_usage SET requested_json=NULL, cached_tokens_json='not-json' "
+                     "WHERE call_key='call-1'")
+    error('USAGE_RECORD_CORRUPT', lambda: ledger.aggregate(OWNER))
 
 
 def test_missing_columns_fail_closed(tmp_path):

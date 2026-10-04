@@ -140,6 +140,13 @@ class PeerWatchdog:
             return False
         if cancel:
             self._cancel_task(child_id)
+        # H3 — hàng sổ con đã đóng: chiếu kết cục vào attempt đang mở của task (nếu con có task),
+        # để một con bị watchdog cắt (restart/mồ côi/quá hạn) không để attempt `running` mãi mãi —
+        # `task_abandon` không đóng được nó và chỉ mục attempt đang hoạt động chặn attempt mới.
+        # Nạp muộn để tránh vòng nhập; `project_child` không bao giờ ném nên đóng con không hỏng.
+        if self.runtime is not None:
+            from . import task_surface
+            task_surface.project_child(self.runtime, child_id)
         session = self.store.get(child_id)
         if session and session.get('status') in ('running', 'idle'):
             self.store.save(child_id, session['messages'], 'cancelled')

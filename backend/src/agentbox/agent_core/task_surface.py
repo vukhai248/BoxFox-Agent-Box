@@ -17,6 +17,20 @@ Bất biến:
 3. Trùng `messageId`/`invocationId` không tạo hiệu ứng mới (khoá idempotency của `task_service`).
 4. Mutation có kết quả không rõ không replay — `task_*` đều là công cụ unsafe, không nằm trong
    `REPLAY_SAFE`.
+
+Theo dõi lượt thử lại (follow-up) của `delegate_task` — ngữ nghĩa đã chọn:
+
+- Một lời gọi mang CÙNG `invocationId` của hợp đồng là một lần THỬ LẠI cùng nhiệm vụ: `create`
+  trả lại hàng task cũ (không sinh task/alias thứ hai), và `open_delegate` đọc lại revision HIỆN
+  TẠI — `create` chỉ phát lại bản ghi LÚC TẠO nên nếu tin vào số cũ thì mọi lần thử lại đều chết
+  ở `bind_attempt` bằng `TASK_REVISION_CONFLICT`.
+- Nếu task còn attempt đang mở, lần thử lại bị TỪ CHỐI bằng mã hợp đồng (`TASK_ATTEMPT_CONFLICT`,
+  từ chỉ mục attempt đang hoạt động) và runtime đóng đúng con vừa `child_start` bằng lý do
+  `TASK_BIND_FAILED` rồi nhả slot fan-out — không để lại con mồ côi hay slot rò.
+- Khi attempt trước đã đóng (đã chiếu từ biên nhận của con), cùng lời gọi đó mở attempt MỚI trên
+  đúng task ấy — follow-up đi qua admission, không tạo task/alias thứ hai.
+- Hợp đồng KHÁC (`invocationId` mới) với cùng `taskId` bị kho từ chối (`TASK_ALIAS_CONFLICT`):
+  hợp đồng, không phải alias, là danh tính của nhiệm vụ.
 """
 
 import os
@@ -33,6 +47,11 @@ SWITCH = 'BOXFOX_TASK_SURFACE'
 #: Trần trang cho `task_list`/`task_get` khi model không nói gì.
 PAGE_LIMIT = 20
 MAX_LIMIT = 100
+
+#: Lý do đóng con khi `bind_attempt` hỏng (task đã có attempt mở, revision đổi giữa chừng, ...):
+#: con vừa `child_start` nhưng chưa từng chạy — đóng ngay bằng lý do hợp đồng để không thành con
+#: mồ côi và không giữ slot fan-out.
+BIND_FAILED_REASON = 'TASK_BIND_FAILED'
 
 
 def enabled(env=None):
@@ -70,8 +89,12 @@ def open_delegate(rt, session, args):
     run_id = _run_id(rt, session, args)
     if not run_id:
         invalid('runId', 'no canonical run is bound to this turn', 'TASK_SURFACE_NO_RUN')
-    created = service(rt).create(root, run_id, dict(contract), controller_id=root)
-    return {'taskKey': created['taskKey'], 'taskId': created['taskId'], 'revision': created['revision'],
+    svc = service(rt)
+    created = svc.create(root, run_id, dict(contract), controller_id=root)
+    # `create` phát lại bản ghi LÚC TẠO theo `invocationId`; revision đã nhích nếu task từng nhận
+    # attempt. Trả revision HIỆN TẠI để lần bind sau không chết vì số cũ (follow-up còn đường).
+    current = svc.get(root, run_id, created['taskKey'])
+    return {'taskKey': current['taskKey'], 'taskId': current['taskId'], 'revision': current['revision'],
             'runId': run_id, 'ownerId': root}
 
 
@@ -94,8 +117,15 @@ def project_child(rt, child_id):
 
     Gọi từ các bộ đóng con HIỆN CÓ (`close_detached_child`, `cancel_child`, người dọn T7). Hàm
     này không bao giờ ném: đóng con không được hỏng vì sổ task. Con chưa từng gắn task ⇒ no-op.
+
+    Công tắc TẮT và kho CHƯA TỪNG có bảng task ⇒ no-op trước khi dựng `TaskService`: mỗi lần dựng
+    chạy DDL (`executescript`) và có thể chốt giao dịch đang mở của người gọi, nên một triển khai
+    chưa bao giờ bật công tắc không phải trả giá đó. Kho đã từng tạo task thì vẫn chiếu (ưu tiên
+    toàn vẹn sổ).
     """
     try:
+        if not enabled() and not _task_store_exists(rt):
+            return None
         child = rt.store.child(child_id)
         if child is None or child['finished'] is None:
             return None
@@ -105,6 +135,27 @@ def project_child(rt, child_id):
         system_log.write('task.attempt_projection_failed', level='warn', session_id=child_id,
                          message=str(exc)[:300])
         return None
+
+
+def current_revision(rt, opened):
+    """Revision HIỆN TẠI của task trong `opened` — đọc lại ngay trước khi quảng cáo.
+
+    `create` phát lại bản ghi lúc tạo (revision cũ), còn `bind_attempt` và chiếu kết cục đều nhích
+    revision, nên biên nhận phải hỏi kho tại thời điểm trả kết quả thay vì phát lại số cũ — model
+    dùng số cũ cho `task_send`/`task_abandon` sẽ bị `TASK_REVISION_CONFLICT` ngay lần đầu.
+    """
+    row = rt.store.db.execute('SELECT revision FROM harness_tasks WHERE task_key=?',
+                              (opened['taskKey'],)).fetchone()
+    if row is None:
+        invalid('taskKey', 'unknown task', 'TASK_UNKNOWN')
+    return row['revision']
+
+
+def _task_store_exists(rt):
+    """Kho này đã từng tạo bảng task chưa — chỉ một SELECT `sqlite_master`, không DDL."""
+    row = rt.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_tasks'"
+                              ).fetchone()
+    return row is not None
 
 
 def _resolve_run(rt, owner_id, run_id):

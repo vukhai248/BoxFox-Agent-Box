@@ -6834,11 +6834,15 @@ class HarnessRuntime(RuntimeCommands):
                          children=[row['child_id'] for row in claimed])
         return len(claimed)
 
-    @staticmethod
-    def _task_receipt(opened):
-        """H3 — phần task của kết quả `delegate_task`: danh tính, không phải quyền."""
+    def _task_receipt(self, opened):
+        """H3 — phần task của kết quả `delegate_task`: danh tính, không phải quyền.
+
+        `revision` đọc lại từ kho tại ĐÚNG thời điểm trả kết quả: `create` phát lại số lúc tạo,
+        còn `bind_attempt` và chiếu kết cục đều nhích revision, nên số cũ làm `task_send`/
+        `task_abandon` đầu tiên của model chết bằng `TASK_REVISION_CONFLICT`.
+        """
         receipt = {'taskKey': opened['taskKey'], 'taskId': opened['taskId'], 'runId': opened['runId'],
-                   'revision': opened['revision']}
+                   'revision': task_surface.current_revision(self, opened)}
         if opened.get('attempt'):
             receipt['attempt'] = {'attemptId': opened['attempt']['attemptId'],
                                   'attemptSeq': opened['attempt']['attemptSeq'],
@@ -7146,7 +7150,16 @@ class HarnessRuntime(RuntimeCommands):
         if opened is not None:
             # Con đã được admit và hàng sổ con đang mở: đây mới là lúc ghi attempt. Hợp đồng lệch
             # vai đã bị chặn ở `open_delegate`, còn `_child` của kho task kiểm lại chủ/vai.
-            opened['attempt'] = task_surface.bind_attempt(self, session, opened, child['id'])
+            # Bind hỏng (task còn attempt mở, revision đổi giữa chừng, ...) KHÔNG được để lại con
+            # mồ côi hay slot rò: đóng đúng con vừa `child_start` bằng lý do hợp đồng rồi nhả slot
+            # trước khi ném mã lỗi ra cho model.
+            try:
+                opened['attempt'] = task_surface.bind_attempt(self, session, opened, child['id'])
+            except BaseException:
+                self.store.child_close_once(child['id'], 'failed',
+                                            reason=task_surface.BIND_FAILED_REASON)
+                self.release_child_slot(parent_id, child['id'])
+                raise
         self.store.emit(parent_id, 'child', {
             'sessionId': child['id'],
             'role': role,

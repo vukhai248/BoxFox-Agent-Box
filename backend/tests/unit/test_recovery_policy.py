@@ -143,3 +143,48 @@ def test_no_progress_changes_the_approach(code):
     assert result['class'] == 'no_progress' and result['action'] == 'change_approach'
     assert result['keepsPartial'] is True and result['replay'] is False
     assert 'không lặp lại vô hạn' in result['reason']
+
+
+# --- 7. Mã THẬT của hệ (failures.classify) phải có lớp, không rơi `unknown` ---------------
+
+#: Mã do `failures.classify` sinh ra cho lỗi router/provider; đo 2026-10-04 bằng probe trên
+#: cây này. Thiếu một mã ở đây nghĩa là lỗi thật sẽ bị xếp `unknown` ⇒ checkpoint oan.
+LIVE_PROVIDER_CODES = ('UPSTREAM_TIMEOUT', 'UPSTREAM_UNREACHABLE', 'UPSTREAM_HTTP_429',
+                       'UPSTREAM_HTTP_502', 'UPSTREAM_HTTP_503', 'UPSTREAM_HTTP_504',
+                       'UPSTREAM_RETRY_EXHAUSTED', 'UPSTREAM_REFUSAL',
+                       'PROVIDER_COMPLETION_FAILED', 'TURN_EMPTY_RESPONSE', 'TURN_EMPTY_STREAM',
+                       'RATE_LIMIT', 'CAPACITY', 'TOOL_NOT_PERMITTED', 'TURN_TOOL_BATCH')
+
+
+@pytest.mark.parametrize('code', LIVE_PROVIDER_CODES)
+def test_live_provider_codes_have_a_declared_class(code):
+    assert policy.classify(code) != 'unknown', f'{code} rơi vào unknown: lỗi thật bị checkpoint oan'
+
+
+def test_timeout_and_exhausted_never_retry_in_the_same_window():
+    for code in ('UPSTREAM_TIMEOUT', 'UPSTREAM_RETRY_EXHAUSTED'):
+        result = policy.decision(code)
+        assert result['action'] == 'checkpoint_and_ask', code
+        assert result['replay'] is False and result['checkpoint'] is True
+        assert result['keepsPartial'] is True, 'phần đã làm được vẫn phải giữ'
+        assert policy.is_transient(code) is False
+        assert policy.keeps_partial(code) is True
+
+
+def test_repeated_transport_failures_escalate_instead_of_retrying_forever():
+    assert policy.decision('UPSTREAM_UNREACHABLE', attempts=0)['action'] == 'retry_backoff'
+    assert policy.decision('UPSTREAM_UNREACHABLE', attempts=1)['action'] == 'retry_backoff'
+    escalated = policy.decision('UPSTREAM_UNREACHABLE', attempts=policy._TRANSPORT_RETRIES)
+    assert escalated['action'] == 'checkpoint_and_ask' and escalated['replay'] is False
+
+
+def test_rate_limit_keeps_the_retry_after_hint():
+    result = policy.decision('UPSTREAM_HTTP_429', retry_after=12)
+    assert result['action'] == 'retry_backoff' and 'Retry-After=12' in result['reason']
+    assert policy.is_transient('RATE_LIMIT') is True and policy.is_transient('CAPACITY') is True
+
+
+def test_permission_and_batch_codes_are_not_transient():
+    assert policy.decision('TOOL_NOT_PERMITTED')['action'] == 'checkpoint_and_ask'
+    assert policy.decision('TURN_TOOL_BATCH')['action'] == 'fix_input'
+    assert policy.is_transient('TOOL_NOT_PERMITTED') is False

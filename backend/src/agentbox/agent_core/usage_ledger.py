@@ -95,6 +95,14 @@ def decode(value):
     return None if value is None else json.loads(value)
 
 
+def _record_json(value, field):
+    """Đọc JSON đã lưu trong sổ; hỏng thì fail closed thay vì lộ `JSONDecodeError` thô."""
+    try:
+        return decode(value)
+    except (TypeError, ValueError):
+        invalid(field, 'stored record is not valid JSON', 'USAGE_RECORD_CORRUPT')
+
+
 def _schema(row):
     if type(row['schema_version']) is not int or row['schema_version'] != RECORD_SCHEMA_VERSION:
         invalid('schemaVersion', 'unsupported persisted record schema', 'USAGE_SCHEMA_UNSUPPORTED')
@@ -283,12 +291,12 @@ def _usage_row_payload(row):
     for field in ('run_id', 'task_key', 'job_id', 'attempt_id', 'provider_id', 'model_id',
                   'route_revision', 'purpose'):
         payload[field] = row[field]
-    payload['requested'] = decode(row['requested_json'])
-    payload['effective'] = decode(row['effective_json'])
+    payload['requested'] = _record_json(row['requested_json'], 'requestedJson')
+    payload['effective'] = _record_json(row['effective_json'], 'effectiveJson')
     for field in ('input_tokens', 'output_tokens', 'reasoning_tokens'):
         payload[field] = row[field]
-    payload['cached_tokens'] = decode(row['cached_tokens_json'])
-    payload['price_snapshot'] = decode(row['price_snapshot_json'])
+    payload['cached_tokens'] = _record_json(row['cached_tokens_json'], 'cachedTokensJson')
+    payload['price_snapshot'] = _record_json(row['price_snapshot_json'], 'priceSnapshotJson')
     payload['amount'] = row['amount']
     payload['currency'] = row['currency']
     payload['certainty'] = row['certainty']
@@ -311,10 +319,13 @@ def _usage_view(row):
             'ownerId': row['owner_id'], 'runId': row['run_id'], 'taskKey': row['task_key'],
             'jobId': row['job_id'], 'attemptId': row['attempt_id'], 'providerId': row['provider_id'],
             'modelId': row['model_id'], 'routeRevision': row['route_revision'], 'purpose': row['purpose'],
-            'requested': decode(row['requested_json']), 'effective': decode(row['effective_json']),
+            'requested': _record_json(row['requested_json'], 'requestedJson'),
+            'effective': _record_json(row['effective_json'], 'effectiveJson'),
             'inputTokens': row['input_tokens'], 'outputTokens': row['output_tokens'],
-            'reasoningTokens': row['reasoning_tokens'], 'cachedTokens': decode(row['cached_tokens_json']),
-            'priceSnapshot': decode(row['price_snapshot_json']), 'amount': row['amount'],
+            'reasoningTokens': row['reasoning_tokens'],
+            'cachedTokens': _record_json(row['cached_tokens_json'], 'cachedTokensJson'),
+            'priceSnapshot': _record_json(row['price_snapshot_json'], 'priceSnapshotJson'),
+            'amount': row['amount'],
             'currency': row['currency'], 'certainty': row['certainty'],
             'observedAt': row['observed_at'], 'createdAt': row['created_at']}
 
@@ -493,17 +504,18 @@ class UsageLedger:
         _schema(row)
         return row
 
-    @staticmethod
-    def _allocation_view(row):
+    def _allocation_view(self, row):
+        """View của allocation; `remaining` trừ cả phần con đang giữ để khớp đường reserve."""
         _schema(row)
-        stored = decode(row['reservation_json'])
-        consumed = decode(row['consumed_json'])
+        stored = _record_json(row['reservation_json'], 'reservationJson')
+        consumed = _record_json(row['consumed_json'], 'consumedJson')
         reservation = {key: value for key, value in stored.items() if key != 'invocation'}
         if row['state'] == 'unsettled':
             remaining = None
         else:
             remaining = round(reservation['amount'] - (consumed.get('amount') or 0.0)
-                              - (consumed.get('releasedAmount') or 0.0), 6)
+                              - (consumed.get('releasedAmount') or 0.0)
+                              - self._held(row['allocation_id']), 6)
         return {'allocationId': row['allocation_id'], 'schemaVersion': row['schema_version'],
                 'parentId': row['parent_id'], 'ownerId': row['owner_id'],
                 'policyRevision': row['policy_revision'], 'consentRef': row['consent_ref'],
@@ -511,15 +523,18 @@ class UsageLedger:
                 'remaining': remaining, 'createdAt': row['created_at'], 'updatedAt': row['updated_at']}
 
     def _held(self, parent_id):
-        """Phần reservation con còn giữ (chưa release) — kể cả con đang usage-unknown."""
+        """Phần reservation con còn tính vào hạn mức cha: `reservation.amount - releasedAmount`.
+
+        Áp cho MỌI con, kể cả con đã chốt/đóng: phần con đã tiêu vẫn nằm trong hạn mức
+        cha sau khi con đóng, còn phần con trả lại (`releasedAmount`) thì được giải
+        phóng. Con đang usage-unknown giữ nguyên toàn bộ mức giữ chỗ (không đoán free).
+        """
         total = 0.0
-        for row in self.db.execute('SELECT schema_version, reservation_json, consumed_json, state '
+        for row in self.db.execute('SELECT schema_version, reservation_json, consumed_json '
                                    'FROM harness_allocations WHERE parent_id=?', (parent_id,)):
             _schema(row)
-            if row['state'] == 'released':
-                continue
-            reservation = decode(row['reservation_json'])
-            consumed = decode(row['consumed_json'])
+            reservation = _record_json(row['reservation_json'], 'reservationJson')
+            consumed = _record_json(row['consumed_json'], 'consumedJson')
             total += reservation['amount'] - (consumed.get('releasedAmount') or 0.0)
         return round(total, 6)
 
@@ -550,7 +565,10 @@ class UsageLedger:
 
         Root cần `ceiling` + `consent_ref` (thiếu → `USAGE_NO_CONSENT`; `None` không phải
         vô hạn). Con kế thừa consent/currency của cha và không được vượt phần ceiling còn
-        lại của cha. Reservation kèm `price` còn phải qua `reserve_decision`.
+        lại của cha. Consent của con là bất biến: chỉ được bỏ trống để kế thừa hoặc lặp
+        đúng `consent_ref` của cha; khai consent khác cha bị từ chối (`USAGE_FIELD_INVALID`)
+        vì con không có đường tự cấp consent mới. Reservation kèm `price` còn phải qua
+        `reserve_decision`.
         """
         identifier(allocation_id, 'allocationId')
         identifier(owner_id, 'ownerId')
@@ -574,7 +592,7 @@ class UsageLedger:
                                   (allocation_id,)).fetchone()
             if row is not None:
                 _schema(row)
-                stored = decode(row['reservation_json'])
+                stored = _record_json(row['reservation_json'], 'reservationJson')
                 invocation = stored.get('invocation') or {}
                 if (row['owner_id'] != owner_id or invocation.get('invocationId') != invocation_id
                         or invocation.get('requestHash') != request_hash):
@@ -593,10 +611,13 @@ class UsageLedger:
                             'USAGE_ALLOCATION_UNKNOWN')
                 if parent['state'] != 'reserved':
                     invalid('parentId', 'parent allocation is not open', 'USAGE_ALLOCATION_CLOSED')
-                parent_reservation = decode(parent['reservation_json'])
-                parent_consumed = decode(parent['consumed_json'])
+                parent_reservation = _record_json(parent['reservation_json'], 'reservationJson')
+                parent_consumed = _record_json(parent['consumed_json'], 'consumedJson')
                 if normalized['currency'] != parent_reservation['currency']:
                     invalid('reservation.currency', 'child currency must match the parent',
+                            'USAGE_FIELD_INVALID')
+                if consent_ref is not None and consent_ref != parent['consent_ref']:
+                    invalid('consentRef', 'child consent must match the parent; omit it to inherit',
                             'USAGE_FIELD_INVALID')
                 parent_remaining = round(parent_reservation['amount']
                                          - (parent_consumed.get('amount') or 0.0)
@@ -604,7 +625,7 @@ class UsageLedger:
                                          - self._held(parent_id), 6)
                 own = normalized['ceiling']
                 ceiling = max(0.0, parent_remaining if own is None else min(own, parent_remaining))
-                consent = consent_ref if consent_ref is not None else parent['consent_ref']
+                consent = parent['consent_ref']
             if normalized['price'] is not None:
                 decision = reserve_decision(normalized['price'], ceiling)
                 if not decision['allowed']:
@@ -621,7 +642,7 @@ class UsageLedger:
                       'invocation': {'invocationId': invocation_id, 'requestHash': request_hash}}
             consumed = {'amount': None, 'currency': normalized['currency'], 'releasedAmount': 0.0,
                         'lateAmount': 0.0, 'settledAt': None, 'usage': None, 'source': None,
-                        'releases': []}
+                        'releases': [], 'invocations': {}}
             try:
                 self.db.execute('INSERT INTO harness_allocations VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                                 (allocation_id, RECORD_SCHEMA_VERSION, parent_id, owner_id,
@@ -634,7 +655,7 @@ class UsageLedger:
                 if row is None:
                     raise
                 _schema(row)
-                stored = decode(row['reservation_json'])
+                stored = _record_json(row['reservation_json'], 'reservationJson')
                 invocation = stored.get('invocation') or {}
                 if (row['owner_id'] != owner_id or invocation.get('invocationId') != invocation_id
                         or invocation.get('requestHash') != request_hash):
@@ -656,6 +677,12 @@ class UsageLedger:
         `actual['amount'] is None` nghĩa là usage chưa về: giữ `unsettled` liability,
         không release. Amount đến muộn sau khi đã settled chỉ cộng vào `lateAmount` —
         không viết lại `consumed.amount` đã chốt.
+
+        Hạn mức của allocation trừ cả phần con đang giữ (`_held`): settle không được
+        đẩy `consumed + released + held` vượt reservation. Mọi `invocation_id` đã áp
+        được ghi trong `consumed['invocations']`; retry bất kỳ invocation cũ nào (kể cả
+        khi invocation khác đã chen vào) đều replay, khác payload thì
+        `USAGE_INVOCATION_CONFLICT`.
         """
         identifier(allocation_id, 'allocationId')
         if invocation_id is not None:
@@ -675,18 +702,26 @@ class UsageLedger:
                                'currency': currency, 'usage': usage_payload, 'source': source})
         with self._write():
             row = self._allocation_row(allocation_id)
-            reservation = decode(row['reservation_json'])
-            consumed = decode(row['consumed_json'])
+            reservation = _record_json(row['reservation_json'], 'reservationJson')
+            consumed = _record_json(row['consumed_json'], 'consumedJson')
+            invocations = dict(consumed.get('invocations') or {})
+            if invocation_id is not None and invocation_id in invocations:
+                if invocations[invocation_id] != request_hash:
+                    invalid('invocationId', 'settle invocation reused with a different request',
+                            'USAGE_INVOCATION_CONFLICT')
+                return self._allocation_view(row)
             if row['state'] == 'released':
                 invalid('allocationId', 'allocation is closed', 'USAGE_ALLOCATION_CLOSED')
             if currency is not None and currency != reservation['currency']:
                 invalid('actual.currency', 'currency mismatch with the reservation', 'USAGE_FIELD_INVALID')
-            last = consumed.get('lastSettle')
-            if invocation_id is not None and last and last.get('invocationId') == invocation_id:
-                if last.get('requestHash') != request_hash:
-                    invalid('invocationId', 'settle invocation reused with a different request',
-                            'USAGE_INVOCATION_CONFLICT')
-                return self._allocation_view(row)
+            if amount is not None:
+                released = consumed.get('releasedAmount') or 0.0
+                held = self._held(allocation_id)
+                reported = max(consumed.get('amount') or 0.0, amount)
+                if reported + released + held > reservation['amount']:
+                    invalid('actual.amount',
+                            'actual usage plus child holds exceeds the reservation',
+                            'USAGE_SETTLE_EXCEEDS')
             now = time.time()
             if amount is None:
                 if row['state'] == 'reserved':
@@ -695,9 +730,6 @@ class UsageLedger:
                 else:
                     state = row['state']
             else:
-                if amount > reservation['amount']:
-                    invalid('actual.amount', 'actual usage exceeds the reservation',
-                            'USAGE_SETTLE_EXCEEDS')
                 if row['state'] in ('reserved', 'unsettled'):
                     consumed.update({'amount': amount, 'currency': currency or reservation['currency'],
                                      'usage': usage_payload, 'source': source, 'settledAt': now})
@@ -712,12 +744,18 @@ class UsageLedger:
                                                            amount - current), 6)
                     state = row['state']
             if invocation_id is not None:
-                consumed['lastSettle'] = {'invocationId': invocation_id, 'requestHash': request_hash}
+                invocations[invocation_id] = request_hash
+                consumed['invocations'] = invocations
             self._save(row, consumed, state, now)
             return self._allocation_view(self._allocation_row(allocation_id))
 
     def release(self, allocation_id, amount, reason, invocation_id=None):
-        """Giải phóng phần reservation chưa dùng; usage unknown thì từ chối (`USAGE_UNSETTLED`)."""
+        """Giải phóng phần reservation chưa dùng; usage unknown thì từ chối (`USAGE_UNSETTLED`).
+
+        Phần con đang giữ (`_held`) không được giải phóng: `available` trừ cả held. Mọi
+        `invocation_id` đã áp được ghi trong `consumed['invocations']`; retry bất kỳ
+        invocation cũ nào đều replay, khác payload thì `USAGE_INVOCATION_CONFLICT`.
+        """
         identifier(allocation_id, 'allocationId')
         value = _number(amount, 'amount')
         text(reason, 'reason', MAX_TEXT)
@@ -727,22 +765,24 @@ class UsageLedger:
                                'reason': reason})
         with self._write():
             row = self._allocation_row(allocation_id)
-            reservation = decode(row['reservation_json'])
-            consumed = decode(row['consumed_json'])
-            releases = consumed.get('releases') or []
-            last = releases[-1] if releases else None
-            if invocation_id is not None and last and last.get('invocationId') == invocation_id:
-                if last.get('requestHash') != request_hash:
+            reservation = _record_json(row['reservation_json'], 'reservationJson')
+            consumed = _record_json(row['consumed_json'], 'consumedJson')
+            invocations = dict(consumed.get('invocations') or {})
+            if invocation_id is not None and invocation_id in invocations:
+                if invocations[invocation_id] != request_hash:
                     invalid('invocationId', 'release invocation reused with a different request',
                             'USAGE_INVOCATION_CONFLICT')
                 return self._allocation_view(row)
             if row['state'] == 'unsettled':
                 invalid('allocationId', 'cannot release while actual usage is unknown',
                         'USAGE_UNSETTLED')
+            releases = consumed.get('releases') or []
             released = consumed.get('releasedAmount') or 0.0
-            available = round(reservation['amount'] - (consumed.get('amount') or 0.0) - released, 6)
+            available = round(reservation['amount'] - (consumed.get('amount') or 0.0) - released
+                              - self._held(allocation_id), 6)
             if value > available:
-                invalid('amount', 'release exceeds the unspent reservation', 'USAGE_RELEASE_EXCEEDS')
+                invalid('amount', 'release exceeds the unspent reservation after child holds',
+                        'USAGE_RELEASE_EXCEEDS')
             now = time.time()
             if value > 0:
                 entry = {'amount': value, 'reason': reason, 'at': now}
@@ -751,6 +791,9 @@ class UsageLedger:
                 releases.append(entry)
                 consumed['releasedAmount'] = round(released + value, 6)
                 consumed['releases'] = releases
+            if invocation_id is not None:
+                invocations[invocation_id] = request_hash
+                consumed['invocations'] = invocations
             total = round((consumed.get('amount') or 0.0) + (consumed.get('releasedAmount') or 0.0), 6)
             state = 'released' if total >= reservation['amount'] else row['state']
             self._save(row, consumed, state, now)
@@ -836,7 +879,7 @@ class UsageLedger:
             group['input'].append(row['input_tokens'])
             group['output'].append(row['output_tokens'])
             group['reasoning'].append(row['reasoning_tokens'])
-            cached = decode(row['cached_tokens_json']) or {}
+            cached = _record_json(row['cached_tokens_json'], 'cachedTokensJson') or {}
             group['read'].append(cached.get('read'))
             group['write'].append(cached.get('write'))
         items = []
@@ -871,7 +914,7 @@ class UsageLedger:
             identifier(owner_id, 'ownerId')
         items = []
         for row in self._allocation_rows(owner_id):
-            liability = _liability(row)
+            liability = _liability(row, self._held(row['allocation_id']))
             if liability is not None:
                 items.append({**self._allocation_view(row), 'liability': liability})
         return items
@@ -898,27 +941,31 @@ class UsageLedger:
             unsettled_amount = None
         else:
             unsettled_amount = round(sum(amounts), 6)
-        late = round(sum((decode(row['consumed_json']).get('lateAmount') or 0.0)
+        late = round(sum((_record_json(row['consumed_json'], 'consumedJson').get('lateAmount') or 0.0)
                          for row in self._allocation_rows(owner_id)), 6)
         return {'ownerId': owner_id, 'checkedAt': time.time(), 'unsettled': items,
                 'unknownUsage': unknown, 'unsettledAmount': unsettled_amount,
                 'lateAmount': late, 'unknownCalls': len(unknown)}
 
 
-def _liability(row):
-    """Liability còn lại của một allocation; None nghĩa là đã chốt sổ."""
+def _liability(row, children_held=0.0):
+    """Liability còn lại của một allocation; None nghĩa là đã chốt sổ.
+
+    `children_held` là phần reservation con đang giữ — trừ ra để liability của cha
+    không đếm trùng với liability của chính các con.
+    """
     _schema(row)
-    reservation = decode(row['reservation_json'])
-    consumed = decode(row['consumed_json'])
+    reservation = _record_json(row['reservation_json'], 'reservationJson')
+    consumed = _record_json(row['consumed_json'], 'consumedJson')
     amount = consumed.get('amount')
     released = consumed.get('releasedAmount') or 0.0
     late = consumed.get('lateAmount') or 0.0
     if row['state'] == 'unsettled':
         return {'amount': None, 'reason': 'usage_unknown'}
     if row['state'] == 'reserved':
-        held = round(reservation['amount'] - released, 6)
-        return {'amount': held, 'reason': 'unsettled_reservation'} if held > 0 else None
-    remainder = round(reservation['amount'] - (amount or 0.0) - released, 6)
+        remaining = round(reservation['amount'] - released - children_held, 6)
+        return {'amount': remaining, 'reason': 'unsettled_reservation'} if remaining > 0 else None
+    remainder = round(reservation['amount'] - (amount or 0.0) - released - children_held, 6)
     if remainder > 0:
         return {'amount': round(remainder + late, 6), 'reason': 'unreleased_remainder'}
     if late > 0:

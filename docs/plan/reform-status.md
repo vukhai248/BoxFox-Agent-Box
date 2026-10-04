@@ -27,23 +27,46 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H2.4 | Lỗi: chỉ mục unique thôi chặn attempt đang park (hở hàng rào tầng dữ liệu) | ✅ | commit `3975ab6`; test attempt park vẫn chặn |
 | H2.5 | Lỗi: reason đóng cũ dính lên attempt đang mở sau resume | ✅ | commit `3975ab6`; test ghim `project_attempt` |
 | H2.6 | Lỗi: `permission_view` báo `adaptiveEnabled` trong khi scope đã hạ `artifact_only` | ✅ | commit `3975ab6`; test view theo nhánh admit |
-| H3 | Bề mặt task (`task_list/get/send/abandon`) + phân loại recovery + receipt huỷ | ✅ | `task_surface.py` (26 test) + `recovery_policy.py`; seam map `/code/.plans/reform-h3-seams.md` |
+| H3 | Bề mặt task (`task_list/get/send/abandon`) + phân loại recovery + receipt huỷ | ✅ | `task_surface.py` (37 test) + `recovery_policy.py` (39 test); seam map `/code/.plans/reform-h3-seams.md` |
 | H3.1 | Lỗi: chưa có đường nối `task_service` vào runtime (chỉ test import) | ✅ | `task_surface.py` + wiring: `turn_profile` gỡ công cụ khi tắt, `dispatch` từ chối, hook `project_child` ở 4 bộ đóng con, `delegate_task` tạo task + ghi attempt |
 | H3.2 | Lỗi: `task_get/send/abandon` đưa `taskId` (alias) thẳng vào khoá backend ⇒ mọi lời gọi theo alias chết `TASK_UNKNOWN` | ✅ | `TaskService.key_for` tra alias trong run; test `task_get` theo `taskId` |
 | H3.3 | Lỗi: kết quả `delegate_task` gọi `_task_receipt` thiếu `self` ⇒ `TURN_FAILED_NAMEERROR` ngay ở bước giao việc có hợp đồng | ✅ | test `test_delegate_with_a_contract_creates_the_task_and_binds_the_attempt` bắt được; đã sửa `self._task_receipt` |
-| H4 | Job nền qua nhiều lượt: ownership, outbox, cursor, wake lock, reconcile sau restart | ✅ | `harness_jobs.py` (50 test); `HarnessJobs(store, confirm_executor=None)` fail closed |
-| H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (106 test) |
-| H6 | Phân bổ và hạch toán: sổ usage, price certainty, reservation/settlement | ✅ | `usage_ledger.py` (46 test); giá lạ là `None`, không phải 0 |
+| H3.4 | Lỗi: gọi lại `delegate_task` cùng `invocationId` trả revision lúc tạo (đã cũ) ⇒ con zombie, rò slot fan-out vĩnh viễn; `invocationId` mới chết `TASK_ALIAS_CONFLICT` | ✅ | `open_delegate` đọc lại revision hiện tại; `bind_attempt` hỏng ⇒ `child_close_once('failed', TASK_BIND_FAILED)` + `release_child_slot`; `_task_receipt` đọc revision lúc trả; ghim ngữ nghĩa gọi lại trong docstring |
+| H3.5 | Lỗi: nhánh `close_attempt` cho task bỏ dở ghi ngoài `_write()` và không commit ⇒ connection thứ hai vẫn thấy `running` | ✅ | gộp cả hai nhánh vào `with self._write()`; test hai connection |
+| H3.6 | Lỗi: `peer_watchdog._close` và đường huỷ của `work_feedback` đóng con mà không project ⇒ attempt kẹt `running`, khoá unique chặn attempt mới | ✅ | late-import `project_child` ở hai bộ đóng; test theo đường đóng thật |
+| H3.7 | Lỗi: `recovery_policy` chỉ map mã DEAD, mọi mã thật của `failures.classify` rơi `unknown` ⇒ `checkpoint_and_ask` thay vì retry/recover | ✅ | phủ 15 mã sống; timeout/exhausted không retry cùng cửa sổ, transport leo thang sau 3 lần; +19 test |
+| H3.8 | Nit: `project_child` dựng TaskService (DDL) dù công tắc chưa từng bật; schema `task_send` thiếu `expectedRevision` trong `required`; `task_list` của con cắt im lặng | ✅ | bỏ DDL khi tắt và cây chưa có bảng; siết `required`; ghim bằng test |
+| H4 | Job nền qua nhiều lượt: ownership, outbox, cursor, wake lock, reconcile sau restart | ✅ | `harness_jobs.py` (59 test); `HarnessJobs(store, confirm_executor=None)` fail closed |
+| H4.1 | Lỗi: cursor `wait` toàn cục bỏ qua sự kiện khi tập watch lớn lên (B seq1 bị A seq2 che) | ✅ | LEFT JOIN `harness_wake_cursors` + sàn theo `(consumer, job)`; test repro |
+| H4.2 | Lỗi: append thử lại kèm `expected_revision` cũ trả `JOB_REVISION_CONFLICT` thay vì replay | ✅ | kiểm replay TRƯỚC `_expected()` như `cancel` |
+| H4.3 | Lỗi: JSON hỏng rò `JSONDecodeError` thô từ `_view/_cached/_append_locked/_control/_wake_view/_child_session` | ✅ | `_decode()`/`_stored_refs()` → `JOB_RECORD_CORRUPT` |
+| H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (114 test) |
+| H5.1 | Lỗi: ghim được nhiều hàng cho một `(skill, attempt)` ⇒ epoch pin vô nghĩa | ✅ | DDL `UNIQUE(skill_id, attempt_id)` + rebuild `_upgrade_pins()`; re-pin thay hàng và ghi `replacedVersion` |
+| H5.2 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_decode` → `SKILL_RECORD_CORRUPT` |
+| H5.3 | Thiếu cột phiên bản record | ✅ | `RECORD_SCHEMA_VERSION = 1` + `ALTER TABLE` idempotent |
+| H6 | Phân bổ và hạch toán: sổ usage, price certainty, reservation/settlement | ✅ | `usage_ledger.py` (55 test); giá lạ là `None`, không phải 0 |
 | H6.1 | Lỗi: `observed_at` nằm trong hash idempotency của `record` ⇒ retry y hệt bị `USAGE_CALL_CONFLICT` oan | ✅ | bỏ mốc sổ khỏi hash; test `test_record_replay_and_conflict` ghim đường thử lại |
-| H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | ✅ | `research_owner.py` (51 test); intent do main viết không thành canonical |
-| H8 | Main thích ứng: progress signal, loop guard, effort, chọn nhánh | ✅ | `adaptive_main.py` (75 test); mọi quyết định kèm `reason` + `evidenceRefs` |
-| H9 | Suite v2 theo outcomes/invariants + compatibility | ⬜ | — |
+| H6.2 | Lỗi: `settle`/`release` của cha bỏ qua hold của con ⇒ vượt trần gốc (10 + 6 > 10) | ✅ | `_held()` tính cả con đã settle; `USAGE_SETTLE_EXCEEDS`/`USAGE_RELEASE_EXCEEDS`; view trừ hold |
+| H6.3 | Lỗi: idempotency chỉ nhớ lần gọi cuối ⇒ A→B→A áp dụng đúp | ✅ | map `consumed['invocations']` theo từng allocation; lệch hash → `USAGE_INVOCATION_CONFLICT` |
+| H6.4 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_record_json` → `USAGE_RECORD_CORRUPT` |
+| H6.5 | Consent của con lỏng hơn luật tiền tệ của cha | ✅ | con phải bỏ trống hoặc lặp đúng `consent_ref` của cha; lệch → `USAGE_FIELD_INVALID` |
+| H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | ✅ | `research_owner.py` (52 test); intent do main viết không thành canonical |
+| H7.1 | Lỗi: đua replay trong `claim` ⇒ `RESEARCH_REVISION_CONFLICT` thay vì replay | ✅ | kiểm cache invocation TRONG giao dịch ghi |
+| H7.2 | Thiếu ghi chú nối dây cho các điểm vào chưa xác thực (`assign`, `handoff`, `release`, `record_intent`, `get`, `validate_report`) | ✅ | mục "GHI CHÚ NỐI DÂY" trong docstring; yêu cầu wiring gọi `authorize(...)` |
+| H8 | Main thích ứng: progress signal, loop guard, effort, chọn nhánh | ✅ | `adaptive_main.py` (87 test); mọi quyết định kèm `reason` + `evidenceRefs` |
+| H8.1 | Lỗi: `_clamp_level` coi trần policy là mức duy nhất ⇒ `maxEffort='high'` nâng low→high, 4096→16000 token | ✅ | clamp theo các mức ≤ trần; ghim ladder snap-up |
+| H8.2 | Lỗi: `intentChange`/`scopeChange` kiểu bool/chuỗi làm nổ `AttributeError` | ✅ | `_change_declared` fail closed, đòi approval |
+| H8.3 | Lỗi: `loop_guard` chỉ soi mục cuối cùng cùng chữ ký ⇒ vòng xen kẽ h1/h2/h1 không chặn | ✅ | quét TOÀN BỘ mục cùng chữ ký |
+| H8.4 | Lỗi: `progress_signal` báo không tiến bộ khi tiêu chí mở cuối cùng vừa đóng | ✅ | chỉ so khi có mặt |
+| H8.5 | Nit: `_budget` với effort lạ thiếu mã/trường trong `reason` | ✅ | `ADAPTIVE_EFFORT_INPUT` + field; mixed needs giữ tập hỗ trợ |
+| H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | `scripts/eval/suite_v2.py` + `suite-v2.json` (62 ca) + 23 test; mới có lớp mapping/validation, chưa chạy sống |
+| H9.1 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; parity/shadow + calibration sống còn chờ consent tài chính |
 | H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⬜ | — |
 | H10.1 | Calibration sống (model/route/ngân sách thật) | ⛔ | Cần consent tài chính riêng; chưa tiêu |
 
 ## Ghi chú trạng thái
 
-- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H8; head hiện tại `3975ab6`.
+- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H8; head đã push `2ac4dd4`, các bản sửa vòng review H3–H8 đang ở working tree.
 - Nhánh nền của PR #3 là `vorflux/w10-w12-completion` (nhánh khảo sát chưa nằm trên `main`); đổi base cần chủ nhà quyết định.
 - PR #2 (`vorflux/boxfox-harness-reform-docs`) giữ tài liệu kiến trúc; PR #3 giữ mã và bảng này.
 - Ba test đỏ của `backend/tests/unit/` là lỗi có sẵn trên baseline `346da06` (`test_terminal_exec_echo`,

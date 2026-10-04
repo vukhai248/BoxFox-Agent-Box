@@ -827,7 +827,7 @@ SCHEMAS = [
          {'taskId': STRING, 'taskKey': STRING, 'runId': STRING, 'messageId': STRING,
           'invocationId': STRING, 'expectedRevision': {'type': 'integer'}, 'kind': STRING,
           'body': STRING, 'inputRefs': {'type': 'array', 'items': STRING}},
-         ['messageId', 'invocationId', 'kind', 'body']),
+         ['messageId', 'invocationId', 'expectedRevision', 'kind', 'body']),
     tool('task_abandon',
          'Kết thúc NHU CẦU với một task (khác với dừng thực thi): đánh dấu main không còn tiêu thụ mục '
          'tiêu. Nếu còn attempt đang mở thì yêu cầu huỷ qua đúng đường cancel_child và trả biên nhận. '

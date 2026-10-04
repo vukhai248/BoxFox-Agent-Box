@@ -27,20 +27,41 @@ ACTIONS = ('retry_backoff', 'recover_model', 'keep_partial', 'fix_input', 'inspe
 
 #: Mã → lớp. Chỉ nhận mã thật đang tồn tại trong hệ; mã không có ở đây rơi vào `unknown` (fail closed).
 CODES = {
-    # Transport / rate limit (router báo, hoặc provider hết hạn mức tạm thời).
+    # Transport / rate limit. Nguồn mã THẬT là `failures.classify`: router báo
+    # `UPSTREAM_*`/`RATE_LIMIT`/`CAPACITY`, còn `ROUTER_*` là bí danh cũ giữ lại để
+    # record lịch sử vẫn phân loại được.
+    'UPSTREAM_UNREACHABLE': 'transport',
+    'UPSTREAM_HTTP_408': 'transport',
+    'UPSTREAM_HTTP_409': 'transport',
+    'UPSTREAM_HTTP_425': 'transport',
+    'UPSTREAM_HTTP_429': 'transport',
+    'UPSTREAM_HTTP_500': 'transport',
+    'UPSTREAM_HTTP_502': 'transport',
+    'UPSTREAM_HTTP_503': 'transport',
+    'UPSTREAM_HTTP_504': 'transport',
+    'RATE_LIMIT': 'transport',
+    'CAPACITY': 'transport',
     'ROUTER_TIMEOUT': 'transport',
     'ROUTER_HTTP_429': 'transport',
     'ROUTER_HTTP_502': 'transport',
     'ROUTER_HTTP_503': 'transport',
     'ROUTER_HTTP_504': 'transport',
     'ROUTER_UNREACHABLE': 'transport',
+    # Timeout và cạn-retry cũng thuộc họ transport nhưng KHÔNG thử lại trong cùng cửa sổ
+    # (khớp `failures.py`: cửa sổ đã tiêu, gọi lại bắt đầu từ 0); `decision` xử riêng.
+    'UPSTREAM_TIMEOUT': 'transport',
+    'UPSTREAM_RETRY_EXHAUSTED': 'transport',
     # Provider stream thiếu terminal / bị cắt giữa dòng.
     'PROVIDER_STREAM_INTERRUPTED': 'provider_stream',
     'PROVIDER_ERROR': 'provider_stream',
+    'PROVIDER_COMPLETION_FAILED': 'provider_stream',
+    'TURN_EMPTY_STREAM': 'provider_stream',
     # Provider trả rỗng / chỉ reasoning / từ chối.
     'PROVIDER_REASONING_ONLY': 'provider_empty',
+    'TURN_EMPTY_RESPONSE': 'provider_empty',
     'TURN_EMPTY_RESPONSE_RETRY': 'provider_empty',
     'PROVIDER_REFUSAL': 'provider_empty',
+    'UPSTREAM_REFUSAL': 'provider_empty',
     # Hết chỗ output / câu trả lời quá dài.
     'PROVIDER_OUTPUT_TRUNCATED': 'output_limit',
     'ANSWER_TOO_LONG': 'output_limit',
@@ -51,6 +72,9 @@ CODES = {
     'TOOL_ARG_INVALID': 'tool_validation',
     'TOOL_NOT_STARTED': 'tool_validation',
     'TOOL_REPLAY_PENDING': 'tool_validation',
+    'TURN_TOOL_BATCH': 'tool_validation',
+    # Quyền: công cụ bị từ chối là chuyện quyền, không phải lỗi tạm thời.
+    'TOOL_NOT_PERMITTED': 'rights_budget',
     # Mutation có kết quả không rõ: chỉ được soi, không replay.
     'TOOL_INTERRUPTED_UNSAFE': 'tool_unknown',
     'WORK_SHIP_IN_PROGRESS': 'tool_unknown',
@@ -89,6 +113,15 @@ _ACTIONS = {
 #: Lớp giữ lại phần đã làm được (không ném đi kết quả một phần).
 _KEEPS_PARTIAL = {'provider_stream', 'provider_empty', 'output_limit', 'tool_unknown', 'no_progress'}
 
+#: Mã transport KHÔNG thử lại trong cùng cửa sổ (khớp `failures.py`): timeout vì cửa sổ
+#: thời gian đã tiêu, cạn-retry vì router đã bỏ cuộc.
+_TIMEOUT_CODES = frozenset({'UPSTREAM_TIMEOUT'})
+_EXHAUSTED_CODES = frozenset({'UPSTREAM_RETRY_EXHAUSTED'})
+_KEEPS_PARTIAL_CODES = _TIMEOUT_CODES | _EXHAUSTED_CODES
+
+#: Số lần thử lại tối đa của họ transport (khớp `failures.DEFAULT_MAX_RETRIES`).
+_TRANSPORT_RETRIES = 3
+
 #: Lớp chỉ được thử lại khi chưa có hiệu ứng nào được ghi nhận.
 _MAY_RETRY = {'transport'}
 
@@ -113,9 +146,22 @@ def decision(code, *, replay_safe=False, has_receipt=False, attempts=0, retry_af
     reason = 'không rõ loại lỗi: dừng ở checkpoint và hỏi chủ nhà'
     if cls == 'transport':
         replay = False  # transport hỏng trước khi tool chạy; thử lại là thử lại REQUEST, không replay tool
-        reason = 'lỗi tạm thời: backoff rồi thử lại request; không xoay key và không replay tool đã chạy'
-        if retry_after is not None:
-            reason = f'{reason} (Retry-After={retry_after})'
+        if str(code or '') in _TIMEOUT_CODES:
+            action = 'checkpoint_and_ask'
+            reason = ('hết cửa sổ thời gian: giữ phần đã có và để chủ nhà quyết định mở cửa sổ mới; '
+                      'không thử lại trong cùng lượt (gọi lại bắt đầu từ 0)')
+        elif str(code or '') in _EXHAUSTED_CODES:
+            action = 'checkpoint_and_ask'
+            reason = ('router đã thử lại và bỏ cuộc: giữ phần đã có, hỏi chủ nhà; '
+                      'không xoay key và không replay tool đã chạy')
+        elif attempts >= _TRANSPORT_RETRIES:
+            action = 'checkpoint_and_ask'
+            reason = (f'đã thử lại {attempts} lần mà vẫn lỗi kết nối: dừng và hỏi chủ nhà; '
+                      'không xoay key và không replay tool đã chạy')
+        else:
+            reason = 'lỗi tạm thời: backoff rồi thử lại request; không xoay key và không replay tool đã chạy'
+            if retry_after is not None:
+                reason = f'{reason} (Retry-After={retry_after})'
     elif cls == 'provider_stream':
         replay = False  # chỉ dispatch tool call đầy đủ/đã validate của response mới
         reason = 'stream thiếu terminal: giữ phần đã có, gọi lại model có giới hạn; không replay tool đã thực thi'
@@ -149,15 +195,20 @@ def decision(code, *, replay_safe=False, has_receipt=False, attempts=0, retry_af
     if cls == 'tool_validation' and has_receipt:
         reason = 'biên nhận đã có: dùng lại kết quả đã commit, không chạy lại'
     return {'code': str(code or ''), 'class': cls, 'action': action, 'replay': replay,
-            'keepsPartial': cls in _KEEPS_PARTIAL, 'checkpoint': cls != 'transport',
+            'keepsPartial': cls in _KEEPS_PARTIAL or str(code or '') in _KEEPS_PARTIAL_CODES,
+            'checkpoint': action != 'retry_backoff',
             'reason': reason}
 
 
 def is_transient(code):
-    """Chỉ lớp `transport` là tạm thời; mọi lớp khác phải xử lý bằng hành động riêng."""
+    """Chỉ lớp `transport` là tạm thời — trừ timeout/cạn-retry, đã tiêu hết cửa sổ."""
+    code = str(code or '')
+    if code in _TIMEOUT_CODES or code in _EXHAUSTED_CODES:
+        return False
     return classify(code) == 'transport'
 
 
 def keeps_partial(code):
     """Lớp này có giữ lại phần đã làm được không."""
-    return classify(code) in _KEEPS_PARTIAL
+    code = str(code or '')
+    return classify(code) in _KEEPS_PARTIAL or code in _KEEPS_PARTIAL_CODES

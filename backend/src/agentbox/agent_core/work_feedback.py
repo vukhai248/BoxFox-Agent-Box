@@ -752,6 +752,10 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         if (rt.store.child(child_id) or {}).get('status') == 'started':
             rt.store.child_finish(child_id, 'cancelled', reason='WORK_RESUME_CANCELLED',
                                   steps_used=lifetime_steps, output_tokens=lifetime_tokens, answer_chars=0)
+            # H3 — lượt chạy lại bị huỷ cũng là một bộ đóng con: chiếu kết cục vào attempt đang mở
+            # (nạp muộn, tránh vòng nhập), nếu không attempt treo `running` và chặn follow-up.
+            from . import task_surface
+            task_surface.project_child(rt, child_id)
         raise
     feedback = service(rt)
     checkpoint = feedback.yielded(child_id)

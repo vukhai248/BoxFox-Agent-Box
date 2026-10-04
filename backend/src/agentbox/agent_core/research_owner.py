@@ -14,11 +14,24 @@ researcher. Module này giữ phần *định danh và quyền* của ranh giớ
 - `control_view` trả bản đầy đủ cho chủ/bộ điều khiển, bản rút gọn `{runId, state, revision}` cho
   mọi định danh khác — không bao giờ lộ ý định, biên nhận hay lý luận ẩn.
 
-Đây là tầng dữ liệu + luật: không gọi model, không gọi mạng, không tự chạy worker. Người gọi phải
-tự xác thực principal trước khi gọi `assign`/`handoff`/`release`; riêng `claim` có actor tường minh
-nên tự kiểm quyền và ghi biên nhận. `get` là bản đọc đầy đủ dành cho chủ sở hữu sau khi đã xác
-thực; `control_view` mới là bản đọc phân quyền. Không đọc/không trả lý luận ẩn: module chỉ giữ
-ý định, biên nhận quyền và biên nhận bàn giao.
+Đây là tầng dữ liệu + luật: không gọi model, không gọi mạng, không tự chạy worker. Không đọc/không
+trả lý luận ẩn: module chỉ giữ ý định, biên nhận quyền và biên nhận bàn giao.
+
+GHI CHÚ NỐI DÂY — đọc trước khi ghép module vào runtime. Các điểm vào dưới đây KHÔNG tự xác thực
+principal, nên nối dây phải tự làm, nếu không một chỗ quên là một lỗ quyền:
+
+- `assign`, `handoff`, `release`, `record_intent`: không có tham số actor. Nối dây phải gọi
+  `authorize(run_id, actor_id, <action>)` và từ chối khi `allowed` là false TRƯỚC khi gọi — đặc
+  biệt `handoff`/`release` (bàn giao/trả tự do run không có người kiểm thứ hai nào khác).
+- `get`: bản đọc ĐẦY ĐỦ (ý định + biên nhận), chỉ dành cho chủ/người điều khiển sau khi nối dây đã
+  xác thực; định danh khác phải dùng `control_view`, vốn tự rút gọn theo actor.
+- `validate_report`/`report_contract`: chỉ kiểm *hình dạng* báo cáo. `provenance.runId` là tuỳ chọn
+  và `authoredBy` chỉ là so khớp chuỗi, nên hàm KHÔNG tự buộc được báo cáo vào một run hay một
+  người viết thật. Nối dây phải tự gắn `report → run → writer` (đối chiếu `provenance.runId` với
+  run đang mở và actor với `owner_id`/`controller_id`) trước khi tin kết quả.
+
+Riêng `claim` có actor tường minh (`controller_id`) nên tự kiểm quyền và ghi biên nhận; `authorize`
+nhận actor tường minh và ghi biên nhận cho mọi quyết định trên run đã biết.
 """
 from contextlib import contextmanager
 import json
@@ -348,6 +361,15 @@ class ResearchOwnership:
                 invalid('runId', decision['reason'], 'RESEARCH_OWNERSHIP_UNKNOWN')
             invalid('controllerId', decision['reason'], 'RESEARCH_CONTROL_FORBIDDEN')
         with self._write():
+            if invocation_id is not None:
+                # Re-check TRONG giao dịch ghi: hai lần thử song song cùng invocation có thể cùng
+                # trượt cache trước giao dịch; bên vào sau phải phát lại kết quả bên thắng theo đúng
+                # hợp đồng "cùng invocation + payload ⇒ replay", không được ném
+                # `RESEARCH_REVISION_CONFLICT` chỉ vì revision đã nhích trong lúc chờ khoá.
+                cached = self._cached(run_id, invocation_id, request_hash,
+                                      'RESEARCH_INVOCATION_CONFLICT')
+                if cached is not None:
+                    return cached
             row = self._row(run_id)
             self._check_revision(row, expected_revision)
             if row['state'] == 'released':

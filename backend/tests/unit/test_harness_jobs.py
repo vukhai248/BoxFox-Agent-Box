@@ -221,6 +221,20 @@ def test_append_replay_with_a_different_payload_conflicts(repo):
         job['jobId'], {'kind': 'result', 'predicate': 'other', 'eventSeq': 1}))
 
 
+def test_append_replay_after_a_lost_response_ignores_the_stale_revision(repo):
+    store, service, _ = repo
+    job = start(repo)
+    event = {'kind': 'result', 'state': 'succeeded'}
+    seq = service.append(job['jobId'], event, expected_revision=job['revision'])
+    # Producer mất response, gửi lại đúng event kèm revision cũ: replay, không phải conflict.
+    assert service.append(job['jobId'], dict(event, eventSeq=seq),
+                          expected_revision=job['revision']) == seq
+    assert len(outbox(store)) == 1
+    # Event MỚI với revision cũ vẫn là xung đột revision.
+    error('JOB_REVISION_CONFLICT', lambda: service.append(
+        job['jobId'], {'kind': 'progress'}, expected_revision=job['revision']))
+
+
 def test_append_on_a_closed_job_cannot_rewrite_state(repo):
     _, service, _ = repo
     job = start(repo)
@@ -344,6 +358,23 @@ def test_wait_delivers_once_and_advances_the_cursor(repo):
     assert cursor == 1
     second = service.wait([job['jobId']], after_seq=first['cursor'])
     assert second['events'] == [] and second['ready'] is False
+
+
+def test_wait_surfaces_unread_events_when_the_watch_set_grows(repo):
+    _, service, _ = repo
+    watched = start(repo)
+    joining = start(repo, invocation='inv-2')
+    service.append(joining['jobId'], {'kind': 'result'})
+    service.append(watched['jobId'], {'kind': 'heartbeat'})
+    first = service.wait([watched['jobId']])
+    assert first['events'] == [] and first['ready'] is False and first['cursor'] == 2
+    # Job gia nhập tập theo dõi sau: event wake seq 1 của nó không bị con trỏ toàn cục 2 bỏ qua.
+    second = service.wait([watched['jobId'], joining['jobId']], after_seq=first['cursor'])
+    assert [(item['jobId'], item['kind']) for item in second['events']] == [(joining['jobId'], 'result')]
+    assert second['ready'] is True
+    # Đã giao một lần: lần chờ sau không lặp lại.
+    third = service.wait([watched['jobId'], joining['jobId']], after_seq=second['cursor'])
+    assert third['events'] == [] and third['ready'] is False
 
 
 def test_wait_reports_interrupted_jobs(repo):
@@ -609,6 +640,57 @@ def test_revision_conflict_on_append(repo):
     job = start(repo)
     error('JOB_REVISION_CONFLICT', lambda: service.append(
         job['jobId'], {'kind': 'progress'}, expected_revision=99))
+
+
+@pytest.mark.parametrize('column', ['admission_json', 'result_refs_json', 'executor_handle_json'])
+def test_corrupt_job_json_fails_closed(repo, column):
+    store, service, _ = repo
+    job = start(repo)
+    with store.db:
+        store.db.execute(f'UPDATE harness_jobs SET {column}=? WHERE job_id=?', ('not-json', job['jobId']))
+    error('JOB_RECORD_CORRUPT', lambda: service.get(job['jobId']))
+    error('JOB_RECORD_CORRUPT', lambda: service.wait([job['jobId']]))
+
+
+def test_corrupt_outbox_payload_fails_closed(repo):
+    store, service, _ = repo
+    job = start(repo)
+    service.append(job['jobId'], {'kind': 'result'})
+    with store.db:
+        store.db.execute('UPDATE harness_wake_outbox SET payload_json=?', ('not-json',))
+    error('JOB_RECORD_CORRUPT', lambda: service.get(job['jobId']))
+    error('JOB_RECORD_CORRUPT', lambda: service.wait([job['jobId']]))
+
+
+def test_corrupt_control_receipt_fails_closed(repo):
+    store, service, _ = repo
+    job = start(repo)
+    service.cancel(job['jobId'], job['revision'], 'user stop')
+    with store.db:
+        store.db.execute("UPDATE harness_wake_outbox SET payload_json='not-json' WHERE predicate='control'")
+    error('JOB_RECORD_CORRUPT', lambda: service.cancel(job['jobId'], job['revision'], 'user stop'))
+    error('JOB_RECORD_CORRUPT', lambda: service.reconcile())
+
+
+def test_corrupt_invocation_receipt_fails_closed(repo):
+    store, service, _ = repo
+    start(repo)
+    with store.db:
+        store.db.execute('UPDATE harness_job_invocations SET result_json=?', ('not-json',))
+    error('JOB_RECORD_CORRUPT', lambda: start(repo))
+    with store.db:
+        store.db.execute('UPDATE harness_job_invocations SET result_json=?', ('{}',))
+    error('JOB_RECORD_CORRUPT', lambda: start(repo))
+
+
+def test_corrupt_stored_refs_block_ref_merge(repo):
+    store, service, _ = repo
+    job = start(repo)
+    with store.db:
+        store.db.execute('UPDATE harness_jobs SET result_refs_json=? WHERE job_id=?',
+                         ('not-json', job['jobId']))
+    error('JOB_RECORD_CORRUPT', lambda: service.append(
+        job['jobId'], {'kind': 'result', 'resultRefs': [ref()]}))
 
 
 def test_child_binding_survives_an_explicit_executor_handle(repo):

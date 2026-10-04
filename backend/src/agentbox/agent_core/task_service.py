@@ -461,21 +461,26 @@ class TaskService:
         if task is None:
             return None
         schema(task)
-        if task['abandoned_at'] is not None:
-            # Task đã bỏ: không hồi sinh trạng thái; attempt vẫn đóng để không treo hàng mở.
-            self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
-                            'WHERE attempt_id=?', (CHILD_OUTCOMES[status], reason, time.time(), row['attempt_id']))
-            return self._attempt_view(self.db.execute('SELECT * FROM harness_task_attempts WHERE attempt_id=?',
-                                                      (row['attempt_id'],)).fetchone())
         child = self.store.child(session_id)
         if child is None or child['finished'] is None or child['started'] != row['started_at']:
             # Con chưa đóng thật, hoặc đã được mở lại (lượt mới): không đoán — để `project_attempt`
-            # của lượt sau làm việc đó với đúng biên nhận của nó.
-            return None
-        projected = CHILD_OUTCOMES[child['status']] if child['status'] in CHILD_OUTCOMES else None
-        if projected is None:
+            # của lượt sau làm việc đó với đúng biên nhận của nó. Áp cho CẢ nhánh task đã bỏ: kết
+            # cục của một con đã mở lại không được ghi vào attempt cũ.
             return None
         with self._write():
+            if task['abandoned_at'] is not None:
+                # Task đã bỏ: không hồi sinh trạng thái; attempt vẫn đóng để không treo hàng mở.
+                # Trong `_write()` như mọi đường ghi khác: UPDATE ngoài đây không commit (kết nối
+                # thứ hai vẫn thấy `running`) và giữ khoá ghi ngoài kỷ luật của module.
+                self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
+                                'WHERE attempt_id=?',
+                                (CHILD_OUTCOMES[status], reason, time.time(), row['attempt_id']))
+                return self._attempt_view(self.db.execute(
+                    'SELECT * FROM harness_task_attempts WHERE attempt_id=?',
+                    (row['attempt_id'],)).fetchone())
+            projected = CHILD_OUTCOMES[child['status']] if child['status'] in CHILD_OUTCOMES else None
+            if projected is None:
+                return None
             self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
                             'WHERE attempt_id=?',
                             (projected, child['reason'], child['finished'], row['attempt_id']))

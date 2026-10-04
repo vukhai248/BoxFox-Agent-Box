@@ -16,6 +16,15 @@ Bất biến đã ghim bằng test:
 Giao ước transaction: `_write` chỉ tự mở transaction khi nó là người sở hữu. Caller
 đã ở trong transaction phải giữ write lock (`BEGIN IMMEDIATE`); nếu không, commit
 đồng thời nổi lên thành `SQLITE_BUSY`, không phải mã xung đột chuẩn.
+
+Giới hạn đã biết của tầng này (không có API nào sửa các giới hạn này):
+- `wait` giao event và tiến con trỏ cho bất kỳ `consumer_id` nào ghi trên hàng
+  outbox, không đòi wake lock. Hai waiter trên cùng một store có thể lấy mất event
+  của nhau; muốn một owner chỉ có một waiter sống thì caller phải tự buộc wake lock
+  quanh vòng `wait`/`acquire_wake` (lock chỉ là thoả thuận, không phải chốt).
+- `eventSeq` do producer truyền vào `append` là dữ liệu caller: một seq nhảy cách
+  (lớn hơn `last+1`) tạo lỗ hổng không phân biệt được với một hàng outbox bị mất.
+  Muốn phát hiện mất hàng thì producer phải tự bảo đảm/gác dãy seq liên tục.
 """
 from contextlib import contextmanager
 import json
@@ -114,6 +123,27 @@ def should_wake(event):
     return wake_worthy(event) and not event.get('intermediate', False)
 
 
+def _decode(raw, field, shape=None):
+    """Giải JSON đã lưu; hỏng/sai hình dạng là JOB_RECORD_CORRUPT, không lộ lỗi thô."""
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        invalid(field, f'corrupt persisted job record: {exc}', 'JOB_RECORD_CORRUPT')
+    if shape is not None and not isinstance(value, shape):
+        invalid(field, 'corrupt persisted job record: unexpected shape', 'JOB_RECORD_CORRUPT')
+    return value
+
+
+def _stored_refs(raw):
+    """Đọc danh sách result refs đã lưu; sai hình dạng là JOB_RECORD_CORRUPT."""
+    merged = _decode(raw, 'result_refs_json', list)
+    for item in merged:
+        if not isinstance(item, dict) or not {'artifactId', 'version', 'contentHash'} <= set(item):
+            invalid('result_refs_json', 'corrupt persisted job record: unexpected ref shape',
+                    'JOB_RECORD_CORRUPT')
+    return merged
+
+
 def _state(value, field='state'):
     if not isinstance(value, str) or value not in JOB_STATES:
         invalid(field, 'unsupported job state')
@@ -205,8 +235,12 @@ class HarnessJobs:
             invalid('schemaVersion', 'unsupported persisted invocation receipt', 'JOB_SCHEMA_UNSUPPORTED')
         if row['request_hash'] != request_hash:
             invalid('invocationId', 'invocation reused with a different request', 'JOB_INVOCATION_CONFLICT')
-        result = json.loads(row['result_json'])
-        self._job(result['jobId'])
+        result = _decode(row['result_json'], 'result_json', dict)
+        job_id = result.get('jobId')
+        if not isinstance(job_id, str):
+            invalid('result_json', 'corrupt persisted invocation receipt: missing jobId',
+                    'JOB_RECORD_CORRUPT')
+        self._job(job_id)
         return result
 
     def _remember(self, owner_id, invocation_id, request_hash, result):
@@ -230,10 +264,11 @@ class HarnessJobs:
             'taskKey': row['task_key'], 'kind': row['kind'], 'ownership': row['ownership'],
             'survivesTurn': row['ownership'] == 'controller', 'revision': row['revision'],
             'state': row['state'], 'capabilityEpoch': row['capability_epoch'],
-            'admission': json.loads(row['admission_json']),
+            'admission': _decode(row['admission_json'], 'admission_json', dict),
             'checkpointRef': row['checkpoint_ref'],
-            'resultRefs': json.loads(row['result_refs_json']),
-            'executorHandle': json.loads(row['executor_handle_json']) if row['executor_handle_json'] else None,
+            'resultRefs': _stored_refs(row['result_refs_json']),
+            'executorHandle': (_decode(row['executor_handle_json'], 'executor_handle_json', dict)
+                               if row['executor_handle_json'] else None),
             'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
             'closedAt': row['closed_at'],
         }
@@ -380,11 +415,11 @@ class HarnessJobs:
 
     def _append_locked(self, row, event, expected_revision):
         normalized = self._event(event, row['owner_id'])
-        if expected_revision is not None:
-            self._expected(row, expected_revision)
         seq = normalized.pop('eventSeq', None)
         last = self._next_seq()
         if seq is not None and seq <= last:
+            # Replay được kiểm TRƯỚC revision: producer mất response gửi lại đúng event
+            # đã áp dụng phải nhận receipt cũ, dù revision hiện tại đã tiến (như cancel).
             existing = self.db.execute(
                 'SELECT * FROM harness_wake_outbox WHERE job_id=? AND consumer_id=? AND event_seq=? '
                 'AND predicate=?', (row['job_id'], normalized['consumerId'], seq,
@@ -392,7 +427,7 @@ class HarnessJobs:
             if existing is None:
                 invalid('eventSeq', 'event sequence already used by another consumer/predicate',
                         'JOB_EVENT_CONFLICT')
-            stored = json.loads(existing['payload_json'])
+            stored = _decode(existing['payload_json'], 'payload_json', dict)
             replayed = {key: value for key, value in stored.items()
                         if key not in ('jobId', 'eventSeq', 'state', 'reportedState')}
             expected = {key: value for key, value in normalized.items() if key != 'state'}
@@ -401,6 +436,8 @@ class HarnessJobs:
                 invalid('eventSeq', 'event sequence replayed with a different payload',
                         'JOB_EVENT_CONFLICT')
             return existing['event_seq']
+        if expected_revision is not None:
+            self._expected(row, expected_revision)
         if seq is None:
             seq = last + 1
         state = normalized.get('state')
@@ -424,7 +461,7 @@ class HarnessJobs:
         payload.update({'jobId': row['job_id'], 'eventSeq': seq})
         refs_json = row['result_refs_json']
         if 'resultRefs' in normalized:
-            merged = json.loads(row['result_refs_json'])
+            merged = _stored_refs(row['result_refs_json'])
             known = {(item['artifactId'], item['version']): item['contentHash'] for item in merged}
             for item in normalized['resultRefs']:
                 key = (item['artifactId'], item['version'])
@@ -527,11 +564,13 @@ class HarnessJobs:
         Trả `{events, cursor, ready, interrupted, jobs}`:
         - `events`: sự kiện đáng đánh thức, gộp theo `(job_id, consumer_id, predicate)`
           nên một batch chỉ còn MỘT wake (bản mới nhất); hàng đã giao được đánh dấu
-          `delivered` và con trỏ consumer tiến theo.
+          `delivered` và con trỏ wake `(consumer, job)` tiến tới seq lớn nhất đã quan sát.
         - `jobs`: trạng thái + refs từng job, kể cả khi không có event mới.
         - `ready`: `any` = có job đóng/đã có wake; `all` = mọi job đều vậy. Job có
           child canonical đã đóng cũng tính là đóng (trả ngay, không park).
-        - `cursor`: mốc `event_seq` toàn cục lớn nhất đã quan sát.
+        - `cursor`: mốc `event_seq` toàn cục lớn nhất đã quan sát. `after_seq` chỉ áp cho
+          hàng của consumer đã có con trỏ wake; job mới gia nhập tập theo dõi vẫn thấy
+          event wake chưa đọc của nó (không bị con trỏ toàn cục bỏ qua).
         """
         if mode not in ('any', 'all'):
             invalid('mode', 'expected any or all')
@@ -549,13 +588,20 @@ class HarnessJobs:
             rows = [self._job(job_id) for job_id in ids]
             observed = []
             for job_id in ids:
+                # Con trỏ wake theo (consumer, job) là sàn đọc: hàng của consumer chưa
+                # từng có con trỏ không bị `after_seq` toàn cục chặn, nên job gia nhập
+                # tập theo dõi sau vẫn thấy event wake chưa đọc của nó.
                 observed.extend(self.db.execute(
-                    'SELECT * FROM harness_wake_outbox WHERE job_id=? AND event_seq>? ORDER BY event_seq',
+                    'SELECT o.* FROM harness_wake_outbox AS o '
+                    'LEFT JOIN harness_wake_cursors AS c ON c.job_id=o.job_id '
+                    'AND c.consumer_id=o.consumer_id '
+                    'WHERE o.job_id=? AND o.event_seq > CASE WHEN c.consumer_id IS NULL THEN 0 ELSE ? END '
+                    'AND o.event_seq > COALESCE(c.last_seq, 0) ORDER BY o.event_seq',
                     (job_id, after)).fetchall())
             observed.sort(key=lambda item: item['event_seq'])
             groups = {}
             for item in observed:
-                if not should_wake(json.loads(item['payload_json'])):
+                if not should_wake(_decode(item['payload_json'], 'payload_json', dict)):
                     continue
                 groups.setdefault((item['job_id'], item['consumer_id'], item['predicate']), []).append(item)
             wakes, now = [], time.time()
@@ -566,7 +612,14 @@ class HarnessJobs:
                     if member['status'] != 'delivered':
                         self.db.execute('UPDATE harness_wake_outbox SET status=?, delivered_at=? '
                                         'WHERE wake_id=?', ('delivered', now, member['wake_id']))
-                self._advance_cursor(latest['consumer_id'], latest['job_id'], latest['event_seq'])
+            # Mọi hàng đã quan sát đều tiến con trỏ wake của (consumer, job): lần wait sau
+            # chỉ đọc phần mới, kể cả khi hàng chỉ là heartbeat/log/progress không đánh thức.
+            advanced = {}
+            for item in observed:
+                key = (item['job_id'], item['consumer_id'])
+                advanced[key] = max(advanced.get(key, 0), item['event_seq'])
+            for (job_id, consumer_id), seq in advanced.items():
+                self._advance_cursor(consumer_id, job_id, seq)
             woken = {item['job_id'] for item in wakes}
             jobs, interrupted, flags = {}, [], []
             for row in rows:
@@ -646,7 +699,8 @@ class HarnessJobs:
                         continue
                     state, reason = 'interrupted', 'model executor unconfirmed after restart'
                 else:
-                    handle = json.loads(row['executor_handle_json']) if row['executor_handle_json'] else None
+                    handle = (_decode(row['executor_handle_json'], 'executor_handle_json', dict)
+                              if row['executor_handle_json'] else None)
                     confirmed = False
                     if handle is not None and self.confirm_executor is not None:
                         try:
@@ -698,7 +752,7 @@ class HarnessJobs:
 
     @staticmethod
     def _wake_view(row):
-        event = json.loads(row['payload_json'])
+        event = _decode(row['payload_json'], 'payload_json', dict)
         event.update({'wakeId': row['wake_id'], 'status': row['status'],
                       'createdAt': row['created_at'], 'deliveredAt': row['delivered_at']})
         return event
@@ -708,23 +762,22 @@ class HarnessJobs:
                               'ORDER BY event_seq DESC LIMIT 1', (job_id,)).fetchone()
         if row is None:
             return None
-        payload = json.loads(row['payload_json'])
-        if not isinstance(payload, dict):
-            return None
+        payload = _decode(row['payload_json'], 'payload_json', dict)
         return {'controlState': payload.get('controlState'), 'reason': payload.get('reason'),
                 'receiptRef': payload.get('receiptRef'), 'eventSeq': row['event_seq'],
                 'wakeId': row['wake_id'], 'createdAt': row['created_at']}
 
     @staticmethod
     def _child_session(row):
-        handle = json.loads(row['executor_handle_json']) if row['executor_handle_json'] else None
+        handle = (_decode(row['executor_handle_json'], 'executor_handle_json', dict)
+                  if row['executor_handle_json'] else None)
         if isinstance(handle, dict):
             for key in ('childSessionId', 'sessionId'):
                 value = handle.get(key)
                 if isinstance(value, str) and value:
                     return value
-        admission = json.loads(row['admission_json'])
-        value = admission.get('childSessionId') if isinstance(admission, dict) else None
+        admission = _decode(row['admission_json'], 'admission_json', dict)
+        value = admission.get('childSessionId')
         return value if isinstance(value, str) and value else None
 
     def _child_closed(self, row):

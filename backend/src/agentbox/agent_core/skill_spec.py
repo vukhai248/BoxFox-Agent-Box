@@ -4,7 +4,8 @@ Module này không đọc và không sao chép file skill riêng của nền t�
 `context.fullTextRef` và không bao giờ được nhúng thẳng vào spec. `readiness()` chỉ trả
 ready/degraded/blocked kèm lý do; nó không đề xuất tạo tool thay thế, không cài package và
 không vượt quyền. Registry lưu draft, review độc lập, phiên bản đã enable và ghim phiên bản
-theo attempt; `enable` không bao giờ viết lại bản mà một attempt đang hoạt động dùng.
+theo epoch: mỗi attempt giữ đúng một phiên bản cho mỗi skill, ghim lại cùng attempt là thay
+thế có ghi dấu; `enable` không truyền attempt không bao giờ viết lại ghim của attempt nào.
 """
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ SKILL_REVISION_CONFLICT = 'SKILL_REVISION_CONFLICT'
 SKILL_STATE_CONFLICT = 'SKILL_STATE_CONFLICT'
 SKILL_INVOCATION_CONFLICT = 'SKILL_INVOCATION_CONFLICT'
 SKILL_VERSION_CONFLICT = 'SKILL_VERSION_CONFLICT'
+SKILL_RECORD_CORRUPT = 'SKILL_RECORD_CORRUPT'
+RECORD_SCHEMA_VERSION = 1
 
 GOAL_MAX = 4000
 TITLE_MAX = 400
@@ -52,6 +55,13 @@ _DIMENSIONS = ('roleRevision', 'toolRevision', 'adapterRevision', 'sourceVersion
 _DEPENDENCIES = ('tools', 'capabilities', 'commands', 'environmentRefs', 'packages')
 _DEPENDENCY_LABELS = {'tools': 'tool', 'capabilities': 'capability', 'commands': 'command',
                       'environmentRefs': 'environment', 'packages': 'package'}
+# Một attempt chỉ giữ đúng MỘT phiên bản cho mỗi skill: ghim lại cùng attempt là thay thế
+# hàng cũ và ghi `replaced_version` — dấu vết reload epoch, không tích thêm ghim thứ hai.
+_PINS_DDL = ('CREATE TABLE IF NOT EXISTS harness_skill_pins ('
+             'pin_id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, version INTEGER NOT NULL, '
+             'attempt_id TEXT NOT NULL, session_id TEXT NOT NULL, created_at REAL NOT NULL, '
+             'updated_at REAL NOT NULL, replaced_version INTEGER, '
+             'UNIQUE(skill_id, attempt_id))')
 
 
 def _remap(exc):
@@ -97,6 +107,24 @@ def _ref(value, field):
 def _encode(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'),
                       allow_nan=False)
+
+
+def _schema(row):
+    """Hàng `harness_skills` phải mang đúng phiên bản bản ghi; lạ là fail closed."""
+    if type(row['schema_version']) is not int or row['schema_version'] != RECORD_SCHEMA_VERSION:
+        invalid('schemaVersion', 'unsupported persisted skill record schema',
+                SKILL_SCHEMA_UNSUPPORTED)
+
+
+def _decode(raw, field, *, required=()):
+    """Giải JSON của hàng lưu trữ; hỏng/sai hình dạng là fail closed, không đoán."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError):
+        invalid(field, 'record is not valid JSON; refusing to read it', SKILL_RECORD_CORRUPT)
+    if not isinstance(value, dict) or not set(required) <= set(value):
+        invalid(field, 'record JSON has an unexpected shape', SKILL_RECORD_CORRUPT)
+    return value
 
 
 def _provenance(value):
@@ -368,8 +396,9 @@ def _cursor(value):
 class SkillRegistry:
     """Sổ đăng ký skill bền vững trên SessionStore: draft -> review -> enable, kèm ghim.
 
-    Đây là lưu trữ và trạng thái, không phải thẩm quyền: `enable` không cấp quyền, và một
-    phiên bản đã ghim cho attempt đang mở không bao giờ bị viết lại.
+    Đây là lưu trữ và trạng thái, không phải thẩm quyền: `enable` không cấp quyền và không
+    tự đổi ghim của attempt nào. Ghim theo epoch: mỗi attempt giữ đúng một phiên bản cho
+    mỗi skill; ghim lại cùng attempt là thay thế và ghi `replacedVersion` làm dấu vết reload.
     """
 
     def __init__(self, store):
@@ -390,34 +419,73 @@ class SkillRegistry:
                         SKILL_SCHEMA_UNSUPPORTED)
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS harness_skills (
-                skill_id TEXT NOT NULL, version INTEGER NOT NULL, revision INTEGER NOT NULL,
-                state TEXT NOT NULL, spec_hash TEXT NOT NULL, spec_json TEXT NOT NULL,
-                provenance_json TEXT NOT NULL, review_json TEXT NOT NULL, state_reason TEXT,
-                created_at REAL NOT NULL, updated_at REAL NOT NULL,
+                skill_id TEXT NOT NULL, version INTEGER NOT NULL, schema_version INTEGER NOT NULL,
+                revision INTEGER NOT NULL, state TEXT NOT NULL, spec_hash TEXT NOT NULL,
+                spec_json TEXT NOT NULL, provenance_json TEXT NOT NULL, review_json TEXT NOT NULL,
+                state_reason TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL,
                 PRIMARY KEY(skill_id, version));
             CREATE INDEX IF NOT EXISTS harness_skills_state ON harness_skills(state, skill_id, version);
             CREATE TABLE IF NOT EXISTS harness_skill_reviews (
                 review_id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, version INTEGER NOT NULL,
                 reviewer_id TEXT NOT NULL, verdict TEXT NOT NULL, notes TEXT NOT NULL,
                 created_at REAL NOT NULL);
-            CREATE TABLE IF NOT EXISTS harness_skill_pins (
-                pin_id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, version INTEGER NOT NULL,
-                attempt_id TEXT NOT NULL, session_id TEXT NOT NULL, created_at REAL NOT NULL,
-                UNIQUE(skill_id, version, attempt_id));
+        ''' + _PINS_DDL + ';' + '''
             CREATE TABLE IF NOT EXISTS harness_skill_invocations (
                 scope TEXT NOT NULL, invocation_id TEXT NOT NULL, operation TEXT NOT NULL,
                 request_hash TEXT NOT NULL, result_json TEXT NOT NULL, created_at REAL NOT NULL,
                 PRIMARY KEY(scope, invocation_id));
         ''')
-        # `state_reason` là cột cộng thêm của hàng disable; DB cũ đã có bảng từ build trước
-        # thì thêm cột, không đụng dữ liệu cũ.
+        # Cột cộng thêm của các build trước: DB cũ đã có bảng thì thêm cột tại chỗ, không
+        # đụng dữ liệu cũ; `schema_version` điền 1 cho hàng có sẵn (DEFAULT của ALTER).
+        self._add_missing_column('harness_skills', 'schema_version',
+                                 'schema_version INTEGER NOT NULL DEFAULT 1')
         self._add_missing_column('harness_skills', 'state_reason', 'state_reason TEXT')
+        self._upgrade_pins()
 
     def _add_missing_column(self, table, name, ddl):
         columns = {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}
         if columns and name not in columns:
             with self.db:
                 self.db.execute(f'ALTER TABLE {table} ADD COLUMN {ddl}')
+
+    def _unique_shapes(self, table):
+        shapes = []
+        for index in self.db.execute(f'PRAGMA index_list({table})'):
+            if index['unique']:
+                shapes.append(tuple(row['name'] for row in
+                                    self.db.execute(f'PRAGMA index_info({index["name"]})')))
+        return shapes
+
+    def _upgrade_pins(self):
+        """Gộp bảng ghim cũ (duy nhất theo skill+version+attempt) về một hàng mỗi attempt.
+
+        Hàng giữ lại là hàng mới nhất theo (created_at, pin_id) cho mỗi
+        (skill_id, attempt_id); nếu nó thay thế một phiên bản khác thì phiên bản bị thay
+        được ghi vào `replaced_version`, để "reload đúng epoch" còn dấu vết.
+        """
+        if ('skill_id', 'version', 'attempt_id') not in self._unique_shapes('harness_skill_pins'):
+            return
+        rows = self.db.execute('SELECT * FROM harness_skill_pins ORDER BY created_at, pin_id').fetchall()
+        groups = {}
+        for row in rows:
+            groups.setdefault((row['skill_id'], row['attempt_id']), []).append(row)
+        keep = []
+        for (skill_id, attempt_id), items in groups.items():
+            newest = items[-1]
+            replaced = next((item['version'] for item in reversed(items[:-1])
+                             if item['version'] != newest['version']), None)
+            updated = newest['updated_at'] if 'updated_at' in newest.keys() else None
+            keep.append((newest['pin_id'], skill_id, newest['version'], attempt_id,
+                         newest['session_id'], newest['created_at'],
+                         updated if updated is not None else newest['created_at'], replaced))
+        with self.db:
+            self.db.execute('DROP TABLE IF EXISTS harness_skill_pins_legacy')
+            self.db.execute('ALTER TABLE harness_skill_pins RENAME TO harness_skill_pins_legacy')
+            self.db.execute(_PINS_DDL)
+            self.db.executemany('INSERT INTO harness_skill_pins (pin_id, skill_id, version, '
+                                'attempt_id, session_id, created_at, updated_at, replaced_version) '
+                                'VALUES(?,?,?,?,?,?,?,?)', keep)
+            self.db.execute('DROP TABLE harness_skill_pins_legacy')
 
     @contextmanager
     def _write(self):
@@ -438,8 +506,11 @@ class SkillRegistry:
                 yield
 
     def _row(self, skill_id, version):
-        return self.db.execute('SELECT * FROM harness_skills WHERE skill_id=? AND version=?',
-                               (skill_id, version)).fetchone()
+        row = self.db.execute('SELECT * FROM harness_skills WHERE skill_id=? AND version=?',
+                              (skill_id, version)).fetchone()
+        if row is not None:
+            _schema(row)
+        return row
 
     def _require_row(self, skill_id, version):
         row = self._row(skill_id, version)
@@ -449,22 +520,26 @@ class SkillRegistry:
 
     @staticmethod
     def _view(row, *, spec=False):
-        result = {'skillId': row['skill_id'], 'version': row['version'], 'revision': row['revision'],
+        _schema(row)
+        spec_payload = _decode(row['spec_json'], 'specJson', required=('id', 'title'))
+        result = {'skillId': row['skill_id'], 'version': row['version'],
+                  'schemaVersion': row['schema_version'], 'revision': row['revision'],
                   'state': row['state'], 'specHash': row['spec_hash'],
-                  'title': json.loads(row['spec_json'])['title'],
-                  'review': json.loads(row['review_json']) or None,
+                  'title': spec_payload['title'],
+                  'review': _decode(row['review_json'], 'reviewJson') or None,
                   'stateReason': row['state_reason'],
                   'createdAt': row['created_at'], 'updatedAt': row['updated_at']}
         if spec:
-            result['spec'] = json.loads(row['spec_json'])
-            result['provenance'] = json.loads(row['provenance_json'])
+            result['spec'] = spec_payload
+            result['provenance'] = _decode(row['provenance_json'], 'provenanceJson')
         return result
 
     @staticmethod
     def _pin_view(row):
         return {'pinId': row['pin_id'], 'skillId': row['skill_id'], 'version': row['version'],
                 'attemptId': row['attempt_id'], 'sessionId': row['session_id'],
-                'createdAt': row['created_at']}
+                'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+                'replacedVersion': row['replaced_version']}
 
     def _cached(self, scope, invocation_id, operation, request_hash):
         if invocation_id is None:
@@ -476,7 +551,7 @@ class SkillRegistry:
         if row['operation'] != operation or row['request_hash'] != request_hash:
             invalid('invocationId', 'invocation reused with a different request',
                     SKILL_INVOCATION_CONFLICT)
-        return json.loads(row['result_json'])
+        return _decode(row['result_json'], 'resultJson')
 
     def _remember(self, scope, invocation_id, operation, request_hash, result):
         if invocation_id is None:
@@ -510,10 +585,13 @@ class SkillRegistry:
             if row is None:
                 now = time.time()
                 try:
-                    self.db.execute('INSERT INTO harness_skills VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                                    (skill_id, version, 1, 'draft', spec.skill_hash,
-                                     spec.payload_json, _encode(payload['provenance']), '{}',
-                                     None, now, now))
+                    self.db.execute('INSERT INTO harness_skills (skill_id, version, schema_version, '
+                                    'revision, state, spec_hash, spec_json, provenance_json, '
+                                    'review_json, state_reason, created_at, updated_at) '
+                                    'VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                                    (skill_id, version, RECORD_SCHEMA_VERSION, 1, 'draft',
+                                     spec.skill_hash, spec.payload_json,
+                                     _encode(payload['provenance']), '{}', None, now, now))
                 except sqlite3.IntegrityError:
                     row = self._row(skill_id, version)
                     if row is None or row['spec_hash'] != spec.skill_hash:
@@ -557,8 +635,10 @@ class SkillRegistry:
                attempt_id=None, session_id=None):
         """Bật một phiên bản đã được review `approve`; chỉ hàng đích đổi trạng thái.
 
-        Khi có `attempt_id`/`session_id`, ghim luôn phiên bản cho attempt đó. Bản đã ghim
-        của attempt đang mở không bị viết lại: enable chỉ đổi hàng đích, giữ nguyên spec_hash.
+        Khi có `attempt_id`/`session_id`, ghim luôn phiên bản cho attempt đó. Ghim theo
+        epoch: mỗi attempt giữ đúng một phiên bản cho mỗi skill, nên ghim lại cùng attempt
+        với phiên bản khác là thay thế hàng ghim cũ và ghi `replacedVersion`; enable không
+        truyền attempt thì không đụng tới ghim của attempt nào (spec_hash giữ nguyên).
         """
         _identifier(skill_id, 'skillId')
         _revision(version, 'version')
@@ -581,7 +661,7 @@ class SkillRegistry:
             row = self._require_row(skill_id, version)
             if row['revision'] != expected_revision:
                 invalid('expectedRevision', 'skill revision changed', SKILL_REVISION_CONFLICT)
-            if json.loads(row['review_json']).get('verdict') != 'approve':
+            if _decode(row['review_json'], 'reviewJson').get('verdict') != 'approve':
                 invalid('review', 'enabling requires an approved review of this exact version',
                         SKILL_NOT_REVIEWED)
             if row['state'] != 'enabled':
@@ -617,19 +697,37 @@ class SkillRegistry:
                                   self._view(self._row(skill_id, version), spec=True))
 
     def _pin(self, skill_id, version, attempt_id, session_id):
+        """Ghim theo epoch: mỗi (skill, attempt) giữ đúng một hàng, ghim lại là thay thế.
+
+        Cùng phiên bản là no-op idempotent. Phiên bản khác thay thế hàng cũ tại chỗ và
+        ghi phiên bản bị thay vào `replaced_version` — dấu vết reload, không tích thêm
+        ghim thứ hai cho cùng attempt.
+        """
         existing = self.db.execute('SELECT * FROM harness_skill_pins WHERE skill_id=? '
-                                   'AND version=? AND attempt_id=?',
-                                   (skill_id, version, attempt_id)).fetchone()
-        if existing is not None:
+                                   'AND attempt_id=?', (skill_id, attempt_id)).fetchone()
+        if existing is not None and existing['version'] == version:
             return self._pin_view(existing)
-        pin_id, now = 'pin-' + uuid.uuid4().hex, time.time()
-        self.db.execute('INSERT INTO harness_skill_pins VALUES(?,?,?,?,?,?)',
-                        (pin_id, skill_id, version, attempt_id, session_id, now))
-        return {'pinId': pin_id, 'skillId': skill_id, 'version': version,
-                'attemptId': attempt_id, 'sessionId': session_id, 'createdAt': now}
+        now = time.time()
+        if existing is None:
+            pin_id = 'pin-' + uuid.uuid4().hex
+            self.db.execute('INSERT INTO harness_skill_pins (pin_id, skill_id, version, '
+                            'attempt_id, session_id, created_at, updated_at, replaced_version) '
+                            'VALUES(?,?,?,?,?,?,?,?)',
+                            (pin_id, skill_id, version, attempt_id, session_id, now, now, None))
+            return {'pinId': pin_id, 'skillId': skill_id, 'version': version,
+                    'attemptId': attempt_id, 'sessionId': session_id, 'createdAt': now,
+                    'updatedAt': now, 'replacedVersion': None}
+        replaced = existing['version']
+        self.db.execute('UPDATE harness_skill_pins SET version=?, session_id=?, updated_at=?, '
+                        'replaced_version=? WHERE pin_id=?',
+                        (version, session_id, now, replaced, existing['pin_id']))
+        return {'pinId': existing['pin_id'], 'skillId': skill_id, 'version': version,
+                'attemptId': attempt_id, 'sessionId': session_id,
+                'createdAt': existing['created_at'], 'updatedAt': now,
+                'replacedVersion': replaced}
 
     def pin(self, skill_id, version, attempt_id, session_id):
-        """Ghim một phiên bản đã enable cho attempt đang dùng; không sửa hàng skill."""
+        """Ghim một phiên bản đã enable cho attempt; ghim lại cùng attempt là thay thế bản cũ."""
         _identifier(skill_id, 'skillId')
         _revision(version, 'version')
         _identifier(attempt_id, 'attemptId')

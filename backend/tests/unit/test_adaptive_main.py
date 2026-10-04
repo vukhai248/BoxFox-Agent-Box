@@ -59,6 +59,19 @@ def test_shrinking_open_criteria_is_progress():
     assert any('A1' in reason for reason in result['reasons'])
 
 
+def test_closing_the_last_open_criterion_is_progress():
+    result = adaptive_main.progress_signal({'openCriteria': ['c1']}, {'openCriteria': []})
+    assert result['progress'] is True
+    assert result['kind'] == 'acceptance_gap'
+    assert any('c1' in reason for reason in result['reasons'])
+
+
+def test_open_criteria_absent_before_cannot_claim_a_shrink():
+    result = adaptive_main.progress_signal({}, {'openCriteria': []})
+    assert result['progress'] is False
+    assert result['kind'] is None
+
+
 def test_resolved_uncertainty_is_progress():
     result = adaptive_main.progress_signal(
         {'uncertainties': ['q1', 'q2']}, {'uncertainties': ['q2']})
@@ -182,9 +195,18 @@ def test_loop_guard_without_history_does_not_block():
     assert result['action'] == 'continue'
 
 
-def test_loop_guard_only_compares_the_most_recent_matching_entry():
-    history = [signature(evidence=('log@1',)), signature(evidence=('log@1', 'log@2'))]
-    result = adaptive_main.loop_guard(history, signature(evidence=('log@1', 'log@2')))
+def test_loop_guard_scans_all_matching_entries_not_only_the_most_recent():
+    # h1, h2, h1: entry gần nhất khác input, nhưng biến thể h1 cũ vẫn là bản lặp.
+    history = [signature(inputs='hash-1'), signature(inputs='hash-2')]
+    result = adaptive_main.loop_guard(history, signature(inputs='hash-1'))
+    assert result['repeat'] is True
+    assert result['code'] == adaptive_main.LOOP_REPEAT
+    assert result['action'] == 'blocked'
+
+
+def test_loop_guard_any_matching_entry_blocks_despite_a_newer_one_with_new_evidence():
+    history = [signature(evidence=('log@1',)), signature(evidence=())]
+    result = adaptive_main.loop_guard(history, signature(evidence=('log@1',)))
     assert result['repeat'] is True
 
 
@@ -228,6 +250,23 @@ def test_effort_never_raises_the_policy_ceiling():
 def test_effort_clamped_by_policy_effort_ceiling():
     result = adaptive_main.effort('high', 'high', full_capability(), policy(maxEffort='low'))
     assert result['level'] == 'low'
+
+
+def test_effort_policy_ceiling_above_the_level_changes_nothing():
+    result = adaptive_main.effort('low', 'low', full_capability(tokens=16000),
+                                  policy(maxEffort='high'))
+    assert result['level'] == 'low'
+    assert result['outputTokens'] == adaptive_main.EFFORT_OUTPUT_TOKENS['low']
+    assert not any('clamped' in reason for reason in result['reasons'])
+
+
+def test_effort_model_ladder_snaps_up_to_the_lowest_published_level():
+    # Model chỉ công bố medium/high: mức thấp hơn được snap lên mức thấp nhất model có.
+    capability = full_capability(levels=['medium', 'high'])
+    result = adaptive_main.effort('low', 'low', capability)
+    assert result['level'] == 'medium'
+    assert result['outputTokens'] == adaptive_main.EFFORT_OUTPUT_TOKENS['medium']
+    assert any('snapped up' in reason for reason in result['reasons'])
 
 
 def test_effort_clamps_level_by_published_thinking_levels():
@@ -388,6 +427,13 @@ def test_unknown_need_is_refused_not_ignored():
     assert decision['requires'] == []
 
 
+def test_mixed_supported_and_unsupported_needs_keep_supported_requirements():
+    decision = adaptive_main.plan_step(policy(), {'needs': ['consent', 'spend_everything']})
+    assert decision['action'] == 'blocked'
+    assert decision['reason'].startswith(adaptive_main.NEED_UNSUPPORTED)
+    assert decision['requires'] == ['consent']
+
+
 def test_pending_user_decision_parks():
     decision = adaptive_main.plan_step(policy(), {'userDecisionPending': True})
     assert decision['action'] == 'park'
@@ -420,6 +466,39 @@ def test_analysis_intent_write_is_blocked():
     decision = adaptive_main.plan_step(policy(), {'intent': 'analysis', 'write': True})
     assert decision['action'] == 'blocked'
     assert decision['requires'] == ['approval']
+
+
+def test_scope_change_flag_requires_approval():
+    decision = adaptive_main.plan_step(policy(), {'scopeChange': True})
+    assert decision['action'] == 'blocked'
+    assert decision['reason'].startswith(adaptive_main.NEEDS_APPROVAL)
+    assert decision['requires'] == ['approval']
+
+
+def test_intent_change_string_requires_approval():
+    decision = adaptive_main.plan_step(policy(), {'intentChange': 'implementation'})
+    assert decision['action'] == 'blocked'
+    assert decision['reason'].startswith(adaptive_main.NEEDS_APPROVAL)
+    assert decision['requires'] == ['approval']
+
+
+def test_empty_scope_change_object_fails_closed():
+    decision = adaptive_main.plan_step(policy(), {'scopeChange': {}})
+    assert decision['action'] == 'blocked'
+    assert decision['reason'].startswith(adaptive_main.NEEDS_APPROVAL)
+    assert decision['requires'] == ['approval']
+
+
+def test_false_scope_change_is_not_a_declared_change():
+    decision = adaptive_main.plan_step(policy(), {'scopeChange': False})
+    assert decision['action'] == 'continue'
+    assert decision['requires'] == []
+
+
+def test_scope_change_with_receipt_is_admitted():
+    decision = adaptive_main.plan_step(policy(), {
+        'scopeChange': {'receiptRef': 'admission@1', 'to': 'implementation'}})
+    assert decision['action'] == 'continue'
 
 
 # --------------------------------------------------------------------------- #
@@ -506,6 +585,16 @@ def test_budget_without_policy_declaration_reports_none_ref():
     decision = adaptive_main.plan_step(policy(), {'uncertainty': 'low', 'value': 'low'})
     assert decision['budget']['ceilingRef'] is None
     assert decision['budget']['outputTokens'] is None  # capability không rõ ⇒ không phát minh số
+
+
+def test_invalid_effort_input_is_surfaced_in_the_decision():
+    decision = adaptive_main.plan_step(policy(), {
+        'uncertainty': 'hgih', 'value': 'high', 'capability': full_capability()})
+    assert decision['action'] == 'continue'
+    assert decision['reason'].startswith(adaptive_main.CONTINUE_DIRECT)
+    assert decision['budget'] == {'outputTokens': None, 'effort': None, 'ceilingRef': None}
+    assert 'effort input rejected' in decision['reason']
+    assert 'ADAPTIVE_EFFORT_INPUT' in decision['reason']
 
 
 # --------------------------------------------------------------------------- #

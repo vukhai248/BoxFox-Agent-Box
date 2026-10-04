@@ -140,6 +140,13 @@ def test_schemas_for_drops_the_surface_when_off(monkeypatch):
     assert {s['function']['name'] for s in schemas_for(names)} == set(names)
 
 
+def test_send_schema_requires_an_expected_revision(monkeypatch):
+    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+    schema = next(s for s in schemas_for(['task_send']) if s['function']['name'] == 'task_send')
+    # `TaskService.send` từ chối thiếu `expectedRevision`; hợp đồng quảng cáo phải nói cùng điều.
+    assert 'expectedRevision' in schema['function']['parameters']['required']
+
+
 def test_turn_profile_hides_the_surface_for_every_profile(monkeypatch, tmp_path):
     from agentbox.agent_core.runtime import HarnessRuntime
     from test_harness_runtime import FixtureExecutor, FixtureModel
@@ -157,17 +164,25 @@ def test_turn_profile_hides_the_surface_for_every_profile(monkeypatch, tmp_path)
 
 # --- 2. Cổng thực thi ---------------------------------------------------------------------
 
-def test_dispatch_refuses_every_task_tool_when_the_switch_is_off(monkeypatch, tmp_path):
+@pytest.mark.parametrize('name,args', [
+    ('task_list', {'runId': 'run-1'}),
+    ('task_get', {'runId': 'run-1', 'taskId': 'inspect-receipts'}),
+    ('task_send', {'runId': 'run-1', 'taskId': 'inspect-receipts', 'invocationId': 'inv-1',
+                   'messageId': 'msg-1', 'kind': 'information', 'body': 'x', 'expectedRevision': 1}),
+    ('task_abandon', {'runId': 'run-1', 'taskId': 'inspect-receipts', 'invocationId': 'inv-1',
+                      'expectedRevision': 1, 'reason': 'stop'}),
+])
+def test_dispatch_refuses_every_task_tool_when_the_switch_is_off(name, args, monkeypatch, tmp_path):
     from agentbox.agent_core.runtime import HarnessRuntime
     from test_harness_runtime import FixtureExecutor, FixtureModel
 
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
-    config = {'skills': [], 'tools': ['task_list']}
+    config = {'skills': [], 'tools': [name]}
     sid = runtime.create(config)['id']
     monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
     with pytest.raises(PermissionError, match='TASK_SURFACE_OFF'):
-        asyncio.run(runtime.dispatch(session(runtime, sid), 'task_list', {'runId': 'run-1'}))
+        asyncio.run(runtime.dispatch(session(runtime, sid), name, args))
     store.close()
 
 
@@ -357,6 +372,34 @@ def test_project_child_never_raises_and_logs(repo, monkeypatch):
     assert task_surface.project_child(rt, sid) is None
 
 
+def test_project_child_does_no_ddl_when_the_switch_is_off_and_no_task_ever_existed(monkeypatch, tmp_path):
+    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    store = SessionStore(tmp_path / 'sessions.db')
+    owner = store.create({'skills': []})['id']
+    rt = FakeRT(store)
+    sid = store.create({'skills': []}, role='explore', parent_id=owner)['id']
+    store.child_start(sid, owner, 1, 2, 'explore', 'x')
+    store.child_finish(sid, 'completed', reason=None, steps_used=1, output_tokens=1, answer_chars=1)
+    assert task_surface.project_child(rt, sid) is None
+    # Dựng `TaskService` là chạy DDL: một triển khai chưa từng bật công tắc không được trả giá đó.
+    tables = {row['name'] for row in store.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert 'harness_tasks' not in tables
+    store.close()
+
+
+def test_project_child_still_projects_when_the_switch_is_off_but_the_table_exists(repo, monkeypatch):
+    store, rt, owner, _ = repo
+    item = task(repo)
+    sid = child(repo)
+    attempt(repo, item, sid)
+    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    store.child_finish(sid, 'completed', reason=None, steps_used=1, output_tokens=1, answer_chars=1)
+    # Kho ĐÃ từng có task: tắt công tắc không được để attempt treo `running` — toàn vẹn sổ trước.
+    assert task_surface.project_child(rt, sid)['status'] == 'succeeded'
+    attempts = task_surface.service(rt).attempts(owner, 'run-1', item['taskKey'])['items']
+    assert [a['status'] for a in attempts] == ['succeeded']
+
+
 def test_close_attempt_skips_a_reopened_child(repo):
     store, rt, owner, _ = repo
     item = task(repo)
@@ -390,6 +433,48 @@ def test_close_attempt_ignores_unknown_outcomes(repo):
     sid = child(repo)
     attempt(repo, item, sid)
     assert task_surface.service(rt).close_attempt(sid, 'vibing', None) is None
+
+
+def test_abandoned_close_attempt_commits_for_a_second_connection(repo):
+    store, rt, owner, _ = repo
+    item = task(repo)
+    sid = child(repo)
+    attempt(repo, item, sid)
+    service = task_surface.service(rt)
+    service.abandon(owner, 'run-1', item['taskKey'], invocation_id='inv-abandon',
+                    expected_revision=fresh(repo, item)['revision'], reason='owner moved on')
+    store.child_finish(sid, 'cancelled', reason='OWNER_CANCELLED', steps_used=1, output_tokens=1,
+                       answer_chars=0)
+    assert service.close_attempt(sid, 'cancelled', 'OWNER_CANCELLED')['status'] == 'cancelled'
+    # Đọc trên KẾT NỐI THỨ HAI: một UPDATE chạy ngoài `_write()` không được commit, nên hàng vẫn
+    # hiện `running` với người đọc khác dù hàm vừa trả về bản ghi đã đóng.
+    path = store.db.execute('PRAGMA database_list').fetchone()['file']
+    other = sqlite3.connect(path)
+    other.row_factory = sqlite3.Row
+    try:
+        row = other.execute('SELECT status, closed_at FROM harness_task_attempts WHERE session_id=?',
+                            (sid,)).fetchone()
+    finally:
+        other.close()
+    assert row['status'] == 'cancelled' and row['closed_at'] is not None
+    assert store.db.in_transaction is False, 'không được để giao dịch mở sau khi chiếu kết cục'
+
+
+def test_watchdog_close_projects_the_attempt_of_a_task_bound_child(repo):
+    from agentbox.agent_core.peer_watchdog import PeerWatchdog
+
+    store, rt, owner, _ = repo
+    item = task(repo)
+    sid = child(repo)
+    attempt(repo, item, sid)
+    # Nhịp quét ĐẦU TIÊN đóng mọi hàng `started` còn sót (luật 4: RESTART) — đây là đường đóng THẬT
+    # của watchdog, không monkeypatch `cancel_child`; con bị cắt phải được chiếu vào attempt.
+    report = PeerWatchdog(store, runtime=rt).sweep()
+    assert report['restart'] == [sid]
+    detail = run(rt, owner, 'task_get', {'runId': 'run-1', 'taskId': item['taskId']})
+    assert detail['attempts'][0]['status'] == 'failed'
+    assert detail['attempts'][0]['reason'] == 'RESTART'
+    assert detail['task']['state'] == 'failed'
 
 
 def test_closed_snapshot_is_immutable_after_a_new_attempt(repo):
@@ -510,4 +595,91 @@ def test_open_delegate_is_a_noop_for_a_non_root_session_and_a_disabled_switch(tm
     assert task_surface.open_delegate(runtime, store.get(child_id), delegate_args()) is None
     monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
     assert task_surface.open_delegate(runtime, store.get(sid), delegate_args()) is None
+    store.close()
+
+
+def test_open_delegate_refreshes_the_revision_of_a_replayed_contract(repo):
+    """Cùng `invocationId` = thử lại CÙNG nhiệm vụ: `create` phát lại số lúc tạo, `open_delegate`
+    phải trả số HIỆN TẠI để attempt mới bind được sau khi lượt trước đã đóng."""
+    store, rt, owner, _ = repo
+    args = delegate_args()
+    opened = task_surface.open_delegate(rt, session(rt, owner), args)
+    assert opened['revision'] == 1
+    first_child = child(repo)
+    first = task_surface.bind_attempt(rt, session(rt, owner), opened, first_child)
+    assert first['status'] == 'running'
+    store.child_finish(first_child, 'completed', reason=None, steps_used=1, output_tokens=1,
+                       answer_chars=1)
+    assert task_surface.project_child(rt, first_child)['status'] == 'succeeded'
+
+    again = task_surface.open_delegate(rt, session(rt, owner), args)
+    assert again['taskKey'] == opened['taskKey'], 'thử lại không sinh task thứ hai'
+    assert again['revision'] == fresh(repo, opened)['revision'] == 3
+    second_child = child(repo)
+    second = task_surface.bind_attempt(rt, session(rt, owner), again, second_child)
+    assert second['status'] == 'running' and second['sessionId'] == second_child
+    assert second['attemptId'] != first['attemptId']
+    assert fresh(repo, opened)['revision'] == 4
+
+
+def test_replaying_a_delegate_with_the_same_contract_leaves_no_zombie_or_slot(tmp_path, monkeypatch):
+    import asyncio
+    from test_harness_runtime import answer, call
+
+    contract = delegate_args()
+    store, runtime, sid = runtime_repo(tmp_path, monkeypatch, [
+        answer(calls=[call('delegate_task', contract, cid='c1'),
+                      call('delegate_task', contract, cid='c2')]),
+        answer('cha chốt lượt')])
+
+    async def drive():
+        runtime.start(sid, 'giao việc hai lần cùng hợp đồng')
+        await runtime.tasks[sid]
+
+    asyncio.run(drive())
+
+    results = [json.loads(m['content']) for m in store.get(sid)['messages'] if m['role'] == 'tool']
+    first, second = results[0], results[1]
+    assert first['status'] == 'started'
+    # Lần gọi đầu: biên nhận mang revision HIỆN TẠI (sau bind), không phải số lúc tạo.
+    assert first['task']['revision'] == 2
+    # Thử lại cùng hợp đồng khi attempt trước còn mở: từ chối bằng mã hợp đồng, không phải lỗi
+    # revision của biên nhận (lỗi cũ khiến model không còn đường thử lại nào).
+    assert second['is_error'] is True and second['errorCode'] == 'TASK_ATTEMPT_CONFLICT'
+    # Con vừa `child_start` của lần thử lại được đóng bằng lý do hợp đồng: không con mồ côi.
+    rows = {c['session_id']: c for c in store.children_of(sid)}
+    bind_failed = [c for c in rows.values() if c['reason'] == 'TASK_BIND_FAILED']
+    assert len(bind_failed) == 1 and bind_failed[0]['status'] == 'failed'
+    # Không slot rò: lượt cha đóng thì không con nào giữ slot và cha không còn "đang chạy".
+    assert runtime.child_slot_holders == {}
+    assert runtime.parent_running.get(sid, 0) == 0
+    store.close()
+
+
+def test_a_follow_up_delegate_with_the_same_contract_binds_a_new_attempt(tmp_path, monkeypatch):
+    """Sau khi attempt trước đã đóng (con xong, đã chiếu), cùng hợp đồng mở attempt MỚI trên đúng
+    task ấy — follow-up đi qua admission, không task/alias thứ hai, không lỗi revision."""
+    import asyncio
+    from test_harness_runtime import answer
+
+    store, runtime, sid = runtime_repo(tmp_path, monkeypatch, [answer('con xong')] * 4)
+    args = delegate_args()
+
+    async def drive():
+        first = await runtime.delegate(store.get(sid), dict(args))
+        await runtime.tasks[first['sessionId']]
+        await asyncio.sleep(0)          # callback đóng con chạy sau khi task của con xong
+        second = await runtime.delegate(store.get(sid), dict(args))
+        await runtime.tasks[second['sessionId']]
+        await asyncio.sleep(0)
+        return first, second
+
+    first, second = asyncio.run(drive())
+    assert first['task']['revision'] == 2, 'biên nhận đọc revision HIỆN TẠI sau bind'
+    assert first['task']['taskKey'] == second['task']['taskKey'], 'không sinh task thứ hai'
+    assert second['task']['revision'] == 4
+    assert second['task']['attempt']['attemptId'] != first['task']['attempt']['attemptId']
+    attempts = task_surface.service(runtime).attempts(sid, 'run-1', first['task']['taskKey'])['items']
+    assert sorted(a['status'] for a in attempts) == ['succeeded', 'succeeded']
+    assert runtime.child_slot_holders == {}
     store.close()

@@ -11,11 +11,13 @@ Quy tắc đã chốt (plan §3, §7, §8):
   được giải quyết hoặc checkpoint có kết quả quan sát được. Văn bản dài hơn, diễn giải
   lại, log lặp và số lần gọi tool KHÔNG phải tiến triển.
 - Cùng failure signature với input/evidence không đổi: chặn lặp tự động, đòi checkpoint
-  và đổi cách; signature đổi hoặc có evidence mới thì xoá chặn.
+  và đổi cách; signature đổi hoặc có evidence mới thì xoá chặn. Quét mọi entry cùng
+  signature, kể cả khi các lần thử xen kẽ hai biến thể input (h1, h2, h1).
 - Effort theo uncertainty × value, bị kẹp bởi capability (trần output công bố, mức
-  reasoning công bố) và bởi trần trong policy. Capability không rõ ⇒ không phát minh số
-  output token (`outputTokens=None` kèm lý do). Lịch sử reasoning token của lần trước
-  không được ép hạ mức.
+  reasoning công bố) và bởi trần trong policy. Trần policy chỉ hạ, không bao giờ nâng;
+  model chỉ công bố ladder cao hơn mức yêu cầu thì snap lên mức thấp nhất được công bố
+  (ghi rõ lý do). Capability không rõ ⇒ không phát minh số output token
+  (`outputTokens=None` kèm lý do). Lịch sử reasoning token của lần trước không được ép hạ mức.
 - Không tự đặt trần step/wall: chỉ tôn trọng `limits` do người gọi khai. Thiếu ngân sách
   cho khoản chi mới thì báo `requires=['consent']`, không suy là vô hạn.
 - Stop/thu hồi epoch luôn thắng: không bao giờ mở nhánh mới sau đó.
@@ -103,6 +105,23 @@ def _flag(value):
             if key in value:
                 return bool(value[key])
         return bool(value)
+    return bool(value)
+
+
+def _change_declared(value):
+    """`intentChange`/`scopeChange` có khai báo thay đổi? Dict rỗng vẫn tính (fail closed).
+
+    Cờ bool và chuỗi mô tả đều hợp lệ như các cờ anh em (`missingConsent`...); None/False/
+    chuỗi rỗng là không khai báo.
+    """
+    if value is None or value is False:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (dict, list, tuple)):
+        return True
+    if isinstance(value, str):
+        return bool(value.strip())
     return bool(value)
 
 
@@ -226,10 +245,13 @@ def progress_signal(previous, current):
         kinds.append('acceptance_gap')
         reasons.append(f'acceptance gap shrank {gap_before} -> {gap_after}')
 
-    open_before, open_after = set(_refs(before.get('openCriteria'))), set(_refs(after.get('openCriteria')))
-    if open_after and open_after < open_before:
-        kinds.append('acceptance_gap')
-        reasons.append('open acceptance criteria shrank: ' + ', '.join(sorted(open_before - open_after)))
+    criteria_before, criteria_after = before.get('openCriteria'), after.get('openCriteria')
+    if criteria_before is not None and criteria_after is not None:
+        open_before, open_after = set(_refs(criteria_before)), set(_refs(criteria_after))
+        if open_after < open_before:  # [] < {..} khi tiêu chí mở cuối cùng được đóng
+            kinds.append('acceptance_gap')
+            reasons.append('open acceptance criteria shrank: '
+                           + ', '.join(sorted(open_before - open_after)))
 
     resolved = [ref for ref in _refs(before.get('uncertainties'))
                 if ref not in set(_refs(after.get('uncertainties')))]
@@ -313,19 +335,25 @@ def _loop_action(history, signature):
 
 
 def loop_guard(history, signature):
-    """Cùng signature + input/evidence không đổi ⇒ chặn lặp tự động (đòi checkpoint/đổi cách)."""
+    """Cùng signature + input/evidence không đổi ⇒ chặn lặp tự động (đòi checkpoint/đổi cách).
+
+    Quét MỌI entry cùng signature trong `history`, không chỉ entry gần nhất: chỉ cần một
+    lần thử trước có cùng input và không có evidence mới hơn thì đã là bản lặp — kể cả khi
+    các lần thử xen kẽ hai biến thể input (h1, h2, h1). Entry khác input hoặc đã có
+    evidence mới bị bỏ qua; không entry nào khớp thì không chặn.
+    """
     current = _loop_entry(signature)
     entries = _loop_entries(history)
     action = _loop_action(history, signature) or 'blocked'
     repeat = False
     if current['signature'] is not None:
-        for entry in reversed(entries):
+        for entry in entries:
             if entry['signature'] != current['signature']:
                 continue
             if entry['inputs'] != current['inputs']:
-                break  # input đổi ⇒ lần thử này không còn là bản lặp
+                continue  # input khác ⇒ entry này không phải bản lặp
             if current['evidence'] - entry['evidence']:
-                break  # evidence mới ⇒ xoá chặn
+                continue  # có evidence mới so với entry này ⇒ entry này không còn là bản lặp
             repeat = True
             break
     return {'repeat': repeat, 'code': LOOP_REPEAT if repeat else None,
@@ -357,12 +385,22 @@ def _effort_level(uncertainty, value, reasons):
 
 
 def _clamp_level(level, supported, reasons, source):
+    """Kẹp mức vào danh sách mức `supported`; không bao giờ nâng quá `supported`.
+
+    - Có mức thấp hơn mức yêu cầu: hạ xuống mức cao nhất trong số đó.
+    - Model chỉ công bố ladder cao hơn mức yêu cầu: snap lên mức thấp nhất được công bố
+      (nearest available — model không có mức thấp hơn để yêu cầu) và ghi rõ lý do.
+    """
     allowed = [item for item in EFFORT_LEVELS if item in supported]
     if not allowed or level in allowed:
         return level
     lower = [item for item in allowed if EFFORT_WEIGHT[item] < EFFORT_WEIGHT[level]]
-    chosen = lower[-1] if lower else allowed[0]
-    reasons.append(f'effort {level} -> {chosen} clamped by {source}')
+    if lower:
+        chosen = lower[-1]
+        reasons.append(f'effort {level} -> {chosen} clamped down by {source}')
+        return chosen
+    chosen = allowed[0]
+    reasons.append(f'effort {level} -> {chosen} snapped up to the lowest level {source} offers')
     return chosen
 
 
@@ -439,8 +477,10 @@ def _policy_effort_ceiling(policy):
 def effort(uncertainty, value, capability, policy=None):
     """Mức effort theo uncertainty × value, kẹp bởi capability và trần policy.
 
-    Không bao giờ nâng trần, không phát minh số token khi capability không rõ, và không
-    đọc lịch sử reasoning token để ép hạ mức.
+    Trần policy chỉ hạ mức, không bao giờ nâng (low vẫn low dưới trần high). Nếu model chỉ
+    công bố ladder cao hơn mức yêu cầu, mức được snap lên mức thấp nhất model công bố và
+    lý do ghi rõ. Không phát minh số token khi capability không rõ, và không đọc lịch sử
+    reasoning token để ép hạ mức.
     """
     reasons = []
     level = _effort_level(uncertainty, value, reasons)
@@ -452,7 +492,10 @@ def effort(uncertainty, value, capability, policy=None):
             reasons.append('model publishes no reasoning levels; the level stays a request only')
     policy_level = _policy_effort_ceiling(policy)
     if policy_level:
-        level = _clamp_level(level, [policy_level], reasons, 'policy effort ceiling')
+        # Trần policy là cận trên: chỉ kẹp về các mức <= trần, không bao giờ nâng mức.
+        ceiling_levels = [item for item in EFFORT_LEVELS
+                          if EFFORT_WEIGHT[item] <= EFFORT_WEIGHT[policy_level]]
+        level = _clamp_level(level, ceiling_levels, reasons, 'policy effort ceiling')
 
     tokens = None
     base = EFFORT_OUTPUT_TOKENS[level]
@@ -501,17 +544,24 @@ def _policy_ceiling_ref(policy):
 
 
 def _budget(policy, observation):
-    """Ngân sách báo cáo: chỉ lấy từ policy/capability, không tự đặt số."""
+    """Ngân sách báo cáo + ghi chú lỗi input effort: `(budget, note)`.
+
+    `note` khác None khi `uncertainty`/`value` không hợp lệ: ngân sách vẫn fail closed
+    (toàn None, không cấp gì) nhưng mã lỗi phải xuất hiện trong `reason` của quyết định.
+    """
     empty = {'outputTokens': None, 'effort': None, 'ceilingRef': None}
     if not _policy_on(policy):
-        return empty
+        return empty, None
     try:
         result = effort(observation.get('uncertainty'), observation.get('value'),
                         observation.get('capability'), policy)
-    except ContractError:
-        return empty
-    return {'outputTokens': result['outputTokens'], 'effort': result['level'],
-            'ceilingRef': _policy_ceiling_ref(policy)}
+    except ContractError as error:
+        code = getattr(error, 'code', 'ADAPTIVE_EFFORT_INPUT')
+        field = getattr(error, 'field', 'uncertainty/value')
+        return empty, (f'effort input rejected ({code}: {field}); no output budget is granted '
+                       'until the input is valid')
+    return ({'outputTokens': result['outputTokens'], 'effort': result['level'],
+             'ceilingRef': _policy_ceiling_ref(policy)}, None)
 
 
 def _progress_result(observation):
@@ -639,10 +689,19 @@ def _missing(observation):
     if write and isinstance(intent, str) and intent.strip().lower() in WRITE_INTENTS:
         found.setdefault('approval', 'analysis/plan/design intent cannot write; owner approval for '
                                      'an implementation intent is required first')
-    change = observation.get('intentChange') or observation.get('scopeChange')
-    if _flag(change):
-        receipt = change.get('receiptRef') if isinstance(change, dict) else None
-        if not receipt and not _flag(change.get('approved')):
+    change = None
+    for key in ('intentChange', 'scopeChange'):
+        if key in observation and _change_declared(observation[key]):
+            change = observation[key]
+            break
+    if change is not None:
+        if isinstance(change, dict):
+            receipt = change.get('receiptRef')
+            approved = _flag(change.get('approved'))
+        else:
+            # Cờ bool/chuỗi không mang receipt ⇒ fail closed, không gọi .get() trên non-dict.
+            receipt, approved = None, False
+        if not receipt and not approved:
             found.setdefault('approval', 'an intent/scope change has no admission receipt')
 
     needs = [name for name in REQUIREMENTS if name in found]
@@ -728,12 +787,16 @@ def _alternatives(action, observation, code, requires):
 
 
 def _decision(action, code, detail, observation, policy, loop, progress, requires=(), evidence=()):
+    budget, budget_note = _budget(policy, observation)
+    reason = f'{code}: {detail}' if detail else code
+    if budget_note:
+        reason = f'{reason}; {budget_note}'
     return {
         'action': action,
-        'reason': f'{code}: {detail}' if detail else code,
+        'reason': reason,
         'evidenceRefs': _evidence(observation, evidence),
         'requires': list(requires),
-        'budget': _budget(policy, observation),
+        'budget': budget,
         'alternatives': _alternatives(action, observation, code, requires),
         'loop': dict(loop),
         'progress': dict(progress),
@@ -778,7 +841,9 @@ def _decide(policy, observation, history):
     if unsupported:
         return _decision('blocked', NEED_UNSUPPORTED,
                          'unsupported need(s) ' + ', '.join(unsupported)
-                         + '; the composer refuses to proceed', observation, policy, loop, progress)
+                         + '; the composer refuses to proceed and keeps the supported '
+                           'needs in `requires`',
+                         observation, policy, loop, progress, requires=needs)
     if needs:
         detail = '; '.join(notes[name] for name in needs if name in notes)
         if needs == ['user_decision']:
