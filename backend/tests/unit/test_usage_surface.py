@@ -284,3 +284,21 @@ def test_plain_child_cannot_evade_root_adaptive_consent(env):
     with pytest.raises(ContractError, match='USAGE_NO_CONSENT'):
         asyncio.run(env[1].complete_model(child['id'], [], [], env[2]['config']['route'], max_tokens=100))
     assert env[3].calls == 0
+
+
+def test_manual_compact_goes_through_the_usage_seam(env, monkeypatch):
+    """`/compact` do người dùng gọi cũng đi qua seam chung: một hàng usage, không gọi thẳng client."""
+    from agentbox.agent_core.compression import ContextCompressor
+
+    store, rt, session, client = env
+
+    async def compact(self, messages, tools, summarize, force=False, usage=None):
+        await summarize(messages, max_tokens=64)
+        return [messages[0], {'role': 'assistant', 'content': 'gộp'}], {
+            'kind': 'compression', 'strategy': 'summary', 'beforeEstimate': 2000,
+            'afterEstimate': 20, 'budgetTokens': 10000}
+
+    monkeypatch.setattr(ContextCompressor, 'compact', compact)
+    asyncio.run(rt.submit(session['id'], '/compact'))
+    assert client.calls == 1, 'lượt tóm tắt của /compact phải đi qua seam, không gọi thẳng client'
+    assert [row['purpose'] for row in rows(env)] == ['summary']

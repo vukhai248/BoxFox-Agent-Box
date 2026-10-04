@@ -1958,7 +1958,9 @@ class HarnessRuntime(RuntimeCommands):
                             'parallel tool execution inside one step is not part of this round '
                             '(T14), so this flag changes no behaviour yet'),
             })
-        role_instructions = (CONTROLLER_ROLES[role] if role in CONTROLLER_ROLES else ROLES[role]).instructions if role in ROLES or role in CONTROLLER_ROLES else orchestrator_guidance()
+        # H7 — `research-lead` là principal backend riêng, không nằm trong catalog specialist.
+        controller_role = CONTROLLER_ROLES.get(role) or ROLES.get(role)
+        role_instructions = controller_role.instructions if controller_role else orchestrator_guidance()
         required_research = {
             'research': ('research-search', 'research-reading', 'research-evidence'),
             'research-review': ('research-critique', 'research-evidence'),
@@ -3733,9 +3735,7 @@ class HarnessRuntime(RuntimeCommands):
             # khi tên đã nằm trong `config['tools']` từ một phiên cũ.
             profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
         if not job_surface.enabled():
-            readable = job_surface.READ_TOOLS if job_surface.has_receipts(self, session['id']) else set()
-            profile['tools'] = [name for name in profile['tools']
-                                if name not in job_surface.JOB_TOOLS or name in readable]
+            profile['tools'] = job_surface.visible_tools(self, session['id'], profile['tools'])
         return research_gateway.apply_profile(self, session, profile)
 
     def turn_profile_base(self, session, invocation_id=None):

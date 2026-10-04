@@ -154,7 +154,6 @@ const ZEN_ROWS = Object.freeze({
 
 // Chỉ nhận id chính xác từ bảng Model ID trên cùng trang tài liệu, không suy
 // giá từ prefix/hậu tố `-free`, và không áp giá Zen cho gateway khác.
-const ZEN_EXACT_ROWS = Object.freeze(Object.fromEntries(Object.keys(ZEN_ROWS).map(id => [id, id])));
 
 /** Peak windows as minutes-of-day, half-open `[from, to)`, UTC. */
 const DEEPSEEK_PEAK_WINDOWS = Object.freeze([[60, 240], [360, 600]]);
@@ -225,11 +224,6 @@ function deepseekRow(modelId) {
   if (id.startsWith('deepseek-v4-pro') || id.includes('pro')) return 'pro';
   if (id.includes('flash')) return 'flash';
   return null;
-}
-
-function zenRow(modelId) {
-  const id = typeof modelId === 'string' ? modelId.trim().toLowerCase() : '';
-  return Object.hasOwn(ZEN_EXACT_ROWS, id) ? ZEN_EXACT_ROWS[id] : null;
 }
 
 /**
@@ -366,9 +360,9 @@ export function documentedDeepseekPrice(modelId, at) {
  * source: 'documented'. Bảng/asOf cố định nên không cần tham số thời gian.
  */
 export function documentedZenPrice(modelId) {
-  const row = zenRow(modelId);
-  if (!row) return null;
-  return { currency: 'USD', unit: PRICE_UNIT, ...ZEN_ROWS[row], asOf: OPENCODE_ZEN_PRICE_AS_OF };
+  const id = typeof modelId === 'string' ? modelId.trim().toLowerCase() : '';
+  if (!Object.hasOwn(ZEN_ROWS, id)) return null;
+  return { currency: 'USD', unit: PRICE_UNIT, ...ZEN_ROWS[id], asOf: OPENCODE_ZEN_PRICE_AS_OF };
 }
 
 /**

@@ -391,6 +391,27 @@ class ResearchOwnership:
                 self._remember(run_id, invocation_id, request_hash, result)
             return result
 
+    def _require_actor(self, run_id, actor_id, action):
+        """Xác thực principal TRƯỚC khi ghi; adapter legacy (không resolver) tự authorize.
+
+        Gateway dùng resolve_creation phải truyền actor_id; thiếu actor là bị từ chối.
+        """
+        if self.resolve_creation is None:
+            return
+        if actor_id is None:
+            invalid('actorId', 'authenticated actor required', 'RESEARCH_CONTROL_FORBIDDEN')
+        decision = self.authorize(run_id, actor_id, action)
+        if not decision['allowed']:
+            invalid('actorId', decision['reason'], decision['code'])
+
+    def _recheck_principal(self, run_id, actor_id):
+        """Đọc lại principal trong giao dịch ghi: quyền có thể đổi giữa hai lần đọc."""
+        if self.resolve_creation is None:
+            return
+        row = self._row(run_id)
+        if actor_id not in (row['owner_id'], row['controller_id']):
+            invalid('actorId', 'principal changed', 'RESEARCH_CONTROL_FORBIDDEN')
+
     def handoff(self, run_id, to_controller_id, reason, expected_revision, invocation_id=None, *, actor_id=None):
         """Bàn giao quyền điều khiển: ghi biên nhận bàn giao rồi mới đổi controller, cùng giao dịch.
 
@@ -398,12 +419,7 @@ class ResearchOwnership:
         Adapter thư viện legacy (không resolver) giữ API cũ, caller tự authorize trước.
         `fromController` trong biên nhận là bộ điều khiển cũ.
         """
-        if self.resolve_creation is not None:
-            if actor_id is None:
-                invalid('actorId', 'authenticated actor required', 'RESEARCH_CONTROL_FORBIDDEN')
-            decision = self.authorize(run_id, actor_id, 'handoff')
-            if not decision['allowed']:
-                invalid('actorId', decision['reason'], decision['code'])
+        self._require_actor(run_id, actor_id, 'handoff')
         identifier(run_id, 'runId')
         identifier(to_controller_id, 'toControllerId')
         text(reason, 'reason')
@@ -414,8 +430,7 @@ class ResearchOwnership:
                                'toControllerId': to_controller_id, 'reason': reason,
                                'expectedRevision': expected_revision})
         with self._write():
-            if self.resolve_creation is not None and actor_id not in (self._row(run_id)['owner_id'], self._row(run_id)['controller_id']):
-                invalid('actorId', 'principal changed', 'RESEARCH_CONTROL_FORBIDDEN')
+            self._recheck_principal(run_id, actor_id)
             if invocation_id is not None:
                 cached = self._cached(run_id, invocation_id, request_hash,
                                       'RESEARCH_INVOCATION_CONFLICT')
@@ -447,12 +462,7 @@ class ResearchOwnership:
         Idempotent: lần ghi đầu thắng, lý do cũ được giữ nguyên dù gọi lại bằng lý do khác. Người
         gọi legacy tự authorize trước; gateway bắt buộc actor_id và xác thực tại đây.
         """
-        if self.resolve_creation is not None:
-            if actor_id is None:
-                invalid('actorId', 'authenticated actor required', 'RESEARCH_CONTROL_FORBIDDEN')
-            decision = self.authorize(run_id, actor_id, 'release')
-            if not decision['allowed']:
-                invalid('actorId', decision['reason'], decision['code'])
+        self._require_actor(run_id, actor_id, 'release')
         identifier(run_id, 'runId')
         text(reason, 'reason')
         if len(reason) > REASON_MAX:
@@ -461,8 +471,7 @@ class ResearchOwnership:
         request_hash = digest({'action': 'release', 'runId': run_id, 'reason': reason,
                                'expectedRevision': expected_revision})
         with self._write():
-            if self.resolve_creation is not None and actor_id not in (self._row(run_id)['owner_id'], self._row(run_id)['controller_id']):
-                invalid('actorId', 'principal changed', 'RESEARCH_CONTROL_FORBIDDEN')
+            self._recheck_principal(run_id, actor_id)
             if invocation_id is not None:
                 cached = self._cached(run_id, invocation_id, request_hash,
                                       'RESEARCH_INVOCATION_CONFLICT')
@@ -491,20 +500,14 @@ class ResearchOwnership:
         `RESEARCH_INTENT_CONFLICT`: đổi ý định phải đi kèm một thay đổi/khẳng định quyền điều khiển.
         Tham chiếu đầu vào của main là phép ghi cộng thêm, khử trùng theo băm, không tăng revision.
         """
-        if self.resolve_creation is not None:
-            if actor_id is None:
-                invalid('actorId', 'authenticated actor required', 'RESEARCH_CONTROL_FORBIDDEN')
-            decision = self.authorize(run_id, actor_id, 'control')
-            if not decision['allowed']:
-                invalid('actorId', decision['reason'], decision['code'])
+        self._require_actor(run_id, actor_id, 'control')
         identifier(run_id, 'runId')
         revision(expected_revision)
         normalized = _normalize_intent(intent)
         request_hash = digest({'action': 'record_intent', 'runId': run_id, 'intent': normalized,
                                'expectedRevision': expected_revision})
         with self._write():
-            if self.resolve_creation is not None and actor_id not in (self._row(run_id)['owner_id'], self._row(run_id)['controller_id']):
-                invalid('actorId', 'principal changed', 'RESEARCH_CONTROL_FORBIDDEN')
+            self._recheck_principal(run_id, actor_id)
             if invocation_id is not None:
                 cached = self._cached(run_id, invocation_id, request_hash,
                                       'RESEARCH_INVOCATION_CONFLICT')

@@ -43,6 +43,18 @@ def has_receipts(rt, sid):
     return exists(rt) and rt.store.db.execute('SELECT 1 FROM harness_jobs WHERE owner_id=? LIMIT 1', (sid,)).fetchone() is not None
 
 
+def visible_tools(rt, sid, tools):
+    """Một chỗ duy nhất cắt công cụ job khỏi hồ sơ lượt.
+
+    Công tắc tắt thì không quảng cáo công cụ nào, trừ hàng ĐỌC khi phiên đã có receipt
+    (phiên cũ vẫn đọc được job đã ghi); công tắc bật thì giữ nguyên danh sách.
+    """
+    if enabled():
+        return list(tools)
+    readable = READ_TOOLS if has_receipts(rt, sid) else set()
+    return [name for name in tools if name not in JOB_TOOLS or name in readable]
+
+
 def prepare(args):
     """Không nhận trường quyền/owner/handle từ caller; identity do backend cấp."""
     value = object_fields(args, 'request', ('kind', 'role', 'goal', 'ownership', 'invocationId'),

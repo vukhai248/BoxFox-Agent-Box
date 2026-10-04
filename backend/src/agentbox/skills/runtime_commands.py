@@ -122,8 +122,11 @@ class RuntimeCommands:
                 async def compact():
                     try:
                         async def summarize(history, max_tokens=None):
-                            return await self.client.complete(history, [], session['config']['route'],
-                                                              max_tokens=max_tokens or 2048)
+                            # H6 — `/compact` cũng đi qua seam chung: một hàng usage, cổng
+                            # admission và trần của policy áp cho cả đường người dùng gọi.
+                            return await self.complete_model(sid, history, [], session['config']['route'],
+                                                             purpose='summary',
+                                                             max_tokens=max_tokens or 2048)
                         # Ngưỡng của lượt này lấy từ chính phiên: `threshold_tokens` là trần byte quy
                         # ra token (xem `ContextCompressor.__init__`). `/compact` là lệnh có ý thức của
                         # người dùng nên đi thẳng qua ngưỡng, nhưng nó vẫn phải biết mình đang đo bằng

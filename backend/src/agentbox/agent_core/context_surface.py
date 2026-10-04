@@ -174,8 +174,7 @@ def _effective(rt, session):
     if not task_surface.enabled():
         profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
     if not job_surface.enabled():
-        readable = job_surface.READ_TOOLS if job_surface.has_receipts(rt, session['id']) else set()
-        profile['tools'] = [name for name in profile['tools'] if name not in job_surface.JOB_TOOLS or name in readable]
+        profile['tools'] = job_surface.visible_tools(rt, session['id'], profile['tools'])
     profile = research_gateway.apply_profile(rt, session, profile)
     return profile['tools'], mode
 
