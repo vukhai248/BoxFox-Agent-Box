@@ -10,7 +10,7 @@ import os
 import time
 import uuid
 
-from . import execution_kernel, tool_recovery, work_scope
+from . import execution_kernel, feature_switches, tool_recovery, work_scope
 from .harness_jobs import HarnessJobs, JOB_SCHEMA, CLOSED_STATES
 from .limits import PEER_WAIT_SAFETY_SECONDS
 from .orchestration_contracts import identifier, invalid, object_fields, text
@@ -23,7 +23,10 @@ STOP_KEY = 'controllerJobsStopped'
 
 
 def enabled(env=None):
-    return str((os.environ.get(SWITCH) if env is None else env) or '').strip().lower() == 'on'
+    """Bề mặt job: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(SWITCH)
 
 
 def exists(rt):

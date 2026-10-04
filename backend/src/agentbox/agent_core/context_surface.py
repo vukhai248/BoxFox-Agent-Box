@@ -10,7 +10,7 @@ import json
 import os
 import time
 
-from . import execution_kernel, work_scope
+from . import execution_kernel, feature_switches, work_scope
 from .context_bundle import ContextBundle, CONTEXT_SCHEMA, CHECKPOINT_SCHEMA, compare_recall
 from .orchestration_contracts import ContractError, invalid
 from .skill_spec import SKILL_UNKNOWN, SkillRegistry, SkillSpec, readiness, revalidate
@@ -27,7 +27,8 @@ class _CatalogFallback(Exception):
 
 
 def enabled():
-    return os.getenv(SWITCH, 'off').strip().lower() == 'on'
+    """Bề mặt context: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    return feature_switches.member_switch(SWITCH)
 
 
 def _exists(db, table):

@@ -24,6 +24,8 @@ bật công tắc không đổi hành vi; nó là lưới cho các mã mới.
 """
 import os
 
+from . import feature_switches
+
 #: Công tắc giết khi nối vào runtime: mặc định TẮT, chỉ `on` mới bật.
 SWITCH = 'BOXFOX_RECOVERY_POLICY'
 
@@ -148,8 +150,10 @@ def classify(code):
 
 
 def enabled(env=None):
-    """Công tắc giết của lớp chính sách hồi phục: chỉ `on` mới bật."""
-    return str((env if env is not None else os.environ.get(SWITCH)) or '').strip().lower() == 'on'
+    """Lớp chính sách hồi phục: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(SWITCH)
 
 
 def may_retry(decision_value):

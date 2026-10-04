@@ -2,6 +2,7 @@
 
 import os
 
+from . import feature_switches
 from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
@@ -19,12 +20,15 @@ CONTROLLER_JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait
 
 
 def controller_jobs_enabled():
-    return os.getenv('BOXFOX_CONTROLLER_JOBS', 'off').strip().lower() == 'on'
+    """Bề mặt job controller: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    return feature_switches.member_switch('BOXFOX_CONTROLLER_JOBS')
 
 
 def task_surface_enabled(env=None):
-    """Công tắc bề mặt task: chỉ `on` mới bật (mặc định TẮT)."""
-    return str((env if env is not None else os.environ.get(TASK_SURFACE_SWITCH)) or '').strip().lower() == 'on'
+    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(TASK_SURFACE_SWITCH)
 
 
 def tool(name, description, properties, required=()):

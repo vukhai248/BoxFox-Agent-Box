@@ -9,7 +9,7 @@ import os
 import time
 import uuid
 
-from . import research_runtime
+from . import feature_switches, research_runtime
 from .orchestration_contracts import identifier, invalid, object_fields, revision, string_list, text
 from .research_owner import ResearchOwnership, validate_report
 from .work_policy import digest
@@ -28,7 +28,10 @@ TERMINAL = {'cancelled', 'completed', 'partial'}
 
 
 def enabled(value=None):
-    return str(os.getenv(SWITCH, 'off') if value is None else value).strip().lower() in ('on', '1', 'true')
+    """Gateway Research: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if value is not None:
+        return str(value).strip().lower() in ('on', '1', 'true')
+    return feature_switches.member_switch(SWITCH)
 
 
 def _exists(store):

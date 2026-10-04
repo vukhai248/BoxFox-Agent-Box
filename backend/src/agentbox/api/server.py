@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
+from ..agent_core import design_runtime, execution_kernel, feature_switches, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
@@ -453,6 +453,8 @@ def create_app(runtime):
         from ..agent_core import work_budget
         return web.json_response({
             'toolGroups': tool_groups(),
+            # H12 — khóa tổng `BOXFOX_REFORM`: nhìn một chỗ biết đang bật gì, vì đâu.
+            'switches': feature_switches.snapshot(),
             'tools': sorted(ORCHESTRATOR_TOOLS),
             'roles': [{'id': r.id, 'name': r.name, 'tools': sorted(r.tools), 'skills': list(r.skills)}
                       for r in ROLES.values()],

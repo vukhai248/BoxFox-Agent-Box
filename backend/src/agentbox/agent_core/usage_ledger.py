@@ -42,6 +42,7 @@ import os
 import sqlite3
 import time
 
+from . import feature_switches
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
 
@@ -100,8 +101,10 @@ _WRITE_KEYS = ('write', 'writeTokens', 'cacheWrite', 'cacheWriteInput', 'cache_c
 
 
 def enabled(env=None):
-    """Công tắc giết của sổ usage: chỉ `on` mới bật; mọi giá trị khác (kể cả thiếu) là TẮT."""
-    return str((env if env is not None else os.environ.get(SWITCH)) or '').strip().lower() == 'on'
+    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(SWITCH)
 
 
 def encode(value):

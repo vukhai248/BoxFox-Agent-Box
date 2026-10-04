@@ -35,7 +35,7 @@ Theo dõi lượt thử lại (follow-up) của `delegate_task` — ngữ nghĩa
 
 import os
 
-from . import execution_kernel, research_runtime, work_scope
+from . import execution_kernel, feature_switches, research_runtime, work_scope
 from .orchestration_contracts import ContractError, invalid
 from .task_service import TaskService
 
@@ -55,8 +55,13 @@ BIND_FAILED_REASON = 'TASK_BIND_FAILED'
 
 
 def enabled(env=None):
-    """Công tắc giết của bề mặt task: chỉ `on` mới bật; mọi giá trị khác (kể cả thiếu) là TẮT."""
-    return str((env if env is not None else os.environ.get(SWITCH)) or '').strip().lower() == 'on'
+    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc).
+
+    `env` là giá trị thô của test; truyền vào thì thắng mọi thứ (giữ nguyên khuôn cũ).
+    """
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(SWITCH)
 
 
 def service(rt):

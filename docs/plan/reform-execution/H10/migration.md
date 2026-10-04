@@ -15,6 +15,7 @@
 
 | Công tắc | Mặc định | Tắt thì |
 |---|---|---|
+| `BOXFOX_REFORM` (khóa tổng, H12) | off | cả nhóm H3–H8 chạy theo giá trị riêng/mặc định; `on` = bật cả nhóm bằng một lệnh; công tắc thành viên tường minh luôn thắng khóa tổng |
 | `BOXFOX_TASK_SURFACE` | off | bốn công cụ `task_*` không được quảng cáo; `dispatch` từ chối `TASK_SURFACE_OFF`; hook `project_child` no-op khi bảng chưa từng có |
 | `BOXFOX_CONTROLLER_JOBS` | off | công cụ controller không mở; đường `job_surface`/`job_wake` không chạy (dữ liệu `harness_jobs*` để nguyên, còn đọc được) |
 | `BOXFOX_CONTEXT_SURFACE` | off | ref/`skill_view` không đi qua surface; đường context cũ giữ nguyên |
@@ -24,6 +25,8 @@
 | `BOXFOX_RECOVERY_POLICY` | off | phân loại hồi phục giữ đường cũ; checkpoint vẫn đọc được |
 | `BOXFOX_PEER_MESH` | (hiện có) | giữ nguyên hành vi uỷ thác trước đợt 2 |
 
+- **Bật dần (chủ nhà chốt 2026-10-04):** mặc định vẫn TẮT; bật từng công tắc theo thứ tự và khuôn kiểm ở
+  `docs/plan/reform-execution/HANDOFF.md` §6; khóa tổng `BOXFOX_REFORM` chỉ là tay nắm cuối cùng.
 - **Rollback reference:** unset các công tắc H2–H8 (hoặc không đặt) là quay về hành vi legacy; dữ liệu
   task/job đã ghi vẫn đọc được (không mất hàng), nhưng model không thấy công cụ và không mutation nào
   replay — đo bằng drill 11/11 (H3) và nghiệm thu vòng chạy 29/29 trên `c836822` (H4–H8).

@@ -6,7 +6,7 @@ fail closed when the guard engine or canonical owner disappears.
 """
 import os
 
-from . import tool_recovery, work_scope
+from . import feature_switches, tool_recovery, work_scope
 
 POLICY_SCHEMA = 'boxfox-execution-policy/1'
 POLICY_KEY = 'harnessPolicy'
@@ -20,6 +20,8 @@ def enabled():
 
 
 def _switch(name):
+    if name in feature_switches.MEMBERS:
+        return feature_switches.member_switch(name)
     return os.getenv(name, 'off').strip().lower() in ('1', 'on', 'true')
 
 
