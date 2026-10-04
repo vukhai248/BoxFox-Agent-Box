@@ -67,11 +67,27 @@
 - `/var/tmp/boxfox-e2e/backend-3113-h11.log` (backend 3113 với code H11)
 - `/code/.plans/v1-boxfox-harness-reform.md` Phụ lục B — H11
 
+## Đo lại toàn bộ unit suite (2026-10-04, sau H12)
+
+Chạy `tests/unit` trên cây `f6dbe2b` (H12): **4356 passed, 12 skipped, 4 failed**. Ba lỗi đỏ là
+lỗi có sẵn từ baseline `346da06` (`test_terminal_exec_echo`,
+`test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`, `test_revoked_grant_blocks_next_tool_call`).
+Lỗi thứ tư là **hồi quy thật do H11**:
+
+- `test_plan_turn_gates.py::test_the_turn_deadline_extension_is_recorded_for_the_write` — H11 nâng
+  `DEADLINE_DEFAULT_SECONDS` 1800 → 7200, mà `DEADLINE_MAX_SECONDS` đã là 7200, nên lượt chạy mặc
+  định **chạm trần** và phần nới theo sự kiện `plan_written` (`PLAN_TURN_EXTENSION_SECONDS` = 420)
+  không còn chỗ để nới ⇒ không có notice `TURN_EXTENDED`.
+- **Cách xử lý:** giữ nguyên trần #6546 (7200 s) và giữ nguyên phần nới; chốt lại hợp đồng bằng hai
+  bài: lượt có hạn chót **dưới trần** (`deadlineSeconds` 600) nới ĐÚNG một lần, lý do `plan_written`
+  (thứ tự cũ giữ nguyên); lượt ở hạn chót **mặc định** không nới và **không bịa notice** — cổng F3
+  vẫn chạy. Ghi chú tương ứng ở `limits.py` cạnh `PLAN_TURN_EXTENSION_SECONDS`.
+- Sau khi sửa: `test_plan_turn_gates.py` + `test_write_plan.py` + `test_reform_master_switch.py`
+  **67 passed**; lần chạy lại toàn bộ `tests/unit` ghi ở `reform-status.md`.
+
 ## Chưa kiểm (không được ghi là đã đạt)
 
 - **E2E thật cho `child_resume`** đã chạy (xem trên); phần chưa kiểm là cờ `timedOut` (cắt vì HẠN
   CHÓT thật, không phải trần bước) và gọi lại nhiều lần trong cùng lượt tới trần 3.
-- **Đo lại toàn bộ unit suite** trên `f7ebbc9` (mới có nhóm liên quan 18 file **271 passed** +
-  scoped 22 file **582 passed** trên `84022bf`).
 - **UI thật** với cờ `timedOut`/`partial` hiển thị trên phiên con bị cắt (chưa chụp lại sau H11).
 - H9 live pilot / H10.1 calibration: vẫn hoãn #6531; `financial_consent_ref: null`.

@@ -314,6 +314,8 @@ PLAN_VERIFY_SUMMARY_CHARS = 800
 PLAN_VERIFY_REVISE_MAX = 2
 # Nới hạn chót ĐÚNG MỘT LẦN cho mỗi lượt, theo sự kiện `plan_written` (đúng chỗ lượt đang kết
 # thúc vì hết giờ), không theo cảm tính của model. Trần hiệu dụng vẫn là `DEADLINE_MAX_SECONDS`.
+# Lưu ý từ H11 (#6546): mặc định 7200 s ĐÃ CHẠM trần, nên lượt chạy mặc định không còn chỗ nới —
+# phần nới chỉ có tác dụng khi lượt được đặt hạn chót thấp hơn trần (`config.deadlineSeconds`).
 PLAN_TURN_EXTENSION_SECONDS = 420
 PLAN_TURN_EXTENSIONS_MAX = 1
 TURN_EXTENDED_CODE = 'TURN_EXTENDED'

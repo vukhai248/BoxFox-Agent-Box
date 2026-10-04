@@ -101,11 +101,11 @@ class FakeBudget:
         self._when = when
 
 
-def runtime_at(tmp_path, responses):
+def runtime_at(tmp_path, responses, values=None):
     store = SessionStore(tmp_path / 'sessions.db')
     model = FixtureModel(responses)
     runtime = HarnessRuntime(store, PlanFixtureExecutor(), model)
-    sid = runtime.create({'skills': []})['id']
+    sid = runtime.create({'skills': [], **(values or {})})['id']
     return store, runtime, sid, model
 
 
@@ -232,7 +232,36 @@ def test_the_nudge_carries_the_prefix_the_recap_knows_to_skip(tmp_path):
 
 
 def test_the_turn_deadline_extension_is_recorded_for_the_write(tmp_path):
-    """Lượt plan thường nới hạn chót ĐÚNG một lần, và lần ấy là của `write_plan`."""
+    """Lượt plan có hạn chót DƯỚI trần nới hạn chót ĐÚNG một lần, và lần ấy là của `write_plan`.
+
+    Từ H11 (`#6546`) hạn chót mặc định 7200 s đã CHẠM trần `DEADLINE_MAX_SECONDS`, nên lượt chạy
+    mặc định không còn chỗ để nới; hợp đồng thứ tự vì thế chốt trên lượt có hạn chót thấp hơn trần
+    — đúng chế độ đã sinh ra phần nới này (người dùng đặt `deadlineSeconds` 600).
+    """
+
+    async def run():
+        store, runtime, sid, _ = runtime_at(tmp_path, [
+            answer('Viết plan', calls=[write_call()]),
+            answer('Xong.'),
+            answer('Xong thật rồi.')], values={'deadlineSeconds': 600})
+        await asyncio.wait_for(runtime.start(sid, 'Lên plan'), 20)
+
+        extended = notices(store, sid, limits.TURN_EXTENDED_CODE)
+        assert [row['reason'] for row in extended] == ['plan_written'], \
+            'một lượt chỉ nới MỘT lần, và lần của bước nhắc không còn chỗ khi bước ghi đã dùng nó'
+        assert extended[0]['seconds'] == limits.PLAN_TURN_EXTENSION_SECONDS, \
+            'phần nới phải đúng bằng số giây của hợp đồng'
+        store.close()
+
+    asyncio.run(run())
+
+
+def test_a_plan_turn_at_the_default_deadline_has_no_headroom_to_extend(tmp_path):
+    """Hạn chót mặc định nay CHẠM trần: lượt không còn chỗ nới, và harness không bịa notice.
+
+    Hệ quả trực tiếp của #6546 (mặc định 7200 s = trần 7200 s). Phần nới vẫn nguyên cho lượt có
+    hạn chót thấp hơn trần (bài ngay trên). Điều KHÔNG được đổi theo: cổng F3 vẫn phải chạy.
+    """
 
     async def run():
         store, runtime, sid, _ = runtime_at(tmp_path, [
@@ -241,9 +270,10 @@ def test_the_turn_deadline_extension_is_recorded_for_the_write(tmp_path):
             answer('Xong thật rồi.')])
         await asyncio.wait_for(runtime.start(sid, 'Lên plan'), 20)
 
-        extended = notices(store, sid, limits.TURN_EXTENDED_CODE)
-        assert [row['reason'] for row in extended] == ['plan_written'], \
-            'một lượt chỉ nới MỘT lần, và lần của bước nhắc không còn chỗ khi bước ghi đã dùng nó'
+        assert notices(store, sid, limits.TURN_EXTENDED_CODE) == [], \
+            'hạn chót đã ở trần thì không còn giây nào để nới — im lặng, không notice giả'
+        assert len(notices(store, sid, limits.PLAN_VERDICT_NUDGE_CODE)) == 1, \
+            'cổng F3 không phụ thuộc phần nới'
         store.close()
 
     asyncio.run(run())

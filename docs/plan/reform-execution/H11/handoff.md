@@ -1,7 +1,10 @@
 # H11 — Handoff
 
 - **Trạng thái:** `partial` (code + unit xanh; E2E thật đã PASS, review đã xong và đã sửa bảy
-  điểm; testing đang chạy khi viết).
+  điểm; testing đã chạy xong và ghi ở `evidence.md`).
+  Đo lại toàn bộ `tests/unit` (2026-10-04) bắt được MỘT hồi quy của H11 — phần nới hạn chót
+  lượt plan hết chỗ vì mặc định 7200 s đã chạm trần — đã sửa ở nhánh H12 (`limits.py` ghi
+  chú + hai bài chốt lại hợp đồng); xem `evidence.md` §"Đo lại toàn bộ unit suite".
   Bốn việc #6545 đã có mã và test: trần mới #6546, cờ kết cục, chặn đọc lại + nhắc/trần chờ hạn,
   `child_resume` giữ nguyên ngữ cảnh con bị cắt, cha khai trần trong `delegate_task`.
 - **Head bàn giao:** `f7ebbc9` trên `vorflux/boxfox-harness-reform` (PR #3, base

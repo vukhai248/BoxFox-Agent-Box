@@ -53,7 +53,7 @@ Sáu ý chủ nhà chốt (#6490–#6499) và phần đã làm tương ứng:
 | H9 | Suite v2 + calibration | `ed5d771`, `c3bee48` | 62 ca / 40 oracle / 38 test; fault corpus 33/33; shadow 34/34 cell | partial — live pilot chờ consent |
 | H10 | Khép harness + handoff | `1253707`, `b219f57` | drill rollback 11/11; nghiệm thu vòng chạy 29/29 trên `c836822`; review cuối 2/10 | partial — pilot sống hoãn |
 | H10.1/H10.2 | Calibration sống + phần giới hạn ngân sách | — | `financial_consent_ref = null`, `measured = false` | tương lai (#6531) |
-| H11 | Quản lý con (#6545–#6548) | `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9` | 37 ca H11; nhóm 18 file 271 passed; live 5/5 kịch bản 37/37 phép kiểm | verified |
+| H11 | Quản lý con (#6545–#6548) | `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9` | 37 ca H11; nhóm 18 file 271 passed; live 5/5 kịch bản 37/37 phép kiểm; chạy toàn bộ unit suite bắt một hồi quy của H11 (phần nới hạn chót lượt plan hết chỗ vì mặc định 7200 s đã chạm trần) — đã sửa kèm hai bài chốt lại hợp đồng | verified |
 | H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | commit H12 | 19 ca mới (`test_reform_master_switch.py`) | verified |
 | Vá #6535 | Phòng kế hoạch: kẹp `.plans`, thư mục con, schema `directory` | `79f024b`, `17b146b`, `ad3b5f8` | unit + live `folders2/3/4` | verified |
 
