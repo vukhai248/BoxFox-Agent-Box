@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import design_runtime, plan_registry, research_runtime
+from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
@@ -1628,6 +1628,24 @@ def create_app(runtime):
             raise ValueError('AUTOPILOT_INVALID: on phải boolean')
         return web.json_response(work_graph.set_autopilot(runtime, sid, body['on']))
 
+    async def execution_policy(request):
+        """`GET|PUT /api/agent/sessions/{sid}/execution-policy` — mode của run (H8).
+
+        Người vận hành là bên DUY NHẤT ghi được policy; model không có tool nào chạm tới nó.
+        Bật `adaptive` khi thiếu công tắc ⇒ 409 kèm mã, không đặt nửa vời.
+        """
+        sid = request.match_info['sid']
+        known_session(sid)
+        if request.method == 'GET':
+            return web.json_response(execution_kernel.status(runtime, sid))
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ApiError('EXECUTION_POLICY_BODY_INVALID', 'body needs `mode` (adaptive/legacy)')
+        try:
+            return web.json_response(execution_kernel.set_policy(runtime, sid, body.get('mode')))
+        except ValueError as exc:
+            raise _action_error(exc, {'POLICY_SWITCH_OFF': 409, 'POLICY_MODE_INVALID': 400}) from None
+
     async def plan_runs(request):
         workflow = plan_workflow.service(runtime)
         rid = request.match_info.get('runId')
@@ -1743,6 +1761,8 @@ def create_app(runtime):
     app.router.add_get('/api/agent/research/jobs/{research_id}', research_job_detail)
     app.router.add_patch('/api/agent/research/jobs/{research_id}', research_job_update)
     app.router.add_put('/api/agent/sessions/{sid}/research-mode', research_mode_set)
+    app.router.add_get('/api/agent/sessions/{sid}/execution-policy', execution_policy)
+    app.router.add_put('/api/agent/sessions/{sid}/execution-policy', execution_policy)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/answer', research_prompt_answer)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/dismiss', research_prompt_dismiss)
     # P1 (design-interfaces §5) — bảy tuyến của chế độ Design.
