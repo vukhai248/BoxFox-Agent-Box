@@ -37,7 +37,7 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | H6 | Phân bổ & hạch toán (`usage_ledger.py`) | partial | 55 ca + P4 7/7; calibration chờ consent |
 | H7 | Research ownership (`research_owner.py`) | partial | 52 ca + P5 8/8; **chưa nối runtime** |
 | H8 | Main thích ứng (`adaptive_main.py`) | partial | 87 ca + P6 14/14; **chưa nối runtime** |
-| H9 | Suite v2 + calibration | partial | 62 ca / 40 safety oracle / 23 test; `measured=false`; live pilot chờ consent |
+| H9 | Suite v2 + calibration | partial | 62 ca / 40 safety oracle / 38 test; fault corpus 33/33; shadow W10.F 34/34 cell, 0 verdict; `measured=false`; live pilot chờ consent |
 | H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; còn: review toàn snapshot cuối |
 | H10.1 | Calibration sống | blocked | cần consent tài chính riêng — chưa tiêu |
 
@@ -76,7 +76,7 @@ Nguồn: `/code/.plans/reform-backlog-disposition.md` (§III.1–III.2). Từ v�
 
 - **Live calibration (H10.1) chưa chạy** — cần consent tài chính riêng; `financial_consent_ref` để `null`, không ghi là đã có quyền.
 - **H4–H8 + recovery_policy chưa nối runtime** (không có src importer): nghiệm thu mức thư viện + probe đạt; điều kiện mức vòng chạy **chưa kiểm**.
-- **H9 chưa đo:** fixture lỗi offline, parity/shadow, live pilot đều chưa làm.
+- **H9 chưa đo:** live pilot (cần consent riêng); fixture lỗi offline + shadow W10.F đã làm offline (33/33, 34/34 cell, 0 verdict).
 - **Rollback/migration drill của H10 đã chạy offline (11/11, `962cd84`)** — chưa drill trên box thật với phiên đang chạy.
 - **F5/H3.11:** `attemptSeq` theo phiên; đổi khoá cần migration chỉ mục — chờ chủ nhà quyết.
 - **Ba test đỏ có sẵn trên `346da06`** (`test_terminal_exec_echo`, `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`, `test_revoked_grant_blocks_next_tool_call`) — không phải regression.

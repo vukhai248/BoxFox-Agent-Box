@@ -26,10 +26,14 @@ Bất biến:
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import pathlib
+import re
+import shutil
 import sys
+import tempfile
 from typing import Any
 
 SUITE_SCHEMA = 'boxfox-eval-suite/2'
@@ -680,7 +684,6 @@ def write_suite(doc: dict[str, Any], path: str | pathlib.Path = MANIFEST_PATH,
 LEGACY_RESULT_KEYS: tuple[str, ...] = ('caseId', 'repeat', 'status', 'validity', 'error',
                                        'measurementInvalid', 'statePassed', 'passed', 'scores')
 
-
 def read_legacy_receipt(row: dict[str, Any], *, source: str) -> dict[str, Any]:
     """Chuyển một hàng kết quả cũ thành evidence v2 — KHÔNG trả verdict.
 
@@ -702,8 +705,303 @@ def read_legacy_receipt(row: dict[str, Any], *, source: str) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# H9 — fixture lỗi offline (fault corpus): mỗi lỗi PHẢI bị bắt đúng mã
+# ---------------------------------------------------------------------------
+
+FAULT_SCHEMA = 'boxfox-eval-faults/1'
+FAULT_CORPUS_PATH = 'scripts/eval/fixtures/suite-v2-faults.json'
+SHADOW_SCHEMA = 'boxfox-eval-shadow/1'
+
+_FAULT_OPS: tuple[str, ...] = ('set', 'delete', 'append', 'replace_doc', 'safety_remap',
+                               'trajectory_as_invariant', 'unknown_invariant',
+                               'unmapped_invariant', 'hash_mismatch', 'pin_mismatch')
+
+
+def _resolve_path(doc: Any, path: Any) -> tuple[Any, Any]:
+    _require(isinstance(path, list) and bool(path), 'SUITE_FAULT_MUTATION_INVALID', 'path rỗng')
+    node = doc
+    for key in path[:-1]:
+        try:
+            node = node[key]
+        except (KeyError, IndexError, TypeError):
+            _fail('SUITE_FAULT_MUTATION_INVALID', f'không tới được {path!r}')
+    return node, path[-1]
+
+
+def _apply_mutation(doc: Any, mutation: dict[str, Any]) -> Any:
+    """Áp một mutation khai trong corpus lên bản sao manifest. Trả về doc đã sửa."""
+    _require(isinstance(mutation, dict), 'SUITE_FAULT_MUTATION_INVALID', 'mutation không phải object')
+    op = mutation.get('op')
+    _require(op in _FAULT_OPS, 'SUITE_FAULT_MUTATION_INVALID', str(op))
+    if op == 'replace_doc':
+        return mutation.get('value')
+    if op in ('set', 'append', 'delete'):
+        node, key = _resolve_path(doc, mutation.get('path'))
+        try:
+            if op == 'set':
+                node[key] = mutation.get('value')
+            elif op == 'append':
+                node[key].append(mutation.get('value'))
+            else:
+                del node[key]
+        except (KeyError, IndexError, TypeError, AttributeError):
+            _fail('SUITE_FAULT_MUTATION_INVALID', f'{op} {mutation.get("path")!r}')
+        return doc
+    if op == 'safety_remap':
+        for case in doc['cases']:
+            for row in case['oracleMapping']:
+                if row['oracle'] in SAFETY_ORACLES:
+                    row['disposition'] = mutation.get('value', 'map_outcome')
+                    return doc
+        _fail('SUITE_FAULT_MUTATION_INVALID', 'không có hàng safety oracle nào')
+    if op == 'trajectory_as_invariant':
+        for case in doc['cases']:
+            trajectory = [row['oracle'] for row in case['oracleMapping']
+                          if row['disposition'] == 'legacy_trajectory_only']
+            if trajectory:
+                case['invariants'] = list(case['invariants']) + [trajectory[0]]
+                return doc
+        _fail('SUITE_FAULT_MUTATION_INVALID', 'không có hàng trajectory-only nào')
+    if op == 'unknown_invariant':
+        doc['cases'][0]['invariants'] = list(doc['cases'][0]['invariants']) + [mutation.get('value')]
+        return doc
+    if op == 'unmapped_invariant':
+        for case in doc['cases']:
+            mapped = {row['oracle'] for row in case['oracleMapping']}
+            missing = sorted(SAFETY_ORACLES - mapped)
+            if missing:
+                case['invariants'] = list(case['invariants']) + [missing[0]]
+                return doc
+        _fail('SUITE_FAULT_MUTATION_INVALID', 'mọi ca đã map đủ safety oracle')
+    if op == 'hash_mismatch':
+        doc['cases'][0]['fixtureHash'] = 'sha256:' + str(mutation.get('value'))
+        return doc
+    if op == 'pin_mismatch':
+        pins = doc['cases'][0]['sourcePins']
+        _require(bool(pins), 'SUITE_FAULT_MUTATION_INVALID', 'ca 0 không có pin nguồn')
+        pins[sorted(pins)[0]] = 'sha256:' + str(mutation.get('value'))
+        return doc
+    _fail('SUITE_FAULT_MUTATION_INVALID', str(op))  # không tới được
+
+
+_BUILD_FAULT_OPS: tuple[str, ...] = ('delete_file', 'write_text', 'json_set', 'drop_case',
+                                     'inject_rule_kind')
+
+
+def _stage_eval_tree(repo_root: pathlib.Path) -> pathlib.Path:
+    """Chép ``scripts/eval`` sang cây tạm để tiêm lỗi nguồn mà không đụng cây thật."""
+    staging = pathlib.Path(tempfile.mkdtemp(prefix='suite-v2-fault-'))
+    shutil.copytree(repo_root / 'scripts' / 'eval', staging / 'scripts' / 'eval',
+                    ignore=shutil.ignore_patterns('__pycache__'))
+    return staging
+
+
+def _apply_build_fault(staged_root: pathlib.Path, mutation: dict[str, Any]) -> None:
+    """Sửa tệp trong cây tạm theo mutation của ``buildFaults``."""
+    _require(isinstance(mutation, dict), 'SUITE_FAULT_MUTATION_INVALID', 'mutation không phải object')
+    op = mutation.get('op')
+    _require(op in _BUILD_FAULT_OPS, 'SUITE_FAULT_MUTATION_INVALID', str(op))
+    rel = str(mutation.get('path') or '')
+    _require(bool(rel), 'SUITE_FAULT_MUTATION_INVALID', 'thiếu path')
+    target = staged_root / rel
+    if op == 'delete_file':
+        _require(target.is_file(), 'SUITE_FAULT_MUTATION_INVALID', f'không có {rel}')
+        target.unlink()
+        return
+    if op == 'write_text':
+        target.write_text(str(mutation.get('value')), encoding='utf-8')
+        return
+    doc = _load_json(target)
+    if op == 'json_set':
+        node, key = _resolve_path(doc, mutation.get('jsonPath'))
+        try:
+            node[key] = mutation.get('value')
+        except (KeyError, IndexError, TypeError):
+            _fail('SUITE_FAULT_MUTATION_INVALID', f'{rel} {mutation.get("jsonPath")!r}')
+    elif op == 'drop_case':
+        wanted = mutation.get('value')
+        cases = doc.get('cases') or []
+        kept = [case for case in cases if case.get('id') != wanted]
+        _require(len(kept) < len(cases), 'SUITE_FAULT_MUTATION_INVALID', f'không có ca {wanted!r}')
+        doc['cases'] = kept
+    elif op == 'inject_rule_kind':
+        oracle = doc.get('oracle') or {}
+        _require(bool(oracle), 'SUITE_FAULT_MUTATION_INVALID', f'{rel} không có bảng oracle')
+        first = sorted(oracle)[0]
+        oracle[first] = list(oracle[first]) + [{'kind': mutation.get('value')}]
+    target.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def _run_with_build_fault(staged_root: pathlib.Path, mutation: dict[str, Any]) -> None:
+    _apply_build_fault(staged_root, mutation)
+    build_suite(staged_root)
+
+
+def _expect_code(runner, *, fault_id: str, expected: Any) -> str:
+    observed = None
+    try:
+        runner()
+    except SuiteError as exc:
+        observed = exc.code
+    if observed is None:
+        _fail('SUITE_FAULT_NOT_CAUGHT', fault_id)
+    if observed != expected:
+        _fail('SUITE_FAULT_CODE_MISMATCH', f'{fault_id}: {observed} != {expected}')
+    return observed
+
+
+def run_fault_corpus(path: str | pathlib.Path = FAULT_CORPUS_PATH, *,
+                     repo_root: pathlib.Path = REPO_ROOT,
+                     check_hashes: bool = True) -> dict[str, Any]:
+    """Chạy corpus lỗi offline. Mỗi mục phải bị bắt **đúng mã** — không có cảnh báo rồi đi tiếp."""
+    corpus = _load_json(repo_root / path if not pathlib.Path(path).is_absolute()
+                        else pathlib.Path(path))
+    _require(isinstance(corpus, dict) and corpus.get('schema') == FAULT_SCHEMA,
+             'SUITE_FAULT_SCHEMA_UNSUPPORTED', str(corpus.get('schema')))
+    manifest_faults = corpus.get('manifestFaults') or []
+    receipt_faults = corpus.get('receiptFaults') or []
+    build_faults = corpus.get('buildFaults') or []
+    tree_faults = corpus.get('treeFaults') or []
+    _require(bool(manifest_faults) and bool(receipt_faults), 'SUITE_FAULT_CORPUS_EMPTY')
+    results: list[dict[str, Any]] = []
+    for entry in manifest_faults:
+        fault_id = str(entry.get('faultId') or '')
+        _require(bool(fault_id), 'SUITE_FAULT_CORPUS_INVALID', 'thiếu faultId')
+        doc = _apply_mutation(copy.deepcopy(build_suite(repo_root)), entry.get('mutation') or {})
+        hashes = bool(entry.get('checkHashes', check_hashes))
+        observed = _expect_code(lambda: validate_suite(doc, repo_root=repo_root, check_hashes=hashes),
+                                fault_id=fault_id, expected=entry.get('expectedCode'))
+        results.append({'faultId': fault_id, 'expectedCode': entry.get('expectedCode'),
+                        'observedCode': observed, 'caught': True})
+    for entry in receipt_faults:
+        fault_id = str(entry.get('faultId') or '')
+        _require(bool(fault_id), 'SUITE_FAULT_CORPUS_INVALID', 'thiếu faultId')
+        observed = _expect_code(
+            lambda: read_legacy_receipt(entry.get('row'), source=str(entry.get('source') or fault_id)),
+            fault_id=fault_id, expected=entry.get('expectedCode'))
+        results.append({'faultId': fault_id, 'expectedCode': entry.get('expectedCode'),
+                        'observedCode': observed, 'caught': True})
+    for entry in build_faults:
+        fault_id = str(entry.get('faultId') or '')
+        _require(bool(fault_id), 'SUITE_FAULT_CORPUS_INVALID', 'thiếu faultId')
+        staged = _stage_eval_tree(repo_root)
+        try:
+            observed = _expect_code(lambda: _run_with_build_fault(staged, entry.get('mutation') or {}),
+                                    fault_id=fault_id, expected=entry.get('expectedCode'))
+        finally:
+            shutil.rmtree(staged, ignore_errors=True)
+        results.append({'faultId': fault_id, 'expectedCode': entry.get('expectedCode'),
+                        'observedCode': observed, 'caught': True})
+    for entry in tree_faults:
+        fault_id = str(entry.get('faultId') or '')
+        _require(bool(fault_id), 'SUITE_FAULT_CORPUS_INVALID', 'thiếu faultId')
+        staged = _stage_eval_tree(repo_root)
+        try:
+            _apply_build_fault(staged, entry.get('mutation') or {})
+            doc = load_suite(repo_root=repo_root)
+            observed = _expect_code(lambda: validate_suite(doc, repo_root=staged, check_hashes=True),
+                                    fault_id=fault_id, expected=entry.get('expectedCode'))
+        finally:
+            shutil.rmtree(staged, ignore_errors=True)
+        results.append({'faultId': fault_id, 'expectedCode': entry.get('expectedCode'),
+                        'observedCode': observed, 'caught': True})
+    return {'schema': FAULT_SCHEMA, 'path': str(path), 'faults': len(results), 'results': results}
+
+
+# ---------------------------------------------------------------------------
+# H9 — shadow legacy: chiếu hàng kết quả cũ sang bằng chứng v2, không chấm lại
+# ---------------------------------------------------------------------------
+
+#: Nhãn cell legacy của W10.F (``S01-r1``) → caseId v2 (``W10/S01``).
+LEGACY_LABEL_RE = re.compile(r'^([A-Za-z])(\d+)-r(\d+)$')
+
+
+def legacy_label_case_id(label: str) -> str | None:
+    """Ánh xạ nhãn cell cũ sang caseId v2; trả ``None`` khi nhãn không thuộc W10."""
+    match = LEGACY_LABEL_RE.match(str(label or ''))
+    if match is None:
+        return None
+    return f'W10/{match.group(1).upper()}{int(match.group(2)):02d}'
+
+
+def shadow_legacy_cells(cells: list[dict[str, Any]], *, source: str,
+                        manifest: dict[str, Any] | None = None,
+                        repo_root: pathlib.Path = REPO_ROOT) -> dict[str, Any]:
+    """Chiếu (shadow) các hàng kết quả legacy sang bằng chứng v2 — chỉ đọc.
+
+    Shadow trả **báo cáo đối chiếu**, không trả kết luận: mọi receipt giữ ``verdict=None``,
+    ``rescored=False``, và hàm tự chặn nếu có verdict rò ra (``SHADOW_VERDICT_LEAKED``).
+    Ca legacy không ánh xạ được ghi vào ``unmapped`` thay vì đoán bừa.
+    """
+    _require(bool(source), 'SHADOW_SOURCE_NOT_DECLARED')
+    _require(isinstance(cells, list) and bool(cells), 'SHADOW_CELLS_MISSING')
+    doc = manifest or load_suite(repo_root=repo_root)
+    by_id = {case['caseId']: case for case in doc['cases']}
+    receipts: list[dict[str, Any]] = []
+    unmapped: list[dict[str, str]] = []
+    case_coverage: dict[str, int] = {}
+    legacy_states: dict[str, int] = {}
+    for cell in cells:
+        _require(isinstance(cell, dict), 'SHADOW_CELL_NOT_AN_OBJECT')
+        label = str(cell.get('label') or '')
+        case_id = legacy_label_case_id(label)
+        if case_id is None or case_id not in by_id:
+            unmapped.append({'label': label, 'reason': 'không có ca v2 tương ứng'})
+            continue
+        case = by_id[case_id]
+        _require('measurement' in (case.get('allowedEvidenceKinds') or ()),
+                 'SHADOW_EVIDENCE_KIND_NOT_ALLOWED', case_id)
+        state = str(cell.get('validity') or cell.get('run') or 'unknown')
+        legacy_states[state] = legacy_states.get(state, 0) + 1
+        receipt = read_legacy_receipt({'caseId': case_id, 'repeat': label,
+                                       'validity': cell.get('validity'),
+                                       'status': cell.get('run')},
+                                      source=source)
+        receipt['legacyObservation'] = {'label': label, 'disposition': cell.get('disposition'),
+                                        'validity': cell.get('validity'), 'run': cell.get('run')}
+        receipts.append(receipt)
+        case_coverage[case_id] = case_coverage.get(case_id, 0) + 1
+    verdicts = sum(1 for receipt in receipts if receipt.get('verdict') is not None)
+    _require(verdicts == 0, 'SHADOW_VERDICT_LEAKED', str(verdicts))
+    return {
+        'schema': SHADOW_SCHEMA,
+        'source': source,
+        'measured': False,
+        'rescored': False,
+        'verdictsProduced': 0,
+        'note': ('shadow chỉ đối chiếu ánh xạ và bằng chứng; kết luận v2 phải đến từ một lượt '
+                 'suite v2 thật trong consent riêng — không chấm lại run cũ'),
+        'coverage': {'total': len(cells), 'mapped': len(receipts), 'unmapped': len(unmapped),
+                     'ratio': round(len(receipts) / len(cells), 4)},
+        'caseCoverage': dict(sorted(case_coverage.items())),
+        'legacyStates': dict(sorted(legacy_states.items())),
+        'unmapped': unmapped,
+        'receipts': receipts,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    if '--faults' in args:
+        report = run_fault_corpus()
+        for row in report['results']:
+            print(f"  {row['faultId']}: {row['observedCode']}")
+        print(f"fault corpus: {report['faults']} lỗi đều bị bắt đúng mã")
+        return 0
+    if '--shadow' in args:
+        index = args.index('--shadow')
+        legacy_path = args[index + 1] if index + 1 < len(args) else ''
+        _require(bool(legacy_path), 'SHADOW_PATH_MISSING')
+        legacy = _load_json(pathlib.Path(legacy_path))
+        report = shadow_legacy_cells(legacy.get('cells') or [], source=legacy_path)
+        if '--out' in args:
+            out = args[args.index('--out') + 1]
+            pathlib.Path(out).write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n',
+                                         encoding='utf-8')
+        print(f"shadow {report['coverage']['mapped']}/{report['coverage']['total']} cell ánh xạ, "
+              f"verdicts={report['verdictsProduced']}, unmapped={len(report['unmapped'])}")
+        return 0
     if '--build' in args:
         doc = build_suite()
         target = write_suite(doc)

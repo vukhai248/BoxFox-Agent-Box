@@ -62,8 +62,9 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H8.3 | Lỗi: `loop_guard` chỉ soi mục cuối cùng cùng chữ ký ⇒ vòng xen kẽ h1/h2/h1 không chặn | ✅ | quét TOÀN BỘ mục cùng chữ ký |
 | H8.4 | Lỗi: `progress_signal` báo không tiến bộ khi tiêu chí mở cuối cùng vừa đóng | ✅ | chỉ so khi có mặt |
 | H8.5 | Nit: `_budget` với effort lạ thiếu mã/trường trong `reason` | ✅ | `ADAPTIVE_EFFORT_INPUT` + field; mixed needs giữ tập hỗ trợ |
-| H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f`: `scripts/eval/suite_v2.py` + `suite-v2.json` (62 ca) + 23 test; mới có lớp mapping/validation, chưa chạy sống |
-| H9.1 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; parity/shadow + calibration sống còn chờ consent tài chính |
+| H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
+| H9.1 | Fixture lỗi offline + shadow legacy (không tốn tiền) | ✅ | `python3 scripts/eval/suite_v2.py --faults` 33/33; `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell ánh xạ, `verdictsProduced=0`; report `/code/.generated_artifacts/h3h8/h9/shadow_w10f.json` |
+| H9.2 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; calibration sống còn chờ consent tài chính |
 | H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⏳ | `docs/plan/reform-execution/` (README + H0–H10, mỗi checkpoint 5 file); drill rollback/kill switch offline 11/11 (`/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log`); còn review toàn snapshot cuối |
 | H10.1 | Calibration sống (model/route/ngân sách thật) | ⛔ | Cần consent tài chính riêng; chưa tiêu |
 

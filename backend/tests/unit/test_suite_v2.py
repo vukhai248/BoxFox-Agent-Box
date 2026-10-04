@@ -227,6 +227,154 @@ def test_legacy_receipt_requires_a_case_id():
     assert excinfo.value.code == 'SUITE_RECEIPT_MISSING_CASE_ID'
 
 
+# --------------------------------------------------------------------------- H9: fault corpus
+def test_fault_corpus_is_fully_caught_with_the_declared_codes():
+    report = suite_v2.run_fault_corpus()
+    assert report['faults'] >= 30
+    assert all(row['caught'] and row['observedCode'] == row['expectedCode']
+               for row in report['results'])
+    ids = [row['faultId'] for row in report['results']]
+    codes = [row['expectedCode'] for row in report['results']]
+    assert len(set(ids)) == len(ids), 'faultId phải duy nhất'
+    assert len(set(codes)) == len(codes), 'mỗi mã lỗi chỉ cần một negative control'
+
+
+def test_fault_corpus_covers_every_validation_code():
+    import re as _re
+    source = (EVAL_DIR / 'suite_v2.py').read_text(encoding='utf-8')
+    declared = {code for code in _re.findall(r"'((?:SUITE|SHADOW)_[A-Z_]+)'", source)
+                if not code.startswith(('SUITE_FAULT_', 'SHADOW_'))}
+    corpus = json.loads((EVAL_DIR / 'fixtures' / 'suite-v2-faults.json').read_text(encoding='utf-8'))
+    covered = {entry['expectedCode'] for section in ('manifestFaults', 'receiptFaults',
+                                                     'buildFaults', 'treeFaults')
+               for entry in corpus.get(section) or []}
+    assert declared == covered
+
+
+def _write_corpus(tmp_path: Path, **sections) -> Path:
+    body = {'schema': 'boxfox-eval-faults/1',
+            'manifestFaults': [{'faultId': 'noop', 'mutation': {'op': 'set',
+                                                                'path': ['note'], 'value': 'x'},
+                                'expectedCode': 'SUITE_SCHEMA_UNSUPPORTED'}],
+            'receiptFaults': [{'faultId': 'ok-row',
+                               'row': {'caseId': 'S01'}, 'expectedCode': 'SUITE_RECEIPT_NOT_AN_OBJECT'}]}
+    body.update(sections)
+    path = tmp_path / 'corpus.json'
+    path.write_text(json.dumps(body, ensure_ascii=False), encoding='utf-8')
+    return path
+
+
+def test_fault_runner_refuses_a_fault_that_slips_through(tmp_path):
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.run_fault_corpus(_write_corpus(tmp_path))
+    assert excinfo.value.code == 'SUITE_FAULT_NOT_CAUGHT'
+
+
+def test_fault_runner_reports_a_wrong_code(tmp_path):
+    path = _write_corpus(tmp_path, manifestFaults=[{'faultId': 'wrong-expectation',
+                                                    'mutation': {'op': 'set', 'path': ['measured'],
+                                                                 'value': True},
+                                                    'expectedCode': 'SUITE_SCHEMA_UNSUPPORTED'}])
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.run_fault_corpus(path)
+    assert excinfo.value.code == 'SUITE_FAULT_CODE_MISMATCH'
+
+
+def test_fault_runner_rejects_an_unknown_mutation_op(tmp_path):
+    path = _write_corpus(tmp_path, manifestFaults=[{'faultId': 'op-la',
+                                                    'mutation': {'op': 'lam-cho-vui'},
+                                                    'expectedCode': 'SUITE_SCHEMA_UNSUPPORTED'}])
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.run_fault_corpus(path)
+    assert excinfo.value.code == 'SUITE_FAULT_MUTATION_INVALID'
+
+
+def test_fault_runner_rejects_a_corpus_with_the_wrong_schema(tmp_path):
+    path = tmp_path / 'corpus.json'
+    path.write_text(json.dumps({'schema': 'boxfox-eval-faults/0'}), encoding='utf-8')
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.run_fault_corpus(path)
+    assert excinfo.value.code == 'SUITE_FAULT_SCHEMA_UNSUPPORTED'
+
+
+def test_cli_faults_passes(capsys):
+    assert suite_v2.main(['--faults']) == 0
+    assert 'đều bị bắt đúng mã' in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- H9: shadow legacy
+def _legacy_cells() -> list[dict]:
+    return [{'label': 'S01-r1', 'validity': 'quality-valid', 'run': 'verified',
+             'disposition': 'completed'},
+            {'label': 'S02-r2', 'validity': 'measurement-invalid', 'disposition': 'completed'},
+            {'label': 'Z99-r1', 'validity': 'quality-valid', 'disposition': 'completed'}]
+
+
+def test_shadow_maps_legacy_labels_to_cases():
+    report = suite_v2.shadow_legacy_cells(_legacy_cells(), source='synthetic')
+    assert report['schema'] == 'boxfox-eval-shadow/1'
+    assert report['coverage'] == {'total': 3, 'mapped': 2, 'unmapped': 1, 'ratio': 0.6667}
+    assert report['caseCoverage'] == {'W10/S01': 1, 'W10/S02': 1}
+    assert report['legacyStates'] == {'measurement-invalid': 1, 'quality-valid': 1}
+    assert report['unmapped'] == [{'label': 'Z99-r1', 'reason': 'không có ca v2 tương ứng'}]
+
+
+def test_shadow_never_produces_a_verdict():
+    report = suite_v2.shadow_legacy_cells(_legacy_cells(), source='synthetic')
+    assert report['verdictsProduced'] == 0
+    assert report['measured'] is False and report['rescored'] is False
+    for receipt in report['receipts']:
+        assert receipt['verdict'] is None
+        assert receipt['rescored'] is False
+        assert receipt['legacyObservation']['label'].startswith(('S01', 'S02'))
+
+
+def test_shadow_requires_a_source():
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.shadow_legacy_cells(_legacy_cells(), source='')
+    assert excinfo.value.code == 'SHADOW_SOURCE_NOT_DECLARED'
+
+
+def test_shadow_requires_cells():
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.shadow_legacy_cells([], source='synthetic')
+    assert excinfo.value.code == 'SHADOW_CELLS_MISSING'
+
+
+def test_shadow_rejects_a_case_that_disallows_measurement_evidence():
+    doc = _manifest()
+    for case in doc['cases']:
+        if case['caseId'] == 'W10/S01':
+            case['allowedEvidenceKinds'] = ['run_state']
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.shadow_legacy_cells(_legacy_cells(), source='synthetic', manifest=doc)
+    assert excinfo.value.code == 'SHADOW_EVIDENCE_KIND_NOT_ALLOWED'
+
+
+def test_shadow_blocks_a_leaked_verdict(monkeypatch):
+    def _leaky(row, *, source):
+        return {'caseId': row.get('caseId'), 'source': source, 'evidenceKind': 'measurement',
+                'payload': {}, 'verdict': 'pass', 'rescored': False, 'note': 'giả lập rò verdict'}
+
+    monkeypatch.setattr(suite_v2, 'read_legacy_receipt', _leaky)
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.shadow_legacy_cells(_legacy_cells(), source='synthetic')
+    assert excinfo.value.code == 'SHADOW_VERDICT_LEAKED'
+
+
+def test_shadow_label_mapping_is_conservative():
+    assert suite_v2.legacy_label_case_id('S01-r2') == 'W10/S01'
+    assert suite_v2.legacy_label_case_id('V13-r1') == 'W10/V13'
+    assert suite_v2.legacy_label_case_id('') is None
+    assert suite_v2.legacy_label_case_id('S01') is None
+
+
+def test_shadow_cli_requires_a_path():
+    with pytest.raises(suite_v2.SuiteError) as excinfo:
+        suite_v2.main(['--shadow'])
+    assert excinfo.value.code == 'SHADOW_PATH_MISSING'
+
+
 # --------------------------------------------------------------------------- CLI
 def test_cli_check_passes(capsys):
     assert suite_v2.main([]) == 0
