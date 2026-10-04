@@ -117,6 +117,10 @@ vẫn đọc được, không mutation nào replay.
 | `BOXFOX_RECOVERY_POLICY` | H8 | phân loại hồi phục giữ đường cũ | phân loại theo lớp lỗi + quyết định retry/giữ | `test_recovery_policy*`, `test_decision_flow` |
 | `BOXFOX_PEER_MESH` | có từ trước | **không** thuộc khóa tổng: mặc định BẬT; đặt `off` thì bỏ `peer_read`/`await_children`/`child_resume` và uỷ thác về đường cũ | mesh uỷ thác đầy đủ (H11 nằm trong này) | `test_peer_cost.py`, `test_child_management_h11.py` |
 
+**Giá trị nhận của công tắc:** `on` / `1` / `true` / `yes` (không phân biệt hoa thường) là BẬT; mọi
+giá trị khác — kể cả chuỗi chỉ có khoảng trắng — là TẮT. Trước H12, năm module chỉ nhận đúng `on`,
+nên nay chúng nhận rộng hơn cho khớp khóa tổng; muốn giữ y hành vi cũ thì chỉ đặt `on`.
+
 Kiểm tra đang bật gì, vì đâu: `GET /api/agent/runtime-info` → khối `switches` (khóa tổng + từng
 thành viên kèm `source`: `explicit` / `master` / `default`). Không cần đọc env của tiến trình nữa.
 

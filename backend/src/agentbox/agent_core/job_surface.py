@@ -6,7 +6,6 @@ chỉ mở event waiter; không mở model turn. Stop/revoke thắng completion 
 """
 import asyncio
 import json
-import os
 import time
 import uuid
 

@@ -4,7 +4,7 @@
 > quy trình bật dần từng công tắc và rollback. Thư mục này giữ bản chi tiết theo từng checkpoint.
 
 - **Phạm vi:** tài liệu bàn giao từng checkpoint của kế hoạch reform harness (plan_id 1257, duyệt qua Plan panel 2026-10-03), phục vụ H10–H11.
-- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `f7ebbc9` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`, `b219f57`, `17b146b`, `ad3b5f8`, `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9`; tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H11) nằm trong chính mốc này.
+- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `0a48282` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`, `b219f57`, `17b146b`, `ad3b5f8`, `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9`, `f6dbe2b` (H12 khóa tổng), `e7223ae` (bàn giao tổng), `0a48282` (chốt lại hợp đồng nới hạn chót lượt plan); tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H11) nằm trong chính mốc này.
 - **Nguồn chính:**
   - `/code/.plans/v1-boxfox-harness-reform.md` — kế hoạch đã duyệt (§17: yêu cầu handoff);
   - `/code/.plans/reform-execution-runbook.md` — §II.2 khung thư mục, §II.3 nghiệm thu, §II.4 ma trận kiểm, §II.6 rollback/migration drill;

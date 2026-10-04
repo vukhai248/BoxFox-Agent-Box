@@ -1,6 +1,5 @@
 """Only tools with an executable v0 adapter are advertised."""
 
-import os
 
 from . import feature_switches
 from .limits import peer_mesh_enabled

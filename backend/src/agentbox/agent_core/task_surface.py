@@ -33,7 +33,6 @@ Theo dõi lượt thử lại (follow-up) của `delegate_task` — ngữ nghĩa
   hợp đồng, không phải alias, là danh tính của nhiệm vụ.
 """
 
-import os
 
 from . import execution_kernel, feature_switches, research_runtime, work_scope
 from .orchestration_contracts import ContractError, invalid

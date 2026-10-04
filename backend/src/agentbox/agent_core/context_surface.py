@@ -7,7 +7,6 @@ Executor không khai evidence thì capability/command/package là thiếu, khôn
 from contextlib import contextmanager
 import hashlib
 import json
-import os
 import time
 
 from . import execution_kernel, feature_switches, work_scope

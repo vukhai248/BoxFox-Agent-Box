@@ -5,7 +5,6 @@ needs_consent; resume không gọi model. Bản lịch sử không tự chuyển
 """
 import copy
 import json
-import os
 import time
 import uuid
 
