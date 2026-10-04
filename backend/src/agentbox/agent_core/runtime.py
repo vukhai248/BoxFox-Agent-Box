@@ -5170,6 +5170,16 @@ class HarnessRuntime(RuntimeCommands):
             result = await self.executor.execute(name, args, sid, **identity)
             self.verify_exec_status = verify_exec.observed(result, self.verify_exec_status)
             return result
+        if name in {'file_write', 'file_edit_block'}:
+            # Chủ nhà 2026-10-04: một kế hoạch ghi ra ngoài `.plans` là một kế hoạch VÔ HÌNH với tab
+            # Plan (bộ đọc chỉ quét `.plans`) và là chỗ sinh ra thư mục `plans` thứ hai trong
+            # workspace. Cổng này bắt mọi đường ghi của model; `write_plan` là đường duy nhất ghi
+            # được kế hoạch, vì nó đi qua đăng ký (identity + số bản + thư mục đã kẹp vào phòng).
+            if plan_registry.plan_outside_room(args.get('path')):
+                raise ValueError(
+                    f'PLAN_OUTSIDE_ROOM: kế hoạch chỉ ghi được trong {plan_registry.PLAN_ROOM}/ — '
+                    'gọi write_plan (harness tự chọn identity, số bản và thư mục) thay vì tự đặt '
+                    'tên tệp, để tab Plan luôn thấy bản vừa ghi.')
         if name in {'file_write', 'file_edit_block', 'terminal_exec'}:
             async with self.writer_lock_for(root):
                 return await self.executor.execute(name, args, sid, **identity)
@@ -6182,12 +6192,17 @@ class HarnessRuntime(RuntimeCommands):
         # D-3: vé mơ hồ của CHÍNH phiên này cho ĐÚNG slug đề nghị. Chỉ đọc `kind='fact'`: một hàng
         # `P:` là kế hoạch đã có thật, còn vé thì cố ý không mang `relativePath`. Vé chỉ sống trong
         # phiên bị từ chối — phiên mới thì luật cũ áp dụng, không có gì để đọc.
+        # Chỗ ghi được kẹp vào phòng kế hoạch NGAY Ở ĐÂY — một lần cho cả vé mơ hồ, quyết định
+        # identity và tên tệp ghi ra: `.plans/tao-ui`, `plans/tao-ui` và `tao-ui` là cùng một thư
+        # mục, còn `../x` không ra ngoài được (chủ nhà, 2026-10-04).
+        directory = plan_registry.plan_room_directory(args.get('directory'))
         ticket = plan_registry.ticket_from_rows(
             self.store.journal_tail(session['id'], kinds=['fact']),
-            slug=slug, directory=str(args.get('directory') or ''))
+            slug=slug, directory=directory)
         return plan_registry.plan_registration(
             slug, index=index, reviews_by_identity=reviews, submitted_by_identity=submitted,
             declared_identity=args.get('identity'), relates_to=args.get('relatesTo'),
+            directory=directory,
             declared_version=declared.version if ok_header else plan_registry.UNSET,
             declared_parent=declared.parent if ok_header else plan_registry.UNSET,
             ambiguity_ticket=ticket)
@@ -6575,6 +6590,10 @@ class HarnessRuntime(RuntimeCommands):
         """
         args = {'slug': registration.slug or slug, 'title': title}
         if registration.degraded:
+            if registration.directory:
+                # "Ghi theo chỗ được chỉ": nhánh suy giảm vẫn giữ thư mục đã kẹp vào phòng — thứ duy
+                # nhất nhánh này không biết là SỐ version, nên chỉ số đó do sandbox tự chọn như cũ.
+                args['directory'] = registration.directory
             args['markdown'] = markdown
             return args, None
         args.update({'directory': registration.directory, 'version': registration.version,
