@@ -1,0 +1,78 @@
+{
+  "checkpoint": "H11",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03) + Phụ lục B; quyết định chủ nhà #6545–#6548 (2026-10-04)",
+  "code_baseline": "346da06",
+  "code_tested": "0e9b6df (H11; vorflux/boxfox-harness-reform) — nhóm liên quan 18 file 269 passed; scoped 22 file 582 passed trên 84022bf; E2E thật trên 3113 PASS (task-fix 1/1, child 1/1)",
+  "intent_ref": "/code/.plans/v1-boxfox-harness-reform.md Phụ lục B — H11; /code/.plans/reform-execution-runbook.md §II.2–§II.3",
+  "scope": {
+    "read": [
+      "backend/src/agentbox/agent_core/{limits,child_lifecycle,runtime,peer_watchdog,task_surface,tool_contracts,roles,tool_groups}.py",
+      "backend/src/agentbox/memory/session_store.py",
+      "backend/tests/unit/test_child_management_h11.py",
+      "/code/.plans/v1-boxfox-harness-reform.md"
+    ],
+    "write": [
+      "backend/src/agentbox/agent_core/*",
+      "backend/src/agentbox/memory/session_store.py",
+      "backend/tests/unit/*",
+      "docs/plan/reform-execution/H11/ + README + reform-status.md"
+    ],
+    "forbidden": [
+      "chạy model trả phí",
+      "bật công tắc mặc định",
+      "đổi SOP mặc định",
+      "merge PR #3 khi chưa có chỉ thị"
+    ]
+  },
+  "dependency_receipts": [
+    "H3 (bề mặt task + kho bền vững) — resume_child dùng task_surface.resume_attempt",
+    "H4–H8 (công tắc nối runtime) — peer_mesh/roles gating",
+    "H10 (bàn giao + drill)",
+    "commit ad3b5f8 (base H11)",
+    "commit 84022bf (H11) + 9a04c16 + 2bd3886 + 0e9b6df"
+  ],
+  "policy_versions": {
+    "taskRecordSchemaVersion": 1,
+    "limits": "MAX_STEPS_DEFAULT=1000, MAX_STEPS_MAX=1500, DEADLINE_DEFAULT_SECONDS=7200, CHILD_MAX_STEPS=1000, CHILD_DEADLINE_SECONDS=7200, CHILD_WALL_MAX_SECONDS=8100",
+    "h11Codes": "PEER_READ_CAPPED, PEER_WAIT_EXPIRED, PEER_WAIT_CAPPED, CHILD_RESUME_NOTE_REQUIRED, CHILD_RESUME_NOT_CUT, CHILD_RESUME_CAPPED, CHILD_RESUME_UNKNOWN, CHILD_RESUME_FORBIDDEN"
+  },
+  "machine_binding_ref": "sandbox Linux, worktree /code/.worktrees/boxfox-harness-reform; backend 3113 (công tắc BẬT) restart bằng 9a04c16; nhóm test sau review chạy trên 0e9b6df",
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {
+      "id": "unit-h11",
+      "result": "pass",
+      "evidence": "backend/tests/unit/test_child_management_h11.py: 35 ca xanh (5 ca thêm sau review)"
+    },
+    {
+      "id": "scoped-suite",
+      "result": "pass",
+      "evidence": "22 file scoped: 582 passed in 167.53s (job 6d9409a3); nhóm liên quan 18 file: 269 passed in 120.49s sau 0e9b6df"
+    },
+    {
+      "id": "limits-visible",
+      "result": "pass",
+      "evidence": "GET /api/agent/runtime-info trên 3113 (84022bf): maxStepsDefault 1000, maxStepsMax 1500, deadline 7200, child 1000/7200, childWallMaxSeconds 8100, tools 61"
+    },
+    {
+      "id": "live-e2e",
+      "result": "pass",
+      "evidence": "driver_task.py nhãn task-fix 1/1 (6/6 check) + driver_child.py nhãn child 1/1 (8/8 check) trên 3113"
+    },
+    {
+      "id": "review",
+      "result": "pass",
+      "evidence": "simplify 9a04c16; review risk 5/10 (7 finding) → sửa ở 0e9b6df, soi lại bằng check_findings_v2.py; testing đang chạy"
+    }
+  ],
+  "known_unknowns": [
+    "Cờ timedOut từ hạn chót THẬT và gọi lại tới trần 3 lần/lượt chưa có kịch bản E2E hoàn chỉnh",
+    "Chưa đo lại toàn bộ unit suite trên 0e9b6df (mới có nhóm liên quan 18 file + scoped 22 file)",
+    "Ngưỡng PEER_READ_IDLE_MAX=3 và CHILD_RESUME_MAX_PER_TURN=3 chọn theo nguồn đo (14–20 lần đọc lại) — có thể chỉnh khi có số mới",
+    "H9 live pilot / H10.1 calibration vẫn hoãn #6531"
+  ],
+  "rollback_ref": "không có bảng/cột mới; tắt công tắc peer mesh là mất child_resume + peer_read/await_children như cũ; trần mới là hằng số (rollback = revert 0e9b6df + 2bd3886 + 9a04c16 + 84022bf)",
+  "next_action": "chờ testing báo cáo cuối (chạy trên 3113 mã 0e9b6df); cập nhật PR #3 (risk 5/10 + body H11); chờ chủ nhà quyết retarget PR #3 và cách đọc follow-up"
+}
