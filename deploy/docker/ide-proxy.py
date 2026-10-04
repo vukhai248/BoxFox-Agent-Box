@@ -122,10 +122,19 @@ HOP_BY_HOP_HEADERS = frozenset({
 
 # Origin được phép MỞ KÊNH WebSocket: ngoài trang cha (:3100) còn gồm origin
 # CỦA CHÍNH editor trong iframe (:8081) — workbench nối WS về cùng origin của nó.
-ALLOWED_WS_ORIGINS = (
-    "http://localhost:3100 http://127.0.0.1:3100 "
-    "http://localhost:8081 http://127.0.0.1:8081"
-).split()
+# `BOXFOX_UI_ORIGINS` (danh sách phân tách bằng dấu phẩy) thêm origin của bản chạy
+# thử — UI ở cổng khác hoặc sau proxy xem trước — mà KHÔNG đụng hai origin gốc.
+def extra_ui_origins() -> list:
+    raw = os.environ.get("BOXFOX_UI_ORIGINS", "")
+    return [part.strip().rstrip("/") for part in raw.split(",") if part.strip()]
+
+
+ALLOWED_WS_ORIGINS = [
+    "http://localhost:3100",
+    "http://127.0.0.1:3100",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+] + extra_ui_origins()
 
 NET_STATE_FILE = "/run/box-net-state"
 FIREWALL_BIN = "/usr/local/sbin/box-firewall"
@@ -1001,7 +1010,8 @@ def main():
         f"POST /__box/files/zip · /__box/file/upload|unzip · "
         f"/__box/files/mkdir|touch|rename|move|delete (cần secret)\n"
         f"[ide-proxy] Plan API: GET /__box/plans|content · GET /__box/plans/index (cần secret) · "
-        f"POST /__box/plans/review (cần secret)",
+        f"POST /__box/plans/review (cần secret)\n"
+        f"[ide-proxy] Origin cho phép: {' '.join(ALLOWED_WS_ORIGINS)}",
         flush=True,
     )
     server.serve_forever()
