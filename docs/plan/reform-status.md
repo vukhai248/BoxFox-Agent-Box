@@ -84,7 +84,8 @@ mọi cập nhật tiến độ ghi vào bảng này.
 
 ## Ghi chú trạng thái
 
-- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H9; head đã push `c3bee48` (H9 offline + dọn cây tạm). Toàn bộ `backend/tests/unit/` đo trên `962cd84`: **4060 passed, 12 skipped, 3 failed** — ba lỗi đỏ y hệt baseline `346da06`.
+- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H9; head đã push `c836822`. Toàn bộ `backend/tests/unit/` đo trên `c836822` (cây sạch): **4277 passed, 12 skipped, 3 failed in 1273.91s** — ba lỗi đỏ y hệt baseline `346da06` (`/code/.generated_artifacts/h4h8/unit/full_unit_c836822.log`).
+- Kiểm thử chấp nhận mức vòng chạy H4–H8 (official, head `c836822`): **29/29 PASS** — parity P1/P2, H4 A1–A9, H5 B1–B5, H6 C1–C5, H7 D1–D4, H8 E1–E4; offline, không gọi model trả phí (`/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json`).
 - Nhánh nền của PR #3 là `vorflux/w10-w12-completion` (nhánh khảo sát chưa nằm trên `main`); đổi base cần chủ nhà quyết định.
 - PR #2 (`vorflux/boxfox-harness-reform-docs`) giữ tài liệu kiến trúc; PR #3 giữ mã và bảng này.
 - Ba test đỏ của `backend/tests/unit/` là lỗi có sẵn trên baseline `346da06` (`test_terminal_exec_echo`,
