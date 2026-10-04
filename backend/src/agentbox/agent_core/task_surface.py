@@ -112,13 +112,17 @@ def bind_attempt(rt, session, opened, child_id):
         capability_epoch=execution_kernel.capability_epoch(rt, session))
 
 
-def resume_attempt(rt, session, child_id, attempt_no):
+def resume_attempt(rt, session, child_id, attempt_no, turn=0):
     """H11 — con được GỌI LẠI: mở attempt MỚI trên CÙNG session con (attempt_seq kế tiếp).
 
     `TaskService.record_attempt` đã dựng sẵn cho ca này ("A resumed legacy child may reuse its
     session ID"): hàng `children` vừa được `child_start` mở lại nên `started` là mốc MỚI, và điều
     kiện `previous['started_at'] != child['started']` chính là dấu hiệu con đã được mở lại. Con
     chưa từng gắn task (công tắc tắt, hoặc `delegate_task` không mang hợp đồng) ⇒ no-op.
+
+    Idempotency key mang CẢ lượt của cha (`resume-<con>-<lượt>-<n>`): vòng soát H11 đo được rằng
+    chỉ `resume-<con>-<n>` làm lời gọi lại ở lượt thứ hai trùng key với lượt đầu — kho task từ
+    chối bằng `TASK_INVOCATION_CONFLICT` và attempt mới im lặng biến mất.
     """
     if not enabled() and not _task_store_exists(rt):
         return None
@@ -129,10 +133,11 @@ def resume_attempt(rt, session, child_id, attempt_no):
         (child_id,)).fetchone()
     if row is None:
         return None
+    key = f'resume-{child_id}-{int(turn or 0)}-{attempt_no}'
     return service(rt).record_attempt(
         row['owner_id'], row['run_id'], row['task_key'],
-        invocation_id=f'resume-{child_id}-{attempt_no}', expected_revision=row['revision'],
-        session_id=child_id, admission_id=f'resume-{child_id}-{attempt_no}',
+        invocation_id=key, expected_revision=row['revision'],
+        session_id=child_id, admission_id=key,
         capability_epoch=execution_kernel.capability_epoch(rt, session))
 
 

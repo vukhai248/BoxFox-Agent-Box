@@ -228,9 +228,9 @@ def test_a_partial_turn_is_told_apart_from_a_finished_one(tmp_path):
 def test_the_partial_turn_is_closed_in_the_contract_order(tmp_path):
     """Thứ tự chốt lượt dở không đổi: notice bền mang mã lý do → `turn_end` (partial) → `finish`.
 
-    Notice là bản DUY NHẤT sống qua `store.save` của lượt sau (`partial_turn` đọc chính nó), nên nó
+    Notice là bản bền mang mã lý do cho các bộ đọc notice (giao diện, `diagnosed_turn`), nên nó
     đi trước; `finish` là hàng đóng lượt và luôn là hàng cuối — và từ vòng 25 nó mang `partial` +
-    `code`, đúng như `turn_end` đã nói.
+    `code`, đúng như `turn_end` đã nói (H11: `partial_turn` đọc chính hàng `finish` cuối ấy).
     """
 
     async def run():

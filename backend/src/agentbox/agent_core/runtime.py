@@ -57,6 +57,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      CHILD_RESUME_MAX_PER_TURN, CHILD_RESUME_NOTE_MAX_CHARS,
                      CHILD_RESUME_NOTE_REQUIRED_CODE, CHILD_RESUME_NOT_CUT_CODE,
                      CHILD_RESUME_CAPPED_CODE, CHILD_RESUME_UNKNOWN_CODE, CHILD_RESUME_FORBIDDEN_CODE,
+                     CHILD_RESUME_START_FAILED_REASON,
                      WEB_READER_MODES, WEB_READER_MODE_UNKNOWN_CODE,
                      WEB_READ_STORE_DEFAULT_MODE, WEB_READ_STORE_ENV, WEB_READ_STORE_MODES,
                      WEB_READ_STORE_MODE_UNKNOWN_CODE,
@@ -1699,6 +1700,11 @@ class HarnessRuntime(RuntimeCommands):
         self.peer_read_windows = {}
         self.peer_wait_timeouts = {}
         self.child_resumes = {}
+        # H11 — tổng số lần MỖI con đã được gọi lại trong vòng đời tiến trình: số thứ tự `attempt`
+        # của event/brief phải đơn điệu (vòng soát H11: đếm theo lượt làm nó quay về 1 mỗi lượt, và
+        # idempotency key `resume-<con>-<n>` trùng nhau giữa các lượt ⇒ kho task từ chối bằng
+        # `TASK_INVOCATION_CONFLICT`). Bản đồ này KHÔNG dọn theo lượt — nó là bộ đếm toàn cục.
+        self.child_resume_totals = {}
         # T5 — fan-out theo CHA: `parent_slots` giữ một semaphore cho MỖI phiên cha (bỏ entry khi
         # bộ đếm về 0 và không còn ai chờ, để dict không phình theo số phiên), còn
         # `global_child_slots` là trần toàn cục của cả tiến trình. `parent_running` đếm con đang
@@ -2184,7 +2190,8 @@ class HarnessRuntime(RuntimeCommands):
             await asyncio.gather(task, return_exceptions=True)
 
     # --- Con sống ngoài lượt cha (T6/T7) ---------------------------------------------------
-    def close_detached_child(self, parent_id, child_id, role, turn, step, goal, task, deliver_to=()):
+    def close_detached_child(self, parent_id, child_id, role, turn, step, goal, task, deliver_to=(),
+                             started=None):
         """Đóng sổ + phát event cho một con `wait=false` khi NÓ tự xong (T6).
 
         Chạy trong `done_callback` của con, tức là trên vòng lặp và không ai chờ kết quả: hàm
@@ -2193,13 +2200,17 @@ class HarnessRuntime(RuntimeCommands):
 
         Hàng sổ con là thứ chống ghi hai lần: chỉ hàng còn `started` mới được đóng ở đây. Hàng
         đã đóng (người dọn T7 vừa dọn, hoặc phiên đã bị xoá) thì callback chỉ nhả slot — một sự
-        việc, một bản ghi.
+        việc, một bản ghi. `started` (khi có) là mốc của ĐÚNG lần chạy đã đăng ký callback: con
+        bị gọi lại (`child_resume`) mở lại hàng với mốc MỚI, nên callback của lần chạy CŨ không
+        được đóng lần chạy mới (vòng soát H11).
         """
         try:
             if child_id in self.reaping:
                 return  # người dọn (T7) đang làm việc này — nó ghi lý do `PARENT_TURN_ENDED`
             row = self.store.child(child_id)
             if row is None or row['status'] != 'started':
+                return
+            if started is not None and row['started'] != started:
                 return
             status, reason, steps_used, output_tokens, answer_chars = 'failed', None, None, None, 0
             try:
@@ -2711,8 +2722,9 @@ class HarnessRuntime(RuntimeCommands):
     def _notice_seen(self, sid, *codes):
         """True khi phiên này đã có notice BỀN khớp MỘT trong các mã (`payload LIKE %<code>%`).
 
-        Một chỗ cho ba câu hỏi cùng dạng: `partial_turn` (mã lý do của lượt dở) và `diagnosed_turn`
-        (mã lý do cộng dấu `"diagnosis": true`) — SQL không chép lại ba lần.
+        Một chỗ cho hai câu hỏi cùng dạng: `diagnosed_turn` (mã lý do cộng dấu `"diagnosis": true`)
+        và các cổng đọc notice khác — SQL không chép lại nhiều lần. `partial_turn` KHÔNG dùng chỗ
+        này nữa (H11): nó đọc hàng `finish` CUỐI của phiên.
         """
         if not codes:
             return False
@@ -2733,12 +2745,23 @@ class HarnessRuntime(RuntimeCommands):
         #1: không thêm từ vựng trạng thái), nên `delegate` phải đọc notice để trả `partial` cho
         cha kèm ĐÚNG mã lý do — cha cần phân biệt "con bị nhà cung cấp cắt" với "con hết
         ngân sách" vì hai ca cần hai cách xử lý khác nhau.
+        H11 — nguồn đọc là hàng `finish` CUỐI của phiên, không phải notice của cả phiên: mọi đường
+        đóng lượt dở đều ghi `partial: True` kèm `code` ở đó, còn con được GỌI LẠI (`child_resume`)
+        dùng lại chính session cũ nên notice cắt của lần chạy TRƯỚC vẫn còn trong sổ — quét cả
+        phiên sẽ gán kết cục cũ cho một lượt vừa chạy sạch (đo được ở vòng soát H11).
         """
-        for code in (TRUNCATED_OUTPUT_NOTICE_CODE, STEP_BUDGET_NOTICE_CODE, DEADLINE_NOTICE_CODE,
-                     ANSWER_TOO_LONG_CODE, output_policy.STREAM_INTERRUPTED_CODE, output_policy.REASONING_ONLY_CODE):
-            if self._notice_seen(sid, code):
-                return code
-        return None
+        row = self.store.db.execute(
+            "SELECT payload FROM events WHERE session_id=? AND kind='finish' "
+            'ORDER BY seq DESC LIMIT 1', (sid,)).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row['payload'])
+        except (TypeError, ValueError):
+            return None
+        if not payload.get('partial'):
+            return None
+        return payload.get('code') or None
 
     async def stash_long_answer(self, sid, text, step_no=None):
         """D-4 (§3.6) — toàn văn câu trả lời quá trần vào gốc bằng chứng, trả đường dẫn (hoặc `None`).
@@ -4292,9 +4315,10 @@ class HarnessRuntime(RuntimeCommands):
 
             Thứ tự bốn việc là hợp đồng: transcript trước (lượt sau đọc được nó), rồi `turn_end`
             với `status='partial'`, rồi `finish`, rồi notice BỀN mang mã lý do — notice là bản
-            duy nhất sống qua `store.save`, và `partial_turn`/`delegate` đọc chính nó để biết
-            lượt này không trọn vẹn. Hàng `sessions` vẫn `completed` (bất biến #1: không thêm từ
-            vựng trạng thái). Trả `text` để chỗ gọi `return` thẳng.
+            sống qua `store.save` cho các bộ đọc notice, còn `partial_turn` đọc cờ `partial`/`code`
+            của hàng `finish` CUỐI (H11) và `delegate` đọc `partial_turn`. Hàng `sessions` vẫn
+            `completed` (bất biến #1: không thêm từ vựng trạng thái). Trả `text` để chỗ gọi `return`
+            thẳng.
             """
             # H4 — lượt đóng DỞ vì trần bước/hạn chót cũng là hết batch: timeout `wait_jobs`
             # của lượt này phải được park như đường hoàn tất thường, nếu không kết quả về sau
@@ -4599,6 +4623,9 @@ class HarnessRuntime(RuntimeCommands):
                     # Only an empty answer gets one bounded recovery request, without halving output.
                     completion = record_completion(response, request_tokens)
                     truncated_partial = False
+                    # H11 — mã lý do của CHÍNH bước này; `partial_turn` giờ đọc hàng `finish` cuối
+                    # của phiên (không phải notice), nên hàng `finish` đang phát không được hỏi nó.
+                    partial_code = None
                     message = choice['message']
                     text, calls = message.get('content') or '', message.get('tool_calls') or []
                     thought = message.get('reasoning_content') or message.get('thought') or choice.get('reasoning_content') or ''
@@ -4662,6 +4689,7 @@ class HarnessRuntime(RuntimeCommands):
                             'message': f'{code}: completion is incomplete ({completion}); partial output preserved, unfinished tool calls were not executed.'})
                         calls = []
                         truncated_partial = True
+                        partial_code = code
                     # B3 chặng 1 — text trả về NGAY TRONG cửa sổ giữ chỗ là câu chốt bốn phần:
                     # model đã được yêu cầu chẩn đoán và đã trả lời, nên lượt đóng là `partial`
                     # kèm notice, y như chặng 2. Ngắn hơn `DIAGNOSIS_MIN_CHARS` thì không tính là
@@ -4757,7 +4785,8 @@ class HarnessRuntime(RuntimeCommands):
                         # C2: `truncated_partial` chỉ bật khi lần thử lại thứ hai vẫn bị nhà cung
                         # cấp cắt ở trần output. Hàng `sessions` vẫn `completed` (giữ nguyên từ
                         # vựng trạng thái cũ), nhưng ranh giới lượt nói thẳng là `partial` và
-                        # `delegate` đọc notice bền của phiên con để trả `partial` cho cha.
+                        # `delegate` đọc cờ `partial`/`code` của hàng `finish` cuối (H11) để trả
+                        # `partial` cho cha.
                         if not calls:
                             # W6.2.BIND: câu tổng hợp cuối không được dùng một whole-pass cũ để
                             # chứng nhận claim mới. Chỉ ghi lại (notice) để eval/UI đọc; không chặn.
@@ -4771,13 +4800,13 @@ class HarnessRuntime(RuntimeCommands):
                         # đóng lượt — không chỉ đường `finish_partial` (chẩn đoán bốn phần). Đường
                         # này đóng một lượt bị cổng độ dài cắt (D2) hoặc bị nhà cung cấp cắt
                         # (`truncated_partial`): `turn_end` đã nói `partial`, nên `finish` không được
-                        # nói `completed` trắng. Mã lý do đọc từ notice bền của chính lượt
-                        # (`partial_turn`), đúng một nguồn với `delegate`.
+                        # nói `completed` trắng. Mã lý do là mã của CHÍNH bước này (`partial_code`) —
+                        # H11: không hỏi `partial_turn` giữa chừng, vì nó đọc hàng `finish` cuối.
                         finish_payload = {'status': 'completed', 'turn': turn_no, 'steps': steps_used,
                                           **self.peer_turn_cost(sid, turn_no)}
                         if partial:
                             finish_payload['partial'] = True
-                            finish_payload['code'] = (self.partial_turn(sid)
+                            finish_payload['code'] = (partial_code
                                                       or (ANSWER_TOO_LONG_CODE if answer_partial
                                                           else TRUNCATED_OUTPUT_NOTICE_CODE))
                         self.store.emit(sid, 'finish', finish_payload)
@@ -4959,6 +4988,8 @@ class HarnessRuntime(RuntimeCommands):
             # H11 — ba bộ đếm theo LƯỢT (cửa sổ đọc lại peer, số lần chờ hết hạn, số lần gọi lại
             # từng con): khoá là `(turn, ...)` nên chúng vô nghĩa sau khi lượt đóng, và để lại thì
             # tiến trình harness sống lâu sẽ phình theo số lượt. Xoá theo ĐÚNG lượt vừa đóng.
+            # `child_resume_totals` KHÔNG nằm trong đây: nó là bộ đếm CẢ ĐỜI của con (số thứ tự
+            # `attempt` phải đơn điệu — xem `resume_child`), không phải bộ đếm của lượt.
             for counter in (self.peer_read_windows, self.peer_wait_timeouts, self.child_resumes):
                 for key in [item for item in counter if item[0] == turn_no]:
                     del counter[key]
@@ -5343,9 +5374,14 @@ class HarnessRuntime(RuntimeCommands):
         "Không có dòng mới" là cửa sổ không chứa `seq` nào vượt quá frontier đã thấy của lượt này —
         nên đọc lại từ `afterSeq=0` (đúng kiểu vòng xoáy đã đo) và hỏi khi chưa có gì mới đều bị
         tính, còn phân trang thật (`afterSeq` = dòng cuối đã thấy) thì luôn có tiến triển.
+
+        Khoá cửa sổ mang cả `sid` (vòng soát H11): số lượt là CỦA TỪNG PHIÊN, nên cha và con cùng
+        lượt 1 đọc chung một đích sẽ dùng chung một cửa sổ nếu chỉ khoá `(turn, target)` — người
+        đọc sạch bị trần của người khác, và lượt của phiên này đóng lại xoá bộ đếm giữa lượt của
+        phiên kia.
         """
         turn = self.active_turn.get(sid) or 0
-        state = self.peer_read_windows.setdefault((turn, target), {'frontier': 0, 'idle': 0})
+        state = self.peer_read_windows.setdefault((turn, sid, target), {'frontier': 0, 'idle': 0})
         newest = max((int(row['seq'] or 0) for row in rows), default=0)
         if newest > state['frontier']:
             state['frontier'] = newest
@@ -7156,20 +7192,30 @@ class HarnessRuntime(RuntimeCommands):
             raise ValueError(f'{CHILD_RESUME_CAPPED_CODE}: this turn already called {child_id} back '
                              f'{used} times (limit {CHILD_RESUME_MAX_PER_TURN}) — decide with what '
                              'you have')
+        # Vòng soát H11 — số thứ tự là CỦA CẢ ĐỜI con (đếm theo lượt làm nó quay về 1 và làm id
+        # `resume-<con>-<n>` trùng giữa các lượt). Trần 3 lần vẫn là trần CỦA LƯỢT.
+        attempt_no = self.child_resume_totals.get(child_id, 0) + 1
+        raw_targets = (args or {}).get('deliverTo')
+        if isinstance(raw_targets, list) and len(raw_targets) > PEER_DELIVER_MAX:
+            # Cùng luật với `delegate`: quá trần thì NÓI RA, không cắt im lặng (vòng soát H11).
+            raise ValueError(f'PEER_DELIVER_MAX: {len(raw_targets)} recipients is more than the '
+                             f'limit of {PEER_DELIVER_MAX} — deliver to `main` and let it fan the '
+                             'result out, or split the work across children')
+        deliver_to = tuple(str(item)[:64] for item in raw_targets) if isinstance(raw_targets, list) \
+            else ()
         try:
             child_row = self.store.get(child_id)
         except KeyError:
             raise ValueError(f'{CHILD_RESUME_UNKNOWN_CODE}: {child_id} has no session to reopen') from None
         if str(child_row.get('status') or '') in ('running', 'awaiting_decision'):
             raise ValueError(still_running)
-        attempt_no = used + 1
         await self.acquire_child_slot(parent_id)
         try:
             self.track_child_slot(child_id, parent_id)
-            self.store.child_start(child_id, parent_id, turn, step, row.get('role'),
-                                   row.get('goal') or '')
+            reopened = self.store.child_start(child_id, parent_id, turn, step, row.get('role'),
+                                              row.get('goal') or '')
             try:
-                task_surface.resume_attempt(self, session, child_id, attempt_no)
+                task_surface.resume_attempt(self, session, child_id, attempt_no, turn)
             except Exception as exc:  # sổ task không được chặn việc gọi lại con
                 system_log.write('child.resume.attempt_failed', level='warn', session_id=child_id,
                                  message=str(exc)[:300])
@@ -7184,15 +7230,19 @@ class HarnessRuntime(RuntimeCommands):
                      'original brief asked for.')
             task = self.start(child_id, brief)
         except BaseException:
+            # Vòng soát H11 — hàng vừa MỞ LẠI mà `start` hỏng thì phải đóng ngay (cùng luật với
+            # `delegate`): để `started` mà không có task là con mồ côi với mọi bộ đọc sổ.
+            self.store.child_close_once(child_id, 'failed', reason=CHILD_RESUME_START_FAILED_REASON)
             self.release_child_slot(parent_id, child_id)
             raise
-        self.child_resumes[key] = attempt_no
+        self.child_resumes[key] = used + 1
+        self.child_resume_totals[child_id] = attempt_no
         wait = bool((args or {}).get('wait', True))
-        deliver_to = tuple(args.get('deliverTo') or ())
         if not wait:
             task.add_done_callback(lambda finished, cid=child_id, pid=parent_id, who=deliver_to: \
                                    self.close_detached_child(pid, cid, row.get('role'), turn, step,
-                                                             row.get('goal') or '', finished, who))
+                                                             row.get('goal') or '', finished, who,
+                                                             started=reopened['started']))
             return {'status': 'started', 'sessionId': child_id, 'resumed': True,
                     'attempt': attempt_no, 'previous': previous, 'turn': turn, 'step': step,
                     'note': 'the child continues in its own transcript; read it later with '
@@ -7413,7 +7463,10 @@ class HarnessRuntime(RuntimeCommands):
             # saved default deadline. Use the live ceiling that the brief promised.
             live_ceiling = max(int(config['deadlineSeconds']),
                                int(self.current_turn_seconds(parent_id)))
-            child_deadline = min(CHILD_DEADLINE_SECONDS, live_ceiling,
+            # Vòng soát H11 — `min` với giá trị ĐÃ KẸP (`child_deadline`), không phải trần máy:
+            # bản cũ ghi đè luôn trần cha khai, nên một con research theo mức chạy lâu hơn số cha
+            # xin. Chỉ được SIẾT, không bao giờ nới.
+            child_deadline = min(child_deadline, CHILD_DEADLINE_SECONDS, live_ceiling,
                                  tier_limits['childSeconds'])
         output_budget = output_policy.child_budget(role, work, task_kind)
         # H3 — lời gọi mang hợp đồng task (`args['task']`) tạo hàng task BỀN trước khi con tồn tại,
@@ -7562,7 +7615,7 @@ class HarnessRuntime(RuntimeCommands):
             # đợt 2 (chặn, không giao hàng). Không có đường nào giao cho peer vì `deliver_to` rỗng,
             # và `wait=false` không có nghĩa gì khi không có `await_children` để đọc kết quả sau.
             deliver_to, wait = [], True
-        self.store.child_start(child['id'], parent_id, turn, step, role, echo_goal)
+        spawn_started = self.store.child_start(child['id'], parent_id, turn, step, role, echo_goal)['started']
         if opened is not None:
             # Con đã được admit và hàng sổ con đang mở: đây mới là lúc ghi attempt. Hợp đồng lệch
             # vai đã bị chặn ở `open_delegate`, còn `_child` của kho task kiểm lại chủ/vai.
@@ -7643,7 +7696,8 @@ class HarnessRuntime(RuntimeCommands):
             # bằng đường giao hàng (T11) hoặc bằng `await_children` (T9), và callback dưới đây
             # đóng sổ con khi nó tự xong (kèm nhả slot).
             task.add_done_callback(lambda finished, cid=child['id'], pid=parent_id, who=deliver_to: \
-                                   self.close_detached_child(pid, cid, role, turn, step, echo_goal, finished, who))
+                                   self.close_detached_child(pid, cid, role, turn, step, echo_goal,
+                                                             finished, who, started=spawn_started))
             started = {'status': 'started', 'sessionId': child['id'], 'role': role,
                        'turn': turn, 'step': step, 'deliverTo': deliver_to}
             if admitted_job is not None:

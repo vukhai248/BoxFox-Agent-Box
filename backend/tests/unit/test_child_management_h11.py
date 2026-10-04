@@ -141,7 +141,7 @@ def test_peer_read_caps_a_window_that_has_no_new_rows(tmp_path):
         runtime._guard_peer_read(sid, peer, same_window)  # lần lặp thứ tư: từ chối
     # Dòng MỚI (frontier mới) mở lại cửa sổ: phân trang thật không bao giờ bị trần này cắt.
     runtime._guard_peer_read(sid, peer, [{'seq': 8}])
-    assert runtime.peer_read_windows[(1, peer)]['idle'] == 0
+    assert runtime.peer_read_windows[(1, sid, peer)]['idle'] == 0
     store.close()
 
 
@@ -392,10 +392,10 @@ def test_detached_child_close_carries_the_outcome_flags(tmp_path):
 def test_per_turn_child_counters_drop_with_the_turn_that_owns_them(tmp_path):
     """Lỗ hổng 4 — lượt đóng thì ba bộ đếm của ĐÚNG lượt ấy biến mất; lượt khác còn nguyên."""
     store, runtime, sid = build(tmp_path, [answer('cha xong')])
-    runtime.peer_read_windows[(1, 'peer-a')] = {'frontier': 0, 'idle': 0}
+    runtime.peer_read_windows[(1, sid, 'peer-a')] = {'frontier': 0, 'idle': 0}
     runtime.peer_wait_timeouts[(1, sid)] = 1
     runtime.child_resumes[(1, 'child-a')] = 1
-    runtime.peer_read_windows[(9, 'peer-b')] = {'frontier': 3, 'idle': 1}
+    runtime.peer_read_windows[(9, sid, 'peer-b')] = {'frontier': 3, 'idle': 1}
     runtime.child_resumes[(9, 'child-b')] = 2
 
     async def run():
@@ -403,10 +403,10 @@ def test_per_turn_child_counters_drop_with_the_turn_that_owns_them(tmp_path):
 
     asyncio.run(run())
 
-    assert (1, 'peer-a') not in runtime.peer_read_windows
+    assert (1, sid, 'peer-a') not in runtime.peer_read_windows
     assert (1, sid) not in runtime.peer_wait_timeouts
     assert (1, 'child-a') not in runtime.child_resumes
-    assert runtime.peer_read_windows[(9, 'peer-b')] == {'frontier': 3, 'idle': 1}, 'lượt khác không bị xoá'
+    assert runtime.peer_read_windows[(9, sid, 'peer-b')] == {'frontier': 3, 'idle': 1}, 'lượt khác không bị xoá'
     assert runtime.child_resumes[(9, 'child-b')] == 2
     store.close()
 
@@ -419,4 +419,121 @@ def test_declared_child_budget_rejects_anything_but_a_positive_integer(tmp_path,
         runtime._declared_child_budget(store.get(sid), {'maxSteps': bad})
     with pytest.raises(ValueError, match='positive integer'):
         runtime._declared_child_budget(store.get(sid), {'deadlineSeconds': bad})
+    store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Vòng soát H11 — bốn sửa đổi sau review
+# --------------------------------------------------------------------------- #
+
+def test_a_resumed_child_that_finishes_cleanly_is_not_marked_partial(tmp_path):
+    """Review H11 (finding 1) — lượt chạy lại SẠCH không mang kết cục cắt của lần TRƯỚC.
+
+    Notice cắt của lần chạy đầu vẫn nằm trong sổ của CHÍNH session con; bản cũ quét notice cả
+    phiên nên gán `partial/STEP_BUDGET_EXHAUSTED` cho một lượt vừa chạy sạch.
+    """
+    store, runtime, sid = build(tmp_path, child_answers=[answer('đã làm nốt, xong sạch')])
+    child = make_child(store, runtime, sid, status='failed', reason=limits.STEP_BUDGET_NOTICE_CODE)
+    # Dấu vết của lần chạy bị cắt: notice bền + hàng `finish` dở của lượt 1.
+    store.emit(child, 'notice', {'code': limits.STEP_BUDGET_NOTICE_CODE, 'partial': True,
+                                 'message': f'{limits.STEP_BUDGET_NOTICE_CODE}: cut at the step budget'})
+    store.emit(child, 'finish', {'status': 'completed', 'turn': 1, 'partial': True,
+                                 'code': limits.STEP_BUDGET_NOTICE_CODE})
+
+    result = asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child, 'note': 'làm nốt'}))
+
+    assert result['status'] == 'completed', 'lượt chạy lại sạch là completed'
+    assert result['partial'] is False and result['timedOut'] is False
+    assert result['resumable'] is False
+    assert store.child(child)['status'] == 'completed'
+    store.close()
+
+
+def test_child_resume_across_turns_records_every_attempt(tmp_path, monkeypatch):
+    """Review H11 (finding 3) — gọi lại ở LƯỢT THỨ HAI cũng ghi được attempt (id không trùng)."""
+    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+    store = SessionStore(tmp_path / 'sessions.db')
+    runtime = HarnessRuntime(store, FixtureExecutor(),
+                             FixtureModel(child_responses=[answer('lần hai xong'),
+                                                           answer('lần ba xong')]))
+    sid = runtime.create({'skills': []})['id']
+    child = make_child(store, runtime, sid, status='started', text='phần đầu')
+    service = lambda rt: TaskService(store, lambda owner_id, run_id: {'runId': run_id,
+                                                                     'sessionId': owner_id})
+    monkeypatch.setattr(task_surface, 'service', service)
+    opened = service(runtime).create(sid, 'run-1', contract(), controller_id=sid)
+    service(runtime).record_attempt(sid, 'run-1', opened['taskKey'], invocation_id='inv-1',
+                                    expected_revision=opened['revision'], session_id=child,
+                                    admission_id='admission-1', capability_epoch=1)
+    store.child_finish(child, 'failed', reason=limits.DEADLINE_NOTICE_CODE, answer_chars=8)
+    task_surface.project_child(runtime, child)
+
+    runtime.active_turn[sid] = 1
+    first = asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child, 'note': 'làm nốt'}))
+    assert first['attempt'] == 1
+    # Con bị cắt LẦN NỮA ở lượt 2 (đóng hàng rồi chiếu attempt, như đường thật).
+    store.child_start(child, sid, 2, 1, 'review', GOAL)
+    store.child_finish(child, 'failed', reason=limits.DEADLINE_NOTICE_CODE, answer_chars=5)
+    runtime.active_turn[sid] = 2
+    second = asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child,
+                                                               'note': 'làm nốt lần nữa'}))
+
+    assert second['attempt'] == 2, 'số thứ tự đơn điệu qua các lượt'
+    rows = store.db.execute('SELECT attempt_seq, session_id FROM harness_task_attempts '
+                            'WHERE session_id=? ORDER BY attempt_seq', (child,)).fetchall()
+    assert [row['attempt_seq'] for row in rows] == [1, 2, 3], 'mọi lần gọi lại đều vào sổ task'
+    assert all(row['session_id'] == child for row in rows)
+    store.close()
+
+
+def test_peer_read_windows_are_per_reader_not_per_turn(tmp_path):
+    """Review H11 (finding 2) — trần đọc lặp của phiên này không được chặn phiên khác cùng lượt."""
+    store, runtime, sid = build(tmp_path)
+    other = runtime.create({'skills': []})['id']
+    runtime.active_turn[sid] = 1
+    runtime.active_turn[other] = 1
+    same_window = [{'seq': 7}]
+    runtime._guard_peer_read(sid, 'target-x', same_window)
+    for _ in range(limits.PEER_READ_IDLE_MAX):
+        runtime._guard_peer_read(sid, 'target-x', same_window)
+    with pytest.raises(ValueError, match=limits.PEER_READ_CAPPED_CODE):
+        runtime._guard_peer_read(sid, 'target-x', same_window)
+
+    runtime._guard_peer_read(other, 'target-x', same_window)  # người đọc khác: lần ĐẦU, không bị chặn
+    assert runtime.peer_read_windows[(1, other, 'target-x')]['idle'] == 0
+    store.close()
+
+
+def test_child_resume_validates_deliver_to_like_delegate(tmp_path):
+    """Review H11 (finding 6) — quá trần người nhận thì NÓI RA, không cắt im lặng."""
+    store, runtime, sid = build(tmp_path)
+    child = make_child(store, runtime, sid)
+    too_many = [f'peer-{index}' for index in range(limits.PEER_DELIVER_MAX + 1)]
+    with pytest.raises(ValueError, match='PEER_DELIVER_MAX'):
+        asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child, 'note': 'x',
+                                                          'deliverTo': too_many}))
+    assert store.child(child)['status'] == 'failed', 'bị từ chối thì hàng sổ không đổi'
+    store.close()
+
+
+def test_a_detached_callback_from_the_old_run_cannot_close_a_reopened_child(tmp_path):
+    """Review H11 (finding 4) — callback của lần chạy CŨ không được đóng lần chạy MỚI."""
+    store, runtime, sid = build(tmp_path)
+    child = make_child(store, runtime, sid, status='started', text='')
+
+    class Finished:
+        def cancelled(self):
+            return False
+
+    old_started = store.child(child)['started']
+    reopened = store.child_start(child, sid, 2, 1, 'review', GOAL)  # gọi lại: mốc MỚI
+    assert reopened['started'] != old_started
+
+    runtime.close_detached_child(sid, child, 'review', 1, 2, GOAL, Finished(), started=old_started)
+    assert store.child(child)['status'] == 'started', 'callback cũ không được đóng hàng vừa mở lại'
+    assert not [event for event in store.events(sid) if event['type'] == 'child']
+
+    runtime.close_detached_child(sid, child, 'review', 2, 1, GOAL, Finished(),
+                                 started=reopened['started'])
+    assert store.child(child)['status'] != 'started', 'callback của đúng lần chạy vẫn đóng bình thường'
     store.close()
