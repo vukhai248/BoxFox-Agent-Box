@@ -4280,6 +4280,10 @@ class HarnessRuntime(RuntimeCommands):
             lượt này không trọn vẹn. Hàng `sessions` vẫn `completed` (bất biến #1: không thêm từ
             vựng trạng thái). Trả `text` để chỗ gọi `return` thẳng.
             """
+            # H4 — lượt đóng DỞ vì trần bước/hạn chót cũng là hết batch: timeout `wait_jobs`
+            # của lượt này phải được park như đường hoàn tất thường, nếu không kết quả về sau
+            # sẽ không đánh thức ai. Đường lỗi/huỷ thì KHÔNG park (fail closed).
+            job_surface.park_after_batch(self, sid)
             # D-4 — câu chốt cũng qua cổng độ dài: đường chốt trong cửa sổ giữ chỗ không được
             # là đường vòng qua trần 150 000 ký tự (soát engine, phát hiện 3).
             text, _ = await self.enforce_answer_length(sid, text, steps_used)
@@ -7168,8 +7172,11 @@ class HarnessRuntime(RuntimeCommands):
                     return cached_job
                 config = session['config']
                 configured = next(r for r in config['subagents'] if r['id'] == role and r.get('enabled', True))
-                child_steps = min(budget_request['maxSteps'], config['maxSteps'])
-                child_deadline = min(budget_request['deadlineSeconds'], config['deadlineSeconds'])
+                # Giữ các kẹp đã tính ở trên (tra cứu nhanh/trần mức research): chỉ siết thêm,
+                # không ghi đè — nếu không, job `research` đi vòng qua trần của lượt.
+                child_steps = min(child_steps, budget_request['maxSteps'], config['maxSteps'])
+                child_deadline = min(child_deadline, budget_request['deadlineSeconds'],
+                                     config['deadlineSeconds'])
             if controller:
                 await controller.after_slot(parent_id, work)
             if work:

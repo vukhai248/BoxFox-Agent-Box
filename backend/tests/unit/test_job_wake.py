@@ -40,7 +40,14 @@ class ScriptedModel:
             await self.gate.wait()
             return answer('Observed receipt paths.')
         self.count += 1
-        return answer(calls=self.steps.pop(0) if self.steps else [])
+        # Bước có thể là danh sách call tĩnh, hàm nhận transcript (để đọc job id vừa sinh),
+        # hoặc chuỗi (câu trả lời chữ, ví dụ chẩn đoán của lượt chốt).
+        step = self.steps.pop(0) if self.steps else []
+        if callable(step):
+            step = step(messages)
+        if isinstance(step, str):
+            return answer(step)
+        return answer(calls=step)
 
 
 def environment(tmp_path, monkeypatch, **switches):
@@ -265,5 +272,56 @@ def test_park_fails_soft_when_subscription_revoked(tmp_path, monkeypatch):
         receipt = wake_rows(store, sid)[0]
         assert receipt['state'] == 'blocked' and 'WORK_CAPABILITY_REVOKED' in receipt['reason']
         assert model.count == 2
+    asyncio.run(drive())
+    store.close()
+
+
+def live_steps(store, rt, sid):
+    """Bước 2 của lượt thật: đọc job id canonical vừa sinh rồi `wait_jobs` timeout 0."""
+    def step(_messages):
+        child = store.children_of(sid)[0]['session_id']
+        jid = job_surface._bound(rt, child)[0]['jobId']
+        return [call('wait_jobs', {'jobIds': [jid], 'timeoutSeconds': 0}, cid='c2')]
+    return step
+
+
+def test_live_turn_parks_on_normal_close_and_wakes_on_later_result(tmp_path, monkeypatch):
+    """F3: timeout `wait_jobs` TRONG lượt thật — lượt đóng thường thì receipt phải `parked`."""
+    env = environment(tmp_path, monkeypatch)
+    store, rt, sid, model = env
+    model.steps = [[call('start_job', request())], live_steps(store, rt, sid),
+                   'Đã dừng chờ job; lượt này không còn việc độc lập để làm nữa.']
+
+    async def drive():
+        await rt.start(sid, 'ROOT parks inside a live turn')
+        await asyncio.gather(rt.tasks[sid], return_exceptions=True)
+        assert [row['state'] for row in wake_rows(store, sid)] == ['parked'], \
+            'lượt đóng thường phải park receipt của timeout wait_jobs'
+        assert model.count == 3  # 2 bước + câu chốt, chưa có lượt wake
+        child = store.children_of(sid)[0]['session_id']
+        await finish(rt, child)
+        assert model.count >= 4, 'kết quả commit sau khi lượt đóng phải mở đúng một lượt wake'
+        assert wake_rows(store, sid)[0]['state'] == 'started'
+    asyncio.run(drive())
+    store.close()
+
+
+def test_step_budget_close_also_parks_the_receipt(tmp_path, monkeypatch):
+    """F1: lượt đóng DỞ vì trần bước vẫn park receipt để kết quả về sau đánh thức."""
+    env = environment(tmp_path, monkeypatch)
+    store, rt, sid, model = env
+    store.update_config(sid, dict(store.get(sid)['config'], maxSteps=2))
+    model.steps = [[call('start_job', request())], live_steps(store, rt, sid),
+                   'Lượt chạm trần bước: job đang chạy, không còn việc độc lập trong lượt này; '
+                   'kết quả còn lại đọc từ outbox bền khi job xong.']
+
+    async def drive():
+        await rt.start(sid, 'ROOT parks at the step budget')
+        await asyncio.gather(rt.tasks[sid], return_exceptions=True)
+        assert [row['state'] for row in wake_rows(store, sid)] == ['parked'], \
+            'đường chốt vì trần bước phải park receipt như đường hoàn tất thường'
+        child = store.children_of(sid)[0]['session_id']
+        await finish(rt, child)
+        assert wake_rows(store, sid)[0]['state'] == 'started'
     asyncio.run(drive())
     store.close()

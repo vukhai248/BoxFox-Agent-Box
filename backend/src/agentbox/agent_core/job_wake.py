@@ -96,7 +96,7 @@ def candidate(rt, sid, ids, mode):
         return None
     turn = rt.active_turn.get(sid)
     if type(turn) is not int or turn < 1:
-        return None  # pas de tour réel => pas d'autorité de réveil
+        return None  # không có lượt thật thì không có thẩm quyền đánh thức
     service(rt)
     from . import job_surface
     with job_surface.service(rt)._write():
@@ -117,7 +117,7 @@ def candidate(rt, sid, ids, mode):
 def park_after_batch(rt, sid):
     """Main chỉ gọi khi hết việc độc lập và `wait_jobs` đã timedOut.
 
-    Main ferme ensuite son _run normalement. Callback tasks attend sa fermeture;
+    Sau đó main đóng `_run` như bình thường; callback của task chờ đúng lúc đóng ấy.
     Kết quả về giữa timeout và park được đọc lại ngay sau khi lượt đóng.
     """
     if not exists(rt) or not adaptive(rt, sid):

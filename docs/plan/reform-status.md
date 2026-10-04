@@ -43,9 +43,11 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H4.1 | Lỗi: cursor `wait` toàn cục bỏ qua sự kiện khi tập watch lớn lên (B seq1 bị A seq2 che) | ✅ | LEFT JOIN `harness_wake_cursors` + sàn theo `(consumer, job)`; test repro |
 | H4.2 | Lỗi: append thử lại kèm `expected_revision` cũ trả `JOB_REVISION_CONFLICT` thay vì replay | ✅ | kiểm replay TRƯỚC `_expected()` như `cancel` |
 | H4.3 | Lỗi: JSON hỏng rò `JSONDecodeError` thô từ `_view/_cached/_append_locked/_control/_wake_view/_child_session` | ✅ | `_decode()`/`_stored_refs()` → `JOB_RECORD_CORRUPT` |
-| H4.4 | Nối runtime: `job_surface` (5 công cụ controller) + `job_wake` park/wake qua `rt.start` hiện hữu; công tắc `BOXFOX_CONTROLLER_JOBS` mặc định off | ✅ | `job_surface.py` (54 test) + `job_wake.py` (10 test); `park_after_batch` gọi ở đường hoàn tất của `_run`; wake chỉ mở lại đúng chủ đã park; Stop/restart/kill thắng |
+| H4.4 | Nối runtime: `job_surface` (5 công cụ controller) + `job_wake` park/wake qua `rt.start` hiện hữu; công tắc `BOXFOX_CONTROLLER_JOBS` mặc định off | ✅ | `job_surface.py` (54 test) + `job_wake.py` (12 test); `park_after_batch` gọi ở MỌI đường đóng lượt trọn vẹn (hoàn tất + chốt dở vì trần bước/hạn chót); wake chỉ mở lại đúng chủ đã park; Stop/restart/kill thắng |
 | H4.5 | Hạn chế đã biết: job tiến trình (`JOB_EXECUTOR_UNSUPPORTED`) và resume theo checkpoint attempt chưa hỗ trợ — fail closed | 📝 | ghim bằng test; chờ chủ nhà quyết |
 | H4.6 | Lỗi: ghim số công cụ orchestrator còn 51 sau khi thêm 5 công cụ job + 4 công cụ Research gateway | ✅ | `test_journal_tools` cập nhật 51 → 60 kèm ghi chú công tắc mặc định tắt (phát hiện bằng chạy toàn bộ `backend/tests/unit/`) |
+| H4.7 | Lỗi: `park_after_batch` chỉ chạy ở đường hoàn tất thường, lượt đóng vì trần bước/hạn chót để receipt mắc ở `candidate` — wake không bao giờ nổ | ✅ | gọi thêm trong `finish_partial`; hai test lượt thật (`test_job_wake`) đỏ khi gỡ hook (`'candidate' != 'parked'`) |
+| H4.8 | Lỗi: nhánh `job_request` của `delegate` ghi đè `child_steps/child_deadline`, bỏ kẹp tra cứu nhanh/trần mức research | ✅ | đổi sang `min(...)` giữ kẹp; job `research` không còn đi vòng qua trần của lượt |
 | H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (114 test) |
 | H5.1 | Lỗi: ghim được nhiều hàng cho một `(skill, attempt)` ⇒ epoch pin vô nghĩa | ✅ | DDL `UNIQUE(skill_id, attempt_id)` + rebuild `_upgrade_pins()`; re-pin thay hàng và ghi `replacedVersion` |
 | H5.2 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_decode` → `SKILL_RECORD_CORRUPT` |
@@ -57,7 +59,10 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H6.3 | Lỗi: idempotency chỉ nhớ lần gọi cuối ⇒ A→B→A áp dụng đúp | ✅ | map `consumed['invocations']` theo từng allocation; lệch hash → `USAGE_INVOCATION_CONFLICT` |
 | H6.4 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_record_json` → `USAGE_RECORD_CORRUPT` |
 | H6.5 | Consent của con lỏng hơn luật tiền tệ của cha | ✅ | con phải bỏ trống hoặc lặp đúng `consent_ref` của cha; lệch → `USAGE_FIELD_INVALID` |
-| H6.6 | Nối runtime: một seam `complete_model` cho mọi request (retry/summary/repair); reserve→settle→release quanh request; giá đọc từ snapshot router (`ping`/`documented`), giá lạ giữ `None` | ✅ | `usage_surface.py` (21 test); allocation backend hoặc route miễn phí xác nhận mới qua cửa; hết trần chặn TRƯỚC khi gọi model |
+| H6.6 | Nối runtime: một seam `complete_model` cho mọi request (retry/summary/repair); reserve→settle→release quanh request; giá đọc từ snapshot router (`ping`/`documented`), giá lạ giữ `None` | ✅ | `usage_surface.py` (22 test); allocation backend hoặc route miễn phí xác nhận mới qua cửa; hết trần chặn TRƯỚC khi gọi model |
+| H6.7 | Lỗi: `/compact` của người dùng gọi thẳng `client.complete`, không qua seam (không hàng usage, không cổng admission) | ✅ | `runtime_commands` gọi `complete_model(purpose='summary')`; test ghim một hàng `purpose='summary'` |
+| H6.8 | Hạn chế có chủ ý: route miễn phí chỉ được chụp lúc admission; gốc không policy/allocation thì không kiểm lại giá từng request — giá đổi giữa run không bị chặn lại | 📝 | chờ chủ nhà quyết trước khi bật `BOXFOX_USAGE_LEDGER` cho phiên thật |
+| H6.9 | `harnessAllocationId` chưa có nơi ghi trong `backend/src` (chỉ test ghim) — đường reserve chỉ sống khi backend ghim allocation | 📝 | bước tích hợp cho giai đoạn bật công tắc, không phải lỗi của batch này |
 | H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | ✅ | `research_owner.py` (52 test); intent do main viết không thành canonical |
 | H7.1 | Lỗi: đua replay trong `claim` ⇒ `RESEARCH_REVISION_CONFLICT` thay vì replay | ✅ | kiểm cache invocation TRONG giao dịch ghi |
 | H7.2 | Thiếu ghi chú nối dây cho các điểm vào chưa xác thực (`assign`, `handoff`, `release`, `record_intent`, `get`, `validate_report`) | ✅ | mục "GHI CHÚ NỐI DÂY" trong docstring; yêu cầu wiring gọi `authorize(...)` |
