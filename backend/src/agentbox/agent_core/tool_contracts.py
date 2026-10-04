@@ -6,7 +6,9 @@ from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
 # `roles` → `tool_contracts` → `roles` sẽ làm hỏng lúc nạp mô-đun. Tên là hợp đồng, không phải bản sao.
-PEER_TOOLS = frozenset({'peer_read', 'await_children'})
+# H11 (việc 2): `child_resume` — gọi lại con đã bị cắt vì hạn/ngân sách, giữ nguyên ngữ cảnh cũ —
+# đi cùng cổng với mesh (công tắc TẮT thì cả ba không được quảng cáo và bị từ chối khi gọi).
+PEER_TOOLS = frozenset({'peer_read', 'await_children', 'child_resume'})
 
 # H3 — bốn công cụ bề mặt task. Cùng lý do như `PEER_TOOLS`: định nghĩa tại đây để `schemas_for`
 # không phải nhập `task_surface` (module đó nhập `research_runtime`). Công tắc đọc thẳng từ môi
@@ -296,7 +298,9 @@ SCHEMAS = [
          '`peer:<sessionId>`, `role:<role>` or a bare role name; leave it empty to wait for the peers of your '
          'own turn. Delivered summaries are bounded and `truncated` says when. There is a 300 s safety net '
          '(`timeoutSeconds` can only shorten it): on `timeout` you still get `pending` and must continue with '
-         'the data you have instead of retrying blindly.',
+         'the data you have instead of retrying blindly. A `pending` row says whether the peer is only slow '
+         'or was CUT by a ceiling (`timedOut`/`partial`/`resumable`), and waiting again after several timeouts '
+         'in the same turn is refused (`PEER_WAIT_CAPPED`) — call a cut child back with `child_resume` instead.',
          {'targets': {'type': 'array', 'items': STRING},
           'mode': {'type': 'string', 'enum': ['all', 'any']},
           'timeoutSeconds': {'type': 'integer'}},
@@ -306,11 +310,35 @@ SCHEMAS = [
          'orchestrator, one of your own children. You get that session events — which tools it ran, what it '
          'answered, which codes it failed with — never its system prompt or the parent transcript. Use it to '
          'avoid repeating a peer\'s work and to wait for the right thing. Long strings are cut; `truncated` says '
-         'so. Read the newest rows by passing the `seq` of the last event you already saw as `afterSeq`.',
+         'so. Read the newest rows by passing the `seq` of the last event you already saw as `afterSeq`. '
+         'Reading the same window again with no new events is refused (`PEER_READ_CAPPED`) after a few tries: '
+         'polling a peer that has not moved wastes the turn — decide with what you have.',
          {'sessionId': STRING,
           'afterSeq': {'type': 'integer'},
           'limit': {'type': 'integer'}},
          ['sessionId']),
+    tool('child_resume',
+         'Call a child that was CUT OFF by a ceiling back to work — it continues in its own '
+         'transcript, so nothing it already read is lost. Use it when `await_children` or a '
+         'delivery reports `timedOut`/`partial` for one of your children and you still need that '
+         'result: the harness refuses a child that is still running, one that finished normally, '
+         'or one whose failure was not a ceiling. You must pass `note` — your decision and what '
+         'the child must continue with — because calling a child back is your judgement, not an '
+         'automatic retry. The call returns the previous outcome plus the fresh result when '
+         '`wait` is true (default).',
+         {'sessionId': STRING,
+          'note': {'type': 'string',
+                   'description': 'Your decision and what the child must continue with; required. '
+                                  'Capped at 500 characters.'},
+          'wait': {'type': 'boolean',
+                   'description': 'false = reopen the child and return at once with its sessionId; '
+                                  'read the result later with `await_children`. Default true: this '
+                                  'call blocks until the child answers.'},
+          'deliverTo': {'type': 'array', 'items': {'type': 'string'},
+                        'description': 'Who the child hands its result to when it finishes (roles '
+                                       'or session ids). Empty = the parent only. Only meaningful '
+                                       'with wait=false.'}},
+         ['sessionId', 'note']),
     tool('journal_write',
          'Write ONE durable line into this session journal (task, step, decision, evidence, fact, blocker). '
          'Use it for the few facts a later turn must not lose: what you are doing (kind="task", status in '
@@ -347,7 +375,8 @@ SCHEMAS = [
          'a child answer without evidence is not a result. Pass `wait=false` to start several children '
          'and keep working: this call returns at once, the child delivers its result to you '
          '(`deliverTo`), and you read it with `await_children`. The default `wait=true` blocks this '
-         'call until the child answers.',
+         'call until the child answers. A child that a ceiling cut short comes back `timedOut`/`partial` '
+         'and can be called back with `child_resume` — it continues in its own transcript.',
          {'role': {'type': 'string',
                    'enum': ['explore', 'plan', 'plan-review', 'design', 'build', 'debug', 'review', 'simplify', 'testing', 'research', 'research-review'],
                    'description': 'Specialist id. Only `research` can look things up outside the workspace: it holds '
@@ -406,6 +435,16 @@ SCHEMAS = [
           'runId': {'type': 'string',
                     'description': 'Which Work Graph run the task belongs to. Default: the run already bound to '
                                    'this turn; the call is refused with TASK_SURFACE_NO_RUN when neither exists.'},
+          'maxSteps': {'type': 'integer',
+                       'description': 'H11: a LOWER step ceiling for this child than the engine default. You can '
+                                      'only tighten: a number above the child ceiling is clamped (with a notice), '
+                                      'never raised. Use it when you know the job is small and a runaway child '
+                                      'would waste the turn.'},
+          'deadlineSeconds': {'type': 'integer',
+                              'description': 'H11: a LOWER wall-clock ceiling (seconds) for this child than the '
+                                             'engine default. Tighten only: a number above the child ceiling is '
+                                             'clamped with a notice. A child that hits either ceiling is marked '
+                                             '`timedOut`/`partial` and can be called back with `child_resume`.'},
           'wait': {'type': 'boolean',
                    'description': 'false = start the child and return at once with its sessionId; you read the '
                                   'result later with `await_children` (or it is delivered to you). Default true: '

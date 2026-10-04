@@ -11,6 +11,10 @@ DECISION = frozenset({'ask_user', 'request_approval'})
 # giao kết quả. Mọi vai trò đều có (READ là gốc của cả mười vai con), vì một con không đọc được
 # bạn thì mesh chỉ là nhiều phiên chạy cạnh nhau.
 PEER = frozenset({'peer_read', 'await_children'})
+# H11 (việc 2) — gọi lại con đã bị cắt. CHỈ cha/orchestrator có: con không gọi con. Vì thế nó
+# không nằm trong `PEER` (mà `READ` đã trải cho mọi vai con), nó là một tập riêng cắm vào
+# `ORCHESTRATOR_TOOLS`, và bị gỡ cùng `PEER` khi mesh tắt.
+CHILD_CALLBACK = frozenset({'child_resume'})
 READ = frozenset({'file_read', 'codebase_glob', 'codebase_grep', 'skills_list', 'skill_view'}) | DECISION \
     | PEER
 WRITE = READ | {'file_write', 'file_edit_block', 'terminal_exec'}
@@ -320,7 +324,7 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        # tắc `BOXFOX_TASK_SURFACE` quyết định có quảng cáo hay không.
                                        'task_list', 'task_get', 'task_send', 'task_abandon',
                                        'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job',
-                                       'research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'} | PEER \
+                                       'research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'} | PEER | CHILD_CALLBACK \
     | VERIFY  # W6.1.3: thiếu ở cha thì `allowed_tools` cắt mất của reviewer con (46 → 47 công cụ).
 
 
@@ -357,7 +361,7 @@ def allowed_tools(role, parent=None):
             inherited.add('research_branch_report')
         names = names & inherited
     if not peer_mesh_enabled():
-        names = set(names) - PEER
+        names = set(names) - PEER - CHILD_CALLBACK
     return frozenset(names)
 
 

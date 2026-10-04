@@ -91,8 +91,10 @@ def test_delegate_task_schema_states_the_result_shape_and_stays_backward_compati
     # đều KHÔNG bắt buộc, nên lệnh gọi cũ `role`/`goal` đi nguyên.
     # Soát tuân thủ 2026-10-04: H3 (`task_surface.open_delegate`) đọc `args['task']`/`args['runId']`
     # nhưng hợp đồng KHÔNG khai hai khoá này, nên model sống không có cách nào chạm tới đường task.
+    # H11 (việc 4, #6546): cha khai được trần THẤP HƠN cho con bằng `maxSteps`/`deadlineSeconds`.
     assert set(properties) == {'role', 'goal', 'context', 'expect', 'wait', 'deliverTo',
-                               'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId'}
+                               'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId',
+                               'maxSteps', 'deadlineSeconds'}
     assert properties['task']['type'] == 'object' and properties['runId']['type'] == 'string'
     assert 'BOXFOX_TASK_SURFACE' in properties['task']['description']
     assert properties['wait']['type'] == 'boolean' and properties['deliverTo']['type'] == 'array'
@@ -135,16 +137,16 @@ def test_child_prompt_carries_the_result_contract_and_the_parents_expected_shape
 
 
 def test_child_budget_is_clamped_by_the_parent_and_by_the_engine_ceiling(tmp_path):
-    """B6 — con 200 bước / 3600 s (#6457), nhưng KHÔNG BAO GIỜ vượt cha (`min()` giữ nguyên).
+    """B6 — con có trần riêng (H11/#6546: 1000 bước / 7200 s), nhưng KHÔNG BAO GIỜ vượt cha.
 
-    `200`/`3600` là **trần**, không phải bảo đảm: lượt cha nào có hạn chót/bước nhỏ hơn thì kẹp con
-    xuống theo cha. Cha mặc định 120 bước/1800 s, nên lượt mặc định cho con đúng 120/1800 — vẫn là
-    quyết định của CHA, không phải của con.
+    Trần của con là **trần**, không phải bảo đảm: lượt cha nào có hạn chót/bước nhỏ hơn thì kẹp con
+    xuống theo cha. Cha mặc định (H11/#6546) 1000 bước/7200 s nên lượt mặc định cho con đúng
+    1000/7200 — vẫn là quyết định của CHA, không phải của con.
     """
     cases = [
         ({'maxSteps': 60, 'deadlineSeconds': 900}, 60, 900),
         ({'maxSteps': 12, 'deadlineSeconds': 60}, 12, 60),
-        ({}, 120, 1800),
+        ({}, 1000, 7200),
     ]
     for parent_values, steps, seconds in cases:
         _, _, child = run_delegation(tmp_path / f"p{steps}-{seconds}", delegate_args(),

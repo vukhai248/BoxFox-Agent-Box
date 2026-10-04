@@ -86,11 +86,14 @@ def notices(store, sid, code=None):
 # --- con số cấu hình (một nguồn duy nhất) -------------------------------------------------------
 
 def test_the_deadline_numbers_are_the_measured_ones():
-    # #6457 (03/10/2026): chủ nhà chốt "rất lớn nhưng vẫn có trần" — phiên 1800 s (trần 7200),
-    # con 3600 s. Số cũ 600/1200/900 ghi ở W8.A4.5.N lượt 15 (con `debug` hết bước giữa chừng).
-    assert limits.DEADLINE_DEFAULT_SECONDS == 1800
+    # #6546 (04/10/2026): chủ nhà chốt nâng trần lên "1k–1k5 bước và 7200 s, tương tự vorflux" —
+    # phiên 1000 bước (trần 1500) / 7200 s, con 1000 bước / 7200 s. Số cũ 1800/3600 ghi ở #6457
+    # (03/10/2026); trước nữa là 600/1200/900 ở W8.A4.5.N lượt 15 (con `debug` hết bước giữa chừng).
+    assert limits.MAX_STEPS_DEFAULT == 1000 and limits.MAX_STEPS_MAX == 1500
+    assert limits.DEADLINE_DEFAULT_SECONDS == 7200
     assert limits.DEADLINE_MAX_SECONDS == 7200
-    assert limits.CHILD_DEADLINE_SECONDS == 3600
+    assert limits.CHILD_MAX_STEPS == 1000
+    assert limits.CHILD_DEADLINE_SECONDS == 7200
     assert limits.PLAN_TURN_EXTENSION_SECONDS == 420 and limits.PLAN_TURN_EXTENSIONS_MAX == 1
     assert limits.TURN_EXTENDED_CODE == 'TURN_EXTENDED'
     assert limits.DEADLINE_MIN_SECONDS == 5, 'sàn cũ giữ nguyên: nới không được phá nó'

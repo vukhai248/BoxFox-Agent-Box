@@ -48,7 +48,9 @@ TOOL_GROUPS = [
                'research_scope'],
      'alwaysOn': False},
     {'key': 'peerMesh',
-     'tools': ['peer_read', 'await_children'],
+     # H11 — `child_resume` (gọi lại con đã bị cắt) đi cùng nhóm với hai công cụ peer: cùng công
+     # tắc `BOXFOX_PEER_MESH`, cùng chỉ cha/orchestrator thấy.
+     'tools': ['peer_read', 'await_children', 'child_resume'],
      'alwaysOn': False},
     # Work Graph — main dựng đồ thị việc, harness chạy vòng phản biện, duyệt rồi chạy DAG.
     # W6.1.3 — `verify_exec` là công cụ của người phản biện (thử MỘT claim tính toán trong sandbox

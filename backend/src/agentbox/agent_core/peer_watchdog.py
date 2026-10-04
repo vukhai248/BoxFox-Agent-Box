@@ -29,6 +29,7 @@ vòng quét không giữ khoá của SQLite dùng chung qua nhiều hàng.
 import asyncio
 import time
 
+from . import child_lifecycle
 from .limits import (CHILD_WALL_MAX_SECONDS, PEER_WAIT_FORCE_GRACE_SECONDS, PEER_WAIT_SAFETY_SECONDS,
                      WATCHDOG_ORPHAN_REASON, WATCHDOG_RESTART_REASON, WATCHDOG_TICK_SECONDS,
                      WATCHDOG_TIMEOUT_REASON)
@@ -160,7 +161,10 @@ class PeerWatchdog:
                 'sessionId': child_id, 'role': row.get('role'), 'status': 'failed',
                 'turn': row.get('parent_turn'), 'step': row.get('spawn_step'), 'goal': row.get('goal'),
                 'reason': reason, 'watchdog': True, 'is_error': True, 'answerChars': 0,
-                'stepsUsed': steps, 'outputTokens': tokens})
+                'stepsUsed': steps, 'outputTokens': tokens,
+                # H11 — con bị watchdog cắt vì vượt trần tường: cha phải thấy đó là `timedOut` (việc
+                # còn dở vì hết giờ, gọi lại được bằng `child_resume`), không phải một cái chết mù.
+                **child_lifecycle.outcome('failed', reason)})
         system_log.write('watchdog.child_closed', level='warn', session_id=child_id,
                          parent=parent_id, reason=reason, sweeps=self.sweeps)
         return True

@@ -66,7 +66,8 @@ def test_the_two_journal_tools_are_advertised_and_held_by_the_orchestrator_only(
     # H4/H7: thêm năm công cụ job controller và bốn công cụ gateway Research (51 → 60);
     # công tắc `BOXFOX_CONTROLLER_JOBS`/`BOXFOX_RESEARCH_GATEWAY` cũng mặc định TẮT nên
     # hồ sơ lượt cắt chúng khỏi quảng cáo cho tới khi bật.
-    assert len(ORCHESTRATOR_TOOLS) == 60
+    # H11: thêm `child_resume` — gọi lại con đã bị cắt (60 → 61), cùng cổng `BOXFOX_PEER_MESH`.
+    assert len(ORCHESTRATOR_TOOLS) == 61
     assert 'work_report' in names & ORCHESTRATOR_TOOLS
     for role in ('build', 'explore', 'review', 'testing'):
         assert not ({'journal_write', 'journal_brief'} & allowed_tools(role)), \
