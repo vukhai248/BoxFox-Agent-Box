@@ -89,8 +89,12 @@ def test_delegate_task_schema_states_the_result_shape_and_stays_backward_compati
     # T6 (vòng 22) thêm `wait` (sinh con không chặn) và `deliverTo` (con giao kết quả cho ai).
     # P3 (§5.9): thêm `taskKind` (kiểu việc của nhánh) và `facetId` (hướng bao phủ). Cả hai
     # đều KHÔNG bắt buộc, nên lệnh gọi cũ `role`/`goal` đi nguyên.
+    # Soát tuân thủ 2026-10-04: H3 (`task_surface.open_delegate`) đọc `args['task']`/`args['runId']`
+    # nhưng hợp đồng KHÔNG khai hai khoá này, nên model sống không có cách nào chạm tới đường task.
     assert set(properties) == {'role', 'goal', 'context', 'expect', 'wait', 'deliverTo',
-                               'reviewTarget', 'questionId', 'taskKind', 'facetId'}
+                               'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId'}
+    assert properties['task']['type'] == 'object' and properties['runId']['type'] == 'string'
+    assert 'BOXFOX_TASK_SURFACE' in properties['task']['description']
     assert properties['wait']['type'] == 'boolean' and properties['deliverTo']['type'] == 'array'
     assert schema['parameters']['required'] == ['role', 'goal'], \
         'existing callers send role/goal/context only: nothing new may become required'

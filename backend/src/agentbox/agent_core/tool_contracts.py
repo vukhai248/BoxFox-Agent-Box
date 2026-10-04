@@ -394,6 +394,18 @@ SCHEMAS = [
                                           'version': {'type': 'integer'},
                                           'mode': {'type': 'string',
                                                    'enum': ['evidence', 'critique', 'coverage']}}},
+          'task': {'type': 'object',
+                   'description': 'Only when the task surface is on (BOXFOX_TASK_SURFACE=on) and this turn is the '
+                                  'MAIN session: the boxfox-task-contract/1 object for this piece of work. The '
+                                  'runtime records the task BEFORE the child is born, so the run task store owns '
+                                  'it (keys: schema, taskId, invocationId, role - which must equal `role` - , goal, '
+                                  'intent, mode, inputs, scope, deliverable, dependsOn, budget). `invocationId` is '
+                                  'the idempotency key: the same call again does not create a second task. Leaving '
+                                  '`task` out keeps the legacy call - the child is still created, but nothing is '
+                                  'written to the task store.'},
+          'runId': {'type': 'string',
+                    'description': 'Which Work Graph run the task belongs to. Default: the run already bound to '
+                                   'this turn; the call is refused with TASK_SURFACE_NO_RUN when neither exists.'},
           'wait': {'type': 'boolean',
                    'description': 'false = start the child and return at once with its sessionId; you read the '
                                   'result later with `await_children` (or it is delivered to you). Default true: '
