@@ -15,15 +15,23 @@
 //   tool-result image as a following user turn   → 200, colour read correctly
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { RouterStore } from '../src/store.mjs';
+import { ProviderService } from '../src/service.mjs';
+import { RouterEngine } from '../src/engine.mjs';
 import { createProviders } from '../src/providers/index.mjs';
 import {
   deriveRequestId,
+  documentedPricing,
   hasValidOpencodeVersion,
   mintOpencodeId,
   OPENCODE_DECOY_TOOLS,
   OPENCODE_REQUEST_RE,
   OPENCODE_SESSION_RE,
   OPENCODE_UA,
+  opencodeModelRow,
   resetStableSessions,
   responsesTools,
   sanitizeResponsesItems,
@@ -358,7 +366,8 @@ test('W12: discovery keeps payload metadata and labels every field with its sour
   assert.match(space.thinkingEvidence, /probe/);
   assert.equal(space.fieldSources.thinking, 'probe', 'registry data is never labelled live');
   assert.equal(space.fieldSources.name, 'unknown', 'the payload publishes no name');
-  assert.equal(space.fieldSources.pricing, 'unknown');
+  assert.equal(space.fieldSources.pricing, 'documented');
+  assert.equal(space.pricing.input, 0, 'Zen publishes this model as free');
 
   // A model nobody has evidence for stays unknown: no invented levels, and no
   // "unsupported" claim either — the row just carries no thinking control.
@@ -408,6 +417,49 @@ test('W12: the curated static fallback labels its own fields', async () => {
   assert.equal(curated.source, 'static');
   assert.equal(curated.fieldSources.inventory, 'static');
   assert.equal(curated.fieldSources.thinking, 'documented');
+  assert.equal(curated.fieldSources.pricing, 'unknown', 'the 1.2 free alias is not in the current pricing table');
+  assert.equal(curated.pricing, undefined);
+  const priced = adapter.fallbackModels.find(model => model.id === 'muse-spark-1.3-contributor-free');
+  assert.equal(priced.pricing.source, 'documented');
+  assert.equal(priced.pricing.input, 0);
+  assert.equal(priced.fieldSources.pricing, 'documented');
+});
+
+test('Zen adapter exposes documentedPricing for known ids and model objects', () => {
+  // Hook nằm trên adapter để service dùng cùng bảng lúc dò và lúc tính chi phí.
+  const adapter = createProviders({ fetchImpl: async () => { throw new Error('no I/O expected'); } }).opencode;
+  assert.equal(adapter.documentedPricing, documentedPricing);
+  const price = adapter.documentedPricing('qwen3.8-max', new Date('2026-10-04T01:00:00Z'));
+  assert.deepEqual(price, {
+    currency: 'USD', unit: 'per_million_tokens', input: 2, cachedInput: 0.25,
+    cacheWriteInput: 2.5, output: 6, asOf: '2026-10-04', source: 'documented',
+  });
+  assert.deepEqual(adapter.documentedPricing({ id: 'qwen3.8-max' }, new Date('2026-10-04T11:00:00Z')), price,
+    'Zen has no peak/off-peak schedule');
+  for (const id of ['unknown-free', 'gpt-5.4', '', null]) assert.equal(adapter.documentedPricing(id), null);
+});
+
+test('Zen model rows attach documented pricing, but a valid ping price wins', async () => {
+  const adapter = createProviders({ fetchImpl: async () => json({ data: [
+    { id: 'qwen3.8-max' }, { id: 'space-bunny-free' }, { id: 'gpt-5.4' },
+  ] }) }).opencode;
+  const { models } = await adapter.discover({ connection, credentials: {} });
+  const priced = models.find(model => model.id === 'qwen3.8-max');
+  assert.deepEqual(priced.pricing, adapter.documentedPricing(priced));
+  assert.equal(priced.fieldSources.pricing, 'documented');
+  assert.equal(models.find(model => model.id === 'space-bunny-free').pricing.output, 0);
+  const tiered = models.find(model => model.id === 'gpt-5.4');
+  assert.equal(tiered.pricing, undefined);
+  assert.equal(tiered.fieldSources.pricing, 'unknown');
+
+  const ping = opencodeModelRow({ id: 'qwen3.8-max', pricing: { prompt: '0.000001', completion: '0.000003' } });
+  assert.equal(ping.pricing.input, 1, 'ping replaces the documented input of 2');
+  assert.equal(ping.pricing.output, 3);
+  assert.equal(ping.pricing.source, 'ping');
+  assert.equal(ping.fieldSources.pricing, 'ping');
+  const broken = opencodeModelRow({ id: 'qwen3.8-max', pricing: { prompt: 'junk', completion: 'junk' } });
+  assert.deepEqual(broken.pricing, adapter.documentedPricing(broken), 'a broken payload price falls back to documented');
+  assert.equal(broken.fieldSources.pricing, 'documented');
 });
 
 test('a discovery failure is raised, not swallowed, so the service can keep last-good', async () => {
@@ -485,4 +537,29 @@ test('Responses refusal delta retains refusal classification', async () => {
     model: 'muse-spark-1.3-contributor-free', messages, stream: true } }));
   assert.equal(events.at(-1).finishReason, 'content_filter');
   assert.equal(events.find(e => e.type === 'delta').delta.refusal, 'fixture refusal');
+});
+
+
+test('Zen documented pricing reaches stored usage through the real service and engine', async t => {
+  // Fixture thuần: discovery + SSE giả, không gọi model thật và không sửa usage lịch sử.
+  const ids = ['qwen3.8-max', 'space-bunny-free', 'gpt-5.4', 'unknown-free'];
+  const dir = mkdtempSync(join(tmpdir(), 'boxfox-zen-cost-'));
+  const store = new RouterStore({ dataDir: dir });
+  t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+  const providers = createProviders({ fetchImpl: async url => String(url).endsWith('/models')
+    ? json({ data: ids.map(id => ({ id })) })
+    : sse([...chatFrames(), { choices: [], usage: { prompt_tokens: 1000, completion_tokens: 100 } }, '[DONE]']) });
+  const service = new ProviderService({ store, providers });
+  const engine = new RouterEngine({ service, deadlineMs: 5000 });
+  const created = service.create({ providerId: 'opencode', endpoint: 'https://zen.invalid', name: 'Zen fixture', apiKey: 'test-only-key' });
+  await service.discover(created.id);
+  service.patch(created.id, { enabledModelIds: ids });
+  for (const [modelId, expected] of [['qwen3.8-max', 0.0026], ['space-bunny-free', 0], ['gpt-5.4', null], ['unknown-free', null]]) {
+    await collect(engine.generate({ connectionId: created.id, modelId, messages, stream: false }));
+    const record = store.list('usage').find(row => row.modelId === modelId);
+    assert.ok(record, modelId);
+    assert.equal(record.cost, expected, modelId);
+    assert.equal(record.costBasis, expected === null ? null : 'documented');
+    assert.equal(record.estimated, expected !== null);
+  }
 });
