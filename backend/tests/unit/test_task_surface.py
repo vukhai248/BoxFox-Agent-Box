@@ -19,6 +19,7 @@ import pytest
 
 from agentbox.agent_core import roles, task_surface, tool_contracts, work_scope
 from agentbox.agent_core.orchestration_contracts import ContractError, TASK_SCHEMA
+from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.task_service import TaskService
 from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, schemas_for
 from agentbox.memory.session_store import SessionStore
@@ -458,6 +459,100 @@ def test_abandoned_close_attempt_commits_for_a_second_connection(repo):
         other.close()
     assert row['status'] == 'cancelled' and row['closed_at'] is not None
     assert store.db.in_transaction is False, 'không được để giao dịch mở sau khi chiếu kết cục'
+
+
+class CancelledTask:
+    """Task asyncio giả: `cancelled()` đúng như một con bị `rt.stop` cắt."""
+
+    def cancelled(self):
+        return True
+
+
+class CancelRT(FakeRT):
+    """Runtime tối thiểu cho đường huỷ THẬT (`research_runtime.cancel_child`).
+
+    Đủ cửa để hàm chạy hết: `stop` (async, không làm gì), `owner_cancels`, `release_child_slot`,
+    và `close_owner_cancelled_child` — bản thật của `HarnessRuntime`, không phải bản chép lại.
+    """
+
+    def __init__(self, store):
+        super().__init__(store)
+        self.owner_cancels = set()
+        self.reaping = set()
+        self.active_turn = {}
+        self.executor = None
+        self.released = []
+        self.delivered = []
+        self.stopped = []
+        self.race = False
+        self.parent = None
+
+    async def stop(self, sid):
+        self.stopped.append(sid)
+        if self.race:
+            # Callback của con chạy TRONG `rt.stop` (đúng thứ tự thật): nó đóng hàng sổ trước khi
+            # `cancel_child` kịp ghi `OWNER_CANCELLED` — đây là cuộc đua mà cờ `owner_cancels` dựng ra.
+            HarnessRuntime.close_detached_child(self, self.parent, sid, 'explore', 1, 2, 'g',
+                                                CancelledTask())
+
+    def release_child_slot(self, parent_sid, child_id=None):
+        self.released.append((parent_sid, child_id))
+
+    def partial_turn(self, sid):
+        return None
+
+    def deliver_child_result(self, *args, **kwargs):
+        self.delivered.append(args)
+        return []
+
+    close_owner_cancelled_child = HarnessRuntime.close_owner_cancelled_child
+
+
+@pytest.mark.parametrize('race', [False, True])
+def test_cancel_child_closes_the_attempt_as_owner_cancelled(repo, race):
+    """F4 — huỷ nhánh phải là `cancelled/OWNER_CANCELLED` ở CẢ hàng sổ con, hàng phiên và attempt.
+
+    `race=True` mô phỏng đúng thứ tự thật: callback của con chạy trong `await rt.stop` và đóng
+    hàng sổ trước. Bản trước để nó thắng thành `failed/TURN_CANCELLED` (nhìn như con tự hỏng), rồi
+    `child_close_once('cancelled')` thành no-op.
+    """
+    from agentbox.agent_core import research_runtime
+
+    store, _rt, owner, _ = repo
+    item = task(repo)
+    sid = child(repo)
+    attempt(repo, item, sid)
+    cancel_rt = CancelRT(store)
+    cancel_rt.race, cancel_rt.parent = race, owner
+    out = asyncio.run(research_runtime.cancel_child(cancel_rt, session(cancel_rt, owner),
+                                                    {'sessionId': sid, 'reason': 'hết việc'}))
+    assert out['status'] == 'cancelled'
+    assert cancel_rt.stopped == [sid]
+    assert store.child(sid)['status'] == 'cancelled'
+    assert store.child(sid)['reason'] == 'OWNER_CANCELLED'
+    assert store.get(sid)['status'] == 'cancelled', 'hàng phiên phải về trạng thái cuối'
+    assert (owner, sid) in cancel_rt.released, 'slot phải được nhả đúng một lần'
+    detail = run(cancel_rt, owner, 'task_get', {'runId': 'run-1', 'taskId': item['taskId']})
+    assert detail['attempts'][0]['status'] == 'cancelled'
+    assert detail['attempts'][0]['reason'] == 'OWNER_CANCELLED'
+
+
+def test_detached_close_honours_the_owner_cancel_marker(repo):
+    """F4 — callback thắng cuộc đua cũng phải ghi HUỶ, không ghi HỎNG.
+
+    `cancel_child` đặt `owner_cancels` TRƯỚC khi dừng con; cờ còn đó thì `close_detached_child`
+    (đường đóng của chính con) chọn `cancelled/OWNER_CANCELLED` thay vì `failed/TURN_CANCELLED`.
+    """
+    store, _rt, owner, _ = repo
+    sid = child(repo)
+    cancel_rt = CancelRT(store)
+    cancel_rt.owner_cancels.add(sid)
+    HarnessRuntime.close_detached_child(cancel_rt, owner, sid, 'explore', 1, 2, 'g',
+                                        CancelledTask())
+    assert store.child(sid)['status'] == 'cancelled'
+    assert store.child(sid)['reason'] == 'OWNER_CANCELLED'
+    assert store.get(sid)['status'] == 'cancelled'
+    assert (owner, sid) in cancel_rt.released
 
 
 def test_watchdog_close_projects_the_attempt_of_a_task_bound_child(repo):

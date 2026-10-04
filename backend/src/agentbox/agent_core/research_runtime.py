@@ -2275,13 +2275,16 @@ async def cancel_child(rt, session, args):
     if str(row.get('status') or '') in {'completed', 'failed', 'cancelled', 'interrupted', 'not_found'}:
         return {'sessionId': target, 'status': 'already_closed', 'childStatus': row.get('status'),
                 'reason': row.get('reason')}
-    await rt.stop(target)
-    closed = rt.store.child_close_once(target, 'cancelled', reason='OWNER_CANCELLED')
-    if closed:
-        # H3 — huỷ nhánh là một bộ đóng con: chiếu biên nhận vào attempt đang mở (nạp muộn để
-        # tránh vòng nhập `task_surface` → `research_runtime`).
-        from . import task_surface
-        task_surface.project_child(rt, target)
+    # F4 — đánh dấu Ý ĐỊNH huỷ của chủ nhà TRƯỚC khi dừng con: callback trong `rt.stop` có thể
+    # đóng hàng sổ trước và ghi `failed/TURN_CANCELLED`; cờ này để nó ghi đúng `cancelled`.
+    rt.owner_cancels.add(target)
+    try:
+        await rt.stop(target)
+    finally:
+        rt.owner_cancels.discard(target)
+    # H3 — huỷ nhánh là một bộ đóng con: hàng sổ + hàng phiên + attempt đóng trong một hàm (nạp
+    # muộn `task_surface` để tránh vòng nhập `task_surface` → `research_runtime`).
+    closed = rt.close_owner_cancelled_child(target)
     # Chỉ thị giữa lượt chỉ xếp cho phiên GỐC, nên vòng lặp này thường không có gì để bỏ; giữ lại để
     # một nhánh đã đóng không bao giờ giữ chỉ thị của chủ nhà trong hàng chờ của mình.
     for steer in rt.store.claim_steers(target, limit=STEER_MAX_PENDING):

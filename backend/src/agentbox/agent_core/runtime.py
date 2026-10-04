@@ -1704,6 +1704,10 @@ class HarnessRuntime(RuntimeCommands):
         self.peer_target_grace = PEER_TARGET_GRACE_SECONDS
         self.peer_wait_tick = PEER_TARGET_POLL_SECONDS
         self.reaping = set()
+        # F4 — con đang được CHỦ NHÀ huỷ qua `cancel_child`. `cancel_child` đặt cờ TRƯỚC khi
+        # `await self.stop(child_id)` chạy callback của con, để callback (nếu thắng cuộc đua) ghi
+        # kết cục `cancelled/OWNER_CANCELLED` thay vì `failed/TURN_CANCELLED`.
+        self.owner_cancels = set()
         self.parent_slots = {}
         self.parent_running = {}
         self.parent_waiters = {}
@@ -2191,6 +2195,9 @@ class HarnessRuntime(RuntimeCommands):
                     # hiển thị "đang chạy" cho một con đã chết.
                     status = 'failed'
                     reason = CHILD_CANCELLED_REASON if task.cancelled() else None
+                    if child_id in self.owner_cancels:
+                        # F4 — chủ nhà vừa gọi `cancel_child`: kết cục là HUỶ, không phải hỏng.
+                        status, reason = 'cancelled', 'OWNER_CANCELLED'
                     self.store.save(child_id, session['messages'], 'cancelled')
                 else:
                     reason = next((event['data'].get('code') for event in reversed(events)
@@ -2222,6 +2229,38 @@ class HarnessRuntime(RuntimeCommands):
                              message=str(exc)[:300])
         finally:
             self.release_child_slot(parent_id, child_id)
+
+    def close_owner_cancelled_child(self, child_id):
+        """Đóng con vì CHỦ NHÀ huỷ (T6b): kết cục `cancelled/OWNER_CANCELLED`, không phải hỏng.
+
+        `cancel_child` gọi hàm này thay vì tự ghi hàng sổ, vì callback của con có thể thắng cuộc
+        đua trong `await self.stop(child_id)`: khi đó hàng sổ mang `failed/TURN_CANCELLED` (nhìn
+        như con tự hỏng) và `child_close_once` sau đó thành no-op. `self.owner_cancels` (đặt trước
+        khi dừng) lo phần callback chạy trước; hàm này lo phần còn lại: hàng phiên về trạng thái
+        cuối, biên nhận chiếu vào attempt, slot nhả (idempotent theo con).
+        """
+        parent = ''
+        try:
+            row = self.store.child(child_id)
+            if row is None:
+                return False
+            parent = str(row.get('parent_id') or '')
+            if row['status'] != 'started':
+                return False
+            session = self.store.get(child_id)
+            if str(session.get('status') or '') in ('running', 'idle'):
+                self.store.save(child_id, session['messages'], 'cancelled')
+            closed = self.store.child_close_once(child_id, 'cancelled', reason='OWNER_CANCELLED')
+            if closed:
+                # H3 — huỷ nhánh là một bộ đóng con: chiếu biên nhận vào attempt đang mở.
+                task_surface.project_child(self, child_id)
+            return closed
+        except Exception as exc:  # pragma: no cover - chốt chặn cuối, không bao giờ được ném
+            system_log.write('child.owner_cancel_close_failed', level='warn', session_id=child_id,
+                             message=str(exc)[:300])
+            return False
+        finally:
+            self.release_child_slot(parent, child_id)
 
     async def reap_children(self, sid, reason=TURN_ENDED_REASON, turn=None):
         """Dừng con còn sống của lượt này khi lượt CHA đóng (T7) — chống phiên mồ côi.
@@ -7158,6 +7197,14 @@ class HarnessRuntime(RuntimeCommands):
             except BaseException:
                 self.store.child_close_once(child['id'], 'failed',
                                             reason=task_surface.BIND_FAILED_REASON)
+                # F6 — con chưa chạy bước nào: hàng phiên cũng phải về trạng thái cuối, nếu không
+                # giao diện còn thấy "đang chạy" cho một con đã đóng.
+                try:
+                    child_row = self.store.get(child['id'])
+                    if str(child_row.get('status') or '') in ('running', 'idle'):
+                        self.store.save(child['id'], child_row['messages'], 'cancelled')
+                except KeyError:  # pragma: no cover - hàng phiên biến mất giữa chừng
+                    pass
                 self.release_child_slot(parent_id, child['id'])
                 raise
         self.store.emit(parent_id, 'child', {
