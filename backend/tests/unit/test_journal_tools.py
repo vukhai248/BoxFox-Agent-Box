@@ -63,7 +63,10 @@ def test_the_two_journal_tools_are_advertised_and_held_by_the_orchestrator_only(
     # W6.1.3: thêm `verify_exec` để reviewer con thừa hưởng được (46 → 47).
     # H3: thêm bốn công cụ `task_*` của bề mặt task (47 → 51); công tắc mặc định TẮT nên
     # chúng không được quảng cáo ở lượt nào cho tới khi `BOXFOX_TASK_SURFACE=on`.
-    assert len(ORCHESTRATOR_TOOLS) == 51
+    # H4/H7: thêm năm công cụ job controller và bốn công cụ gateway Research (51 → 60);
+    # công tắc `BOXFOX_CONTROLLER_JOBS`/`BOXFOX_RESEARCH_GATEWAY` cũng mặc định TẮT nên
+    # hồ sơ lượt cắt chúng khỏi quảng cáo cho tới khi bật.
+    assert len(ORCHESTRATOR_TOOLS) == 60
     assert 'work_report' in names & ORCHESTRATOR_TOOLS
     for role in ('build', 'explore', 'review', 'testing'):
         assert not ({'journal_write', 'journal_brief'} & allowed_tools(role)), \

@@ -45,6 +45,7 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H4.3 | Lỗi: JSON hỏng rò `JSONDecodeError` thô từ `_view/_cached/_append_locked/_control/_wake_view/_child_session` | ✅ | `_decode()`/`_stored_refs()` → `JOB_RECORD_CORRUPT` |
 | H4.4 | Nối runtime: `job_surface` (5 công cụ controller) + `job_wake` park/wake qua `rt.start` hiện hữu; công tắc `BOXFOX_CONTROLLER_JOBS` mặc định off | ✅ | `job_surface.py` (54 test) + `job_wake.py` (10 test); `park_after_batch` gọi ở đường hoàn tất của `_run`; wake chỉ mở lại đúng chủ đã park; Stop/restart/kill thắng |
 | H4.5 | Hạn chế đã biết: job tiến trình (`JOB_EXECUTOR_UNSUPPORTED`) và resume theo checkpoint attempt chưa hỗ trợ — fail closed | 📝 | ghim bằng test; chờ chủ nhà quyết |
+| H4.6 | Lỗi: ghim số công cụ orchestrator còn 51 sau khi thêm 5 công cụ job + 4 công cụ Research gateway | ✅ | `test_journal_tools` cập nhật 51 → 60 kèm ghi chú công tắc mặc định tắt (phát hiện bằng chạy toàn bộ `backend/tests/unit/`) |
 | H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (114 test) |
 | H5.1 | Lỗi: ghim được nhiều hàng cho một `(skill, attempt)` ⇒ epoch pin vô nghĩa | ✅ | DDL `UNIQUE(skill_id, attempt_id)` + rebuild `_upgrade_pins()`; re-pin thay hàng và ghi `replacedVersion` |
 | H5.2 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_decode` → `SKILL_RECORD_CORRUPT` |
@@ -68,6 +69,7 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H8.4 | Lỗi: `progress_signal` báo không tiến bộ khi tiêu chí mở cuối cùng vừa đóng | ✅ | chỉ so khi có mặt |
 | H8.5 | Nit: `_budget` với effort lạ thiếu mã/trường trong `reason` | ✅ | `ADAPTIVE_EFFORT_INPUT` + field; mixed needs giữ tập hỗ trợ |
 | H8.6 | Nối runtime: `adaptive_surface` (decision/loop/evidence bền) + cổng `recovery_policy` chặn retry khi policy từ chối; guidance động chỉ thay SOP gốc | ✅ | `adaptive_surface.py` (13 test) + test cổng deny/allow; kill switch giữ checkpoint đọc được |
+| H8.7 | Lỗi: `dispatch` bọc `_dispatch` làm test ghim cửa kernel vỡ (`SimpleNamespace` không có `_dispatch`) | ✅ | stub uỷ nhiệm lại đường công khai `HarnessRuntime.dispatch` → giữ nguyên phép ghim |
 | H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
 | H9.1 | Fixture lỗi offline + shadow legacy (không tốn tiền) | ✅ | `python3 scripts/eval/suite_v2.py --faults` 33/33; `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell ánh xạ, `verdictsProduced=0`; report `/code/.generated_artifacts/h3h8/h9/shadow_w10f.json` |
 | H9.2 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; calibration sống còn chờ consent tài chính |
