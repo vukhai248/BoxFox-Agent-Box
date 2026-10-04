@@ -242,7 +242,7 @@ def test_child_resume_is_capped_per_turn(tmp_path):
     store, runtime, sid = build(tmp_path)
     child = make_child(store, runtime, sid)
     runtime.active_turn[sid] = 1
-    runtime.child_resumes[(1, child)] = limits.CHILD_RESUME_MAX_PER_TURN
+    runtime.child_resumes[(1, sid, child)] = limits.CHILD_RESUME_MAX_PER_TURN
     with pytest.raises(ValueError, match=limits.CHILD_RESUME_CAPPED_CODE):
         asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child, 'note': 'làm tiếp'}))
     assert store.child(child)['status'] == 'failed', 'bị từ chối thì hàng sổ không đổi'
@@ -394,9 +394,9 @@ def test_per_turn_child_counters_drop_with_the_turn_that_owns_them(tmp_path):
     store, runtime, sid = build(tmp_path, [answer('cha xong')])
     runtime.peer_read_windows[(1, sid, 'peer-a')] = {'frontier': 0, 'idle': 0}
     runtime.peer_wait_timeouts[(1, sid)] = 1
-    runtime.child_resumes[(1, 'child-a')] = 1
+    runtime.child_resumes[(1, sid, 'child-a')] = 1
     runtime.peer_read_windows[(9, sid, 'peer-b')] = {'frontier': 3, 'idle': 1}
-    runtime.child_resumes[(9, 'child-b')] = 2
+    runtime.child_resumes[(9, sid, 'child-b')] = 2
 
     async def run():
         return await runtime.start(sid, 'chạy một lượt')
@@ -405,9 +405,56 @@ def test_per_turn_child_counters_drop_with_the_turn_that_owns_them(tmp_path):
 
     assert (1, sid, 'peer-a') not in runtime.peer_read_windows
     assert (1, sid) not in runtime.peer_wait_timeouts
-    assert (1, 'child-a') not in runtime.child_resumes
+    assert (1, sid, 'child-a') not in runtime.child_resumes
     assert runtime.peer_read_windows[(9, sid, 'peer-b')] == {'frontier': 3, 'idle': 1}, 'lượt khác không bị xoá'
-    assert runtime.child_resumes[(9, 'child-b')] == 2
+    assert runtime.child_resumes[(9, sid, 'child-b')] == 2
+    store.close()
+
+
+def test_per_turn_counters_of_another_session_survive_a_turn_end(tmp_path):
+    """Review H11 vòng 2 (finding 1) — lượt của phiên NÀY đóng không xoá bộ đếm của phiên khác.
+
+    Số lượt là của từng phiên: cha và con (hoặc hai phiên bất kỳ) cùng ở lượt 1 là chuyện thường,
+    nên bộ dọn chỉ được so `key[0]` nếu khoá mang cả chủ — bản cũ xoá mọi khoá `(1, ...)` của cả
+    tiến trình, tháo hàng rào chống quay vòng của người đang chạy cùng lượt.
+    """
+    store, runtime, sid = build(tmp_path, [answer('cha xong')])
+    other = runtime.create({'skills': []})['id']
+    runtime.active_turn[other] = 1
+    runtime.peer_read_windows[(1, other, 'target-x')] = {'frontier': 7, 'idle': 2}
+    runtime.peer_wait_timeouts[(1, other)] = 2
+    runtime.child_resumes[(1, other, 'child-of-b')] = 2
+
+    async def run():
+        return await runtime.start(sid, 'chạy một lượt')
+
+    asyncio.run(run())
+
+    assert runtime.peer_read_windows[(1, other, 'target-x')] == {'frontier': 7, 'idle': 2}, \
+        'bộ đếm đọc lại của phiên khác cùng lượt còn nguyên'
+    assert runtime.peer_wait_timeouts[(1, other)] == 2
+    assert runtime.child_resumes[(1, other, 'child-of-b')] == 2
+    store.close()
+
+
+def test_a_stale_callback_does_not_free_the_reopened_runs_slot(tmp_path):
+    """Review H11 vòng 2 (finding 2) — callback cũ không nhả suất fan-out của lần chạy MỚI."""
+    store, runtime, sid = build(tmp_path)
+    child = make_child(store, runtime, sid, status='started', text='')
+
+    class Finished:
+        def cancelled(self):
+            return False
+
+    runtime.track_child_slot(child, sid)
+    old_started = store.child(child)['started']
+    reopened = store.child_start(child, sid, 2, 1, 'review', GOAL)  # gọi lại: mốc MỚI + suất mới
+    assert reopened['started'] != old_started
+    runtime.track_child_slot(child, sid)
+
+    runtime.close_detached_child(sid, child, 'review', 1, 2, GOAL, Finished(), started=old_started)
+    assert child in runtime.child_slot_holders, 'suất của lần chạy mới chưa bị callback cũ nhả'
+    assert store.child(child)['status'] == 'started'
     store.close()
 
 

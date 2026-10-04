@@ -2204,6 +2204,7 @@ class HarnessRuntime(RuntimeCommands):
         bị gọi lại (`child_resume`) mở lại hàng với mốc MỚI, nên callback của lần chạy CŨ không
         được đóng lần chạy mới (vòng soát H11).
         """
+        stale = False
         try:
             if child_id in self.reaping:
                 return  # người dọn (T7) đang làm việc này — nó ghi lý do `PARENT_TURN_ENDED`
@@ -2211,6 +2212,11 @@ class HarnessRuntime(RuntimeCommands):
             if row is None or row['status'] != 'started':
                 return
             if started is not None and row['started'] != started:
+                # Vòng soát H11 (vòng 2) — hàng sổ đang thuộc lần chạy MỚI, nên suất fan-out
+                # trong `child_slot_holders` cũng của lần chạy mới: nhả ở đây là trừ oan suất
+                # của nó. Suất của lần chạy cũ đã được nhả bởi chính bộ đã đóng hàng sổ (watchdog
+                # / người dọn / callback trước đó) trước khi hàng được mở lại.
+                stale = True
                 return
             status, reason, steps_used, output_tokens, answer_chars = 'failed', None, None, None, 0
             try:
@@ -2276,7 +2282,8 @@ class HarnessRuntime(RuntimeCommands):
             system_log.write('child.detached_close_failed', level='warn', session_id=parent_id,
                              message=str(exc)[:300])
         finally:
-            self.release_child_slot(parent_id, child_id)
+            if not stale:
+                self.release_child_slot(parent_id, child_id)
 
     def close_owner_cancelled_child(self, child_id):
         """Đóng con vì CHỦ NHÀ huỷ (T6b): kết cục `cancelled/OWNER_CANCELLED`, không phải hỏng.
@@ -4986,12 +4993,14 @@ class HarnessRuntime(RuntimeCommands):
             self.plan_turn_notes.pop(sid, None)
             self.plan_verdict_nudges.pop(sid, None)
             # H11 — ba bộ đếm theo LƯỢT (cửa sổ đọc lại peer, số lần chờ hết hạn, số lần gọi lại
-            # từng con): khoá là `(turn, ...)` nên chúng vô nghĩa sau khi lượt đóng, và để lại thì
-            # tiến trình harness sống lâu sẽ phình theo số lượt. Xoá theo ĐÚNG lượt vừa đóng.
-            # `child_resume_totals` KHÔNG nằm trong đây: nó là bộ đếm CẢ ĐỜI của con (số thứ tự
-            # `attempt` phải đơn điệu — xem `resume_child`), không phải bộ đếm của lượt.
+            # từng con): khoá là `(turn, sid, ...)` nên chúng vô nghĩa sau khi lượt đóng, và để
+            # lại thì tiến trình harness sống lâu sẽ phình theo số lượt. Xoá theo ĐÚNG lượt vừa
+            # đóng CỦA ĐÚNG phiên này (`key[1] == sid`) — vòng soát H11 (vòng 2): chỉ so `key[0]`
+            # là xoá bộ đếm của phiên khác đang ở cùng số lượt, tức tháo luôn hàng rào chống
+            # quay vòng của người khác. `child_resume_totals` KHÔNG nằm trong đây: nó là bộ đếm
+            # CẢ ĐỜI của con (số thứ tự `attempt` phải đơn điệu — xem `resume_child`).
             for counter in (self.peer_read_windows, self.peer_wait_timeouts, self.child_resumes):
-                for key in [item for item in counter if item[0] == turn_no]:
+                for key in [item for item in counter if item[0] == turn_no and item[1] == sid]:
                     del counter[key]
             # The turn ended (completed, failed or cancelled) while a decision was still open.
             for record in self.pending_for(sid):
@@ -7186,7 +7195,10 @@ class HarnessRuntime(RuntimeCommands):
                              'by a time or budget ceiling can be called back')
         turn = self.active_turn.get(parent_id) or 0
         step = self.active_step.get(parent_id) or 0
-        key = (turn, child_id)
+        # Khoá mang cả CHA (`parent_id`): lượt là con số của từng phiên, nên hai cha khác nhau
+        # cùng ở lượt 1 mà chỉ khoá `(turn, child_id)` thì bộ dọn theo lượt của người này xoá bộ
+        # đếm của người kia (vòng soát H11, vòng 2 — cùng lý do với `_guard_peer_read`).
+        key = (turn, parent_id, child_id)
         used = self.child_resumes.get(key, 0)
         if used >= CHILD_RESUME_MAX_PER_TURN:
             raise ValueError(f'{CHILD_RESUME_CAPPED_CODE}: this turn already called {child_id} back '
@@ -7715,7 +7727,8 @@ class HarnessRuntime(RuntimeCommands):
             if controller:
                 # Run-owned helpers survive turn reaping, so their owning
                 # admission must close the existing ledger on cancellation.
-                self.close_detached_child(parent_id, child['id'], role, turn, step, echo_goal, task)
+                self.close_detached_child(parent_id, child['id'], role, turn, step, echo_goal, task,
+                                          started=spawn_started)
             raise
         child_rec = self.store.get(child['id'])
         status = child_rec['status']
