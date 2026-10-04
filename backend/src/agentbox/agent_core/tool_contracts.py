@@ -442,10 +442,11 @@ SCHEMAS = [
          'the plan is refused.',
          {'slug': STRING, 'markdown': STRING, 'title': STRING, 'identity': STRING, 'relatesTo': STRING,
           'directory': {'type': 'string', 'description':
-                        'Folder inside the plan room for this plan group, e.g. "tao-ui" or "designs/login" → '
-                        '.plans/<directory>/vN-slug.md. Optional (default: the room root). Every spelling is '
-                        'clamped into .plans/: prefixes "plans"/".plans" are stripped and ".." or an invalid '
-                        'segment is refused with PLAN_EVAL_REJECTED — a plan never lands outside .plans/.'},
+                        'Folder inside the plan room for this plan group, e.g. "tao-ui" → '
+                        '.plans/tao-ui/vN-slug.md, or "designs/login" → .plans/designs/login/vN-slug.md '
+                        '(folders may nest). Optional (default: the room root). Every spelling is clamped '
+                        'into .plans/: prefixes "plans"/".plans" are stripped and ".." or an invalid segment '
+                        'is refused with PLAN_EVAL_REJECTED — a plan never lands outside .plans/.'},
           'runId': STRING, 'briefRevision': {'type': 'integer'},
           'traceability': {'type': 'array', 'items': {'type': 'object'}},
           'researchDependencies': {'type': 'array', 'items': {'type': 'object', 'properties': {

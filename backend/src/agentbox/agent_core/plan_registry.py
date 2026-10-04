@@ -112,6 +112,9 @@ def plan_room_directory(value) -> str:
     for segment in segments:
         if not _IDENTITY_TEXT_RE.fullmatch(segment):
             raise PlanRegistrationError('directory-invalid', directory=text)
+    # KHÔNG có trần độ sâu ở đây: người đọc (`plan_files.py:_IDENTITY_RE_GROUP`), khối header
+    # (`plan_header.IDENTITY_PATTERN`), `runtime.PLAN_PATH_RE` và nhật ký đều dùng chung grammar
+    # `(?:slug/)*slug`, nên `designs/login` là chỗ ghi hợp lệ và đi được tới bước ghim `P:`.
     return '/'.join(segments)
 
 
@@ -174,9 +177,9 @@ REMEDIES = {
         'gạch, có thể kèm thư mục (ví dụ "designs/login-page"). Sửa tham số rồi gọi lại write_plan.'
     ),
     'directory-invalid': (
-        'thư mục «{directory}» không dùng được: mỗi đoạn chỉ chữ thường và số, cách nhau đúng một '
-        'dấu gạch (ví dụ "tao-ui" hay "work/run-1"). Bỏ dấu chấm, dấu `/` thừa và `..` rồi gọi lại '
-        'write_plan — kế hoạch luôn nằm trong `.plans`.'
+        'thư mục «{directory}» không dùng được: chỉ chữ thường và số, các từ cách nhau đúng một '
+        'dấu gạch (ví dụ "tao-ui"). Bỏ dấu chấm, dấu `/` thừa và `..` rồi gọi lại write_plan — '
+        'kế hoạch luôn nằm trong `.plans`.'
     ),
 }
 
@@ -508,6 +511,14 @@ def resolve_identity(proposed_slug, *, index=None, declared_identity=None, relat
         # khi kiểm grammar, vì `.plans/...` không phải một identity hợp lệ nhưng là một chỗ ghi hợp lệ.
         directory_of_declared, slug_of_declared = split_identity(related_identity)
         directory_of_declared = plan_room_directory(directory_of_declared)
+        # Khai identity TRẦN (không kèm thư mục) cho một chủ đề đã có ĐÚNG một nhóm trong thư mục
+        # con: nhận thư mục của nhóm cũ thay vì mở nhóm thứ hai ở gốc phòng. Đo sống 2026-10-04:
+        # v1 nằm ở `.plans/designs/login/`, bản khai `identity: "dang-nhap-sso"` rơi về `.plans/`
+        # và tách cùng một chủ đề ra hai chỗ (v2 ở gốc, parent v1 trong thư mục con).
+        if not directory_of_declared and index is not None and slug_of_declared:
+            owners = {group.directory for group in index.groups if group.slug == slug_of_declared}
+            if len(owners) == 1:
+                directory_of_declared = owners.pop()
         related_identity = (directory_of_declared + '/' if directory_of_declared else '') + slug_of_declared
         if not _identity_is_valid(related_identity):
             raise PlanRegistrationError('identity-invalid', identity=related_identity)

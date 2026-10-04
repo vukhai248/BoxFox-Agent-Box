@@ -104,7 +104,6 @@ def test_degraded_index_still_keeps_the_declared_folder(tmp_path):
     args, evaluation = rt.plan_write_args('# Plan\n\nNội dung.\n', 'login-page', 'Login page', registration)
     assert args['directory'] == 'tao-ui' and 'version' not in args and evaluation is None
 
-
 def _write_plan_schema():
     from agentbox.agent_core.tool_contracts import SCHEMAS
     return next(tool for tool in SCHEMAS if tool['function']['name'] == 'write_plan')
@@ -120,9 +119,9 @@ def test_write_plan_schema_declares_the_destination_folder():
     """
     schema = _write_plan_schema()
     properties = schema['function']['parameters']['properties']
-    assert 'directory' in properties
-    assert 'tao-ui' in properties['directory'].get('description', '')
-    assert '.plans/' in properties['directory'].get('description', '')
+    description = properties['directory'].get('description', '')
+    assert 'tao-ui' in description and '.plans/' in description
+    assert 'designs/login' in description and 'nest' in description  # thư mục lồng nhau phải nói rõ
     # Không khai thêm required: chỗ ghi vẫn là tuỳ chọn, mặc định là gốc phòng.
     assert schema['function']['parameters']['required'] == ['slug', 'markdown']
 
@@ -141,5 +140,60 @@ def test_declared_folder_keeps_the_model_facing_name_and_the_clamped_path(tmp_pa
         assert registration.slug == 'dang-nhap-sso'
         args, _ = rt.plan_write_args('# Kế hoạch\n', 'dang-nhap-sso', 'Đăng nhập SSO', registration)
         assert args['directory'] == 'designs/login'
+
+    asyncio.run(run())
+
+
+def test_nested_folder_identity_is_journal_mintable(tmp_path):
+    """Đo sống 2026-10-04: identity lồng hai cấp ghi được tệp rồi vỡ ở bước ghim `P:`.
+
+    `directory="designs/login"` + `slug="dang-nhap-sso"` cho ra identity ba đoạn. Người đọc
+    (`plan_files.py`), khối header và `runtime.PLAN_PATH_RE` đều nhận độ sâu bất kỳ, nhưng
+    `journal.PLAN_IDENTITY_RE` bản cũ chỉ nhận hai đoạn: tệp `.plans/designs/login/v1-…md` đã nằm
+    trên đĩa mà lượt hỏng (`TURN_FAILED_JOURNALERROR`). Ca này ghim cả chuỗi: chỗ ghi → identity →
+    mã `P:` sinh ra → đọc lại mã đó.
+    """
+    from agentbox.agent_core import journal
+    from agentbox.agent_core.runtime import plan_identity
+
+    _, rt, _, executor, sid = build(tmp_path)
+    empty_index(executor)
+
+    async def run():
+        registration = await rt.plan_registration_for(
+            rt.store.get(sid), 'dang-nhap-sso', {'directory': 'designs/login'}, None)
+        assert registration.identity == 'designs/login/dang-nhap-sso'
+        # Cùng một identity khi đi từ đường dẫn tệp thật mà bộ đọc trả về.
+        assert plan_identity('.plans/designs/login/v1-dang-nhap-sso.md') == registration.identity
+        plan_id = journal.mint_id('plan', 'ab12cd34', 1,
+                                  {'identity': registration.identity, 'version': registration.version})
+        assert plan_id == 'P:designs/login/dang-nhap-sso@v1'
+        parsed = journal.PLAN_ID_RE.match(plan_id)
+        assert parsed is not None and parsed.group('slug') == registration.identity
+
+    asyncio.run(run())
+
+
+def test_declared_plain_identity_adopts_the_existing_group_folder(tmp_path):
+    """Khai identity trần cho chủ đề đã có nhóm trong thư mục con: KHÔNG mở nhóm thứ hai ở gốc phòng.
+
+    Đo sống 2026-10-04: v1 ở `.plans/designs/login/`, model khai `identity: "login"` (một đoạn) nên
+    bản v2 rơi về `.plans/` — cùng chủ đề nằm hai chỗ. Ca này ghim luật nhận thư mục của nhóm cũ.
+    """
+    _, rt, _, executor, sid = build(tmp_path)
+    empty_index(executor, [{
+        'identity': 'designs/login', 'slug': 'login', 'relativeDirectory': 'designs',
+        'versions': [{'version': 1, 'relativePath': 'designs/v1-login.md', 'sizeBytes': 10,
+                      'modifiedAt': '2026-10-01T00:00:00Z', 'status': 'draft', 'headerStatus': 'ok',
+                      'headerVersion': 1, 'headerIdentity': 'designs/login',
+                      'declaredParent': None, 'declaredSlug': None}],
+    }])
+
+    async def run():
+        registration = await rt.plan_registration_for(
+            rt.store.get(sid), 'login', {'identity': 'login'}, None)
+        assert registration.directory == 'designs'
+        assert registration.identity == 'designs/login'
+        assert registration.version == 2
 
     asyncio.run(run())
