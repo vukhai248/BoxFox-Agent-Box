@@ -1,0 +1,34 @@
+{
+  "checkpoint": "H9",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["/var/tmp/w10f-seq/** (chỉ đọc, không sửa)", "scripts/eval/work_acceptance_bench.py (chỉ đọc)"],
+    "write": ["scripts/eval/suite_v2.py", "scripts/eval/suite-v2.json", "backend/tests/unit/test_suite_v2.py"],
+    "forbidden": ["sửa suite/oracle W10 cũ", "chạy sống khi chưa consent", "rollout trước evidence gate"]
+  },
+  "dependency_receipts": ["commit e7a1e6f"],
+  "policy_versions": {"suiteSchema": "boxfox-eval-suite/2", "measurementContract": "eval-manifest-v1"},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "mapping-validation", "result": "pass", "evidence": "suite-v2.json: 62 ca / 5 họ / 4 disposition / 40 safety oracle; test_suite_v2.py 23 ca"},
+    {"id": "safety-oracles", "result": "pass", "evidence": "SAFETY_ORACLES (suite_v2.py:326) = 40 tên; disposition preserve_invariant"},
+    {"id": "trajectory-only", "result": "pass", "evidence": "disposition legacy_trajectory_only trong suite-v2.json"},
+    {"id": "no-w10-edit", "result": "pass", "evidence": "không sửa file nào trong /var/tmp/w10f-seq hay work_acceptance_bench.py"},
+    {"id": "offline-fixtures", "result": "not-run", "evidence": "chưa có fixture lỗi offline"},
+    {"id": "parity-shadow", "result": "not-run", "evidence": "chưa chạy parity/shadow"},
+    {"id": "live-pilot", "result": "blocked", "evidence": "livePilotRequiresConsent=true; status='unmeasured'; measured=false — chờ consent tài chính riêng (H10.1)"}
+  ],
+  "known_unknowns": [
+    "chưa có số valid/invalid, quality/cost/latency/interruptions cho suite v2 (measured=false)",
+    "chưa có fixture lỗi offline và parity/shadow run",
+    "live pilot cần consent tài chính riêng — không được ghi là quyền đã có"
+  ],
+  "rollback_ref": "gỡ 2 file mới + test; không đụng dữ liệu/W10 cũ",
+  "next_action": "H10.1 (calibration sống) chờ consent; bổ sung fixture lỗi offline + parity/shadow trước"
+}

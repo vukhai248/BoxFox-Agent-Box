@@ -1,0 +1,31 @@
+{
+  "checkpoint": "H5",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/context_bundle.py", "skill loader hiện có (chỉ đọc)"],
+    "write": ["backend/src/agentbox/agent_core/skill_spec.py", "backend/src/agentbox/agent_core/context_bundle.py", "backend/tests/unit/test_skill_spec.py", "backend/tests/unit/test_context_bundle.py"],
+    "forbidden": ["import bộ skill tham khảo bên ngoài", "chế tunnel/installer khi tool thiếu", "đổi epoch/revision của record đã ghim"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"skillSchema": "boxfox-skill-spec/1", "contextSchema": "boxfox-context-bundle/1", "checkpointSchema": "boxfox-context-checkpoint/1", "recordSchemaVersion": 1},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_skill_spec.py (63 hàm / 114 ca) + test_context_bundle.py (21 hàm / 79 ca)"},
+    {"id": "probe-P3", "result": "pass", "evidence": "probes_962cd84.json P3 13/13: enable không đổi version đang ghim; readiness blocked/degraded kèm lý do; revalidate phát hiện role/tool/adapter/source/epoch đổi"},
+    {"id": "epoch-pin", "result": "pass", "evidence": "DDL UNIQUE(skill_id, attempt_id) (skill_spec.py:60) + rebuild `_upgrade_pins()` (H5.1)"},
+    {"id": "no-foreign-skills", "result": "pass", "evidence": "không có import/asset ngoài repo trong diff H5"},
+    {"id": "compaction-recall", "result": "not-run", "evidence": "context_bundle chưa có src importer — chưa exercise recall sau compaction trong phiên thật"}
+  ],
+  "known_unknowns": [
+    "chưa nối runtime: recall sau compaction và reload skill trong phiên thật chưa kiểm",
+    "context_bundle chưa có src importer (theo kiểm tra import trong backend/src)"
+  ],
+  "rollback_ref": "module độc lập + bảng additive; gỡ file là đủ (chưa nối runtime)",
+  "next_action": "nối H5 khi có checkpoint wiring"
+}

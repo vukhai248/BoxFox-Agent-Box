@@ -1,0 +1,31 @@
+{
+  "checkpoint": "H6",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["metadata usage/price hiện có trên code đích"],
+    "write": ["backend/src/agentbox/agent_core/usage_ledger.py", "backend/tests/unit/test_usage_ledger.py"],
+    "forbidden": ["gọi model/route thật để lấy giá", "tự chọn số mặc định khi chưa calibration", "coi giá lạ là 0"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"recordSchemaVersion": 1},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_usage_ledger.py (50 hàm / 55 ca)"},
+    {"id": "probe-P4", "result": "pass", "evidence": "probes_962cd84.json P4 7/7: giá lạ None; retry/child/Research không double-count; settle→release cho con bị huỷ; thiếu trần caller → từ chối chi mới; usage muộn vẫn unsettled"},
+    {"id": "no-zero-price", "result": "pass", "evidence": "P4 + test trong test_usage_ledger.py (giá lạ là None)"},
+    {"id": "defaults-need-calibration", "result": "not-run", "evidence": "chưa có consent tài chính; không tự chọn số mặc định"},
+    {"id": "runtime-constraints-stop", "result": "not-run", "evidence": "chưa nối runtime — 'caller constraints và Stop có hiệu lực' mới ở mức thiết kế"}
+  ],
+  "known_unknowns": [
+    "calibration sống chưa chạy (H10.1 bị chặn bởi consent tài chính riêng)",
+    "chưa nối runtime: Stop/caller constraints ở vòng chạy thật chưa kiểm"
+  ],
+  "rollback_ref": "module độc lập + bảng additive; gỡ file là đủ",
+  "next_action": "chờ consent cho calibration (H10.1) và checkpoint wiring"
+}

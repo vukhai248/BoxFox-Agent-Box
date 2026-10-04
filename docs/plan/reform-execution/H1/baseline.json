@@ -1,0 +1,26 @@
+{
+  "checkpoint": "H1",
+  "status": "verified",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/orchestration_contracts.py", "dữ liệu/approval cũ (chỉ đọc)"],
+    "write": ["backend/src/agentbox/agent_core/orchestration_contracts.py", "backend/tests/unit/test_orchestration_contracts.py"],
+    "forbidden": ["runtime.py", "session_store.py", "sửa approval/verdict lịch sử"]
+  },
+  "dependency_receipts": ["PR #3", "commit ab26776", "commit 3975ab6"],
+  "policy_versions": {"taskContractSchema": "boxfox-task-contract/1"},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "legacy-read", "result": "pass", "evidence": "/var/tmp/boxfox-testing/results/legacy_read_3975ab6.json (8/8)"},
+    {"id": "reject-bad-input", "result": "pass", "evidence": "ab26776: 11 ca biên; 3975ab6: thiếu cột → TASK_SCHEMA_UNSUPPORTED; test_unsupported_schema_has_specific_code"},
+    {"id": "hash-approval-stable", "result": "pass", "evidence": "không đụng bảng approval/verdict; test_revision_does_not_coerce_boolean_string_or_float ghim revision"}
+  ],
+  "known_unknowns": ["không có receipt ID cho intent; dùng plan 1257 làm ref"],
+  "rollback_ref": "module chỉ parse/validate, chưa nối runtime; gỡ file là đủ",
+  "next_action": "H2"
+}

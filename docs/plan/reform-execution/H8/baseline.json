@@ -1,0 +1,30 @@
+{
+  "checkpoint": "H8",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/runtime.py (composer hiện có, chỉ đọc)"],
+    "write": ["backend/src/agentbox/agent_core/adaptive_main.py", "backend/tests/unit/test_adaptive_main.py"],
+    "forbidden": ["bỏ minimum checks", "tự phát minh trần step/wall", "chạy hai scheduler cho cùng admission"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"adaptiveMain": "không có hằng số schema/phiên bản trong module"},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_adaptive_main.py (87 ca)"},
+    {"id": "probe-P6", "result": "pass", "evidence": "probes_962cd84.json P6 14/14: stop/revoke luôn thắng; cùng chữ ký lỗi + bằng chứng không đổi → chặn; không phát minh trần step/wall; mọi quyết định kèm reason + evidenceRefs"},
+    {"id": "change-receipt", "result": "pass", "evidence": "H8.2 `_change_declared` fail closed, đòi approval khi intent/scope đổi"},
+    {"id": "two-schedulers", "result": "not-run", "evidence": "chưa nối composer runtime — chưa kiểm 'không chạy hai scheduler cho cùng admission' trong phiên thật"}
+  ],
+  "known_unknowns": [
+    "chưa nối runtime/composer: điều kiện một-scheduler và 'giao specialist khi có lợi' chưa kiểm bằng phiên thật",
+    "chưa có số đo hiệu quả adaptive (thuộc calibration H10.1, cần consent)"
+  ],
+  "rollback_ref": "module độc lập; gỡ file là đủ (chưa nối runtime)",
+  "next_action": "nối H8 khi có checkpoint wiring; giữ luật stop/revoke thắng và reason+evidenceRefs"
+}
