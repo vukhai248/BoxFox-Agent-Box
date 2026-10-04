@@ -3,7 +3,7 @@
   "status": "verified",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "962cd84 (nghiệm thu H1) → 82550cc (head; module được các lớp H3–H8 import)",
+  "code_tested": "962cd84 (nghiệm thu H1) → f7e4a9b (head; module được các lớp H3–H8 import)",
   "intent_ref": null,
   "scope": {
     "read": ["backend/src/agentbox/agent_core/orchestration_contracts.py", "dữ liệu/approval cũ (chỉ đọc)"],

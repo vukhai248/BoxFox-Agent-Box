@@ -5,7 +5,7 @@
   nghiệm thu mức vòng chạy **29/29 PASS** trên `c836822`; review toàn snapshot cuối đã chạy trên
   `ed5d771`/`c3bee48` (không phát hiện chặn; should-fix tài liệu đã sửa). Còn thiếu: H9 live pilot +
   calibration sống (H10.1 — hoãn #6531), các quyết định của chủ nhà.
-- **Head bàn giao:** `82550cc` trên `vorflux/boxfox-harness-reform` (PR #3, base
+- **Head bàn giao:** `f7e4a9b` trên `vorflux/boxfox-harness-reform` (PR #3, base
   `vorflux/w10-w12-completion`); chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`,
   `82550cc`; lần soát tài liệu này nằm trong chính mốc này.
 - **Quyết định đã ghi:**

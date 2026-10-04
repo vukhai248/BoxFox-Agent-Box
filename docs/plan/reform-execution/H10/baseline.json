@@ -3,7 +3,7 @@
   "status": "partial",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "82550cc (head; vorflux/boxfox-harness-reform) — nghiệm thu vòng chạy H4–H8 trên c836822",
+  "code_tested": "f7e4a9b (head; vorflux/boxfox-harness-reform) — nghiệm thu vòng chạy H4–H8 trên c836822",
   "intent_ref": "/code/.plans/reform-execution-runbook.md §II.2–§II.6",
   "scope": {
     "read": [
@@ -62,7 +62,7 @@
     {
       "id": "plan-vs-code-review",
       "result": "pass",
-      "evidence": "3 review theo miền rủi ro (H3, H4–H6, H7–H8) + simplify + 1 review toàn snapshot trên ed5d771/c3bee48 (không phát hiện chặn; should-fix tài liệu đã sửa; risk 2/10); tiếp nối bằng việc 2026-10-04 (79f024b, c6c88bb, fcc6819, b37dafb, 82550cc)"
+      "evidence": "3 review theo miền rủi ro (H3, H4–H6, H7–H8) + simplify + 1 review toàn snapshot trên ed5d771/c3bee48 (không phát hiện chặn; should-fix tài liệu đã sửa; risk 2/10); tiếp nối bằng việc 2026-10-04 (79f024b, c6c88bb, fcc6819, b37dafb, 82550cc, f7e4a9b)"
     }
   ],
   "known_unknowns": [

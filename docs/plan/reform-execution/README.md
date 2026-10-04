@@ -1,7 +1,7 @@
 # Bàn giao reform harness BoxFox — theo checkpoint (H0–H9)
 
 - **Phạm vi:** tài liệu bàn giao từng checkpoint của kế hoạch reform harness (plan_id 1257, duyệt qua Plan panel 2026-10-03), phục vụ H10.
-- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `82550cc` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`; tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H10) nằm trong chính mốc này.
+- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `f7e4a9b` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`; tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H10) nằm trong chính mốc này.
 - **Nguồn chính:**
   - `/code/.plans/v1-boxfox-harness-reform.md` — kế hoạch đã duyệt (§17: yêu cầu handoff);
   - `/code/.plans/reform-execution-runbook.md` — §II.2 khung thư mục, §II.3 nghiệm thu, §II.4 ma trận kiểm, §II.6 rollback/migration drill;
@@ -78,7 +78,7 @@ Nguồn: `/code/.plans/reform-backlog-disposition.md` (§III.1–III.2). Từ v�
 - **H4–H8 + `recovery_policy` đã nối runtime** (`802f51f`; bảy công tắc mặc định off): nghiệm thu mức vòng chạy **29/29 PASS** trên `c836822`; nợ riêng từng checkpoint ghi ở H4.5, H6.8/H6.9.
 - **H9 chưa đo:** live pilot (cần consent riêng); fixture lỗi offline + shadow W10.F đã làm offline (33/33, 34/34 cell, 0 verdict).
 - **Rollback/migration drill của H10 đã chạy offline (11/11, `962cd84`)** — chưa drill trên box thật với phiên đang chạy.
-- **Review toàn snapshot cuối (H10) đã chạy** trên `ed5d771`/`c3bee48`: không phát hiện chặn; 1 should-fix về tài liệu (đã sửa trong `c3bee48`+); risk 2/10; tiếp nối bằng việc 2026-10-04 (`79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`).
+- **Review toàn snapshot cuối (H10) đã chạy** trên `ed5d771`/`c3bee48`: không phát hiện chặn; 1 should-fix về tài liệu (đã sửa trong `c3bee48`+); risk 2/10; tiếp nối bằng việc 2026-10-04 (`79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`).
 - **F5/H3.11:** `attemptSeq` theo phiên; đổi khoá cần migration chỉ mục — chờ chủ nhà quyết.
 - **Ba test đỏ có sẵn trên `346da06`** (`test_terminal_exec_echo`, `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`, `test_revoked_grant_blocks_next_tool_call`) — không phải regression.
 - **Cách đếm test:** số trong tài liệu này là **số ca thu thập** (parametrize mở rộng) theo `docs/plan/reform-status.md` / PR body; test plan H3–H8 dùng **số hàm `def test_`** (thấp hơn, ví dụ `orchestration_contracts` 15 hàm / 77 ca). Cả hai đều ghi được nguồn.

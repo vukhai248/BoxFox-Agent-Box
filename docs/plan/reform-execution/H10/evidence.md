@@ -24,7 +24,7 @@
   `test_suite_v2.py` 38 passed — `/code/.generated_artifacts/h9/verification_summary.json`.
 - **Review toàn snapshot cuối (H10) trên `ed5d771`/`c3bee48`:** không phát hiện chặn; 1 should-fix về
   tài liệu (tham chiếu snapshot cũ — đã sửa); risk **2/10** (ngưỡng 6). Sau đó: `c836822`/`8a4bc54`/
-  `a95576d` ghi nhận bằng chứng, và việc 2026-10-04 (`79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`).
+  `a95576d` ghi nhận bằng chứng, và việc 2026-10-04 (`79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`).
 - **Test Report 956 (v3, PASSED)** cho PR #3 — tiêu đề `H1–H2 — hợp đồng task, kernel admission và
   kho task bền vững (PR #3)` (báo cáo hội tụ một tiêu đề theo hướng dẫn; v3 bổ sung vòng H9 offline).
 
