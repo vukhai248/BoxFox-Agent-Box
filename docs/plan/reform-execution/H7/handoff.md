@@ -7,4 +7,5 @@
   - các điểm vào chưa xác thực phải gọi `authorize(...)` (H7.2); `guard_request` chặn model khi intake chưa admit (H7.3).
 - **Blocker:** không; Research sống thuộc calibration (hoãn #6531).
 - **Việc tiếp:** khi mở consent, thêm E2E main↔Research qua envelope và migrate read view trên dữ liệu thật.
+- **Bật dần:** công tắc của checkpoint này nằm trong nhóm bật dần H3–H8 — thứ tự, khuôn kiểm 5 bước và rollback ở `docs/plan/reform-execution/HANDOFF.md` §6.
 - **Tham chiếu:** `probes_962cd84.json` (P5); nghiệm thu vòng chạy `/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json`; `docs/plan/reform-status.md` H7–H7.3.

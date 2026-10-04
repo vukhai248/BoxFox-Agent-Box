@@ -8,4 +8,5 @@
   - park ở mọi đường đóng batch, kể cả lượt chốt dở (trần bước/hạn chót); wake chỉ mở lại đúng chủ đã park (H4.7, `f3004ee`).
 - **Blocker:** không; giới hạn đã ghi: process job `JOB_EXECUTOR_UNSUPPORTED`, resume theo checkpoint chưa hỗ trợ (H4.5 — fail closed).
 - **Việc tiếp:** chạy phiên thật cần consent (H10.1); trước đó giữ công tắc off.
+- **Bật dần:** công tắc của checkpoint này nằm trong nhóm bật dần H3–H8 — thứ tự, khuôn kiểm 5 bước và rollback ở `docs/plan/reform-execution/HANDOFF.md` §6.
 - **Tham chiếu:** `probes_962cd84.json` (P2); nghiệm thu vòng chạy `/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json`; `docs/plan/reform-status.md` H4–H4.8.

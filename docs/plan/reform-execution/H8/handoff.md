@@ -8,4 +8,5 @@
   - bật `adaptive` đòi cả `BOXFOX_ADAPTIVE_HARNESS` + `BOXFOX_USAGE_LEDGER`; chỉ vận hành viên ghi được policy, model không có tool ghi.
 - **Blocker:** không; chạy thật thuộc calibration (hoãn #6531).
 - **Việc tiếp:** khi mở consent, đo hiệu quả trong calibration; giữ P6 ở mức runtime.
+- **Bật dần:** công tắc của checkpoint này nằm trong nhóm bật dần H3–H8 — thứ tự, khuôn kiểm 5 bước và rollback ở `docs/plan/reform-execution/HANDOFF.md` §6.
 - **Tham chiếu:** `probes_962cd84.json` (P6); nghiệm thu vòng chạy `/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json`; `docs/plan/reform-status.md` H8–H8.7.

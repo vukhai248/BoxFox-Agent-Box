@@ -19,6 +19,8 @@
     tương lai (#6531).
 - **Blocker:** không có blocker kỹ thuật đang chặn; H10.1 hoãn #6531 (consent tài chính riêng).
 - **Việc tiếp theo (thứ tự đề xuất):**
+  0. Bật dần bảy công tắc H3–H8 theo khuôn 5 bước ở `docs/plan/reform-execution/HANDOFF.md` §6
+     (mặc định vẫn TẮT; khóa tổng `BOXFOX_REFORM` chỉ dùng sau khi cả bảy đã xanh riêng lẻ).
   1. Chủ nhà quyết retarget PR #3 và cách đọc ngữ nghĩa follow-up.
   2. H9: live pilot + calibration (H10.1) chỉ khi có consent tài chính riêng; mở rộng shadow khi có
      receipt dạng cell cho R/Q/RV2/seeded.

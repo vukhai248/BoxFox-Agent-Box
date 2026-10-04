@@ -25,6 +25,9 @@ Mỗi thư mục `H0/` … `H11/` gồm đúng 5 file:
 | `migration.md` | tương thích, dữ liệu legacy, rollback / kill switch |
 | `handoff.md` | trạng thái, quyết định, blocker, việc tiếp |
 
+**H12 (khóa tổng) không tách thư mục** — nằm trọn trong `HANDOFF.md` §5 (bảng công tắc) và §6
+(quy trình bật dần từng công tắc); bảng theo dõi vẫn có dòng H12.
+
 Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) · `partial` (đạt một phần, nêu rõ điều kiện chưa đạt) · `blocked` (chờ consent/quyết định) · `tương lai` (hoãn có mác, theo #6531).
 
 ## Danh sách checkpoint
