@@ -1,7 +1,7 @@
 # Bàn giao reform harness BoxFox — theo checkpoint (H0–H9)
 
 - **Phạm vi:** tài liệu bàn giao từng checkpoint của kế hoạch reform harness (plan_id 1257, duyệt qua Plan panel 2026-10-03), phục vụ H10.
-- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `962cd84` (cây sạch, 2026-10-04). Tài liệu trong thư mục này **chưa commit**.
+- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `c3bee48` (cây sạch, 2026-10-04); tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48`.
 - **Nguồn chính:**
   - `/code/.plans/v1-boxfox-harness-reform.md` — kế hoạch đã duyệt (§17: yêu cầu handoff);
   - `/code/.plans/reform-execution-runbook.md` — §II.2 khung thư mục, §II.3 nghiệm thu, §II.4 ma trận kiểm, §II.6 rollback/migration drill;
@@ -38,7 +38,7 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | H7 | Research ownership (`research_owner.py`) | partial | 52 ca + P5 8/8; **chưa nối runtime** |
 | H8 | Main thích ứng (`adaptive_main.py`) | partial | 87 ca + P6 14/14; **chưa nối runtime** |
 | H9 | Suite v2 + calibration | partial | 62 ca / 40 safety oracle / 38 test; fault corpus 33/33; shadow W10.F 34/34 cell, 0 verdict; `measured=false`; live pilot chờ consent |
-| H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; còn: review toàn snapshot cuối |
+| H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; review toàn snapshot cuối đã chạy (không phát hiện chặn, 2/10); còn: nghiệm thu mức vòng chạy H4–H8, H9 live pilot, quyết định chủ nhà |
 | H10.1 | Calibration sống | blocked | cần consent tài chính riêng — chưa tiêu |
 
 ## Ma trận yêu cầu → bằng chứng → nghiệm thu (tóm tắt)
@@ -78,6 +78,7 @@ Nguồn: `/code/.plans/reform-backlog-disposition.md` (§III.1–III.2). Từ v�
 - **H4–H8 + recovery_policy chưa nối runtime** (không có src importer): nghiệm thu mức thư viện + probe đạt; điều kiện mức vòng chạy **chưa kiểm**.
 - **H9 chưa đo:** live pilot (cần consent riêng); fixture lỗi offline + shadow W10.F đã làm offline (33/33, 34/34 cell, 0 verdict).
 - **Rollback/migration drill của H10 đã chạy offline (11/11, `962cd84`)** — chưa drill trên box thật với phiên đang chạy.
+- **Review toàn snapshot cuối (H10) đã chạy** trên `ed5d771`/`c3bee48`: không phát hiện chặn; 1 should-fix về tài liệu (đã sửa trong `c3bee48`+); risk 2/10.
 - **F5/H3.11:** `attemptSeq` theo phiên; đổi khoá cần migration chỉ mục — chờ chủ nhà quyết.
 - **Ba test đỏ có sẵn trên `346da06`** (`test_terminal_exec_echo`, `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`, `test_revoked_grant_blocks_next_tool_call`) — không phải regression.
 - **Cách đếm test:** số trong tài liệu này là **số ca thu thập** (parametrize mở rộng) theo `docs/plan/reform-status.md` / PR body; test plan H3–H8 dùng **số hàm `def test_`** (thấp hơn, ví dụ `orchestration_contracts` 15 hàm / 77 ca). Cả hai đều ghi được nguồn.

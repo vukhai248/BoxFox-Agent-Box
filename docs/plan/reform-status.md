@@ -27,7 +27,7 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H2.4 | Lỗi: chỉ mục unique thôi chặn attempt đang park (hở hàng rào tầng dữ liệu) | ✅ | commit `3975ab6`; test attempt park vẫn chặn |
 | H2.5 | Lỗi: reason đóng cũ dính lên attempt đang mở sau resume | ✅ | commit `3975ab6`; test ghim `project_attempt` |
 | H2.6 | Lỗi: `permission_view` báo `adaptiveEnabled` trong khi scope đã hạ `artifact_only` | ✅ | commit `3975ab6`; test view theo nhánh admit |
-| H3 | Bề mặt task (`task_list/get/send/abandon`) + phân loại recovery + receipt huỷ | ✅ | `task_surface.py` (37 test) + `recovery_policy.py` (39 test); seam map `/code/.plans/reform-h3-seams.md` |
+| H3 | Bề mặt task (`task_list/get/send/abandon`) + phân loại recovery + receipt huỷ | ✅ | `task_surface.py` (40 ca) + `recovery_policy.py` (39 test); seam map `/code/.plans/reform-h3-seams.md` |
 | H3.1 | Lỗi: chưa có đường nối `task_service` vào runtime (chỉ test import) | ✅ | `task_surface.py` + wiring: `turn_profile` gỡ công cụ khi tắt, `dispatch` từ chối, hook `project_child` ở 4 bộ đóng con, `delegate_task` tạo task + ghi attempt |
 | H3.2 | Lỗi: `task_get/send/abandon` đưa `taskId` (alias) thẳng vào khoá backend ⇒ mọi lời gọi theo alias chết `TASK_UNKNOWN` | ✅ | `TaskService.key_for` tra alias trong run; test `task_get` theo `taskId` |
 | H3.3 | Lỗi: kết quả `delegate_task` gọi `_task_receipt` thiếu `self` ⇒ `TURN_FAILED_NAMEERROR` ngay ở bước giao việc có hợp đồng | ✅ | test `test_delegate_with_a_contract_creates_the_task_and_binds_the_attempt` bắt được; đã sửa `self._task_receipt` |
@@ -65,12 +65,12 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
 | H9.1 | Fixture lỗi offline + shadow legacy (không tốn tiền) | ✅ | `python3 scripts/eval/suite_v2.py --faults` 33/33; `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell ánh xạ, `verdictsProduced=0`; report `/code/.generated_artifacts/h3h8/h9/shadow_w10f.json` |
 | H9.2 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; calibration sống còn chờ consent tài chính |
-| H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⏳ | `docs/plan/reform-execution/` (README + H0–H10, mỗi checkpoint 5 file); drill rollback/kill switch offline 11/11 (`/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log`); còn review toàn snapshot cuối |
+| H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⏳ | `docs/plan/reform-execution/` (README + H0–H10, mỗi checkpoint 5 file); drill rollback/kill switch offline 11/11 (`/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log`); review toàn snapshot cuối đã chạy trên `ed5d771`/`c3bee48` — không phát hiện chặn, risk 2/10; còn nghiệm thu mức vòng chạy H4–H8 + live pilot |
 | H10.1 | Calibration sống (model/route/ngân sách thật) | ⛔ | Cần consent tài chính riêng; chưa tiêu |
 
 ## Ghi chú trạng thái
 
-- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H9; head đã push `962cd84`. Toàn bộ `backend/tests/unit/` trên head này: **4060 passed, 12 skipped, 3 failed** — ba lỗi đỏ y hệt baseline `346da06`.
+- PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H9; head đã push `c3bee48` (H9 offline + dọn cây tạm). Toàn bộ `backend/tests/unit/` đo trên `962cd84`: **4060 passed, 12 skipped, 3 failed** — ba lỗi đỏ y hệt baseline `346da06`.
 - Nhánh nền của PR #3 là `vorflux/w10-w12-completion` (nhánh khảo sát chưa nằm trên `main`); đổi base cần chủ nhà quyết định.
 - PR #2 (`vorflux/boxfox-harness-reform-docs`) giữ tài liệu kiến trúc; PR #3 giữ mã và bảng này.
 - Ba test đỏ của `backend/tests/unit/` là lỗi có sẵn trên baseline `346da06` (`test_terminal_exec_echo`,

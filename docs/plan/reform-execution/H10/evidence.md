@@ -16,8 +16,13 @@
   `test_revoked_grant_blocks_next_tool_call`.
 - **E2E real-runtime + probe** (từ H3, nhãn `962cd84-final`): 9/9 scenario (110 check), P1–P6 71/71 —
   `/code/.generated_artifacts/h3h8/e2e/summary.json`, `/code/.generated_artifacts/h3h8/probes/probes_962cd84.json`.
-- **Test Report 956 (v2, PASSED)** cho PR #3 — tiêu đề `H1–H2 — hợp đồng task, kernel admission và
-  kho task bền vững (PR #3)` (báo cáo hội tụ một tiêu đề theo hướng dẫn).
+- **H9 offline (từ H9, độc lập kiểm lại trên `ed5d771`):** `--faults` 33/33 lỗi bắt đúng mã;
+  `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell (17 ca × 2 repeat), `verdictsProduced=0`;
+  `test_suite_v2.py` 38 passed — `/code/.generated_artifacts/h9/verification_summary.json`.
+- **Review toàn snapshot cuối (H10) trên `ed5d771`/`c3bee48`:** không phát hiện chặn; 1 should-fix về
+  tài liệu (tham chiếu snapshot cũ — đã sửa); risk **2/10** (ngưỡng 6).
+- **Test Report 956 (v3, PASSED)** cho PR #3 — tiêu đề `H1–H2 — hợp đồng task, kernel admission và
+  kho task bền vững (PR #3)` (báo cáo hội tụ một tiêu đề theo hướng dẫn; v3 bổ sung vòng H9 offline).
 
 ## Artifact tham chiếu
 
@@ -29,9 +34,8 @@
 
 ## Chưa kiểm (không được ghi là đã đạt)
 
-- Review toàn snapshot cuối sau `962cd84` (mới có review theo miền rủi ro ở vòng trước).
 - Nghiệm thu mức vòng chạy cho H4–H8 (chưa nối runtime — không có src importer).
-- H9: fixture lỗi offline, parity/shadow run, live pilot.
+- H9: live pilot + calibration sống (H10.1); shadow cho R/Q/RV2/seeded khi có receipt dạng cell.
 - H10.1: calibration sống (cần consent tài chính riêng; `financial_consent_ref: null`).
 - Drill trên môi trường thật (docker/box) — drill này chạy offline trên SQLite tạm; chưa kiểm
   rollback khi có phiên đang chạy thật.
