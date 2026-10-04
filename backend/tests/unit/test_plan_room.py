@@ -103,3 +103,43 @@ def test_degraded_index_still_keeps_the_declared_folder(tmp_path):
     assert registration.degraded
     args, evaluation = rt.plan_write_args('# Plan\n\nNội dung.\n', 'login-page', 'Login page', registration)
     assert args['directory'] == 'tao-ui' and 'version' not in args and evaluation is None
+
+
+def _write_plan_schema():
+    from agentbox.agent_core.tool_contracts import SCHEMAS
+    return next(tool for tool in SCHEMAS if tool['function']['name'] == 'write_plan')
+
+
+def test_write_plan_schema_declares_the_destination_folder():
+    """Model sống chỉ biết tham số NẰM TRONG schema: chỗ ghi phải được khai, không chỉ được đọc.
+
+    Hướng "mềm" của chủ nhà (2026-10-04): ghi theo chỗ người dùng chỉ, và bản sau nối tiếp trong
+    thư mục của nhóm. Runtime đã kẹp `directory` từ `79f024b`, nhưng schema không khai tham số này —
+    lượt kiểm thử thật với model miễn phí đã báo đúng như vậy ("write_plan không có tham số
+    `directory`") nên hướng mềm không thể chạm tới từ model. Ca này ghim lời khai đó.
+    """
+    schema = _write_plan_schema()
+    properties = schema['function']['parameters']['properties']
+    assert 'directory' in properties
+    assert 'tao-ui' in properties['directory'].get('description', '')
+    assert '.plans/' in properties['directory'].get('description', '')
+    # Không khai thêm required: chỗ ghi vẫn là tuỳ chọn, mặc định là gốc phòng.
+    assert schema['function']['parameters']['required'] == ['slug', 'markdown']
+
+
+def test_declared_folder_keeps_the_model_facing_name_and_the_clamped_path(tmp_path):
+    """`directory` + `slug` phải cho ra đúng `.plans/<directory>/vN-<slug>.md` (không nuốt slug)."""
+    _, rt, _, executor, sid = build(tmp_path)
+    empty_index(executor)
+
+    async def run():
+        registration = await rt.plan_registration_for(
+            rt.store.get(sid), 'dang-nhap-sso',
+            {'directory': 'designs/login', 'identity': None}, None)
+        assert registration.directory == 'designs/login'
+        assert registration.identity == 'designs/login/dang-nhap-sso'
+        assert registration.slug == 'dang-nhap-sso'
+        args, _ = rt.plan_write_args('# Kế hoạch\n', 'dang-nhap-sso', 'Đăng nhập SSO', registration)
+        assert args['directory'] == 'designs/login'
+
+    asyncio.run(run())

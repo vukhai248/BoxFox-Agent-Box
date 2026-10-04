@@ -430,7 +430,10 @@ SCHEMAS = [
          'the version it revises (the harness tells you the number to write in the header block it generates). '
          'Pass `identity` (e.g. "billing-plan", or "subplans/api" for a nested folder; it wins over `slug`) when you '
          'know which plan group this belongs to, and `relatesTo` ("none", "<identity>", or "<identity>@vN") when the new '
-         'plan is a deliberate fork; without them the harness decides by slug similarity. Pass '
+         'plan is a deliberate fork; without them the harness decides by slug similarity. '
+         'Pass `directory` (e.g. "tao-ui" or "designs/login") when the owner names the folder the plan must live '
+         'in: the file lands at .plans/<directory>/vN-slug.md and later versions of the same group continue in that '
+         'folder even without the argument. Pass '
          '`researchDependencies` for the exact dossier versions that justify this plan; a newer dossier '
          'marks the plan stale and blocks approval until a revised plan is reviewed. '
          'Next step is mandatory: delegate `plan-review` to critique the file you just wrote (tell it the exact path '
@@ -438,6 +441,11 @@ SCHEMAS = [
          'verdict with `plan_verify`. Until a passing critique exists for this exact version, `request_approval` for '
          'the plan is refused.',
          {'slug': STRING, 'markdown': STRING, 'title': STRING, 'identity': STRING, 'relatesTo': STRING,
+          'directory': {'type': 'string', 'description':
+                        'Folder inside the plan room for this plan group, e.g. "tao-ui" or "designs/login" → '
+                        '.plans/<directory>/vN-slug.md. Optional (default: the room root). Every spelling is '
+                        'clamped into .plans/: prefixes "plans"/".plans" are stripped and ".." or an invalid '
+                        'segment is refused with PLAN_EVAL_REJECTED — a plan never lands outside .plans/.'},
           'runId': STRING, 'briefRevision': {'type': 'integer'},
           'traceability': {'type': 'array', 'items': {'type': 'object'}},
           'researchDependencies': {'type': 'array', 'items': {'type': 'object', 'properties': {
