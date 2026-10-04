@@ -792,8 +792,12 @@ _BUILD_FAULT_OPS: tuple[str, ...] = ('delete_file', 'write_text', 'json_set', 'd
 def _stage_eval_tree(repo_root: pathlib.Path) -> pathlib.Path:
     """Chép ``scripts/eval`` sang cây tạm để tiêm lỗi nguồn mà không đụng cây thật."""
     staging = pathlib.Path(tempfile.mkdtemp(prefix='suite-v2-fault-'))
-    shutil.copytree(repo_root / 'scripts' / 'eval', staging / 'scripts' / 'eval',
-                    ignore=shutil.ignore_patterns('__pycache__'))
+    try:
+        shutil.copytree(repo_root / 'scripts' / 'eval', staging / 'scripts' / 'eval',
+                        ignore=shutil.ignore_patterns('__pycache__'))
+    except BaseException:  # chép hỏng thì không để lại rác
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     return staging
 
 
