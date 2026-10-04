@@ -4,9 +4,10 @@
   điểm; testing đang chạy khi viết).
   Bốn việc #6545 đã có mã và test: trần mới #6546, cờ kết cục, chặn đọc lại + nhắc/trần chờ hạn,
   `child_resume` giữ nguyên ngữ cảnh con bị cắt, cha khai trần trong `delegate_task`.
-- **Head bàn giao:** `0e9b6df` trên `vorflux/boxfox-harness-reform` (PR #3, base
+- **Head bàn giao:** `f7ebbc9` trên `vorflux/boxfox-harness-reform` (PR #3, base
   `vorflux/w10-w12-completion`); base checkpoint `ad3b5f8`. Chuỗi H11: `84022bf` (code) →
-  `9a04c16` (simplify) → `2bd3886` (phủ kiểm) → `0e9b6df` (bảy sửa đổi sau review).
+  `9a04c16` (simplify) → `2bd3886` (phủ kiểm) → `0e9b6df` (bảy sửa đổi sau review) →
+  `f7ebbc9` (ba siết sau vòng soát thứ hai).
 - **Quyết định đã ghi (chủ nhà, 2026-10-04):**
   - #6545: chọn cả bốn đề xuất quản lý con, gộp thành MỘT checkpoint mới.
   - #6546: trần cao lên 1k/1k5 bước và 7200 s (giống Vorflux); con chạm trần thì hoặc tổng hợp rồi
@@ -20,7 +21,7 @@
      hiện nếu có rồi cập nhật `evidence.md`.
   2. Kịch bản E2E thật cho `child_resume` (con bị cắt bằng trần cha khai thấp → gọi lại) khi có
      ngân sách model phù hợp.
-  3. Đo lại toàn bộ unit suite trên `0e9b6df` trước khi khép checkpoint (mới có nhóm liên quan
-     18 file **269 passed** và scoped 22 file **582 passed** trên `84022bf`).
-- **Rollback:** xem `migration.md`; revert `0e9b6df` + `2bd3886` + `9a04c16` + `84022bf` là đủ
-  (không có dữ liệu phải chuyển ngược).
+  3. Đo lại toàn bộ unit suite trên `f7ebbc9` trước khi khép checkpoint (mới có nhóm liên quan
+     18 file **271 passed** và scoped 22 file **582 passed** trên `84022bf`).
+- **Rollback:** xem `migration.md`; revert `f7ebbc9` + `0e9b6df` + `2bd3886` + `9a04c16` +
+  `84022bf` là đủ (không có dữ liệu phải chuyển ngược).

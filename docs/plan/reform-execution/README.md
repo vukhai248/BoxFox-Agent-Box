@@ -1,7 +1,7 @@
 # Bàn giao reform harness BoxFox — theo checkpoint (H0–H11)
 
 - **Phạm vi:** tài liệu bàn giao từng checkpoint của kế hoạch reform harness (plan_id 1257, duyệt qua Plan panel 2026-10-03), phục vụ H10–H11.
-- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `0e9b6df` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`, `b219f57`, `17b146b`, `ad3b5f8`, `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`; tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H11) nằm trong chính mốc này.
+- **Nhánh / mốc:** `vorflux/boxfox-harness-reform`, base `346da06`, head `f7ebbc9` (2026-10-04); lớp vòng chạy H4–H8 nối ở `802f51f`; chuỗi việc 2026-10-04: `79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`, `b219f57`, `17b146b`, `ad3b5f8`, `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9`; tài liệu này đã commit ở `c6be87e`, `ed5d771`, `c3bee48` và cập nhật ở `c836822`, `8a4bc54`, `a95576d`; lần soát 2026-10-04 (H4–H11) nằm trong chính mốc này.
 - **Nguồn chính:**
   - `/code/.plans/v1-boxfox-harness-reform.md` — kế hoạch đã duyệt (§17: yêu cầu handoff);
   - `/code/.plans/reform-execution-runbook.md` — §II.2 khung thư mục, §II.3 nghiệm thu, §II.4 ma trận kiểm, §II.6 rollback/migration drill;
@@ -40,7 +40,7 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | H9 | Suite v2 + calibration | partial | 62 ca / 40 safety oracle / 38 test; fault corpus 33/33; shadow W10.F 34/34 cell, 0 verdict; `measured=false`; live pilot chờ consent |
 | H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; nghiệm thu mức vòng chạy H4–H8 **29/29 PASS** trên `c836822`; review toàn snapshot cuối (không phát hiện chặn, 2/10); còn: H9 live pilot, quyết định chủ nhà |
 | H10.1 | Calibration sống | tương lai | hoãn theo #6531 — cần consent tài chính riêng; mã giữ nguyên, công tắc TẮT; chưa tiêu |
-| H11 | Quản lý con/subagent (#6545–#6548): trần 1000/1500 + 7200 s, cờ kết cục, chặn đọc lại, nhắc/trần chờ hạn, `child_resume`, cha khai trần | partial | code `84022bf` + simplify `9a04c16` + phủ kiểm `2bd3886` + bảy sửa đổi sau review `0e9b6df`; `test_child_management_h11.py` **35 ca**, nhóm liên quan 18 file **269 passed**, scoped 22 file **582 passed** trên `84022bf`; trần mới đọc được từ `runtime-info` trên 3113; E2E thật `task-fix` 1/1 + `child` 1/1 (PASS); review risk 5/10 đã xử lý; testing chạy nốt |
+| H11 | Quản lý con/subagent (#6545–#6548): trần 1000/1500 + 7200 s, cờ kết cục, chặn đọc lại, nhắc/trần chờ hạn, `child_resume`, cha khai trần | partial | code `84022bf` + simplify `9a04c16` + phủ kiểm `2bd3886` + bảy sửa đổi sau review `0e9b6df` + ba siết sau vòng soát 2 `f7ebbc9`; `test_child_management_h11.py` **37 ca**, nhóm liên quan 18 file **271 passed**, scoped 22 file **582 passed** trên `84022bf`; trần mới đọc được từ `runtime-info` trên 3113; E2E thật `task-fix` 1/1 + `child` 1/1 (PASS); review risk 5/10 đã xử lý; testing chạy nốt |
 
 ## Ma trận yêu cầu → bằng chứng → nghiệm thu (tóm tắt)
 

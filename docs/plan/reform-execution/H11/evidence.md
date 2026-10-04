@@ -40,6 +40,13 @@
   (`h11-review`) xong trên `ad3b5f8..84022bf`: **risk 5/10, Medium, "ship with mitigations"**, bảy
   finding (1 High, 2 Medium, 3 Low, 1 Nit); ba finding nặng đã soi lại bằng script
   (`/var/tmp/h11check/check_findings.py`). Testing đang chạy; kết quả ghi bổ sung khi có.
+- **Vòng soát H11 vòng 2 trên `0e9b6df`** — risk **3/10 (Low)**, "ship with mitigations": cả bảy
+  sửa đổi đúng như mô tả; ba điểm còn hở của chính bản sửa (bộ dọn theo lượt vẫn xoá bộ đếm của
+  phiên khác cùng số lượt — Medium; callback cũ vẫn nhả suất fan-out của lần chạy mới — Low; nốt
+  một chỗ gọi `close_detached_child` thiếu `started` — Low). Siết cả ba ở `f7ebbc9` kèm hai ca mới;
+  kịch bản soi lại của vòng soát (`/var/tmp/h11_repro_cleanup.py`) xác nhận ba bộ đếm của phiên
+  khác cùng lượt sống sót. Đo sau `f7ebbc9`: `test_child_management_h11.py` **37 ca**, nhóm liên
+  quan 18 file **271 passed in 122.29s`.
 - **Bảy sửa đổi sau review** — `0e9b6df`: (1) `partial_turn` đọc hàng `finish` CUỐI của phiên
   (cờ `partial` + `code`) thay vì quét mọi notice bền — con được gọi lại chạy sạch không còn mang
   kết cục cắt của lần trước; (2) cửa sổ `peer_read` khoá theo người đọc `(turn, sid, target)`;
@@ -64,7 +71,7 @@
 
 - **E2E thật cho `child_resume`** đã chạy (xem trên); phần chưa kiểm là cờ `timedOut` (cắt vì HẠN
   CHÓT thật, không phải trần bước) và gọi lại nhiều lần trong cùng lượt tới trần 3.
-- **Đo lại toàn bộ unit suite** trên `0e9b6df` (mới có nhóm liên quan 18 file **269 passed** +
+- **Đo lại toàn bộ unit suite** trên `f7ebbc9` (mới có nhóm liên quan 18 file **271 passed** +
   scoped 22 file **582 passed** trên `84022bf`).
 - **UI thật** với cờ `timedOut`/`partial` hiển thị trên phiên con bị cắt (chưa chụp lại sau H11).
 - H9 live pilot / H10.1 calibration: vẫn hoãn #6531; `financial_consent_ref: null`.

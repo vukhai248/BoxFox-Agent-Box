@@ -3,7 +3,7 @@
   "status": "partial",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03) + Phụ lục B; quyết định chủ nhà #6545–#6548 (2026-10-04)",
   "code_baseline": "346da06",
-  "code_tested": "0e9b6df (H11; vorflux/boxfox-harness-reform) — nhóm liên quan 18 file 269 passed; scoped 22 file 582 passed trên 84022bf; E2E thật trên 3113 PASS (task-fix 1/1, child 1/1)",
+  "code_tested": "f7ebbc9 (H11; vorflux/boxfox-harness-reform) — nhóm liên quan 18 file 271 passed; scoped 22 file 582 passed trên 84022bf; E2E thật trên 3113 PASS (task-fix 1/1, child 1/1)",
   "intent_ref": "/code/.plans/v1-boxfox-harness-reform.md Phụ lục B — H11; /code/.plans/reform-execution-runbook.md §II.2–§II.3",
   "scope": {
     "read": [
@@ -30,7 +30,7 @@
     "H4–H8 (công tắc nối runtime) — peer_mesh/roles gating",
     "H10 (bàn giao + drill)",
     "commit ad3b5f8 (base H11)",
-    "commit 84022bf (H11) + 9a04c16 + 2bd3886 + 0e9b6df"
+    "commit 84022bf (H11) + 9a04c16 + 2bd3886 + 0e9b6df + f7ebbc9"
   ],
   "policy_versions": {
     "taskRecordSchemaVersion": 1,
@@ -44,12 +44,12 @@
     {
       "id": "unit-h11",
       "result": "pass",
-      "evidence": "backend/tests/unit/test_child_management_h11.py: 35 ca xanh (5 ca thêm sau review)"
+      "evidence": "backend/tests/unit/test_child_management_h11.py: 37 ca xanh (5 ca thêm sau review + 2 ca sau vòng soát 2)"
     },
     {
       "id": "scoped-suite",
       "result": "pass",
-      "evidence": "22 file scoped: 582 passed in 167.53s (job 6d9409a3); nhóm liên quan 18 file: 269 passed in 120.49s sau 0e9b6df"
+      "evidence": "22 file scoped: 582 passed in 167.53s (job 6d9409a3); nhóm liên quan 18 file: 271 passed in 122.29s sau f7ebbc9"
     },
     {
       "id": "limits-visible",
@@ -64,15 +64,15 @@
     {
       "id": "review",
       "result": "pass",
-      "evidence": "simplify 9a04c16; review risk 5/10 (7 finding) → sửa ở 0e9b6df, soi lại bằng check_findings_v2.py; testing đang chạy"
+      "evidence": "simplify 9a04c16; review vòng 1 risk 5/10 (7 finding) → sửa ở 0e9b6df; review vòng 2 risk 3/10 (3 điểm) → siết ở f7ebbc9; testing đang chạy"
     }
   ],
   "known_unknowns": [
     "Cờ timedOut từ hạn chót THẬT và gọi lại tới trần 3 lần/lượt chưa có kịch bản E2E hoàn chỉnh",
-    "Chưa đo lại toàn bộ unit suite trên 0e9b6df (mới có nhóm liên quan 18 file + scoped 22 file)",
+    "Chưa đo lại toàn bộ unit suite trên f7ebbc9 (mới có nhóm liên quan 18 file + scoped 22 file)",
     "Ngưỡng PEER_READ_IDLE_MAX=3 và CHILD_RESUME_MAX_PER_TURN=3 chọn theo nguồn đo (14–20 lần đọc lại) — có thể chỉnh khi có số mới",
     "H9 live pilot / H10.1 calibration vẫn hoãn #6531"
   ],
-  "rollback_ref": "không có bảng/cột mới; tắt công tắc peer mesh là mất child_resume + peer_read/await_children như cũ; trần mới là hằng số (rollback = revert 0e9b6df + 2bd3886 + 9a04c16 + 84022bf)",
-  "next_action": "chờ testing báo cáo cuối (chạy trên 3113 mã 0e9b6df); cập nhật PR #3 (risk 5/10 + body H11); chờ chủ nhà quyết retarget PR #3 và cách đọc follow-up"
+  "rollback_ref": "không có bảng/cột mới; tắt công tắc peer mesh là mất child_resume + peer_read/await_children như cũ; trần mới là hằng số (rollback = revert f7ebbc9 + 0e9b6df + 2bd3886 + 9a04c16 + 84022bf)",
+  "next_action": "restart 3113 tại f7ebbc9 rồi chạy lại các kịch bản bị ảnh hưởng; chờ testing báo cáo cuối; cập nhật PR #3 (risk 5/10 + body H11); chờ chủ nhà quyết retarget PR #3 và cách đọc follow-up"
 }
