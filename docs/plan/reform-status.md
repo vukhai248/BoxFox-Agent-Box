@@ -76,16 +76,18 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H8.5 | Nit: `_budget` với effort lạ thiếu mã/trường trong `reason` | ✅ | `ADAPTIVE_EFFORT_INPUT` + field; mixed needs giữ tập hỗ trợ |
 | H8.6 | Nối runtime: `adaptive_surface` (decision/loop/evidence bền) + cổng `recovery_policy` chặn retry khi policy từ chối; guidance động chỉ thay SOP gốc | ✅ | `adaptive_surface.py` (13 test) + test cổng deny/allow; kill switch giữ checkpoint đọc được |
 | H8.7 | Lỗi: `dispatch` bọc `_dispatch` làm test ghim cửa kernel vỡ (`SimpleNamespace` không có `_dispatch`) | ✅ | stub uỷ nhiệm lại đường công khai `HarnessRuntime.dispatch` → giữ nguyên phép ghim |
-| H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
+| H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ (offline xong; live ⏭️) | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
 | H9.1 | Fixture lỗi offline + shadow legacy (không tốn tiền) | ✅ | `python3 scripts/eval/suite_v2.py --faults` 33/33; `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell ánh xạ, `verdictsProduced=0`; report `/code/.generated_artifacts/h3h8/h9/shadow_w10f.json` |
 | H9.2 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; calibration sống còn chờ consent tài chính |
 | H10 | Bàn giao: contract/baseline/evidence/migration/handoff từng checkpoint | ⏳ | `docs/plan/reform-execution/` (README + H0–H10, mỗi checkpoint 5 file); drill rollback/kill switch offline 11/11 (`/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log`); review toàn snapshot cuối đã chạy trên `ed5d771`/`c3bee48` — không phát hiện chặn, risk 2/10; còn nghiệm thu mức vòng chạy H4–H8 + live pilot |
-| H10.1 | Calibration sống (model/route/ngân sách thật) | ⛔ | Cần consent tài chính riêng; chưa tiêu |
+| H10.1 | Calibration sống (model/route/ngân sách thật) | ⏭️ tương lai | Quyết định chủ nhà #6531 (2026-10-04): tạm tắt phần **giới hạn ngân sách**, ghi mác tương lai làm sau, coi như xong ở mức hiện tại; code giữ nguyên, công tắc TẮT; xem Phụ lục A của plan |
+| H10.2 | Phần **giới hạn ngân sách** (allocation + trần chi + `BOXFOX_USAGE_LEDGER` cho phiên thật) hoãn sang tương lai | ⏭️ tương lai | #6531: chỉ hoãn phần giới hạn ngân sách; phần hàng usage + giá của H6 giữ nguyên; mở lại khi có consent tài chính hoặc chạy bằng model miễn phí có kiểm soát |
 
 ## Ghi chú trạng thái
 
 - PR #3 (`vorflux/boxfox-harness-reform`) là **nhánh duy nhất** cho toàn bộ H1–H9; head đã push `c836822`. Toàn bộ `backend/tests/unit/` đo trên `c836822` (cây sạch): **4277 passed, 12 skipped, 3 failed in 1273.91s** — ba lỗi đỏ y hệt baseline `346da06` (`/code/.generated_artifacts/h4h8/unit/full_unit_c836822.log`).
 - Kiểm thử chấp nhận mức vòng chạy H4–H8 (official, head `c836822`): **29/29 PASS** — parity P1/P2, H4 A1–A9, H5 B1–B5, H6 C1–C5, H7 D1–D4, H8 E1–E4; offline, không gọi model trả phí (`/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json`).
+- **Tương lai (làm sau) — #6531:** phần *giới hạn ngân sách* (allocation/trần chi + calibration sống) hoãn sang tương lai; hiện tại coi như xong. Chi tiết ở Phụ lục A của plan `/code/.plans/v1-boxfox-harness-reform.md`.
 - Nhánh nền của PR #3 là `vorflux/w10-w12-completion` (nhánh khảo sát chưa nằm trên `main`); đổi base cần chủ nhà quyết định.
 - PR #2 (`vorflux/boxfox-harness-reform-docs`) giữ tài liệu kiến trúc; PR #3 giữ mã và bảng này.
 - Ba test đỏ của `backend/tests/unit/` là lỗi có sẵn trên baseline `346da06` (`test_terminal_exec_echo`,
