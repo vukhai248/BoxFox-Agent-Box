@@ -4959,13 +4959,9 @@ class HarnessRuntime(RuntimeCommands):
             # H11 — ba bộ đếm theo LƯỢT (cửa sổ đọc lại peer, số lần chờ hết hạn, số lần gọi lại
             # từng con): khoá là `(turn, ...)` nên chúng vô nghĩa sau khi lượt đóng, và để lại thì
             # tiến trình harness sống lâu sẽ phình theo số lượt. Xoá theo ĐÚNG lượt vừa đóng.
-            closed_turn = turn_no
-            for window_key in [key for key in self.peer_read_windows if key[0] == closed_turn]:
-                self.peer_read_windows.pop(window_key, None)
-            for wait_key in [key for key in self.peer_wait_timeouts if key[0] == closed_turn]:
-                self.peer_wait_timeouts.pop(wait_key, None)
-            for resume_key in [key for key in self.child_resumes if key[0] == closed_turn]:
-                self.child_resumes.pop(resume_key, None)
+            for counter in (self.peer_read_windows, self.peer_wait_timeouts, self.child_resumes):
+                for key in [item for item in counter if item[0] == turn_no]:
+                    del counter[key]
             # The turn ended (completed, failed or cancelled) while a decision was still open.
             for record in self.pending_for(sid):
                 if not record.get('durable'):
@@ -5364,7 +5360,6 @@ class HarnessRuntime(RuntimeCommands):
                 f'{state["idle"]} reads in this turn — stop polling it. Decide with what you have: '
                 '`await_children` to wait for delivery, `child_resume` to call that child back with '
                 'its context, `cancel_child` to stop it, or close your turn with the answer you have.')
-        return None
 
     # --- T9: chờ tới lúc bạn GIAO kết quả ------------------------------------------------
     def notify_peer_delivery(self, recipient):
@@ -7144,9 +7139,10 @@ class HarnessRuntime(RuntimeCommands):
         if row is None or row.get('parent_id') != parent_id:
             raise PermissionError(f'{CHILD_RESUME_UNKNOWN_CODE}: {child_id or "<empty>"} is not a '
                                   'child of this session')
+        still_running = (f'{CHILD_RESUME_NOT_CUT_CODE}: {child_id} is still running — wait for '
+                         'it with `await_children` or stop it with `cancel_child` first')
         if row.get('status') == 'started':
-            raise ValueError(f'{CHILD_RESUME_NOT_CUT_CODE}: {child_id} is still running — wait for '
-                             'it with `await_children` or stop it with `cancel_child` first')
+            raise ValueError(still_running)
         previous = child_lifecycle.outcome(row.get('status'), row.get('reason'))
         if not previous['resumable']:
             raise ValueError(f'{CHILD_RESUME_NOT_CUT_CODE}: {child_id} ended '
@@ -7165,8 +7161,7 @@ class HarnessRuntime(RuntimeCommands):
         except KeyError:
             raise ValueError(f'{CHILD_RESUME_UNKNOWN_CODE}: {child_id} has no session to reopen') from None
         if str(child_row.get('status') or '') in ('running', 'awaiting_decision'):
-            raise ValueError(f'{CHILD_RESUME_NOT_CUT_CODE}: {child_id} is still running — wait for '
-                             'it with `await_children` or stop it with `cancel_child` first')
+            raise ValueError(still_running)
         attempt_no = used + 1
         await self.acquire_child_slot(parent_id)
         try:

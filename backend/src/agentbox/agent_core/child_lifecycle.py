@@ -26,13 +26,11 @@ TIMED_OUT_REASONS = frozenset({
 })
 
 #: Câu trả lời DỞ: hết bước, hết giờ, bị nhà cung cấp cắt ở trần output, hoặc bị cắt ở trần độ dài.
-PARTIAL_REASONS = frozenset({
+PARTIAL_REASONS = TIMED_OUT_REASONS | {
     limits.STEP_BUDGET_NOTICE_CODE,
-    limits.DEADLINE_NOTICE_CODE,
-    limits.WATCHDOG_TIMEOUT_REASON,
     limits.TRUNCATED_OUTPUT_NOTICE_CODE,
     limits.ANSWER_TOO_LONG_CODE,
-})
+}
 
 
 def outcome(status, reason=None):

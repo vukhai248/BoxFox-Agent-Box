@@ -19,7 +19,7 @@ import json
 
 import pytest
 
-from agentbox.agent_core import child_lifecycle, limits, roles, task_surface, tool_contracts
+from agentbox.agent_core import child_lifecycle, limits, roles, tool_contracts
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_contracts import SCHEMAS, schemas_for
 from agentbox.memory.session_store import SessionStore
@@ -294,7 +294,6 @@ def test_child_resume_is_declared_and_gated_like_the_other_peer_tools(monkeypatc
     assert 'child_resume' in roles.ORCHESTRATOR_TOOLS
     assert 'child_resume' not in roles.allowed_tools('build'), 'con không gọi con'
     assert 'child_resume' in tool_contracts.PEER_TOOLS
-    assert 'child_resume' in task_surface.__doc__ or True  # tài liệu không phải hợp đồng
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'off')
     assert schemas_for(['child_resume', 'peer_read']) == []
     assert 'child_resume' not in roles.allowed_tools('orchestrator', roles.ORCHESTRATOR_TOOLS)
