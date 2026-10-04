@@ -17,11 +17,10 @@ Giao ước transaction: `_write` chỉ tự mở transaction khi nó là ngư�
 đã ở trong transaction phải giữ write lock (`BEGIN IMMEDIATE`); nếu không, commit
 đồng thời nổi lên thành `SQLITE_BUSY`, không phải mã xung đột chuẩn.
 
-Giới hạn đã biết của tầng này (không có API nào sửa các giới hạn này):
-- `wait` giao event và tiến con trỏ cho bất kỳ `consumer_id` nào ghi trên hàng
-  outbox, không đòi wake lock. Hai waiter trên cùng một store có thể lấy mất event
-  của nhau; muốn một owner chỉ có một waiter sống thì caller phải tự buộc wake lock
-  quanh vòng `wait`/`acquire_wake` (lock chỉ là thoả thuận, không phải chốt).
+Giới hạn đã biết của tầng này:
+- `wait` không truyền `consumer_id` giữ API thư viện không scoped. Runtime phải
+  truyền owner/consumer/lock_token để kiểm tra wake lock và cô lập con trỏ của owner.
+  Outbox chỉ là dữ liệu: không tự mở lại một lượt model đã đóng.
 - `eventSeq` do producer truyền vào `append` là dữ liệu caller: một seq nhảy cách
   (lớn hơn `last+1`) tạo lỗ hổng không phân biệt được với một hàng outbox bị mất.
   Muốn phát hiện mất hàng thì producer phải tự bảo đảm/gác dãy seq liên tục.
@@ -365,7 +364,7 @@ class HarnessJobs:
             invalid('event', f'not a finite JSON document: {exc}')
         return normalized
 
-    def start(self, owner_id, request, capability_ref, invocation_id):
+    def start(self, owner_id, request, capability_ref, invocation_id, *, runtime_request_hash=None):
         """Mở job mới; idempotent theo `(owner_id, invocation_id)` + hash request.
 
         Chỉ ghi sổ: trả về `{jobId, controllerId, kind, state, ownership, revision, ...}`.
@@ -379,6 +378,8 @@ class HarnessJobs:
         capability, epoch = self._capability(capability_ref)
         request_hash = digest({'action': 'start_job', 'ownerId': owner_id, 'request': payload,
                                'capabilityRef': capability})
+        if runtime_request_hash is not None:
+            request_hash = runtime_request_hash
         with self._write():
             cached = self._cached(owner_id, invocation_id, request_hash)
             if cached is not None:
@@ -558,7 +559,7 @@ class HarnessJobs:
                     'jobId': job_id, 'consumerId': consumer_id, 'predicate': predicate,
                     'state': row['state'], 'cursor': current}
 
-    def wait(self, job_ids, mode='any', after_seq=0):
+    def wait(self, job_ids, mode='any', after_seq=0, *, consumer_id=None, owner_id=None, lock_token=None):
         """Ảnh chụp đánh thức; KHÔNG bao giờ ngủ/chờ timeout, kể cả khi job đã đóng.
 
         Trả `{events, cursor, ready, interrupted, jobs}`:
@@ -586,6 +587,13 @@ class HarnessJobs:
                 ids.append(job_id)
         with self._write():
             rows = [self._job(job_id) for job_id in ids]
+            if consumer_id is not None:
+                lock = self.db.execute('SELECT * FROM harness_wake_locks WHERE owner_id=?',
+                                       (owner_id,)).fetchone()
+                if lock is None or lock['consumer_id'] != (lock_token or consumer_id) or lock['expires_at'] <= time.time():
+                    invalid('ownerId', 'wait requires a live owner wake lock', 'JOB_WAKE_LOCKED')
+                if any(row['owner_id'] != owner_id for row in rows):
+                    invalid('jobId', 'foreign owner', 'JOB_FORBIDDEN')
             observed = []
             for job_id in ids:
                 # Con trỏ wake theo (consumer, job) là sàn đọc: hàng của consumer chưa
@@ -596,8 +604,9 @@ class HarnessJobs:
                     'LEFT JOIN harness_wake_cursors AS c ON c.job_id=o.job_id '
                     'AND c.consumer_id=o.consumer_id '
                     'WHERE o.job_id=? AND o.event_seq > CASE WHEN c.consumer_id IS NULL THEN 0 ELSE ? END '
-                    'AND o.event_seq > COALESCE(c.last_seq, 0) ORDER BY o.event_seq',
-                    (job_id, after)).fetchall())
+                    'AND o.event_seq > COALESCE(c.last_seq, 0) '
+                    'AND (? IS NULL OR o.consumer_id=?) ORDER BY o.event_seq',
+                    (job_id, after, consumer_id, consumer_id)).fetchall())
             observed.sort(key=lambda item: item['event_seq'])
             groups = {}
             for item in observed:
@@ -667,7 +676,7 @@ class HarnessJobs:
                                      (owner_id, consumer_id))
             return {'ownerId': owner_id, 'consumerId': consumer_id, 'released': cursor.rowcount > 0}
 
-    def reconcile(self):
+    def reconcile(self, *, restart=False):
         """Sau restart: đóng job không còn xác nhận được executor; KHÔNG sinh tiến trình thay thế.
 
         - Job `turn` không sống qua lượt ⇒ `interrupted`.
@@ -694,7 +703,7 @@ class HarnessJobs:
                 elif row['kind'] == 'model':
                     child_id = self._child_session(row)
                     child = self.store.child(child_id) if child_id else None
-                    if child is not None and child['status'] == 'started' and child['finished'] is None:
+                    if not restart and child is not None and child['status'] == 'started' and child['finished'] is None:
                         outcome['confirmed'].append(row['job_id'])
                         continue
                     state, reason = 'interrupted', 'model executor unconfirmed after restart'
@@ -740,7 +749,7 @@ class HarnessJobs:
 
     def _events(self, job_id, after):
         rows = self.db.execute('SELECT * FROM harness_wake_outbox WHERE job_id=? AND event_seq>? '
-                               'ORDER BY event_seq, predicate', (job_id, after)).fetchall()
+                               'ORDER BY event_seq, predicate LIMIT ?', (job_id, after, PAGE_LIMIT)).fetchall()
         seen, items = set(), []
         for row in rows:
             key = (row['event_seq'], row['predicate'])

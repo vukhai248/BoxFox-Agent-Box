@@ -167,6 +167,8 @@ def test_dispatch_routes_through_the_kernel_guard(environment, monkeypatch):
         raise _Reached()
 
     monkeypatch.setattr(execution_kernel, 'guard_tool', stop)
+    # H8 — `dispatch` bọc `_dispatch` (adaptive `after_tool`); stub uỷ nhiệm đúng đường công khai.
+    runtime._dispatch = lambda *a, **k: runtime_module.HarnessRuntime._dispatch(runtime, *a, **k)
     with pytest.raises(_Reached):
         asyncio.run(runtime_module.HarnessRuntime.dispatch(runtime, session, 'file_read', {'path': 'x'}))
     assert seen == [(runtime, sid, 'file_read', {'path': 'x'})]

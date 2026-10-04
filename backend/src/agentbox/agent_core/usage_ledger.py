@@ -25,16 +25,28 @@ Bất biến:
 
 Quy ước chung H3–H8: bảng cộng thêm trên `SessionStore.db`, lỗi `ContractError` mã
 `USAGE_*`, docstring tiếng Việt, không thêm dependency ngoài stdlib.
+
+Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định TẮT). Khi bật, runtime ghi
+một hàng `record()` cho mỗi lần gọi model hoàn tất (`record_completion`) với đúng
+`input/output/reasoning/cached` mà router báo; giá lấy từ `pricing` của dòng model
+trong router (một snapshot admin cho mỗi request) — không có giá thì `certainty='unknown'`
+và `amount=None`, không bao giờ 0. `reserve`/`settle` nối khi root có `harnessAllocationId` do backend ghim tới
+allocation đã cấp. Adaptive request thiếu allocation chỉ được dùng route có giá
+miễn phí xác nhận. Không tự tạo consent hoặc root allocation từ văn bản model.
 """
 from contextlib import contextmanager
 import copy
 import json
 import math
+import os
 import sqlite3
 import time
 
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
+
+#: Công tắc giết khi nối vào runtime: mặc định TẮT, chỉ `on` mới bật (khuôn `BOXFOX_TASK_SURFACE`).
+SWITCH = 'BOXFOX_USAGE_LEDGER'
 
 RECORD_SCHEMA_VERSION = 1
 PAGE_LIMIT = 100
@@ -85,6 +97,11 @@ _USAGE_PAYLOAD_KEYS = ('run_id', 'task_key', 'job_id', 'attempt_id', 'provider_i
 
 _READ_KEYS = ('read', 'readTokens', 'cached', 'cacheRead', 'cache_read_input_tokens')
 _WRITE_KEYS = ('write', 'writeTokens', 'cacheWrite', 'cacheWriteInput', 'cache_creation_input_tokens')
+
+
+def enabled(env=None):
+    """Công tắc giết của sổ usage: chỉ `on` mới bật; mọi giá trị khác (kể cả thiếu) là TẮT."""
+    return str((env if env is not None else os.environ.get(SWITCH)) or '').strip().lower() == 'on'
 
 
 def encode(value):
@@ -205,7 +222,7 @@ def _computed_amount(price, input_tokens, output_tokens, cached):
     """
     if not price or price.get('input') is None or price.get('output') is None:
         return None
-    if input_tokens is None and output_tokens is None:
+    if input_tokens is None or output_tokens is None:
         return None
     cached = cached or {}
     inp = input_tokens or 0

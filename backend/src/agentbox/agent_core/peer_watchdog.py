@@ -113,7 +113,9 @@ class PeerWatchdog:
                 continue
             graph = getattr(self.runtime, 'work_graph', None)
             controller = getattr(graph, 'continuations', None)
-            owned = bool(controller and controller.owns_child(child_id))
+            from . import job_surface
+            owned = bool(controller and controller.owns_child(child_id)) or bool(
+                self.runtime and job_surface.owns_child(self.runtime, child_id))
             if owned:
                 try:
                     self.store.get(row['parent_id'])
@@ -147,6 +149,8 @@ class PeerWatchdog:
         if self.runtime is not None:
             from . import task_surface
             task_surface.project_child(self.runtime, child_id)
+            from . import job_surface
+            job_surface.project_child(self.runtime, child_id)
         session = self.store.get(child_id)
         if session and session.get('status') in ('running', 'idle'):
             self.store.save(child_id, session['messages'], 'cancelled')

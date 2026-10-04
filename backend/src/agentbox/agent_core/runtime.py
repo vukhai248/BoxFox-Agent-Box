@@ -14,6 +14,7 @@ import uuid
 import httpx
 from .attachments import (MAX_INLINE_MEDIA, attachment_prompt_block, validate_attachments,
                         validate_inline_images)
+from . import context_surface
 from .compression import ContextCompressor, estimate_tokens, usage_reading
 from .failures import (RETRY_BUDGET_SECONDS, classify_failure, failure_detail, level_refusal,
                        log_safe_failure, retry_advice, stop_reason)
@@ -56,11 +57,11 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      RESEARCH_PROGRESS_NUDGE_SECONDS, RESEARCH_HARD_CEILING_NOTICE_CODE,
                      WRAP_UP_MAX_TOKENS,
                      WRAP_UP_READ_TOOL_CALLS, WRAP_UP_STEPS_RESERVED, WRAP_UP_TIMEOUT_SECONDS)
-from . import plan_quality, research_review, research_runtime
+from . import plan_quality, research_review, research_runtime, research_gateway
 from . import plan_workflow, verify_exec, work_graph, work_feedback, work_scope, execution_kernel
-from . import task_surface
+from . import task_surface, job_surface, usage_surface, recovery_policy, adaptive_surface
 from .plan_quality import check_plan_quality
-from .roles import ROLES, allowed_tools
+from .roles import ROLES, CONTROLLER_ROLES, allowed_tools
 from .limits import (BTW_ASK_PREFIX, DECISION_ANSWERED_STATUS, DECISION_NOTE_MAX_CHARS,
                      DECISION_NOTE_REQUIRED_CODE,
                      DECISION_NOTE_TOO_LONG_CODE, DECISION_OTHER_LABEL, DECISION_OTHER_OPTION_ID,
@@ -1726,6 +1727,7 @@ class HarnessRuntime(RuntimeCommands):
         self.verify_exec_status = dict(verify_exec.UNPROBED)
         # web_search / web_fetch run on the HOST: the box has no Internet (only loopback).
         self.web = WebTools(snapshot_store=store)
+        job_surface.reconcile_startup(self)
 
     async def heal_context_windows(self):
         """Sửa cửa sổ ngữ cảnh của các phiên ĐÃ LƯU, trả về số phiên đã sửa.
@@ -1956,7 +1958,7 @@ class HarnessRuntime(RuntimeCommands):
                             'parallel tool execution inside one step is not part of this round '
                             '(T14), so this flag changes no behaviour yet'),
             })
-        role_instructions = ROLES[role].instructions if role in ROLES else orchestrator_guidance()
+        role_instructions = (CONTROLLER_ROLES[role] if role in CONTROLLER_ROLES else ROLES[role]).instructions if role in ROLES or role in CONTROLLER_ROLES else orchestrator_guidance()
         required_research = {
             'research': ('research-search', 'research-reading', 'research-evidence'),
             'research-review': ('research-critique', 'research-evidence'),
@@ -2013,7 +2015,7 @@ class HarnessRuntime(RuntimeCommands):
         return record if isinstance(record, dict) else None
 
     def start(self, sid, prompt, image=None, route=None, route_metadata=None, images=None,
-              attachments=None, invocation_id=None, btw=False):
+              attachments=None, invocation_id=None, btw=False, *, job_wake=None):
         """Mở lượt mới. `images` là mảng ảnh inline của lượt (A7), `attachments` là tệp đã
         nằm thật trên đĩa box; cả hai đi qua `agent_core/attachments.py` để kiểm.
 
@@ -2022,6 +2024,13 @@ class HarnessRuntime(RuntimeCommands):
         kèm `btw: true` để transcript hiện đúng như chủ nhà đã gõ.
         """
         session = self.store.get(sid)
+        wake_data, wake_binding = None, None
+        if job_wake is not None:
+            from . import job_wake as wake_surface
+            if image or route or route_metadata or images or attachments or btw:
+                raise PermissionError('JOB_WAKE_FORBIDDEN: wake cannot change route/intent/attachments')
+            wake_data, wake_binding = wake_surface.before_start(self, sid, job_wake, invocation_id)
+            prompt = json.dumps(wake_data, ensure_ascii=False)
         # P1 (§5.2): lượt bơm `research-resume-*` phải dùng hồ sơ research dù mode đã tắt;
         # `_run` đọc lại giá trị này qua `turn_profile`.
         self.turn_invocations[sid] = invocation_id
@@ -2094,7 +2103,9 @@ class HarnessRuntime(RuntimeCommands):
                                                          for row in checked_images]
         else:
             content = text
-        messages.append({'role': 'user', 'content': content})
+        messages.append({'role': 'system' if wake_data else 'user', 'content': content})
+        if wake_data is None:
+            job_surface.begin_turn(self, sid)
         self.store.save(sid, messages, 'running')
         # T2 — số LƯỢT của phiên, cấp ĐÚNG MỘT lần cho mỗi lượt (đọc–tăng–ghi trong một giao
         # dịch, xem `begin_turn`). Trước đây `turnId` trong log là số BƯỚC nên không có cách nào
@@ -2113,7 +2124,10 @@ class HarnessRuntime(RuntimeCommands):
         # W8.A4.2 — gắn phạm vi thi công cho LƯỢT này: `/plan|/research|/design` (intent) hoặc lượt
         # bơm của harness (batch quyết định). Lượt người dùng mới đã bỏ binding cũ ở
         # `runtime_commands._next_turn_skills`.
-        work_scope.begin_turn(self, sid, turn, invocation_id)
+        if wake_data is None:
+            work_scope.begin_turn(self, sid, turn, invocation_id)
+        else:
+            work_scope.store_binding(self, sid, dict(wake_binding, turn=turn) if wake_binding else None)
         event = {'text': prompt, 'turn': turn}
         if invocation_id:
             event['invocationId'] = invocation_id
@@ -2126,12 +2140,16 @@ class HarnessRuntime(RuntimeCommands):
             event['attachments'] = checked_attachments
         if checked_images:
             event['images'] = checked_images
-        self.store.emit(sid, 'user', event)
+        self.store.emit(sid, 'job_wake' if wake_data else 'user', event)
         task = asyncio.create_task(self._run(sid))
         self.tasks[sid] = task
+        if wake_data is not None:
+            wake_surface.after_start(self, sid, job_wake)
         return task
 
     async def stop(self, sid):
+        job_surface.on_stop(self, sid)
+        await research_gateway.on_stop(self, sid)
         if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
             self.work_graph.decisions.cancel(sid)
             self.work_graph.progress.cancel(sid)
@@ -2208,6 +2226,7 @@ class HarnessRuntime(RuntimeCommands):
                                     output_tokens=output_tokens, answer_chars=answer_chars)
             # H3 — con `wait=false` tự xong: chiếu kết cục vào attempt đang mở của task (nếu có).
             task_surface.project_child(self, child_id)
+            job_surface.project_child(self, child_id)
             # T11 — con `wait=false` tự xong cũng phải giao hàng: nếu không, người nhận khai trong
             # `deliverTo` chờ một biên nhận không bao giờ tới (chỉ `main` đọc được event này).
             try:
@@ -2254,6 +2273,7 @@ class HarnessRuntime(RuntimeCommands):
             if closed:
                 # H3 — huỷ nhánh là một bộ đóng con: chiếu biên nhận vào attempt đang mở.
                 task_surface.project_child(self, child_id)
+                job_surface.project_child(self, child_id)
             return closed
         except Exception as exc:  # pragma: no cover - chốt chặn cuối, không bao giờ được ném
             system_log.write('child.owner_cancel_close_failed', level='warn', session_id=child_id,
@@ -2279,6 +2299,8 @@ class HarnessRuntime(RuntimeCommands):
         for row in self.store.children_of(sid, turn=turn):
             if row['status'] != 'started':
                 continue
+            if job_surface.owns_child(self, row['session_id']):
+                continue  # H4: chỉ controller job đã admit giữ con qua lượt
             graph = getattr(self, 'work_graph', None)
             if graph and graph.continuations.owns_child(row['session_id']):
                 continue  # a run-owned worker owns cleanup; root stop still cancels it
@@ -2320,6 +2342,7 @@ class HarnessRuntime(RuntimeCommands):
                                         output_tokens=tokens)
                 # H3 — người dọn T7 cũng là một bộ đóng con: chiếu kết cục vào attempt đang mở.
                 task_surface.project_child(self, child_id)
+                job_surface.project_child(self, child_id)
                 session = self.store.get(child_id)
                 if session['status'] in ('running', 'idle'):
                     self.store.save(child_id, session['messages'], 'cancelled')
@@ -2805,7 +2828,7 @@ class HarnessRuntime(RuntimeCommands):
                         # lời gọi được thực thi), rồi tới nhịp chẩn đoán — trần cứng ba lời gọi
                         # provider cho cả đường hạn chót.
                         for _ in range(WRAP_UP_READ_TOOL_CALLS):
-                            response = await self.client.complete(request, read_schemas, config['route'],
+                            response = await self.complete_model(sid, request, read_schemas, config['route'],
                                 max_tokens=output_policy.request_budget({**config, 'maxTokens': WRAP_UP_MAX_TOKENS}))
                             if output_policy.completion_reason(response) != 'complete':
                                 break  # A partial tool argument is never admitted to execution.
@@ -2852,7 +2875,7 @@ class HarnessRuntime(RuntimeCommands):
                                                 'name': name,
                                                 'content': json.dumps(safe, ensure_ascii=False)[:8000]})
                 # Câu trả lời cuối: KHÔNG tool. Model phải nói ra bốn phần chẩn đoán bằng chữ.
-                response = await self.client.complete(list(messages) + [{'role': 'user', 'content': prompt}],
+                response = await self.complete_model(sid, list(messages) + [{'role': 'user', 'content': prompt}],
                     [], config['route'], max_tokens=output_policy.request_budget({**config, 'maxTokens': WRAP_UP_MAX_TOKENS}))
                 message = (response.get('choices') or [{}])[0].get('message') or {}
                 return (message.get('content') or '').strip(), read_calls
@@ -3432,7 +3455,7 @@ class HarnessRuntime(RuntimeCommands):
         prompt = evidence_gate.repair_message(verdict, profile, probe)
         try:
             async with asyncio.timeout(limit):
-                response = await self.client.complete(list(messages) + [prompt], [], config['route'],
+                response = await self.complete_model(sid, list(messages) + [prompt], [], config['route'],
                     max_tokens=output_policy.request_budget({**config, 'maxTokens': EVIDENCE_REPAIR_MAX_TOKENS}))
                 if output_policy.completion_reason(response) != 'complete':
                     return None
@@ -3535,7 +3558,7 @@ class HarnessRuntime(RuntimeCommands):
         vừa lệch số vừa ghi `turn.index_drift` mãi.
         """
         row = self.store.db.execute(
-            "SELECT COUNT(*) AS total FROM events WHERE session_id=? AND kind='user' "
+            "SELECT COUNT(*) AS total FROM events WHERE session_id=? AND kind IN ('user','job_wake') "
             "AND COALESCE(json_extract(payload, '$.control'), 0) = 0",
             (sid,)).fetchone()
         return int(row['total'] or 0) if row is not None else 0
@@ -3553,7 +3576,7 @@ class HarnessRuntime(RuntimeCommands):
         skills = []
         for name in ('research-scoping', 'research-search', 'research-synthesis'):
             if name in self.catalog.items:
-                content = self.catalog.read(name).get('content') or ''
+                content = context_surface.mode_skill(self, session, name)
                 if content:
                     skills.append(content)
         lines = [
@@ -3591,7 +3614,7 @@ class HarnessRuntime(RuntimeCommands):
         skills = []
         for name in design_runtime.DESIGN_SKILL_NAMES:
             if hasattr(self.catalog, 'items') and name in self.catalog.items:
-                content = self.catalog.read(name).get('content') or ''
+                content = context_surface.mode_skill(self, session, name)
                 if content:
                     skills.append(content)
         lines = [
@@ -3709,7 +3732,11 @@ class HarnessRuntime(RuntimeCommands):
             # research, design, plan): tắt thì bốn công cụ `task_*` không được quảng cáo, kể cả
             # khi tên đã nằm trong `config['tools']` từ một phiên cũ.
             profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
-        return profile
+        if not job_surface.enabled():
+            readable = job_surface.READ_TOOLS if job_surface.has_receipts(self, session['id']) else set()
+            profile['tools'] = [name for name in profile['tools']
+                                if name not in job_surface.JOB_TOOLS or name in readable]
+        return research_gateway.apply_profile(self, session, profile)
 
     def turn_profile_base(self, session, invocation_id=None):
         """Hồ sơ LƯỢT `{mode, tools, promptBlock}` đọc từ `config.researchMode` (§5.2).
@@ -3979,6 +4006,34 @@ class HarnessRuntime(RuntimeCommands):
                 await asyncio.gather(task, return_exceptions=True)
         return updated
 
+    async def prepare_research_admission(self, lead, request):
+        return await usage_surface.prepare_research_admission(self, lead, request)
+
+    def research_admission(self, lead, request):
+        return usage_surface.research_admission(self, lead, request)
+
+    async def complete_model(self, sid, messages, tools, route, **kwargs):
+        """Một seam cho mọi request runtime, không bỏ sót retry/summary/repair."""
+        decision = adaptive_surface.before_request(self, sid)
+        if decision is not None:
+            ceiling = decision['budget'].get('outputTokens')
+            if type(ceiling) is int and ceiling > 0:
+                kwargs['max_tokens'] = min(kwargs.get('max_tokens', 4096), ceiling)
+            effort = decision['budget'].get('effort')
+            metadata = self.store.get(sid)['config'].get('modelMetadata') or {}
+            if effort is not None and effort in (metadata.get('thinkingLevels') or []):
+                route = dict(route, thinkingLevel=effort)
+            messages = copy.deepcopy(messages)
+            # Chỉ thay SOP gốc đã biết, không xoá intent/directive/decision của chủ nhà.
+            for item in messages:
+                if item.get('role') == 'system' and isinstance(item.get('content'), str):
+                    item['content'] = item['content'].replace(ORCHESTRATOR_SOP_GUIDANCE, adaptive_surface.GUIDANCE)
+                    item['content'] = item['content'].replace(orchestrator_guidance(), adaptive_surface.GUIDANCE)
+        response = await usage_surface.complete(self, sid, messages, tools, route, **kwargs)
+        if decision is not None and isinstance(response, dict):
+            response = dict(response, _harnessRequest={'maxTokens': kwargs.get('max_tokens', 4096)})
+        return response
+
     async def _run(self, sid):
         session = self.store.get(sid)
         config, messages = session['config'], session['messages']
@@ -4001,7 +4056,7 @@ class HarnessRuntime(RuntimeCommands):
         start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
-        tools = schemas_for(profile['tools'])
+        tools = schemas_for(profile['tools'], job_receipts=job_surface.has_receipts(self, sid), research_receipts=research_gateway.has_receipts(self, sid))
         loop_guard = AntiLoopGuard(threshold=3)
         started = time.time()
         steps_used = 0
@@ -4108,6 +4163,8 @@ class HarnessRuntime(RuntimeCommands):
         model_attempts = []
 
         def record_completion(response, tokens, recovery=None):
+            if execution_kernel._policy(self.store.get(sid)) is not None:
+                tokens = (response.get('_harnessRequest') or {}).get('maxTokens', tokens)
             choice = (response.get('choices') or [{}])[0]
             message = choice.get('message') or {}
             reason = output_policy.completion_reason(response)
@@ -4292,7 +4349,7 @@ class HarnessRuntime(RuntimeCommands):
                 for step in range(config['maxSteps']):
                     model_attempts.clear()
                     async def summarize(history, max_tokens=None):
-                        response = await self.client.complete(history, [], config['route'], max_tokens=
+                        response = await self.complete_model(sid, history, [], config['route'], purpose='summary', max_tokens=
                             output_policy.request_budget({**config, 'maxTokens': max_tokens or 2048}))
                         if output_policy.completion_reason(response) != 'complete':
                             raise ValueError('PROVIDER_SUMMARY_INCOMPLETE: context summary did not finish')
@@ -4305,6 +4362,7 @@ class HarnessRuntime(RuntimeCommands):
                     if event:
                         if compacted is not messages:
                             saved = messages
+                            context_surface.compact(self, sid, saved, compacted, event)
                             # N4 — hàng checkpoint tự nói nó đo bằng gì (cửa sổ, ngưỡng, ước
                             # lượng). Đường `/compact` đã ghi bốn số này từ đầu; đường tự động thì
                             # chưa, nên 22 hàng sống chỉ có `id, session_id, messages, reason,
@@ -4422,7 +4480,7 @@ class HarnessRuntime(RuntimeCommands):
                                     request_messages = list(request_messages) + [
                                         {'role': 'user', 'content': recap}]
                             request_tokens = output_policy.request_budget(config, estimate_tokens(request_messages, tools))
-                            response = await self.client.complete(request_messages, tools, config['route'], on_thought=handle_thought, on_content=handle_content,
+                            response = await self.complete_model(sid, request_messages, tools, config['route'], on_thought=handle_thought, on_content=handle_content,
                                                                   max_tokens=request_tokens)
                             break
                         except Exception as exc:
@@ -4456,6 +4514,14 @@ class HarnessRuntime(RuntimeCommands):
                                 continue
                             advice = retry_advice(exc, attempts, remaining_seconds=self.seconds_left(budget),
                                                   spent_seconds=retry_waited)
+                            if recovery_policy.enabled():
+                                recovery = recovery_policy.decision(code, attempts=attempts,
+                                                                    retry_after=(advice or {}).get('delay'))
+                                self.store.emit(sid, 'recovery_decision', recovery)
+                                if advice and not recovery_policy.may_retry(recovery):
+                                    self.store.emit(sid, 'notice', {'code': 'RECOVERY_POLICY_DENIED',
+                                        'message': recovery['reason'], 'recovery': recovery})
+                                    advice = None
                             if advice is None:
                                 if attempts:
                                     # The chat banner prints the LAST error, which on its own reads
@@ -4541,7 +4607,7 @@ class HarnessRuntime(RuntimeCommands):
                             retry_route = {**config['route'], 'tool_choice': 'required'}
                         recovery_tokens = min(request_tokens, output_policy.request_budget(config, estimate_tokens(retry_messages, retry_tools)))
                         _reset_stream()
-                        response = await self.client.complete(retry_messages, retry_tools, retry_route,
+                        response = await self.complete_model(sid, retry_messages, retry_tools, retry_route, purpose='recovery',
                                                               on_thought=handle_thought,
                                                               on_content=handle_content,
                                                               max_tokens=recovery_tokens)
@@ -4704,6 +4770,10 @@ class HarnessRuntime(RuntimeCommands):
                                          deadlineUsedMs=elapsed_ms,
                                          durationMs=elapsed_ms,
                                          **self.peer_turn_cost(sid, turn_no))
+                        # H4 — batch hết việc độc lập: biến timeout `wait_jobs` của lượt này thành
+                        # subscription bền. No-op khi không có candidate; callback chỉ chạy sau khi
+                        # `_run` đóng, nên không mở lượt thứ hai chồng lên lượt đang chạy.
+                        job_surface.park_after_batch(self, sid)
                         return text
                     if len(calls) > 16:
                         raise ValueError('Tool-call batch exceeds limit')
@@ -4745,6 +4815,8 @@ class HarnessRuntime(RuntimeCommands):
                         safe = {k: v for k, v in result.items() if k not in {'image', 'base64'}}
                         if safe.get('is_error'):
                             safe['reflection_hint'] = reflection_hint(name, safe.get('errorCode'))
+                            if recovery_policy.enabled():
+                                safe['recovery'] = recovery_policy.decision(safe.get('errorCode'))
                         if loop_guard.check_and_record(name, args if isinstance(args, dict) else {}, bool(safe.get('is_error'))):
                             safe['warning'] = 'CRITICAL_LOOP_GUARD: This exact tool call has repeatedly failed 3 times. You MUST halt this approach immediately, analyze why it is failing, change parameters, or delegate to a specialist.'
                         text_result = json.dumps(safe, ensure_ascii=False)
@@ -4892,17 +4964,33 @@ class HarnessRuntime(RuntimeCommands):
                                  message=str(exc)[:300])
 
     async def dispatch(self, session, name, args, call_id=None):
+        try:
+            result = await self._dispatch(session, name, args, call_id)
+        except Exception as exc:
+            code, message = classify_failure(exc)
+            adaptive_surface.after_tool(self, session['id'], name, args,
+                                        {'is_error': True, 'errorCode': code})
+            raise
+        adaptive_surface.after_tool(self, session['id'], name, args, result)
+        return result
+
+    async def _dispatch(self, session, name, args, call_id=None):
         sid, config = session['id'], session['config']
         current = self.store.get(sid)
         graph = getattr(self, 'work_graph', None)
         # W8.A4.2 — cửa quyết định của phạm vi thi công: run artifact-only/chờ duyệt/đã duyệt/đã đóng
         # đều không cho main sửa mã trực tiếp; con chỉ được ghi khi binding execute còn hiệu lực.
+        job_surface.guard_child(self, current, name)
+        research_gateway.guard_tool(self, current, name, args)
         execution_kernel.guard_tool(self, current, name, args)
+        adaptive_surface.before_tool(self, session['id'], name, args)
         if current.get('parent_id') and graph and graph.feedback.yielded(sid):
             raise PermissionError('WORK_CHECKPOINT_YIELDED: wait for main before running more tools')
         plan_tools = plan_workflow.allowed_tools(self, current)
         if plan_tools is not None and name not in plan_tools:
             raise PermissionError('PLAN_EXECUTION_BLOCKED: công cụ này không được chạy trong Plan: ' + name)
+        if name in research_gateway.GATEWAY_TOOLS or name == research_gateway.PUBLISH_TOOL:
+            return await research_gateway.handle(self, current, name, args)
         if name == 'work_artifact_read':
             return work_graph.service(self).artifacts.read(current, args)
         if name == 'work_report':
@@ -4950,7 +5038,7 @@ class HarnessRuntime(RuntimeCommands):
                 raise PermissionError('Skill is not enabled for this session')
             if args['id'] in EXTERNAL:
                 raise PermissionError('Use an explicit CLI command; executor skills cannot run through native terminal tools')
-            return self.skill_loader.read(session, args['id'], args.get('file_path', 'SKILL.md'), self.active_messages.get(sid))
+            return context_surface.read_skill(self, current, args['id'], args.get('file_path', 'SKILL.md'), self.active_messages.get(sid))
         if name == 'session_search':
             return self.session_search(sid, args)
         if name in {'peer_read', 'await_children'} and not peer_mesh_enabled():
@@ -4964,6 +5052,8 @@ class HarnessRuntime(RuntimeCommands):
             return await self.await_children(session, args)
         if name == 'delegate_task':
             return await self.delegate(session, args)
+        if name in job_surface.JOB_TOOLS:
+            return await job_surface.handle(self, current, name, args)
         if name in task_surface.TASK_TOOLS:
             # H3 — bề mặt task (plan v1 §4). Cổng ở đây là hàng rào cuối: phiên tạo lúc công tắc còn
             # bật rồi công tắc tắt giữa chừng vẫn bị từ chối, không "chạy tạm".
@@ -6888,12 +6978,17 @@ class HarnessRuntime(RuntimeCommands):
                                   'status': opened['attempt']['status']}
         return receipt
 
-    async def delegate(self, session, args, work=None):
+    async def delegate(self, session, args, work=None, *, job_request=None):
         """Spawn one specialist child. `work` is set only by the Work Graph engine (never by the model):
         such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
         bindings and per-turn child cap do not apply — the engine owns its own budget."""
+        research_gateway.guard_delegate(self, self.store.get(session['id']), args, job_request=job_request)
         if session['role'] != 'orchestrator':
-            raise PermissionError('Leaf agents cannot delegate')
+            if not research_gateway.is_lead(self, session):
+                raise PermissionError('Leaf agents cannot delegate')
+            research_gateway.guard_tool(self, self.store.get(session['id']), 'delegate_task', args)
+        if job_request is not None:
+            session = job_surface.admission(self, session, job_request)
         role = args.get('role')
         work = dict(work) if isinstance(work, dict) else None
         if work:
@@ -7065,6 +7160,16 @@ class HarnessRuntime(RuntimeCommands):
         opened = task_surface.open_delegate(self, session, args)
         await self.acquire_child_slot(parent_id)
         try:
+            if job_request is not None:
+                session = job_surface.admission(self, session, job_request)
+                cached_job = job_surface.replay(self, session, job_request)
+                if cached_job is not None:
+                    self.release_child_slot(parent_id)
+                    return cached_job
+                config = session['config']
+                configured = next(r for r in config['subagents'] if r['id'] == role and r.get('enabled', True))
+                child_steps = min(budget_request['maxSteps'], config['maxSteps'])
+                child_deadline = min(budget_request['deadlineSeconds'], config['deadlineSeconds'])
             if controller:
                 await controller.after_slot(parent_id, work)
             if work:
@@ -7103,6 +7208,10 @@ class HarnessRuntime(RuntimeCommands):
                 child['config']['outputTokenCeiling'] = config['outputTokenCeiling']
             if output_budget is not None:
                 child['config']['maxTokens'] = output_budget
+            if job_request is not None:
+                policy = execution_kernel._policy(session)
+                if policy is not None:
+                    child['config'][execution_kernel.POLICY_KEY] = dict(policy)
             if work:
                 child['config']['workBinding'] = work
                 work['admissionSeq'] = self.store.db.execute('SELECT COALESCE(MAX(seq),0) FROM events WHERE session_id=?', (child['id'],)).fetchone()[0]
@@ -7207,6 +7316,16 @@ class HarnessRuntime(RuntimeCommands):
                     pass
                 self.release_child_slot(parent_id, child['id'])
                 raise
+        admitted_job = None
+        if job_request is not None:
+            try:
+                admitted_job = job_surface.bind(self, session, job_request, child['id'])
+            except BaseException:
+                self.store.child_close_once(child['id'], 'failed', reason='JOB_BIND_FAILED')
+                job_surface.project_child(self, child['id'])
+                self.store.save(child['id'], child['messages'], 'cancelled')
+                self.release_child_slot(parent_id, child['id'])
+                raise
         self.store.emit(parent_id, 'child', {
             'sessionId': child['id'],
             'role': role,
@@ -7228,7 +7347,11 @@ class HarnessRuntime(RuntimeCommands):
                 work_graph.service(self).progress.attach(work['progressAdmissionId'], parent_id, work, child['id'])
             task = self.start(child['id'], child_prompt)
         except BaseException:
-            self.release_child_slot(parent_id)
+            if admitted_job is not None:
+                self.store.child_close_once(child['id'], 'failed', reason='JOB_START_FAILED')
+                job_surface.project_child(self, child['id'])
+                self.store.save(child['id'], child['messages'], 'cancelled')
+            self.release_child_slot(parent_id, child['id'])
             raise
         if research_question_id:
             job = self.store.research_job(research_cfg['researchId'])
@@ -7255,6 +7378,8 @@ class HarnessRuntime(RuntimeCommands):
                                    self.close_detached_child(pid, cid, role, turn, step, echo_goal, finished, who))
             started = {'status': 'started', 'sessionId': child['id'], 'role': role,
                        'turn': turn, 'step': step, 'deliverTo': deliver_to}
+            if admitted_job is not None:
+                started['job'] = admitted_job
             if opened is not None:
                 # H3 — main cần `taskId`/`taskKey` để `task_get`/`task_send`/`task_abandon` sau này.
                 started['task'] = self._task_receipt(opened)
@@ -7336,6 +7461,7 @@ class HarnessRuntime(RuntimeCommands):
                                 output_tokens=output_tokens, answer_chars=len(answer_text))
         # H3 — con `wait=true` xong: chiếu kết cục vào attempt đang mở của task (nếu có).
         task_surface.project_child(self, child['id'])
+        job_surface.project_child(self, child['id'])
         result.update({'stepsUsed': steps_used, 'outputTokens': output_tokens,
                        'answerChars': len(answer_text), 'wallMs': wall_ms})
         if opened is not None:

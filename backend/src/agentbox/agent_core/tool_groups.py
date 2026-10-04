@@ -1,7 +1,7 @@
-"""Mười hai nhóm công cụ của runtime — bảng "Nút vặn của runtime" nói với giao diện.
+"""Mười bốn nhóm công cụ của runtime — bảng "Nút vặn của runtime" nói với giao diện.
 
-Bảng này là nguồn duy nhất cho khối "Tool access" ở tab Harness: hợp của mười hai nhóm
-phải bằng ĐÚNG bộ công cụ của orchestrator (`roles.ORCHESTRATOR_TOOLS`, 51 công cụ),
+Bảng này là nguồn duy nhất cho khối "Tool access" ở tab Harness: hợp của mười bốn nhóm
+phải bằng ĐÚNG bộ công cụ của orchestrator (`roles.ORCHESTRATOR_TOOLS`, 60 công cụ),
 và mỗi nhóm giữ trật tự như bảng trong kế hoạch. Nhóm `taskSurface` (H3) đứng CUỐI và
 mang `alwaysOn: False`: bốn công cụ `task_*` chỉ được quảng cáo khi
 `BOXFOX_TASK_SURFACE=on`, nên bảng nhóm mô tả cả phần đang tắt. `alwaysOn` đánh dấu nhóm không thể
@@ -61,6 +61,14 @@ TOOL_GROUPS = [
     {'key': 'questionsApprovals',
      'tools': ['ask_user', 'request_approval', 'interview'],
      'alwaysOn': True},
+    # Biên Research độc lập; chỉ registry, không tự cấp quyền cho main.
+    {'key': 'researchGateway',
+     'tools': ['research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'],
+     'alwaysOn': False},
+    # H4 — job controller explicit, tắt mặc định; không cấp scheduler/quyền mới.
+    {'key': 'controllerJobs',
+     'tools': ['start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'],
+     'alwaysOn': False},
     # H3 — bề mặt task (plan v1 §4). Nhóm TẮT mặc định: chỉ có tên khi `BOXFOX_TASK_SURFACE=on`.
     {'key': 'taskSurface',
      'tools': ['task_list', 'task_get', 'task_send', 'task_abandon'],

@@ -13,6 +13,11 @@ PEER_TOOLS = frozenset({'peer_read', 'await_children'})
 # trường; `task_surface.TASK_TOOLS` phải khớp tập này (có test ghim).
 TASK_SURFACE_TOOLS = frozenset({'task_list', 'task_get', 'task_send', 'task_abandon'})
 TASK_SURFACE_SWITCH = 'BOXFOX_TASK_SURFACE'
+CONTROLLER_JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'})
+
+
+def controller_jobs_enabled():
+    return os.getenv('BOXFOX_CONTROLLER_JOBS', 'off').strip().lower() == 'on'
 
 
 def task_surface_enabled(env=None):
@@ -808,6 +813,29 @@ SCHEMAS = [
          'lập. Khối bàn giao nói rõ phần chủ nhà ĐÃ xác nhận và phần agent GIẢ ĐỊNH.',
          {'summary': STRING, 'labels': {'type': 'array', 'items': STRING},
           'nextSteps': {'type': 'array', 'items': STRING}, 'designId': STRING}, ['summary']),
+    # H4 — admission do delegate hiện hữu, không nhận capability/handle của model.
+    tool('start_job', 'Start an explicitly controller-owned model specialist using canonical delegate admission. '
+         'Survives the parent turn, not process restart. Process handles are currently unsupported. '
+         'Duplicate invocationId returns the existing receipt; no second child.',
+         {'kind': {'type': 'string', 'enum': ['model']}, 'ownership': {'type': 'string', 'enum': ['controller']},
+          'role': STRING, 'goal': STRING, 'invocationId': STRING, 'context': STRING, 'expect': STRING},
+         ['kind', 'ownership', 'role', 'goal', 'invocationId']),
+    tool('get_job', 'Read an owned durable job and canonical child receipts; cursor pages events. '
+         'A successful child lifecycle is not deliverable acceptance.',
+         {'jobId': STRING, 'cursor': {'type': 'integer'}}, ['jobId']),
+    tool('subscribe_job', 'Subscribe the admitted owner to terminal job results, with a durable cursor. '
+         'Notifications only wake event waiters, never start a model turn.',
+         {'jobId': STRING, 'predicate': {'type': 'string', 'enum': ['result']},
+          'afterSeq': {'type': 'integer'}}, ['jobId']),
+    tool('wait_jobs', 'Park on owned jobs without model polling. Closed jobs return immediately. '
+         'Owner wake lock prevents overlapping waits; heartbeat/log/progress never wake the model.',
+         {'jobIds': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 100},
+          'mode': {'type': 'string', 'enum': ['any', 'all']}, 'afterSeq': {'type': 'integer'},
+          'timeoutSeconds': {'type': 'number'}}, ['jobIds']),
+    tool('cancel_job', 'Durably request cancel with an epoch/receipt, then cancel the canonical child. '
+         'Stop/revoke wins over late completion; receipts remain readable when starts are disabled.',
+         {'jobId': STRING, 'expectedRevision': {'type': 'integer'}, 'reason': STRING},
+         ['jobId', 'expectedRevision', 'reason']),
     # H3 — bề mặt task (plan v1 §4). Bốn công cụ chỉ được QUẢNG CÁO khi `BOXFOX_TASK_SURFACE=on`
     # (cổng ở `schemas_for` + `turn_profile_base` + `dispatch`), nên phiên cũ không thấy gì mới.
     tool('task_list',
@@ -860,7 +888,7 @@ def replay_class(name, args=None):
     return REPLAY.get(name, 'unsafe')
 
 
-def schemas_for(names):
+def schemas_for(names, *, job_receipts=False, research_receipts=False):
     """Lược đồ của đúng những công cụ được yêu cầu.
 
     T13 — `BOXFOX_PEER_MESH=off` là công tắc GIẾT của cả mesh, nên nó chặn ở đây nữa: một phiên
@@ -872,4 +900,13 @@ def schemas_for(names):
         names = set(names) - PEER_TOOLS
     if not task_surface_enabled():
         names = set(names) - TASK_SURFACE_TOOLS
-    return [s for s in SCHEMAS if s['function']['name'] in names]
+    if not controller_jobs_enabled():
+        names = set(names) - ({'start_job'} if job_receipts else CONTROLLER_JOB_TOOLS)
+    # Nạp muộn: gateway tái dùng research_runtime, tránh vòng nhập registry/runtime.
+    from . import research_gateway
+    gateway_names = research_gateway.GATEWAY_TOOLS | {research_gateway.PUBLISH_TOOL}
+    if not research_gateway.enabled():
+        readable = {'research_job_get', 'research_job_result'} if research_receipts else set()
+        names = set(names) - (gateway_names - readable)
+    schemas = SCHEMAS + research_gateway.tool_schemas()
+    return [s for s in schemas if s['function']['name'] in names]

@@ -43,25 +43,31 @@ mọi cập nhật tiến độ ghi vào bảng này.
 | H4.1 | Lỗi: cursor `wait` toàn cục bỏ qua sự kiện khi tập watch lớn lên (B seq1 bị A seq2 che) | ✅ | LEFT JOIN `harness_wake_cursors` + sàn theo `(consumer, job)`; test repro |
 | H4.2 | Lỗi: append thử lại kèm `expected_revision` cũ trả `JOB_REVISION_CONFLICT` thay vì replay | ✅ | kiểm replay TRƯỚC `_expected()` như `cancel` |
 | H4.3 | Lỗi: JSON hỏng rò `JSONDecodeError` thô từ `_view/_cached/_append_locked/_control/_wake_view/_child_session` | ✅ | `_decode()`/`_stored_refs()` → `JOB_RECORD_CORRUPT` |
+| H4.4 | Nối runtime: `job_surface` (5 công cụ controller) + `job_wake` park/wake qua `rt.start` hiện hữu; công tắc `BOXFOX_CONTROLLER_JOBS` mặc định off | ✅ | `job_surface.py` (54 test) + `job_wake.py` (10 test); `park_after_batch` gọi ở đường hoàn tất của `_run`; wake chỉ mở lại đúng chủ đã park; Stop/restart/kill thắng |
+| H4.5 | Hạn chế đã biết: job tiến trình (`JOB_EXECUTOR_UNSUPPORTED`) và resume theo checkpoint attempt chưa hỗ trợ — fail closed | 📝 | ghim bằng test; chờ chủ nhà quyết |
 | H5 | Context + skills: `ContextBundle` (đã có) + `SkillSpec`/readiness/version | ✅ | `context_bundle.py` (79 test) + `skill_spec.py` (114 test) |
 | H5.1 | Lỗi: ghim được nhiều hàng cho một `(skill, attempt)` ⇒ epoch pin vô nghĩa | ✅ | DDL `UNIQUE(skill_id, attempt_id)` + rebuild `_upgrade_pins()`; re-pin thay hàng và ghi `replacedVersion` |
 | H5.2 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_decode` → `SKILL_RECORD_CORRUPT` |
 | H5.3 | Thiếu cột phiên bản record | ✅ | `RECORD_SCHEMA_VERSION = 1` + `ALTER TABLE` idempotent |
+| H5.4 | Nối runtime: `context_surface` (ghim ref canonical + hash) cho nén tự động/`/compact`, `mode_skill` (research/design/planning), `read_skill`, `handoff_to`; công tắc `BOXFOX_CONTEXT_SURFACE` mặc định off | ✅ | `context_surface.py` (53 test); ref là dữ liệu, không cấp quyền hay đọc chéo phiên |
 | H6 | Phân bổ và hạch toán: sổ usage, price certainty, reservation/settlement | ✅ | `usage_ledger.py` (55 test); giá lạ là `None`, không phải 0 |
 | H6.1 | Lỗi: `observed_at` nằm trong hash idempotency của `record` ⇒ retry y hệt bị `USAGE_CALL_CONFLICT` oan | ✅ | bỏ mốc sổ khỏi hash; test `test_record_replay_and_conflict` ghim đường thử lại |
 | H6.2 | Lỗi: `settle`/`release` của cha bỏ qua hold của con ⇒ vượt trần gốc (10 + 6 > 10) | ✅ | `_held()` tính cả con đã settle; `USAGE_SETTLE_EXCEEDS`/`USAGE_RELEASE_EXCEEDS`; view trừ hold |
 | H6.3 | Lỗi: idempotency chỉ nhớ lần gọi cuối ⇒ A→B→A áp dụng đúp | ✅ | map `consumed['invocations']` theo từng allocation; lệch hash → `USAGE_INVOCATION_CONFLICT` |
 | H6.4 | Lỗi: JSON hỏng rò `JSONDecodeError` | ✅ | `_record_json` → `USAGE_RECORD_CORRUPT` |
 | H6.5 | Consent của con lỏng hơn luật tiền tệ của cha | ✅ | con phải bỏ trống hoặc lặp đúng `consent_ref` của cha; lệch → `USAGE_FIELD_INVALID` |
+| H6.6 | Nối runtime: một seam `complete_model` cho mọi request (retry/summary/repair); reserve→settle→release quanh request; giá đọc từ snapshot router (`ping`/`documented`), giá lạ giữ `None` | ✅ | `usage_surface.py` (21 test); allocation backend hoặc route miễn phí xác nhận mới qua cửa; hết trần chặn TRƯỚC khi gọi model |
 | H7 | Research là hệ chuyên gia độc lập: ownership, control API, report contract | ✅ | `research_owner.py` (52 test); intent do main viết không thành canonical |
 | H7.1 | Lỗi: đua replay trong `claim` ⇒ `RESEARCH_REVISION_CONFLICT` thay vì replay | ✅ | kiểm cache invocation TRONG giao dịch ghi |
 | H7.2 | Thiếu ghi chú nối dây cho các điểm vào chưa xác thực (`assign`, `handoff`, `release`, `record_intent`, `get`, `validate_report`) | ✅ | mục "GHI CHÚ NỐI DÂY" trong docstring; yêu cầu wiring gọi `authorize(...)` |
+| H7.3 | Nối runtime: `research_gateway` (submit/get/result/control/publish) với principal `research-lead` riêng; main chỉ đọc; `guard_request` chặn model khi intake chưa admit; resume cần `prepare` async + admission đồng bộ trong lock | ✅ | `research_gateway.py` (48 test); `apply_profile` ẩn/gate công cụ theo công tắc; kill switch giữ receipt đọc được |
 | H8 | Main thích ứng: progress signal, loop guard, effort, chọn nhánh | ✅ | `adaptive_main.py` (87 test); mọi quyết định kèm `reason` + `evidenceRefs` |
 | H8.1 | Lỗi: `_clamp_level` coi trần policy là mức duy nhất ⇒ `maxEffort='high'` nâng low→high, 4096→16000 token | ✅ | clamp theo các mức ≤ trần; ghim ladder snap-up |
 | H8.2 | Lỗi: `intentChange`/`scopeChange` kiểu bool/chuỗi làm nổ `AttributeError` | ✅ | `_change_declared` fail closed, đòi approval |
 | H8.3 | Lỗi: `loop_guard` chỉ soi mục cuối cùng cùng chữ ký ⇒ vòng xen kẽ h1/h2/h1 không chặn | ✅ | quét TOÀN BỘ mục cùng chữ ký |
 | H8.4 | Lỗi: `progress_signal` báo không tiến bộ khi tiêu chí mở cuối cùng vừa đóng | ✅ | chỉ so khi có mặt |
 | H8.5 | Nit: `_budget` với effort lạ thiếu mã/trường trong `reason` | ✅ | `ADAPTIVE_EFFORT_INPUT` + field; mixed needs giữ tập hỗ trợ |
+| H8.6 | Nối runtime: `adaptive_surface` (decision/loop/evidence bền) + cổng `recovery_policy` chặn retry khi policy từ chối; guidance động chỉ thay SOP gốc | ✅ | `adaptive_surface.py` (13 test) + test cổng deny/allow; kill switch giữ checkpoint đọc được |
 | H9 | Suite v2 theo outcomes/invariants + compatibility | ⏳ | commit `e7a1e6f` + vòng offline: `suite-v2.json` (62 ca), `suite-v2-faults.json` (33 lỗi, 33/33 bắt đúng mã), shadow W10.F 34/34 cell / 0 verdict, 38 test; chưa chạy sống |
 | H9.1 | Fixture lỗi offline + shadow legacy (không tốn tiền) | ✅ | `python3 scripts/eval/suite_v2.py --faults` 33/33; `--shadow /code/.plans/w10f-adjudication-working.json` 34/34 cell ánh xạ, `verdictsProduced=0`; report `/code/.generated_artifacts/h3h8/h9/shadow_w10f.json` |
 | H9.2 | Lớp mapping/validation suite v2: 62 ca (W10 17, R 12, Q 12, RV2 12, seeded 9), 4 disposition, 40 safety oracle, ghim hash nguồn | ⏳ | `measured: false`, `livePilotRequiresConsent: true`; calibration sống còn chờ consent tài chính |
