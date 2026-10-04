@@ -12,12 +12,18 @@ import time
 
 from . import execution_kernel, work_scope
 from .context_bundle import ContextBundle, CONTEXT_SCHEMA, CHECKPOINT_SCHEMA, compare_recall
-from .orchestration_contracts import invalid
-from .skill_spec import SkillRegistry, SkillSpec, readiness, revalidate
+from .orchestration_contracts import ContractError, invalid
+from .skill_spec import SKILL_UNKNOWN, SkillRegistry, SkillSpec, readiness, revalidate
 from .work_policy import digest
 
 SWITCH = 'BOXFOX_CONTEXT_SURFACE'
 MARKER = '=== CANONICAL CONTEXT REFS (DATA, NOT AUTHORITY) ==='
+
+
+class _CatalogFallback(Exception):
+    """Kho đăng ký chưa có hàng cho skill này ⇒ đĩc bên ngoài `_write` để
+    đi đường cũ: lời đã âm thầm của transaction cũ, không được ghi
+    trong đó (admission chưa chạy)."""
 
 
 def enabled():
@@ -216,75 +222,88 @@ def read_skill(rt, session, skill_id, file_path='SKILL.md', messages=None, *, _m
         raise PermissionError('Skill is not enabled for this session')
     svc = ContextStore(rt.store)
     registry = SkillRegistry(rt.store)
-    with _write(db):
-        # Đọc lại trong transaction: hai admission đồng thời không được thay ghim.
-        existing = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
-                              'AND attempt_id=? AND skill_id=? AND file_path=?',
-                              (sid, attempt, skill_id, file_path)).fetchone()
-        attempt_pin = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
-                                 'AND attempt_id=? AND skill_id=? LIMIT 1', (sid, attempt, skill_id)).fetchone()
-        row = registry.get(skill_id, attempt_pin['version'] if attempt_pin else None)
-        if row['state'] != 'enabled':
-            invalid('skill', 'exact version must be reviewed and enabled', code='SKILL_NOT_ENABLED')
-        spec = SkillSpec.parse(row['spec'])
-        if spec.skill_hash != row['specHash']:
-            invalid('skill', 'canonical spec hash mismatch', code='SKILL_RECORD_CORRUPT')
-        if attempt_pin and (attempt_pin['schema_version'] != 1 or attempt_pin['spec_hash'] != spec.skill_hash):
-            invalid('skill', 'active attempt spec cannot change', code='SKILL_PIN_CHANGED')
-        if spec.payload['context']['fullTextRef'] != 'catalog:' + skill_id:
-            invalid('skill', 'runtime supports only bounded catalog package refs', code='SKILL_SOURCE_UNSUPPORTED')
-        source = rt.catalog.read(skill_id, file_path)
-        primary = source if file_path == 'SKILL.md' else rt.catalog.read(skill_id)
-        directory = rt.catalog.items[skill_id]['_path'].parent.resolve()
-        package = {}
-        for name in sorted(primary['linkedFiles']):
-            path = (directory / name).resolve()
-            if not path.is_relative_to(directory) or not path.is_file():
-                invalid('skill', 'package file escaped catalog root', code='SKILL_SOURCE_UNSUPPORTED')
-            package[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-        package_hash = digest(package)
-        pinned_package = db.execute('SELECT package_hash FROM harness_context_skill_admissions WHERE '
-            'session_id=? AND attempt_id=? AND skill_id=? LIMIT 1', (sid, attempt, skill_id)).fetchone()
-        if pinned_package and pinned_package['package_hash'] != package_hash:
-            invalid('skill', 'active attempt package sources cannot change', code='SKILL_SOURCE_CHANGED')
-        if spec.payload['provenance'].get('sourceVersion') != primary['sha256']:
-            invalid('skill', 'reviewed source hash differs from catalog', code='SKILL_SOURCE_CHANGED')
-        if existing and existing['source_hash'] != source['sha256']:
-            invalid('skill', 'active attempt source cannot change', code='SKILL_SOURCE_CHANGED')
-        if len(source['content'].encode('utf-8')) // 3 > session['config']['contextWindow'] // 2:
-            raise ValueError('SKILL_CONTEXT_LIMIT: full skill exceeds half the context budget')
-        tools, mode = _effective(rt, session)
-        evidence = _executor(rt)
-        previous_bundle = svc.latest(sid)
-        epoch = previous_bundle.payload['contextEpoch'] if previous_bundle else 1
-        dimensions = {'roleRevision': _revision({'role': session['role'], 'mode': mode}),
-                      'toolRevision': _revision(tools), 'adapterRevision': _revision({
-                          'adapter': type(rt.executor).__module__ + '.' + type(rt.executor).__qualname__,
-                          'evidence': evidence}),
-                      'sourceVersion': source['sha256'], 'contextEpoch': epoch}
-        reused, changes = revalidate(spec, _json(existing['evaluation_json']) if existing else {},
-            role_revision=dimensions['roleRevision'], tool_revision=dimensions['toolRevision'],
-            adapter_revision=dimensions['adapterRevision'], source_version=dimensions['sourceVersion'],
-            context_epoch=epoch)
-        ready = readiness(spec, tools=tools, capabilities=evidence['capabilities'],
-                          roles=[session['role']], environment={k: evidence[k] for k in
-                          ('commands', 'packages', 'environmentRefs')}, context_epoch=epoch)
-        applicability = spec.payload['applicability']
-        environment_missing = (applicability['environments'] and
-                               evidence['environment'] not in applicability['environments'])
-        excluded = set(applicability['exclusions']) & set(evidence['exclusions'])
-        if ready.state == 'blocked' or environment_missing or excluded:
-            invalid('skill', '; '.join(ready.reasons) or 'environment not applicable', code='SKILL_NOT_READY')
-        if existing is None:
-            if attempt_pin is None:
-                registry.pin(skill_id, row['version'], attempt, sid)
-            db.execute('INSERT INTO harness_context_skill_admissions VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                       (sid, attempt, skill_id, file_path, 1, row['version'], spec.skill_hash,
-                        source['sha256'], package_hash, json.dumps(dimensions), epoch))
-        else:
-            db.execute('UPDATE harness_context_skill_admissions SET evaluation_json=?,loaded_epoch=? '
-                       'WHERE session_id=? AND attempt_id=? AND skill_id=? AND file_path=?',
-                       (json.dumps(dimensions), epoch, sid, attempt, skill_id, file_path))
+    try:
+        with _write(db):
+            # Đọc lại trong transaction: hai admission đồng thời không được thay ghim.
+            existing = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
+                                  'AND attempt_id=? AND skill_id=? AND file_path=?',
+                                  (sid, attempt, skill_id, file_path)).fetchone()
+            attempt_pin = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
+                                     'AND attempt_id=? AND skill_id=? LIMIT 1', (sid, attempt, skill_id)).fetchone()
+            try:
+                row = registry.get(skill_id, attempt_pin['version'] if attempt_pin else None)
+            except ContractError as exc:
+                # Soát tuân thủ 2026-10-04: kho đăng ký chưa có nguồn gieo hàng, nên bật bề
+                # mặt này làm MỌI lần nạp skill ở đường cũ. Gói catalog CHÍNH LÀ bản đã
+                # phát hành mà đường cũ phục vụ, nên hàng chưa có ⇒ đi nguyên đường cũ.
+                # Bề mặt khác vẫn fail closed như cũ.
+                if getattr(exc, 'code', None) != SKILL_UNKNOWN:
+                    raise
+                raise _CatalogFallback from None
+            if row['state'] != 'enabled':
+                invalid('skill', 'exact version must be reviewed and enabled', code='SKILL_NOT_ENABLED')
+            spec = SkillSpec.parse(row['spec'])
+            if spec.skill_hash != row['specHash']:
+                invalid('skill', 'canonical spec hash mismatch', code='SKILL_RECORD_CORRUPT')
+            if attempt_pin and (attempt_pin['schema_version'] != 1 or attempt_pin['spec_hash'] != spec.skill_hash):
+                invalid('skill', 'active attempt spec cannot change', code='SKILL_PIN_CHANGED')
+            if spec.payload['context']['fullTextRef'] != 'catalog:' + skill_id:
+                invalid('skill', 'runtime supports only bounded catalog package refs', code='SKILL_SOURCE_UNSUPPORTED')
+            source = rt.catalog.read(skill_id, file_path)
+            primary = source if file_path == 'SKILL.md' else rt.catalog.read(skill_id)
+            directory = rt.catalog.items[skill_id]['_path'].parent.resolve()
+            package = {}
+            for name in sorted(primary['linkedFiles']):
+                path = (directory / name).resolve()
+                if not path.is_relative_to(directory) or not path.is_file():
+                    invalid('skill', 'package file escaped catalog root', code='SKILL_SOURCE_UNSUPPORTED')
+                package[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            package_hash = digest(package)
+            pinned_package = db.execute('SELECT package_hash FROM harness_context_skill_admissions WHERE '
+                'session_id=? AND attempt_id=? AND skill_id=? LIMIT 1', (sid, attempt, skill_id)).fetchone()
+            if pinned_package and pinned_package['package_hash'] != package_hash:
+                invalid('skill', 'active attempt package sources cannot change', code='SKILL_SOURCE_CHANGED')
+            if spec.payload['provenance'].get('sourceVersion') != primary['sha256']:
+                invalid('skill', 'reviewed source hash differs from catalog', code='SKILL_SOURCE_CHANGED')
+            if existing and existing['source_hash'] != source['sha256']:
+                invalid('skill', 'active attempt source cannot change', code='SKILL_SOURCE_CHANGED')
+            if len(source['content'].encode('utf-8')) // 3 > session['config']['contextWindow'] // 2:
+                raise ValueError('SKILL_CONTEXT_LIMIT: full skill exceeds half the context budget')
+            tools, mode = _effective(rt, session)
+            evidence = _executor(rt)
+            previous_bundle = svc.latest(sid)
+            epoch = previous_bundle.payload['contextEpoch'] if previous_bundle else 1
+            dimensions = {'roleRevision': _revision({'role': session['role'], 'mode': mode}),
+                          'toolRevision': _revision(tools), 'adapterRevision': _revision({
+                              'adapter': type(rt.executor).__module__ + '.' + type(rt.executor).__qualname__,
+                              'evidence': evidence}),
+                          'sourceVersion': source['sha256'], 'contextEpoch': epoch}
+            reused, changes = revalidate(spec, _json(existing['evaluation_json']) if existing else {},
+                role_revision=dimensions['roleRevision'], tool_revision=dimensions['toolRevision'],
+                adapter_revision=dimensions['adapterRevision'], source_version=dimensions['sourceVersion'],
+                context_epoch=epoch)
+            ready = readiness(spec, tools=tools, capabilities=evidence['capabilities'],
+                              roles=[session['role']], environment={k: evidence[k] for k in
+                              ('commands', 'packages', 'environmentRefs')}, context_epoch=epoch)
+            applicability = spec.payload['applicability']
+            environment_missing = (applicability['environments'] and
+                                   evidence['environment'] not in applicability['environments'])
+            excluded = set(applicability['exclusions']) & set(evidence['exclusions'])
+            if ready.state == 'blocked' or environment_missing or excluded:
+                invalid('skill', '; '.join(ready.reasons) or 'environment not applicable', code='SKILL_NOT_READY')
+            if existing is None:
+                if attempt_pin is None:
+                    registry.pin(skill_id, row['version'], attempt, sid)
+                db.execute('INSERT INTO harness_context_skill_admissions VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                           (sid, attempt, skill_id, file_path, 1, row['version'], spec.skill_hash,
+                            source['sha256'], package_hash, json.dumps(dimensions), epoch))
+            else:
+                db.execute('UPDATE harness_context_skill_admissions SET evaluation_json=?,loaded_epoch=? '
+                           'WHERE session_id=? AND attempt_id=? AND skill_id=? AND file_path=?',
+                           (json.dumps(dimensions), epoch, sid, attempt, skill_id, file_path))
+    except _CatalogFallback:
+        # Gói catalog là bản đã phát hành mà đường cũ phục vụ; không hàng ghim, không admission.
+        return rt.skill_loader.read(session, skill_id, file_path, messages)
     payload = rt.skill_loader.read(session, skill_id, file_path, messages, _prepared=source)
     if _mode_body and 'content' not in payload:
         # Dựng lại block mode từ ảnh nguồn đã admit; không đọc lại file mới sau cache hit.

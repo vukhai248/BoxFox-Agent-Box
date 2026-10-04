@@ -129,6 +129,29 @@ def lossily_compact(rt):
 
 
 @run_async
+async def test_a_catalog_skill_without_a_registry_row_still_loads(runtime):
+    """Soát tuân thủ 2026-10-04: kho đăng ký chưa có nguồn gieo hàng, nên bật bề mặt này từng làm
+    MỌI lần nạp skill ở đường cũ ném SKILL_UNKNOWN. Gói catalog là bản đã phát hành mà đường cũ
+    phục vụ: hàng chưa có ⇒ đi nguyên đường cũ, không hàng ghim, không admission."""
+    rt, session, _ = runtime
+    registry = SkillRegistry(rt.store)
+    assert registry.list()['items'] == []
+    result = await read(rt, session)
+    assert result['content'] == rt.catalog.read('runtime-check')['content']
+    assert 'skillAdmission' not in result
+    assert rt.store.db.execute("SELECT COUNT(*) FROM harness_skill_pins").fetchone()[0] == 0
+
+
+@run_async
+async def test_a_reviewed_row_still_wins_over_the_catalog_fallback(runtime):
+    rt, session, _ = runtime
+    enable(rt)
+    result = await read(rt, session)
+    assert result['skillAdmission']['version'] == 1
+    assert rt.store.db.execute("SELECT COUNT(*) FROM harness_skill_pins").fetchone()[0] == 1
+
+
+@run_async
 async def test_real_tool_load_is_admitted_and_pinned(runtime):
     rt, session, _ = runtime
     enable(rt)
@@ -481,11 +504,27 @@ async def test_readiness_degraded_is_visible_without_guessing_context_cost(runti
     assert any('unknown' in reason for reason in loaded['skillAdmission']['reasons'])
 
 
-def test_mode_skill_does_not_bypass_admission(runtime, monkeypatch):
+def test_mode_skill_does_not_bypass_a_registry_decision(runtime, monkeypatch):
+    """Mode không được vượt phán quyết CỦA KHO: có hàng mà chưa enable ⇒ chặn, thân skill không lọt.
+
+    Soát tuân thủ 2026-10-04: kho chưa có nguồn gieo hàng, nên khi kho TRỐNG thì mode đọc gói
+    catalog như đường cũ (xem `test_mode_skill_falls_back_to_the_catalog_when_the_registry_is_empty`);
+    hàng có mà chưa enable vẫn là hàng chặn, không có chuyện "không thấy hàng thì thôi".
+    """
     rt, session, _ = runtime
-    assert 'SKILL_UNKNOWN' in context_surface.mode_skill(rt, session, 'runtime-check')
-    assert 'Check the supplied evidence.' not in context_surface.mode_skill(rt, session, 'runtime-check')
+    registry = SkillRegistry(rt.store)
+    registry.propose(spec(rt), 'owner-test', 'proposal-mode')
+    blocked = context_surface.mode_skill(rt, session, 'runtime-check')
+    assert 'SKILL_NOT_ENABLED' in blocked
+    assert 'Check the supplied evidence.' not in blocked
     monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
+    assert context_surface.mode_skill(rt, session, 'runtime-check') == rt.catalog.read('runtime-check')['content']
+
+
+def test_mode_skill_falls_back_to_the_catalog_when_the_registry_is_empty(runtime):
+    """Kho trống (chưa gieo hàng) ⇒ mode đọc gói catalog y như đường cũ; nếu không thì bật bề mặt
+    làm mọi mode mất thân skill, và không có cách nào gieo hàng cho kịp."""
+    rt, session, _ = runtime
     assert context_surface.mode_skill(rt, session, 'runtime-check') == rt.catalog.read('runtime-check')['content']
 
 
