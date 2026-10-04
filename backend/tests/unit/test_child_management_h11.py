@@ -12,6 +12,9 @@ Bốn việc chủ nhà chốt, mỗi việc một nhóm ca ở đây:
    quá trần máy thì bị kẹp và NÓI RA, không bao giờ được nới.
 
 Trần mới của #6546 (1000/1500 bước, 7200 s) được ghim ở `test_plan_deadline.py`; ở đây khoá hành vi.
+
+Phần cuối là năm lỗ hổng phủ kiểm do vòng kiểm thử H11 chỉ ra: ghi attempt khi gọi lại con có task,
+cờ kết cục ở watchdog và ở con `wait=false`, dọn bộ đếm theo lượt, và đầu vào xấu của trần cha khai.
 """
 import asyncio
 import copy
@@ -19,8 +22,11 @@ import json
 
 import pytest
 
-from agentbox.agent_core import child_lifecycle, limits, roles, tool_contracts
+from agentbox.agent_core import child_lifecycle, limits, roles, task_surface, tool_contracts
+from agentbox.agent_core.orchestration_contracts import TASK_SCHEMA
+from agentbox.agent_core.peer_watchdog import PeerWatchdog
 from agentbox.agent_core.runtime import HarnessRuntime
+from agentbox.agent_core.task_service import TaskService
 from agentbox.agent_core.tool_contracts import SCHEMAS, schemas_for
 from agentbox.memory.session_store import SessionStore
 
@@ -297,3 +303,120 @@ def test_child_resume_is_declared_and_gated_like_the_other_peer_tools(monkeypatc
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'off')
     assert schemas_for(['child_resume', 'peer_read']) == []
     assert 'child_resume' not in roles.allowed_tools('orchestrator', roles.ORCHESTRATOR_TOOLS)
+
+
+# --------------------------------------------------------------------------- #
+# Phủ kiểm của vòng kiểm thử: các đường còn thiếu ca trực tiếp
+# --------------------------------------------------------------------------- #
+
+def contract(role='review', invocation='inv-create'):
+    """Hợp đồng tối thiểu, đủ qua `TaskContract.parse` — đúng khuôn của `test_task_surface`."""
+    return {'schema': TASK_SCHEMA, 'taskId': 'inspect-recovery', 'invocationId': invocation,
+            'role': role, 'goal': GOAL, 'intent': 'analysis', 'mode': 'read_only', 'inputs': [],
+            'scope': {'read': ['backend/src'], 'write': [], 'externalSources': 'none'},
+            'deliverable': {'kind': 'knowledge', 'format': 'markdown', 'evidence': ['file_line'],
+                            'acceptance': ['Cite the canonical closer.']},
+            'dependsOn': [], 'budget': {'allocationPolicy': 'inherited'}}
+
+
+def test_child_resume_records_a_follow_up_attempt_on_the_same_task(tmp_path, monkeypatch):
+    """Lỗ hổng 1 — con có task: gọi lại ghi attempt MỚI (`attempt_seq` 2) trên CÙNG session con.
+
+    `resume_attempt` chạy khi công tắc BẬT và con đã từng gắn task; khoá `harness_task_active`
+    buộc attempt trước phải đóng trước (đúng như đường đóng con thật làm qua `project_child`).
+    """
+    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+    store = SessionStore(tmp_path / 'sessions.db')
+    runtime = HarnessRuntime(store, FixtureExecutor(),
+                             FixtureModel(child_responses=[answer('đã làm nốt')]))
+    sid = runtime.create({'skills': []})['id']
+    child = make_child(store, runtime, sid, status='started', text='phần đầu')
+    service = lambda rt: TaskService(store, lambda owner_id, run_id: {'runId': run_id,
+                                                                     'sessionId': owner_id})
+    monkeypatch.setattr(task_surface, 'service', service)
+    opened = service(runtime).create(sid, 'run-1', contract(), controller_id=sid)
+    service(runtime).record_attempt(sid, 'run-1', opened['taskKey'], invocation_id='inv-1',
+                                    expected_revision=opened['revision'], session_id=child,
+                                    admission_id='admission-1', capability_epoch=1)
+    store.child_finish(child, 'failed', reason=limits.DEADLINE_NOTICE_CODE, answer_chars=8)
+    task_surface.project_child(runtime, child)  # đường đóng con thật đóng attempt 1
+
+    result = asyncio.run(runtime.resume_child(store.get(sid), {'sessionId': child, 'note': 'làm nốt'}))
+
+    assert result['resumed'] is True and result['status'] == 'completed'
+    rows = store.db.execute('SELECT attempt_seq, session_id, status FROM harness_task_attempts '
+                            'WHERE session_id=? ORDER BY attempt_seq', (child,)).fetchall()
+    assert [row['attempt_seq'] for row in rows] == [1, 2], 'gọi lại là attempt nối tiếp, không phải lần đầu'
+    assert all(row['session_id'] == child for row in rows), 'CÙNG session con, không tạo session mới'
+    tasks = store.db.execute('SELECT COUNT(*) AS n FROM harness_tasks').fetchone()
+    assert tasks['n'] == 1, 'không sinh task thứ hai'
+    store.close()
+
+
+def test_watchdog_close_marks_a_child_cut_at_the_wall_as_timed_out(tmp_path):
+    """Lỗ hổng 2 — con bị watchdog cắt vì vượt trần tường: event `child` mang cờ gọi lại được."""
+    store = SessionStore(tmp_path / 'sessions.db')
+    parent = store.create({'skills': []})['id']
+    child = store.create({'skills': []}, role='review', parent_id=parent)['id']
+    store.child_start(child, parent, 1, 2, 'review', goal=GOAL)
+    watchdog = PeerWatchdog(store, runtime=None, tick=0.01)
+
+    closed = watchdog._close(child, store.child(child), limits.WATCHDOG_TIMEOUT_REASON, cancel=True)
+
+    assert closed is True
+    event = [item['data'] for item in store.events(parent) if item['type'] == 'child'][-1]
+    assert event['watchdog'] is True and event['reason'] == limits.WATCHDOG_TIMEOUT_REASON
+    assert event['timedOut'] is True and event['partial'] is True and event['resumable'] is True
+    store.close()
+
+
+def test_detached_child_close_carries_the_outcome_flags(tmp_path):
+    """Lỗ hổng 3 — con `wait=false` tự xong: event `detached` cũng mang cờ kết cục."""
+    store, runtime, sid = build(tmp_path)
+    child = make_child(store, runtime, sid, status='started', text='')
+
+    class Finished:
+        def cancelled(self):
+            return False
+
+    store.save(child, [], 'failed')
+    store.emit(child, 'error', {'code': limits.WATCHDOG_TIMEOUT_REASON})
+    runtime.close_detached_child(sid, child, 'review', 1, 2, GOAL, Finished())
+
+    event = [item['data'] for item in store.events(sid) if item['type'] == 'child'][-1]
+    assert event['detached'] is True and event['reason'] == limits.WATCHDOG_TIMEOUT_REASON
+    assert event['timedOut'] is True and event['partial'] is True and event['resumable'] is True
+    store.close()
+
+
+def test_per_turn_child_counters_drop_with_the_turn_that_owns_them(tmp_path):
+    """Lỗ hổng 4 — lượt đóng thì ba bộ đếm của ĐÚNG lượt ấy biến mất; lượt khác còn nguyên."""
+    store, runtime, sid = build(tmp_path, [answer('cha xong')])
+    runtime.peer_read_windows[(1, 'peer-a')] = {'frontier': 0, 'idle': 0}
+    runtime.peer_wait_timeouts[(1, sid)] = 1
+    runtime.child_resumes[(1, 'child-a')] = 1
+    runtime.peer_read_windows[(9, 'peer-b')] = {'frontier': 3, 'idle': 1}
+    runtime.child_resumes[(9, 'child-b')] = 2
+
+    async def run():
+        return await runtime.start(sid, 'chạy một lượt')
+
+    asyncio.run(run())
+
+    assert (1, 'peer-a') not in runtime.peer_read_windows
+    assert (1, sid) not in runtime.peer_wait_timeouts
+    assert (1, 'child-a') not in runtime.child_resumes
+    assert runtime.peer_read_windows[(9, 'peer-b')] == {'frontier': 3, 'idle': 1}, 'lượt khác không bị xoá'
+    assert runtime.child_resumes[(9, 'child-b')] == 2
+    store.close()
+
+
+@pytest.mark.parametrize('bad', [0, -3, 2.5, '40', True, False])
+def test_declared_child_budget_rejects_anything_but_a_positive_integer(tmp_path, bad):
+    """Lỗ hổng 5 — ngoài `maxSteps=0`: số âm, số thực, chuỗi, bool đều bị từ chối như nhau."""
+    store, runtime, sid = build(tmp_path)
+    with pytest.raises(ValueError, match='positive integer'):
+        runtime._declared_child_budget(store.get(sid), {'maxSteps': bad})
+    with pytest.raises(ValueError, match='positive integer'):
+        runtime._declared_child_budget(store.get(sid), {'deadlineSeconds': bad})
+    store.close()
