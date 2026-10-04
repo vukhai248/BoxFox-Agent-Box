@@ -322,13 +322,28 @@ def allowed_hosts() -> set[str]:
     }
 
 
+def allowed_origins() -> set[str]:
+    """Origin của UI. Mặc định chỉ hai origin loopback của bản chạy chuẩn;
+
+    `BOXFOX_UI_ORIGINS` (phân tách bằng dấu phẩy) thêm origin của MỘT bản chạy
+    tách riêng — cùng tinh thần với `BOXFOX_HARNESS_PORT`: bản tách riêng khai cổng của nó,
+    mặc định không bị nới.
+    """
+    origins = {'http://localhost:3100', 'http://127.0.0.1:3100'}
+    for item in (os.environ.get('BOXFOX_UI_ORIGINS') or '').split(','):
+        item = item.strip().rstrip('/')
+        if item:
+            origins.add(item)
+    return origins
+
+
 def create_app(runtime):
     @web.middleware
     async def boundary(request, handler):
         if request.host not in allowed_hosts():
             return web.json_response({'error': 'Host not allowed'}, status=403)
         if request.path != '/api/agent/health':
-            if request.headers.get('X-BoxFox-Admin') != '1' or request.headers.get('Origin', 'http://localhost:3100') not in {'http://localhost:3100', 'http://127.0.0.1:3100'}:
+            if request.headers.get('X-BoxFox-Admin') != '1' or request.headers.get('Origin', 'http://localhost:3100') not in allowed_origins():
                 return web.json_response({'error': 'Local administration required'}, status=403)
         try:
             return await handler(request)
