@@ -1,13 +1,13 @@
 {
   "checkpoint": "H7",
-  "status": "partial",
+  "status": "verified",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "code_tested": "c836822 (nghiệm thu vòng chạy 29/29) + 802f51f (nối runtime; vorflux/boxfox-harness-reform)",
   "intent_ref": null,
   "scope": {
     "read": ["research_runtime.py (hợp đồng hiện có, chỉ đọc)"],
-    "write": ["backend/src/agentbox/agent_core/research_owner.py", "backend/tests/unit/test_research_owner.py"],
+    "write": ["backend/src/agentbox/agent_core/research_owner.py", "backend/src/agentbox/agent_core/research_gateway.py", "backend/tests/unit/test_research_owner.py", "backend/tests/unit/test_research_gateway.py"],
     "forbidden": ["cho main ghi verdict/kết quả canonical", "điều khiển worker nội bộ Research", "chạy Research sống khi chưa consent"]
   },
   "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
@@ -16,16 +16,16 @@
   "resource_grant_refs": [],
   "financial_consent_ref": null,
   "acceptance_results": [
-    {"id": "unit", "result": "pass", "evidence": "test_research_owner.py (52 ca)"},
+    {"id": "unit", "result": "pass", "evidence": "test_research_owner.py (52 ca) + test_research_gateway.py (48 ca)"},
     {"id": "probe-P5", "result": "pass", "evidence": "probes_962cd84.json P5 8/8: intent do main viết không thành canonical; stale revision → conflict không receipt; control_view che cho non-owner; validate_report từ chối kết luận do main viết / thiếu bằng chứng"},
     {"id": "version-binding", "result": "pass", "evidence": "P5 + test publication/review bind version"},
-    {"id": "runtime-envelope", "result": "not-run", "evidence": "research_owner chưa có src importer — chưa có phiên thật main↔Research"}
+    {"id": "runtime-envelope", "result": "pass", "evidence": "D1–D4 trong 29/29 PASS trên c836822 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json); principal research-lead riêng, main chỉ đọc; guard_request chặn model khi intake chưa admit"}
   ],
   "known_unknowns": [
-    "chưa nối runtime: envelope submit/get/control/result chưa chạy trong phiên thật",
-    "chưa có phiên Research sống (chờ consent + wiring)",
-    "migrate read view/history của Research chưa kiểm trên dữ liệu thật"
+    "chưa chạy Research sống (hoãn #6531)",
+    "migrate read view/history chưa kiểm trên dữ liệu thật",
+    "#6536: gateway giữ trong mã, mặc định off — bản này main tự spawn research sub-agent"
   ],
-  "rollback_ref": "module độc lập + bảng additive; gỡ file là đủ",
-  "next_action": "nối H7 khi có checkpoint wiring; giữ luật 'main không ghi canonical'"
+  "rollback_ref": "đặt BOXFOX_RESEARCH_GATEWAY về off (mặc định) — không cần gỡ file; bảng additive để nguyên",
+  "next_action": "chạy Research sống khi có consent; giữ luật 'main không ghi canonical'"
 }

@@ -14,7 +14,7 @@
      đã ghi vẫn đọc được; mutation không replay; schema cũ và `user_version` không đổi.
   3. Ma trận requirement → evidence → acceptance và disposition backlog có trong README.
   4. Rollback reference rõ (tắt công tắc + không có migration phá compatibility).
-  5. Không tuyên bố nào vượt bằng chứng: không OS isolation, không "đã calibration", không "đã nối
-     runtime" cho H4–H8.
-- **Điều kiện chưa đạt (tại thời điểm viết):** đối chiếu plan ↔ code cuối mới ở mức bảng trạng thái +
-  review theo miền rủi ro, chưa có review toàn snapshot sau cùng; calibration sống chờ consent.
+  5. Không tuyên bố nào vượt bằng chứng: không OS isolation, không "đã calibration", không nhận "đã
+     chạy phiên thật" cho H4–H8 (đã nối runtime, mặc định off, nghiệm thu offline 29/29 trên `c836822`).
+- **Điều kiện chưa đạt (tại thời điểm viết):** review toàn snapshot cuối đã chạy trên `ed5d771`/`c3bee48`
+  (không phát hiện chặn); còn calibration sống chờ consent (#6531) và drill trên box thật.

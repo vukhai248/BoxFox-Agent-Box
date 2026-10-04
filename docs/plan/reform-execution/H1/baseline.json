@@ -3,7 +3,7 @@
   "status": "verified",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "code_tested": "962cd84 (nghiệm thu H1) → 82550cc (head; module được các lớp H3–H8 import)",
   "intent_ref": null,
   "scope": {
     "read": ["backend/src/agentbox/agent_core/orchestration_contracts.py", "dữ liệu/approval cũ (chỉ đọc)"],
@@ -20,7 +20,10 @@
     {"id": "reject-bad-input", "result": "pass", "evidence": "ab26776: 11 ca biên; 3975ab6: thiếu cột → TASK_SCHEMA_UNSUPPORTED; test_unsupported_schema_has_specific_code"},
     {"id": "hash-approval-stable", "result": "pass", "evidence": "không đụng bảng approval/verdict; test_revision_does_not_coerce_boolean_string_or_float ghim revision"}
   ],
-  "known_unknowns": ["không có receipt ID cho intent; dùng plan 1257 làm ref"],
-  "rollback_ref": "module chỉ parse/validate, chưa nối runtime; gỡ file là đủ",
+  "known_unknowns": [
+    "không có receipt ID cho intent; dùng plan 1257 làm ref",
+    "module đã thành điểm nối chung (các lớp H3–H8 import) — thay đổi hợp đồng phải soát toàn cục"
+  ],
+  "rollback_ref": "module parse/validate dùng chung — các lớp H3–H8 import; rollback bằng công tắc từng lớp, không gỡ file",
   "next_action": "H2"
 }

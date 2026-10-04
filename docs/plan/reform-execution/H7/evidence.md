@@ -10,7 +10,11 @@
 - Bảng mới (additive): `harness_research_ownership` (dòng 88), `harness_research_handoffs` (94), `harness_research_controls` (101), `harness_research_invocations` (107).
 - Lỗi đã sửa: H7.1 đua replay trong `claim` → kiểm cache invocation TRONG giao dịch ghi (trả replay thay vì conflict); H7.2 thiếu ghi chú nối dây cho các điểm vào chưa xác thực (`assign`, `handoff`, `release`, `record_intent`, `get`, `validate_report`) → thêm mục "GHI CHÚ NỐI DÂY" trong docstring, yêu cầu wiring gọi `authorize(...)`.
 
+## Nối runtime (`802f51f`)
+- `research_gateway.py` (48 test): submit/get/result/control/publish với principal `research-lead` riêng; main chỉ đọc; `guard_request` chặn model khi intake chưa admit; `apply_profile` ẩn/gate công cụ theo công tắc (`BOXFOX_RESEARCH_GATEWAY` mặc định off); các cửa control gọi `ownership.authorize(...)`.
+- Nghiệm thu vòng chạy D1–D4 nằm trong **29/29 PASS** trên `c836822` — `/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json` (gồm "lead là principal tách biệt").
+- #6536: gateway giữ trong mã, mặc định off; bản này main tự spawn research sub-agent — không mô tả là đã gỡ hay đã bật.
+
 ## Chưa kiểm
-- Chưa nối runtime: chưa có phiên thật main↔Research để kiểm envelope; **chưa kiểm** migrate read view/history trên dữ liệu thật.
-- Chưa chạy Research sống (ngoài phạm vi, chờ consent + wiring).
-- Các điểm vào ghi chú H7.2 mới là hợp đồng ở docstring; chưa có mã nối thật — khi nối phải gọi `authorize(...)`.
+- Chưa chạy Research sống (hoãn #6531); chưa kiểm migrate read view/history trên dữ liệu thật ngoài envelope.
+- Khi mở rộng thêm điểm vào phải giữ `authorize(...)` (H7.2).

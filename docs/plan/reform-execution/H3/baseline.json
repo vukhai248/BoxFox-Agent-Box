@@ -3,14 +3,14 @@
   "status": "verified",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "962cd84 (vorflux/boxfox-harness-reform; cây sạch)",
+  "code_tested": "962cd84 (nghiệm thu H3, cây sạch) + fcc6819 (delegate_task task/runId; vorflux/boxfox-harness-reform)",
   "intent_ref": null,
   "scope": {
     "read": ["backend/src/agentbox/agent_core/runtime.py", "research_runtime.py", "peer_watchdog.py", "work_feedback.py"],
     "write": ["backend/src/agentbox/agent_core/task_surface.py", "backend/src/agentbox/agent_core/recovery_policy.py", "điểm nối trong runtime.py/research_runtime.py/peer_watchdog.py/work_feedback.py", "backend/tests/unit/test_task_surface.py", "backend/tests/unit/test_recovery_policy.py"],
     "forbidden": ["đổi luật work_scope/work_policy", "tuyên bố OS isolation", "sửa oracle/suite cũ"]
   },
-  "dependency_receipts": ["commit 90a9fce", "commit 2ac4dd4", "commit 04ea7da", "commit 962cd84", "/code/.plans/reform-h3-seams.md"],
+  "dependency_receipts": ["commit 90a9fce", "commit 2ac4dd4", "commit 04ea7da", "commit 962cd84", "commit fcc6819", "/code/.plans/reform-h3-seams.md"],
   "policy_versions": {"taskRecordSchemaVersion": 1},
   "machine_binding_ref": null,
   "resource_grant_refs": [],
@@ -22,13 +22,14 @@
     {"id": "terminal-followup", "result": "pass", "evidence": "E3b; test_a_follow_up_delegate_with_the_same_contract_binds_a_new_attempt"},
     {"id": "unknown-no-replay", "result": "pass", "evidence": "test_unknown_outcome_mutation_is_never_replayed; test_no_class_ever_returns_replay_true_today"},
     {"id": "cancel-receipt", "result": "pass", "evidence": "E5 14/14 (attempt + hàng con + hàng phiên = cancelled/OWNER_CANCELLED, không rò slot); test_cancel_child_closes_the_attempt_as_owner_cancelled"},
-    {"id": "probes", "result": "pass", "evidence": "/code/.generated_artifacts/h3h8/probes/probes_962cd84.json: P1–P6 = 71/71 check"}
+    {"id": "probes", "result": "pass", "evidence": "/code/.generated_artifacts/h3h8/probes/probes_962cd84.json: P1–P6 = 71/71 check"},
+    {"id": "runtime-surface", "result": "pass", "evidence": "fcc6819: hợp đồng delegate_task khai task/runId; task_surface.open_delegate đọc hai khoá — bề mặt H3 chạm được từ model sống khi bật công tắc"}
   ],
   "known_unknowns": [
     "F5/H3.11: attemptSeq theo phiên (attempt nối tiếp lại bắt đầu từ 1) — chờ chủ nhà quyết, không chặn",
-    "recovery_policy chưa được nối vào runtime (không có src importer) — mới đạt mức thư viện + probe",
+    "recovery_policy đã nối runtime (BOXFOX_RECOVERY_POLICY, mặc định off); E2E phân loại hồi phục riêng trong phiên dài ngày chưa chạy",
     "E3 semantics: /code/.plans/reform-h3-seams.md mục (b) chặt hơn ngữ nghĩa đã ghi trong docstring (follow-up mở attempt mới) — chủ nhà có thể muốn đồng bộ câu chữ"
   ],
-  "rollback_ref": "unset BOXFOX_TASK_SURFACE (mặc định off) → công cụ biến mất, đường legacy giữ nguyên; hook project_child no-op khi bảng chưa có",
+  "rollback_ref": "unset BOXFOX_TASK_SURFACE (mặc định off) → công cụ biến mất, đường legacy giữ nguyên; hook project_child no-op khi bảng chưa có; BOXFOX_RECOVERY_POLICY off giữ phân loại cũ",
   "next_action": "H4"
 }

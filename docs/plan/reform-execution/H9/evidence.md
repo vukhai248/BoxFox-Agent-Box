@@ -27,7 +27,7 @@
 - `python3 scripts/eval/suite_v2.py --shadow /code/.plans/w10f-adjudication-working.json --out /code/.generated_artifacts/h3h8/h9/shadow_w10f.json` → **34/34 cell ánh xạ** (17 ca W10 × 2 repeat), `unmapped=0`, `verdictsProduced=0`, `rescored=false`, `measured=false`; trạng thái legacy chỉ ghi làm quan sát: `quality-valid` 31, `unknown` 3 (3 cell chưa hoàn tất theo stop của chủ nhà).
   - Shadow không chấm lại: mọi receipt `verdict=None`; rò verdict bị chặn bằng `SHADOW_VERDICT_LEAKED` (test `test_shadow_blocks_a_leaked_verdict`).
   - Tệp legacy `/code/.plans/w10f-adjudication-working.json` chỉ được đọc (không ghi).
-- Bộ test suite v2: **38 passed** (`backend/tests/unit/test_suite_v2.py`).
+- Bộ test suite v2: **38 passed** (`backend/tests/unit/test_suite_v2.py`); các commit sau `c3bee48` đến `82550cc` không đổi `scripts/eval/**` hay `test_suite_v2.py`.
 
 ## Chưa kiểm
 - Live pilot + báo cáo valid/invalid + quality/cost/latency/interruptions **chưa chạy** (đúng trạng thái `unmeasured`); cần consent tài chính riêng (H10.1) — không tự chạy, không ghi là đã có quyền.

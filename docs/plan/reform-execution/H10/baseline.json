@@ -3,7 +3,7 @@
   "status": "partial",
   "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
   "code_baseline": "346da06",
-  "code_tested": "c3bee48 (vorflux/boxfox-harness-reform; cây sạch)",
+  "code_tested": "82550cc (head; vorflux/boxfox-harness-reform) — nghiệm thu vòng chạy H4–H8 trên c836822",
   "intent_ref": "/code/.plans/reform-execution-runbook.md §II.2–§II.6",
   "scope": {
     "read": [
@@ -25,6 +25,10 @@
   "dependency_receipts": [
     "H0–H9 (README mỗi checkpoint)",
     "commit c3bee48",
+    "commit 802f51f",
+    "commit c836822",
+    "commit b37dafb",
+    "commit 82550cc",
     "Test Report 956 (v3, PASSED)"
   ],
   "policy_versions": {
@@ -48,21 +52,26 @@
     {
       "id": "full-unit-suite",
       "result": "pass-with-known-baseline-failures",
-      "evidence": "backend/tests/unit trên 962cd84: 3 failed, 4060 passed, 12 skipped in 1131.01s — 3 lỗi đỏ y hệt baseline 346da06"
+      "evidence": "backend/tests/unit: 962cd84 → 3 failed, 4060 passed, 12 skipped in 1131.01s; c836822 (sau nối H4–H8) → 3 failed, 4277 passed, 12 skipped in 1273.91s — 3 lỗi đỏ y hệt baseline 346da06"
+    },
+    {
+      "id": "runtime-acceptance-h4-h8",
+      "result": "pass",
+      "evidence": "official head c836822, offline: 29/29 PASS — parity P1/P2 + H4 A1–A9, H5 B1–B5, H6 C1–C5, H7 D1–D4, H8 E1–E4 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json)"
     },
     {
       "id": "plan-vs-code-review",
       "result": "pass",
-      "evidence": "3 review theo miền rủi ro (H3, H4–H6, H7–H8) + simplify + 1 review toàn snapshot trên ed5d771/c3bee48 (không phát hiện chặn; should-fix tài liệu đã sửa; risk 2/10)"
+      "evidence": "3 review theo miền rủi ro (H3, H4–H6, H7–H8) + simplify + 1 review toàn snapshot trên ed5d771/c3bee48 (không phát hiện chặn; should-fix tài liệu đã sửa; risk 2/10); tiếp nối bằng việc 2026-10-04 (79f024b, c6c88bb, fcc6819, b37dafb, 82550cc)"
     }
   ],
   "known_unknowns": [
-    "H4–H8 chưa nối runtime: nghiệm thu mức vòng chạy chưa kiểm",
-    "H9 live pilot + H10.1 calibration sống blocked theo consent tài chính riêng",
+    "H9 live pilot + H10.1 calibration sống hoãn #6531 (consent tài chính riêng)",
     "F5/H3.11 attemptSeq theo phiên — chờ chủ nhà quyết",
     "W10.F không có aggregate cuối (31/34 cell, dừng theo lệnh chủ nhà)",
-    "drill rollback chưa chạy trên box thật với phiên đang chạy"
+    "drill rollback chưa chạy trên box thật với phiên đang chạy",
+    "phiên thật dài ngày cho H4–H8 chưa chạy (mới có nghiệm thu offline 29/29, công tắc mặc định off)"
   ],
-  "rollback_ref": "unset BOXFOX_ADAPTIVE_HARNESS + BOXFOX_TASK_SURFACE (mặc định off) → hành vi legacy; bảng mới additive, không migration phá compatibility",
-  "next_action": "chủ nhà quyết: retarget PR #3 về main sau khi nhánh khảo sát merge; H4–H8 nối runtime theo run; H9 live pilot/H10.1 khi có consent tài chính"
+  "rollback_ref": "unset các công tắc H2–H8 (mặc định off) → hành vi legacy; bảng mới additive, không migration phá compatibility",
+  "next_action": "chủ nhà quyết: retarget PR #3 về main sau khi nhánh khảo sát merge; H9 live pilot/H10.1 khi có consent tài chính (#6531)"
 }
