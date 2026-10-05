@@ -572,3 +572,19 @@ def test_prepare_refuses_caller_transaction_without_awaiting_hook(rt):
         assert calls == []
     finally:
         runtime.store.db.rollback()
+
+
+def test_engine_work_spawns_cannot_bypass_the_gateway_either(rt):
+    """Đường Work Graph cũng không phải cửa sau: `work=` KHÔNG miễn kiểm của gateway.
+
+    Hệ quả có chủ đích của #6599: dưới mặc định mới, luồng `research` của Work Graph
+    (engine tự spawn producer research/research-review) dừng với `RESEARCH_MAIN_READ_ONLY`
+    cho tới khi phiên main có binding research legacy hoặc gateway tắt — Research phải đi
+    qua biên độc lập (H7.1/P5). Bài này chốt hành vi đó để nó không âm thầm đổi.
+    """
+    runtime, root = rt
+    submit(rt)
+    with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
+        asyncio.run(runtime.delegate(root, {'role': 'research', 'goal': 'Engine spawn'},
+                                     work={'run': 'r1', 'node': 'n1', 'stage': 'produce'}))
+    assert runtime.store.children_of(root['id']) == []

@@ -250,10 +250,15 @@ def _action_error(exc, statuses=None, default=400):
 def _open_allocations(rt):
     """Trần chi đang mở cho khối `usage` của runtime-info — chỉ đọc, không cấp chi.
 
-    Một hàng hỏng hoặc bảng thiếu KHÔNG được làm đỏ cả tab Harness: tab này còn phục vụ
-    việc chẩn đoán, nên chỗ này trả `[]` và ghi log thay vì ném ra ngoài.
+    Chỉ đọc THẬT: bảng của sổ chi chưa có thì trả `[]` ngay, không dựng sổ — dựng sổ là
+    ghi schema, kể cả khi cả nhóm công tắc đang tắt. Một hàng hỏng hoặc bảng thiếu KHÔNG
+    được làm đỏ cả tab Harness: tab này còn phục vụ việc chẩn đoán, nên chỗ này trả `[]`
+    và ghi log thay vì ném ra ngoài.
     """
     try:
+        if rt.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                               "AND name='harness_allocations'").fetchone() is None:
+            return []
         return usage_surface.service(rt).open_allocations()
     except Exception:
         logger.exception('usage allocations unavailable')
@@ -1714,6 +1719,12 @@ def create_app(runtime):
         body = await request.json()
         if not isinstance(body, dict):
             raise ApiError('USAGE_ALLOCATION_BODY_INVALID', 'body needs `ceiling` and `consentRef`')
+        # `attached` ở trên đọc TRƯỚC `await request.json()`, nên hai PUT song song cùng thấy
+        # `None`: cả hai reserve, cái sau ghi đè con trỏ và bỏ rơi reservation của cái trước
+        # (không còn đường DELETE — hàng mồ côi vĩnh viễn). Chốt lại SAU await; từ đây tới
+        # `update_config` không còn await nào nên vòng lặp sự kiện giữ lát cắt này nguyên tử.
+        root = usage_surface.root_session(runtime, sid)
+        attached = (root['config'] or {}).get('harnessAllocationId')
         if attached:
             raise ApiError('ALLOCATION_ALREADY_ATTACHED',
                            'detach the current allocation before attaching another', 409)
@@ -1722,13 +1733,19 @@ def create_app(runtime):
             raise ApiError('USAGE_NO_CONSENT', 'consentRef is required to attach a ceiling')
         if not isinstance(ceiling, (int, float)) or isinstance(ceiling, bool) or not ceiling > 0:
             raise ApiError('USAGE_FIELD_INVALID', 'ceiling must be a positive number')
+        try:
+            # `int` khổng lồ (10**400) qua được `isinstance` nhưng `float()` ném
+            # OverflowError: đó vẫn là ceiling sai, không được rơi ra 500.
+            amount = float(ceiling)
+        except OverflowError:
+            raise ApiError('USAGE_FIELD_INVALID', 'ceiling must be a positive number') from None
         allocation_id = 'alloc-' + uuid.uuid4().hex
         try:
             view = ledger.reserve(allocation_id, root['id'],
                                   execution_kernel.capability_epoch(runtime, root), str(consent),
                                   # `ceiling` là bắt buộc với root: `None` không phải vô hạn,
                                   # nên trần phải khai đúng bằng số tiền người vận hành chốt.
-                                  {'amount': float(ceiling), 'ceiling': float(ceiling),
+                                  {'amount': amount, 'ceiling': amount,
                                    'currency': 'USD', 'purpose': body.get('purpose') or 'session'},
                                   'attach-' + allocation_id)
         except ValueError as exc:

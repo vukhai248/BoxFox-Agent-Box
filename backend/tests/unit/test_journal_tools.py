@@ -23,12 +23,6 @@ from agentbox.memory.session_store import SessionStore
 import pytest
 
 
-
-
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
-pytestmark = pytest.mark.legacy_path
-
 class FixtureExecutor:
     """Sandbox giả: trả lời op `journal_append`; có công tắc để giả box hỏng."""
 

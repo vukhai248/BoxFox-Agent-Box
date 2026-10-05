@@ -771,9 +771,11 @@ class UsageLedger:
     def release(self, allocation_id, amount, reason, invocation_id=None):
         """Giải phóng phần reservation chưa dùng; usage unknown thì từ chối (`USAGE_UNSETTLED`).
 
-        Phần con đang giữ (`_held`) không được giải phóng: `available` trừ cả held. Mọi
-        `invocation_id` đã áp được ghi trong `consumed['invocations']`; retry bất kỳ
-        invocation cũ nào đều replay, khác payload thì `USAGE_INVOCATION_CONFLICT`.
+        Phần con đang giữ (`_held`) không được giải phóng: `available` trừ cả held. Hàng
+        đóng khi phần chưa tiêu còn lại bằng 0 (kể cả phần con đã tiêu, xem
+        `_cascade_release_to_parent`). Mọi `invocation_id` đã áp được ghi trong
+        `consumed['invocations']`; retry bất kỳ invocation cũ nào đều replay, khác payload
+        thì `USAGE_INVOCATION_CONFLICT`.
         """
         identifier(allocation_id, 'allocationId')
         value = _number(amount, 'amount')
@@ -814,9 +816,31 @@ class UsageLedger:
                 invocations[invocation_id] = request_hash
                 consumed['invocations'] = invocations
             total = round((consumed.get('amount') or 0.0) + (consumed.get('releasedAmount') or 0.0), 6)
-            state = 'released' if total >= reservation['amount'] else row['state']
+            # Đóng khi KHÔNG còn gì để tiêu nữa: phần con đang giữ (`_held`) không bao giờ
+            # trả lại được — con đã tiêu là tiêu — nên `total >= amount` một mình khoá cứng
+            # mọi trần từng có con tiêu tiền. Đóng theo `remaining == 0` để người vận hành
+            # gỡ được trần; phần con trả lại sau đó chảy tiếp qua `_cascade_release_to_parent`.
+            remaining = round(reservation['amount'] - total - self._held(allocation_id), 6)
+            state = 'released' if remaining <= 0 else row['state']
             self._save(row, consumed, state, now)
+            self._cascade_release_to_parent(row, value)
             return self._allocation_view(self._allocation_row(allocation_id))
+
+    def _cascade_release_to_parent(self, row, value):
+        """Phần con vừa trả lại cũng rời hạn mức cha — cha đã đóng thì trả nốt vào cha.
+
+        Cha còn mở: `_held` tự trả phần này về hạn mức của cha, không cần làm gì. Cha đã
+        đóng (người vận hành gỡ trần lúc con còn giữ chỗ): không còn đường `release` nào
+        chạm tới phần vừa rời đi, nên trả luôn vào `releasedAmount` của cha — nếu không nó
+        nằm kẹt trong một hàng đã đóng và không API nào thấy.
+        """
+        if value <= 0 or row['parent_id'] is None:
+            return
+        parent = self.db.execute('SELECT * FROM harness_allocations WHERE allocation_id=?',
+                                 (row['parent_id'],)).fetchone()
+        if parent is None or parent['state'] != 'released':
+            return
+        self.release(parent['allocation_id'], value, 'child release cascade')
 
     def record(self, call_key, owner_id, **usage):
         """Một hàng cho một backend model call; idempotent theo `call_key` + payload hash.

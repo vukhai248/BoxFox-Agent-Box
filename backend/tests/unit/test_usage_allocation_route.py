@@ -170,6 +170,43 @@ def test_a_second_put_is_refused_until_delete(tmp_path):
     assert rows[0]['allocation_id'] == first['allocation']['allocationId']
 
 
+def test_two_concurrent_puts_attach_exactly_one(tmp_path):
+    """Hai PUT song song: một thắng 200, một phải 409 — không hàng reservation mồ côi.
+
+    PUT đầu gửi body theo từng khúc và giữ khúc cuối, nên handler của nó đọc `attached`
+    xong vẫn đang chờ body khi PUT thứ hai chạy trọn. Nếu lượt kiểm `attached` dùng giá
+    trị đọc trước `await request.json()`, cả hai đều reserve: con trỏ trỏ về cái sau, còn
+    reservation của cái trước mồ côi vĩnh viễn vì DELETE chỉ gỡ theo con trỏ.
+    """
+    async def scenario(client, store, runtime, root, child):
+        url = f'/api/agent/sessions/{root}/usage-allocation'
+        release = asyncio.Event()
+
+        async def slow_body():
+            yield b'{"ceiling": 7, "consentRef": "race-A"}'
+            await release.wait()
+
+        slow = asyncio.create_task(client.put(url, data=slow_body(), headers=HEADERS))
+        await asyncio.sleep(0.3)   # handler A đã đọc `attached`, đang chờ nốt body
+        fast = await client.put(url, json={'ceiling': 3, 'consentRef': 'race-B'},
+                                headers=HEADERS)
+        fast_body = await fast.json()
+        release.set()
+        slow_response = await slow
+        slow_body_payload = await slow_response.json()
+        return (fast.status, fast_body, slow_response.status, slow_body_payload,
+                allocation_rows(store), runtime.store.get(root)['config'])
+
+    fast_status, fast_body, slow_status, slow_body, rows, config = run(tmp_path, scenario)
+    assert fast_status == 200
+    assert slow_status == 409
+    assert slow_body['code'] == 'ALLOCATION_ALREADY_ATTACHED'
+    assert len(rows) == 1
+    winner = fast_body['allocation']['allocationId']
+    assert rows[0]['allocation_id'] == winner
+    assert config['harnessAllocationId'] == winner
+
+
 def test_get_shows_remaining_and_delete_releases_it(tmp_path):
     async def scenario(client, store, runtime, root, child):
         opened = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
@@ -224,3 +261,54 @@ def test_no_model_tool_can_open_a_ceiling():
     source = inspect.getsource(tool_contracts)
     assert 'harnessAllocationId' not in source
     assert 'reserve' not in source
+
+
+def test_delete_closes_a_ceiling_even_when_a_child_already_spent(tmp_path):
+    """Con đã tiêu là tiêu: phần đó không trả lại được, nhưng trần vẫn phải gỡ được.
+
+    `_held` cộng cả phần con đã tiêu vào hạn mức cha, nên nếu chỉ đóng khi
+    `consumed + released >= amount` thì mọi trần từng có con tiêu tiền nằm `reserved`
+    vĩnh viễn: DELETE trả phần rảnh, con trả nốt phần chưa tiêu, mà hàng vẫn mở và vẫn
+    hiện trong `usage.allocations`. Bài này khoá luật đóng mới (đóng theo `remaining`)
+    và đường chảy tiếp của phần con trả lại sau khi cha đã đóng.
+    """
+    async def scenario(client, store, runtime, root, child):
+        opened = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                         json={'ceiling': 10, 'consentRef': 'consent-10'},
+                                         headers=HEADERS)).json()
+        allocation_id = opened['allocation']['allocationId']
+        ledger = usage_surface.service(runtime)
+        # Đúng đường `usage_surface.complete()` đi: con giữ chỗ 4, tiêu 0.5, rồi trả lại 3.5.
+        ledger.reserve('call-1', root, 1, None, {'amount': 4, 'currency': 'USD'},
+                       'call-1', parent_id=allocation_id)
+        ledger.settle('call-1', {'amount': 0.5}, invocation_id='settle-1')
+        detached = await (await client.delete(f'/api/agent/sessions/{root}/usage-allocation',
+                                              headers=HEADERS)).json()
+        while_held = ledger.get_allocation(allocation_id)
+        open_while_held = ledger.open_allocations()
+        ledger.release('call-1', 3.5, 'call done', invocation_id='release-1')
+        closed = ledger.get_allocation(allocation_id)
+        return detached, while_held, open_while_held, closed
+
+    detached, while_held, open_while_held, closed = run(tmp_path, scenario)
+    assert detached['detached'] is True and detached['released'] == 6.0
+    # Đóng ngay cả khi con còn giữ 4: `remaining` bằng 0, không nằm lại trong danh sách mở.
+    assert while_held['state'] == 'released' and while_held['remaining'] == 0.0
+    assert open_while_held == []
+    # Con trả lại 3.5 sau đó chảy vào `releasedAmount` của cha, không kẹt trong hàng đã đóng.
+    assert closed['state'] == 'released' and closed['remaining'] == 0.0
+    assert closed['consumed']['releasedAmount'] == 9.5
+
+
+def test_an_absurd_integer_ceiling_is_refused_not_a_crash(tmp_path):
+    """`10**400` qua được `isinstance` nhưng `float()` ném OverflowError: vẫn phải là 400."""
+    async def scenario(client, store, runtime, root, child):
+        response = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                    json={'ceiling': 10 ** 400, 'consentRef': 'consent-huge'},
+                                    headers=HEADERS)
+        return response.status, await response.json(), allocation_rows(store)
+
+    code, error, rows = run(tmp_path, scenario)
+    assert code == 400
+    assert error['code'] == 'USAGE_FIELD_INVALID'
+    assert rows == []

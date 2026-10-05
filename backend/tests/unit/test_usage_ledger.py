@@ -445,13 +445,15 @@ def test_parent_release_cannot_free_held_child_budget(ledger):
     error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 4.01, 'too much'))
     released = ledger.release('alloc-1', 4.0, 'parent shrink')
     assert released['consumed']['releasedAmount'] == 4.0 and released['remaining'] == 0.0
+    # Hết phần chưa tiêu ⇒ hàng cha ĐÓNG luôn, dù con còn giữ 6: phần con đã tiêu là tiêu,
+    # còn phần con trả lại sau đó chảy tiếp vào `releasedAmount` của cha (không mở lại hàng).
+    assert released['state'] == 'released'
     error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 0.01, 'again'))
-    # con trả lại phần chưa dùng thì cha mở lại đúng phần đó, không hơn
     ledger.settle('child-1', {'amount': 2.0})
     ledger.release('child-1', 4.0, 'child done')
-    assert ledger.get_allocation('alloc-1')['remaining'] == 4.0
-    closed = ledger.release('alloc-1', 4.0, 'parent done')
-    assert closed['remaining'] == 0.0
+    parent = ledger.get_allocation('alloc-1')
+    assert parent['remaining'] == 0.0 and parent['consumed']['releasedAmount'] == 8.0
+    assert ledger.get_allocation('child-1')['consumed']['releasedAmount'] == 4.0
     error('USAGE_RELEASE_EXCEEDS', lambda: ledger.release('alloc-1', 0.01, 'again'))
 
 

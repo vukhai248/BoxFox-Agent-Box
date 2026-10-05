@@ -6,10 +6,12 @@ chứng, vì đó là ĐƯỜNG ROLLBACK. Cách làm ở đây: file nào chốt
 `pytestmark = pytest.mark.legacy_path`, và fixture dưới đây pin `BOXFOX_REFORM=off` cho mọi bài
 trong file đó.
 
-Vì sao pin cả khóa tổng chứ không từng thành viên: `off` ở khóa tổng tái lập ĐÚNG cấu hình trước
-v2 bằng một biến, và tự nó là phép kiểm cho lối thoát hiểm một lệnh. Bài nào cần chạy đường mới
-trong file legacy thì đặt env thành viên TƯỜNG MINH (`monkeypatch.setenv('BOXFOX_X', 'on')`) —
-giá trị tường minh luôn thắng khóa tổng.
+Vì sao pin CẢ khóa tổng lẫn bảy thành viên: env thành viên đặt tường minh luôn thắng khóa tổng,
+nên chỉ `BOXFOX_REFORM=off` là không kín — một shell đang có `BOXFOX_TASK_SURFACE=on` (đúng cách
+đợt bật dần từng bước đã chạy) sẽ lọt vào "đường cũ" và bài test không còn chốt cấu hình trước v2.
+Pin cả bảy thành viên giữ phép kiểm kín, và khóa tổng `off` vẫn là lối thoát hiểm một lệnh thật
+(vì fixture chỉ chạm tới file khai `legacy_path`). Bài nào cần chạy đường mới trong file legacy thì
+đặt env thành viên TƯỜNG MINH sau fixture (`monkeypatch.setenv('BOXFOX_X', 'on')`).
 
 File KHÔNG khai báo gì thì chạy đúng thứ người dùng mới nhận được (mặc định BẬT).
 """
@@ -30,3 +32,5 @@ def legacy_path_switch(request, monkeypatch):
     """File khai `legacy_path` chạy đúng cấu hình trước v2; file khác giữ mặc định hiện hành."""
     if request.node.get_closest_marker('legacy_path'):
         monkeypatch.setenv(feature_switches.MASTER_SWITCH, 'off')
+        for name in feature_switches.MEMBERS:
+            monkeypatch.setenv(name, 'off')

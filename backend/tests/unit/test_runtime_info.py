@@ -423,3 +423,27 @@ def test_the_usage_block_lists_open_allocations(tmp_path, monkeypatch):
     assert allocation['remaining'] == 4.0
     assert allocation['state'] == 'reserved'
     assert isinstance(allocation['updatedAt'], float)
+
+
+def test_the_usage_read_never_creates_the_ledger_tables(tmp_path):
+    """`usage.allocations` chỉ đọc THẬT: lượt xem tab Harness không được dựng schema sổ chi.
+
+    Trước bài này, `_open_allocations` dựng `UsageLedger` ngay ở lượt đọc, nên một GET
+    runtime-info tạo `harness_usage`/`harness_allocations` trong DB — kể cả khi cả nhóm công
+    tắc đang tắt (rollback vẫn ghi schema), và nhánh "bảng thiếu ⇒ `[]`" thành không tới được.
+    """
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-readonly.db')
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                payload = await (await http.get(info_url)).json()
+                # Đọc bảng NGAY trong lượt chạy: app đóng store lúc TestServer thoát.
+                tables = {row[0] for row in store.db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+        return payload, tables
+
+    payload, tables = asyncio.run(run())
+    assert payload['usage'] == {'allocations': []}
+    assert 'harness_allocations' not in tables
+    assert 'harness_usage' not in tables
