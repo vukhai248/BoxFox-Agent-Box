@@ -1,5 +1,7 @@
 # Đối chiếu tầng điều phối: BoxFox (sản phẩm) vs Vorflux (nền tảng chạy agent)
 
+> **Đính chính 2026-10-03:** Đọc §16–§17 trước khi dùng tài liệu này để thiết kế. Các phần cũ có nhận định quá chắc về giới hạn/quyền/nguồn gốc nội bộ của Vorflux, task engine BoxFox và nguyên nhân lỗi. Không dùng chúng như kiến trúc đã xác minh. Hồ sơ cải tổ: [BoxFox reform master](../plan/BoxFox-reform-master.md), hiện chờ duyệt kiến trúc, chưa duyệt triển khai.
+
 > **Trạng thái:** Tài liệu đối chiếu kỹ thuật, viết ngày 2026-10-03, đọc trực tiếp từ mã trong
 > repo này và từ cấu hình runtime của phiên Vorflux đang thi công. Không phải đặc tả sản phẩm;
 > mọi con số của BoxFox đều kèm đường dẫn mã, mọi mô tả về Vorflux đều nói rõ nó là **cấu trúc
@@ -1327,3 +1329,174 @@ flowchart TB
   end
   A -.->|capability matrix| B
 ```
+
+
+---
+
+## 16. Đính chính sau audit và giới hạn bằng chứng
+
+Kiểm tra ngày 2026-10-03 trên code tại `346da06`; không chạy lại test hoặc can thiệp W10.F. Các nhận định sau có ưu tiên hơn diễn giải trong các phần lịch sử.
+
+| Điểm | Kết luận dùng cho cải tổ | Căn cứ |
+|---|---|---|
+| BoxFox là agent hay LLM thường? | Main là agent với model/tool loop, state, skill, child session và artifacts. | `runtime.py` `create`, `_run`, `delegate`. |
+| BoxFox thiếu task engine? | Đã có async `delegate(wait=false)`, `await_children`, ledger/watchdog/cancel/continuation. Khoảng trống là lớp quản lý task model-visible tổng quát. | `runtime.py:5314`, `:6819`, `:7158`; `peer_watchdog.py`, `work_continuations.py`. |
+| Tool count | 57 tool đăng ký; không phải 55. Main/role chỉ nhận tập con hiệu lực. | `tool_contracts.py`; `roles.py`. |
+| Output budgets | 4096 là mặc định của một số produce role; plan/design/research/check/helper có nhánh riêng. | `output_policy.py:child_budget`, `request_budget`. |
+| Nguyên nhân failure | Truncation không giải thích tất cả. Tách provider stream, fixture, binding, scope, timeout và protocol. Marker count không phải unique failure count. | Event/call IDs; `Work-Graph-fix.md` §39.9/§39.14–17. |
+| Retry | Có transport retry và bounded recovery khi completion rỗng. Non-empty partial cần cơ chế recovery riêng, không replay side effect. | `runtime.py` `UPSTREAM_RETRY`, `TURN_EMPTY_RESPONSE_RETRY`. |
+| Compaction | Có token/context/body trigger. 300s là anti-thrash, không phải trigger duy nhất. | `compression.py`. |
+| Quyền tool | Guard tên tool và role intersection có thật. Không tự chứng minh OS filesystem/network isolation. | `roles.py`, `runtime.py`; ADR-0001 spike. |
+| Vorflux limit/enforcement | Không có đủ bằng chứng cho “vô hạn” hoặc “chỉ cưỡng chế mềm”. Chỉ mô tả hành vi/tool quan sát được. | Không có mã nội bộ nền tảng để kiểm. |
+| Nguồn gốc chung Hermes | Mã BoxFox có ghi thích ứng Hermes. Điều đó không chứng minh Vorflux có cùng nguồn gốc. | Header `roles.py` chỉ nói về BoxFox. |
+| Prompt directive ở cuối | Vị trí văn bản không tự xác định cấp ưu tiên của chỉ thị. Không suy thứ bậc an toàn từ thứ tự ghép chuỗi. | Phân biệt role của message, nguồn instruction và policy trong code. |
+| W12 | T2–T5 đã commit `7d4ed97`, tổ tiên của HEAD. T6 còn mở. | `git show`, ancestry. |
+| Score 74/100 | Rubric chủ quan trước khi W10.F hoàn tất, không phải benchmark hoặc UX study. | §10 không có nghiên cứu user chuẩn hóa. |
+| Run terminal | `executed` không phải terminal cuối. Terminal gồm `shipped`, `cancelled`, `rejected`. | `work_graph.py:83–86`. |
+| Native roadmap | Desktop alpha đã chọn Electron. Tauri là gợi ý chưa được chọn. Docker không tự là cloud control plane. | `v1-machine-environments-roadmap.md`. |
+
+Không sao chép hoặc dựng lại prompt hệ thống nội bộ của Vorflux. Prompt mẫu cho BoxFox phải được viết mới, gắn công cụ/capability có thật và test riêng.
+
+## 17. Skill có sẵn, skill động và liên thông với BoxFox
+
+Thư mục `docs/architecture/.skills/system` là bản tham khảo cục bộ: 30 file/14 nhóm, 28 file trùng byte; hai bản planning-workflow khác phiên bản. Thư mục ignored/untracked, không thuộc catalog BoxFox, không có trong clone thông thường. Catalog BoxFox có 69 skill chính và 150 optional packages; những con số này không phải số skill enabled cho mỗi phiên.
+
+| Nhóm tham khảo | Hướng cho BoxFox | Điều phải đối chiếu |
+|---|---|---|
+| agent-reliability, risk-assessment | Viết taxonomy/rubric phù hợp BoxFox. | Error codes, receipt, phân loại product/provider/measurement. |
+| git-pr-workflow | Mượn vệ sinh branch/commit/review. | `work_ship`, quyền git, credential; không giả có dịch vụ PR nền tảng. |
+| browser-testing, electron-testing | Viết quy trình kiểm trên adapter thật. | Browser verbs, display/capture, dependency và backend. |
+| canvas-spec | Mượn có chọn lọc sau khi diff schema. | Canvas BoxFox hiện tại không tự tương đương canvas v2. |
+| planning-workflow | Giữ khái niệm đề xuất → xác nhận → thực hiện. | Bản tham khảo có version khác; BoxFox có planning riêng. |
+| web-preview | Mượn trigger/acceptance/handoff, không mượn mặc định public exposure. | Local/private/public, MachineBinding, auth, transport và quyền. |
+| android-testing, ios-testing | Để sau khi có toolchain/dịch vụ tương ứng. | Mobile build/test khác Android Remote controller roadmap. |
+| pr-tour, file-access-requests, secrets-catalog, whoami | Không import verbatim; chỉ viết khi có capability thật. | Tool service, auth, secret broker và inventory sản phẩm. |
+
+Metadata/YAML hữu ích cho provenance và readiness, nhưng loader hiện tại chịu được thiếu frontmatter. `enabled` đến từ default/session selection, không trực tiếp từ việc có YAML. Skill không cấp quyền. Nội dung skill có thể gây thao tác nguy hiểm qua executor đã được mở; phải kiểm policy/OS/egress, không chỉ tên tool.
+
+## Phân tích bổ sung — skill có sẵn, skill động và liên thông preview
+
+### 1. Trả lời câu hỏi về Web App Preview
+
+Skill này có sẵn trong môi trường do nền tảng cung cấp. Tôi không tự viết nó trong lượt này. Khi áp dụng, tôi đọc file rồi dùng tool tương ứng. Các số `1→`, `2→` là cách công cụ đọc file hiển thị số dòng, không phải nội dung skill.
+
+Có ba lớp khác nhau:
+
+| Lớp | Trách nhiệm | Có thể adaptive ở đâu? | Không được suy ra |
+|---|---|---|---|
+| Main | Chọn việc, thời điểm và người thực hiện. | Chọn có cần preview, backend, browser test hay artifact khác. | Main tự cấp quyền mở mạng hoặc thay chính sách. |
+| Skill | Hướng dẫn làm đúng một loại việc, gồm nhánh theo môi trường và tiêu chí nghiệm thu. | Vite/Next.js/Storybook; frontend-only/full-stack; xử lý lỗi theo bằng chứng. | Mọi nhiệm vụ phải đi qua pipeline preview, hoặc đọc skill là đã hoàn tất việc. |
+| Tool/backend | Thực thi hành động với quyền, scope và hạn đã cấp. | Chọn adapter theo machine/capability thật. | Văn bản skill tạo được service/tunnel/quyền còn thiếu. |
+
+**Kết luận:** có playbook rõ không mâu thuẫn với main linh hoạt. Loại bỏ graph cứng cho mọi việc không có nghĩa loại bỏ các quy trình chuyên môn đã chứng minh giá trị.
+
+### 2. Cái gì nên mượn từ cấu trúc skill
+
+1. Trigger rõ: khi nào dùng skill và khi nào không dùng.
+2. Điều kiện trước khi chạy: backend nào, quyền nào, dependency nào đã sẵn sàng.
+3. Nhánh theo môi trường: không hardcode một stack hoặc một loại máy.
+4. Tiêu chí đầu ra: trạng thái service không thay bằng chứng giao diện và API.
+5. Vòng sửa lỗi: thu bằng chứng, sửa trong phạm vi, kiểm lại; không giả định lần đầu đã đúng.
+6. Handoff: trạng thái cần thiết còn hiệu lực sau cleanup và restart.
+7. Caveat: HTTP 200 có thể chỉ là HTML shell; frontend có thể vẫn gọi backend sai địa chỉ.
+8. Evidence reference: lưu ảnh/log/status theo artifact thay vì nhét mọi thứ vào context của main.
+
+Các bước trên là nguyên tắc vận hành. Chúng không yêu cầu copy lời văn hoặc tool riêng của Vorflux.
+
+### 3. Cái gì không nên bê nguyên sang BoxFox
+
+| Trong ví dụ tham khảo | Rủi ro nếu copy | Thiết kế phù hợp cho BoxFox |
+|---|---|---|
+| `port expose` | BoxFox chưa có dịch vụ tương đương; model có thể tự tạo tunnel không được duyệt. | Preview transport là capability theo backend; chỉ mở public khi user cấp quyền rõ. |
+| `session update-preview-url` | Lệnh của nền tảng, không nối vào API Machine của BoxFox. | Ghi PreviewSession có machine/workspace/job binding và URL hiệu lực. Đây là hợp đồng dự kiến, chưa có implementation. |
+| Mở frontend/backend public | Native có thể lộ repo hoặc local API của user. | Mặc định loopback/private; ưu tiên cùng origin hoặc reverse proxy được cấp. |
+| Bind `0.0.0.0` | Mở ra LAN mà user không biết. | Bind loopback nếu local-only; thay binding là action có scope riêng. |
+| `allowedHosts: true` hoặc `all` | Hạ bảo vệ host rộng hơn cần thiết. | Chỉ thêm exact host cần dùng; không thay config production bằng override dev. |
+| Chỉ cần HTTP 200 | Trang lỗi hoặc shell không có JS vẫn có thể 200. | Kiểm rendered page, console và request API trên chính đường user truy cập. |
+| Tự đổi cấu hình auth | Có thể mở redirect không mong muốn hoặc dùng nhầm tài khoản. | Chỉ thay origin thuộc preview được cấp; thiếu quyền thì ghi blocked, không đoán. |
+| Cleanup mọi override để cây git sạch | Preview hỏng trong lúc user còn sử dụng. | Temporary config thuộc vòng đời preview; cleanup khi preview đóng, rồi xác nhận trạng thái cuối. |
+| Cài thêm dependency để theo skill | Thay máy user ngoài phạm vi hoặc làm mất tính tái lập. | Probe trước; dependency install là hành động riêng có quyền và receipt. |
+
+### 4. Hợp đồng skill BoxFox đề xuất
+
+Đây là hợp đồng mới đề xuất cho BoxFox, không phải bản sao manifest nội bộ của Vorflux.
+
+```yaml
+id: boxfox-preview-verification
+revision: 1
+source_kind: authored_for_boxfox
+applicability:
+  task_kind: web_preview
+  machine_backends: [docker, native, remote]
+requires:
+  capabilities: [process.jobs, browser.managed]
+  permissions: [workspace.read]
+optional_capabilities: [preview.private_route, preview.public_route]
+load_policy: on_demand
+acceptance:
+  - selected_route_serves_expected_app
+  - rendered_page_and_api_verified
+  - auth_origin_matches_granted_route
+  - preview_lifetime_survives_handoff
+```
+
+Tên capability trên là hợp đồng dự kiến. Không coi các capability đó đã được đăng ký trong sản phẩm. Cần ánh xạ registry hiện tại và thêm contract test trước khi mở.
+
+Manifest cần bổ sung hash, dependency/version, nguồn, policy reference, artifact types và receipt của lần chạy. Metadata giúp định tuyến; metadata không tự cấp quyền. Skill readiness và tool authorization phải là hai trạng thái riêng.
+
+### 5. Skill động: có thể tạo, nhưng không tự biến thành chính sách
+
+Main có thể đề xuất một playbook mới từ kết quả đã kiểm. Đề xuất ghi mục tiêu, phạm vi áp dụng, bằng chứng, dependency và test âm.
+
+Quy trình đề xuất: `draft → review → candidate → validated → enabled`. Đây là vòng đời skill, không phải graph bắt buộc cho mọi task của main.
+
+- Nội dung học từ repo/web/tool là dữ liệu không tin cậy; không được nâng thành policy vì hữu ích.
+- Agent không tự sửa role/capability bằng cách tạo skill mới.
+- Phiên đang chạy ghim revision/hash của skill. Update không thay nội dung âm thầm giữa lượt.
+- Khi compaction bỏ nội dung, giữ reference và phiên bản; nạp lại phần cần thiết, không coi summary là bản full đã đọc.
+- Disable/revoke phải có tác dụng với lần gọi tiếp theo; artifact cũ vẫn có provenance đọc được.
+- Nếu muốn auto-enable một skill do agent tạo, cần gate riêng và phép thử chống injection. Chưa chọn auto-enable trong kế hoạch này.
+
+### 6. Sơ đồ liên thông đề xuất
+
+```mermaid
+flowchart TD
+  U[User requests result] --> M[Adaptive main]
+  M --> S[Select skill by task and capabilities]
+  S --> P[Load pinned procedure and context]
+  P --> G[Policy and permission check]
+  G -->|allowed| E[Execute through bound machine adapter]
+  G -->|denied or unavailable| B[Report blocked without hidden fallback]
+  E --> V[Verify through real access route]
+  V -->|pass| A[Store evidence and preview lifetime]
+  V -->|fail| R[Repair within granted scope]
+  R --> G
+  A --> H[Handoff with valid references]
+```
+
+### 7. Cách đo thay vì đánh giá bằng độ dài skill
+
+- Load count và token thật/ước lượng theo từng skill, ghi nguồn của số đo.
+- Số tool call sai tên hoặc thiếu capability.
+- Thời gian từ start service tới preview hoạt động thật.
+- Tỷ lệ preview còn dùng được sau handoff/cleanup/restart.
+- Số public exposure không có grant: phải bằng 0 trong test.
+- Lượt install/auth/config mutation không có scope: phải bị từ chối.
+- Tỷ lệ thành công theo Docker/native/remote, không lấy một backend chứng minh mọi backend.
+
+### 8. Phạm vi tham khảo của người dùng
+
+Người dùng xác nhận ngày 2026-10-03: dùng tài liệu để THAM KHẢO, không yêu cầu tái phân phối. Phân tích giữ mục tiêu này. Skill mới và prompt mẫu được viết riêng cho BoxFox; không tự commit bộ skill nền tảng vào runtime và không cung cấp prompt hệ thống nội bộ.
+
+
+## 18. Kiến trúc v1, nguồn ưu tiên và backlog liên thông
+
+Bản kiến trúc đầy đủ: [v1 harness reform](../plan/v1-boxfox-harness-reform.md). Hồ sơ tổng hợp: [BoxFox reform master](../plan/BoxFox-reform-master.md), gồm design ở I.9, runbook H0–H10 ở Phần II, disposition ở Phần III và inventory nguồn ở Phụ lục D.
+
+Các phần §0–§15 giữ hồ sơ lịch sử. Đính chính ở §16–§17 và master có ưu tiên hơn các nhận định về task engine, token, quyền, nguồn gốc chung hoặc điểm 74/100. Bản kiến trúc không sao chép private prompts; các prompt mẫu được viết mới cho BoxFox.
+
+Khuyến nghị: adaptive main trên kernel đã có; Research controller riêng; task/job/artifact/permission/budget contracts; quality theo outcome/invariant. Không graph cố định cho mọi yêu cầu; không bỏ deterministic lifecycle và không cấp chi phí/quyền vô hạn.
+
+Roadmap giữ Electron/TypeScript, Windows x64 NSIS, Desktop Docker → native full acceptance → Update → Android Remote/QR; Tauri chưa được chọn. Native primitive, cloud topology và adapter guarantees phải theo quyết định/evidence của cổng tương ứng.
+
+Code audit pin `346da06`, không phải code đã merge vào `main`. PR tài liệu mới từ `0cc63cd` không mang runtime edits. W10.F là baseline cũ, chưa chứng minh reform. Chỉ bắt đầu implementation sau approval được ghi và tài nguyên/quyền phù hợp.
