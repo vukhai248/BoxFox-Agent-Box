@@ -27,6 +27,7 @@ from agentbox.agent_core import (research_profiles, research_quality, research_r
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
 from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, CONTROLLER_JOB_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
+from agentbox.agent_core import usage_surface
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
 
@@ -447,3 +448,30 @@ def test_the_usage_read_never_creates_the_ledger_tables(tmp_path):
     assert payload['usage'] == {'allocations': []}
     assert 'harness_allocations' not in tables
     assert 'harness_usage' not in tables
+
+
+def test_a_half_built_ledger_schema_is_left_alone(tmp_path):
+    """Schema sổ dở dang (thiếu `harness_usage`) cũng phải để yên: lượt đọc không tự vá bảng thiếu.
+
+    `UsageLedger.__init__` dựng CẢ HAI bảng, nên trạng thái nửa vời chỉ đến từ DDL bị cắt ngang.
+    Phép dò cũ chỉ hỏi `harness_allocations`, nên lượt đọc vẫn chạy constructor và tạo nốt
+    `harness_usage`; phép dò mới đòi đủ cả hai tên.
+    """
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-partial.db')
+        usage_surface.service(runtime)          # dựng đủ schema như một lượt dùng thật
+        store.db.execute('DROP TABLE harness_usage')
+        store.db.commit()
+        runtime._usage_ledger = None            # buộc lượt đọc phải đi qua constructor
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                payload = await (await http.get(info_url)).json()
+                tables = {row[0] for row in store.db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+        return payload, tables
+
+    payload, tables = asyncio.run(run())
+    assert payload['usage'] == {'allocations': []}
+    assert 'harness_usage' not in tables
+    assert 'harness_allocations' in tables

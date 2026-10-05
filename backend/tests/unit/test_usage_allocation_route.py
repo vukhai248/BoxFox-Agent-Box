@@ -300,6 +300,41 @@ def test_delete_closes_a_ceiling_even_when_a_child_already_spent(tmp_path):
     assert closed['consumed']['releasedAmount'] == 9.5
 
 
+def test_delete_closes_a_ceiling_when_a_child_holds_all_of_it(tmp_path):
+    """Con giữ TRỌN trần thì `remaining` của cha đúng bằng 0.0 — vẫn phải gọi release để chốt hàng.
+
+    Bản trước dùng `if released:` nên bỏ qua đúng trường hợp `remaining == 0.0`: con trỏ bị gỡ
+    (không API nào chạm tới hàng nữa) mà hàng nằm `reserved` vĩnh viễn; khi con tiêu rồi trả lại,
+    hàng hiện lại trong `usage.allocations` với phần chưa tiêu và không còn đường gỡ.
+    """
+    async def scenario(client, store, runtime, root, child):
+        opened = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                         json={'ceiling': 10, 'consentRef': 'consent-full'},
+                                         headers=HEADERS)).json()
+        allocation_id = opened['allocation']['allocationId']
+        ledger = usage_surface.service(runtime)
+        # Đúng đường `usage_surface.complete()` đi: con giữ trọn 10 nên cha hết chỗ.
+        ledger.reserve('call-full', root, 1, None, {'amount': 10, 'currency': 'USD'},
+                       'call-full', parent_id=allocation_id)
+        before = ledger.get_allocation(allocation_id)
+        detached = await (await client.delete(f'/api/agent/sessions/{root}/usage-allocation',
+                                              headers=HEADERS)).json()
+        closed = ledger.get_allocation(allocation_id)
+        ledger.settle('call-full', {'amount': 1}, invocation_id='settle-full')
+        ledger.release('call-full', 9, 'call done', invocation_id='release-full')
+        after = ledger.get_allocation(allocation_id)
+        return before, detached, closed, after, ledger.open_allocations()
+
+    before, detached, closed, after, still_open = run(tmp_path, scenario)
+    assert before['state'] == 'reserved' and before['remaining'] == 0.0
+    assert detached['detached'] is True and detached['released'] == 0.0
+    assert closed['state'] == 'released' and closed['remaining'] == 0.0
+    # Con tiêu 1 rồi trả 9: chảy hết vào `releasedAmount` của cha đã đóng, không kẹt lại.
+    assert after['state'] == 'released' and after['remaining'] == 0.0
+    assert after['consumed']['releasedAmount'] == 9.0
+    assert still_open == []
+
+
 def test_an_absurd_integer_ceiling_is_refused_not_a_crash(tmp_path):
     """`10**400` qua được `isinstance` nhưng `float()` ném OverflowError: vẫn phải là 400."""
     async def scenario(client, store, runtime, root, child):

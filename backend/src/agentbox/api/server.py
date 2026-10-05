@@ -256,8 +256,10 @@ def _open_allocations(rt):
     và ghi log thay vì ném ra ngoài.
     """
     try:
-        if rt.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
-                               "AND name='harness_allocations'").fetchone() is None:
+        tables = {row[0] for row in rt.store.db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('harness_allocations', 'harness_usage')")}
+        if len(tables) < 2:  # thiếu một trong hai là schema dở dang: tuyệt đối không dựng sổ
             return []
         return usage_surface.service(rt).open_allocations()
     except Exception:
@@ -1709,7 +1711,10 @@ def create_app(runtime):
                                           'released': None, 'reason': 'no allocation attached'})
             view = ledger.get_allocation(attached)
             released = view['remaining']
-            if released:
+            # `remaining == 0.0` là trạng thái HỢP LỆ (con đang giữ trọn trần), không phải
+            # "không còn gì để trả": vẫn phải gọi release để luật đóng `remaining == 0` chốt
+            # hàng lại, nếu không con trỏ đi rồi mà hàng `reserved` ở lại vĩnh viễn.
+            if released is not None:
                 ledger.release(attached, released, 'operator detached',
                                invocation_id='detach-' + attached)
             config = dict(root['config'] or {})
