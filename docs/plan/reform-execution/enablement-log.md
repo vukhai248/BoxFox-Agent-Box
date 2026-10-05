@@ -26,7 +26,7 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 | 1 | `BOXFOX_RECOVERY_POLICY` | 2026-10-05 | **49 passed** | **49 passed** | `on: true, source: explicit` | `enable-step1`: **3/3 kịch bản, 7/7 phép kiểm** | ✅ ĐẠT |
 | 2 | `BOXFOX_CONTEXT_SURFACE` | 2026-10-05 | **249 passed** | **249 passed** | `on: true, source: explicit` (kèm bước 1 vẫn `explicit`) | `enable-step2`: **3/3 kịch bản, 8/8 phép kiểm** | ✅ ĐẠT |
 | 3 | `BOXFOX_TASK_SURFACE` | 2026-10-05 | **112 passed** | **112 passed** | `on: true, source: explicit` (kèm bước 1–2) | `enable-step3-mimo`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT (kèm ghi chú model yếu) |
-| 4 | `BOXFOX_CONTROLLER_JOBS` | — | — | — | — | — | chưa chạy |
+| 4 | `BOXFOX_CONTROLLER_JOBS` | 2026-10-05 | **125 passed** | **125 passed** | `on: true, source: explicit` (kèm bước 1–3) | `enable-step4`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT |
 | 5 | `BOXFOX_USAGE_LEDGER` | — | — | — | — | — | chưa chạy |
 | 6 | `BOXFOX_ADAPTIVE_HARNESS` | — | — | — | — | — | chưa chạy |
 | 7 | `BOXFOX_RESEARCH_GATEWAY` | — | — | — | — | — | chưa chạy |
@@ -101,8 +101,30 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
   là đủ. Đã ghi nhận thành phát hiện ngoài phạm vi (`652bc4b7`): khai `properties` lồng nhau cho tham số `task`
   hoặc nhận `task` dạng chuỗi JSON để bề mặt chịu được model yếu.
 
+### Bước 4 — `BOXFOX_CONTROLLER_JOBS` (2026-10-05, cộng dồn bước 1–3)
+
+- **Test khi TẮT:** `BOXFOX_CONTROLLER_JOBS=off` + `tests/unit/test_harness_jobs.py` +
+  `tests/unit/test_job_surface.py` + `tests/unit/test_job_wake.py` → **125 passed in 57.36s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_CONTROLLER_JOBS=on` → **125 passed in 58.07s**.
+  (Vòng BẬT đầu tiên đỏ 1 test `test_job_surface.py::test_switch_defaults_off[None]` — cùng lớp
+  hermeticity đã sửa ở `1ad3ae8`.)
+- **Khởi động lại instance** thêm `BOXFOX_CONTROLLER_JOBS=on`: `runtime-info` trả bốn công tắc
+  `on: true, source: explicit`, ba thành viên còn lại `default/off`, 61 tool (catalog có đủ
+  `start_job`/`get_job`/`subscribe_job`/`wait_jobs`/`cancel_job`); log
+  `/var/tmp/boxfox-enable/backend-3116-step4.log`.
+- **Vòng live** `driver_job.py` (kịch bản `start_job`, model sống gọi `start_job` rồi `get_job`),
+  model miễn phí ghim `mimo-v2.6-flash-free`: `enable-step4` **1/1 kịch bản, 6/6 phép kiểm** —
+  hàng job bền vững `job-833d5497f5e04392874fe11a73676815` (`kind: model`, `ownership: controller`,
+  owner = phiên main), phiên con thật `6dccce7f01924fe4b770af866d6b1eee` (role `explore`) được admit,
+  không có `JOB_SURFACE_OFF`, lượt kết thúc `completed`. Đọc lại sau khi vòng chạy xong: job đã tự
+  chuyển `state: succeeded` (revision 3, `closed_at` có giá trị) và con hoàn tất 1 lượt — job sống
+  qua khỏi lượt main như thiết kế H4.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step4/` (`summary.json`: total 1, passed 1,
+  failed 0).
+
 ## Trạng thái hiện tại của instance bật dần
 
-`BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`; bốn công tắc còn lại TẮT;
-`BOXFOX_REFORM` chưa đặt (`default`). Bước kế tiếp: **bước 4 — `BOXFOX_CONTROLLER_JOBS`**
-(test `test_harness_jobs.py` + `test_job_surface.py` + `test_job_wake.py`, live `driver_job.py`).
+`BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`,
+`BOXFOX_CONTROLLER_JOBS=on`; ba công tắc còn lại TẮT; `BOXFOX_REFORM` chưa đặt (`default`).
+Bước kế tiếp: **bước 5 — `BOXFOX_USAGE_LEDGER`** (test `test_usage_ledger.py` + `test_usage_surface.py`
++ `test_peer_cost.py`, live `driver_child.py`).
