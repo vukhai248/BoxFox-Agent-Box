@@ -111,23 +111,21 @@ def test_put_opens_a_reservation_and_pins_the_root(tmp_path):
                                     json={'ceiling': 5, 'consentRef': 'consent-1',
                                           'purpose': 'research'}, headers=HEADERS)
         body = await response.json()
-        return (response.status, body, allocation_rows(store), runtime.store.get(root)['config'],
-                body['allocation']['allocationId'])
+        return (response.status, body, allocation_rows(store), runtime.store.get(root)['config'])
 
-    code, body, rows, config, allocation_id = run(tmp_path, scenario)
+    code, body, rows, config = run(tmp_path, scenario)
     assert code == 200
     assert body['sessionId']
     assert body['attached'] is True
     view = body['allocation']
-    assert view['allocationId'] == allocation_id
     assert view['ownerId'] == body['sessionId']
-    assert view['policyRevision'] == execution_kernel.capability_epoch(None, None) == 1
+    assert view['policyRevision'] == 1
     assert view['consentRef'] == 'consent-1'
     assert view['reservation'] == {'amount': 5.0, 'ceiling': 5.0, 'currency': 'USD',
                                    'price': None, 'purpose': 'research'}
     assert view['state'] == 'reserved'
     assert view['remaining'] == 5.0
-    assert config['harnessAllocationId'] == allocation_id
+    assert config['harnessAllocationId'] == view['allocationId']
     assert len(rows) == 1
     assert rows[0]['owner_id'] == body['sessionId']
 

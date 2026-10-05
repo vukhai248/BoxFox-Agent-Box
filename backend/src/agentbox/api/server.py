@@ -247,14 +247,14 @@ def _action_error(exc, statuses=None, default=400):
     return ApiError(code, detail.strip() if sep else '', (statuses or {}).get(code, default))
 
 
-def _open_allocations(rt, limit=20):
+def _open_allocations(rt):
     """Trần chi đang mở cho khối `usage` của runtime-info — chỉ đọc, không cấp chi.
 
     Một hàng hỏng hoặc bảng thiếu KHÔNG được làm đỏ cả tab Harness: tab này còn phục vụ
     việc chẩn đoán, nên chỗ này trả `[]` và ghi log thay vì ném ra ngoài.
     """
     try:
-        return usage_surface.service(rt).open_allocations(limit)
+        return usage_surface.service(rt).open_allocations()
     except Exception:
         logger.exception('usage allocations unavailable')
         return []
