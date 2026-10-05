@@ -115,7 +115,10 @@ def run(rt, sid, name, args):
 
 # --- 1. Công tắc giết ---------------------------------------------------------------------
 
-def test_switch_is_off_by_default_and_only_on_enables():
+def test_switch_is_off_by_default_and_only_on_enables(monkeypatch):
+    # Bài này chốt MẶC ĐỊNH, nên phải tự cắt env ambient: bước "bật dần" chạy cả bộ với
+    # `BOXFOX_TASK_SURFACE=on` (kiểm trạng thái BẬT), lúc đó khẳng định mặc định vẫn phải đúng.
+    monkeypatch.delenv(task_surface.SWITCH, raising=False)
     assert task_surface.enabled() is False
     assert task_surface.enabled('off') is False
     assert task_surface.enabled('') is False

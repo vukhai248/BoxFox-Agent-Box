@@ -84,9 +84,16 @@ def test_tool_names_roles_groups_schema_contract():
     assert 'idle' not in PARENT_ALIVE_STATES
 
 
-@pytest.mark.parametrize('value', [None, '', 'off', 'true', '1'])
+@pytest.mark.parametrize('value', ['', 'off', 'true', '1'])
 def test_switch_defaults_off(value):
     assert not job_surface.enabled(value)
+
+
+def test_switch_defaults_off_without_ambient_env(monkeypatch):
+    # Bước "bật dần" chạy cả bộ với `BOXFOX_CONTROLLER_JOBS=on` (kiểm trạng thái BẬT),
+    # nên khẳng định MẶC ĐỊNH phải tự cắt env ambient thay vì tin vào môi trường gọi.
+    monkeypatch.delenv(job_surface.SWITCH, raising=False)
+    assert not job_surface.enabled()
 
 
 def test_default_off_runtime_profile_schemas_and_no_ddl(repo, monkeypatch):
