@@ -5,6 +5,7 @@ import json
 import time
 import uuid
 from ..agent_core import research_runtime
+from ..agent_core import context_surface
 from ..agent_core import plan_workflow, work_graph, work_scope
 from ..agent_core.limits import (STEER_MAX_PENDING, RESEARCH_MODE_BLOCK_MARKER,
                                  RESEARCH_MODE_BLOCK_END, RESEARCH_MODE_EVENT_CODE,
@@ -121,8 +122,11 @@ class RuntimeCommands:
                 async def compact():
                     try:
                         async def summarize(history, max_tokens=None):
-                            return await self.client.complete(history, [], session['config']['route'],
-                                                              max_tokens=max_tokens or 2048)
+                            # H6 — `/compact` cũng đi qua seam chung: một hàng usage, cổng
+                            # admission và trần của policy áp cho cả đường người dùng gọi.
+                            return await self.complete_model(sid, history, [], session['config']['route'],
+                                                             purpose='summary',
+                                                             max_tokens=max_tokens or 2048)
                         # Ngưỡng của lượt này lấy từ chính phiên: `threshold_tokens` là trần byte quy
                         # ra token (xem `ContextCompressor.__init__`). `/compact` là lệnh có ý thức của
                         # người dùng nên đi thẳng qua ngưỡng, nhưng nó vẫn phải biết mình đang đo bằng
@@ -144,6 +148,9 @@ class RuntimeCommands:
                             # created` — muốn biết cửa sổ/ngưỡng/ước lượng của lần nén đó phải mò
                             # sang `events.payload`. Ghi ngay tại đây, cùng lượt với bản gốc.
                             saved_messages = session['messages']
+                            context_receipt = context_surface.compact(self, sid, saved_messages, messages, compact_event)
+                            if context_receipt:
+                                event = compact_event
                             self.store.checkpoint(sid, saved_messages, 'manual_compact', {
                                 'before_estimate': (event or {}).get('beforeEstimate', before),
                                 'after_estimate': (event or {}).get('afterEstimate'),

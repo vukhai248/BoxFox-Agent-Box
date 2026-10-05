@@ -144,8 +144,9 @@ def test_a_normal_answer_gets_no_notice_at_all(tmp_path):
 def test_a_cut_answer_is_partial_for_the_parent_too(tmp_path):
     """Soát engine #7: lượt bị cắt ở trần độ dài là `partial` với CHA, không phải `completed`.
 
-    `turn_end` của lượt đã nói `partial` từ D2, nhưng `partial_turn` không quét
-    `ANSWER_TOO_LONG`, nên cha đọc con này là `completed` trọn vẹn — hai chỗ nói hai chuyện.
+    `turn_end` của lượt đã nói `partial` từ D2; từ vòng 25 hàng `finish` mang luôn `partial` +
+    `code`, và H11 đọc chính hàng `finish` cuối ấy — nên cha đọc con này là `partial` kèm ĐÚNG mã
+    `ANSWER_TOO_LONG`, không còn hai chỗ nói hai chuyện.
     """
     store, runtime, session = run_turn(tmp_path, FixtureModel([answer('d' * 200_000)]))
     sid = session['id']

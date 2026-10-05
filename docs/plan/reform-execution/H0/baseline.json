@@ -1,0 +1,38 @@
+{
+  "checkpoint": "H0",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "6adbe78 (runtime đóng băng của W10.F)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["/var/tmp/w10f-seq/**", "scripts/eval/**", "docs/plan/**"],
+    "write": ["docs/plan/reform-status.md", "Test Report W8.A4.5.N"],
+    "forbidden": ["backend/src/**", "backend/tests/**", "scripts/eval/work_acceptance_bench.py", "fixture/oracle đang chạy"]
+  },
+  "dependency_receipts": [
+    "/var/tmp/w10f-seq/owner-stop.json",
+    "/var/tmp/w10f-seq/freeze.txt",
+    "/var/tmp/w10f-seq/plan.json",
+    "/code/.plans/w10f-input-pins.json"
+  ],
+  "policy_versions": {
+    "workChecks": "work-checks/10",
+    "configHash": "e1a3791b7938ab1ab74051824c6e7c50aaece1bb25fb7e2c65d73492f31fcf79"
+  },
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "keep-cells", "result": "partial", "evidence": "owner-stop.json: completedCells=31/34; 1 ownerInterrupted; 2 notRun"},
+    {"id": "classify", "result": "pass", "evidence": "Test Report W8.A4.5.N (report 956) — theo bảng trạng thái"},
+    {"id": "parity", "result": "pass", "evidence": "git diff --stat 6adbe78 346da06 -- backend/src backend/tests scripts → rỗng"},
+    {"id": "not-reform-result", "result": "pass", "evidence": "tài liệu này ghi baseline là mốc so sánh, không phải kết quả reform"}
+  ],
+  "known_unknowns": [
+    "3 cell thiếu điểm: V13-r2 (ownerInterrupted), V14-r1/r2 (notRun); finalAggregateAvailable=false",
+    "chưa có MachineBinding/resource grant cho lần chạy W10.F"
+  ],
+  "rollback_ref": null,
+  "next_action": "mở H1 trên baseline 346da06"
+}

@@ -58,6 +58,7 @@ __all__ = [
     'ticket_from_rows', 'ambiguity_ticket_usable',
     'GroupState', 'group_state', 'review_stale', 'pending_submissions',
     'RegistrationPlan', 'plan_registration',
+    'PLAN_ROOM', 'plan_room_directory', 'plan_outside_room',
 ]
 
 INDEX_PATH = '/__box/plans/index'
@@ -75,6 +76,63 @@ PLAN_EVAL_PREFIX = 'PLAN_EVAL_REJECTED'
 # Grammar identity, neo vào cùng hằng số với khối header (`plan_header.IDENTITY_PATTERN`) nên không
 # có bản sao thứ ba của `_SLUG`.
 _IDENTITY_TEXT_RE = re.compile(rf'^{IDENTITY_PATTERN}$')
+# Bản sao của hai mảnh grammar trong `plan_header` (`_SLUG`/`_VERSION`), để khuôn tên tệp kế hoạch
+# ở đây không lệch với bộ đọc (`deploy/docker/plan_files.py`) hay khối header.
+_SLUG_TEXT = r'[a-z0-9]+(?:-[a-z0-9]+)*'
+_VERSION_TEXT = r'[1-9][0-9]{0,9}'
+
+# Phòng kế hoạch: bộ đọc (`deploy/docker/plan_files.py`) chỉ quét cây này, nên MỌI lần ghi phải nằm
+# trong đây — một tệp `vN-<slug>.md` ở ngoài là một kế hoạch vô hình với tab Plan. Chủ nhà đo sống
+# 2026-10-04: một lượt ghi ra ngoài phòng khiến tab Plan không thấy bản mới và sinh thêm thư mục
+# `plans` khác. Luật chốt: ghi theo chỗ được chỉ, nhưng **kẹp** vào phòng.
+PLAN_ROOM = '.plans'
+_ROOM_SEGMENTS = ('plans', '.plans')
+
+
+def plan_room_directory(value) -> str:
+    """Chuẩn hoá "chỗ ghi" của một kế hoạch về thư mục con BÊN TRONG phòng, `''` = gốc phòng.
+
+    Tiền tố trỏ vào chính phòng (`plans/`, `.plans/`, kể cả `.plans/plans/`) bị bỏ, `.`/`..`/dấu `/`
+    thừa bị bỏ, đoạn còn lại phải đúng quy tắc slug của tên tệp. `'../designs'` → `'designs'`;
+    `'.plans/tao-ui'` → `'tao-ui'`; `'tao-ui'` → `'tao-ui'`.
+    """
+    text = str(value or '').strip().replace('\\', '/')
+    segments: list[str] = []
+    for raw in text.split('/'):
+        segment = raw.strip()
+        if segment in ('', '.'):
+            continue
+        if segment == '..':
+            if segments:
+                segments.pop()
+            continue
+        segments.append(segment)
+    while segments and segments[0] in _ROOM_SEGMENTS:
+        segments.pop(0)
+    for segment in segments:
+        if not _IDENTITY_TEXT_RE.fullmatch(segment):
+            raise PlanRegistrationError('directory-invalid', directory=text)
+    # KHÔNG có trần độ sâu ở đây: người đọc (`plan_files.py:_IDENTITY_RE_GROUP`), khối header
+    # (`plan_header.IDENTITY_PATTERN`), `runtime.PLAN_PATH_RE` và nhật ký đều dùng chung grammar
+    # `(?:slug/)*slug`, nên `designs/login` là chỗ ghi hợp lệ và đi được tới bước ghim `P:`.
+    return '/'.join(segments)
+
+
+_PLAN_FILENAME_RE = re.compile(rf'^v{_VERSION_TEXT}-{_SLUG_TEXT}\.md$')
+
+
+def plan_outside_room(path) -> str:
+    """`'PLAN_OUTSIDE_ROOM'` khi `path` là một TỆP KẾ HOẠCH nằm ngoài phòng, ngược lại `''`.
+
+    Nhận diện bằng chính tên tệp của bộ đọc (`v<version>-<slug>.md`). Mọi đường dẫn KHÔNG bắt đầu
+    bằng `.plans/` mà tên tệp khớp khuôn đó đều bị chặn: kế hoạch ngoài phòng là kế hoạch vô hình
+    với tab Plan, và là chỗ sinh ra thư mục `plans` thứ hai (đo sống 2026-10-04).
+    """
+    segments = [segment for segment in str(path or '').replace('\\', '/').split('/')
+                if segment not in ('', '.')]
+    if not segments or segments[0] == PLAN_ROOM:
+        return ''
+    return 'PLAN_OUTSIDE_ROOM' if _PLAN_FILENAME_RE.fullmatch(segments[-1]) else ''
 
 
 class _Unset:
@@ -117,6 +175,11 @@ REMEDIES = {
     'identity-invalid': (
         'identity «{identity}» không hợp lệ: chỉ chữ thường và số, các từ cách nhau đúng một dấu '
         'gạch, có thể kèm thư mục (ví dụ "designs/login-page"). Sửa tham số rồi gọi lại write_plan.'
+    ),
+    'directory-invalid': (
+        'thư mục «{directory}» không dùng được: chỉ chữ thường và số, các từ cách nhau đúng một '
+        'dấu gạch (ví dụ "tao-ui"). Bỏ dấu chấm, dấu `/` thừa và `..` rồi gọi lại write_plan — '
+        'kế hoạch luôn nằm trong `.plans`.'
     ),
 }
 
@@ -437,30 +500,51 @@ def resolve_identity(proposed_slug, *, index=None, declared_identity=None, relat
     lần ghi vào tên file không hợp lệ thì phải dừng trước khi ghi, không im lặng đổi nhóm.
     """
     slug = str(proposed_slug or '').strip()
+    directory = plan_room_directory(directory)
+    explicit_none = relates_to is not None and str(relates_to or '').strip().lower() == 'none'
     declared = str(declared_identity or '').strip().strip('/')
     related_identity, _ = parse_relates_to(relates_to)
     related_identity = declared or related_identity
 
     if related_identity:
+        # Chỗ chỉ định có thể kèm tiền tố phòng (`.plans/tao-ui`) hoặc dấu `/` thừa: chuẩn hoá TRƯỚC
+        # khi kiểm grammar, vì `.plans/...` không phải một identity hợp lệ nhưng là một chỗ ghi hợp lệ.
+        directory_of_declared, slug_of_declared = split_identity(related_identity)
+        directory_of_declared = plan_room_directory(directory_of_declared)
+        # Khai identity TRẦN (không kèm thư mục) cho một chủ đề đã có ĐÚNG một nhóm trong thư mục
+        # con: nhận thư mục của nhóm cũ thay vì mở nhóm thứ hai ở gốc phòng. Đo sống 2026-10-04:
+        # v1 nằm ở `.plans/designs/login/`, bản khai `identity: "dang-nhap-sso"` rơi về `.plans/`
+        # và tách cùng một chủ đề ra hai chỗ (v2 ở gốc, parent v1 trong thư mục con).
+        if not directory_of_declared and index is not None and slug_of_declared:
+            owners = {group.directory for group in index.groups if group.slug == slug_of_declared}
+            if len(owners) == 1:
+                directory_of_declared = owners.pop()
+        related_identity = (directory_of_declared + '/' if directory_of_declared else '') + slug_of_declared
         if not _identity_is_valid(related_identity):
             raise PlanRegistrationError('identity-invalid', identity=related_identity)
-        directory_of_declared, slug_of_declared = split_identity(related_identity)
         canonical = slug_of_declared
         return IdentityDecision(
-            'declared', identity=related_identity, directory=directory_of_declared or '',
+            'declared', identity=related_identity, directory=directory_of_declared,
             slug=canonical,
             declared_slug=slug if slug and slug != canonical else None,
             matched_by='declared')
 
+    # Không khai chỗ ghi VÀ không khai "chủ đề mới": nếu đã có ĐÚNG một nhóm cùng slug ở một thư mục
+    # con thì bản mới nối tiếp trong chính thư mục đó (`.plans/tao-ui/v1-x.md` →
+    # `.plans/tao-ui/v2-x.md`) — "tìm thư mục plan mà ghi vào" theo luật chủ nhà, thay vì rơi về gốc
+    # phòng và tách khỏi bản cũ. `relatesTo: "none"` là một khai báo nên nó vẫn thắng như cũ.
+    if not directory and not explicit_none and index is not None and slug:
+        owners = {group.directory for group in index.groups if group.slug == slug}
+        if len(owners) == 1:
+            directory = owners.pop()
+
     if index is None:
-        return IdentityDecision('degraded', identity='', directory=str(directory or '').strip('/'),
+        return IdentityDecision('degraded', identity='', directory=directory,
                                 slug=slug, matched_by='none')
 
     # `relatesTo: "none"` là một khai báo, nên nó thắng cả dải gộp: người dùng nói "chủ đề mới" thì
     # hệ thống ghi nhóm mới và để lại dấu `forcedNew` cho chủ dự án thấy (§3.3), chứ không lặng lẽ
     # kéo nó về nhóm cũ.
-    explicit_none = relates_to is not None and str(relates_to or '').strip().lower() == 'none'
-
     candidates = []
     for group in index.groups_in(directory):
         if not group.slug:
@@ -839,11 +923,14 @@ def plan_registration(proposed_slug, *, index, reviews_by_identity=None, directo
     """
     reviews_by_identity = reviews_by_identity or {}
     submitted_by_identity = submitted_by_identity or {}
+    # Chuẩn hoá MỘT lần ở đây để vé mơ hồ, quyết định identity và tên tệp ghi ra dùng chung một giá
+    # trị: vé ghi bằng chỗ đã kẹp thì lượt gửi lại (cùng tham số thô) cũng phải tra được.
+    directory = plan_room_directory(directory)
     decision = resolve_identity(proposed_slug, index=index, declared_identity=declared_identity,
                                 relates_to=relates_to, directory=directory,
                                 ambiguity_ticket=ambiguity_ticket)
     if decision.action == 'degraded':
-        return RegistrationPlan(identity='', directory=str(directory or '').strip('/'),
+        return RegistrationPlan(identity='', directory=directory,
                                 slug=str(proposed_slug or '').strip(), version=0, parent=None,
                                 degraded=True, state='unknown', state_version=None)
 

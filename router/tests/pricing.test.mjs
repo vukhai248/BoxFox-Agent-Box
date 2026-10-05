@@ -16,8 +16,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEEPSEEK_PRICE_AS_OF, MAX_PRICE_USD, PER_MILLION, PRICE_SOURCES, PRICE_UNIT,
-  costFromUsage, deepseekPeakAt, documentedDeepseekPrice, normalizePrice, priceFromOpenRouter, roundUsd,
+  DEEPSEEK_PRICE_AS_OF, MAX_PRICE_USD, OPENCODE_ZEN_PRICE_AS_OF, OPENCODE_ZEN_PRICE_DOCS, PER_MILLION, PRICE_SOURCES, PRICE_UNIT,
+  costFromUsage, deepseekPeakAt, documentedDeepseekPrice, documentedZenPrice, normalizePrice, priceFromOpenRouter, roundUsd,
 } from '../src/pricing.mjs';
 import { normalizeUsage } from '../src/usage.mjs';
 
@@ -265,4 +265,52 @@ test('roundUsd stores six decimals and refuses what it cannot round', () => {
   assert.equal(roundUsd('0.5'), null);
   assert.equal(roundUsd(null), null);
   assert.equal(roundUsd(), null);
+});
+
+// Giá Zen đọc từ bảng USD / 1M của https://opencode.ai/docs/zen ngày 2026-10-04.
+// Giá cache tách riêng; dấu `-` không được đổi thành 0.
+test('Zen documented flat prices preserve the published components and snapshot', () => {
+  assert.equal(OPENCODE_ZEN_PRICE_AS_OF, '2026-10-04');
+  assert.equal(OPENCODE_ZEN_PRICE_DOCS, 'https://opencode.ai/docs/zen');
+  const rows = [
+    ['claude-sonnet-4-6', [3, 0.3, 3.75, 15]],
+    ['qwen3.8-flash', [0.15, 0.016, 0.2, 0.47]],
+    ['deepseek-v4-pro', [1.74, 0.145, null, 3.48]],
+    ['gpt-5.4-mini', [0.75, 0.075, null, 4.5]],
+    ['gemini-3.8-flash', [1.5, 0.15, null, 7.5]],
+    ['jev-1.13', [0.042, null, null, 0]],
+  ];
+  for (const [id, [input, cachedInput, cacheWriteInput, output]] of rows) {
+    const price = documentedZenPrice(id);
+    assert.deepEqual(price, { currency: 'USD', unit: PRICE_UNIT, input, cachedInput, cacheWriteInput, output, asOf: OPENCODE_ZEN_PRICE_AS_OF }, id);
+    assert.equal('source' in price, false, 'adapter owns provenance');
+    assert.ok(normalizePrice({ ...price, source: 'documented' }), 'table meets the price invariants');
+  }
+  assert.deepEqual(documentedZenPrice('  QWEN3.8-FLASH  '), documentedZenPrice('qwen3.8-flash'));
+  const changed = documentedZenPrice('qwen3.8-flash');
+  changed.input = 999;
+  assert.equal(documentedZenPrice('qwen3.8-flash').input, 0.15, 'a returned snapshot cannot mutate the table');
+});
+
+test('a documented free Zen model has a real zero cost but absent cache prices stay null', () => {
+  for (const id of ['big-pickle', 'space-bunny-free', 'muse-spark-1.3-contributor-free', 'jev-1.13-free']) {
+    const price = { ...documentedZenPrice(id), source: 'documented' };
+    assert.equal(price.input, 0);
+    assert.equal(price.output, 0);
+    assert.equal(price.cacheWriteInput, null);
+    assert.equal(price.cachedInput, id === 'jev-1.13-free' ? null : 0);
+    assert.deepEqual(costFromUsage({ usage: liveRow, price }), { cost: 0, basis: 'documented' });
+  }
+});
+
+test('Zen unknown ids and context-tiered models are not guessed', () => {
+  // Không lấy bậc thấp/cao tuỳ tiện khi đường tính giá chỉ nhận id model.
+  for (const id of [
+    'claude-sonnet-4-5', 'gemini-3.1-pro', 'grok-4.7', 'grok-4.6', 'grok-4.5',
+    'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-luna', 'gpt-5.6-sol',
+    'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4',
+    'unknown-free', 'deepseek-v4-flash-free', 'muse-spark-1.2-contributor-free',
+    'gateway/space-bunny-free', 'gpt-5.4-mini-latest', '__proto__', 'constructor',
+    '', null, undefined, { id: 'space-bunny-free' },
+  ]) assert.equal(documentedZenPrice(id), null, `${String(id)} has no documented flat Zen price`);
 });

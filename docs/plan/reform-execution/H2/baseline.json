@@ -1,0 +1,32 @@
+{
+  "checkpoint": "H2",
+  "status": "verified",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "962cd84 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/work_scope.py", "work_policy.py", "work_checks.py", "runtime.py (chỉ điểm nối dispatch)"],
+    "write": ["backend/src/agentbox/agent_core/execution_kernel.py", "backend/src/agentbox/agent_core/task_service.py", "backend/src/agentbox/agent_core/runtime.py (2 dòng nối guard)"],
+    "forbidden": ["sửa luật work_scope/work_policy/work_checks", "tuyên bố OS/native isolation", "migration phá dữ liệu cũ"]
+  },
+  "dependency_receipts": ["PR #3", "commit ab26776", "commit 3975ab6", "commit 2c7ec66"],
+  "policy_versions": {"policySchema": "boxfox-execution-policy/1", "taskRecordSchemaVersion": 1},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "parity-S4-S5", "result": "pass", "evidence": "/var/tmp/boxfox-testing/results/parity_checks_3975ab6.json — failed=[]; S4 dispatch/guard identical; S5 adaptive==admitted ở cả 5 chế độ"},
+    {"id": "child-not-wider", "result": "pass", "evidence": "test_missing_parent_does_not_use_child_tool_fallback; test_missing_session_does_not_fallback_to_caller_config"},
+    {"id": "kill-switch", "result": "pass", "evidence": "BOXFOX_ADAPTIVE_HARNESS mặc định off (execution_kernel.py:16); test_legacy_guard_remains_the_behavior_source; test_switch_off_beats_a_live_graph"},
+    {"id": "no-isolation-claim", "result": "pass", "evidence": "permission_view: enforcement=application, filesystemIsolation/networkIsolation=unverified (execution_kernel.py:124-125); test_view_is_application_level_not_os_or_network_isolation"},
+    {"id": "recheck-fresh-config", "result": "pass", "evidence": "test_owner_revoke_reads_fresh_config_not_the_callers_copy (guard đọc config tươi mỗi lần gọi)"},
+    {"id": "broken-profile-fail-closed", "result": "pass", "evidence": "parity checks: S5_broken_profile_fails_closed=true; test_unavailable_turn_profile_fails_closed"}
+  ],
+  "known_unknowns": [
+    "chưa có test E2E riêng cho kịch bản recheck sau await slot (ánh xạ bằng test đọc config tươi)",
+    "kho task chưa có PRAGMA user_version migration (SessionStore) — bảng additive, chờ chủ nhà quyết nếu cần versioning"
+  ],
+  "rollback_ref": "unset BOXFOX_ADAPTIVE_HARNESS + gỡ 2 dòng nối dispatch; bảng harness_* để nguyên (additive)",
+  "next_action": "H3 — bề mặt task trên kho này"
+}

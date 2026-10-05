@@ -14,6 +14,13 @@ from agentbox.agent_core.compression import estimate_tokens
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_contracts import schemas_for
 from agentbox.memory.session_store import SessionStore
+import pytest
+
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
 
 # B7 (vòng 22) thêm `stepsClamped` — đối xứng với `deadlineClamped` của C1: một `maxSteps`
 # bị kẹp cũng phải nói ra, không im lặng như trước.
@@ -109,8 +116,8 @@ def test_deadline_clamp_flag_is_visible_in_the_session_payload(tmp_path):
 
     store2 = SessionStore(tmp_path / 'sessions2.db')
     runtime2 = HarnessRuntime(store2, FixtureExecutor(), FixtureModel([answer('xong')]))
-    # Vòng 25 (M8) nâng trần lên 1200 s ⇒ con số "quá trần" phải lớn hơn trần MỚI.
-    clamped = runtime2.create({'skills': [], 'connectionId': 'c1', 'deadlineSeconds': 1500})
+    # #6457 nâng trần lên 7200 s ⇒ con số "quá trần" phải lớn hơn trần MỚI (không phải 1500 cũ).
+    clamped = runtime2.create({'skills': [], 'connectionId': 'c1', 'deadlineSeconds': 9000})
     assert clamped['config']['deadlineClamped'] is True, 'config đã nằm trong payload GET'
     assert runtime2.session_metrics(clamped['id'])['deadlineClamped'] is True
     store.close()

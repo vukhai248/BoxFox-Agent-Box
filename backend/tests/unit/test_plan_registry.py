@@ -23,8 +23,8 @@ from agentbox.agent_core.plan_registry import (
     MERGE_THRESHOLD, RegistrationPlan, PlanIndex, PlanIndexEntry, PlanRegistrationError,
     PlanGroup, ambiguity_ticket_usable, build_ambiguity_ticket, group_state, jaccard,
     next_version_and_parent, parse_plan_index, parse_relates_to,
-    pending_submissions, plan_registration, read_plan_index, resolve_identity, review_stale,
-    rejection_message, slug_tokens, split_identity, ticket_from_rows,
+    pending_submissions, plan_registration, plan_outside_room, read_plan_index, resolve_identity,
+    review_stale, rejection_message, slug_tokens, split_identity, ticket_from_rows,
 )
 
 CLINICAL = 'clinical-patient-record-lookup-research'
@@ -176,13 +176,68 @@ class ResolveIdentityTest(unittest.TestCase):
         self.assertFalse(decision.forced_new)
 
     def test_similarity_only_compares_groups_in_the_same_directory(self):
-        index = index_of(group('designs/login-page', 1))
-        decision = resolve_identity('login-page', index=index)
+        # Slug KHÁC nhưng giống token thì vẫn chỉ so trong cùng thư mục (luật §3.2 không đổi);
+        # j = 3/4 = 0.75 nên bản trong thư mục `designs` được gộp, bản ở gốc phòng là nhóm mới.
+        index = index_of(group('designs/login-page-flow', 1))
+        decision = resolve_identity('login-page-flow-final', index=index)
         self.assertEqual(decision.action, 'new')
-        self.assertEqual(decision.identity, 'login-page')
-        nested = resolve_identity('login-page', index=index, directory='designs')
+        self.assertEqual(decision.identity, 'login-page-flow-final')
+        nested = resolve_identity('login-page-flow-final', index=index, directory='designs')
         self.assertEqual(nested.action, 'merge')
-        self.assertEqual(nested.identity, 'designs/login-page')
+        self.assertEqual(nested.identity, 'designs/login-page-flow')
+
+    def test_same_slug_group_adopts_its_folder_so_v2_lands_next_to_v1(self):
+        """Chủ nhà 2026-10-04: không chỉ định chỗ ghi ⇒ tìm thư mục plan mà ghi vào.
+
+        Cùng slug nghĩa là cùng một việc, nên bản mới phải nối tiếp trong chính thư mục của bản cũ
+        (`.plans/tao-ui/v1-x.md` → `.plans/tao-ui/v2-x.md`) thay vì rơi về gốc phòng.
+        """
+        index = index_of(group('tao-ui/login-page', 1))
+        decision = resolve_identity('login-page', index=index)
+        self.assertEqual(decision.action, 'merge')
+        self.assertEqual(decision.identity, 'tao-ui/login-page')
+        self.assertEqual(decision.directory, 'tao-ui')
+
+    def test_explicit_new_topic_keeps_the_room_root_and_two_folders_stay_ambiguous(self):
+        one = index_of(group('tao-ui/login-page', 1))
+        declared = resolve_identity('login-page', index=one, relates_to='none')
+        self.assertEqual(declared.identity, 'login-page')
+        self.assertEqual(declared.directory, '')
+        # Hai thư mục cùng slug: harness không đoán bừa, bản mới về gốc phòng.
+        two = index_of(group('tao-ui/login-page', 1), group('admin-ui/login-page', 1))
+        ambiguous = resolve_identity('login-page', index=two)
+        self.assertEqual(ambiguous.directory, '')
+        self.assertEqual(ambiguous.identity, 'login-page')
+
+    def test_declared_destination_is_clamped_into_the_plan_room(self):
+        """`.plans/tao-ui`, `plans/tao-ui` và `tao-ui` là MỘT chỗ; `..` không ra ngoài được."""
+        index = index_of()
+        for declared in ('.plans/tao-ui/login-page', 'plans/tao-ui/login-page', 'tao-ui/login-page',
+                         '/.plans/plans/tao-ui/login-page', '../tao-ui/login-page'):
+            with self.subTest(declared=declared):
+                decision = resolve_identity('login-page', index=index, declared_identity=declared)
+                self.assertEqual(decision.identity, 'tao-ui/login-page')
+                self.assertEqual(decision.directory, 'tao-ui')
+
+    def test_directory_with_a_bad_segment_is_refused(self):
+        for bad in ('Tao UI', 'tao_ui', 'tao.ui', 'tao--ui'):
+            with self.subTest(bad=bad):
+                with self.assertRaises(PlanRegistrationError) as caught:
+                    resolve_identity('pilot', index=index_of(), directory=bad)
+                self.assertEqual(caught.exception.code, 'directory-invalid')
+                self.assertTrue(str(caught.exception).startswith('PLAN_EVAL_REJECTED: (directory-invalid)'))
+
+    def test_plan_outside_room_flags_only_plan_files_outside_the_room(self):
+        for inside in ('.plans/v1-x.md', '.plans/tao-ui/v2-x.md', '.plans/work/run-1/v3-a-3f9c2b.md'):
+            with self.subTest(inside=inside):
+                self.assertEqual(plan_outside_room(inside), '')
+        for outside in ('v1-x.md', 'plans/v1-x.md', 'plans/sub/v1-x.md', 'docs/v1-x.md',
+                        '.plans-backups/2026/v1-x.md', 'src/v1-schema.md'):
+            with self.subTest(outside=outside):
+                self.assertEqual(plan_outside_room(outside), 'PLAN_OUTSIDE_ROOM')
+        for other in ('notes.md', '.plans/notes.md', 'src/schema-v1.md', 'src/plan.md', ''):
+            with self.subTest(other=other):
+                self.assertEqual(plan_outside_room(other), '')
 
     def test_invalid_declared_identity_is_rejected(self):
         index = index_of(group(CLINICAL, 3))

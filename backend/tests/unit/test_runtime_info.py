@@ -10,17 +10,24 @@ Không đường nào nới ra: nếu nới được thì khối "Tool access" t
 import asyncio
 import inspect
 
+import pytest
+
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
+from switch_isolation import isolate_default, isolate_off
 
 from agentbox.agent_core import failures, limits
+from agentbox.agent_core.feature_switches import MEMBERS
 from agentbox.agent_core import web as web_module
 from agentbox.agent_core import runtime as runtime_module
 from agentbox.agent_core import tool_groups as tool_groups_module
+from agentbox.agent_core import research_gateway
 from agentbox.agent_core import (research_profiles, research_quality, research_runtime,
                                  source_tiers)
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
+from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, CONTROLLER_JOB_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
+from agentbox.agent_core import usage_surface
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
 
@@ -120,7 +127,7 @@ def test_a_missing_or_non_list_field_keeps_the_role_default(tmp_path):
     store.close()
 
 
-def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
+def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatch):
     """Đường thật của một lượt: bộ đã thu hẹp là bộ được gửi cho model.
 
     Config đúng mà lượt vẫn gửi bộ đầy đủ thì luật thu hẹp chỉ là hình thức — đây là
@@ -138,24 +145,31 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
         store.close()
         return client.offered[-1]
 
+    for switch in ('BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS', 'BOXFOX_RESEARCH_GATEWAY'):
+        isolate_off(monkeypatch, switch)
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))
-    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS), 'thiếu trường thì lượt vẫn thấy đủ 38 công cụ'
+    # Tắt TƯỜNG MINH cả ba bề mặt mới; bật task không tự bật job/Research.
+    other_off = CONTROLLER_JOB_TOOLS | research_gateway.GATEWAY_TOOLS
+    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - TASK_SURFACE_TOOLS - other_off)
+    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+    switched = asyncio.run(run('switch.db', {}))
+    assert sorted(switched) == sorted(ORCHESTRATOR_TOOLS - other_off)
 
 
-def test_the_twelve_groups_cover_the_orchestrator_exactly():
+def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     groups = tool_groups_module.TOOL_GROUPS
     assert [g['key'] for g in groups] == ['repositoryReading', 'skills', 'filesTerminal',
                                           'screenBrowser', 'webResearch', 'delegationPlans',
                                           'researchLedger', 'researchDossiers', 'peerMesh',
-                                          'workGraph', 'questionsApprovals'], \
-        'đúng thứ tự bảng Nút vặn của runtime (vòng 27 đợt 3–8 chèn hai nhóm research NGAY SAU delegationPlans)'
+                                          'workGraph', 'questionsApprovals', 'researchGateway',
+                                          'controllerJobs', 'taskSurface'], \
+        'đúng thứ tự bảng Nút vặn của runtime'
     assert all(set(g) == {'key', 'tools', 'alwaysOn'} for g in groups)
     assert all(g['tools'] for g in groups)
     union = [tool for g in groups for tool in g['tools']]
-    # W6.1.3: `verify_exec` vào nhóm workGraph (46 → 47), hợp vẫn bằng bộ orchestrator.
-    assert len(union) == len(set(union)) == 47, 'mười hai nhóm không chồng nhau'
+    assert len(union) == len(set(union)) == 61, 'mười bốn nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
     assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
@@ -163,11 +177,27 @@ def test_the_twelve_groups_cover_the_orchestrator_exactly():
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
 
-def test_the_route_answers_the_same_twelve_groups(tmp_path):
+def test_the_switch_block_shows_the_v2_default_of_the_whole_group(tmp_path, monkeypatch):
+    """V2 (#6599): env trống ⇒ khối `switches` của route THẬT báo cả nhóm BẬT, nguồn `default`."""
+    isolate_default(monkeypatch, *MEMBERS)
+    info = runtime_info(tmp_path, 'runtime-info-switches.db')
+    assert info['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'default'}
+    assert set(info['switches']['members']) == set(MEMBERS)
+    assert all(item == {'on': True, 'source': 'default'}
+               for item in info['switches']['members'].values())
+    # Một lệnh rollback: khóa tổng `off` ⇒ cả nhóm TẮT, nguồn `master`.
+    monkeypatch.setenv('BOXFOX_REFORM', 'off')
+    rolled = runtime_info(tmp_path, 'runtime-info-switches-off.db')
+    assert rolled['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': False, 'source': 'explicit'}
+    assert all(item == {'on': False, 'source': 'master'}
+               for item in rolled['switches']['members'].values())
+
+
+def test_the_route_answers_the_same_fourteen_groups(tmp_path):
     info = runtime_info(tmp_path)
     assert info['toolGroups'] == tool_groups_module.tool_groups()
     assert info['tools'] == sorted(ORCHESTRATOR_TOOLS)
-    assert len(info['tools']) == 47
+    assert len(info['tools']) == 61
 
 
 def test_every_role_row_equals_the_roles_definition(tmp_path):
@@ -361,6 +391,86 @@ def test_a_mis_set_reading_switch_keeps_the_default_and_says_so_once(tmp_path, m
     assert 'auto' in notices[0]['message']
 
     # Route web gọi đúng chỗ này: một máy đặt sai biến phải nói ra khi phiên thật sự đọc nguồn.
-    source = inspect.getsource(runtime_module.HarnessRuntime.dispatch)
+    assert 'self._dispatch(' in inspect.getsource(runtime_module.HarnessRuntime.dispatch)
+    source = inspect.getsource(runtime_module.HarnessRuntime._dispatch)
     assert 'self.web_switch_notices(sid)' in source
     store.close()
+
+def test_the_usage_block_lists_open_allocations(tmp_path, monkeypatch):
+    """H10.2: khối `usage` chỉ đọc — store tươi thấy `[]`, sau PUT thấy đúng allocation vừa mở."""
+    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
+
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-usage.db')
+        root = runtime.create({'skills': []})['id']
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                attach_url = str(server.make_url(f'/api/agent/sessions/{root}/usage-allocation'))
+                before = await (await http.get(info_url)).json()
+                opened = await (await http.put(attach_url, json={'ceiling': 4,
+                                                                 'consentRef': 'consent-4'})).json()
+                after = await (await http.get(info_url)).json()
+        store.close()
+        return before, opened, after
+
+    before, opened, after = asyncio.run(run())
+    assert before['usage'] == {'allocations': []}
+    assert len(after['usage']['allocations']) == 1
+    allocation = after['usage']['allocations'][0]
+    assert allocation['allocationId'] == opened['allocation']['allocationId']
+    assert allocation['ownerId'] == opened['sessionId']
+    assert allocation['reservation']['currency'] == 'USD'
+    assert allocation['remaining'] == 4.0
+    assert allocation['state'] == 'reserved'
+    assert isinstance(allocation['updatedAt'], float)
+
+
+def test_the_usage_read_never_creates_the_ledger_tables(tmp_path):
+    """`usage.allocations` chỉ đọc THẬT: lượt xem tab Harness không được dựng schema sổ chi.
+
+    Trước bài này, `_open_allocations` dựng `UsageLedger` ngay ở lượt đọc, nên một GET
+    runtime-info tạo `harness_usage`/`harness_allocations` trong DB — kể cả khi cả nhóm công
+    tắc đang tắt (rollback vẫn ghi schema), và nhánh "bảng thiếu ⇒ `[]`" thành không tới được.
+    """
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-readonly.db')
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                payload = await (await http.get(info_url)).json()
+                # Đọc bảng NGAY trong lượt chạy: app đóng store lúc TestServer thoát.
+                tables = {row[0] for row in store.db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+        return payload, tables
+
+    payload, tables = asyncio.run(run())
+    assert payload['usage'] == {'allocations': []}
+    assert 'harness_allocations' not in tables
+    assert 'harness_usage' not in tables
+
+def test_a_half_built_ledger_schema_is_left_alone(tmp_path):
+    """Schema sổ dở dang (thiếu `harness_usage`) cũng phải để yên: lượt đọc không tự vá bảng thiếu.
+
+    `UsageLedger.__init__` dựng CẢ HAI bảng, nên trạng thái nửa vời chỉ đến từ DDL bị cắt ngang.
+    Phép dò cũ chỉ hỏi `harness_allocations`, nên lượt đọc vẫn chạy constructor và tạo nốt
+    `harness_usage`; phép dò mới đòi đủ cả hai tên.
+    """
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-partial.db')
+        usage_surface.service(runtime)          # dựng đủ schema như một lượt dùng thật
+        store.db.execute('DROP TABLE harness_usage')
+        store.db.commit()
+        runtime._usage_ledger = None            # buộc lượt đọc phải đi qua constructor
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                payload = await (await http.get(info_url)).json()
+                tables = {row[0] for row in store.db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+        return payload, tables
+
+    payload, tables = asyncio.run(run())
+    assert payload['usage'] == {'allocations': []}
+    assert 'harness_usage' not in tables
+    assert 'harness_allocations' in tables

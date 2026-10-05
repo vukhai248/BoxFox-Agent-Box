@@ -38,3 +38,19 @@ def test_bad_values_raise_a_named_error(monkeypatch):
         with pytest.raises(ValueError) as err:
             server.harness_port()
         assert 'BOXFOX_HARNESS_PORT' in str(err.value), value
+
+
+def test_ui_origins_default_to_the_two_loopback_origins(monkeypatch):
+    monkeypatch.delenv('BOXFOX_UI_ORIGINS', raising=False)
+    assert server.allowed_origins() == {'http://localhost:3100', 'http://127.0.0.1:3100'}
+
+
+def test_ui_origins_env_adds_an_isolated_instance_origin(monkeypatch):
+    """Bản chạy tách riêng (dev server cổng khác, hoặc URL xem trước công khai) khai origin của
+    nó; hai origin mặc định KHÔNG bị bỏ, nên bản chạy chuẩn vẫn nguyên."""
+    monkeypatch.setenv('BOXFOX_UI_ORIGINS',
+                       'http://127.0.0.1:3110, https://abc.preview.us1.vorflux.com/, ')
+    origins = server.allowed_origins()
+    assert 'http://127.0.0.1:3110' in origins
+    assert 'https://abc.preview.us1.vorflux.com' in origins, 'dấu / cuối bị cắt'
+    assert {'http://localhost:3100', 'http://127.0.0.1:3100'} <= origins

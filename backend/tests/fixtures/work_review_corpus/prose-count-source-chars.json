@@ -1,0 +1,31 @@
+{
+  "case": "a prose count claim (source.md = 16 chars, measured 25) is self-refuted by its own verify_exec",
+  "expected": {
+    "blocking": [],
+    "downgraded": [
+      {
+        "findingId": "F1",
+        "reason": "SELF_REFUTED"
+      }
+    ],
+    "status": "unverified"
+  },
+  "reportText": "Review of the assigned artifact.\n```json\n{\"coverage\": [{\"id\": \"A1\", \"status\": \"revise\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\", \"findingIds\": [\"F1\"]}, {\"id\": \"A2\", \"status\": \"pass\", \"target\": \"artifact\", \"evidence\": \"Observed on the opened source.\"}], \"findings\": [{\"id\": \"F1\", \"criterionId\": \"A1\", \"severity\": \"blocking\", \"scope\": \"node\", \"claim\": \"The supplied source docs/source.md is 16 characters after stripping.\", \"evidenceRefs\": [\"call_verify\"], \"impact\": \"A1 requires the source length\", \"fix\": \"recount the source\", \"counterCheck\": {\"strongest\": \"The measured stripped length is 25, not 16\", \"checkedBy\": \"call_verify\", \"outcome\": \"confirmed\"}}]}\n```\nVERDICT: revise",
+  "source": "docs/plan/W6.Q-adjudication.md#B2; docs/plan/W6.1.3-checker-duty-evidence.json#measuredProseCounterexamples.sourceChars",
+  "toolEvents": [
+    {
+      "args": {
+        "claim": "stripped length of docs/source.md",
+        "code": "print(len(open('docs/source.md', encoding='utf-8').read().strip()))",
+        "language": "python"
+      },
+      "id": "call_verify",
+      "name": "verify_exec",
+      "result": {
+        "content": "25\n",
+        "exit_code": 0,
+        "is_error": false
+      }
+    }
+  ]
+}

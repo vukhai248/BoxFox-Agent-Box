@@ -178,14 +178,18 @@ KẾT THÚC bằng đúng một dòng `VERDICT: ok` hoặc `VERDICT: revise`, kh
 # W6.2 — đầu ra theo taskKind/depth: tra cứu ngắn, research brief không có phương án/khuyến nghị.
 LOOKUP_ANSWER_WORDS = 120
 RESEARCH_BRIEF_WORDS = 400
+# FU5 (W6.Q): MỘT luật đếm cho trần `LOOKUP_ANSWER_WORDS` — phần THÂN mục Trả lời, không tính
+# dòng tiêu đề Markdown và không tính các mục sau. Đo trên corpus W6.2: 122 từ (đếm thô, kể cả
+# dòng tiêu đề) so với 119 từ (đúng luật này). Producer, oracle và người đọc phải dùng chung luật.
+LOOKUP_ANSWER_COUNT_RULE = 'body of the Answer section, Markdown heading lines excluded'
 DELIVERABLE_LOOKUP = {
     'en': """Deliverable (Markdown, in the owner's language):
-## Answer — at most 120 words; the direct answer only.
+## Answer — at most 120 words (count the section body; heading lines do not count); the direct answer only.
 ## Sources opened — one line per path:line or URL with its tool call id/ref.
 ## Unverified — claims you could not open a source for; may be empty.
 No options, recommendation or plan.""",
     'vi': """Đầu ra Markdown bằng tiếng Việt có dấu:
-## Trả lời — tối đa 120 từ; chỉ câu trả lời trực tiếp.
+## Trả lời — tối đa 120 từ (đếm phần thân mục; không tính dòng tiêu đề); chỉ câu trả lời trực tiếp.
 ## Nguồn đã mở — mỗi dòng một path:line hoặc URL kèm tool call id/ref.
 ## Chưa kiểm — khẳng định chưa mở được nguồn; có thể để trống.
 Không có phương án, khuyến nghị hay kế hoạch.""",

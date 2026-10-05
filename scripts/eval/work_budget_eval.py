@@ -15,11 +15,18 @@ import time
 import uuid
 
 from work_check_eval import ROOT, FixtureExecutor
-from agentbox.agent_core import runtime as runtime_module, work_graph as wg, work_policy, work_checks, work_budget
+from agentbox.agent_core import limits as limits_module, runtime as runtime_module, work_graph as wg, work_policy, work_checks, work_budget
 from agentbox.agent_core.runtime import HarnessRuntime, RouterClient
 from agentbox.memory.session_store import SessionStore
 
 PROFILES = {'baseline': (40, 14), 'medium': (60, 24), 'high': (60, 40), 'native': (60, 24)}
+# #9: trần phiên lấy từ `limits.py` chứ không chép số cũ vào driver. Bản trước ghi cứng 60/1200
+# (thời trước #6457), nên mọi lượt đo sau khi trần đổi vẫn chạy dưới một ngân sách không còn tồn
+# tại và cột `ownerSteps` trong kết quả nói sai thực tế. Giữ nguyên tên hằng để lượt sau đổi trần
+# là driver theo ngay, và số đo luôn kèm nguồn.
+OWNER_STEPS = int(limits_module.MAX_STEPS_DEFAULT)
+OWNER_DEADLINE = int(limits_module.DEADLINE_DEFAULT_SECONDS)
+CHILD_DEADLINE = int(limits_module.CHILD_DEADLINE_SECONDS)
 CASES = ('short_lookup', 'long_research', 'long_plan_design', 'single_large_review', 'multi_artifact_review', 'long_testing')
 
 
@@ -85,11 +92,12 @@ async def run(args):
             fixture(folder)
             store=SessionStore(folder/'sessions.db')
             rt=HarnessRuntime(store,FixtureExecutor(folder),client)
-            session=rt.create({**route,'skills':[],'maxSteps':60,'deadlineSeconds':1200})
+            session=rt.create({**route,'skills':[],'maxSteps':OWNER_STEPS,'deadlineSeconds':OWNER_DEADLINE})
             graph=wg.service(rt)
             started=time.monotonic();call_start=len(client.calls)
             row={'case':case,'repeat':repeat,'profile':args.profile,'route':route,'reviewSteps':review_steps,
-                'producerSteps':producer_steps,'ownerSteps':60,'ownerDeadline':1200,'childDeadline':900,
+                'producerSteps':producer_steps,'ownerSteps':OWNER_STEPS,'ownerDeadline':OWNER_DEADLINE,
+                'childDeadline':CHILD_DEADLINE,'limitsSource':'agentbox.agent_core.limits',
                 'outputProfile':16000,'scope':'native production profiles' if args.profile == 'native' else 'isolated constant override',
                 'commit':source_commit,'sourceHashes':source_hashes,
                 'distinctArtifacts': args.distinct_artifacts,

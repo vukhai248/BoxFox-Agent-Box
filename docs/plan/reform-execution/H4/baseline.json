@@ -1,0 +1,31 @@
+{
+  "checkpoint": "H4",
+  "status": "verified",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "c836822 (nghiệm thu vòng chạy 29/29) + 802f51f (nối runtime; vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/session_store.py", "runtime.py (hợp đồng turn-owned child)"],
+    "write": ["backend/src/agentbox/agent_core/harness_jobs.py", "backend/src/agentbox/agent_core/job_surface.py", "backend/src/agentbox/agent_core/job_wake.py", "backend/tests/unit/test_harness_jobs.py", "backend/tests/unit/test_job_surface.py", "backend/tests/unit/test_job_wake.py"],
+    "forbidden": ["đổi hợp đồng dọn con của turn", "sửa luật work_scope", "thêm scheduler thứ hai cho job"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"jobRequestSchema": "boxfox-job-request/1", "jobAdmissionSchema": "boxfox-job-admission/1", "recordSchemaVersion": 1},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_harness_jobs.py (56 hàm / 59 ca) + test_job_surface.py (54 ca) + test_job_wake.py (12 ca)"},
+    {"id": "probe-P2", "result": "pass", "evidence": "probes_962cd84.json P2 10/10: heartbeat/log/progress không đánh thức; result/blocker/owner_subscribed đánh thức; duplicate + late completion một hiệu lực; reconcile spawned=0; wake lock một người đọc"},
+    {"id": "heartbeat-no-turn", "result": "pass", "evidence": "P2 + nghiệm thu vòng chạy A1–A9 (29/29 trên c836822)"},
+    {"id": "turn-owned-cleanup", "result": "pass", "evidence": "P2: job do turn sở hữu chết theo turn, job do controller sở hữu sống tiếp"},
+    {"id": "runtime-acceptance", "result": "pass", "evidence": "A1–A9 trong 29/29 PASS trên c836822 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json); park_after_batch ở mọi đường đóng batch, wake mở lại đúng chủ đã park"}
+  ],
+  "known_unknowns": [
+    "process job (`JOB_EXECUTOR_UNSUPPORTED`) và resume theo checkpoint chưa hỗ trợ — fail closed (H4.5)",
+    "chưa có phiên thật dài ngày (cần consent H10.1)"
+  ],
+  "rollback_ref": "đặt BOXFOX_CONTROLLER_JOBS về off (mặc định) — không cần gỡ file; bảng additive để nguyên",
+  "next_action": "chạy phiên thật khi chủ nhà mở consent (H10.1); trước đó giữ công tắc off"
+}

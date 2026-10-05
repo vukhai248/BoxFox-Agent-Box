@@ -20,6 +20,12 @@ from agentbox.agent_core.runtime import DecisionError, HarnessRuntime, WORK_TOOL
 from agentbox.agent_core.tool_contracts import SCHEMAS, reflection_hint
 from agentbox.memory.session_store import SessionStore
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 PRODUCE = 'Work Graph run'
 REVIEW = 'Independent review of Work Graph node'
 WHOLE = 'Whole-plan review of Work Graph run'
@@ -789,13 +795,14 @@ def test_fanout_busy_is_queued_not_a_failed_node(tmp_path, monkeypatch):
 
 def test_an_exhausted_child_budget_leaves_the_node_waiting_for_the_next_call(tmp_path, monkeypatch):
     _, runtime, model, _, sid = build(tmp_path)
+    original_budget = wg.WORK_CHILDREN_PER_RUN_CALL
     monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 1)
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Survey the chat header'})
         await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE]})
         first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
-        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', 72)
+        monkeypatch.setattr(wg, 'WORK_CHILDREN_PER_RUN_CALL', original_budget)
         second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
         return first, second
 
@@ -938,3 +945,96 @@ def test_main_keeps_driving_an_active_run_without_the_turn_recap(tmp_path, monke
     assert not wg.driving(runtime, dict(session, parent_id='parent'))
     monkeypatch.setenv(wg.WORK_GRAPH_ENV, 'off')
     assert not wg.driving(runtime, session)
+
+
+def test_run_lifetime_counts_calls_children_and_seconds_across_calls(tmp_path):
+    """#6457/W6.5.2: `lifetime` là bộ đếm THAM VẤN cả đời run — đo trước, chưa siết trần cứng nào.
+
+    Trần mỗi lời gọi (`WORK_CHILDREN_PER_RUN_CALL`/`WORK_RUN_MAX_SECONDS`) không phải ngân sách suốt
+    run, nên tổng đời run phải đọc được ở chính tài liệu run: `work_run` trả `lifetime` và ghi event
+    `run_lifetime`. Bộ đếm này không chặn gì; nó chỉ trả lời W6.5.2 bằng số thật.
+    """
+    store, runtime, model, _, sid = build(tmp_path)
+
+    async def run():
+        created = await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button',
+                                                          'flow': 'plan'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        first = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        second = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        return created['runId'], first, second
+
+    rid, first, second = asyncio.run(run())
+    assert first['lifetime']['calls'] == 1, 'mỗi lời gọi work_run đếm một lần'
+    assert second['lifetime']['calls'] == 2, 'bộ đếm phải cộng dồn qua các lời gọi, không đặt lại'
+    assert second['lifetime']['children'] >= first['lifetime']['children'] >= 1, 'con đã dùng phải cộng dồn'
+    assert second['lifetime']['seconds'] >= first['lifetime']['seconds'] > 0, 'giây phải cộng dồn và dương'
+    saved = runtime.work_graph.get(rid)
+    assert saved['lifetime'] == second['lifetime'], 'số trả về là số đã ghi vào tài liệu run'
+    assert 'run_lifetime' in [item['event'] for item in saved['history']]
+    # Không chặn: lượt gọi vẫn chạy đủ việc dù bộ đếm đã tích luỹ.
+    assert [node['id'] for node in saved['nodes']] == ['E1', 'P1']
+
+
+def test_work_check_children_also_enter_the_lifetime_counter(tmp_path):
+    """#10: con sinh ngoài `work_run` (kiểm/sửa) cũng phải vào sổ `lifetime`.
+
+    Bộ đếm cũ chỉ cộng số con theo hiệu ngân sách của từng lời gọi `work_run`, nên con của
+    `work_check`/`work_repair` — đường main gọi sau khi `work_run` đã trả — không được đếm: một run
+    dài có thể tiêu hàng chục con mà sổ đời run vẫn đứng yên. Nay `spawn()` là chỗ duy nhất ghi sổ.
+    """
+    store, runtime, model, _, sid = build(tmp_path)
+    research = {'id': 'R1', 'kind': 'research', 'title': 'Compare approaches',
+                'goal': 'Compare two export formats using the provided evidence',
+                'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
+
+    async def run():
+        await raw_tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Compare the two approaches',
+                                                    'flow': 'research'})
+        await raw_tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [research]})
+        draft = await raw_tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        node = draft['nodes'][0]
+        before = dict(wg.service(runtime).get(draft['runId'])['lifetime'])
+        await raw_tool(runtime, sid, 'work_check', {'action': 'start', 'runId': draft['runId'], 'nodeId': node['id'],
+                                                    'stage': 'produce',
+                                                    'artifactId': node['artifacts']['produce']['artifactId'],
+                                                    'invocationId': uuid.uuid4().hex})
+        return draft['runId'], before, dict(wg.service(runtime).get(draft['runId'])['lifetime'])
+
+    rid, before, after = asyncio.run(run())
+    assert after['children'] > before['children'], 'con của work_check phải cộng vào sổ đời run'
+    assert after['childSeconds'] > before['childSeconds'] > 0, 'giây của con được đo riêng ở childSeconds'
+    saved = runtime.work_graph.get(rid)
+    assert saved['lifetime']['children'] == after['children'], 'sổ nằm trên tài liệu run để lượt sau đọc'
+
+
+def test_the_model_can_discover_the_resolve_action(tmp_path):
+    """#6456(b): hàng rào chỉ mở được nếu mô hình BIẾT có đường mở.
+
+    Đo lượt 14–16: cả ba lượt kiểm đỏ đều kẹt ở `inputConflicts` và mô hình không có cách nào gỡ.
+    Engine nhận `action=resolve`, nhưng hợp đồng công cụ (enum + mô tả) và câu `next` mới là chỗ mô
+    hình đọc — thiếu hai chỗ đó thì đường mở coi như không tồn tại.
+    """
+    from agentbox.agent_core import tool_contracts
+
+    schema = next(item['function'] for item in tool_contracts.SCHEMAS
+                  if item['function']['name'] == 'work_graph')
+    assert 'resolve' in schema['parameters']['properties']['action']['enum']
+    assert 'resolve clears the recorded input conflicts' in schema['description']
+
+    _, runtime, _, _, sid = build(tmp_path)
+    conflict = {'id': 'A1', 'requirement': 'Keep the exact owner constraints', 'evidence': 'reviewer evidence'}
+    state = {'status': 'revise', 'attempts': 1, 'rounds': [], 'output': 'draft text', 'outputChars': 10,
+             'feedback': '', 'knowledge': [], 'error': None, 'startedAt': None, 'finishedAt': None,
+             'artifact': {'artifactId': 'a-1'}, 'inputConflicts': [conflict]}
+
+    async def run():
+        await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Add an export button', 'flow': 'plan'})
+        await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [EXPLORE, PLAN]})
+        document = runtime.work_graph.get(runtime.work_graph.active(sid)['runId'])
+        document['nodes'][0]['stages']['produce'] = state
+        runtime.work_graph.save(document)
+        return runtime.work_graph.next_step(runtime.work_graph.get(document['runId']))
+
+    guidance = asyncio.run(run())
+    assert 'action=resolve' in guidance and 'action=update' in guidance

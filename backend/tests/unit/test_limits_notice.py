@@ -72,9 +72,9 @@ def test_a_clamped_deadline_is_reported_once(tmp_path):
         async with TestServer(create_app(runtime)) as server:
             async with ClientSession(headers=HEADERS) as http:
                 url = str(server.make_url('/api/agent/sessions'))
-                # Vòng 25 (M8) nâng trần lên 1200 s, nên con số "quá trần" phải lớn hơn trần MỚI:
-                # xin 1500 để chắc chắn bị kẹp, thay vì 900 (nay nằm trong khoảng hợp lệ).
-                async with http.post(url, json={'skills': [], 'deadlineSeconds': 1500}) as resp:
+                # #6457 nâng trần lên 7200 s, nên con số "quá trần" phải lớn hơn trần MỚI:
+                # xin 9000 để chắc chắn bị kẹp (1500 của bản cũ nay nằm trong khoảng hợp lệ).
+                async with http.post(url, json={'skills': [], 'deadlineSeconds': 9000}) as resp:
                     assert resp.status == 201
                     payload = await resp.json()
                 sid = payload['id']
@@ -85,7 +85,7 @@ def test_a_clamped_deadline_is_reported_once(tmp_path):
                 assert again['config']['deadlineClamped'] is True
             clamped = notices(store, sid, DEADLINE_CLAMP_NOTICE_CODE)
             assert len(clamped) == 1, 'một lần kẹp, một notice'
-            assert clamped[0]['requested'] == 1500 and clamped[0]['applied'] == DEADLINE_MAX_SECONDS
+            assert clamped[0]['requested'] == 9000 and clamped[0]['applied'] == DEADLINE_MAX_SECONDS
             assert clamped[0]['message'].startswith(DEADLINE_CLAMP_NOTICE_CODE + ':')
             assert runtime.session_metrics(sid)['deadlineClamped'] is True
 
@@ -128,20 +128,26 @@ def run_step_capped_turn(tmp_path, seed=None):
 
 
 def test_a_clamped_step_budget_is_reported_once(tmp_path):
-    """B7 — `maxSteps` bị kẹp phải NÓI RA, đối xứng với `DEADLINE_CLAMPED` của C1."""
+    """B7 — `maxSteps` bị kẹp phải NÓI RA, đối xứng với `DEADLINE_CLAMPED` của C1.
+
+    #6546 nâng trần bước lên `MAX_STEPS_MAX` (1500) nên số yêu cầu phải tính TỪ hằng số: một số
+    cứng như 999 cũ sẽ nằm trong khoảng hợp lệ và bài kiểm sẽ đo một lần kẹp không bao giờ xảy ra.
+    """
+    requested_steps = MAX_STEPS_MAX + 400
+
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
         runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([answer('xong')]))
         async with TestServer(create_app(runtime)) as server:
             async with ClientSession(headers=HEADERS) as http:
                 url = str(server.make_url('/api/agent/sessions'))
-                async with http.post(url, json={'skills': [], 'maxSteps': 999}) as resp:
+                async with http.post(url, json={'skills': [], 'maxSteps': requested_steps}) as resp:
                     high = await resp.json()
                 assert high['config']['maxSteps'] == MAX_STEPS_MAX
                 assert high['config']['stepsClamped'] is True, 'payload phải nói ra sự thật'
                 clamped = notices(store, high['id'], STEPS_CLAMP_NOTICE_CODE)
                 assert len(clamped) == 1, 'một lần kẹp, một notice'
-                assert clamped[0]['requested'] == 999 and clamped[0]['applied'] == MAX_STEPS_MAX
+                assert clamped[0]['requested'] == requested_steps and clamped[0]['applied'] == MAX_STEPS_MAX
                 assert clamped[0]['message'].startswith(STEPS_CLAMP_NOTICE_CODE + ':')
                 assert runtime.session_metrics(high['id'])['stepsClamped'] is True
 

@@ -8,6 +8,11 @@ from agentbox.agent_core import work_graph as wg, work_prompts
 from test_work_graph import build, ok_script, tool, EXPLORE, PLAN
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def test_lookup_deliverable_is_short_contract_vi_en():
     for lang, headings, forbidden in (
             ('vi', ('## Trả lời', '## Nguồn đã mở', '## Chưa kiểm'), ('Khuyến nghị', 'So sánh phương án')),
@@ -18,6 +23,18 @@ def test_lookup_deliverable_is_short_contract_vi_en():
         assert '120' in text
     knowledge = work_prompts.child_contract('knowledge', 'vi')
     assert '## Trả lời' in knowledge and '## Nguồn đã mở' in knowledge
+
+
+def test_lookup_answer_cap_names_the_one_counting_rule():
+    """FU5 (W6.Q): trần 120 từ phải nói rõ cách đếm — thân mục, không tính dòng tiêu đề.
+
+    Đếm thô (kể cả `## Trả lời`) từng cho 122 và bị đọc là vượt trần, trong khi đúng luật là 119.
+    """
+    vi = work_prompts.deliverable('research', 'vi', task_kind='lookup')
+    en = work_prompts.deliverable('research', 'en', task_kind='lookup')
+    assert 'không tính dòng tiêu đề' in vi
+    assert 'heading lines do not count' in en
+    assert work_prompts.LOOKUP_ANSWER_COUNT_RULE in ('body of the Answer section, Markdown heading lines excluded',)
 
 
 def test_research_brief_depth_omits_options_section():
@@ -118,3 +135,47 @@ def test_final_claims_check_accepts_labeled_unverified_claim(tmp_path):
     text = ('New numbers were not part of the review.\n\n'
             'chưa kiểm: WORK_NEW_CODE_123 and docs/other.md:3 appear in a new proposal.\n')
     assert wg.final_claims_check(run, text) == []
+
+
+def test_reviewed_set_reports_a_truncated_claim_set_instead_of_cutting_silently(tmp_path, monkeypatch):
+    """#6474: chạm trần token claim thì phải nói ra, không cắt im lặng.
+
+    Badge W6.2.BIND chỉ là tập token; nếu tập bị cắt ở 600 mà không ghi gì thì lượt đọc sau tưởng
+    "mọi token đều đã kiểm" trong khi một phần chưa từng vào bộ đã phản biện.
+    """
+    _, runtime, _, _, sid = build(tmp_path)
+    out = verified_run(runtime, sid)
+    graph = runtime.work_graph
+    run = graph.get(out['runId'])
+    full = graph.reviewed_set(run)
+    assert full['claimsTruncated'] is False and full['claimsTotal'] == len(full['claims'])
+    real = wg.claim_tokens
+    monkeypatch.setattr(wg, 'claim_tokens', lambda text: set(real(text)) | {'WORK_A_1', 'WORK_B_2'})
+    monkeypatch.setattr(wg, 'CLAIM_TOKENS_MAX', 2)
+    cut = graph.reviewed_set(run)
+    assert cut['claimsTruncated'] is True
+    assert cut['claimsTotal'] > 2 and len(cut['claims']) == 2, 'vẫn cắt để giữ trần, nhưng phải khai'
+
+
+def test_final_claim_notices_fire_before_the_run_is_verified(tmp_path):
+    """#6474: notice claim chưa kiểm không chỉ nổ khi graph đã `verified`.
+
+    Main trả lời giữa lượt hoặc sau `needs_revision` cũng phải thấy tín hiệu; notice KHÔNG chặn
+    câu trả lời, nên phát sớm không khoá chat.
+    """
+    _, runtime, _, _, sid = build(tmp_path)
+    out = verified_run(runtime, sid)
+    graph = runtime.work_graph
+    assert runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.')
+    run = graph.get(out['runId'])
+    run['status'] = 'needs_revision'
+    graph.save(run, 'test_status_move')
+    notices = runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.')
+    assert notices and notices[0]['type'] == 'unreviewed_claims'
+    assert 'WORK_NEW_CODE_123' in notices[0]['tokens']
+    assert notices[0]['truncated'] is False
+    # Không có reviewedSet (chưa từng whole-pass) thì im lặng — không có gì để so.
+    empty = graph.get(out['runId'])
+    empty.pop('reviewedSet')
+    graph.save(empty, 'test_no_review')
+    assert runtime.final_claim_notices(sid, 'WORK_NEW_CODE_123 xuất hiện ở đây.') == []

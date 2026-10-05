@@ -523,14 +523,21 @@ class SessionStore:
         return turn
 
     def child_start(self, child_id, parent_id, turn, step, role, goal=''):
-        """Ghi hàng sổ con lúc con được sinh; gọi lại thì cập nhật chỗ sinh chứ không nhân hàng."""
+        """Ghi hàng sổ con lúc con được sinh; gọi lại thì cập nhật chỗ sinh chứ không nhân hàng.
+
+        H11 — hàng đã ĐÓNG cũng được MỞ LẠI ở đây (status về `started`, `finished`/`reason` xoá):
+        gọi một con đã bị cắt về làm tiếp là mở lại đúng hàng sổ ấy trên cùng session, không sinh
+        hàng thứ hai. `finished` còn sót lại thì mọi bộ đọc sổ (`children` đang chạy, `child_finish`,
+        chiếu attempt của kho task) đều coi con đã chết và việc gọi lại không có hiệu lực.
+        """
         with self.db:
             self.db.execute(
                 'INSERT INTO children(session_id,parent_id,parent_turn,spawn_step,role,goal,status,started)'
                         ' VALUES(?,?,?,?,?,?,?,?)'
                 ' ON CONFLICT(session_id) DO UPDATE SET parent_id=excluded.parent_id,'
                 ' parent_turn=excluded.parent_turn, spawn_step=excluded.spawn_step,'
-                ' role=excluded.role, goal=excluded.goal, started=excluded.started',
+                ' role=excluded.role, goal=excluded.goal, started=excluded.started,'
+                " status='started', reason=NULL, finished=NULL, waiting_for='[]', waiting_since=NULL",
                 (child_id, parent_id, int(turn or 0), int(step or 0), role, str(goal or ''),
                  'started', time.time()))
         return self.child(child_id)

@@ -30,7 +30,7 @@
       {"kind": "no_auto_pass", "why": "partial không được auto-pass"}
     ],
     "reviewer": [
-      {"kind": "check_status_any", "status_in": ["unverified", "error", "revise", "pass"], "why": "không khẳng định pass khi bằng chứng bị cắt; ghi nhận trạng thái thật"}
+      {"kind": "check_status_any", "status_in": ["unverified", "error", "revise", "pass"], "when_no_check": "pass", "why": "không khẳng định pass khi bằng chứng bị cắt; nếu lượt dừng ở partial trước khi tới pha kiểm thì luật không áp dụng (ghi nhận phaseNotReached), không quy lỗi reviewer"}
     ],
     "flow": [
       {"kind": "no_duplicate_continuation", "why": "retry không được tạo continuation trùng"}

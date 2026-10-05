@@ -29,6 +29,7 @@ vòng quét không giữ khoá của SQLite dùng chung qua nhiều hàng.
 import asyncio
 import time
 
+from . import child_lifecycle
 from .limits import (CHILD_WALL_MAX_SECONDS, PEER_WAIT_FORCE_GRACE_SECONDS, PEER_WAIT_SAFETY_SECONDS,
                      WATCHDOG_ORPHAN_REASON, WATCHDOG_RESTART_REASON, WATCHDOG_TICK_SECONDS,
                      WATCHDOG_TIMEOUT_REASON)
@@ -113,7 +114,9 @@ class PeerWatchdog:
                 continue
             graph = getattr(self.runtime, 'work_graph', None)
             controller = getattr(graph, 'continuations', None)
-            owned = bool(controller and controller.owns_child(child_id))
+            from . import job_surface
+            owned = bool(controller and controller.owns_child(child_id)) or bool(
+                self.runtime and job_surface.owns_child(self.runtime, child_id))
             if owned:
                 try:
                     self.store.get(row['parent_id'])
@@ -140,6 +143,15 @@ class PeerWatchdog:
             return False
         if cancel:
             self._cancel_task(child_id)
+        # H3 — hàng sổ con đã đóng: chiếu kết cục vào attempt đang mở của task (nếu con có task),
+        # để một con bị watchdog cắt (restart/mồ côi/quá hạn) không để attempt `running` mãi mãi —
+        # `task_abandon` không đóng được nó và chỉ mục attempt đang hoạt động chặn attempt mới.
+        # Nạp muộn để tránh vòng nhập; `project_child` không bao giờ ném nên đóng con không hỏng.
+        if self.runtime is not None:
+            from . import task_surface
+            task_surface.project_child(self.runtime, child_id)
+            from . import job_surface
+            job_surface.project_child(self.runtime, child_id)
         session = self.store.get(child_id)
         if session and session.get('status') in ('running', 'idle'):
             self.store.save(child_id, session['messages'], 'cancelled')
@@ -149,7 +161,10 @@ class PeerWatchdog:
                 'sessionId': child_id, 'role': row.get('role'), 'status': 'failed',
                 'turn': row.get('parent_turn'), 'step': row.get('spawn_step'), 'goal': row.get('goal'),
                 'reason': reason, 'watchdog': True, 'is_error': True, 'answerChars': 0,
-                'stepsUsed': steps, 'outputTokens': tokens})
+                'stepsUsed': steps, 'outputTokens': tokens,
+                # H11 — con bị watchdog cắt vì vượt trần tường: cha phải thấy đó là `timedOut` (việc
+                # còn dở vì hết giờ, gọi lại được bằng `child_resume`), không phải một cái chết mù.
+                **child_lifecycle.outcome('failed', reason)})
         system_log.write('watchdog.child_closed', level='warn', session_id=child_id,
                          parent=parent_id, reason=reason, sweeps=self.sweeps)
         return True

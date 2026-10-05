@@ -108,8 +108,14 @@ PLAN_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,78}$")
 # kế hoạch lồng thư mục viết được ra đĩa mà không ghim được `P:` — và cả LƯỢT hỏng theo, vì lỗi
 # mã bản ghi ném ra từ giữa `write_plan` (bắt được thật 2026-09-21 bằng
 # `test_nested_plan_target_uses_the_reader_identity_and_version`).
-PLAN_IDENTITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,78}(?:/[a-z0-9][a-z0-9-]{0,78})?$")
-PLAN_ID_RE = re.compile(r"^P:(?P<slug>[a-z0-9][a-z0-9-]{0,78}(?:/[a-z0-9][a-z0-9-]{0,78})?)@v(?P<version>[0-9]{1,6})$")
+# Trần độ sâu là KHÔNG có, khớp đúng grammar của người đọc (`plan_files.py:_IDENTITY_RE_GROUP`,
+# `plan_header.IDENTITY_PATTERN`, `runtime.PLAN_PATH_RE`) — cả ba đều là `(?:slug/)*slug`. Bản cũ
+# chặn ở hai đoạn (một cấp thư mục) và đó là chỗ vỡ thật đo sống 2026-10-04: `write_plan` với
+# `directory="designs/login"` ghi đúng tệp `.plans/designs/login/v1-dang-nhap-sso.md` rồi chết ở
+# bước ghim `P:` vì identity ba đoạn bị từ chối — tệp nằm trên đĩa mà cả LƯỢT hỏng theo
+# (`TURN_FAILED_JOURNALERROR`), đúng cái bẫy mà ghi chú trên đã cảnh báo cho trường hợp một cấp.
+PLAN_IDENTITY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,78}(?:/[a-z0-9][a-z0-9-]{0,78})*$")
+PLAN_ID_RE = re.compile(r"^P:(?P<slug>[a-z0-9][a-z0-9-]{0,78}(?:/[a-z0-9][a-z0-9-]{0,78})*)@v(?P<version>[0-9]{1,6})$")
 
 BRIEF_TRUNCATED_TAIL = "\n… [cắt]"
 # Chỗ chừa cho dòng "còn N bản ghi nữa": không chừa thì chính cái trần cắt mất lời nói thật.
@@ -175,8 +181,8 @@ def _plan_parts(plan: dict | str | None) -> tuple[str, int]:
     slug = str(plan.get("slug") or plan.get("identity") or "").strip().lower()
     if not PLAN_IDENTITY_RE.match(slug):
         raise JournalError(
-            "identity bản kế hoạch phải là kebab-case thường, có thể lồng một cấp thư mục "
-            f"(ví dụ `long-task-journal` hoặc `docs/docs`), nhận {slug!r}")
+            "identity bản kế hoạch phải là kebab-case thường, có thể lồng thư mục nhiều cấp "
+            f"(ví dụ `long-task-journal` hoặc `designs/login-page`), nhận {slug!r}")
     raw = plan.get("version", 1)
     try:
         version = int(str(raw).lstrip("vV"))

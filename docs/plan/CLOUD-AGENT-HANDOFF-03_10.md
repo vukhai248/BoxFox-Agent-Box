@@ -4,7 +4,7 @@ Ngày: **03/10/2026**. Đây là **bản chỉ dẫn ngắn**, không thay kế 
 
 ## 1. Đọc gì trước
 
-1. [Work-Graph-fix.md](Work-Graph-fix.md): kế hoạch gốc và nhật ký canonical. Đọc mục12 (các W), mục27–29 (kiến trúc/quyết định owner), mục30–35 (checkpoint local/cloud), mục36 (lỗi bộ đo mới), mục37 (W11 prompt/skill). Đọc mục6–9 để hiểu chuẩn đầu ra; quay lại các phần W6/W6.5 khi sửa review/budget.
+1. [Work-Graph-fix.md](Work-Graph-fix.md): kế hoạch gốc và nhật ký canonical. Đọc mục12 (các W), mục27–29 (kiến trúc/quyết định owner), mục30–35 (checkpoint local/cloud), mục36 (lỗi bộ đo mới), mục37 (W11 prompt/skill), mục38 (W12 adaptive model/thinking/budget/pricing). Đọc mục6–9 để hiểu chuẩn đầu ra; quay lại các phần W6/W6.5 khi sửa review/budget.
 2. [cloud-pr-audit-03_10.md](cloud-pr-audit-03_10.md): audit code/PR và nguyên nhân không hội tụ. **Mục9 là cập nhật sau khi nhận bundle**, supersede các đoạn trước nói còn thiếu cả folder. H1–H5 có nguyên nhân, vị trí code và checkpoint.
 3. [cloud-w10-bundle-audit-03_10.json](cloud-w10-bundle-audit-03_10.json): receipt đếm/hash local. Sau đó đọc [README bundle](../w10-handoff-03_10/README-BAN-GIAO.md), `reports/`, `merged-partial/results.json`, raw `shards/*/runs/*/bundle.json` và `w8-a45/` cho ca mình điều tra.
 4. [handoff-03_10.md](handoff-03_10.md) và [review-simplify-03_10.md](review-simplify-03_10.md): lịch sử cloud, commit, tests và findings đã vá. Một số trạng thái cũ/nhãn “Xong” không phải nghiệm thu chất lượng; đối chiếu mục34/36 và audit mới.
@@ -28,7 +28,7 @@ Ngày: **03/10/2026**. Đây là **bản chỉ dẫn ngắn**, không thay kế 
 - Ưu tiên cùng child/context/folder khi tiếp tục; cùng Testing child kiểm code mới nếu assignment còn tương thích. Không reuse pass cũ. Fallback child mới chỉ khi không resume được, phải ghi lý do.
 - Reset budget **từng lượt** khi có answer/code/evidence thực sự mới; giữ lifetime usage/lỗi. Ba lượt không tiến triển thì báo main chọn hướng khác. **Child không vượt trần cha**; thời gian user suy nghĩ không là compute. Không tự tăng token/steps/time để che chất lượng kém.
 - Review công tâm trước: source/acceptance/phản chứng phải chứng minh finding; thiếu proof ngoài scope không là lỗi chặn. Sau adjudication mới phân trách nhiệm main/producer, ghi W riêng nếu cần.
-- Giữ **UI/UX**, model kiểm thử **OpenCode `opencode/space-bunny-free`**. CUA chỉ khi cần; không đổi provider/model để tăng điểm. Đổi kiến trúc/quyền/workflow mới phải trình thay đổi và đánh đổi để owner duyệt.
+- Giữ **UI/UX**, model kiểm thử **OpenCode `opencode/space-bunny-free`**. Riêng **W12.MODEL.METADATA** được owner làm rõ: discovery adaptive cho OpenCode và các provider khác, model/thinking/token budget/limits/pricing có provenance/freshness; khôi phục selector hiện hữu và sửa metadata/mapping/request liên quan. Space Bunny là ca lỗi, không hardcode từng ID hoặc redesign composer. Contract/kiểu điều khiển mới phải trình scope riêng. CUA chỉ khi cần; không đổi provider/model kiểm thử để tăng điểm. Đổi kiến trúc/quyền/workflow mới phải trình thay đổi và đánh đổi để owner duyệt.
 
 ## 4. Local đã làm gì — đọc chi tiết tại Work-Graph-fix
 
@@ -71,6 +71,9 @@ Gói có20bundle nhưng merged mới16/24: statePassed4/16, passed0/16, gatefals
 | W8.A4.5.N | Đường repair chưa có probe khép kín xanh, integration chưa đo | Audit§3.1/9.6, repair evidence + raw workspace. Đỏ→sửa→tester cũ retest hash mới; Debug có điều kiện; thêm integration |
 | W6.Q/W6.2.BIND | Review có finding chưa công tâm/prose sai; claim main mới chưa được chứng nhận bởi whole-pass cũ | Work-Graph-fix§34.4, audit§3.3/9.5. Adjudicate từng finding; sửa review trước, producer/main sau đúng tác nhân |
 | W11.PROMPT | Giao việc cần cụ thể hơn; role/skill có thể áp sai quyền/độ sâu/baseline | **Mục37**: phân tích prompt Simplify đã xong; inventory → đề xuất nhỏ → tests → A/B output. Chưa sửa runtime/prompt/skill |
+| W12.MODEL.METADATA | Bug Space Bunny mất thinking đã được user xác nhận; owner yêu cầu adaptive theo provider vì inventory/thinking/budget/giá thay đổi | **Mục38**: cơ chế discovery/refresh đã có; kiểm metadata/freshness đi đủ pipeline, model mới/retired và field đổi. Tách effort/budget/limits/quota/price; thiếu API fields thì nguồn bổ sung hoặc unknown, không hardcode/đoán/free |
+
+**Prompt duy nhất cho cloud:** Work-Graph-fix§38.6 hợp nhất prompt tiếp nhận checkpoint và yêu cầu W12. Nó có đủ nội dung để cloud đang dùng repo cũ ghi W mới vào `docs/plan/Work-Graph-fix.md` trước khi sửa code; nếu W đã tồn tại thì cập nhật, nếu ID đã dùng cho việc khác thì chọn ID tiếp theo và ghi mapping. W mới bổ sung nhiệm vụ, không thay việc hoàn thiện các W còn mở trong bản bàn giao cũ.
 
 Đợt19–20giờ không hội tụ liên quan nhiều yếu tố: review sai scope, thay node/criteria, partial/provider failures, fixture và thu bằng chứng lỗi, chạy nhiều vòng rộng. Audit§4 có chứng cứ; chưa có trace phân bổ chính xác toàn20giờ, không quy tất cả cho timeout/mạng. Tăng token không chữa các nguyên nhân này.
 
@@ -78,6 +81,7 @@ Gói có20bundle nhưng merged mới16/24: statePassed4/16, passed0/16, gatefals
 
 - [ ] **Nhận việc:** xác minh B/HEAD/WIP, đọc các file mục1, liệt kê evidence thiếu và scope dự định sửa; không sửa chồng một task đang chạy.
 - [ ] **Dễ trước:** M1 → M2 → M3, unit/fixture nhỏ không model; xin dữ liệu gốc khi thiếu. Không chạy lại24ca trên harness hiện tại.
+- [ ] **Adaptive metadata:** W12 theo mục38; fixture provider đổi model/levels/budget/pricing qua refresh, rồi picker/payload/persistence. Space Bunny là pilot live lỗi đã báo, các provider khác kiểm discovery/API và fixtures; không cần mở DAG hoặc gọi inference cho mọi model. Ghi provenance/freshness/unknown và applied selection.
 - [ ] **Kiểm cơ chế:** native pilot repair/integration A4.5.N sau khi fixture đúng. Kiểm budget/interview/replay theo quyết định đã duyệt, không đổi scheduler để chữa lỗi đo.
 - [ ] **Kiểm nội dung:** W6.Q và W11 inventory/prompt theo scope riêng; review-first, corpus cũ còn đủ nguồn dùng được; thiếu thì mới gọi Space Bunny. Chuẩn Plan/Research/Design và ma trận output đúng ở mục37.
 - [ ] **Nghiệm thu:** W10.F freeze product/oracle/config/applied budget; pilot ít ca rồi12scenario×2 khi phép đo đúng. Báo mọi failure, product/provider/measurement riêng; đọc nội dung đúng prompt AI bệnh án thực, không thay bằng API nhỏ rồi gọi nghiệm thu y tế.
@@ -86,3 +90,20 @@ Gói có20bundle nhưng merged mới16/24: statePassed4/16, passed0/16, gatefals
 Mỗi checkpoint cập nhật **Work-Graph-fix.md**: source/commit, files, lệnh thật + kết quả, model/config, refs/version/hash, lỗi còn lại, bước tiếp tục. Chỉ tick phần kiểm được; giữ failure/cancelled/incomplete. Patch và commit nhỏ trên B theo quyền đợt làm việc; không `git add -A` vào WIP, không push/merge nếu chưa được yêu cầu. Nếu cần thay kiến trúc, trình current → proposed → tradeoff và chờ owner duyệt. Gửi tiến độ ngắn khi làm lâu.
 
 **Tình trạng file này:** tài liệu bàn giao; chưa triển khai các ô trống, chưa có test/model/CUA mới. Chi tiết quyết định và test cases nằm trong các file được dẫn ở trên.
+
+## 8. Trạng thái lượt local 02/10/2026 (UTC, tối) — branch `vorflux/w10-w12-completion`
+
+Branch `vorflux/w10-w12-completion` tách từ B `4e0923d`, **17 commit**, working tree sạch. **Chưa push, chưa mở PR** (chờ yêu cầu). Chi tiết + bằng chứng ở Work-Graph-fix **mục 39** (mục 37 W11, mục 38 W12 giữ nguyên):
+
+| Việc | Trạng thái | Bằng chứng chính |
+|---|---|---|
+| W10.M1/M2/M3 (phép đo) | **Đã commit + xác minh dữ liệu thật** | `dd69edf`, `c731318`; `test_work_acceptance_bench.py` 64 passed; lượt S09 pilot3: `missing: []`, `measurementInvalid: false`, bundle 48 596 event = DB, 92/92 lượt gọi có `sessionId`, ngân sách requested/effective + clampNotices |
+| W12.MODEL.METADATA | Đã commit + kiểm live | `f2f2260`, `3265475`, `e62c0f7`; router `npm test` 257 passed; ảnh picker `w12-thinking-space-bunny-picker.png` |
+| W11.PROMPT | P0b + nhánh Simplify đã commit; P0c và câu vendor/`AGENT.md` chờ owner | `9d5ab04`, `182a974`; `docs/plan/W11-p0b-inventory.md` |
+| W8.A4.5.N (`__integration__`) | **Một nửa có bằng chứng native**; `oracle` vẫn `false` | `3d6fd2f`, `346430f`, `473e6ad`, `500665a`, `664f25e`, `6f7ea56`, `1f53f9e`; 7 lượt probe, bằng chứng `docs/plan/W8.A4.5.N-repair-loop-native-evidence.json`; lượt 7: node `__integration__` dựng thật + child Testing chạy trên cây gộp |
+| S09 pilot (kịch bản) | **Chưa đạt** (giữ trong thống kê) | Work-Graph-fix 39.7: root dừng ở `discovering`, chưa tới bước hỏi/thi công trong 45 phút |
+| W6.1 C4/C5, W6.Q, W6.2.BIND, W6.5.2, W7.1 UI, W7.2, W9.UI, W10.F | Vẫn mở | Work-Graph-fix 39.5/39.6; W6.5.2 đã có tracing bằng mã (ngân sách per-call) |
+
+Phạm vi đã giữ: chỉ OpenCode `opencode/space-bunny-free` cho inference; không đổi UI/UX; không đổi kiến trúc/quyền/workflow; không push/merge.
+
+**Hai việc cần owner quyết trước khi làm tiếp:** (1) cò đỏ của fixture W8.A4.5.N nên gieo đỏ thật thay vì trả traceback cắm sẵn (đổi ngữ nghĩa phép đo); (2) câu vendor `simplify-code/SKILL.md` dòng 195 và `AGENT.md:12/:20` so với §27–29.

@@ -73,6 +73,12 @@ _NUDGE_BODY = ('{elapsed} phút đã trôi trong lượt research này. Báo ti�
 # --------------------------------------------------------------------------- cấu hình
 
 
+def _engine_owner(rt, session):
+    # Vai lead mới phải có binding canonical; lịch sử giữ luật vai cũ.
+    from .research_gateway import engine_owner
+    return engine_owner(rt, session)
+
+
 def research_config(session) -> dict:
     """Brief của phiên (`session['config']['research']`), hoặc `{}`."""
     value = (session.get('config') or {}).get('research')
@@ -909,7 +915,7 @@ async def research_brief(rt, session, args):
     nâng mức phải xin chủ nhà ở lượt sau (D-24/D-40).
     """
     sid = session['id']
-    if session.get('role') != 'orchestrator' or session.get('parent_id'):
+    if not _engine_owner(rt, session) or session.get('parent_id'):
         raise PermissionError('research_brief is orchestrator-only (#5961): a child must not choose the '
                               'level — ask the main turn to record it, or note it in your answer')
     question = str(args.get('question') or '').strip()
@@ -1603,7 +1609,7 @@ async def dossier_write(rt, session, args):
     # Hồ sơ do MAIN ghi (ledger subplan §A3.5): nhánh con `research` chỉ để lại dòng sổ + bản tóm tắt,
     # nên cổng vai ở đây là orchestrator. Một nhánh gọi thẳng cũng bị từ chối, không chỉ thiếu tên
     # công cụ trong `config['tools']`.
-    if session.get('role') != 'orchestrator':
+    if not _engine_owner(rt, session):
         raise PermissionError('dossier_write is for the orchestrator — a research branch reports its '
                               'ledger rows up and main writes the dossier')
     cfg = research_config(session)
@@ -2009,7 +2015,7 @@ async def research_verify(rt, session, args):
     Vai: **orchestrator** (iface.md §1). Người phản biện không tự ghi phán quyết của chính mình —
     luật đó là chỗ biến "phản biện độc lập" từ lời nói thành chuyện máy kiểm được (D-40).
     """
-    if session.get('role') != 'orchestrator':
+    if not _engine_owner(rt, session):
         raise PermissionError('research_verify is for the orchestrator role — a research branch that '
                               'got a critique reports the verdict up to the orchestrator, which records '
                               'it (the critic is the orchestrator\'s own child)')
@@ -2097,7 +2103,7 @@ def research_status(rt, session, args):
     Vai được đọc: orchestrator, phiên research của việc, và người phản biện (`research-review`) —
     đúng hợp đồng `/var/tmp/v27/iface.md` §1. Vai khác gọi vào là lỗi quyền, không phải lỗi dữ liệu.
     """
-    if session.get('role') not in {'orchestrator', 'research', 'research-review'}:
+    if not _engine_owner(rt, session) and session.get('role') not in {'research', 'research-review'}:
         raise PermissionError('research_status is for the orchestrator, the research session and the reviewer')
     research_id = str(args.get('researchId') or research_config(session).get('researchId') or '').strip().lower()
     if not research_id:
@@ -2152,7 +2158,7 @@ def research_status(rt, session, args):
 
 def research_update(rt, session, args):
     """Checkpoint a question, finding or blocker without rewriting the dossier."""
-    if session.get('role') != 'orchestrator' or session.get('parent_id'):
+    if not _engine_owner(rt, session) or session.get('parent_id'):
         raise PermissionError('research_update is orchestrator-only')
     research_id = str(args.get('researchId') or research_config(session).get('researchId') or '')
     job = rt.store.research_job(research_id)
@@ -2275,8 +2281,16 @@ async def cancel_child(rt, session, args):
     if str(row.get('status') or '') in {'completed', 'failed', 'cancelled', 'interrupted', 'not_found'}:
         return {'sessionId': target, 'status': 'already_closed', 'childStatus': row.get('status'),
                 'reason': row.get('reason')}
-    await rt.stop(target)
-    closed = rt.store.child_close_once(target, 'cancelled', reason='OWNER_CANCELLED')
+    # F4 — đánh dấu Ý ĐỊNH huỷ của chủ nhà TRƯỚC khi dừng con: callback trong `rt.stop` có thể
+    # đóng hàng sổ trước và ghi `failed/TURN_CANCELLED`; cờ này để nó ghi đúng `cancelled`.
+    rt.owner_cancels.add(target)
+    try:
+        await rt.stop(target)
+    finally:
+        rt.owner_cancels.discard(target)
+    # H3 — huỷ nhánh là một bộ đóng con: hàng sổ + hàng phiên + attempt đóng trong một hàm (nạp
+    # muộn `task_surface` để tránh vòng nhập `task_surface` → `research_runtime`).
+    closed = rt.close_owner_cancelled_child(target)
     # Chỉ thị giữa lượt chỉ xếp cho phiên GỐC, nên vòng lặp này thường không có gì để bỏ; giữ lại để
     # một nhánh đã đóng không bao giờ giữ chỉ thị của chủ nhà trong hàng chờ của mình.
     for steer in rt.store.claim_steers(target, limit=STEER_MAX_PENDING):
@@ -2869,7 +2883,7 @@ def research_scope(rt, session, args):
     `action='ask'` tạo lời hỏi nhiều câu (≤ 3 câu, §4.4) và đẩy run sang `needs_user` khi còn câu
     chặn chưa trả lời.
     """
-    if session.get('role') != 'orchestrator':
+    if not _engine_owner(rt, session):
         raise PermissionError('research_scope is orchestrator-only (a research child notes scope in its answer)')
     action = str(args.get('action') or 'propose').strip().lower()
     if action not in ('propose', 'update', 'ask'):

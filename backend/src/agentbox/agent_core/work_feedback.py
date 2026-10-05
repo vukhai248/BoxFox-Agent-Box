@@ -262,8 +262,12 @@ class Feedback:
         keys, grant = [], None
         if kind == 'needs_user':
             from .work_grants import decision_keys
+            if 'decisionKeys' not in args and self.graph.grants.any_for(run, binding):
+                raise FeedbackError('WORK_DECISION_KEYS_INVALID',
+                                    'main granted interview rights for this node/stage; send 1..3 decisionKeys '
+                                    'matching the grant (omit them only when no grant exists)', 400)
             keys = decision_keys(args.get('decisionKeys'),len(questions)) if 'decisionKeys' in args else [q['id'] for q in questions]
-            revoked = self.graph.grants.revoked(run, binding, keys) if 'decisionKeys' in args else None
+            revoked = self.graph.grants.revoked(run, binding, keys)
             if revoked:
                 raise FeedbackError('WORK_CAPABILITY_REVOKED', 'main revoked interview rights for '
                                     + ', '.join(sorted(keys)) + '; report a checkpoint to main instead of asking the user', 403)
@@ -748,6 +752,10 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         if (rt.store.child(child_id) or {}).get('status') == 'started':
             rt.store.child_finish(child_id, 'cancelled', reason='WORK_RESUME_CANCELLED',
                                   steps_used=lifetime_steps, output_tokens=lifetime_tokens, answer_chars=0)
+            # H3 — lượt chạy lại bị huỷ cũng là một bộ đóng con: chiếu kết cục vào attempt đang mở
+            # (nạp muộn, tránh vòng nhập), nếu không attempt treo `running` và chặn follow-up.
+            from . import task_surface
+            task_surface.project_child(rt, child_id)
         raise
     feedback = service(rt)
     checkpoint = feedback.yielded(child_id)
@@ -770,5 +778,8 @@ async def resume_child(rt, owner, child_id, prompt, work, request=None):
         result['request'] = checkpoint
     rt.store.child_finish(child_id, status, reason=result['reason'], steps_used=lifetime_steps,
                           output_tokens=lifetime_tokens, answer_chars=len(answer or ''))
+    # H3 — lượt chạy lại cũng đóng con: chiếu kết cục vào attempt đang mở (nạp muộn, tránh vòng nhập).
+    from . import task_surface
+    task_surface.project_child(rt, child_id)
     rt.store.emit(owner['id'], 'child', result)
     return result

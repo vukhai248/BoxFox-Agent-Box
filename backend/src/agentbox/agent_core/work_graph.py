@@ -63,11 +63,18 @@ MAX_ROUNDS_DEFAULT = 3
 MAX_ROUNDS_CEILING = 4
 MAX_GRAPH_REVIEWS = 3
 KNOWLEDGE_MAX = 3
-WORK_CHILDREN_PER_RUN_CALL = 72
-WORK_RUN_MAX_SECONDS = 3600.0
+# Quyết định chủ nhà #6457 (03/10/2026): ngân sách MỖI LỜI GỌI nâng 72 → 256 con và
+# 3600 → 21600 s (6 h) để việc dài kiểu Devin không bị cắt; trần vẫn giữ vì đây là trần CỦA
+# MỘT LỜI GỌI, còn `lifetime` bên dưới đếm cộng dồn toàn đời run (chỉ báo cáo, chưa chặn —
+# số thật sẽ chốt trần cứng ở W6.5.2).
+WORK_CHILDREN_PER_RUN_CALL = 256
+WORK_RUN_MAX_SECONDS = 21600.0
 OUTPUT_MAX_CHARS = 20000
 CONTEXT_MAX_CHARS = 15000
 FINDINGS_MAX_CHARS = 3000
+# #6474: trần token claim của `reviewedSet`. Chạm trần thì ghi lại `claimsTotal`/`claimsTruncated`
+# thay vì cắt im lặng — badge không được nói "đã kiểm" cho một tập bị cắt mà không nói gì.
+CLAIM_TOKENS_MAX = 600
 HISTORY_MAX = 120
 WORK_SKILL = 'work-graph-planning'
 REVIEW_MAX_STEPS = 14
@@ -918,12 +925,14 @@ class WorkGraph:
             return self.result(run)
         if run['status'] in TERMINAL_STATUSES:
             raise ValueError(f'WORK_RUN_CLOSED: run {run["runId"]} is {run["status"]}; create a new run')
-        if action in ('add', 'update', 'remove', 'retry', 'cancel') and self.busy(run):
+        if action in ('add', 'update', 'remove', 'retry', 'cancel', 'resolve') and self.busy(run):
             raise ValueError('WORK_RUN_BUSY: work_run is running for this run; wait for it to return')
         if action in ('add', 'update'):
             self.apply_nodes(run, args.get('nodes'), replace=action == 'update')
             return self.result(self.save(run, action, ','.join(str((n or {}).get('id')) for n in args['nodes']
                                                                 if isinstance(n, dict))))
+        if action == 'resolve':
+            return self.resolve_conflicts(run, args)
         if action == 'remove':
             ids = set(clean_list(args.get('nodeIds'), 'nodeIds', 24, 32))
             if not ids:
@@ -948,6 +957,67 @@ class WorkGraph:
             return self.result(self.save(run, 'cancelled'))
         raise ValueError(f'WORK_ACTION_INVALID: action {action!r} is not supported here')
 
+    def resolve_conflicts(self, run, args):
+        """#6456(b): xác nhận/xoá xung đột đầu vào mà KHÔNG phá bản nháp.
+
+        `action=update` xoá được xung đột nhưng đặt lại stage (`new_stage()`), tức mất
+        artifact/policy/bản nháp vừa sửa — đo ở W8.A4.5.N lượt 9/12: chỉ cần con kiểm dán nhãn
+        `criterion` là cả vòng sửa bị chặn, rồi công sửa cũng mất. Đường này giữ nguyên trạng thái
+        stage, chỉ bỏ danh sách xung đột (có ghi nhật ký) để lượt kiểm/sản xuất kế tiếp chạy tiếp
+        trên chính bản nháp đó. Sản phẩm không tự phán tiêu chí đúng hay sai: nếu artifact vẫn vi
+        phạm, lượt kiểm sau đỏ lại và vòng sửa tiếp tục.
+        """
+        only_stage = str(args.get('stage') or '').strip() or None
+        ids = set(clean_list(args.get('nodeIds'), 'nodeIds', MAX_NODES, 32))
+        note = str(args.get('note') or '').strip()[:500]
+        cleared = []
+        for node in run['nodes']:
+            if ids and node['id'] not in ids:
+                continue
+            names = [only_stage] if only_stage else list(node['stages'])
+            for stage in names:
+                state = node['stages'].get(stage)
+                if not state or not state.get('inputConflicts'):
+                    continue
+                cleared.append({'nodeId': node['id'], 'stage': stage, 'conflicts': state['inputConflicts']})
+                state['inputConflicts'] = []
+                # Ghi vết lên chính hồ sơ lượt kiểm: nếu không, lượt kiểm kế tiếp của một loại khác
+                # dựng lại hàng rào từ bản ghi cũ và `resolve` coi như bị hoàn tác.
+                self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note)
+        # W10: hàng rào "mã đã đổi" cũng phải có đường xoá. Khi mọi lượt kiểm của stage đều bị từ
+        # chối (`superseded`) vì cây mã đổi, stage bị kẹt ở needs_checks: `work_run` không chạy lại
+        # (chỉ chạy stage pending/revise), `retry` từ chối (nút không rejected/failed), và chỉ còn
+        # `action=update` — đường duy nhất xoá luôn bản nháp. Đường này giữ bản nháp, trả stage về
+        # sản xuất để dựng bản mới trên cây hiện tại.
+        for node in run['nodes']:
+            if ids and node['id'] not in ids:
+                continue
+            names = [only_stage] if only_stage else list(node['stages'])
+            for stage in names:
+                state = node['stages'].get(stage)
+                if not state or state['status'] not in ('needs_checks', 'revise'):
+                    continue
+                latest = [doc for doc in self.checks.latest(run, node, stage).values() if doc]
+                if not latest or any(doc.get('status') != 'superseded' for doc in latest):
+                    continue
+                cleared.append({'nodeId': node['id'], 'stage': stage, 'conflicts': state.get('inputConflicts') or [],
+                                'codeMoved': state.get('codeMoved')})
+                state['inputConflicts'] = []
+                state.update(status='pending', error=None)
+                self.checks.mark_conflicts_resolved(run['runId'], node['id'], stage, note or 'code moved')
+        if not cleared:
+            raise ValueError('WORK_NO_CONFLICT: no input conflict or refused-check barrier to resolve for the '
+                             'given nodes/stage')
+        self.save(run, 'input_conflicts_resolved', json.dumps(cleared, ensure_ascii=False)[:600])
+        message = ('Cleared %d input conflict(s) and %d refused-check barrier(s); the draft is kept. '
+                   % (sum(len(item['conflicts']) for item in cleared),
+                      sum(1 for item in cleared if item.get('codeMoved') is not None))) + \
+            ('A stage that is still open (needs_checks/revise) continues with the next work_run/check; '
+             'a stage returned to pending needs work_run phase=execute to produce a fresh draft on the '
+             'current code; a rejected/failed stage needs work_graph action=retry first.') + \
+            (f' Note: {note}' if note else '')
+        return self.result(run, message) | {'resolved': cleared}
+
     def retry(self, run, ids):
         """Re-open rejected/failed stages (all, or `ids`) with their last findings as feedback."""
         reset = []
@@ -962,8 +1032,16 @@ class WorkGraph:
                                                           'rounds': state.get('rounds') or []}
                     reset.append(f'{node["id"]}:{name}')
         if not reset:
+            # W10: nút kẹt ở needs_checks vì mã đã đổi KHÔNG phải lỗi "không có gì để chạy lại" —
+            # thông báo cũ để main hết đường và rò mã nội bộ ra chủ sở hữu (đo ở W10.F ca S12).
+            stuck = [(node['id'], name) for node in run['nodes'] for name, state in node['stages'].items()
+                     if state.get('codeMoved') is not None or state.get('status') in ('needs_checks', 'revise')]
             raise ValueError('WORK_NOTHING_TO_RETRY: no rejected or failed stage'
-                             + (' among ' + ', '.join(sorted(ids)) if ids else ''))
+                             + (' among ' + ', '.join(sorted(ids)) if ids else '')
+                             + '. A stage that is open or blocked by a moved tree has two paths: '
+                               'work_graph action=resolve (clears the barrier and returns the stage to '
+                               'production, keeping the draft) or work_run phase=execute (produce again on '
+                               'the current code). Open stages now: ' + str(stuck[:6]))
         if run['status'] == 'execute_failed':
             run['status'] = 'approved'
         elif run['status'] == 'needs_revision':
@@ -1028,9 +1106,16 @@ class WorkGraph:
         conflicts = [(n['id'], stage, s['inputConflicts']) for n in run['nodes']
                      for stage, s in n['stages'].items() if s.get('inputConflicts')]
         if conflicts:
-            return ('Main: correct the conflicting node goal/acceptance with work_graph action=update before '
-                    'retrying checks or production. Preserve facts in the artifact; the assignment needs correction: '
-                    + str(conflicts))
+            return ('Main: settle the assignment question first. If the node goal/acceptance really is wrong, '
+                    'correct it with work_graph action=update (new draft, fresh checks). If the label was wrong '
+                    'and the current draft stands, clear the barrier with work_graph action=resolve — it keeps the '
+                    'draft, its artifact and its history. Then retry checks or production: ' + str(conflicts))
+        moved = [(n['id'], stage, s.get('codeMoved')) for n in self.all_nodes(run) for stage, s in n['stages'].items()
+                 if s.get('codeMoved') is not None and s['status'] in ('pending', 'needs_checks', 'revise')]
+        if moved:
+            return ('Main: the tree moved inside these nodes\' declared files, so their current drafts cannot be '
+                    'checked: ' + str(moved[:4]) + '. Call work_graph action=resolve to clear the barrier (the draft '
+                    'and its history are kept), then work_run phase=execute to produce a fresh draft on the current code.')
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1103,8 +1188,36 @@ class WorkGraph:
                 return data.get('text') or ''
         return ''
 
+    def lifetime(self, run, calls=0, children=0, seconds=0.0, childSeconds=0.0):
+        """Bộ đếm cộng dồn của cả đời run (W6.5.2, quyết định #6457) — chỉ để đo, KHÔNG chặn.
+
+        `work_run` đặt lại `child_budget` ở MỖI lời gọi (72 con cũ, 256 con mới) và đồng hồ
+        `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có thể vượt cả hai mà
+        không có lỗi nào. Bộ đếm này ghi lại số thật (số lời gọi, số con, tổng giây) vào chính
+        tài liệu run để lượt sau đọc được; nó không chặn và không làm hỏng lượt chạy nào.
+
+        `children`/`childSeconds` được đếm ở `spawn()` — cửa duy nhất sinh con của run — nên con
+        của `work_check`/`work_repair` cũng vào sổ, không chỉ con trong lời gọi `work_run`
+        (finding #10). `seconds` là giây của chính các lời gọi vào graph; `childSeconds` là giây
+        của các con, cộng riêng để không trộn hai phép đo.
+        """
+        lifetime = run.setdefault('lifetime', {'calls': 0, 'children': 0, 'seconds': 0.0,
+                                               'childSeconds': 0.0})
+        lifetime.setdefault('childSeconds', 0.0)
+        lifetime['calls'] += int(calls)
+        lifetime['children'] += int(children)
+        lifetime['seconds'] = round(lifetime['seconds'] + float(seconds), 3)
+        lifetime['childSeconds'] = round(lifetime['childSeconds'] + float(childSeconds), 3)
+        return lifetime
+
     async def spawn(self, session, run, node, stage, purpose, role, goal, context, expect, attempt, extra_binding=None):
-        """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer."""
+        """One child through the normal `delegate` path (events, slots, budgets, UI) + full answer.
+
+        Cửa duy nhất sinh con của run (produce/kiểm/knowledge/debug), nên đây cũng là chỗ duy nhất
+        ghi sổ `lifetime`: mỗi con cộng một lượt và giây chạy thật của nó. Nhờ vậy con sinh từ
+        `work_check`/`work_repair` cũng được đếm (finding #10), không chỉ con trong `work_run`.
+        """
+        child_started = time.monotonic()
         budget = self.child_budget.get(run['runId'])
         if budget is not None:
             if budget[0] <= 0:
@@ -1182,6 +1295,7 @@ class WorkGraph:
         result['progress'] = {k: receipt.get(k) for k in ('admissionId', 'streak', 'progressed', 'blocked')}
         if receipt.get('blocked'):
             result.update(status='partial', is_error=True, reason='WORK_NO_PROGRESS')
+        self.lifetime(run, children=1, childSeconds=time.monotonic() - child_started)
         return result, answer
 
     # ---- node execution with the review loop ------------------------------------------------- #
@@ -1433,6 +1547,9 @@ class WorkGraph:
                                        status='pending', snapshot=None, needsTests=True, at=now())
             if touchset:
                 dirty_after = await self.worktrees.dirty_manifest(session['id'])
+                if dirty_after:
+                    # W10: ghim phần cây nút này sở hữu để lượt kiểm sau biết mã đổi trong hay ngoài phạm vi.
+                    dirty_after = dirty_after | {'declared': work_checks.declared_map(self, node, dirty_after)}
                 violations = self.worktrees.touch_violations(node, dirty_before, dirty_after)
                 if violations:
                     state.update(status='failed', touchViolation=violations[:20],
@@ -1444,7 +1561,12 @@ class WorkGraph:
                     self.save(run, 'node_failed', node['id'])
                     return state['status']
             after = await self.code_identity(run, run['sessionId'], root, base) if stage == 'execute' else None
-            changed = before is not None and after is not None and before != after
+            if touchset and after and (dirty_after or {}).get('declared'):
+                # W10: bản ghim giữ phần khai báo của nút để quyết định ghim lại/không ở lượt kiểm.
+                after['declared'] = dirty_after['declared']
+            # So theo schema+hash: bản ghim W10 mang thêm phần `declared` nên so cả dict sẽ luôn "đổi".
+            changed = (before is not None and after is not None
+                       and not work_checks.same_identity(before, after))
             declared_sensitive = any(re.search(r'api|schema|auth|migration|contract|concurr|lock', path, re.I) for path in node['files'])
             # The virtual integration node keeps its own (converged) policy after a repair.
             policy = (work_policy.integration(run) if node['id'] == INTEGRATION_NODE else
@@ -1563,6 +1685,7 @@ class WorkGraph:
             self.live[run['runId']] = run
             self.save(run, 'run_started', phase)
             self.child_budget[run['runId']] = [WORK_CHILDREN_PER_RUN_CALL]
+            self.lifetime(run, calls=1)
             limit = max(1, int(self.rt.fanout_limit(session.get('config'))))
             try:
                 with self.budget_paused(sid):
@@ -1587,13 +1710,38 @@ class WorkGraph:
         """W8.A4.3: a touch-set run is identified by the shared dirty manifest, a git run by its
         scoped worktree snapshot. A workspace that answers neither yields None; the caller decides
         (`run_stage` keeps going, an execution admission refuses)."""
-        if (run.get('isolation') or {}).get('mode') == 'touchset':
-            manifest = await self.worktrees.dirty_manifest(sid)
-            if manifest:
-                # Cùng hình dạng với `work_checks.snapshot` để mọi cổng so sánh dùng chung một kiểu.
-                return {'schema': manifest.get('schema'), 'hash': work_policy.digest(manifest),
-                        'head': manifest.get('head'), 'criticalChanges': False}
-        return await work_checks.snapshot(self, sid, root, base)
+        # W10: một đầu đọc duy nhất (`work_checks.identity_of`) để bản ghim và mọi cổng so sánh
+        # luôn cùng schema — trước đây binding `work-dirty/1` bị đem so với ảnh chụp git.
+        return await work_checks.identity_of(self, sid, None, (run.get('isolation') or {}).get('mode'),
+                                             root=root, base=base)
+
+    async def rebind_artifact(self, run, node, stage, meta, current, trail):
+        """W10 quyết định A: ghim lại bản nháp vào cây hiện tại khi mã chỉ đổi NGOÀI file của nút.
+
+        Bản nháp, policy và lịch sử được giữ; vết `codeRebound` nằm ngay trên artifact nên người
+        duyệt sau thấy được vì sao hash đổi. Không có đường này thì nút đứng mãi ở `needs_checks`.
+        """
+        state = node['stages'][stage]
+        binding = meta.setdefault('binding', {})
+        binding['codeSnapshot'] = current
+        binding['codeRebound'] = trail
+        self.artifacts.update(meta)
+        if (state.get('artifact') or {}).get('artifactId') == meta.get('artifactId'):
+            state['artifact'] = meta
+        self.save(run, 'artifact_rebound',
+                  f'{node["id"]}:{stage} {str(trail.get("from"))[:12]}→{str(trail.get("to"))[:12]}')
+
+    def stage_needs_rebuild(self, run, node, stage, moved):
+        """W10: mã đổi ĐÚNG vào file nút khai báo ⇒ trả stage về sản xuất, giữ lịch sử vòng.
+
+        Không xoá gì: artifact cũ vẫn đọc được trong registry, `rounds` còn nguyên. Chỉ trạng thái
+        đổi để `work_run phase=execute` dựng bản nháp mới trên cây hiện tại.
+        """
+        state = node['stages'][stage]
+        state.update(status='pending', codeMoved=sorted(moved or [])[:20] or ['<unmeasurable>'],
+                     error='WORK_CHECK_CODE_MOVED: the tree moved inside this node\'s declared files; '
+                           'produce a fresh draft on the current code (work_run phase=execute).')
+        self.save(run, 'code_moved', f'{node["id"]}:{stage} ' + ', '.join(state['codeMoved'][:6]))
 
     async def ensure_isolation(self, session, run, args):
         """W8.A4.3: resolve the repository and create the run worktree once per execution run."""
@@ -1643,13 +1791,15 @@ class WorkGraph:
                                  'integration check before execute/ship.')
             return
         current = None
+        mode = (run.get('isolation') or {}).get('mode')
         for node in run['nodes']:
             state = node['stages'].get('execute', {})
             if state.get('status') == 'accepted':
                 if current is None:
-                    current = await work_checks.snapshot(self, run['sessionId'])
+                    current = await work_checks.identity_of(self, run['sessionId'], None, mode)
                 expected = state.get('artifact', {}).get('binding', {}).get('codeSnapshot')
-                if not current or expected != current or not self.checks.valid(run, node, 'execute'):
+                if not current or not work_checks.same_identity(expected, current) \
+                        or not self.checks.valid(run, node, 'execute'):
                     state.update(status='revise', feedback='Integrated source changed: preserve valid changes, inspect current code and produce a fresh handoff for testing.',
                                  error='WORK_CODE_STALE: re-produce/re-test the current integrated snapshot.')
                     run['status'] = 'approved'
@@ -1853,6 +2003,11 @@ class WorkGraph:
         out['blocked'] = blocked
         budget = self.child_budget.get(run['runId'])
         out['budgetExhausted'] = bool(budget is not None and budget[0] <= 0)
+        # W6.5.2 (#6457): bộ đếm CỘNG DỒN toàn đời run. Chỉ báo cáo — không chặn gì; số thật ở
+        # đây là đầu vào để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
+        # `children`/`childSeconds` do `spawn()` cộng (finding #10), nên không cộng lại ở đây.
+        out['lifetime'] = dict(self.lifetime(run, seconds=time.monotonic() - started))
+        self.save(run, 'run_lifetime', json.dumps(out['lifetime'])[:300])
         out['outputs'] = [{'id': node['id'], 'kind': node['kind'], 'status': node['stages'][stage]['status'],
                            'attempts': node['stages'][stage]['attempts'],
                            'verdicts': [item.get('verdict') for item in node['stages'][stage]['rounds']],
@@ -2040,7 +2195,13 @@ class WorkGraph:
             return await self.finish_verify(sid, run, review, produce, verdict, findings, doc.get('coverage', []))
 
     def reviewed_set(self, run):
-        """W6.2.BIND — tài liệu đã được whole-pass chứng nhận, kèm hash tại thời điểm đó."""
+        """W6.2.BIND — tài liệu đã được whole-pass chứng nhận, kèm hash tại thời điểm đó.
+
+        `claims` là TẬP TOKEN kỹ thuật của đúng bộ tài liệu đã phản biện, không phải bản chứng
+        nhận ngữ nghĩa/đơn vị/phiên bản: badge chỉ nói "token này có mặt trong tài liệu đã kiểm".
+        Chạm trần `CLAIM_TOKENS_MAX` thì ghi `claimsTotal`/`claimsTruncated` để lượt đọc sau biết
+        tập đã bị cắt (#6474) — trước đây cắt im lặng ở 600.
+        """
         produce = [n for n in run['nodes'] if 'produce' in n['stages']]
         artifacts, claims = [], set()
         for node in produce:
@@ -2056,7 +2217,9 @@ class WorkGraph:
         # `claims` là token kỹ thuật của đúng bộ tài liệu đã phản biện: `final_claims_check` là hàm
         # thuần, không đọc DB ở cuối lượt main (W6.2.BIND).
         return {'wholeBinding': self.whole_binding(run), 'artifacts': artifacts,
-                'claims': sorted(claims)[:600], 'reviewedAt': now(), 'verdict': 'ok'}
+                'claims': sorted(claims)[:CLAIM_TOKENS_MAX], 'claimsTotal': len(claims),
+                'claimsTruncated': len(claims) > CLAIM_TOKENS_MAX,
+                'reviewedAt': now(), 'verdict': 'ok'}
 
     def stale_review(self, run):
         """True when the reviewed set no longer matches the live graph or a reviewed artifact changed."""

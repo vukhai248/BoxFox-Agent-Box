@@ -10,6 +10,11 @@ from test_work_graph import build, ok_script, EXPLORE, answer
 from test_work_handoffs_w8 import assign, drain
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def setup(tmp_path, role='research', helpers=1):
     produced = 0
     def script(kind, text):

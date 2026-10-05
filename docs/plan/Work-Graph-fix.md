@@ -2641,7 +2641,7 @@ flowchart TD
 | **W7.1 — legacy history và CUA** | **[BACKEND ĐÃ GIAO 02/10/2026, UI CÒN MỞ]** Interview main bền (`kind='main_interview'`, main yield, trả lời quay lại như lượt mới qua outbox `main_decision`, ghi bù `run['interviews']` khi đọc); API events thêm `hasMore`/`nextAfter`; probe 1200 event/3 trang qua harness tiến trình riêng đạt oracle. **Chưa nghiệm thu renderer** (không đổi UI theo yêu cầu; cần duyệt riêng). Bằng chứng `docs/plan/W7.1-interview-pagination-evidence.json`. | Renderer/lịch sử legacy + thẻ 1–3 câu trong chat/Decisions vẫn cần lượt kiểm UI riêng trước khi tick W7.1. |
 | **W7.2 — schema và recovery kết hợp** | **[ĐÃ GIAO 02/10/2026]** `ACTION_FIELDS` theo từng action + envelope `{field, action, hint, received}`; `WORK_ARTIFACT_RUN_REQUIRED` thay thông điệp dễ đọc nhầm thành ACL; `REPLAY` safe/unsafe, `tool_end` là điểm commit; `tool_recovery.py` dùng lại receipt đã commit, chạy lại tool safe đúng 1 lần, `TOOL_INTERRUPTED_UNSAFE` cho tool unsafe, `WORK_CAPABILITY_REVOKED` khi grant bị thu hồi. Probe Space Bunny 2/2 oracle, 3/3 lỗi tự sửa trong ≤1 lần thử, 0 lần đọc nhầm ACL. Bằng chứng `docs/plan/W7.2-schema-recovery-evidence.json`. | Còn lệch nhỏ: `decisionKeys` không bắt buộc cho `needs_user` (đã ghi lý do). |
 | **W6.1.3 — reviewer phụ và proportional findings** | **[ĐÃ GIAO 02/10/2026]** Reviewer có `verify_exec` (`ac/verify_exec.py`, hợp đồng tham số python|node, code≤8000, stdin≤8000, claim≤300, timeout 1–20 s) chạy trong sandbox bwrap tách biệt, fail-closed `VERIFY_EXEC_UNAVAILABLE`; mở theo duyệt #6423: **đọc repo read-only** (`--ro-bind / /`, bỏ `--unshare-net`), **ghi scratch** (`/tmp` + temp bind, receipt `scratchRoot`+`scratch[]` ≤20 mục), **có mạng** — đo thật trong box `agentbox-sandbox:w9probe`: đọc repo exit 0, ghi repo `OSError [Errno 30]`, mạng off `ConnectionRefusedError`/on `connected 1.1.1.1:443`. Findings: hợp đồng trích dẫn bắt buộc `toolCallId` cùng admission (hoặc `verify:<codeHash>`/`artifact:<id>@<hash>`), 9 lý do hạ (`UNKNOWN_RECEIPT`, `NUMERIC_UNVERIFIED`, `SELF_REFUTED`…), `work-check-inputs/2`, `reviewedSet`; prompt producer `deliverable()` theo taskKind/depth, lookup ≤120 từ. Probe Space Bunny 3 ca × 2 lượt: oracle 2/5 → **4/6**, downgrade 7/20 → 5/29, false-positive control trước 1 lượt không chặn sai → nay **chặn sai 2/2** (đòi bằng chứng thiếu) — ghi nhận là hạn chế thật, W10 theo dõi tỉ lệ hạ/false-positive. `verifyExecCalls = 0/6` (model chưa tự gọi). Test `test_work_finding_citations.py` 20, `test_work_verify_exec.py` 6, `test_sandbox_verify_exec.py` 9, `test_work_producer_quality.py` 7; `-k work` 757+2 (2 lỗi `test_claude_worker_router.py` là ca môi trường tiền đề 'không có bwrap', host nay có bwrap). Bằng chứng `docs/plan/W6.1.3-verify-findings-evidence.json`, `W6.2-producer-quality-evidence.json`. | Adjudicate từng finding với source/testCore verdict có ca đúng nhưng prose sai line count/codepoint/encoding/byte semantics/inventory/language; ca cũ compact có findings chưa công tâm. | Adjudicate từng finding với source/test thật và scope; dùng corpus đã lưu, sửa reviewer ở checkpoint riêng. Không biến lỗi phụ thành chặn nếu không ảnh hưởng tiêu chí; không cho verdict đúng che lỗi prose. Chỉ chuyển lỗi sang producer/main khi có bằng chứng đúng tác nhân. |
-| **W6.2 — main/producer quality** | **[ĐÃ GIAO 02/10/2026]** Phân loại depth/taskKind và hợp đồng deliverable theo vai: `work_prompts.deliverable()` cắt mục bắt buộc theo `taskKind`/`depth` (`work_policy.DEPTHS`), lookup ≤120 từ; `work_feedback` giữ interview main bền; producer/checker giữ cap 16000 (W6.5.3). Probe A/B lookup: legacy 1050 từ/185 s so lookup 254 từ/22 s (Answer thô 122, bỏ heading 119 — lệch 2 từ so với trần 120, ghi nhận). `verifyExecCalls=0/6` và control chặn sai nêu ở W6.1.3 là hạn chế còn mở, chuyển W10 đo. | Phân loại depth/task, hợp đồng role/skill và nguồnĐã thấy lookup120từ thành dossier dài, claim vượt nguồn, lựa chọn tool/format/language, tổng hợp bỏ finding. Chưa tuning trong A3/A4.1. | Phân loại depth/task, hợp đồng role/skill và nguồn; dùng output cũ đối chiếu trước. Research/Plan/Design phải đúng scope và chuẩn SWE khi liên quan; không sửa chồng reviewer hoặc DAG. Cần checkpoint được chốt riêng. |
+| **W6.2 — main/producer quality** | **[ĐÃ GIAO 02/10/2026]** Phân loại depth/taskKind và hợp đồng deliverable theo vai: `work_prompts.deliverable()` cắt mục bắt buộc theo `taskKind`/`depth` (`work_policy.DEPTHS`), lookup ≤120 từ; `work_feedback` giữ interview main bền; producer/checker giữ cap 16000 (W6.5.3). Probe A/B lookup: legacy 1050 từ/185 s so lookup 254 từ/22 s (Answer thô 122, bỏ heading 119 — lệch 2 từ so với trần 120, ghi nhận). `verifyExecCalls=0/6` và control chặn sai nêu ở W6.1.3 là hạn chế còn mở, chuyển W10 đo. | Phân loại depth/task, hợp đồng role/skill và nguồnĐã thấy lookup120từ thành dossier dài, claim vượt nguồn, lựa chọn tool/format/language. Claim "tổng hợp bỏ finding" đã RÚT khỏi danh sách "đã thấy" (FU10): W6.Q §5 không tìm được receipt nào nêu tên finding bị bỏ; muốn nêu lại phải kèm run + finding id. Chưa tuning trong A3/A4.1. | Phân loại depth/task, hợp đồng role/skill và nguồn; dùng output cũ đối chiếu trước. Research/Plan/Design phải đúng scope và chuẩn SWE khi liên quan; không sửa chồng reviewer hoặc DAG. Cần checkpoint được chốt riêng. |
 | **W6.5.3 — lookup helper cap/performance** | **[ĐÃ ĐO VÀ QUYẾT 02/10/2026 — NÂNG LÊN 16000]** 32 run Space Bunny (8 ca lookup dài × 2 cap × 2 lần): cap 4096 có **5/16 run `finishReason=length`** (0/16 ở 16000) → điều kiện A đúng; coverage tụt 7,78 điểm (<10) → B sai; median wall time 84,3 s (16000) so 93,3 s (4096), tỉ lệ 0,904 ≤ 1,25 → C đúng. Luật `(A or B) and C` → nâng. `output_policy.py` thêm `WORK_HELPER_OUTPUT_TOKENS = 16000` cho `work.purpose == 'knowledge'`, giữ núm `BOXFOX_WORK_HELPER_OUTPUT_TOKENS ∈ {4096,16000}` (giá trị khác fail closed); trần `outputTokenCeiling` của chủ vẫn bound. Bằng chứng `docs/plan/W6.5.3-helper-budget-evidence.json` (kèm caveat: máy chịu tải ~8,9 vì các track chạy song song; một run 4096 bị hạn 90 s của router cắt, không phải do cap). | Không còn việc bắt buộc. Nếu sau này đổi cap phải đo lại theo cùng luật. |
 | **W9 — recorder/CDP integration** | **[ĐÃ GIAO 02/10/2026]** Root cause tách được và sửa: (a) recorder dùng MP4 phân mảnh (`+frag_keyframe+empty_moov+default_base_moof`, GOP 2 s, flush mỗi packet) + `record_stop` SIGINT 15 s → SIGTERM 5 s → SIGKILL 5 s + ffprobe trước khi trả lời (`ok:false`/`RECORDING_INCOMPLETE` thay vì thời lượng wall-clock giả); ma trận trong box 30/40 → **40/40** file đọc được. (b) CDP attach: đo được một tab bận JS giữ `connect_over_cdp` ~59,2 s bất kể độ dài vòng lặp, nên trần 15 s cũ nổ dù ws đã connect; worker nay chờ `/json/version`, attach theo ngân sách 2×35 s, marker bằng `wait_for_function` có trần. Bằng chứng `docs/plan/W9-recorder-cdp-evidence.json`. | Còn mở: nguyên nhân ~59 s phía trong Chromium chưa xác định; tab bận vô hạn vẫn timeout ~70 s. Runbook W2.UI/W9.UI `docs/plan/W9.UI-runbook.md` chỉ là quy trình — cần một lượt harness thật + một xác nhận CUA trước khi tick W2.UI/W9.UI. |
 
@@ -2665,8 +2665,8 @@ Rà tất cả checkbox chưa tick trong nhật ký W0–W8 cho thấy bảng34.
 | **W1.P — preflight role/tool** | **[ĐÃ GIAO 02/10/2026]** `capability_preflight()` chạy trước `progress.reserve()` và khi resume sau slot; `WORK_ROLE_UNAVAILABLE`/`WORK_CHECK_UNAVAILABLE` nêu đúng role/tool thiếu; tool bị thu hồi giữa lượt → `WORK_CAPABILITY_REVOKED`. 5 test pass, 1 ca `verify_exec` để skip chờ track W6.1.3. Bằng chứng `docs/plan/W1.P-preflight-evidence.json`. | `answer_knowledge()` chưa nối preflight (ghi nhận). |
 | **W2.UI / W9.UI — inspector, badges, panel và rollout** | Phần UI cũ ngoài interview W7.1: đổi child/reset content-loading; completed khác reviewed; artifact/version/file links; render/copy/export UTF-8; Research/Design/Plan/Work Graph dùng đúng trạng thái backend; compatibility/pilot/rollback. Giữ tên W9.UI để không nhầm W9 recorder/CDP ở34.2. | CUA: đổi child nhanh không hiện kết quả cũ; partial/error không có badge reviewed/ready; link mở đúng artifact/version; copy/export giữ URL và dấu tiếng Việt, không chèn diagnostic. API/client cũ báo capability đúng. Chỉ ghi runbook trước; cần duyệt riêng nếu phải đổi UI/UX. |
 | **W5.LEGACY — migration/export/recovery toàn luồng** | **[ĐÃ GIAO MỘT PHẦN 02/10/2026]** `scripts/eval/work_legacy_eval.py` oracle đạt: run policy 9 đọc được, `WORK_LEGACY_CHECKS_REQUIRED`, `WORK_CHECK_STALE`, import giữ `runId`, `WORK_ARTIFACT_CORRUPT`, restart → `interrupted` (7/7 ca). Phần registry/version/hash/namespace/read refs đã có checkpoint trước. Bằng chứng `docs/plan/W5.LEGACY-evidence.json`. Chưa phủ export/index và migration đầy đủ. | Legacy đọc được, giữ lịch sử/identity/hash và consent thật; bản cũ không tự được nhãn đạt chuẩn/check mới. Import/tiếp tục tạo binding đúng run/revision, file lỗi hoặc registry/file lệch không dùng cached pass. Export/index tham chiếu đúng bản; restart không mất draft hoặc giả ready. Kiểm coverage hiện có trước thêm migration mới. |
-| **W6.2.BIND — claim mới trong tổng hợp main** | Whole binding hiện bám goal/interview/node/produce artifact; chưa chứng nhận mọi claim main thêm sau whole review cũng thuộc bản đã kiểm. Tách khỏi lỗi prose reviewer W6.1.3, nối W6.2 và W8.A4.4. | Main thêm quyết định/claim kỹ thuật quan trọng phải có nguồn và nằm trong artifact chính thức/version/hash được kiểm; không dùng một whole-pass cũ để chứng nhận chat summary mới. Sửa nội dung chính thức invalidates đúng review/approval; giải thích không thay nội dung không tự tăng version. Không khóa mọi câu trả lời chat vào reviewer. |
-| **W10 — nghiệm thu tổng hợp** | Bộ12kịch bản cố định chạy2lần, cộng ca V/folder đã ghi ở mục5/9/12; đánh giá Plan/Research/Design/main và flow integration. Kết hợp W8.A4.5, W7.1, W9.UI và lỗi integration W9. | Ghi model/commit/config/usage/latency và từng failure; không loại lượt lỗi khỏi mẫu. Đánh giá nội dung SWE, grounding, coverage, dependency, scope và interview; không lấy unit hoặc native fixture nhỏ làm benchmark toàn hệ thống. Session/DB/workspace riêng, OpenCode Space Bunny; chốt phạm vi/ngân sách trước chạy, không mở sweep hoặc native dài vô hạn. |
+| **W6.2.BIND — claim mới trong tổng hợp main** | Whole binding hiện bám goal/interview/node/produce artifact; chưa chứng nhận mọi claim main thêm sau whole review cũng thuộc bản đã kiểm. Tách khỏi lỗi prose reviewer W6.1.3, nối W6.2 và W8.A4.4. | Main thêm quyết định/claim kỹ thuật quan trọng phải có nguồn và nằm trong artifact chính thức/version/hash được kiểm; không dùng một whole-pass cũ để chứng nhận chat summary mới. Sửa nội dung chính thức invalidates đúng review/approval; giải thích không thay nội dung không tự tăng version. Không khóa mọi câu trả lời chat vào reviewer. **Điều kiện của badge (FU8, sau #6474):** badge chỉ là TẬP TOKEN kỹ thuật của đúng bộ artifact đã whole-pass — nó KHÔNG chứng nhận ngữ nghĩa, đơn vị, mốc phiên bản hay claim mới xuất hiện trong chat; tập token cắt ở `CLAIM_TOKENS_MAX=600` và nay ghi `claimsTotal`/`claimsTruncated` khi chạm trần thay vì cắt im lặng; `final_claims_check` là hàm thuần, KHÔNG chặn câu trả lời; notice `unreviewed_claims` phát khi run đã có `reviewedSet` (không chỉ khi `status == 'verified'`). |
+| **W10 — nghiệm thu tổng hợp** | Bộ12kịch bản cố định chạy2lần, cộng ca V/folder đã ghi ở mục5/9/12; đánh giá Plan/Research/Design/main và flow integration. Kết hợp W8.A4.5, W7.1, W9.UI và lỗi integration W9. | Ghi model/commit/config/usage/latency và từng failure; không loại lượt lỗi khỏi mẫu. Đánh giá nội dung SWE, grounding, coverage, dependency, scope và interview; không lấy unit hoặc native fixture nhỏ làm benchmark toàn hệ thống. Session/DB/workspace riêng, OpenCode Space Bunny; chốt phạm vi/ngân sách trước chạy, không mở sweep hoặc native dài vô hạn. **Soát hợp đồng (FU9):** `work_policy.VERSION` vẫn `work-checks/10` (kèm `COMPATIBLE_VERSIONS=('work-checks/10','work-checks/11')`) trong khi `work_checks.INPUTS_VERSION='work-check-inputs/2'` tham gia binding và receipt kiểm — cần chốt khi nào hợp đồng inputs đổi nghĩa verdict thì bump `VERSION`, và ghi hai trục version này cạnh nhau trong một dòng tài liệu. |
 
 **Việc lịch sử đã được xử lý, không đưa lại thành bug còn mở:** `clean_list` hiện trả lỗi rõ khi vượt trần, acceptance nhận tối đa64mục (`work_graph.py:205–255`); không còn âm thầm cắt20mục như checkbox ở16.8. Artifact refs/manifest/namespace, same-child feedback, shared continuation và ledger chống lặp có checkpoint30–33. Các failure suite/provider trên source cũ giữ làm lịch sử; không dùng chúng để kết luận source hiện tại còn cùng lỗi hoặc tự tick toàn hệ thống đạt.
 
@@ -2825,13 +2825,35 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 ### 37.4 Workflow triển khai và checkbox
 
 - [x] **P0a — phân tích mẫu:** đọc prompt, đối chiếu role/skill/giao việc; ghi điểm hữu ích và giới hạn ở trên. Đây là công việc tài liệu, chưa có test/model mới.
-- [ ] **P0b — inventory thực:** ghi source pin, prompt lắp cuối cùng của các đường Work Graph/delegate/custom/resume/check, role instructions, skill đã nạp, tools và scope hiệu lực. Bảo vệ bí mật; không lưu hidden reasoning. Nêu từng chỉ dẫn trùng/xung đột và bằng chứng đường gọi, tránh suy từ tên skill.
+- [x] **P0b — inventory thực:** ghi source pin, prompt lắp cuối cùng của các đường Work Graph/delegate/custom/resume/check, role instructions, skill đã nạp, tools và scope hiệu lực. Bảo vệ bí mật; không lưu hidden reasoning. Nêu từng chỉ dẫn trùng/xung đột và bằng chứng đường gọi, tránh suy từ tên skill. → **Đã giao 02/10/2026 (local):** [`W11-p0b-inventory.md`](W11-p0b-inventory.md) — 388 dòng, source pin `4e0923d` + SHA256 từng file nguồn, bảng đường lắp prompt (system prompt mọi phiên, producer/reviewer/knowledge Work Graph, delegate thường, resume, custom command, check), bảng role instructions/skills/tools, bảng scope hiệu lực theo trạng thái, và **7 nhóm chỉ dẫn trùng/xung đột kèm `file:line`**. Đọc tĩnh, chưa có trace runtime; mục 6 của file ghi rõ phần không kiểm chứng được. Bản sao ngoài repo: `/code/.generated_artifacts/w11-p0b-inventory.md`.
 - [ ] **P0c — thứ tự áp dụng chỉ dẫn:** đối chiếu owner assignment, role, skill và source tham khảo; làm rõ quyền do backend quyết định và requirement do owner xác nhận. Kiểm câu lệnh imperative từ role/skill có kéo dry-run thành edit, review thành tự apply hoặc feedback thành consent không; ghi xung đột để sửa đúng lớp, không thêm một system prompt cạnh tranh.
 - [ ] **P1 — thiết kế bản sửa nhỏ:** bảng current → proposed → lý do → test cho từng role cần sửa. Bắt đầu Simplify; kiểm chung Plan/Research/Design/Review để không tạo hai chuẩn. Tách yêu cầu nhiệm vụ khỏi hướng dẫn vai, tránh heading rỗng và không bắt test đã dự kiến phải là test đã chạy. Trình scope trước khi thi công; thay đổi scheduler/quyền/contract phải xin duyệt riêng.
 - [ ] **P2 — tinh chỉnh đúng lớp:** sửa prompt/adapter skill đã chọn trong phạm vi duyệt; giữ scope gates, artifact store, interview grants, budget và DAG. Không nâng token/time để che lỗi nội dung. Không xóa code theo prompt cleanup trong W này.
 - [ ] **P3 — test tất định:** mở rộng `test_work_prompt_contracts.py`, `test_runtime_prompt.py`, `test_work_producer_quality.py`, tests skills/role/tool tương ứng. Test toàn prompt được lắp, không chỉ tìm một chuỗi trong template. Giữ marker parser, quyền read-only, output tiếng Việt và đường resume hiện hữu.
 - [ ] **P4 — đánh giá đầu ra:** dùng corpus cũ còn đủ source/receipts để adjudicate trước; so baseline/candidate cùng task, source, tools, model Space Bunny và budgets. Chạy pilot ngắn theo vai trước, không mở 24 ca W10 trên bộ đo lỗi. Đọc final/artifact và receipts, không chỉ badge/word count. Báo failures/latency/usage và commit/config của cả hai nhóm; thiếu đo ghi rõ.
 - [ ] **P5 — chốt checkpoint:** chỉ tick phần có bằng chứng đạt; ghi phần chưa đạt và bước tiếp tục. Đối chiếu W6.1.3, W6.2, W6.2.BIND để không sửa chồng. Mỗi patch độc lập, report test thật; không commit/push khi chưa có quyền phù hợp của đợt triển khai.
+
+**Bằng chứng W11 lượt local 02/10/2026 (working tree, chưa commit):**
+
+| Bước | Trạng thái | Bằng chứng |
+|---|---|---|
+| P0a | Đạt (lượt trước) | Mục37.1–37.2; prompt Simplify nguyên văn ở mục37.1.1 |
+| P0b | **Đạt** | `docs/plan/W11-p0b-inventory.md` (388 dòng) + checklist trên |
+| P1 (nhánh Simplify) | Một phần | Bảng current → proposed bên dưới; các vai khác (Plan/Research/Design/Review) chưa làm bảng |
+| P2 (nhánh Simplify) | Một phần | `backend/src/agentbox/agent_core/roles.py` — `SIMPLIFY_INSTRUCTIONS` viết lại (mtime 20:44:17Z); không đổi tool set, skill, scheduler, quyền hay contract |
+| P3 (nhánh Simplify) | Một phần | Test mới `backend/tests/unit/test_work_simplify_prompt.py` (6 test, xanh); suite lân cận `test_work_prompt_contracts.py + test_runtime_prompt.py + test_work_simplify_prompt.py + test_plan_review_role.py` = **77 passed** |
+| P4/P5 | Chưa | Cần corpus/pilot riêng; vendor skill `simplify-code` và `AGENT.md` cũ vẫn nguyên |
+
+Bảng P1 cho nhánh Simplify (current → proposed → lý do → test):
+
+| # | Current (HEAD `4e0923d`, `roles.py`) | Proposed | Lý do | Test |
+|---|---|---|---|---|
+| 1 | `"4. Verify Tests: Run the existing test suite via terminal_exec to guarantee zero behavioral regressions."` (HEAD:roles.py:142) | `"4. Verify Honestly: run the targeted tests for the behaviour you touched when the tools and the environment allow; report the exact command, the before/after result, and every failure, skip or NOT RUN. A green suite does not prove zero regressions."` | Không thể "guarantee zero regressions" bằng một suite; trùng rubric reviewer `work_prompts.py:149` cho phép "NOT RUN" | `test_verification_is_honest_about_failures_skips_and_unrun_tests` |
+| 2 | `"### Verification Proof (test run output demonstrating 100% passing tests)"` (HEAD:roles.py:146) | `"### Verification Proof (exact commands with before/after output; failures, skips and NOT RUN stated plainly)"` | Ép "100% passing" tạo áp lực báo cáo sai khi baseline đỏ (ca mục37.5 dòng 2) | `test_the_old_impossible_claims_are_gone` |
+| 3 | Bước 3 cũ: `"Apply Streamlined Edits: Use file_edit_block"` không phân biệt nhiệm vụ khảo sát | `"3. Mode Follows The Assignment: apply edits with file_edit_block only when the assignment grants a write scope; a survey-only assignment reports findings with file:line and leaves the tree untouched."` | Ca "Simplify chỉ đọc/không có diff" (mục37.5 dòng 1) không được tự sửa | `test_edits_follow_the_assignment_and_survey_mode_leaves_the_tree_alone` |
+| 4 | Không có luật nào chống bỏ finding | `"Do not silently drop a blocking finding that carries evidence: adjudicate it with a reason and its source. An optional cleanup idea may be dropped when you say why."` | Đối trọng câu "drop weak or wrong suggestions silently" trong vendor `simplify-code/SKILL.md:195` (P0b §5.2) | `test_an_evidenced_blocking_finding_is_never_dropped_silently` |
+
+Ranh giới đã giữ: không sửa tool set `WRITE` của vai, không sửa `ROLE_SKILLS['simplify']`, không sửa vendor skill, không sửa `AGENT.md`, không đổi cơ chế `with_work_graph` (test `test_the_work_graph_note_still_lands_after_the_role_protocol` và `test_the_role_keeps_its_permissions_and_skill_wiring` ghim các bất biến này).
 
 ### 37.5 Các ca kiểm chứng và output đúng
 
@@ -2850,3 +2872,641 @@ Không áp các bất biến cleanup cho Plan/Research/Design: với các vai đ
 **Thước đo:** hoàn thành acceptance theo scope, claim có nguồn hỗ trợ thật, mức tự thêm quyết định, lỗi tool và sửa lỗi, review false-positive/false-negative được adjudicate, coverage đọc input, test thực, ngân sách/latency theo caller đã xác định. Số dòng xóa, số heading, độ dài prompt hay điểm tổng không thay nghiệm thu. Ngưỡng định lượng mới chỉ là đề xuất đến khi có baseline và phạm vi được duyệt.
 
 **Quan hệ với việc đang mở:** M1–M3 của W10 phải làm đúng phép đo trước khi dùng W10 để đánh giá P4; W6.Q xử lý sự công tâm reviewer trước khi gán lỗi cho producer/main; W11 thuộc phần prompt/skill producer, không sửa scheduler W8. Có thể làm inventory/test prompt độc lập từ sớm, nhưng không kết luận chất lượng từ bundle thiếu events. W10.F dùng source cuối đã freeze của các patch thực sự đã được chốt.
+
+## 38. W12.MODEL.METADATA — discovery adaptive cho model, thinking, giới hạn và chi phí
+
+**03/10/2026 — bổ sung theo bug user-confirmed và yêu cầu làm rõ của owner.** Tên draft trước là W12.MODEL.THINKING; đây là **cùng một W**, được chỉnh phạm vi thành metadata adaptive cho OpenCode và các provider khác. Space Bunny là ca tái hiện, không phải danh sách model để hardcode. Lượt local mới đọc code và cập nhật tài liệu, chưa sửa code, ping provider hoặc kiểm thử live.
+
+**02/10/2026 (UTC) — lượt local thứ hai đã thi công + kiểm chứng live.** Đã sửa lớp mất metadata trước UI, chạy lại discovery thật và gọi model thật để đo; chi tiết và bằng chứng ở khối cuối mục38.4. Các nhánh chưa đo (budget numeric, limits, pricing, retired/manual override) vẫn giữ trạng thái chưa tick.
+
+### 38.1 Yêu cầu đã chốt và ca lỗi
+
+- Owner yêu cầu BoxFox lấy danh sách model cùng thinking, budget và chi phí từ nguồn provider phù hợp, vì provider thay model thường xuyên. Model mới/đổi khả năng phải đi qua cùng cơ chế, không cần thêm từng ID vào code chỉ để hiện thinking.
+- Bug user đã xác nhận: chọn **Space Bunny Free / OpenCode** trong BoxFox không hiện lựa chọn thinking. Ảnh tham chiếu `codex-clipboard-f1e8c6f4-ba1d-4c3f-82a4-84995e4664a1.png` có Default/Low/Medium/High/Extra high/Max. Giữ ảnh làm ca tham chiếu; cloud xác minh bộ mức/payload provider thật, không suy rộng sang mọi model.
+- Muse Spark có thể là ngoại lệ user nhớ. Kiểm theo từng model/connection; không hỏi lại để xác nhận triệu chứng đã báo.
+- “Ping” ở đây là gọi API discovery/metadata được provider hỗ trợ, không phải ICMP hoặc một completion chạy rồi đoán capability. `/models` không mặc định chứa đủ thinking/budget/pricing cho mọi provider.
+- “Budget” trong W này là điều khiển thinking bằng token và giới hạn model/request (context/input/output/reasoning khi có). Quota/hạn mức tài khoản và ngân sách do người dùng đặt là lớp riêng, có nguồn và đơn vị riêng; không thay maxSteps/deadline/budget W6.5 hoặc cấp thêm budget cho sub-agent.
+
+### 38.2 Metadata adaptive cần được kiểm chứng
+
+| Nhóm | Dữ liệu cần lấy/đối chiếu | Hành vi khi thiếu hoặc thay đổi |
+|---|---|---|
+| Inventory | Model ID thật, provider/connection/endpoint, tên, trạng thái routable/retired, source và lần sync | Model mới xuất hiện qua refresh; model bị rút không tiếp tục được trình là đang sẵn sàng. Giữ cấu hình/refs cũ theo contract, không tự đổi sang model khác |
+| Thinking | Có reasoning không; điều khiển effort, numeric token budget, fixed/không tùy chỉnh; levels/default/range nếu có | Hiển thị đúng kiểu điều khiển hiện có phù hợp khả năng. Unknown khác unsupported; không hardcode Low/Medium/High/Max cho mọi model hoặc coi không có levels là không reasoning |
+| Limits | Context window, max input/output, phạm vi thinking budget, các ràng buộc giữa output/reasoning tokens nếu nguồn công bố | Phân biệt maximum provider, requested và effective theo cấu hình owner. Trường không có nguồn giữ unknown, không biến default nội bộ thành provider maximum |
+| Pricing | Input/output/cache read/cache write hoặc thành phần provider thực sự công bố; currency/unit, scope/conditions, nguồn và mốc hiệu lực | Giá không biết không thành 0/free; giá per-token và per-million được chuẩn hóa đúng. Khả năng gọi model free không tự chứng minh giá/quota của mọi route |
+| Usage/cost | Usage và cost provider trả thật so với estimate theo price snapshot | Giữ cơ sở giá của lượt đã chạy; refresh giá mới không tính lại lịch sử bằng giá mới. Không coi bảng giá hoặc menu thinking là bằng chứng chi phí thực đã áp dụng |
+| Freshness | Source từng trường, fetched/as-of khi có, stale/error, snapshot/revision | Không gắn toàn bộ row source=live nếu chỉ tên model lấy live còn levels/giá lấy static. Refresh thất bại giữ dữ liệu cuối với trạng thái cũ/lỗi đúng |
+
+**Nguồn:** ưu tiên dữ liệu đúng provider/endpoint/connection/model từ discovery/metadata API; nếu API thiếu trường thì dùng nguồn chính thức/registry/config được xác minh và có provenance/freshness riêng. Manual override của user giữ nhãn manual và được xử lý theo contract hiện có. Không hứa ping một endpoint sẽ lấy được mọi trường; không xóa fallback hữu ích, nhưng fallback không được che mất metadata mới hoặc tự được nâng thành live/verified.
+
+### 38.3 Đối chiếu code đã có và dấu hiệu cần điều tra
+
+1. `router/src/providers/opencode.mjs`: curated metadata thinking có cho Muse Spark; model non-curated trong `discover()` gọi `modelRecord(item.id, item.name || item.id)` mà không truyền metadata từ item. Đây là **dấu hiệu mất metadata trước UI**; kiểm payload/registry/variants thực tế, không vá bằng thêm riêng ID Space Bunny.
+2. `router/src/providers/common.mjs`: đã có `modelThinking`, `thinkingFromDiscovery`, kiểu effort/budget/fixed/none và chuẩn hóa context/levels. Kiểm adapter nào bảo toàn dữ liệu và adapter nào bỏ trường hoặc mặc định none khi khả năng chưa biết. Enum/metadata có trong code chưa chứng minh numeric thinking budget đã đi hết UI/request.
+3. `router/src/service.mjs`: đã có discover dedupe, revision guard, merge model records, manual override/pricing và stale/degraded khi lỗi; có API `POST /api/router/connections/{id}/models/refresh`. Kiểm giá trị thiếu so với giá trị bị provider gỡ/đổi, manual precedence và source từng trường, model removal/alias handling. Không lấy dòng có source=live làm chứng nhận tất cả metadata trong dòng.
+4. `router/src/model-sync.mjs`: đã có scheduler, interval mặc định6giờ, chống run chồng và timeout discovery. Kiểm scheduler thực được khởi động, eligibility/auth/anonymous connections (OpenCode), refresh thủ công, data stale và hành vi sau restart. Không tạo scheduler thứ hai hoặc chốt chu kỳ mới chỉ vì mục tiêu adaptive; đề xuất khi evidence cho thấy cần.
+5. `router/src/context-window.mjs`, `router/src/pricing.mjs`: đã có nguồn reported/documented/manual, giá từ ping và cost accounting. Bảng documented/static có thể hữu ích khi API thiếu hoặc trả sai; kiểm freshness/conflict/precedence, không để bảng cũ thắng dữ liệu mới mà không có lý do. Schema budget/max-output đầy đủ và nguồn từng trường có thể còn thiếu; xác nhận interface trước khi bổ sung.
+6. `frontend/src/lib/routeOptions.ts`: levels nhóm provider là giao giữa connections; pin dùng đúng connection, alias theo target. Không đổi giao thành hợp để hiện mức không hợp lệ ở một route; kiểm metadata thiếu/khác phiên bản thay vì giả định tất cả connection đồng nhất.
+7. `frontend/src/components/chat/HarnessModelPicker.tsx`: selector hiện khi `thinkingLevels.length > 1`; đọc cùng `frontend/src/lib/harnessThinking.ts`, `frontend/src/store/providerStore.ts`, `frontend/src/store/harnessStore.ts`, `frontend/src/components/panels/ChatPanel.tsx` và `frontend/src/types/provider.ts`. Kiểm mất field, store/refresh/persistence và nguồn options ở cả prop/live path; không chỉ sửa điều kiện render.
+8. `backend/src/agentbox/agent_core/runtime.py` và provider generate/mapping: kiểm modelMetadata/route, validate lựa chọn, spelling payload effort/token budget và endpoint Responses/chat-completions. Default phải có nghĩa omit/provider default rõ ràng; một tên label trong UI không tự là giá trị native provider.
+
+**Phương pháp:** theo một snapshot thật qua provider → adapter → service/state → route options/store → picker → session/runtime → outbound request; chỉ rõ lớp đầu tiên làm mất/đổi dữ liệu. Kiểm riêng freshness và runtime enforcement khi snapshot thay đổi giữa chọn và gửi. Đây là hướng điều tra static, chưa là kết luận nguyên nhân đầy đủ của bug.
+
+### 38.4 Workflow và ranh giới triển khai
+
+- [x] **T0a — ghi nhận:** bug user-confirmed, phạm vi adaptive owner đã làm rõ, code paths và expected output; cập nhật prompt/bàn giao.
+- [x] **T0b — inventory:** lập bảng từng provider đang được BoxFox hỗ trợ: discovery endpoint, nguồn metadata từng nhóm, freshness/manual/fallback, trường còn unknown. Space Bunny là ca lỗi đầu tiên; chọn thêm provider có payload khác để kiểm cơ chế chung, không yêu cầu gọi live toàn bộ model. → **Đã giao 02/10/2026:** [`W12-metadata-inventory.md`](W12-metadata-inventory.md) — bảng 11 adapter user-addable (anthropic, antigravity/agy, claude, cline, codex, copilot/github, deepseek, gemini, openai+custom+14 gateway, opencode, openrouter) với cột: credential mode, discovery endpoint `file:line`, nguồn inventory/thinking/limits/pricing/capabilities, freshness/failure, unknown còn lại, và **dòng đầu tiên làm mất/mặc định metadata**. Ghi nhận: không provider nào có trường max-output trong model record (`common.mjs:155-173`); `copilot`/`opencode`/`openrouter` tự nuốt lỗi mạng và trả static với `stale:false`, còn `anthropic`/`gemini`/`openai`/`deepseek`/`antigravity` ném lỗi.
+- [ ] **T1 — chốt bản sửa nhỏ:** current → proposed → file/interface → nguồn → test. Tận dụng discovery/sync/pricing/thinking hiện có, fix mất metadata trước. Nếu cần thêm metadata contract hoặc kiểu điều khiển numeric budget chưa có UI tương ứng, trình riêng thay đổi và tradeoff trước khi triển khai; không âm thầm redesign.
+- [ ] **T2 — adaptive refresh:** model ID mới không cần code riêng; metadata đổi cập nhật atomically/có revision, giữ manual/selection khi hợp lệ; model/mức bị rút xử lý rõ. Giữ last-good khi lỗi với stale/error, bounded timeout/backoff/dedupe; không ping mọi provider mỗi render, không dùng completion tốn phí làm discovery mặc định.
+- [ ] **T3 — selection/request:** menu/điều khiển hiện hữu và session/request dùng đúng model metadata; phân biệt default/effort/budget/fixed/unknown, requested/effective và trần owner. Metadata giá không được làm đổi model hoặc budget mà user đã chọn; route pin/alias cùng contract.
+- [ ] **T4 — test đích không model:** fixture provider thay payload qua các lần refresh; non-curated ID, mức/budget/giá đổi, field missing/removed, model retired, manual override, stale failure, concurrent/revision, multi-connection/pin/alias, picker/persistence và outbound mapping. Đọc tests hiện có ở router `opencode`, `thinking-mapping`, `pricing`, `context-window`, model-sync/service; frontend `routeOptions`, picker, harnessThinking; runtime/session. Test meaningful theo lỗi/contracts, không chỉ snapshot chuỗi.
+- [ ] **T5 — kiểm live nhỏ:** lấy snapshot provider thật và xác minh ca Space Bunny; fixture phủ các provider/kiểu điều khiển khác. Một lượt model có mục tiêu nếu cần xác nhận payload/provider acceptance, OpenCode Space Bunny theo model kiểm thử đã chốt. Provider khác ưu tiên metadata API; nếu cần inference test làm thay model kiểm thử/chi phí thì trình riêng. CUA tối thiểu khi cần menu thật; không chạy DAG benchmark dài cho dropdown.
+- [ ] **T6 — bàn giao:** source/commit/config, metadata/provenance đã kiểm, patch, commands và actual/expected, failure/unknown và giới hạn. Chỉ tick phần đạt; không ghi adaptive hoàn tất chỉ vì Space Bunny có menu.
+
+**Bằng chứng lượt 02/10/2026 (working tree `vorflux/w10-w12-completion`, chưa commit; router đã chạy lại code vá):**
+
+- **Bản sửa (lớp đầu tiên làm mất metadata, không hardcode ID):**
+  - Mới `router/src/providers/opencode-capabilities.mjs`: registry bổ sung ngoài payload, có `pattern`/`thinkingType`/`thinkingLevels`/`defaultThinking`/`source`/`asOf`/`evidence`; `opencodeCapabilityFor(modelId)` trả `null` khi không khớp họ model (giữ `unknown`, không đoán).
+  - `router/src/providers/opencode.mjs`: `opencodeModelRow()` gộp payload + curated + registry và ghi **nguồn từng trường** (`fieldSources.inventory/name/thinking/contextWindow/pricing`, `thinkingSource`, `thinkingAsOf`, `thinkingEvidence`) thay vì gắn cả row `source:'live'`; `opencodeThinkingMetadata()` là hook adapter để `service.mjs modelThinking()` vá row đã lưu sau restart; `normalizeOpencodeReasoning()` nay đọc `thinkingLevel` (trường harness thật gửi) chứ không chỉ `reasoning_effort`, và bỏ cả hai khỏi payload gửi đi trước khi đặt `reasoning.effort`.
+  - `frontend/src/types/provider.ts`: thêm `fieldSources`/`thinkingSource`/`thinkingAsOf`/`thinkingEvidence`; `npx tsc --noEmit -p tsconfig.app.json` exit 0.
+  - Fixture test (không gọi model): `router/tests/opencode.test.mjs` (payload giữ metadata + nhãn nguồn; `space-bunny-free` → `['minimal','low','medium','high']`, `thinkingSource 'probe'`; `mystery-model-free` → `[]` + `unknown`; fallback static ghi `fieldSources.inventory='static'`), `router/tests/thinking-mapping.test.mjs` (level BoxFox lưu → `reasoning.effort`, không còn `thinkingLevel`/`reasoning_effort` đi tiếp), `router/tests/model-metadata.test.mjs` (row lưu cũ được vá theo registry; row có `fieldSources.thinking='live'` giữ nguyên). Lượt đích 3 file: **45 passed, 0 fail**.
+- **Kiểm live (cùng model kiểm thử đã chốt `opencode/space-bunny-free`):**
+  - Probe provider (`/var/tmp/w12-space-bunny-probe.json`, `/var/tmp/w12-level-probe.json`): `/zen/v1/responses` nhận `reasoning.effort`/`reasoning_effort` (`minimal|low|medium|high`) và trả `usage.completion_tokens_details.reasoning_tokens`; `muse-spark-1.2-contributor-free` không trả `reasoning_tokens` (giữ nhãn documented, không nâng thành probe).
+  - Sau khi restart router bằng code vá: row lưu được vá lúc boot; `POST /api/router/connections/d7e26488-65b0-4012-8009-589cd94b324b/models/refresh` (46 model, `discoveryState: ready`) trả row `space-bunny-free`: `thinkingType 'effort'`, `thinkingLevels ['minimal','low','medium','high']`, `thinkingSource 'probe'`, `thinkingAsOf '2026-10-02'`, `fieldSources.thinking 'probe'`, `fieldSources.name 'unknown'` (payload `/models` chỉ có `{id,object,created,owned_by}`). Proxy frontend `/api/router/state` thấy đúng các trường này.
+  - Gọi thật qua `/api/router/chat` (header admin): `(none)` → 235 ký tự reasoning / 93 reasoning tokens; `low` → 168 / 53; `high` → 203 / 63; cả ba 200. Nghĩa là mức chọn đi hết pipeline tới provider, không chỉ hiện nhãn.
+  - CUA tối thiểu (1 lượt, không mở DAG): picker tab **Single Models** hiện `space-bunny-free` với `Thinking: Minimal · Low · Medium (đang chọn) · High`. Ảnh: `/code/.generated_artifacts/images/w12-thinking-space-bunny-picker.png`.
+- **Chưa tick (còn thiếu bằng chứng):** T2 (model bị rút/đổi ID, last-good + stale/error, revision/dedupe riêng cho opencode), T3 (requested/effective cho budget/limits, pricing/usage), T4 (ma trận retired/manual override/stale/concurrency/persistence, frontend routeOptions/picker/persistence), T5 (provider khác + ca đối chứng âm), T6 (bàn giao sau khi có commit/config chốt).
+
+### 38.5 Checkpoint kiểm chứng
+
+| Ca | Expected output |
+|---|---|
+| Provider thêm model ID chưa từng có trong code | Sau refresh model có trong inventory và metadata đi đủ pipeline; không sửa bảng ID để route/selector hoạt động |
+| Space Bunny và model hỗ trợ nhiều efforts | Selector có đúng mức đã xác minh; lựa chọn/Default phản ánh payload thực, không chỉ hiện nhãn |
+| Provider đổi/removes level hoặc đổi numeric budget/limits | Snapshot mới cập nhật; giá trị lưu cũ không hợp lệ được xử lý đúng contract và runtime không gửi sai. Không tự nâng budget owner |
+| Effort / token budget / fixed / unsupported / unknown | Giữ đúng khả năng; không đồng nhất numeric budget với các mức effort. Trường thiếu là unknown hoặc hạn chế được ghi, không tự thành unsupported/free |
+| Giá thay đổi, cache price thiếu hoặc khác đơn vị | Giá mới có source/as-of/unit đúng; thiếu giữ unknown; estimate khác reported cost. Usage cũ giữ price basis tại lúc chạy |
+| API chỉ trả tên/ID, không trả thinking hoặc giá | Dùng nguồn bổ sung hợp lệ hoặc báo unknown; không giả provenance live/verified hoặc đoán từ tên model |
+| Refresh lỗi/429/auth, chồng lượt, restart | Last-good có stale/error, không xoá selection/cấu hình vô cớ; bounded retry/dedupe, không áp response cũ lên revision mới |
+| Nhóm nhiều connection, pin/alias, manual override | Metadata đúng route đích; giao capability không bị mở rộng sai; manual source không bị ping ghi đè hoặc được gán thành reported |
+| Model bị gỡ/thay ID | Không tiếp tục advertise là model có sẵn; không tự remap tên tương tự. Lịch sử session/usage còn đọc được và alias/selection xử lý theo contract |
+
+### 38.6 Prompt hợp nhất cho cloud agent, gồm checkpoint và W12
+
+Owner yêu cầu **một prompt duy nhất** thay cho prompt tiếp nhận và prompt bổ sung rời nhau. Khối dưới đây thay thế cả hai: đủ read-first/scope/kiến trúc/kiểm chứng của bản bàn giao và nội dung W12 để cloud đang dùng repo cũ chép vào file canonical trước khi thi công.
+
+````text
+Bạn tiếp nhận dự án BoxFox từ checkpoint, không có ký ức hội thoại trước. Nhiệm vụ là hoàn thiện các W còn mở trong bản bàn giao và thực hiện W mới về model metadata adaptive dưới đây. Đọc, xác định phạm vi, sửa code và kiểm chứng; không chỉ viết kế hoạch rồi dừng.
+
+1. ĐỌC VÀ XÁC MINH TRƯỚC KHI SỬA
+
+Đọc đầu tiên docs/plan/CLOUD-AGENT-HANDOFF-03_10.md. Đây chỉ là bản chỉ dẫn; trước khi quyết định hoặc sửa, phải đọc:
+- docs/plan/Work-Graph-fix.md: mục27–29,30–36,37; mục38 nếu đã có, cùng phần chi tiết của W đang xử lý.
+- docs/plan/cloud-pr-audit-03_10.md, đặc biệt mục9.
+- docs/plan/cloud-w10-bundle-audit-03_10.json.
+- docs/plan/handoff-03_10.md và review-simplify-03_10.md.
+- Source, callers, tests, evidence và raw bundle của từng vấn đề liên quan.
+
+Xác minh repo/remote, branch, HEAD và working tree thật. Chỉ làm trên B, bảo toàn WIP người dùng và tránh sửa chồng task đang chạy. Nếu file audit/bundle không có trong clone, báo đúng file cần và xin cung cấp; không đoán nội dung. Tiếp tục phần độc lập làm được trong lúc chờ.
+
+Ở lượt đầu báo ngắn: local/cloud đã làm gì; phần chỉ có code so với phần đã kiểm chứng; các W còn mở và nguyên nhân xác nhận; phạm vi patch, files và tests tiếp theo. Đối chiếu source hiện tại, không xem nhãn Xong hoặc checkbox lịch sử là nghiệm thu toàn luồng.
+
+2. CÔNG VIỆC VÀ THỨ TỰ THỰC HIỆN
+
+Hoàn thiện phần còn lại W6.1/W6.5/W7/W8 và các W/checkpoint liên quan W9/W10/W11 theo tài liệu và phạm vi đã duyệt. Phần đã có checkpoint đạt thì giữ bằng chứng, không làm lại vô cớ.
+
+- Ưu tiên W10.M1/M2/M3: pagination events, collect đúng store/runtime sau restart, caller identity/fault injection, executor parity và oracle. Đọc audit để tái lập; không coi mọi no_run là lỗi model. Sửa phép đo trước khi chạy benchmark dài.
+- Tiếp tục W8.A4.5.N: repair có điều kiện, retest snapshot mới bằng Testing child tương thích, kiểm __integration__; fixture phải đúng trước native probe.
+- W6.Q/W6.1: adjudicate reviewer bằng source, acceptance và phản chứng; kiểm cả verdict và prose. Chỉ quy lỗi main/producer sau khi xác định finding công tâm. Đối chiếu W6.2.BIND để claim mới trong tổng hợp không kế thừa whole-pass cũ.
+- W11.PROMPT: đọc prompt Simplify nguyên văn và phân tích ở mục37; báo phạm vi tinh chỉnh prompt/skill, tận dụng hợp đồng hiện có và kiểm output theo vai. W11 áp dụng cho Explore, Research, Plan, Design, Build, Testing, Debug, Simplify và Review; Simplify là mẫu đầu tiên để đối chiếu, mỗi vai cần prompt, skill và tiêu chí đánh giá phù hợp nhiệm vụ. Không sao chép quyền/HEAD/baseline cũ, không ép mọi nhiệm vụ thành plan đầy đủ.
+- Thực hiện W12 bên dưới như task riêng theo dependency/rủi ro; nó bổ sung công việc, không thay các W trước. Inventory/tests độc lập có thể làm sớm.
+- W10.F chỉ chạy khi phép đo đúng: freeze product/oracle/config/budget hiệu lực, test đích và pilot nhỏ trước, rồi bộ nghiệm thu theo plan. Rescore dữ liệu cũ không thay chạy sản phẩm sau patch.
+
+Báo phạm vi sửa rồi tiếp tục các bug và việc đã được giao trong kiến trúc đã duyệt. Nếu phát hiện cần thay kiến trúc/quyền/workflow hoặc mở phạm vi mới, trình current → proposed → tradeoff và chờ tôi duyệt phần thay đổi đó.
+
+3. GHI W MỚI VÀO PLAN TRƯỚC KHI THI CÔNG
+
+Repo bạn nhận có thể chưa có cập nhật W12 từ local. Chép nguyên khối Markdown sau vào docs/plan/Work-Graph-fix.md, rồi thêm link/trạng thái vào file bàn giao hiện có. Nếu cùng W này đã tồn tại thì cập nhật tại đó, không tạo bản trùng. Nếu ID W12 đã dùng cho việc khác, dùng ID W tiếp theo và ghi mapping rõ trong báo cáo. Giữ checklist và tick theo bằng chứng.
+
+```markdown
+## W12.MODEL.METADATA — discovery adaptive cho model, thinking, budget và chi phí
+
+**Yêu cầu owner, 03/10/2026. Trạng thái: cần thực hiện và kiểm chứng.**
+
+### Vấn đề và mục tiêu
+
+User đã xác nhận chọn Space Bunny Free của OpenCode trong BoxFox không hiện lựa chọn thinking. Ảnh tham chiếu ứng dụng khác có Default/Low/Medium/High/Extra high/Max; Muse Spark có thể là ngoại lệ user nhớ. Space Bunny là ca tái hiện, không phải model duy nhất cần sửa.
+
+BoxFox phải adaptive với OpenCode và các provider khác vì model/khả năng/giá thay đổi thường xuyên: gọi discovery/metadata API phù hợp để lấy model và các trường được công bố, cập nhật theo nguồn/thời điểm. Model ID mới không cần thêm thủ công vào code để selector hoạt động. Không hardcode cùng bộ thinking cho mọi model.
+
+### Nội dung phải giải quyết
+
+1. Inventory theo provider/connection/endpoint: model ID thật, availability, model mới/bị rút và alias/selection liên quan.
+2. Thinking: reasoning capability, kiểu effort/numeric token budget/fixed, levels/default/range thực. Thiếu metadata là unknown, không tự thành unsupported. Default phải có payload semantics đúng; chọn mức đi hết store/session/runtime/provider request.
+3. Budget/limits: context/input/output/reasoning token limits nếu có nguồn; tách requested/effective/provider maximum. Quota tài khoản, user budget và budget bước/thời gian Work Graph là các lớp khác, không tự thay đổi.
+4. Pricing/cost: input/output/cache và điều kiện provider thực sự công bố, currency/unit/source/as-of; chuẩn hóa đơn vị, phân biệt price/estimated cost/provider-reported cost. Unknown không thành 0/free; refresh giá không tính lại usage lịch sử bằng giá mới.
+5. Provenance/freshness từng trường: metadata API hiện tại, nguồn chính thức/registry/config khi API thiếu, manual override và static fallback có nguồn rõ. Không gắn cả row là live/verified khi chỉ model ID lấy live. Không giả định một lần ping /models lấy đủ mọi trường.
+6. Refresh/cache: tận dụng cơ chế hiện có; timeout/backoff/dedupe/revision đúng, giữ last-good với stale/error khi thất bại; metadata mới cập nhật đúng. Không gọi completion tốn phí cho mọi model để discovery hoặc ping mọi provider mỗi render.
+
+### Đọc code trước
+
+- router/src/providers/opencode.mjs và adapters liên quan, providers/common.mjs.
+- router/src/service.mjs, server.mjs, model-sync.mjs, pricing.mjs, context-window.mjs.
+- frontend/src/lib/routeOptions.ts, harnessThinking.ts; store/providerStore.ts, store/harnessStore.ts.
+- frontend/src/components/chat/HarnessModelPicker.tsx; components/panels/ChatPanel.tsx; types/provider.ts.
+- backend/src/agentbox/agent_core/runtime.py, model client/provider payload mapping và tests tương ứng.
+
+Dấu hiệu static cần đối chiếu: OpenCode curated metadata có cho Muse Spark; discovery non-curated gọi modelRecord mà không truyền metadata item. Picker chỉ hiện selector nếu có nhiều thinkingLevels; routeOptions giao levels giữa connections. Đây là hướng điều tra, chưa là kết luận đầy đủ. Fix lớp mất dữ liệu, không thêm riêng Space Bunny để che lỗi.
+
+### Checklist và nghiệm thu
+
+- [ ] M0: Theo dữ liệu provider → adapter/state → options/store/picker → session/runtime → request; xác định nguồn/unknown và lớp lỗi. Kiểm discovery/scheduler hiện có, kể cả connection anonymous như OpenCode.
+- [ ] M1: Sửa metadata/refresh trong hợp đồng hiện hữu; giữ manual overrides và quyền/routing. Contract hoặc kiểu điều khiển UI mới phải trình scope/tradeoff để owner duyệt trước.
+- [ ] M2: Khôi phục selection/default/persistence/payload; kiểm group nhiều connections, pin/alias, đổi model/reload. Không gộp effort với numeric budget; runtime không gửi mức sai.
+- [ ] M3: Fixture tests provider thêm/gỡ ID, đổi levels/budget/giá, thiếu/gỡ trường, stale/error/429/auth, refresh chồng/revision, manual overrides, đơn vị/pricing history và request mapping. Model mới hoạt động không cần patch danh sách ID.
+- [ ] M4: Test API/component/commands trước; metadata live phù hợp và pilot OpenCode Space Bunny có mục tiêu khi cần xác minh request/provider acceptance. CUA tối thiểu khi cần menu thật. Không cần DAG dài cho dropdown hoặc inference mọi provider.
+- [ ] M5: Báo patch/files/source/commit/config, actual/expected, evidence, failures/unknown và phần chưa kiểm; cập nhật checklist. Chỉ tick adaptive đạt khi cơ chế đổi model/metadata và request được kiểm, không chỉ khi một menu đã hiện.
+
+Giữ UI/UX hiện hữu và kiến trúc đã duyệt. W này khôi phục capability/selection và metadata adaptive; không tự thay DAG, model kiểm thử hoặc ngân sách agent. Giới hạn nguồn/khả năng thật phải báo rõ, không đoán dữ liệu để làm xanh.
+```
+
+4. GIỮ KIẾN TRÚC VÀ QUYẾT ĐỊNH ĐÃ DUYỆT
+
+- Main điều phối linh hoạt; không pipeline cố định theo role và không bắt mọi sub qua cùng kiểu Review/Debug.
+- Thông báo main và handoff đã được giao có thể độc lập; không bắt thêm lượt main model relay. Tách notification, handoff, main decision và user decision.
+- Dùng artifact refs/version/hash/binding và code snapshot đúng. Produced không đồng nghĩa accepted; retry không tạo hai lượt thực thi/check.
+- Retest cùng Testing child khi tương thích, với read/test proof mới trên code mới. Fallback child mới chỉ khi cần theo contract, ghi lý do; không dùng pass cũ.
+- Interview/checkpoint/grants/user-action/revision/idempotency theo plan đã duyệt. Sub soạn câu hỏi; publication/continuation theo quyền, không tự đoán answer từ timeout.
+- Budget theo owner: child≤parent; fresh admission khi có input/code/evidence thực mới, giữ lifetime usage/errors; chống ba lượt không tiến triển; thời gian user suy nghĩ không tiêu compute.
+- Review công tâm, mở nguồn và phản chứng; finding phải bám requirement/scope. Chỉ tuning main/producer theo lỗi đã xác định, không bỏ finding hợp lệ để làm xanh.
+
+5. KIỂM THỬ VÀ CHECKPOINT
+
+Giữ UI/UX. W12 được phép khôi phục selector hiện hữu và metadata/mapping/request liên quan; redesign/kiểu điều khiển mới cần duyệt như trên.
+
+Model inference kiểm thử chỉ dùng OpenCode opencode/space-bunny-free. Provider khác có thể kiểm discovery/metadata API và fixtures; nếu cần inference model khác hoặc chi phí mới thì trình riêng. Ưu tiên unit/fixture/component/API và corpus cũ còn đủ source/receipts; CUA chỉ khi thực sự cần. Không chạy lại24ca trên harness còn lỗi hoặc đổi model để làm đẹp kết quả.
+
+Mỗi checkpoint cập nhật Work-Graph-fix và bàn giao: commit/source, files/patch, lệnh và test thật, model/config/requested-effective budget, evidence refs/hashes, failures, phần chưa đạt và bước tiếp theo. Chỉ tick phần đã kiểm; phân biệt lỗi sản phẩm/provider/phép đo, giữ failures trong thống kê. Không coi test xanh hoặc review badge là chứng nhận mọi claim SWE/AI.
+
+Báo tiến độ ngắn khi làm lâu. Không tự mở goal dài hoặc push/merge. Nếu chưa hoàn tất một W, ghi rõ checkpoint và nguyên nhân, tiếp tục phần độc lập còn làm được; không tuyên bố toàn bộ hoàn tất khi còn check chưa đạt.
+````
+
+## 39. Lượt local 02/10/2026 (tối) — W10.M1–M3, W11.PROMPT, W12 và probe W8.A4.5.N
+
+**Trạng thái: tiếp tục, chưa tick W nào mới.** Branch `vorflux/w10-w12-completion`, 11 commit trên nền `4e0923d`; chưa push. Số liệu dưới đây lấy từ lượt chạy thật trên máy local, bundle/DB thô còn nguyên tại `/var/tmp/w8-probe-run{1..4}-*` và `/var/tmp/w10-pilot*`.
+
+### 39.1 W10.M1/M2/M3 — sửa phép đo trước khi dùng W10 để đánh giá (commit `dd69edf`, siết `c731318`)
+
+| Hạng mục | Trước (đo được) | Sau | Bằng chứng |
+| --- | --- | --- | --- |
+| H1 events chỉ đọc trang đầu | `store.events(sid)` dừng ở `EVENTS_PAGE=500`; 57 phiên trong bộ W10 bị cắt, 14 ô mất output cuối/tool_end/receipt/câu trả lời | đọc hết theo `events_page` + `hasMore`/`nextAfter`, ghi lỗi đọc vào `missing` thay vì im lặng | DB 1200 event đọc đủ 1200 |
+| H2 restart đọc DB đã đóng | `drive_session()` trả `notes` nhưng `run_cell()` vẫn dùng `store/graph` cũ → S09 r1/r2 `missing: sessions: Cannot operate on a closed database.` | trả và dùng lại `store, rt, graph` mới; lỗi cũ chỉ còn là sự kiện có kiểm soát | S09-r1/r2 nay `measInv: true`; lượt đóng DB chỉ sinh một `events_read_error` với `ProgrammingError: Cannot operate on a closed database.` |
+| H3 danh tính người gọi | 647/647 lời gọi model trong 20 bundle có `sessionId: null`; `RecordingClient` đọc `route.get('sessionId')` mà route thật không có → thống kê vai mặc định về main; S06 tiêm `ghost-sentinel-7f3a` vào **main** | lấy `sessionId` từ ngữ cảnh thật; gọi không rõ chủ vào rổ `unknown`, thêm `callsWithoutSessionId` từng ô | test `results_json_carries_gate_failures_and_per_role_latency`: `roles['unknown'].calls == 1`, `callsWithoutSessionId == 1`, `tokens == {'in': 147, 'out': 30}` |
+| H4 executor lệch sản phẩm | `WorkspaceExecutor.execute()` không hiểu `verify_exec`; allowlist chỉ cho `snapshot`, `python -m pytest`, `git status`, `git diff` → chặn `git -C …`, `cd … && …`, checkpoint/merge của worktree thật | thêm `verify_exec`, dịch `/workspace`, cho `git -C`/`cd … && …` trong phạm vi ô, chặn thay thế lệnh/`..`/wrapper `-c` | test `terminal_fence_stops_wrappers_substitution_and_relative_escapes` (9 lệnh chặn, 5 lệnh cho qua) |
+| H4b trần output sai | fixture cắt ở `256 KiB` trong khi box thật cắt ở 20 000 ký tự (trả 15 000 + cờ `truncated`), `verify_exec` 8000 | khớp `worker.py:235` | test `terminal_output_truncates_like_the_real_box` |
+| H5 oracle sai | `interview_questions_max` cộng dồn cả run thay vì ≤3 **mỗi vòng**; `interview_answered` đạt khi revision≥1 dù không có câu trả lời; `merge_results()` tự tính lại `statePassed`; `gate.ok` không đòi `passed` đạt ngưỡng; ngân sách xin 80 bước/2700s nhưng hiệu lực 60/1200s | sửa từng luật, ghi `budget.requested` vs `budget.effective` + `clampNotices`; giữ **cả** ngưỡng `passed` và `statePassed` (ghi rõ trong docstring là cố ý, không nới) | S04/S05 `phaseNotReached ['reviewer:check_status_any']` |
+
+**Còn mở:** lượt S09 pilot3 (chạy lại bằng mã đã vá, `BOXFOX_EVAL_ALLOW_SPEND=1`, `--budget-usd 0.5`) đang chạy; kết quả sẽ vào 39.7.
+
+### 39.2 W12.MODEL.METADATA — giữ metadata và để mức thinking đi hết tới provider (commit `f2f2260`, `3265475`, `e62c0f7`)
+
+- Discovery OpenCode trước đây bỏ toàn bộ metadata payload (`/zen/v1/models` chỉ có `{id, object, created, owned_by}`) và để `thinkingType: 'none'`, `thinkingLevels: []`; `normalizeOpencodeReasoning` xoá `thinkingLevel` — đúng trường harness gửi — nên mức đã chọn không tới provider.
+- Nay: giữ metadata discovery, thêm `thinkingSource`/`thinkingAsOf`/`thinkingEvidence` + `fieldSources` từng trường; giữ context window/giá payload khi thiếu khối reasoning; hàng vá lúc khởi động ghim nguồn và không ghi đè nguồn `probe` bằng `documented`.
+- Bằng chứng sống: ảnh `w12-thinking-space-bunny-picker.png` — tab Single Models lọc `space-bunny`, dòng `OpenCode Free · space-bunny-free`, 6 kết nối `ready`, và hàng **Thinking: Minimal · Low · Medium (đang chọn) · High**.
+- Bằng chứng hẹp: registry `muse-spark` chỉ còn khẳng định "hợp đồng được chấp nhận", không claim đã đo `reasoning_tokens` trả về.
+- Test: `router/tests/model-metadata.test.mjs` + `npm test` **257 passed**.
+
+### 39.3 W11.PROMPT — vai Simplify theo nhiệm vụ, xác minh trung thực (commit `9d5ab04`, `182a974`)
+
+- Bỏ khỏi prompt vai Simplify các câu "bảo đảm không hồi quy hành vi"/"100% test xanh" vốn mâu thuẫn với rubric cho phép "NOT RUN"; nay yêu cầu nói thẳng phần chưa chạy và không bỏ finding có bằng chứng.
+- Inventory P0b 388 dòng đã giao tại `docs/plan/W11-p0b-inventory.md` (bản sao trong `/code/.generated_artifacts/w11-p0b-inventory.md`).
+- **Chưa làm (cần owner duyệt current → proposed → tradeoff):** câu trong vendor `simplify-code/SKILL.md` dòng 195 ("drop weak or wrong suggestions silently") và `AGENT.md:12/:20` vẫn chèn chính sách cũ vào mọi system prompt, trái §27–29.
+
+### 39.4 W8.A4.5.N — bốn lượt probe native, `oracle=false` cả bốn (commit `3d6fd2f`, `346430f`, `473e6ad`, `500665a`)
+
+Bằng chứng đầy đủ: `docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (lưu cả 4 lượt, hash `results.json`, lý do chưa nghiệm thu).
+
+| Lượt | Kết cục | Nguyên nhân dừng |
+| --- | --- | --- |
+| 1 (`run1-4096`) | `error: ValueError: WORK_CHECK_NOT_READY` | trần output 4096 của con Build → `PROVIDER_OUTPUT_TRUNCATED` (3958 token reasoning), bản nháp không hoàn tất; đã khai báo núm `BUILD_CHILD_OUTPUT_TOKENS=16000` |
+| 2 (`run2-16000`) | đỏ→sửa→resume **đúng child cũ** chạy được, rồi probe tự nổ `IndexError` | `checks.tool` trả `checks: []` (đường `inputConflicts`) mà probe đọc `checks[0]`; đã thêm chốt ghi nguyên văn |
+| 3 (`run3-16000`) | `redCheck unverified`, không mở vòng sửa, B1 `accepted` | con kiểm thử chạy được pytest thật nhưng không qua **đúng câu lệnh bắt buộc** trong lượt kiểm → backend hạ `pass`→`unverified` (đúng luật) |
+| 4 (`run4-16000`) | như lượt 3, **chỉ ra nguyên nhân gốc** | cò đỏ của fixture trả kết quả cắm sẵn cho **mọi** lệnh chứa chuỗi `pytest` (kể cả `echo "hello pytest world"`, `command -v pytest`); model phát hiện đúng là kết quả bịa, tự kiểm lại bằng script khác (12 passed thật) rồi báo đạt → `unverified` |
+
+**Cập nhật cùng tối (lượt 5–7, sau khi vá phép đo của probe):**
+
+| Lượt | Kết cục | Ghi nhận |
+| --- | --- | --- |
+| 5 | `oracle=false`, probe nổ `WORK_CHECK_STALE` | lượt kiểm đầu `unverified` vì finding thiếu receipt (`WORK_FINDING_UNCITED`); **lượt kiểm THỨ HAI trả `revise` thật và sản phẩm đã định tuyến sửa** (DB: `repairs` n=1, `class=unclassified`, `reason=no failing required command event`, có `debugChildId`, `buildChildId`, `resumed=true`, `codeHash` ghim). Probe cũ chết vì artifact đổi sau sửa → đã vá đọc lại artifact từng lượt |
+| 6 | probe nổ `KeyError` | ghi đúng hàng rào sản phẩm `WORK_CHECK_EXHAUSTED` (3 lượt mở kiểm/artifact); lỗi phép đo ở phần tính oracle, đã vá |
+| 7 | **lượt đầy đủ đầu tiên, không lỗi** | lượt kiểm đầu `unverified` (cò đỏ cắm sẵn), lượt kiểm thứ hai `pass` ⇒ B1 `accepted`; **node `__integration__` lần đầu được dựng native** (`built: true`, `required: [tests, code_review]`, artifact `a-36776aa3…`) và một child Testing THẬT chạy trên cây gộp (`cd .boxfox/worktrees/w-75f1a5b18d/main && python -m pytest -q`, 151.1s) |
+
+**Kết luận trung thực:** nửa sau của W8.A4.5.N nay đã có bằng chứng native — node `__integration__` được dựng và kiểm trên cây gộp (2/4 tiêu chí `integrationNative`); nửa đầu (đỏ ở **lượt kiểm đầu** → phân loại → resume → kiểm lại xanh) vẫn chưa đạt vì lượt kiểm đầu không bao giờ tự đỏ với cò đỏ cắm sẵn của fixture. Hai tiêu chí `integrationNative` còn lại hỏng đúng theo hàng rào `test_proof`: child bọc `; echo EXIT=$?` quanh câu lệnh bắt buộc nên bị hạ `pass`→`unverified` (giữ nguyên luật, không nới). `oracle` vẫn `false`. **Cần owner duyệt một thay đổi ngữ nghĩa phép đo:** cò đỏ nên gieo **đỏ thật** (hạ `src/export.py` trong worktree rồi commit) thay vì trả traceback cắm sẵn, nếu không lượt kiểm đầu không thể tự đỏ theo đường `test_proof` và vòng sửa không mở đúng chỗ cần đo. Việc còn lại của phép đo: chốt xem hàng rào `test_proof` (đòi đúng câu lệnh bắt buộc, không bọc ống/`echo`) là hành vi sản phẩm giữ nguyên hay là giới hạn của fixture cần khai báo.
+
+Hai lỗi phép đo đã tìm ra và sửa trong lượt này (không phải lỗi sản phẩm):
+
+- `checks.tool` trả `checks: []` khi `state['inputConflicts']` còn hiệu lực (`work_checks.py:1076`) — đây là tín hiệu sản phẩm hợp lệ ("bản nháp mới chưa kiểm được vì xung đột đầu vào của vòng trước chưa giải quyết"), probe phải đọc `inputConflicts` thay vì `checks[0]`.
+- `build_integration` nhận **đối tượng `run` cũ** của probe (mọi thao tác của sản phẩm chạy trên bản sao đọc từ DB rồi ghi lại) nên thấy B1 còn `needs_checks` và trả `False`; đã đọc lại `graph.get(runId)` trước khi gọi và ghi `executeStatuses` để lần sau thấy ngay stage nào chặn.
+
+### 39.5 W6.5.2 — tracing ngân sách (đọc mã, không sửa)
+
+Xác nhận đúng như ghi chú W6.5.2: `WORK_CHILDREN_PER_RUN_CALL=72` được đặt lại ở **mỗi lời gọi** `work_run`/`schedule_nodes` (`work_graph.py:1565`, xoá ở `:1571`) và `WORK_RUN_MAX_SECONDS=3600` đo từ `started` của chính lời gọi đó (`:1783`, `:1792`). Các nhánh continuation tự cấp ngân sách riêng `[8]` (`work_continuations.py:250`) và `[5]` (`:263`), `work_checks.start_locked` cấp `[8]` (`work_checks.py:1051`). Vì vậy tổng thời gian/số con của **cả đời run** có thể vượt 3600s và 72 con mà không có lỗi mạng hay timeout nào. Chưa sửa bộ đếm/scheduler; đây là dữ kiện để chốt cơ chế sau.
+
+**Cập nhật #6457 (03/10/2026) — đã chốt cơ chế, xem §39.11:** chủ nhà chốt "đo trước, rồi mới siết trần cứng", nên (1) trần mỗi lời gọi nâng lên `WORK_CHILDREN_PER_RUN_CALL=256` / `WORK_RUN_MAX_SECONDS=21600`, (2) thêm bộ đếm **tham vấn** `lifetime` (`work_graph.lifetime()`: `calls`/`children`/`seconds` tích luỹ qua các lời gọi, ghi vào kết quả `work_run` ở khoá `lifetime` + event `run_lifetime`) để đo tổng đời run thật trước khi đặt bất kỳ trần cứng nào. Bộ đếm này KHÔNG chặn gì; nó chỉ trả lời câu W6.5.2 bằng số liệu.
+
+### 39.6 Việc còn mở (giữ nguyên, không tự mở rộng)
+
+- W6.1 C4/C5, W6.Q, W6.2.BIND, W6.5.2 (chốt cơ chế sau tracing), W7.1 UI (renderer/lịch sử legacy — không được đổi UI/UX khi chưa duyệt), W7.2 `decisionKeys`, W9.UI.
+- W11 P0c/P1/P2 cho các vai còn lại và hai câu vendor/`AGENT.md` nêu ở 39.3.
+- W10.F chỉ chạy sau khi M1–M3 được xác nhận bằng lượt pilot 39.7.
+- Không push/merge khi chưa được yêu cầu.
+
+### 39.7 Kết quả lượt S09 pilot3 (chạy lại sau khi vá phép đo)
+
+Lệnh: `BOXFOX_EVAL_ALLOW_SPEND=1 BOXFOX_ROUTER_KEY=bf_local_pilot BOXFOX_HARNESS_ADMIN_TOKEN=local-pilot BOXFOX_ROUTER_BASE_URL=http://127.0.0.1:3101 PYTHONPATH=backend/src PYTHONUNBUFFERED=1 timeout 3600 backend/.venv/bin/python scripts/eval/work_acceptance_bench.py --cases S09 --repeats 1 --execute --budget-usd 0.5 --out /var/tmp/w10-pilot3` — model `opencode/space-bunny-free`, kết thúc sau 2 700 320 ms, 92 lượt gọi model, 2 191 257 token vào / 229 549 token ra, 10 child.
+
+**Phép đo nay sạch (M1/M2/M3 xác nhận trên dữ liệu thật):**
+
+| Điểm kiểm | Kết quả |
+| --- | --- |
+| `missing` / lỗi phép đo | `missing: []`, `measurementInvalid: false` — không còn `Cannot operate on a closed database` |
+| Events đọc đủ trang | bundle 48 596 event = DB 48 596, có `seq` cuối 48 596; 4 phiên >4 000 event (trước bị cắt ở 500), không phiên nào đúng 500 |
+| Danh tính người gọi | `callsWithoutSessionId: 0`; **92/92** lượt gọi có `sessionId` (trước: 647/647 null); chia theo phiên: plan-review 47, plan 19, orchestrator 18, explore 8 |
+| Ngân sách | `requested {maxSteps 80, deadlineSeconds 2700}` vs `effective {60, 1200}` kèm `clampNotices [DEADLINE_CLAMPED, STEPS_CLAMPED]` |
+| `phaseNotReached` | `[]` |
+
+**Nhưng kịch bản vẫn KHÔNG đạt (giữ nguyên trong thống kê):**
+
+- `observedState: discovering` ≠ `expectedState: verified`; `score 71.43`; `passed: false`; cổng `ok: false` với lý do `passed 0/1 < 22`, `statePassed 0/1 < 22`, `sameChild=1`.
+- Run dừng ở `discovering`, revision 25: `E1` explore `accepted`; `P1` plan còn `needs_checks`; `B1` build và `T1` testing vẫn `pending`. Root tiêu hết 45 phút hạn driver trong vòng plan → plan-review (5 child plan-review) mà không mở được vòng kiểm cho `P1`.
+- **Không có `decision_requested`** trong cả lượt ⇒ lỗi restart của S09 (`restart_while_waiting`) và đường chữ tự do (`allowFreeText` + `note`) **chưa được chạy thử** ở lượt này. `same_child_continuation` hỏng theo đó: `derived.continuations: 0` nên luật trả `rows=0`, không phải một vi phạm độc lập.
+- Đối chiếu lượt pilot2 (trước khi vá, bị dừng tay): root hỏi chủ nhà ở giây 2 289 và câu hỏi nói `python -m pytest -q` chưa chạy được vì máy chưa cài pytest; driver chọn phương án có `allowFreeText` mà không kèm `note` nên `DECISION_NOTE_REQUIRED` chặn run (đã vá). Lượt 3 hỏng theo cùng kiểu "root quá chậm trước bước hỏi", không phải hồi quy do bản vá.
+
+**Kết luận:** lớp phép đo đã đúng; lỗi còn lại là chất lượng sản phẩm (root xoay plan/plan-review quá lâu, chưa tới bước hỏi/thi công, và môi trường worktree của sản phẩm thiếu pytest theo chính câu hỏi ở lượt 2). **Chưa chạy W10.F**; các lượt lỗi được giữ nguyên trong mẫu số.
+
+### 39.8 Nguyên nhân treo của S09 (điều tra theo yêu cầu owner, 03/10/2026)
+
+Owner yêu cầu xác nhận **nguyên nhân treo** trước khi chạy lại dài hơn: "vẫn research", "lag do model", hay "sub và review đá nhau mãi không cho ra". Kết quả điều tra trên DB/bundle của lượt pilot3 (2 700 s, 10 child, 2 191 257 token vào / 229 549 token ra):
+
+| Child | Vai | Bắt đầu | Kết thúc | Thời lượng |
+| --- | --- | --- | --- | --- |
+| `8491e145` | explore | +117 s | +196 s | 79 s |
+| `1c8f222b` | plan (P1 v2) | +196 s | +375 s | 178 s |
+| `0162e5d6` | plan-review | +387 s | +683 s | 296 s — **VERDICT: revise** (F1 chặn) |
+| `cb4f0b20` | plan (v3) | +707 s | +903 s | 197 s |
+| `3a8041c3` | plan (bản gọn v4) | +947 s | +1 012 s | 66 s |
+| `f645f373` | plan-review | +1 016 s | +1 452 s | 437 s — **VERDICT: revise** (pytest **NOT RUN**) |
+| `0d496918` | plan (v5) | +1 489 s | +1 591 s | 103 s |
+| `d0d4fbe3` | plan-review | +1 605 s | +2 121 s | 516 s — **VERDICT: revise** (v5 vượt trần 6 000 ký tự) |
+| `bf45cfe4` | plan-review | +2 121 s | +2 600 s | 479 s — 4 điểm sửa **đúng**, nhưng thiếu dòng `VERDICT:` |
+| `972aa7c3` | plan-review | +2 613 s | +2 700 s | 87 s — bị huỷ khi hết hạn driver |
+
+**Kết luận: không phải treo vì rảnh, cũng không phải còn research.** Research xong ở +196 s; các child chạy **nối đuôi liên tục** suốt 2 700 s, tổng 97 lượt `completion_attempt`, mỗi vòng review 5–9 phút. Đây đúng là **plan ↔ plan-review đá nhau** (4 plan + 5 plan-review), và nguyên nhân nằm ở ba tầng:
+
+1. **Tầng provider (model free):** 3 × `PROVIDER_STREAM_INTERRUPTED` và 4 × `PROVIDER_OUTPUT_TRUNCATED` — vòng review bị cắt giữa dòng nên mất `VERDICT:`; chính root tự báo: *"review lỗi hạ tầng, không phải lỗi plan … mỗi vòng 8–9 phút và đều hỏng ở tầng provider"*.
+2. **Luật bằng chứng của sản phẩm:** 21 × `SELF_REFUTED` và 3 × `WORK_FINDING_UNCITED` — finding chặn không đủ receipt hợp lệ nên bị bác, khiến lượt review không kết luận được thay vì trả `revise/ok`.
+3. **Môi trường:** sandbox của sản phẩm **không có pytest** (`ModuleNotFoundError`), nên câu lệnh nghiệm thu `python -m pytest -q` trong chính prompt S09 không thể chạy; reviewer ghi `NOT RUN` và plan cứ bị sửa lại vì tiêu chí nghiệm thu không thoả được.
+
+**Hành động:** chạy lại S09 với hạn driver dài hơn (`--deadline-seconds 5400`, vẫn `--budget-usd 0.5`, cùng model `opencode/space-bunny-free`, không đổi fixture/rubric) — kết quả ghi ở 39.9. Đây là phép đo "chạy lâu hơn có hội tụ không", không thay đổi ngưỡng cổng đạt.
+
+### 39.9 Kết quả lượt S09 pilot4 (hạn driver 5 400 s)
+
+Lượt chạy: `--cases S09 --repeats 1 --execute --budget-usd 0.5 --deadline-seconds 5400 --out /var/tmp/w10-pilot4`,
+cùng model `opencode/space-bunny-free`, không đổi fixture/rubric/ngưỡng cổng.
+
+**Số đo (đã kiểm phép đo sạch):**
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Wall time | 517 013 ms — **không chạm hạn 5 400 s**, lượt tự dừng ở +517 s |
+| Model calls / token | 44 lượt · vào 849 537 · ra 40 072 |
+| Child | 3 (đều `explore`), không có plan/review |
+| Trạng thái run | `discovering` (kỳ vọng `verified`), score 71.43 |
+| `missing` / `measurementInvalid` | `[]` / `false` — phép đo sạch |
+| `callsWithoutSessionId` | 0/44 (W10.M2 giữ nguyên tác dụng) |
+| Ngân sách | requested `{maxSteps 80, deadlineSeconds 5400}` + `driverDeadlineSeconds: 5400`; effective `{60, 1200}` kèm `DEADLINE_CLAMPED` (5400→1200) và `STEPS_CLAMPED` (80→60) |
+| Luật hỏng | main `event_kind_seen`, `interview_answered`; flow `same_child_continuation` |
+
+**Dòng thời gian (mốc so với lúc tạo run):**
+
+| Mốc | Sự kiện |
+| --- | --- |
+| +20 s | `run_started discover`; `E1:produce`, `E2:produce` |
+| +75 s | `E1` accepted |
+| +120 s | `E2` **needs_user** — child `3cbca790` xin bằng chứng: *"Acceptance #2 (báo cáo fail thật kèm output pytest thực tế) đòi chạy lệnh, nhưng node explore này không được cấp `terminal_exec` và `skills_list` trả về rỗng — không thể tự tạo bằng chứng chạy thật mà không bịa."* |
+| +193 s | Main mở lượt mới (run_started → run_finished ngay) |
+| +244 s | `E2:produce` lần hai |
+| +315 s | `E2` **failed** |
+| +357 s | main `update E2` |
+| +359 s | `E2:produce` lần ba |
+| +381 s | `E2` **accepted** → `run_finished {E1: accepted, E2: accepted}` |
+| +517 s | Driver hết thời gian chờ yên (settle) và thoát; run vẫn `discovering` |
+
+**Vì sao không đạt (ba nguyên nhân, đều là thật đo được):**
+
+1. **Cò `restart_while_waiting` không bao giờ bắn.** Fault chỉ bắn khi `rt.pending_for(sid)` trả về thẻ interview.
+   Yêu cầu duy nhất của lượt (`wr-f1b6ad6935e94aa5b8f6aa05fbc4fe11`, kind `needs_evidence`, revision 2) đã ở trạng thái
+   **`consumed`**: main tự xử lý bằng cách resume chính child đó (hai lần `E2:produce`), nên nó không còn là thẻ chờ.
+   Không có thẻ chờ ⇒ không restart, không có sự kiện `decision_requested`, không có câu trả lời nào được ghi.
+2. **Đề bài S09 mâu thuẫn với chính fixture của nó.** Prompt giả định chủ nhà phải quyết định định dạng cột, nhưng
+   `tests/test_reports.py` trong workspace đã khoá định dạng (`'date,revenue'` ⇒ phẩy + header). Child chứng minh
+   bằng `verify_exec` (receipt thật) rằng *"2 câu hỏi main định hỏi chủ sở hữu ĐÃ ĐƯỢC test trả lời, không cần hỏi"*
+   và từ chối hỏi — đúng hành vi, nhưng làm luật `event_kind_seen(decision_requested)` không thể đạt.
+3. **Nút `explore` không có kênh chạy lệnh.** Child tự khai không được cấp `terminal_exec`; main chạy hộ bằng
+   `verify_exec` rồi child mới chốt được artifact (accepted ở +381 s).
+
+**Kết luận:** lớp phép đo vẫn sạch (`missing: []`, `measurementInvalid: false`, đủ `sessionId`), hạn driver 5 400 s
+đã đi vào `plan.json`/`results.json`, nhưng S09 vẫn chưa tới `verified` và lượt tự dừng ở +517 s sau khi cả hai nút
+được nhận. Hai luật `event_kind_seen`/`interview_answered` hỏng vì **không có cuộc hỏi–đáp nào của chủ nhà diễn ra**,
+không phải vì phép đo mất dữ liệu; `same_child_continuation` hỏng vì `rows=0` (không có continuation nào để chấm).
+Đây là lỗi **thiết kế kịch bản + khoảng trống của driver**, không phải lỗi W10.M1–M3.
+
+**Việc còn mở (ghi để không trôi):**
+
+- `derived.feedback` gom **mọi** bản ghi `work_requests` bất kể trạng thái, còn `work_feedback.card()` luôn trả
+  `resolved: false` — nên oracle đọc một thẻ mà runtime đã `consumed`. Cần tách "thẻ đã hiện cho chủ nhà" khỏi
+  "yêu cầu con đã được main xử lý" trước khi dùng lại hai luật này (đổi ngữ nghĩa phép đo ⇒ cần owner duyệt).
+- Fixture S09 nên bỏ chi tiết định dạng đã bị test khoá, hoặc đổi câu hỏi sang thứ test không trả lời được.
+- Driver chưa có nhánh cho thẻ interview **0 câu hỏi** (`_pending_answer` trả `[]` nên không bao giờ trả lời được);
+  đã thêm ghi chú chẩn đoán vào `bundle['notes']` để lần sau thấy ngay lý do đứng.
+- Nút `explore` thiếu `terminal_exec` là hành vi sản phẩm đúng như thiết kế; nếu muốn S09 tự chạy `pytest` thì phải
+  đổi kịch bản sang nút thi công, không nới quyền cho explore.
+
+### 39.10 W8.A4.5.N — cò đỏ THẬT: các lượt 8–12 (commit `144443b`, `0a3801e`, `1e87b87`, `913b57d`)
+
+Owner đã duyệt hướng "gieo đỏ thật" (#6451) và chốt **không nới luật `test_proof`** (#6452). Fixture nay hạ cấp
+`src/export.py` trong worktree nút NGAY TRƯỚC lệnh checkpoint của harness, để chính harness commit bản lỗi vào
+`codeSnapshot` của artifact (gieo sau đó thì sản phẩm trả `superseded`, không đỏ). Bằng chứng đầy đủ:
+`docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (8 lượt, hash `results.json` từng lượt).
+
+| Lượt | Kết cục | Ghi nhận |
+| --- | --- | --- |
+| 8 | probe dừng ngay sau lượt sản xuất, `FIXTURE_RED_NOT_SEEDED` | `work_worktrees.path` là đường dẫn **tương đối** (`.boxfox/worktrees/<run>/n-B1`); `Path(tương đối)` trỏ vào gốc repo nên `seed_real_red` return im lặng, commit giữ bản xanh. Đã giải theo gốc fixture, ghi `realRed.errors`, và dừng lượt nếu gieo hụt |
+| 9 | `oracle=false`; **nửa đầu đạt bằng chứng native** | Commit `0eef30b boxfox(w-fe1d0a8288): B1 attempt 1` chứa `return text.upper()`; `python -m pytest -q` chạy thật ngay sau khi gieo trả exit=1 (1 failed); lượt kiểm đầu **`revise`** thật (`class=clear`, "required command failed with a trace into tracked files"), sản phẩm **resume ĐÚNG con Build cũ** và tạo artifact v3 trên hash mới `997e4d7c…`. Chỗ tắc: lượt kiểm đỏ đánh dấu tiêu chí A1 `target=criterion` ⇒ backend coi là **xung đột đầu vào** và `work_checks.py:1076` chặn mọi lượt kiểm/sản xuất tiếp cho tới khi main sửa nhiệm vụ (`work_graph action=update`) — đường xoá duy nhất, nhưng đổi định nghĩa nút làm stage reset và mất bản nháp vừa sửa |
+| 10 | `oracle=false` **nhưng ba nhóm gần đạt**: B1 `accepted`, `__integration__` `built: true`, child Testing THẬT chạy `python -m pytest -q` trên cây gộp **`pass`** (95.7 s) | Lượt kiểm ĐẦU chỉ `unverified` (`WORK_FINDING_UNCITED: … SELF_REFUTED`) rồi lượt sau mới `revise` ⇒ probe cũ đọc nhầm lượt đầu nên mọi tiêu chí `mechanism` sai; `buildChildTouchedItsFile` sai vì tóm tắt con resume lấy từ mục rỗng; `integrationChecked` sai vì probe chỉ mở `tests` trong khi node tổng hợp yêu cầu `[tests, code_review]`. Đã vá cả ba (commit `1e87b87`) |
+| 11 | `oracle=false`; **`mechanism` 8/8 và `model` 5/5 lần đầu cùng xanh** | Cùng một lượt: gieo đỏ thật (commit `…B1 attempt 1` chứa `text.upper()`), lượt kiểm đầu `unverified` (`UNKNOWN_RECEIPT`) rồi lượt sau **`revise`** với `class=clear`, sản phẩm **resume ĐÚNG con Build cũ** trên hash mã mới, kiểm lại `pass`, B1 `accepted`. Chỗ tắc duy nhất còn lại: mở `[tests, code_review]` trong MỘT lời gọi bị từ chối — `WORK_REVIEW_NOT_CONVERGED: the integrated run branch must pass its tests on this exact snapshot before code_review; start tests first, then review the same artifact.` Đã sửa ở `913b57d`: mở kiểm node tổng hợp **lần lượt theo `required`** |
+| 12 | `oracle=false`; nửa đầu vẫn 8/8 + 5/5; node tổng hợp **kiểm NHẦM CÂY** | Probe gọi thẳng `graph.build_integration` mà bỏ qua `integrate_nodes`, nên nhánh run vẫn ở commit nền `b08426e` và artifact tổng hợp tự ghi `files owned by this run: (none)`. Child Testing THẬT tự bắt đúng: `git merge-base --is-ancestor 40d810f HEAD` → exit 1, `git show HEAD:src/export.py` = bản nền `return text`, rồi trả `revise` — hành vi ĐÚNG của sản phẩm. Sản phẩm còn có hàng rào riêng cho đúng tình huống này ở `work_graph.py:1633`: `WORK_CODE_STALE: an accepted node is not integrated into the run branch; call work_run phase=execute to finish integration, then re-check.` Đây là lỗi PHÉP ĐO (sản phẩm chỉ hợp nhất trong `work_graph action=run phase=execute`, `work_graph.py:1538-1542` và `:1837-1838`); đã sửa: probe đi đúng đường main rồi mới mở kiểm node tổng hợp |
+| 13 | `oracle=false`; **vòng sửa chết vì nút FIXTURE**, nút B1 `rejected` sau 1 lượt nên node tổng hợp không được dựng | Con Testing chạy lệnh bắt buộc ở dạng **bọc** `python -m pytest -q; echo "EXIT=$?"` ⇒ bộ phân loại trả `class=unclassified` ("no failing required command event") — đúng luật sản phẩm (#6452). Sản phẩm mở con `debug` chẩn đoán chỉ-đọc; con này mở ĐÚNG bằng chứng (`file_read src/export.py` → `return text.upper()`) nhưng câu trả lời cuối dài quá 4096 token output nên bị `PROVIDER_OUTPUT_TRUNCATED` (partial) ⇒ `work_checks.complete()` false ⇒ `WORK_REPAIR_UNDIAGNOSED: Debug opened no evidence; main decides` ⇒ nút `rejected`. Nút FIXTURE `BUILD_CHILD_OUTPUT_TOKENS` trước chỉ áp cho vai `build`; đã mở rộng cho cả vai `debug` (cùng loại câu trả lời cuối dài). Lỗi PHÉP ĐO: sản phẩm làm đúng (phân loại → debug → escalate khi chẩn đoán không hoàn tất) |
+
+**Dữ kiện sản phẩm rút ra (không tự sửa):**
+
+- Bộ phân loại chỉ thấy "lệnh bắt buộc thất bại" khi child chạy **đúng câu lệnh trần**: lượt 10 child chạy
+  `python -m pytest -q; echo "EXITCODE=$?"` nên `class=unclassified` ("no failing required command event") và
+  sản phẩm mở thêm con `debug`; lượt 9 child chạy trần nên `class=clear`. Cùng một luật với `test_proof` (#6452).
+- Lượt kiểm đầu có thể bị hạ `unverified` vì findings thiếu receipt (`WORK_FINDING_UNCITED`, `SELF_REFUTED`) —
+  lượt sau trên CÙNG artifact mới `revise`. Đo "lượt đỏ" theo lượt kiểm đầu là sai.
+- Xung đột đầu vào (`inputConflicts`) là hàng rào bền vững: chỉ `work_graph action=update` xoá được, và đổi định
+  nghĩa nút làm stage reset. **Cần owner quyết** xem một tiêu chí bị artifact vi phạm có nên bị ghi thành xung đột
+  tiêu chí hay chỉ là `target=artifact` (hiện con kiểm thử tự chọn nhãn; nhãn `criterion` kéo theo chu trình duyệt lại).
+- **Hợp nhất nhánh run chỉ xảy ra trong `work_graph action=run phase=execute`** (`integrate_nodes` → `build_integration`,
+  `work_graph.py:1538-1542` và `:1837-1838`). `build_integration` một mình KHÔNG hợp nhất; nếu bị gọi trên cây chưa
+  hợp nhất thì artifact tổng hợp tự ghi `files owned by this run: (none)` và mọi kết luận "cây gộp xanh" là sai.
+  Sản phẩm có hàng rào riêng: `work_graph.py:1633` trả `WORK_CODE_STALE: an accepted node is not integrated into the
+  run branch; call work_run phase=execute to finish integration, then re-check.`
+- **Node tổng hợp đòi THỨ TỰ**: `tests` phải `pass` trên ĐÚNG snapshot trước, rồi mới mở `code_review` trên cùng
+  artifact (`work_repair.converged`, `WORK_REVIEW_NOT_CONVERGED`). Mở cả hai trong một lời gọi luôn bị từ chối.
+- Artifact tổng hợp (`integration_artifact`) tự công bố danh tính cây gộp (head/tree/branch/worktree), tệp thuộc run,
+  diff stat và output NGUYÊN VĂN của mọi lệnh test bắt buộc — nhờ vậy con kiểm thử đối chiếu được và đã tự bác đúng
+  lượt 12 khi cây chưa hợp nhất.
+
+### 39.11. Chủ nhà chốt #6454–#6457 (03/10/2026) — kiến trúc leo thang + trần ngân sách
+
+**Bối cảnh đo được.** Ba lượt probe liên tiếp (14, 15, 16) đều `oracle=false` vì lý do KHÁC nhau, và cả ba
+đều chỉ vào hai chỗ: (a) một NHÃN do con kiểm tự chọn có thể chặn cả vòng sửa; (b) TRẦN BƯỚC/THỜI GIAN cắt
+con giữa chừng. Lượt 14: con kiểm trả coverage sai hợp đồng (`Invalid JSON coverage; every assigned id needs
+status and evidence. Revised A criteria must explicitly set target=artifact or target=criterion.`) rồi lượt sau
+`UNKNOWN_RECEIPT` ⇒ `WORK_NO_PROGRESS`. Lượt 15: phiên cha 24 bước ⇒ con `debug` `STEP_BUDGET_EXHAUSTED`
+(`steps_used 22`, `status=partial`) ⇒ `complete()` false ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ B1 `rejected`. Lượt 16:
+lượt kiểm đầu `unverified` vì `WORK_FINDING_UNCITED` (mọi finding đều `UNKNOWN_RECEIPT`), lượt kế `SELF_REFUTED`.
+
+**#6454 → #6456 (kiến trúc).** Chủ nhà yêu cầu tra cứu thực tiễn tốt nhất rồi chốt. Kết luận tra cứu: tách
+*lỗi ĐỊNH NGHĨA nhiệm vụ* (phải hỏi owner) khỏi *lỗi TRIỂN KHAI* (vòng sửa tự lo); escalation phải là một
+**trạng thái chờ hạng nhất** — ghi lý do có cấu trúc, GIỮ tiến độ, resume đúng chỗ, có đường hết hạn; mẫu
+`retry / escalate / quarantine` của spec-drift; "long-running = đi tiếp có kiểm soát", không phải vô hạn.
+Nguồn: O'Reilly *Why AI coding agents still need clear specs*, VS Code agent best practices, tài liệu
+trạng thái agent (waiting/blocked/resume), Anthropic *effective harnesses for long-running agents*.
+
+Chủ nhà chốt **kiến trúc đầy đủ** (#6456), ba nhánh:
+- **(a) Thu hẹp nghĩa nhãn `criterion`**: chỉ dành cho tiêu chí MƠ HỒ / MÂU THUẪN / KHÔNG KIỂM ĐƯỢC (cần main
+  làm rõ); "code vi phạm một tiêu chí RÕ RÀNG" luôn là `target=artifact` và đi theo vòng sửa. Sửa ở prompt +
+  hợp đồng output của con kiểm.
+- **(b) Hàng rào là TRẠNG THÁI CHỜ, không phá tiến độ**: đường xác nhận/xoá xung đột GIỮ `artifact`/`policy`/
+  bản nháp để resume đúng chỗ, thay vì `new_stage()` (`work_graph.py:886-890`).
+- **(c) Tự leo thang**: CÙNG một tiêu chí đỏ `revise` sau 2 lượt sửa ⇒ nâng thành xung đột (bắt đúng ca
+  "spec vs implementation" mà nhãn của con kiểm bỏ sót).
+
+Tradeoff đã báo: nhiều code + test nhất (work_checks, work_graph, prompt/hợp đồng con kiểm, các file test
+chạm hằng số), đổi hành vi workflow nên cần một vòng test hồi quy đầy đủ. Đổi lại: repair loop không thể bị
+vô hiệu hoá bởi một lựa chọn nhãn, owner vẫn nhận tín hiệu spec, không mất công sửa.
+
+**#6455 → #6457 (ngân sách).** Chủ nhà: "nên để RẤT LỚN vì chuyên chạy dài (kiểu Devin: con gọi hàng trăm
+lượt, một tiếng hoặc hơn)", chốt **bộ số đề xuất — rất lớn nhưng vẫn có trần**:
+
+| Chỗ | Cũ | Mới |
+| --- | --- | --- |
+| `limits.MAX_STEPS_DEFAULT` / `MAX_STEPS_MAX` | 40 / 60 | **120 / 400** |
+| `limits.DEADLINE_DEFAULT_SECONDS` / `DEADLINE_MAX_SECONDS` | 600 / 1200 | **1800 / 7200** |
+| `limits.CHILD_MAX_STEPS` / `CHILD_DEADLINE_SECONDS` | 40 / 900 | **200 / 3600** |
+| `work_budget.PRODUCER_STEPS` / `SHORT_REVIEW_STEPS` / `LONG_REVIEW_STEPS` | 60 / 14 / 24 | **200 / 40 / 80** |
+| `work_graph.WORK_CHILDREN_PER_RUN_CALL` / `WORK_RUN_MAX_SECONDS` | 72 / 3600 | **256 / 21600** |
+
+Kèm **bộ đếm cộng dồn toàn đời run** (`work_graph.lifetime`, chỉ báo cáo — không chặn): `work_run` đặt lại
+ngân sách con ở MỖI lời gọi và đồng hồ `WORK_RUN_MAX_SECONDS` cũng đo theo từng lời gọi, nên tổng đời run có
+thể vượt cả hai mà không có lỗi nào; số thật (số lời gọi, số con, tổng giây) được ghi vào tài liệu run và trả
+trong `out['lifetime']` để chốt một trần cứng sau (plan cấm tự chọn trần mới khi chưa đo).
+
+### 39.12. Vòng soát #6456/#6457 (03/10/2026) — phát hiện và cách xử lý
+
+Soát mã bản vá ở `508bf86` (một vòng `simplify` + một vòng `review` có chấm rủi ro 6/10 "ship with
+mitigations"). Các phát hiện và trạng thái:
+
+| # | Phát hiện | Mức | Xử lý |
+| --- | --- | --- | --- |
+| 1 | `limits.CHILD_WALL_MAX_SECONDS` để nguyên 1200 s trong khi #6457 nâng trần con lên 3600 s ⇒ watchdog đóng mọi con chạy quá 1200 s là `failed/WATCHDOG_TIMEOUT`, tức cắt đúng loại việc dài mà #6457 vừa mở | CAO | Đã sửa: trần tường **suy ra** từ trần con (`CHILD_DEADLINE_SECONDS + CHILD_WALL_MAX_GRACE_SECONDS = 4500`), kèm test bất biến trong `test_peer_watchdog.py` |
+| 2 | `resolve` không có trong hợp đồng công cụ (enum + mô tả) và câu `next` chỉ đường `update` ⇒ hàng rào #6456(b) không thể được gọi | CAO | Đã sửa ở `2fef164`: enum + mô tả + câu `next` hai đường, kèm test chống tái phát |
+| 3 | `stuck_criteria` leo thang nhầm cả `C1` (tiêu chí của chính lượt kiểm) | CAO | Đã sửa ở `2fef164`: dựng lại tập A từ `node['acceptance']` |
+| 4 | 16 test còn đỏ vì bám số cũ (60/14/24, 40/900) | CAO | Đã sửa: `test_work_budget_w65.py`, `test_work_retest_w8.py`, `test_delegation_contract.py` cập nhật theo #6457 |
+| 5 | `stuck_criteria` chỉ chạy được ở stage `execute` (chỉ nơi đó mới có `repairs`) | VỪA | **Giữ nguyên có ghi chú**: mở sang `rounds` của stage `produce` là đổi ngữ nghĩa, cần chủ nhà chốt trước |
+| 6 | `resolve` không bền: lượt kiểm kế tiếp của loại khác dựng lại hàng rào từ hồ sơ cũ | VỪA | Đã sửa: `mark_conflicts_resolved` ghi cờ lên chính hồ sơ, `pending_conflicts` bỏ qua hồ sơ đã xử lý |
+| 7 | Câu trả lời của `resolve` hứa quá mức khi stage đã `rejected`/`failed` | THẤP | Đã sửa: nói rõ stage còn mở thì đi tiếp, stage đã đóng thì phải `retry` trước |
+| 8 | Số cũ trong chú thích (`limits.py`, `work_repair_loop_eval.py`) | THẤP | Đã sửa |
+| 9 | `scripts/eval/work_budget_eval.py` còn tạo phiên 60 bước/1200 s nên không còn đo mặc định mới | THẤP | **Còn mở** — chỉ ảnh hưởng phép đo cũ, không ảnh hưởng sản phẩm |
+| 10 | `lifetime` chỉ đếm con/giây trong `work_run`, bỏ sót con do `work_check`/`work_repair` sinh ra | INFO | **Còn mở, có chủ ý**: bộ đếm là tham vấn; muốn nó thành căn cứ đặt trần cứng thì phải mở rộng phạm vi trước |
+
+
+### 39.13 Bản ghi CHUẨN của W8.A4.5.N — lượt 19 (`oracle=true` + qua cổng đóng băng nguồn)
+
+Lượt chạy: `PYTHONPATH=backend/src backend/.venv/bin/python scripts/eval/work_repair_loop_eval.py --router http://127.0.0.1:3101
+--output .tmp/w8-probe-red12 --manifest .tmp/work-checks/w8-isolation-manifest-02-10.json`, trên cây **đóng băng**
+`29deaa6` (nhánh `vorflux/w10-w12-completion`, 20 tệp trong manifest, `mismatch: []` trước và sau lượt).
+
+| Tầng oracle | Kết quả |
+| --- | --- |
+| `mechanism` | **8/8** — `oneRepairEntry`, `classified`, `debugOnlyWhenUnclassified`, `resumedSameChild`, `freshArtifactAfterRepair`, `findingsBoundToChild`, `codeHashPinned`, `redCheckIsRevise` |
+| `model` | **5/5** — `seedIsRealRed` (gieo 1 lần, `python -m pytest -q` ngay sau đó exit≠0), `testerSawTheRedCommand`, `buildChildTouchedItsFile`, `secondCheckPassed`, `nodeAccepted` |
+| `integrationNative` | **5/5** — `mergedIntoRunBranch`, `built`, `hasRealChild`, `testsPassedOnMergedTree`, `integrationChecked` |
+| `oracle` | **true** · `error: null` · `latencySeconds: 1846.103` |
+
+**Chuỗi đo được:** lượt kiểm đầu `revise` (con Testing thật) → phân loại `class=clear` ("required command failed with
+a trace into tracked files") → main **resume CHÍNH con Build đầu** (`58964399…`, `resumed: true`) kèm findings của
+người soát (`a-2088af61…`) → artifact mới + `codeHash c02fd92d…` ghim → lượt kiểm xanh `pass` → nút `accepted` →
+hợp nhất vào nhánh run (`head d856bfed…`) → child Testing THẬT chạy `[tests, code_review]` **lần lượt** trên cây đã
+hợp nhất, `integrationStatus: checked`. Lượt này **không cần con `debug`** (`debugChildId: null`) — đúng luật
+"debug chỉ khi `unclassified`" — nên đây là đường **resume-trực-tiếp**, bổ sung cho đường **debug** đã đạt ở lượt 17.
+
+**Vì sao lượt này là bản ghi chuẩn (khác lượt 17 và 18):** lượt 17 cũng `oracle=true` nhưng trượt cổng
+`snapshot_source` (`AssertionError: source drift`) vì nguồn bị sửa giữa lượt; lượt 18 trên cây đóng băng hỏng vì
+lý do **hạ tầng** — con `debug` `39597230…` bị nhà cung cấp ngắt stream (`PROVIDER_STREAM_INTERRUPTED`, 13 bước)
+⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`. Lượt 19 trên cùng cây đóng băng vừa đạt đủ ba tầng oracle vừa giữ
+được cổng đóng băng (tiến trình thoát 0, `snapshot_source` không báo drift). Bằng chứng đầy đủ:
+`docs/plan/W8.A4.5.N-repair-loop-native-evidence.json` (18 lượt; lượt 19 có `resultsSha256`).
+
+**Hai dấu hiệu hạ tầng cần theo dõi (không phải lỗi sản phẩm):** con Testing `fa72544a…` của lượt 19 cũng bị
+`PROVIDER_STREAM_INTERRUPTED` (21 bước) — sản phẩm đã mở lại lượt kiểm khác và vẫn xanh; và bộ đếm
+`run.lifetime` vẫn `null` trên tài liệu run vì lượt probe không gọi `work_run` sau khi run được ghi.
+
+**Bốn test đỏ của lượt chạy đủ trên `b9c0b25` — đã xử lý xong ở `29deaa6`:**
+
+| Test | Nguyên nhân | Xử lý |
+| --- | --- | --- |
+| `test_peer_slot_lifecycle.py::test_watchdog_huy_con_qua_han_chi_nha_mot_slot` | Tuổi con viết cứng `1 300 s`, nay **thấp hơn** trần tường 4 500 s nên watchdog không còn đóng | Suy tuổi từ `CHILD_WALL_MAX_SECONDS + 100` (nhập hằng số) |
+| `test_session_length_payload.py::test_deadline_clamp_flag_is_visible_in_the_session_payload` | Yêu cầu `1 500 s`, nay **thấp hơn** trần 7 200 s nên không có cờ `deadlineClamped` | Nâng yêu cầu lên `9 000 s` |
+| `test_terminal_tools.py::test_terminal_exec_echo` | Chạy `Write-Output` (PowerShell) trên bash ⇒ exit 127 | **Lỗi môi trường có sẵn**: chạy lại trên worktree sạch của `origin/main` cũng đỏ y hệt |
+| `test_web_tools.py::test_the_dispatcher_sends_web_tools_to_the_host_not_the_box` | `runtime.store` giả thiếu `.db`; dòng đọc `.db` thuộc commit `6b44be3`/`0e4ce660`, trước bản vá | **Lỗi môi trường có sẵn**: đỏ y hệt trên `origin/main` |
+
+Sau hai bản vá test: bộ đơn vị đầy đủ `2 failed, 3319 passed, 12 skipped` (chỉ còn hai lỗi môi trường ở trên),
+và bộ E2E 11 kịch bản (resolve/update/resume/độ bền/thông điệp `rejected`/ngân sách/con/`lifetime`/`stuck`/schema/info)
+**11/11 OK**.
+
+### 39.14 W10.F pilot 5 — ca S12 (`faults=dirty_foreign_file`) trên cây đóng băng `29deaa6`
+
+Lượt chạy: `BOXFOX_EVAL_ALLOW_SPEND=1 … backend/.venv/bin/python scripts/eval/work_acceptance_bench.py --cases S12
+--repeats 1 --execute --budget-usd 0.5 --deadline-seconds 5400 --out /var/tmp/w10-pilot5-s12`,
+model `opencode/space-bunny-free`, không đổi fixture/rubric/ngưỡng. **Kết cục: `passed: false`, score 62.5** — giữ
+nguyên trong mẫu số, không bỏ lượt.
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Wall time | 616 402 ms (driver tự dừng ở +616 s, hạn 5 400 s không chạm) |
+| Model calls / token | 61 lượt · vào 1 627 901 · ra 37 049 · **1 con** (build) |
+| Trạng thái run | `approved` — **khớp** `expectedState`, nhưng `passed: false` vì các luật vai |
+| Phép đo | `missing: []`, `measurementInvalid: false`, `callsWithoutSessionId: 0/61` — **sạch** |
+| Ngân sách | requested `{maxSteps 80, deadlineSeconds 5400}` = effective, **`clampNotices: []`** (trần #6457 đã hiệu lực trong bộ nghiệm thu) |
+| `run.lifetime` | `{calls: 1, children: 1, seconds: 79.347}` — bộ đếm tham vấn ghi được trong lượt thật |
+| Luật hỏng | main `no_diagnostic_leak`; reviewer `check_status_any`, `word_count_max`; testing `converged_review`; `fabricatedUrlOrDiagnostic=1` |
+
+**Chỗ tắc thật (đáng giá nhất của lượt này).** Nút `P1` đứng ở `needs_checks` suốt lượt: ba lượt `tests` đều kết
+`superseded` với **cùng một `workKey` `0e9d161f9e2a28a7f2d4`** và cùng lỗi `Code changed before check.`, lượt thứ
+tư bị từ chối `WORK_CHECK_EXHAUSTED — checkpoint and revise scope/artifact`. Main thử `work_graph action=retry` và
+nhận `WORK_NOTHING_TO_RETRY` vì nút đang `needs_checks` (không phải `failed`). **Không có đường nào để main đi
+tiếp**: bắt đầu lại cùng `workKey` lặp đúng lỗi cũ, `retry` từ chối, và không có lệnh nào "buộc bind lại theo hash
+mới". Đây đúng **cùng loại lỗi như hàng rào xung đột đầu vào của #6456(b)** nhưng ở tầng binding: một hàng rào
+đúng (không kiểm cây khác artifact) nhưng **không có đường xoá**. Ca S12 gieo `faults=dirty_foreign_file` nên
+worktree đổi sau checkpoint — chính là tình huống hàng rào này sinh ra để bắt.
+
+**Hệ quả phụ:** main báo cho chủ nhà bằng **mã nội bộ** (`WORK_CHECK_EXHAUSTED`, `WORK_NOTHING_TO_RETRY`) trong
+bảng cuối — luật `no_diagnostic_leak` bắt đúng (F04 tái hiện với mã khác). Và vì chưa có lượt kiểm nào ra phán
+quyết, ba luật vai reviewer/testing không thể đạt (`check_status_any`, `word_count_max`, `converged_review`) — đúng
+hệ quả, không phải lỗi phép đo.
+
+**Đề nghị cần chủ nhà chốt (chưa tự sửa — đổi luồng workflow):** thêm một đường xoá cho hàng rào binding, ví dụ
+`work_check action=start` được phép **bind lại theo `codeHash` hiện tại** khi lượt trước `superseded` vì mã đổi
+(kèm ghi vết), hoặc để `work_graph action=resolve` nhận cả hàng rào `superseded` (hiện `resolve` chỉ xử
+`inputConflicts`). Kèm: `retry` nên nói rõ đường đúng khi nút đang `needs_checks`, và thông điệp
+`Code changed before check.` nên kèm hướng dẫn.
+
+### 39.15. Chủ nhà chốt #6469–#6473 (03/10/2026) và bản vá W10/W11 đã thi công
+
+Năm câu hỏi phỏng vấn (`/code/.generated_artifacts/interview-w12-round2.json`) đã được chủ nhà trả lời; đây là bản ghi quyết định và phần đã làm theo đúng quyết định đó.
+
+| # | Câu hỏi | Chủ nhà chốt |
+|---|---|---|
+| 6469 | Đường xoá hàng rào binding `Code changed before check.` | **A — rebind có điều kiện + resolve**: mã đổi NGOÀI file nút khai báo thì ghim lại artifact theo mã hiện tại và chạy kiểm, ghi vết `reboundFrom/To`; mã đổi ĐÚNG vào file nút khai báo thì trả stage về `pending` để producer chạy lại trên mã mới (giữ lịch sử/vòng). `work_graph action=resolve` cũng xoá được hàng rào này. |
+| 6470 | `stuck_criteria` có mở sang stage `produce` không | **Có — đếm số vòng producer**: sau 2 vòng producer vẫn đỏ cùng một tiêu chí thì mở `inputConflicts` để main xem lại phân công. |
+| 6471 | Câu chữ vendor (`AGENT.md`, `simplify-code/SKILL.md:195`) | **Sửa cả hai + test prompt contract**. |
+| 6472 | Phạm vi W10.F | **Bộ đầy đủ 17 ca** (S01–S12 + V06/V07/V10/V13/V14), cổng `minPassed 22`, chạy nền. |
+| 6473 | Ưu tiên W6 | **W6.Q trước** (adjudicate bằng chứng đã có, không gọi model), rồi mới C4 live. |
+
+#### 39.15.1 Hai nguyên nhân gốc của ca S12 (§39.14)
+
+1. **Lỗi phép đo (bench, W10.M3).** `_terminal_problem` trong `scripts/eval/work_acceptance_bench.py` từ chối mọi lệnh chứa `$(`. Lệnh dò cô lập thật của sản phẩm là `t=$(git rev-parse --show-toplevel 2>/dev/null) && [ -n "$t" ] && [ "$t" = "$(pwd -P)" ] && echo workspace-is-repo`, nên nó bị fixture từ chối ⇒ sản phẩm kết luận "không có git trong workspace" và run ghi `isolation.mode='touchset'` dù workspace LÀ gốc repo. **Đã vá:** fixture chạy lệnh bằng `create_subprocess_shell` (đúng như box thật) nên thay thế lệnh là cú pháp hợp lệ; hàng rào nay kiểm **phần lồng** bằng cùng bộ luật (`_substitutions`, trần 4 lớp) thay vì từ chối cả lệnh — `echo $(rm -rf x)`, ``echo `cat /etc/passwd` ``, `echo $(bash -c …)` vẫn bị chặn, còn phép dò cô lập và các lệnh sản phẩm thật chạy được. Bài kiểm mới `test_terminal_fence_allows_the_isolation_probe_and_checks_inside_substitutions` ghim cả hai chiều; `test_work_acceptance_bench.py` = **66 passed**.
+2. **Lỗi sản phẩm (gốc thật).** Ở chế độ `touchset`, artifact được ghim bằng dirty manifest (`work-dirty/1`), nhưng mọi cổng so sánh lại đọc cây bằng ảnh chụp git (`work-code/1`) — hai schema không bao giờ bằng nhau, nên MỌI lượt kiểm bị `superseded` với `Code changed before check.`; nút đứng mãi ở `needs_checks`, `work_run` không chạy lại (chỉ chạy stage `pending`/`revise`), và `retry` từ chối vì nút không `rejected`/`failed`. Hệ quả: **một run trong workspace không phải git repo không bao giờ qua được kiểm**, và main chỉ còn `action=update` — đường duy nhất xoá luôn bản nháp.
+
+#### 39.15.2 Bản vá W10 đã thi công (`9b2fcac`, 8 tệp)
+
+- `work_checks.identity_of(graph, sid, source, mode=None, root=None, base=None)` là **đầu đọc duy nhất** theo schema của chính bản ghim (`work-dirty/1` → dirty manifest + `declared`; còn lại → `work-code/1`); so sánh luôn bằng `same_identity` (schema + hash), không so cả dict. Áp cho cả 8 cổng: check start, retest, feedback, continuation, handoff, `busy_receipt`, receipt/recheck, và `work_graph.require_code_current`.
+- `binding_gate(...)` + `declared_map(...)`: mã đổi **ngoài** file nút khai báo ⇒ `graph.rebind_artifact(...)` ghim lại bản nháp, ghi vết `codeRebound` (giữ artifact, policy, lịch sử, số vòng); mã đổi **đúng vào** file nút khai báo ⇒ `graph.stage_needs_rebuild(...)` đặt `status='pending'`, `codeMoved=[...]`, lỗi `WORK_CHECK_CODE_MOVED`, để `work_run phase=execute` dựng bản mới. Không đo được (bản ghim cũ thiếu `declared`, hoặc ảnh chụp git thiếu `changed`) thì **fail-closed** — coi như `moved`, trả về sản xuất.
+- `work_graph action=resolve` xoá được hàng rào refused-check (stage `needs_checks`/`revise` mà mọi lượt kiểm mới nhất đều `superseded`) mà **không mất bản nháp**; `retry` và `next_step` chỉ đúng đường xoá khi không còn gì để reset.
+- Ảnh chụp git nay kể tên tệp đã đổi (`changed`, tối đa 200) để quyết định ghim lại có căn cứ.
+- `stuck_criteria` mở sang stage `produce` theo #6470: execute+git đếm `repairs`, mọi stage khác (kể cả `produce`) đếm `rounds`.
+- 7 bài kiểm mới: `backend/tests/unit/test_work_code_binding_w10.py` (7 passed in 5.33s) — ghim đúng schema, ghim lại khi mã đổi ngoài phạm vi, trả về sản xuất khi mã đổi trong phạm vi, `resolve` mở hàng rào, `retry`/`next_step` nói đúng đường, `stuck_criteria` leo thang sau các vòng producer.
+- Suite lân cận sau khi vá: `test_work_checks.py` + `test_work_retest_w8.py` + `test_work_repair_w8.py` + `test_work_handoffs_w8.py` + `test_work_admission_w8.py` + `test_work_converged_review.py` + `test_work_graph.py` + `test_work_checks_remaining.py` + `test_work_checks_w61.py` = **84 passed in 62.85s**.
+- Lỗi hồi quy bắt được trong lúc vá: `code_identity` đánh rơi `root`/`base` làm `work_progress.reserve` từ chối lượt execute của `P1` (`WORK_CODE_SNAPSHOT_REQUIRED: failed code inspection cannot admit a fresh execution turn`) — đã sửa bằng cách truyền thẳng `root=`/`base=` xuống `identity_of`.
+
+#### 39.15.3 Bản vá W11 P0c (theo #6471)
+
+- `AGENT.md:12`: bỏ câu "a child ... never asks the owner"; câu mới nói con lưu câu hỏi bằng `work_report` (`needs_user`) và main trả lời hoặc phát hành qua thẻ phỏng vấn.
+- `AGENT.md:20`: bỏ câu "Every child output in a Work Graph goes to an independent reviewer"; câu mới nói kiểm chứng theo artifact/rủi ro qua `work_policy.derive` và code review git để tới cây hội tụ.
+- `vendor/hermes/skills/software-development/simplify-code/SKILL.md` (Phase 3, mục 2): không còn dặn bỏ gợi ý "âm thầm"; mọi finding bị bỏ phải kèm một dòng bằng chứng.
+- 2 bài kiểm hợp đồng mới trong `backend/tests/unit/test_work_prompt_contracts.py` (44 passed) đọc thẳng `AGENT.md` và file skill để câu cũ không quay lại.
+
+#### 39.15.4 Còn lại của lượt này
+
+- Phép đo bench cho `$(...)`: **đã vá** (xem 39.15.1). Fixture/driver S09 (thẻ interview 0 câu hỏi): `w10-s09-fixture-driver` (đang chạy), sẽ commit cùng lượt.
+- W10.F bộ đầy đủ 17 ca (#6472): chỉ chạy sau khi phép đo S12 được vá; mọi thất bại giữ trong thống kê.
+- W6.Q adjudication (#6473): `w6q-adjudication` (đang chạy) — bằng chứng có sẵn, không gọi model.
+- W11 P0c/P1/P2/P3 cho các vai còn lại: `w11-p0c-p3-roles` (đang chạy), chỉ sửa câu chữ prompt + test, không đụng quyền/scheduler.
+
+### 39.16 W6.Q — adjudication reviewer/producer/main trên corpus đã lưu (quyết định #6473)
+
+Báo cáo đầy đủ: [`W6.Q-adjudication.md`](W6.Q-adjudication.md) (244 dòng, chỉ đọc corpus — không gọi model, không chạy live, không sửa sản phẩm).
+
+**Kết quả:** 60 dòng adjudication trong 8 nhóm bằng chứng — **35 `chưa công tâm`**, **15 `công tâm`**, **10 `không kết luận được`**. Theo tác nhân: reviewer 33, measurement 13, main 8, producer 6.
+
+- Lỗi reviewer nhiều nhất nhưng phần lớn ở **câu chữ/severity/scope**, không phải định tuyến verdict: 8/8 verdict theo policy 10 đúng, `criterionConflictRouted`/`producerRetryBlocked` đúng, không có lượt pass giả.
+- Lỗi producer/main ít hơn nhưng nặng hơn: sai đơn vị và sai mốc version trong bản tổng hợp cuối (G2/G3); pass giả ở T7 lan sang P3 (E6→E13); main gọi finding đã bị bác là "thật" ở design-repeat2 (F12/F13).
+- **W6.2.BIND chủ yếu là lỗ hổng sản phẩm:** binding là **tập token** (`work_graph.py:2194`, cắt `[:600]`), `final_claims_check` thuần và không chặn (`work_graph.py:135`), thông báo chỉ nổ khi `status == 'verified'` (`runtime.py:6452`) — không kiểm ngữ nghĩa/đơn vị/version.
+- Phần đo của W6.2.BIND: S01-r2 **không có whole-pass nào** (cả hai lượt `whole` đều `error`); bundle gốc `docs/w10-handoff-03_10/` không có trong repo; ảnh chụp whole không ghim môi trường đích.
+- Không dùng độ dài/nhãn `finalized` làm bằng chứng ở bất kỳ dòng nào; plan S01 13 537 ký tự được ghi là **chưa qua whole-pass**, và không có kết luận chất lượng/khả thi nào cho ứng dụng y tế/pháp lý.
+
+**Theo dõi đề xuất (chỉ việc có bằng chứng xác nhận):** FU1 bổ sung khai báo cho fixture đối chứng (dialect/quoting/lineterminator); FU2 giữ prompt `verify_exec`, theo dõi `verifyExecCalls` + tỉ lệ hạ cấp ở W10; FU3 oracle số phải có ≥1 claim số sống sót hoặc ghi `N/A`; FU4 sửa tiền đề `csv-error-type` (NUL trong `str` không ném lỗi trên 3.12); FU5 chốt một luật đếm cho lookup (122 raw / 119 không heading / trần 120); FU6 gom phản ví dụ prose thành corpus nhỏ; FU7 ghi số từ reviewer vào báo cáo mỗi lượt; FU8 ghi giới hạn thật của badge vào hợp đồng W6.2.BIND; FU9 `work_policy.VERSION` vẫn `work-checks/10` trong khi `INPUTS_VERSION='work-check-inputs/2'` tham gia binding — việc soát hợp đồng cho W10; FU10 triệu chứng "tổng hợp bỏ finding" chưa có receipt (thêm run + finding id hoặc bỏ khỏi danh sách "observed").
+
+**Hai lỗ hổng không thể đóng từ corpus:** raw `.tmp/work-checks/w61-*`/`w611-*`/`w612-*`/`w613-*` đã mất, và bằng chứng probe không có trường `raw` — nên một số claim chỉ còn tựa vào bản tóm tắt trong `docs/plan/*.json`.
+
+### 39.17. Chủ nhà chốt #6474–#6477 (03/10/2026) — bản vá đã thi công và bộ W10.F đang chạy
+
+#### 39.17.1 #6474 — W6.2.BIND: khai tập claim bị cắt, notice phát sớm (`042b52a`)
+
+- `work_graph.reviewed_set` ghi thêm `claimsTotal` và `claimsTruncated` khi chạm trần `CLAIM_TOKENS_MAX = 600` (hằng mới, thay con số 600 nằm trong biểu thức cắt). Badge vẫn CHỈ là tập token — nay nói được là tập đã bị cắt.
+- `runtime.final_claim_notices` phát khi run ĐÃ CÓ `reviewedSet`, không chỉ khi `status == 'verified'`; message nêu `(tập claim đã bị cắt ở 600/N token)` khi bị cắt. Vẫn KHÔNG chặn câu trả lời.
+- Test: `test_reviewed_set_reports_a_truncated_claim_set_instead_of_cutting_silently`, `test_final_claim_notices_fire_before_the_run_is_verified` (`test_work_producer_quality.py` 9 passed).
+
+#### 39.17.2 #6475 — W7.2 `decisionKeys`: bắt buộc khi đã có grant (tự quyết, chủ nhà không có ý kiến)
+
+- Luật mới: nếu tồn tại grant (kể cả vừa bị thu hồi) trỏ đúng `nodeId`/`stage`/`purpose`/`checkKind` của binding thì `work_report action=needs_user` PHẢI gửi `decisionKeys` 1..3 khớp grant; thiếu ⇒ `WORK_DECISION_KEYS_INVALID` (400). Bỏ trường này trước đây rơi im lặng khỏi đường grant: không kiểm thu hồi, không khớp câu hỏi với quyền, card thiếu khoá quyết định.
+- Không có grant ⇒ đường dự phòng giữ nguyên: con lưu câu hỏi, main trả lời hoặc phát hành thẻ (đúng ngữ nghĩa W11 P0c).
+- Thêm `Grants.any_for(run, binding)`; bỏ điều kiện `'decisionKeys' in args` khi kiểm thu hồi và tìm grant (nay luôn kiểm với khoá đang dùng).
+- Test: `test_granted_node_must_send_decision_keys_on_needs_user`; 4 tệp liên quan 47 passed.
+
+#### 39.17.3 W11 P0c+P1+P2+P3 cho chín vai còn lại (`064e42b`)
+
+- `roles.py` 11 dòng: chín vai đổi "Output Requirement: Return a structured Markdown report with:" → "Unless the assignment supplies its own deliverable, return …"; Plan bước 5 thêm "In a Work Graph node you must NOT call `write_plan` at all"; `WORK_EXEC_REVIEWER_NOTE` nói rõ "Do NOT edit the production source under test".
+- Bốn bài kiểm mới đọc **prompt đã lắp** của từng vai (`HarnessRuntime` + `SessionStore`) + một bất biến (mọi Work Graph note vẫn nằm trước `STRICT PROHIBITION` cuối của vai). Báo cáo: `docs/plan/W11-p1-p2-report.md` (265 dòng, có bảng P0c/P1/P2/P3 và bảng "cố ý không sửa").
+- **Ngoài scope, cần chủ nhà duyệt riêng:** §5.5 — `DECISION` được quảng cáo trong prompt nhưng bị `runtime.py` từ chối; đây là tầng QUYỀN, P2 cấm sửa trong lượt này.
+- `RESEARCH_REVIEW_INSTRUCTIONS` cùng lớp §5.4 nhưng ngoài danh sách chín vai đã duyệt — một dòng P1 nếu chủ nhà muốn đồng bộ.
+
+#### 39.17.4 S09 và FU5 — phép đo
+
+- `a5d4773`: fixture S09 hỏi đích ghi tệp CSV (thứ repo không trả lời được) thay cho định dạng cột đã bị `tests/test_reports.py` khoá; driver `drive_session` kết thúc chờ khi chỉ còn thẻ 0 câu hỏi không thể trả lời (trước đây quay vòng tới hết hạn). Lượt S09 cũ chạy trên fixture/driver cũ đã bị dừng; S09 nay nằm trong bộ W10.F.
+- `6eb8e93` (FU5): trần 120 từ của nhánh lookup nay ghi thẳng luật đếm vào prompt (`Đầu ra … (đếm phần thân mục; không tính dòng tiêu đề)`) và hằng `LOOKUP_ANSWER_COUNT_RULE`; oracle `work_lookup_probe.contract_words` đếm đúng luật đó (122 thô → 119).
+- FU1/FU3/FU4/FU6/FU7 (nửa phép đo) giao subagent, không gọi model, cây làm việc ghi ở lượt kế tiếp.
+- FU8/FU9/FU10 đã ghi vào §34.2 và §34.4 (điều kiện badge W6.2.BIND; hai trục version; rút claim "tổng hợp bỏ finding" vì không có receipt).
+
+#### 39.17.5 Bộ W10.F — lần 1 (3 shard) bị vô hiệu vì nhiễu tải, lần 2 chạy tuần tự
+
+- **Lần 1 (đã dừng, giữ log):** `/var/tmp/run-w10f-full.sh /var/tmp/w10f-full 3`, commit `6eb8e93`, bắt đầu 08:55:19Z, 3 shard song song, 17 ca × 2 = 34 ô, `--deadline-seconds 2700`. Sau 65 phút: 10/34 ô, **0 ô đạt**, nhiều ô bị hạn driver cắt khi còn `drafting`/`discovering`.
+- **Vì sao vô hiệu:** ba shard dùng chung MỘT route miễn phí nên latency mỗi lời gọi tăng ~3,4 lần — đo trực tiếp cùng ca S12: median 4,2 s → 14,2 s, p90 21,5 s → 64,5 s, max 44,6 s → 172,1 s, tổng thời gian gọi 599 s → 2 577 s. Ô bị hạn 2 700 s cắt trước khi hội tụ, nên "0/10 đạt" là **nhiễu phép đo**, không phải kết quả sản phẩm. Log giữ nguyên ở `/var/tmp/w10f-full-3shards-aborted/` (không trộn vào thống kê lần 2).
+- **Lần 2 (đang chạy):** `/var/tmp/run-w10f-seq.sh /var/tmp/w10f-seq`, **tuần tự 1 tiến trình**, commit neo **`6adbe78`**, bắt đầu **2026-10-03T10:00:58Z**, cùng 17 ca × 2 = 34 ô, `--budget-usd 0.5`, `--deadline-seconds 1800`, `--max-steps 80`, cổng `minPassed 22` (#6472). Đây mới là phép đo để trích số.
+- Mọi commit sau `6adbe78` KHÔNG nằm trong phép đo này; đọc `freeze.txt` trước khi trích số.
+- C4/C5 của W6.1 (#6477, phương án A) chạy SAU khi bộ này xong, trên cùng cây đã vá.

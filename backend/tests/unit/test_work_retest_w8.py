@@ -253,8 +253,8 @@ def test_retest_budget_uses_new_input_size_profile_still_clamped_to_owner(tmp_pa
         second = await check(rt, sid, meta, 'long')
         assert second['childId'] == first['childId'] and second['status'] == 'pass'
         budget = store.get(second['childId'])['config']['workBudget']
-        assert budget['profile'] == 'review_long' and budget['requestedMaxSteps'] == 24
-        assert budget['effectiveMaxSteps'] == min(24, store.get(sid)['config']['maxSteps'])
+        assert budget['profile'] == 'review_long' and budget['requestedMaxSteps'] == 80
+        assert budget['effectiveMaxSteps'] == min(80, store.get(sid)['config']['maxSteps'])
     asyncio.run(run())
 
 

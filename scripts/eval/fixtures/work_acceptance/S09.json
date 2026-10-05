@@ -3,11 +3,11 @@
   "title": "Restart khi đang chờ trả lời — thẻ còn, resume đúng child (W7.1)",
   "goal": "Harness khởi động lại giữa lúc chờ owner: thẻ interview sống sót và câu trả lời resume đúng child",
   "ownerLanguage": "vi",
-  "intent": {"command": "mixed", "why": "Triển khai endpoint + hỏi chủ nhà về định dạng cột ⇒ luồng thi công (mixed)."},
-  "notes": "Khi có thẻ interview đang chờ, bench đóng DB/runtime rồi mở lại trên cùng DB/workspace trước khi trả lời. Sau restart, lượt main cũ mất theo tiến trình nên bench mô phỏng lượt kế tiếp của người dùng (RESTART_RESUME_PROMPT) để run đi tiếp trên trạng thái bền.",
-  "prompt": "Triển khai endpoint xuất CSV trong repo này. Nếu cần tôi quyết định về định dạng cột (dấu phẩy hay tab, có header hay không) thì hỏi tôi rồi làm tiếp; chạy python -m pytest -q sau khi xong.",
+  "intent": {"command": "mixed", "why": "Triển khai endpoint + hỏi chủ nhà đích ghi tệp báo cáo (repo không thể trả lời) ⇒ luồng thi công (mixed)."},
+  "notes": "Khi có thẻ interview đang chờ, bench đóng DB/runtime rồi mở lại trên cùng DB/workspace trước khi trả lời. Sau restart, lượt main cũ mất theo tiến trình nên bench mô phỏng lượt kế tiếp của người dùng (RESTART_RESUME_PROMPT) để run đi tiếp trên trạng thái bền. Câu hỏi dành cho chủ nhà là đích ghi tệp CSV — thứ repo không thể trả lời; bản cũ hỏi định dạng cột đã bị tests/test_reports.py khoá nên child từ chối hỏi.",
+  "prompt": "Triển khai endpoint xuất CSV trong repo này. Định dạng cột đã được tests/test_reports.py khoá — cứ theo đó mà làm. Riêng đích ghi tệp (đường dẫn và tên tệp CSV) thì repo không có câu trả lời: đó là quyết định của tôi, hãy hỏi tôi trước khi viết mã rồi làm tiếp theo câu trả lời.",
   "interviewAnswers": [
-    {"text": "Dùng dấu phẩy và có header; tên cột giữ như trong tests."}
+    {"text": "Ghi ra out/report.csv (tạo thư mục nếu chưa có); giữ đúng định dạng tests/test_reports.py đang khoá."}
   ],
   "faults": [
     {"kind": "restart_while_waiting"}

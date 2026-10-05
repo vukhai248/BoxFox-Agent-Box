@@ -16,7 +16,7 @@ import asyncio
 
 import pytest
 
-from agentbox.agent_core import research_header, research_quality, research_runtime
+from agentbox.agent_core import research_gateway, research_header, research_quality, research_runtime
 from agentbox.agent_core.limits import RESEARCH_GATE_ENV
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
@@ -81,6 +81,18 @@ def harness(tmp_path, monkeypatch):
     sid = runtime.create({'skills': []})['id']
     yield store, runtime, sid, store.get(sid), executor
     store.close()
+
+
+@pytest.fixture(autouse=True)
+def _legacy_path_pins_the_gateway_off(monkeypatch):
+    """Tệp này kiểm ĐƯỜNG CŨ (`BOXFOX_RESEARCH_GATE`) — ghim gateway TẮT tường minh.
+
+    Khi `BOXFOX_RESEARCH_GATEWAY` bật, main chỉ còn đi qua ranh giới đã publish
+    (`RESEARCH_MAIN_READ_ONLY`), nên đường cũ đóng lại — đó là hành vi của tệp khác
+    (`test_research_gateway.py`). Bài kiểm ở đây phải độc lập với môi trường thật của máy chạy:
+    máy có đặt `BOXFOX_RESEARCH_GATEWAY=on` thì tệp này vẫn đo đúng đường cũ.
+    """
+    monkeypatch.setenv(research_gateway.SWITCH, 'off')
 
 
 def seed_row(runtime, session, **overrides):

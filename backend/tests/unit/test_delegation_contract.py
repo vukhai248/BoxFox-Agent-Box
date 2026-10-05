@@ -16,6 +16,12 @@ from agentbox.agent_core.runtime import (CHILD_ANSWER_MAX_CHARS, CHILD_ECHO_MAX_
 from agentbox.agent_core.tool_contracts import SCHEMAS
 from agentbox.memory.session_store import SessionStore
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 BIG_CONTEXT = 'C' * 20000
 
 
@@ -89,8 +95,14 @@ def test_delegate_task_schema_states_the_result_shape_and_stays_backward_compati
     # T6 (vòng 22) thêm `wait` (sinh con không chặn) và `deliverTo` (con giao kết quả cho ai).
     # P3 (§5.9): thêm `taskKind` (kiểu việc của nhánh) và `facetId` (hướng bao phủ). Cả hai
     # đều KHÔNG bắt buộc, nên lệnh gọi cũ `role`/`goal` đi nguyên.
+    # Soát tuân thủ 2026-10-04: H3 (`task_surface.open_delegate`) đọc `args['task']`/`args['runId']`
+    # nhưng hợp đồng KHÔNG khai hai khoá này, nên model sống không có cách nào chạm tới đường task.
+    # H11 (việc 4, #6546): cha khai được trần THẤP HƠN cho con bằng `maxSteps`/`deadlineSeconds`.
     assert set(properties) == {'role', 'goal', 'context', 'expect', 'wait', 'deliverTo',
-                               'reviewTarget', 'questionId', 'taskKind', 'facetId'}
+                               'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId',
+                               'maxSteps', 'deadlineSeconds'}
+    assert properties['task']['type'] == 'object' and properties['runId']['type'] == 'string'
+    assert 'BOXFOX_TASK_SURFACE' in properties['task']['description']
     assert properties['wait']['type'] == 'boolean' and properties['deliverTo']['type'] == 'array'
     assert schema['parameters']['required'] == ['role', 'goal'], \
         'existing callers send role/goal/context only: nothing new may become required'
@@ -131,16 +143,16 @@ def test_child_prompt_carries_the_result_contract_and_the_parents_expected_shape
 
 
 def test_child_budget_is_clamped_by_the_parent_and_by_the_engine_ceiling(tmp_path):
-    """B6 — con 40 bước / 420 s (vòng 25: 300 → 420), nhưng KHÔNG BAO GIỜ vượt cha (`min()` giữ nguyên).
+    """B6 — con có trần riêng (H11/#6546: 1000 bước / 7200 s), nhưng KHÔNG BAO GIỜ vượt cha.
 
-    `420 s` là **trần**, không phải bảo đảm: lượt cha nào có hạn chót nhỏ hơn thì kẹp con xuống
-    theo cha. Vòng 25 nâng hạn chót mặc định của cha lên 600 s (D-35), nên lượt mặc định cho con
-    đúng trần 420 s — vẫn là quyết định của CHA, không phải của con.
+    Trần của con là **trần**, không phải bảo đảm: lượt cha nào có hạn chót/bước nhỏ hơn thì kẹp con
+    xuống theo cha. Cha mặc định (H11/#6546) 1000 bước/7200 s nên lượt mặc định cho con đúng
+    1000/7200 — vẫn là quyết định của CHA, không phải của con.
     """
     cases = [
-        ({'maxSteps': 60, 'deadlineSeconds': 900}, 40, 900),
+        ({'maxSteps': 60, 'deadlineSeconds': 900}, 60, 900),
         ({'maxSteps': 12, 'deadlineSeconds': 60}, 12, 60),
-        ({}, 40, 600),
+        ({}, 1000, 7200),
     ]
     for parent_values, steps, seconds in cases:
         _, _, child = run_delegation(tmp_path / f"p{steps}-{seconds}", delegate_args(),

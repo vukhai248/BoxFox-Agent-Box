@@ -1,0 +1,31 @@
+{
+  "checkpoint": "H8",
+  "status": "verified",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "c836822 (nghiệm thu vòng chạy 29/29) + 802f51f/c6c88bb (nối runtime + route policy; vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["backend/src/agentbox/agent_core/runtime.py (composer hiện có, chỉ đọc)"],
+    "write": ["backend/src/agentbox/agent_core/adaptive_main.py", "backend/src/agentbox/agent_core/adaptive_surface.py", "backend/src/agentbox/agent_core/execution_kernel.py", "backend/tests/unit/test_adaptive_main.py", "backend/tests/unit/test_adaptive_surface.py", "backend/tests/unit/test_execution_policy_route.py"],
+    "forbidden": ["bỏ minimum checks", "tự phát minh trần step/wall", "chạy hai scheduler cho cùng admission"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"adaptiveMain": "không có hằng số schema/phiên bản trong module", "harnessPolicy": "boxfox-execution-policy/1"},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_adaptive_main.py (87 ca) + test_adaptive_surface.py (13 ca)"},
+    {"id": "probe-P6", "result": "pass", "evidence": "probes_962cd84.json P6 14/14: stop/revoke luôn thắng; cùng chữ ký lỗi + bằng chứng không đổi → chặn; không phát minh trần step/wall; mọi quyết định kèm reason + evidenceRefs"},
+    {"id": "change-receipt", "result": "pass", "evidence": "H8.2 `_change_declared` fail closed, đòi approval khi intent/scope đổi"},
+    {"id": "two-schedulers", "result": "pass", "evidence": "E1–E4 trong 29/29 PASS trên c836822 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json; gồm ADAPTIVE_LOOP_REPEAT, recovery_decision)"},
+    {"id": "policy-writer", "result": "pass", "evidence": "c6c88bb: execution_kernel.set_policy/status + route GET|PUT /api/agent/sessions/{sid}/execution-policy; 409 POLICY_SWITCH_OFF / 400 POLICY_MODE_INVALID; test_execution_policy_route.py (5 ca)"}
+  ],
+  "known_unknowns": [
+    "hiệu quả/chi phí adaptive chưa đo (calibration H10.1 — hoãn #6531)",
+    "phiên thật dài ngày với mode adaptive chưa chạy (cần consent + hai công tắc)"
+  ],
+  "rollback_ref": "đặt BOXFOX_ADAPTIVE_HARNESS về off (mặc định) — không cần gỡ file; mode legacy giữ nguyên",
+  "next_action": "mở lại khi có consent (H10.1); giữ stop/revoke thắng + reason+evidenceRefs"
+}

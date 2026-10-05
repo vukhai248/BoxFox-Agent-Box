@@ -39,7 +39,7 @@ tracked=subprocess.run(['git','ls-files','-z'],capture_output=True,check=True).s
 tracked={x.decode('utf-8') for x in tracked.split(b'\\0') if x}
 changed+=sorted(set(paths)-tracked)
 critical=any(re.search(r'api|schema|auth|migration|contract|concurr|lock',x,re.I) for x in changed) or len(changed)>8
-print(json.dumps({'schema':'work-code/1','hash':h.hexdigest(),'head':head,'criticalChanges':critical}))
+print(json.dumps({'schema':'work-code/1','hash':h.hexdigest(),'head':head,'criticalChanges':critical,'changed':changed[:200]}))
 '''
 SNAPSHOT_COMMAND = "python3 -c \"import base64;exec(base64.b64decode('%s'))\"" % base64.b64encode(
     SNAPSHOT_SCRIPT.encode()).decode()
@@ -77,10 +77,64 @@ async def snapshot(graph, sid, root=None, base=None):
     return None
 
 
+DIRTY_SCHEMA = 'work-dirty/1'
+
+
+async def identity_of(graph, sid, source, mode=None, root=None, base=None):
+    """Đọc danh tính mã hiện tại bằng ĐÚNG đầu đọc đã ghi ra binding (W10).
+
+    Run touchset (workspace không có git) được ghim bằng dirty manifest (`work-dirty/1`);
+    run git bằng ảnh chụp worktree (`work-code/1`). Hai schema không bao giờ bằng nhau, nên
+    đọc một binding `work-dirty/1` bằng ảnh chụp git làm MỌI lượt kiểm trong workspace
+    không-git bị từ chối "Code changed before check." (đo ở W10.F ca S12).
+    """
+    source = source if isinstance(source, dict) else {}
+    if source.get('schema') == DIRTY_SCHEMA or (not source and mode == 'touchset'):
+        manifest = await graph.worktrees.dirty_manifest(sid)
+        if manifest:
+            # Cùng hình dạng với `work_graph.code_identity` để mọi cổng so sánh dùng chung một kiểu.
+            return {'schema': DIRTY_SCHEMA, 'hash': work_policy.digest(manifest),
+                    'head': manifest.get('head'), 'criticalChanges': False}
+        if source.get('schema') == DIRTY_SCHEMA:
+            return None      # bản ghim dirty mà không đọc lại được cây: fail-closed, không đoán
+        # Chưa có bản ghim: giữ nguyên đường dự phòng cũ (đọc ảnh chụp git) cho môi trường
+        # không trả lời được manifest — cổng so sánh vẫn theo schema, chỉ đường đọc là dự phòng.
+    return await snapshot(graph, sid, root if root is not None else source.get('root'),
+                          base if base is not None else source.get('base'))
+
+
+def same_identity(a, b):
+    """Cùng một cây mã? So schema+hash, KHÔNG so cả dict: bản ghim cũ và bản đọc mới có thể
+    mang thêm trường (root/base/declared/changed) mà vẫn tả đúng một cây."""
+    if not isinstance(a, dict) or not isinstance(b, dict) or not b.get('hash'):
+        return False
+    return (a.get('schema'), a.get('hash')) == (b.get('schema'), b.get('hash'))
+
+
+async def identity_changed(graph, sid, source, mode=None):
+    """True khi cây mã không còn khớp bản ghim đã lưu."""
+    if not isinstance(source, dict) or not source.get('hash'):
+        return False
+    return not same_identity(await identity_of(graph, sid, source, mode), source)
+
+
 async def snapshot_of(graph, sid, source):
     """Re-read the tree a stored snapshot was taken from (legacy: the whole workspace)."""
-    source = source if isinstance(source, dict) else {}
-    return await snapshot(graph, sid, source.get('root'), source.get('base'))
+    return await identity_of(graph, sid, source)
+
+
+def declared_map(graph, node, manifest):
+    """Digest từng mục khai báo của nút (W10: nhỏ, có tính tiền tố thư mục).
+
+    Chỉ ghim phần cây mà nút này thực sự sở hữu, nên quyết định ghim lại/không ghim lại
+    không cần giữ cả manifest (hàng nghìn đường dẫn) trong từng artifact.
+    """
+    files = (manifest or {}).get('files') or {}
+    out = {}
+    for entry in graph.worktrees.touch_paths(node):
+        out[entry] = work_policy.digest({p: files[p] for p in files
+                                         if p == entry or p.startswith(entry + '/')})
+    return out
 
 
 def complete(result):
@@ -396,6 +450,34 @@ def apply_findings(raw, status, coverage, analysis):
     return new, updated, error
 
 
+def stuck_criteria(state, doc, criteria, limit=2):
+    """#6456(c): cùng một tiêu chí vẫn `revise` sau ≥ `limit` lượt sửa ⇒ nâng thành xung đột đầu vào.
+
+    Con kiểm có thể cứ `revise` mãi trên một tiêu chí bất khả thi/mâu thuẫn mà không dán nhãn
+    `criterion` (đo ở W8.A4.5.N lượt 14–16: coverage sai hợp đồng, `UNKNOWN_RECEIPT`, `SELF_REFUTED`).
+    Luật này KHÔNG phụ thuộc nhãn của con kiểm: quá `limit` vòng sửa trên cùng một tiêu chí thì main
+    phải xem lại định nghĩa nhiệm vụ thay vì sửa artifact lần thứ ba.
+
+    Phạm vi (W10, chủ nhà chốt): stage `execute` của run git đếm `state['repairs']` — số vòng sửa
+    tự động đã chạy; mọi stage còn lại (gồm `produce`) đếm `state['rounds']` — số vòng sản xuất đã
+    chạy. Trước W10 chỉ stage execute có `repairs` mới leo thang, nên một tiêu chí bị gán sai ở
+    stage sản xuất cứ lặp vô hạn mà không bao giờ thành hàng rào cho main xem lại.
+    """
+    if doc.get('status') != 'revise':
+        return []
+    attempts = len(state.get('repairs') or []) or len(state.get('rounds') or [])
+    if attempts < limit:
+        return []
+    out = []
+    for item in doc.get('coverage') or []:
+        if item.get('status') == 'revise' and item.get('target', 'artifact') != 'criterion' \
+                and item.get('id') in criteria:
+            out.append({'id': item['id'], 'requirement': criteria[item['id']],
+                        'evidence': item.get('evidence') or '',
+                        'source': 'stuck_criteria'})
+    return out
+
+
 def input_conflicts(coverage, criteria):
     """An evidenced conflict in main's assignment, not a request to falsify the artifact."""
     return [{'id': item['id'], 'requirement': criteria[item['id']], 'evidence': item['evidence']}
@@ -424,21 +506,25 @@ def contract(lang, criteria):
         '\ncodeSnapshot.hash nhận diện nội dung cây mã; head nhận diện commit Git, criticalChanges là tín hiệu rủi ro. '
         'Head trùng hoặc criticalChanges=false không chứng minh cây mã chưa đổi. '
         'Test chỉ chứng minh assertion/input thực đã chạy; không suy ra quoting/encoding/field rỗng chưa kiểm. ') + work_prompts.choose(lang,
-        '\nJudge the EXACT wording of each criterion. When an A criterion contains a disproved technical premise, '
-        'use status=revise, target=criterion and evidence naming the conflict and correction for main. '
+        '\nJudge the EXACT wording of each criterion. target=criterion means THE CRITERION ITSELF is wrong: '
+        'its wording is ambiguous, contradicts another requirement, or rests on a premise no implementation can satisfy. '
+        'Only then use status=revise, target=criterion, with evidence naming the conflict and the correction for main. '
+        'When the criterion is clear and the artifact merely does not satisfy it, use status=revise with target=artifact: '
+        'that is an implementation failure, and the repair loop fixes it — never label a failing artifact criterion. '
         'Keep a factually correct artifact intact; do not silently replace the criterion and mark it pass. '
-        'Every coverage entry explicitly includes target. Other findings use target=artifact; '
-        'target=criterion is not for C/G rubrics. ',
-        '\nKiểm ĐÚNG nội dung từng tiêu chí. Tiêu chí A có tiền đề kỹ thuật bị nguồn bác bỏ phải ghi '
+        'Every coverage entry explicitly includes target. target=criterion is not for C/G rubrics. ',
+        '\nKiểm ĐÚNG nội dung từng tiêu chí. target=criterion nghĩa là CHÍNH TIÊU CHÍ sai: câu chữ mơ hồ, '
+        'mâu thuẫn với yêu cầu khác, hoặc dựa trên tiền đề không artifact nào thoả được. Chỉ khi đó mới ghi '
         'status=revise, target=criterion và evidence nêu mâu thuẫn/sửa tiêu chí cho main. '
+        'Khi tiêu chí RÕ RÀNG mà artifact không đạt, ghi status=revise với target=artifact: đó là lỗi triển khai '
+        'và vòng sửa lo — tuyệt đối không dán nhãn criterion cho một artifact hỏng. '
         'Giữ artifact đúng dữ kiện; không âm thầm đổi nghĩa tiêu chí rồi ghi pass. '
-        'Mỗi coverage entry ghi rõ target. Finding khác dùng target=artifact; '
-        'target=criterion không áp dụng rubric C/G. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
+        'Mỗi coverage entry ghi rõ target. target=criterion không áp dụng rubric C/G. ') + '\n' + json.dumps(criteria, ensure_ascii=False) + work_prompts.choose(lang,
         '\nReturn findings and a fenced json object {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"specific reference or finding"}]}. '
-        'Example for a disproved premise: {"id":"A1","status":"revise","target":"criterion","evidence":"Opened source refutes the premise; main must correct A1, not rewrite the correct artifact."}. '
+        'Example for a criterion no artifact can satisfy: {"id":"A1","status":"revise","target":"criterion","evidence":"A1 rests on a premise the opened source refutes; no artifact can satisfy A1 as written, so main must correct A1."}. '
         'Include every criterion id exactly once. END with one line VERDICT: ok or VERDICT: revise.',
         '\nTrả finding và object trong fenced json {"coverage":[{"id":"A1","status":"pass|revise|unverified","target":"artifact|criterion","evidence":"tham chiếu hoặc finding cụ thể"}]}. '
-        'Ví dụ tiền đề bị bác bỏ: {"id":"A1","status":"revise","target":"criterion","evidence":"Nguồn đã mở bác tiền đề; main sửa A1, không viết lại artifact đúng."}. '
+        'Ví dụ tiêu chí không artifact nào thoả được: {"id":"A1","status":"revise","target":"criterion","evidence":"Tiền đề của A1 bị nguồn đã mở bác; không artifact nào thoả A1 như đang viết, main phải sửa A1."}. '
         'Mỗi id xuất hiện đúng một lần. KẾT THÚC bằng một dòng VERDICT: ok hoặc VERDICT: revise.') + work_prompts.choose(lang,
         '\nFindings (same json object, at most 8): {"id":"F1","criterionId":"A1","severity":"blocking|note",'
         '"scope":"node|run","claim":"<=300 chars","evidenceRefs":["<tool call id>","verify:<codeHash>",'
@@ -707,10 +793,83 @@ class Checks:
             self.graph.require_planning_current(run)
             return doc['binding'].get('codeSnapshot')
         source = current()
-        if not source or await snapshot_of(self.graph, owner, source) != source:
+        if not source or await identity_changed(self.graph, owner, source):
             raise ValueError('WORK_RETEST_STALE: code changed while waiting for slot')
         if current() != source:
             raise ValueError('WORK_RETEST_STALE: check binding changed during code inspection')
+
+    def pending_conflicts(self, run, node, stage):
+        """Xung đột đầu vào còn hiệu lực cho stage này.
+
+        Hồ sơ lượt kiểm đã được main `resolve` (`inputConflictsResolved`) thì KHÔNG dựng lại hàng
+        rào: nếu không, `resolve` bị chính lượt kiểm kế tiếp của một loại khác hoàn tác, và main kẹt
+        vòng resolve → check → conflict.
+        """
+        return [item for record in self.latest(run, node, stage).values()
+                if not record.get('inputConflictsResolved')
+                for item in record.get('inputConflicts', [])]
+
+    def mark_conflicts_resolved(self, run_id, node_id, stage, note=''):
+        """Ghi vết lên chính hồ sơ lượt kiểm: hàng rào đã được main xác nhận xử lý."""
+        marked = 0
+        for record in self.records(run_id):
+            if (record.get('nodeId') == node_id and record.get('stage') == stage
+                    and record.get('inputConflicts') and not record.get('inputConflictsResolved')):
+                record['inputConflictsResolved'] = {'at': time.time(), 'note': note[:200]}
+                self.save(record)
+                marked += 1
+        return marked
+
+    async def moved_paths(self, run, node, source, current):
+        """Mục khai báo của nút đã đổi nội dung kể từ bản ghim, hoặc None khi không đo được."""
+        schema = source.get('schema')
+        if schema == DIRTY_SCHEMA:
+            stored = source.get('declared')
+            if not isinstance(stored, dict):
+                return None  # bản ghim trước W10 không có phần khai báo: không đo được ⇒ chạy lại
+            manifest = await self.graph.worktrees.dirty_manifest(run['sessionId'])
+            if not manifest:
+                return None
+            now = declared_map(self.graph, node, manifest)
+            return {entry for entry in set(stored) | set(now) if stored.get(entry) != now.get(entry)}
+        if schema == 'work-code/1':
+            # Ảnh chụp không kể tên tệp đã đổi (bản cũ/đầu đọc không đầy đủ) ⇒ KHÔNG đoán:
+            # không đo được thì bản nháp phải được sản xuất lại, không được ghim lại mù.
+            if not isinstance((current or {}).get('changed'), list):
+                return None
+            allowed = self.graph.worktrees.touch_paths(node)
+            changed = list((current or {}).get('changed') or [])
+            hits = {p for p in changed if any(p == a or p.startswith(a + '/') for a in allowed)}
+            if (current or {}).get('head') != source.get('head'):
+                hits.add('<HEAD moved>')
+            return hits
+        return None
+
+    async def binding_gate(self, run, node, stage, meta, *, rebind=True):
+        """(trạng thái, chi tiết) cho bản ghim mã của một bản nháp (W10 quyết định A).
+
+        - 'current': cây vẫn khớp bản ghim.
+        - 'rebound': cây đã đổi nhưng CHỈ ngoài file nút này khai báo ⇒ ghim lại bản nháp vào
+          cây hiện tại và ghi vết; bản nháp cùng lịch sử được giữ.
+        - 'moved':   cây đổi ĐÚNG vào file nút khai báo (hoặc không đo được) ⇒ người gọi từ chối
+          lượt kiểm và trả stage về sản xuất: không kiểm chữ cũ trên mã mới.
+        """
+        source = (meta.get('binding') or {}).get('codeSnapshot')
+        if not source or not source.get('hash'):
+            return 'current', None
+        mode = (run.get('isolation') or {}).get('mode')
+        current = await identity_of(self.graph, run['sessionId'], source, mode)
+        if same_identity(current, source):
+            return 'current', None
+        moved = await self.moved_paths(run, node, source, current)
+        if moved is None:
+            return 'moved', None
+        if rebind and not moved and current:
+            trail = {'from': source.get('hash'), 'to': current.get('hash'), 'at': time.time(),
+                     'mode': mode, 'stage': stage}
+            await self.graph.rebind_artifact(run, node, stage, meta, current, trail)
+            return 'rebound', trail
+        return 'moved', sorted(moved)
 
     async def judge(self, session, run, node, stage, spec, metas, criteria, doc, whole=False):
         graph = self.graph
@@ -839,8 +998,23 @@ class Checks:
         source = targets[0]['binding'].get('codeSnapshot')
         if spec['id'] in ('tests', 'code_review') and not source:
             return doc | {'status': 'unverified', 'error': 'Exact code snapshot required.'}
-        if source and await snapshot_of(graph, run['sessionId'], source) != source:
-            return doc | {'status': 'superseded', 'error': 'Code changed before check.'}
+        if source:
+            if node is None:
+                if await identity_changed(graph, run['sessionId'], source):
+                    return doc | {'status': 'superseded', 'error': 'Code changed before check.'}
+            else:
+                gate, detail = await self.binding_gate(run, node, stage, targets[0])
+                if gate == 'moved':
+                    # W10 quyết định A: mã đổi ĐÚNG vào file của nút ⇒ trả stage về sản xuất (giữ
+                    # lịch sử) thay vì để nút đứng mãi ở needs_checks với hàng rào không đường xoá.
+                    graph.stage_needs_rebuild(run, node, stage, detail)
+                    return doc | {'status': 'superseded', 'error':
+                                  'WORK_CHECK_CODE_MOVED: the tree moved inside this node\'s declared files ('
+                                  + ', '.join((detail or ['<unmeasurable>'])[:6]) + '); the stage is back to '
+                                  'pending — call work_run phase=execute to produce a fresh draft on the current code.'}
+                if gate == 'rebound':
+                    doc['codeRebound'] = detail
+                source = targets[0]['binding'].get('codeSnapshot')
         previous_tester = None if whole else self.retest_candidate(session, run, node, stage, spec, criteria, targets[0], doc['checkId'])
         if previous_tester:
             doc.update(retestOf=previous_tester['checkId'], previousArtifactId=previous_tester['artifactId'])
@@ -911,9 +1085,25 @@ class Checks:
                 doc.update(status='unverified', error='Missing actual successful required test command events.')
             if doc['status'] != 'error':
                 break
-        if source and await snapshot_of(graph, run['sessionId'], source) != source:
-            doc.update(status='superseded', error='Source changed during check (including terminal side effects).')
-        doc['inputConflicts'] = input_conflicts(doc.get('coverage', []), criteria) if doc['status'] == 'revise' else []
+        if source:
+            if node is None:
+                if await identity_changed(graph, run['sessionId'], source):
+                    doc.update(status='superseded',
+                               error='Source changed during check (including terminal side effects).')
+            else:
+                gate, detail = await self.binding_gate(run, node, stage, targets[0])
+                if gate == 'moved':
+                    doc.update(status='superseded',
+                               error='Source changed during check (including terminal side effects).')
+                elif gate == 'rebound':
+                    doc['codeRebound'] = detail
+        # `node` là None ở lượt duyệt TOÀN kế hoạch: chỉ lượt kiểm gắn nút mới có vòng sửa để đếm.
+        # `criteria` ở đây còn có `C1` (tiêu chí của chính lượt kiểm), không phải tiêu chí nghiệm thu —
+        # leo thang chỉ áp cho A*, nên dựng lại đúng tập A từ `node['acceptance']` như ở `start()`.
+        acceptance = {f'A{i+1}': value for i, value in enumerate(node['acceptance'])} if node else {}
+        stuck = stuck_criteria(node['stages'][stage], doc, acceptance) if node else []
+        doc['inputConflicts'] = (input_conflicts(doc.get('coverage', []), criteria)
+                                 if doc['status'] == 'revise' else []) + stuck
         doc['finishedAt'] = time.time()
         return doc
 
@@ -976,7 +1166,7 @@ class Checks:
                 return None
             docs.append(doc)
         source = meta['binding'].get('codeSnapshot')
-        if source and await snapshot_of(self.graph, run['sessionId'], source) != source:
+        if source and await identity_changed(self.graph, run['sessionId'], source):
             raise ValueError('WORK_CHECK_STALE: code changed; cannot join old check')
         # Re-read after an awaited snapshot: another operation may have stopped or
         # superseded the admission. Receipt aliases do not mutate the live graph.
@@ -1067,7 +1257,7 @@ class Checks:
                         inputs = graph.artifacts.input_closure(run['runId'], [meta])
                         graph.artifacts.validate_manifest(run, receipt or passed, inputs, [meta['artifactId']])
                         source = meta['binding'].get('codeSnapshot')
-                        if source and await snapshot_of(graph, run['sessionId'], source) != source:
+                        if source and await identity_changed(graph, run['sessionId'], source):
                             raise ValueError('WORK_CHECK_STALE: code changed; old check receipt is not current proof')
                         if passed:
                             self.remember_invocation(run['runId'], key, request, passed['checkId'])
@@ -1109,6 +1299,10 @@ class Checks:
                 graph.child_budget.pop(run['runId'], None)
         if self.valid(run, node, stage):
             state.update(status='accepted', feedback='', error=None)
+        elif state.get('codeMoved') and state.get('status') == 'pending':
+            # W10: hàng rào "mã đã đổi trong phạm vi nút" đã trả stage về sản xuất; giữ nguyên
+            # (nếu không, đuôi này dựng lại đúng cái kẹt needs_checks mà đường xoá vừa gỡ).
+            pass
         elif any(r['status'] == 'revise' for r in self.latest(run, node, stage).values()):
             state.update(status='revise' if state['attempts'] < state.get('maxRounds', 3) else 'rejected',
                          feedbackSource='checks',
@@ -1116,8 +1310,7 @@ class Checks:
                                             if r['status'] == 'revise'))
         else:
             state['status'] = 'needs_checks'
-        state['inputConflicts'] = [item for record in self.latest(run, node, stage).values()
-                                  for item in record.get('inputConflicts', [])]
+        state['inputConflicts'] = self.pending_conflicts(run, node, stage)
         if records:
             doc = records[-1]
             state['rounds'][-1].update(reviewerId=doc.get('childId'),

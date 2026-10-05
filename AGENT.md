@@ -9,7 +9,7 @@
 ---
 
 ## 2. Agent Roles & Specialization Hierarchy
-BoxFox is one main agent (the orchestrator) and eleven specialist roles. Only the main agent delegates; a child never spawns another child and never asks the owner.
+BoxFox is one main agent (the orchestrator) and eleven specialist roles. Only the main agent delegates, and a child never spawns another child. A child that needs an owner decision saves the question with `work_report` (`needs_user`); the main agent answers it or publishes it to the owner through the interview card.
 1. **Main agent (`orchestrator`)**:
    - Triages the request, then builds and drives a Work Graph (`work_graph`, `work_run`, `work_ship`) for any non-trivial task: discovery nodes, sub-plans P1..Pn with tests and dependencies, whole-plan review, owner approval (or Autopilot), DAG execution in parallel waves, and a PR at the end.
    - Asks the owner only through `interview` (a multi-question card) or `ask_user` / `request_approval`.
@@ -17,7 +17,7 @@ BoxFox is one main agent (the orchestrator) and eleven specialist roles. Only th
 2. **Discovery roles**: `explore` (reads the repository and reports facts with file:line evidence), `research` (answers questions from the web and documents with cited sources), `design` (UI and interaction design).
 3. **Planning role**: `plan` (a senior design document: context, scope, interfaces, steps, tests, risks, rollout).
 4. **Execution roles**: `build` (implements a plan), `debug` (root cause and a surgical fix), `simplify` (refactors without behavior change), `testing` (runs the real tests and reports evidence).
-5. **Review roles**: `review` (code review), `plan-review` (plan and design review), `research-review` (dossier review). Every child output in a Work Graph goes to an independent reviewer that ends with `VERDICT: ok` or `VERDICT: revise`; the producer revises until the verdict is ok or the round cap is reached.
+5. **Review roles**: `review` (code review), `plan-review` (plan and design review), `research-review` (dossier review). Verification follows the artifact and its risk, not one fixed reviewer for every node: `work_policy.derive` requires tests, plan review, design review, evidence or code review per artifact kind, and a git-isolated code review is deferred until the converged tree. A dispatched check ends with `VERDICT: ok` or `VERDICT: revise`; the producer revises until the verdict is ok or the round cap is reached.
 
 ---
 

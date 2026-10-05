@@ -16,6 +16,12 @@ from agentbox.agent_core import limits, research_header, research_quality, resea
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 EXCERPT = ('Người bệnh đúng tuyến được hưởng 80% chi phí khám chữa bệnh, hồ sơ chuyển tuyến gồm '
            'giấy chuyển tuyến và bản tóm tắt điều trị theo quy định. ') * 3
 PAYLOAD = {'docNumber': '75/2023/NĐ-CP', 'effectiveDate': '2023-12-01', 'validity': 'in_force',
