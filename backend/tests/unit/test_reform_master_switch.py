@@ -12,7 +12,7 @@ Luật (chủ nhà 05/10/2026, quyết định #6599 — v2 bật mặc định)
 import pytest
 
 from agentbox.agent_core import feature_switches as fs
-from agentbox.agent_core import context_surface, job_surface, recovery_policy, research_gateway
+from agentbox.agent_core import context_surface, job_surface, research_gateway
 from agentbox.agent_core import task_surface, tool_contracts, usage_ledger
 
 MEMBERS = fs.MEMBERS
@@ -23,7 +23,6 @@ READERS = {
     'BOXFOX_CONTROLLER_JOBS': (job_surface.enabled, tool_contracts.controller_jobs_enabled),
     'BOXFOX_USAGE_LEDGER': (usage_ledger.enabled,),
     'BOXFOX_RESEARCH_GATEWAY': (research_gateway.enabled,),
-    'BOXFOX_RECOVERY_POLICY': (recovery_policy.enabled,),
 }
 
 
@@ -68,9 +67,9 @@ def test_master_accepts_every_on_spelling(clean_env, value):
 
 def test_an_explicit_member_wins_over_the_master_in_both_directions(clean_env):
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    clean_env.setenv('BOXFOX_RECOVERY_POLICY', 'off')
-    assert fs.member_switch('BOXFOX_RECOVERY_POLICY') is False
-    assert fs.source('BOXFOX_RECOVERY_POLICY') == 'explicit'
+    clean_env.setenv('BOXFOX_RESEARCH_GATEWAY', 'off')
+    assert fs.member_switch('BOXFOX_RESEARCH_GATEWAY') is False
+    assert fs.source('BOXFOX_RESEARCH_GATEWAY') == 'explicit'
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
     clean_env.setenv('BOXFOX_TASK_SURFACE', 'on')
     assert fs.member_switch('BOXFOX_TASK_SURFACE') is True
@@ -109,7 +108,6 @@ def test_switch_readers_still_honour_their_own_raw_test_value(clean_env):
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
     assert task_surface.enabled('off') is False
     assert usage_ledger.enabled('off') is False
-    assert recovery_policy.enabled('off') is False
     assert research_gateway.enabled('off') is False
     assert job_surface.enabled('off') is False
     assert tool_contracts.task_surface_enabled('off') is False

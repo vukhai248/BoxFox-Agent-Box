@@ -28,7 +28,8 @@ MASTER_DEFAULT = True
 
 ON_VALUES = {'1', 'on', 'true', 'yes'}
 
-#: Bảy công tắc của đợt cải tổ (H3–H8). Thứ tự này cũng là thứ tự hiện trong `runtime-info`.
+#: Các công tắc của đợt cải tổ còn lại sau checkpoint xoá dần (H3–H8). Thứ tự này cũng là
+#: thứ tự hiện trong `runtime-info`.
 MEMBERS = (
     'BOXFOX_TASK_SURFACE',
     'BOXFOX_CONTEXT_SURFACE',
@@ -36,7 +37,6 @@ MEMBERS = (
     'BOXFOX_USAGE_LEDGER',
     'BOXFOX_RESEARCH_GATEWAY',
     'BOXFOX_ADAPTIVE_HARNESS',
-    'BOXFOX_RECOVERY_POLICY',
 )
 
 

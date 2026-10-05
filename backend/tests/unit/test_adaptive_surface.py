@@ -158,7 +158,6 @@ def test_real_runtime_adaptive_turn_is_measured_and_decided(env):
 @pytest.mark.parametrize('deny', [False, True])
 def test_recovery_gate_is_live_and_only_removes_retries(env, monkeypatch, deny):
     from agentbox.agent_core import failures
-    monkeypatch.setenv('BOXFOX_RECOVERY_POLICY', 'on')
     original_advice = failures.retry_advice
     def immediate(*args, **kwargs):
         advice = original_advice(*args, **kwargs)

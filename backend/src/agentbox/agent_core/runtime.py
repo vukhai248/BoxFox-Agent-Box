@@ -4565,14 +4565,13 @@ class HarnessRuntime(RuntimeCommands):
                                 continue
                             advice = retry_advice(exc, attempts, remaining_seconds=self.seconds_left(budget),
                                                   spent_seconds=retry_waited)
-                            if recovery_policy.enabled():
-                                recovery = recovery_policy.decision(code, attempts=attempts,
-                                                                    retry_after=(advice or {}).get('delay'))
-                                self.store.emit(sid, 'recovery_decision', recovery)
-                                if advice and not recovery_policy.may_retry(recovery):
-                                    self.store.emit(sid, 'notice', {'code': 'RECOVERY_POLICY_DENIED',
-                                        'message': recovery['reason'], 'recovery': recovery})
-                                    advice = None
+                            recovery = recovery_policy.decision(code, attempts=attempts,
+                                                                retry_after=(advice or {}).get('delay'))
+                            self.store.emit(sid, 'recovery_decision', recovery)
+                            if advice and not recovery_policy.may_retry(recovery):
+                                self.store.emit(sid, 'notice', {'code': 'RECOVERY_POLICY_DENIED',
+                                    'message': recovery['reason'], 'recovery': recovery})
+                                advice = None
                             if advice is None:
                                 if attempts:
                                     # The chat banner prints the LAST error, which on its own reads
@@ -4871,8 +4870,7 @@ class HarnessRuntime(RuntimeCommands):
                         safe = {k: v for k, v in result.items() if k not in {'image', 'base64'}}
                         if safe.get('is_error'):
                             safe['reflection_hint'] = reflection_hint(name, safe.get('errorCode'))
-                            if recovery_policy.enabled():
-                                safe['recovery'] = recovery_policy.decision(safe.get('errorCode'))
+                            safe['recovery'] = recovery_policy.decision(safe.get('errorCode'))
                         if loop_guard.check_and_record(name, args if isinstance(args, dict) else {}, bool(safe.get('is_error'))):
                             safe['warning'] = 'CRITICAL_LOOP_GUARD: This exact tool call has repeatedly failed 3 times. You MUST halt this approach immediately, analyze why it is failing, change parameters, or delegate to a specialist.'
                         text_result = json.dumps(safe, ensure_ascii=False)
