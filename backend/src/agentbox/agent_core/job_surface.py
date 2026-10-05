@@ -22,7 +22,7 @@ STOP_KEY = 'controllerJobsStopped'
 
 
 def enabled(env=None):
-    """Bề mặt job: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Bề mặt job: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     if env is not None:
         return str(env or '').strip().lower() == 'on'
     return feature_switches.member_switch(SWITCH)

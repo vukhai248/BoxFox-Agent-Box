@@ -289,3 +289,202 @@ Chủ nhà giao agent quyết định (#6598: *"Tôi chưa hiểu lắm phần n
   (bản trên nhánh là tập con thật sự). Ba tệp mang vào từ `main`: tài liệu kiến trúc nói trên,
   `docs/plan/BoxFox-reform-master.md`, `docs/plan/v1-boxfox-harness-reform.md`.
 - Kiểm thử lại trên cây sau merge: xem `## Kiểm thử sau merge` bên dưới.
+
+## v2 — bật mặc định (2026-10-05, quyết định #6599)
+
+Chủ nhà chốt: *"tôi muốn bật lên hoàn toàn"* nhưng **giữ công tắc** để agent sau còn biết cách tổ chức
+(#6599). v2 đổi mặc định của khóa tổng từ TẮT sang **BẬT**: vận hành không cần env nào; công tắc trở thành
+lối thoát hiểm có tổ chức (`BOXFOX_REFORM=off` một lệnh cho cả nhóm, hoặc từng thành viên `off`).
+Quyết định xoá hay giữ nhánh legacy thuộc checkpoint sau, cần bằng chứng chạy thật dài ngày — ghi ở
+`HANDOFF.md` §6.4.
+
+### Mã và test (commit `96f158e`)
+
+- `backend/src/agentbox/agent_core/feature_switches.py`: `MASTER_DEFAULT = False` → **`True`** + docstring
+  viết lại theo nghĩa v2 (giá trị hiệu lực = tường minh > khóa tổng > mặc định).
+- 13 ghi chú "mặc định TẮT (bật dần từng công tắc)" ở bảy module lõi đổi thành "mặc định BẬT từ v2 (#6599),
+  tắt tường minh bằng `off`" (`context_surface.py`, `job_surface.py`, `research_gateway.py`,
+  `task_surface.py`, `tool_contracts.py`, `usage_ledger.py`, `recovery_policy.py`). Chỉ đổi chú thích, không
+  đổi hành vi đọc công tắc.
+- Đảo mặc định làm ~35 tệp test chốt hành vi cũ đỏ. Cách xử lý có tổ chức thay vì sửa từng bài:
+  - `backend/tests/unit/switch_isolation.py` thêm `isolate_off(monkeypatch, *switches)` (cạnh
+    `isolate_default`): cắt env khóa tổng + đặt tường minh các thành viên được nêu là `off`.
+  - `backend/tests/unit/conftest.py` (MỚI): marker `legacy_path` + fixture autouse đặt `BOXFOX_REFORM=off`
+    cho mọi bài mang marker.
+  - **35 tệp** chốt hành vi TRƯỚC v2 được gắn `pytestmark = pytest.mark.legacy_path` (khối chú thích 2 dòng
+    nêu lý do). Ba tệp đỏ có sẵn từ baseline **không** gắn (không phải ca legacy): `test_terminal_tools.py`,
+    `test_web_tools.py`, `test_work_tool_replay.py`.
+  - Sáu tệp khẳng định MẶC ĐỊNH chuyển sang `isolate_off` (cắt cả khóa tổng) hoặc sang khẳng định mới của v2
+    (`test_context_surface.py`, `test_job_surface.py`, `test_research_gateway.py`, `test_usage_surface.py`,
+    `test_task_surface.py`, `test_reform_master_switch.py`).
+  - `test_reform_master_switch.py` thêm ca `test_master_default_constant_is_true_after_the_v2_flip` và ca
+    "không env nào ⇒ cả nhóm BẬT, `source: default`"; `test_runtime_info.py` thêm ca khối `switches` hiện
+    mặc định v2 của cả nhóm.
+
+### Bốn con số kiểm thử
+
+| Lần chạy | Kết quả | Log |
+|---|---|---|
+| Toàn bộ `backend/tests/unit/` **không env** (lần chạy HỖN HỢP: 35 tệp legacy chạy dưới pin `legacy_path`, phần còn lại chạy mặc định mới) | **3 failed, 4384 passed, 12 skipped** trong 1292.85s — đúng ba lỗi đỏ baseline `346da06`, không phát sinh đỏ mới | `/var/tmp/v2-full-unit-2.log` |
+| Nhóm 22 tệp liên quan, mặc định mới | **747 passed** trong 236.49s (EXIT=0) | `/var/tmp/v2-default-group.log` |
+| Cùng nhóm 22 tệp, `BOXFOX_REFORM=off` | **747 passed** trong 237.16s (EXIT=0) — đường rollback một lệnh vẫn xanh | `/var/tmp/v2-off-group.log` |
+| Mẫu 7 tệp chẩn đoán (đối chứng) | `off` → 128 passed; mặc định mới → 66 failed, 62 passed ⇒ đỏ do ĐẢO MẶC ĐỊNH, không do lỗi sản phẩm | `/var/tmp/v2-sample-off.log`, `/var/tmp/v2-sample.log` |
+
+### Bằng chứng sống trên instance 3118
+
+Instance mới (`BOXFOX_AGENT_DATA_DIR=/var/tmp/boxfox-enable/data-v2`, cổng 3118) chạy **không env công tắc
+nào**; `GET /api/agent/runtime-info`:
+
+- `switches.master` = `{'name': 'BOXFOX_REFORM', 'on': True, 'source': 'default'}`;
+- cả bảy thành viên `{'on': True, 'source': 'default'}`;
+- `tools: 61`.
+
+Ảnh đầy đủ: `/code/.generated_artifacts/v2/runtime-info-default-3118.json`. (Trước v2 cùng khối này hiện
+`on: false, source: default` — xem mục bước 8 ở trên.)
+
+### Bốn driver trên 3118 (mặc định mới)
+
+Bốn driver live, tất cả trên 3118 (mặc định mới, không env công tắc), model miễn phí như mọi vòng E2E:
+
+| Driver | Nhãn | Kết quả | Bằng chứng / ghi chú |
+|---|---|---|---|
+| `driver.py` (11 kịch bản) | `v2-default` | **11/11 PASSED** (EXIT=0) | `kernel_guard` lần 1 đỏ rồi tự chạy lại lần 2 xanh; `/code/.generated_artifacts/e2e/runs/v2-default/` |
+| `driver_job.py` | `v2-default-job` | **1/1 PASSED**, 6/6 check (EXIT=0) | job `job-c30b4f1e` kind `model`, ownership `controller`; phiên con `7319bd6722e3` role `explore`; `/code/.generated_artifacts/e2e/runs/v2-default-job/` |
+| `driver_child_caps.py` (5 kịch bản) | `v2-default-caps` | **5/5 PASSED** (EXIT=0) | `await_nudge_cap` (3/3 timeout rồi `PEER_WAIT_CAPPED`), `peer_read_cap` (4 lần đọc OK rồi `PEER_READ_CAPPED`), `resume_not_cut` (`CHILD_RESUME_NOT_CUT`), `resume_second_turn` (attempt 1→2), `resume_wait_false`; `/code/.generated_artifacts/e2e/runs/v2-default-caps/` |
+| `driver_task.py` | `v2-default-task` | **0/1 — model MIỄN PHÍ làm hỏng hợp đồng task** | Không phải hồi quy sản phẩm: cùng driver **đã PASS 1/1** ở `enable-step8-task` (3117, công tắc bật). Transcript: model nâng `acceptance` lên gốc (bị từ chối), rồi gửi `inputs: []`, `inputs: ""`, `dependsOn: ""` — không lần nào đủ hợp đồng. Bằng chứng: `/code/.generated_artifacts/e2e/runs/v2-default-task/delegate_contract.json` |
+
+
+### Drill rollback một lệnh
+
+Hai lệnh trên CHÍNH instance 3118 + data dir `data-v2` (không đổi code, không migration, không mất dữ liệu):
+
+1. Restart với `BOXFOX_REFORM=off` → `GET /api/agent/runtime-info`: `switches.master = {'on': False, 'source': 'explicit'}`,
+   **cả bảy thành viên `{'on': False, 'source': 'master'}`** (`/code/.generated_artifacts/v2/runtime-info-reform-off-3118.json`).
+2. `driver.py --only kernel_guard,tools_and_file --switches off` → **3/3 PASSED** (EXIT=0): hai kịch bản đường cũ giữ
+   nguyên hành vi, kịch bản `adaptive_off` xác nhận đường mới bị TỪ CHỐI đúng trạng thái TẮT (`POLICY_SWITCH_OFF`) —
+   `/code/.generated_artifacts/e2e/runs/v2-rollback-off/`.
+3. Restart bỏ env → cả nhóm lại `{'on': True, 'source': 'default'}`
+   (`/code/.generated_artifacts/v2/runtime-info-back-on-3118.json`).
+
+Một env `off` là đủ để về hành vi trước v2; **bỏ env KHÔNG phải rollback** (env trống = BẬT).
+
+
+## v2 — trần chi (mock $4/$20) — 2026-10-05 (quyết định #6600)
+
+Mở lại phần **giới hạn ngân sách** của H10.2 (đã hoãn ở #6531) và kiểm chứng nó **sống**, bằng đúng cách
+chủ nhà cho phép: model **MIỄN PHÍ** + **giá giả** trên **router bản sao**; **tuyệt đối không gọi model trả
+phí**. Trước v2, `harnessAllocationId` không có nơi ghi trong `backend/src` (H6.9) nên đường reserve chỉ
+sống khi test ghim tay.
+
+### Mã mới (commit `96f158e`)
+
+- `backend/src/agentbox/api/server.py`: route vận hành `GET|PUT|DELETE /api/agent/sessions/{sid}/usage-allocation`
+  (sau ranh giới admin/Origin như mọi route khác). PUT đòi `consentRef` (thiếu → `USAGE_NO_CONSENT` 400) và
+  `ceiling` dương (thiếu/sai → `USAGE_FIELD_INVALID` 400), mở reservation với
+  `policyRevision = capability_epoch(...)` rồi ghim `harnessAllocationId` vào config gốc; đã gắn thì PUT lần
+  hai trả **409 `ALLOCATION_ALREADY_ATTACHED`**. DELETE gỡ pointer trước rồi `ledger.release(...)`.
+  `runtime-info` thêm khối `usage.allocations` (đọc `usage_ledger.open_allocations()`).
+- `backend/src/agentbox/agent_core/usage_ledger.py`: `open_allocations(limit=20)` — hàng `reserved` mới nhất
+  trước; bảng thiếu → `[]`; `limit` sai → `USAGE_FIELD_INVALID`.
+- Test: `backend/tests/unit/test_usage_allocation_route.py` (MỚI, 8 ca: 403 thiếu admin; 400 thiếu
+  ceiling/consent; ghim root + `policyRevision`; con ghim root; PUT lần hai 409; GET còn lại + DELETE release;
+  view route = `ledger.get_allocation`; không tool nào mở được trần) + 2 ca `open_allocations` trong
+  `test_usage_ledger.py` + `test_the_usage_block_lists_open_allocations` trong `test_runtime_info.py`.
+  Chạy: **64 passed** (ledger + route), **14 passed** (runtime-info); sau hậu kiểm v2: **68 passed** (ledger + route), **15 passed** (runtime-info).
+
+### Giao thức (bằng chứng: `/code/.generated_artifacts/h10/mock-price-20261005/`)
+
+1. Chụp router thật (`snapshot-real-router-before.json`): `space-bunny-free` giá 0/0, context `null`;
+   sha256 `router.sqlite` = `f50bbe3551f33425116a99d4fbf22f97642a553be0c1ba71b028729242ef8d8a`.
+2. Bản sao WAL-safe bằng Python `sqlite3` `source.backup(target)` → `/var/tmp/boxfox-budget/router-data/`
+   (kèm `master.key`), chạy `node src/main.mjs` cổng 3211
+   (`BOXFOX_ROUTER_DATA_DIR=/var/tmp/boxfox-budget/router-data BOXFOX_ROUTER_PORT=3211 BOXFOX_OAUTH_PORT=52121`).
+3. Giá giả:
+   `curl -s -X PATCH -H 'x-boxfox-admin: 1' -H 'content-type: application/json' -d '{"modelPricing":{"modelId":"space-bunny-free","input":4,"output":20}}' http://127.0.0.1:3211/api/router/connections/d7e26488-65b0-4012-8009-589cd94b324b`
+   rồi `modelContextWindow` 1 000 000 ⇒ `pricing.source='manual'` (`snapshot-copy-mocked.json`).
+4. Tầm nhìn harness: `_price` = `{input: 4, output: 20, source: 'manual'}`; `_bound(rows, 4096)` = **4.08192**
+   (= (1 000 000×4 + 4 096×20)/1 000 000) — đúng con số plan dự đoán.
+5. Bốn ca (driver `/code/.generated_artifacts/h10/mock_price_ceiling_v2.py`: runtime thật trong tiến trình +
+   `aiohttp` TestServer cho route thật):
+   - **A — không allocation** (`case-A-no-consent.json`): `USAGE_NO_CONSENT`, `modelCalls: 0`, 0 hàng allocation.
+   - **B — trần hẹp hơn bound** (`case-B-ceiling-exceeded.json`): ceiling 1.00 < 4.08192 →
+     `USAGE_CEILING_EXCEEDED`, `modelCalls: 0`, hàng allocation vẫn `reserved` (`consumed.amount: null`).
+   - **C — trong trần** (`case-C-within-ceiling.json`): ceiling 10.00 → reserve 4.08192 → gọi model free thật
+     (12.19 s, trả `pong`) → hàng `harness_usage` `amount 0.001272` (= (163×4 + 31×20)/1e6),
+     `price_snapshot.source='manual'`; reservation chuyển `released`, `releasedAmount 4.080648`.
+   - **D — route miễn phí** (`case-D-free-route.json`): PATCH giá về 0/0 ⇒ adaptive **không** allocation đi
+     qua, `amount 0.0`, `certainty: estimated`, `bound 0.0`.
+6. Revert + chứng minh mock biến mất: PATCH bản sao về 0/0 (`snapshot-copy-after-revert.json`); kill tiến
+   trình 3211 (cổng trống); `rm -rf /var/tmp/boxfox-budget` (xoá cả bản sao chứa `master.key`); router thật
+   vẫn 0/0/context `null` và **sha256 không đổi** (`snapshot-real-router-after.json`).
+
+**Kết luận:** đường trần chi chạy sống đúng hợp đồng; cả hai đường từ chối đều chặn **TRƯỚC** khi gọi model
+(`modelCalls: 0`); **không có chi phí thật nào phát sinh**. H10.1 (calibration sống) **vẫn hoãn**.
+
+
+## v2 — hậu kiểm: ba vòng review độc lập + sửa (commit `4c4c5dc`, `9da988f`)
+
+Hai review độc lập (`v2-review-switches` rủi ro 5/10, `v2-review-usage` rủi ro 3/10) và một simplify chạy
+trên `c6fd6e9..96f158e`; mọi phát hiện trong tầm được sửa trong commit này — không đổi mặc định, không đổi
+hợp đồng công khai.
+
+### Miền công tắc (review 1)
+
+- **Chốt lại: spawn research của Work Graph dừng dưới mặc định BẬT là CÓ CHỦ ĐÍCH, không phải hồi quy.**
+  `research_gateway.guard_delegate` chạy trước nhánh `work=`, đúng H7.1/P5 ("intent của main là đầu vào,
+  không bao giờ canonical"); luồng `research` của Work Graph là đường legacy, thay bằng biên Research độc lập.
+  Đã ghi `HANDOFF.md` §6.5, sửa docstring `runtime.delegate`, khoá bằng test mặc định
+  `test_engine_work_spawns_cannot_bypass_the_gateway_either`. Hai lối thoát hiểm giữ nguyên:
+  `BOXFOX_RESEARCH_GATEWAY=off`, hoặc binding research legacy của phiên cũ.
+- **Marker `legacy_path` nay KÍN**: fixture pin cả khóa tổng LẪN bảy thành viên `off`. Trước đó
+  `BOXFOX_REFORM=off BOXFOX_RESEARCH_GATEWAY=on` vẫn lọt vào đường cũ (9 bài đỏ) — nay 9/9 xanh.
+- **Sửa chỉ dẫn rollback tự mâu thuẫn**: `HANDOFF.md` §6.1 bước 6 và §9 mục 5 nay nói rõ "đặt tường minh
+  `BOXFOX_<TÊN>=off`" — bỏ env là BẬT, không phải rollback.
+- `test_journal_tools.py` bỏ marker (không nằm trong danh sách đỏ, không cần pin) → đúng **35 tệp** như
+  tài liệu; sửa luôn dòng trống thừa.
+- Số liệu tài liệu sửa cho khớp: `test_reform_master_switch.py` **20 ca**, `H6.8` trỏ đúng
+  `H6/evidence.md`, hàng full-suite ghi rõ là lần chạy HỖN HỢP (35 tệp legacy pin `off`).
+
+### Miền trần chi H10.2 (review 2)
+
+- **PUT song song**: `attached` được đọc lại SAU `await request.json()` (trước đây hai PUT song song cùng
+  reserve → con trỏ ghi đè, một hàng `reserved` mồ côi vĩnh viễn). Test:
+  `test_two_concurrent_puts_attach_exactly_one`.
+- **Gỡ trần khi con còn giữ chỗ**: luật đóng đổi từ `consumed + released >= amount` sang `remaining == 0`,
+  và phần con trả lại sau đó chảy tiếp vào `releasedAmount` của cha (`_cascade_release_to_parent`). Trước
+  đây mọi trần từng có con tiêu tiền nằm `reserved` VĨNH VIỄN (không API nào gỡ được, vẫn hiện trong
+  `usage.allocations`). Test: `test_delete_closes_a_ceiling_even_when_a_child_already_spent`; ca cũ
+  `test_parent_release_cannot_free_held_child_budget` cập nhật theo luật mới.
+- **`runtime-info` chỉ đọc THẬT**: `_open_allocations` kiểm `sqlite_master` trước khi dựng sổ — trước đây
+  một GET tạo bảng `harness_usage`/`harness_allocations` kể cả khi cả nhóm TẮT (rollback vẫn ghi schema).
+  Test: `test_the_usage_read_never_creates_the_ledger_tables`.
+- **Ceiling số nguyên khổng lồ** (`10**400`) trả 400 `USAGE_FIELD_INVALID` thay vì 500. Test:
+  `test_an_absurd_integer_ceiling_is_refused_not_a_crash`.
+- Ghi nhận KHÔNG sửa (đã cân nhắc): `except Exception` quanh khối `usage` là cố ý — tab Harness không đỏ
+  vì sổ hỏng, chỉ ghi log; lệch status 409/400 khi con trỏ trỏ vào allocation đã mất là nit đã biết.
+
+### Kiểm chứng sống sau khi sửa (3118 + code mới)
+
+- `live_allocation_check.py --base 3118` → **9/9 PASSED**: PUT 200 (`reserved`, `policyRevision 1`,
+  `remaining = ceiling`), runtime-info thấy allocation, GET `attached: true`, PUT lần hai 409
+  `ALLOCATION_ALREADY_ATTACHED`, DELETE `detached: true` + trả đúng ceiling, runtime-info sạch sau DELETE,
+  DELETE lần hai `detached: false`. Bằng chứng `/code/.generated_artifacts/v2/live-allocation.json`.
+- Bốn tệp test liên quan sau khi sửa: **132 passed** (route 11 + ledger 57 + runtime-info 15 + gateway 49).
+
+### Vòng hai: review delta `4c4c5dc` + sửa (`9da988f`)
+
+Review delta tìm thêm hai ca; cả hai đã sửa ngay:
+
+- **(F1, Medium) DELETE khi con đang giữ TRỌN trần**: `remaining` của cha đúng bằng `0.0`, nên `if released:`
+  bỏ qua lệnh release — con trỏ gỡ rồi mà hàng nằm `reserved` vĩnh viễn, rồi hiện lại trong
+  `usage.allocations` khi con tiêu/trả lại, không còn đường gỡ. Nay `if released is not None:` để luật đóng
+  `remaining == 0` chốt hàng. Test mới: `test_delete_closes_a_ceiling_when_a_child_holds_all_of_it`.
+- **(F2, nit) `_open_allocations` chỉ dò `harness_allocations`**: schema dở dang (thiếu `harness_usage`) vẫn
+  bị lượt đọc vá thêm bảng. Nay dò ĐỦ hai tên. Test mới: `test_a_half_built_ledger_schema_is_left_alone`.
+- Cả hai bài mới đều **đỏ khi lùi mã nguồn** (kiểm chứng bằng mutation tại chỗ) — tức chúng thật sự khoá
+  bản sửa, không phải test trang trí.
+- `d4bd374` chỉ khôi phục xuống dòng CRLF cho `test_runtime_info.py` (bài mới ở `9da988f` vô tình ghi cả
+  tệp bằng LF) — diff so với bản trước còn đúng 27 dòng thêm, nội dung không đổi.
+- Chạy lại sau vòng hai: **134 passed** (route 12 + ledger 57 + runtime-info 16 + gateway 49);
+  **sweep hồi quy 152 passed** (chạy hai lần, EXIT=0); `live_allocation_check.py --base 3118` trên instance
+  khởi động lại với code mới: vẫn **9/9**.

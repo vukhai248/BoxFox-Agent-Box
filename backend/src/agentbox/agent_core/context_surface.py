@@ -26,7 +26,7 @@ class _CatalogFallback(Exception):
 
 
 def enabled():
-    """Bề mặt context: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Bề mặt context: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     return feature_switches.member_switch(SWITCH)
 
 

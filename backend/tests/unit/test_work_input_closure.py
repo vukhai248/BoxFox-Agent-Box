@@ -9,6 +9,11 @@ from agentbox.agent_core import work_graph, work_checks
 from test_work_graph import build, EXPLORE, answer
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 async def fixture(tmp_path, large=False):
     store, rt, model, _, sid = build(tmp_path)
     graph = work_graph.service(rt)

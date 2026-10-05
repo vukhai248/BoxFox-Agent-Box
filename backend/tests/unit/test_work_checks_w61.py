@@ -9,6 +9,11 @@ from test_work_checks import setup, start
 from test_work_graph import build, ok_script
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def test_all_24_acceptance_items_reach_checker_and_missing_last_cannot_pass(tmp_path):
     _, rt, model, _, sid = build(tmp_path)
     async def run():

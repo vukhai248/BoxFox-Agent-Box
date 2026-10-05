@@ -7,6 +7,12 @@ from agentbox.agent_core import output_policy as policy, work_graph as wg
 from test_work_graph import build
 from test_work_checks import RESEARCH
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 ENV = 'BOXFOX_WORK_HELPER_OUTPUT_TOKENS'
 HELPER = {'runId': 'w-x', 'nodeId': 'R1', 'stage': 'produce', 'purpose': 'knowledge', 'helperRole': 'research'}
 

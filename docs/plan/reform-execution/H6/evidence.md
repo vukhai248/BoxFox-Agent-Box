@@ -19,5 +19,5 @@
 
 ## Chưa kiểm
 - Calibration sống (giá/độ trễ/hiệu quả thật) — **hoãn #6531**, chờ consent tài chính riêng; không tự chọn số mặc định.
-- Route miễn phí chỉ chụp giá lúc admission (H6.8); `harnessAllocationId` chưa có writer trong `backend/src` (H6.9).
+- Route miễn phí chỉ chụp giá lúc admission (H6.8); `harnessAllocationId` đã có writer: route vận hành `PUT /api/agent/sessions/{sid}/usage-allocation` (v2, #6600).
 - Chưa có số đo hiệu năng của sổ (khối lượng ghi) ngoài unit/acceptance.

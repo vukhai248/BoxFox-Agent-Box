@@ -47,10 +47,10 @@ def run(tmp_path, coro_factory, switches=()):
     import os
     saved = {name: os.environ.get(name) for name in (execution_kernel.ADAPTIVE_SWITCH,
                                                      execution_kernel.LEDGER_SWITCH)}
+    # Từ v2 mặc định BẬT: "không nằm trong `switches`" phải là `off` TƯỜNG MINH, nếu chỉ
+    # pop env thì mặc định mới (BẬT) chen vào và bài chốt đường legacy sẽ đỏ.
     for name in saved:
-        os.environ.pop(name, None)
-    for name in switches:
-        os.environ[name] = 'on'
+        os.environ[name] = 'on' if name in switches else 'off'
     try:
         return asyncio.run(main())
     finally:

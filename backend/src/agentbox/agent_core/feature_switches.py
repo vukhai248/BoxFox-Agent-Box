@@ -1,14 +1,19 @@
 """Khóa tổng của đợt cải tổ: `BOXFOX_REFORM`.
 
-Chủ nhà chốt 04/10/2026: các công tắc được **bật DẦN**, từng cái một, sau khi cái trước đã có
-bằng chứng chạy thật. Vì vậy khóa tổng ở đây chỉ là một tay nắm cho cả nhóm, không đổi mặc định:
+Chủ nhà chốt 05/10/2026 (quyết định #6599, v2): đợt bật dần đã xong tám bước, nên **mặc định
+là BẬT**. Khóa tổng trở thành tay nắm để TẮT cả nhóm khi cần, không còn là điều kiện để bật:
 
-- Thiếu `BOXFOX_REFORM` ⇒ giữ nguyên hành vi cũ: cả bảy công tắc thành viên TẮT.
-- `BOXFOX_REFORM=on` ⇒ bật cả nhóm bằng MỘT lệnh (dùng khi đã bật dần xong và muốn chạy cả cụm).
-- `BOXFOX_REFORM=off` ⇒ tắt cả nhóm bằng một lệnh (lối thoát hiểm).
-- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng, nên vẫn bật dần từng cái được.
+- Thiếu `BOXFOX_REFORM` ⇒ cả bảy công tắc thành viên **BẬT** (mặc định mới, từ v2).
+- `BOXFOX_REFORM=off` ⇒ tắt cả nhóm bằng MỘT lệnh (lối thoát hiểm một lệnh).
+- `BOXFOX_REFORM=on` ⇒ giữ nguyên nghĩa cũ: nói rõ "bật cả nhóm" mà không cần env thành viên.
+- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng: `BOXFOX_TASK_SURFACE=off` tắt riêng
+  một bề mặt để điều tra sự cố trong khi phần còn lại vẫn chạy.
 
-Thứ tự bật dần, cách kiểm từng công tắc và điều kiện rollback: `docs/plan/reform-execution/HANDOFF.md`.
+Lối thoát hiểm này KHÔNG bị xoá ở v2: nó là cách tổ chức để một agent sau quyết định giữ hay
+xoá nhánh legacy, và quyết định đó cần bằng chứng chạy thật dài ngày trước.
+
+Cách tổ chức công tắc, cách kiểm từng công tắc và điều kiện rollback:
+`docs/plan/reform-execution/HANDOFF.md`.
 
 `BOXFOX_PEER_MESH` KHÔNG thuộc nhóm này: nó là công tắc giết của mesh uỷ thác, có từ trước đợt
 cải tổ, mặc định BẬT và vẫn đọc riêng ở `limits.peer_mesh_enabled`.
@@ -17,8 +22,9 @@ import os
 
 MASTER_SWITCH = 'BOXFOX_REFORM'
 
-#: Giá trị của khóa tổng khi env trống: GIỮ NGUYÊN hành vi cũ (bật dần từng công tắc).
-MASTER_DEFAULT = False
+#: Giá trị của khóa tổng khi env trống: BẬT (v2, quyết định #6599). Tắt bằng
+#: `BOXFOX_REFORM=off` — lối thoát hiểm giữ nguyên.
+MASTER_DEFAULT = True
 
 ON_VALUES = {'1', 'on', 'true', 'yes'}
 

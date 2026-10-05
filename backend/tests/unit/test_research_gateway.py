@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from switch_isolation import isolate_default
+from switch_isolation import isolate_off
 from agentbox.agent_core import research_gateway as gateway
 from agentbox.agent_core.research_owner import REPORT_SCHEMA
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -87,9 +87,9 @@ def control_args(receipt, action='cancel', **changes):
     return args
 
 
-def test_default_off_and_legacy_dispatch_parity(rt, monkeypatch):
+def test_switch_off_and_legacy_dispatch_parity(rt, monkeypatch):
     runtime, root = rt
-    isolate_default(monkeypatch, gateway.SWITCH)
+    isolate_off(monkeypatch, gateway.SWITCH)
     assert not gateway.enabled()
     dispatch(runtime, root, 'file_write', {'path': 'legacy.txt', 'content': 'same legacy path'})
     assert runtime.executor.calls[-1][0] == 'file_write'
@@ -572,3 +572,19 @@ def test_prepare_refuses_caller_transaction_without_awaiting_hook(rt):
         assert calls == []
     finally:
         runtime.store.db.rollback()
+
+
+def test_engine_work_spawns_cannot_bypass_the_gateway_either(rt):
+    """Đường Work Graph cũng không phải cửa sau: `work=` KHÔNG miễn kiểm của gateway.
+
+    Hệ quả có chủ đích của #6599: dưới mặc định mới, luồng `research` của Work Graph
+    (engine tự spawn producer research/research-review) dừng với `RESEARCH_MAIN_READ_ONLY`
+    cho tới khi phiên main có binding research legacy hoặc gateway tắt — Research phải đi
+    qua biên độc lập (H7.1/P5). Bài này chốt hành vi đó để nó không âm thầm đổi.
+    """
+    runtime, root = rt
+    submit(rt)
+    with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
+        asyncio.run(runtime.delegate(root, {'role': 'research', 'goal': 'Engine spawn'},
+                                     work={'run': 'r1', 'node': 'n1', 'stage': 'produce'}))
+    assert runtime.store.children_of(root['id']) == []

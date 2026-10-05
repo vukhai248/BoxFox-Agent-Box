@@ -15,6 +15,12 @@ from agentbox.agent_core import limits
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 #: Đủ dài để một lần mở lại được coi là "trang thật" (trên sàn thành-công-giả 300 ký tự).
 EXCERPT = ('Người bệnh đúng tuyến được hưởng 80% chi phí khám chữa bệnh, và hồ sơ chuyển tuyến '
            'gồm giấy chuyển tuyến cùng bản tóm tắt điều trị. ') * 3

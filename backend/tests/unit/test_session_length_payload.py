@@ -14,6 +14,13 @@ from agentbox.agent_core.compression import estimate_tokens
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_contracts import schemas_for
 from agentbox.memory.session_store import SessionStore
+import pytest
+
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
 
 # B7 (vòng 22) thêm `stepsClamped` — đối xứng với `deadlineClamped` của C1: một `maxSteps`
 # bị kẹp cũng phải nói ra, không im lặng như trước.

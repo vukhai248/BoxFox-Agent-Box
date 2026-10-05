@@ -9,6 +9,11 @@ from test_work_graph import build, raw_tool, ok_script, EXPLORE
 from test_work_checks import RESEARCH
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def assign(graph, store, sid, rid, **extra):
     return graph.graph(store.get(sid), {'action':'assign_handoff','runId':rid,
         'revision':graph.current(rid)['revision'],'nodeId':'R1','stage':'produce',

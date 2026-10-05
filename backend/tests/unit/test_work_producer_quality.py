@@ -8,6 +8,11 @@ from agentbox.agent_core import work_graph as wg, work_prompts
 from test_work_graph import build, ok_script, tool, EXPLORE, PLAN
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def test_lookup_deliverable_is_short_contract_vi_en():
     for lang, headings, forbidden in (
             ('vi', ('## Trả lời', '## Nguồn đã mở', '## Chưa kiểm'), ('Khuyến nghị', 'So sánh phương án')),

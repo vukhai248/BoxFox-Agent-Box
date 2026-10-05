@@ -26,7 +26,7 @@ Bất biến:
 Quy ước chung H3–H8: bảng cộng thêm trên `SessionStore.db`, lỗi `ContractError` mã
 `USAGE_*`, docstring tiếng Việt, không thêm dependency ngoài stdlib.
 
-Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định TẮT). Khi bật, runtime ghi
+Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định BẬT từ v2, #6599). Khi bật, runtime ghi
 một hàng `record()` cho mỗi lần gọi model hoàn tất (`record_completion`) với đúng
 `input/output/reasoning/cached` mà router báo; giá lấy từ `pricing` của dòng model
 trong router (một snapshot admin cho mỗi request) — không có giá thì `certainty='unknown'`
@@ -45,7 +45,7 @@ from . import feature_switches
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
 
-#: Công tắc giết khi nối vào runtime: mặc định TẮT, chỉ `on` mới bật (khuôn `BOXFOX_TASK_SURFACE`).
+#: Công tắc giết khi nối vào runtime: mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off` (khuôn `BOXFOX_TASK_SURFACE`).
 SWITCH = 'BOXFOX_USAGE_LEDGER'
 
 RECORD_SCHEMA_VERSION = 1
@@ -100,7 +100,7 @@ _WRITE_KEYS = ('write', 'writeTokens', 'cacheWrite', 'cacheWriteInput', 'cache_c
 
 
 def enabled(env=None):
-    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     if env is not None:
         return str(env or '').strip().lower() == 'on'
     return feature_switches.member_switch(SWITCH)
@@ -771,9 +771,11 @@ class UsageLedger:
     def release(self, allocation_id, amount, reason, invocation_id=None):
         """Giải phóng phần reservation chưa dùng; usage unknown thì từ chối (`USAGE_UNSETTLED`).
 
-        Phần con đang giữ (`_held`) không được giải phóng: `available` trừ cả held. Mọi
-        `invocation_id` đã áp được ghi trong `consumed['invocations']`; retry bất kỳ
-        invocation cũ nào đều replay, khác payload thì `USAGE_INVOCATION_CONFLICT`.
+        Phần con đang giữ (`_held`) không được giải phóng: `available` trừ cả held. Hàng
+        đóng khi phần chưa tiêu còn lại bằng 0 (kể cả phần con đã tiêu, xem
+        `_cascade_release_to_parent`). Mọi `invocation_id` đã áp được ghi trong
+        `consumed['invocations']`; retry bất kỳ invocation cũ nào đều replay, khác payload
+        thì `USAGE_INVOCATION_CONFLICT`.
         """
         identifier(allocation_id, 'allocationId')
         value = _number(amount, 'amount')
@@ -814,9 +816,31 @@ class UsageLedger:
                 invocations[invocation_id] = request_hash
                 consumed['invocations'] = invocations
             total = round((consumed.get('amount') or 0.0) + (consumed.get('releasedAmount') or 0.0), 6)
-            state = 'released' if total >= reservation['amount'] else row['state']
+            # Đóng khi KHÔNG còn gì để tiêu nữa: phần con đang giữ (`_held`) không bao giờ
+            # trả lại được — con đã tiêu là tiêu — nên `total >= amount` một mình khoá cứng
+            # mọi trần từng có con tiêu tiền. Đóng theo `remaining == 0` để người vận hành
+            # gỡ được trần; phần con trả lại sau đó chảy tiếp qua `_cascade_release_to_parent`.
+            remaining = round(reservation['amount'] - total - self._held(allocation_id), 6)
+            state = 'released' if remaining <= 0 else row['state']
             self._save(row, consumed, state, now)
+            self._cascade_release_to_parent(row, value)
             return self._allocation_view(self._allocation_row(allocation_id))
+
+    def _cascade_release_to_parent(self, row, value):
+        """Phần con vừa trả lại cũng rời hạn mức cha — cha đã đóng thì trả nốt vào cha.
+
+        Cha còn mở: `_held` tự trả phần này về hạn mức của cha, không cần làm gì. Cha đã
+        đóng (người vận hành gỡ trần lúc con còn giữ chỗ): không còn đường `release` nào
+        chạm tới phần vừa rời đi, nên trả luôn vào `releasedAmount` của cha — nếu không nó
+        nằm kẹt trong một hàng đã đóng và không API nào thấy.
+        """
+        if value <= 0 or row['parent_id'] is None:
+            return
+        parent = self.db.execute('SELECT * FROM harness_allocations WHERE allocation_id=?',
+                                 (row['parent_id'],)).fetchone()
+        if parent is None or parent['state'] != 'released':
+            return
+        self.release(parent['allocation_id'], value, 'child release cascade')
 
     def record(self, call_key, owner_id, **usage):
         """Một hàng cho một backend model call; idempotent theo `call_key` + payload hash.
@@ -937,6 +961,21 @@ class UsageLedger:
             if liability is not None:
                 items.append({**self._allocation_view(row), 'liability': liability})
         return items
+
+    def open_allocations(self, limit=20):
+        """Allocation đang mở, mới chốt sổ gần nhất trước — cho khối `usage` của runtime-info.
+
+        Chỉ đọc: không sửa hàng, không cấp chi. Bảng chưa tồn tại (DB chưa từng mở
+        allocation) trả `[]` để runtime-info không đỏ vì một tính năng chưa dùng.
+        """
+        if type(limit) is not int or limit <= 0:
+            invalid('limit', 'expected a positive row ceiling', 'USAGE_FIELD_INVALID')
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_allocations'"
+                           ).fetchone() is None:
+            return []
+        rows = self.db.execute('SELECT * FROM harness_allocations WHERE state=? '
+                               'ORDER BY updated_at DESC LIMIT ?', ('reserved', limit))
+        return [self._allocation_view(row) for row in rows]
 
     def _unknown_usage(self, owner_id=None):
         sql = 'SELECT * FROM harness_usage WHERE amount IS NULL'

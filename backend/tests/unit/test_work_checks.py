@@ -11,6 +11,11 @@ from agentbox.agent_core import work_graph as wg, work_policy as policy, work_ch
 from test_work_graph import build, raw_tool, tool, PLAN, EXPLORE, ok_script, answer
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 RESEARCH = {'id': 'R1', 'kind': 'research', 'title': 'Compare approaches',
             'goal': 'Compare two export formats using the provided evidence',
             'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}

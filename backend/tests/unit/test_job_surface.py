@@ -17,7 +17,7 @@ from agentbox.agent_core.peer_watchdog import PeerWatchdog, PARENT_ALIVE_STATES
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_groups import TOOL_GROUPS
 from agentbox.memory.session_store import SessionStore
-from switch_isolation import isolate_default
+from switch_isolation import isolate_off
 from test_harness_runtime import FixtureExecutor, answer, call
 
 
@@ -90,16 +90,17 @@ def test_switch_defaults_off(value):
     assert not job_surface.enabled(value)
 
 
-def test_switch_defaults_off_without_ambient_env(monkeypatch):
-    # Bước "bật dần" chạy cả bộ với `BOXFOX_CONTROLLER_JOBS=on` (kiểm trạng thái BẬT),
-    # nên khẳng định MẶC ĐỊNH phải tự cắt env ambient thay vì tin vào môi trường gọi.
-    isolate_default(monkeypatch, job_surface.SWITCH)
+def test_switch_off_when_the_env_says_off(monkeypatch):
+    # Từ v2 (mặc định BẬT) đường legacy chỉ còn khi env nói TẮT tường minh; bài này đặt
+    # `off` thay vì tin vào mặc định, và cắt khóa tổng để env ambient của vòng chạy nhóm
+    # (`BOXFOX_REFORM=on`) không chen vào.
+    isolate_off(monkeypatch, job_surface.SWITCH)
     assert not job_surface.enabled()
 
 
-def test_default_off_runtime_profile_schemas_and_no_ddl(repo, monkeypatch):
+def test_switch_off_runtime_profile_schemas_and_no_ddl(repo, monkeypatch):
     store, rt, sid, _ = repo
-    isolate_default(monkeypatch, job_surface.SWITCH)
+    isolate_off(monkeypatch, job_surface.SWITCH)
     assert not job_surface.exists(rt)
     assert not job_surface.JOB_TOOLS & set(rt.turn_profile(store.get(sid))['tools'])
     assert not tool_contracts.schemas_for(job_surface.JOB_TOOLS)

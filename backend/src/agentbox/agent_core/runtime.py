@@ -7297,7 +7297,15 @@ class HarnessRuntime(RuntimeCommands):
     async def delegate(self, session, args, work=None, *, job_request=None):
         """Spawn one specialist child. `work` is set only by the Work Graph engine (never by the model):
         such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
-        bindings and per-turn child cap do not apply — the engine owns its own budget."""
+        bindings and per-turn child cap do not apply — the engine owns its own budget.
+
+        The research gateway guard runs BEFORE the `work=` branch on purpose: with the gateway on
+        (v2 default) the engine's own research/research-review spawns are refused too
+        (`RESEARCH_MAIN_READ_ONLY`) unless the session keeps a legacy research binding — research work
+        must go through the independent boundary. Escape hatches: `BOXFOX_RESEARCH_GATEWAY=off`, or the
+        legacy `researchId` binding of an old research session. Pinned by
+        `tests/unit/test_research_gateway.py::test_engine_work_spawns_cannot_bypass_the_gateway_either`.
+        """
         research_gateway.guard_delegate(self, self.store.get(session['id']), args, job_request=job_request)
         if session['role'] != 'orchestrator':
             if not research_gateway.is_lead(self, session):
