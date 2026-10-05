@@ -7,7 +7,7 @@ chứng, vì đó là ĐƯỜNG ROLLBACK. Cách làm ở đây: file nào chốt
 trong file đó.
 
 Vì sao pin CẢ khóa tổng lẫn mọi thành viên còn lại: env thành viên đặt tường minh luôn thắng khóa
-tổng, nên chỉ `BOXFOX_REFORM=off` là không kín — một shell đang có `BOXFOX_ADAPTIVE_HARNESS=on`
+tổng, nên chỉ `BOXFOX_REFORM=off` là không kín — một shell đang có `BOXFOX_RESEARCH_GATEWAY=on`
 (đúng cách đợt bật dần từng bước đã chạy) sẽ lọt vào "đường cũ" và bài test không còn chốt cấu
 hình trước v2. Pin cả nhóm thành viên giữ phép kiểm kín, và khóa tổng `off` vẫn là lối thoát hiểm một lệnh thật
 (vì fixture chỉ chạm tới file khai `legacy_path`). Bài nào cần chạy đường mới trong file legacy thì

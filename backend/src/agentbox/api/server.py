@@ -1686,7 +1686,7 @@ def create_app(runtime):
         try:
             return web.json_response(execution_kernel.set_policy(runtime, sid, body.get('mode')))
         except ValueError as exc:
-            raise _action_error(exc, {'POLICY_SWITCH_OFF': 409, 'POLICY_MODE_INVALID': 400}) from None
+            raise _action_error(exc, {'POLICY_MODE_INVALID': 400}) from None
 
     async def usage_allocation(request):
         """`GET|PUT|DELETE /api/agent/sessions/{sid}/usage-allocation` — trần chi của run (H10.2).

@@ -146,8 +146,6 @@ async def complete(rt, sid, messages, tools, route, *, purpose='completion', **k
     session = rt.store.get(sid)
     root = root_session(rt, sid)
     adaptive = execution_kernel._policy(session) is not None or execution_kernel._policy(root) is not None
-    if adaptive and not execution_kernel.enabled():
-        invalid('harnessPolicy', 'adaptive admission switch was disabled', 'ADAPTIVE_DISABLED')
     allocation_id = root['config'].get('harnessAllocationId')
     if (adaptive or allocation_id) and ('cancelled' in (root.get('status'), session.get('status'))):
         invalid('ownerId', 'canonical owner or request session stopped', 'USAGE_OWNER_STOPPED')
@@ -223,8 +221,6 @@ def research_admission(rt, lead, request):
         return False
     root = root_session(rt, lead['id'])
     if root.get('status') in ('cancelled', 'awaiting_decision'):
-        return False
-    if execution_kernel._policy(root) is not None and not execution_kernel.enabled():
         return False
     # Chưa có kho permissionEnvelope refs: không biến chuỗi model thành quyền.
     if request.get('permissionEnvelopeRef') is not None:

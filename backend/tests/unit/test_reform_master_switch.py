@@ -67,16 +67,16 @@ def test_an_explicit_member_wins_over_the_master_in_both_directions(clean_env):
     assert fs.member_switch('BOXFOX_RESEARCH_GATEWAY') is False
     assert fs.source('BOXFOX_RESEARCH_GATEWAY') == 'explicit'
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
-    clean_env.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
-    assert fs.member_switch('BOXFOX_ADAPTIVE_HARNESS') is True
-    assert fs.source('BOXFOX_ADAPTIVE_HARNESS') == 'explicit'
+    clean_env.setenv('BOXFOX_RESEARCH_GATEWAY', 'on')
+    assert fs.member_switch('BOXFOX_RESEARCH_GATEWAY') is True
+    assert fs.source('BOXFOX_RESEARCH_GATEWAY') == 'explicit'
 
 
 def test_a_blank_member_value_is_not_an_explicit_choice(clean_env):
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    clean_env.setenv('BOXFOX_ADAPTIVE_HARNESS', '   ')
-    assert fs.member_switch('BOXFOX_ADAPTIVE_HARNESS') is True
-    assert fs.source('BOXFOX_ADAPTIVE_HARNESS') == 'master'
+    clean_env.setenv('BOXFOX_RESEARCH_GATEWAY', '   ')
+    assert fs.member_switch('BOXFOX_RESEARCH_GATEWAY') is True
+    assert fs.source('BOXFOX_RESEARCH_GATEWAY') == 'master'
 
 
 @pytest.mark.parametrize('name,readers', list(READERS.items()))
@@ -87,14 +87,6 @@ def test_every_member_reader_follows_the_master(clean_env, name, readers):
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
     for reader in readers:
         assert reader() is False, (name, reader)
-
-
-def test_execution_kernel_switch_follows_the_master(clean_env):
-    from agentbox.agent_core import execution_kernel
-    clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    assert execution_kernel.enabled() is True
-    clean_env.setenv(fs.MASTER_SWITCH, 'off')
-    assert execution_kernel.enabled() is False
 
 
 def test_switch_readers_still_honour_their_own_raw_test_value(clean_env):
@@ -113,4 +105,3 @@ def test_snapshot_names_the_master_and_every_member_with_its_source(clean_env):
     snap = fs.snapshot()
     assert snap['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'explicit'}
     assert snap['members']['BOXFOX_RESEARCH_GATEWAY'] == {'on': False, 'source': 'explicit'}
-    assert snap['members']['BOXFOX_ADAPTIVE_HARNESS'] == {'on': True, 'source': 'master'}

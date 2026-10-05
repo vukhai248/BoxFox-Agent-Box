@@ -39,7 +39,6 @@ class Client:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     executor, client = Executor(), Client()
     rt = HarnessRuntime(store, executor, client)
@@ -103,16 +102,6 @@ def test_restart_keeps_failure_signature(env):
     restarted = HarnessRuntime(env[0], env[3], env[4])
     with pytest.raises(ContractError, match='ADAPTIVE_LOOP_REPEAT'):
         adaptive_surface.before_tool(restarted, sid, 'file_read', {'path': 'missing'})
-
-
-def test_kill_switch_blocks_new_requests_keeps_state_readable(env, monkeypatch):
-    pin(env)
-    adaptive_surface.decide(env[1], env[2]['id'])
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
-    with pytest.raises(ContractError, match='ADAPTIVE_DISABLED'):
-        asyncio.run(env[1].complete_model(env[2]['id'], [], [], env[2]['config']['route']))
-    assert env[4].calls == 0
-    assert adaptive_surface.state(env[1], env[2]['id']) == ([], [])
 
 
 def test_dynamic_adaptive_guidance_does_not_rewrite_original_intent(env):

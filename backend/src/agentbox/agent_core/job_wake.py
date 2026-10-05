@@ -47,8 +47,7 @@ def row(rt, park_id):
 def adaptive(rt, sid):
     from . import job_surface
     owner = rt.store.get(sid)
-    return (execution_kernel.enabled()
-            and execution_kernel._policy(owner) is not None
+    return (execution_kernel._policy(owner) is not None
             and not owner.get('parent_id') and owner.get('role') == 'orchestrator')
 
 
@@ -56,8 +55,6 @@ def validate(rt, value):
     """Không waiver ancestor: owner root, subscription do canonical wait tạo."""
     from . import job_surface
     owner = rt.store.get(value['owner_id'])
-    if not execution_kernel.enabled():
-        raise PermissionError('JOB_WAKE_DISABLED: BOXFOX_ADAPTIVE_HARNESS is off')
     if not adaptive(rt, owner['id']):
         raise PermissionError('JOB_WAKE_DISABLED: owner has no adaptive policy or is not the root')
     if owner['config'].get(job_surface.STOP_KEY) or owner['status'] in ('cancelled', 'interrupted', 'awaiting_decision', 'failed'):

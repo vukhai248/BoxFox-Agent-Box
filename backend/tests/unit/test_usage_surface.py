@@ -47,7 +47,6 @@ class Executor:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     client = Client()
     rt = HarnessRuntime(store, Executor(), client)
@@ -192,18 +191,6 @@ def test_snapshot_error_preserves_legacy_unknown_and_blocks_adaptive(env):
     with pytest.raises(ContractError, match='USAGE_NO_CONSENT'):
         call(env)
     assert env[3].calls == 1
-
-
-def test_flag_revoked_during_snapshot_blocks_adaptive_request(env, monkeypatch):
-    adaptive(env)
-    original = env[3].snapshot
-    async def snapshot():
-        monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
-        return await original()
-    env[3].snapshot = snapshot
-    with pytest.raises(ContractError, match='ADAPTIVE_DISABLED'):
-        call(env)
-    assert env[3].calls == 0
 
 
 def test_usd_price_cannot_consume_non_usd_allocation(env):

@@ -52,7 +52,6 @@ class ScriptedModel:
 
 def environment(tmp_path, monkeypatch, **switches):
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'on')
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     for name, value in switches.items():
         monkeypatch.setenv(name, value)
     store = SessionStore(tmp_path / 'sessions.db')
