@@ -15,7 +15,7 @@
 | Kiến trúc BoxFox vs Vorflux | `docs/architecture/vorflux-vs-boxfox-orchestration.md` |
 | Bàn giao từng checkpoint | `docs/plan/reform-execution/H0/ … H11/` |
 | Ánh xạ backlog + kiểm kê nợ | `/code/.plans/reform-backlog-disposition.md`, `/code/.plans/reform-backlog-audit.md` |
-| Pull request | https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/pull/3 (nhánh `vorflux/boxfox-harness-reform`, base `vorflux/w10-w12-completion`) |
+| Pull request | https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/pull/3 (nhánh `vorflux/boxfox-harness-reform`, base `main` — đổi từ `vorflux/w10-w12-completion` theo quyết định #6598; xem mục phát hành ở nhật ký bật dần) |
 
 ## 2. Bức tranh một trang — đợt này nhằm gì
 

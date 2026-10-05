@@ -254,6 +254,15 @@ nên khi khóa tổng BẬT thì giá trị hiệu lực là BẬT và khẳng �
 - **Kết quả:** nhóm 22 tệp với `BOXFOX_REFORM=on` → **846 passed in 237.63s** (trước khi sửa: 16 failed,
   830 passed); chạy lại ở trạng thái mặc định (không env nào) → **846 passed in 232.98s**.
 
+## Kiểm thử sau merge (2026-10-05, head `699ab8d`)
+
+- Nhóm 22 tệp liên quan với `BOXFOX_REFORM=on`: **846 passed in 238.95s**.
+- Toàn bộ `backend/tests/unit/` trên cây sau merge: **3 failed, 4382 passed, 12 skipped in 1262.91s** — đúng ba
+  lỗi đỏ có sẵn từ baseline `346da06` (`test_terminal_exec_echo`,
+  `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`,
+  `test_revoked_grant_blocks_next_tool_call`), không do PR này.
+- Log: `/var/tmp/post-merge-tests.log`.
+
 ## Trạng thái hiện tại của instance bật dần
 
 `BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`,
@@ -261,5 +270,22 @@ nên khi khóa tổng BẬT thì giá trị hiệu lực là BẬT và khẳng �
 cả bảy thành viên đều `on: true, source: explicit`; `BOXFOX_REFORM` vẫn `default/off`.
 **Bước 8 đã chạy xong** trên instance riêng cổng 3117 (`/var/tmp/boxfox-enable/data-master`) với đúng một
 biến `BOXFOX_REFORM=on`: cả bảy thành viên `source: master` và bốn driver đều đạt.
-**Bật dần đã hết tám bước.** Việc còn lại là quyết định phát hành (nhánh nền PR, #6531/#6536) — không nằm
-trong nhóm công tắc này.
+**Bật dần đã hết tám bước.** Việc còn lại là quyết định phát hành (#6531/#6536) — không nằm trong nhóm
+công tắc này.
+
+## Phát hành: PR #3 đổi nhánh nền sang `main` (2026-10-05, quyết định #6598)
+
+Chủ nhà giao agent quyết định (#6598: *"Tôi chưa hiểu lắm phần này, bạn có thể quyết định tốt nhất"*). Quyết
+định: **PR #3 lấy `main` làm nhánh nền**, để một lần merge đưa được cả bản cải tổ vào `main` (trước đó base là
+`vorflux/w10-w12-completion`, nhánh khảo sát chưa nằm trên `main`).
+
+- Lý do chính: bản cải tổ dựng trên đầu nhánh khảo sát tại `346da06`, mà **PR #1 chỉ merge một phần** nhánh
+  này — 15 commit còn lại (W6.Q/W6.2/W10/W11/W12 + tài liệu kiến trúc §1–§15) chưa từng nằm trên `main`.
+  Giữ base cũ thì bản cải tổ không có đường vào `main`; đổi base là một cửa duy nhất.
+- Hệ quả đã báo rõ trong PR: diff của PR #3 gồm cả 15 commit ấy (khoảng 35 tệp) bên cạnh H1–H12; phần đó
+  không thuộc phạm vi review của đợt này. Muốn tách thì mở PR riêng `vorflux/w10-w12-completion → main` trước.
+- Đã gộp `main` vào nhánh cải tổ (merge commit `699ab8d`) để PR hết xung đột: xung đột duy nhất là
+  `docs/architecture/vorflux-vs-boxfox-orchestration.md` (add/add) và đã lấy bản đầy đủ hơn của `main`
+  (bản trên nhánh là tập con thật sự). Ba tệp mang vào từ `main`: tài liệu kiến trúc nói trên,
+  `docs/plan/BoxFox-reform-master.md`, `docs/plan/v1-boxfox-harness-reform.md`.
+- Kiểm thử lại trên cây sau merge: xem `## Kiểm thử sau merge` bên dưới.
