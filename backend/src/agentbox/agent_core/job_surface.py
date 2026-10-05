@@ -9,23 +9,15 @@ import json
 import time
 import uuid
 
-from . import execution_kernel, feature_switches, tool_recovery, work_scope
+from . import execution_kernel, tool_recovery, work_scope
 from .harness_jobs import HarnessJobs, JOB_SCHEMA, CLOSED_STATES
 from .limits import PEER_WAIT_SAFETY_SECONDS
 from .orchestration_contracts import identifier, invalid, object_fields, text
 from .work_policy import digest
 
-SWITCH = 'BOXFOX_CONTROLLER_JOBS'
 JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'})
 READ_TOOLS = JOB_TOOLS - {'start_job'}
 STOP_KEY = 'controllerJobsStopped'
-
-
-def enabled(env=None):
-    """Bề mặt job: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(SWITCH)
 
 
 def exists(rt):
@@ -39,22 +31,6 @@ def service(rt):
     if svc is None:
         svc = rt._controller_jobs = HarnessJobs(rt.store)
     return svc
-
-
-def has_receipts(rt, sid):
-    return exists(rt) and rt.store.db.execute('SELECT 1 FROM harness_jobs WHERE owner_id=? LIMIT 1', (sid,)).fetchone() is not None
-
-
-def visible_tools(rt, sid, tools):
-    """Một chỗ duy nhất cắt công cụ job khỏi hồ sơ lượt.
-
-    Công tắc tắt thì không quảng cáo công cụ nào, trừ hàng ĐỌC khi phiên đã có receipt
-    (phiên cũ vẫn đọc được job đã ghi); công tắc bật thì giữ nguyên danh sách.
-    """
-    if enabled():
-        return list(tools)
-    readable = READ_TOOLS if has_receipts(rt, sid) else set()
-    return [name for name in tools if name not in JOB_TOOLS or name in readable]
 
 
 def prepare(args):
@@ -84,8 +60,6 @@ def admission(rt, session, request, *, new=True):
         from .tool_contracts import peer_mesh_enabled
         if not peer_mesh_enabled():
             raise PermissionError('JOB_EXECUTOR_UNSUPPORTED: async delegation requires the existing peer mesh')
-    if new and not enabled():
-        raise PermissionError('JOB_SURFACE_OFF: new job admission is disabled')
     if config.get(STOP_KEY) or current.get('status') in ('cancelled', 'interrupted'):
         raise PermissionError('JOB_STOPPED: controller was stopped')
     if not {'start_job', 'delegate_task'} <= tool_recovery.owner_tools(rt.store, current):

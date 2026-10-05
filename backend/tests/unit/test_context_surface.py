@@ -609,7 +609,6 @@ def test_context_record_corruption_fails_closed(runtime, corrupt):
 async def test_real_job_handoff_persists_validated_context_ref_without_authority(runtime, monkeypatch):
     from agentbox.agent_core import job_surface
     rt, session, _ = runtime
-    monkeypatch.setenv('BOXFOX_CONTROLLER_JOBS', 'on')
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'on')
     configure(rt, session['id'], {'tools': sorted(job_surface.JOB_TOOLS | {'delegate_task', 'file_read', 'skill_view'})})
     out = await rt.dispatch(rt.store.get(session['id']), 'start_job', {
@@ -703,9 +702,7 @@ async def test_mode_rebuild_keeps_validated_body_even_when_loader_cache_hits(run
 @pytest.mark.parametrize('mode', ['main', 'research', 'design', 'plan'])
 def test_readiness_effective_tools_match_real_profile_intersection(runtime, mode, monkeypatch):
     rt, session, _ = runtime
-    monkeypatch.setenv('BOXFOX_CONTROLLER_JOBS', 'off')
     monkeypatch.setenv('BOXFOX_RESEARCH_GATEWAY', 'off')
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'off')
     changes = {'tools': ['skill_view', 'file_read', 'start_job', 'research_job_submit', 'task_get']}
     if mode == 'research':
         changes['researchMode'] = {'on': True}
@@ -720,7 +717,7 @@ def test_readiness_effective_tools_match_real_profile_intersection(runtime, mode
     expected = rt.turn_profile(current)
     assert set(effective) == set(expected['tools'])
     assert effective_mode == expected['mode']
-    assert not {'start_job', 'research_job_submit', 'task_get'} & set(effective)
+    assert 'research_job_submit' not in set(effective)
 
 
 def test_old_context_table_without_schema_marker_fails_closed(runtime):

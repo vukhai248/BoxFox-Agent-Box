@@ -47,7 +47,6 @@ class Executor:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
     monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     client = Client()
@@ -82,13 +81,6 @@ def allocate(env, amount=.01):
     config = store.get(session['id'])['config']
     store.update_config(session['id'], dict(config, harnessAllocationId='root-budget'))
     return ledger
-
-
-def test_off_legacy_has_no_rows(env, monkeypatch):
-    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
-    call(env)
-    assert env[3].calls == 1
-    assert env[0].db.execute("SELECT name FROM sqlite_master WHERE name='harness_usage'").fetchone() is None
 
 
 def test_each_request_costs_once_with_cache_and_reasoning_overlap(env):
@@ -166,14 +158,6 @@ def test_adaptive_confirmed_free_route_passes_and_mock_price_restores(env):
     with pytest.raises(ContractError, match='USAGE_NO_CONSENT'):
         call(env)
     assert env[3].calls == 1
-
-
-def test_adaptive_ledger_kill_switch_cannot_fallback_legacy(env, monkeypatch):
-    adaptive(env)
-    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
-    with pytest.raises(ContractError, match='USAGE_LEDGER_DISABLED'):
-        call(env)
-    assert env[3].calls == 0
 
 
 def test_other_root_allocation_cannot_be_used(env):

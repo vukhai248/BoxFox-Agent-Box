@@ -45,10 +45,9 @@ def run(tmp_path, coro_factory):
         store.close()
         return results
 
-    saved = {name: os.environ.get(name) for name in (usage_ledger.SWITCH,
-                                                     execution_kernel.ADAPTIVE_SWITCH)}
-    # Sổ và harness thích ứng là điều kiện của trần chi: đặt TƯỜNG MINH để bài không phụ
-    # thuộc env của máy chạy (từ v2 thiếu env nghĩa là BẬT, nhưng `off` của người khác thì không).
+    saved = {name: os.environ.get(name) for name in (execution_kernel.ADAPTIVE_SWITCH,)}
+    # Harness thích ứng là điều kiện của trần chi: đặt TƯỜNG MINH để bài không phụ thuộc env của
+    # máy chạy (từ v2 thiếu env nghĩa là BẬT, nhưng `off` của người khác thì không).
     for name in saved:
         os.environ[name] = 'on'
     try:

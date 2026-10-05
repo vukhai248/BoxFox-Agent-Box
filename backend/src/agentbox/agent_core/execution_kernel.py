@@ -11,7 +11,6 @@ from . import feature_switches, tool_recovery, work_scope
 POLICY_SCHEMA = 'boxfox-execution-policy/1'
 POLICY_KEY = 'harnessPolicy'
 ADAPTIVE_SWITCH = 'BOXFOX_ADAPTIVE_HARNESS'
-LEDGER_SWITCH = 'BOXFOX_USAGE_LEDGER'
 MODES = ('adaptive', 'legacy')
 
 
@@ -37,16 +36,15 @@ def set_policy(rt, sid, mode):
     """Người vận hành ghi `harnessPolicy` — đường DUY NHẤT ghi policy (model không có tool nào).
 
     Trước bản này không có writer nào, nên H8 ("main thích ứng") chỉ là thư viện + seam: bật công tắc
-    cũng không có cách nào đặt mode cho một phiên (soát tuân thủ 2026-10-04). Bật `adaptive` đòi CẢ
-    HAI công tắc vì `usage_surface` từ chối mọi model call khi policy adaptive mà thiếu một trong
+    cũng không có cách nào đặt mode cho một phiên (soát tuân thủ 2026-10-04). Bật `adaptive` đòi công
+    tắc `BOXFOX_ADAPTIVE_HARNESS`; sổ usage LUÔN sống từ v2 (#6599) nên không còn là điều kiện thứ
     hai — nói thẳng ở đây thay vì để lượt chết ở giữa. `legacy` gỡ khoá, quay về đúng hành vi cũ.
     """
     if mode not in MODES:
         raise ValueError('POLICY_MODE_INVALID: mode must be one of ' + ', '.join(MODES))
-    for name in ((ADAPTIVE_SWITCH, LEDGER_SWITCH) if mode == 'adaptive' else ()):
-        if not _switch(name):
-            raise ValueError(f'POLICY_SWITCH_OFF: {name} is off in this build — turn it on before a '
-                             'session can pin the adaptive policy')
+    if mode == 'adaptive' and not _switch(ADAPTIVE_SWITCH):
+        raise ValueError(f'POLICY_SWITCH_OFF: {ADAPTIVE_SWITCH} is off in this build — turn it on '
+                         'before a session can pin the adaptive policy')
     root = root_session(rt, sid)
     config = dict(root['config'])
     if mode == 'adaptive':
@@ -58,7 +56,7 @@ def set_policy(rt, sid, mode):
 
 
 def status(rt, sid):
-    """Mode đang ghim của run + hai công tắc, để người vận hành thấy ngay vì sao bật được hay không."""
+    """Mode đang ghim của run + công tắc adaptive, để người vận hành thấy ngay vì sao bật được hay không."""
     root = root_session(rt, sid)
     try:
         value = _policy(root)
@@ -66,7 +64,7 @@ def status(rt, sid):
         value = (root['config'] or {}).get(POLICY_KEY)
     return {'sessionId': root['id'], 'mode': (value or {}).get('mode') or 'legacy',
             'policy': value,
-            'switches': {name: _switch(name) for name in (ADAPTIVE_SWITCH, LEDGER_SWITCH)}}
+            'switches': {name: _switch(name) for name in (ADAPTIVE_SWITCH,)}}
 
 
 def _policy(current):

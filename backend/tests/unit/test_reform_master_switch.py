@@ -12,15 +12,12 @@ Luật (chủ nhà 05/10/2026, quyết định #6599 — v2 bật mặc định)
 import pytest
 
 from agentbox.agent_core import feature_switches as fs
-from agentbox.agent_core import job_surface, research_gateway
-from agentbox.agent_core import task_surface, tool_contracts, usage_ledger
+from agentbox.agent_core import research_gateway
+from agentbox.agent_core import tool_contracts
 
 MEMBERS = fs.MEMBERS
 
 READERS = {
-    'BOXFOX_TASK_SURFACE': (task_surface.enabled, tool_contracts.task_surface_enabled),
-    'BOXFOX_CONTROLLER_JOBS': (job_surface.enabled, tool_contracts.controller_jobs_enabled),
-    'BOXFOX_USAGE_LEDGER': (usage_ledger.enabled,),
     'BOXFOX_RESEARCH_GATEWAY': (research_gateway.enabled,),
 }
 
@@ -52,7 +49,7 @@ def test_master_on_turns_the_whole_group_on(clean_env):
 
 
 def test_master_off_turns_the_whole_group_off(clean_env):
-    """Một lệnh rollback: `=off` tắt cả bảy thành viên, nguồn `master`, không cần env thành viên."""
+    """Một lệnh rollback: `=off` tắt cả nhóm thành viên, nguồn `master`, không cần env thành viên."""
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
     assert [fs.member_switch(name) for name in MEMBERS] == [False] * len(MEMBERS)
     assert {fs.source(name) for name in MEMBERS} == {'master'}
@@ -70,16 +67,16 @@ def test_an_explicit_member_wins_over_the_master_in_both_directions(clean_env):
     assert fs.member_switch('BOXFOX_RESEARCH_GATEWAY') is False
     assert fs.source('BOXFOX_RESEARCH_GATEWAY') == 'explicit'
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
-    clean_env.setenv('BOXFOX_TASK_SURFACE', 'on')
-    assert fs.member_switch('BOXFOX_TASK_SURFACE') is True
-    assert fs.source('BOXFOX_TASK_SURFACE') == 'explicit'
+    clean_env.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
+    assert fs.member_switch('BOXFOX_ADAPTIVE_HARNESS') is True
+    assert fs.source('BOXFOX_ADAPTIVE_HARNESS') == 'explicit'
 
 
 def test_a_blank_member_value_is_not_an_explicit_choice(clean_env):
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    clean_env.setenv('BOXFOX_TASK_SURFACE', '   ')
-    assert fs.member_switch('BOXFOX_TASK_SURFACE') is True
-    assert fs.source('BOXFOX_TASK_SURFACE') == 'master'
+    clean_env.setenv('BOXFOX_ADAPTIVE_HARNESS', '   ')
+    assert fs.member_switch('BOXFOX_ADAPTIVE_HARNESS') is True
+    assert fs.source('BOXFOX_ADAPTIVE_HARNESS') == 'master'
 
 
 @pytest.mark.parametrize('name,readers', list(READERS.items()))
@@ -92,24 +89,18 @@ def test_every_member_reader_follows_the_master(clean_env, name, readers):
         assert reader() is False, (name, reader)
 
 
-def test_execution_kernel_switch_follows_the_master_for_its_two_members(clean_env):
+def test_execution_kernel_switch_follows_the_master(clean_env):
     from agentbox.agent_core import execution_kernel
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
     assert execution_kernel.enabled() is True
-    assert execution_kernel._switch(execution_kernel.LEDGER_SWITCH) is True
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
     assert execution_kernel.enabled() is False
-    assert execution_kernel._switch(execution_kernel.LEDGER_SWITCH) is False
 
 
 def test_switch_readers_still_honour_their_own_raw_test_value(clean_env):
     """Khuôn cũ của test (`env=`/`value=`) không đổi: giá trị thô truyền vào thắng khóa tổng."""
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    assert task_surface.enabled('off') is False
-    assert usage_ledger.enabled('off') is False
     assert research_gateway.enabled('off') is False
-    assert job_surface.enabled('off') is False
-    assert tool_contracts.task_surface_enabled('off') is False
 
 
 def test_snapshot_names_the_master_and_every_member_with_its_source(clean_env):
@@ -118,8 +109,8 @@ def test_snapshot_names_the_master_and_every_member_with_its_source(clean_env):
     assert set(snap['members']) == set(MEMBERS)
     assert all(item == {'on': True, 'source': 'default'} for item in snap['members'].values())
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    clean_env.setenv('BOXFOX_CONTROLLER_JOBS', 'off')
+    clean_env.setenv('BOXFOX_RESEARCH_GATEWAY', 'off')
     snap = fs.snapshot()
     assert snap['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'explicit'}
-    assert snap['members']['BOXFOX_CONTROLLER_JOBS'] == {'on': False, 'source': 'explicit'}
-    assert snap['members']['BOXFOX_TASK_SURFACE'] == {'on': True, 'source': 'master'}
+    assert snap['members']['BOXFOX_RESEARCH_GATEWAY'] == {'on': False, 'source': 'explicit'}
+    assert snap['members']['BOXFOX_ADAPTIVE_HARNESS'] == {'on': True, 'source': 'master'}

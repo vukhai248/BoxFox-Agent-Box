@@ -165,10 +165,6 @@ def _effective(rt, session):
         if not config.get('workTools') or 'work_graph' in tools:
             tools |= WORK_TOOLS | {'work_artifact_read'}
     profile = work_scope.apply_profile(rt, session, {'mode': mode, 'tools': sorted(tools)})
-    if not task_surface.enabled():
-        profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
-    if not job_surface.enabled():
-        profile['tools'] = job_surface.visible_tools(rt, session['id'], profile['tools'])
     profile = research_gateway.apply_profile(rt, session, profile)
     return profile['tools'], mode
 

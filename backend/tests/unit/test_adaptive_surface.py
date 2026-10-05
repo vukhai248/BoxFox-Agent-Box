@@ -40,7 +40,6 @@ class Client:
 @pytest.fixture
 def env(tmp_path, monkeypatch):
     monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     executor, client = Executor(), Client()
     rt = HarnessRuntime(store, executor, client)

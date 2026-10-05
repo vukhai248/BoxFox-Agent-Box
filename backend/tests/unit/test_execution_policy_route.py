@@ -2,8 +2,8 @@
 
 Soát tuân thủ 2026-10-04 chỉ ra H8 ("main thích ứng") chỉ có thư viện + seam: bật công tắc cũng
 không có cách nào đặt mode cho một phiên, nên phần "main thích ứng" không vận hành được. File này
-khoá hợp đồng của writer mới: GET thấy mode + hai công tắc; PUT `adaptive` bị từ chối khi thiếu công
-tắc (409, policy KHÔNG đổi); đủ công tắc thì policy ghim ở PHIÊN GỐC của run (con đọc theo cha);
+khoá hợp đồng của writer mới: GET thấy mode + công tắc adaptive; PUT `adaptive` bị từ chối khi công
+tắc tắt (409, policy KHÔNG đổi); bật công tắc thì policy ghim ở PHIÊN GỐC của run (con đọc theo cha);
 `legacy` gỡ khoá; mode lạ 400. Và: không tool nào của model chạm tới policy.
 """
 from __future__ import annotations
@@ -45,8 +45,7 @@ def run(tmp_path, coro_factory, switches=()):
         return results
 
     import os
-    saved = {name: os.environ.get(name) for name in (execution_kernel.ADAPTIVE_SWITCH,
-                                                     execution_kernel.LEDGER_SWITCH)}
+    saved = {name: os.environ.get(name) for name in (execution_kernel.ADAPTIVE_SWITCH,)}
     # Từ v2 mặc định BẬT: "không nằm trong `switches`" phải là `off` TƯỜNG MINH, nếu chỉ
     # pop env thì mặc định mới (BẬT) chen vào và bài chốt đường legacy sẽ đỏ.
     for name in saved:
@@ -61,7 +60,7 @@ def run(tmp_path, coro_factory, switches=()):
                 os.environ[name] = value
 
 
-def test_status_reports_legacy_and_the_two_switches(tmp_path):
+def test_status_reports_legacy_and_the_adaptive_switch(tmp_path):
     async def scenario(client, store, runtime, root, child):
         return await (await client.get(f'/api/agent/sessions/{root}/execution-policy',
                                       headers=HEADERS)).json()
@@ -70,8 +69,7 @@ def test_status_reports_legacy_and_the_two_switches(tmp_path):
     assert payload['mode'] == 'legacy'
     assert payload['policy'] is None
     assert payload['sessionId']
-    assert payload['switches'] == {execution_kernel.ADAPTIVE_SWITCH: False,
-                                   execution_kernel.LEDGER_SWITCH: False}
+    assert payload['switches'] == {execution_kernel.ADAPTIVE_SWITCH: False}
 
 
 def test_adaptive_is_refused_while_a_switch_is_off(tmp_path):
@@ -99,9 +97,8 @@ def test_adaptive_pins_the_root_run_and_legacy_releases_it(tmp_path):
                                           json={'mode': 'legacy'}, headers=HEADERS)).json()
         return turned_on, from_child, released, runtime.store.get(root)['config'], root
 
-    turned_on, from_child, released, config, root_id = run(tmp_path, scenario,
-                                                  switches=(execution_kernel.ADAPTIVE_SWITCH,
-                                                            execution_kernel.LEDGER_SWITCH))
+    turned_on, from_child, released, config, root_id = run(
+        tmp_path, scenario, switches=(execution_kernel.ADAPTIVE_SWITCH,))
     assert turned_on['mode'] == 'adaptive'
     assert turned_on['policy'] == {'schema': execution_kernel.POLICY_SCHEMA, 'mode': 'adaptive'}
     # Con KHÔNG có khoá riêng: nó đọc policy của phiên gốc, nên bật ở con cũng là bật cả run.

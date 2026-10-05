@@ -25,7 +25,6 @@ from agentbox.agent_core import research_gateway
 from agentbox.agent_core import (research_profiles, research_quality, research_runtime,
                                  source_tiers)
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
-from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, CONTROLLER_JOB_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core import usage_surface
 from agentbox.api.server import create_app
@@ -145,17 +144,13 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatc
         store.close()
         return client.offered[-1]
 
-    for switch in ('BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS', 'BOXFOX_RESEARCH_GATEWAY'):
-        isolate_off(monkeypatch, switch)
+    isolate_off(monkeypatch, 'BOXFOX_RESEARCH_GATEWAY')
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))
-    # Tắt TƯỜNG MINH cả ba bề mặt mới; bật task không tự bật job/Research.
-    other_off = CONTROLLER_JOB_TOOLS | research_gateway.GATEWAY_TOOLS
-    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - TASK_SURFACE_TOOLS - other_off)
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
-    switched = asyncio.run(run('switch.db', {}))
-    assert sorted(switched) == sorted(ORCHESTRATOR_TOOLS - other_off)
+    # Tắt TƯỜNG MINH bề mặt gateway còn lại: bộ task và bộ job LUÔN có mặt từ v2 (#6599).
+    other_off = research_gateway.GATEWAY_TOOLS
+    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - other_off)
 
 
 def test_the_fourteen_groups_cover_the_orchestrator_exactly():
@@ -172,7 +167,8 @@ def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     assert len(union) == len(set(union)) == 61, 'mười bốn nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
-    assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
+    assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals', 'controllerJobs',
+                                                            'taskSurface']
     questions = next(g for g in groups if g['key'] == 'questionsApprovals')
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
@@ -398,7 +394,6 @@ def test_a_mis_set_reading_switch_keeps_the_default_and_says_so_once(tmp_path, m
 
 def test_the_usage_block_lists_open_allocations(tmp_path, monkeypatch):
     """H10.2: khối `usage` chỉ đọc — store tươi thấy `[]`, sau PUT thấy đúng allocation vừa mở."""
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
 
     async def run():
         store, runtime = make_runtime(tmp_path, 'runtime-info-usage.db')

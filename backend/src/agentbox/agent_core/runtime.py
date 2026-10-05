@@ -3775,13 +3775,6 @@ class HarnessRuntime(RuntimeCommands):
         nằm ở `dispatch`, còn đây chỉ để model không phí bước gọi thứ sẽ bị từ chối.
         """
         profile = work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
-        if not task_surface.enabled():
-            # H3 — công tắc giết của bề mặt task, áp ở ĐÚNG một chỗ cho MỌI hồ sơ lượt (main,
-            # research, design, plan): tắt thì bốn công cụ `task_*` không được quảng cáo, kể cả
-            # khi tên đã nằm trong `config['tools']` từ một phiên cũ.
-            profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
-        if not job_surface.enabled():
-            profile['tools'] = job_surface.visible_tools(self, session['id'], profile['tools'])
         return research_gateway.apply_profile(self, session, profile)
 
     def turn_profile_base(self, session, invocation_id=None):
@@ -4102,7 +4095,7 @@ class HarnessRuntime(RuntimeCommands):
         start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
-        tools = schemas_for(profile['tools'], job_receipts=job_surface.has_receipts(self, sid), research_receipts=research_gateway.has_receipts(self, sid))
+        tools = schemas_for(profile['tools'], research_receipts=research_gateway.has_receipts(self, sid))
         loop_guard = AntiLoopGuard(threshold=3)
         started = time.time()
         steps_used = 0
@@ -5125,11 +5118,7 @@ class HarnessRuntime(RuntimeCommands):
         if name in job_surface.JOB_TOOLS:
             return await job_surface.handle(self, current, name, args)
         if name in task_surface.TASK_TOOLS:
-            # H3 — bề mặt task (plan v1 §4). Cổng ở đây là hàng rào cuối: phiên tạo lúc công tắc còn
-            # bật rồi công tắc tắt giữa chừng vẫn bị từ chối, không "chạy tạm".
-            if not task_surface.enabled():
-                raise PermissionError(f'TASK_SURFACE_OFF: {name} is unavailable while '
-                                      f'{task_surface.SWITCH} is off')
+            # H3 — bề mặt task (plan v1 §4).
             return await task_surface.handle(self, current, name, args)
         if name in WORK_TOOLS:
             result = await self.work_tool(session, name, args, call_id)

@@ -102,7 +102,7 @@ def test_delegate_task_schema_states_the_result_shape_and_stays_backward_compati
                                'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId',
                                'maxSteps', 'deadlineSeconds'}
     assert properties['task']['type'] == 'object' and properties['runId']['type'] == 'string'
-    assert 'BOXFOX_TASK_SURFACE' in properties['task']['description']
+    assert 'MAIN session' in properties['task']['description']
     assert properties['wait']['type'] == 'boolean' and properties['deliverTo']['type'] == 'array'
     assert schema['parameters']['required'] == ['role', 'goal'], \
         'existing callers send role/goal/context only: nothing new may become required'

@@ -3,10 +3,10 @@
 Chủ nhà chốt 05/10/2026 (quyết định #6599, v2): đợt bật dần đã xong tám bước, nên **mặc định
 là BẬT**. Khóa tổng trở thành tay nắm để TẮT cả nhóm khi cần, không còn là điều kiện để bật:
 
-- Thiếu `BOXFOX_REFORM` ⇒ cả bảy công tắc thành viên **BẬT** (mặc định mới, từ v2).
+- Thiếu `BOXFOX_REFORM` ⇒ mọi công tắc thành viên **BẬT** (mặc định mới, từ v2).
 - `BOXFOX_REFORM=off` ⇒ tắt cả nhóm bằng MỘT lệnh (lối thoát hiểm một lệnh).
 - `BOXFOX_REFORM=on` ⇒ giữ nguyên nghĩa cũ: nói rõ "bật cả nhóm" mà không cần env thành viên.
-- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng: `BOXFOX_TASK_SURFACE=off` tắt riêng
+- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng: `BOXFOX_ADAPTIVE_HARNESS=off` tắt riêng
   một bề mặt để điều tra sự cố trong khi phần còn lại vẫn chạy.
 
 Lối thoát hiểm này KHÔNG bị xoá ở v2: nó là cách tổ chức để một agent sau quyết định giữ hay
@@ -31,9 +31,6 @@ ON_VALUES = {'1', 'on', 'true', 'yes'}
 #: Các công tắc của đợt cải tổ còn lại sau checkpoint xoá dần (H3–H8). Thứ tự này cũng là
 #: thứ tự hiện trong `runtime-info`.
 MEMBERS = (
-    'BOXFOX_TASK_SURFACE',
-    'BOXFOX_CONTROLLER_JOBS',
-    'BOXFOX_USAGE_LEDGER',
     'BOXFOX_RESEARCH_GATEWAY',
     'BOXFOX_ADAPTIVE_HARNESS',
 )
