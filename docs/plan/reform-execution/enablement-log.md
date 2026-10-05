@@ -240,6 +240,20 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 - Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step8/` (5/5), `enable-step8-task/`,
   `enable-step8-job/`, `enable-step8-caps/` — mỗi thư mục có `summary.json` + JSON từng kịch bản.
 
+### Sửa hermeticity cho trạng thái "cả nhóm BẬT" (2026-10-05, sau bước 8)
+
+Chạy nhóm 22 tệp liên quan với `BOXFOX_REFORM=on` phát hiện **16 ca đỏ** — cùng một lớp lỗi như
+`1ad3ae8`: bài kiểm khẳng định hành vi MẶC ĐỊNH nhưng chỉ cắt env **thành viên**, không cắt **khóa tổng**,
+nên khi khóa tổng BẬT thì giá trị hiệu lực là BẬT và khẳng định mặc định sai.
+
+- Thêm `tests/unit/switch_isolation.py` với `isolate_default(monkeypatch, *switches)`: cắt cả env thành
+  viên lẫn `BOXFOX_REFORM`, để giá trị hiệu lực thật sự là mặc định.
+- Áp cho 16 ca ở sáu tệp: `test_task_surface.py` (9), `test_job_surface.py` (2), `test_usage_surface.py` (2),
+  `test_runtime_info.py` (1), `test_research_gateway.py` (1), `test_context_surface.py` (1). Chỉ đụng test,
+  không đổi sản phẩm.
+- **Kết quả:** nhóm 22 tệp với `BOXFOX_REFORM=on` → **846 passed in 237.63s** (trước khi sửa: 16 failed,
+  830 passed); chạy lại ở trạng thái mặc định (không env nào) → **846 passed in 232.98s**.
+
 ## Trạng thái hiện tại của instance bật dần
 
 `BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`,

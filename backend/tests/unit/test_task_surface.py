@@ -23,6 +23,7 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.task_service import TaskService
 from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, schemas_for
 from agentbox.memory.session_store import SessionStore
+from switch_isolation import isolate_default
 
 
 def request(**updates):
@@ -117,8 +118,9 @@ def run(rt, sid, name, args):
 
 def test_switch_is_off_by_default_and_only_on_enables(monkeypatch):
     # Bài này chốt MẶC ĐỊNH, nên phải tự cắt env ambient: bước "bật dần" chạy cả bộ với
-    # `BOXFOX_TASK_SURFACE=on` (kiểm trạng thái BẬT), lúc đó khẳng định mặc định vẫn phải đúng.
-    monkeypatch.delenv(task_surface.SWITCH, raising=False)
+    # `BOXFOX_TASK_SURFACE=on` (kiểm trạng thái BẬT) hoặc `BOXFOX_REFORM=on` (cả nhóm), lúc đó
+    # khẳng định mặc định vẫn phải đúng — cắt cả env thành viên LẪN khóa tổng.
+    isolate_default(monkeypatch, task_surface.SWITCH)
     assert task_surface.enabled() is False
     assert task_surface.enabled('off') is False
     assert task_surface.enabled('') is False
@@ -138,7 +140,7 @@ def test_tool_names_are_one_contract_in_two_modules():
 
 def test_schemas_for_drops_the_surface_when_off(monkeypatch):
     names = ['task_list', 'task_get', 'task_send', 'task_abandon', 'read_source']
-    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    isolate_default(monkeypatch, 'BOXFOX_TASK_SURFACE')
     assert [s['function']['name'] for s in schemas_for(names)] == ['read_source']
     monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     assert {s['function']['name'] for s in schemas_for(names)} == set(names)
@@ -159,7 +161,7 @@ def test_turn_profile_hides_the_surface_for_every_profile(monkeypatch, tmp_path)
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
     config = {'skills': [], 'tools': ['task_list', 'task_get', 'task_send', 'task_abandon', 'read_source']}
     sid = runtime.create(config)['id']
-    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    isolate_default(monkeypatch, 'BOXFOX_TASK_SURFACE')
     assert runtime.turn_profile(session(runtime, sid))['tools'] == ['read_source']
     monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     assert set(runtime.turn_profile(session(runtime, sid))['tools']) == set(config['tools'])
@@ -184,7 +186,7 @@ def test_dispatch_refuses_every_task_tool_when_the_switch_is_off(name, args, mon
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
     config = {'skills': [], 'tools': [name]}
     sid = runtime.create(config)['id']
-    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    isolate_default(monkeypatch, 'BOXFOX_TASK_SURFACE')
     with pytest.raises(PermissionError, match='TASK_SURFACE_OFF'):
         asyncio.run(runtime.dispatch(session(runtime, sid), name, args))
     store.close()
@@ -377,7 +379,7 @@ def test_project_child_never_raises_and_logs(repo, monkeypatch):
 
 
 def test_project_child_does_no_ddl_when_the_switch_is_off_and_no_task_ever_existed(monkeypatch, tmp_path):
-    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    isolate_default(monkeypatch, 'BOXFOX_TASK_SURFACE')
     store = SessionStore(tmp_path / 'sessions.db')
     owner = store.create({'skills': []})['id']
     rt = FakeRT(store)
@@ -691,7 +693,7 @@ def test_open_delegate_is_a_noop_for_a_non_root_session_and_a_disabled_switch(tm
     store, runtime, sid = runtime_repo(tmp_path, monkeypatch, [])
     child_id = runtime.create({'skills': []}, parent_id=sid, role='explore')['id']
     assert task_surface.open_delegate(runtime, store.get(child_id), delegate_args()) is None
-    monkeypatch.delenv('BOXFOX_TASK_SURFACE', raising=False)
+    isolate_default(monkeypatch, 'BOXFOX_TASK_SURFACE')
     assert task_surface.open_delegate(runtime, store.get(sid), delegate_args()) is None
     store.close()
 

@@ -4,6 +4,7 @@ import copy
 
 import pytest
 
+from switch_isolation import isolate_default
 from agentbox.agent_core import research_gateway as gateway
 from agentbox.agent_core.research_owner import REPORT_SCHEMA
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -88,7 +89,7 @@ def control_args(receipt, action='cancel', **changes):
 
 def test_default_off_and_legacy_dispatch_parity(rt, monkeypatch):
     runtime, root = rt
-    monkeypatch.delenv(gateway.SWITCH)
+    isolate_default(monkeypatch, gateway.SWITCH)
     assert not gateway.enabled()
     dispatch(runtime, root, 'file_write', {'path': 'legacy.txt', 'content': 'same legacy path'})
     assert runtime.executor.calls[-1][0] == 'file_write'

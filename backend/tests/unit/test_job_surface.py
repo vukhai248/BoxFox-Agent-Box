@@ -17,6 +17,7 @@ from agentbox.agent_core.peer_watchdog import PeerWatchdog, PARENT_ALIVE_STATES
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_groups import TOOL_GROUPS
 from agentbox.memory.session_store import SessionStore
+from switch_isolation import isolate_default
 from test_harness_runtime import FixtureExecutor, answer, call
 
 
@@ -92,13 +93,13 @@ def test_switch_defaults_off(value):
 def test_switch_defaults_off_without_ambient_env(monkeypatch):
     # Bước "bật dần" chạy cả bộ với `BOXFOX_CONTROLLER_JOBS=on` (kiểm trạng thái BẬT),
     # nên khẳng định MẶC ĐỊNH phải tự cắt env ambient thay vì tin vào môi trường gọi.
-    monkeypatch.delenv(job_surface.SWITCH, raising=False)
+    isolate_default(monkeypatch, job_surface.SWITCH)
     assert not job_surface.enabled()
 
 
 def test_default_off_runtime_profile_schemas_and_no_ddl(repo, monkeypatch):
     store, rt, sid, _ = repo
-    monkeypatch.delenv(job_surface.SWITCH, raising=False)
+    isolate_default(monkeypatch, job_surface.SWITCH)
     assert not job_surface.exists(rt)
     assert not job_surface.JOB_TOOLS & set(rt.turn_profile(store.get(sid))['tools'])
     assert not tool_contracts.schemas_for(job_surface.JOB_TOOLS)

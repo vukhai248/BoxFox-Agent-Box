@@ -14,6 +14,7 @@ import pytest
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
+from switch_isolation import isolate_default
 
 from agentbox.agent_core import failures, limits
 from agentbox.agent_core import web as web_module
@@ -143,7 +144,7 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatc
         return client.offered[-1]
 
     for switch in ('BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS', 'BOXFOX_RESEARCH_GATEWAY'):
-        monkeypatch.delenv(switch, raising=False)
+        isolate_default(monkeypatch, switch)
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))

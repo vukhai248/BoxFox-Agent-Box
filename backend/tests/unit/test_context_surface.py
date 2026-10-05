@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from switch_isolation import isolate_default
 from agentbox.agent_core import context_surface, execution_kernel
 from agentbox.agent_core.context_surface import ContextStore
 from agentbox.agent_core.compression import ContextCompressor
@@ -348,7 +349,7 @@ async def test_auto_compaction_calls_real_runtime_hook_and_passes_data_brief_to_
 @run_async
 async def test_default_off_preserves_catalog_loader_payload_and_dedup(runtime, monkeypatch):
     rt, session, _ = runtime
-    monkeypatch.delenv('BOXFOX_CONTEXT_SURFACE')
+    isolate_default(monkeypatch, 'BOXFOX_CONTEXT_SURFACE')
     assert not context_surface.enabled()
     expected = rt.catalog.read('runtime-check')
     loaded = await read(rt, session)
