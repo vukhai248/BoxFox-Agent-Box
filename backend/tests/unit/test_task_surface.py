@@ -116,7 +116,7 @@ def test_tool_names_are_one_contract_in_two_modules():
     assert task_surface.TASK_TOOLS == TASK_SURFACE_TOOLS
     group = next(g for g in __import__('agentbox.agent_core.tool_groups', fromlist=['TOOL_GROUPS'])
                  .TOOL_GROUPS if g['key'] == 'taskSurface')
-    assert group['alwaysOn'] is True
+    assert group['alwaysOn'] is False
     assert set(group['tools']) == TASK_SURFACE_TOOLS
     assert TASK_SURFACE_TOOLS <= roles.ORCHESTRATOR_TOOLS
 

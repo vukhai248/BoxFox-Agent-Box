@@ -78,7 +78,7 @@ def test_tool_names_roles_groups_schema_contract():
     assert job_surface.JOB_TOOLS == tool_contracts.CONTROLLER_JOB_TOOLS
     assert job_surface.JOB_TOOLS <= roles.ORCHESTRATOR_TOOLS
     group = next(g for g in TOOL_GROUPS if g['key'] == 'controllerJobs')
-    assert set(group['tools']) == job_surface.JOB_TOOLS and group['alwaysOn']
+    assert set(group['tools']) == job_surface.JOB_TOOLS and not group['alwaysOn']
     assert all(tool_contracts.replay_class(n) == 'unsafe' for n in job_surface.JOB_TOOLS)
     assert 'idle' not in PARENT_ALIVE_STATES
 

@@ -167,8 +167,7 @@ def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     assert len(union) == len(set(union)) == 61, 'mười bốn nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
-    assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals', 'controllerJobs',
-                                                            'taskSurface']
+    assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
     questions = next(g for g in groups if g['key'] == 'questionsApprovals')
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
