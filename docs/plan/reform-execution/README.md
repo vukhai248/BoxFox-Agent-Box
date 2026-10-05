@@ -25,6 +25,8 @@ Mỗi thư mục `H0/` … `H11/` gồm đúng 5 file:
 | `migration.md` | tương thích, dữ liệu legacy, rollback / kill switch |
 | `handoff.md` | trạng thái, quyết định, blocker, việc tiếp |
 
+**Nhật ký bật dần công tắc:** `enablement-log.md` (append-only; bước 1–2 đã ĐẠT 2026-10-05).
+
 **H12 (khóa tổng) không tách thư mục** — nằm trọn trong `HANDOFF.md` §5 (bảng công tắc) và §6
 (quy trình bật dần từng công tắc); bảng theo dõi vẫn có dòng H12.
 

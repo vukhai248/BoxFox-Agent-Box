@@ -145,16 +145,18 @@ Ghi chú vận hành: env đọc lúc gọi, nhưng tiến trình đang chạy k
 
 ### 6.2 Thứ tự đề xuất (từ ít rủi ro đến nhiều rủi ro)
 
-| Bước | Công tắc | Vì sao ở vị trí này | Test phải xanh | Vòng live |
-|---|---|---|---|---|
-| 1 | `BOXFOX_RECOVERY_POLICY` | Chỉ đổi cách phân loại lỗi; không mở công cụ mới, không ghi sổ | `test_recovery_policy.py`, `test_decision_flow.py` | `driver.py` (kịch bản lỗi/hồi phục) |
-| 2 | `BOXFOX_CONTEXT_SURFACE` | Đổi đường ref/skill; chưa mở công cụ | `test_context_surface.py` | `driver.py` (context/skill) |
-| 3 | `BOXFOX_TASK_SURFACE` | Mở bốn công cụ task cho model; đã E2E 9/9 nhưng là bề mặt thấy được | `test_harness_task_service.py`, `test_tool_groups.py` | `driver_task.py` |
-| 4 | `BOXFOX_CONTROLLER_JOBS` | Job nền nhiều lượt; cần bước 3 xong để hàng việc nhất quán | `test_harness_jobs*.py` | `driver.py` (job) |
-| 5 | `BOXFOX_USAGE_LEDGER` | Bắt đầu ghi sổ chi; chưa siết gì khi chưa có allocation | `test_usage_ledger.py`, `test_usage_surface.py`, `test_peer_cost.py` | `driver_child.py` (đếm chi của con) |
-| 6 | `BOXFOX_ADAPTIVE_HARNESS` | Đổi owner-check + mở mode `adaptive`; **cần bước 5** vì mode adaptive đòi sổ usage | `test_adaptive_main.py`, `test_adaptive_surface.py` | `driver_child_caps.py` |
-| 7 | `BOXFOX_RESEARCH_GATEWAY` | Chạm chủ quyền Research — cần chủ nhà quyết riêng (#6536) trước khi bật | `test_research_gateway*.py` | `driver.py` (research) |
-| 8 | `BOXFOX_REFORM=on` | Khi cả bảy đã xanh riêng lẻ: một lệnh chạy cả cụm | toàn bộ nhóm trên | cả bốn driver |
+Nhật ký chạy thật (ngày, lệnh, bằng chứng, trạng thái từng bước): [`enablement-log.md`](enablement-log.md). Cột **Đã chạy** dưới đây chỉ ghi bước nào đã qua đủ 5 bước.
+
+| Bước | Công tắc | Vì sao ở vị trí này | Test phải xanh | Vòng live | Đã chạy |
+|---|---|---|---|---|---|
+| 1 | `BOXFOX_RECOVERY_POLICY` | Chỉ đổi cách phân loại lỗi; không mở công cụ mới, không ghi sổ | `test_recovery_policy.py`, `test_decision_flow.py` | `driver.py` (kịch bản lỗi/hồi phục) | ✅ 2026-10-05 |
+| 2 | `BOXFOX_CONTEXT_SURFACE` | Đổi đường ref/skill; chưa mở công cụ | `test_context_surface.py` | `driver.py` (context/skill) | ✅ 2026-10-05 |
+| 3 | `BOXFOX_TASK_SURFACE` | Mở bốn công cụ task cho model; đã E2E 9/9 nhưng là bề mặt thấy được | `test_harness_task_service.py`, `test_tool_groups.py` | `driver_task.py` | — |
+| 4 | `BOXFOX_CONTROLLER_JOBS` | Job nền nhiều lượt; cần bước 3 xong để hàng việc nhất quán | `test_harness_jobs*.py` | `driver.py` (job) | — |
+| 5 | `BOXFOX_USAGE_LEDGER` | Bắt đầu ghi sổ chi; chưa siết gì khi chưa có allocation | `test_usage_ledger.py`, `test_usage_surface.py`, `test_peer_cost.py` | `driver_child.py` (đếm chi của con) | — |
+| 6 | `BOXFOX_ADAPTIVE_HARNESS` | Đổi owner-check + mở mode `adaptive`; **cần bước 5** vì mode adaptive đòi sổ usage | `test_adaptive_main.py`, `test_adaptive_surface.py` | `driver_child_caps.py` | — |
+| 7 | `BOXFOX_RESEARCH_GATEWAY` | Chạm chủ quyền Research — cần chủ nhà quyết riêng (#6536) trước khi bật | `test_research_gateway*.py` | `driver.py` (research) | — |
+| 8 | `BOXFOX_REFORM=on` | Khi cả bảy đã xanh riêng lẻ: một lệnh chạy cả cụm | toàn bộ nhóm trên | cả bốn driver | — |
 
 Sau bước 8 mới tính chuyện xoá nhánh legacy; **chưa xoá gì trong đợt này** — đó là việc của một
 checkpoint riêng, phải có bằng chứng chạy thật dài ngày.
