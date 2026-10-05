@@ -449,7 +449,6 @@ def test_the_usage_read_never_creates_the_ledger_tables(tmp_path):
     assert 'harness_allocations' not in tables
     assert 'harness_usage' not in tables
 
-
 def test_a_half_built_ledger_schema_is_left_alone(tmp_path):
     """Schema sổ dở dang (thiếu `harness_usage`) cũng phải để yên: lượt đọc không tự vá bảng thiếu.
 
