@@ -88,8 +88,36 @@ CODES = {
     'TOOL_NOT_STARTED': 'tool_validation',
     'TOOL_REPLAY_PENDING': 'tool_validation',
     'TURN_TOOL_BATCH': 'tool_validation',
+    # Bề mặt task/job/decision (H3–H4). Đo sống 2026-10-05: model yếu gọi `delegate_task`
+    # kèm hợp đồng sai kiểu mảng, bị `HARNESS_CONTRACT_INVALID`, rồi KHÔNG sửa mà dừng hỏi
+    # chủ nhà — vì mã chưa khai nên rơi `unknown` ⇒ `checkpoint_and_ask`. Hợp đồng/đối số
+    # sai là việc model sửa được: khai `tool_validation` để lời khuyên là `fix_input`
+    # ("sửa trường/đổi cách gọi"), đúng như `reflection_hint` đã nói.
+    'HARNESS_CONTRACT_INVALID': 'tool_validation',
+    'HARNESS_SCHEMA_UNSUPPORTED': 'tool_validation',
+    'TASK_SCHEMA_UNSUPPORTED': 'tool_validation',
+    'TASK_DELEGATE_ROLE_MISMATCH': 'tool_validation',
+    'TASK_SURFACE_NO_RUN': 'tool_validation',
+    'TASK_ALIAS_CONFLICT': 'tool_validation',
+    'TASK_INVOCATION_CONFLICT': 'tool_validation',
+    'TASK_MESSAGE_CONFLICT': 'tool_validation',
+    'DECISION_INVALID': 'tool_validation',
+    'JOB_OWNERSHIP_REQUIRED': 'tool_validation',
+    'JOB_EXECUTOR_UNSUPPORTED': 'tool_validation',
+    'JOB_PREDICATE_UNSUPPORTED': 'tool_validation',
+    'JOB_HANDLE_STALE': 'tool_validation',
+    # Id không tồn tại: đọc lại rồi gọi bằng id đúng — vẫn là lỗi đối số, không phải quyền.
+    'TASK_UNKNOWN': 'tool_validation',
+    'TASK_RUN_UNKNOWN': 'tool_validation',
+    'TASK_CHILD_UNKNOWN': 'tool_validation',
+    'TASK_ATTEMPT_UNKNOWN': 'tool_validation',
+    'JOB_UNKNOWN': 'tool_validation',
     # Quyền: công cụ bị từ chối là chuyện quyền, không phải lỗi tạm thời.
     'TOOL_NOT_PERMITTED': 'rights_budget',
+    # Nhập học/owner/revision của bề mặt task–job: không tự retry để vượt quyền.
+    'JOB_ADMISSION_REQUIRED': 'rights_budget',
+    'TASK_OWNER_MISMATCH': 'rights_budget',
+    'TASK_REVISION_CONFLICT': 'rights_budget',
     # Mutation có kết quả không rõ: chỉ được soi, không replay.
     'TOOL_INTERRUPTED_UNSAFE': 'tool_unknown',
     'WORK_SHIP_IN_PROGRESS': 'tool_unknown',

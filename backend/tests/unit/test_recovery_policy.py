@@ -110,6 +110,46 @@ def test_validation_errors_fix_input_instead_of_repeating_the_payload():
     assert 'dùng lại kết quả đã commit' in receipt['reason']
 
 
+#: Mã do bề mặt task/job/decision sinh ra (H3–H4), đo sống 2026-10-05. Cùng luật với
+#: `LIVE_PROVIDER_CODES`: thiếu một mã ở đây nghĩa là lỗi thật bị xếp `unknown` ⇒ checkpoint oan.
+LIVE_SURFACE_CODES = ('HARNESS_CONTRACT_INVALID', 'HARNESS_SCHEMA_UNSUPPORTED',
+                      'TASK_SCHEMA_UNSUPPORTED', 'TASK_DELEGATE_ROLE_MISMATCH',
+                      'TASK_SURFACE_NO_RUN', 'TASK_ALIAS_CONFLICT', 'TASK_INVOCATION_CONFLICT',
+                      'TASK_MESSAGE_CONFLICT', 'DECISION_INVALID', 'JOB_OWNERSHIP_REQUIRED',
+                      'JOB_EXECUTOR_UNSUPPORTED', 'JOB_PREDICATE_UNSUPPORTED', 'JOB_HANDLE_STALE',
+                      'TASK_UNKNOWN', 'TASK_RUN_UNKNOWN', 'TASK_CHILD_UNKNOWN',
+                      'TASK_ATTEMPT_UNKNOWN', 'JOB_UNKNOWN', 'JOB_ADMISSION_REQUIRED',
+                      'TASK_OWNER_MISMATCH', 'TASK_REVISION_CONFLICT')
+
+
+@pytest.mark.parametrize('code', LIVE_SURFACE_CODES)
+def test_live_surface_codes_have_a_declared_class(code):
+    assert policy.classify(code) != 'unknown', f'{code} rơi vào unknown: lỗi thật bị checkpoint oan'
+
+
+def test_a_bad_task_contract_tells_the_model_to_fix_the_field_not_to_stop():
+    """Đo sống 2026-10-05: model yếu gửi hợp đồng sai kiểu, bị từ chối rồi DỪNG hỏi chủ nhà."""
+    result = policy.decision('HARNESS_CONTRACT_INVALID')
+    assert result['class'] == 'tool_validation' and result['action'] == 'fix_input'
+    assert result['replay'] is False and result['keepsPartial'] is False
+    assert 'sửa trường/đổi cách gọi' in result['reason']
+    assert policy.may_retry(result) is False, 'fix_input là sửa rồi gọi lại, không phải vé replay tool'
+
+
+def test_admission_and_ownership_stay_with_the_owner():
+    for code in ('JOB_ADMISSION_REQUIRED', 'TASK_OWNER_MISMATCH', 'TASK_REVISION_CONFLICT'):
+        result = policy.decision(code)
+        assert result['action'] == 'checkpoint_and_ask', code
+        assert result['replay'] is False and policy.may_retry(result) is False
+
+
+def test_integrity_codes_still_fail_closed_to_unknown():
+    for code in ('TASK_BIND_FAILED', 'TASK_CHILD_BINDING', 'TASK_CONTRACT_CORRUPT',
+                 'TASK_RECORD_CORRUPT'):
+        assert policy.classify(code) == 'unknown', code
+        assert policy.decision(code)['action'] == 'checkpoint_and_ask'
+
+
 # --- 5. Rỗng/reasoning-only/từ chối -------------------------------------------------------
 
 def test_empty_response_retries_exactly_once_then_stops():
