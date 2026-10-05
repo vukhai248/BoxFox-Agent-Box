@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from switch_isolation import isolate_off
 from agentbox.agent_core import context_surface, execution_kernel
 from agentbox.agent_core.context_surface import ContextStore
 from agentbox.agent_core.compression import ContextCompressor
@@ -56,8 +55,7 @@ class Model:
 
 
 @pytest.fixture
-def runtime(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'on')
+def runtime(tmp_path):
     root = tmp_path / 'skills'
     package = root / 'skills' / 'runtime-check'
     package.mkdir(parents=True)
@@ -347,69 +345,6 @@ async def test_auto_compaction_calls_real_runtime_hook_and_passes_data_brief_to_
 
 
 @run_async
-async def test_switch_off_preserves_catalog_loader_payload_and_dedup(runtime, monkeypatch):
-    rt, session, _ = runtime
-    isolate_off(monkeypatch, 'BOXFOX_CONTEXT_SURFACE')
-    assert not context_surface.enabled()
-    expected = rt.catalog.read('runtime-check')
-    loaded = await read(rt, session)
-    assert loaded == expected
-    rt.active_messages[session['id']] = [{'role': 'tool', 'content': loaded['content']}]
-    again = await read(rt, session)
-    assert again == {'id': 'runtime-check', 'file': 'SKILL.md', 'sha256': loaded['sha256'],
-                     'status': 'unchanged', 'content_returned': False}
-    assert context_surface.handoff(rt, session) is None
-    tables = {r['name'] for r in rt.store.db.execute('SELECT name FROM sqlite_master')}
-    assert 'harness_context_bundles' not in tables
-    assert 'harness_skills' not in tables
-
-
-@run_async
-async def test_off_manual_compact_has_no_new_refs_or_brief(runtime, monkeypatch):
-    rt, session, _ = runtime
-    monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
-    lossily_compact(rt)
-    monkeypatch.setattr('agentbox.skills.runtime_commands.ContextCompressor',
-                        lambda window: rt.compressors[session['id']])
-    await rt.submit(session['id'], '/compact')
-    await asyncio.wait_for(rt.tasks[session['id']], 3)
-    events = rt.store.events(session['id'])
-    assert not any(e['type'] == 'context_checkpoint' for e in events)
-    assert not any('contextBundleRef' in e['data'] for e in events)
-    assert not any(m.get('content', '').startswith(context_surface.MARKER)
-                   for m in rt.store.get(session['id'])['messages'])
-    assert not context_surface._exists(rt.store.db, 'harness_context_bundles')
-
-
-@run_async
-async def test_off_auto_compact_parity_has_no_context_mutations(runtime, monkeypatch):
-    rt, session, _ = runtime
-    monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
-    lossily_compact(rt)
-    await asyncio.wait_for(rt.start(session['id'], 'Bounded legacy action.'), 3)
-    assert rt.client.messages
-    assert not any(m.get('content', '').startswith(context_surface.MARKER) for m in rt.client.messages[-1])
-    assert not context_surface._exists(rt.store.db, 'harness_context_bundles')
-    assert not any(e['type'] == 'context_checkpoint' for e in rt.store.events(session['id']))
-
-
-@run_async
-async def test_kill_switch_keeps_existing_pins_but_does_not_fall_back_to_legacy(runtime, monkeypatch):
-    rt, session, _ = runtime
-    enable(rt)
-    await read(rt, session)
-    receipt = context_surface.handoff(rt, session)
-    monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
-    for file in ('SKILL.md', 'reference.txt'):
-        with pytest.raises(ContractError, match='SKILL_SURFACE_OFF'):
-            await read(rt, session, file)
-    assert context_surface.load_bundle(rt, session, receipt['ref']).manifest_hash == receipt['ref']['contentHash']
-    again = context_surface.handoff(rt, session)
-    assert again['ref']['version'] > receipt['ref']['version']
-    assert rt.store.db.execute('SELECT COUNT(*) FROM harness_skill_pins').fetchone()[0] == 1
-
-
-@run_async
 async def test_restart_revalidates_immutable_pins_and_bundle_hash(runtime):
     rt, session, _ = runtime
     enable(rt)
@@ -505,7 +440,7 @@ async def test_readiness_degraded_is_visible_without_guessing_context_cost(runti
     assert any('unknown' in reason for reason in loaded['skillAdmission']['reasons'])
 
 
-def test_mode_skill_does_not_bypass_a_registry_decision(runtime, monkeypatch):
+def test_mode_skill_does_not_bypass_a_registry_decision(runtime):
     """Mode không được vượt phán quyết CỦA KHO: có hàng mà chưa enable ⇒ chặn, thân skill không lọt.
 
     Soát tuân thủ 2026-10-04: kho chưa có nguồn gieo hàng, nên khi kho TRỐNG thì mode đọc gói
@@ -518,8 +453,6 @@ def test_mode_skill_does_not_bypass_a_registry_decision(runtime, monkeypatch):
     blocked = context_surface.mode_skill(rt, session, 'runtime-check')
     assert 'SKILL_NOT_ENABLED' in blocked
     assert 'Check the supplied evidence.' not in blocked
-    monkeypatch.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
-    assert context_surface.mode_skill(rt, session, 'runtime-check') == rt.catalog.read('runtime-check')['content']
 
 
 def test_mode_skill_falls_back_to_the_catalog_when_the_registry_is_empty(runtime):

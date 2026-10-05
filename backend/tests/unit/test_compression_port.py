@@ -614,6 +614,7 @@ def test_the_manual_compact_command_anchors_on_the_recorded_usage(tmp_path):
         assert runtime.last_usage.get(session['id']) is None, 'hoá đơn cũ bị bỏ sau khi danh sách thay'
         after = store.get(session['id'])['messages']
         assert estimate_tokens(after) < raw, 'transcript sống đã nhỏ lại'
-        assert after[1]['content'].startswith('[Context compaction')
+        # Bề mặt context chèn khối refs canonical trước phần tóm tắt, nên tìm ở mọi vị trí.
+        assert any(m['content'].startswith('[Context compaction') for m in after)
         store.close()
     asyncio.run(run())

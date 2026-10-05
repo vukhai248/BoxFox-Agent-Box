@@ -12,14 +12,13 @@ Luật (chủ nhà 05/10/2026, quyết định #6599 — v2 bật mặc định)
 import pytest
 
 from agentbox.agent_core import feature_switches as fs
-from agentbox.agent_core import context_surface, job_surface, research_gateway
+from agentbox.agent_core import job_surface, research_gateway
 from agentbox.agent_core import task_surface, tool_contracts, usage_ledger
 
 MEMBERS = fs.MEMBERS
 
 READERS = {
     'BOXFOX_TASK_SURFACE': (task_surface.enabled, tool_contracts.task_surface_enabled),
-    'BOXFOX_CONTEXT_SURFACE': (context_surface.enabled,),
     'BOXFOX_CONTROLLER_JOBS': (job_surface.enabled, tool_contracts.controller_jobs_enabled),
     'BOXFOX_USAGE_LEDGER': (usage_ledger.enabled,),
     'BOXFOX_RESEARCH_GATEWAY': (research_gateway.enabled,),
@@ -119,8 +118,8 @@ def test_snapshot_names_the_master_and_every_member_with_its_source(clean_env):
     assert set(snap['members']) == set(MEMBERS)
     assert all(item == {'on': True, 'source': 'default'} for item in snap['members'].values())
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
-    clean_env.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
+    clean_env.setenv('BOXFOX_CONTROLLER_JOBS', 'off')
     snap = fs.snapshot()
     assert snap['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'explicit'}
-    assert snap['members']['BOXFOX_CONTEXT_SURFACE'] == {'on': False, 'source': 'explicit'}
+    assert snap['members']['BOXFOX_CONTROLLER_JOBS'] == {'on': False, 'source': 'explicit'}
     assert snap['members']['BOXFOX_TASK_SURFACE'] == {'on': True, 'source': 'master'}

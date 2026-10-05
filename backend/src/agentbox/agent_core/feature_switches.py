@@ -32,7 +32,6 @@ ON_VALUES = {'1', 'on', 'true', 'yes'}
 #: thứ tự hiện trong `runtime-info`.
 MEMBERS = (
     'BOXFOX_TASK_SURFACE',
-    'BOXFOX_CONTEXT_SURFACE',
     'BOXFOX_CONTROLLER_JOBS',
     'BOXFOX_USAGE_LEDGER',
     'BOXFOX_RESEARCH_GATEWAY',
