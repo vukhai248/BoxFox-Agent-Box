@@ -155,8 +155,8 @@ Nhật ký chạy thật (ngày, lệnh, bằng chứng, trạng thái từng b�
 | 4 | `BOXFOX_CONTROLLER_JOBS` | Job nền nhiều lượt; cần bước 3 xong để hàng việc nhất quán | `test_harness_jobs.py`, `test_job_surface.py`, `test_job_wake.py` | `driver_job.py` | ✅ 2026-10-05 |
 | 5 | `BOXFOX_USAGE_LEDGER` | Bắt đầu ghi sổ chi; chưa siết gì khi chưa có allocation | `test_usage_ledger.py`, `test_usage_surface.py`, `test_peer_cost.py` | `driver.py` (`delegate` + `ledger_rows`, `--db` của instance bật dần) | ✅ 2026-10-05 |
 | 6 | `BOXFOX_ADAPTIVE_HARNESS` | Đổi owner-check + mở mode `adaptive`; **cần bước 5** vì mode adaptive đòi sổ usage | `test_adaptive_main.py`, `test_adaptive_surface.py` | `driver.py` (`--switches on`, kịch bản `adaptive_on`) + `driver_child_caps.py` (`peer_read_cap`) | ✅ 2026-10-05 |
-| 7 | `BOXFOX_RESEARCH_GATEWAY` | Chạm chủ quyền Research — cần chủ nhà quyết riêng (#6536) trước khi bật | `test_research_gateway*.py` | `driver.py` (research) | — |
-| 8 | `BOXFOX_REFORM=on` | Khi cả bảy đã xanh riêng lẻ: một lệnh chạy cả cụm | toàn bộ nhóm trên | cả bốn driver | — |
+| 7 | `BOXFOX_RESEARCH_GATEWAY` | Chạm chủ quyền Research — chủ nhà chốt bật ở #6597 | `test_research_gateway.py`, `test_research_gate_runtime.py`, `test_research_owner.py`, `test_research_switches.py` | `driver.py` (`research`, `research_gateway`, `research_main_tools`) | ✅ 2026-10-05 |
+| 8 | `BOXFOX_REFORM=on` | Khi cả bảy đã xanh riêng lẻ: một lệnh chạy cả cụm | toàn bộ nhóm trên | cả bốn driver | ✅ 2026-10-05 |
 
 Sau bước 8 mới tính chuyện xoá nhánh legacy; **chưa xoá gì trong đợt này** — đó là việc của một
 checkpoint riêng, phải có bằng chứng chạy thật dài ngày.

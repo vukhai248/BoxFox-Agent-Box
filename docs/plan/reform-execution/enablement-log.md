@@ -29,8 +29,8 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 | 4 | `BOXFOX_CONTROLLER_JOBS` | 2026-10-05 | **125 passed** | **125 passed** | `on: true, source: explicit` (kèm bước 1–3) | `enable-step4`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT |
 | 5 | `BOXFOX_USAGE_LEDGER` | 2026-10-05 | **92 passed** | **92 passed** | `on: true, source: explicit` (kèm bước 1–4) | `enable-step5`: **3/3 kịch bản, 9/9 phép kiểm** | ✅ ĐẠT |
 | 6 | `BOXFOX_ADAPTIVE_HARNESS` | 2026-10-05 | **100 passed** | **100 passed** | `on: true, source: explicit` (kèm bước 1–5) | `enable-step6`: **3/3 kịch bản, 9/9 phép kiểm** + `enable-step6-caps`: **1/1 kịch bản, 7/7 phép kiểm** | ✅ ĐẠT |
-| 7 | `BOXFOX_RESEARCH_GATEWAY` | — | — | — | — | — | chưa chạy |
-| 8 | `BOXFOX_REFORM=on` | — | — | — | — | — | chưa chạy |
+| 7 | `BOXFOX_RESEARCH_GATEWAY` | 2026-10-05 | **115 passed** | **115 passed** | `on: true, source: explicit` (kèm bước 1–6) | `enable-step7`: **4/4 kịch bản, 11/11 phép kiểm** | ✅ ĐẠT (quyết định #6597 của chủ nhà) |
+| 8 | `BOXFOX_REFORM=on` (khóa tổng) | 2026-10-05 | (dùng lại bộ test của bước 1–7) | (như trên) | **cả bảy `on: true, source: master`** | `enable-step8` 5/5 kịch bản 16/16 phép kiểm; `enable-step8-task` 1/1–6/6; `enable-step8-job` 1/1–6/6; `enable-step8-caps` 1/1–7/7 | ✅ ĐẠT |
 
 ## Chi tiết từng bước
 
@@ -189,10 +189,63 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 - Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step6/` (`summary.json`: total 3, passed 3,
   failed 0) và `/code/.generated_artifacts/e2e/runs/enable-step6-caps/` (total 1, passed 1, failed 0).
 
+### Bước 7 — `BOXFOX_RESEARCH_GATEWAY` (2026-10-05, cộng dồn bước 1–6; chủ nhà chốt ở #6597)
+
+- **Sửa hermeticity trước khi bật (`84065cf`):** `test_research_gate_runtime.py` kiểm ĐƯỜNG CŨ
+  (`BOXFOX_RESEARCH_GATE`) mà không ghim công tắc gateway, nên khi môi trường máy chạy đặt
+  `BOXFOX_RESEARCH_GATEWAY=on` thì 11/12 ca đỏ (`RESEARCH_MAIN_READ_ONLY`). Thêm fixture autouse ghim
+  gateway TẮT tường minh cho cả tệp — lỗi hermeticity, không phải lỗi sản phẩm.
+- **Test:** `test_research_gateway.py` + `test_research_gate_runtime.py` + `test_research_owner.py` +
+  `test_research_switches.py` → **115 passed in 44.42s khi TẮT** và **115 passed in 44.17s khi BẬT**
+  (trước khi sửa: 115 / 11 failed).
+- **Khởi động lại instance** thêm `BOXFOX_RESEARCH_GATEWAY=on`: `runtime-info` trả **bảy** công tắc
+  `on: true, source: explicit`; `BOXFOX_REFORM` vẫn `default/off`; 61 tool, trong đó bốn công cụ cổng
+  (`research_job_submit`, `research_job_get`, `research_job_result`, `research_job_control`);
+  log `/var/tmp/boxfox-enable/backend-3116-step7.log`.
+- **Vòng live** `driver.py --only research,research_gateway,research_main_tools --switches on
+  --model mimo-v2.6-flash-free --db /var/tmp/boxfox-enable/data/sessions.sqlite` → **4/4 kịch bản,
+  11/11 phép kiểm**:
+  - `research` **PASS** — main vẫn `web_search` bình thường, câu trả lời kèm URL nguồn;
+  - `research_gateway` **PASS** — `research_job_submit` thật tạo hàng cổng
+    `research-3f2cd73e…` (`state: needs_consent`, revision 1, có `controller_id` là principal
+    `research-lead` riêng) rồi `research_job_get` đọc receipt; không có chi nào được cấp;
+  - `research_main_tools` **PASS** — main gọi `delegate_task role="research"` và bị **GUARD** chặn bằng
+    `RESEARCH_MAIN_READ_ONLY` (lần gọi đó là lần lỗi), lượt vẫn `completed`. Ghi chú đo được: khi gateway
+    BẬT, công cụ nội bộ VẪN nằm trong bộ lược đồ của main (chặn ở GUARD, không chặn ở bề mặt) — đúng
+    thiết kế H7 "main không sửa internals"; hai model miễn phí từ chối gọi thẳng `source_add` (chúng nói
+    công cụ "không tồn tại" — chép nguyên văn, đó là hành vi model, không phải bề mặt bị lọc: đã kiểm
+    bằng `schemas_for` trên chính config sống: `source_add` CÓ trong 52 lược đồ hiệu lực).
+  - `adaptive_on` **PASS** — công tắc adaptive vẫn nguyên sau khi gateway bật.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step7/` (`summary.json`: total 4, passed 4,
+  failed 0). Vòng nháp giữ ở `enable-step7-scratch*/`.
+
+### Bước 8 — `BOXFOX_REFORM=on`, một biến bật cả nhóm (2026-10-05)
+
+- **Instance riêng cổng 3117, data dir mới `/var/tmp/boxfox-enable/data-master`, CHỈ đặt một biến**
+  `BOXFOX_REFORM=on` (không đặt env thành viên nào); log `/var/tmp/boxfox-enable/backend-3117-step8.log`.
+- **`runtime-info`:** khóa tổng `BOXFOX_REFORM: on, source: explicit`; **cả bảy thành viên
+  `on: true, source: master`**; 61 tool — đúng hợp đồng "một lệnh bật cả nhóm".
+- **Bốn driver trên chính instance đó** (model miễn phí `mimo-v2.6-flash-free`, DB của instance):
+  - `driver.py --only delegate,kernel_guard,ledger_rows,research_gateway --switches on`
+    → **5/5 kịch bản, 16/16 phép kiểm** (kèm `adaptive_on` chạy tự động ở cuối): con `explore` thật
+    `fc84f8d2…` báo 22 tệp `.md`; ghi `/etc/...` vẫn `ABSENT`; sổ usage có hàng đủ cột với token thật;
+    `research_job_submit` tạo hàng cổng `research-64984f0e…` (`needs_consent`); adaptive ghim được
+    và lượt thật chạy với giá 0.
+  - `driver_task.py` (`e2e-master-task`/`e2e-master-inv`) → **1/1 kịch bản, 6/6 phép kiểm**: hàng task
+    `task-50ec2e69…` (`succeeded`, revision 3, run `w-b508aac76d`) + attempt 1 gắn con `8287ec8d…`.
+  - `driver_job.py` → **1/1 kịch bản, 6/6 phép kiểm**: hàng job `job-e991f581…` (`kind: model`,
+    `ownership: controller`); đọc lại sau lượt: `state: succeeded`, revision 3, có `closed_at`.
+  - `driver_child_caps.py --only peer_read_cap` → **1/1 kịch bản, 7/7 phép kiểm**: 4 lần đọc được phép
+    rồi lần thứ 5 bị `PEER_READ_CAPPED`, lượt cha `completed`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step8/` (5/5), `enable-step8-task/`,
+  `enable-step8-job/`, `enable-step8-caps/` — mỗi thư mục có `summary.json` + JSON từng kịch bản.
+
 ## Trạng thái hiện tại của instance bật dần
 
 `BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`,
 `BOXFOX_CONTROLLER_JOBS=on`, `BOXFOX_USAGE_LEDGER=on`, `BOXFOX_ADAPTIVE_HARNESS=on`;
-chỉ còn `BOXFOX_RESEARCH_GATEWAY` TẮT; `BOXFOX_REFORM` chưa đặt (`default`).
-Bước kế tiếp: **bước 7 — `BOXFOX_RESEARCH_GATEWAY`** (test `test_research_gateway*.py`, live `driver.py`
-kịch bản `research`) — **cần chủ nhà quyết định #6536 trước khi bật**, vì bật là chạm chủ quyền Research.
+cả bảy thành viên đều `on: true, source: explicit`; `BOXFOX_REFORM` vẫn `default/off`.
+**Bước 8 đã chạy xong** trên instance riêng cổng 3117 (`/var/tmp/boxfox-enable/data-master`) với đúng một
+biến `BOXFOX_REFORM=on`: cả bảy thành viên `source: master` và bốn driver đều đạt.
+**Bật dần đã hết tám bước.** Việc còn lại là quyết định phát hành (nhánh nền PR, #6531/#6536) — không nằm
+trong nhóm công tắc này.
