@@ -16,7 +16,6 @@ from .orchestration_contracts import identifier, invalid, object_fields, text
 from .work_policy import digest
 
 JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'})
-READ_TOOLS = JOB_TOOLS - {'start_job'}
 STOP_KEY = 'controllerJobsStopped'
 
 
@@ -102,9 +101,8 @@ def bind(rt, session, request, child_id):
     checkpoint = context_surface.handoff(rt, current)
     payload = {'schema': JOB_SCHEMA, 'kind': 'model', 'ownership': 'controller',
                'controllerId': current['id'], 'childSessionId': child_id}
-    if checkpoint is not None:
-        # Sổ job giữ locator text; JSON ghim owner/version/hash, không chỉ artifactId.
-        payload['checkpointRef'] = json.dumps(checkpoint['ref'], sort_keys=True, separators=(',', ':'))
+    # Sổ job giữ locator text; JSON ghim owner/version/hash, không chỉ artifactId.
+    payload['checkpointRef'] = json.dumps(checkpoint['ref'], sort_keys=True, separators=(',', ':'))
     job = service(rt).start(current['id'], payload,
         capability, request['invocationId'], runtime_request_hash=request_hash(current, request))
     service(rt).append(job['jobId'], {'kind': 'progress', 'state': 'running', 'intermediate': True})

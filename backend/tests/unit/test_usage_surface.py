@@ -4,7 +4,6 @@ import copy
 
 import pytest
 
-from switch_isolation import isolate_off
 from agentbox.agent_core import execution_kernel, usage_surface
 from agentbox.agent_core.orchestration_contracts import ContractError
 from agentbox.agent_core.runtime import HarnessRuntime

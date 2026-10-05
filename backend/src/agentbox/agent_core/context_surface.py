@@ -142,7 +142,7 @@ def _attempt(rt, session):
 
 def _effective(rt, session):
     """Lọc scope/mode hiệu lực mà không dựng promptBlock, tránh đệ quy mode/skill."""
-    from . import plan_workflow, design_runtime, task_surface, job_surface, research_gateway, work_graph
+    from . import plan_workflow, design_runtime, research_gateway, work_graph
     from .runtime import (research_mode, design_mode, RESEARCH_MODE_EXCLUDED_TOOLS,
                           DESIGN_MODE_EXCLUDED_TOOLS, WORK_ENGINE_TOOLS, WORK_TOOLS)
     tools = set(execution_kernel.permission_view(rt, session)['tools'])
@@ -192,11 +192,6 @@ def read_skill(rt, session, skill_id, file_path='SKILL.md', messages=None, *, _m
     session = rt.store.get(session['id'])
     sid, db = session['id'], rt.store.db
     attempt = _attempt(rt, session)
-    existing = None
-    if _exists(db, 'harness_context_skill_admissions'):
-        existing = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
-                              'AND attempt_id=? AND skill_id=?',
-                              (sid, attempt, skill_id)).fetchone()
     if skill_id not in session['config'].get('skills', []):
         raise PermissionError('Skill is not enabled for this session')
     svc = ContextStore(rt.store)
@@ -528,8 +523,7 @@ def compact(rt, sid, saved, compacted, event):
     """Hook chung cho nén tự động và /compact, không đổi điều kiện kích hoạt nén."""
     receipt = checkpoint(rt, rt.store.get(sid), reason='compaction', before_messages=saved,
                          after_messages=compacted)
-    if receipt:
-        event['contextBundleRef'] = receipt['ref']
+    event['contextBundleRef'] = receipt['ref']
     return receipt
 
 
@@ -641,6 +635,5 @@ def handoff_to(rt, parent, child_id):
         invalid('child', 'handoff requires a canonical started child of this parent', code='HARNESS_CONTEXT_OWNER')
     messages = list(child['messages'])
     receipt = checkpoint(rt, child, reason='handoff', after_messages=messages)
-    if receipt:
-        rt.store.save(child_id, messages)
+    rt.store.save(child_id, messages)
     return receipt

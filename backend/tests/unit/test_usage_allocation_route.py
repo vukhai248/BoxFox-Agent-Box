@@ -14,7 +14,7 @@ import asyncio
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 
-from agentbox.agent_core import usage_ledger, usage_surface
+from agentbox.agent_core import usage_surface
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app

@@ -1,11 +1,10 @@
-"""H3 — bề mặt task: công tắc giết, phân quyền, ghi bền vững và chiếu kết cục của con.
+"""H3 — bề mặt task: quảng cáo, phân quyền, ghi bền vững và chiếu kết cục của con.
 
 Không model, không provider, không mạng: chỉ `SessionStore` + `TaskService` thật trên SQLite tạm.
-Ba tầng được ghim riêng:
+Hai tầng được ghim riêng:
 
 1. **Quảng cáo** — `turn_profile`/`schemas_for` LUÔN trả bốn công cụ `task_*` từ v2 (#6599).
-2. **Thực thi** — `dispatch` từ chối khi công tắc tắt, kể cả phiên đã giữ tên công cụ từ trước.
-3. **Dữ liệu** — `task_list/get/send/abandon` chỉ gọi hàm có sẵn của `TaskService`, và bộ đóng con
+2. **Dữ liệu** — `task_list/get/send/abandon` chỉ gọi hàm có sẵn của `TaskService`, và bộ đóng con
    hiện có (`child_finish`, `child_close_once`) chiếu được kết cục vào attempt đang mở.
 """
 import asyncio
@@ -17,7 +16,7 @@ import sqlite3
 
 import pytest
 
-from agentbox.agent_core import roles, task_surface, tool_contracts, work_scope
+from agentbox.agent_core import roles, task_surface, work_scope
 from agentbox.agent_core.orchestration_contracts import ContractError, TASK_SCHEMA
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.task_service import TaskService

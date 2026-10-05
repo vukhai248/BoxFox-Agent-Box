@@ -45,7 +45,6 @@ def row(rt, park_id):
 
 
 def adaptive(rt, sid):
-    from . import job_surface
     owner = rt.store.get(sid)
     return (execution_kernel._policy(owner) is not None
             and not owner.get('parent_id') and owner.get('role') == 'orchestrator')

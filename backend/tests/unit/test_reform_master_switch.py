@@ -13,7 +13,6 @@ import pytest
 
 from agentbox.agent_core import feature_switches as fs
 from agentbox.agent_core import research_gateway
-from agentbox.agent_core import tool_contracts
 
 MEMBERS = fs.MEMBERS
 

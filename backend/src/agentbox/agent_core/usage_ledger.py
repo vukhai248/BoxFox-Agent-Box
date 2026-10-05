@@ -41,7 +41,6 @@ import math
 import sqlite3
 import time
 
-from . import feature_switches
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
 

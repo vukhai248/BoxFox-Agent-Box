@@ -1674,7 +1674,7 @@ def create_app(runtime):
         """`GET|PUT /api/agent/sessions/{sid}/execution-policy` — mode của run (H8).
 
         Người vận hành là bên DUY NHẤT ghi được policy; model không có tool nào chạm tới nó.
-        Bật `adaptive` khi thiếu công tắc ⇒ 409 kèm mã, không đặt nửa vời.
+        Mode lạ ⇒ 400 kèm mã, không đặt nửa vời.
         """
         sid = request.match_info['sid']
         known_session(sid)
