@@ -74,6 +74,14 @@ Các trả lời trên là định hướng kiến trúc, KHÔNG phải phê duy
 
 Người dùng làm rõ: tài liệu dùng để THAM KHẢO kiến trúc, không yêu cầu tái phân phối. Không suy ra kết luận pháp lý tổng quát từ mục tiêu sử dụng. Không tự copy bộ skill vào runtime; viết hướng dẫn/prompt mẫu mới cho BoxFox.
 
+### I.2.2 Quyết định v2 sau khi PR #3 merge (2026-10-05)
+
+| ID | Ý định đã xác nhận | Chi tiết được kiến nghị; chưa approved |
+|---|---|---|
+| #6599 | Bật mặc định cả nhóm công tắc; GIỮ công tắc để agent sau biết cách tổ chức và tự quyết xoá hay giữ về sau; ghi cả vào handoff. | `MASTER_DEFAULT = True`; công tắc giữ làm lối thoát hiểm (`BOXFOX_REFORM=off` một lệnh); marker `legacy_path` cho tệp test chốt đường cũ; quyết định xoá thuộc checkpoint sau, cần bằng chứng dài ngày (HANDOFF §6.4). Không xoá legacy trong đợt này. |
+| #6600 | Bật chi ngân sách (H10.2), nhưng chỉ GIẢ LẬP: model free + giá giả $4 in / $20 out để thử; xác nhận xong thì quay lại gốc. | Writer `harnessAllocationId` (route vận hành) + khối `usage.allocations`; giao thức bốn ca A–D trên router BẢN SAO; revert + chứng minh router thật không đổi. Không gọi model trả phí; không sửa giá thật; H10.1 vẫn hoãn. |
+| thay #6601 | Đặt chỗ "#6601 = cùng nhánh/PR #3" hết hiệu lực: PR #3 đã merge ở `c6fd6e9`, nhánh đã xoá trên origin. | v2 land bằng nhánh/PR MỚI từ `main`: `vorflux/boxfox-reform-v2-default-on`. |
+
 ## I.3 Những nhận định cũ cần đính chính
 
 | Nhận định cũ | Kết luận đã kiểm tra lại | Hệ quả cho cải tổ |

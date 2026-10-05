@@ -102,12 +102,14 @@ main turn → execution_kernel.admission (policy của run)
 
 ## 5. Các công tắc — bảng đầy đủ
 
-**Nguyên tắc:** mặc định TẮT hết. Tắt thì hành vi y như trước đợt cải tổ; dữ liệu `harness_*` đã ghi
-vẫn đọc được, không mutation nào replay.
+**Nguyên tắc (v2, #6599):** mặc định **BẬT** — env trống nghĩa là cả nhóm chạy đường mới. Tắt là
+hành động TƯỜNG MINH: một lệnh `BOXFOX_REFORM=off` (cả nhóm) hoặc `BOXFOX_<TÊN>=off` (một bề mặt),
+rồi khởi động lại. Tắt thì hành vi y như trước đợt cải tổ; dữ liệu `harness_*` đã ghi vẫn đọc được,
+không mutation nào replay. Công tắc được GIỮ làm lối thoát hiểm đã tổ chức — xem §6.4.
 
 | Công tắc | Nhóm | Tắt thì | Bật thì | Test ghim |
 |---|---|---|---|---|
-| `BOXFOX_REFORM` | **khóa tổng** | mọi thành viên theo giá trị riêng/mặc định (TẮT) | bật cả bảy thành viên bằng một lệnh | `test_reform_master_switch.py` (19 ca) |
+| `BOXFOX_REFORM` | **khóa tổng** | `off` ⇒ tắt cả bảy thành viên bằng một lệnh (lối thoát hiểm) | `on` (hoặc env trống — mặc định từ v2) ⇒ cả bảy thành viên BẬT | `test_reform_master_switch.py` (20 ca) |
 | `BOXFOX_TASK_SURFACE` | H3 | bốn công cụ `task_*` không được quảng cáo; `dispatch` từ chối `TASK_SURFACE_OFF` | model thấy `task_list`/`task_get`/`task_send`/`task_abandon` | `test_harness_task_service.py`, `test_tool_groups`, E2E `task-fix` |
 | `BOXFOX_CONTROLLER_JOBS` | H4 | công cụ controller không mở; `job_surface`/`job_wake` không chạy | model thấy `start_job`/`get_job`/`subscribe_job`/`wait_jobs`/`cancel_job` | `test_harness_jobs*`, P2 10/10 |
 | `BOXFOX_CONTEXT_SURFACE` | H5 | ref/`skill_view` đi đường cũ | context bundle + pin skill chạy qua surface | `test_context_surface.py`, P3 13/13 |
@@ -136,8 +138,9 @@ thành viên kèm `source`: `explicit` / `master` / `default`). Không cần đ�
    TẮT trước đó; nếu thấp hơn thì lùi ngay.
 5. **Ghi bằng chứng** vào `docs/plan/reform-status.md` (bảng công tắc) và, nếu cần, một tệp
    `docs/plan/reform-execution/H<n>/evidence.md` bổ sung: commit, env, lệnh, kết quả.
-6. **Rollback = bỏ env rồi khởi động lại.** Không cần đổi code, không cần migration; dữ liệu
-   `harness_*` đã ghi vẫn đọc được ở cả hai chiều.
+6. **Rollback = đặt `BOXFOX_\<TÊN\>=off` rồi khởi động lại.** Từ v2 (#6599) **bỏ env KHÔNG còn là
+   rollback**: env trống nghĩa là BẬT, nên phải khai tường minh `off`. Không cần đổi code, không
+   cần migration; dữ liệu `harness_*` đã ghi vẫn đọc được ở cả hai chiều.
 
 Ghi chú vận hành: env đọc lúc gọi, nhưng tiến trình đang chạy không tự thấy env mới — **phải khởi
 động lại backend** sau khi đổi env. `BOXFOX_PEER_MESH` (đang BẬT) giữ nguyên trong mọi bước; chỉ
@@ -161,6 +164,11 @@ Nhật ký chạy thật (ngày, lệnh, bằng chứng, trạng thái từng b�
 Sau bước 8 mới tính chuyện xoá nhánh legacy; **chưa xoá gì trong đợt này** — đó là việc của một
 checkpoint riêng, phải có bằng chứng chạy thật dài ngày.
 
+**Từ v2 (#6599) bảng này là NHẬT KÝ LỊCH SỬ, không phải việc phải làm:** không cần bật env nào nữa —
+env trống đã là BẬT. Giữ bảng để tra cứu cách tổ chức (thứ tự nào an toàn, mỗi bước kiểm bằng gì,
+vòng live nào đã đạt) khi cần tắt riêng một bề mặt để điều tra, hoặc khi một agent sau muốn quyết
+định xoá hay giữ nhánh legacy.
+
 ### 6.3 Cách kiểm từng bước bằng dữ liệu
 
 - `GET /api/agent/runtime-info` → `switches` + `limits` + `toolGroups`: biết chắc đang bật gì.
@@ -168,18 +176,59 @@ checkpoint riêng, phải có bằng chứng chạy thật dài ngày.
   task/con đều có hàng trong `harness_*` để đối chiếu với UI.
 - Driver live in ra `summary.json` theo từng vòng; giữ cả vòng TẮT và vòng BẬT để so cặp.
 
+### 6.4 Vì sao GIỮ công tắc + quyết định tương lai (v2, #6599)
+
+Chủ nhà chốt 2026-10-05 (#6599): **bật mặc định, GIỮ công tắc và giữ nhánh legacy**; ghi cả cách tổ
+chức lẫn quyết định tương lai vào handoff này. Lý do (ý chủ nhà): công tắc là cách để một agent sau
+hiểu đợt này đã được tổ chức thế nào — tắt riêng một bề mặt để điều tra, và so cặp TẮT/BẬT khi
+nghi ngờ. Việc xoá legacy thuộc một checkpoint sau, phải có bằng chứng chạy thật dài ngày.
+
+Ba tầng của cùng một lối thoát hiểm, từ rộng đến hẹp:
+
+| Tầng | Lệnh / cách | Tác dụng | Ghi chú |
+|---|---|---|---|
+| Cả nhóm | `BOXFOX_REFORM=off` | Tắt cả bảy thành viên bằng MỘT env, restart backend | Lối thoát hiểm một lệnh; env tường minh của thành viên vẫn thắng khóa tổng |
+| Một bề mặt | `BOXFOX_<TÊN>=off` | Tắt đúng một thành viên, các thành viên khác giữ mặc định | Dùng khi điều tra một bề mặt |
+| Trong test | `@pytest.mark.legacy_path` | Pin cả `BOXFOX_REFORM=off` LẪN bảy thành viên `off` cho cả tệp test chốt đường TRƯỚC v2 | `backend/tests/unit/conftest.py`; phải pin cả thành viên vì env thành viên tường minh thắng khóa tổng (shell đang có `BOXFOX_X=on` sẽ lọt vào "đường cũ"). Tệp KHÔNG khai báo chạy đúng mặc định mới (BẬT) |
+
+Điều KHÔNG được làm ở v2: không xoá nhánh legacy, không xoá công tắc, không đổi tên env, không hạ
+mặc định của bất kỳ thành viên nào. Điều kiện để một checkpoint sau xoá: (1) đủ bằng chứng chạy thật
+dài ngày trên mặc định BẬT; (2) không còn tệp test nào cần `legacy_path`; (3) chủ nhà chốt.
+
+
+### 6.5 Hệ quả ĐÃ CHỐT của mặc định BẬT: spawn research của Work Graph (v2)
+
+Hậu kiểm v2 soi đúng chỗ này: `research_gateway.guard_delegate` chạy TRƯỚC nhánh `work=` của
+`runtime.delegate`, nên khi gateway BẬT (mặc định v2) **chính engine Work Graph cũng không spawn
+được producer `research`/`research-review`**: mọi lượt như vậy dừng với `RESEARCH_MAIN_READ_ONLY`,
+node của run đóng `failed` (44 bài test cũ đỏ nếu bỏ pin `legacy_path`; chỉ cần
+`BOXFOX_RESEARCH_GATEWAY=off` là 94/94 xanh lại).
+
+Đây là **hệ quả có chủ đích, không phải lỗi sản phẩm**: H7.1/P5 chốt "intent của main là đầu vào,
+không bao giờ canonical" và main không điều khiển worker Research nội bộ — luồng `research` của
+Work Graph là đường legacy thay thế bằng biên Research độc lập (`research_job_submit` →
+`research_job_get|control|result`). Hai lối thoát hiểm giữ nguyên:
+
+- `BOXFOX_RESEARCH_GATEWAY=off` — trả lại hành vi trước v2 cho luồng này;
+- phiên main còn binding research legacy (`researchId` trong `research_config`) — đường cũ vẫn chạy.
+
+Đã khoá bằng test mặc định: `tests/unit/test_research_gateway.py::test_engine_work_spawns_cannot_bypass_the_gateway_either`.
+Điều KHÔNG làm ở v2: miễn `work=` khỏi gateway (đó sẽ là cửa sau cho main tự spawn research) hoặc
+viết lại luồng `research` của Work Graph đi qua envelope (việc của checkpoint sau, nếu chủ nhà muốn).
+
+
 ## 7. Đầu việc còn lại (không nằm trong H12)
 
 | Việc | Trạng thái | Chờ gì |
 |---|---|---|
 | H9/H10.1 calibration sống (đo chi thật, đo chất lượng) | hoãn #6531 | consent tài chính riêng của chủ nhà; `financial_consent_ref` còn `null` |
-| H10.2 giới hạn ngân sách cứng theo allocation | hoãn #6531 | cùng consent trên |
-| H7 gateway Research bật mặc định | hoãn #6536 | quyết định chủ nhà về chủ quyền Research |
-| Bật dần bảy công tắc | **chưa bắt đầu** | theo mục 6; mỗi bước cần một vòng chạy thật |
-| Xoá nhánh legacy (khi mọi công tắc đã bật ổn định) | chưa mở | checkpoint riêng + bằng chứng dài ngày |
+| H10.2 giới hạn ngân sách cứng theo allocation | ✅ writer + kiểm chứng mock xong ở v2 (`PUT|GET|DELETE /api/agent/sessions/{sid}/usage-allocation`); H10.1 (đo chi thật) vẫn hoãn | chỉ còn consent tài chính cho H10.1 |
+| H7 gateway Research bật mặc định | ✅ bật mặc định từ v2 (#6599) — spawn research của Work Graph dừng với `RESEARCH_MAIN_READ_ONLY`, xem §6.5 | không còn phải bật env; quyết định chủ quyền Research đã chốt ở #6599 |
+| Bật dần bảy công tắc | ✅ xong 2026-10-05 (đủ tám bước) | không còn phải bật env: v2 đổi mặc định sang BẬT (#6599) |
+| Xoá nhánh legacy (khi mọi công tắc đã bật ổn định) | chưa mở — v2 cố ý giữ, xem §6.4 | checkpoint riêng + bằng chứng dài ngày + chủ nhà chốt |
 | `attemptSeq` của H3 giới hạn theo phiên (H3.11) | ghi nhận | thiết kế sau nếu cần nhiều phiên |
 | Tab Plan hiện tệp kế hoạch trong UI | chờ | UI; hiện chỉ đọc qua API |
-| `harnessAllocationId` trong `runtime-info` | chờ | mở khi làm H10.2 |
+| `harnessAllocationId` trong `runtime-info` | ✅ xong ở v2 — khối `usage.allocations` (trần 20 hàng, chỉ đọc) | không |
 | Ngân sách/thời gian của chính main (không chỉ con) | chưa mở | cùng họ #6546 |
 
 ## 8. Bằng chứng và artifact
@@ -195,9 +244,12 @@ checkpoint riêng, phải có bằng chứng chạy thật dài ngày.
 
 ## 9. Rollback tổng (khi cần dừng cả đợt)
 
-1. Bỏ `BOXFOX_REFORM` và bảy env thành viên; giữ `BOXFOX_PEER_MESH` nguyên trạng.
+1. Đặt `BOXFOX_REFORM=off` (một lệnh, áp cho cả bảy thành viên); giữ `BOXFOX_PEER_MESH` nguyên
+   trạng. Từ v2, **bỏ env không còn là rollback** — env trống nghĩa là BẬT.
 2. Khởi động lại backend; đọc `/api/agent/runtime-info` xác nhận mọi thành viên `on: false`.
 3. Không xoá bảng `harness_*`, không sửa `sessions.db`; hàng đã ghi vô hại với đường cũ.
 4. Drill đã chạy: `/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log` — 11/11 PASS
    (không mất data/approval, không replay mutation, `user_version` giữ nguyên).
-5. Nếu chỉ một công tắc gây sự cố: chỉ bỏ env của công tắc đó (các bước ở mục 6 vốn đã tách rời).
+5. Nếu chỉ một công tắc gây sự cố: **đặt tường minh `BOXFOX_<TÊN>=off`** cho công tắc đó rồi khởi
+   động lại (các bước ở mục 6 vốn đã tách rời). Từ v2, bỏ env của công tắc đó là BẬT nó — không
+   phải rollback.
