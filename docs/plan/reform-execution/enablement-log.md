@@ -25,7 +25,7 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 | 0 | (chưa bật gì) | 2026-10-05 | — | — | cả bảy `on: false, source: default`; 61 tool; health 200 | — | baseline sạch |
 | 1 | `BOXFOX_RECOVERY_POLICY` | 2026-10-05 | **49 passed** | **49 passed** | `on: true, source: explicit` | `enable-step1`: **3/3 kịch bản, 7/7 phép kiểm** | ✅ ĐẠT |
 | 2 | `BOXFOX_CONTEXT_SURFACE` | 2026-10-05 | **249 passed** | **249 passed** | `on: true, source: explicit` (kèm bước 1 vẫn `explicit`) | `enable-step2`: **3/3 kịch bản, 8/8 phép kiểm** | ✅ ĐẠT |
-| 3 | `BOXFOX_TASK_SURFACE` | — | — | — | — | — | chưa chạy |
+| 3 | `BOXFOX_TASK_SURFACE` | 2026-10-05 | **112 passed** | **112 passed** | `on: true, source: explicit` (kèm bước 1–2) | `enable-step3-mimo`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT (kèm ghi chú model yếu) |
 | 4 | `BOXFOX_CONTROLLER_JOBS` | — | — | — | — | — | chưa chạy |
 | 5 | `BOXFOX_USAGE_LEDGER` | — | — | — | — | — | chưa chạy |
 | 6 | `BOXFOX_ADAPTIVE_HARNESS` | — | — | — | — | — | chưa chạy |
@@ -69,8 +69,40 @@ Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `4
 - Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step2/` (`summary.json`: total 3, passed 3, failed 0);
   log `/var/tmp/boxfox-enable/backend-3116-step2.log`.
 
+### Bước 3 — `BOXFOX_TASK_SURFACE` (2026-10-05, cộng dồn bước 1–2)
+
+- **Test khi TẮT:** `BOXFOX_TASK_SURFACE=off` + `tests/unit/test_harness_task_service.py` +
+  `tests/unit/test_task_surface.py` + `tests/unit/test_runtime_info.py` → **112 passed in 37.34s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_TASK_SURFACE=on` → **112 passed in 37.65s**.
+  - Vòng chạy BẬT đầu tiên đỏ **1 test** (`test_task_surface.py::test_switch_is_off_by_default_and_only_on_enables`):
+    test khẳng định trạng thái MẶC ĐỊNH nhưng đọc env ambient, mà bước bật dần lại chạy cả bộ với
+    env BẬT. Đây là lỗi hermeticity của test, không phải lỗi sản phẩm; đã cắt env bằng
+    `monkeypatch.delenv` ở commit `1ad3ae8` (kèm `test_job_surface.py::test_switch_defaults_off[None]`
+    gặp đúng lỗi đó ở bước 4). Sau khi sửa: 112/112 ở cả hai trạng thái.
+- **Khởi động lại instance** với `BOXFOX_RECOVERY_POLICY=on` + `BOXFOX_CONTEXT_SURFACE=on` +
+  `BOXFOX_TASK_SURFACE=on`: `runtime-info` trả ba công tắc `on: true, source: explicit`, bốn thành viên
+  còn lại `default/off`, 61 tool; log `/var/tmp/boxfox-enable/backend-3116-step3.log`.
+- **Vòng live** `driver_task.py` (kịch bản `delegate_contract`, model sống gọi `delegate_task` kèm hợp đồng):
+  - Năm vòng đầu với model mặc định `space-bunny-free` **KHÔNG ĐẠT**: model luôn gọi đúng `work_graph` +
+    `delegate_task`, nhưng phiên âm sai kiểu các mảng rỗng của hợp đồng (`"inputs": ""`, `"dependsOn": ""`,
+    có vòng bọc `{"item": ...}`). Bề mặt từ chối đúng cách — `HARNESS_CONTRACT_INVALID` nêu đúng tên trường,
+    `action: checkpoint_and_ask`, **không ghi hàng task/attempt nào** (không có trạng thái dở dang).
+    Đây là giới hạn của model miễn phí, không phải lỗi sản phẩm (xem ghi chú bên dưới).
+  - Vòng đạt: ghim model miễn phí khác `mimo-v2.6-flash-free` (vẫn 0 đồng, không đụng ngân sách) →
+    `enable-step3-mimo` **1/1 kịch bản, 6/6 phép kiểm**: `work_graph` mở run `w-06d133f8d5`,
+    `delegate_task` chạy, hàng task bền vững `task-592496d0598b491d9e99033d10fcf3bd` (alias
+    `e2e-durable-mimo`, `state: succeeded`, revision 3), attempt 1 gắn phiên con thật
+    `8f214a240f444f8b98e368f35a9ff0cb` (role `explore`, `completed`), lượt kết thúc `completed`,
+    con đếm đúng 22 tệp `.md` dưới `.plans/`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step3-mimo/` (`summary.json`: total 1, passed 1,
+  failed 0) — các vòng không đạt giữ nguyên ở `runs/enable-step3/`, `runs/enable-step3b..3e/`, `runs/task-recheck/`.
+- **Ghi chú model:** bề mặt task bền vững chỉ dùng được khi model phiên âm đúng JSON lồng nhau. Model mặc định
+  `space-bunny-free` hiện viết `""` cho mảng rỗng nên hợp đồng luôn bị từ chối; ghim một model miễn phí khác
+  là đủ. Đã ghi nhận thành phát hiện ngoài phạm vi (`652bc4b7`): khai `properties` lồng nhau cho tham số `task`
+  hoặc nhận `task` dạng chuỗi JSON để bề mặt chịu được model yếu.
+
 ## Trạng thái hiện tại của instance bật dần
 
-`BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`; năm công tắc còn lại TẮT;
-`BOXFOX_REFORM` chưa đặt (`default`). Bước kế tiếp: **bước 3 — `BOXFOX_TASK_SURFACE`**
-(test `test_harness_task_service.py` + `test_tool_groups.py`, live `driver_task.py`).
+`BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`; bốn công tắc còn lại TẮT;
+`BOXFOX_REFORM` chưa đặt (`default`). Bước kế tiếp: **bước 4 — `BOXFOX_CONTROLLER_JOBS`**
+(test `test_harness_jobs.py` + `test_job_surface.py` + `test_job_wake.py`, live `driver_job.py`).
