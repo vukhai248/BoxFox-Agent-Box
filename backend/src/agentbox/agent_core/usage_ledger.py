@@ -26,7 +26,7 @@ Bất biến:
 Quy ước chung H3–H8: bảng cộng thêm trên `SessionStore.db`, lỗi `ContractError` mã
 `USAGE_*`, docstring tiếng Việt, không thêm dependency ngoài stdlib.
 
-Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định TẮT). Khi bật, runtime ghi
+Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định BẬT từ v2, #6599). Khi bật, runtime ghi
 một hàng `record()` cho mỗi lần gọi model hoàn tất (`record_completion`) với đúng
 `input/output/reasoning/cached` mà router báo; giá lấy từ `pricing` của dòng model
 trong router (một snapshot admin cho mỗi request) — không có giá thì `certainty='unknown'`
@@ -45,7 +45,7 @@ from . import feature_switches
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
 
-#: Công tắc giết khi nối vào runtime: mặc định TẮT, chỉ `on` mới bật (khuôn `BOXFOX_TASK_SURFACE`).
+#: Công tắc giết khi nối vào runtime: mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off` (khuôn `BOXFOX_TASK_SURFACE`).
 SWITCH = 'BOXFOX_USAGE_LEDGER'
 
 RECORD_SCHEMA_VERSION = 1
@@ -100,7 +100,7 @@ _WRITE_KEYS = ('write', 'writeTokens', 'cacheWrite', 'cacheWriteInput', 'cache_c
 
 
 def enabled(env=None):
-    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     if env is not None:
         return str(env or '').strip().lower() == 'on'
     return feature_switches.member_switch(SWITCH)
@@ -937,6 +937,21 @@ class UsageLedger:
             if liability is not None:
                 items.append({**self._allocation_view(row), 'liability': liability})
         return items
+
+    def open_allocations(self, limit=20):
+        """Allocation đang mở, mới chốt sổ gần nhất trước — cho khối `usage` của runtime-info.
+
+        Chỉ đọc: không sửa hàng, không cấp chi. Bảng chưa tồn tại (DB chưa từng mở
+        allocation) trả `[]` để runtime-info không đỏ vì một tính năng chưa dùng.
+        """
+        if type(limit) is not int or limit <= 0:
+            invalid('limit', 'expected a positive row ceiling', 'USAGE_FIELD_INVALID')
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_allocations'"
+                           ).fetchone() is None:
+            return []
+        rows = self.db.execute('SELECT * FROM harness_allocations WHERE state=? '
+                               'ORDER BY updated_at DESC LIMIT ?', ('reserved', limit))
+        return [self._allocation_view(row) for row in rows]
 
     def _unknown_usage(self, owner_id=None):
         sql = 'SELECT * FROM harness_usage WHERE amount IS NULL'

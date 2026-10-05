@@ -682,3 +682,30 @@ def test_unsupported_row_schema_fails_closed(ledger):
                      "'{}', '{}', 'reserved', 1.0, 1.0)")
     error('USAGE_SCHEMA_UNSUPPORTED', lambda: ledger.get_allocation('alloc-x'))
     error('USAGE_SCHEMA_UNSUPPORTED', lambda: ledger.unsettled(OWNER))
+
+
+# --- H10.2: khối `usage` của runtime-info đọc qua đây, chỉ đọc --------------------------------
+
+def test_open_allocations_lists_reserved_newest_first_with_a_limit(ledger):
+    store, ledger = ledger
+    for name in ('alloc-a', 'alloc-b', 'alloc-c'):
+        reserve(ledger, name)
+    for name, stamp in (('alloc-a', 1.0), ('alloc-b', 2.0), ('alloc-c', 3.0)):
+        store.db.execute('UPDATE harness_allocations SET updated_at=? WHERE allocation_id=?',
+                         (stamp, name))
+    assert [row['allocationId'] for row in ledger.open_allocations()] == \
+        ['alloc-c', 'alloc-b', 'alloc-a']
+    assert [row['allocationId'] for row in ledger.open_allocations(limit=2)] == ['alloc-c', 'alloc-b']
+    assert ledger.open_allocations(limit=2)[0]['remaining'] == 1.0
+    error('USAGE_FIELD_INVALID', lambda: ledger.open_allocations(0))
+
+
+def test_open_allocations_skips_closed_rows_and_a_missing_table(ledger):
+    store, ledger = ledger
+    reserve(ledger, 'alloc-open')
+    reserve(ledger, 'alloc-closed')
+    ledger.release('alloc-closed', 1.0, 'done')
+    assert [row['allocationId'] for row in ledger.open_allocations()] == ['alloc-open']
+    # DB chưa từng mở allocation: runtime-info phải thấy `[]`, không phải một lỗi SQL.
+    store.db.execute('DROP TABLE harness_allocations')
+    assert ledger.open_allocations() == []

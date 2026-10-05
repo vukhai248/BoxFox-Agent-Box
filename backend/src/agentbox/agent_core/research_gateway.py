@@ -27,7 +27,7 @@ TERMINAL = {'cancelled', 'completed', 'partial'}
 
 
 def enabled(value=None):
-    """Gateway Research: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Gateway Research: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     if value is not None:
         return str(value).strip().lower() in ('on', '1', 'true')
     return feature_switches.member_switch(SWITCH)

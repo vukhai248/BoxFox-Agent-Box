@@ -14,6 +14,11 @@ import pytest
 from agentbox.memory.session_store import SessionStore
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def old_database(path):
     """DB y hệt bản trước T1: chỉ `sessions`/`events`/`checkpoints`, cộng một hàng phiên cũ."""
     db = sqlite3.connect(path)

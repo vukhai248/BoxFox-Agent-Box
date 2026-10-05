@@ -10,6 +10,11 @@ from test_work_graph import build, answer
 from test_work_feedback_w7 import QUESTIONS
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def call(name, args, ident='call'):
     return {'choices': [{'message': {'tool_calls': [{'id': ident, 'type': 'function',
         'function': {'name': name, 'arguments': json.dumps(args)}}]}, 'finish_reason': 'tool_calls'}]}

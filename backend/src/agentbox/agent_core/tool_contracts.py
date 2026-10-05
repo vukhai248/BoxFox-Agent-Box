@@ -19,12 +19,12 @@ CONTROLLER_JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait
 
 
 def controller_jobs_enabled():
-    """Bề mặt job controller: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Bề mặt job controller: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     return feature_switches.member_switch('BOXFOX_CONTROLLER_JOBS')
 
 
 def task_surface_enabled(env=None):
-    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
     if env is not None:
         return str(env or '').strip().lower() == 'on'
     return feature_switches.member_switch(TASK_SURFACE_SWITCH)

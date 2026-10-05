@@ -15,6 +15,12 @@ from agentbox.agent_core import limits, research_quality, research_runtime
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
+
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 LONG = ('Hồ sơ chuyển tuyến bảo hiểm y tế gồm bốn loại giấy tờ theo quy định hiện hành, '
         'kèm mức hưởng và tuyến chuyên môn. ') * 2
 #: Một bản tin KHÁC HẲN — dùng để phân biệt "hai nguồn độc lập" với "một bản tin đăng lại".

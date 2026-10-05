@@ -14,6 +14,11 @@ from agentbox.skills.catalog import SkillCatalog
 from agentbox.api.server import create_app
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def answer(text='done', calls=None, finish='stop'):
     return {'choices': [{'message': {'content': text, **({'tool_calls': calls} if calls else {})},
                          'finish_reason': 'tool_calls' if calls else finish}], 'usage': {'prompt_tokens': 10, 'completion_tokens': 2}}

@@ -17,7 +17,8 @@ def environment(tmp_path, monkeypatch):
     root = store.create({'tools': TOOLS}, role='orchestrator')['id']
     runtime = SimpleNamespace(store=store)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: None)
-    monkeypatch.delenv('BOXFOX_ADAPTIVE_HARNESS', raising=False)
+    # Từ v2 mặc định BẬT: muốn chốt đường legacy phải đặt `off` TƯỜNG MINH.
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
     yield runtime, root
     store.close()
 
@@ -185,7 +186,7 @@ def test_switch_off_beats_a_live_graph(environment, monkeypatch):
     runtime, sid = environment
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
-    monkeypatch.delenv('BOXFOX_ADAPTIVE_HARNESS', raising=False)
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
     with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
         execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})
     assert execution_kernel.guard_tool(runtime, current, 'file_read', {'path': 'x'})['mode'] == 'artifact_only'
@@ -196,7 +197,7 @@ def test_switch_off_beats_a_live_run_execute_binding(environment, monkeypatch):
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
     monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
-    monkeypatch.delenv('BOXFOX_ADAPTIVE_HARNESS', raising=False)
+    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
     with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
         execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})
     assert execution_kernel.guard_tool(runtime, current, 'terminal_exec', {'command': 'ls'})['mode'] == 'artifact_only'

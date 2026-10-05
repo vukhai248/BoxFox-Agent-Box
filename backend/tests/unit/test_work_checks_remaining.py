@@ -8,6 +8,11 @@ from test_work_graph import build
 from test_work_checks import setup, start
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 @pytest.mark.parametrize('name', ['web_fetch', 'read_source'])
 @pytest.mark.parametrize('quality', ['junk', 'empty', 'wrong-page', 'error-page', 'unknown', None])
 def test_unusable_web_body_never_counts_as_source(tmp_path, name, quality):

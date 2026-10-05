@@ -22,6 +22,11 @@ from agentbox.skills.commands import CommandRegistry
 from agentbox.skills.catalog import SkillCatalog
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 @pytest.fixture(autouse=True)
 def legacy_mode_path(monkeypatch):
     """This file pins the legacy slash-mode path; the Work Graph (the default) is tested in test_work_graph.py."""

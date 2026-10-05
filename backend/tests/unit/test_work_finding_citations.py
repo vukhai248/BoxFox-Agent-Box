@@ -16,6 +16,11 @@ from test_work_graph import build, ok_script
 from test_work_checks import setup, start
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 CORPUS = Path(__file__).resolve().parents[1] / 'fixtures' / 'work_review_corpus'
 CRITERIA = {'A1': 'Preserve the owner constraint', 'A2': 'Distinguish facts and proposals'}
 

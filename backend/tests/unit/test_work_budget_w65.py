@@ -16,6 +16,11 @@ from test_work_checks import setup, start
 from test_delegation_contract import FixtureExecutor, FixtureModel, answer, call
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 @pytest.mark.parametrize('role,task,expected', [
     ('research', 'deliverable', 200), ('plan', 'deliverable', 200),
     ('design', 'deliverable', 200), ('research', 'lookup', 40),

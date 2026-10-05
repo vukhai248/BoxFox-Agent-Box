@@ -9,6 +9,11 @@ from test_work_graph import build, raw_tool
 from test_work_checks import setup, start
 
 
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
+# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+pytestmark = pytest.mark.legacy_path
+
+
 def test_new_invocation_on_same_green_input_reuses_check_and_persists_alias(tmp_path):
     async def run_test():
         store,rt,model,_,sid=build(tmp_path)

@@ -14,9 +14,10 @@ import pytest
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
-from switch_isolation import isolate_default
+from switch_isolation import isolate_default, isolate_off
 
 from agentbox.agent_core import failures, limits
+from agentbox.agent_core.feature_switches import MEMBERS
 from agentbox.agent_core import web as web_module
 from agentbox.agent_core import runtime as runtime_module
 from agentbox.agent_core import tool_groups as tool_groups_module
@@ -144,11 +145,11 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatc
         return client.offered[-1]
 
     for switch in ('BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS', 'BOXFOX_RESEARCH_GATEWAY'):
-        isolate_default(monkeypatch, switch)
+        isolate_off(monkeypatch, switch)
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))
-    # Tắt mặc định cả ba bề mặt mới; bật task không tự bật job/Research.
+    # Tắt TƯỜNG MINH cả ba bề mặt mới; bật task không tự bật job/Research.
     other_off = CONTROLLER_JOB_TOOLS | research_gateway.GATEWAY_TOOLS
     assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - TASK_SURFACE_TOOLS - other_off)
     monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
@@ -173,6 +174,22 @@ def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
     questions = next(g for g in groups if g['key'] == 'questionsApprovals')
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
+
+
+def test_the_switch_block_shows_the_v2_default_of_the_whole_group(tmp_path, monkeypatch):
+    """V2 (#6599): env trống ⇒ khối `switches` của route THẬT báo cả nhóm BẬT, nguồn `default`."""
+    isolate_default(monkeypatch, *MEMBERS)
+    info = runtime_info(tmp_path, 'runtime-info-switches.db')
+    assert info['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'default'}
+    assert set(info['switches']['members']) == set(MEMBERS)
+    assert all(item == {'on': True, 'source': 'default'}
+               for item in info['switches']['members'].values())
+    # Một lệnh rollback: khóa tổng `off` ⇒ cả nhóm TẮT, nguồn `master`.
+    monkeypatch.setenv('BOXFOX_REFORM', 'off')
+    rolled = runtime_info(tmp_path, 'runtime-info-switches-off.db')
+    assert rolled['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': False, 'source': 'explicit'}
+    assert all(item == {'on': False, 'source': 'master'}
+               for item in rolled['switches']['members'].values())
 
 
 def test_the_route_answers_the_same_fourteen_groups(tmp_path):
@@ -377,3 +394,32 @@ def test_a_mis_set_reading_switch_keeps_the_default_and_says_so_once(tmp_path, m
     source = inspect.getsource(runtime_module.HarnessRuntime._dispatch)
     assert 'self.web_switch_notices(sid)' in source
     store.close()
+
+def test_the_usage_block_lists_open_allocations(tmp_path, monkeypatch):
+    """H10.2: khối `usage` chỉ đọc — store tươi thấy `[]`, sau PUT thấy đúng allocation vừa mở."""
+    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
+
+    async def run():
+        store, runtime = make_runtime(tmp_path, 'runtime-info-usage.db')
+        root = runtime.create({'skills': []})['id']
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers=HEADERS) as http:
+                info_url = str(server.make_url('/api/agent/runtime-info'))
+                attach_url = str(server.make_url(f'/api/agent/sessions/{root}/usage-allocation'))
+                before = await (await http.get(info_url)).json()
+                opened = await (await http.put(attach_url, json={'ceiling': 4,
+                                                                 'consentRef': 'consent-4'})).json()
+                after = await (await http.get(info_url)).json()
+        store.close()
+        return before, opened, after
+
+    before, opened, after = asyncio.run(run())
+    assert before['usage'] == {'allocations': []}
+    assert len(after['usage']['allocations']) == 1
+    allocation = after['usage']['allocations'][0]
+    assert allocation['allocationId'] == opened['allocation']['allocationId']
+    assert allocation['ownerId'] == opened['sessionId']
+    assert allocation['reservation']['currency'] == 'USD'
+    assert allocation['remaining'] == 4.0
+    assert allocation['state'] == 'reserved'
+    assert isinstance(allocation['updatedAt'], float)

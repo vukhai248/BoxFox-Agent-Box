@@ -1,0 +1,228 @@
+"""H10.2 — đường DUY NHẤT mở trần chi: route của người vận hành (gọi route THẬT qua aiohttp).
+
+H6.9 để lại một lỗ: `harnessAllocationId` chỉ được test ghim bằng tay, không nơi nào trong
+`backend/src` ghi được khoá đó — nên "main thích ứng" có ngân sách chỉ sống trên giấy. File này
+khoá hợp đồng của writer mới: thiếu header admin ⇒ 403; PUT thiếu `ceiling`/`consentRef` ⇒ 400
+(không auto-grant, không giá trị mặc định); PUT hợp lệ mở reservation rồi ghim vào PHIÊN GỐC
+(gọi từ con cũng ghim ở root, đúng chỗ `usage_surface.complete()` đọc); PUT lần hai ⇒ 409 cho tới
+khi DELETE; DELETE gỡ con trỏ và trả lại phần chưa tiêu; và không tool nào của model chạm tới trần.
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+
+from aiohttp import ClientSession
+from aiohttp.test_utils import TestServer
+
+from agentbox.agent_core import execution_kernel, usage_ledger, usage_surface
+from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS
+from agentbox.agent_core.runtime import HarnessRuntime
+from agentbox.api.server import create_app
+from agentbox.memory.session_store import SessionStore
+
+HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
+
+
+class FixtureExecutor:
+    async def execute(self, name, args, sid):
+        return {'ok': True}
+
+    async def cleanup(self, sid):
+        return None
+
+
+def run(tmp_path, coro_factory):
+    """Một phiên gốc + một phiên con, chạy request THẬT trong một vòng aiohttp."""
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), None)
+        root = runtime.create({'skills': []})['id']
+        child = store.create({'skills': []}, parent_id=root)['id']
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(server.make_url('/')) as client:
+                results = await coro_factory(client, store, runtime, root, child)
+        store.close()
+        return results
+
+    saved = {name: os.environ.get(name) for name in (usage_ledger.SWITCH,
+                                                     execution_kernel.ADAPTIVE_SWITCH)}
+    # Sổ và harness thích ứng là điều kiện của trần chi: đặt TƯỜNG MINH để bài không phụ
+    # thuộc env của máy chạy (từ v2 thiếu env nghĩa là BẬT, nhưng `off` của người khác thì không).
+    for name in saved:
+        os.environ[name] = 'on'
+    try:
+        return asyncio.run(main())
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def allocation_rows(store):
+    """Hàng allocation thô; bảng chỉ tồn tại sau lượt `UsageLedger` đầu tiên."""
+    if store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='harness_allocations'").fetchone() is None:
+        return []
+    return list(store.db.execute('SELECT * FROM harness_allocations'))
+
+
+def test_a_request_without_the_admin_header_is_refused(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        response = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                    json={'ceiling': 5, 'consentRef': 'consent-1'},
+                                    headers={'Host': '127.0.0.1:3102'})
+        return response.status, await response.json(), allocation_rows(store)
+
+    code, error, rows = run(tmp_path, scenario)
+    assert code == 403
+    assert error['error'] == 'Local administration required'
+    assert rows == []
+
+
+def test_put_requires_a_ceiling_and_a_consent_ref(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        no_consent = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                      json={'ceiling': 5}, headers=HEADERS)
+        no_ceiling = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                      json={'consentRef': 'consent-1'}, headers=HEADERS)
+        zero = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                json={'ceiling': 0, 'consentRef': 'consent-1'}, headers=HEADERS)
+        return (no_consent.status, await no_consent.json(),
+                no_ceiling.status, await no_ceiling.json(),
+                zero.status, await zero.json(), allocation_rows(store),
+                runtime.store.get(root)['config'].get('harnessAllocationId'))
+
+    no_consent, consent_error, no_ceiling, ceiling_error, zero, zero_error, rows, attached = \
+        run(tmp_path, scenario)
+    assert (no_consent, consent_error['code']) == (400, 'USAGE_NO_CONSENT')
+    assert (no_ceiling, ceiling_error['code']) == (400, 'USAGE_FIELD_INVALID')
+    assert (zero, zero_error['code']) == (400, 'USAGE_FIELD_INVALID')
+    # Không auto-grant: ba lượt từ chối không để lại hàng nào và không ghim con trỏ.
+    assert rows == []
+    assert attached is None
+
+
+def test_put_opens_a_reservation_and_pins_the_root(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        response = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                    json={'ceiling': 5, 'consentRef': 'consent-1',
+                                          'purpose': 'research'}, headers=HEADERS)
+        body = await response.json()
+        return (response.status, body, allocation_rows(store), runtime.store.get(root)['config'],
+                body['allocation']['allocationId'])
+
+    code, body, rows, config, allocation_id = run(tmp_path, scenario)
+    assert code == 200
+    assert body['sessionId']
+    assert body['attached'] is True
+    view = body['allocation']
+    assert view['allocationId'] == allocation_id
+    assert view['ownerId'] == body['sessionId']
+    assert view['policyRevision'] == execution_kernel.capability_epoch(None, None) == 1
+    assert view['consentRef'] == 'consent-1'
+    assert view['reservation'] == {'amount': 5.0, 'ceiling': 5.0, 'currency': 'USD',
+                                   'price': None, 'purpose': 'research'}
+    assert view['state'] == 'reserved'
+    assert view['remaining'] == 5.0
+    assert config['harnessAllocationId'] == allocation_id
+    assert len(rows) == 1
+    assert rows[0]['owner_id'] == body['sessionId']
+
+
+def test_a_child_session_pins_the_allocation_to_the_root(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        from_child = await client.put(f'/api/agent/sessions/{child}/usage-allocation',
+                                      json={'ceiling': 2, 'consentRef': 'consent-2'}, headers=HEADERS)
+        body = await from_child.json()
+        seen_from_root = await (await client.get(f'/api/agent/sessions/{root}/usage-allocation',
+                                                 headers=HEADERS)).json()
+        seen_from_child = await (await client.get(f'/api/agent/sessions/{child}/usage-allocation',
+                                                  headers=HEADERS)).json()
+        return (body, seen_from_root, seen_from_child, runtime.store.get(root)['config'],
+                runtime.store.get(child)['config'], root)
+
+    body, from_root, from_child, root_config, child_config, root = run(tmp_path, scenario)
+    assert body['sessionId'] == root
+    assert body['allocation']['ownerId'] == root
+    # Con KHÔNG có con trỏ riêng: `complete()` đọc config của root, nên ghim ở con cũng là ghim cả run.
+    assert root_config['harnessAllocationId'] == body['allocation']['allocationId']
+    assert 'harnessAllocationId' not in child_config
+    assert from_root['attached'] is True and from_child['attached'] is True
+    assert from_child['sessionId'] == root
+
+
+def test_a_second_put_is_refused_until_delete(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        first = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                        json={'ceiling': 5, 'consentRef': 'consent-1'},
+                                        headers=HEADERS)).json()
+        second = await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                  json={'ceiling': 9, 'consentRef': 'consent-9'}, headers=HEADERS)
+        error = await second.json()
+        return first, second.status, error, allocation_rows(store)
+
+    first, code, error, rows = run(tmp_path, scenario)
+    assert code == 409
+    assert error['code'] == 'ALLOCATION_ALREADY_ATTACHED'
+    # Trần đã ghim không bị ghi đè ngầm: vẫn đúng một hàng, đúng số tiền ban đầu.
+    assert len(rows) == 1
+    assert rows[0]['allocation_id'] == first['allocation']['allocationId']
+
+
+def test_get_shows_remaining_and_delete_releases_it(tmp_path):
+    async def scenario(client, store, runtime, root, child):
+        opened = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                         json={'ceiling': 5, 'consentRef': 'consent-1'},
+                                         headers=HEADERS)).json()
+        allocation_id = opened['allocation']['allocationId']
+        before = await (await client.get(f'/api/agent/sessions/{root}/usage-allocation',
+                                         headers=HEADERS)).json()
+        detached = await (await client.delete(f'/api/agent/sessions/{root}/usage-allocation',
+                                              headers=HEADERS)).json()
+        after = await (await client.get(f'/api/agent/sessions/{root}/usage-allocation',
+                                        headers=HEADERS)).json()
+        again = await (await client.delete(f'/api/agent/sessions/{root}/usage-allocation',
+                                           headers=HEADERS)).json()
+        ledger = usage_surface.service(runtime)
+        return (allocation_id, before, detached, after, again, ledger.get_allocation(allocation_id),
+                runtime.store.get(root)['config'])
+
+    allocation_id, before, detached, after, again, view, config = run(tmp_path, scenario)
+    assert before['attached'] is True
+    assert before['allocation']['allocationId'] == allocation_id
+    assert before['allocation']['remaining'] == 5.0
+    assert detached == {'sessionId': before['sessionId'], 'detached': True, 'released': 5.0}
+    # Gỡ con trỏ là hàng đầu tiên: không còn đường reserve mới, rồi phần chưa tiêu được trả lại.
+    assert 'harnessAllocationId' not in config
+    assert after == {'sessionId': before['sessionId'], 'attached': False, 'allocation': None}
+    assert again['detached'] is False and again['released'] is None
+    assert view['state'] == 'released'
+    assert view['remaining'] == 0.0
+    assert view['consumed']['releasedAmount'] == 5.0
+
+
+def test_the_ledger_view_is_the_one_the_route_returns(tmp_path):
+    """Route không bịa shape: view trả ra đúng bằng `ledger.get_allocation()`."""
+    async def scenario(client, store, runtime, root, child):
+        opened = await (await client.put(f'/api/agent/sessions/{root}/usage-allocation',
+                                         json={'ceiling': 3, 'consentRef': 'consent-3'},
+                                         headers=HEADERS)).json()
+        return opened, usage_surface.service(runtime).get_allocation(
+            opened['allocation']['allocationId'])
+
+    opened, view = run(tmp_path, scenario)
+    assert opened['allocation'] == view
+
+
+def test_no_model_tool_can_open_a_ceiling():
+    """Hàng rào cuối: trần chi là chuyện của người vận hành, không phải của model."""
+    assert not [name for name in ORCHESTRATOR_TOOLS
+                if 'allocation' in name or 'ceiling' in name or 'consent' in name]
+    import inspect
+    from agentbox.agent_core import tool_contracts
+    source = inspect.getsource(tool_contracts)
+    assert 'harnessAllocationId' not in source
+    assert 'reserve' not in source

@@ -2,7 +2,7 @@
 
 Kế hoạch v1 §4. Đây là lớp mỏng nối `task_service` (kho bền vững) vào runtime:
 
-- `enabled()` — công tắc giết `BOXFOX_TASK_SURFACE`, mặc định TẮT. Tắt thì công cụ không được
+- `enabled()` — công tắc giết `BOXFOX_TASK_SURFACE`, mặc định BẬT từ v2 (#6599); tắt tường minh bằng `off` thì công cụ không được
   quảng cáo (`turn_profile_base`) và `dispatch` từ chối thẳng, nên phiên cũ không đổi hành vi.
 - `handle(rt, session, name, args)` — bốn handler, chỉ gọi hàm đã có của `task_service` và
   `research_runtime.cancel_child`; không tự ghi bảng nào.
@@ -54,7 +54,7 @@ BIND_FAILED_REASON = 'TASK_BIND_FAILED'
 
 
 def enabled(env=None):
-    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc).
+    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`.
 
     `env` là giá trị thô của test; truyền vào thì thắng mọi thứ (giữ nguyên khuôn cũ).
     """

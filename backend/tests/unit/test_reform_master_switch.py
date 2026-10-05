@@ -1,10 +1,13 @@
 """H12 — khóa tổng `BOXFOX_REFORM`: một tay nắm cho cả nhóm công tắc H3–H8.
 
-Luật (chủ nhà 04/10/2026, bật dần từng công tắc):
-1. Thiếu env ⇒ TẮT (giữ nguyên hành vi cũ) — mọi công tắc thành viên theo khóa tổng.
-2. `BOXFOX_REFORM=on` ⇒ cả nhóm BẬT; `=off` ⇒ cả nhóm TẮT.
-3. Công tắc thành viên đặt tường minh LUÔN thắng khóa tổng (để bật dần từng cái).
+Luật (chủ nhà 05/10/2026, quyết định #6599 — v2 bật mặc định):
+1. Thiếu env ⇒ **BẬT** (mặc định mới từ v2; trước đó là TẮT để bật dần) — mọi công tắc thành
+   viên theo khóa tổng.
+2. `BOXFOX_REFORM=on` ⇒ cả nhóm BẬT; `=off` ⇒ cả nhóm TẮT (một lệnh rollback).
+3. Công tắc thành viên đặt tường minh LUÔN thắng khóa tổng (tắt riêng một bề mặt để điều tra).
 4. `/api/agent/runtime-info` phải cho thấy khóa tổng và từng thành viên kèm nguồn.
+5. `MASTER_DEFAULT` là hằng số neo của lần flip: có bài chốt riêng, để lần đổi sau phải sửa
+   cả bài chốt chứ không lặng lẽ trôi.
 """
 import pytest
 
@@ -31,10 +34,16 @@ def clean_env(monkeypatch):
     return monkeypatch
 
 
-def test_master_is_off_when_unset_and_every_member_follows():
-    assert fs.master() is False
-    assert [fs.member_switch(name) for name in MEMBERS] == [False] * len(MEMBERS)
+def test_master_is_on_when_unset_and_every_member_follows():
+    """V2 (#6599): env trống ⇒ cả nhóm BẬT, và nguồn của mọi thành viên là `default`."""
+    assert fs.master() is True
+    assert [fs.member_switch(name) for name in MEMBERS] == [True] * len(MEMBERS)
     assert {fs.source(name) for name in MEMBERS} == {'default'}
+
+
+def test_master_default_constant_is_true_after_the_v2_flip():
+    """Neo cho lần flip: đổi `MASTER_DEFAULT` phải sửa cả bài này (và docstring luật 1)."""
+    assert fs.MASTER_DEFAULT is True
 
 
 def test_master_on_turns_the_whole_group_on(clean_env):
@@ -45,8 +54,10 @@ def test_master_on_turns_the_whole_group_on(clean_env):
 
 
 def test_master_off_turns_the_whole_group_off(clean_env):
+    """Một lệnh rollback: `=off` tắt cả bảy thành viên, nguồn `master`, không cần env thành viên."""
     clean_env.setenv(fs.MASTER_SWITCH, 'off')
-    assert fs.member_switch('BOXFOX_TASK_SURFACE') is False
+    assert [fs.member_switch(name) for name in MEMBERS] == [False] * len(MEMBERS)
+    assert {fs.source(name) for name in MEMBERS} == {'master'}
 
 
 @pytest.mark.parametrize('value', ['on', 'ON', 'true', '1', 'yes'])
@@ -106,9 +117,9 @@ def test_switch_readers_still_honour_their_own_raw_test_value(clean_env):
 
 def test_snapshot_names_the_master_and_every_member_with_its_source(clean_env):
     snap = fs.snapshot()
-    assert snap['master'] == {'name': 'BOXFOX_REFORM', 'on': False, 'source': 'default'}
+    assert snap['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'default'}
     assert set(snap['members']) == set(MEMBERS)
-    assert all(item == {'on': False, 'source': 'default'} for item in snap['members'].values())
+    assert all(item == {'on': True, 'source': 'default'} for item in snap['members'].values())
     clean_env.setenv(fs.MASTER_SWITCH, 'on')
     clean_env.setenv('BOXFOX_CONTEXT_SURFACE', 'off')
     snap = fs.snapshot()

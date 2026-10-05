@@ -6,10 +6,12 @@ import os
 import re
 import sys
 import time
+import uuid
 from pathlib import Path
 from aiohttp import web
 from ..agent_core import design_runtime, execution_kernel, feature_switches, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
+from ..agent_core import usage_surface
 from ..agent_core.plan_header import IDENTITY_PATTERN
 from ..agent_core.peer_watchdog import PeerWatchdog
 from ..agent_core.runtime import HarnessRuntime, DecisionError
@@ -245,6 +247,19 @@ def _action_error(exc, statuses=None, default=400):
     return ApiError(code, detail.strip() if sep else '', (statuses or {}).get(code, default))
 
 
+def _open_allocations(rt, limit=20):
+    """Trần chi đang mở cho khối `usage` của runtime-info — chỉ đọc, không cấp chi.
+
+    Một hàng hỏng hoặc bảng thiếu KHÔNG được làm đỏ cả tab Harness: tab này còn phục vụ
+    việc chẩn đoán, nên chỗ này trả `[]` và ghi log thay vì ném ra ngoài.
+    """
+    try:
+        return usage_surface.service(rt).open_allocations(limit)
+    except Exception:
+        logger.exception('usage allocations unavailable')
+        return []
+
+
 #: Mã khoá lạc quan của lượt chủ nhà → status HTTP: một chỗ khai cho CẢ nhánh `scope`/`deepen`
 #: lẫn phần còn lại của handler (cùng một luật "khoá cũ ⇒ 409, đích không có ⇒ 404").
 _RESEARCH_CONFLICT_STATUS = {'RESEARCH_SCOPE_REVISION_STALE': 409,
@@ -455,6 +470,9 @@ def create_app(runtime):
             'toolGroups': tool_groups(),
             # H12 — khóa tổng `BOXFOX_REFORM`: nhìn một chỗ biết đang bật gì, vì đâu.
             'switches': feature_switches.snapshot(),
+            # H10.2 — khối `usage`: trần chi đang mở, chỉ đọc, trần cứng 20 hàng; bảng chưa
+            # có thì `[]` để tab Harness không đỏ vì tính năng chưa dùng.
+            'usage': {'allocations': _open_allocations(runtime)},
             'tools': sorted(ORCHESTRATOR_TOOLS),
             'roles': [{'id': r.id, 'name': r.name, 'tools': sorted(r.tools), 'skills': list(r.skills)}
                       for r in ROLES.values()],
@@ -1663,6 +1681,64 @@ def create_app(runtime):
         except ValueError as exc:
             raise _action_error(exc, {'POLICY_SWITCH_OFF': 409, 'POLICY_MODE_INVALID': 400}) from None
 
+    async def usage_allocation(request):
+        """`GET|PUT|DELETE /api/agent/sessions/{sid}/usage-allocation` — trần chi của run (H10.2).
+
+        Người vận hành là bên DUY NHẤT mở được trần; model không có tool nào chạm tới nó.
+        PUT mở một reservation trong sổ rồi ghim `harnessAllocationId` vào ĐÚNG root mà
+        `usage_surface.complete()` đọc (kể cả khi gọi từ phiên con hay research-root).
+        Không auto-grant: thiếu `ceiling`/`consentRef` là lỗi, không có giá trị mặc định;
+        đã ghim rồi thì 409 — gỡ bằng DELETE trước, để không có đường ghi đè ngầm.
+        """
+        sid = request.match_info['sid']
+        known_session(sid)
+        ledger = usage_surface.service(runtime)
+        root = usage_surface.root_session(runtime, sid)
+        attached = (root['config'] or {}).get('harnessAllocationId')
+        if request.method == 'GET':
+            return web.json_response({'sessionId': root['id'], 'attached': bool(attached),
+                                      'allocation': ledger.get_allocation(attached) if attached else None})
+        if request.method == 'DELETE':
+            if not attached:
+                return web.json_response({'sessionId': root['id'], 'detached': False,
+                                          'released': None, 'reason': 'no allocation attached'})
+            view = ledger.get_allocation(attached)
+            released = view['remaining']
+            if released:
+                ledger.release(attached, released, 'operator detached',
+                               invocation_id='detach-' + attached)
+            config = dict(root['config'] or {})
+            config.pop('harnessAllocationId', None)
+            runtime.store.update_config(root['id'], config)
+            return web.json_response({'sessionId': root['id'], 'detached': True, 'released': released})
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ApiError('USAGE_ALLOCATION_BODY_INVALID', 'body needs `ceiling` and `consentRef`')
+        if attached:
+            raise ApiError('ALLOCATION_ALREADY_ATTACHED',
+                           'detach the current allocation before attaching another', 409)
+        ceiling, consent = body.get('ceiling'), body.get('consentRef')
+        if consent is None or not str(consent).strip():
+            raise ApiError('USAGE_NO_CONSENT', 'consentRef is required to attach a ceiling')
+        if not isinstance(ceiling, (int, float)) or isinstance(ceiling, bool) or not ceiling > 0:
+            raise ApiError('USAGE_FIELD_INVALID', 'ceiling must be a positive number')
+        allocation_id = 'alloc-' + uuid.uuid4().hex
+        try:
+            view = ledger.reserve(allocation_id, root['id'],
+                                  execution_kernel.capability_epoch(runtime, root), str(consent),
+                                  # `ceiling` là bắt buộc với root: `None` không phải vô hạn,
+                                  # nên trần phải khai đúng bằng số tiền người vận hành chốt.
+                                  {'amount': float(ceiling), 'ceiling': float(ceiling),
+                                   'currency': 'USD', 'purpose': body.get('purpose') or 'session'},
+                                  'attach-' + allocation_id)
+        except ValueError as exc:
+            raise _action_error(exc, {'USAGE_ALLOCATION_CONFLICT': 409,
+                                      'USAGE_ALLOCATION_UNKNOWN': 409}) from None
+        config = dict(root['config'] or {})
+        config['harnessAllocationId'] = allocation_id
+        runtime.store.update_config(root['id'], config)
+        return web.json_response({'sessionId': root['id'], 'attached': True, 'allocation': view})
+
     async def plan_runs(request):
         workflow = plan_workflow.service(runtime)
         rid = request.match_info.get('runId')
@@ -1780,6 +1856,9 @@ def create_app(runtime):
     app.router.add_put('/api/agent/sessions/{sid}/research-mode', research_mode_set)
     app.router.add_get('/api/agent/sessions/{sid}/execution-policy', execution_policy)
     app.router.add_put('/api/agent/sessions/{sid}/execution-policy', execution_policy)
+    app.router.add_get('/api/agent/sessions/{sid}/usage-allocation', usage_allocation)
+    app.router.add_put('/api/agent/sessions/{sid}/usage-allocation', usage_allocation)
+    app.router.add_delete('/api/agent/sessions/{sid}/usage-allocation', usage_allocation)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/answer', research_prompt_answer)
     app.router.add_post('/api/agent/research/prompts/{prompt_id}/dismiss', research_prompt_dismiss)
     # P1 (design-interfaces §5) — bảy tuyến của chế độ Design.

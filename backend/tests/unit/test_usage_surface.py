@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from switch_isolation import isolate_default
+from switch_isolation import isolate_off
 from agentbox.agent_core import execution_kernel, usage_surface
 from agentbox.agent_core.orchestration_contracts import ContractError
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -85,7 +85,7 @@ def allocate(env, amount=.01):
 
 
 def test_off_legacy_has_no_rows(env, monkeypatch):
-    isolate_default(monkeypatch, 'BOXFOX_USAGE_LEDGER')
+    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
     call(env)
     assert env[3].calls == 1
     assert env[0].db.execute("SELECT name FROM sqlite_master WHERE name='harness_usage'").fetchone() is None
@@ -170,7 +170,7 @@ def test_adaptive_confirmed_free_route_passes_and_mock_price_restores(env):
 
 def test_adaptive_ledger_kill_switch_cannot_fallback_legacy(env, monkeypatch):
     adaptive(env)
-    isolate_default(monkeypatch, 'BOXFOX_USAGE_LEDGER')
+    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
     with pytest.raises(ContractError, match='USAGE_LEDGER_DISABLED'):
         call(env)
     assert env[3].calls == 0
