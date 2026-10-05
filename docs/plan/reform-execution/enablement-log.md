@@ -488,3 +488,26 @@ Review delta tìm thêm hai ca; cả hai đã sửa ngay:
 - Chạy lại sau vòng hai: **134 passed** (route 12 + ledger 57 + runtime-info 16 + gateway 49);
   **sweep hồi quy 152 passed** (chạy hai lần, EXIT=0); `live_allocation_check.py --base 3118` trên instance
   khởi động lại với code mới: vẫn **9/9**.
+
+## v3 — xoá dần 6/7 bề mặt legacy (2026-10-05)
+
+Chủ nhà chốt lựa chọn B của `HANDOFF.md` §10.2 ("xoá dần dần để công tắc mặc định là bật"). Mỗi bề
+mặt một commit, mỗi commit làm trọn B1–B3 (bỏ pin test + bỏ nhánh code `off` + bỏ tên env khỏi
+`feature_switches.MEMBERS`). Nhánh `vorflux/boxfox-legacy-surface-removal` (worktree
+`/var/tmp/boxfox-legacy-wt`), nền `main` @ `f8f33b3`.
+
+| Bề mặt | Commit | Quy mô | Test tại chỗ | Live |
+|---|---|---|---|---|
+| `BOXFOX_RECOVERY_POLICY` | `4a4bdac` | `recovery_policy.py` mất `SWITCH`/`enabled()`; 2 cổng `runtime.py` vô điều kiện | 95 + 26 passed | — |
+| `BOXFOX_CONTEXT_SURFACE` | `42b337a` | mất `SWITCH`/`enabled()`/`_active()`; 4 bài legacy-off xoá | 93 passed | — |
+| `BOXFOX_TASK_SURFACE` + `BOXFOX_CONTROLLER_JOBS` + `BOXFOX_USAGE_LEDGER` | `64f960d` | 25 tệp, +89/−381; `tool_groups` → `alwaysOn: True` | 34 + 219 + 122 passed | — |
+| `BOXFOX_ADAPTIVE_HARNESS` | `f2fceb0` | 14 tệp, +39/−166; giữ mode `adaptive`/`legacy` | 105 + 243 + 12 passed | — |
+
+- `feature_switches.MEMBERS` còn đúng một tên: `BOXFOX_RESEARCH_GATEWAY`.
+- **Bề mặt 7 (RESEARCH_GATEWAY) cố ý chưa xoá.** Số đo trên 35 tệp ghim `legacy_path` khi pin bị gỡ
+  (`strip_legacy_pin`): trước đợt `232 failed / 416 passed / 7 errors`; sau 6 bề mặt
+  `231 failed / 405 passed / 7 errors`; thêm `BOXFOX_RESEARCH_GATEWAY=off` → **`643 passed` (0 đỏ)**.
+  Nghĩa là mọi số đỏ còn lại thuộc đúng bề mặt 7, và xoá nó cần chủ nhà chốt luồng `research` của
+  Work Graph + chuyển phiên cũ khỏi `researchId` (`HANDOFF.md` §10.6).
+- Bằng chứng: `/var/tmp/wt-strip.log` (sau 6 bề mặt), `/var/tmp/wt-strip-gwoff.log` (đối chứng gateway
+  off), `/var/tmp/pin-strip-A.log` (trước đợt), plugin `/var/tmp/strip_legacy_pin.py`.

@@ -43,13 +43,13 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | H4 | Job qua nhiều lượt (`harness_jobs.py` → `job_surface.py`, `job_wake.py`) | verified | 59 ca + P2 10/10; nối runtime `802f51f`; A1–A9/29 đạt trên `c836822`; process job fail closed |
 | H5 | Context + skills (`context_bundle.py`, `skill_spec.py` → `context_surface.py`) | verified | 79 + 114 + 56 ca + P3 13/13; nối runtime `802f51f`; B1–B5/29 đạt trên `c836822` |
 | H6 | Phân bổ & hạch toán (`usage_ledger.py` → `usage_surface.py`) | verified | 55 + 22 ca + P4 7/7; nối runtime `802f51f`; C1–C5/29 đạt trên `c836822`; phần giới hạn ngân sách hoãn #6531 |
-| H7 | Research ownership (`research_owner.py` → `research_gateway.py`) | verified | 52 + 48 ca + P5 8/8; nối runtime `802f51f`; D1–D4/29 đạt trên `c836822`; gateway giữ mã, mặc định off (#6536) |
+| H7 | Research ownership (`research_owner.py` → `research_gateway.py`) | verified | 52 + 48 ca + P5 8/8; nối runtime `802f51f`; D1–D4/29 đạt trên `c836822`; gateway giữ mã, mặc định BẬT từ v2; **công tắc còn lại duy nhất sau v3** (xoá dần 6/7 bề mặt — `HANDOFF.md` §10.6) |
 | H8 | Main thích ứng (`adaptive_main.py` → `adaptive_surface.py`) | verified | 87 + 13 ca + P6 14/14; nối runtime `802f51f`; E1–E4/29 đạt trên `c836822`; route policy vận hành `c6c88bb` |
 | H9 | Suite v2 + calibration | partial | 62 ca / 40 safety oracle / 38 test; fault corpus 33/33; shadow W10.F 34/34 cell, 0 verdict; `measured=false`; live pilot chờ consent |
 | H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; nghiệm thu mức vòng chạy H4–H8 **29/29 PASS** trên `c836822`; review toàn snapshot cuối (không phát hiện chặn, 2/10); còn: H9 live pilot, quyết định chủ nhà |
 | H10.1 | Calibration sống | tương lai | hoãn theo #6531 — cần consent tài chính riêng; mã giữ nguyên, công tắc TẮT; chưa tiêu |
 | H11 | Quản lý con/subagent (#6545–#6548): trần 1000/1500 + 7200 s, cờ kết cục, chặn đọc lại, nhắc/trần chờ hạn, `child_resume`, cha khai trần | partial | code `84022bf` + simplify `9a04c16` + phủ kiểm `2bd3886` + bảy sửa đổi sau review `0e9b6df` + ba siết sau vòng soát 2 `f7ebbc9`; `test_child_management_h11.py` **37 ca**, nhóm liên quan 18 file **271 passed**, scoped 22 file **582 passed** trên `84022bf`; trần mới đọc được từ `runtime-info` trên 3113; E2E thật `task-fix` 1/1 + `child` 1/1 (PASS); review risk 5/10 đã xử lý; testing chạy nốt |
-| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | verified | `feature_switches.py` (một chỗ đọc duy nhất), bảy read-site đổi sang đó, `runtime-info` thêm `switches`; `test_reform_master_switch.py` **19 ca**; mặc định giữ TẮT để bật dần |
+| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | verified | `feature_switches.py` (một chỗ đọc duy nhất), bảy read-site đổi sang đó, `runtime-info` thêm `switches`; `test_reform_master_switch.py`; **v2: mặc định BẬT (#6599); v3: sáu thành viên đã bị xoá khỏi mã, `MEMBERS` chỉ còn `BOXFOX_RESEARCH_GATEWAY`** |
 
 ## Ma trận yêu cầu → bằng chứng → nghiệm thu (tóm tắt)
 
@@ -68,7 +68,7 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | Task list/send/abandon + receipt huỷ | H3 | E2E 9/9; E5 14/14 | duplicate không effect mới; cancel có receipt | F5 attemptSeq |
 | Job nền nhiều lượt | H4 | P2 10/10; A1–A9/29 | heartbeat không mở turn; reconcile không spawn | — |
 | Context/skill epoch | H5 | P3 13/13; B1–B5/29 | pin `(skill, attempt)` duy nhất; không import skill ngoài | — |
-| Kill switch mặc định off | H2/H3 | test switch off; 7 công tắc H4–H8: `BOXFOX_TASK_SURFACE`, `BOXFOX_CONTROLLER_JOBS`, `BOXFOX_ADAPTIVE_HARNESS`, `BOXFOX_USAGE_LEDGER`, `BOXFOX_CONTEXT_SURFACE`, `BOXFOX_RESEARCH_GATEWAY`, `BOXFOX_RECOVERY_POLICY` (+ `BOXFOX_PEER_MESH` riêng) | đường legacy giữ nguyên | — |
+| Kill switch mặc định BẬT (v2 #6599) rồi xoá dần (v3) | H2/H3 | v3: 6/7 công tắc H4–H8 đã xoá khỏi mã (`4a4bdac`, `42b337a`, `64f960d`, `f2fceb0`); còn `BOXFOX_RESEARCH_GATEWAY` + khóa tổng (+ `BOXFOX_PEER_MESH` riêng) | đường legacy của 6 bề mặt đã biến mất; bề mặt 7 chờ chủ nhà (§10.6) | — |
 | Rollback/migration drill (H10) | H2/H3 | `/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log`: 11/11 | rollback không mất data/approval, không replay mutation | chưa drill trên box thật |
 
 ## Ánh xạ backlog (tóm tắt)
@@ -86,7 +86,7 @@ Nguồn: `/code/.plans/reform-backlog-disposition.md` (§III.1–III.2). Từ v�
 ## Nợ và điểm chưa kiểm chung
 
 - **Live calibration (H10.1) hoãn #6531** — cần consent tài chính riêng; `financial_consent_ref` để `null`, không ghi là đã có quyền; mã giữ nguyên, công tắc TẮT.
-- **H4–H8 + `recovery_policy` đã nối runtime** (`802f51f`; bảy công tắc mặc định off): nghiệm thu mức vòng chạy **29/29 PASS** trên `c836822`; nợ riêng từng checkpoint ghi ở H4.5, H6.8/H6.9.
+- **H4–H8 + `recovery_policy` đã nối runtime** (`802f51f`): nghiệm thu mức vòng chạy **29/29 PASS** trên `c836822`; nợ riêng từng checkpoint ghi ở H4.5, H6.8/H6.9. Từ v3, sáu trong bảy công tắc đã bị xoá khỏi mã (nhánh cũ B1–B3) — xem `HANDOFF.md` §10.6 để biết vì sao bề mặt 7 (Research gateway) còn lại và cần gì để xoá nốt.
 - **H9 chưa đo:** live pilot (cần consent riêng); fixture lỗi offline + shadow W10.F đã làm offline (33/33, 34/34 cell, 0 verdict).
 - **Rollback/migration drill của H10 đã chạy offline (11/11, `962cd84`)** — chưa drill trên box thật với phiên đang chạy.
 - **Review toàn snapshot cuối (H10) đã chạy** trên `ed5d771`/`c3bee48`: không phát hiện chặn; 1 should-fix về tài liệu (đã sửa trong `c3bee48`+); risk 2/10; tiếp nối bằng việc 2026-10-04 (`79f024b`, `c6c88bb`, `fcc6819`, `b37dafb`, `82550cc`, `f7e4a9b`).
