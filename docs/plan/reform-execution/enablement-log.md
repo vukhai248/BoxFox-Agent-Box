@@ -422,7 +422,7 @@ sống khi test ghim tay.
 (`modelCalls: 0`); **không có chi phí thật nào phát sinh**. H10.1 (calibration sống) **vẫn hoãn**.
 
 
-## v2 — hậu kiểm: hai review độc lập + sửa (commit `4c4c5dc`)
+## v2 — hậu kiểm: ba vòng review độc lập + sửa (commit `4c4c5dc`, `9da988f`)
 
 Hai review độc lập (`v2-review-switches` rủi ro 5/10, `v2-review-usage` rủi ro 3/10) và một simplify chạy
 trên `c6fd6e9..96f158e`; mọi phát hiện trong tầm được sửa trong commit này — không đổi mặc định, không đổi
@@ -470,3 +470,19 @@ hợp đồng công khai.
   `ALLOCATION_ALREADY_ATTACHED`, DELETE `detached: true` + trả đúng ceiling, runtime-info sạch sau DELETE,
   DELETE lần hai `detached: false`. Bằng chứng `/code/.generated_artifacts/v2/live-allocation.json`.
 - Bốn tệp test liên quan sau khi sửa: **132 passed** (route 11 + ledger 57 + runtime-info 15 + gateway 49).
+
+### Vòng hai: review delta `4c4c5dc` + sửa (`9da988f`)
+
+Review delta tìm thêm hai ca; cả hai đã sửa ngay:
+
+- **(F1, Medium) DELETE khi con đang giữ TRỌN trần**: `remaining` của cha đúng bằng `0.0`, nên `if released:`
+  bỏ qua lệnh release — con trỏ gỡ rồi mà hàng nằm `reserved` vĩnh viễn, rồi hiện lại trong
+  `usage.allocations` khi con tiêu/trả lại, không còn đường gỡ. Nay `if released is not None:` để luật đóng
+  `remaining == 0` chốt hàng. Test mới: `test_delete_closes_a_ceiling_when_a_child_holds_all_of_it`.
+- **(F2, nit) `_open_allocations` chỉ dò `harness_allocations`**: schema dở dang (thiếu `harness_usage`) vẫn
+  bị lượt đọc vá thêm bảng. Nay dò ĐỦ hai tên. Test mới: `test_a_half_built_ledger_schema_is_left_alone`.
+- Cả hai bài mới đều **đỏ khi lùi mã nguồn** (kiểm chứng bằng mutation tại chỗ) — tức chúng thật sự khoá
+  bản sửa, không phải test trang trí.
+- Chạy lại sau vòng hai: **134 passed** (route 12 + ledger 57 + runtime-info 16 + gateway 49);
+  **sweep hồi quy 152 passed** (chạy hai lần, EXIT=0); `live_allocation_check.py --base 3118` trên instance
+  khởi động lại với code mới: vẫn **9/9**.
