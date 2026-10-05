@@ -483,6 +483,8 @@ Review delta tìm thêm hai ca; cả hai đã sửa ngay:
   bị lượt đọc vá thêm bảng. Nay dò ĐỦ hai tên. Test mới: `test_a_half_built_ledger_schema_is_left_alone`.
 - Cả hai bài mới đều **đỏ khi lùi mã nguồn** (kiểm chứng bằng mutation tại chỗ) — tức chúng thật sự khoá
   bản sửa, không phải test trang trí.
+- `d4bd374` chỉ khôi phục xuống dòng CRLF cho `test_runtime_info.py` (bài mới ở `9da988f` vô tình ghi cả
+  tệp bằng LF) — diff so với bản trước còn đúng 27 dòng thêm, nội dung không đổi.
 - Chạy lại sau vòng hai: **134 passed** (route 12 + ledger 57 + runtime-info 16 + gateway 49);
   **sweep hồi quy 152 passed** (chạy hai lần, EXIT=0); `live_allocation_check.py --base 3118` trên instance
   khởi động lại với code mới: vẫn **9/9**.
