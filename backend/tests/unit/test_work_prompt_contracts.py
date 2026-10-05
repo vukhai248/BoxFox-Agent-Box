@@ -2,13 +2,16 @@
 import asyncio
 import hashlib
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 from agentbox.agent_core import work_graph as wg, work_prompts as wp
-from agentbox.agent_core.runtime import CHILD_EXPECT_MAX_CHARS
+from agentbox.agent_core.roles import READ, ROLES
+from agentbox.agent_core.runtime import CHILD_EXPECT_MAX_CHARS, HarnessRuntime
+from agentbox.memory.session_store import SessionStore
 from test_work_graph import build, tool, PLAN, EXPLORE
+from test_runtime_prompt import Executor, Model, system_prompt
 
 
 @pytest.mark.parametrize('goal,expected', [
@@ -151,3 +154,121 @@ def test_existing_document_keeps_utf8_content_hash_and_nested_path(tmp_path):
     assert emitted['bytes'] == len(raw)
     assert emitted['contentHash'] == hashlib.sha256(raw).hexdigest()
     assert json.loads(json.dumps(emitted, ensure_ascii=False))['title'] == 'Kế hoạch'
+
+
+def test_agent_identity_text_matches_the_current_policy():
+    """W11 P0c: `AGENT.md` đi NGUYÊN VĂN vào system prompt của mọi phiên (kể cả con).
+
+    Câu cũ ở đây từng mô tả một thiết kế khác (mọi con đều có reviewer; con không bao giờ hỏi
+    chủ) và đảo ngược quyết định §27–29 — plan đã yêu cầu không dùng doc cũ để đảo kiến trúc.
+    """
+    text = (Path(__file__).resolve().parents[3] / 'AGENT.md').read_text(encoding='utf-8')
+    assert 'never asks the owner' not in text
+    assert 'work_report' in text and 'needs_user' in text
+    assert 'Every child output in a Work Graph goes to an independent reviewer' not in text
+    assert 'work_policy.derive' in text and 'converged tree' in text
+
+
+def test_simplify_skill_keeps_dropped_findings_visible():
+    """W11 P0c: skill vendor không được dặn bỏ gợi ý "âm thầm" — mọi kết luận cần bằng chứng."""
+    path = (Path(__file__).resolve().parents[2] / 'src' / 'agentbox' / 'vendor' / 'hermes' / 'skills'
+            / 'software-development' / 'simplify-code' / 'SKILL.md')
+    text = path.read_text(encoding='utf-8')
+    assert 'drop weak or wrong suggestions silently' not in text
+    assert 'never drop a suggestion silently' in text
+
+
+# ------------------------- W11.PROMPT P3 — prompt ĐÃ LẮP theo từng vai (P0b §5.4, §5.6, §5.7)
+
+# Chín vai còn lại của W11.PROMPT; nhánh Simplify có tệp ghim riêng (`test_work_simplify_prompt.py`).
+W11_ROLES = ('explore', 'plan', 'plan-review', 'design', 'build', 'debug', 'review', 'testing', 'research')
+HEADINGS_YIELD = 'Unless the assignment supplies its own deliverable, return a structured Markdown report with:'
+HEADINGS_YIELD_PLAN_REVIEW = ('unless the assignment supplies its own deliverable or rubric, '
+                              'return a Markdown report.')
+HEADINGS_ABSOLUTE = ('Output Requirement: Return a structured Markdown report with:',
+                     'Output Requirement: return a Markdown report.')
+# Ba note Work Graph (producer, reviewer, execution reviewer) — mỗi vai nhận đúng bộ của nó.
+WORK_GRAPH_NOTES = ('Work Graph node: when the prompt starts with',
+                    'Work Graph review: when the prompt starts with',
+                    'Work Graph execution review: for "Independent review')
+
+
+def assembled_prompts(tmp_path, roles):
+    """System prompt THẬT của từng vai con: `AGENT.md` + `ROLES[vai].instructions` đã ghép note."""
+    store = SessionStore(tmp_path / 'w11-assembled.db')
+    runtime = HarnessRuntime(store, Executor(), Model([]))
+    main = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'm'})
+    prompts = {role: system_prompt(runtime, runtime.create(
+        {'skills': [], 'connectionId': 'c1', 'modelId': 'm'}, parent_id=main['id'], role=role))
+        for role in roles}
+    store.close()
+    return prompts
+
+
+def test_w11_generic_headings_yield_to_the_assignment_in_the_assembled_prompt(tmp_path):
+    """P0b §5.4 — hai bộ heading không được cùng là "mặc định" trong một prompt.
+
+    `WORK_PRODUCER_NOTE` nói deliverable của nhiệm vụ đè heading chung, nhưng bộ heading cũ vẫn nằm
+    nguyên văn trong instruction của vai, nên model nhận cả hai chuẩn (và không cổng runtime nào kiểm
+    hình dạng output). Bản vá biến bộ heading chung thành MẶC ĐỊNH CÓ ĐIỀU KIỆN — bộ heading vẫn còn
+    nguyên, nên không mất năng lực nào.
+    """
+    prompts = assembled_prompts(tmp_path, W11_ROLES)
+    for role, prompt in prompts.items():
+        expected = HEADINGS_YIELD_PLAN_REVIEW if role == 'plan-review' else HEADINGS_YIELD
+        assert expected in prompt, f'vai {role}: thiếu câu điều kiện cho heading chung'
+        for absolute in HEADINGS_ABSOLUTE:
+            assert absolute not in prompt, f'vai {role}: heading chung vẫn được rao như mặc định duy nhất'
+    # Bộ heading cũ không bị xóa: khi assignment không cấp deliverable, model vẫn có khuôn để theo.
+    assert '### Architecture & Key Files' in prompts['explore']
+    assert '### Failure Reproduction' in prompts['debug']
+    assert '### Findings by Severity' in prompts['plan-review']
+    assert '### Verified Facts & Technical Specifications' in prompts['research']
+
+
+def test_w11_plan_forbids_write_plan_inside_a_work_graph_node_only(tmp_path):
+    """P0b §5.6 — `plan` giữ `write_plan` cho đường cũ, nhưng trong Work Graph harness tự ghi tài liệu.
+
+    Lỗi cũ: bước 5 ra lệnh "call it again" mà không nêu ngoại lệ, còn `WORK_PLAN_NOTE` cấm gọi
+    `write_plan` cho node — hai câu mâu thuẫn trong cùng một prompt, và không có cổng dispatch nào
+    chặn `write_plan` ở node produce (chỉ node check bị `WORK_CHECK_READ_ONLY`). Ràng buộc này phải
+    nhất quán ở tầng prompt; quyền của vai không đổi.
+    """
+    prompt = assembled_prompts(tmp_path, ('plan',))['plan']
+    assert 'In a Work Graph node you must NOT call `write_plan` at all' in prompt
+    assert 'Do NOT call `write_plan` for a Work Graph node' in prompt       # WORK_PLAN_NOTE vẫn còn
+    assert '`write_plan` refuses a plan without those sections' in prompt   # đường ghi plan cũ không mất
+    assert ROLES['plan'].tools == READ | {'write_plan'}, 'W11 chỉ sửa prompt — quyền của vai không đổi'
+
+
+def test_w11_testing_review_names_the_source_it_must_not_edit(tmp_path):
+    """P0b §5.7 — vai Testing phải VIẾT test (mission + `WRITE`) mà note lại phán "Do NOT edit source files".
+
+    Hai câu có thể cùng đúng, nhưng prompt không định nghĩa "source file": lượt kiểm có thể tưởng mình
+    bị cấm viết file test, còn lượt sản xuất có thể tưởng được sửa mã nguồn. Bản vá chỉ định đúng đối
+    tượng — mã nguồn SẢN XUẤT đang được kiểm — và không đổi bộ công cụ của vai.
+    """
+    prompt = assembled_prompts(tmp_path, ('testing',))['testing']
+    assert 'write and execute rigorous automated tests' in prompt
+    assert 'Do NOT edit the production source under test' in prompt
+    assert 'Do NOT edit source files' not in prompt
+    assert {'file_write', 'file_edit_block'} <= ROLES['testing'].tools
+
+
+def test_w11_work_graph_note_never_lands_after_the_roles_closing_prohibition():
+    """Bất biến P2: `with_work_graph` chèn note TRƯỚC câu `STRICT PROHIBITION` cuối của vai.
+
+    Vai nào không có câu chốt (`debug`) thì hàm nối khối note vào cuối — nhánh dự phòng đã có trong
+    mã; bài kiểm chỉ đòi note nằm SAU phần protocol của vai, không chen vào giữa các bước.
+    """
+    for role in W11_ROLES:
+        text = ROLES[role].instructions
+        notes = [note for note in WORK_GRAPH_NOTES if note in text]
+        assert notes, f'vai {role}: không thấy note Work Graph nào'
+        if 'STRICT PROHIBITION' in text:
+            closing = text.rindex('STRICT PROHIBITION')
+            for note in notes:
+                assert text.index(note) < closing, f'vai {role}: note Work Graph nằm sau câu chốt của vai'
+        else:
+            assert text.index(notes[0]) > text.index('5. Output Requirement:'), \
+                f'vai {role}: note Work Graph phải nằm sau phần protocol của vai'

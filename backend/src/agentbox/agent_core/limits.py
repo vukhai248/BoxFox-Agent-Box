@@ -22,20 +22,23 @@ INSTRUCTIONS_MAX_CHARS = 12000
 # Quyết định chủ nhà #6457 (03/10/2026) — "để RẤT LỚN vì chuyên chạy dài" (kiểu Devin: con gọi
 # hàng trăm lượt, một tiếng hoặc hơn), nhưng vẫn CÓ TRẦN: đo ở W8.A4.5.N lượt 15 cho thấy trần
 # bước của phiên cha (24) cắt con `debug` giữa chừng (`STEP_BUDGET_EXHAUSTED`) ⇒ `complete()` false
-# ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`, tức trần bước đang chặn thẳng tính năng sửa. Bộ số
-# mới: phiên chính 40 → **120** bước (trần 60 → **400**), trần thời gian 600 → **1800 s** (trần
-# 1200 → **7200 s**); con **200 bước / 3600 s**. Trần vẫn giữ vì mọi phiên đều có checkpoint và
-# continuation để đi tiếp qua phiên mới — "chạy dài" là đi tiếp có kiểm soát, không phải vô hạn.
-MAX_STEPS_DEFAULT = 120
-MAX_STEPS_MAX = 400
+# ⇒ `WORK_REPAIR_UNDIAGNOSED` ⇒ nút `rejected`, tức trần bước đang chặn thẳng tính năng sửa.
+# Quyết định #6546 (04/10/2026) — chủ nhà so với Vorflux (trần cứng 7200 s, task bị cắt vẫn gọi
+# lại được) và chốt: "nâng lên 1k bước hoặc 1k5 và 7200, cho giới hạn cao cao lên". Bộ số dưới đây
+# là bản thực hiện đúng lời chốt đó: phiên chính **1000 bước** (trần **1500**) và **7200 s** (trần
+# **7200**); con **1000 bước / 7200 s**. Con chạm trần KHÔNG còn là ngõ cụt: `child_lifecycle` đánh
+# dấu `timedOut`/`partial` cho cha thấy, và cha gọi lại chính con đó bằng `child_resume` (giữ
+# nguyên ngữ cảnh) — xem `runtime.resume_child`. "Chạy dài" vẫn là đi tiếp có kiểm soát, không vô hạn.
+MAX_STEPS_DEFAULT = 1000
+MAX_STEPS_MAX = 1500
 # Vòng 25 (D-35) — đo sống: một lượt lập kế hoạch CƠ BẢN chết ở 210 s trước cả `write_plan` khi
 # mặc định là 180 s, và một lượt khác ở 622 s vẫn `partial` (chưa xong). Lượt lập kế hoạch đầu
 # tiên không có dấu vết tất định nào để nhận ra TRƯỚC khi nó chạy, nên nâng toàn cục; phần nới
 # theo sự kiện (`PLAN_TURN_EXTENSION_SECONDS`) chỉ để lượt kịp đi hết vòng phản biện.
-DEADLINE_DEFAULT_SECONDS = 1800
+DEADLINE_DEFAULT_SECONDS = 7200
 DEADLINE_MAX_SECONDS = 7200
-CHILD_MAX_STEPS = 200
-CHILD_DEADLINE_SECONDS = 3600
+CHILD_MAX_STEPS = 1000
+CHILD_DEADLINE_SECONDS = 7200
 
 # Trần BYTE của một request mà router chấp nhận, và phần byte của request không nằm trong
 # `messages` (prompt vai + schema công cụ). Bộ nén phải biết cả hai: trên cửa sổ 1M, ngưỡng
@@ -153,8 +156,9 @@ PEER_DELIVER_MAX = 4
 # `CHILD_WALL_MAX_SECONDS` phải rộng hơn hẳn trần thời gian của MỘT con (`CHILD_DEADLINE_SECONDS`):
 # watchdog chỉ được huỷ con đã vượt xa mọi ngưỡng hợp lệ, nếu không nó thành kẻ giết việc đang chạy
 # tốt. #6457 nâng trần con lên 3600 s nên trần tường suy ra TỪ trần con (3600 + 900 = 4500 s); để
-# nguyên 1200 s cũ là biến watchdog thành người cắt việc dài mà #6457 vừa mở. Nhịp quét thưa (10 s)
-# vì mỗi nhịp là một giao dịch trên SQLite dùng chung.
+# nguyên 1200 s cũ là biến watchdog thành người cắt việc dài mà #6457 vừa mở. #6546 nâng trần con
+# lên 7200 s ⇒ trần tường thành 7200 + 900 = **8100 s**. Nhịp quét thưa (10 s) vì mỗi nhịp là một
+# giao dịch trên SQLite dùng chung.
 WATCHDOG_TICK_SECONDS = 10
 CHILD_WALL_MAX_GRACE_SECONDS = 900
 CHILD_WALL_MAX_SECONDS = CHILD_DEADLINE_SECONDS + CHILD_WALL_MAX_GRACE_SECONDS
@@ -167,6 +171,36 @@ WATCHDOG_ORPHAN_REASON = 'ORPHAN'
 # Chờ bạn quá `PEER_WAIT_SAFETY_SECONDS` cộng ngần này thì watchdog đánh thức cưỡng bức. Người chờ
 # chạy tiếp bình thường với `peer_wait_end status='timeout'`, lượt KHÔNG bị đánh `failed`.
 PEER_WAIT_FORCE_GRACE_SECONDS = 30
+# --- H11 (quyết định #6545–#6548, 04/10/2026): quản lý con/subagent ----------------------------
+# Bốn việc chủ nhà chốt, lấy đúng cách Vorflux đang chạy làm mẫu:
+#   (1) hết hạn chờ thì NHẮC cha, và `peer_read` không được đọc lại mãi một cửa sổ không có gì mới;
+#   (2) con bị cắt vì hết hạn thì gọi lại được với NGUYÊN ngữ cảnh (`child_resume`);
+#   (3) kết cục của con nhìn thấy được: `timedOut`/`partial` (xem `child_lifecycle`);
+#   (4) cha khai được trần thấp hơn cho con ngay trong `delegate_task`.
+# Đo sống 04/10/2026 (lượt TẮT, model miễn phí): hai phiên `plan_room`/`plan_version_two` đi vòng
+# `peer_read` 14–20 lần đọc LẠI đúng một cửa sổ journal của con `plan-review` để tìm dòng `VERDICT`
+# và không bao giờ đóng lượt — trần dưới đây chặn đúng kiểu đó mà không cắt đường phân trang hợp lệ
+# (đọc có frontier mới thì không tính là lặp).
+#: Số lần `peer_read` LIÊN TIẾP không mang frontier mới cho CÙNG một đích trong CÙNG một lượt.
+PEER_READ_IDLE_MAX = 3
+PEER_READ_CAPPED_CODE = 'PEER_READ_CAPPED'
+#: Số lần một lượt được phép chờ rồi hết hạn (`status='timeout'`) trước khi bị buộc quyết định.
+PEER_WAIT_EXPIRED_MAX_PER_TURN = 3
+PEER_WAIT_CAPPED_CODE = 'PEER_WAIT_CAPPED'
+#: Câu nhắc gắn vào kết quả chờ hết hạn — đây là "nhắc khi hết hạn chờ" của Vorflux.
+PEER_WAIT_NUDGE_CODE = 'PEER_WAIT_EXPIRED'
+#: Số lần cha được gọi lại CÙNG một con trong CÙNG một lượt (mỗi lần mở một attempt mới).
+CHILD_RESUME_MAX_PER_TURN = 3
+#: Trần chữ của `note` khi gọi lại con — quyết định của cha phải gọn và đọc được.
+CHILD_RESUME_NOTE_MAX_CHARS = 500
+CHILD_RESUME_NOTE_REQUIRED_CODE = 'CHILD_RESUME_NOTE_REQUIRED'
+CHILD_RESUME_NOT_CUT_CODE = 'CHILD_RESUME_NOT_CUT'
+CHILD_RESUME_CAPPED_CODE = 'CHILD_RESUME_CAPPED'
+CHILD_RESUME_UNKNOWN_CODE = 'CHILD_RESUME_UNKNOWN'
+CHILD_RESUME_FORBIDDEN_CODE = 'CHILD_RESUME_FORBIDDEN'
+#: Lý do đóng hàng sổ khi hàng vừa được MỞ LẠI mà lượt chạy không dựng được (hàng `started` mà
+#: không có task là con mồ côi với mọi bộ đọc sổ — cùng luật với `delegate`).
+CHILD_RESUME_START_FAILED_REASON = 'CHILD_RESUME_START_FAILED'
 PEER_MESH_ENV = 'BOXFOX_PEER_MESH'
 PEER_FANOUT_ENV = 'BOXFOX_PEER_FANOUT'
 PARALLEL_READ_ENV = 'BOXFOX_PARALLEL_READ_TOOLS'
@@ -280,6 +314,8 @@ PLAN_VERIFY_SUMMARY_CHARS = 800
 PLAN_VERIFY_REVISE_MAX = 2
 # Nới hạn chót ĐÚNG MỘT LẦN cho mỗi lượt, theo sự kiện `plan_written` (đúng chỗ lượt đang kết
 # thúc vì hết giờ), không theo cảm tính của model. Trần hiệu dụng vẫn là `DEADLINE_MAX_SECONDS`.
+# Lưu ý từ H11 (#6546): mặc định 7200 s ĐÃ CHẠM trần, nên lượt chạy mặc định không còn chỗ nới —
+# phần nới chỉ có tác dụng khi lượt được đặt hạn chót thấp hơn trần (`config.deadlineSeconds`).
 PLAN_TURN_EXTENSION_SECONDS = 420
 PLAN_TURN_EXTENSIONS_MAX = 1
 TURN_EXTENDED_CODE = 'TURN_EXTENDED'

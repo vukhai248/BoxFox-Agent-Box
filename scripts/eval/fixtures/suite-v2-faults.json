@@ -1,0 +1,214 @@
+{
+  "schema": "boxfox-eval-faults/1",
+  "note": "Corpus lỗi offline cho suite v2: mỗi mục PHẢI bị validate_suite/read_legacy_receipt bắt đúng mã. Không gọi model, không mở mạng, không tiêu tiền.",
+  "manifestFaults": [
+    {
+      "faultId": "doc-not-an-object",
+      "description": "Manifest bị thay bằng một mảng — phải từ chối ngay.",
+      "mutation": {"op": "replace_doc", "value": []},
+      "expectedCode": "SUITE_NOT_AN_OBJECT"
+    },
+    {
+      "faultId": "schema-v1",
+      "description": "Manifest khai schema cũ boxfox-eval-suite/1.",
+      "mutation": {"op": "set", "path": ["schema"], "value": "boxfox-eval-suite/1"},
+      "expectedCode": "SUITE_SCHEMA_UNSUPPORTED"
+    },
+    {
+      "faultId": "measured-claim",
+      "description": "Manifest tự nhận đã đo dù chưa có lượt live nào.",
+      "mutation": {"op": "set", "path": ["measured"], "value": true},
+      "expectedCode": "SUITE_MEASURED_CLAIM_UNSUPPORTED"
+    },
+    {
+      "faultId": "consent-missing",
+      "description": "Bỏ khai báo live pilot cần consent tài chính riêng.",
+      "mutation": {"op": "set", "path": ["livePilotRequiresConsent"], "value": false},
+      "expectedCode": "SUITE_CONSENT_NOT_DECLARED"
+    },
+    {
+      "faultId": "field-missing",
+      "description": "Thiếu measurementContractVersion ở cấp manifest.",
+      "mutation": {"op": "set", "path": ["measurementContractVersion"], "value": ""},
+      "expectedCode": "SUITE_FIELD_MISSING"
+    },
+    {
+      "faultId": "disposition-set-changed",
+      "description": "Thêm disposition lạ vào tập đóng.",
+      "mutation": {"op": "append", "path": ["dispositions"], "value": "looks_fine"},
+      "expectedCode": "SUITE_DISPOSITION_SET_CHANGED"
+    },
+    {
+      "faultId": "evidence-set-changed",
+      "description": "Bỏ một loại bằng chứng khỏi tập đóng.",
+      "mutation": {"op": "delete", "path": ["evidenceKinds", 0]},
+      "expectedCode": "SUITE_EVIDENCE_SET_CHANGED"
+    },
+    {
+      "faultId": "family-set-changed",
+      "description": "Rút gọn tập family còn một mục.",
+      "mutation": {"op": "set", "path": ["families"], "value": ["work-acceptance"]},
+      "expectedCode": "SUITE_FAMILY_SET_CHANGED"
+    },
+    {
+      "faultId": "safety-set-drift",
+      "description": "Thêm oracle an toàn bịa vào danh sách khai báo.",
+      "mutation": {"op": "append", "path": ["safetyOracles"], "value": "safety_invented"},
+      "expectedCode": "SUITE_SAFETY_SET_DRIFT"
+    },
+    {
+      "faultId": "cases-missing",
+      "description": "Manifest không còn ca nào.",
+      "mutation": {"op": "set", "path": ["cases"], "value": []},
+      "expectedCode": "SUITE_CASES_MISSING"
+    },
+    {
+      "faultId": "case-not-an-object",
+      "description": "Một ca bị thay bằng chuỗi.",
+      "mutation": {"op": "set", "path": ["cases", 0], "value": "W10/S01"},
+      "expectedCode": "SUITE_CASE_NOT_AN_OBJECT"
+    },
+    {
+      "faultId": "case-field-missing",
+      "description": "Ca thiếu measurementContractVersion.",
+      "mutation": {"op": "set", "path": ["cases", 0, "measurementContractVersion"], "value": ""},
+      "expectedCode": "SUITE_CASE_FIELD_MISSING"
+    },
+    {
+      "faultId": "case-duplicate",
+      "description": "Hai ca trùng caseId.",
+      "mutation": {"op": "set", "path": ["cases", 1, "caseId"], "value": "W10/S01"},
+      "expectedCode": "SUITE_CASE_DUPLICATE"
+    },
+    {
+      "faultId": "family-unknown",
+      "description": "Ca mang family không có trong tập đóng.",
+      "mutation": {"op": "set", "path": ["cases", 0, "family"], "value": "vibes-family"},
+      "expectedCode": "SUITE_FAMILY_UNKNOWN"
+    },
+    {
+      "faultId": "fixture-hash-invalid",
+      "description": "fixtureHash không phải sha256.",
+      "mutation": {"op": "set", "path": ["cases", 0, "fixtureHash"], "value": "md5:abc"},
+      "expectedCode": "SUITE_FIXTURE_HASH_INVALID"
+    },
+    {
+      "faultId": "source-pins-missing",
+      "description": "sourcePins không phải map có ít nhất một mục.",
+      "mutation": {"op": "set", "path": ["cases", 0, "sourcePins"], "value": "sha256:khong-phai-map"},
+      "expectedCode": "SUITE_SOURCE_PINS_MISSING"
+    },
+    {
+      "faultId": "evidence-unknown",
+      "description": "Ca cho phép một loại bằng chứng lạ.",
+      "mutation": {"op": "set", "path": ["cases", 0, "allowedEvidenceKinds"], "value": ["vibes"]},
+      "expectedCode": "SUITE_EVIDENCE_UNKNOWN"
+    },
+    {
+      "faultId": "oracle-not-an-object",
+      "description": "Hàng oracle bị thay bằng chuỗi.",
+      "mutation": {"op": "set", "path": ["cases", 0, "oracleMapping", 0], "value": "no_auto_pass"},
+      "expectedCode": "SUITE_ORACLE_NOT_AN_OBJECT"
+    },
+    {
+      "faultId": "oracle-field-missing",
+      "description": "Hàng oracle thiếu negative control.",
+      "mutation": {"op": "set", "path": ["cases", 0, "oracleMapping", 0, "negativeControl"], "value": ""},
+      "expectedCode": "SUITE_ORACLE_FIELD_MISSING"
+    },
+    {
+      "faultId": "disposition-unknown",
+      "description": "Hàng oracle mang disposition lạ.",
+      "mutation": {"op": "set", "path": ["cases", 0, "oracleMapping", 0, "disposition"], "value": "looks_fine"},
+      "expectedCode": "SUITE_DISPOSITION_UNKNOWN"
+    },
+    {
+      "faultId": "safety-remapped",
+      "description": "Oracle an toàn bị đổi sang map_outcome.",
+      "mutation": {"op": "safety_remap", "value": "map_outcome"},
+      "expectedCode": "SUITE_SAFETY_ORACLE_REMAPPED"
+    },
+    {
+      "faultId": "trajectory-as-invariant",
+      "description": "Oracle trajectory-only bị khai thành bất biến của ca.",
+      "mutation": {"op": "trajectory_as_invariant"},
+      "expectedCode": "SUITE_TRAJECTORY_CLAIMED_AS_INVARIANT"
+    },
+    {
+      "faultId": "invariant-unknown",
+      "description": "Ca khai bất biến không nằm trong bảng safety oracle.",
+      "mutation": {"op": "unknown_invariant", "value": "invariant_invented"},
+      "expectedCode": "SUITE_INVARIANT_UNKNOWN"
+    },
+    {
+      "faultId": "invariant-not-mapped",
+      "description": "Ca khai bất biến an toàn nhưng bảng oracle không map nó.",
+      "mutation": {"op": "unmapped_invariant"},
+      "expectedCode": "SUITE_INVARIANT_NOT_MAPPED"
+    },
+    {
+      "faultId": "fixture-hash-mismatch",
+      "description": "Băm fixture lệch cây hiện tại (bật kiểm hash).",
+      "mutation": {"op": "hash_mismatch", "value": "0000000000000000000000000000000000000000000000000000000000000000"},
+      "expectedCode": "SUITE_FIXTURE_HASH_MISMATCH"
+    },
+    {
+      "faultId": "source-pin-mismatch",
+      "description": "Pin nguồn lệch cây hiện tại (bật kiểm hash).",
+      "mutation": {"op": "pin_mismatch", "value": "1111111111111111111111111111111111111111111111111111111111111111"},
+      "expectedCode": "SUITE_SOURCE_PIN_MISMATCH"
+    }
+  ],
+  "receiptFaults": [
+    {
+      "faultId": "receipt-not-an-object",
+      "description": "Hàng kết quả legacy không phải object.",
+      "row": "S01-r1",
+      "expectedCode": "SUITE_RECEIPT_NOT_AN_OBJECT"
+    },
+    {
+      "faultId": "receipt-missing-case-id",
+      "description": "Hàng kết quả legacy thiếu caseId.",
+      "row": {"validity": "quality-valid", "statePassed": true},
+      "expectedCode": "SUITE_RECEIPT_MISSING_CASE_ID"
+    }
+  ],
+  "buildFaults": [
+    {
+      "faultId": "fixture-id-mismatch",
+      "description": "Fixture W10 khai id khác tên tệp.",
+      "mutation": {"op": "json_set", "path": "scripts/eval/fixtures/work_acceptance/S01.json",
+                   "jsonPath": ["id"], "value": "S99"},
+      "expectedCode": "SUITE_FIXTURE_ID_MISMATCH"
+    },
+    {
+      "faultId": "source-unreadable",
+      "description": "Nguồn research-v2.json hỏng (không parse được).",
+      "mutation": {"op": "write_text", "path": "scripts/eval/benchmarks/research-v2.json",
+                   "value": "{\"cases\": ["},
+      "expectedCode": "SUITE_SOURCE_UNREADABLE"
+    },
+    {
+      "faultId": "source-missing-case",
+      "description": "Nguồn research-v2.json thiếu một ca bắt buộc.",
+      "mutation": {"op": "drop_case", "path": "scripts/eval/benchmarks/research-v2.json",
+                   "value": "simple-fact"},
+      "expectedCode": "SUITE_SOURCE_MISSING_CASE"
+    },
+    {
+      "faultId": "oracle-unmapped",
+      "description": "Fixture khai một kind oracle chưa có disposition.",
+      "mutation": {"op": "inject_rule_kind", "path": "scripts/eval/fixtures/work_acceptance/S01.json",
+                   "value": "kind-invented"},
+      "expectedCode": "SUITE_ORACLE_UNMAPPED"
+    }
+  ],
+  "treeFaults": [
+    {
+      "faultId": "fixture-missing",
+      "description": "Manifest đã commit đối chiếu cây thiếu fixture (bật kiểm hash).",
+      "mutation": {"op": "delete_file", "path": "scripts/eval/fixtures/work_acceptance/S01.json"},
+      "expectedCode": "SUITE_FIXTURE_MISSING"
+    }
+  ]
+}

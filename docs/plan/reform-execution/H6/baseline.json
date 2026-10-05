@@ -1,0 +1,31 @@
+{
+  "checkpoint": "H6",
+  "status": "verified",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "c836822 (nghiệm thu vòng chạy 29/29) + 802f51f/0419ffe (nối runtime; vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": ["metadata usage/price hiện có trên code đích"],
+    "write": ["backend/src/agentbox/agent_core/usage_ledger.py", "backend/src/agentbox/agent_core/usage_surface.py", "backend/tests/unit/test_usage_ledger.py", "backend/tests/unit/test_usage_surface.py"],
+    "forbidden": ["gọi model/route thật để lấy giá", "tự chọn số mặc định khi chưa calibration", "coi giá lạ là 0"]
+  },
+  "dependency_receipts": ["commit 8d7c0f5", "commit 04ea7da"],
+  "policy_versions": {"recordSchemaVersion": 1},
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {"id": "unit", "result": "pass", "evidence": "test_usage_ledger.py (50 hàm / 55 ca) + test_usage_surface.py (22 ca)"},
+    {"id": "probe-P4", "result": "pass", "evidence": "probes_962cd84.json P4 7/7: giá lạ None; retry/child/Research không double-count; settle→release cho con bị huỷ; thiếu trần caller → từ chối chi mới; usage muộn vẫn unsettled"},
+    {"id": "no-zero-price", "result": "pass", "evidence": "P4 + test trong test_usage_ledger.py (giá lạ là None); nghiệm thu C3 giữ snapshot None"},
+    {"id": "defaults-need-calibration", "result": "not-run", "evidence": "hoãn #6531 — cần consent tài chính; không tự chọn số mặc định"},
+    {"id": "runtime-constraints-stop", "result": "pass", "evidence": "C1–C5 trong 29/29 PASS trên c836822 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json); hết trần chặn TRƯỚC khi gọi model"}
+  ],
+  "known_unknowns": [
+    "calibration sống hoãn #6531 (consent tài chính riêng)",
+    "H6.8: route miễn phí chỉ chụp giá lúc admission; H6.9: harnessAllocationId chưa có writer trong backend/src"
+  ],
+  "rollback_ref": "đặt BOXFOX_USAGE_LEDGER về off (mặc định) — không cần gỡ file; bảng additive để nguyên",
+  "next_action": "mở lại khi có consent tài chính hoặc chạy bằng model miễn phí có kiểm soát (#6531)"
+}

@@ -1,0 +1,81 @@
+{
+  "checkpoint": "H9",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "c3bee48 (vorflux/boxfox-harness-reform)",
+  "intent_ref": null,
+  "scope": {
+    "read": [
+      "/var/tmp/w10f-seq/** (chỉ đọc, không sửa)",
+      "scripts/eval/work_acceptance_bench.py (chỉ đọc)"
+    ],
+    "write": [
+      "scripts/eval/suite_v2.py",
+      "scripts/eval/suite-v2.json",
+      "backend/tests/unit/test_suite_v2.py",
+      "scripts/eval/fixtures/suite-v2-faults.json"
+    ],
+    "forbidden": [
+      "sửa suite/oracle W10 cũ",
+      "chạy sống khi chưa consent",
+      "rollout trước evidence gate"
+    ]
+  },
+  "dependency_receipts": [
+    "commit e7a1e6f",
+    "commit ed5d771",
+    "commit c3bee48"
+  ],
+  "policy_versions": {
+    "suiteSchema": "boxfox-eval-suite/2",
+    "measurementContract": "eval-manifest-v1"
+  },
+  "machine_binding_ref": null,
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {
+      "id": "mapping-validation",
+      "result": "pass",
+      "evidence": "suite-v2.json: 62 ca / 5 họ / 4 disposition / 40 safety oracle; test_suite_v2.py 38 ca"
+    },
+    {
+      "id": "safety-oracles",
+      "result": "pass",
+      "evidence": "SAFETY_ORACLES (suite_v2.py:326) = 40 tên; disposition preserve_invariant"
+    },
+    {
+      "id": "trajectory-only",
+      "result": "pass",
+      "evidence": "disposition legacy_trajectory_only trong suite-v2.json"
+    },
+    {
+      "id": "no-w10-edit",
+      "result": "pass",
+      "evidence": "không sửa file nào trong /var/tmp/w10f-seq hay work_acceptance_bench.py"
+    },
+    {
+      "id": "offline-fixtures",
+      "result": "pass",
+      "evidence": "suite-v2-faults.json 33 lỗi (26 manifest + 2 receipt + 4 build + 1 tree); --faults 33/33 đúng mã; test ghim mọi mã validate"
+    },
+    {
+      "id": "parity-shadow",
+      "result": "pass",
+      "evidence": "--shadow /code/.plans/w10f-adjudication-working.json: 34/34 cell ánh xạ (17 ca × 2 repeat), unmapped=0, verdictsProduced=0; tệp legacy chỉ đọc"
+    },
+    {
+      "id": "live-pilot",
+      "result": "blocked",
+      "evidence": "livePilotRequiresConsent=true; status='unmeasured'; measured=false — chờ consent tài chính riêng (H10.1)"
+    }
+  ],
+  "known_unknowns": [
+    "chưa có số valid/invalid, quality/cost/latency/interruptions cho suite v2 (measured=false)",
+    "live pilot cần consent tài chính riêng — không được ghi là quyền đã có",
+    "shadow mới chạy cho W10.F; các nhóm R/Q/RV2/seeded chưa có receipt dạng cell"
+  ],
+  "rollback_ref": "gỡ 2 file mới + test; không đụng dữ liệu/W10 cũ",
+  "next_action": "H10.1 (calibration sống) chờ consent tài chính; mở rộng shadow khi có receipt dạng cell cho các nhóm khác"
+}

@@ -1434,7 +1434,52 @@ class WorkspaceExecutor:
             return await self.verify_exec(args)
         return {'is_error': True, 'error': 'W10 fixture: công cụ không thuộc lượt: ' + str(name)}
 
-    def _terminal_problem(self, command):
+    SUBSTITUTION_DEPTH_MAX = 4
+
+    @staticmethod
+    def _substitutions(command):
+        """Thân các lệnh lồng trong `$(…)` và `` `…` `` — phần shell thật sự chạy thêm.
+
+        Fixture chạy lệnh bằng `create_subprocess_shell`, đúng như box thật, nên thay thế lệnh
+        KHÔNG phải lối đi vòng: nó là cú pháp hợp lệ và sản phẩm có dùng (phép dò cô lập
+        `t=$(git rev-parse --show-toplevel …) && …`). Hàng rào phải kiểm chính phần lồng đó bằng
+        cùng bộ luật, thay vì từ chối cả lệnh (W10.M3 — S12 từng bị từ chối oan và ghi sai
+        `isolation.mode='touchset'` cho một workspace LÀ gốc git).
+        """
+        bodies, index = [], 0
+        while index < len(command):
+            char = command[index]
+            if char == '\\':
+                index += 2
+                continue
+            if char == '`':
+                end = command.find('`', index + 1)
+                if end == -1:
+                    bodies.append(command[index + 1:])
+                    break
+                bodies.append(command[index + 1:end])
+                index = end + 1
+                continue
+            if command.startswith('$(', index):
+                depth, cursor = 1, index + 2
+                while cursor < len(command) and depth:
+                    if command[cursor] == '\\':
+                        cursor += 2
+                        continue
+                    if command.startswith('$(', cursor):
+                        depth += 1
+                        cursor += 2
+                        continue
+                    if command[cursor] == ')':
+                        depth -= 1
+                    cursor += 1
+                bodies.append(command[index + 2:cursor - 1 if depth == 0 else cursor])
+                index = cursor
+                continue
+            index += 1
+        return bodies
+
+    def _terminal_problem(self, command, depth=0):
         """None nếu lệnh được chạy; ngược lại câu lý do (W10.M3).
 
         Fixture phải chạy được ĐÚNG các lệnh sản phẩm dùng trong workspace riêng (`git -C …`,
@@ -1447,10 +1492,16 @@ class WorkspaceExecutor:
         if '\n' in command or len(command) > self.TERMINAL_MAX_CHARS:
             return f'lệnh quá dài hoặc nhiều dòng (> {self.TERMINAL_MAX_CHARS} ký tự)'
         # Hàng rào phép đo KHÔNG phải sandbox bảo mật (xem `sandbox/worker.py` cho box thật), nên
-        # chặn thẳng các lối đi vòng rẻ tiền: thay thế lệnh, vỏ shell lồng, đường dẫn tương đối
-        # thoát workspace. Lệnh sản phẩm đo được (20 bundle W10) không dùng lối nào trong số này.
+        # chặn thẳng các lối đi vòng rẻ tiền: vỏ shell lồng, đường dẫn tương đối thoát workspace,
+        # và mọi lệnh nằm trong thay thế lệnh (`$(…)`/`` `…` ``) — shell chạy phần lồng thật, nên
+        # phần lồng phải qua đúng bộ luật này.
         if '`' in command or '$(' in command:
-            return 'lệnh có thay thế lệnh (`…` hoặc `$(`): fixture không diễn giải shell lồng'
+            if depth >= self.SUBSTITUTION_DEPTH_MAX:
+                return f'lệnh lồng quá sâu (> {self.SUBSTITUTION_DEPTH_MAX} lớp thay thế lệnh)'
+            for body in self._substitutions(command):
+                nested = self._terminal_problem(body, depth + 1)
+                if nested:
+                    return f'lệnh trong thay thế lệnh: {nested}'
         try:
             words = shlex.split(command)
         except ValueError as exc:
@@ -2050,6 +2101,17 @@ async def drive_session(rt, graph, work_feedback, sid, scenario, *, deadline_sec
             except Exception as exc:
                 notes.append(f'answer {card["decisionId"]}: {type(exc).__name__}: {exc}')
         live = [item for item in rt.tasks.values() if not item.done()]
+        # W10 — thẻ interview 0 câu hỏi KHÔNG BAO GIỜ trả lời được: hợp đồng
+        # `work_feedback.answer()` từ chối cả `submit` (danh sách rỗng) lẫn `decide` (không còn
+        # questionId nào), nên khi không còn task nào sống và mọi thứ đang chờ chỉ còn loại thẻ ấy
+        # thì KẾT THÚC CHỜ ngay bằng chú thích đã ghi ở trên — thay vì quay vòng tới hết hạn
+        # driver. Pilot4 S09 02/10/2026 dừng ở +517 s mà `bundle['notes']` không nói vì sao.
+        unanswerable = [card for card in interviews if not _pending_answer(card, [])]
+        waiting = [card for card in cards
+                   if card.get('kind') != 'interview' or _pending_answer(card, [])]
+        if not live and unanswerable and not waiting:
+            notes.append('interview: chỉ còn thẻ 0 câu hỏi không thể trả lời — kết thúc chờ')
+            break
         # W7.1 sau restart: card sống sót nhưng lượt main cũ đã mất theo tiến trình, nên
         # người dùng gửi một lượt mới để run đi tiếp — đúng thao tác thật sau khi khởi động lại.
         if restarted and not resumed_main and not live and not cards \

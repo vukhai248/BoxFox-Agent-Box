@@ -6,7 +6,8 @@ has a working bubblewrap). Oracle, per case and per run:
 
   * every claim it blocks on carries an evidenceRef that was really observed in that admission;
   * a true finding stays blocking; a false one is downgraded or never blocks;
-  * each numeric claim cites verify_exec/terminal_exec.
+  * each numeric claim cites verify_exec/terminal_exec — with no surviving numeric claim the numeric
+    half is N/A (`numericClaims: 0`, `numericCited: null`), never a vacuous `true`.
 
 No main model, no Build: the harness fixture supplies the artifacts. N is small and reported.
 """
@@ -91,19 +92,36 @@ CASES = [
         'expect': 'blocking',
     },
     {
+        # FU4: tiền đề cũ 'NUL trong str ném csv.Error/ValueError' đã bị chính verify_exec bác, nên ca này
+        # được đo như ca "finding khác tiền đề": finding đúng là về câu trích dẫn tài liệu, không phải loại
+        # exception. Giữ `expect: 'blocking'` và giữ tên ca để nối tiếp corpus cũ.
         'case': 'csv-error-type',
         'artifact': ('# Bàn giao: lỗi parse CSV\n\n'
                      'Kết luận: `parse_rows` ném ValueError khi gặp byte NUL, đúng như tài liệu mô tả. '
                      'Không cần sửa gì.\n'),
-        'acceptance': ['Nêu đúng exception mà parse_rows ném ra với byte NUL'],
-        'truth': "docs/source.md không nêu exception nào; Python 3.12 với str KHÔNG ném lỗi NUL "
-                 "(đo lại bằng verify_exec: 'a\\x00b' đọc được) — artifact trích 'đúng như tài liệu' là sai",
+        'acceptance': ['Đối chiếu câu "đúng như tài liệu mô tả" với docs/source.md: tài liệu có nêu '
+                       'exception nào cho byte NUL không?'],
+        'truth': "docs/source.md không nêu exception nào cho byte NUL; đọc NUL trong str không ném exception "
+                 "(verify_exec: 'a\\x00b' → ['a\\x00b']). Artifact nói 'đúng như tài liệu mô tả' là trích dẫn "
+                 "sai — ca 'finding khác tiền đề' (FU4/A5), không phải ca chốt loại exception.",
         'expect': 'blocking',
     },
     {
+        # FU1: ca đối chứng từng bị chặn 2/2 vì artifact không khai dialect/quoting/lineterminator và không
+        # kèm bằng chứng chạy được. Artifact nay khai đủ và ghi lại đúng lệnh + output đã quan sát, để
+        # reviewer đúng có thể kiểm bằng verify_exec; side remark sai vẫn là thứ không được phép chặn.
         'case': 'side-remark',
         'artifact': ('# Bàn giao: ghi CSV\n\n'
-                     'Kết luận: `writerow([""])` ghi ra `""\\r\\n`; mọi nghiệm thu đều đạt. '
+                     'Kết luận: `writerow([""])` ghi ra `""\\r\\n`; mọi nghiệm thu đều đạt.\n\n'
+                     "Khai báo ghi đầy đủ: `dialect='excel'`, `quoting=csv.QUOTE_MINIMAL`, "
+                     "`lineterminator='\\r\\n'`.\n\n"
+                     'Bằng chứng — lệnh đã chạy và output quan sát được:\n'
+                     '```\n'
+                     "$ python -c \"import csv, io; b = io.StringIO(); csv.writer(b, dialect='excel', "
+                     "quoting=csv.QUOTE_MINIMAL, lineterminator='\\r\\n').writerow(['']); "
+                     "print(repr(b.getvalue()))\"\n"
+                     "'\"\"\\r\\n'\n"
+                     '```\n\n'
                      'Ghi chú: thứ tự tiêu đề có thể gọn hơn.\n'),
         'acceptance': ['Ghi đúng chuỗi cho một ô rỗng'],
         'truth': 'verify_exec: csv.writer ghi ô rỗng thành ""\\r\\n là đúng',
@@ -129,9 +147,12 @@ def score(doc, tools, case, artifact_id=None, content_hash=None):
         return (ref in observed or ref == artifact_ref
                 or (isinstance(ref, str) and ref.startswith('verify:') and ref[7:] in verify_hashes))
     cited = all(all(known(ref) for ref in item.get('evidenceRefs') or []) for item in blocking)
-    numeric = all(not work_checks.NUMERIC_CLAIM_RE.findall(item.get('claim') or '')
-                  or any(ref in {event.get('id') for event in receipts} for ref in item.get('evidenceRefs') or [])
-                  for item in blocking)
+    # FU3: nửa numeric chỉ được tính khi CÓ ít nhất một claim số còn sống. Không có claim số ⇒ N/A
+    # (`numericCited: null`), không phải `true` rỗng; và nửa đó không được coi là đã đạt.
+    numeric_claims = [item for item in blocking
+                      if work_checks.NUMERIC_CLAIM_RE.findall(item.get('claim') or '')]
+    numeric = (all(any(ref in {event.get('id') for event in receipts} for ref in item.get('evidenceRefs') or [])
+                   for item in numeric_claims) if numeric_claims else None)
     if case['expect'] == 'blocking':
         behaviour = doc['status'] == 'revise' and bool(blocking)
     else:
@@ -140,9 +161,11 @@ def score(doc, tools, case, artifact_id=None, content_hash=None):
         behaviour = not blocking
     return {
         'status': doc['status'], 'findings': len(findings), 'blocking': len(blocking),
-        'downgraded': downgraded, 'cited': cited, 'numericCited': numeric,
-        'verifyExecCalls': len(receipts), 'oracle': bool(cited and numeric and behaviour),
-        'behaviour': behaviour, 'answer': (doc.get('findings') or '')[-1500:],
+        'downgraded': downgraded, 'cited': cited, 'numericClaims': len(numeric_claims),
+        'numericCited': numeric, 'verifyExecCalls': len(receipts),
+        'oracle': bool(cited and numeric is not False and behaviour),
+        'behaviour': behaviour, 'proseWords': work_checks.prose_words(doc.get('findings') or ''),
+        'answer': (doc.get('findings') or '')[-1500:],
     }
 
 
@@ -238,7 +261,8 @@ async def main(args):
             (output / 'results.json').write_bytes(
                 (json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
             print(json.dumps({k: row.get(k) for k in ('case', 'attempt', 'status', 'blocking', 'downgraded',
-                                                      'verifyExecCalls', 'oracle', 'latencySeconds', 'error')},
+                                                      'verifyExecCalls', 'numericClaims', 'numericCited',
+                                                      'proseWords', 'oracle', 'latencySeconds', 'error')},
                              ensure_ascii=False), flush=True)
             await rt.stop(sid)
             store.db.close()
@@ -249,7 +273,14 @@ async def main(args):
                          for item in chosen},
                'blockingTotal': sum(row.get('blocking') or 0 for row in rows),
                'downgradedTotal': sum(len(row.get('downgraded') or []) for row in rows),
-               'verifyExecCalls': sum(row.get('verifyExecCalls') or 0 for row in rows)}
+               'verifyExecCalls': sum(row.get('verifyExecCalls') or 0 for row in rows),
+               'numericClaims': sum(row.get('numericClaims') or 0 for row in rows),
+               'numericCitedRows': sum(1 for row in rows if row.get('numericCited') is True),
+               'numericNARows': sum(1 for row in rows
+                                     if 'numericCited' in row and row['numericCited'] is None),
+               'proseWordsMax': max((row.get('proseWords') or 0 for row in rows), default=0),
+               'proseWordsOverCap': sum(1 for row in rows
+                                        if (row.get('proseWords') or 0) > work_checks.PROSE_WORD_CAP)}
     (output / 'summary.json').write_bytes((json.dumps(summary, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
     print(json.dumps(summary, ensure_ascii=False), flush=True)
 
@@ -276,9 +307,12 @@ def rescore(output):
     (output / 'results.json').write_bytes((json.dumps(rows, ensure_ascii=False, indent=2) + '\n').encode('utf8'))
     for row in rows:
         print(json.dumps({k: row.get(k) for k in ('case', 'attempt', 'status', 'blocking', 'cited',
-                                                  'numericCited', 'downgraded', 'verifyExecCalls', 'oracle')},
+                                                  'numericClaims', 'numericCited', 'downgraded',
+                                                  'verifyExecCalls', 'proseWords', 'oracle')},
                          ensure_ascii=False))
-    print(json.dumps({'rows': len(rows), 'oracle': sum(1 for row in rows if row.get('oracle'))}, ensure_ascii=False))
+    print(json.dumps({'rows': len(rows), 'oracle': sum(1 for row in rows if row.get('oracle')),
+                      'proseWordsMax': max((row.get('proseWords') or 0 for row in rows), default=0)},
+                     ensure_ascii=False))
 
 
 if __name__ == '__main__':

@@ -1,10 +1,33 @@
 """Only tools with an executable v0 adapter are advertised."""
 
+
+from . import feature_switches
 from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
 # `roles` → `tool_contracts` → `roles` sẽ làm hỏng lúc nạp mô-đun. Tên là hợp đồng, không phải bản sao.
-PEER_TOOLS = frozenset({'peer_read', 'await_children'})
+# H11 (việc 2): `child_resume` — gọi lại con đã bị cắt vì hạn/ngân sách, giữ nguyên ngữ cảnh cũ —
+# đi cùng cổng với mesh (công tắc TẮT thì cả ba không được quảng cáo và bị từ chối khi gọi).
+PEER_TOOLS = frozenset({'peer_read', 'await_children', 'child_resume'})
+
+# H3 — bốn công cụ bề mặt task. Cùng lý do như `PEER_TOOLS`: định nghĩa tại đây để `schemas_for`
+# không phải nhập `task_surface` (module đó nhập `research_runtime`). Công tắc đọc thẳng từ môi
+# trường; `task_surface.TASK_TOOLS` phải khớp tập này (có test ghim).
+TASK_SURFACE_TOOLS = frozenset({'task_list', 'task_get', 'task_send', 'task_abandon'})
+TASK_SURFACE_SWITCH = 'BOXFOX_TASK_SURFACE'
+CONTROLLER_JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'})
+
+
+def controller_jobs_enabled():
+    """Bề mặt job controller: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    return feature_switches.member_switch('BOXFOX_CONTROLLER_JOBS')
+
+
+def task_surface_enabled(env=None):
+    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định TẮT (bật dần từng công tắc)."""
+    if env is not None:
+        return str(env or '').strip().lower() == 'on'
+    return feature_switches.member_switch(TASK_SURFACE_SWITCH)
 
 
 def tool(name, description, properties, required=()):
@@ -278,7 +301,9 @@ SCHEMAS = [
          '`peer:<sessionId>`, `role:<role>` or a bare role name; leave it empty to wait for the peers of your '
          'own turn. Delivered summaries are bounded and `truncated` says when. There is a 300 s safety net '
          '(`timeoutSeconds` can only shorten it): on `timeout` you still get `pending` and must continue with '
-         'the data you have instead of retrying blindly.',
+         'the data you have instead of retrying blindly. A `pending` row says whether the peer is only slow '
+         'or was CUT by a ceiling (`timedOut`/`partial`/`resumable`), and waiting again after several timeouts '
+         'in the same turn is refused (`PEER_WAIT_CAPPED`) — call a cut child back with `child_resume` instead.',
          {'targets': {'type': 'array', 'items': STRING},
           'mode': {'type': 'string', 'enum': ['all', 'any']},
           'timeoutSeconds': {'type': 'integer'}},
@@ -288,11 +313,35 @@ SCHEMAS = [
          'orchestrator, one of your own children. You get that session events — which tools it ran, what it '
          'answered, which codes it failed with — never its system prompt or the parent transcript. Use it to '
          'avoid repeating a peer\'s work and to wait for the right thing. Long strings are cut; `truncated` says '
-         'so. Read the newest rows by passing the `seq` of the last event you already saw as `afterSeq`.',
+         'so. Read the newest rows by passing the `seq` of the last event you already saw as `afterSeq`. '
+         'Reading the same window again with no new events is refused (`PEER_READ_CAPPED`) after a few tries: '
+         'polling a peer that has not moved wastes the turn — decide with what you have.',
          {'sessionId': STRING,
           'afterSeq': {'type': 'integer'},
           'limit': {'type': 'integer'}},
          ['sessionId']),
+    tool('child_resume',
+         'Call a child that was CUT OFF by a ceiling back to work — it continues in its own '
+         'transcript, so nothing it already read is lost. Use it when `await_children` or a '
+         'delivery reports `timedOut`/`partial` for one of your children and you still need that '
+         'result: the harness refuses a child that is still running, one that finished normally, '
+         'or one whose failure was not a ceiling. You must pass `note` — your decision and what '
+         'the child must continue with — because calling a child back is your judgement, not an '
+         'automatic retry. The call returns the previous outcome plus the fresh result when '
+         '`wait` is true (default).',
+         {'sessionId': STRING,
+          'note': {'type': 'string',
+                   'description': 'Your decision and what the child must continue with; required. '
+                                  'Capped at 500 characters.'},
+          'wait': {'type': 'boolean',
+                   'description': 'false = reopen the child and return at once with its sessionId; '
+                                  'read the result later with `await_children`. Default true: this '
+                                  'call blocks until the child answers.'},
+          'deliverTo': {'type': 'array', 'items': {'type': 'string'},
+                        'description': 'Who the child hands its result to when it finishes (roles '
+                                       'or session ids). Empty = the parent only. Only meaningful '
+                                       'with wait=false.'}},
+         ['sessionId', 'note']),
     tool('journal_write',
          'Write ONE durable line into this session journal (task, step, decision, evidence, fact, blocker). '
          'Use it for the few facts a later turn must not lose: what you are doing (kind="task", status in '
@@ -329,7 +378,8 @@ SCHEMAS = [
          'a child answer without evidence is not a result. Pass `wait=false` to start several children '
          'and keep working: this call returns at once, the child delivers its result to you '
          '(`deliverTo`), and you read it with `await_children`. The default `wait=true` blocks this '
-         'call until the child answers.',
+         'call until the child answers. A child that a ceiling cut short comes back `timedOut`/`partial` '
+         'and can be called back with `child_resume` — it continues in its own transcript.',
          {'role': {'type': 'string',
                    'enum': ['explore', 'plan', 'plan-review', 'design', 'build', 'debug', 'review', 'simplify', 'testing', 'research', 'research-review'],
                    'description': 'Specialist id. Only `research` can look things up outside the workspace: it holds '
@@ -376,6 +426,28 @@ SCHEMAS = [
                                           'version': {'type': 'integer'},
                                           'mode': {'type': 'string',
                                                    'enum': ['evidence', 'critique', 'coverage']}}},
+          'task': {'type': 'object',
+                   'description': 'Only when the task surface is on (BOXFOX_TASK_SURFACE=on) and this turn is the '
+                                  'MAIN session: the boxfox-task-contract/1 object for this piece of work. The '
+                                  'runtime records the task BEFORE the child is born, so the run task store owns '
+                                  'it (keys: schema, taskId, invocationId, role - which must equal `role` - , goal, '
+                                  'intent, mode, inputs, scope, deliverable, dependsOn, budget). `invocationId` is '
+                                  'the idempotency key: the same call again does not create a second task. Leaving '
+                                  '`task` out keeps the legacy call - the child is still created, but nothing is '
+                                  'written to the task store.'},
+          'runId': {'type': 'string',
+                    'description': 'Which Work Graph run the task belongs to. Default: the run already bound to '
+                                   'this turn; the call is refused with TASK_SURFACE_NO_RUN when neither exists.'},
+          'maxSteps': {'type': 'integer',
+                       'description': 'H11: a LOWER step ceiling for this child than the engine default. You can '
+                                      'only tighten: a number above the child ceiling is clamped (with a notice), '
+                                      'never raised. Use it when you know the job is small and a runaway child '
+                                      'would waste the turn.'},
+          'deadlineSeconds': {'type': 'integer',
+                              'description': 'H11: a LOWER wall-clock ceiling (seconds) for this child than the '
+                                             'engine default. Tighten only: a number above the child ceiling is '
+                                             'clamped with a notice. A child that hits either ceiling is marked '
+                                             '`timedOut`/`partial` and can be called back with `child_resume`.'},
           'wait': {'type': 'boolean',
                    'description': 'false = start the child and return at once with its sessionId; you read the '
                                   'result later with `await_children` (or it is delivered to you). Default true: '
@@ -400,7 +472,10 @@ SCHEMAS = [
          'the version it revises (the harness tells you the number to write in the header block it generates). '
          'Pass `identity` (e.g. "billing-plan", or "subplans/api" for a nested folder; it wins over `slug`) when you '
          'know which plan group this belongs to, and `relatesTo` ("none", "<identity>", or "<identity>@vN") when the new '
-         'plan is a deliberate fork; without them the harness decides by slug similarity. Pass '
+         'plan is a deliberate fork; without them the harness decides by slug similarity. '
+         'Pass `directory` (e.g. "tao-ui" or "designs/login") when the owner names the folder the plan must live '
+         'in: the file lands at .plans/<directory>/vN-slug.md and later versions of the same group continue in that '
+         'folder even without the argument. Pass '
          '`researchDependencies` for the exact dossier versions that justify this plan; a newer dossier '
          'marks the plan stale and blocks approval until a revised plan is reviewed. '
          'Next step is mandatory: delegate `plan-review` to critique the file you just wrote (tell it the exact path '
@@ -408,6 +483,12 @@ SCHEMAS = [
          'verdict with `plan_verify`. Until a passing critique exists for this exact version, `request_approval` for '
          'the plan is refused.',
          {'slug': STRING, 'markdown': STRING, 'title': STRING, 'identity': STRING, 'relatesTo': STRING,
+          'directory': {'type': 'string', 'description':
+                        'Folder inside the plan room for this plan group, e.g. "tao-ui" → '
+                        '.plans/tao-ui/vN-slug.md, or "designs/login" → .plans/designs/login/vN-slug.md '
+                        '(folders may nest). Optional (default: the room root). Every spelling is clamped '
+                        'into .plans/: prefixes "plans"/".plans" are stripped and ".." or an invalid segment '
+                        'is refused with PLAN_EVAL_REJECTED — a plan never lands outside .plans/.'},
           'runId': STRING, 'briefRevision': {'type': 'integer'},
           'traceability': {'type': 'array', 'items': {'type': 'object'}},
           'researchDependencies': {'type': 'array', 'items': {'type': 'object', 'properties': {
@@ -701,7 +782,9 @@ SCHEMAS = [
          'set_repair sets the bounded repair policy (maxRepairs <= maxRounds-1, debug=never|when_unclassified|'
          'always_first, revision, invocationId); cleanup_worktrees removes the clean worktrees of a closed run. '
          'resolve clears the recorded input conflicts of nodeIds (optional stage) once main has settled the '
-         'assignment question; unlike update it keeps the current draft, its artifact and its history.',
+         'assignment question, and clears a refused-check barrier (a stage whose every check was superseded '
+         'because the tree moved), returning that stage to pending so work_run phase=execute can produce a '
+         'fresh draft on the current code; unlike update it keeps the current draft, its artifact and its history.',
          {'action': {'type': 'string', 'enum': ['create', 'add', 'update', 'remove', 'status', 'validate',
                                                 'verify', 'submit', 'retry', 'cancel', 'grant', 'revoke', 'assign_handoff', 'revoke_handoff',
                                                 'set_repair', 'cleanup_worktrees', 'resolve']},
@@ -793,6 +876,56 @@ SCHEMAS = [
          'lập. Khối bàn giao nói rõ phần chủ nhà ĐÃ xác nhận và phần agent GIẢ ĐỊNH.',
          {'summary': STRING, 'labels': {'type': 'array', 'items': STRING},
           'nextSteps': {'type': 'array', 'items': STRING}, 'designId': STRING}, ['summary']),
+    # H4 — admission do delegate hiện hữu, không nhận capability/handle của model.
+    tool('start_job', 'Start an explicitly controller-owned model specialist using canonical delegate admission. '
+         'Survives the parent turn, not process restart. Process handles are currently unsupported. '
+         'Duplicate invocationId returns the existing receipt; no second child.',
+         {'kind': {'type': 'string', 'enum': ['model']}, 'ownership': {'type': 'string', 'enum': ['controller']},
+          'role': STRING, 'goal': STRING, 'invocationId': STRING, 'context': STRING, 'expect': STRING},
+         ['kind', 'ownership', 'role', 'goal', 'invocationId']),
+    tool('get_job', 'Read an owned durable job and canonical child receipts; cursor pages events. '
+         'A successful child lifecycle is not deliverable acceptance.',
+         {'jobId': STRING, 'cursor': {'type': 'integer'}}, ['jobId']),
+    tool('subscribe_job', 'Subscribe the admitted owner to terminal job results, with a durable cursor. '
+         'Notifications only wake event waiters, never start a model turn.',
+         {'jobId': STRING, 'predicate': {'type': 'string', 'enum': ['result']},
+          'afterSeq': {'type': 'integer'}}, ['jobId']),
+    tool('wait_jobs', 'Park on owned jobs without model polling. Closed jobs return immediately. '
+         'Owner wake lock prevents overlapping waits; heartbeat/log/progress never wake the model.',
+         {'jobIds': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 100},
+          'mode': {'type': 'string', 'enum': ['any', 'all']}, 'afterSeq': {'type': 'integer'},
+          'timeoutSeconds': {'type': 'number'}}, ['jobIds']),
+    tool('cancel_job', 'Durably request cancel with an epoch/receipt, then cancel the canonical child. '
+         'Stop/revoke wins over late completion; receipts remain readable when starts are disabled.',
+         {'jobId': STRING, 'expectedRevision': {'type': 'integer'}, 'reason': STRING},
+         ['jobId', 'expectedRevision', 'reason']),
+    # H3 — bề mặt task (plan v1 §4). Bốn công cụ chỉ được QUẢNG CÁO khi `BOXFOX_TASK_SURFACE=on`
+    # (cổng ở `schemas_for` + `turn_profile_base` + `dispatch`), nên phiên cũ không thấy gì mới.
+    tool('task_list',
+         'Liệt kê task của run hiện tại theo trang: trạng thái, attempt, số message chưa đọc và ref '
+         'kết quả. Phiên con chỉ thấy task gắn với chính nó. Không trả hidden reasoning hay toàn '
+         'transcript.',
+         {'runId': STRING, 'status': STRING, 'cursor': STRING, 'limit': {'type': 'integer'}},
+         []),
+    tool('task_get',
+         'Đọc MỘT task: hợp đồng hiệu lực, các attempt, trạng thái, biên nhận đóng child và message '
+         'đã gửi. Dùng `taskId` (alias trong run) hoặc `taskKey` (khoá backend).',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING}, []),
+    tool('task_send',
+         'Gửi một message bền vững vào task: kind=information|clarification|scope_proposal. Ack nghĩa '
+         'là ĐÃ NHẬN, không phải con đã đọc; scope_proposal KHÔNG tự tăng quyền hay đổi approval. '
+         'Trùng messageId với payload khác bị từ chối.',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING, 'messageId': STRING,
+          'invocationId': STRING, 'expectedRevision': {'type': 'integer'}, 'kind': STRING,
+          'body': STRING, 'inputRefs': {'type': 'array', 'items': STRING}},
+         ['messageId', 'invocationId', 'expectedRevision', 'kind', 'body']),
+    tool('task_abandon',
+         'Kết thúc NHU CẦU với một task (khác với dừng thực thi): đánh dấu main không còn tiêu thụ mục '
+         'tiêu. Nếu còn attempt đang mở thì yêu cầu huỷ qua đúng đường cancel_child và trả biên nhận. '
+         'Không xoá artifact/check/usage và không hoàn tiền đã dùng.',
+         {'taskId': STRING, 'taskKey': STRING, 'runId': STRING, 'invocationId': STRING,
+          'expectedRevision': {'type': 'integer'}, 'reason': STRING},
+         ['invocationId', 'expectedRevision', 'reason']),
 ]
 
 
@@ -818,13 +951,25 @@ def replay_class(name, args=None):
     return REPLAY.get(name, 'unsafe')
 
 
-def schemas_for(names):
+def schemas_for(names, *, job_receipts=False, research_receipts=False):
     """Lược đồ của đúng những công cụ được yêu cầu.
 
     T13 — `BOXFOX_PEER_MESH=off` là công tắc GIẾT của cả mesh, nên nó chặn ở đây nữa: một phiên
     được tạo lúc mesh còn bật rồi công tắc tắt giữa chừng cũng không được nhận lược đồ của hai
     công cụ peer. Kiểm ở tầng thấp nhất là kiểm không thể quên.
+    H3 — cùng khuôn cho bề mặt task: `BOXFOX_TASK_SURFACE=off` (mặc định) gỡ bốn công cụ `task_*`.
     """
     if not peer_mesh_enabled():
         names = set(names) - PEER_TOOLS
-    return [s for s in SCHEMAS if s['function']['name'] in names]
+    if not task_surface_enabled():
+        names = set(names) - TASK_SURFACE_TOOLS
+    if not controller_jobs_enabled():
+        names = set(names) - ({'start_job'} if job_receipts else CONTROLLER_JOB_TOOLS)
+    # Nạp muộn: gateway tái dùng research_runtime, tránh vòng nhập registry/runtime.
+    from . import research_gateway
+    gateway_names = research_gateway.GATEWAY_TOOLS | {research_gateway.PUBLISH_TOOL}
+    if not research_gateway.enabled():
+        readable = {'research_job_get', 'research_job_result'} if research_receipts else set()
+        names = set(names) - (gateway_names - readable)
+    schemas = SCHEMAS + research_gateway.tool_schemas()
+    return [s for s in schemas if s['function']['name'] in names]

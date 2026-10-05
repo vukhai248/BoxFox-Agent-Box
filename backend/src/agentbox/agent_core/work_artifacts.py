@@ -64,6 +64,16 @@ class Artifacts:
                             (aid, run['runId'], run['sessionId'], json.dumps(meta, ensure_ascii=False), text))
         return meta
 
+    def update(self, meta):
+        """W10: ghim lại metadata tại chỗ (nội dung bất biến; chỉ binding được phép đổi).
+
+        Chỉ dùng cho `codeRebound` — ghim lại bản nháp vào cây hiện tại khi mã chỉ đổi ngoài
+        phạm vi nút. Nội dung (`content`) và `contentHash` không bao giờ đổi ở đây.
+        """
+        with self.db:
+            self.db.execute('UPDATE work_artifacts SET metadata=? WHERE id=? AND run_id=?',
+                            (json.dumps(meta, ensure_ascii=False), meta['artifactId'], meta['runId']))
+
     def get(self, run_id, aid):
         row = self.db.execute('SELECT * FROM work_artifacts WHERE id=? AND run_id=?', (aid, run_id)).fetchone()
         if row is None:

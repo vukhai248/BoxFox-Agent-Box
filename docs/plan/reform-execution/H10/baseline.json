@@ -1,0 +1,77 @@
+{
+  "checkpoint": "H10",
+  "status": "partial",
+  "approved_plan_ref": "plan_id 1257 (Plan panel, 2026-10-03)",
+  "code_baseline": "346da06",
+  "code_tested": "f7e4a9b (head; vorflux/boxfox-harness-reform) — nghiệm thu vòng chạy H4–H8 trên c836822",
+  "intent_ref": "/code/.plans/reform-execution-runbook.md §II.2–§II.6",
+  "scope": {
+    "read": [
+      "docs/plan/reform-status.md",
+      "/code/.plans/v1-boxfox-harness-reform.md",
+      "/code/.plans/reform-execution-runbook.md",
+      "/code/.plans/reform-backlog-disposition.md"
+    ],
+    "write": [
+      "docs/plan/reform-execution/ (H0–H10 + README)",
+      "artifact drill: /code/.generated_artifacts/h3h8/drill/"
+    ],
+    "forbidden": [
+      "sửa src/test để làm đẹp drill",
+      "đóng mục defer của roadmap",
+      "ghi financial_consent_ref khi chưa có consent"
+    ]
+  },
+  "dependency_receipts": [
+    "H0–H9 (README mỗi checkpoint)",
+    "commit c3bee48",
+    "commit 802f51f",
+    "commit c836822",
+    "commit b37dafb",
+    "commit 82550cc",
+    "Test Report 956 (v3, PASSED)"
+  ],
+  "policy_versions": {
+    "taskRecordSchemaVersion": 1,
+    "evalManifest": "eval-manifest-v1"
+  },
+  "machine_binding_ref": "sandbox Linux, worktree /code/.worktrees/boxfox-harness-reform",
+  "resource_grant_refs": [],
+  "financial_consent_ref": null,
+  "acceptance_results": [
+    {
+      "id": "handoff-docs",
+      "result": "pass",
+      "evidence": "docs/plan/reform-execution/: README + H0–H10, mỗi checkpoint đủ 5 file"
+    },
+    {
+      "id": "rollback-drill",
+      "result": "pass",
+      "evidence": "/code/.generated_artifacts/h3h8/drill/rollback_drill_962cd84.log: 11/11 check (công tắc tắt không tạo bảng harness_*, dispatch từ chối TASK_SURFACE_OFF, dữ liệu đã ghi còn nguyên, không replay mutation, schema cũ + user_version không đổi, không grant/verdict mới)"
+    },
+    {
+      "id": "full-unit-suite",
+      "result": "pass-with-known-baseline-failures",
+      "evidence": "backend/tests/unit: 962cd84 → 3 failed, 4060 passed, 12 skipped in 1131.01s; c836822 (sau nối H4–H8) → 3 failed, 4277 passed, 12 skipped in 1273.91s — 3 lỗi đỏ y hệt baseline 346da06"
+    },
+    {
+      "id": "runtime-acceptance-h4-h8",
+      "result": "pass",
+      "evidence": "official head c836822, offline: 29/29 PASS — parity P1/P2 + H4 A1–A9, H5 B1–B5, H6 C1–C5, H7 D1–D4, H8 E1–E4 (/code/.generated_artifacts/h4h8/runs/official-c836822/summary.json)"
+    },
+    {
+      "id": "plan-vs-code-review",
+      "result": "pass",
+      "evidence": "3 review theo miền rủi ro (H3, H4–H6, H7–H8) + simplify + 1 review toàn snapshot trên ed5d771/c3bee48 (không phát hiện chặn; should-fix tài liệu đã sửa; risk 2/10); tiếp nối bằng việc 2026-10-04 (79f024b, c6c88bb, fcc6819, b37dafb, 82550cc, f7e4a9b)"
+    }
+  ],
+  "known_unknowns": [
+    "H9 live pilot + H10.1 calibration sống hoãn #6531 (consent tài chính riêng)",
+    "F5/H3.11 attemptSeq theo phiên — chờ chủ nhà quyết",
+    "W10.F không có aggregate cuối (31/34 cell, dừng theo lệnh chủ nhà)",
+    "drill rollback chưa chạy trên box thật với phiên đang chạy",
+    "phiên thật dài ngày cho H4–H8 chưa chạy (mới có nghiệm thu offline 29/29, công tắc mặc định off)"
+  ],
+  "rollback_ref": "unset các công tắc H2–H8 (mặc định off) → hành vi legacy; bảng mới additive, không migration phá compatibility",
+  "next_action": "chủ nhà quyết: retarget PR #3 về main sau khi nhánh khảo sát merge; H9 live pilot/H10.1 khi có consent tài chính (#6531)"
+}

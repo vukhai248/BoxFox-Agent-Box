@@ -86,11 +86,14 @@ def notices(store, sid, code=None):
 # --- con số cấu hình (một nguồn duy nhất) -------------------------------------------------------
 
 def test_the_deadline_numbers_are_the_measured_ones():
-    # #6457 (03/10/2026): chủ nhà chốt "rất lớn nhưng vẫn có trần" — phiên 1800 s (trần 7200),
-    # con 3600 s. Số cũ 600/1200/900 ghi ở W8.A4.5.N lượt 15 (con `debug` hết bước giữa chừng).
-    assert limits.DEADLINE_DEFAULT_SECONDS == 1800
+    # #6546 (04/10/2026): chủ nhà chốt nâng trần lên "1k–1k5 bước và 7200 s, tương tự vorflux" —
+    # phiên 1000 bước (trần 1500) / 7200 s, con 1000 bước / 7200 s. Số cũ 1800/3600 ghi ở #6457
+    # (03/10/2026); trước nữa là 600/1200/900 ở W8.A4.5.N lượt 15 (con `debug` hết bước giữa chừng).
+    assert limits.MAX_STEPS_DEFAULT == 1000 and limits.MAX_STEPS_MAX == 1500
+    assert limits.DEADLINE_DEFAULT_SECONDS == 7200
     assert limits.DEADLINE_MAX_SECONDS == 7200
-    assert limits.CHILD_DEADLINE_SECONDS == 3600
+    assert limits.CHILD_MAX_STEPS == 1000
+    assert limits.CHILD_DEADLINE_SECONDS == 7200
     assert limits.PLAN_TURN_EXTENSION_SECONDS == 420 and limits.PLAN_TURN_EXTENSIONS_MAX == 1
     assert limits.TURN_EXTENDED_CODE == 'TURN_EXTENDED'
     assert limits.DEADLINE_MIN_SECONDS == 5, 'sàn cũ giữ nguyên: nới không được phá nó'
@@ -225,9 +228,9 @@ def test_a_partial_turn_is_told_apart_from_a_finished_one(tmp_path):
 def test_the_partial_turn_is_closed_in_the_contract_order(tmp_path):
     """Thứ tự chốt lượt dở không đổi: notice bền mang mã lý do → `turn_end` (partial) → `finish`.
 
-    Notice là bản DUY NHẤT sống qua `store.save` của lượt sau (`partial_turn` đọc chính nó), nên nó
+    Notice là bản bền mang mã lý do cho các bộ đọc notice (giao diện, `diagnosed_turn`), nên nó
     đi trước; `finish` là hàng đóng lượt và luôn là hàng cuối — và từ vòng 25 nó mang `partial` +
-    `code`, đúng như `turn_end` đã nói.
+    `code`, đúng như `turn_end` đã nói (H11: `partial_turn` đọc chính hàng `finish` cuối ấy).
     """
 
     async def run():

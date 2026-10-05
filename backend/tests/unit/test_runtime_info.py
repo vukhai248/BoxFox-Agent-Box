@@ -10,16 +10,21 @@ Không đường nào nới ra: nếu nới được thì khối "Tool access" t
 import asyncio
 import inspect
 
+import pytest
+
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
+from switch_isolation import isolate_default
 
 from agentbox.agent_core import failures, limits
 from agentbox.agent_core import web as web_module
 from agentbox.agent_core import runtime as runtime_module
 from agentbox.agent_core import tool_groups as tool_groups_module
+from agentbox.agent_core import research_gateway
 from agentbox.agent_core import (research_profiles, research_quality, research_runtime,
                                  source_tiers)
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
+from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, CONTROLLER_JOB_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
@@ -120,7 +125,7 @@ def test_a_missing_or_non_list_field_keeps_the_role_default(tmp_path):
     store.close()
 
 
-def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
+def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatch):
     """Đường thật của một lượt: bộ đã thu hẹp là bộ được gửi cho model.
 
     Config đúng mà lượt vẫn gửi bộ đầy đủ thì luật thu hẹp chỉ là hình thức — đây là
@@ -138,24 +143,31 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path):
         store.close()
         return client.offered[-1]
 
+    for switch in ('BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS', 'BOXFOX_RESEARCH_GATEWAY'):
+        isolate_default(monkeypatch, switch)
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
     assert narrowed == ['file_read']
     full = asyncio.run(run('full.db', {}))
-    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS), 'thiếu trường thì lượt vẫn thấy đủ 38 công cụ'
+    # Tắt mặc định cả ba bề mặt mới; bật task không tự bật job/Research.
+    other_off = CONTROLLER_JOB_TOOLS | research_gateway.GATEWAY_TOOLS
+    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - TASK_SURFACE_TOOLS - other_off)
+    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+    switched = asyncio.run(run('switch.db', {}))
+    assert sorted(switched) == sorted(ORCHESTRATOR_TOOLS - other_off)
 
 
-def test_the_twelve_groups_cover_the_orchestrator_exactly():
+def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     groups = tool_groups_module.TOOL_GROUPS
     assert [g['key'] for g in groups] == ['repositoryReading', 'skills', 'filesTerminal',
                                           'screenBrowser', 'webResearch', 'delegationPlans',
                                           'researchLedger', 'researchDossiers', 'peerMesh',
-                                          'workGraph', 'questionsApprovals'], \
-        'đúng thứ tự bảng Nút vặn của runtime (vòng 27 đợt 3–8 chèn hai nhóm research NGAY SAU delegationPlans)'
+                                          'workGraph', 'questionsApprovals', 'researchGateway',
+                                          'controllerJobs', 'taskSurface'], \
+        'đúng thứ tự bảng Nút vặn của runtime'
     assert all(set(g) == {'key', 'tools', 'alwaysOn'} for g in groups)
     assert all(g['tools'] for g in groups)
     union = [tool for g in groups for tool in g['tools']]
-    # W6.1.3: `verify_exec` vào nhóm workGraph (46 → 47), hợp vẫn bằng bộ orchestrator.
-    assert len(union) == len(set(union)) == 47, 'mười hai nhóm không chồng nhau'
+    assert len(union) == len(set(union)) == 61, 'mười bốn nhóm không chồng nhau'
     assert set(union) == set(ORCHESTRATOR_TOOLS)
 
     assert [g['key'] for g in groups if g['alwaysOn']] == ['questionsApprovals']
@@ -163,11 +175,11 @@ def test_the_twelve_groups_cover_the_orchestrator_exactly():
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
 
-def test_the_route_answers_the_same_twelve_groups(tmp_path):
+def test_the_route_answers_the_same_fourteen_groups(tmp_path):
     info = runtime_info(tmp_path)
     assert info['toolGroups'] == tool_groups_module.tool_groups()
     assert info['tools'] == sorted(ORCHESTRATOR_TOOLS)
-    assert len(info['tools']) == 47
+    assert len(info['tools']) == 61
 
 
 def test_every_role_row_equals_the_roles_definition(tmp_path):
@@ -361,6 +373,7 @@ def test_a_mis_set_reading_switch_keeps_the_default_and_says_so_once(tmp_path, m
     assert 'auto' in notices[0]['message']
 
     # Route web gọi đúng chỗ này: một máy đặt sai biến phải nói ra khi phiên thật sự đọc nguồn.
-    source = inspect.getsource(runtime_module.HarnessRuntime.dispatch)
+    assert 'self._dispatch(' in inspect.getsource(runtime_module.HarnessRuntime.dispatch)
+    source = inspect.getsource(runtime_module.HarnessRuntime._dispatch)
     assert 'self.web_switch_notices(sid)' in source
     store.close()

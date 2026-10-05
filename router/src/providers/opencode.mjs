@@ -34,12 +34,21 @@
 // items, and move tool-result images into their own user turn.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { EFFORT_LEVELS, modelRecord, modelThinking, normalizeFinishReason, parseJson, parseRetryAfter, providerError, sseEvents, thinkingFromProviderPayload } from './common.mjs';
+import { EFFORT_LEVELS, jsonOrProviderError, modelRecord, modelThinking, normalizeFinishReason, parseJson, parseRetryAfter, providerError, sseEvents, thinkingFromProviderPayload } from './common.mjs';
 import { opencodeCapabilityFor } from './opencode-capabilities.mjs';
-import { priceFromOpenRouter } from '../pricing.mjs';
+import { documentedZenPrice, priceFromOpenRouter } from '../pricing.mjs';
 import { RouterError } from '../errors.mjs';
 
 const BASE_URL = 'https://opencode.ai';
+
+/**
+ * Giá Zen công bố, kèm nguồn `documented`; id lạ hoặc có bậc context trả null.
+ * Giữ chữ ký hook chung với DeepSeek; Zen không đổi giá theo giờ nên không dùng `at`.
+ */
+export function documentedPricing(model, at = new Date()) {
+  const price = documentedZenPrice(typeof model === 'string' ? model : model?.id);
+  return price ? { ...price, source: 'documented' } : null;
+}
 
 /** The CLI user agent the free tier accepts. 9Router pins the same shape; the gate reads the version. */
 export const OPENCODE_UA = 'opencode/1.18.31';
@@ -637,6 +646,7 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
   const payload = thinkingFromProviderPayload(item);
   const published = payload.thinkingType === 'none' ? null : payload;
   const publishedPrice = item?.pricing && typeof item.pricing === 'object' ? priceFromOpenRouter(item.pricing) : null;
+  const pricing = publishedPrice ? { ...publishedPrice, source: 'ping' } : documentedPricing(id);
   const curatedThinking = curated && Array.isArray(curated.thinkingLevels) && curated.thinkingLevels.length
     ? { thinkingType: curated.thinkingType, thinkingLevels: curated.thinkingLevels, defaultThinking: curated.defaultThinking ?? null }
     : null;
@@ -657,8 +667,8 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
   const record = modelRecord(id, payloadName || curated?.name || id, capabilities, chosen);
   return {
     ...record,
-    // Giá chỉ có mặt khi payload công bố và parse được; nhãn `ping` đi cùng dữ liệu.
-    ...(publishedPrice ? { pricing: { ...publishedPrice, source: 'ping' } } : {}),
+    // Giá payload parse được luôn thắng bảng tài liệu; nhãn đi cùng đúng dữ liệu.
+    ...(pricing ? { pricing } : {}),
     source: 'live',
     stale: false,
     // Chỉ id `-free` mới trả lời khi không có credential (đo 2026-09-21).
@@ -671,7 +681,7 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
       name: payloadName ? 'live' : curated?.name ? 'documented' : 'unknown',
       thinking: thinkingSource,
       contextWindow: record.contextWindowSource || (payload.contextWindow ? 'reported' : 'unknown'),
-      pricing: publishedPrice ? 'ping' : 'unknown',
+      pricing: pricing?.source || 'unknown',
     },
   };
 }
@@ -709,8 +719,10 @@ export function opencodeThinkingMetadata(model = {}) {
  * một định nghĩa để không trôi khỏi nhau.
  */
 function staticModelRow(model) {
+  const pricing = documentedPricing(model);
   return {
     ...model,
+    ...(pricing ? { pricing } : {}),
     source: 'static',
     stale: false,
     enabled: true,
@@ -719,7 +731,7 @@ function staticModelRow(model) {
       name: 'documented',
       thinking: model.thinkingLevels?.length ? 'documented' : 'unknown',
       contextWindow: model.contextWindowSource || 'unknown',
-      pricing: 'unknown',
+      pricing: pricing?.source || 'unknown',
     },
   };
 }
@@ -731,36 +743,36 @@ export function createOpenCodeAdapter({ fetchImpl }) {
   };
 
   return {
+    documentedPricing,
     thinkingMetadata: model => opencodeThinkingMetadata(model || {}),
     // Dòng dự phòng không đến từ ping: nhãn từng trường phải nói đúng như vậy.
     fallbackModels: OPENCODE_MODELS.map(staticModelRow),
 
     async discover({ connection, credentials, signal } = {}) {
-      try {
-        const modelsUrl = `${baseFor(connection)}/models`;
-        const response = await fetchImpl(modelsUrl, {
-          headers: opencodeHeaders({ stream: false, apiKey: credentials?.apiKey, userAgent: credentials?.userAgent, session: translateSessionId('discovery'), request: mintOpencodeId('msg', randomUUID()) }),
-          signal,
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-          if (list.length) {
-            return {
-              // W12.MODEL.METADATA: giữ payload + curated + registry, ghi nguồn
-              // từng trường; không gắn cả hàng là live khi chỉ id là dữ liệu live.
-              models: list.map(item => opencodeModelRow(item, {
-                curated: OPENCODE_MODELS.find(m => m.id === item.id) || null,
-              })),
-            };
-          }
-        }
-      } catch {
-        /* best effort fallback */
+      // W12/T2 — lỗi dò PHẢI nổi lên `ProviderService.#discover`: nhánh catch ở đó mới giữ
+      // được last-good (`stale` + `error` + `discoveryState: degraded`), và chỉ seed bảng curated
+      // khi connection chưa có hàng nào để giữ. Bản cũ tự nuốt lỗi rồi trả bảng curated
+      // `stale: false`, nên một lần 429/offline thay mất cả inventory live mà không để lại dấu
+      // vết nào — khác mọi adapter còn lại (anthropic/gemini/openai/deepseek/antigravity).
+      const modelsUrl = `${baseFor(connection)}/models`;
+      const response = await fetchImpl(modelsUrl, {
+        headers: opencodeHeaders({ stream: false, apiKey: credentials?.apiKey, userAgent: credentials?.userAgent, session: translateSessionId('discovery'), request: mintOpencodeId('msg', randomUUID()) }),
+        signal,
+      });
+      const data = await jsonOrProviderError(response);
+      const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      // Một id chỉ có MỘT hàng: payload từng trả trùng id, và hàng trùng là hàng người dùng
+      // bật/tắt mà không có gì khác biệt phía sau. Lần xuất hiện đầu tiên thắng.
+      const seen = new Set();
+      const rows = [];
+      for (const item of list) {
+        if (typeof item?.id !== 'string' || !item.id || seen.has(item.id)) continue;
+        seen.add(item.id);
+        // W12.MODEL.METADATA: giữ payload + curated + registry, ghi nguồn từng trường;
+        // không gắn cả hàng là live khi chỉ id là dữ liệu live.
+        rows.push(opencodeModelRow(item, { curated: OPENCODE_MODELS.find(m => m.id === item.id) || null }));
       }
-      // Curated fallback: the inventory call did not answer, so this is not
-      // live data (BUG-4/R2). W12: nhãn từng trường nói đúng nguồn curated.
-      return { models: OPENCODE_MODELS.map(staticModelRow) };
+      return { models: rows };
     },
 
     async *generate({ connection, credentials, body, signal }) {

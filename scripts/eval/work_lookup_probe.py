@@ -44,7 +44,12 @@ def answer_part(text):
 
 
 def contract_words(text):
-    return words(text)
+    """FU5 (W6.Q): luật đếm duy nhất của trần Answer — thân mục, KHÔNG tính dòng tiêu đề.
+
+    `work_prompts.LOOKUP_ANSWER_COUNT_RULE` là hợp đồng; đếm thô (kể cả `## Trả lời`) từng cho
+    122 từ và bị đọc là vượt trần 120, trong khi đúng luật này là 119.
+    """
+    return words('\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#')))
 
 
 class Client(FixtureClient):

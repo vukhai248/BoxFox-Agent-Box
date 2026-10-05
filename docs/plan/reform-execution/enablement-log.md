@@ -1,0 +1,291 @@
+# Nhật ký bật dần công tắc (enablement log)
+
+> Append-only. Mỗi lần chạy một bước của quy trình `HANDOFF.md` §6 thì ghi thêm một mục ở đây:
+> ngày, công tắc, kết quả bốn phép kiểm (test TẮT, test BẬT, `runtime-info`, vòng live), bằng chứng,
+> và bước tiếp theo. **Một bước = một công tắc**, bật xong mới sang bước sau.
+
+## Môi trường chạy
+
+| Thứ | Giá trị |
+|---|---|
+| Instance bật dần | cổng **3116**, data dir `/var/tmp/boxfox-enable/data`, log `/var/tmp/boxfox-enable/backend-3116-step*.log` |
+| Instance E2E (không đụng vào) | cổng 3113, data dir `/var/tmp/boxfox-e2e/data-on`, sáu công tắc `explicit` |
+| Lệnh test | `cd /code/.worktrees/boxfox-harness-reform/backend && TMPDIR=/var/tmp PYTHONPATH=src /code/i3abyxinhdepqua-lang/BoxFox-Agent-Box/backend/.venv/bin/python -m pytest -q <paths> -p no:cacheprovider` (đặt env công tắc TRƯỚC lệnh để chạy trạng thái TẮT/BẬT) |
+| Lệnh live | `python3 /code/.generated_artifacts/e2e/driver.py --base 3116 --label enable-step<N> --only <kịch bản> --switches off` |
+| Bằng chứng live | `/code/.generated_artifacts/e2e/runs/enable-step<N>/` (mỗi kịch bản một tệp JSON + `summary.json`) |
+| Xem đang bật gì | `curl -s -H 'X-BoxFox-Admin: 1' http://127.0.0.1:3116/api/agent/runtime-info` → khối `switches` |
+
+Ghi chú: `--switches off` nghĩa là kịch bản `adaptive_off` kỳ vọng `409 POLICY_SWITCH_OFF` (đúng khi
+`BOXFOX_ADAPTIVE_HARNESS` chưa bật). Khi nào tới bước 6 thì đổi thành `--switches on`.
+
+## Nhật ký
+
+| Bước | Công tắc | Ngày | Test TẮT | Test BẬT | `runtime-info` | Vòng live | Kết quả |
+|---|---|---|---|---|---|---|---|
+| 0 | (chưa bật gì) | 2026-10-05 | — | — | cả bảy `on: false, source: default`; 61 tool; health 200 | — | baseline sạch |
+| 1 | `BOXFOX_RECOVERY_POLICY` | 2026-10-05 | **49 passed** | **49 passed** | `on: true, source: explicit` | `enable-step1`: **3/3 kịch bản, 7/7 phép kiểm** | ✅ ĐẠT |
+| 2 | `BOXFOX_CONTEXT_SURFACE` | 2026-10-05 | **249 passed** | **249 passed** | `on: true, source: explicit` (kèm bước 1 vẫn `explicit`) | `enable-step2`: **3/3 kịch bản, 8/8 phép kiểm** | ✅ ĐẠT |
+| 3 | `BOXFOX_TASK_SURFACE` | 2026-10-05 | **112 passed** | **112 passed** | `on: true, source: explicit` (kèm bước 1–2) | `enable-step3-mimo`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT (kèm ghi chú model yếu) |
+| 4 | `BOXFOX_CONTROLLER_JOBS` | 2026-10-05 | **125 passed** | **125 passed** | `on: true, source: explicit` (kèm bước 1–3) | `enable-step4`: **1/1 kịch bản, 6/6 phép kiểm** | ✅ ĐẠT |
+| 5 | `BOXFOX_USAGE_LEDGER` | 2026-10-05 | **92 passed** | **92 passed** | `on: true, source: explicit` (kèm bước 1–4) | `enable-step5`: **3/3 kịch bản, 9/9 phép kiểm** | ✅ ĐẠT |
+| 6 | `BOXFOX_ADAPTIVE_HARNESS` | 2026-10-05 | **100 passed** | **100 passed** | `on: true, source: explicit` (kèm bước 1–5) | `enable-step6`: **3/3 kịch bản, 9/9 phép kiểm** + `enable-step6-caps`: **1/1 kịch bản, 7/7 phép kiểm** | ✅ ĐẠT |
+| 7 | `BOXFOX_RESEARCH_GATEWAY` | 2026-10-05 | **115 passed** | **115 passed** | `on: true, source: explicit` (kèm bước 1–6) | `enable-step7`: **4/4 kịch bản, 11/11 phép kiểm** | ✅ ĐẠT (quyết định #6597 của chủ nhà) |
+| 8 | `BOXFOX_REFORM=on` (khóa tổng) | 2026-10-05 | (dùng lại bộ test của bước 1–7) | (như trên) | **cả bảy `on: true, source: master`** | `enable-step8` 5/5 kịch bản 16/16 phép kiểm; `enable-step8-task` 1/1–6/6; `enable-step8-job` 1/1–6/6; `enable-step8-caps` 1/1–7/7 | ✅ ĐẠT |
+
+## Chi tiết từng bước
+
+### Bước 0 — baseline (2026-10-05)
+
+- Khởi động instance bật dần **không đặt env công tắc nào**: `switches.master = {on: false, source: default}`,
+  cả bảy thành viên `on: false, source: default`, 61 tool, `/api/agent/health` 200.
+- Log: `/var/tmp/boxfox-enable/backend-3116-step0.log`.
+
+### Bước 1 — `BOXFOX_RECOVERY_POLICY` (2026-10-05)
+
+- **Test khi TẮT:** `BOXFOX_RECOVERY_POLICY=off` + `tests/unit/test_recovery_policy.py` + `tests/unit/test_decision_flow.py`
+  → **49 passed in 7.55s**.
+- **Test khi BẬT:** cùng hai tệp với `BOXFOX_RECOVERY_POLICY=on` → **49 passed in 7.27s**.
+- **Khởi động lại instance** với `BOXFOX_RECOVERY_POLICY=on`: `runtime-info` trả
+  `BOXFOX_RECOVERY_POLICY: {on: true, source: explicit}`, sáu thành viên còn lại `default/off`.
+- **Vòng live** (`--label enable-step1 --only kernel_guard,tools_and_file --switches off`):
+  - `kernel_guard` **PASS** — ghi `/etc/boxfox-should-not-exist.txt` bị từ chối, tệp `ABSENT`, lượt `completed`;
+  - `tools_and_file` **PASS** — `terminal_exec` + `file_write` thật, đọc lại thấy `proof-2026-10-04`, lượt `completed`;
+  - `adaptive_off` **PASS** — `409 POLICY_SWITCH_OFF`, policy không đổi.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step1/` (`summary.json`: total 3, passed 3, failed 0);
+  log `/var/tmp/boxfox-enable/backend-3116-step1.log`.
+
+### Bước 2 — `BOXFOX_CONTEXT_SURFACE` (2026-10-05, cộng dồn bước 1)
+
+- **Test khi TẮT:** `BOXFOX_CONTEXT_SURFACE=off` + `tests/unit/test_context_surface.py` + `tests/unit/test_context_bundle.py`
+  + `tests/unit/test_skill_spec.py` → **249 passed in 42.78s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_CONTEXT_SURFACE=on` → **249 passed in 41.72s**.
+- **Khởi động lại instance** với `BOXFOX_RECOVERY_POLICY=on` + `BOXFOX_CONTEXT_SURFACE=on`: `runtime-info` trả
+  hai công tắc `on: true, source: explicit`, năm thành viên còn lại `default/off`.
+- **Vòng live** (`--label enable-step2 --only skill_view,tools_and_file --switches off`):
+  - `skill_view` **PASS** — `skill_view` đã chạy, không `SKILL_UNKNOWN`, trả lời đúng nội dung skill
+    `work-graph-planning` (v2.0.0) từ catalog;
+  - `tools_and_file` **PASS** — như bước 1 (đối chứng parity);
+  - `adaptive_off` **PASS** — `409 POLICY_SWITCH_OFF`, policy không đổi.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step2/` (`summary.json`: total 3, passed 3, failed 0);
+  log `/var/tmp/boxfox-enable/backend-3116-step2.log`.
+
+### Bước 3 — `BOXFOX_TASK_SURFACE` (2026-10-05, cộng dồn bước 1–2)
+
+- **Test khi TẮT:** `BOXFOX_TASK_SURFACE=off` + `tests/unit/test_harness_task_service.py` +
+  `tests/unit/test_task_surface.py` + `tests/unit/test_runtime_info.py` → **112 passed in 37.34s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_TASK_SURFACE=on` → **112 passed in 37.65s**.
+  - Vòng chạy BẬT đầu tiên đỏ **1 test** (`test_task_surface.py::test_switch_is_off_by_default_and_only_on_enables`):
+    test khẳng định trạng thái MẶC ĐỊNH nhưng đọc env ambient, mà bước bật dần lại chạy cả bộ với
+    env BẬT. Đây là lỗi hermeticity của test, không phải lỗi sản phẩm; đã cắt env bằng
+    `monkeypatch.delenv` ở commit `1ad3ae8` (kèm `test_job_surface.py::test_switch_defaults_off[None]`
+    gặp đúng lỗi đó ở bước 4). Sau khi sửa: 112/112 ở cả hai trạng thái.
+- **Khởi động lại instance** với `BOXFOX_RECOVERY_POLICY=on` + `BOXFOX_CONTEXT_SURFACE=on` +
+  `BOXFOX_TASK_SURFACE=on`: `runtime-info` trả ba công tắc `on: true, source: explicit`, bốn thành viên
+  còn lại `default/off`, 61 tool; log `/var/tmp/boxfox-enable/backend-3116-step3.log`.
+- **Vòng live** `driver_task.py` (kịch bản `delegate_contract`, model sống gọi `delegate_task` kèm hợp đồng):
+  - Năm vòng đầu với model mặc định `space-bunny-free` **KHÔNG ĐẠT**: model luôn gọi đúng `work_graph` +
+    `delegate_task`, nhưng phiên âm sai kiểu các mảng rỗng của hợp đồng (`"inputs": ""`, `"dependsOn": ""`,
+    có vòng bọc `{"item": ...}`). Bề mặt từ chối đúng cách — `HARNESS_CONTRACT_INVALID` nêu đúng tên trường,
+    `action: checkpoint_and_ask`, **không ghi hàng task/attempt nào** (không có trạng thái dở dang).
+    Đây là giới hạn của model miễn phí, không phải lỗi sản phẩm (xem ghi chú bên dưới).
+  - Vòng đạt: ghim model miễn phí khác `mimo-v2.6-flash-free` (vẫn 0 đồng, không đụng ngân sách) →
+    `enable-step3-mimo` **1/1 kịch bản, 6/6 phép kiểm**: `work_graph` mở run `w-06d133f8d5`,
+    `delegate_task` chạy, hàng task bền vững `task-592496d0598b491d9e99033d10fcf3bd` (alias
+    `e2e-durable-mimo`, `state: succeeded`, revision 3), attempt 1 gắn phiên con thật
+    `8f214a240f444f8b98e368f35a9ff0cb` (role `explore`, `completed`), lượt kết thúc `completed`,
+    con đếm đúng 22 tệp `.md` dưới `.plans/`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step3-mimo/` (`summary.json`: total 1, passed 1,
+  failed 0) — các vòng không đạt giữ nguyên ở `runs/enable-step3/`, `runs/enable-step3b..3e/`, `runs/task-recheck/`.
+- **Ghi chú model:** bề mặt task bền vững chỉ dùng được khi model phiên âm đúng JSON lồng nhau. Model mặc định
+  `space-bunny-free` hiện viết `""` cho mảng rỗng nên hợp đồng luôn bị từ chối; ghim một model miễn phí khác
+  là đủ. Đã ghi nhận thành phát hiện ngoài phạm vi (`652bc4b7`): khai `properties` lồng nhau cho tham số `task`
+  hoặc nhận `task` dạng chuỗi JSON để bề mặt chịu được model yếu.
+
+### Bước 4 — `BOXFOX_CONTROLLER_JOBS` (2026-10-05, cộng dồn bước 1–3)
+
+- **Test khi TẮT:** `BOXFOX_CONTROLLER_JOBS=off` + `tests/unit/test_harness_jobs.py` +
+  `tests/unit/test_job_surface.py` + `tests/unit/test_job_wake.py` → **125 passed in 57.36s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_CONTROLLER_JOBS=on` → **125 passed in 58.07s**.
+  (Vòng BẬT đầu tiên đỏ 1 test `test_job_surface.py::test_switch_defaults_off[None]` — cùng lớp
+  hermeticity đã sửa ở `1ad3ae8`.)
+- **Khởi động lại instance** thêm `BOXFOX_CONTROLLER_JOBS=on`: `runtime-info` trả bốn công tắc
+  `on: true, source: explicit`, ba thành viên còn lại `default/off`, 61 tool (catalog có đủ
+  `start_job`/`get_job`/`subscribe_job`/`wait_jobs`/`cancel_job`); log
+  `/var/tmp/boxfox-enable/backend-3116-step4.log`.
+- **Vòng live** `driver_job.py` (kịch bản `start_job`, model sống gọi `start_job` rồi `get_job`),
+  model miễn phí ghim `mimo-v2.6-flash-free`: `enable-step4` **1/1 kịch bản, 6/6 phép kiểm** —
+  hàng job bền vững `job-833d5497f5e04392874fe11a73676815` (`kind: model`, `ownership: controller`,
+  owner = phiên main), phiên con thật `6dccce7f01924fe4b770af866d6b1eee` (role `explore`) được admit,
+  không có `JOB_SURFACE_OFF`, lượt kết thúc `completed`. Đọc lại sau khi vòng chạy xong: job đã tự
+  chuyển `state: succeeded` (revision 3, `closed_at` có giá trị) và con hoàn tất 1 lượt — job sống
+  qua khỏi lượt main như thiết kế H4.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step4/` (`summary.json`: total 1, passed 1,
+  failed 0).
+
+### Bước 5 — `BOXFOX_USAGE_LEDGER` (2026-10-05, cộng dồn bước 1–4)
+
+- **Test khi TẮT:** `BOXFOX_USAGE_LEDGER=off` + `tests/unit/test_usage_ledger.py` +
+  `tests/unit/test_usage_surface.py` + `tests/unit/test_peer_cost.py` → **92 passed in 32.02s**.
+- **Test khi BẬT:** cùng ba tệp với `BOXFOX_USAGE_LEDGER=on` → **92 passed in 32.45s**.
+- **Khởi động lại instance** thêm `BOXFOX_USAGE_LEDGER=on`: `runtime-info` trả năm công tắc
+  `on: true, source: explicit`, hai thành viên còn lại (`ADAPTIVE_HARNESS`, `RESEARCH_GATEWAY`)
+  `default/off`, 61 tool; log `/var/tmp/boxfox-enable/backend-3116-step5.log`.
+- **Vòng live** `driver.py --only delegate,ledger_rows --switches off --db /var/tmp/boxfox-enable/data/sessions.sqlite`:
+  - `delegate` **PASS** — main gọi `delegate_task` thật, con `explore` `65380d9d46844fbf8126297de8a38952`
+    hoàn tất, main trả lời bằng số của con (22 tệp `.md`), lượt `completed`;
+  - `ledger_rows` **PASS** — bảng `harness_usage` có thật, 5 hàng gần nhất đủ cột hợp đồng
+    (`call_key`, `certainty`, `price_snapshot_json`, `input_tokens`, `output_tokens`…), token thật
+    đã ghi (ví dụ 26804/1006, 26505/88, 12103/4096);
+  - `adaptive_off` **PASS** — `409 POLICY_SWITCH_OFF`; `switches` trả về cho thấy
+    `BOXFOX_USAGE_LEDGER: true` mà policy vẫn không đổi.
+- **Sổ ghi chi của con (peer cost):** hàng usage ghi theo **root** (`owner_id` = phiên main) và
+  `run_id` = phiên gọi thật, nên chi của con nằm chung sổ với cha mà vẫn tách được theo phiên:
+  con `65380d9d46844fbf8126297de8a38952` có **14 hàng**, `owner_id` = main `92c519be55c94d19907ca4837a66ea22`
+  (cùng sổ: 3 hàng của main). Tổng 44 hàng cho 6 `run_id`.
+- **Thứ tự chạy quan trọng:** `ledger_rows` chỉ đọc DB, nên phải chạy một lượt model thật TRƯỚC
+  (`delegate`) mới có hàng để kiểm. Vòng đầu chạy `ledger_rows` trước nên bảng còn rỗng và đỏ 4/4 —
+  bằng chứng của vòng đó giữ ở `runs/enable-step5-scratch/`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step5/` (`summary.json`: total 3, passed 3,
+  failed 0) — `delegate.json`, `ledger_rows.json`, `adaptive_off.json` (kèm `attempts: 1`).
+
+### Sửa lỗi phát hiện khi bật bước 3 — lời khuyên sai cho lỗi hợp đồng (commit `8aa0e70`)
+
+- **Triệu chứng:** model gọi `delegate_task` kèm hợp đồng sai kiểu mảng, nhận `HARNESS_CONTRACT_INVALID`,
+  rồi DỪNG và hỏi chủ nhà thay vì sửa trường. Mã lỗi này chưa có trong bảng phân loại của
+  `recovery_policy` nên rơi `unknown` ⇒ `checkpoint_and_ask`.
+- **Sửa:** khai lớp cho 18 mã bề mặt H3–H4 — hợp đồng/schema/role/decision và id không tồn tại ⇒
+  `tool_validation` (`fix_input`: sửa trường rồi gọi lại, không replay tool); `JOB_ADMISSION_REQUIRED`,
+  `TASK_OWNER_MISMATCH`, `TASK_REVISION_CONFLICT` ⇒ `rights_budget` (không tự retry để vượt quyền);
+  mã toàn vẹn vẫn `unknown` (fail closed). Test: `test_recovery_policy.py` + `test_decision_flow.py`
+  **73 passed**; nhóm 8 tệp bề mặt với `BOXFOX_RECOVERY_POLICY=on` **336 passed**.
+- **Kiểm chứng sống lại bước 3 với model mặc định:** `driver_task.py --label retry-check
+  --model space-bunny-free --attempts 2` → **1/1 kịch bản, 6/6 phép kiểm, `attempts: 1`** — model yếu
+  nay đi hết một mạch (prompt đã thêm đoạn nhắc kiểu dữ liệu mảng), không cần tới lần chạy lại.
+  Bằng chứng: `/code/.generated_artifacts/e2e/runs/retry-check/`.
+- **Cơ chế chạy lại của driver:** `driver.py`, `driver_task.py`, `driver_job.py` nhận `--attempts`
+  (mặc định 2); vòng hỏng được giữ nguyên dưới tên `<kịch bản>.attempt<N>.json` trước khi chạy lại,
+  và `evidence.attempts` ghi lại lần chạy đã đạt.
+
+### Bước 6 — `BOXFOX_ADAPTIVE_HARNESS` (2026-10-05, cộng dồn bước 1–5)
+
+- **Test khi TẮT:** `BOXFOX_ADAPTIVE_HARNESS=off` + `tests/unit/test_adaptive_main.py` +
+  `tests/unit/test_adaptive_surface.py` → **100 passed in 7.59s**.
+- **Test khi BẬT:** cùng hai tệp với `BOXFOX_ADAPTIVE_HARNESS=on` → **100 passed in 7.50s**.
+- **Khởi động lại instance** thêm `BOXFOX_ADAPTIVE_HARNESS=on`: `runtime-info` trả sáu công tắc
+  `on: true, source: explicit`; chỉ còn `BOXFOX_RESEARCH_GATEWAY` TẮT; khóa tổng `BOXFOX_REFORM`
+  vẫn `default/off`; log `/var/tmp/boxfox-enable/backend-3116-step6.log`.
+- **Vòng live chính** `driver.py --only kernel_guard,delegate --switches on --db /var/tmp/boxfox-enable/data/sessions.sqlite`:
+  - `kernel_guard` **PASS** — tệp ngoài phạm vi vẫn `ABSENT`, lượt `completed` (đối chứng owner-check mới
+    không nới quyền);
+  - `delegate` **PASS** (lần 1 hỏng vì câu trả lời rỗng — driver chạy lại và đạt ở lần 2; bản hỏng giữ ở
+    `delegate.attempt1.json`): con `explore` `c8002498c2c548d9b599615eb79612ad` hoàn tất, main đối chiếu
+    lại bằng `terminal_exec` và ra đúng 22 tệp `.md`;
+  - `adaptive_on` **PASS** — `PUT execution-policy {mode: adaptive}` trả **200**, policy ghim `adaptive`,
+    một lượt thật chạy trên route miễn phí kết thúc `completed`, sổ usage ghi hàng cho lượt
+    (`amount 0.0`, `certainty: estimated`).
+- **Vòng live phụ** `driver_child_caps.py --only peer_read_cap`: **1/1 kịch bản, 7/7 phép kiểm** — lần đọc
+  đầu trả cửa sổ thật (64 sự kiện), 4 lần đọc được phép rồi lần thứ 5 bị `PEER_READ_CAPPED`, sau khi bị
+  chặn không còn lần đọc nào thành công, lượt cha `completed`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step6/` (`summary.json`: total 3, passed 3,
+  failed 0) và `/code/.generated_artifacts/e2e/runs/enable-step6-caps/` (total 1, passed 1, failed 0).
+
+### Bước 7 — `BOXFOX_RESEARCH_GATEWAY` (2026-10-05, cộng dồn bước 1–6; chủ nhà chốt ở #6597)
+
+- **Sửa hermeticity trước khi bật (`84065cf`):** `test_research_gate_runtime.py` kiểm ĐƯỜNG CŨ
+  (`BOXFOX_RESEARCH_GATE`) mà không ghim công tắc gateway, nên khi môi trường máy chạy đặt
+  `BOXFOX_RESEARCH_GATEWAY=on` thì 11/12 ca đỏ (`RESEARCH_MAIN_READ_ONLY`). Thêm fixture autouse ghim
+  gateway TẮT tường minh cho cả tệp — lỗi hermeticity, không phải lỗi sản phẩm.
+- **Test:** `test_research_gateway.py` + `test_research_gate_runtime.py` + `test_research_owner.py` +
+  `test_research_switches.py` → **115 passed in 44.42s khi TẮT** và **115 passed in 44.17s khi BẬT**
+  (trước khi sửa: 115 / 11 failed).
+- **Khởi động lại instance** thêm `BOXFOX_RESEARCH_GATEWAY=on`: `runtime-info` trả **bảy** công tắc
+  `on: true, source: explicit`; `BOXFOX_REFORM` vẫn `default/off`; 61 tool, trong đó bốn công cụ cổng
+  (`research_job_submit`, `research_job_get`, `research_job_result`, `research_job_control`);
+  log `/var/tmp/boxfox-enable/backend-3116-step7.log`.
+- **Vòng live** `driver.py --only research,research_gateway,research_main_tools --switches on
+  --model mimo-v2.6-flash-free --db /var/tmp/boxfox-enable/data/sessions.sqlite` → **4/4 kịch bản,
+  11/11 phép kiểm**:
+  - `research` **PASS** — main vẫn `web_search` bình thường, câu trả lời kèm URL nguồn;
+  - `research_gateway` **PASS** — `research_job_submit` thật tạo hàng cổng
+    `research-3f2cd73e…` (`state: needs_consent`, revision 1, có `controller_id` là principal
+    `research-lead` riêng) rồi `research_job_get` đọc receipt; không có chi nào được cấp;
+  - `research_main_tools` **PASS** — main gọi `delegate_task role="research"` và bị **GUARD** chặn bằng
+    `RESEARCH_MAIN_READ_ONLY` (lần gọi đó là lần lỗi), lượt vẫn `completed`. Ghi chú đo được: khi gateway
+    BẬT, công cụ nội bộ VẪN nằm trong bộ lược đồ của main (chặn ở GUARD, không chặn ở bề mặt) — đúng
+    thiết kế H7 "main không sửa internals"; hai model miễn phí từ chối gọi thẳng `source_add` (chúng nói
+    công cụ "không tồn tại" — chép nguyên văn, đó là hành vi model, không phải bề mặt bị lọc: đã kiểm
+    bằng `schemas_for` trên chính config sống: `source_add` CÓ trong 52 lược đồ hiệu lực).
+  - `adaptive_on` **PASS** — công tắc adaptive vẫn nguyên sau khi gateway bật.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step7/` (`summary.json`: total 4, passed 4,
+  failed 0). Vòng nháp giữ ở `enable-step7-scratch*/`.
+
+### Bước 8 — `BOXFOX_REFORM=on`, một biến bật cả nhóm (2026-10-05)
+
+- **Instance riêng cổng 3117, data dir mới `/var/tmp/boxfox-enable/data-master`, CHỈ đặt một biến**
+  `BOXFOX_REFORM=on` (không đặt env thành viên nào); log `/var/tmp/boxfox-enable/backend-3117-step8.log`.
+- **`runtime-info`:** khóa tổng `BOXFOX_REFORM: on, source: explicit`; **cả bảy thành viên
+  `on: true, source: master`**; 61 tool — đúng hợp đồng "một lệnh bật cả nhóm".
+- **Bốn driver trên chính instance đó** (model miễn phí `mimo-v2.6-flash-free`, DB của instance):
+  - `driver.py --only delegate,kernel_guard,ledger_rows,research_gateway --switches on`
+    → **5/5 kịch bản, 16/16 phép kiểm** (kèm `adaptive_on` chạy tự động ở cuối): con `explore` thật
+    `fc84f8d2…` báo 22 tệp `.md`; ghi `/etc/...` vẫn `ABSENT`; sổ usage có hàng đủ cột với token thật;
+    `research_job_submit` tạo hàng cổng `research-64984f0e…` (`needs_consent`); adaptive ghim được
+    và lượt thật chạy với giá 0.
+  - `driver_task.py` (`e2e-master-task`/`e2e-master-inv`) → **1/1 kịch bản, 6/6 phép kiểm**: hàng task
+    `task-50ec2e69…` (`succeeded`, revision 3, run `w-b508aac76d`) + attempt 1 gắn con `8287ec8d…`.
+  - `driver_job.py` → **1/1 kịch bản, 6/6 phép kiểm**: hàng job `job-e991f581…` (`kind: model`,
+    `ownership: controller`); đọc lại sau lượt: `state: succeeded`, revision 3, có `closed_at`.
+  - `driver_child_caps.py --only peer_read_cap` → **1/1 kịch bản, 7/7 phép kiểm**: 4 lần đọc được phép
+    rồi lần thứ 5 bị `PEER_READ_CAPPED`, lượt cha `completed`.
+- Bằng chứng: `/code/.generated_artifacts/e2e/runs/enable-step8/` (5/5), `enable-step8-task/`,
+  `enable-step8-job/`, `enable-step8-caps/` — mỗi thư mục có `summary.json` + JSON từng kịch bản.
+
+### Sửa hermeticity cho trạng thái "cả nhóm BẬT" (2026-10-05, sau bước 8)
+
+Chạy nhóm 22 tệp liên quan với `BOXFOX_REFORM=on` phát hiện **16 ca đỏ** — cùng một lớp lỗi như
+`1ad3ae8`: bài kiểm khẳng định hành vi MẶC ĐỊNH nhưng chỉ cắt env **thành viên**, không cắt **khóa tổng**,
+nên khi khóa tổng BẬT thì giá trị hiệu lực là BẬT và khẳng định mặc định sai.
+
+- Thêm `tests/unit/switch_isolation.py` với `isolate_default(monkeypatch, *switches)`: cắt cả env thành
+  viên lẫn `BOXFOX_REFORM`, để giá trị hiệu lực thật sự là mặc định.
+- Áp cho 16 ca ở sáu tệp: `test_task_surface.py` (9), `test_job_surface.py` (2), `test_usage_surface.py` (2),
+  `test_runtime_info.py` (1), `test_research_gateway.py` (1), `test_context_surface.py` (1). Chỉ đụng test,
+  không đổi sản phẩm.
+- **Kết quả:** nhóm 22 tệp với `BOXFOX_REFORM=on` → **846 passed in 237.63s** (trước khi sửa: 16 failed,
+  830 passed); chạy lại ở trạng thái mặc định (không env nào) → **846 passed in 232.98s**.
+
+## Kiểm thử sau merge (2026-10-05, head `699ab8d`)
+
+- Nhóm 22 tệp liên quan với `BOXFOX_REFORM=on`: **846 passed in 238.95s**.
+- Toàn bộ `backend/tests/unit/` trên cây sau merge: **3 failed, 4382 passed, 12 skipped in 1262.91s** — đúng ba
+  lỗi đỏ có sẵn từ baseline `346da06` (`test_terminal_exec_echo`,
+  `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`,
+  `test_revoked_grant_blocks_next_tool_call`), không do PR này.
+- Log: `/var/tmp/post-merge-tests.log`.
+
+## Trạng thái hiện tại của instance bật dần
+
+`BOXFOX_RECOVERY_POLICY=on`, `BOXFOX_CONTEXT_SURFACE=on`, `BOXFOX_TASK_SURFACE=on`,
+`BOXFOX_CONTROLLER_JOBS=on`, `BOXFOX_USAGE_LEDGER=on`, `BOXFOX_ADAPTIVE_HARNESS=on`;
+cả bảy thành viên đều `on: true, source: explicit`; `BOXFOX_REFORM` vẫn `default/off`.
+**Bước 8 đã chạy xong** trên instance riêng cổng 3117 (`/var/tmp/boxfox-enable/data-master`) với đúng một
+biến `BOXFOX_REFORM=on`: cả bảy thành viên `source: master` và bốn driver đều đạt.
+**Bật dần đã hết tám bước.** Việc còn lại là quyết định phát hành (#6531/#6536) — không nằm trong nhóm
+công tắc này.
+
+## Phát hành: PR #3 đổi nhánh nền sang `main` (2026-10-05, quyết định #6598)
+
+Chủ nhà giao agent quyết định (#6598: *"Tôi chưa hiểu lắm phần này, bạn có thể quyết định tốt nhất"*). Quyết
+định: **PR #3 lấy `main` làm nhánh nền**, để một lần merge đưa được cả bản cải tổ vào `main` (trước đó base là
+`vorflux/w10-w12-completion`, nhánh khảo sát chưa nằm trên `main`).
+
+- Lý do chính: bản cải tổ dựng trên đầu nhánh khảo sát tại `346da06`, mà **PR #1 chỉ merge một phần** nhánh
+  này — 15 commit còn lại (W6.Q/W6.2/W10/W11/W12 + tài liệu kiến trúc §1–§15) chưa từng nằm trên `main`.
+  Giữ base cũ thì bản cải tổ không có đường vào `main`; đổi base là một cửa duy nhất.
+- Hệ quả đã báo rõ trong PR: diff của PR #3 gồm cả 15 commit ấy (khoảng 35 tệp) bên cạnh H1–H12; phần đó
+  không thuộc phạm vi review của đợt này. Muốn tách thì mở PR riêng `vorflux/w10-w12-completion → main` trước.
+- Đã gộp `main` vào nhánh cải tổ (merge commit `699ab8d`) để PR hết xung đột: xung đột duy nhất là
+  `docs/architecture/vorflux-vs-boxfox-orchestration.md` (add/add) và đã lấy bản đầy đủ hơn của `main`
+  (bản trên nhánh là tập con thật sự). Ba tệp mang vào từ `main`: tài liệu kiến trúc nói trên,
+  `docs/plan/BoxFox-reform-master.md`, `docs/plan/v1-boxfox-harness-reform.md`.
+- Kiểm thử lại trên cây sau merge: xem `## Kiểm thử sau merge` bên dưới.

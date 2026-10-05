@@ -124,7 +124,8 @@ def prompt_block(rt, session):
     if run is None:
         return ''
     snapshot = json.dumps(run, ensure_ascii=False)
-    procedure = rt.catalog.read('planning')['content']
+    from . import context_surface
+    procedure = context_surface.mode_skill(rt, session, 'planning')
     owner = ('You are a read-only planning specialist. Return evidence, design proposals or missing questions '
              'to the main session. You cannot call plan_scope, interview the user, write the official plan, '
              'or implement. The root workflow below is context for the owner, not tools you can call.\n'

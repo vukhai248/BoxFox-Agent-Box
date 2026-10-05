@@ -10,7 +10,7 @@
 //   2. `ping`       — the price the provider published in its `/models` payload
 //                     (OpenRouter-shaped `pricing`, USD per token, as strings).
 //   3. `documented` — the table this module ships for a provider that publishes
-//                     no price through its API. DeepSeek is the only one today.
+//                     no price through its API (DeepSeek and OpenCode Zen).
 //   4. `manual`     — the price the user set for one model on one connection.
 //
 // Everything here is a pure function: no I/O, no hidden clock (`at` is always a
@@ -69,6 +69,91 @@ const DEEPSEEK_EXACT_ROWS = Object.freeze({
   'deepseek-v4-flash-vision-exp': 'flash',
   'deepseek-v4-pro': 'pro',
 });
+
+/** Ngày đọc bảng giá OpenCode Zen: USD / 1M tokens, không có giờ cao điểm. */
+export const OPENCODE_ZEN_PRICE_AS_OF = '2026-10-04';
+export const OPENCODE_ZEN_PRICE_DOCS = 'https://opencode.ai/docs/zen';
+
+// Giới hạn đã biết: KHÔNG đoán giá cho model có bậc theo kích thước context.
+// ≤/> 200K: Claude Sonnet 4.5, Gemini 3.1 Pro, Grok 4.7, Grok 4.6, Grok 4.5.
+// ≤/> 272K: GPT 6 Astra, GPT 6 Sol, GPT 6.1 Sol, GPT 6 Luna, GPT 5.6 Sol,
+// GPT 5.6 Terra, GPT 5.6 Luna, GPT 5.5, GPT 5.4. Các id này trả null.
+// `Free` là giá 0 có nguồn; dấu `-` là null, không phải miễn phí.
+const ZEN_ROWS = Object.freeze({
+  'big-pickle': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'claude-fable-5': Object.freeze({ input: 10, cachedInput: 1, cacheWriteInput: 12.5, output: 50 }),
+  'claude-fable-5-1': Object.freeze({ input: 10, cachedInput: 0.25, cacheWriteInput: 12.5, output: 50 }),
+  'claude-haiku-4-5': Object.freeze({ input: 1, cachedInput: 0.1, cacheWriteInput: 1.25, output: 5 }),
+  'claude-opus-4-5': Object.freeze({ input: 5, cachedInput: 0.5, cacheWriteInput: 6.25, output: 25 }),
+  'claude-opus-4-6': Object.freeze({ input: 5, cachedInput: 0.5, cacheWriteInput: 6.25, output: 25 }),
+  'claude-opus-4-7': Object.freeze({ input: 5, cachedInput: 0.5, cacheWriteInput: 6.25, output: 25 }),
+  'claude-opus-4-8': Object.freeze({ input: 5, cachedInput: 0.5, cacheWriteInput: 6.25, output: 25 }),
+  'claude-opus-5': Object.freeze({ input: 5, cachedInput: 0.5, cacheWriteInput: 6.25, output: 25 }),
+  'claude-opus-5-5': Object.freeze({ input: 4, cachedInput: 0.2, cacheWriteInput: 5, output: 20 }),
+  'claude-sonnet-4-6': Object.freeze({ input: 3, cachedInput: 0.3, cacheWriteInput: 3.75, output: 15 }),
+  'claude-sonnet-5': Object.freeze({ input: 2, cachedInput: 0.2, cacheWriteInput: 2.5, output: 10 }),
+  'deepseek-v4-flash': Object.freeze({ input: 0.14, cachedInput: 0.028, cacheWriteInput: null, output: 0.28 }),
+  'deepseek-v4-flash-vision-exp': Object.freeze({ input: 0.14, cachedInput: 0.028, cacheWriteInput: null, output: 0.28 }),
+  'deepseek-v4-pro': Object.freeze({ input: 1.74, cachedInput: 0.145, cacheWriteInput: null, output: 3.48 }),
+  'deepseek-v4.1-flash': Object.freeze({ input: 0.3, cachedInput: 0.006, cacheWriteInput: null, output: 1.2 }),
+  'fledge-alpha-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'gemini-3-flash': Object.freeze({ input: 0.5, cachedInput: 0.05, cacheWriteInput: null, output: 3 }),
+  'gemini-3.5-flash': Object.freeze({ input: 1.5, cachedInput: 0.15, cacheWriteInput: null, output: 9 }),
+  'gemini-3.5-flash-lite': Object.freeze({ input: 0.3, cachedInput: 0.03, cacheWriteInput: null, output: 2.5 }),
+  'gemini-3.6-flash': Object.freeze({ input: 1.5, cachedInput: 0.15, cacheWriteInput: null, output: 7.5 }),
+  'gemini-3.7-flash': Object.freeze({ input: 1.5, cachedInput: 0.15, cacheWriteInput: null, output: 7.5 }),
+  'gemini-3.8-flash': Object.freeze({ input: 1.5, cachedInput: 0.15, cacheWriteInput: null, output: 7.5 }),
+  'glm-5': Object.freeze({ input: 1, cachedInput: 0.2, cacheWriteInput: null, output: 3.2 }),
+  'glm-5.1': Object.freeze({ input: 1.4, cachedInput: 0.26, cacheWriteInput: null, output: 4.4 }),
+  'glm-5.2': Object.freeze({ input: 1.4, cachedInput: 0.26, cacheWriteInput: null, output: 4.4 }),
+  'glm-5.3': Object.freeze({ input: 1.4, cachedInput: 0.26, cacheWriteInput: null, output: 4.4 }),
+  'glm-5.3-flash': Object.freeze({ input: 0.15, cachedInput: 0.03, cacheWriteInput: null, output: 0.5 }),
+  'gpt-5': Object.freeze({ input: 1.07, cachedInput: 0.107, cacheWriteInput: null, output: 8.5 }),
+  'gpt-5-codex': Object.freeze({ input: 1.07, cachedInput: 0.107, cacheWriteInput: null, output: 8.5 }),
+  'gpt-5-nano': Object.freeze({ input: 0.05, cachedInput: 0.005, cacheWriteInput: null, output: 0.4 }),
+  'gpt-5.1': Object.freeze({ input: 1.07, cachedInput: 0.107, cacheWriteInput: null, output: 8.5 }),
+  'gpt-5.1-codex': Object.freeze({ input: 1.07, cachedInput: 0.107, cacheWriteInput: null, output: 8.5 }),
+  'gpt-5.1-codex-max': Object.freeze({ input: 1.25, cachedInput: 0.125, cacheWriteInput: null, output: 10 }),
+  'gpt-5.1-codex-mini': Object.freeze({ input: 0.25, cachedInput: 0.025, cacheWriteInput: null, output: 2 }),
+  'gpt-5.2': Object.freeze({ input: 1.75, cachedInput: 0.175, cacheWriteInput: null, output: 14 }),
+  'gpt-5.2-codex': Object.freeze({ input: 1.75, cachedInput: 0.175, cacheWriteInput: null, output: 14 }),
+  'gpt-5.3-codex': Object.freeze({ input: 1.75, cachedInput: 0.175, cacheWriteInput: null, output: 14 }),
+  'gpt-5.3-codex-spark': Object.freeze({ input: 1.75, cachedInput: 0.175, cacheWriteInput: null, output: 14 }),
+  'gpt-5.4-mini': Object.freeze({ input: 0.75, cachedInput: 0.075, cacheWriteInput: null, output: 4.5 }),
+  'gpt-5.4-nano': Object.freeze({ input: 0.2, cachedInput: 0.02, cacheWriteInput: null, output: 1.25 }),
+  'gpt-5.4-pro': Object.freeze({ input: 30, cachedInput: 30, cacheWriteInput: null, output: 180 }),
+  'gpt-5.5-pro': Object.freeze({ input: 30, cachedInput: 30, cacheWriteInput: null, output: 180 }),
+  'grok-build-0.1': Object.freeze({ input: 1, cachedInput: 0.2, cacheWriteInput: null, output: 2 }),
+  'jev-1.13': Object.freeze({ input: 0.042, cachedInput: null, cacheWriteInput: null, output: 0 }),
+  'jev-1.13-free': Object.freeze({ input: 0, cachedInput: null, cacheWriteInput: null, output: 0 }),
+  'kimi-k2.5': Object.freeze({ input: 0.6, cachedInput: 0.1, cacheWriteInput: null, output: 3 }),
+  'kimi-k2.6': Object.freeze({ input: 0.95, cachedInput: 0.16, cacheWriteInput: null, output: 4 }),
+  'kimi-k2.7-code': Object.freeze({ input: 0.95, cachedInput: 0.19, cacheWriteInput: null, output: 4 }),
+  'kimi-k3': Object.freeze({ input: 3, cachedInput: 0.3, cacheWriteInput: null, output: 15 }),
+  'ling-3.0-flash-fin-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'ling-3.1-flash-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'longcat-2.5-preview-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'mimo-v2.5-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'mimo-v2.6-flash-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'minimax-m2.5': Object.freeze({ input: 0.3, cachedInput: 0.06, cacheWriteInput: null, output: 1.2 }),
+  'minimax-m2.7': Object.freeze({ input: 0.3, cachedInput: 0.06, cacheWriteInput: null, output: 1.2 }),
+  'minimax-m3': Object.freeze({ input: 0.3, cachedInput: 0.06, cacheWriteInput: null, output: 1.2 }),
+  'muse-spark-1.2': Object.freeze({ input: 1.25, cachedInput: 0.15, cacheWriteInput: null, output: 4.25 }),
+  'muse-spark-1.3': Object.freeze({ input: 1.25, cachedInput: 0.15, cacheWriteInput: null, output: 4.25 }),
+  'muse-spark-1.3-contributor-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'nemotron-3-ultra-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'nemotron-3.5-lightning-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+  'qwen3.5-plus': Object.freeze({ input: 0.2, cachedInput: 0.02, cacheWriteInput: 0.25, output: 1.2 }),
+  'qwen3.6-plus': Object.freeze({ input: 0.5, cachedInput: 0.05, cacheWriteInput: 0.625, output: 3 }),
+  'qwen3.7-max': Object.freeze({ input: 2.5, cachedInput: 0.5, cacheWriteInput: 3.125, output: 7.5 }),
+  'qwen3.7-plus': Object.freeze({ input: 0.4, cachedInput: 0.04, cacheWriteInput: 0.5, output: 1.6 }),
+  'qwen3.8-flash': Object.freeze({ input: 0.15, cachedInput: 0.016, cacheWriteInput: 0.2, output: 0.47 }),
+  'qwen3.8-max': Object.freeze({ input: 2, cachedInput: 0.25, cacheWriteInput: 2.5, output: 6 }),
+  'space-bunny-free': Object.freeze({ input: 0, cachedInput: 0, cacheWriteInput: null, output: 0 }),
+});
+
+// Chỉ nhận id chính xác từ bảng Model ID trên cùng trang tài liệu, không suy
+// giá từ prefix/hậu tố `-free`, và không áp giá Zen cho gateway khác.
 
 /** Peak windows as minutes-of-day, half-open `[from, to)`, UTC. */
 const DEEPSEEK_PEAK_WINDOWS = Object.freeze([[60, 240], [360, 600]]);
@@ -267,6 +352,17 @@ export function documentedDeepseekPrice(modelId, at) {
     output: prices.output,
     asOf: DEEPSEEK_PRICE_AS_OF,
   };
+}
+
+/**
+ * Giá Zen công bố cho id chính xác, hoặc null khi không có giá phẳng đáng tin.
+ * Hàm thuần, không đọc đồng hồ; adapter chịu trách nhiệm scope provider và gắn
+ * source: 'documented'. Bảng/asOf cố định nên không cần tham số thời gian.
+ */
+export function documentedZenPrice(modelId) {
+  const id = typeof modelId === 'string' ? modelId.trim().toLowerCase() : '';
+  if (!Object.hasOwn(ZEN_ROWS, id)) return null;
+  return { currency: 'USD', unit: PRICE_UNIT, ...ZEN_ROWS[id], asOf: OPENCODE_ZEN_PRICE_AS_OF };
 }
 
 /**

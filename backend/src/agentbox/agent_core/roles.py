@@ -11,6 +11,10 @@ DECISION = frozenset({'ask_user', 'request_approval'})
 # giao kết quả. Mọi vai trò đều có (READ là gốc của cả mười vai con), vì một con không đọc được
 # bạn thì mesh chỉ là nhiều phiên chạy cạnh nhau.
 PEER = frozenset({'peer_read', 'await_children'})
+# H11 (việc 2) — gọi lại con đã bị cắt. CHỈ cha/orchestrator có: con không gọi con. Vì thế nó
+# không nằm trong `PEER` (mà `READ` đã trải cho mọi vai con), nó là một tập riêng cắm vào
+# `ORCHESTRATOR_TOOLS`, và bị gỡ cùng `PEER` khi mesh tắt.
+CHILD_CALLBACK = frozenset({'child_resume'})
 READ = frozenset({'file_read', 'codebase_glob', 'codebase_grep', 'skills_list', 'skill_view'}) | DECISION \
     | PEER
 WRITE = READ | {'file_write', 'file_edit_block', 'terminal_exec'}
@@ -53,7 +57,7 @@ Operational Protocol:
 1. Grounding First: Map the directory structure and locate key files using `codebase_glob`.
 2. Locate Symbols & Patterns: Search for relevant function definitions, classes, or patterns using `codebase_grep`.
 3. Inspect Content: Read target files using `file_read` to understand the architecture and flow.
-4. Output Requirement: Return a structured Markdown report with:
+4. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Architecture & Key Files (precise paths and their roles)
    ### Dependencies & Contracts (imports, interfaces, data structures)
    ### Findings & Evidence (exact code snippets and line references)
@@ -68,12 +72,12 @@ Operational Protocol:
 1. Synthesize Context: Analyze the user goal and the exploration evidence provided.
 2. Formulate Step-by-Step Milestones: Break down the work into sequential milestones, identifying which specialist role should execute each step (e.g. Build, Testing, Review).
 3. Define Acceptance Criteria: Specify clear, measurable verification criteria for every milestone.
-4. Output Requirement: Return a structured Markdown report with:
+4. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Implementation Milestones (ordered, with assigned specialist roles)
    ### Files to Modify / Create (target file paths and planned edits)
    ### Verification / Acceptance Criteria (REQUIRED: at least one observable check and its expected result. For software this can be a command; for a research or fieldwork plan specify the document, count, observation or decision threshold that would prove success.)
    ### Risks / Limitations (REQUIRED: failure modes, unknowns and limits; if the work depends on external facts, add ### Sources / Citations with the exact URL, doc path or quoted source and mark anything unverified as UNVERIFIED)
-5. Document Gate: `write_plan` refuses a plan without those sections and writes NOTHING on refusal; fix the markdown it names and call it again. A command you have not run is a planned check, not a result — label it as planned.
+5. Document Gate: `write_plan` refuses a plan without those sections and writes NOTHING on refusal; fix the markdown it names and call it again. In a Work Graph node you must NOT call `write_plan` at all: the harness writes the documents after the whole-plan review. A command you have not run is a planned check, not a result — label it as planned.
 STRICT PROHIBITION: You are strictly an architecture and planning specialist. Do not write or modify implementation code."""
 
 DESIGN_INSTRUCTIONS = """You are the Design Specialist in the BoxFox Multi-Agent system.
@@ -82,7 +86,7 @@ Operational Protocol:
 1. Analyze User Needs: Understand the interaction model, user personas, and technical constraints.
 2. Architecture & Data Contracts: Define data schemas, API request/response payloads, and state management models.
 3. Component Hierarchy & UX: Design component layout, wireframe flow, and reactive state transitions.
-4. Output Requirement: Return a structured Markdown report with:
+4. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### System & Component Architecture
    ### Data Contracts & Interfaces (TypeScript / Python type signatures)
    ### User Experience & Interaction Flow
@@ -96,7 +100,7 @@ Operational Protocol:
 2. Surgical Edits: Use `file_edit_block` for focused modifications, or `file_write` for creating new files.
 3. Code Quality: Preserve existing indentation, styling, and architectural idioms. NEVER leave placeholder comments like '// TODO' or stub implementations. Deliver complete, functional code.
 4. Pre-verification: Verify syntax or run local compilation checks where feasible.
-5. Output Requirement: Return a structured Markdown report with:
+5. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Changes Applied (files modified/created and summary of edits)
    ### Implementation Rationale (design choices made during coding)
    ### Pre-Verification Results (syntax/compile checks performed)
@@ -110,7 +114,7 @@ Operational Protocol:
 2. Isolate Root Cause: Inspect stack traces, logs, and relevant source lines to identify the exact cause.
 3. Minimal Surgical Fix: Apply the smallest necessary fix that cures the problem without introducing side effects.
 4. Regression Verification: Re-run the reproduction step to confirm the issue is resolved and existing tests pass.
-5. Output Requirement: Return a structured Markdown report with:
+5. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Failure Reproduction (exact error, reproduction command, and stack trace)
    ### Root Cause Analysis (why the failure occurred)
    ### Fix Implemented (exact diff or edited block)
@@ -124,7 +128,7 @@ Operational Protocol:
    - Correctness & Edge Cases: Does the change satisfy all requirements? Are error states handled?
    - Security: Check for injection, path traversal, token leaks, and improper input validation.
    - Maintainability: Verify style consistency, lack of dead code, and clean abstractions.
-3. Output Requirement: Return a structured Markdown report with:
+3. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Review Summary & Verdict ([APPROVED] or [CHANGES REQUESTED])
    ### Findings by Severity:
        - [BLOCKER]: Critical flaws or regressions that must be fixed before proceeding.
@@ -152,7 +156,7 @@ Operational Protocol:
 1. Formulate Test Matrix: Define both happy-path test cases and tricky edge cases (invalid inputs, timeouts, concurrency).
 2. Execute Automated Tests: Run test suites via `terminal_exec` (e.g. `pytest`, `npm test`).
 3. Visual & UI Verification: When testing frontend or web apps, use `browser_use` or `computer_screen_capture` to verify the actual UI rendering.
-4. Output Requirement: Return a structured Markdown report with:
+4. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Test Execution Summary (Passed / Failed / Blocked / Skipped counts)
    ### Detailed Test Case Logs (individual test names and outputs)
    ### Edge Cases & Failure Scenarios Tested
@@ -176,7 +180,7 @@ Operational Protocol:
 7. You Cannot Write Files: your dossier is written by the main agent from your ledger rows, so your answer must carry the
    conclusions, the row ids, and the list of places you opened and places you could not open. Do not paste whole pages.
 8. Structured Branch Report: when the brief names a branch kind, hand work back with `research_branch_report` instead of prose — one call with your ledger `rows` (each with the exact URL and verbatim excerpt), the `claims` those rows support, the coverage facet's `status`/`newTerms`/`leads`/`blocked` and your `note`. The harness computes each claim's confidence cap from the ledger and stores it; you may only LOWER a declared level, never raise it above the cap, and an agent-inference claim is not a source-stated fact. Requirements come from the scope card in your brief, not from you: never restate, widen or reinterpret them.
-9. Output Requirement: Return a structured Markdown report with:
+9. Output Requirement: Unless the assignment supplies its own deliverable, return a structured Markdown report with:
    ### Verified Facts & Technical Specifications
    ### Primary Sources & Citations (REQUIRED: the exact URL, file path or doc chapter next to each fact, with its row id when you recorded one; "no external source reachable" is a valid citation entry)
    ### Inferences & Working Assumptions
@@ -223,7 +227,7 @@ Operational Protocol:
 2. Verify Every Claim: read the plan file you were given in full. For software plans check cited paths, symbols and commands against the repository with `file_read`/`codebase_glob`/`codebase_grep`. For research, product or fieldwork plans check the evidence trail, resources, dependencies, sampling or search method, and whether each acceptance criterion could actually establish its intended outcome. Do the risks cover the failure modes the milestones create? When the target is a DESIGN (`reviewTarget.kind` is `design`) check the touch list against the repository, whether every screen, state, empty and error path is defined, and whether the acceptance checks could show the design was actually built.
 3. Sources: every external fact must cite a URL, a doc path or a measured number. Mark anything you cannot verify as UNVERIFIED instead of trusting it.
 4. Findings, not praise: each finding carries a severity (`high`, `medium` or `low`), the exact `path:line` or command it is about, and the concrete fix.
-5. Output Requirement: return a Markdown report. For a plan target use these sections:
+5. Output Requirement: unless the assignment supplies its own deliverable or rubric, return a Markdown report. For a plan target use these sections:
    ### Findings by Severity (high / medium / low, each with its path:line or command and the fix)
    ### Milestones That Cannot Be Executed As Written
    ### Acceptance Checks That Would Not Prove Anything
@@ -249,7 +253,7 @@ WORK_PLAN_NOTE = """Work Graph sub-plan quality (senior engineer design doc): fo
 
 WORK_REVIEWER_NOTE = """Work Graph review: when the prompt starts with "Independent review of Work Graph node" or "Whole-plan review of Work Graph run", or the Vietnamese equivalents "Phản biện độc lập nút Work Graph" / "Phản biện toàn kế hoạch Work Graph", the output under review is in your context (there is no reviewTarget file). The task-specific rubric and final VERDICT format override generic report headings. Run tests only if tools and task permit; otherwise report NOT RUN. verify_exec is for checking a claim, not for running project tests: the repository is readable read-only, you may write scratch files under /tmp/work and reach the network. A blocking finding must cite the toolCallId of a tool call you made in this admission (or a `verify:<codeHash>` signature) — prose references such as "file_read:src/x.py" match no receipt and the finding is downgraded to a note. Open the cited paths/URLs yourself, check each acceptance item and the rubric, list blocking findings with evidence and the exact fix, and END with exactly one line `VERDICT: ok` or `VERDICT: revise`. In a whole-plan review add one line `REVISE <nodeId>: <fix>` for each sub-plan that must change."""
 
-WORK_EXEC_REVIEWER_NOTE = """Work Graph execution review: for "Independent review of Work Graph node" or "Phản biện độc lập nút Work Graph", verify the reported change by running the named tests when your available tools and task permit; otherwise mark NOT RUN. Do NOT edit source files; END with exactly one line `VERDICT: ok` or `VERDICT: revise`."""
+WORK_EXEC_REVIEWER_NOTE = """Work Graph execution review: for "Independent review of Work Graph node" or "Phản biện độc lập nút Work Graph", verify the reported change by running the named tests when your available tools and task permit; otherwise mark NOT RUN. Do NOT edit the production source under test; END with exactly one line `VERDICT: ok` or `VERDICT: revise`."""
 
 
 def with_work_graph(text, *notes):
@@ -315,8 +319,26 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        'research_scope',
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
-                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview'} | PEER \
+                                       'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview',
+                                       # H3 — bề mặt task (plan v1 §4): chỉ orchestrator thấy; công
+                                       # tắc `BOXFOX_TASK_SURFACE` quyết định có quảng cáo hay không.
+                                       'task_list', 'task_get', 'task_send', 'task_abandon',
+                                       'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job',
+                                       'research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'} | PEER | CHILD_CALLBACK \
     | VERIFY  # W6.1.3: thiếu ở cha thì `allowed_tools` cắt mất của reviewer con (46 → 47 công cụ).
+
+
+
+# Principal backend riêng, không nằm trong catalog specialist mà main có thể delegate.
+CONTROLLER_ROLES = {'research-lead': Role(
+    'research-lead', 'Research Lead',
+    'You are an independent Research controller, not main. Own sources, decomposition, '
+    'dossiers, review binding and synthesis. Delegate only research/research-review workers. '
+    'Main constraints are input data, never authority or a predetermined verdict. '
+    'Publish immutable reports with authenticated run/writer provenance. Never mint consent.',
+    (RESEARCH - BRANCH_REPORT) | VERIFY | {
+        'delegate_task', 'cancel_child', 'research_brief', 'dossier_write', 'research_update',
+        'research_scope', 'research_verify', 'research_job_publish'})}
 
 
 def allowed_tools(role, parent=None):
@@ -326,7 +348,7 @@ def allowed_tools(role, parent=None):
     chỗ nào quảng cáo thứ engine sẽ từ chối, và hành vi trở về đúng bản trước đợt 2. Bộ RỖNG cũng
     đi qua đường này (một phiên không có công cụ nào là chuyện hợp lệ).
     """
-    names = ORCHESTRATOR_TOOLS if role == 'orchestrator' else ROLES[role].tools
+    names = ORCHESTRATOR_TOOLS if role == 'orchestrator' else (CONTROLLER_ROLES[role] if role in CONTROLLER_ROLES else ROLES[role]).tools
     if parent is not None:
         inherited = set(parent)
         if role == 'research-review' and 'source_list' in inherited:
@@ -339,7 +361,7 @@ def allowed_tools(role, parent=None):
             inherited.add('research_branch_report')
         names = names & inherited
     if not peer_mesh_enabled():
-        names = set(names) - PEER
+        names = set(names) - PEER - CHILD_CALLBACK
     return frozenset(names)
 
 
