@@ -96,6 +96,14 @@ export function SearchProviderPanel({ snapshot }: { snapshot: ProviderSnapshot }
     }
   }
 
+  /** Deleting a provider also drops what this panel still shows about it: a fresh test
+   *  verdict and a revealed key belong to the credential that is going away. */
+  const forget = (provider: SearchProviderView) => {
+    if (verdict?.id === provider.id) setVerdict(null)
+    if (revealed?.id === provider.id) setRevealed(null)
+    run(remove(provider.id))
+  }
+
   const rowVerdict = (provider: SearchProviderView) => {
     const fresh = verdict?.id === provider.id ? verdict.result : null
     if (fresh) {
@@ -227,7 +235,7 @@ export function SearchProviderPanel({ snapshot }: { snapshot: ProviderSnapshot }
                     {testing === provider.id ? t('providerSearch.testing') : t('providerSearch.test')}
                   </button>
                   {provider.credentialPresent && (
-                    <button type="button" disabled={busy} onClick={() => run(remove(provider.id))} className={secondary}>
+                    <button type="button" disabled={busy} onClick={() => forget(provider)} className={secondary}>
                       {t('providerSearch.delete')}
                     </button>
                   )}

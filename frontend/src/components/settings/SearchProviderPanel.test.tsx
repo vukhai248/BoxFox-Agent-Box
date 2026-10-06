@@ -295,6 +295,25 @@ describe('Search provider panel', () => {
     expect(rowFor('brave').textContent).not.toContain('BSA12…')
   })
 
+  it('deleting a provider drops its fresh verdict and the revealed key with it', async () => {
+    const page = searchPage({ providers: CATALOG.map((entry) => (entry.id === 'brave' ? configuredBrave : providerView({ id: entry.id }))) })
+    routerStub(page)
+    await renderPanel(page)
+
+    await act(async () => buttonIn(rowFor('brave'), 'Reveal')!.click())
+    expect(rowFor('brave').textContent).toContain(RAW_KEY)
+    await act(async () => buttonIn(rowFor('brave'), 'Test')!.click())
+    expect(rowFor('brave').textContent).toContain('Passed · 412 ms')
+
+    await act(async () => buttonIn(rowFor('brave'), 'Delete')!.click())
+
+    // The credential is gone from the router, so nothing about it may stay on screen:
+    // not the test verdict, not the raw key.
+    expect(rowFor('brave').textContent).toContain('Not configured')
+    expect(rowFor('brave').textContent).not.toContain('Passed')
+    expect(host.textContent).not.toContain(RAW_KEY)
+  })
+
   it('a snapshot without a search section shows the disconnected state', async () => {
     const page = searchPage()
     delete page.search
