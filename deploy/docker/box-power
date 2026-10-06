@@ -74,9 +74,12 @@ services_alive() {
 # Hai lượt on/off chồng nhau thì tranh cổng nhau (8080/5900/6080/7681). `flock`
 # là util-linux; thiếu thì vẫn chạy tiếp — cửa sổ chồng lấn hẹp hơn nhiều so với
 # việc bỏ hẳn chốt.
+# `-w`: chờ CÓ HẠN. Chờ vô hạn thì một tiến trình lạ giữ khoá sẽ treo luôn nút
+# nguồn trên giao diện, vì ide-proxy gọi box-power bằng subprocess không timeout.
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$LOCK_FILE"
-  flock 9
+  flock -w "${BOX_POWER_LOCK_WAIT:-10}" 9 \
+    || echo "[box-power] cảnh báo: không lấy được khoá sau ${BOX_POWER_LOCK_WAIT:-10}s — chạy tiếp" >&2
 fi
 
 case "${1:-}" in

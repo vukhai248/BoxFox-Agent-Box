@@ -16,7 +16,9 @@ trong `stop_services` đều làm đỏ test, thay vì lọt qua.
 
 from __future__ import annotations
 
+import fcntl
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -217,6 +219,7 @@ class BoxPowerStaleStateTest(unittest.TestCase):
         self.assertEqual(self._wait_for_started_services(1), 1)
         self.assertEqual(self.state.read_text(encoding="utf-8").strip(), "on")
 
+    @unittest.skipUnless(shutil.which("flock"), "cần flock (util-linux) để kiểm chốt khoá")
     def test_second_on_does_not_block_while_services_are_starting(self) -> None:
         """Khoá không được theo chân dịch vụ xuống nền — nếu không, `off` sau đó chờ vô hạn."""
         self._set_alive(())
@@ -229,6 +232,43 @@ class BoxPowerStaleStateTest(unittest.TestCase):
 
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertLess(time.monotonic() - started, 10.0, "lượt `on` thứ hai bị chặn bởi khoá còn giữ")
+        self.assertTrue((self.root / "box-power.lock").exists(), "khoá phải được tạo thật")
+
+    @unittest.skipUnless(shutil.which("flock"), "cần flock (util-linux) để kiểm chốt khoá")
+    def test_lock_held_elsewhere_does_not_hang_forever(self) -> None:
+        """Chờ khoá phải CÓ HẠN: ide-proxy gọi box-power không timeout, treo là treo nút nguồn."""
+        self._set_alive(ALL_SERVICE_PATTERNS)
+        lock_path = self.root / "box-power.lock"
+
+        with lock_path.open("w") as holder:
+            fcntl.flock(holder, fcntl.LOCK_EX)
+
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "PATH": f"{self.bin}:{environment['PATH']}",
+                    "HOME": str(self.root),
+                    "BOX_POWER_STATE_FILE": str(self.state),
+                    "BOX_POWER_SERVICES_BIN": str(self.services),
+                    "BOX_POWER_AGENT_HOME": str(self.root),
+                    "BOX_POWER_LOCK_FILE": str(lock_path),
+                    "BOX_POWER_LOCK_WAIT": "1",
+                }
+            )
+            started = time.monotonic()
+            result = subprocess.run(
+                ["/bin/sh", str(BOX_POWER), "off"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=15,
+                check=False,
+            )
+            elapsed = time.monotonic() - started
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("không lấy được khoá", result.stderr)
+        self.assertLess(elapsed, 10.0, "phải bỏ cuộc sau thời gian chờ có hạn, không treo")
 
     def test_power_off_writes_state_and_stops_services(self) -> None:
         self.state.write_text("on\n", encoding="utf-8")
