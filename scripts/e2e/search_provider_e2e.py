@@ -113,15 +113,6 @@ def search(query: str, count: int = 3) -> dict:
     return tools.search({'query': query, 'count': count})
 
 
-def search_error(query: str, count: int = 3) -> dict:
-    from agentbox.agent_core.web import WebError, WebTools
-    try:
-        WebTools().search({'query': query, 'count': count})
-    except WebError as exc:
-        return {'code': exc.code, 'message': str(exc), 'details': getattr(exc, 'details', None)}
-    raise AssertionError('mong đợi WebError nhưng lời gọi lại thành công')
-
-
 # --------------------------------------------------------------------- kịch bản
 
 SCENARIOS: list[tuple[str, str, object]] = []

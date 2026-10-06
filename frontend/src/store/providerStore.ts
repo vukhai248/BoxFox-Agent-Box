@@ -5,20 +5,12 @@ import {
   searchProviderPath,
   searchProviderRevealPath,
   searchProviderTestPath,
-  searchProvidersPath,
 } from '../lib/searchProviderPaths'
 import type { ProviderSnapshot, SearchProviderId, SearchTestResult } from '../types/provider'
 
 export type ModelProbeResult =
   | { status: 'passed'; latencyMs: number }
   | { status: 'failed'; httpStatus: number; code: string; message: string }
-
-/** The three fields a search entry may carry; an empty string clears a stored key. */
-export interface SearchProviderValues {
-  apiKey?: string
-  endpoint?: string
-  accountId?: string
-}
 
 interface ProviderStore {
   snapshot: ProviderSnapshot | null
@@ -28,8 +20,6 @@ interface ProviderStore {
   load: () => Promise<void>
   request: (path: string, method?: string, body?: unknown) => Promise<unknown>
   probeModel: (connectionId: string, modelId: string, signal?: AbortSignal) => Promise<ModelProbeResult>
-  createSearchProvider: (providerId: SearchProviderId, values: SearchProviderValues) => Promise<unknown>
-  updateSearchProvider: (providerId: SearchProviderId, values: SearchProviderValues) => Promise<unknown>
   deleteSearchProvider: (providerId: SearchProviderId) => Promise<unknown>
   setActiveSearchProvider: (providerId: SearchProviderId | null) => Promise<unknown>
   revealSearchProvider: (providerId: SearchProviderId) => Promise<string>
@@ -107,12 +97,10 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     }
   },
   /**
-   * Search-provider writes. All four go through `request()`: they are quick, the caller
+   * Search-provider writes. Both go through `request()`: they are quick, the caller
    * wants the global banner for a refusal, and `request()` reloads the snapshot so the
    * panel never shows a state the router has already left.
    */
-  createSearchProvider: (providerId, values) => get().request(searchProvidersPath(), 'POST', { providerId, ...values }),
-  updateSearchProvider: (providerId, values) => get().request(searchProviderPath(providerId), 'PATCH', values),
   deleteSearchProvider: (providerId) => get().request(searchProviderPath(providerId), 'DELETE'),
   setActiveSearchProvider: (providerId) => get().request(searchActivePath(), 'PUT', { providerId }),
   /**

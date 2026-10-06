@@ -1183,10 +1183,7 @@ def _search_chain() -> tuple:
     còn lại giữ nguyên thứ tự `GENERAL_PROVIDERS` (SearXNG → Firecrawl → …). Không lựa chọn, không
     khoá ENV ⇒ trả ĐÚNG `GENERAL_PROVIDERS` như trước, nên đường cũ không đổi một ly nào.
     """
-    source = search_credentials.active_source()
-    head = None
-    if source is not None:
-        head = SELECTED_ONLY_LEGS.get(source.provider_id) or _LEG_BY_PROVIDER_ID.get(source.provider_id)
+    head = _selected_leg()
     env_legs = tuple(leg for leg, names in ENV_KEYED_LEGS
                      if leg is not head and any((os.environ.get(name) or '').strip() for name in names))
     rest = tuple(leg for leg in GENERAL_PROVIDERS if leg is not head and leg not in env_legs)
