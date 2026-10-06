@@ -6,6 +6,12 @@ export const ICONS: Record<string, string> = {
   anthropic: '/providers/anthropic.svg',
   gemini: '/providers/gemini.svg',
   custom: '/providers/custom.svg',
+  'brave-search': '/providers/brave-search.png',
+  tavily: '/providers/tavily.png',
+  exa: '/providers/exa.png',
+  firecrawl: '/providers/firecrawl.png',
+  searxng: '/providers/searxng.png',
+  'cloudflare-ai': '/providers/cloudflare-ai.png',
 }
 
 export function ProviderIcon({
@@ -21,7 +27,10 @@ export function ProviderIcon({
 }) {
   const [failedProvider, setFailedProvider] = useState<string | null>(null)
   const label = name ?? providerId
-  const src = ICONS[providerId] ?? `/providers/${providerId}.png`
+  // An empty id means "this entry has no logo of its own" (the search catalog sends
+  // `icon: null` for Parallel): render the monogram straight away instead of asking the
+  // server for a file that does not exist.
+  const src = providerId ? ICONS[providerId] ?? `/providers/${providerId}.png` : null
 
   if (!src || failedProvider === providerId) {
     return (

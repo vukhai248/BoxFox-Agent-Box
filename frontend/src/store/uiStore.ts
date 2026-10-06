@@ -271,7 +271,7 @@ interface UiState {
   isSettingsOpen: boolean
   settingsCategory: SettingSectionId
   settingsTab: SettingTabId
-  providerInitialTab: 'api' | 'router'
+  providerInitialTab: 'api' | 'router' | 'search'
   editingHarnessId: string | null
   openSettings: (tab?: SettingTabId) => void
   closeSettings: () => void
