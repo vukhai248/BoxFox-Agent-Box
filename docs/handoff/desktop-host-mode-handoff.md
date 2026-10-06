@@ -247,3 +247,43 @@ chưa có trên host trả `UNSUPPORTED_IN_HOST_MODE` (danh sách `DEFERRED_TOOL
   shell/tệp). `trusted` là chế độ duy nhất tự cho qua, và nó chỉ nên dùng khi người dùng hiểu rõ.
 - Màn hình khoá / UAC / secure desktop ⇒ từ chối (`DESKTOP_LOCKED`), **không** cố chụp.
 - Phiên chạy qua SSH (session 0) không có desktop tương tác ⇒ `SESSION_NOT_INTERACTIVE`.
+
+---
+
+## 9. Checkpoint tiếp tục ở local — nhánh `desktop-app` (2026-10-06)
+
+**Phạm vi owner giao mới:** lấy PR #12 sang nhánh riêng để tiếp tục phần app cloud làm dở. Không merge app vào main tại checkpoint này. Cập nhật ở đây là hướng dẫn triển khai tiếp, không phải biên bản nghiệm thu.
+
+- [x] Nhập nguyên cây mã của PR `https://github.com/vukhai248/BoxFox-Agent-Box/pull/12`, head `00fed5886e9d6913179bdc2bbc64aa2c12840fe9`.
+- [x] Đồng bộ main `c13e7d2a4dc3c6c780724398408ecf03f0e99468` vào nhánh riêng; commit neo nhập PR: `ad95593a5874a828e2563bf48ff31c5abee5bcac`. Cây mã sau merge giống nguyên head PR, không có sửa sản phẩm trong thao tác nhập.
+- [x] Tạo checkout riêng; bảo toàn WIP ở checkout main. Không nhập những thay đổi chưa commit của người dùng.
+- [ ] Sửa các vấn đề dưới đây và ghi commit, lệnh, kết quả, evidence theo từng việc.
+- [ ] Build/cài/chạy stack thật trên Windows; hoàn thành checklist nghiệm thu trước khi đề nghị merge.
+
+### 9.1 Cách đọc trạng thái cũ
+
+Các nhãn **xong** H1–H7/D1–D5 ở mục 2 ghi nhận implementation và test thành phần do cloud báo cáo. Chúng không có nghĩa các thành phần đã tích hợp thành app hai mode được nghiệm thu. Số test và hash bộ cài ở mục 6 chưa được local chạy lại. Smoke desktop dùng service stub; không thay thế test với router/harness đóng gói thật. Bộ cài được nhắc ở đường dẫn cloud chưa có artifact tải về trong checkpoint này.
+
+Đọc source/callers/tests trước khi sửa: `desktop/src/{main,mode,supervisor,gateway}.ts`, `backend/src/agentbox/{api/server.py,agent_core/permissions.py,sandbox/host_executor.py}`, các client box/IDE/VNC/terminal/plan/workspace trong frontend, rồi scripts build/runtime và test tương ứng. `docs/plan/desktop-alpha-packaging.md` đang được tài liệu trỏ tới nhưng không có trong cây Git nhập từ PR: khôi phục bản gốc nếu có, không đoán nội dung.
+
+### 9.2 Checklist sửa tiếp theo thứ tự
+
+Các phát hiện dưới đây đã được đối chiếu tĩnh với source tại head PR; chưa phải kết quả tái hiện trên Windows thật.
+
+| Mã | Việc còn mở | Vị trí và checkpoint cần kiểm chứng |
+|---|---|---|
+| DA1 | [ ] Ràng buộc quyền duyệt với đúng phiên và tài nguyên | `PermissionPolicy.session_key/remember` thiếu session ID và path cho thao tác file. Test: duyệt file A ở S1 không cấp quyền file B hoặc S2; deny vẫn thắng; một lần/phiên/vĩnh viễn đúng phạm vi. |
+| DA2 | [ ] Nối yêu cầu hỏi quyền vào executor thật | `build_executor` chưa gắn approver; `_ask` thiếu approver trả deny; `register_pending/resolve_pending` chưa có caller production. Kiểm qua API thật: có request ID, chờ quyết định, allow/deny có tác dụng đúng thao tác, gửi trùng không thực thi hai lần. Không sửa bằng cách đổi mặc định sang trusted. Thiết kế cách chờ/tiếp tục phải đối chiếu harness và trình nếu đổi workflow đã duyệt. |
+| DA3 | [ ] Sửa bootstrap và binding Docker | `decideMode` trả host khi thiếu image làm nhánh `ensureSandboxImage` không chạy; container app riêng không khớp mặc định `SandboxExecutor`. Kiểm Docker thiếu image, engine tắt, box web cũ đang chạy và cổng bận; công cụ/API phải tới đúng container/profile. Thiếu Docker không được coi là consent chạy trực tiếp trên host. |
+| DA4 | [ ] Nối UI, gateway, cổng, token và route theo mode | Client box/IDE/VNC/terminal còn URL/token phát triển; CSP gateway không cho các URL đó. Host mapping `/__box/*` chưa có đầy đủ counterpart file/plan/status. Kiểm các panel với stack thật và cổng được cấp, không chỉ stub. Giữ bố cục/UX sản phẩm; không redesign trong lượt sửa. |
+| DA5 | [ ] Sửa WebSocket handshake | `handleUpgrade` dùng `proxyHeaders` bỏ `Connection/Upgrade`; test hiện chỉ nhận HTTP 200 từ stub. Test thành công phải có handshake 101, trao đổi hai chiều và đóng kết nối đúng; Origin lạ vẫn bị từ chối. |
+| DA6 | [ ] Chốt khả năng chạy workflow của host | `write_plan/dossier_write/design_write/verify_exec/session_ensure/journal/checkpoint` chưa hỗ trợ trong HostExecutor. Đối chiếu capability và đường artifact/verify thật; chưa tự đánh dấu Plan/Research/Design tương đương Docker. Nếu cần cơ chế mới hoặc thay ranh giới cách ly, trình phương án trước code. |
+| DA7 | [ ] Hoàn thiện CUA và đường người dùng giành lại quyền | Hook chưa có caller `pump_messages`, `poll_idle` chưa được gọi; input hiện trả `unverifiable`. Cắm đúng message loop/thread và kiểm trên Windows thật: Esc, chạm chuột/phím, stop UI/tray, token cũ, password/UAC/lock, xác minh hiệu ứng. Giữ CUA chưa nghiệm thu ở trạng thái rõ ràng; không tự mở quyền để test dễ hơn. |
+| DA8 | [ ] Khóa build inputs và kiểm Windows CI/local | Fetch hiện resolve dependency theo khoảng phiên bản rồi ghi lock mới; hash PyPI không đọc được chỉ cảnh báo. Build thường phải dùng phiên bản/hash đã duyệt; cập nhật lock là thao tác riêng. Sửa nhánh `t.skip()` không return ở smoke; kiểm bộ cài và bundled runtime trên Windows sạch. |
+| DA9 | [ ] Hoàn thiện tài liệu và evidence trước merge | Khôi phục plan thiếu; cập nhật nhãn code/test/acceptance, cách chọn mode thật và giới hạn. Ghi SHA commit, inputs, installer, log và expected/actual từng ca; không dùng test Linux/stub để tick nghiệm thu Windows. |
+
+### 9.3 Ranh giới công việc tiếp tục
+
+Ưu tiên bug tích hợp, quyền và tái lập; app hai mode vẫn là mục tiêu cuối. QR/mobile/auto-update, thay DAG hoặc các đầu việc harness khác không thuộc checkpoint này. Không tự thay kiến trúc/quyền/workflow hoặc bật native/CUA rộng hơn để vượt lỗi. Những thay đổi cấu trúc cần trình phương án và đánh đổi trước khi triển khai. Test model nếu cần chỉ dùng OpenCode `opencode/space-bunny-free`; ưu tiên test xác định, CUA khi thật sự cần và có target phù hợp.
+
+Các tài liệu app/roadmap chưa commit ở checkout main là WIP được bảo toàn, không nằm trong nhánh này. Đọc và đối chiếu khi chốt kiến trúc; không stage hoặc sao chép toàn bộ WIP theo mặc định.
