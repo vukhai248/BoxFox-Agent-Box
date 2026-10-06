@@ -1,7 +1,7 @@
 # Test E2E "Web Search API" — khoá tìm kiếm trong router (PART 2)
 
 > **Trạng thái:** bốn tầng test đã chạy trên máy này ngày **2026-10-06** — router `305 xanh`, harness
-> `263 xanh + 1 ca đỏ có sẵn từ `main`` (xem §1), frontend `32 xanh`, E2E **8/8 kịch bản tự động xanh**
+> `263 xanh + 1 ca đỏ có sẵn từ `main`` (xem §1), frontend `34 xanh`, E2E **8/8 kịch bản tự động xanh**
 > (+1 kịch bản chỉ in hướng dẫn) trên máy **không có** biến khoá nào. Phạm vi: người dùng dán khoá tìm kiếm trong
 > **Settings → Provider → Web Search**, harness đọc khoá đó qua loopback và dùng nó **trước** các
 > bậc còn lại; không cấu hình gì thì `web_search` vẫn chạy bằng đường built-in của PART 1.
@@ -17,7 +17,7 @@
 | 1 — router | `cd router && npm test` | Node 24 | `305 passed, 0 failed` (6,7 s) — gồm `tests/search-providers.test.mjs` (10 ca) và `tests/search-http.test.mjs` (5 ca) |
 | 2 — harness (đơn vị) | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/unit/test_search_credentials.py tests/unit/test_web_search_selected_source.py` | không mạng, không router | `22 passed` |
 | 2b — harness (bộ liên quan) | thêm `test_search_pipeline.py test_searxng_provider.py test_search_failures.py test_health_search_status.py test_web_tools.py test_recovery_policy.py test_tool_recovery.py test_runtime_info.py` | như trên | `263 passed, 1 failed` — ca đỏ là **có sẵn từ `main`**, xem ghi chú dưới |
-| 3 — frontend | `cd frontend && npx vitest run src/components/settings/SearchProviderPanel.test.tsx src/components/settings/ProviderView.test.tsx && npx tsc -b --noEmit` | `node_modules` | `32 passed` (14 ca mới + 18 ca cũ), `tsc` sạch |
+| 3 — frontend | `cd frontend && npx vitest run src/components/settings/SearchProviderPanel.test.tsx src/components/settings/ProviderView.test.tsx && npx tsc -b --noEmit` | `node_modules` | `34 passed` (16 ca mới + 18 ca cũ), `tsc` sạch |
 | 4 — E2E xuyên hệ thống | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src /var/tmp/boxfox-venv/bin/python ../scripts/e2e/search_provider_e2e.py` | Node 24; **không** mạng, **không** khoá | **`8/8 kịch bản tự động XANH`** (mã thoát 0, +1 thủ công), xem §3 |
 
 Máy này dùng venv sẵn có thay cho `python3` trần:
