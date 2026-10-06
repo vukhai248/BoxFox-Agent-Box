@@ -387,8 +387,8 @@ cần migration `researchId` (box này chỉ là môi trường thử, không c�
 
 | Bước | Commit | Quy mô | Kiểm chứng tại chỗ |
 |---|---|---|---|
-| Bề mặt 7/7 RESEARCH_GATEWAY (B1–B3) | `6c8fe6b` | 40 tệp, +565/−419: bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF`; bỏ toàn bộ lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user` / `RESEARCH_NEEDS_MAIN`; `MEMBERS = ()`; viết lại 33 tệp test | 169 + 155 + 105 + 204 + 121 + 59 ca xanh |
-| B5 — xoá hẳn khóa tổng | `0404356` | 41 tệp: xoá `feature_switches.py` + khối `switches` khỏi `runtime-info`; bỏ pin `legacy_path` ở `conftest.py`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py`; sửa comment đầu 35 tệp | 16 + 24 + 169 ca xanh; collect 4372 ca, không tệp nào vỡ import |
+| Bề mặt 7/7 RESEARCH_GATEWAY (B1–B3) | `6c8fe6b` | 40 tệp, +565/−419: bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF`; bỏ toàn bộ lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user` / `RESEARCH_NEEDS_MAIN`; `MEMBERS = ()`; viết lại 34 tệp test | 169 + 155 + 105 + 204 + 121 + 59 ca xanh |
+| B5 — xoá hẳn khóa tổng | `0404356` | 42 tệp: xoá `feature_switches.py` + khối `switches` khỏi `runtime-info`; bỏ pin `legacy_path` ở `conftest.py`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py`; sửa comment đầu 35 tệp | 16 + 24 + 169 ca xanh; collect 4372 ca, không tệp nào vỡ import |
 | Bản sửa sau full suite | `762b159`, `a6a5881` | Feedback simplify/review (F1–F4); **9 bài đỏ còn sót** ở ba tệp KHÔNG mang nhãn `legacy_path` (`test_research_job_v2` 2, `test_research_phase_ledger` 2, `test_research_task_kinds` 5) — chúng tự khai `config['research']['researchId']` để main gọi `delegate_task role=research`, tức xanh nhờ đúng lối thoát đã xoá; nay dựng lead THẬT qua `research_intake.admit_lead` (`research_job_submit` → `resume`) | 21 + 8 + 12 ca xanh; nhóm research 196 ca xanh |
 
 **Blast radius đã về 0.** Phép đo cũ (gỡ pin ở 35 tệp ghim) cho 231 đỏ trên 33 tệp; nay không còn pin

@@ -521,8 +521,8 @@ nhóm test ghim), xoá hẳn khóa tổng SAU khi xoá xong bề mặt 7, **khô
 
 | Bước | Commit | Quy mô | Test tại chỗ |
 |---|---|---|---|
-| Bề mặt 7/7 `BOXFOX_RESEARCH_GATEWAY` | `6c8fe6b` | 40 tệp, +565/−419; bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF` + lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user`; viết lại 33 tệp test | 169 + 155 + 105 + 204 + 121 + 59 passed |
-| B5 — xoá hẳn khóa tổng | `0404356` | 41 tệp; xoá `feature_switches.py` + khối `switches` + pin `legacy_path`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py` | 16 + 24 + 169 passed; collect 4372 ca |
+| Bề mặt 7/7 `BOXFOX_RESEARCH_GATEWAY` | `6c8fe6b` | 40 tệp, +565/−419; bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF` + lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user`; viết lại 34 tệp test | 169 + 155 + 105 + 204 + 121 + 59 passed |
+| B5 — xoá hẳn khóa tổng | `0404356` | 42 tệp; xoá `feature_switches.py` + khối `switches` + pin `legacy_path`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py` | 16 + 24 + 169 passed; collect 4372 ca |
 | Bản sửa sau full suite | `762b159`, `a6a5881` | Feedback simplify/review (F1–F4); **9 bài đỏ còn sót** ở ba tệp không mang nhãn `legacy_path` (chúng xanh nhờ đúng lối thoát legacy của main) — nay dựng lead THẬT qua `tests/unit/research_intake.py` | 21 + 8 + 12 passed; nhóm research 196 passed |
 
 - **Blast radius về 0:** phép đo cũ (gỡ pin 35 tệp) cho `231 failed / 405 passed / 7 errors`; sau v4

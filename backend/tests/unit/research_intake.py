@@ -22,7 +22,8 @@ REQUEST = {'schema': 'boxfox-research-job/1', 'goal': 'Chốt phương án thay 
 
 def admit_lead(store, runtime, root, *, invocation='lead-submit'):
     """Trả `(lead, run_id)` của một intake đã admit (binding `running`)."""
-    original_start = runtime.start
+    seams = {name: getattr(runtime, name, None)
+             for name in ('start', 'prepare_research_admission', 'research_admission')}
     runtime.start = lambda *args, **kwargs: asyncio.get_running_loop().create_future()
 
     async def run():
@@ -39,5 +40,8 @@ def admit_lead(store, runtime, root, *, invocation='lead-submit'):
     try:
         receipt = asyncio.run(run())
     finally:
-        runtime.start = original_start
+        # Trả lại CẢ BA cửa: để nguyên hook admission trên runtime dùng lại được là một cửa sau
+        # khiến một bài kiểm về consent sau này xanh rỗng.
+        for name, original in seams.items():
+            setattr(runtime, name, original)
     return store.get(receipt['ownerControllerId']), receipt['researchJobId']
