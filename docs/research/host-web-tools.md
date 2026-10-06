@@ -51,6 +51,8 @@ ghi rõ ngay dưới bảng.
 | `export.arxiv.org/api/query` | không | `source="papers"` | **406** cho `all:referral` (3 lần) mà **200** cho `all:electron` cùng phiên | chân **cuối** của chuỗi học thuật (A-6) |
 | `api.exa.ai/search` | **cần** | Settings/ENV `EXA_API_KEY` (bậc 1–2) | không gọi được (chủ dự án không có khoá) | Chân 4 của `source="web"`, chỉ chạy khi có khoá (A-7) |
 | `api.parallel.ai/v1beta/search` | **cần** | Settings/ENV `PARALLEL_API_KEY` (bậc 1–2) | không gọi được | Chân 5 của `source="web"`, chỉ chạy khi có khoá (A-7) |
+| `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/websearch/` | **cần** (Account ID + token) | Settings → Provider → Web Search (bậc 1); catalog **không** có biến ENV cho mục này | không gọi được (chủ dự án không có khoá) | Chân mới của `source="web"` (PART 2): đọc `items[]` → `{title, url, snippet}` |
+| endpoint tự khai của người dùng (`custom`) | tuỳ chọn (chỉ endpoint là bắt buộc) | Settings → Provider → Web Search (bậc 1) | chưa đo | Chân mới của `source="web"` (PART 2): POST truy vấn kèm `Authorization: Bearer`, tự nhận `results[]` hoặc `items[]` |
 | `r.jina.ai/<url>` | không | — (đầu đọc, không phải tìm kiếm) | **200**, Markdown có `Title:` và `Markdown Content:` | Bản dự phòng đọc trang khi bản chính bị chặn/thiếu chữ |
 
 ### 2.2 Vòng đo 2026-10-06 — SearXNG tự host thành chân mặc định không khoá

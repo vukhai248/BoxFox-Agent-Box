@@ -109,6 +109,23 @@ Không đưa raw OAuth token, refresh token, cookie hoặc CLI credential vào f
 - Cline và OpenCode là client, không phải inference provider; cần upstream thật hoặc BoxFox adapter rõ ràng.
 - Không suy ra quyền dùng subscription chỉ vì CLI đang đăng nhập.
 
+### 4. Tab "Web Search" — phần mở rộng của bề mặt Provider (PART 2, 2026-10-06)
+
+`Settings → Provider` nay có **ba tab**: **API · Router · Web Search** (nhãn đúng như trên thanh tab). Tab Web Search không phải
+một bề mặt mới: nó **mượn đúng cơ chế lưu khoá** mà tab API đã dùng (bảng `credentials`, một
+dòng cho mỗi provider, AAD = id dòng) qua hai `kind` mới (`search_provider`, `search_config`), nên
+đường suy luận mô hình không bị chạm tới và không có thay đổi schema/hàm mã hoá nào.
+
+- Tám thẻ provider theo catalog của router (`SEARCH_PROVIDER_CATALOG`), đúng thứ tự hiển thị.
+- Khoá thô **không bao giờ** vào snapshot, log hay phản hồi HTTP thường — chỉ `prefix` (6 ký tự đầu
+  + `…`). Hai đường duy nhất trả khoá thô là nút **Hiện** của giao diện và `GET /api/router/search/resolve`
+  (harness đọc qua loopback).
+- Hợp đồng HTTP đầy đủ (7 route) nằm ở [`router/CONTRACT.md`](../../router/CONTRACT.md); cách chạy
+  bốn tầng test và smoke test thủ công nằm ở
+  [`docs/testing/search-provider-e2e.md`](../testing/search-provider-e2e.md).
+- Mục "Mặc định" trong tab = đường built-in không khoá của PART 1 (`searxng` tự host). Chọn một mục
+  thì nó đứng đầu chuỗi ưu tiên; xoá mục đang dùng thì về lại "Mặc định".
+
 ## File chính
 
 - `frontend/src/components/settings/RouterView.tsx`
