@@ -48,7 +48,7 @@ không có bản macOS/Linux của lớp CUA (chỉ Windows).
 | D2 | Supervisor + gateway + profile | `vorflux/desktop-alpha` @ `3bf3ab5` | **xong** |
 | D3 | Tray + chẩn đoán + bộ cài NSIS | `vorflux/desktop-alpha` | **đang làm** |
 | D4 | Tài liệu cài đặt + checklist nghiệm thu 13 bước | `vorflux/desktop-alpha` | **đang làm** |
-| D5 | UI chọn chế độ + quyền + CUA (tab Settings) | `vorflux/desktop-host-mode` | **đang làm** |
+| D5 | UI chọn chế độ + quyền + CUA (tab Settings "Machine & Permissions") | `vorflux/desktop-host-mode` @ `b81d095` | **xong** |
 
 Việc đã xong và **có test chạy được trên Linux** (nền tảng Windows giả, không cần máy Windows):
 
@@ -65,9 +65,14 @@ Việc đã xong và **có test chạy được trên Linux** (nền tảng Wind
 | `backend/tests/unit/test_desktop_control.py` | 36 | lease/epoch, phát hiện người thật, fence, thang xác minh, chống lặp ảnh |
 | `backend/tests/unit/test_host_executor_cua.py` | 31 | ba công cụ CUA trong executor: lease → quyền → mutex → fence → input |
 | `backend/tests/unit/test_desktop_api.py` | 11 | `GET\|POST /api/agent/desktop/lease`, `POST .../inspect-element`, health mang lease thật |
-| **Tổng** | **358** | |
+| `frontend/src/components/settings/MachinePermissionsView.test.tsx` | 9 | tab Quyền/CUA: cảnh báo khi người giữ lease, ba nút gọi đúng route, chế độ docker không vỡ |
+| **Tổng** | **367** | |
 
-Lệnh chạy (không dùng `--timeout`, không dùng cache):
+Giao diện: `cd frontend && npm run typecheck` (sạch) và `npx vitest run src/components/settings`
+(118 xanh; 3 ca đỏ là **có sẵn trên `main`**: `ConnectionKeyRing.test.tsx` ×2 và
+`ProviderConnectionCard.test.tsx` ×1 — đã đối chiếu lại khi bỏ thay đổi của D5 ra thì vẫn đỏ đúng 3 ca đó).
+
+Lệnh chạy test backend (không dùng `--timeout`, không dùng cache):
 
 ```bash
 cd <worktree>/backend && TMPDIR=/var/tmp PYTHONPATH=src /var/tmp/boxfox-venv/bin/python \
@@ -83,6 +88,7 @@ cd <worktree>/backend && TMPDIR=/var/tmp PYTHONPATH=src /var/tmp/boxfox-venv/bin
 | Nhánh | Nội dung | Worktree tham chiếu |
 |---|---|---|
 | `vorflux/desktop-host-mode` | PR-1: host mode phía **backend** (H1–H7) + UI quyền/CUA (D5) | `/var/tmp/boxfox-hostmode-wt` |
+| `vorflux/desktop-handoff` | PR #5: **chỉ** tài liệu này | `/var/tmp/boxfox-handoff-wt` |
 | `vorflux/desktop-alpha` | PR-2: **ứng dụng Electron** + bộ cài NSIS (D1–D4) | `/var/tmp/boxfox-desktop-wt` |
 
 Cả hai cắt từ `origin/main` `8d45b45`. Chúng **không** sửa cùng tệp (`backend/` + `frontend/` so với
@@ -181,6 +187,8 @@ chưa có trên host trả `UNSUPPORTED_IN_HOST_MODE` (danh sách `DEFERRED_TOOL
 | `docs/architecture/decisions/0002-concurrent-desktop-control.md` | ADR: đã chọn kết hợp hai cơ chế (epoch + fence tại điểm hành động) |
 | `docs/testing/desktop-host-mode.md` | cách kiểm tầng Windows trên Linux + checklist cho chủ nhà |
 | `desktop/**` | ứng dụng Electron: supervisor, gateway, profile, tray, chẩn đoán, bộ cài (D1–D3) |
+| `frontend/src/components/settings/MachinePermissionsView.tsx` | tab "Machine & Permissions" (D5) |
+| `frontend/src/lib/permissions/http.ts` | adapter gọi `/api/agent/permissions*` + `/api/agent/desktop/lease` (D5) |
 
 ---
 
@@ -188,10 +196,12 @@ chưa có trên host trả `UNSUPPORTED_IN_HOST_MODE` (danh sách `DEFERRED_TOOL
 
 1. **D3 + D4 (nhánh `vorflux/desktop-alpha`)** — tray, chẩn đoán, bộ cài NSIS, `docs/plan/desktop-alpha-install.md`
    + checklist nghiệm thu 13 bước. Đang làm.
-2. **D5 (nhánh `vorflux/desktop-host-mode`)** — tab Settings "Machine & Permissions": chế độ chạy, quyền,
-   danh sách luật + thu hồi, thẻ duyệt đang chờ, băng lease với ba nút (`claim`/`release`/`stop`). Đang làm.
-3. **Mở PR-1 (draft) cho `vorflux/desktop-host-mode`**, rồi PR-2 cho `vorflux/desktop-alpha` (PR-2 phải
-   rebase lên `origin/main` mới nếu `main` đã tiến).
+2. **D5 — xong** (`b81d095`): tab Settings "Machine & Permissions" đã có adapter
+   (`frontend/src/lib/permissions/http.ts`) đi qua `agentApi`, kiểu dữ liệu riêng
+   (`frontend/src/types/machinePermissions.ts`), 9 ca test. Chế độ docker hiện thẻ "không có động cơ
+   quyền" và **không** gọi route nào, nên không chạm `PERMISSIONS_UNAVAILABLE`.
+3. **Mở PR-1 cho `vorflux/desktop-host-mode`** (H1–H7 + D5), rồi PR-2 cho `vorflux/desktop-alpha` (D1–D4);
+   PR-2 phải rebase lên `origin/main` mới nếu `main` đã tiến.
 4. **Kiểm thử độc lập trên máy Windows thật** — đây là việc **bắt buộc** trước khi phát hành, vì toàn bộ
    H5–H7 mới chỉ chạy trên nền tảng giả:
    - `ComUiaAccessor` (đường `comtypes` thật) **chưa từng chạy** — rủi ro cao nhất.
