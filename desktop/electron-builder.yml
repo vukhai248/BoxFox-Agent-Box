@@ -1,0 +1,72 @@
+# electron-builder configuration for BoxFox Desktop (Alpha) — plan §6 PR-2 / D1.
+#
+# Everything the app needs at runtime is staged by `node scripts/build-app.mjs` into
+# `desktop/build/` and copied verbatim into the installer's `resources/` directory
+# (`extraResources`). The app itself is just the compiled `dist/` — electron and
+# electron-builder stay in `devDependencies` (electron-builder refuses to package an
+# app that lists them as runtime dependencies).
+#
+# Build: `npm run dist:win` → release/BoxFox-Desktop-Alpha-<version>-Setup.exe
+
+appId: tech.kp21.boxfox.desktop
+productName: BoxFox Desktop (Alpha)
+copyright: BoxFox
+
+directories:
+  output: release
+  buildResources: build
+
+# The installed app only contains the compiled main/preload processes plus package.json.
+files:
+  - dist/**
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+
+# No native modules to rebuild — keeps the Windows build reproducible on any machine.
+npmRebuild: false
+nodeGypRebuild: false
+
+extraResources:
+  - from: build/ui
+    to: ui
+  - from: build/router
+    to: router
+  - from: build/harness
+    to: harness
+  - from: build/runtime
+    to: runtime
+  - from: build/docker-context
+    to: docker-context
+  - from: build/build-manifest.json
+    to: build-manifest.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  # electron-builder 26 moved the publisher name under the signing options; it is the
+  # name shown by SmartScreen ("unknown publisher" until a certificate is configured).
+  signtoolOptions:
+    publisherName: BoxFox
+  artifactName: BoxFox-Desktop-Alpha-${version}-Setup.${ext}
+
+nsis:
+  # Per-user install: no administrator prompt, installs under %LOCALAPPDATA%\Programs.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: BoxFox Desktop (Alpha)
+  # Uninstalling must never destroy the user's profile (machine.json, sessions, logs).
+  deleteAppDataOnUninstall: false
+
+linux:
+  target:
+    - target: dir
+      arch:
+        - x64
+  category: Utility

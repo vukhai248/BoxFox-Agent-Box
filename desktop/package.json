@@ -1,0 +1,26 @@
+{
+  "name": "boxfox-desktop",
+  "productName": "BoxFox Desktop (Alpha)",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BoxFox Desktop (Alpha) — Electron shell that bundles the BoxFox router, harness and web UI.",
+  "author": "BoxFox",
+  "license": "UNLICENSED",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test \"test/**/*.test.mjs\"",
+    "fetch-runtime": "node scripts/fetch-runtime.mjs",
+    "fetch-runtime:check": "node scripts/fetch-runtime.mjs --check",
+    "build-app": "node scripts/build-app.mjs",
+    "pack:linux": "npm run build && electron-builder --linux dir --x64",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.6.0"
+  }
+}

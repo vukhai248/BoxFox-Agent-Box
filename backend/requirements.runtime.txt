@@ -1,0 +1,29 @@
+# Runtime requirements of the BoxFox harness that ship inside BoxFox Desktop (Alpha).
+#
+# Split from `backend/requirements.txt` (plan §6 PR-2 / D1):
+#   * dropped: `pytest` (development only — it is not needed to run the harness);
+#   * added:   `comtypes` (pure-Python wheel, no compilation) — the COM/UIA bridge the
+#              Windows platform layer uses to resolve UI elements without stealing focus.
+#
+# `desktop/scripts/fetch-runtime.mjs` resolves these for Windows with
+#   pip download --only-binary=:all: --platform win_amd64 --python-version 3.13 \
+#       -r backend/requirements.runtime.txt
+# so every dependency below must publish a wheel for cp313 / win_amd64 (or be pure Python).
+
+aiohttp>=3.9,<4
+httpx>=0.27,<1
+PyYAML>=6,<7
+
+# Vòng 27 (đợt 1, A-10) — thang đọc đầy đủ dựng lại PDF TẠI CHỖ: `pdfplumber` lấy chữ + bảng,
+# `pypdfium2` là engine render bên dưới nó.
+pdfplumber>=0.11,<1
+pypdfium2>=5,<6
+
+# Windows UI Automation (COM) — element resolution for the CUA surface.
+comtypes>=1.4,<2
+
+# Optional, NOT installed by default (plan §4.2 "Dự phòng WGC"): only needed when a window
+# keeps rendering black with PrintWindow/BitBlt. Uncomment and re-run fetch-runtime.mjs to
+# bundle them.
+# windows-capture>=2.0.1,<3      # cp39-abi3-win_amd64
+# winrt-Windows.Graphics.Capture>=3.2,<4
