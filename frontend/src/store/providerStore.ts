@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import { api, ProviderApiError } from '../lib/providerApi'
-import type { ProviderSnapshot } from '../types/provider'
+import {
+  searchActivePath,
+  searchProviderPath,
+  searchProviderRevealPath,
+  searchProviderTestPath,
+} from '../lib/searchProviderPaths'
+import type { ProviderSnapshot, SearchProviderId, SearchTestResult } from '../types/provider'
 
 export type ModelProbeResult =
   | { status: 'passed'; latencyMs: number }
@@ -14,6 +20,10 @@ interface ProviderStore {
   load: () => Promise<void>
   request: (path: string, method?: string, body?: unknown) => Promise<unknown>
   probeModel: (connectionId: string, modelId: string, signal?: AbortSignal) => Promise<ModelProbeResult>
+  deleteSearchProvider: (providerId: SearchProviderId) => Promise<unknown>
+  setActiveSearchProvider: (providerId: SearchProviderId | null) => Promise<unknown>
+  revealSearchProvider: (providerId: SearchProviderId) => Promise<string>
+  testSearchProvider: (providerId: SearchProviderId, signal?: AbortSignal) => Promise<SearchTestResult>
 }
 
 function errorMessage(error: unknown) {
@@ -82,6 +92,50 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     } catch (error) {
       if (error instanceof ProviderApiError) return { status: 'failed', httpStatus: error.status, code: error.code, message: error.message }
       return { status: 'failed', httpStatus: 0, code: 'REQUEST_FAILED', message: errorMessage(error) }
+    } finally {
+      await get().load().catch(() => undefined)
+    }
+  },
+  /**
+   * Search-provider writes. Both go through `request()`: they are quick, the caller
+   * wants the global banner for a refusal, and `request()` reloads the snapshot so the
+   * panel never shows a state the router has already left.
+   */
+  deleteSearchProvider: (providerId) => get().request(searchProviderPath(providerId), 'DELETE'),
+  setActiveSearchProvider: (providerId) => get().request(searchActivePath(), 'PUT', { providerId }),
+  /**
+   * The raw key exists for exactly as long as the caller keeps it: this action returns it
+   * and never stores it, so the secret cannot leak through a snapshot, a re-render or a
+   * second panel.
+   */
+  revealSearchProvider: async (providerId) => {
+    const result = await api<{ id: string; key: string }>(searchProviderRevealPath(providerId), { method: 'POST' })
+    return typeof result?.key === 'string' ? result.key : ''
+  },
+  /**
+   * Test one search provider. Deliberately does NOT go through `request()`: an upstream
+   * test can take up to 15 s, and `request()` would hold the global `busy` flag (freezing
+   * every button on the panel) and paint the global error banner for a verdict that the
+   * provider row already shows. The verdict is returned to the caller; the router records
+   * `lastTest`/`lastTestedAt` even on failure, so the reload in `finally` makes it durable.
+   */
+  testSearchProvider: async (providerId, signal) => {
+    try {
+      const result = await api<SearchTestResult>(searchProviderTestPath(providerId), { method: 'POST', signal })
+      return {
+        ok: Boolean(result?.ok),
+        providerId: result?.providerId ?? providerId,
+        status: result?.status ?? null,
+        latencyMs: result?.latencyMs ?? null,
+        code: result?.code ?? null,
+        message: result?.message ?? null,
+        sample: result?.sample ?? null,
+      }
+    } catch (error) {
+      if (error instanceof ProviderApiError) {
+        return { ok: false, providerId, status: error.status, latencyMs: null, code: error.code, message: error.message, sample: null }
+      }
+      return { ok: false, providerId, status: null, latencyMs: null, code: 'REQUEST_FAILED', message: errorMessage(error), sample: null }
     } finally {
       await get().load().catch(() => undefined)
     }

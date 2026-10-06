@@ -70,6 +70,8 @@
 | 32 | **Phản biện ý kiến chủ nhà — CHỐT:** **tự động** khi brief có ý kiến/giả định/khẳng định; pha 4 luôn có **mục riêng ba nhãn**: bằng chứng **ủng hộ / phản bác / chưa chắc** | #6025 |
 | 33 | **Ba mục nhỏ tôi tự quyết:** ảnh chụp trang giá **bắt buộc với TM-1** khi giá là số sống và ở **mức 3**; luật cross-nhóm theo **#5995** (main tự mở nhánh + nói rõ trong báo cáo); cổng giữa bốn pha = **ba mốc báo tiến độ** đã có, không thêm cổng chờ người | ghi rõ để chủ nhà chỉnh |
 
+> **Cập nhật 2026-10-06 (PART 1):** hàng 30 nay có bản ghi quyết định đầy đủ — SearXNG **tự host trên loopback** là chân không-khoá mặc định (tự dò `127.0.0.1:8888`), **không mua khoá, không thuê crawler trả giá**: xem `docs/plan/builtin-search-default.md`. **D-42 giữ nguyên hiệu lực** — "hoãn SearXNG/crawler giá" nói về dịch vụ/crawler **phải trả tiền**, còn SearXNG tự host thì không tốn phí và không cần khoá.
+
 ## 2. Vấn đề — số đo hôm nay (2026-09-23, HEAD `2add905`, không dùng khoá API)
 
 | # | Sự thật đo được | Bằng chứng |

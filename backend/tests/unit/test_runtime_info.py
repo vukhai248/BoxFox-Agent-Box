@@ -20,6 +20,7 @@ from agentbox.agent_core import web as web_module
 from agentbox.agent_core import runtime as runtime_module
 from agentbox.agent_core import tool_groups as tool_groups_module
 from agentbox.agent_core import research_gateway
+from agentbox.agent_core import search_pipeline
 from agentbox.agent_core import (research_profiles, research_quality, research_runtime,
                                  source_tiers)
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
@@ -329,6 +330,20 @@ def test_the_limits_are_the_numbers_the_runtime_applies(tmp_path):
             'readStoreDefault': limits.WEB_READ_STORE_DEFAULT_MODE,
             'textHardChars': web_module.MAX_TEXT_HARD,
             'storeMaxEntries': limits.READ_STORE_MAX_ENTRIES,
+        },
+        # Cải tổ web search (đợt 1, A5) — khối `search`: số báo cho giao diện là số engine
+        # ĐANG áp, đọc qua CHÍNH hàm của `search_pipeline` và hằng của `limits`.
+        'search': {
+            'pipelineMode': search_pipeline.pipeline_mode(),
+            'pipelineModes': ['off', 'on', 'auto'],
+            'pipelineDefault': 'auto',
+            'autodetect': search_pipeline.autodetect_enabled(),
+            'autodetectUrl': search_pipeline.autodetect_url(),
+            'autodetectEnv': search_pipeline.SEARXNG_AUTODETECT_ENV,
+            'engineRotation': limits.SEARCH_ENGINE_ROTATION_N,
+            'topK': limits.SEARCH_PIPELINE_TOP_K,
+            'cacheTtlSeconds': limits.SEARCH_CACHE_TTL_SECONDS,
+            'searxngTimeoutSeconds': limits.SEARXNG_TIMEOUT_SECONDS,
         },
     }
     assert info['limits']['instructionsChars'] == limits.INSTRUCTIONS_MAX_CHARS

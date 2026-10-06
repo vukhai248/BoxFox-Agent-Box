@@ -119,7 +119,8 @@ LIVE_SURFACE_CODES = ('HARNESS_CONTRACT_INVALID', 'HARNESS_SCHEMA_UNSUPPORTED',
                       'JOB_EXECUTOR_UNSUPPORTED', 'JOB_PREDICATE_UNSUPPORTED', 'JOB_HANDLE_STALE',
                       'TASK_UNKNOWN', 'TASK_RUN_UNKNOWN', 'TASK_CHILD_UNKNOWN',
                       'TASK_ATTEMPT_UNKNOWN', 'JOB_UNKNOWN', 'JOB_ADMISSION_REQUIRED',
-                      'TASK_OWNER_MISMATCH', 'TASK_REVISION_CONFLICT')
+                      'TASK_OWNER_MISMATCH', 'TASK_REVISION_CONFLICT',
+                      'WEB_SEARCH_UNAVAILABLE', 'WEB_SEARCH_EMPTY')
 
 
 @pytest.mark.parametrize('code', LIVE_SURFACE_CODES)
@@ -228,3 +229,19 @@ def test_permission_and_batch_codes_are_not_transient():
     assert policy.decision('TOOL_NOT_PERMITTED')['action'] == 'checkpoint_and_ask'
     assert policy.decision('TURN_TOOL_BATCH')['action'] == 'fix_input'
     assert policy.is_transient('TOOL_NOT_PERMITTED') is False
+
+
+def test_a_missing_search_backend_asks_the_owner_instead_of_retrying_the_query():
+    """F05: lỗi cấu hình/hạ tầng tìm kiếm phải dừng ở checkpoint, KHÔNG xui đổi truy vấn."""
+    result = policy.decision('WEB_SEARCH_UNAVAILABLE')
+    assert result['class'] == 'capability_gap'
+    assert result['action'] == 'checkpoint_and_ask'
+    assert result['replay'] is False
+    assert 'đừng lặp truy vấn' in result['reason']
+
+
+def test_an_empty_search_changes_the_approach():
+    result = policy.decision('WEB_SEARCH_EMPTY')
+    assert result['class'] == 'no_progress'
+    assert result['action'] == 'change_approach'
+    assert result['replay'] is False

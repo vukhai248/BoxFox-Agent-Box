@@ -45,9 +45,14 @@ import { ProviderRail, type ProviderRailGroup } from './ProviderRail'
 import { ApiProviderCatalogTable } from './ApiProviderCatalogTable'
 import { ConnectedKeysPanel } from './ConnectedKeysPanel'
 import { AddConnectionModal } from './AddConnectionModal'
+import { SearchProviderPanel } from './SearchProviderPanel'
 
-type ProviderTab = 'api' | 'router'
+type ProviderTab = 'api' | 'router' | 'search'
 type RouterSection = 'accounts' | 'models' | 'routing' | 'quota' | 'usage' | 'access'
+
+/** The three tabs, in keyboard order. `Home`/`End` land on the ends of this list. */
+const PROVIDER_TABS: ProviderTab[] = ['api', 'router', 'search']
+const PROVIDER_TAB_LABELS: Record<ProviderTab, string> = { api: 'API', router: 'Router', search: 'Web Search' }
 
 const field = 'w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-fg outline-hidden transition focus:border-brand focus:ring-2 focus:ring-brand/15'
 const secondary = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-panel2 px-3 py-2 text-xs font-semibold text-fg transition hover:border-brand/60 hover:text-brand disabled:cursor-not-allowed disabled:opacity-50'
@@ -127,7 +132,7 @@ export function ProviderView({ initialTab = 'router' }: { initialTab?: ProviderT
           </div>
         </div>
         <div role="tablist" aria-label="Provider settings" className="mx-auto mt-5 flex max-w-6xl items-end gap-1">
-          {(['api', 'router'] as ProviderTab[]).map((item) => (
+          {PROVIDER_TABS.map((item, index) => (
             <button
               key={item}
               type="button"
@@ -140,13 +145,17 @@ export function ProviderView({ initialTab = 'router' }: { initialTab?: ProviderT
               onKeyDown={(event) => {
                 if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
                 event.preventDefault()
-                const next = event.key === 'Home' ? 'api' : event.key === 'End' ? 'router' : item === 'api' ? 'router' : 'api'
+                const next = event.key === 'Home'
+                  ? PROVIDER_TABS[0]
+                  : event.key === 'End'
+                    ? PROVIDER_TABS[PROVIDER_TABS.length - 1]
+                    : PROVIDER_TABS[(index + (event.key === 'ArrowRight' ? 1 : PROVIDER_TABS.length - 1)) % PROVIDER_TABS.length]
                 setTab(next)
                 document.getElementById(`provider-tab-${next}`)?.focus()
               }}
               className={`relative -mb-px min-w-28 rounded-t-xl border px-5 py-2.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand/40 ${tab === item ? 'border-line border-b-bg bg-bg text-fg' : 'border-transparent bg-panel/60 text-muted hover:bg-panel2 hover:text-fg'}`}
             >
-              {item === 'api' ? 'API' : 'Router'}
+              {PROVIDER_TAB_LABELS[item]}
             </button>
           ))}
         </div>
@@ -160,8 +169,10 @@ export function ProviderView({ initialTab = 'router' }: { initialTab?: ProviderT
           <div className="rounded-xl border border-line bg-panel p-6 text-sm">Router engine is unavailable. Start BoxFox with the router launcher and retry.<button type="button" onClick={() => run(load())} className={`${secondary} mt-3 block`}>Retry connection</button></div>
         ) : tab === 'api' ? (
           <ApiPanel snapshot={snapshot} busy={busy} />
-        ) : (
+        ) : tab === 'router' ? (
           <RouterPanel snapshot={snapshot} busy={busy} />
+        ) : (
+          <SearchProviderPanel snapshot={snapshot} />
         )}
       </main>
     </div>

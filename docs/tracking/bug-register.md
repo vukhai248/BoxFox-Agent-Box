@@ -110,7 +110,7 @@ Kế hoạch của đợt: [round7-batch-plan.md](../plan/round7-batch-plan.md).
 | BUG-30 | `/claude-code` là ngõ cụt: ảnh box không có `node`/`claude`/`bwrap`; harness không truyền `ANTHROPIC_*`; readiness đòi đăng nhập tài khoản; box không tới được router | HIGH | ĐÃ SỬA phần mã (`7bf7d84`, `dad8178`, `51ecba6`) — CHƯA XÁC MINH sống vì container thật chưa tạo lại và cầu nối còn tắt (mặc định) | `deploy/docker/README-claude-code.md` |
 | BUG-31 | Log hệ thống cho dev chưa có; test đơn vị ghi thẳng vào thư mục log thật của người vận hành | MEDIUM | ĐÃ SỬA (`0800349`, `006e466`, `aa30ffb`) | `test_system_log.py` (8 ca), `backend/tests/conftest.py` |
 | N-4 | Bảng Terminal trong box thì agent đọc được; nhật ký dev nay ở host (`~/BoxFox/logs`) nên agent không thấy, nhưng **chưa có bảng xem trong app** | — | CHƯA LÀM (bản v2 của kế hoạch nhật ký) | `dev-system-log-plan.md` §3 |
-| N-5 | Sản phẩm **không có công cụ tìm kiếm web**; năng lực web duy nhất là `browser_use`, mà box mặc định tắt mạng | — | CHƯA LÀM — cần chủ sở hữu quyết định mở mạng theo phiên | `agent-output-quality-plan.md` §4 (ca Q5/Q6) |
+| N-5 | Sản phẩm **không có công cụ tìm kiếm web**; năng lực web duy nhất là `browser_use`, mà box mặc định tắt mạng | — | **ĐÃ XONG (2026-10-06)** — có `web_search`/`web_fetch` ở tầng host và **tìm được ngay khi cài, không cần khoá**: SearXNG tự host + tự dò `127.0.0.1:8888` là chân mặc định (bậc 3), ống 10 bước mặc định `auto` | `agent-output-quality-plan.md` §4 (ca Q5/Q6); `docs/plan/builtin-search-default.md`; `docs/testing/builtin-search-e2e.md` |
 
 ### 6.1 Năm lỗi vòng kiểm chứng đợt 7 — ĐÃ SỬA (`9e25bea`)
 
@@ -1671,3 +1671,17 @@ thêm `BUG-114` ở đây).
 nói rõ việc chưa chạy được; **D-18** (cổng bằng chứng không chấm khuôn câu trả lời); tóm tắt do model
 viết + `View details` — nay chỉ còn là **mẹo đọc**, không phải luật.
 
+### 6.38 Vòng 2026-10-06 — F05 (Work Graph, `web_search`): lỗi hạ tầng/cấu hình không còn xui sửa truy vấn — ĐÃ SỬA (PART 1)
+
+Nhãn **F05** theo `docs/plan/Work-Graph-fix.md` §"Danh mục lỗi" — **đừng lẫn với F5** ở §6.2 (ca
+`inspect_element`). Bản ghi quyết định đầy đủ: `docs/plan/builtin-search-default.md`; ba tầng test +
+kịch bản bench: `docs/testing/builtin-search-e2e.md`.
+
+| Mã | Lỗi / việc | Mức | Trạng thái | Bằng chứng |
+|---|---|---|---|---|
+| F05 | `web_search` lỗi vì **hạ tầng/cấu hình** (Firecrawl 403/429; SearXNG/Brave/Tavily chưa cấu hình) mà hint vẫn bảo "sửa input và gọi lại" ⇒ agent đốt bước thử truy vấn khác trên cùng hạ tầng chết. **Không phải** lỗi do tiếng Việt trong truy vấn | HIGH | **ĐÃ SỬA (PART 1, 2026-10-06)** — lỗi cuối được phân loại `searchFailure.kind` = `config`/`infra`/`source`; câu chữ nói thẳng "not a query problem" (config/infra) và "do not retry the same search"; ca **rỗng** tách thành mã riêng `WEB_SEARCH_EMPTY` (được phép nới/đổi truy vấn **một lần**); `recovery_policy` khai hai mã là `capability_gap`/`no_progress` nên không rơi vào `unknown` | `backend/tests/unit/test_search_failures.py` (10 lượt: 8 hàm, 1 hàm tham số hoá 3 giá trị); `backend/tests/integration/test_search_searxng_stub.py` (4 ca, có ca rỗng ≠ chết); `backend/tests/integration/test_search_searxng_live.py` (5 ca, xoá sạch khoá trước khi chạy) |
+
+Kèm theo cùng vòng: **N-5 đóng** (SearXNG tự host + tự dò là chân không-khoá mặc định — xem hàng N-5 ở
+§6) và **R10-5 được rà lại, giữ nguyên**: hành vi "nhà cung cấp trả 200 với thân không phải JSON làm
+đứt cả chuỗi" vẫn đúng là đã sửa ở đợt 10
+(`test_web_tools.py::test_the_provider_chain_survives_a_challenge_page`).

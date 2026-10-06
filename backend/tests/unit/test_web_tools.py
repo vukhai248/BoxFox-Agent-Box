@@ -183,7 +183,28 @@ def test_every_provider_failing_is_one_clear_error(tools, monkeypatch):
     with pytest.raises(WebError) as caught:
         tools.search({'query': 'x'})
     assert caught.value.code == 'WEB_SEARCH_UNAVAILABLE'
-    assert 'source="wikipedia"' in str(caught.value)
+    # F05: lỗi cấu hình phải nói thẳng là vấn đề cấu hình, KHÔNG xui đổi truy vấn/nguồn.
+    assert 'not a query problem' in str(caught.value)
+    assert 'Every provider was refused or empty' not in str(caught.value)
+    assert caught.value.details['searchFailure']['kind'] == 'config'
+
+
+def test_a_dead_leg_with_a_configured_backend_reports_infra(tools, monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.setattr(web_module.search_pipeline, 'searxng_search',
+                        lambda *a, **kw: {'results': [], 'engines': ['bing'], 'unresponsive': [],
+                                          'error': 'ConnectionRefusedError: refused', 'latencyMs': 3})
+    monkeypatch.setattr(web_module, 'http_request',
+                        lambda url, **kwargs: (_ for _ in ()).throw(
+                            WebError('WEB_FETCH_FAILED', 'mạng đứt')))
+    for key in ('FIRECRAWL_API_KEY', 'BRAVE_API_KEY', 'TAVILY_API_KEY', 'EXA_API_KEY',
+                'PARALLEL_API_KEY'):
+        monkeypatch.delenv(key, raising=False)
+    with pytest.raises(WebError) as caught:
+        tools.search({'query': 'x'})
+    assert caught.value.details['searchFailure']['kind'] == 'infra'
+    assert 'backend problem, not a query problem' in str(caught.value)
+    assert 'do not retry the same search' in str(caught.value)
 
 
 def test_wikipedia_search_uses_vietnamese_for_diacritics(tools, monkeypatch):
