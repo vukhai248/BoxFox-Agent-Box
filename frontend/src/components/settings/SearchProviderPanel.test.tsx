@@ -188,6 +188,28 @@ describe('Search provider panel', () => {
     expect(host.textContent).toContain('In use: Brave Search')
   })
 
+  it('the default row offers the switch back only while a named provider is active', async () => {
+    const page = searchPage({
+      activeProviderId: 'brave',
+      providers: CATALOG.map((entry) => (entry.id === 'brave' ? configuredBrave : providerView({ id: entry.id }))),
+    })
+    const calls = routerStub(page)
+    await renderPanel(page)
+
+    // Brave is in use: the header says so, and the Default row must offer "Use this"
+    // instead of claiming to be the source in use itself.
+    expect(host.textContent).toContain('In use: Brave Search')
+    expect(buttonIn(rowFor('default'), 'Use this')).not.toBeUndefined()
+    expect(rowFor('default').textContent).not.toContain('In use')
+
+    await act(async () => buttonIn(rowFor('default'), 'Use this')!.click())
+
+    expect(calls).toContainEqual({ path: '/api/router/search/active', method: 'PUT', body: { providerId: null } })
+    expect(host.textContent).toContain('In use: Default — built-in search (SearXNG)')
+    expect(buttonIn(rowFor('default'), 'Use this')).toBeUndefined()
+    expect(rowFor('default').textContent).toContain('In use')
+  })
+
   it('the modal posts the documented body for an api key provider', async () => {
     const page = searchPage()
     const calls = routerStub(page)

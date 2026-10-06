@@ -153,7 +153,9 @@ export function SearchProviderPanel({ snapshot }: { snapshot: ProviderSnapshot }
               <p className="text-xs font-semibold text-fg">{t('providerSearch.default')}</p>
               <p className="text-[11px] text-muted">{t('providerSearch.defaultHint')}</p>
             </div>
-            {active ? (
+            {/* "In use" here means the built-in source is the selection: that is exactly when
+                no named provider is active (`!active`), the same condition as the header card. */}
+            {!active ? (
               <Pill value="passed">
                 <span className="inline-flex items-center gap-1">
                   <Check className="size-3" />
