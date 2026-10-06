@@ -65,6 +65,16 @@ def router_request(method: str, path: str, body: dict | None = None, *, admin: b
             return exc.code, {'raw': raw}
 
 
+def _dead_loopback_url() -> str:
+    """Một URL loopback trỏ vào cổng vừa đóng: kết nối bị từ chối, không chạm Internet."""
+    import socket
+    probe = socket.socket()
+    probe.bind(('127.0.0.1', 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    return f'http://127.0.0.1:{port}/'
+
+
 def wait_for_router(deadline: float = 30.0) -> None:
     end = time.time() + deadline
     while time.time() < end:
@@ -73,7 +83,8 @@ def wait_for_router(deadline: float = 30.0) -> None:
             if status < 500:
                 return
         except Exception:
-            time.sleep(0.25)
+            pass
+        time.sleep(0.25)                     # router trả 5xx cũng phải chờ, không quay CPU
     raise RuntimeError(f'router không lên được ở {ROUTER_URL}')
 
 
@@ -168,16 +179,44 @@ def _state(fake: FakeSearchProviders) -> None:
 
 
 @scenario('a_broken_selected_key_falls_through_to_the_builtin_path',
-          'khoá đã chọn hỏng (401) ⇒ vẫn có kết quả built-in và nói rõ nguồn hỏng')
+          'khoá đã chọn hỏng (401) ⇒ vẫn có kết quả built-in; mọi bậc hỏng thì câu lỗi nêu tên nguồn')
 def _broken(fake: FakeSearchProviders) -> None:
+    from agentbox.agent_core.web import WebError
+
+    # Giữ NGUYÊN giá trị gốc để trả lại: `fake.url('searxng')` trả `…/searxng/search` (đường ĐẦY ĐỦ),
+    # còn biến môi trường phải là GỐC `…/searxng` — trả nhầm là mọi kịch bản sau mất bậc built-in.
+    original = {name: os.environ.get(name, '') for name in
+                ('BOXFOX_BRAVE_SEARCH_URL', 'BOXFOX_SEARXNG_URL', 'BOXFOX_FIRECRAWL_SEARCH_URL')}
     os.environ['BOXFOX_BRAVE_SEARCH_URL'] = fake.url('brave', status=401)
     fake.reset()
     try:
         result = search('truy vấn brave hỏng')
+        assert result['results'], 'phải rơi xuống bậc tiếp theo và vẫn có kết quả'
+        # Hai khẳng định dưới đây giữ cho kịch bản KHÔNG rỗng: thiếu chúng thì nó vẫn xanh khi
+        # tính năng "nguồn đang chọn" biến mất, hoặc khi hook ghi đè URL không được áp dụng và
+        # lời gọi đi thẳng ra api.search.brave.com thật.
+        assert fake.calls('brave'), 'nguồn ĐÃ CHỌN phải được gọi trước bậc built-in'
+        assert fake.calls('searxng'), 'bậc built-in phải chạy sau khi nguồn chọn hỏng'
+
+        # Vế thứ hai của tên kịch bản: khi MỌI bậc hỏng, câu lỗi phải nói tên nguồn đang chọn,
+        # nếu không người dùng chỉ thấy các chân built-in hỏng và không hiểu vì sao.
+        # SearXNG nhận GỐC rồi harness tự nối `/search?q=…`, nên không gắn `?status=` vào gốc được:
+        # trỏ nó vào một cổng vừa đóng (kết nối bị từ chối, vẫn kín mạng).
+        os.environ['BOXFOX_SEARXNG_URL'] = _dead_loopback_url()
+        os.environ['BOXFOX_FIRECRAWL_SEARCH_URL'] = fake.url('firecrawl', status=503)
+        try:
+            search('truy vấn mọi bậc hỏng')
+        except WebError as exc:
+            assert "selected source 'brave'" in str(exc), str(exc)
+        else:
+            raise AssertionError('mọi bậc đều hỏng mà không ném WebError')
     finally:
-        os.environ['BOXFOX_BRAVE_SEARCH_URL'] = fake.url('brave')
-    assert result['results'], 'phải rơi xuống bậc tiếp theo và vẫn có kết quả'
-    assert fake.calls('searxng'), 'bậc built-in phải chạy sau khi nguồn chọn hỏng'
+        for name, value in original.items():
+            os.environ[name] = value
+        # Lượt tìm hỏng vừa rồi có thể đã đánh dấu SearXNG là không dùng được; xoá dấu đó để các
+        # kịch bản sau vẫn thấy đúng trạng thái sạch.
+        from agentbox.agent_core import search_pipeline
+        search_pipeline.reset_autodetect()
 
 
 @scenario('the_cloudflare_entry_needs_account_and_key_and_maps_items',
@@ -228,7 +267,7 @@ def _remove(fake: FakeSearchProviders) -> None:
 
 
 @scenario('the_ui_contract_shapes_match',
-          'bảy route của hợp đồng UI trả đúng hình dạng đã chốt')
+          'tám route của hợp đồng UI trả đúng hình dạng đã chốt')
 def _contract(fake: FakeSearchProviders) -> None:
     status, listing = router_request('GET', '/api/router/search')
     assert status == 200, status
@@ -251,8 +290,14 @@ def _contract(fake: FakeSearchProviders) -> None:
     status, tested = router_request('POST', '/api/router/search/providers/tavily/test')
     assert status == 200 and set(tested) >= {'ok', 'providerId', 'status', 'latencyMs', 'code',
                                              'message', 'sample'}, tested
+    assert tested['ok'] is True, f'nút Kiểm tra phải chạm endpoint giả và xanh, nhận {tested}'
+    assert fake.calls('tavily'), 'probe phải đi qua hook BOXFOX_TAVILY_SEARCH_URL, không ra Internet thật'
     status, resolved = router_request('GET', '/api/router/search/resolve')
     assert status == 200 and 'revision' in resolved and 'active' in resolved, resolved
+    status, active = router_request('PUT', '/api/router/search/active', {'providerId': 'tavily'})
+    assert status == 200 and active.get('activeProviderId') == 'tavily', active
+    assert active.get('revision', 0) > resolved.get('revision', 0), 'đổi lựa chọn phải đẩy revision lên'
+    router_request('PUT', '/api/router/search/active', {'providerId': None})
     status, denied = router_request('GET', '/api/router/search', admin=False)
     assert status == 403, f'thiếu header admin phải 403, nhận {status} {denied}'
     router_request('DELETE', '/api/router/search/providers/tavily')
@@ -267,11 +312,19 @@ def _manual(fake: FakeSearchProviders) -> None:
 
 # --------------------------------------------------------------------- điều khiển
 
+#: Kịch bản CHỈ in hướng dẫn (cần khoá thật) — không tính vào số kịch bản tự động đã kiểm.
+MANUAL_SCENARIOS = {'a_real_key_smoke_test_is_manual_and_optional'}
+
+
 def main() -> int:
     E2E_DIR.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault('BOXFOX_SEARCH_REFRESH', '1')
     os.environ.setdefault('BOXFOX_ROUTER_SEARCH_URL', ROUTER_URL + '/api/router/search/resolve')
     os.environ.setdefault('BOXFOX_SEARCH_SOURCE_TTL', '0')
+    # Bậc built-in gọi `record_response_health` ⇒ DB engine THẬT. Không trỏ nó vào thư mục tạm thì
+    # mỗi lần chạy E2E lại gieo hàng sức khoẻ giả cho bing/brave/... vào `~/BoxFox/harness/search.sqlite`,
+    # và những hàng đó nuôi cầu dao ngắt engine (3 lỗi liên tiếp ⇒ tạm dừng 5/15/60 phút).
+    os.environ['BOXFOX_SEARCH_DB'] = str(E2E_DIR / 'search.sqlite')
 
     with FakeSearchProviders(log_path=str(E2E_DIR / 'fake-calls.jsonl')) as fake:
         os.environ.update(fake.env())
@@ -279,18 +332,24 @@ def main() -> int:
         try:
             wait_for_router()
             failures: list[str] = []
+            checked = 0
             for index, (name, title, fn) in enumerate(SCENARIOS, start=1):
+                manual = name in MANUAL_SCENARIOS
                 print(f'[{index}/{len(SCENARIOS)}] {name} — {title}', flush=True)
                 try:
                     fn(fake)
-                    print('      PASS', flush=True)
+                    if not manual:
+                        checked += 1
+                    print('      PASS' + (' (thủ công)' if manual else ''), flush=True)
                 except Exception as exc:                        # noqa: BLE001 — kịch bản nào hỏng cũng ghi lại
                     print(f'      FAIL: {exc.__class__.__name__}: {exc}', flush=True)
                     failures.append(name)
+            manual_total = len(MANUAL_SCENARIOS & {name for name, _, _ in SCENARIOS})
             if failures:
                 print(f'\n{len(failures)}/{len(SCENARIOS)} kịch bản HỎNG: {", ".join(failures)}')
                 return 1
-            print(f'\n{len(SCENARIOS)}/{len(SCENARIOS)} kịch bản XANH')
+            print(f'\n{checked}/{len(SCENARIOS) - manual_total} kịch bản tự động XANH'
+                  f' (+{manual_total} thủ công, chỉ in hướng dẫn)')
             return 0
         finally:
             router.stop()

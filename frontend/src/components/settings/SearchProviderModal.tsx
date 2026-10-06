@@ -74,8 +74,11 @@ export function SearchProviderModal({
 
   const endpointMissing = wantsEndpoint && provider.requires.includes('endpoint') && !endpoint.trim()
   const endpointInvalid = wantsEndpoint && endpoint.trim() !== '' && !endpointIsValid(endpoint)
+  // Chỉ `requires` mới chặn Lưu. `custom` khai `optional: ['apiKey']` (endpoint tự do, khoá Bearer tuỳ
+  // chọn), nên bắt nó phải có khoá sẽ khoá mất một cấu hình đã được ghi trong hợp đồng.
+  const apiKeyRequired = provider.requires.includes('apiKey')
   const canSubmit = Boolean(
-    (!wantsApiKey || apiKey.trim() || (editing && provider.hasSecret))
+    (!apiKeyRequired || apiKey.trim() || (editing && provider.hasSecret))
     && (!wantsAccountId || accountId.trim())
     && !endpointMissing && !endpointInvalid,
   )

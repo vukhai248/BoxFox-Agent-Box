@@ -280,3 +280,23 @@ test('the probe records the last test verdict and never throws on a broken endpo
   }
   await assert.rejects(async () => f.search.probe('tavily'), error => error.code === 'NOT_FOUND' && error.status === 404, 'probing an entry that is not configured is a 404');
 });
+
+test('a provider that echoes the key into its own error text cannot put it in the record', async t => {
+  const page = 'x'.repeat(600);
+  const fetchImpl = async () => new Response(
+    JSON.stringify({ error: { message: `Bad credentials: SEARCH-SECRET-1 ${page}` } }),
+    { status: 401, headers: { 'Content-Type': 'application/json' } },
+  );
+  const f = await fixture(t, { fetchImpl });
+  f.search.create({ providerId: 'brave', apiKey: 'SEARCH-SECRET-1' });
+
+  const verdict = await f.search.probe('brave');
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.code, 'AUTH');
+  assert.equal(verdict.message.includes('SEARCH-SECRET-1'), false, 'the echoed key is redacted before it is stored');
+  assert.equal(verdict.message.includes('[redacted]'), true);
+  assert.equal(verdict.message.length <= 301, true, 'the provider text is capped at 300 characters plus the ellipsis');
+  const raw = JSON.stringify(f.service.snapshot());
+  assert.equal(raw.includes('SEARCH-SECRET-1'), false, 'the snapshot never carries the key');
+  assert.equal(raw.includes('x'.repeat(400)), false, 'the snapshot never carries the whole page either');
+});

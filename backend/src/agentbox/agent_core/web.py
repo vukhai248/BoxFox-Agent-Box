@@ -509,11 +509,16 @@ def _leg_names(providers) -> list[str]:
 
 
 def search_status() -> dict:
-    """Trạng thái tìm kiếm cho `GET /api/agent/health` — chỉ ĐỌC env/cache, không gọi mạng.
+    """Trạng thái tìm kiếm cho `GET /api/agent/health` — không gọi provider nào.
 
     Gộp ba thứ người vận hành cần phân biệt: (1) ống 10 bước có đang dùng không, (2) khoá/nguồn
     tường minh nào có mặt, (3) chân nào sẽ chạy trước và còn chân nào dự phòng. Mọi lỗi ⇒ giá trị
     rỗng chứ không ném: health không được chết vì một khoá hỏng.
+
+    Lưu ý về "không gọi mạng": `_search_chain()` đọc nguồn đang chọn qua `search_credentials`, nên
+    khi cache 15 giây đã hết hạn nó CÓ thể phát một lời GET loopback tới router. Đó là lời gọi nội
+    bộ, tức thời khi router chết (kết nối bị từ chối), trần 2 giây — không phải một truy vấn ra
+    Internet. `probe_searxng` vẫn là lời gọi mạng duy nhất mà health phát ra theo yêu cầu.
     """
     try:
         status = search_pipeline.search_status()

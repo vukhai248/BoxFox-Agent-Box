@@ -45,6 +45,8 @@ const REQUIRED_LABELS = { apiKey: 'API key', endpoint: 'endpoint URL', accountId
 /** Truy vấn thử của nút "Kiểm tra" — cố định, nhỏ, không lấy từ người dùng. */
 const PROBE_QUERY = 'boxfox search test';
 const PROBE_TIMEOUT_MS = 15000;
+/** Trần câu lỗi lấy từ nhà cung cấp — đủ để đọc, không đủ để nhét cả trang vào bản ghi. */
+const MAX_PROBE_MESSAGE = 300;
 
 /**
  * Endpoint thật của từng nhà cung cấp. `probe` đọc biến ghi đè
@@ -75,6 +77,20 @@ function envValue(name) {
   const value = (process.env[name] || '').trim();
   return value || null;
 }
+/**
+ * Câu lỗi của nhà cung cấp là VĂN BẢN CỦA HỌ: nó được lưu vào bản ghi `search_provider`
+ * (JSON thuần, chỉ dòng `credentials` mới mã hoá) và trả lại trong mọi snapshot. Vì vậy
+ * cắt trần và xoá khoá ra TRƯỚC khi lưu — một nhà cung cấp lỡ nhắc lại `Authorization`
+ * không được biến bản ghi thành chỗ chứa bí mật.
+ */
+function safeProbeMessage(text, secret) {
+  if (typeof text !== 'string') return null;
+  let value = text.trim();
+  if (secret && value.includes(secret)) value = value.split(secret).join('[redacted]');
+  if (!value) return null;
+  return value.length > MAX_PROBE_MESSAGE ? `${value.slice(0, MAX_PROBE_MESSAGE)}…` : value;
+}
+
 /** Câu lỗi nhà cung cấp tự nói trong payload (nếu có) — không bao giờ là request của ta. */
 function providerMessage(payload) {
   if (!payload || typeof payload !== 'object') return null;
@@ -416,6 +432,7 @@ export class SearchService {
   }
   async #runProbe(provider, record, signal) {
     const request = this.#probeRequest(provider, record);
+    const key = this.#credential(provider.id)?.apiKey ?? '';
     const timeout = AbortSignal.timeout(PROBE_TIMEOUT_MS);
     const response = await this.fetchImpl(request.url, {
       method: request.method,
@@ -427,13 +444,15 @@ export class SearchService {
     let payload = null;
     try { payload = text ? JSON.parse(text) : null; } catch { payload = null; }
     if (!response.ok) {
-      return { ok: false, status: response.status, code: verdictFor(response.status), message: providerMessage(payload) || `The provider refused the test request (HTTP ${response.status}).`, sample: null };
+      const refused = providerMessage(payload) || `The provider refused the test request (HTTP ${response.status}).`;
+      return { ok: false, status: response.status, code: verdictFor(response.status), message: safeProbeMessage(refused, key), sample: null };
     }
     if (text && payload === null) {
       return { ok: false, status: response.status, code: 'UNAVAILABLE', message: 'The provider returned a response that is not JSON.', sample: null };
     }
     if (payload && typeof payload === 'object' && payload.success === false) {
-      return { ok: false, status: response.status, code: 'UNAVAILABLE', message: providerMessage(payload) || 'The provider answered with success: false.', sample: null };
+      const refusal = providerMessage(payload) || 'The provider answered with success: false.';
+      return { ok: false, status: response.status, code: 'UNAVAILABLE', message: safeProbeMessage(refusal, key), sample: null };
     }
     return { ok: true, status: response.status, code: null, message: null, sample: firstSample(payload) };
   }

@@ -66,8 +66,14 @@ _LOCK = threading.Lock()
 
 
 def resolve_url() -> str:
-    """Endpoint phân giải của router: `BOXFOX_ROUTER_SEARCH_URL` hoặc loopback mặc định."""
-    return (os.environ.get(ROUTER_SEARCH_URL_ENV) or '').strip() or ROUTER_SEARCH_RESOLVE_URL_DEFAULT
+    """Endpoint phân giải của router: `BOXFOX_ROUTER_SEARCH_URL` hoặc loopback mặc định.
+
+    Giá trị thiếu scheme (`http://`/`https://`) bị BỎ QUA và quay về mặc định: một biến test đặt
+    sai không được làm `web_search` ném lỗi ở tận `cache_key()`/`_search_chain()`, nơi không có
+    vòng bắt lỗi nào.
+    """
+    value = (os.environ.get(ROUTER_SEARCH_URL_ENV) or '').strip()
+    return value if value.startswith(('http://', 'https://')) else ROUTER_SEARCH_RESOLVE_URL_DEFAULT
 
 
 def _ttl_seconds() -> float:
@@ -120,10 +126,11 @@ def _parse(payload: object) -> SearchSource | None:
 
 def _fetch() -> object:
     """Một lời đọc router. Trả `SearchSource`, `None` (Mặc định) hoặc sentinel `_FAILED`."""
-    request = urllib.request.Request(resolve_url(), method='GET',
-                                     headers={'x-boxfox-admin': '1', 'Accept': 'application/json'})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
+        # Dựng Request TRONG `try`: một URL dị dạng làm hàm dựng ném ngay, trước mọi handler.
+        request = urllib.request.Request(resolve_url(), method='GET',
+                                         headers={'x-boxfox-admin': '1', 'Accept': 'application/json'})
         with opener.open(request, timeout=SEARCH_SOURCE_TIMEOUT_SECONDS) as response:
             body = response.read(64 * 1024)
         return _parse(json.loads(body.decode('utf-8', 'replace') or '{}'))

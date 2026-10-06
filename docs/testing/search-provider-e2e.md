@@ -1,8 +1,8 @@
 # Test E2E "Web Search API" — khoá tìm kiếm trong router (PART 2)
 
-> **Trạng thái:** bốn tầng test đã chạy trên máy này ngày **2026-10-06** — router `304 xanh`, harness
-> `263 xanh + 1 ca đỏ có sẵn từ `main`` (xem §1), frontend `30 xanh`, E2E **9/9 xanh** trên máy
-> **không có** biến khoá nào. Phạm vi: người dùng dán khoá tìm kiếm trong
+> **Trạng thái:** bốn tầng test đã chạy trên máy này ngày **2026-10-06** — router `305 xanh`, harness
+> `263 xanh + 1 ca đỏ có sẵn từ `main`` (xem §1), frontend `32 xanh`, E2E **8/8 kịch bản tự động xanh**
+> (+1 kịch bản chỉ in hướng dẫn) trên máy **không có** biến khoá nào. Phạm vi: người dùng dán khoá tìm kiếm trong
 > **Settings → Provider → Web Search**, harness đọc khoá đó qua loopback và dùng nó **trước** các
 > bậc còn lại; không cấu hình gì thì `web_search` vẫn chạy bằng đường built-in của PART 1.
 >
@@ -14,11 +14,11 @@
 
 | Tầng | Lệnh (chạy từ gốc repo) | Cần gì | Kết quả đo 2026-10-06 |
 |---|---|---|---|
-| 1 — router | `cd router && npm test` | Node 24 | `304 passed, 0 failed` (7,7 s) — gồm `tests/search-providers.test.mjs` (9 ca) và `tests/search-http.test.mjs` (5 ca) |
-| 2 — harness (đơn vị) | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/unit/test_search_credentials.py tests/unit/test_web_search_selected_source.py` | không mạng, không router | `20 passed` |
+| 1 — router | `cd router && npm test` | Node 24 | `305 passed, 0 failed` (6,7 s) — gồm `tests/search-providers.test.mjs` (10 ca) và `tests/search-http.test.mjs` (5 ca) |
+| 2 — harness (đơn vị) | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/unit/test_search_credentials.py tests/unit/test_web_search_selected_source.py` | không mạng, không router | `22 passed` |
 | 2b — harness (bộ liên quan) | thêm `test_search_pipeline.py test_searxng_provider.py test_search_failures.py test_health_search_status.py test_web_tools.py test_recovery_policy.py test_tool_recovery.py test_runtime_info.py` | như trên | `263 passed, 1 failed` — ca đỏ là **có sẵn từ `main`**, xem ghi chú dưới |
-| 3 — frontend | `cd frontend && npx vitest run src/components/settings/SearchProviderPanel.test.tsx src/components/settings/ProviderView.test.tsx && npx tsc -b --noEmit` | `node_modules` | `30 passed` (10 ca mới + 20 ca cũ), `tsc` sạch |
-| 4 — E2E xuyên hệ thống | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src /var/tmp/boxfox-venv/bin/python ../scripts/e2e/search_provider_e2e.py` | Node 24; **không** mạng, **không** khoá | **`9/9 kịch bản XANH`** (mã thoát 0), xem §3 |
+| 3 — frontend | `cd frontend && npx vitest run src/components/settings/SearchProviderPanel.test.tsx src/components/settings/ProviderView.test.tsx && npx tsc -b --noEmit` | `node_modules` | `32 passed` (14 ca mới + 18 ca cũ), `tsc` sạch |
+| 4 — E2E xuyên hệ thống | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src /var/tmp/boxfox-venv/bin/python ../scripts/e2e/search_provider_e2e.py` | Node 24; **không** mạng, **không** khoá | **`8/8 kịch bản tự động XANH`** (mã thoát 0, +1 thủ công), xem §3 |
 
 Máy này dùng venv sẵn có thay cho `python3` trần:
 `/var/tmp/boxfox-venv/bin/python` (có pytest 8.4.2). Trên máy khác cứ dùng `python3` sau khi cài
@@ -47,7 +47,8 @@ Khoá thô **không bao giờ** vào prompt, vào payload `web_search`, hay vào
 
 `scripts/e2e/search_provider_e2e.py` tự làm hết: mở máy chủ provider giả, mở router tạm ở cổng
 **3199** với `BOXFOX_ROUTER_DATA_DIR` riêng, trỏ cả hai vào máy giả, chạy 9 kịch bản, rồi dọn tiến
-trình con. Không chạm router thật ở 3101, không chạm mạng ngoài.
+trình con. Không chạm router thật ở 3101, không chạm mạng ngoài, và **không chạm DB thật** —
+`BOXFOX_SEARCH_DB` được trỏ vào `BOXFOX_E2E_DIR` trước lời gọi `search()` đầu tiên (xem §3.1).
 
 ```
 cd backend && TMPDIR=/var/tmp PYTHONPATH=src \
@@ -67,14 +68,16 @@ cd backend && env -u BRAVE_API_KEY -u BOXFOX_BRAVE_API_KEY -u TAVILY_API_KEY -u 
 | 1 | `default_choice_uses_the_builtin_path` | không cấu hình gì ⇒ kết quả đến từ SearXNG, và **không** có lời gọi nào tới Brave |
 | 2 | `a_saved_brave_key_is_resolved_and_used` | lưu khoá + chọn ⇒ harness gọi Brave với `X-Subscription-Token`, khoá thô không vào payload |
 | 3 | `the_router_state_endpoint_never_leaks_the_key` | `GET /api/router/state` chỉ có `prefix`, không có khoá thô |
-| 4 | `a_broken_selected_key_falls_through_to_the_builtin_path` | Brave trả 401 ⇒ vẫn có kết quả, và bậc built-in thật sự chạy |
+| 4 | `a_broken_selected_key_falls_through_to_the_builtin_path` | Brave trả 401 ⇒ nguồn **đã chọn** thật sự bị gọi, bậc built-in chạy tiếp và vẫn có kết quả; khi **mọi** bậc hỏng thì câu lỗi nêu tên `selected source 'brave'` |
 | 5 | `the_cloudflare_entry_needs_account_and_key_and_maps_items` | thiếu `accountId` ⇒ 400; đủ ⇒ dùng Cloudflare và map `items[]` |
 | 6 | `the_custom_entry_posts_the_query_with_the_stored_key` | mục `custom` POST truy vấn kèm `Authorization`, khoá không nằm trong thân bài |
 | 7 | `removing_the_active_provider_returns_to_the_builtin_path` | xoá mục đang dùng ⇒ `activeProviderId: null` và tìm kiếm về built-in |
-| 8 | `the_ui_contract_shapes_match` | 8 đường HTTP trả đúng hình dạng hợp đồng; thiếu header admin ⇒ 403 |
+| 8 | `the_ui_contract_shapes_match` | cả 8 đường HTTP (gồm `PUT /active`) trả đúng hình dạng hợp đồng, `revision` tăng khi đổi lựa chọn; nút Kiểm tra chạm đúng endpoint giả; thiếu header admin ⇒ 403 |
 | 9 | `a_real_key_smoke_test_is_manual_and_optional` | chỉ in hướng dẫn smoke test thủ công (§6) |
 
-Script trả mã **≠ 0** nếu một kịch bản hỏng, và in `n/9 kịch bản HỎNG: <tên…>`.
+Script trả mã **≠ 0** nếu một kịch bản hỏng, và in `n/9 kịch bản HỎNG: <tên…>`. Kịch bản 9 chỉ **in**
+hướng dẫn smoke test thủ công nên được đếm riêng: dòng cuối là
+`8/8 kịch bản tự động XANH (+1 thủ công, chỉ in hướng dẫn)` — con số "tự động" mới là thứ có khẳng định.
 
 ### 3.1 Biến môi trường chỉ dùng cho test/E2E
 
@@ -89,6 +92,7 @@ Script trả mã **≠ 0** nếu một kịch bản hỏng, và in `n/9 kịch b
 | `BOXFOX_{BRAVE,TAVILY,EXA,PARALLEL,FIRECRAWL,CLOUDFLARE,CUSTOM}_SEARCH_URL` | — | ghi đè base URL của từng chân provider. Riêng `BOXFOX_CUSTOM_SEARCH_URL` chỉ dùng khi mục `custom` **không** có endpoint riêng |
 | `BOXFOX_E2E_DIR` | `/var/tmp/boxfox-e2e` | thư mục dữ liệu/router log của E2E |
 | `BOXFOX_E2E_ROUTER_PORT` | `3199` | cổng router tạm của E2E |
+| `BOXFOX_SEARCH_DB` | `~/BoxFox/harness/search.sqlite` | E2E **tự trỏ** biến này vào `BOXFOX_E2E_DIR`: bậc built-in gọi `record_response_health`, không tách DB thì mỗi lần chạy lại gieo hàng sức khoẻ giả vào DB thật (nuôi cầu dao ngắt engine) |
 
 Ghi chú: `BOXFOX_SEARXNG_URL` là gốc **không** kèm `/search` — cả harness lẫn router tự nối `/search`
 vào sau. Máy chủ giả phục vụ đúng đường đó ở `/searxng/search`.
@@ -138,7 +142,7 @@ Không có bước nào trong CI chạm khoá thật. Khi có khoá thật và m
 1. Mở **Settings → Provider → Web Search**, chọn thẻ provider, dán khoá, bấm **Lưu**.
 2. Bấm **Kiểm tra** trên đúng thẻ đó ⇒ kỳ vọng `ok: true` kèm `latencyMs` và một `sample` trích từ
    kết quả thật. `ok: false` kèm `code: AUTH` nghĩa là khoá sai/hết hạn — sửa lại ở bước 1.
-3. Chọn thẻ đó làm nguồn đang dùng (**Dùng nguồn này**).
+3. Chọn thẻ đó làm nguồn đang dùng (**Chọn dùng**).
 4. Hỏi agent một câu cần tìm web, rồi xem log harness: phải có dòng `selected source '<id>'` và
    `provider=<id>` trong dòng kết quả.
 5. Xong thì bấm **Xoá** để trả về đường built-in không khoá (kịch bản 7 đã kiểm đúng hành vi này).

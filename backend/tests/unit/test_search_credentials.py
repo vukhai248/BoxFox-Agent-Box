@@ -154,3 +154,21 @@ def test_the_resolve_request_carries_the_admin_header(router):
     assert router.calls[0]['path'] == '/api/router/search/resolve'
     headers = {name.lower(): value for name, value in router.calls[0]['headers'].items()}
     assert headers.get('x-boxfox-admin') == '1'
+
+
+def test_a_schemeless_router_url_falls_back_to_the_default_instead_of_raising(monkeypatch):
+    """Biến test đặt sai (`/api/router/search/resolve`, thiếu scheme) ⇒ về mặc định, KHÔNG ném.
+
+    Đây là lỗ hổng của hợp đồng "không bao giờ ném": hàm dựng `Request` ném ngay với URL dị dạng,
+    và `cache_key()`/`_search_chain()` gọi đường này mà không có vòng bắt lỗi nào.
+    """
+    monkeypatch.setenv(search_credentials.ROUTER_SEARCH_URL_ENV, '/api/router/search/resolve')
+    search_credentials.invalidate()
+    assert search_credentials.resolve_url() == 'http://127.0.0.1:3101/api/router/search/resolve'
+    assert search_credentials.active_source(force=True) is None      # router thật không chạy ⇒ Mặc định
+    assert search_credentials.cache_key() == 'default'
+
+
+def test_a_whitespace_router_url_also_falls_back(monkeypatch):
+    monkeypatch.setenv(search_credentials.ROUTER_SEARCH_URL_ENV, '   ')
+    assert search_credentials.resolve_url() == 'http://127.0.0.1:3101/api/router/search/resolve'

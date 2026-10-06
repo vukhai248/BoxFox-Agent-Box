@@ -302,4 +302,39 @@ describe('Search provider panel', () => {
     expect(save().disabled).toBe(false)
     expect(dialog.textContent).not.toContain('must be a valid http/https URL')
   })
+
+  it('a custom endpoint without a key can be saved', async () => {
+    const page = searchPage()
+    const calls = routerStub(page)
+    await renderPanel(page)
+
+    act(() => buttonIn(rowFor('custom'), 'Add key')!.click())
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!
+    const endpoint = dialog.querySelector<HTMLInputElement>('input[type="text"]')!
+    const save = () => buttonIn(dialog, 'Save key')!
+
+    expect(save().disabled).toBe(true)                    // endpoint bắt buộc, còn trống
+    await act(async () => setValue(endpoint, 'http://127.0.0.1:9999/search'))
+    expect(save().disabled).toBe(false)                   // `optional: ['apiKey']` KHÔNG được chặn Lưu
+
+    await act(async () => save().click())
+    const posted = calls.find((call) => call.method === 'POST' && call.path === '/api/router/search/providers')
+    expect(posted?.body).toEqual({ providerId: 'custom', endpoint: 'http://127.0.0.1:9999/search' })
+  })
+
+  it('the edit form saves with an empty key field and never sends an empty apiKey', async () => {
+    const calls = routerStub(searchPage())
+    const onClose = vi.fn()
+    await renderModal(configuredBrave, onClose)
+
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!
+    const save = buttonIn(dialog, 'Save key')!
+    expect(save.disabled).toBe(false)                     // đã có khoá lưu sẵn ⇒ không cần gõ lại
+
+    await act(async () => save.click())
+    const patched = calls.find((call) => call.method === 'PATCH')
+    expect(patched?.path).toBe('/api/router/search/providers/brave')
+    expect(patched?.body).toEqual({})                     // thiếu `apiKey` ⇒ router giữ nguyên khoá cũ
+    expect(onClose).toHaveBeenCalled()
+  })
 })
