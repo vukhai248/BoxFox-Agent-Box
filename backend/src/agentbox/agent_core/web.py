@@ -46,11 +46,12 @@ import urllib.request
 from html.parser import HTMLParser
 
 from ..observability.system_log import system_log
-from . import reading, search_failures, search_pipeline, source_pack
+from . import reading, search_credentials, search_failures, search_pipeline, source_pack
 from .limits import (OPENALEX_MAILTO_DEFAULT, OPENALEX_MAILTO_ENV, PAPER_CITATIONS_LIMIT_MAX,
                      PAPER_CITATIONS_RESOLVE_MAX, READ_FIND_MAX_TERMS, READ_OFFSET_MAX,
                      SEARCH_CACHE_MAX_ENTRIES, SEARCH_PAYLOAD_CHARS,
                      SEARCH_CACHE_TTL_SECONDS, SEARCH_QUERY_MAX, SEARCH_RETRY_ATTEMPTS,
+                     WEB_TEST_ALLOW_LOOPBACK_ENV,
                      web_decode_mode, web_read_store_mode, web_reader_mode)
 
 __all__ = ['WebTools', 'WebError', 'PUBLIC_SOURCES', 'UNTRUSTED_NOTE', 'html_to_text',
@@ -147,6 +148,11 @@ def _resolved_addresses(host: str) -> list[str]:
     return sorted({info[4][0] for info in infos})
 
 
+def _loopback_test_allowed() -> bool:
+    """`BOXFOX_WEB_TEST_ALLOW_LOOPBACK=1` — hook CHỈ TEST/E2E, mặc định TẮT (kế hoạch PART 2, R9)."""
+    return (os.environ.get(WEB_TEST_ALLOW_LOOPBACK_ENV) or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def assert_public_url(url: str) -> urllib.parse.SplitResult:
     """Refuse anything that is not a public http(s) URL. The box's admin surface lives on loopback."""
     parsed = urllib.parse.urlsplit(str(url or '').strip())
@@ -155,8 +161,11 @@ def assert_public_url(url: str) -> urllib.parse.SplitResult:
     host = (parsed.hostname or '').lower()
     if not host:
         raise WebError('WEB_URL_INVALID', 'the URL has no host')
+    allow_loopback = _loopback_test_allowed()
     if host in _BLOCKED_HOSTNAMES or host.endswith('.localhost') or host.endswith('.internal'):
-        raise WebError('WEB_URL_FORBIDDEN', f'{host} is a local or metadata host; this tool only reaches the public Internet')
+        # Hook test chỉ nới cho TÊN loopback; `metadata`, `*.internal` và host nội bộ vẫn bị chặn.
+        if not (allow_loopback and (host == 'localhost' or host.endswith('.localhost'))):
+            raise WebError('WEB_URL_FORBIDDEN', f'{host} is a local or metadata host; this tool only reaches the public Internet')
     literal = host.strip('[]')
     try:
         addresses = [str(ipaddress.ip_address(literal))]
@@ -168,6 +177,8 @@ def assert_public_url(url: str) -> urllib.parse.SplitResult:
         except ValueError:
             raise WebError('WEB_URL_FORBIDDEN', f'{host} resolved to an unreadable address {address!r}') from None
         if any(getattr(parsed_ip, attr) for attr in _PRIVATE_ATTRS) or address == '169.254.169.254':
+            if allow_loopback and parsed_ip.is_loopback:
+                continue
             raise WebError('WEB_URL_FORBIDDEN',
                            f'{host} resolves to {address}, a non-public address; the host-side fetch tool '
                            f'refuses private, loopback, link-local and metadata destinations')
@@ -421,11 +432,16 @@ def _search_queries(args: dict) -> list[str]:
 
 
 def _search_cache_key(queries: list[str], source: str, count: int, site: str, freshness: str,
-                      lang: str, exclude: set[str], cursor: int = 0) -> str:
-    """Khoá cache theo args ĐÃ CHUẨN HOÁ (không theo chuỗi thô của model)."""
+                      lang: str, exclude: set[str], cursor: int = 0,
+                      selection: str = 'default') -> str:
+    """Khoá cache theo args ĐÃ CHUẨN HOÁ (không theo chuỗi thô của model).
+
+    `selection` là lựa chọn nguồn tìm kiếm hiện tại (`search_credentials.cache_key()`): đổi nguồn
+    trong Settings ⇒ đổi khoá ⇒ KHÔNG dùng lại kết quả của nguồn cũ (PART 2, R3).
+    """
     return json.dumps({'queries': queries, 'source': source, 'count': count, 'site': site,
                        'freshness': freshness, 'lang': lang, 'exclude': sorted(exclude),
-                       'cursor': cursor},
+                       'cursor': cursor, 'selection': selection},
                       sort_keys=True, ensure_ascii=False)
 
 
@@ -514,7 +530,12 @@ def search_status() -> dict:
                         ('exa', ('EXA_API_KEY',)), ('parallel', ('PARALLEL_API_KEY',)),
                         ('firecrawl', ('FIRECRAWL_API_KEY',))):
         keys[name] = any((os.environ.get(item) or '').strip() for item in group)
-    legs = _leg_names(GENERAL_PROVIDERS)
+    # `legs` phải là chuỗi THẬT SẼ CHẠY (PART 2: nguồn đang chọn/khoá ENV được kéo lên đầu), không
+    # phải thứ tự tĩnh của `GENERAL_PROVIDERS` — nếu không, health nói một đằng, tìm kiếm chạy một nẻo.
+    try:
+        legs = _leg_names(_search_chain())
+    except Exception:
+        legs = _leg_names(GENERAL_PROVIDERS)
     # Thứ tự ưu tiên theo hợp đồng §4.1: Settings → env → SearXNG → chân keyless.
     if provider_id and provider_id != 'searxng':
         source = 'selected'
@@ -666,14 +687,24 @@ def _firecrawl_body(query: str, count: int, options: dict | None = None) -> dict
     return body
 
 
+def _search_url(provider_id: str, default: str) -> str:
+    """URL thật của một chân, hoặc hook TEST/E2E `BOXFOX_<ID>_SEARCH_URL` khi được đặt.
+
+    Hook này để E2E trỏ chân vào máy chủ giả cục bộ (PART 2 §Biến môi trường) — KHÔNG phải API
+    người dùng, không bao giờ được ghi vào tài liệu người dùng như một tính năng.
+    """
+    override = (os.environ.get(f'BOXFOX_{provider_id.upper()}_SEARCH_URL') or '').strip()
+    return override or default
+
+
 def _provider_firecrawl(query: str, count: int, options: dict | None = None) -> list[dict]:
     body = json.dumps(_firecrawl_body(query, count, options)).encode('utf-8')
     headers = {'Content-Type': 'application/json'}
-    key = os.environ.get('FIRECRAWL_API_KEY')
+    key = _selected_key('firecrawl', 'FIRECRAWL_API_KEY')
     if key:
         headers['Authorization'] = f'Bearer {key}'
-    status, _, text, _ = http_request('https://api.firecrawl.dev/v1/search', method='POST', body=body,
-                                      headers=headers)
+    status, _, text, _ = http_request(_search_url('firecrawl', 'https://api.firecrawl.dev/v1/search'),
+                                      method='POST', body=body, headers=headers)
     payload = json.loads(text or '{}')
     if not payload.get('success'):
         raise WebError('WEB_SEARCH_UNAVAILABLE', f'the keyless search provider refused the query (HTTP {status})')
@@ -685,14 +716,15 @@ def _provider_firecrawl(query: str, count: int, options: dict | None = None) -> 
 
 
 def _provider_brave(query: str, count: int, options: dict | None = None) -> list[dict]:
-    key = os.environ.get('BRAVE_API_KEY') or os.environ.get('BOXFOX_BRAVE_API_KEY')
+    key = _selected_key('brave', 'BRAVE_API_KEY', 'BOXFOX_BRAVE_API_KEY')
     if not key:
         raise WebError('WEB_SEARCH_UNAVAILABLE', 'BRAVE_API_KEY is not set')
     params = {'q': query, 'count': count}
     window = FRESHNESS_BRAVE.get(str((options or {}).get('freshness') or ''))
     if window:
         params['freshness'] = window
-    url = 'https://api.search.brave.com/res/v1/web/search?' + urllib.parse.urlencode(params)
+    url = _search_url('brave', 'https://api.search.brave.com/res/v1/web/search')
+    url += ('&' if '?' in url else '?') + urllib.parse.urlencode(params)
     _, _, text, _ = http_request(url, headers={'X-Subscription-Token': key, 'Accept': 'application/json'})
     payload = json.loads(text or '{}')
     return [{'title': _bounded_snippet(item.get('title')), 'url': str(item.get('url') or ''),
@@ -701,14 +733,15 @@ def _provider_brave(query: str, count: int, options: dict | None = None) -> list
 
 
 def _provider_tavily(query: str, count: int, options: dict | None = None) -> list[dict]:
-    key = os.environ.get('TAVILY_API_KEY')
+    key = _selected_key('tavily', 'TAVILY_API_KEY')
     if not key:
         raise WebError('WEB_SEARCH_UNAVAILABLE', 'TAVILY_API_KEY is not set')
     body: dict = {'query': query, 'max_results': count}
     if (options or {}).get('exclude'):
         body['exclude_domains'] = sorted(options['exclude'])
     body = json.dumps(body).encode('utf-8')
-    _, _, text, _ = http_request('https://api.tavily.com/search', method='POST', body=body,
+    _, _, text, _ = http_request(_search_url('tavily', 'https://api.tavily.com/search'), method='POST',
+                                 body=body,
                                  headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {key}'})
     payload = json.loads(text or '{}')
     return [{'title': _bounded_snippet(item.get('title')), 'url': str(item.get('url') or ''),
@@ -953,11 +986,11 @@ def _provider_arxiv(query: str, count: int, options: dict | None = None) -> list
 # người vận hành đã đặt khoá của chúng (thiếu khoá ⇒ nói tên khoá rồi rơi tiếp, không ném ra ngoài).
 def _provider_exa(query: str, count: int, options: dict | None = None) -> list[dict]:
     """Chân có khoá thứ tư: Exa. Không khoá ⇒ nói thẳng tên khoá, để chuỗi rơi tiếp."""
-    key = os.environ.get('EXA_API_KEY')
+    key = _selected_key('exa', 'EXA_API_KEY')
     if not key:
         raise WebError('WEB_SEARCH_UNAVAILABLE', 'EXA_API_KEY is not set')
     body = json.dumps({'query': query, 'numResults': count}).encode('utf-8')
-    _, _, text, _ = http_request('https://api.exa.ai/search', method='POST', body=body,
+    _, _, text, _ = http_request(_search_url('exa', 'https://api.exa.ai/search'), method='POST', body=body,
                                  headers={'Content-Type': 'application/json', 'x-api-key': key})
     payload = json.loads(text or '{}')
     return [{'title': _bounded_snippet(item.get('title')), 'url': str(item.get('url') or ''),
@@ -967,11 +1000,12 @@ def _provider_exa(query: str, count: int, options: dict | None = None) -> list[d
 
 def _provider_parallel(query: str, count: int, options: dict | None = None) -> list[dict]:
     """Chân có khoá thứ năm: Parallel. Cùng luật với Exa — thiếu khoá thì nói tên khoá."""
-    key = os.environ.get('PARALLEL_API_KEY')
+    key = _selected_key('parallel', 'PARALLEL_API_KEY')
     if not key:
         raise WebError('WEB_SEARCH_UNAVAILABLE', 'PARALLEL_API_KEY is not set')
     body = json.dumps({'objective': query, 'max_results': count}).encode('utf-8')
-    _, _, text, _ = http_request('https://api.parallel.ai/v1beta/search', method='POST', body=body,
+    _, _, text, _ = http_request(_search_url('parallel', 'https://api.parallel.ai/v1beta/search'),
+                                 method='POST', body=body,
                                  headers={'Content-Type': 'application/json', 'x-api-key': key})
     payload = json.loads(text or '{}')
     rows = payload.get('results') if isinstance(payload, dict) else None
@@ -986,13 +1020,14 @@ def _provider_parallel(query: str, count: int, options: dict | None = None) -> l
 def _provider_searxng(query: str, count: int, options: dict | None = None) -> list[dict]:
     """Chân SearXNG tự host, đứng ĐẦU chuỗi tìm chung khi có `BOXFOX_SEARXNG_URL` (#6071).
 
-    URL lấy từ `search_pipeline.searxng_url()`: biến env trước, không có thì **tự dò**
-    `127.0.0.1:8888` (v1 cải tổ web search — cài xong là tìm được, không cần khoá). Thiếu cả hai
-    ⇒ ném lỗi NÊU TÊN biến VÀ địa chỉ đã thử rồi để chuỗi rơi tiếp. Bộ luân phiên (bước 7) chọn
-    một tập engine con mỗi lần, nên một engine ít bị chặn hơn. Hàng trả về mang `engines` để bước
-    gộp biết nó đến từ đâu.
+    URL lấy theo thứ tự: **nguồn `searxng` đang được chọn trong Settings** (PART 2) → biến env →
+    **tự dò** `127.0.0.1:8888` (v1 cải tổ web search — cài xong là tìm được, không cần khoá). Thiếu
+    cả ba ⇒ ném lỗi NÊU TÊN biến VÀ địa chỉ đã thử rồi để chuỗi rơi tiếp. Bộ luân phiên (bước 7)
+    chọn một tập engine con mỗi lần, nên một engine ít bị chặn hơn. Hàng trả về mang `engines` để
+    bước gộp biết nó đến từ đâu.
     """
-    if not search_pipeline.searxng_url():
+    url = search_credentials.searxng_url() or search_pipeline.searxng_url()
+    if not url:
         raise WebError('WEB_SEARCH_UNAVAILABLE',
                        f'{search_pipeline.SEARXNG_URL_ENV} is not set and no SearXNG answered on '
                        f'{search_pipeline.autodetect_url()}')
@@ -1000,7 +1035,8 @@ def _provider_searxng(query: str, count: int, options: dict | None = None) -> li
     engines = search_pipeline.pick_engines()
     response = search_pipeline.searxng_search(query, engines=engines, count=count,
                                               time_range=options.get('freshness') or None,
-                                              language=str(options.get('lang') or ''))
+                                              language=str(options.get('lang') or ''),
+                                              base_url=url)
     search_pipeline.record_response_health(response, engines)
     if response.get('error') and not response.get('results'):
         raise WebError('WEB_SEARCH_UNAVAILABLE',
@@ -1009,6 +1045,72 @@ def _provider_searxng(query: str, count: int, options: dict | None = None) -> li
              'snippet': _bounded_snippet(row.get('snippet')), 'provider': 'searxng',
              'engines': [row.get('engine')] if row.get('engine') else []}
             for row in (response.get('results') or []) if row.get('url')][:count]
+
+
+def _provider_cloudflare(query: str, count: int, options: dict | None = None) -> list[dict]:
+    """Chân Cloudflare Web Search — CHỈ có mặt khi mục `cloudflare` đang được chọn (PART 2).
+
+    Hình dạng theo tài liệu chính thức (developers.cloudflare.com/web-search): POST
+    `/accounts/{account_id}/ai/websearch/`, `Authorization: Bearer <token>`, thân
+    `{query, provider: 'ceramic', limit, options.gateway.id}`; kết quả ở `items[]`. Thiếu
+    `accountId` hoặc khoá ⇒ nói tên trường thiếu rồi để chuỗi rơi tiếp (F05 phân loại `infra`).
+    """
+    source = search_credentials.active_source()
+    account_id = str(getattr(source, 'account_id', '') or '').strip()
+    key = str(getattr(source, 'api_key', '') or '').strip()
+    if not account_id:
+        raise WebError('WEB_SEARCH_UNAVAILABLE', 'the selected cloudflare source has no accountId')
+    if not key:
+        raise WebError('WEB_SEARCH_UNAVAILABLE', 'the selected cloudflare source has no apiKey')
+    default = f'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/websearch/'
+    url = _search_url('cloudflare', default).replace('{account_id}', account_id)
+    body = json.dumps({'query': query, 'provider': 'ceramic', 'limit': count,
+                       'options': {'gateway': {'id': 'default'}}}).encode('utf-8')
+    _, _, text, _ = http_request(url, method='POST', body=body,
+                                 headers={'Content-Type': 'application/json',
+                                          'Authorization': f'Bearer {key}'})
+    payload = json.loads(text or '{}')
+    return [{'title': _bounded_snippet(item.get('title') or item.get('url')),
+             'url': str(item.get('url') or ''),
+             'snippet': _bounded_snippet(item.get('description')),
+             'provider': 'cloudflare'}
+            for item in (payload.get('items') or []) if isinstance(item, dict) and item.get('url')][:count]
+
+
+def _provider_custom(query: str, count: int, options: dict | None = None) -> list[dict]:
+    """Chân endpoint tìm kiếm tự định nghĩa — CHỈ có mặt khi mục `custom` đang được chọn (PART 2).
+
+    POST `{query, count}` tới endpoint người dùng nhập; có khoá thì thêm `Authorization: Bearer`.
+    Nhận cả hai hình dạng phổ biến (`results[]` và `items[]`) và chuẩn hoá `url/title/snippet`.
+    Thiếu endpoint ⇒ nói rõ; endpoint đi qua `assert_public_url` trong `http_request` như mọi chân.
+    """
+    source = search_credentials.active_source()
+    endpoint = str(getattr(source, 'endpoint', '') or '').strip()
+    if not endpoint:
+        # Hook test/E2E chỉ có tác dụng khi mục `custom` KHÔNG khai endpoint (kế hoạch §Biến môi trường).
+        endpoint = (os.environ.get('BOXFOX_CUSTOM_SEARCH_URL') or '').strip()
+    if not endpoint:
+        raise WebError('WEB_SEARCH_UNAVAILABLE', 'the selected custom source has no endpoint')
+    # Endpoint do NGƯỜI DÙNG nhập ⇒ qua đúng cổng SSRF như mọi lượt tải, TRƯỚC khi gọi. `http_request`
+    # cũng chặn (nó đi qua `http_request_meta`), nhưng để cổng ở đây thì bất biến này đọc được ngay
+    # tại chân và không phụ thuộc vào việc lớp transport có bị thay hay không.
+    assert_public_url(endpoint)
+    headers = {'Content-Type': 'application/json'}
+    key = str(getattr(source, 'api_key', '') or '').strip()
+    if key:
+        headers['Authorization'] = f'Bearer {key}'
+    body = json.dumps({'query': query, 'count': count}).encode('utf-8')
+    _, _, text, _ = http_request(endpoint, method='POST', body=body, headers=headers)
+    payload = json.loads(text or '{}')
+    rows = payload.get('results') if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        rows = payload.get('items') if isinstance(payload, dict) else None
+    return [{'title': _bounded_snippet(item.get('title') or item.get('url')),
+             'url': str(item.get('url') or ''),
+             'snippet': _bounded_snippet(item.get('snippet') or item.get('description')
+                                         or item.get('content')),
+             'provider': 'custom'}
+            for item in (rows or []) if isinstance(item, dict) and item.get('url')][:count]
 
 
 def _academic_module():
@@ -1038,6 +1140,67 @@ def _provider_papers_first(query: str, count: int, options: dict | None = None) 
 
 GENERAL_PROVIDERS = (_provider_searxng, _provider_firecrawl, _provider_brave, _provider_tavily,
                      _provider_exa, _provider_parallel)
+# Giá trị/THỨ TỰ của `GENERAL_PROVIDERS` là hợp đồng đã kiểm bằng test — chuỗi của nguồn đang chọn
+# (PART 2) xếp lại các chân này, KHÔNG đổi chính tuple đó.
+
+#: Các chân dùng khoá qua ENV, kèm tên biến theo thứ tự ưu tiên (PART 2 §Thứ tự ưu tiên, bậc 2).
+ENV_KEYED_LEGS = ((_provider_brave, ('BRAVE_API_KEY', 'BOXFOX_BRAVE_API_KEY')),
+                  (_provider_tavily, ('TAVILY_API_KEY',)),
+                  (_provider_exa, ('EXA_API_KEY',)),
+                  (_provider_parallel, ('PARALLEL_API_KEY',)),
+                  (_provider_firecrawl, ('FIRECRAWL_API_KEY',)))
+
+#: Hai chân CHỈ chạy khi mục tương ứng đang được chọn: chúng không có đường ENV, và
+#: `_provider_custom` gọi thẳng endpoint người dùng nhập (đã qua `assert_public_url`).
+SELECTED_ONLY_LEGS = {'cloudflare': _provider_cloudflare, 'custom': _provider_custom}
+
+#: Bản đồ id trong catalog nguồn (router) → chân tương ứng của harness.
+_LEG_BY_PROVIDER_ID = {'brave': _provider_brave, 'tavily': _provider_tavily, 'exa': _provider_exa,
+                       'parallel': _provider_parallel, 'firecrawl': _provider_firecrawl,
+                       'searxng': _provider_searxng}
+
+
+def _selected_key(provider_id: str, *env_names: str) -> str:
+    """Khoá để gọi `provider_id`: nguồn ĐANG CHỌN trước, rồi mới tới ENV (PART 2, R1).
+
+    Nguồn đang chọn đúng `provider_id` và có `apiKey` ⇒ dùng khoá đó (không đụng ENV). Ngược lại
+    lấy biến ENV đầu tiên có giá trị — nên một khoá ENV sẵn có vẫn cứu được chuỗi khi lựa chọn hỏng.
+    """
+    source = search_credentials.active_source()
+    if source is not None and source.provider_id == provider_id and source.api_key:
+        return str(source.api_key).strip()
+    for name in env_names:
+        value = (os.environ.get(name) or '').strip()
+        if value:
+            return value
+    return ''
+
+
+def _search_chain() -> tuple:
+    """Chuỗi chân cho `source='web'` khi CÓ nguồn đang chọn (PART 2 §Thứ tự ưu tiên).
+
+    (1) nguồn đang chọn (nếu có chân) → (2) mọi chân có khoá ENV, theo thứ tự khai báo → (3) phần
+    còn lại giữ nguyên thứ tự `GENERAL_PROVIDERS` (SearXNG → Firecrawl → …). Không lựa chọn, không
+    khoá ENV ⇒ trả ĐÚNG `GENERAL_PROVIDERS` như trước, nên đường cũ không đổi một ly nào.
+    """
+    source = search_credentials.active_source()
+    head = None
+    if source is not None:
+        head = SELECTED_ONLY_LEGS.get(source.provider_id) or _LEG_BY_PROVIDER_ID.get(source.provider_id)
+    env_legs = tuple(leg for leg, names in ENV_KEYED_LEGS
+                     if leg is not head and any((os.environ.get(name) or '').strip() for name in names))
+    rest = tuple(leg for leg in GENERAL_PROVIDERS if leg is not head and leg not in env_legs)
+    return ((head,) if head is not None else ()) + env_legs + rest
+
+
+def _selected_leg() -> object:
+    """Chân của nguồn đang chọn, hoặc `None` — dùng để nêu tên nguồn khi mọi chân đều hỏng."""
+    source = search_credentials.active_source()
+    if source is None:
+        return None
+    return SELECTED_ONLY_LEGS.get(source.provider_id) or _LEG_BY_PROVIDER_ID.get(source.provider_id)
+
+
 SOURCE_PROVIDERS = {
     'wikipedia': (_provider_wikipedia,),
     'stackoverflow': (_provider_stackexchange,),
@@ -1265,7 +1428,8 @@ class WebTools:
         elif args.get('cursor') is not None:
             raise WebError('WEB_URL_INVALID', 'cursor is supported only for source="openreview"')
 
-        cache_key = _search_cache_key(queries, source, count, site, freshness, lang, exclude, cursor)
+        cache_key = _search_cache_key(queries, source, count, site, freshness, lang, exclude, cursor,
+                                      selection=search_credentials.cache_key())
         cached = self._cache_get(cache_key)
         if cached is not None:
             # KHÔNG tự ghi nhật ký ở đây: `run()` → `_log_ok` đã ghi đúng một dòng `web.search`
@@ -1307,7 +1471,10 @@ class WebTools:
                     payload['packWarning'] = pack_warning
                 self._cache_put(cache_key, payload)
                 return payload
-        providers = SOURCE_PROVIDERS.get(source) or GENERAL_PROVIDERS
+        # Nguồn chọn trong Settings (PART 2) đứng đầu chuỗi tìm chung; không có lựa chọn thì
+        # `_search_chain()` trả ĐÚNG `GENERAL_PROVIDERS` như trước. Các nguồn riêng (wikipedia,
+        # papers, …) không đổi: chúng không đi qua nguồn người dùng chọn.
+        providers = SOURCE_PROVIDERS.get(source) or _search_chain()
         rows: list[dict] = []
         per_query: list[dict] = []
         found_by_query: list[tuple[str, list[dict]]] = []
@@ -1350,8 +1517,15 @@ class WebTools:
             answered_empty = bool(leg_reasons) and not real_reasons
             missing = _missing_search_keys()
             backends = _configured_search_backends()
-            resolved = search_pipeline.searxng_url()
+            resolved = search_credentials.searxng_url() or search_pipeline.searxng_url()
             probe_target = search_pipeline.autodetect_url()
+            # Nguồn đang chọn hỏng thì câu lỗi PHẢI nói tên nó, nếu không người dùng chỉ thấy các
+            # chân built-in hỏng và không hiểu vì sao tìm kiếm tệ đi (PART 2 §Thông điệp lỗi).
+            selected = search_credentials.active_source()
+            selected_note = ''
+            if selected is not None and _selected_leg() is not None:
+                selected_note = (f" the selected source '{selected.provider_id}' failed first; "
+                                 f'check it in {search_failures.SETTINGS_POINTER}.')
             verdict = search_failures.classify(source=source, reasons=real_reasons,
                                                answered_empty=answered_empty, backends=backends,
                                                missing=missing)
@@ -1360,13 +1534,14 @@ class WebTools:
                                                        source=source, reasons=real_reasons,
                                                        backends=backends, missing=missing,
                                                        query=queries[0], searxng_url=resolved,
-                                                       autodetect_url=probe_target),
+                                                       autodetect_url=probe_target) + selected_note,
                            search_failures.log_line_for(code=verdict['code'], kind=verdict['kind'],
                                                         source=source, queries=len(queries),
                                                         attempts=len(errors)),
                            details={'searchFailure': {'kind': verdict['kind'], 'source': source,
                                                       'backends': backends, 'missing': missing,
-                                                      'attempts': len(errors)}})
+                                                      'attempts': len(errors),
+                                                      'selected': (selected.provider_id if selected else None)}})
         retained = {reading.normalize_url(str(row.get('url') or '')) for row in results}
         merged = {reading.normalize_url(str(row.get('url') or '')) for row in merged_results}
         trace: list[dict] = []
