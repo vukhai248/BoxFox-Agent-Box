@@ -8,8 +8,8 @@ from test_work_graph import build
 from test_work_checks import RESEARCH
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -63,8 +63,10 @@ def test_helper_child_request_uses_override_through_runtime(raw, expected, tmp_p
     _, rt, model, _, sid = build(tmp_path)
     graph = wg.service(rt)
     run = graph.create(rt.store.get(sid), {'goal': 'Research export formats', 'flow': 'research'})
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: helper `research` không còn spawn được từ main; lượt tra cứu
+    # dùng `explore` — cùng profile knowledge nên vẫn đo đúng trần token của helper.
     result = asyncio.run(graph.answer_knowledge(rt.store.get(sid), run, wg.normalize_node(RESEARCH), 'produce',
-                                                [{'role': 'research', 'question': 'Where is CSV declared?'}], 1))
+                                                [{'role': 'explore', 'question': 'Where is CSV declared?'}], 1))
     assert result[0]['status'] == 'completed'
     assert [tokens for kind, _, tokens in model.tokens if kind == 'knowledge'] == [expected]
     child = rt.store.get(result[0]['childId'])['config']

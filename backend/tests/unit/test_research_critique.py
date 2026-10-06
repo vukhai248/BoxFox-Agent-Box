@@ -15,8 +15,8 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -137,14 +137,17 @@ def test_only_the_orchestrator_records_the_verdict(harness):
     store, runtime, sid, session = harness
     record_dossier(store, sid, 1)
     review_child(store, runtime, sid)
+    # Gọi THẲNG engine `research_verify`: biên dispatch của main đã bị Research gateway đóng
+    # (`RESEARCH_MAIN_READ_ONLY`) — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
     branch = runtime.create({'skills': []}, parent_id=sid, role='research')
-    with pytest.raises(PermissionError):
-        asyncio.run(runtime.dispatch(store.get(branch['id']), 'research_verify',
-                                     {'researchId': 'gia-dich-vu-2026', 'version': 1, 'verdict': 'revise'}))
-    answer = asyncio.run(runtime.dispatch(session, 'research_verify',
-                                          {'researchId': 'gia-dich-vu-2026', 'version': 1,
-                                           'verdict': 'revise', 'issues': ['thiếu nguồn thứ hai'],
-                                           'summary': 'bổ sung nguồn'}))
+    with pytest.raises(PermissionError, match='orchestrator'):
+        asyncio.run(research_runtime.research_verify(
+            runtime, store.get(branch['id']),
+            {'researchId': 'gia-dich-vu-2026', 'version': 1, 'verdict': 'revise'}))
+    answer = asyncio.run(research_runtime.research_verify(
+        runtime, session, {'researchId': 'gia-dich-vu-2026', 'version': 1,
+                           'verdict': 'revise', 'issues': ['thiếu nguồn thứ hai'],
+                           'summary': 'bổ sung nguồn'}))
     assert answer['verdict'] == 'revise'
     assert answer['label'] == limits.RESEARCH_CRITIQUE_LABEL
     assert answer['capped'] is False
@@ -157,11 +160,11 @@ def test_a_verdict_that_disagrees_with_the_critique_is_refused(harness):
     record_dossier(store, sid, 1)
     review_child(store, runtime, sid)
     with pytest.raises(ValueError, match=limits.RESEARCH_VERIFY_VERDICT_MISMATCH_CODE):
-        asyncio.run(runtime.dispatch(session, 'research_verify',
-                                     {'researchId': 'gia-dich-vu-2026', 'version': 1, 'verdict': 'ok'}))
+        asyncio.run(research_runtime.research_verify(
+            runtime, session, {'researchId': 'gia-dich-vu-2026', 'version': 1, 'verdict': 'ok'}))
     with pytest.raises(ValueError, match=limits.RESEARCH_VERIFY_VERSION_MISSING_CODE):
-        asyncio.run(runtime.dispatch(session, 'research_verify',
-                                     {'researchId': 'gia-dich-vu-2026', 'version': 'v1', 'verdict': 'ok'}))
+        asyncio.run(research_runtime.research_verify(
+            runtime, session, {'researchId': 'gia-dich-vu-2026', 'version': 'v1', 'verdict': 'ok'}))
     assert store.research_verification_count('gia-dich-vu-2026') == 0
 
 

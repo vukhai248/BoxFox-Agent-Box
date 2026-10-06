@@ -17,8 +17,8 @@ from agentbox.agent_core.tool_contracts import SCHEMAS
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -29,10 +29,11 @@ BIG_CONTEXT = 'C' * 20000
 def _legacy_research_mode(monkeypatch):
     """Giữ đường CŨ cho bộ kiểm hợp đồng uỷ quyền.
 
-    Các ca ở đây uỷ quyền vai `research` mà KHÔNG gọi `research_brief`, nên khi công tắc
-    `BOXFOX_RESEARCH_MODE` bật (mặc định từ F4) nhánh đầu bị kẹp mức 1 — trần bước/giây của con đổi
-    và các khẳng định về trần sẽ sai. Bộ kiểm này khoá HỢP ĐỒNG uỷ quyền (hình dạng kết quả, kẹp theo
-    cha), không khoá chế độ Research; hành vi mới được khoá trong `test_research_mode_shell.py`."""
+    Các ca ở đây uỷ quyền vai `explore` — vai main CÒN giao được. Vai `research`/`research-review`
+    không còn đường nào từ main (cổng Research vô điều kiện, xem
+    `test_main_may_not_delegate_the_research_roles`). Giữ `BOXFOX_RESEARCH_MODE=off` để bộ kiểm
+    tách khỏi chế độ Research: nó khoá HỢP ĐỒNG uỷ quyền (hình dạng kết quả, kẹp theo cha),
+    không khoá chế độ Research; hành vi mới được khoá trong `test_research_mode_shell.py`."""
     monkeypatch.setenv('BOXFOX_RESEARCH_MODE', 'off')
 
 
@@ -65,7 +66,9 @@ class FixtureExecutor:
 
 
 def delegate_args(**overrides):
-    args = {'role': 'research', 'goal': 'Find out how FHIR Patient search works'}
+    # Bề mặt 7 đã xoá: main KHÔNG còn giao được vai `research`/`research-review`
+    # (`RESEARCH_MAIN_READ_ONLY`), nên các ca hợp đồng dùng `explore` — vai main vẫn giao được.
+    args = {'role': 'explore', 'goal': 'Find out how FHIR Patient search works'}
     args.update(overrides)
     return args
 
@@ -102,7 +105,7 @@ def test_delegate_task_schema_states_the_result_shape_and_stays_backward_compati
                                'reviewTarget', 'questionId', 'taskKind', 'facetId', 'task', 'runId',
                                'maxSteps', 'deadlineSeconds'}
     assert properties['task']['type'] == 'object' and properties['runId']['type'] == 'string'
-    assert 'BOXFOX_TASK_SURFACE' in properties['task']['description']
+    assert 'MAIN session' in properties['task']['description']
     assert properties['wait']['type'] == 'boolean' and properties['deliverTo']['type'] == 'array'
     assert schema['parameters']['required'] == ['role', 'goal'], \
         'existing callers send role/goal/context only: nothing new may become required'
@@ -203,3 +206,31 @@ def test_a_huge_parent_context_never_mangles_the_delegation_result(tmp_path):
     prompt = [message['content'] for message in child['messages'] if message['role'] == 'user'][-1]
     assert BIG_CONTEXT[:16000] in prompt
     assert 'E' * 2000 in prompt, "the parent's result shape reaches the child at full length of its own cap"
+
+
+def test_main_may_not_delegate_the_research_roles(tmp_path):
+    """Bề mặt 7 đã xoá: main KHÔNG còn đường giao vai `research`/`research-review`.
+
+    Trước đây công tắc `BOXFOX_RESEARCH_GATEWAY=off` (hoặc binding `researchId` legacy) mở lại
+    đường này; nay cổng là VÔ ĐIỀU KIỆN, nên lời gọi trở thành lỗi tool `RESEARCH_MAIN_READ_ONLY`
+    mà model đọc được — và KHÔNG phiên con nào được sinh (không hàng `sessions` mồ côi)."""
+    for role in ('research', 'research-review'):
+        store = SessionStore(tmp_path / role / 'sessions.db')
+        model = FixtureModel([answer(calls=[call('delegate_task', {'role': role, 'goal': 'tra cứu'})]),
+                              answer('parent final')])
+        runtime = HarnessRuntime(store, FixtureExecutor(), model)
+        sid = runtime.create({'skills': []})['id']
+
+        async def run():
+            await runtime.start(sid, 'Delegate to a specialist')
+
+        asyncio.run(run())
+        assert not [event for event in store.events(sid) if event['type'] == 'child'], \
+            'bị từ chối thì không có event `child` nào'
+        assert store.children_of(sid) == [], 'bị từ chối thì không có hàng sổ con nào'
+        result = json.loads(next(message for message in store.get(sid)['messages']
+                                 if message['role'] == 'tool')['content'])
+        assert result['is_error'] is True
+        assert result['errorCode'] == 'TOOL_NOT_PERMITTED'
+        assert 'RESEARCH_MAIN_READ_ONLY' in result['error'], role
+        store.close()

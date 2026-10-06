@@ -11,8 +11,8 @@ from test_work_graph import answer
 from test_work_handoffs_w8 import setup as handoff_setup, assign, drain
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -381,7 +381,9 @@ def test_unassigned_required_check_routes_main_but_explicit_handoff_runs_indepen
         assert graph.get(rid)['nodes'][0]['stages']['produce']['status'] == 'needs_checks'
         graph.decisions.reconcile()
         decision = graph.decisions.records()[0]
-        assert decision['kind'] == 'checks' and decision['refs']['missingCheckIds'] == ['evidence']
+        # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: nút mẫu của handoff là `design` (một kiểm bắt buộc
+        # `design_review`, người kiểm `plan-review`) thay cho nút `research` cũ.
+        assert decision['kind'] == 'checks' and decision['refs']['missingCheckIds'] == ['design_review']
         # Main can assign the existing transition before a queued decision runs.
         assign(graph, store, sid, rid); await drain(graph)
         await finish(rt, graph)

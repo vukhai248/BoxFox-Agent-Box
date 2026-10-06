@@ -9,6 +9,7 @@ trị `BOXFOX_RESEARCH_GATE` cho ra ba kết cục khác nhau — trong đó `of
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 
@@ -17,8 +18,8 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -93,19 +94,27 @@ def harness(tmp_path, monkeypatch):
     store.close()
 
 
+def engine(fn, runtime, session, args):
+    """Gọi THẲNG engine (sync hay async): biên dispatch của main đã bị Research gateway đóng
+    (`RESEARCH_MAIN_READ_ONLY`) — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
+    """
+    out = fn(runtime, session, args)
+    return asyncio.run(out) if inspect.isawaitable(out) else out
+
+
 def seed_row(runtime, session, **overrides):
     args = {'claim': 'quy định chuyển tuyến đúng tuyến', 'url': URL, 'excerpt': EXCERPT,
             'payload': PAYLOAD}
     args.update(overrides)
-    return asyncio.run(runtime.dispatch(session, 'source_add', args))
+    return engine(research_runtime.source_add, runtime, session, args)
 
 
 def write(runtime, session, **overrides):
-    """Gọi `dossier_write`. Có brief thì ghi cho ĐÚNG việc của brief (một lượt một việc)."""
+    """Gọi `dossier_write` (engine). Có brief thì ghi cho ĐÚNG việc của brief (một lượt một việc)."""
     args = {'level': 2, 'profile': 'health', 'markdown': MARKDOWN, 'title': 'Chuyển tuyến 2026'}
     args['researchId'] = research_runtime.research_config(session).get('researchId') or 'chuyen-tuyen-2026'
     args.update(overrides)
-    return asyncio.run(runtime.dispatch(session, 'dossier_write', args))
+    return engine(research_runtime.dossier_write, runtime, session, args)
 
 
 def test_a_dossier_without_sources_is_refused_before_anything_is_written(harness):
@@ -238,9 +247,9 @@ def test_a_research_branch_reports_its_rows_up_and_never_writes_the_dossier(harn
     công cụ thì một đường gọi khác (dispatch trực tiếp) vẫn ghi được hồ sơ, và hàng rào sẽ là trang trí.
     """
     store, runtime, sid, session, executor = harness
-    asyncio.run(runtime.dispatch(session, 'research_brief',
-                                {'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến?',
-                                 'rationale': 'văn bản chính thống'}))
+    engine(research_runtime.research_brief, runtime, session,
+           {'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến?',
+            'rationale': 'văn bản chính thống'})
     research_id = research_runtime.research_config(store.get(sid))['researchId']
     branch = runtime.create({'skills': []}, parent_id=sid, role='research')
     child = store.get(branch['id'])
@@ -250,9 +259,9 @@ def test_a_research_branch_reports_its_rows_up_and_never_writes_the_dossier(harn
     seed_row(runtime, child)
     assert store.source_count(sid) == 1 and store.source_count(child['id']) == 0
     with pytest.raises(PermissionError, match='for the orchestrator'):
-        asyncio.run(runtime.dispatch(child, 'dossier_write',
-                                     {'researchId': research_id, 'level': 2, 'profile': 'health',
-                                      'markdown': MARKDOWN, 'title': 'Chuyển tuyến'}))
+        engine(research_runtime.dossier_write, runtime, child,
+               {'researchId': research_id, 'level': 2, 'profile': 'health',
+                'markdown': MARKDOWN, 'title': 'Chuyển tuyến'})
     assert [name for name, _args, _sid in executor.calls] == ['journal_append'], \
         'lượt bị từ chối: chỉ hàng `D:` của brief, không có lệnh nào chạm tệp hồ sơ'
     # Và main ghi được — trên đúng sổ ấy.
@@ -283,13 +292,16 @@ def test_a_table_sent_as_the_documented_list_shape_reaches_the_box(harness):
 def test_only_the_right_roles_may_write_a_dossier_or_read_a_status(harness):
     store, runtime, sid, session, executor = harness
     other = runtime.create({'skills': []}, parent_id=sid, role='plan-review')
-    for tool, args in (('dossier_write', {'researchId': 'x-y', 'level': 1, 'profile': 'law',
-                                          'markdown': '# Câu hỏi\nx\n'}),
-                       ('research_verify', {'researchId': 'x-y', 'version': 1, 'verdict': 'ok'}),
-                       ('research_status', {'researchId': 'x-y'}),
-                       ('research_brief', {'tier': 2, 'jobProfile': 'law', 'question': 'x'})):
+    # Cổng vai nằm trong ENGINE (dispatch của main đã đóng — xem `engine`), nên bài này gọi thẳng.
+    for fn, args in ((research_runtime.dossier_write, {'researchId': 'x-y', 'level': 1, 'profile': 'law',
+                                                       'markdown': '# Câu hỏi\nx\n'}),
+                     (research_runtime.research_verify, {'researchId': 'x-y', 'version': 1,
+                                                         'verdict': 'ok'}),
+                     (research_runtime.research_status, {'researchId': 'x-y'}),
+                     (research_runtime.research_brief, {'tier': 2, 'jobProfile': 'law',
+                                                        'question': 'x'})):
         with pytest.raises(PermissionError):
-            asyncio.run(runtime.dispatch(store.get(other['id']), tool, args))
+            engine(fn, runtime, store.get(other['id']), args)
 
 
 # --- #6025: brief có ý kiến chủ nhà ⇒ mục soi ý kiến ba nhãn là điều kiện để ghi ----------
@@ -308,9 +320,9 @@ def dossier_calls(executor):
 
 
 def with_owner_views(runtime, session, views=('phí chuyển tuyến sẽ tăng trong 2026',)):
-    return asyncio.run(runtime.dispatch(session, 'research_brief', {
+    return engine(research_runtime.research_brief, runtime, session, {
         'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến 2026?',
-        'rationale': 'cần dẫn nguồn văn bản', 'ownerViews': list(views)}))
+        'rationale': 'cần dẫn nguồn văn bản', 'ownerViews': list(views)})
 
 
 def test_owner_views_in_the_brief_make_the_three_label_review_a_condition(harness):
@@ -350,9 +362,9 @@ def test_a_review_label_without_a_source_is_still_refused(harness):
 def test_a_brief_without_owner_views_never_asks_for_the_label_section(harness):
     store, runtime, sid, session, executor = harness
     seed_row(runtime, session)
-    asyncio.run(runtime.dispatch(session, 'research_brief', {
+    engine(research_runtime.research_brief, runtime, session, {
         'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến 2026?',
-        'rationale': 'cần dẫn nguồn văn bản'}))
+        'rationale': 'cần dẫn nguồn văn bản'})
     answer = write(runtime, session)
     assert 'research-owner-views-missing' not in answer['gate']['issues']
 
@@ -366,9 +378,9 @@ def test_a_dossier_for_another_job_is_refused_while_a_brief_is_open(harness):
     """
     store, runtime, sid, session, executor = harness
     seed_row(runtime, session)
-    brief = asyncio.run(runtime.dispatch(session, 'research_brief', {
+    brief = engine(research_runtime.research_brief, runtime, session, {
         'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến 2026?',
-        'rationale': 'văn bản chính thống'}))
+        'rationale': 'văn bản chính thống'})
     other_id = 'viec-khac-2026'
     assert other_id != brief['researchId']
     with pytest.raises(ValueError) as exc:

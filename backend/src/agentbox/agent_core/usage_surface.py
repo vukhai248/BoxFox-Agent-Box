@@ -135,27 +135,17 @@ async def complete(rt, sid, messages, tools, route, *, purpose='completion', **k
     from . import research_gateway
     job_surface.guard_request(rt, sid)
     research_gateway.guard_request(rt, sid)
-    if not usage_ledger.enabled():
-        current = rt.store.get(sid)
-        root = root_session(rt, sid)
-        if execution_kernel._policy(current) is not None or execution_kernel._policy(root) is not None:
-            invalid('usageLedger', 'adaptive accounting is disabled', 'USAGE_LEDGER_DISABLED')
-        return await rt.client.complete(messages, tools, route, **kwargs)
     session = rt.store.get(sid)
     root = root_session(rt, sid)
     ledger = service(rt)
     call_key = 'call-' + uuid.uuid4().hex
     rows = await route_rows(rt, route)
-    # snapshot là await point: đọc lại authority, allocation và kill switch sau đó.
+    # snapshot là await point: đọc lại authority và allocation sau đó.
     job_surface.guard_request(rt, sid)
     research_gateway.guard_request(rt, sid)
     session = rt.store.get(sid)
     root = root_session(rt, sid)
     adaptive = execution_kernel._policy(session) is not None or execution_kernel._policy(root) is not None
-    if adaptive and not execution_kernel.enabled():
-        invalid('harnessPolicy', 'adaptive admission switch was disabled', 'ADAPTIVE_DISABLED')
-    if adaptive and not usage_ledger.enabled():
-        invalid('usageLedger', 'adaptive accounting was disabled', 'USAGE_LEDGER_DISABLED')
     allocation_id = root['config'].get('harnessAllocationId')
     if (adaptive or allocation_id) and ('cancelled' in (root.get('status'), session.get('status'))):
         invalid('ownerId', 'canonical owner or request session stopped', 'USAGE_OWNER_STOPPED')
@@ -227,13 +217,10 @@ def research_admission(rt, lead, request):
     from . import research_gateway
     from .work_policy import digest
     current = rt.store.get(lead['id'])
-    if (not research_gateway.enabled() or not research_gateway.is_lead(rt, current)
-            or not usage_ledger.enabled()):
+    if not research_gateway.is_lead(rt, current):
         return False
     root = root_session(rt, lead['id'])
     if root.get('status') in ('cancelled', 'awaiting_decision'):
-        return False
-    if execution_kernel._policy(root) is not None and not execution_kernel.enabled():
         return False
     # Chưa có kho permissionEnvelope refs: không biến chuỗi model thành quyền.
     if request.get('permissionEnvelopeRef') is not None:

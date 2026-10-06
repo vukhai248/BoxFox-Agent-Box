@@ -17,8 +17,6 @@ def environment(tmp_path, monkeypatch):
     root = store.create({'tools': TOOLS}, role='orchestrator')['id']
     runtime = SimpleNamespace(store=store)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: None)
-    # Từ v2 mặc định BẬT: muốn chốt đường legacy phải đặt `off` TƯỜNG MINH.
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
     yield runtime, root
     store.close()
 
@@ -42,7 +40,7 @@ def test_legacy_guard_remains_the_behavior_source(environment):
     ('terminal_exec', {'command': 'touch x'}), ('terminal_exec', {'command': 'python -m pytest'}),
     ('delegate_task', {'role': 'build'}), ('delegate_task', {'role': 'testing'}),
 ])
-def test_new_policy_cannot_use_off_switch_to_mutate(environment, name, args):
+def test_new_policy_cannot_fall_through_to_legacy_mutation(environment, name, args):
     runtime, sid = environment
     current = runtime.store.get(sid)
     runtime.store.update_config(sid, dict(current['config'], tools=TOOLS + ['file_edit_block']))
@@ -51,28 +49,26 @@ def test_new_policy_cannot_use_off_switch_to_mutate(environment, name, args):
         execution_kernel.guard_tool(runtime, current, name, args)
 
 
-def test_enable_flag_without_canonical_engine_does_not_open_legacy(environment, monkeypatch):
+def test_policy_without_canonical_engine_does_not_open_legacy(environment):
     runtime, sid = environment
     current = policy_session(runtime, sid)
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
         execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})
     assert execution_kernel.guard_tool(runtime, current, 'file_read', {'path': 'x'})['mode'] == 'artifact_only'
 
 
-def test_enabled_engine_without_execution_binding_stays_restricted(environment, monkeypatch):
+def test_engine_without_execution_binding_stays_restricted(environment, monkeypatch):
     runtime, sid = environment
     child = runtime.store.create({'tools': ['file_read'], 'harnessPolicy': POLICY},
                                  role='explore', parent_id=sid)['id']
     current = runtime.store.get(child)
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
     view = execution_kernel.guard_tool(runtime, current, 'file_read', {'path': 'x'})
     assert view['mode'] == 'artifact_only'
     assert 'no canonical execution binding' in view['reason']
 
 
-def test_read_only_controls_work_with_switch_off(environment):
+def test_read_only_controls_stay_restricted_without_a_graph(environment):
     runtime, sid = environment
     current = policy_session(runtime, sid)
     assert execution_kernel.guard_tool(runtime, current, 'terminal_exec', {'command': 'ls'})['mode'] == 'artifact_only'
@@ -176,36 +172,22 @@ def test_dispatch_routes_through_the_kernel_guard(environment, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Switch-off isolation: the two disjuncts must each hold on their own.
+# Graph isolation: a live graph alone is not authority without a binding.
 # --------------------------------------------------------------------------- #
 
 LIVE = work_scope.scope('run_execute', 'run-1', 'approved execution of node build-1', admission='adm-1')
 
 
-def test_switch_off_beats_a_live_graph(environment, monkeypatch):
+def test_a_live_graph_alone_is_not_authority(environment, monkeypatch):
     runtime, sid = environment
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
     with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
         execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})
     assert execution_kernel.guard_tool(runtime, current, 'file_read', {'path': 'x'})['mode'] == 'artifact_only'
 
 
-def test_switch_off_beats_a_live_run_execute_binding(environment, monkeypatch):
-    runtime, sid = environment
-    current = policy_session(runtime, sid)
-    monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
-    monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
-    with pytest.raises(PermissionError, match='WORK_SCOPE_ARTIFACT_ONLY'):
-        execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})
-    assert execution_kernel.guard_tool(runtime, current, 'terminal_exec', {'command': 'ls'})['mode'] == 'artifact_only'
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
-    assert execution_kernel.guard_tool(runtime, current, 'file_write', {'path': 'x'})['mode'] == 'run_execute'
-
-
-def test_live_graph_without_switch_still_reports_restricted_view(environment, monkeypatch):
+def test_live_graph_without_a_binding_still_reports_restricted_view(environment, monkeypatch):
     runtime, sid = environment
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
@@ -238,7 +220,6 @@ def test_injected_design_tool_survives_the_owner_check_when_admitted(environment
                                             'tools': TOOLS + ['design_write'], 'promptBlock': ''}
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
     monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     assert execution_kernel.guard_tool(runtime, current, 'design_write', {'path': 'x'})['mode'] == 'run_execute'
 
 
@@ -287,11 +268,10 @@ def test_view_keeps_the_owner_switchboard_for_legacy_sessions(environment):
 
 
 def test_view_does_not_claim_adaptive_is_enabled_for_a_downgraded_scope(environment, monkeypatch):
-    """Switch on + live graph, but a `legacy` scope still means the engine is not in effect."""
+    """A live graph, but a `legacy` scope still means the engine is not in effect."""
     runtime, sid = environment
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     view = execution_kernel.permission_view(runtime, current)
     assert view['scope']['mode'] == 'artifact_only'
     assert view['adaptiveEnabled'] is False and view['admitted'] is False
@@ -302,7 +282,6 @@ def test_view_claims_adaptive_only_when_a_binding_is_admitted(environment, monke
     current = policy_session(runtime, sid)
     monkeypatch.setattr(work_scope, '_graph', lambda rt: object())
     monkeypatch.setattr(work_scope, 'resolve', lambda rt, session: dict(LIVE))
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     view = execution_kernel.permission_view(runtime, current)
     assert view['scope']['mode'] == 'run_execute'
     assert view['adaptiveEnabled'] is True and view['admitted'] is True

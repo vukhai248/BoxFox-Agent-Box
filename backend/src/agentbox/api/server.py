@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import design_runtime, execution_kernel, feature_switches, plan_registry, research_runtime
+from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core import usage_surface
 from ..agent_core.plan_header import IDENTITY_PATTERN
@@ -475,8 +475,6 @@ def create_app(runtime):
         from ..agent_core import work_budget
         return web.json_response({
             'toolGroups': tool_groups(),
-            # H12 — khóa tổng `BOXFOX_REFORM`: nhìn một chỗ biết đang bật gì, vì đâu.
-            'switches': feature_switches.snapshot(),
             # H10.2 — khối `usage`: trần chi đang mở, chỉ đọc, trần cứng 20 hàng; bảng chưa
             # có thì `[]` để tab Harness không đỏ vì tính năng chưa dùng.
             'usage': {'allocations': _open_allocations(runtime)},
@@ -1674,7 +1672,7 @@ def create_app(runtime):
         """`GET|PUT /api/agent/sessions/{sid}/execution-policy` — mode của run (H8).
 
         Người vận hành là bên DUY NHẤT ghi được policy; model không có tool nào chạm tới nó.
-        Bật `adaptive` khi thiếu công tắc ⇒ 409 kèm mã, không đặt nửa vời.
+        Mode lạ ⇒ 400 kèm mã, không đặt nửa vời.
         """
         sid = request.match_info['sid']
         known_session(sid)
@@ -1686,7 +1684,7 @@ def create_app(runtime):
         try:
             return web.json_response(execution_kernel.set_policy(runtime, sid, body.get('mode')))
         except ValueError as exc:
-            raise _action_error(exc, {'POLICY_SWITCH_OFF': 409, 'POLICY_MODE_INVALID': 400}) from None
+            raise _action_error(exc, {'POLICY_MODE_INVALID': 400}) from None
 
     async def usage_allocation(request):
         """`GET|PUT|DELETE /api/agent/sessions/{sid}/usage-allocation` — trần chi của run (H10.2).

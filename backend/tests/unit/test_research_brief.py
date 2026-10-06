@@ -16,8 +16,8 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -60,10 +60,13 @@ def harness(tmp_path):
 
 
 def brief(runtime, session, **overrides):
+    """Gọi THẲNG engine `research_brief`: biên dispatch của main đã bị Research gateway đóng
+    (`RESEARCH_MAIN_READ_ONLY`) — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
+    """
     args = {'tier': 2, 'jobProfile': 'health', 'question': 'Mức hưởng chuyển tuyến 2026?',
             'rationale': 'cần dẫn nguồn văn bản, nhiều khía cạnh'}
     args.update(overrides)
-    return asyncio.run(runtime.dispatch(session, 'research_brief', args))
+    return asyncio.run(research_runtime.research_brief(runtime, session, args))
 
 
 def notices(store, sid):
@@ -92,7 +95,7 @@ def test_v2_brief_returns_exact_question_ids_for_delegation(harness):
 
 def test_v2_brief_without_a_profile_uses_mixed_evidence_not_price(harness):
     store, runtime, sid, session = harness
-    answer = asyncio.run(runtime.dispatch(session, 'research_brief', {
+    answer = asyncio.run(research_runtime.research_brief(runtime, session, {
         'tier': 2, 'question': 'Quy trình chuyển viện và nhu cầu người bệnh?',
         'rationale': 'Cần đối chiếu quy định, nhu cầu và sản phẩm.',
         'goal': 'Lập kế hoạch agent y tế', 'methods': ['law', 'users', 'products'],

@@ -18,6 +18,7 @@ from agentbox.agent_core import limits, research_review
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_contracts import SCHEMAS
 from agentbox.memory.session_store import SessionStore
+from research_intake import admit_lead
 
 CONFIRMED_GOAL = 'Chọn công cụ thay thế cho hệ cũ trong quý này'
 ASSUMED_PURPOSE = 'Giả định mục đích là giảm chi phí vận hành'
@@ -144,42 +145,42 @@ class FixtureExecutor:
 
 
 def _run_delegate(tmp_path, args, *, scope=None, questions=None):
-    """Gọi thẳng `runtime.delegate` trên một việc v2 đã có thẻ phạm vi."""
+    """Gọi thẳng `runtime.delegate` trên một nhánh của LEAD đã admit.
 
-    async def run():
-        store = SessionStore(tmp_path / 'sessions.db')
-        model = FixtureModel([answer('child final answer')])
-        runtime = HarnessRuntime(store, FixtureExecutor(), model)
-        sid = runtime.create({'skills': []})['id']
-        session = store.get(sid)
-        session['config']['research'] = {'researchId': 'seed-run', 'jobMode': 'v2', 'tier': 2}
-        store.update_config(sid, session['config'])
-        store.research_job_save('seed-run', sid,
-                               {'budgetSeconds': 1800, 'tier': 2,
-                                'scope': scope if scope is not None else _scope(),
-                                'questions': questions if questions is not None else [
-                                    {'id': 'q1', 'text': 'Công cụ nào rẻ hơn?',
-                                     'importance': 'high', 'status': 'unexplored'}]},
-                               status='researching')
-        runtime.active_turn[sid] = 1
-        session = store.get(sid)
-        events = []
-        try:
-            result = await runtime.delegate(session, args)
-        except ValueError as error:
-            runtime.active_turn.pop(sid, None)
-            children = store.children_of(sid)
-            store.close()
-            return {'error': str(error), 'children': children, 'prompt': ''}
-        child_id = result.get('sessionId')
-        child = store.get(child_id)
-        prompt = [m['content'] for m in child['messages'] if m['role'] == 'user'][-1]
-        events = [event['data'] for event in store.events(sid) if event['type'] == 'child']
-        runtime.active_turn.pop(sid, None)
+    Bề mặt 7 (`6c8fe6b`) đã xoá lối thoát legacy: main không còn `delegate_task role=research` với
+    một `researchId` tự khai, nên nhánh research chỉ giao được từ lead đã admit. Lead ở đây đi qua
+    chính cổng công khai của sản phẩm (`research_job_submit` → `research_job_control resume`);
+    `scope`/`questions` là thứ lead thật nhận qua `research_scope`, ghim lại trên hàng việc để bài
+    kiểm đo đúng brief mà runtime dựng từ đó.
+    """
+    store = SessionStore(tmp_path / 'sessions.db')
+    model = FixtureModel([answer('child final answer')])
+    runtime = HarnessRuntime(store, FixtureExecutor(), model)
+    root = runtime.create({'skills': []})
+    lead, run_id = admit_lead(store, runtime, root)
+    store.research_job_save(run_id, lead['id'],
+                            {'budgetSeconds': 1800, 'tier': 2,
+                             'scope': scope if scope is not None else _scope(),
+                             'questions': questions if questions is not None else [
+                                 {'id': 'q1', 'text': 'Công cụ nào rẻ hơn?',
+                                  'importance': 'high', 'status': 'unexplored'}]},
+                            status='researching')
+    runtime.active_turn[lead['id']] = 1
+    events = []
+    try:
+        result = asyncio.run(runtime.delegate(store.get(lead['id']), args))
+    except ValueError as error:
+        runtime.active_turn.pop(lead['id'], None)
+        children = store.children_of(lead['id'])
         store.close()
-        return {'result': result, 'child': child, 'prompt': prompt, 'events': events}
-
-    return asyncio.run(run())
+        return {'error': str(error), 'children': children, 'prompt': ''}
+    child_id = result.get('sessionId')
+    child = store.get(child_id)
+    prompt = [m['content'] for m in child['messages'] if m['role'] == 'user'][-1]
+    events = [event['data'] for event in store.events(lead['id']) if event['type'] == 'child']
+    runtime.active_turn.pop(lead['id'], None)
+    store.close()
+    return {'result': result, 'child': child, 'prompt': prompt, 'events': events}
 
 
 def test_the_runtime_builds_the_child_brief_and_the_model_does_not_write_requirements(tmp_path):

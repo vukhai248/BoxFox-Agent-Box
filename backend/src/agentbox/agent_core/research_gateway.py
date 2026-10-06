@@ -1,19 +1,18 @@
 """Biên Research versioned: main gửi câu hỏi, lead riêng sở hữu engine và bản công bố.
 
 Không scheduler mới, không cấp consent từ chuỗi ref. Thiếu admission backend thì chỉ lưu
-needs_consent; resume không gọi model. Bản lịch sử không tự chuyển chủ khi bật công tắc.
+needs_consent; resume không gọi model. Bản lịch sử không tự chuyển chủ.
 """
 import copy
 import json
 import time
 import uuid
 
-from . import feature_switches, research_runtime
+from . import research_runtime
 from .orchestration_contracts import identifier, invalid, object_fields, revision, string_list, text
 from .research_owner import ResearchOwnership, validate_report
 from .work_policy import digest
 
-SWITCH = 'BOXFOX_RESEARCH_GATEWAY'
 SCHEMA = 'boxfox-research-job/1'
 GATEWAY_TOOLS = frozenset({'research_job_submit', 'research_job_get', 'research_job_control',
                            'research_job_result'})
@@ -24,13 +23,6 @@ INTERNAL_TOOLS = frozenset({'source_add', 'source_list', 'source_verify', 'dossi
 LEAD_TOOLS = (INTERNAL_TOOLS - {'research_branch_report', 'claim_assess'}) | {
     'delegate_task', 'cancel_child', PUBLISH_TOOL}
 TERMINAL = {'cancelled', 'completed', 'partial'}
-
-
-def enabled(value=None):
-    """Gateway Research: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if value is not None:
-        return str(value).strip().lower() in ('on', '1', 'true')
-    return feature_switches.member_switch(SWITCH)
 
 
 def _exists(store):
@@ -169,8 +161,6 @@ class ResearchGateway:
                                    for item in (job['state'].get('blockedSources', []) if job else [])]}
 
     async def submit(self, actor, args):
-        if not enabled():
-            raise PermissionError('RESEARCH_GATEWAY_OFF: new admissions disabled')
         if actor.get('role') != 'orchestrator' or actor.get('parent_id'):
             raise PermissionError('RESEARCH_CONTROL_FORBIDDEN: submit requires the root principal')
         if 'research_job_submit' not in actor['config'].get('tools', []):
@@ -285,8 +275,6 @@ class ResearchGateway:
         object_fields(patch, 'constraintPatch', (), ('constraints',))
         string_list(patch.get('constraints', []), 'constraints', limit=100, item_limit=2000)
         if args['action'] in {'resume', 'refresh', 'request_revision'}:
-            if not enabled():
-                raise PermissionError('RESEARCH_GATEWAY_OFF: new admissions disabled')
             if 'research_job_control' not in actor['config'].get('tools', []):
                 raise PermissionError('RESEARCH_CAPABILITY_REVOKED')
         request_hash = digest(args)
@@ -328,8 +316,6 @@ class ResearchGateway:
                     or digest(parse_request(json.loads(row['request_json']))) != prepared_request):
                 invalid('request', 'canonical intake changed during preparation', 'RESEARCH_REVISION_CONFLICT')
             if args['action'] in {'resume', 'refresh', 'request_revision'}:
-                if not enabled():
-                    raise PermissionError('RESEARCH_GATEWAY_OFF: new admissions disabled')
                 if 'research_job_control' not in actor['config'].get('tools', []):
                     raise PermissionError('RESEARCH_CAPABILITY_REVOKED')
             own = self.ownership.get(row['run_id'])
@@ -388,10 +374,6 @@ class ResearchGateway:
         return result
 
 
-def has_receipts(rt, sid):
-    return bool(_exists(rt.store) and rt.store.db.execute('SELECT 1 FROM harness_research_gateway WHERE root_id=?', (sid,)).fetchone())
-
-
 async def on_stop(rt, sid):
     """Stop của root thắng admission và dừng controller qua đúng kernel đang có."""
     if not _exists(rt.store):
@@ -442,12 +424,7 @@ def guard_delegate(rt, actor, args, *, job_request=None):
             raise PermissionError('RESEARCH_DELEGATE_FORBIDDEN: no general controller jobs')
         guard_tool(rt, actor, 'delegate_task', args)
         return
-    if not enabled() and not has_receipts(rt, actor['id']):
-        return
     if actor.get('role') == 'orchestrator' and args.get('role') in {'research', 'research-review'}:
-        legacy = research_runtime.research_config(actor).get('researchId')
-        if legacy and not _binding(rt.store, run_id=legacy):
-            return
         raise PermissionError('RESEARCH_MAIN_READ_ONLY: submit through independent Research boundary')
 
 
@@ -474,8 +451,6 @@ def guard_request(rt, sid):
         if actor.get('role') == 'research-lead':
             raise PermissionError('RESEARCH_CREATION_FORBIDDEN: controller has no canonical intake')
         return None
-    if not enabled():
-        raise PermissionError('RESEARCH_GATEWAY_OFF: model admissions disabled')
     if row['state'] != 'running':
         raise PermissionError('RESEARCH_NEEDS_CONSENT: controller intake is not admitted/running')
     lead = rt.store.get(row['controller_id'])
@@ -506,14 +481,9 @@ def guard_request(rt, sid):
 
 
 def guard_tool(rt, actor, name, args):
-    """Cửa dispatch canonical, kể cả sau kill switch; không lấy quyền từ prompt/config tự khai."""
+    """Cửa dispatch canonical; không lấy quyền từ prompt/config tự khai."""
     row = _binding(rt.store, controller_id=actor['id'])
-    active = enabled() or row is not None or (_exists(rt.store) and rt.store.db.execute('SELECT 1 FROM harness_research_gateway WHERE root_id=?', (actor['id'],)).fetchone() is not None)
     if name in GATEWAY_TOOLS or name == PUBLISH_TOOL:
-        if name == 'research_job_submit' and not enabled():
-            raise PermissionError('RESEARCH_GATEWAY_OFF')
-        return
-    if not active:
         return
     if is_lead(rt, actor):
         if (research_runtime.research_config(actor).get('researchId') != row['run_id']
@@ -528,7 +498,7 @@ def guard_tool(rt, actor, name, args):
         own = service(rt).ownership.get(row['run_id'])
         job = rt.store.research_job(row['run_id'])
         if name not in {'source_list', 'research_status', 'file_read', 'codebase_glob', 'codebase_grep'}:
-            if not enabled() or own['state'] == 'released' or job['status'] in TERMINAL | {'paused'}:
+            if own['state'] == 'released' or job['status'] in TERMINAL | {'paused'}:
                 raise PermissionError('RESEARCH_JOB_STOPPED')
         if name == 'delegate_task' and (args.get('role') not in {'research', 'research-review'} or any(k in args for k in ('task', 'job', 'work'))):
             raise PermissionError('RESEARCH_DELEGATE_FORBIDDEN: lead can only dispatch scoped Research specialists')
@@ -539,7 +509,7 @@ def guard_tool(rt, actor, name, args):
     if parent:
         job = rt.store.research_job(parent['run_id'])
         released = service(rt).ownership.get(parent['run_id'])['state'] == 'released'
-        if (not enabled() or released or job['status'] in TERMINAL | {'paused'}) and name not in {'source_list', 'research_status', 'file_read'}:
+        if (released or job['status'] in TERMINAL | {'paused'}) and name not in {'source_list', 'research_status', 'file_read'}:
             raise PermissionError('RESEARCH_JOB_STOPPED')
         if name in {'delegate_task', 'cancel_child', 'task_list', 'task_get', 'task_send', 'task_abandon'}:
             raise PermissionError('RESEARCH_WORKER_CONTROL_FORBIDDEN')
@@ -550,14 +520,6 @@ def guard_tool(rt, actor, name, args):
             raise PermissionError('RESEARCH_CONTROL_FORBIDDEN')
         return
     if actor.get('role') == 'orchestrator':
-        # Không thu hồi quyền lịch sử khi run cũ đang dùng engine cũ.
-        legacy = research_runtime.research_config(actor).get('researchId')
-        path = str(args.get('path') or args.get('file_path') or '')
-        if name in {'file_read', 'file_write', 'file_edit_block'} and '.research' in path and legacy not in path.split('/'):
-            raise PermissionError('RESEARCH_MAIN_READ_ONLY: private dossier namespace')
-        requested_run = args.get('researchId') or args.get('slug') or legacy
-        if legacy and not _binding(rt.store, run_id=legacy) and not _binding(rt.store, run_id=requested_run):
-            return
         if name in INTERNAL_TOOLS:
             raise PermissionError('RESEARCH_MAIN_READ_ONLY: use the published gateway boundary')
         if name in {'file_read', 'file_write', 'file_edit_block'} and '.research' in str(args.get('path') or args.get('file_path') or ''):
@@ -571,11 +533,7 @@ def guard_tool(rt, actor, name, args):
 def apply_profile(rt, actor, profile):
     profile = dict(profile)
     tools = list(profile['tools'])
-    if not enabled():
-        tools = [n for n in tools if n not in GATEWAY_TOOLS | {PUBLISH_TOOL}]
-        if _exists(rt.store) and actor.get('role') == 'orchestrator':
-            tools += [n for n in ('research_job_get', 'research_job_result') if n not in tools]
-    elif actor.get('role') == 'orchestrator' and not research_runtime.research_config(actor).get('researchId'):
+    if actor.get('role') == 'orchestrator':
         tools = [n for n in tools if n not in INTERNAL_TOOLS]
         tools += [n for n in GATEWAY_TOOLS if n not in tools]
     if is_lead(rt, actor):
@@ -588,7 +546,7 @@ def apply_profile(rt, actor, profile):
 
 
 def tool_schemas():
-    """Lược đồ gateway để registry dùng cùng tên và công tắc."""
+    """Lược đồ gateway để registry dùng cùng tên."""
     def tool(name, properties, required, description):
         return {'type': 'function', 'function': {'name': name, 'description': description,
             'parameters': {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}}}

@@ -9,13 +9,12 @@ import hashlib
 import json
 import time
 
-from . import execution_kernel, feature_switches, work_scope
+from . import execution_kernel, work_scope
 from .context_bundle import ContextBundle, CONTEXT_SCHEMA, CHECKPOINT_SCHEMA, compare_recall
 from .orchestration_contracts import ContractError, invalid
 from .skill_spec import SKILL_UNKNOWN, SkillRegistry, SkillSpec, readiness, revalidate
 from .work_policy import digest
 
-SWITCH = 'BOXFOX_CONTEXT_SURFACE'
 MARKER = '=== CANONICAL CONTEXT REFS (DATA, NOT AUTHORITY) ==='
 
 
@@ -23,11 +22,6 @@ class _CatalogFallback(Exception):
     """Kho đăng ký chưa có hàng cho skill này ⇒ đĩc bên ngoài `_write` để
     đi đường cũ: lời đã âm thầm của transaction cũ, không được ghi
     trong đó (admission chưa chạy)."""
-
-
-def enabled():
-    """Bề mặt context: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    return feature_switches.member_switch(SWITCH)
 
 
 def _exists(db, table):
@@ -131,12 +125,6 @@ class ContextStore:
                 'provenance': 'backend', 'status': 'available', 'reason': None}
 
 
-def _active(rt, sid):
-    return enabled() or (_exists(rt.store.db, 'harness_context_bundles') and
-                        rt.store.db.execute('SELECT 1 FROM harness_context_bundles WHERE session_id=?',
-                                            (sid,)).fetchone() is not None)
-
-
 def _attempt(rt, session):
     db, sid = rt.store.db, session['id']
     if _exists(db, 'harness_task_attempts'):
@@ -154,7 +142,7 @@ def _attempt(rt, session):
 
 def _effective(rt, session):
     """Lọc scope/mode hiệu lực mà không dựng promptBlock, tránh đệ quy mode/skill."""
-    from . import plan_workflow, design_runtime, task_surface, job_surface, research_gateway, work_graph
+    from . import plan_workflow, design_runtime, research_gateway, work_graph
     from .runtime import (research_mode, design_mode, RESEARCH_MODE_EXCLUDED_TOOLS,
                           DESIGN_MODE_EXCLUDED_TOOLS, WORK_ENGINE_TOOLS, WORK_TOOLS)
     tools = set(execution_kernel.permission_view(rt, session)['tools'])
@@ -177,10 +165,6 @@ def _effective(rt, session):
         if not config.get('workTools') or 'work_graph' in tools:
             tools |= WORK_TOOLS | {'work_artifact_read'}
     profile = work_scope.apply_profile(rt, session, {'mode': mode, 'tools': sorted(tools)})
-    if not task_surface.enabled():
-        profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
-    if not job_surface.enabled():
-        profile['tools'] = job_surface.visible_tools(rt, session['id'], profile['tools'])
     profile = research_gateway.apply_profile(rt, session, profile)
     return profile['tools'], mode
 
@@ -208,16 +192,6 @@ def read_skill(rt, session, skill_id, file_path='SKILL.md', messages=None, *, _m
     session = rt.store.get(session['id'])
     sid, db = session['id'], rt.store.db
     attempt = _attempt(rt, session)
-    existing = None
-    if _exists(db, 'harness_context_skill_admissions'):
-        existing = db.execute('SELECT * FROM harness_context_skill_admissions WHERE session_id=? '
-                              'AND attempt_id=? AND skill_id=?',
-                              (sid, attempt, skill_id)).fetchone()
-    if not enabled() and existing is None:
-        return rt.skill_loader.read(session, skill_id, file_path, messages)
-    if not enabled() and existing is not None:
-        # Kill switch chặn lượt nạp mới nhưng không thay ghim của attempt đang có.
-        invalid('skill', 'new skill loads disabled; existing pin retained', code='SKILL_SURFACE_OFF')
     if skill_id not in session['config'].get('skills', []):
         raise PermissionError('Skill is not enabled for this session')
     svc = ContextStore(rt.store)
@@ -316,11 +290,6 @@ def read_skill(rt, session, skill_id, file_path='SKILL.md', messages=None, *, _m
 
 def mode_skill(rt, session, skill_id):
     """Mode cũ không được vượt admission; lý do bị chặn vẫn hiện rõ."""
-    pins = _exists(rt.store.db, 'harness_context_skill_admissions') and rt.store.db.execute(
-        'SELECT 1 FROM harness_context_skill_admissions WHERE session_id=? AND attempt_id=? AND skill_id=?',
-        (session['id'], _attempt(rt, session), skill_id)).fetchone()
-    if not enabled() and not pins:
-        return rt.catalog.read(skill_id).get('content') or ''
     from .orchestration_contracts import ContractError
     try:
         return read_skill(rt, session, skill_id, messages=rt.active_messages.get(session['id']),
@@ -526,8 +495,6 @@ def _capture(rt, svc, session, messages, epoch):
 def checkpoint(rt, session, *, reason, before_messages=None, after_messages=None):
     """Lưu bền qua đổi epoch; không summary nào được nâng thành thẩm quyền."""
     sid = session['id']
-    if not _active(rt, sid):
-        return None
     svc = ContextStore(rt.store)
     session = rt.store.get(sid)
     before_messages = session['messages'] if before_messages is None else before_messages
@@ -556,8 +523,7 @@ def compact(rt, sid, saved, compacted, event):
     """Hook chung cho nén tự động và /compact, không đổi điều kiện kích hoạt nén."""
     receipt = checkpoint(rt, rt.store.get(sid), reason='compaction', before_messages=saved,
                          after_messages=compacted)
-    if receipt:
-        event['contextBundleRef'] = receipt['ref']
+    event['contextBundleRef'] = receipt['ref']
     return receipt
 
 
@@ -661,8 +627,6 @@ def validate_ref(rt, session, ref):
 
 def handoff_to(rt, parent, child_id):
     """Gắn bundle của đúng con đã admit; không dùng ref của cha để cấp quyền cho con."""
-    if not enabled() and not _active(rt, child_id):
-        return None
     parent = rt.store.get(parent['id'])
     child = rt.store.get(child_id)
     record = rt.store.child(child_id)
@@ -671,6 +635,5 @@ def handoff_to(rt, parent, child_id):
         invalid('child', 'handoff requires a canonical started child of this parent', code='HARNESS_CONTEXT_OWNER')
     messages = list(child['messages'])
     receipt = checkpoint(rt, child, reason='handoff', after_messages=messages)
-    if receipt:
-        rt.store.save(child_id, messages)
+    rt.store.save(child_id, messages)
     return receipt

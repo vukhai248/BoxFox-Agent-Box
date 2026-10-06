@@ -39,8 +39,6 @@ class Client:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     executor, client = Executor(), Client()
     rt = HarnessRuntime(store, executor, client)
@@ -106,16 +104,6 @@ def test_restart_keeps_failure_signature(env):
         adaptive_surface.before_tool(restarted, sid, 'file_read', {'path': 'missing'})
 
 
-def test_kill_switch_blocks_new_requests_keeps_state_readable(env, monkeypatch):
-    pin(env)
-    adaptive_surface.decide(env[1], env[2]['id'])
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
-    with pytest.raises(ContractError, match='ADAPTIVE_DISABLED'):
-        asyncio.run(env[1].complete_model(env[2]['id'], [], [], env[2]['config']['route']))
-    assert env[4].calls == 0
-    assert adaptive_surface.state(env[1], env[2]['id']) == ([], [])
-
-
 def test_dynamic_adaptive_guidance_does_not_rewrite_original_intent(env):
     pin(env)
     messages = [{'role': 'system', 'content': ORCHESTRATOR_SOP_GUIDANCE + '\nOWNER KEEP THIS'},
@@ -158,7 +146,6 @@ def test_real_runtime_adaptive_turn_is_measured_and_decided(env):
 @pytest.mark.parametrize('deny', [False, True])
 def test_recovery_gate_is_live_and_only_removes_retries(env, monkeypatch, deny):
     from agentbox.agent_core import failures
-    monkeypatch.setenv('BOXFOX_RECOVERY_POLICY', 'on')
     original_advice = failures.retry_advice
     def immediate(*args, **kwargs):
         advice = original_advice(*args, **kwargs)

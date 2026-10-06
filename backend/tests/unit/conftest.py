@@ -1,36 +1,14 @@
-"""Mặc định của bộ unit test sau v2 (#6599): công tắc BẬT, trừ khi file khai ngược lại.
+"""Nhãn `legacy_path` là dấu LỊCH SỬ, không còn kèm env nào.
 
-Từ v2, env trống nghĩa là **cả nhóm cải tổ BẬT** (`BOXFOX_REFORM` mặc định `True`). Nhiều tệp
-test được viết cho cấu hình TRƯỚC v2 (công tắc TẮT) và chốt hành vi cũ — chúng vẫn phải có bằng
-chứng, vì đó là ĐƯỜNG ROLLBACK. Cách làm ở đây: file nào chốt đường cũ thì khai báo tường minh
-`pytestmark = pytest.mark.legacy_path`, và fixture dưới đây pin `BOXFOX_REFORM=off` cho mọi bài
-trong file đó.
-
-Vì sao pin CẢ khóa tổng lẫn bảy thành viên: env thành viên đặt tường minh luôn thắng khóa tổng,
-nên chỉ `BOXFOX_REFORM=off` là không kín — một shell đang có `BOXFOX_TASK_SURFACE=on` (đúng cách
-đợt bật dần từng bước đã chạy) sẽ lọt vào "đường cũ" và bài test không còn chốt cấu hình trước v2.
-Pin cả bảy thành viên giữ phép kiểm kín, và khóa tổng `off` vẫn là lối thoát hiểm một lệnh thật
-(vì fixture chỉ chạm tới file khai `legacy_path`). Bài nào cần chạy đường mới trong file legacy thì
-đặt env thành viên TƯỜNG MINH sau fixture (`monkeypatch.setenv('BOXFOX_X', 'on')`).
-
-File KHÔNG khai báo gì thì chạy đúng thứ người dùng mới nhận được (mặc định BẬT).
+Bước B5 (HANDOFF §10.3) đã xoá khóa tổng `BOXFOX_REFORM` cùng nhóm công tắc thành viên (nhóm nay
+rỗng vì cả bảy bề mặt đã xoá), nên nhãn này KHÔNG còn điều khiển cấu hình chạy: file khai
+`pytestmark = pytest.mark.legacy_path` chỉ ghi lại rằng nội dung của nó được viết cho cấu hình
+TRƯỚC v2 (#6599). Không còn nhánh legacy nào để bật hay tắt, nên không còn gì để pin.
 """
-import pytest
-
-from agentbox.agent_core import feature_switches
 
 
 def pytest_configure(config):
     config.addinivalue_line(
         'markers',
-        'legacy_path: chốt hành vi TRƯỚC v2 — pin `BOXFOX_REFORM=off` cho mọi bài trong file',
+        'legacy_path: nội dung viết cho cấu hình TRƯỚC v2 (#6599) — nhãn lịch sử, không kèm env',
     )
-
-
-@pytest.fixture(autouse=True)
-def legacy_path_switch(request, monkeypatch):
-    """File khai `legacy_path` chạy đúng cấu hình trước v2; file khác giữ mặc định hiện hành."""
-    if request.node.get_closest_marker('legacy_path'):
-        monkeypatch.setenv(feature_switches.MASTER_SWITCH, 'off')
-        for name in feature_switches.MEMBERS:
-            monkeypatch.setenv(name, 'off')

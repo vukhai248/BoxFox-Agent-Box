@@ -2,8 +2,8 @@
 
 Kế hoạch v1 §4. Đây là lớp mỏng nối `task_service` (kho bền vững) vào runtime:
 
-- `enabled()` — công tắc giết `BOXFOX_TASK_SURFACE`, mặc định BẬT từ v2 (#6599); tắt tường minh bằng `off` thì công cụ không được
-  quảng cáo (`turn_profile_base`) và `dispatch` từ chối thẳng, nên phiên cũ không đổi hành vi.
+Bề mặt LUÔN sống từ v2 (#6599): bốn công cụ luôn được quảng cáo cho phiên gốc và `dispatch`
+không còn nhánh từ chối theo công tắc.
 - `handle(rt, session, name, args)` — bốn handler, chỉ gọi hàm đã có của `task_service` và
   `research_runtime.cancel_child`; không tự ghi bảng nào.
 - Phân quyền: chỉ phiên gốc (owner/controller) được `send`/`abandon`; phiên con chỉ đọc task gắn
@@ -34,14 +34,12 @@ Theo dõi lượt thử lại (follow-up) của `delegate_task` — ngữ nghĩa
 """
 
 
-from . import execution_kernel, feature_switches, research_runtime, work_scope
+from . import execution_kernel, research_runtime, work_scope
 from .orchestration_contracts import ContractError, invalid
 from .task_service import TaskService
 
-#: Bốn công cụ của bề mặt này. `schemas_for` gỡ cả bốn khi công tắc tắt (khuôn `PEER_TOOLS`).
+#: Bốn công cụ của bề mặt này.
 TASK_TOOLS = frozenset({'task_list', 'task_get', 'task_send', 'task_abandon'})
-
-SWITCH = 'BOXFOX_TASK_SURFACE'
 
 #: Trần trang cho `task_list`/`task_get` khi model không nói gì.
 PAGE_LIMIT = 20
@@ -53,16 +51,6 @@ MAX_LIMIT = 100
 BIND_FAILED_REASON = 'TASK_BIND_FAILED'
 
 
-def enabled(env=None):
-    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`.
-
-    `env` là giá trị thô của test; truyền vào thì thắng mọi thứ (giữ nguyên khuôn cũ).
-    """
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(SWITCH)
-
-
 def service(rt):
     """`TaskService` của runtime này, với resolver đọc run từ Work Graph hiện có."""
     return TaskService(rt.store, lambda owner_id, run_id: _resolve_run(rt, owner_id, run_id))
@@ -71,15 +59,13 @@ def service(rt):
 def open_delegate(rt, session, args):
     """Tạo task cho một lần `delegate_task` có hợp đồng, trước khi con được sinh.
 
-    Trả `None` khi công tắc tắt, khi lượt này không phải main (chỉ phiên GỐC tạo task), hoặc khi
-    lời gọi không mang `task`. Hợp đồng đi NGUYÊN VĂN qua `TaskContract.parse`; `invocationId`
+    Trả `None` khi lượt này không phải main (chỉ phiên GỐC tạo task), hoặc khi lời gọi không
+    mang `task`. Hợp đồng đi NGUYÊN VĂN qua `TaskContract.parse`; `invocationId`
     trong hợp đồng là khoá idempotency, nên thử lại cùng một lời gọi không sinh task thứ hai.
 
     Ghi task KHÔNG cấp quyền chạy: quyền vẫn do các cổng hiện có quyết định, và attempt chỉ được
     ghi sau khi con thật sự được admit (`bind_attempt`).
     """
-    if not enabled():
-        return None
     contract = (args or {}).get('task')
     if contract is None:
         return None
@@ -122,14 +108,12 @@ def resume_attempt(rt, session, child_id, attempt_no, turn=0):
     `TaskService.record_attempt` đã dựng sẵn cho ca này ("A resumed legacy child may reuse its
     session ID"): hàng `children` vừa được `child_start` mở lại nên `started` là mốc MỚI, và điều
     kiện `previous['started_at'] != child['started']` chính là dấu hiệu con đã được mở lại. Con
-    chưa từng gắn task (công tắc tắt, hoặc `delegate_task` không mang hợp đồng) ⇒ no-op.
+    chưa từng gắn task (`delegate_task` không mang hợp đồng) ⇒ no-op.
 
     Idempotency key mang CẢ lượt của cha (`resume-<con>-<lượt>-<n>`): vòng soát H11 đo được rằng
     chỉ `resume-<con>-<n>` làm lời gọi lại ở lượt thứ hai trùng key với lượt đầu — kho task từ
     chối bằng `TASK_INVOCATION_CONFLICT` và attempt mới im lặng biến mất.
     """
-    if not enabled() and not _task_store_exists(rt):
-        return None
     row = rt.store.db.execute(
         'SELECT t.task_key AS task_key, t.run_id AS run_id, t.owner_id AS owner_id, '
         't.revision AS revision FROM harness_tasks t JOIN harness_task_attempts a '
@@ -151,14 +135,8 @@ def project_child(rt, child_id):
     Gọi từ các bộ đóng con HIỆN CÓ (`close_detached_child`, `cancel_child`, người dọn T7). Hàm
     này không bao giờ ném: đóng con không được hỏng vì sổ task. Con chưa từng gắn task ⇒ no-op.
 
-    Công tắc TẮT và kho CHƯA TỪNG có bảng task ⇒ no-op trước khi dựng `TaskService`: mỗi lần dựng
-    chạy DDL (`executescript`) và có thể chốt giao dịch đang mở của người gọi, nên một triển khai
-    chưa bao giờ bật công tắc không phải trả giá đó. Kho đã từng tạo task thì vẫn chiếu (ưu tiên
-    toàn vẹn sổ).
     """
     try:
-        if not enabled() and not _task_store_exists(rt):
-            return None
         child = rt.store.child(child_id)
         if child is None or child['finished'] is None:
             return None
@@ -182,13 +160,6 @@ def current_revision(rt, opened):
     if row is None:
         invalid('taskKey', 'unknown task', 'TASK_UNKNOWN')
     return row['revision']
-
-
-def _task_store_exists(rt):
-    """Kho này đã từng tạo bảng task chưa — chỉ một SELECT `sqlite_master`, không DDL."""
-    row = rt.store.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='harness_tasks'"
-                              ).fetchone()
-    return row is not None
 
 
 def _resolve_run(rt, owner_id, run_id):
@@ -257,8 +228,6 @@ def _bound_tasks(rt, session, run_id):
 async def handle(rt, session, name, args):
     """Chạy một công cụ bề mặt task. Mọi mã lỗi đã là mã hợp đồng (`TASK_*`, `TASK_SURFACE_*`)."""
     args = args if isinstance(args, dict) else {}
-    if not enabled():
-        raise PermissionError(f'TASK_SURFACE_OFF: {name} is unavailable while {SWITCH} is off')
     root = _root_id(rt, session)
     is_root = not session.get('parent_id')
     run_id = _run_id(rt, session, args)

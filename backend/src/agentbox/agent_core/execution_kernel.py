@@ -4,25 +4,11 @@ This module does not schedule children, mint grants, or certify OS isolation.
 Legacy dispatch retains its original scope checks. Adaptive bindings additionally
 fail closed when the guard engine or canonical owner disappears.
 """
-import os
-
-from . import feature_switches, tool_recovery, work_scope
+from . import tool_recovery, work_scope
 
 POLICY_SCHEMA = 'boxfox-execution-policy/1'
 POLICY_KEY = 'harnessPolicy'
-ADAPTIVE_SWITCH = 'BOXFOX_ADAPTIVE_HARNESS'
-LEDGER_SWITCH = 'BOXFOX_USAGE_LEDGER'
 MODES = ('adaptive', 'legacy')
-
-
-def enabled():
-    return _switch(ADAPTIVE_SWITCH)
-
-
-def _switch(name):
-    if name in feature_switches.MEMBERS:
-        return feature_switches.member_switch(name)
-    return os.getenv(name, 'off').strip().lower() in ('1', 'on', 'true')
 
 
 def root_session(rt, sid):
@@ -37,16 +23,12 @@ def set_policy(rt, sid, mode):
     """Người vận hành ghi `harnessPolicy` — đường DUY NHẤT ghi policy (model không có tool nào).
 
     Trước bản này không có writer nào, nên H8 ("main thích ứng") chỉ là thư viện + seam: bật công tắc
-    cũng không có cách nào đặt mode cho một phiên (soát tuân thủ 2026-10-04). Bật `adaptive` đòi CẢ
-    HAI công tắc vì `usage_surface` từ chối mọi model call khi policy adaptive mà thiếu một trong
-    hai — nói thẳng ở đây thay vì để lượt chết ở giữa. `legacy` gỡ khoá, quay về đúng hành vi cũ.
+    cũng không có cách nào đặt mode cho một phiên (soát tuân thủ 2026-10-04). Từ v2 (#6599) không
+    còn công tắc riêng: sổ usage LUÔN sống và engine thích ứng LUÔN nhận admission khi có graph sống,
+    nên `adaptive` chỉ cần một lệnh ghim. `legacy` gỡ khoá, quay về đúng hành vi cũ.
     """
     if mode not in MODES:
         raise ValueError('POLICY_MODE_INVALID: mode must be one of ' + ', '.join(MODES))
-    for name in ((ADAPTIVE_SWITCH, LEDGER_SWITCH) if mode == 'adaptive' else ()):
-        if not _switch(name):
-            raise ValueError(f'POLICY_SWITCH_OFF: {name} is off in this build — turn it on before a '
-                             'session can pin the adaptive policy')
     root = root_session(rt, sid)
     config = dict(root['config'])
     if mode == 'adaptive':
@@ -58,15 +40,14 @@ def set_policy(rt, sid, mode):
 
 
 def status(rt, sid):
-    """Mode đang ghim của run + hai công tắc, để người vận hành thấy ngay vì sao bật được hay không."""
+    """Mode đang ghim của run, để người vận hành thấy ngay run đang chạy đường nào."""
     root = root_session(rt, sid)
     try:
         value = _policy(root)
     except PermissionError:
         value = (root['config'] or {}).get(POLICY_KEY)
     return {'sessionId': root['id'], 'mode': (value or {}).get('mode') or 'legacy',
-            'policy': value,
-            'switches': {name: _switch(name) for name in (ADAPTIVE_SWITCH, LEDGER_SWITCH)}}
+            'policy': value}
 
 
 def _policy(current):
@@ -130,9 +111,9 @@ def guard_tool(rt, session, name, args):
             raise PermissionError('HARNESS_OWNER_UNKNOWN: no owner, no adaptive effect') from exc
     if name not in tool_recovery.owner_tools(rt.store, current) and name not in _injected_tools(rt, current):
         raise PermissionError('WORK_CAPABILITY_REVOKED: the current owner no longer permits ' + name)
-    # The new switch cannot use BOXFOX_WORK_GRAPH=off to fall through to legacy.
-    if not enabled() or work_scope._graph(rt) is None:
-        reason = 'adaptive admission is disabled or unavailable'
+    # Không có graph canonical thì không có admission: kernel không bao giờ rơi về legacy mutation.
+    if work_scope._graph(rt) is None:
+        reason = 'adaptive admission is unavailable'
     elif scope.get('mode') == 'legacy':
         # An enabled flag without canonical execution bindings is not authority.
         reason = 'adaptive request has no canonical execution binding'
@@ -156,8 +137,7 @@ def permission_view(rt, session):
         except KeyError as exc:
             raise PermissionError('HARNESS_OWNER_UNKNOWN: canonical parent is unavailable') from exc
     scope = work_scope.resolve(rt, current)
-    restricted = bool(policy) and (not enabled() or work_scope._graph(rt) is None
-                                   or scope['mode'] == 'legacy')
+    restricted = bool(policy) and (work_scope._graph(rt) is None or scope['mode'] == 'legacy')
     if restricted:
         scope = work_scope.scope('artifact_only', scope.get('runId'),
                                 'adaptive execution is not admitted')
@@ -166,7 +146,7 @@ def permission_view(rt, session):
         blocked = work_scope.MUTATING_TOOLS | work_scope.DESIGN_MUTATING
         tools = [name for name in tools if name not in blocked]
     # `adaptiveEnabled` states one fact: the adaptive engine is actually in effect for this
-    # session (policy + switch + live graph + a canonical binding). A policy session whose scope
+    # session (policy + live graph + a canonical binding). A policy session whose scope
     # downgraded to `artifact_only` is not enabled, so the field never contradicts `admitted`.
     admitted = bool(policy) and not restricted
     return {

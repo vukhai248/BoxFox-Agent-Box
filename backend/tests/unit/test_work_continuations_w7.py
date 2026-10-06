@@ -10,8 +10,8 @@ from test_work_graph import build, answer
 from test_work_feedback_w7 import QUESTIONS
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -60,11 +60,15 @@ def setup(tmp_path, second=False):
     store, rt, _, executor, sid = build(tmp_path)
     model = Model(); rt.client = model
     graph = work_graph.service(rt)
-    nodes = [{'id': 'R1', 'kind': 'research', 'taskKind': 'lookup', 'title': 'Owner intent',
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research` (nút sẽ đóng
+    # `needs_user` với `RESEARCH_NEEDS_MAIN`). Cơ chế continuation/phỏng vấn không phụ thuộc kind, nên
+    # bài giữ nguyên ý nghĩa bằng nút `explore` + `taskKind: lookup` — main vẫn chạy được, và vì
+    # artifact là `knowledge`/risk thường nên không sinh check tự động, đúng như nút research cũ.
+    nodes = [{'id': 'R1', 'kind': 'explore', 'taskKind': 'lookup', 'title': 'Owner intent',
         'goal': 'Read source then confirm users and deployment of the CSV exporter',
         'acceptance': ['Use the owner answers and source'], 'dependsOn': []}]
     if second:
-        nodes.append({'id': 'R2', 'kind': 'research', 'taskKind': 'lookup', 'title': 'Independent R2',
+        nodes.append({'id': 'R2', 'kind': 'explore', 'taskKind': 'lookup', 'title': 'Independent R2',
                       'goal': 'Independent R2: inspect unrelated source while R1 needs the owner'})
     run = graph.create(store.get(sid), {'goal': 'Research exporter intent only; no implementation',
                                       'flow': 'research', 'nodes': nodes})

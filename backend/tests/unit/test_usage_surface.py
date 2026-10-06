@@ -4,7 +4,6 @@ import copy
 
 import pytest
 
-from switch_isolation import isolate_off
 from agentbox.agent_core import execution_kernel, usage_surface
 from agentbox.agent_core.orchestration_contracts import ContractError
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -47,8 +46,6 @@ class Executor:
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     client = Client()
     rt = HarnessRuntime(store, Executor(), client)
@@ -82,13 +79,6 @@ def allocate(env, amount=.01):
     config = store.get(session['id'])['config']
     store.update_config(session['id'], dict(config, harnessAllocationId='root-budget'))
     return ledger
-
-
-def test_off_legacy_has_no_rows(env, monkeypatch):
-    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
-    call(env)
-    assert env[3].calls == 1
-    assert env[0].db.execute("SELECT name FROM sqlite_master WHERE name='harness_usage'").fetchone() is None
 
 
 def test_each_request_costs_once_with_cache_and_reasoning_overlap(env):
@@ -168,14 +158,6 @@ def test_adaptive_confirmed_free_route_passes_and_mock_price_restores(env):
     assert env[3].calls == 1
 
 
-def test_adaptive_ledger_kill_switch_cannot_fallback_legacy(env, monkeypatch):
-    adaptive(env)
-    isolate_off(monkeypatch, 'BOXFOX_USAGE_LEDGER')
-    with pytest.raises(ContractError, match='USAGE_LEDGER_DISABLED'):
-        call(env)
-    assert env[3].calls == 0
-
-
 def test_other_root_allocation_cannot_be_used(env):
     store, rt, session, client = env
     other = store.create({})
@@ -210,18 +192,6 @@ def test_snapshot_error_preserves_legacy_unknown_and_blocks_adaptive(env):
     assert env[3].calls == 1
 
 
-def test_flag_revoked_during_snapshot_blocks_adaptive_request(env, monkeypatch):
-    adaptive(env)
-    original = env[3].snapshot
-    async def snapshot():
-        monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'off')
-        return await original()
-    env[3].snapshot = snapshot
-    with pytest.raises(ContractError, match='ADAPTIVE_DISABLED'):
-        call(env)
-    assert env[3].calls == 0
-
-
 def test_usd_price_cannot_consume_non_usd_allocation(env):
     store, rt, session, client = env
     ledger = usage_surface.service(rt)
@@ -235,7 +205,6 @@ def test_usd_price_cannot_consume_non_usd_allocation(env):
 
 def research_lead(env, monkeypatch, *, admit=True):
     from agentbox.agent_core import research_gateway
-    monkeypatch.setenv(research_gateway.SWITCH, 'on')
     store, rt, session, client = env
     config = store.get(session['id'])['config']
     # Trần output 100 giữ upper bound admission (contextWindow fixture 1000) trong ngân sách .01.

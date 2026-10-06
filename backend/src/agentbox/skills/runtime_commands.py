@@ -148,9 +148,8 @@ class RuntimeCommands:
                             # created` — muốn biết cửa sổ/ngưỡng/ước lượng của lần nén đó phải mò
                             # sang `events.payload`. Ghi ngay tại đây, cùng lượt với bản gốc.
                             saved_messages = session['messages']
-                            context_receipt = context_surface.compact(self, sid, saved_messages, messages, compact_event)
-                            if context_receipt:
-                                event = compact_event
+                            context_surface.compact(self, sid, saved_messages, messages, compact_event)
+                            event = compact_event
                             self.store.checkpoint(sid, saved_messages, 'manual_compact', {
                                 'before_estimate': (event or {}).get('beforeEstimate', before),
                                 'after_estimate': (event or {}).get('afterEstimate'),

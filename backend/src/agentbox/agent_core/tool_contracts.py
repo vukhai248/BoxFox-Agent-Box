@@ -1,7 +1,6 @@
 """Only tools with an executable v0 adapter are advertised."""
 
 
-from . import feature_switches
 from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
@@ -11,23 +10,11 @@ from .limits import peer_mesh_enabled
 PEER_TOOLS = frozenset({'peer_read', 'await_children', 'child_resume'})
 
 # H3 — bốn công cụ bề mặt task. Cùng lý do như `PEER_TOOLS`: định nghĩa tại đây để `schemas_for`
-# không phải nhập `task_surface` (module đó nhập `research_runtime`). Công tắc đọc thẳng từ môi
-# trường; `task_surface.TASK_TOOLS` phải khớp tập này (có test ghim).
+# không phải nhập `task_surface` (module đó nhập `research_runtime`); `task_surface.TASK_TOOLS`
+# phải khớp tập này (có test ghim). Bề mặt LUÔN sống từ v2 (#6599) nên `schemas_for` không còn
+# nhánh cắt theo công tắc.
 TASK_SURFACE_TOOLS = frozenset({'task_list', 'task_get', 'task_send', 'task_abandon'})
-TASK_SURFACE_SWITCH = 'BOXFOX_TASK_SURFACE'
 CONTROLLER_JOB_TOOLS = frozenset({'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'})
-
-
-def controller_jobs_enabled():
-    """Bề mặt job controller: tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    return feature_switches.member_switch('BOXFOX_CONTROLLER_JOBS')
-
-
-def task_surface_enabled(env=None):
-    """Bề mặt task: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(TASK_SURFACE_SWITCH)
 
 
 def tool(name, description, properties, required=()):
@@ -427,8 +414,8 @@ SCHEMAS = [
                                           'mode': {'type': 'string',
                                                    'enum': ['evidence', 'critique', 'coverage']}}},
           'task': {'type': 'object',
-                   'description': 'Only when the task surface is on (BOXFOX_TASK_SURFACE=on) and this turn is the '
-                                  'MAIN session: the boxfox-task-contract/1 object for this piece of work. The '
+                   'description': 'Only when this turn is the MAIN session: the boxfox-task-contract/1 '
+                                  'object for this piece of work. The '
                                   'runtime records the task BEFORE the child is born, so the run task store owns '
                                   'it (keys: schema, taskId, invocationId, role - which must equal `role` - , goal, '
                                   'intent, mode, inputs, scope, deliverable, dependsOn, budget). `invocationId` is '
@@ -899,8 +886,7 @@ SCHEMAS = [
          'Stop/revoke wins over late completion; receipts remain readable when starts are disabled.',
          {'jobId': STRING, 'expectedRevision': {'type': 'integer'}, 'reason': STRING},
          ['jobId', 'expectedRevision', 'reason']),
-    # H3 — bề mặt task (plan v1 §4). Bốn công cụ chỉ được QUẢNG CÁO khi `BOXFOX_TASK_SURFACE=on`
-    # (cổng ở `schemas_for` + `turn_profile_base` + `dispatch`), nên phiên cũ không thấy gì mới.
+    # H3 — bề mặt task (plan v1 §4). Bốn công cụ LUÔN được quảng cáo từ v2 (#6599).
     tool('task_list',
          'Liệt kê task của run hiện tại theo trang: trạng thái, attempt, số message chưa đọc và ref '
          'kết quả. Phiên con chỉ thấy task gắn với chính nó. Không trả hidden reasoning hay toàn '
@@ -951,25 +937,16 @@ def replay_class(name, args=None):
     return REPLAY.get(name, 'unsafe')
 
 
-def schemas_for(names, *, job_receipts=False, research_receipts=False):
+def schemas_for(names):
     """Lược đồ của đúng những công cụ được yêu cầu.
 
     T13 — `BOXFOX_PEER_MESH=off` là công tắc GIẾT của cả mesh, nên nó chặn ở đây nữa: một phiên
     được tạo lúc mesh còn bật rồi công tắc tắt giữa chừng cũng không được nhận lược đồ của hai
     công cụ peer. Kiểm ở tầng thấp nhất là kiểm không thể quên.
-    H3 — cùng khuôn cho bề mặt task: `BOXFOX_TASK_SURFACE=off` (mặc định) gỡ bốn công cụ `task_*`.
     """
     if not peer_mesh_enabled():
         names = set(names) - PEER_TOOLS
-    if not task_surface_enabled():
-        names = set(names) - TASK_SURFACE_TOOLS
-    if not controller_jobs_enabled():
-        names = set(names) - ({'start_job'} if job_receipts else CONTROLLER_JOB_TOOLS)
     # Nạp muộn: gateway tái dùng research_runtime, tránh vòng nhập registry/runtime.
     from . import research_gateway
-    gateway_names = research_gateway.GATEWAY_TOOLS | {research_gateway.PUBLISH_TOOL}
-    if not research_gateway.enabled():
-        readable = {'research_job_get', 'research_job_result'} if research_receipts else set()
-        names = set(names) - (gateway_names - readable)
     schemas = SCHEMAS + research_gateway.tool_schemas()
     return [s for s in schemas if s['function']['name'] in names]

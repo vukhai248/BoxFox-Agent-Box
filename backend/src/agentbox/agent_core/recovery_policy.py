@@ -15,18 +15,13 @@ Bất biến (kiểm bằng test):
 5. Empty/reasoning-only/refusal phân biệt được: empty có đúng một lần thử lại, còn lại dừng/hỏi đổi route.
 6. Mã lạ ⇒ fail closed: checkpoint + hỏi, không đoán.
 
-Nối runtime (H8a): công tắc `BOXFOX_RECOVERY_POLICY` (mặc định BẬT từ v2, #6599). Khi bật, runtime
+Nối runtime (H8a): lớp này LUÔN sống từ v2 (#6599). Runtime
 (a) ghi quyết định của module vào kết quả tool lỗi và event `error`, và (b) dùng
 quyết định làm **cổng chỉ-chặn**: mã nào module nói `checkpoint_and_ask`/`stop` mà
 vòng retry cũ định thử lại thì bị chặn (`RECOVERY_POLICY_DENIED`). Cổng không bao giờ
 THÊM một lần thử lại — hôm nay nó khớp `failures.retry_advice` từng mã (H3.7), nên
-bật công tắc không đổi hành vi; nó là lưới cho các mã mới.
+nó không đổi hành vi; nó là lưới cho các mã mới.
 """
-
-from . import feature_switches
-
-#: Công tắc giết khi nối vào runtime: mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`.
-SWITCH = 'BOXFOX_RECOVERY_POLICY'
 
 #: Hai hành động mà module nói "được phép chạy lại việc"; mọi hành động khác là dừng/giữ.
 RETRY_ACTIONS = ('retry_backoff', 'recover_model')
@@ -174,13 +169,6 @@ _EMPTY_RETRIES = 1  # khớp `TURN_EMPTY_RESPONSE_RETRY` của runtime: rỗng t
 def classify(code):
     """Mã lỗi → lớp. Mã lạ trả `'unknown'` (không đoán, không coi là transient)."""
     return CODES.get(str(code or '').strip(), 'unknown')
-
-
-def enabled(env=None):
-    """Lớp chính sách hồi phục: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(SWITCH)
 
 
 def may_retry(decision_value):

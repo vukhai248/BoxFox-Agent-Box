@@ -51,10 +51,7 @@ class ScriptedModel:
 
 
 def environment(tmp_path, monkeypatch, **switches):
-    monkeypatch.setenv('BOXFOX_CONTROLLER_JOBS', 'on')
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'on')
-    monkeypatch.setenv('BOXFOX_ADAPTIVE_HARNESS', 'on')
-    monkeypatch.setenv('BOXFOX_USAGE_LEDGER', 'on')
     for name, value in switches.items():
         monkeypatch.setenv(name, value)
     store = SessionStore(tmp_path / 'sessions.db')
@@ -198,24 +195,6 @@ def test_busy_owner_defers_wake_until_turn_closes(tmp_path, monkeypatch):
         job_wake.notify(rt, sid)
         await asyncio.sleep(0)
         assert model.count == 3
-    asyncio.run(drive())
-    store.close()
-
-
-def test_kill_switch_blocks_wake_but_keeps_durable_result(tmp_path, monkeypatch):
-    env = environment(tmp_path, monkeypatch)
-    store, rt, sid, model = env
-
-    async def drive():
-        child, _ = await arm(env)
-        monkeypatch.setenv('BOXFOX_CONTROLLER_JOBS', 'off')
-        await finish(rt, child)
-        receipt = wake_rows(store, sid)[0]
-        assert model.count == 2 and receipt['state'] == 'blocked'
-        assert job_surface.SWITCH in (receipt['reason'] or '')
-        pending = store.db.execute("SELECT count(*) FROM harness_wake_outbox WHERE consumer_id=? "
-            "AND predicate='result' AND status='pending'", (sid,)).fetchone()[0]
-        assert pending == 1
     asyncio.run(drive())
     store.close()
 

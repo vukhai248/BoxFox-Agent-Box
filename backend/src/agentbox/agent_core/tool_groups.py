@@ -3,10 +3,10 @@
 Bảng này là nguồn duy nhất cho khối "Tool access" ở tab Harness: hợp của mười bốn nhóm
 phải bằng ĐÚNG bộ công cụ của orchestrator (`roles.ORCHESTRATOR_TOOLS`, 60 công cụ),
 và mỗi nhóm giữ trật tự như bảng trong kế hoạch. Nhóm `taskSurface` (H3) đứng CUỐI và
-mang `alwaysOn: False`: bốn công cụ `task_*` chỉ được quảng cáo khi
-`BOXFOX_TASK_SURFACE=on`, nên bảng nhóm mô tả cả phần đang tắt. `alwaysOn` đánh dấu nhóm không thể
-tắt: hỏi người dùng và xin phép là hai công cụ quyết định (`roles.DECISION`), mọi
-vai trò đều có, nên một harness tắt chúng là một harness không còn hỏi được ai.
+mang `alwaysOn: False` (từ v3, sau khi xoá công tắc bề mặt: bốn công cụ `task_*` luôn được
+quảng cáo, nhưng một harness vẫn THU HẸP được chúng như mọi nhóm khác). `alwaysOn` đánh dấu
+nhóm không thể tắt: hỏi người dùng và xin phép là hai công cụ quyết định (`roles.DECISION`),
+mọi vai trò đều có, nên một harness tắt chúng là một harness không còn hỏi được ai.
 
 Chỉ `runtime.py` mới quyết định bộ công cụ thật của một phiên; tệp này chỉ MÔ TẢ
 cách chia nhóm, không cấp quyền gì thêm.
@@ -67,11 +67,12 @@ TOOL_GROUPS = [
     {'key': 'researchGateway',
      'tools': ['research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'],
      'alwaysOn': False},
-    # H4 — job controller explicit, tắt mặc định; không cấp scheduler/quyền mới.
+    # H4 — job controller explicit; công cụ LUÔN mở từ v2 (#6599), không cấp scheduler/quyền mới.
+    # `alwaysOn: False` giữ nguyên: harness vẫn thu hẹp được nhóm này, như mọi nhóm khác.
     {'key': 'controllerJobs',
      'tools': ['start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job'],
      'alwaysOn': False},
-    # H3 — bề mặt task (plan v1 §4). Nhóm TẮT mặc định: chỉ có tên khi `BOXFOX_TASK_SURFACE=on`.
+    # H3 — bề mặt task (plan v1 §4). Công cụ LUÔN mở từ v2 (#6599); harness vẫn thu hẹp được.
     {'key': 'taskSurface',
      'tools': ['task_list', 'task_get', 'task_send', 'task_abandon'],
      'alwaysOn': False},
