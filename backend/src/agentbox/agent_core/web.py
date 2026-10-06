@@ -537,7 +537,9 @@ def search_status() -> dict:
         explicit = _explicit_search_config()
         alive = bool(status['searxng']['url'])
         mode = str(status['pipeline'].get('mode') or 'auto')
-        status['pipeline']['applies'] = mode == 'on' or (mode == 'auto' and alive and not explicit)
+        # `applies` phải khớp cổng THẬT (`_pipeline_applies`): cổng ấy đòi SearXNG sống cho MỌI
+        # chế độ (kể cả `on`) — nói `applies: true` khi ống sẽ không chạy là dối người vận hành.
+        status['pipeline']['applies'] = alive and (mode == 'on' or (mode == 'auto' and not explicit))
         status['pipeline']['backends'] = (['searxng'] if alive else []) + explicit
     except Exception:
         pass
@@ -1287,6 +1289,7 @@ class WebTools:
             pack_warning = ('source pack has no search_index.jsonl: this call fell through to '
                             'the live network instead of answering from the pack')
         pipeline_fallback = None
+        pipeline_reason = ''
         if _pipeline_applies(source):
             try:
                 payload = search_pipeline.run_pipeline(queries, source=source, count=count,
@@ -1295,7 +1298,10 @@ class WebTools:
             except WebError as exc:
                 # Ống hỏng/không ra gì KHÔNG được làm lời gọi thất bại khi còn chân khác: rơi xuống
                 # chuỗi một lần, giữ mã lỗi của ống để payload cuối nói rõ đã rơi (v1 cải tổ search).
+                # Giữ LUÔN lý do của ống (`log_message`: bản không chứa truy vấn/URL) — lỗi cuối phải
+                # gộp cả lý do ống lẫn lý do chuỗi, không chỉ mã.
                 pipeline_fallback = {'from': 'pipeline', 'code': str(getattr(exc, 'code', '') or '')}
+                pipeline_reason = str(getattr(exc, 'log_message', '') or '')
             else:
                 if pack_warning:
                     payload['packWarning'] = pack_warning
@@ -1340,7 +1346,7 @@ class WebTools:
             pipeline_code = str((pipeline_fallback or {}).get('code') or '')
             pipeline_failed = bool(pipeline_fallback) and pipeline_code != search_failures.WEB_SEARCH_EMPTY
             if pipeline_failed:
-                real_reasons.append(f'the 10-step pipeline failed ({pipeline_code or "unknown"})')
+                real_reasons.append(f'the 10-step pipeline failed ({pipeline_reason or pipeline_code})')
             answered_empty = bool(leg_reasons) and not real_reasons
             missing = _missing_search_keys()
             backends = _configured_search_backends()

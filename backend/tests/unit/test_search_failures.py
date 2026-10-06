@@ -63,6 +63,18 @@ def test_a_source_specific_group_keeps_its_own_message():
     assert 'another source' in message
 
 
+def test_the_infra_message_only_names_searxng_when_searxng_is_the_broken_backend():
+    """Khoá Brave hỏng mà câu lại chỉ `127.0.0.1:8888` + `probe.py` là chỉ sai chỗ."""
+    message = sf.message_for(code=sf.WEB_SEARCH_UNAVAILABLE, kind='infra', source='web',
+                             reasons=['brave: HTTP 429'], backends=['env:BRAVE_API_KEY'],
+                             missing=[], query='hồ sơ', searxng_url='', autodetect_url='http://127.0.0.1:8888')
+    assert 'brave: HTTP 429' in message
+    assert 'http://127.0.0.1:8888' not in message
+    assert 'deploy/searxng/probe.py' not in message
+    assert 'Settings → Provider → Web Search' in message
+    assert 'backend problem, not a query problem' in message
+
+
 def test_an_empty_answer_with_a_real_failure_stays_infra():
     """Một chân rỗng + một chân ném KHÔNG phải ca rỗng: `answered_empty` do chỗ gọi quyết định."""
     verdict = sf.classify(source='web', reasons=['brave: HTTP 429'], answered_empty=False,

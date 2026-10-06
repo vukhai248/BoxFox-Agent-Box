@@ -38,6 +38,8 @@ def classify(*, source: str, reasons, answered_empty: bool, backends, missing) -
     backends = [str(backend) for backend in (backends or []) if str(backend).strip()]
     missing = [str(name) for name in (missing or []) if str(name).strip()]
     if answered_empty and not reasons:
+        # Ca RỖNG đứng TRƯỚC ca `source`: nguồn trả lời mà không có hàng nào vẫn là "nới/đổi truy
+        # vấn một lần", không phải "nguồn hỏng" — bảng §4.2 chỉ xếp `source` khi có LÝ DO hỏng thật.
         return {'code': WEB_SEARCH_EMPTY, 'kind': ''}
     if str(source or 'web') != 'web':
         return {'code': WEB_SEARCH_UNAVAILABLE, 'kind': 'source'}
@@ -67,12 +69,18 @@ def message_for(*, code: str, kind: str, source: str, reasons, backends, missing
                 '"web" or "wikipedia"); do not repeat the same call unchanged.')
     if kind == 'infra':
         names = ', '.join(str(backend) for backend in (backends or [])) or 'the configured backend'
-        target = searxng_url or autodetect_url or ''
+        # Chỉ nói địa chỉ/probe của SearXNG khi SearXNG THẬT SỰ nằm trong nhóm backend: khoá Brave
+        # hỏng mà câu lại chỉ `http://127.0.0.1:8888` và `probe.py` là chỉ sai chỗ.
+        searxng_here = any('searxng' in str(backend) for backend in (backends or []))
+        target = (searxng_url or autodetect_url or '') if searxng_here else ''
         where = f' at {target}' if target else ''
+        advice = (f'Check it with {PROBE_SCRIPT} or {UP_SCRIPT}, set BOXFOX_SEARXNG_URL, or add a '
+                  f'search key in {SETTINGS_POINTER}.') if searxng_here else (
+                  f'Check the key, quota or plan of {names}, or add another search key in '
+                  f'{SETTINGS_POINTER}.')
         return (head + f'every configured web-search backend failed ({names}{where}): {detail}. '
                 f'This is a backend problem, not a query problem — do not retry the same search. '
-                f'Check it with {PROBE_SCRIPT} or {UP_SCRIPT}, set BOXFOX_SEARXNG_URL, or add a '
-                f'search key in {SETTINGS_POINTER}.')
+                f'{advice}')
     keys = f' Missing keys: {", ".join(missing)}.' if missing else ''
     return (head + f'nothing is configured to search the web and this is a configuration problem, '
             f'not a query problem ({detail}). Enable the built-in search with {UP_SCRIPT}, set '

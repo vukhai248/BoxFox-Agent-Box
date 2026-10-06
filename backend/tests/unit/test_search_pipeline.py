@@ -670,6 +670,41 @@ def test_record_response_health_writes_one_row_per_engine(monkeypatch):
     assert all(kw['empty'] is True and kw['latency_ms'] == 7 for _, kw in written)
 
 
+def test_fold_response_health_marks_a_dead_backend_blocked_not_empty():
+    """Phản hồi LỖI (không tới được) ⇒ `blocked`, KHÔNG phải `empty`: engine chết phải vào bộ ngắt mạch."""
+    health = {}
+    sp.fold_response_health({'results': [], 'unresponsive': [], 'error': 'connection refused',
+                             'latencyMs': 30}, ['brave', 'bing'], health)
+    assert health['brave'] == {'ok': False, 'empty': False, 'blocked': True, 'timeout': False,
+                               'latency': 30}
+    assert health['bing']['blocked'] is True
+
+
+def test_fold_response_health_marks_a_timed_out_backend_as_timeout():
+    health = {}
+    sp.fold_response_health({'results': [], 'unresponsive': [], 'error': 'Read timed out',
+                             'latencyMs': 8000}, ['brave'], health)
+    assert health['brave']['timeout'] is True and health['brave']['blocked'] is False
+    assert health['brave']['empty'] is False
+
+
+def test_fold_response_health_keeps_empty_when_the_backend_answered(monkeypatch):
+    """Không có `error` ⇒ engine trả lời rỗng thật, vẫn là `empty` (đừng đổi nghĩa ca cũ)."""
+    health = {}
+    sp.fold_response_health({'results': [], 'unresponsive': [], 'latencyMs': 7}, ['bing'], health)
+    assert health['bing']['empty'] is True and health['bing']['blocked'] is False
+
+
+def test_search_status_does_not_claim_the_pipeline_applies_without_a_live_url(monkeypatch):
+    monkeypatch.setenv(sp.PIPELINE_ENV, 'on')
+    monkeypatch.delenv(sp.SEARXNG_URL_ENV, raising=False)
+    monkeypatch.setenv(sp.SEARXNG_AUTODETECT_ENV, 'off')
+    sp.reset_autodetect()
+    status = sp.search_status()
+    assert status['searxng']['url'] == ''
+    assert status['pipeline']['applies'] is False, 'on + không SearXNG ⇒ cổng thật vẫn đóng'
+
+
 def test_search_status_does_not_create_the_search_db(tmp_path, monkeypatch):
     """Health phải rẻ và KHÔNG được tạo file: chưa có DB thì `engines == []`, DB vẫn không tồn tại."""
     target = tmp_path / 'chưa-có.sqlite'

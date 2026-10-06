@@ -281,7 +281,10 @@ def search_status() -> dict:
     return {'searxng': {'url': url, 'origin': origin, 'reachable': reachable,
                         'checkedAt': checked_at or None},
             'pipeline': {'mode': mode,
-                         'applies': mode == 'on' or (mode == 'auto' and bool(url))},
+                         # Cổng thật (`web._pipeline_applies`) đòi SearXNG sống cho MỌI chế độ;
+                         # `auto` còn đòi thêm "chưa có cấu hình tường minh" — chỗ gọi biết điều đó
+                         # (`web.search_status` ghi đè bằng câu trả lời đầy đủ hơn).
+                         'applies': bool(url) and mode != 'off'},
             'engines': _engine_health_rows()}
 
 
@@ -898,6 +901,12 @@ def fold_response_health(response: dict, engines: list[str], into: dict) -> None
         else:
             names.append(str(item))
     latency = int(response.get('latencyMs') or 0)
+    # Phản hồi LỖI (không tới được, HTTP 5xx, …) không phải "engine trả lời rỗng": ghi `empty` cho
+    # ca này thì bộ ngắt mạch không bao giờ tạm dừng engine chết và health hiện "rỗng" thay vì
+    # "bị chặn". `timeout` tách riêng theo câu lỗi.
+    error = str(response.get('error') or '').strip().lower()
+    dead = bool(error) and not rows
+    timeout_error = dead and ('timeout' in error or 'timed out' in error)
     for engine in engines:
         slot = into.setdefault(engine, {'ok': False, 'empty': True, 'blocked': False,
                                         'timeout': False, 'latency': 0})
@@ -910,6 +919,10 @@ def fold_response_health(response: dict, engines: list[str], into: dict) -> None
                 slot['timeout'] = True
             else:
                 slot['blocked'] = True
+        elif dead:
+            slot['timeout'] = timeout_error
+            slot['blocked'] = not timeout_error
+            slot['empty'] = False
         from_engine = [row for row in rows if str(row.get('engine')) == engine]
         if from_engine:
             slot['ok'] = True

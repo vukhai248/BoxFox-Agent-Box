@@ -289,6 +289,18 @@ def test_the_pipeline_does_not_apply_to_other_sources(monkeypatch):
     assert web_module._pipeline_applies('wikipedia') is False
 
 
+def test_the_health_block_does_not_claim_the_pipeline_applies_without_searxng(monkeypatch):
+    """`applies` phải khớp cổng thật: `on` mà không có SearXNG nào thì ống KHÔNG chạy."""
+    monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'on')
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'off')
+    sp.reset_autodetect()
+    assert web_module._pipeline_applies('web') is False
+    status = web_module.search_status()
+    assert status['searxng']['url'] == ''
+    assert status['pipeline']['applies'] is False
+
+
 def test_a_pipeline_that_finds_nothing_falls_through_to_the_keyless_leg(tools, monkeypatch):
     monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
     monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
@@ -335,7 +347,7 @@ def test_a_pipeline_that_failed_keeps_its_reason_when_the_chain_is_empty(tools, 
     assert caught.value.code == 'WEB_SEARCH_UNAVAILABLE'
     assert caught.value.details['searchFailure']['kind'] == 'infra'
     assert 'not a query problem' in str(caught.value)
-    assert 'the 10-step pipeline failed (WEB_SEARCH_UNAVAILABLE)' in str(caught.value)
+    assert 'the 10-step pipeline failed (WEB_SEARCH_UNAVAILABLE' in str(caught.value)
 
 
 def test_a_dead_searxng_falls_through_to_the_next_leg(tools, monkeypatch):
