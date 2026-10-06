@@ -43,6 +43,7 @@ export type SettingTabId =
   | 'automations'
   // MACHINES
   | 'configuration'
+  | 'machine_permissions'
   | 'secrets'
   | 'browser'
   // FEATURES
