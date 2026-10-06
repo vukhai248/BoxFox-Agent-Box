@@ -423,6 +423,17 @@ SEARCH_RETRY_ATTEMPTS = 2
 # §5.4.2 (mặc định riêng tư), §5.4.3 (học thuật), §5.4.4 (top-k). Mọi con số là [ƯỚC LƯỢNG] và
 # được chỉnh trên tập `dev` của 8.7, KHÔNG chỉnh trên tập `test`.
 SEARXNG_TIMEOUT_SECONDS = 8.0
+# Tự dò SearXNG tự host (v1 cải tổ web search): khi `BOXFOX_SEARXNG_URL` chưa đặt, harness thử
+# instance ở địa chỉ dưới đây. Đầu dò là `GET /healthz` (image `searxng/searxng` hiện tại trả
+# 200 + thân "OK"; đo 06/10/2026), đường lùi `GET /config` (JSON có khoá `engines`). Cache dương
+# 30 s / cache âm 15 s — đủ nhanh để `deploy/searxng/up.sh` xong là dùng được, đủ thưa để không
+# thăm dò mỗi lời gọi tìm kiếm.
+SEARXNG_AUTODETECT_URL_DEFAULT = 'http://127.0.0.1:8888'
+SEARXNG_AUTODETECT_TTL_SECONDS = 30.0
+SEARXNG_AUTODETECT_MISS_TTL_SECONDS = 15.0
+SEARXNG_HEALTH_PATH = '/healthz'
+SEARXNG_CONFIG_PATH = '/config'
+SEARXNG_PROBE_TIMEOUT_SECONDS = 2.0
 ACADEMIC_TIMEOUT_SECONDS = 10.0
 SEARCH_PIPELINE_VARIANTS_L2 = 6
 SEARCH_PIPELINE_VARIANTS_L3 = 10

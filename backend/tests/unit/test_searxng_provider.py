@@ -102,6 +102,7 @@ def test_search_keeps_the_old_path_when_everything_is_off(tools, monkeypatch):
 
 def test_search_uses_the_pipeline_when_enabled(tools, monkeypatch):
     monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'on')
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')   # ống cần SearXNG sống
     calls = {}
 
     def fake_run(queries, **kwargs):
@@ -210,3 +211,109 @@ def test_paper_citations_keeps_openalex_when_the_pipeline_is_off(tools, monkeypa
         'meta': {'count': 1}})
     payload = tools.paper_citations({'workId': 'W123', 'direction': 'forward', 'limit': 5})
     assert payload['source'] == 'openalex' and payload['count'] == 1
+
+
+# ------------------------------------- v1 cải tổ web search: chân SearXNG tự dò ------------------
+
+def test_the_searxng_leg_names_env_and_probe_target_when_missing(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'off')
+    with pytest.raises(WebError) as exc:
+        web_module._provider_searxng('q', 3, {})
+    assert 'BOXFOX_SEARXNG_URL is not set' in str(exc.value)
+    assert '127.0.0.1:8888' in str(exc.value)
+
+
+def test_the_searxng_leg_records_engine_health(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.setattr(sp, 'pick_engines', lambda *a, **kw: ['bing'])
+    monkeypatch.setattr(sp, 'searxng_search', lambda *a, **kw: {
+        'results': [{'url': 'https://example.com/a', 'title': 't', 'snippet': 's', 'engine': 'bing'}],
+        'engines': ['bing'], 'unresponsive': [], 'error': None, 'latencyMs': 5})
+    written = []
+    monkeypatch.setattr(sp, 'record_engine_result', lambda engine, **kw: written.append((engine, kw)))
+    rows = web_module._provider_searxng('q', 3, {})
+    assert rows and rows[0]['provider'] == 'searxng'
+    assert written == [('bing', {'ok': True, 'empty': False, 'blocked': False, 'timeout': False,
+                                 'latency_ms': 5})]
+
+
+# ------------------------------------- v1 cải tổ web search: công tắc `auto` --------------------
+
+def test_auto_mode_uses_the_pipeline_only_without_explicit_config(tools, monkeypatch):
+    """`auto` (mặc định): SearXNG sống + không cấu hình gì ⇒ ống; có cấu hình tường minh ⇒ nhường."""
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    monkeypatch.delenv('BRAVE_API_KEY', raising=False)
+    monkeypatch.delenv('BOXFOX_BRAVE_API_KEY', raising=False)
+    calls = []
+
+    def fake_run(queries, **kwargs):
+        calls.append(queries)
+        return {'query': queries[0], 'queries': queries, 'source': kwargs['source'],
+                'results': [_row()], 'count': 1, 'pipeline': {'pack': False, 'steps': {}}}
+
+    monkeypatch.setattr(sp, 'run_pipeline', fake_run)
+    assert web_module._pipeline_applies('web') is True
+    payload = tools.search({'query': 'qua ống auto'})
+    assert payload['pipeline']['pack'] is False and len(calls) == 1
+
+    # Có khoá env ⇒ ống nhường đường cho chuỗi ưu tiên (hợp đồng §4.1).
+    monkeypatch.setenv('BRAVE_API_KEY', 'k')
+    assert web_module._pipeline_applies('web') is False
+    assert web_module._explicit_search_config() == ['env:BRAVE_API_KEY']
+
+
+def test_a_selected_source_keeps_the_pipeline_out_of_the_way(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    monkeypatch.setattr(web_module, '_selected_search_source',
+                        lambda: SimpleNamespace(provider_id='brave'))
+    assert web_module._explicit_search_config() == ['selected:brave']
+    assert web_module._pipeline_applies('web') is False
+    monkeypatch.setattr(web_module, '_selected_search_source',
+                        lambda: SimpleNamespace(provider_id='searxng'))
+    assert web_module._explicit_search_config() == ['selected:searxng']
+    assert web_module._pipeline_applies('web') is False
+
+
+def test_the_pipeline_can_be_killed_with_off(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'off')
+    assert web_module._pipeline_applies('web') is False
+
+
+def test_the_pipeline_does_not_apply_to_other_sources(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    assert web_module._pipeline_applies('wikipedia') is False
+
+
+def test_a_pipeline_that_finds_nothing_falls_through_to_the_keyless_leg(tools, monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+
+    def dead_pipeline(queries, **kwargs):
+        raise WebError('WEB_SEARCH_UNAVAILABLE', 'the pipeline found nothing')
+
+    monkeypatch.setattr(sp, 'run_pipeline', dead_pipeline)
+    monkeypatch.setattr(web_module, 'GENERAL_PROVIDERS', (lambda query, count, options=None: [_row()],))
+    payload = tools.search({'query': 'rơi xuống chuỗi'})
+    assert payload['results'][0]['url'] == 'https://example.com/a'
+    assert payload['searchFallback'] == {'from': 'pipeline', 'code': 'WEB_SEARCH_UNAVAILABLE'}
+
+
+def test_a_dead_searxng_falls_through_to_the_next_leg(tools, monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    monkeypatch.setattr(sp, 'run_pipeline',
+                        lambda queries, **kw: (_ for _ in ()).throw(
+                            WebError('WEB_SEARCH_UNAVAILABLE', 'searxng: connection refused')))
+    monkeypatch.setattr(web_module, 'GENERAL_PROVIDERS', (
+        lambda query, count, options=None: (_ for _ in ()).throw(
+            WebError('WEB_SEARCH_UNAVAILABLE', 'searxng: connection refused')),
+        lambda query, count, options=None: [_row('https://keyless.example/b')],
+    ))
+    payload = tools.search({'query': 'searxng chết'})
+    assert payload['results'][0]['url'] == 'https://keyless.example/b'
+    assert payload['searchFallback']['from'] == 'pipeline'

@@ -47,6 +47,11 @@ Upon container initialization (`box-entrypoint.sh`), the following directories a
   - Uses `docker compose up -d --build` with layer cache for instant startup (<0.5s when unchanged, 1-2s when docker config changes).
   - Full argument pass-through via `%*` (`start.bat -Rebuild`).
 
+### D. Built-in Keyless Web Search (PART 1, 2026-10-06)
+- `web_search` now works **out of the box, no API key required**: a self-hosted SearXNG on `127.0.0.1:8888` is auto-detected (`BOXFOX_SEARXNG_AUTODETECT`, 30s positive / 15s negative cache) and used as the default keyless leg; the 10-step pipeline defaults to `BOXFOX_SEARCH_PIPELINE=auto`. Start it with `bash deploy/searxng/up.sh` (see `deploy/searxng/README.md`).
+- Failures are classified (`searchFailure.kind` = `config` / `infra` / `source`): infrastructure and config errors now say **"not a query problem"** instead of telling the agent to retry the query (fixes F05); an empty result set is a separate code (`WEB_SEARCH_EMPTY`).
+- Decision record and **PART 2 interface contract (§4)**: `docs/plan/builtin-search-default.md`; three test tiers (unit / stub / live) and the latency bench: `docs/testing/builtin-search-e2e.md`.
+
 ---
 
 ## 3. High-Performance Architecture Reference

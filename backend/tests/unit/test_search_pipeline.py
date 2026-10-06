@@ -27,13 +27,23 @@ def _isolated(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------ công tắc
 
-def test_pipeline_is_off_by_default(monkeypatch):
+def test_pipeline_is_off_by_default_without_searxng(monkeypatch):
     sp.reset_store()
-    assert sp.pipeline_enabled() is False
+    assert sp.pipeline_mode() == 'auto', 'mặc định mới là auto (không phải off)'
+    assert sp.pipeline_enabled() is False, 'auto KHÔNG phải on: nhánh papers giữ nguyên nghĩa cũ'
     monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'ON')
     assert sp.pipeline_enabled() is True
     monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'maybe')
     assert sp.pipeline_enabled() is False
+    assert sp.pipeline_mode() == 'auto'
+
+
+def test_pipeline_mode_reads_off_on_and_auto(monkeypatch):
+    for value, expected in (('off', 'off'), ('0', 'off'), ('false', 'off'), ('no', 'off'),
+                            ('on', 'on'), ('1', 'on'), ('true', 'on'), ('yes', 'on'),
+                            ('auto', 'auto'), ('', 'auto'), ('maybe', 'auto')):
+        monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', value)
+        assert sp.pipeline_mode() == expected, value
 
 
 def test_searxng_url_trims_the_trailing_slash(monkeypatch):
@@ -275,10 +285,38 @@ def test_run_pipeline_serves_the_second_identical_call_from_the_cache(monkeypatc
 
 def test_run_pipeline_raises_web_error_when_every_engine_refuses(monkeypatch):
     monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'on')
-    monkeypatch.setattr(sp, 'searxng_search', _fake_leg([]))
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+
+    def refused(query, *, engines, count, time_range=None, language='', timeout=None):
+        return {'results': [], 'engines': list(engines), 'unresponsive': [],
+                'error': 'HTTP 503: upstream refused', 'latencyMs': 9}
+
+    monkeypatch.setattr(sp, 'searxng_search', refused)
     with pytest.raises(WebError) as caught:
         sp.run_pipeline(['không có gì'], source='web', count=5, options={})
     assert caught.value.code == 'WEB_SEARCH_UNAVAILABLE'
+    assert caught.value.details['searchFailure']['kind'] == 'infra'
+    assert 'not a query problem' in str(caught.value)
+
+
+def test_run_pipeline_reports_config_when_no_searxng_is_configured(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'on')
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    with pytest.raises(WebError) as caught:
+        sp.run_pipeline(['không có gì'], source='web', count=5, options={})
+    assert caught.value.details['searchFailure']['kind'] == 'config'
+    assert 'not a query problem' in str(caught.value)
+    assert 'BOXFOX_SEARXNG_URL is not set' in str(caught.value)
+
+
+def test_run_pipeline_reports_an_empty_answer_as_its_own_code(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARCH_PIPELINE', 'on')
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.setattr(sp, 'searxng_search', _fake_leg([]))
+    with pytest.raises(WebError) as caught:
+        sp.run_pipeline(['không có gì'], source='web', count=5, options={})
+    assert caught.value.code == 'WEB_SEARCH_EMPTY'
+    assert 'returned no rows' in str(caught.value)
 
 
 def test_run_pipeline_feeds_the_local_index_in_as_its_own_engine(monkeypatch):
@@ -487,3 +525,175 @@ def test_freshness_credit_needs_a_real_date_not_a_bare_year():
     assert all(sp._fresh_score(row, scope) == 0.0 for row in uncredited)
     # Ngoài facet hiện trạng thì ε độ mới luôn bằng 0.
     assert sp._fresh_score(credited[0], {'needs_fresh': False}) == 0.0
+
+
+# ------------------------------------- v1 cải tổ web search: tự dò SearXNG tự host ----------------
+
+def test_searxng_url_prefers_the_env_var_over_autodetect(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:9999/')
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'on')
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: pytest.fail('có env thì không dò'))
+    assert sp.searxng_url() == 'http://127.0.0.1:9999'
+
+
+def test_searxng_url_autodetects_a_live_instance_and_caches_it(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'on')
+    seen = []
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: seen.append(url) or True)
+    sp.reset_autodetect()
+    assert sp.searxng_url() == 'http://127.0.0.1:8888'
+    assert sp.searxng_url() == 'http://127.0.0.1:8888'
+    assert seen == ['http://127.0.0.1:8888']           # cache dương: dò một lần
+
+
+def test_searxng_url_negative_cache_avoids_probing_every_call(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'on')
+    seen = []
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: seen.append(url) or False)
+    sp.reset_autodetect()
+    assert sp.searxng_url() == '' and sp.searxng_url() == ''
+    assert len(seen) == 1                               # cache âm 15 s
+
+
+def test_autodetect_can_be_switched_off(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'off')
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: pytest.fail('tắt thì không dò'))
+    assert sp.searxng_url() == ''
+
+
+def test_autodetect_target_can_be_moved(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'on')
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT_URL', 'http://127.0.0.1:8899/')
+    seen = []
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: seen.append(url) or True)
+    sp.reset_autodetect()
+    assert sp.searxng_url() == 'http://127.0.0.1:8899'
+    assert seen == ['http://127.0.0.1:8899']
+
+
+def test_probe_searxng_accepts_healthz(monkeypatch):
+    monkeypatch.setattr(sp, 'http_request', lambda url, *, timeout: (200, 'OK'))
+    assert sp.probe_searxng('http://127.0.0.1:8888') is True
+
+
+def test_probe_searxng_falls_back_to_config(monkeypatch):
+    def only_config(url, *, timeout):
+        if url.endswith('/healthz'):
+            raise sp._LocalRequestError('HTTP 404: not found')
+        return 200, json.dumps({'engines': [{'name': 'bing'}]})
+    monkeypatch.setattr(sp, 'http_request', only_config)
+    assert sp.probe_searxng('http://127.0.0.1:8888') is True
+
+
+def test_probe_searxng_rejects_a_foreign_service(monkeypatch):
+    monkeypatch.setattr(sp, 'http_request', lambda url, *, timeout: (200, '<html>hello</html>'))
+    assert sp.probe_searxng('http://127.0.0.1:8888') is False
+
+
+def test_probe_searxng_never_raises(monkeypatch):
+    def boom(url, *, timeout):
+        raise OSError('connection refused')
+    monkeypatch.setattr(sp, 'http_request', boom)
+    assert sp.probe_searxng('http://127.0.0.1:8888') is False
+
+
+def test_searxng_search_uses_the_given_base_url(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'off')
+    seen = {}
+
+    def fake_request(url, *, timeout):
+        seen['url'] = url
+        return 200, json.dumps({'results': [], 'unresponsive_engines': []})
+
+    monkeypatch.setattr(sp, 'http_request', fake_request)
+    response = sp.searxng_search('x', engines=['bing'], count=3, base_url='http://127.0.0.1:8899/')
+    assert seen['url'].startswith('http://127.0.0.1:8899/search?')
+    assert response['error'] is None
+
+
+def test_searxng_search_without_any_url_names_env_and_probe_target(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'off')
+    response = sp.searxng_search('x', engines=[], count=3)
+    assert 'BOXFOX_SEARXNG_URL is not set' in response['error']
+    assert '127.0.0.1:8888' in response['error']
+
+
+def test_a_transport_failure_on_the_autodetected_url_clears_the_positive_cache(monkeypatch):
+    monkeypatch.delenv('BOXFOX_SEARXNG_URL', raising=False)
+    monkeypatch.setenv('BOXFOX_SEARXNG_AUTODETECT', 'on')
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: True)
+
+    def boom(url, *, timeout):
+        raise sp._LocalRequestError('ConnectionRefusedError: refused')
+    monkeypatch.setattr(sp, 'http_request', boom)
+    sp.reset_autodetect()
+    assert sp.searxng_url() == 'http://127.0.0.1:8888'
+    assert sp.searxng_search('x', engines=[], count=3)['error']
+    # Cache dương đã bị xoá: lượt sau dò lại, lần này instance đã chết.
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, **kw: False)
+    assert sp.searxng_url() == ''
+
+
+def test_fold_response_health_marks_blocked_timeout_and_ok():
+    health = {}
+    response = {'results': [{'engine': 'bing'}], 'unresponsive': ['brave', 'mojeek'],
+                'latencyMs': 120}
+    sp.fold_response_health(response, ['brave', 'mojeek', 'bing'], health)
+    assert health['brave']['blocked'] is True           # không rõ lý do ⇒ coi là bị chặn
+    assert health['mojeek']['blocked'] is True
+    assert health['bing'] == {'ok': True, 'empty': False, 'blocked': False, 'timeout': False,
+                              'latency': 120}
+
+
+def test_fold_response_health_reads_reasons_from_the_raw_pair_shape():
+    health = {}
+    response = {'results': [],
+                'unresponsive': [['brave', 'Suspended: too many requests'], ['mojeek', 'timeout']],
+                'latencyMs': 1}
+    sp.fold_response_health(response, ['brave', 'mojeek'], health)
+    assert health['brave']['blocked'] is True
+    assert health['mojeek']['timeout'] is True
+
+
+def test_record_response_health_writes_one_row_per_engine(monkeypatch):
+    written = []
+    monkeypatch.setattr(sp, 'record_engine_result',
+                        lambda engine, **kw: written.append((engine, kw)))
+    sp.record_response_health({'results': [], 'unresponsive': [], 'latencyMs': 7}, ['bing', 'brave'])
+    assert [engine for engine, _ in written] == ['bing', 'brave']
+    assert all(kw['empty'] is True and kw['latency_ms'] == 7 for _, kw in written)
+
+
+def test_search_status_does_not_create_the_search_db(tmp_path, monkeypatch):
+    """Health phải rẻ và KHÔNG được tạo file: chưa có DB thì `engines == []`, DB vẫn không tồn tại."""
+    target = tmp_path / 'chưa-có.sqlite'
+    monkeypatch.setenv('BOXFOX_SEARCH_DB', str(target))
+    sp.reset_store()
+    status = sp.search_status()
+    assert status['engines'] == []
+    assert not target.exists(), 'search_status tạo DB ⇒ mỗi lần curl health lại đẻ ra một file'
+    assert status['searxng']['reachable'] is None, 'chưa dò thì phải là None, không phải False'
+    assert status['searxng']['url'] == ''
+
+
+def test_search_status_reports_the_env_url_as_not_yet_probed(monkeypatch):
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:9999/')
+    status = sp.search_status()
+    assert status['searxng'] == {'url': 'http://127.0.0.1:9999', 'origin': 'env',
+                                 'reachable': None, 'checkedAt': None}
+    assert status['pipeline']['applies'] is True, 'on/auto + URL ⇒ ống chạy'
+
+
+def test_search_status_says_not_reachable_after_a_failed_probe(monkeypatch):
+    monkeypatch.setattr(sp, 'probe_searxng', lambda url, *, timeout=None: False)
+    sp.reset_autodetect()
+    assert sp.probe_now() is False
+    status = sp.search_status()
+    assert status['searxng']['reachable'] is False and status['searxng']['url'] == ''
+    assert status['searxng']['checkedAt'], 'có dấu thời gian để UI nói "dò lúc nào"'

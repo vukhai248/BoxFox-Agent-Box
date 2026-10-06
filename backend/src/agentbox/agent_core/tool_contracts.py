@@ -109,10 +109,15 @@ def reflection_hint(name, code=None):
     # Capability/transport failures and optimistic-lock conflicts are not schema errors.
     # Keep the real error in the tool envelope; advise recovery without an automatic replay.
     if code == 'WEB_SEARCH_UNAVAILABLE':
-        return prefix + ('Read `error` for missing provider configuration, HTTP refusals, or empty results. '
-                         'Changing query syntax cannot fix missing keys or provider access. Use another '
-                         'available source or web_fetch with a known public URL; otherwise report the '
-                         'capability gap. Do not retry identical arguments repeatedly.')
+        return prefix + ('Read `error` for missing provider configuration, HTTP refusals, or a dead '
+                         'backend. Changing query syntax cannot fix missing keys or provider access. '
+                         'If the error says the backend is unreachable or unconfigured, report it and '
+                         'stop; do not re-run the same search. Otherwise use another available source '
+                         'or web_fetch with a known public URL; do not retry identical arguments.')
+    if code == 'WEB_SEARCH_EMPTY':
+        return prefix + ('The backends answered but returned no rows: this is a query/coverage problem, '
+                         'not a broken backend. Widen or change the query once, switch source, or '
+                         'web_fetch a known public URL; do not repeat identical arguments.')
     if code == 'WEB_FETCH_FAILED':
         return prefix + ('Read `error` for the HTTP status or transport failure. Verify the source URL '
                          'or try another accessible source; do not assume the argument schema is wrong '

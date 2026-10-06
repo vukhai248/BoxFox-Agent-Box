@@ -46,7 +46,7 @@ import urllib.request
 from html.parser import HTMLParser
 
 from ..observability.system_log import system_log
-from . import reading, search_pipeline, source_pack
+from . import reading, search_failures, search_pipeline, source_pack
 from .limits import (OPENALEX_MAILTO_DEFAULT, OPENALEX_MAILTO_ENV, PAPER_CITATIONS_LIMIT_MAX,
                      PAPER_CITATIONS_RESOLVE_MAX, READ_FIND_MAX_TERMS, READ_OFFSET_MAX,
                      SEARCH_CACHE_MAX_ENTRIES, SEARCH_PAYLOAD_CHARS,
@@ -119,10 +119,14 @@ class WebError(ValueError):
     carry them out of the machine. Sites that name content pass a content-free variant.
     """
 
-    def __init__(self, code: str, message: str, log_message: str | None = None):
+    def __init__(self, code: str, message: str, log_message: str | None = None,
+                 details: dict | None = None):
         super().__init__(f'{code}: {message}')
         self.code = code
         self.log_message = f'{code}: {log_message}' if log_message else f'{code}: request failed'
+        #: Dữ liệu máy đọc được (F05: `{'searchFailure': {...}}`); runtime hợp nhất vào phong bì
+        #: công cụ nên model thấy `kind` mà không phải đoán từ câu chữ.
+        self.details = dict(details or {})
 
 
 # --------------------------------------------------------------------- transport
@@ -423,6 +427,124 @@ def _search_cache_key(queries: list[str], source: str, count: int, site: str, fr
                        'freshness': freshness, 'lang': lang, 'exclude': sorted(exclude),
                        'cursor': cursor},
                       sort_keys=True, ensure_ascii=False)
+
+
+def _selected_search_source():
+    """Nguồn người dùng chọn trong Settings (module của PART 2) — chưa có module ⇒ `None`, không lỗi."""
+    try:
+        from . import search_credentials
+    except ImportError:  # pragma: no cover - nhánh chạy khi chưa land phần Settings
+        return None
+    try:
+        return search_credentials.active_source()
+    except Exception:  # pragma: no cover - phòng thủ: router hỏng không được làm chết tìm kiếm
+        return None
+
+
+def _explicit_search_config() -> list[str]:
+    """Cấu hình tường minh đang có mặt: `['env:BRAVE_API_KEY', 'selected:brave', …]`.
+
+    Dùng cho công tắc `auto`: có BẤT KỲ mục nào ⇒ ống nhường đường cho chuỗi ưu tiên (Settings →
+    env → …), đúng hợp đồng §4.1.
+    """
+    found: list[str] = []
+    for group in SEARCH_KEY_GROUPS:
+        for name in group:
+            if (os.environ.get(name) or '').strip():
+                found.append(f'env:{name}')
+                break
+    if (os.environ.get('FIRECRAWL_API_KEY') or '').strip():
+        found.append('env:FIRECRAWL_API_KEY')
+    selected = _selected_search_source()
+    provider_id = str(getattr(selected, 'provider_id', '') or '').strip()
+    if provider_id and provider_id != 'searxng':
+        found.append(f'selected:{provider_id}')
+    elif provider_id == 'searxng':
+        found.append('selected:searxng')
+    return found
+
+
+def _configured_search_backends(source: str) -> list[str]:
+    """Backend ĐƯỢC CẤU HÌNH/CHỌN (không tính chân keyless luôn có mặt) — đầu vào phân loại F05."""
+    del source                                        # giữ chữ ký để chỗ gọi đọc rõ ý
+    backends: list[str] = []
+    if search_pipeline.searxng_available():
+        backends.append('searxng')
+    backends.extend(_explicit_search_config())
+    return backends
+
+
+def _pipeline_applies(source: str) -> bool:
+    """Ống 10 bước có được dùng cho lời gọi này không? (`off` < `auto` < `on`).
+
+    - `off` ⇒ không bao giờ; `on` ⇒ luôn (chỉ cho `source="web"`), kể cả khi có cấu hình khác;
+    - `auto` (mặc định) ⇒ chỉ khi `source="web"` ∧ SearXNG sống ∧ **không** cấu hình tường minh.
+    """
+    mode = search_pipeline.pipeline_mode()
+    if mode == 'off' or source != 'web':
+        return False
+    if not search_pipeline.searxng_available():
+        return False
+    if mode == 'on':
+        return True
+    return not _explicit_search_config()
+
+
+def _leg_names(providers) -> list[str]:
+    """Tên đọc được của các chân trong một nhóm (`_provider_searxng` → `searxng`)."""
+    return [str(getattr(fn, '__name__', '') or '').removeprefix('_provider_') for fn in providers]
+
+
+def search_status() -> dict:
+    """Trạng thái tìm kiếm cho `GET /api/agent/health` — chỉ ĐỌC env/cache, không gọi mạng.
+
+    Gộp ba thứ người vận hành cần phân biệt: (1) ống 10 bước có đang dùng không, (2) khoá/nguồn
+    tường minh nào có mặt, (3) chân nào sẽ chạy trước và còn chân nào dự phòng. Mọi lỗi ⇒ giá trị
+    rỗng chứ không ném: health không được chết vì một khoá hỏng.
+    """
+    try:
+        status = search_pipeline.search_status()
+    except Exception:
+        status = {'searxng': {'url': '', 'origin': '', 'reachable': None, 'checkedAt': None},
+                  'pipeline': {'mode': 'auto', 'applies': False}, 'engines': []}
+    try:
+        selected = _selected_search_source()
+        provider_id = str(getattr(selected, 'provider_id', '') or '').strip()
+    except Exception:
+        provider_id = ''
+    keys = {}
+    for name, group in (('brave', ('BRAVE_API_KEY', 'BOXFOX_BRAVE_API_KEY')), ('tavily', ('TAVILY_API_KEY',)),
+                        ('exa', ('EXA_API_KEY',)), ('parallel', ('PARALLEL_API_KEY',)),
+                        ('firecrawl', ('FIRECRAWL_API_KEY',))):
+        keys[name] = any((os.environ.get(item) or '').strip() for item in group)
+    legs = _leg_names(GENERAL_PROVIDERS)
+    # Thứ tự ưu tiên theo hợp đồng §4.1: Settings → env → SearXNG → chân keyless.
+    if provider_id and provider_id != 'searxng':
+        source = 'selected'
+    elif any(keys[name] for name in ('brave', 'tavily', 'exa', 'parallel')):
+        source = 'env-key'
+    elif status['searxng']['url']:
+        source = 'searxng'
+    elif keys['firecrawl'] or legs:
+        source = 'keyless'
+    else:
+        source = 'none'
+    status['keys'] = keys
+    status['selected'] = provider_id or None
+    status['source'] = source
+    status['legs'] = legs
+    status['fallback'] = legs[1:]
+    try:
+        # KHÔNG gọi `_pipeline_applies`/`_configured_search_backends`: hai hàm ấy DÒ mạng khi
+        # cache tự dò trống, còn health phải rẻ. Ở đây chỉ dùng lại kết quả cache của pipeline.
+        explicit = _explicit_search_config()
+        alive = bool(status['searxng']['url'])
+        mode = str(status['pipeline'].get('mode') or 'auto')
+        status['pipeline']['applies'] = mode == 'on' or (mode == 'auto' and alive and not explicit)
+        status['pipeline']['backends'] = (['searxng'] if alive else []) + explicit
+    except Exception:
+        pass
+    return status
 
 
 def _missing_search_keys() -> list[str]:
@@ -865,17 +987,22 @@ def _provider_parallel(query: str, count: int, options: dict | None = None) -> l
 def _provider_searxng(query: str, count: int, options: dict | None = None) -> list[dict]:
     """Chân SearXNG tự host, đứng ĐẦU chuỗi tìm chung khi có `BOXFOX_SEARXNG_URL` (#6071).
 
-    Thiếu biến ⇒ ném lỗi NÊU TÊN biến rồi để chuỗi rơi tiếp; nhờ vậy khi URL chưa đặt (mặc định)
-    đường cũ chạy y như trước. Bộ luân phiên (bước 7) chọn một tập engine con mỗi lần, nên một
-    engine ít bị chặn hơn. Hàng trả về mang `engines` để bước gộp biết nó đến từ đâu.
+    URL lấy từ `search_pipeline.searxng_url()`: biến env trước, không có thì **tự dò**
+    `127.0.0.1:8888` (v1 cải tổ web search — cài xong là tìm được, không cần khoá). Thiếu cả hai
+    ⇒ ném lỗi NÊU TÊN biến VÀ địa chỉ đã thử rồi để chuỗi rơi tiếp. Bộ luân phiên (bước 7) chọn
+    một tập engine con mỗi lần, nên một engine ít bị chặn hơn. Hàng trả về mang `engines` để bước
+    gộp biết nó đến từ đâu.
     """
     if not search_pipeline.searxng_url():
-        raise WebError('WEB_SEARCH_UNAVAILABLE', 'BOXFOX_SEARXNG_URL is not set')
+        raise WebError('WEB_SEARCH_UNAVAILABLE',
+                       f'{search_pipeline.SEARXNG_URL_ENV} is not set and no SearXNG answered on '
+                       f'{search_pipeline.autodetect_url()}')
     options = options or {}
     engines = search_pipeline.pick_engines()
     response = search_pipeline.searxng_search(query, engines=engines, count=count,
                                               time_range=options.get('freshness') or None,
                                               language=str(options.get('lang') or ''))
+    search_pipeline.record_response_health(response, engines)
     if response.get('error') and not response.get('results'):
         raise WebError('WEB_SEARCH_UNAVAILABLE',
                        f'the local SearXNG refused the query ({response["error"]})')
@@ -1066,6 +1193,7 @@ class WebTools:
                            queryChars=len(result.get('query') or ''),
                            queries=len(result.get('queries') or []), resultCount=result.get('count', 0),
                            deduped=result.get('deduped', 0), cached=bool(result.get('cached')),
+                           fallback=bool(result.get('searchFallback')),
                            durationMs=duration)
         else:
             self.log.write('web.fetch', session_id=session_id, source=name, host=result.get('host'),
@@ -1161,18 +1289,29 @@ class WebTools:
             # lời gọi này ĐÃ chạm mạng — payload phải nói rõ (§1/§8.3: "gói ⇒ không gọi mạng").
             pack_warning = ('source pack has no search_index.jsonl: this call fell through to '
                             'the live network instead of answering from the pack')
-        if search_pipeline.pipeline_enabled():
-            payload = search_pipeline.run_pipeline(queries, source=source, count=count, options=options,
-                                                   session_id=self._snapshot_scope.get())
-            if pack_warning:
-                payload['packWarning'] = pack_warning
-            self._cache_put(cache_key, payload)
-            return payload
+        pipeline_fallback = None
+        if _pipeline_applies(source):
+            try:
+                payload = search_pipeline.run_pipeline(queries, source=source, count=count,
+                                                       options=options,
+                                                       session_id=self._snapshot_scope.get())
+            except WebError as exc:
+                # Ống hỏng/không ra gì KHÔNG được làm lời gọi thất bại khi còn chân khác: rơi xuống
+                # chuỗi một lần, giữ mã lỗi của ống để payload cuối nói rõ đã rơi (v1 cải tổ search).
+                pipeline_fallback = {'from': 'pipeline', 'code': str(getattr(exc, 'code', '') or '')}
+            else:
+                if pack_warning:
+                    payload['packWarning'] = pack_warning
+                self._cache_put(cache_key, payload)
+                return payload
         providers = SOURCE_PROVIDERS.get(source) or GENERAL_PROVIDERS
         rows: list[dict] = []
         per_query: list[dict] = []
         found_by_query: list[tuple[str, list[dict]]] = []
         errors: list[str] = []
+        if pipeline_fallback:
+            errors.append('the 10-step pipeline found nothing '
+                          f"({pipeline_fallback['code'] or 'WEB_SEARCH_UNAVAILABLE'})")
         for query in queries:
             effective = f'site:{site} {query}' if site else query
             found, failure = self._search_leg(providers, effective, count, options)
@@ -1194,14 +1333,31 @@ class WebTools:
         merged_results, deduped = _dedupe_results(rows)
         results, dropped = _fit_results(merged_results)
         if not results:
-            hint = ('Every provider was refused or empty. Try source="wikipedia", "stackoverflow", '
-                    'or "github", or fetch a known URL with web_fetch.')
+            # F05: phân loại trước khi viết câu — lỗi cấu hình/hạ tầng KHÔNG được xui sửa truy vấn.
+            leg_reasons = [str(entry.get('error') or '') for entry in per_query if entry.get('error')]
+            real_reasons = [reason for reason in leg_reasons
+                            if reason != search_failures.NO_PROVIDER_ANSWERED]
+            answered_empty = bool(leg_reasons) and not real_reasons and not pipeline_fallback
             missing = _missing_search_keys()
-            keys = f' Set one of {", ".join(missing)} to add a search leg.' if missing else ''
-            raise WebError('WEB_SEARCH_UNAVAILABLE',
-                           f'no result for {queries[0]!r}: ' + ' | '.join(errors[:3]) + '. ' + hint + keys,
-                           f'every provider refused or returned nothing for {len(queries)} quer'
-                           f'{"y" if len(queries) == 1 else "ies"} ({len(errors)} attempt(s))')
+            backends = _configured_search_backends(source)
+            resolved = search_pipeline.searxng_url()
+            probe_target = search_pipeline.autodetect_url()
+            verdict = search_failures.classify(source=source, reasons=real_reasons,
+                                               answered_empty=answered_empty, backends=backends,
+                                               missing=missing, searxng_url=resolved,
+                                               autodetect_url=probe_target)
+            raise WebError(verdict['code'],
+                           search_failures.message_for(code=verdict['code'], kind=verdict['kind'],
+                                                       source=source, reasons=real_reasons,
+                                                       backends=backends, missing=missing,
+                                                       query=queries[0], searxng_url=resolved,
+                                                       autodetect_url=probe_target),
+                           search_failures.log_line_for(code=verdict['code'], kind=verdict['kind'],
+                                                        source=source, queries=len(queries),
+                                                        attempts=len(errors)),
+                           details={'searchFailure': {'kind': verdict['kind'], 'source': source,
+                                                      'backends': backends, 'missing': missing,
+                                                      'attempts': len(errors)}})
         retained = {reading.normalize_url(str(row.get('url') or '')) for row in results}
         merged = {reading.normalize_url(str(row.get('url') or '')) for row in merged_results}
         trace: list[dict] = []
@@ -1248,6 +1404,8 @@ class WebTools:
                                'freshness': freshness or None, 'lang': lang or None}}
         if pack_warning:
             payload['packWarning'] = pack_warning
+        if pipeline_fallback:
+            payload['searchFallback'] = dict(pipeline_fallback)
         self._cache_put(cache_key, payload)
         return payload
 

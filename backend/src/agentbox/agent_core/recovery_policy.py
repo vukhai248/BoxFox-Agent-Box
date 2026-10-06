@@ -28,7 +28,7 @@ RETRY_ACTIONS = ('retry_backoff', 'recover_model')
 
 #: Lớp hồi phục. Thứ tự này cũng là thứ tự ưu tiên khi một mã khớp nhiều luật.
 CLASSES = ('transport', 'provider_stream', 'provider_empty', 'output_limit', 'tool_validation',
-           'tool_unknown', 'rights_budget', 'no_progress', 'unknown')
+           'tool_unknown', 'rights_budget', 'no_progress', 'capability_gap', 'unknown')
 
 #: Hành động đề xuất. `retry_backoff` và `recover_model` là hai hành động *được phép thử lại*;
 #: mọi hành động còn lại không tự chạy lại việc đã làm.
@@ -133,6 +133,10 @@ CODES = {
     'WORK_REPAIR_UNDIAGNOSED': 'no_progress',
     'WORK_REPAIR_LIMIT': 'no_progress',
     'WORK_LOOKUP_UNVERIFIED': 'no_progress',
+    # F05 (v1 cải tổ web search): thiếu cấu hình/hạ tầng tìm kiếm KHÔNG phải lỗi truy vấn — lớp
+    # riêng để thông báo nói đúng việc cần làm thay vì rơi vào `unknown` (fail closed) như trước.
+    'WEB_SEARCH_UNAVAILABLE': 'capability_gap',
+    'WEB_SEARCH_EMPTY': 'no_progress',
 }
 
 #: Lớp → hành động mặc định.
@@ -145,6 +149,7 @@ _ACTIONS = {
     'tool_unknown': 'inspect_only',
     'rights_budget': 'checkpoint_and_ask',
     'no_progress': 'change_approach',
+    'capability_gap': 'checkpoint_and_ask',
     'unknown': 'checkpoint_and_ask',
 }
 
@@ -232,6 +237,10 @@ def decision(code, *, replay_safe=False, has_receipt=False, attempts=0, retry_af
     elif cls == 'no_progress':
         replay = False
         reason = 'không có tiến triển thật: đổi cách/câu hỏi, lưu checkpoint; không lặp lại vô hạn'
+    elif cls == 'capability_gap':
+        replay = False
+        reason = ('backend tìm kiếm thiếu cấu hình hoặc đang hỏng: đừng lặp truy vấn; dùng nguồn khác, '
+                  'hoặc báo khoảng trống cho chủ nhà')
     if cls == 'tool_unknown' and replay_safe:
         # Nhãn "safe" của tool không biến một mutation chưa rõ kết quả thành replay được.
         replay = False

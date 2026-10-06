@@ -7,14 +7,18 @@
 # Mặc định ở đây theo kế hoạch v2 §5.4.2. Chủ nhà sửa được: tắt một engine chỉ cần `disabled: true`
 # (hoặc bỏ nó khỏi danh sách). Chạy kèm `docker-compose.yml` trong cùng thư mục.
 #
-# `server.bind_address: 127.0.0.1` + compose dùng `network_mode: host`: instance CHỈ nghe ở loopback
-# của host — không lộ ra LAN. Nếu chạy Docker Desktop (Mac/Windows) không có host network, xem
-# biến thể port-mapping đã chú thích trong `docker-compose.yml`.
+# Compose mặc định dùng port-mapping `127.0.0.1:8888:8888`, nên trong container PHẢI bind
+# "0.0.0.0" (dưới đây); chính vế publish mới giới hạn ở loopback của host — không lộ ra LAN.
+# Chỉ đổi về "127.0.0.1" nếu quay lại biến thể `network_mode: host` (xem chú thích trong
+# `docker-compose.yml`).
 
 use_default_settings: true
 
 server:
-  bind_address: "127.0.0.1"
+  # "0.0.0.0" BÊN TRONG container: compose chỉ publish `127.0.0.1:8888` ra host (không lộ LAN).
+  bind_address: "0.0.0.0"
+  # BẪY ĐÃ ĐO 2026-10-06: granian BỎ QUA khoá `port:` này — cổng thật do biến `SEARXNG_PORT`
+  # quyết định (compose đặt sẵn, khớp cả hai vế của `ports:`). Số ở đây chỉ để đọc cho dễ.
   port: 8888
   # Chỉ harness gọi; không có người lạ ⇒ không cần `limiter` (limiter còn cần thêm Valkey).
   public_instance: false
@@ -127,8 +131,10 @@ engines:
 # Tor / vì mô-đun `torch.py` không còn trong ảnh. Đó là tiếng ồn của ảnh gốc, KHÔNG phải lỗi cấu
 # hình của BoxFox: khai lại chúng ở đây cũng không làm dòng lỗi biến mất, nên ta để nguyên.
 #
-# ĐO ĐƯỢC 2026-09-25 từ máy chủ BoxFox (IP trung tâm dữ liệu, không khoá):
-#   brave 24 kết quả · mojeek 34 · startpage 34 · bing 10 · google 9 · google cse 16 —
-#   duckduckgo và qwant bị CAPTCHA (không dùng được từ IP này). Bước 7 của ống tìm tự luân phiên
-#   và tự ngưng engine hỏng, nên hai engine bị chặn không làm hỏng lượt tìm.
+# ĐO ĐƯỢC 2026-10-06 từ máy chủ BoxFox (IP trung tâm dữ liệu, không khoá, bản port-mapping):
+#   google cse 14–20 kết quả · bing 10 kết quả; brave bị "Suspended: too many requests" (429);
+#   duckduckgo và qwant bị CAPTCHA (không dùng được từ IP này).
+#   (Đo 2026-09-25 trước đó: brave 24 · mojeek 34 · startpage 34 · bing 10 · google 9 ·
+#   google cse 16 — cùng kết luận.) Bước 7 của ống tìm tự luân phiên và tự ngưng engine hỏng,
+#   nên engine bị chặn không làm hỏng lượt tìm.
 #   Muốn bỏ hẳn một engine: thêm `disabled: true` cho nó ở khối `engines:` phía trên.

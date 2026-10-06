@@ -30,6 +30,19 @@ def test_search_capability_hint_names_configuration_and_an_available_alternative
     assert 'identical' in hint
 
 
+def test_the_search_hint_never_tells_the_model_to_fix_the_query():
+    """F05: cả hai mã tìm kiếm phải nói rõ đó không phải lỗi truy vấn."""
+    unavailable = reflection_hint('web_search', 'WEB_SEARCH_UNAVAILABLE')
+    assert 'do not re-run the same search' in unavailable
+    assert 'report it and stop' in unavailable
+    empty = reflection_hint('web_search', 'WEB_SEARCH_EMPTY')
+    assert 'returned no rows' in empty and 'not a broken backend' in empty
+    assert 'once' in empty, 'nới truy vấn MỘT lần, không lặp vô hạn'
+    for hint in (unavailable, empty):
+        assert 'Fix only that input' not in hint
+        assert 'not fix missing keys' in hint or 'not a broken backend' in hint
+
+
 def test_revision_hint_reads_status_before_reapplying_a_mutation():
     hint = reflection_hint('plan_scope', 'PLAN_REVISION_CONFLICT')
     assert 'action="status"' in hint
@@ -101,6 +114,9 @@ def test_real_tool_envelope_preserves_search_error_and_capability_recovery(tmp_p
         assert 'HTTP 403' in result['error'] and 'BOXFOX_SEARXNG_URL' in result['error']
         assert 'configuration' in result['reflection_hint']
         assert 'Fix only that input' not in result['reflection_hint']
+        assert result['recovery']['class'] == 'capability_gap'
+        assert result['recovery']['action'] == 'checkpoint_and_ask'
+        assert result['recovery']['replay'] is False
         assert store.get(sid)['status'] == 'completed'
     finally:
         store.close()
