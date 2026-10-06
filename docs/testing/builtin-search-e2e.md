@@ -65,9 +65,11 @@ không bind được trong sandbox) ghi ở `deploy/searxng/README.md` §1.
 | `BOXFOX_SEARCH_DB` | `$BOXFOX_AGENT_DATA_DIR/search.sqlite` → `~/BoxFox/harness/` | DB bộ đệm + bảng sức khoẻ engine; **mỗi lượt test/bench nên trỏ chỗ riêng** để không ăn cache của nhau |
 | `BOXFOX_SEARXNG_LIVE_URL` | `http://127.0.0.1:8888` | Chỉ tầng 3: đổi đích container (đặt `http://127.0.0.1:9` để thử nhánh `skip`/chân chết) |
 
-Tầng 3 **xoá sạch** `BRAVE_API_KEY`, `BOXFOX_BRAVE_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`,
-`PARALLEL_API_KEY`, `FIRECRAWL_API_KEY` trước mỗi bài — bài xanh vì có khoá thì không chứng minh
-được "không khoá vẫn tìm được". Đừng "sửa" chỗ này.
+Cả ba tầng đều **xoá sạch** `BRAVE_API_KEY`, `BOXFOX_BRAVE_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`,
+`PARALLEL_API_KEY`, `FIRECRAWL_API_KEY` trước mỗi bài (tầng 1: fixture chung `tests/unit/conftest.py`;
+tầng 2: fixture `stub`; tầng 3: fixture `live`) — bài xanh vì có khoá thì không chứng minh
+được "không khoá vẫn tìm được", và máy dev đang giữ khoá thật cũng không làm tầng 1–2 đỏ.
+Đừng "sửa" chỗ này.
 
 ## 4. `probe.py` — phán quyết sâu theo engine
 
