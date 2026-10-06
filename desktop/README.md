@@ -2,24 +2,32 @@
 
 Electron shell that runs the whole BoxFox stack — the web UI, the router and the agent
 harness — as a normal Windows desktop app, without a developer checkout on the machine.
-Plan: `/.plans/desktop-alpha-packaging.md` §6 PR-2 (work items D1 and D2).
+Plan: `/.plans/desktop-alpha-packaging.md` §6 PR-2 (work items D1–D3).
+
+**Installing the alpha and testing it:** `docs/plan/desktop-alpha-install.md` (Vietnamese) —
+install, choosing host/docker mode, where the profile/logs live, how to export diagnostics,
+the host-mode warning and the 13-step acceptance checklist.
 
 ```
 desktop/
   src/                 main process (TypeScript → dist/)
-    main.ts            startup order: profile → lock → mode → services → gateway → window
+    main.ts            startup order: profile → lock → mode → services → gateway → window → tray
     preload.ts         the only bridge exposed to the UI (contextBridge, no nodeIntegration)
     profile.ts         per-user profile, port allocation, machine.json, admin token
     supervisor.ts      single-instance lock + child processes (router, harness) + health
     gateway.ts         loopback HTTP/WS gateway: serves the UI, proxies the three surfaces
     mode.ts            host | docker decision, docker probe, per-profile compose override
     paths.ts           where the bundled blocks live (packaged vs. checkout)
-    diagnostics.ts     the data behind "Trạng thái dịch vụ"
+    tray.ts            the tray menu as data (labels, order, handlers) + show/hide rules
+    desktop-control.ts the tray's "Trả quyền cho agent" / "Dừng khẩn" calls to the harness
+    diagnostics.ts     service summary + the redacted support-bundle zip
+    zip.ts             dependency-free ZIP writer for the support bundle
   scripts/
     fetch-runtime.mjs  downloads Node + CPython + wheels, verifies sha256, writes the lock
     build-app.mjs      stages build/ (ui, router, harness, runtime, docker-context)
     lib/               zip reader/writer, streaming downloads, hashes, the runtime lock
-  test/                node:test — profile, gateway, supervisor, mode, build scripts
+  test/                node:test — profile, gateway, supervisor, mode, tray, diagnostics, scripts
+  build/               staged blocks (generated) + the committed icon.ico / tray.png / installer.nsh
   runtime-sources.json pinned runtime versions and digests
   runtime.lock.json    what was actually fetched (regenerate with fetch-runtime)
   THIRD-PARTY.md       generated licence inventory of the bundled runtime
@@ -96,6 +104,19 @@ A mismatch deletes the `.part` file and aborts; nothing is ever extracted unveri
    container (docker) or the harness desktop API (host). `Host` and `Origin` must be the
    gateway's own loopback names, state-changing requests must carry an `Origin`, and the
    UI is served with a CSP that contains no wildcard.
+6. **Window and tray** — the window points at the gateway. Closing it (`X`) **hides it to
+   the tray**; the app only exits from the tray's `Thoát`, `before-quit` or when no tray
+   could be created. The tray menu carries `Hiện/Ẩn cửa sổ`, `Trả quyền cho agent`,
+   `Dừng khẩn`, `Mở thư mục dữ liệu`, `Sao lưu chẩn đoán` and `Thoát`; the two control
+   entries POST `{"action":"claim"|"stop"}` to the harness lease route and report the
+   result (a `409` means docker mode keeps the pointer inside the container — that is
+   reported, not hidden).
+7. **Diagnostics bundle** — `Sao lưu chẩn đoán` writes one zip into
+   `<profile>/diagnostics/`: `manifest.json` (version, commit, mode + reason, ports, paths,
+   runtime file inventory with sha256), `health.json` (`GET /api/agent/health`),
+   `summary.txt` and the last 200 lines of every file in `logs/`. Every value passes
+   through a keyword filter (`key`, `token`, `secret`, `authorization`, `password`) before
+   it is written, so the bundle never carries the machine token or an API key.
 
 ## Known limitations (alpha)
 
@@ -103,8 +124,12 @@ A mismatch deletes the `.part` file and aborts; nothing is ever extracted unveri
 - **No auto-update.** `updates/` exists in the profile but nothing writes to it yet.
 - **Windows only.** The bundled runtime is `win-x64`; a Linux/macOS bundle needs its own
   entry in `runtime-sources.json` (and wheels for that platform).
-- **`build/icon.ico` is a placeholder** (the packaging step needs *some* icon). The real
-  brand icon, the tray, the installer NSIS script and the diagnostics UI are work item D3.
+- **`build/icon.ico` is a placeholder** (the packaging step needs *some* icon); the tray
+  icon (`build/tray.png`, 32×32) is committed next to it. The real brand icon is still to
+  come; `build/installer.nsh` holds the NSIS hooks (per-user data directory, and an
+  uninstaller that deliberately keeps the profile).
+- **Tray is best-effort.** If no tray can be created, the app logs
+  `[desktop] no tray; closing the window will quit the app.` and `X` quits.
 - **`/__tty` is unavailable in host mode** — the terminal bridge is a container feature.
 - Uninstalling keeps `%LOCALAPPDATA%\BoxFoxDesktopAlpha` (sessions, logs, machine.json)
   on purpose.
@@ -118,5 +143,7 @@ npm run typecheck # tsc --noEmit
 
 The suite covers the profile/port/token logic, the gateway allowlists and proxies (against
 stub upstreams), the supervisor (locks, service environment, restart, process-tree stop),
-the host/docker decision and the build scripts (zip round-trip, verified downloads,
-runtime lock, staged manifest).
+the host/docker decision, the tray menu/show-hide rules, the lease calls (against a stub
+harness, including `409` and timeouts), the diagnostics redaction rules and support-bundle
+zip, and the build scripts (zip round-trip, verified downloads, runtime lock, staged
+manifest).
