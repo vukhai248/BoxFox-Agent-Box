@@ -457,16 +457,13 @@ def _explicit_search_config() -> list[str]:
         found.append('env:FIRECRAWL_API_KEY')
     selected = _selected_search_source()
     provider_id = str(getattr(selected, 'provider_id', '') or '').strip()
-    if provider_id and provider_id != 'searxng':
+    if provider_id:
         found.append(f'selected:{provider_id}')
-    elif provider_id == 'searxng':
-        found.append('selected:searxng')
     return found
 
 
-def _configured_search_backends(source: str) -> list[str]:
+def _configured_search_backends() -> list[str]:
     """Backend ĐƯỢC CẤU HÌNH/CHỌN (không tính chân keyless luôn có mặt) — đầu vào phân loại F05."""
-    del source                                        # giữ chữ ký để chỗ gọi đọc rõ ý
     backends: list[str] = []
     if search_pipeline.searxng_available():
         backends.append('searxng')
@@ -1337,15 +1334,21 @@ class WebTools:
             leg_reasons = [str(entry.get('error') or '') for entry in per_query if entry.get('error')]
             real_reasons = [reason for reason in leg_reasons
                             if reason != search_failures.NO_PROVIDER_ANSWERED]
-            answered_empty = bool(leg_reasons) and not real_reasons and not pipeline_fallback
+            # Ống đã rơi xuống chuỗi: mã của ống là một lý do THẬT — trừ khi chính ống cũng chỉ
+            # "trả lời mà rỗng" (`WEB_SEARCH_EMPTY`): lúc đó ca rỗng vẫn là ca rỗng (F05 §4.2),
+            # không được nâng nhầm thành lỗi hạ tầng.
+            pipeline_code = str((pipeline_fallback or {}).get('code') or '')
+            pipeline_failed = bool(pipeline_fallback) and pipeline_code != search_failures.WEB_SEARCH_EMPTY
+            if pipeline_failed:
+                real_reasons.append(f'the 10-step pipeline failed ({pipeline_code or "unknown"})')
+            answered_empty = bool(leg_reasons) and not real_reasons
             missing = _missing_search_keys()
-            backends = _configured_search_backends(source)
+            backends = _configured_search_backends()
             resolved = search_pipeline.searxng_url()
             probe_target = search_pipeline.autodetect_url()
             verdict = search_failures.classify(source=source, reasons=real_reasons,
                                                answered_empty=answered_empty, backends=backends,
-                                               missing=missing, searxng_url=resolved,
-                                               autodetect_url=probe_target)
+                                               missing=missing)
             raise WebError(verdict['code'],
                            search_failures.message_for(code=verdict['code'], kind=verdict['kind'],
                                                        source=source, reasons=real_reasons,

@@ -25,8 +25,7 @@ UP_SCRIPT = 'bash deploy/searxng/up.sh'
 PROBE_SCRIPT = 'python3 deploy/searxng/probe.py'
 
 
-def classify(*, source: str, reasons, answered_empty: bool, backends, missing,
-             searxng_url: str = '', autodetect_url: str = '') -> dict:
+def classify(*, source: str, reasons, answered_empty: bool, backends, missing) -> dict:
     """`{'code', 'kind'}` theo bảng F05. Không đoán mò: chỉ dùng dữ liệu người gọi đưa vào.
 
     - `reasons`: lý do từng chân (rỗng ⇒ không chân nào ném).
@@ -35,7 +34,6 @@ def classify(*, source: str, reasons, answered_empty: bool, backends, missing,
       mặt nên nếu tính nó thì ca "chưa cấu hình gì" sẽ bị xếp nhầm thành `infra`).
     - `missing`: tên các biến khoá còn thiếu (chỉ dùng cho câu chữ).
     """
-    del searxng_url, autodetect_url                       # hai tham số này chỉ dùng ở `message_for`
     reasons = [str(reason) for reason in (reasons or []) if str(reason).strip()]
     backends = [str(backend) for backend in (backends or []) if str(backend).strip()]
     missing = [str(name) for name in (missing or []) if str(name).strip()]
@@ -60,7 +58,8 @@ def message_for(*, code: str, kind: str, source: str, reasons, backends, missing
     head = f'no result for {query!r}: ' if query else 'no result: '
     detail = ' | '.join(reasons[:3]) if reasons else 'no backend answered'
     if code == WEB_SEARCH_EMPTY:
-        return (head + f'the search backends answered but returned no rows ({detail}). This is not '
+        why = f' ({detail})' if reasons else ''
+        return (head + f'the search backends answered but returned no rows{why}. This is not '
                 'an infrastructure failure: change or widen the query once, or try another source; '
                 'do not repeat the same call unchanged.')
     if kind == 'source':

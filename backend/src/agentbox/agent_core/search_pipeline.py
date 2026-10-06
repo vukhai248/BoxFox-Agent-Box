@@ -194,6 +194,14 @@ def probe_searxng(url: str, *, timeout: float | None = None) -> bool:
     return False
 
 
+def _remember_autodetect(url: str, ttl: float) -> None:
+    """Ghi cache tự dò: `url` rỗng = cache âm, `ttl` giây, `checked` để `search_status` báo lúc nào."""
+    with _AUTODETECT_LOCK:
+        _AUTODETECT_CACHE['url'] = str(url or '')
+        _AUTODETECT_CACHE['expires'] = time.time() + float(ttl)
+        _AUTODETECT_CACHE['checked'] = time.time()
+
+
 def resolved_searxng_url() -> str:
     """Env → tự dò (cache dương 30 s / âm 15 s) → rỗng. Không bao giờ ném."""
     configured = configured_searxng_url()
@@ -208,10 +216,7 @@ def resolved_searxng_url() -> str:
     candidate = autodetect_url()
     alive = probe_searxng(candidate)
     ttl = SEARXNG_AUTODETECT_TTL_SECONDS if alive else SEARXNG_AUTODETECT_MISS_TTL_SECONDS
-    with _AUTODETECT_LOCK:
-        _AUTODETECT_CACHE['url'] = candidate if alive else ''
-        _AUTODETECT_CACHE['expires'] = time.time() + float(ttl)
-        _AUTODETECT_CACHE['checked'] = time.time()
+    _remember_autodetect(candidate if alive else '', ttl)
     return candidate if alive else ''
 
 
@@ -228,10 +233,7 @@ def note_searxng_failure(url: str) -> None:
         return
     if str(url).strip().rstrip('/') != autodetect_url():
         return
-    with _AUTODETECT_LOCK:
-        _AUTODETECT_CACHE['url'] = ''
-        _AUTODETECT_CACHE['expires'] = 0.0
-        _AUTODETECT_CACHE['checked'] = time.time()
+    _remember_autodetect('', 0.0)
 
 
 def reset_autodetect() -> None:
@@ -242,21 +244,18 @@ def reset_autodetect() -> None:
         _AUTODETECT_CACHE['checked'] = 0.0
 
 
-def probe_now(url: str | None = None) -> bool:
+def probe_now() -> bool:
     """Dò THẬT ngay bây giờ và ghi kết quả vào cache tự dò (chỉ `?probe=search` gọi hàm này).
 
     Không bao giờ ném; `False` nghĩa là không thấy SearXNG sống ở đích dò.
     """
-    target = str(url or autodetect_url()).strip().rstrip('/')
+    target = autodetect_url()
     try:
         alive = bool(probe_searxng(target))
     except Exception:
         alive = False
     ttl = SEARXNG_AUTODETECT_TTL_SECONDS if alive else SEARXNG_AUTODETECT_MISS_TTL_SECONDS
-    with _AUTODETECT_LOCK:
-        _AUTODETECT_CACHE['url'] = target if alive else ''
-        _AUTODETECT_CACHE['expires'] = time.time() + float(ttl)
-        _AUTODETECT_CACHE['checked'] = time.time()
+    _remember_autodetect(target if alive else '', ttl)
     return alive
 
 
@@ -987,11 +986,6 @@ def _fresh_score(row: dict, scope: dict) -> float:
     return 0.0
 
 
-def _variant_reason(legs: list[dict]) -> str:
-    errors = [str(leg.get('error')) for leg in legs if leg.get('error')]
-    return ' | '.join(errors[:3]) or 'every engine refused or returned nothing'
-
-
 def _first_nonempty_leg(legs: list[dict], variants: list[dict] | None = None) -> dict | None:
     """Chân ĐẦU có kết quả, xét THEO THỨ TỰ BIẾN THỂ (không theo thứ tự luồng nào xong trước).
 
@@ -1058,7 +1052,6 @@ def run_pipeline(queries: list[str], *, source: str, count: int, options: dict,
     không cấm nhiều request trong một công cụ), trần `MAX_WORKERS` luồng và mỗi chân ≤ 8 s.
     """
     from .web import WebError                         # import muộn tránh vòng nhập mô-đun
-    started = time.time()
     options = dict(options or {})
     store = _store()
     queries = [str(query) for query in (queries or []) if str(query).strip()]
@@ -1228,8 +1221,7 @@ def run_pipeline(queries: list[str], *, source: str, count: int, options: dict,
         resolved, probe_target = searxng_url(), autodetect_url()
         verdict = search_failures.classify(source='web', reasons=reasons,
                                            answered_empty=answered_empty, backends=backends,
-                                           missing=[], searxng_url=resolved,
-                                           autodetect_url=probe_target)
+                                           missing=[])
         raise WebError(verdict['code'],
                        search_failures.message_for(code=verdict['code'], kind=verdict['kind'],
                                                    source='web', reasons=reasons, backends=backends,

@@ -303,6 +303,41 @@ def test_a_pipeline_that_finds_nothing_falls_through_to_the_keyless_leg(tools, m
     assert payload['searchFallback'] == {'from': 'pipeline', 'code': 'WEB_SEARCH_UNAVAILABLE'}
 
 
+def test_a_pipeline_that_answered_empty_keeps_the_empty_code(tools, monkeypatch):
+    """Ống trả lời rỗng rồi rơi xuống chuỗi cũng rỗng ⇒ ca RỖNG, không được nâng nhầm thành infra.
+
+    Đây là F05 §4.2: "mọi chân trả lời mà không có hàng nào" là vấn đề truy vấn/độ phủ, KHÔNG phải
+    hạ tầng chết — nói sai thì model hoặc bỏ cuộc, hoặc đổi truy vấn trên hạ tầng hỏng.
+    """
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    monkeypatch.setattr(sp, 'run_pipeline',
+                        lambda queries, **kw: (_ for _ in ()).throw(
+                            WebError('WEB_SEARCH_EMPTY', 'the backends answered with no rows')))
+    monkeypatch.setattr(web_module, 'GENERAL_PROVIDERS', (lambda query, count, options=None: [],))
+    with pytest.raises(WebError) as caught:
+        tools.search({'query': 'rỗng cả hai đường'})
+    assert caught.value.code == 'WEB_SEARCH_EMPTY'
+    assert caught.value.details['searchFailure']['kind'] == ''
+    assert 'returned no rows' in str(caught.value)
+
+
+def test_a_pipeline_that_failed_keeps_its_reason_when_the_chain_is_empty(tools, monkeypatch):
+    """Ống hỏng THẬT rồi chuỗi chỉ "không ai trả lời" ⇒ vẫn là lỗi hạ tầng, và câu phải nói vì sao."""
+    monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
+    monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)
+    monkeypatch.setattr(sp, 'run_pipeline',
+                        lambda queries, **kw: (_ for _ in ()).throw(
+                            WebError('WEB_SEARCH_UNAVAILABLE', 'searxng: connection refused')))
+    monkeypatch.setattr(web_module, 'GENERAL_PROVIDERS', (lambda query, count, options=None: [],))
+    with pytest.raises(WebError) as caught:
+        tools.search({'query': 'ống hỏng'})
+    assert caught.value.code == 'WEB_SEARCH_UNAVAILABLE'
+    assert caught.value.details['searchFailure']['kind'] == 'infra'
+    assert 'not a query problem' in str(caught.value)
+    assert 'the 10-step pipeline failed (WEB_SEARCH_UNAVAILABLE)' in str(caught.value)
+
+
 def test_a_dead_searxng_falls_through_to_the_next_leg(tools, monkeypatch):
     monkeypatch.setenv('BOXFOX_SEARXNG_URL', 'http://127.0.0.1:8888')
     monkeypatch.delenv('BOXFOX_SEARCH_PIPELINE', raising=False)

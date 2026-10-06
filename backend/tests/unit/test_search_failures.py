@@ -29,8 +29,7 @@ def test_a_missing_backend_is_a_config_error_and_does_not_ask_for_a_query_fix():
 
 def test_a_dead_searxng_is_an_infra_error_naming_the_url():
     verdict = sf.classify(source='web', reasons=['searxng: connection refused'],
-                          answered_empty=False, backends=['searxng'], missing=[],
-                          searxng_url='http://127.0.0.1:8888')
+                          answered_empty=False, backends=['searxng'], missing=[])
     assert verdict == {'code': sf.WEB_SEARCH_UNAVAILABLE, 'kind': 'infra'}
     message = sf.message_for(code=verdict['code'], kind=verdict['kind'], source='web',
                              reasons=['searxng: connection refused'], backends=['searxng'],
@@ -50,6 +49,7 @@ def test_an_empty_answer_is_its_own_code():
                              backends=['searxng'], missing=[], query='hồ sơ')
     assert 'returned no rows' in message
     assert 'not an infrastructure failure' in message
+    assert 'no backend answered' not in message, 'câu rỗng không được đọc như thiếu backend'
     assert 'not a query problem' not in message, 'ca rỗng KHÔNG phải lỗi cấu hình'
 
 

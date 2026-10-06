@@ -464,7 +464,6 @@ def create_app(runtime):
             # Dò SearXNG CHỈ khi được hỏi: `probe_searxng` là lời gọi mạng thật (2 s), không được
             # chạy trong đường health thường.
             try:
-                from ..agent_core import search_pipeline
                 search_pipeline.probe_now()
             except Exception:
                 pass
