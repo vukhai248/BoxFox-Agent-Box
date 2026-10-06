@@ -287,8 +287,10 @@ test('both scripts parse their flags', () => {
 
   const buildOptions = parseBuildArgs(['--skip-ui', '--out', '/tmp/build', '--lock', '/tmp/runtime.lock.json'])
   assert.equal(buildOptions.skipUi, true)
-  assert.equal(buildOptions.out, '/tmp/build')
-  assert.equal(buildOptions.lockFile, '/tmp/runtime.lock.json')
+  // The parser resolves both paths, so compare against path.resolve() — on Windows
+  // `path.resolve('/tmp/build')` is `<drive>:\tmp\build`, not the literal string.
+  assert.equal(buildOptions.out, path.resolve('/tmp/build'))
+  assert.equal(buildOptions.lockFile, path.resolve('/tmp/runtime.lock.json'))
   assert.throws(() => parseBuildArgs(['--nope']), /Unknown argument/)
 })
 

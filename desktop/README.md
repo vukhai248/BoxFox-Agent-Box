@@ -46,6 +46,11 @@ exists, otherwise it runs `npm run build` in `frontend/` (which needs
 node scripts/build-app.mjs --ui-dir /path/to/built/ui
 ```
 
+`.github/workflows/desktop-build.yml` runs exactly the steps above on a clean
+`windows-latest` runner — manually (`workflow_dispatch`) or on a `desktop-v*` tag, never on
+every push. It uploads the installer plus a `SHA256SUMS.txt` as a build artifact; it does
+not publish a release (the installer is unsigned).
+
 Cross-building the Windows installer on Linux works (Wine is used for the NSIS step):
 `DISPLAY=:1 npx electron-builder --win nsis --x64`. `npm run pack:linux` produces an
 unpacked Linux tree for smoke tests, but it still bundles the Windows runtime, so the
