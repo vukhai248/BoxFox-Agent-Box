@@ -3,6 +3,8 @@ node_modules/
 dist/
 build/*
 !build/icon.ico
+!build/tray.png
+!build/installer.nsh
 runtime/
 staging/
 release/

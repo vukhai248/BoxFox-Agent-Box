@@ -56,6 +56,15 @@ export function manifestPath(resourcesDir: string): string {
   return path.join(resourcesDir, 'build-manifest.json')
 }
 
+/**
+ * Tray icon. `build/tray.png` is a tracked build resource (like the installer icon) and
+ * is copied next to the other blocks by `extraResources`, so the same lookup works in
+ * development and in the installed app.
+ */
+export function trayIconPath(resourcesDir: string): string {
+  return path.join(resourcesDir, 'tray.png')
+}
+
 export function readBuildManifest(resourcesDir: string): Record<string, unknown> | null {
   try {
     return JSON.parse(fs.readFileSync(manifestPath(resourcesDir), 'utf8')) as Record<string, unknown>

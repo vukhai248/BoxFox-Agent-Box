@@ -40,6 +40,10 @@ extraResources:
     to: docker-context
   - from: build/build-manifest.json
     to: build-manifest.json
+  # Tray icon: `trayIconPath(resourcesDir)` resolves to resources/tray.png when packaged
+  # and to build/tray.png when running from source.
+  - from: build/tray.png
+    to: tray.png
 
 win:
   target:
@@ -61,6 +65,13 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: BoxFox Desktop (Alpha)
+  # The name shown in "Apps & features" / "Add or remove programs".
+  uninstallDisplayName: BoxFox Desktop (Alpha) ${version}
+  # Do not launch the app straight after install: the user picks the execution mode on
+  # first run, and the installer is often run on a machine that is still being set up.
+  runAfterFinish: false
+  # Our hooks (per-user data directory, "never delete the profile on uninstall").
+  include: build/installer.nsh
   # Uninstalling must never destroy the user's profile (machine.json, sessions, logs).
   deleteAppDataOnUninstall: false
 
