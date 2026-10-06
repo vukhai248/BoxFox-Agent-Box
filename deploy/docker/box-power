@@ -20,35 +20,64 @@
 #
 # Vì vậy `on` chỉ bỏ qua khi tệp trạng thái nói "on" VÀ dịch vụ còn sống thật
 # (`services_alive`). Tệp trạng thái là gợi ý, không phải bằng chứng.
+#
+# Hai chốt an toàn quanh đó:
+#   - `flock` trên /run/box-power.lock: hai lượt `on`/`off` chồng nhau (người
+#     dùng bấm nút trong lúc boot đang dựng dịch vụ) sẽ tranh cổng nhau.
+#   - `stop_services` hạ cả `box-services.sh` đang chạy dở, không chỉ các dịch vụ
+#     nó đã sinh ra: bỏ sót thì thế hệ cũ tiếp tục dựng nốt phần còn lại song
+#     song với thế hệ mới.
 # ==============================================================================
 set -eu
 STATE="${BOX_POWER_STATE_FILE:-/run/box-power-state}"
 SERVICES_BIN="${BOX_POWER_SERVICES_BIN:-/usr/local/bin/box-services.sh}"
-GOSU_BIN="${BOX_POWER_GOSU_BIN:-gosu}"
 AGENT_HOME="${BOX_POWER_AGENT_HOME:-/home/agent}"
+LOCK_FILE="${BOX_POWER_LOCK_FILE:-/run/box-power.lock}"
 
-# Hạ đủ bộ dịch vụ dài hạn. Dùng cho cả `off` lẫn nhánh khởi động lại của `on`:
-# khởi động chồng lên tiến trình cũ sẽ tranh cổng (8080/5900/6080/7681) và
-# `box-services.sh` thất bại ngầm.
+# Mẫu nhận diện tiến trình: NEO ĐẦU CHUỖI (`^`). Không neo thì `pkill -f` khớp
+# mọi tiến trình có chuỗi đó trong dòng lệnh — kể cả shell của người đang gỡ lỗi
+# (đã gặp thật: một shell chứa chữ "xfce4-session" bị chính lệnh pkill của nó
+# giết), và `services_alive` có thể trả lời "sống" nhờ một tiến trình lạ.
+XVNC_PATTERN='^Xvnc :99'
+CODE_SERVER_PATTERN='^/opt/code-server/.*--bind-addr'
+TTY_BRIDGE_PATTERN='^/usr/bin/python3 /usr/local/bin/tty-bridge\.py'
+WEBSOCKIFY_PATTERN='^(/usr/bin/python3 )?(/usr/bin/)?websockify 6080'
+XFCE_PATTERN='^(dbus-launch --exit-with-session )?xfce4-session$'
+SERVICES_SCRIPT_PATTERN="^/bin/sh ${SERVICES_BIN}\$"
+
+# Năm nhóm tiến trình dài hạn của box-services.sh. `pkill` không có kết quả khớp
+# vẫn phải coi là thành công (`|| true`) vì `set -eu`.
 stop_services() {
-  pkill -f 'code-server.*--bind-addr' 2>/dev/null || true
-  pkill -f 'websockify 6080' 2>/dev/null || true
-  pkill -f 'tty-bridge.py' 2>/dev/null || true
-  pkill -f 'xfce4-session' 2>/dev/null || true
+  pkill -f "$SERVICES_SCRIPT_PATTERN" 2>/dev/null || true
+  pkill -f "$CODE_SERVER_PATTERN" 2>/dev/null || true
+  pkill -f "$WEBSOCKIFY_PATTERN" 2>/dev/null || true
+  pkill -f "$TTY_BRIDGE_PATTERN" 2>/dev/null || true
+  pkill -f "$XFCE_PATTERN" 2>/dev/null || true
   # Xvnc là X server VÀ VNC server ⇒ chỉ còn một tiến trình phải hạ (trước đây
   # là Xvfb + x11vnc). Bỏ sót dòng này thì display :99 vẫn bị chiếm và
   # `box-power on` sau đó khởi động Xvnc thất bại ngầm.
-  pkill -f 'Xvnc :99' 2>/dev/null || true
+  pkill -f "$XVNC_PATTERN" 2>/dev/null || true
 }
 
-# Ba nhóm dịch vụ mà ba tab của giao diện cần: Machine (Xvnc), IDE (code-server),
-# Terminal (tty-bridge). Thiếu một nhóm là "ON" đã thành lời nói dối.
+# Mọi nhóm dịch vụ mà giao diện cần: Machine (Xvnc + websockify + XFCE), IDE
+# (code-server), Terminal (tty-bridge). Thiếu một nhóm là "ON" đã thành lời nói
+# dối — đúng lớp lỗi mà khối BUG ở trên mô tả.
 services_alive() {
-  pgrep -f 'Xvnc :99' >/dev/null 2>&1 || return 1
-  pgrep -f 'code-server.*--bind-addr' >/dev/null 2>&1 || return 1
-  pgrep -f 'tty-bridge.py' >/dev/null 2>&1 || return 1
+  pgrep -f "$XVNC_PATTERN" >/dev/null 2>&1 || return 1
+  pgrep -f "$WEBSOCKIFY_PATTERN" >/dev/null 2>&1 || return 1
+  pgrep -f "$XFCE_PATTERN" >/dev/null 2>&1 || return 1
+  pgrep -f "$CODE_SERVER_PATTERN" >/dev/null 2>&1 || return 1
+  pgrep -f "$TTY_BRIDGE_PATTERN" >/dev/null 2>&1 || return 1
   return 0
 }
+
+# Hai lượt on/off chồng nhau thì tranh cổng nhau (8080/5900/6080/7681). `flock`
+# là util-linux; thiếu thì vẫn chạy tiếp — cửa sổ chồng lấn hẹp hơn nhiều so với
+# việc bỏ hẳn chốt.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  flock 9
+fi
 
 case "${1:-}" in
   off)
@@ -58,15 +87,18 @@ case "${1:-}" in
     echo "[box-power] OFF — các dịch vụ của box đã dừng"
     ;;
   on)
-    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ] && services_alive; then
-      echo "[box-power] đã ON từ trước — bỏ qua"
-      exit 0
-    fi
     if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ]; then
+      if services_alive; then
+        echo "[box-power] đã ON từ trước — bỏ qua"
+        exit 0
+      fi
       echo "[box-power] trạng thái ghi ON nhưng dịch vụ không chạy — khởi động lại"
     fi
     stop_services
-    "$GOSU_BIN" agent "$SERVICES_BIN" >"$AGENT_HOME/services.log" 2>&1 &
+    # `9>&-`: đóng fd của khoá trước khi thả dịch vụ xuống nền. Dịch vụ sống lâu
+    # hơn box-power rất nhiều, nên để chúng thừa hưởng fd 9 là khoá bị giữ mãi:
+    # lượt `off` sau đó sẽ chờ vô hạn.
+    gosu agent "$SERVICES_BIN" >"$AGENT_HOME/services.log" 2>&1 9>&- &
     echo on > "$STATE"
     chmod 644 "$STATE"
     echo "[box-power] ON — đang khởi động dịch vụ"
