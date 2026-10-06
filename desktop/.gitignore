@@ -1,0 +1,11 @@
+# Build outputs and downloaded artifacts of the desktop app — never commit.
+node_modules/
+dist/
+build/*
+!build/icon.ico
+!build/tray.png
+!build/installer.nsh
+runtime/
+staging/
+release/
+*.log

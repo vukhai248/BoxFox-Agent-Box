@@ -1,0 +1,22 @@
+{
+  "target": "win-x64",
+  "node": {
+    "version": "24.9.0",
+    "zip": "node-v24.9.0-win-x64.zip",
+    "url": "https://nodejs.org/dist/v{version}/node-v{version}-win-x64.zip",
+    "shasumsUrl": "https://nodejs.org/dist/v{version}/SHASUMS256.txt",
+    "sha256": "6873514c3e6a012917cc6f95ce48a6289253370d025f1b69db290d70feebfa6e"
+  },
+  "python": {
+    "version": "3.13.7",
+    "zip": "python-3.13.7-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/{version}/python-{version}-embed-amd64.zip",
+    "sha256": "f6cca216a359be84797cabb54149ce5e062afb16cc7567eb7fc51cacb2d86b65",
+    "license": "PSF-2.0"
+  },
+  "wheels": {
+    "requirements": "backend/requirements.runtime.txt",
+    "platform": "win_amd64",
+    "pythonVersion": "3.13"
+  }
+}

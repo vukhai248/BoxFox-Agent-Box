@@ -44,10 +44,10 @@ không có bản macOS/Linux của lớp CUA (chỉ Windows).
 | H5 | Nền tảng Windows: capture / input / UIA | `vorflux/desktop-host-mode` @ `ee1d79b` | **xong** |
 | H6 | Select element ba nhánh (`dom → uia → desktop`) | `vorflux/desktop-host-mode` @ `ee1d79b` | **xong** |
 | H7 | Lease / epoch / mutex / token / thang xác minh **+ ba công cụ CUA trong executor + API desktop** | `vorflux/desktop-host-mode` @ `b9e27cc` | **xong** |
-| D1 | Khung Electron + bundle runtime | `vorflux/desktop-alpha` @ `0f17b37` | **xong** |
-| D2 | Supervisor + gateway + profile | `vorflux/desktop-alpha` @ `3bf3ab5` | **xong** |
-| D3 | Tray + chẩn đoán + bộ cài NSIS | `vorflux/desktop-alpha` | **đang làm** |
-| D4 | Tài liệu cài đặt + checklist nghiệm thu 13 bước | `vorflux/desktop-alpha` | **đang làm** |
+| D1 | Khung Electron + bundle runtime | `vorflux/desktop-alpha` @ `fe46a70` | **xong** |
+| D2 | Supervisor + gateway + profile | `vorflux/desktop-alpha` @ `fe46a70` | **xong** |
+| D3 | Tray + chẩn đoán + bộ cài NSIS | `vorflux/desktop-alpha` @ `dee25ca` | **xong** |
+| D4 | Tài liệu cài đặt + checklist nghiệm thu 13 bước | `vorflux/desktop-alpha` @ `9be9567` | **xong** |
 | D5 | UI chọn chế độ + quyền + CUA (tab Settings "Machine & Permissions") | `vorflux/desktop-host-mode` @ `b81d095` | **xong** |
 
 Việc đã xong và **có test chạy được trên Linux** (nền tảng Windows giả, không cần máy Windows):
@@ -194,14 +194,18 @@ chưa có trên host trả `UNSUPPORTED_IN_HOST_MODE` (danh sách `DEFERRED_TOOL
 
 ## 6. Việc phải làm tiếp, theo thứ tự
 
-1. **D3 + D4 (nhánh `vorflux/desktop-alpha`)** — tray, chẩn đoán, bộ cài NSIS, `docs/plan/desktop-alpha-install.md`
-   + checklist nghiệm thu 13 bước. Đang làm.
+1. **D3 + D4 — xong** (`dee25ca`, `9be9567`): tray (Hiện/Ẩn, Trả quyền cho agent, Dừng khẩn, mở thư mục dữ
+   liệu, sao lưu chẩn đoán, Thoát), chẩn đoán ZIP có lọc bí mật, bộ cài NSIS theo từng người dùng, tài liệu
+   `docs/plan/desktop-alpha-install.md` + checklist 13 bước. Test app: `npm test` trong `desktop/` → **72 xanh**.
+   Bộ cài mới: `/code/.generated_artifacts/BoxFox-Desktop-Alpha-0.1.0-Setup.exe`, sha256
+   `fbf07c4ac0b0b3b85d46ab80a0a71350ae69756d82b29338a78f42cc4d2b82a6`.
 2. **D5 — xong** (`b81d095`): tab Settings "Machine & Permissions" đã có adapter
    (`frontend/src/lib/permissions/http.ts`) đi qua `agentApi`, kiểu dữ liệu riêng
    (`frontend/src/types/machinePermissions.ts`), 9 ca test. Chế độ docker hiện thẻ "không có động cơ
    quyền" và **không** gọi route nào, nên không chạm `PERMISSIONS_UNAVAILABLE`.
-3. **Mở PR-1 cho `vorflux/desktop-host-mode`** (H1–H7 + D5), rồi PR-2 cho `vorflux/desktop-alpha` (D1–D4);
-   PR-2 phải rebase lên `origin/main` mới nếu `main` đã tiến.
+3. **PR-1 cho `vorflux/desktop-host-mode`** (H1–H7 + D5) đang mở; **PR-2 cho `vorflux/desktop-alpha`**
+   (D1–D4) đã rebase lên `origin/main` mới nhất. PR-2 cần PR-1 để có nghĩa đầy đủ (gateway trỏ
+   `/__box/*` sang `/api/agent/desktop/*`).
 4. **Kiểm thử độc lập trên máy Windows thật** — đây là việc **bắt buộc** trước khi phát hành, vì toàn bộ
    H5–H7 mới chỉ chạy trên nền tảng giả:
    - `ComUiaAccessor` (đường `comtypes` thật) **chưa từng chạy** — rủi ro cao nhất.
@@ -229,6 +233,7 @@ chưa có trên host trả `UNSUPPORTED_IN_HOST_MODE` (danh sách `DEFERRED_TOOL
 | `docs/testing/desktop-host-mode.md` | lệnh chạy test, cách kiểm tầng Windows trên Linux, checklist 13 bước cho chủ nhà |
 | `docs/architecture/decisions/0002-concurrent-desktop-control.md` | ADR-0002: chuyển từ "Hoãn" sang "Đã chọn: kết hợp lựa chọn 1 + 2" kèm 8 cơ chế và bảng tiêu chí trước khi bật |
 | `docs/plan/desktop-alpha-packaging.md` | kế hoạch đóng gói alpha: D1–D5, câu hỏi mở đã có mặc định (profile `BoxFoxDesktopAlpha`, cổng động, build kèm bản Linux, CI `workflow_dispatch`, không bundle WGC mặc định, thêm `comtypes`) |
+| `docs/plan/desktop-alpha-install.md` | hướng dẫn cài bộ cài NSIS, chọn chế độ, biến môi trường thật, chỗ nằm hồ sơ/log, cách xuất chẩn đoán, cảnh báo host mode, checklist nghiệm thu 13 bước (D4) |
 
 ---
 

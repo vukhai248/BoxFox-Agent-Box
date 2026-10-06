@@ -1,0 +1,122 @@
+# BoxFox Desktop (Alpha) — reproducible Windows installer build (plan §6 PR-2 / D1).
+#
+# Triggers (plan §9.5): manual (`workflow_dispatch`) or a `desktop-v*` tag — deliberately
+# NOT on every push, because one run downloads ~190 MB of pinned runtime and runs NSIS.
+#
+# What a green run proves: the installer builds from a clean checkout on a machine that has
+# never run BoxFox. `fetch-runtime` verifies every download against its sha256 pin (Node
+# against the published SHASUMS256.txt *and* the pin, each wheel against the digest PyPI
+# publishes for that exact file), `npm test` re-verifies the extracted runtime against
+# `runtime.lock.json` and exercises the profile/gateway/supervisor suites, and `build-app`
+# refuses to stage a bundle whose runtime does not match the lock.
+#
+# The installer is UNSIGNED (alpha — there is no code-signing identity yet), so this
+# workflow only uploads a build artifact; it never publishes a GitHub Release.
+# `build-manifest.json` will report `dirty: true` on CI: `fetch-runtime` rewrites the tracked
+# `runtime.lock.json`, which carries a fresh `createdAt`. That is the lock doing its job,
+# not a failure.
+
+name: desktop-build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    name: Windows installer (NSIS, x64)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      # fetch-runtime already picks `python` on Windows; pin it so the setup-python
+      # interpreter wins over any other one on the runner's PATH.
+      BOXFOX_PIP_PYTHON: python
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Node 24 is what the build scripts need; the *bundled* Node is pinned exactly
+          # (version + sha256) in desktop/runtime-sources.json and is what ships.
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Used only by `pip download` for the win_amd64 wheels; the bundled interpreter
+          # is the CPython 3.13 embeddable distribution.
+          python-version: '3.13'
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Cache the runtime downloads
+        uses: actions/cache@v4
+        with:
+          path: desktop/runtime/.downloads
+          # A restored cache entry is still checked against its sha256 pin before use, so a
+          # stale cache can only cost time, never correctness.
+          key: desktop-runtime-downloads-${{ hashFiles('desktop/runtime-sources.json', 'backend/requirements.runtime.txt') }}
+
+      - name: Fetch the bundled runtime (Node + CPython + wheels)
+        working-directory: desktop
+        run: npm run fetch-runtime
+
+      - name: Verify the fetched runtime against the lock
+        working-directory: desktop
+        run: npm run fetch-runtime:check
+
+      - name: Typecheck and run the desktop test suite
+        working-directory: desktop
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build the production UI
+        working-directory: frontend
+        run: npm run build
+
+      - name: Stage the bundle (ui + router + harness + runtime + docker context)
+        working-directory: desktop
+        run: npm run build-app
+
+      - name: Build the NSIS installer
+        working-directory: desktop
+        # --publish never: the artifact is uploaded below, not released.
+        run: npm run dist:win -- --publish never
+
+      - name: Write the installer checksum
+        working-directory: desktop
+        shell: bash
+        run: |
+          cd release
+          node -e "const fs=require('node:fs'),c=require('node:crypto');const lines=fs.readdirSync('.').filter((n)=>n.endsWith('.exe')).map((n)=>c.createHash('sha256').update(fs.readFileSync(n)).digest('hex')+'  '+n);fs.writeFileSync('SHA256SUMS.txt',lines.join('\n')+'\n');console.log(lines.join('\n'))"
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: boxfox-desktop-alpha-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.exe.blockmap
+            desktop/release/SHA256SUMS.txt
