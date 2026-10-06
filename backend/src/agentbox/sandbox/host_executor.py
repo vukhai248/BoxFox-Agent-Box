@@ -47,9 +47,30 @@ APPROVAL_DENIAL_BREAKER_CODE = 'APPROVAL_DENIAL_BREAKER'
 PATH_ESCAPE_CODE = 'PATH_OUTSIDE_WORKSPACE'
 COMMAND_TIMEOUT_CODE = 'COMMAND_TIMEOUT'
 
+# -- H7: mã lỗi của đường CUA (điều khiển desktop máy thật) --------------------
+#: Host mode chạy nhưng KHÔNG có `DesktopControl` (thiếu nền tảng/cấu hình) ⇒ không có CUA.
+CUA_UNAVAILABLE_CODE = 'CUA_UNAVAILABLE'
+#: Người dùng đang giữ quyền điều khiển — agent phải dừng, không chen input.
+HUMAN_HAS_CONTROL_CODE = 'HUMAN_HAS_CONTROL'
+#: Cửa sổ/điểm đích không xác định được (không có cửa sổ tại toạ độ, hwnd lạ).
+TARGET_UNKNOWN_CODE = 'TARGET_UNKNOWN'
+#: Không lấy được mutex chuột/phím — tiến trình khác đang tiêm input.
+CONTROL_BUSY_CODE = 'CONTROL_BUSY'
+#: Cửa sổ đổi vị trí/kích thước/DPI sau khi agent đã soi — token cũ, phải soi lại.
+SOURCE_CHANGED_CODE = 'SOURCE_CHANGED'
+#: Hành động chưa có trên host (ví dụ `scroll`).
+UNSUPPORTED_ACTION_CODE = 'UNSUPPORTED_ACTION'
+
 #: Công cụ v1 chạy được trên host. Danh sách này là HỢP ĐỒNG với tài liệu `docs/plan/desktop-host-mode.md`.
 HOST_TOOLS = ('file_read', 'codebase_glob', 'codebase_grep', 'file_write', 'file_edit_block',
               'terminal_exec')
+
+#: Công cụ CUA CHỈ ĐỌC (H5/H6): chụp màn hình và soi phần tử. Vẫn cần lease, không cần mutex input.
+CUA_OBSERVE_TOOLS = ('computer_screen_capture', 'inspect_element')
+#: Công cụ CUA TIÊM INPUT (H7): mọi lời gọi đi qua lease + mutex + fence.
+CUA_INPUT_TOOLS = ('computer_use',)
+CUA_TOOLS = CUA_OBSERVE_TOOLS + CUA_INPUT_TOOLS
+HOST_TOOLS = HOST_TOOLS + CUA_TOOLS
 
 #: Công cụ tồn tại trong catalog nhưng CHƯA có trên host — trả lỗi có mã thay vì "unknown tool".
 DEFERRED_TOOLS = ('browser_use', 'computer_screen_record', 'verify_exec', 'write_plan', 'dossier_write',
@@ -167,7 +188,7 @@ class HostExecutor:
     """Thi hành công cụ v1 trên máy thật. Mọi quyết định quyền đi qua `policy`."""
 
     def __init__(self, workspace=None, *, policy=None, platform=None, approver=None, env=None,
-                 artifacts_dir=None, root=None):
+                 artifacts_dir=None, root=None, desktop=None):
         source = os.environ if env is None else env
         self.env = source
         self.workspace = Path(workspace or source.get('BOXFOX_HOST_WORKSPACE')
@@ -184,6 +205,41 @@ class HostExecutor:
         self.visual_lock = asyncio.Lock()
         self.processes = {}      # session ⇒ process group đang chạy (để `cleanup` dừng được)
         self.permission_hook = None   # `api/server.py` gắn hàm ghi audit/thẻ duyệt nếu cần
+        #: H7 — bộ điều khiển desktop (`DesktopControl`). `None` ⇒ CUA trả `CUA_UNAVAILABLE`
+        #: thay vì ném: host mode vẫn chạy được các công cụ tệp/lệnh.
+        self.desktop = desktop
+        self._prepared = False
+        self._win_capture = None
+        self._win_input = None
+
+    # -- CUA: chuẩn bị nền tảng (H5) -----------------------------------------
+
+    def prepare(self):
+        """Bật DPI awareness + nạp bảng phần tử một lần cho tiến trình host.
+
+        Gọi lúc khởi động host mode (`api/server.py`); gọi lại là vô hại. Trả `(ok, code)` để
+        chỗ gọi ghi log mà không phải bắt ngoại lệ — máy không phải Windows vẫn khởi động được.
+        """
+        if self._prepared:
+            return True, ''
+        if self.platform != 'win32':
+            return False, UNSUPPORTED_CODE
+        try:
+            from .win import capture as win_capture
+            from ..agent_core import inspect_host
+        except Exception as exc:      # pragma: no cover - chỉ xảy ra khi thiếu pywin32
+            return False, f'{UNSUPPORTED_CODE}: {exc}'
+        try:
+            win_capture.set_dpi_awareness()
+        except Exception:
+            pass
+        try:
+            inspect_host.prepare()
+        except Exception:
+            pass
+        self._win_capture = win_capture
+        self._prepared = True
+        return True, ''
 
     # -- hợp đồng ------------------------------------------------------------
 
@@ -225,6 +281,8 @@ class HostExecutor:
                 return self._codebase_grep(args, root=root)
             if name == 'terminal_exec':
                 return await self._terminal_exec(args, session, root=root)
+            if name in CUA_TOOLS:
+                return await self._cua(name, args, session)
         except _PathEscape as exc:
             return error_result(PATH_ESCAPE_CODE, str(exc))
         except FileNotFoundError as exc:
@@ -236,6 +294,241 @@ class HostExecutor:
         except Exception as exc:                      # phòng thủ: một công cụ không được giết lượt
             return error_result('HOST_TOOL_FAILED', '%s: %s' % (type(exc).__name__, exc))
         return unsupported_result(name)
+
+    # -- CUA: chụp màn hình, soi phần tử, tiêm input (H5–H7) ------------------
+
+    async def _cua(self, name, args, session):
+        """Cổng chung của mọi công cụ CUA: lease trước, rồi mới đọc/tiêm.
+
+        Ba tầng phòng thủ, theo thứ tự: (1) `DesktopControl` phải tồn tại; (2) lease phải thuộc
+        agent — người dùng chạm chuột/phím là quyền về tay người ngay; (3) với công cụ tiêm input,
+        mutex liên tiến trình + `fence()` ngay trước khi gửi. Chỉ tầng (2) là đủ cho hai công cụ
+        chỉ đọc, vì chúng không đổi trạng thái máy.
+        """
+        if self.desktop is None:
+            return error_result(CUA_UNAVAILABLE_CODE,
+                                'host mode chưa bật điều khiển desktop (thiếu DesktopControl)')
+        if self.platform != 'win32':
+            return error_result(UNSUPPORTED_CODE, 'điều khiển desktop chỉ có trên Windows ở bản alpha')
+        self.prepare()
+        granted, state, _error = self.desktop.agent_lease('agent gọi %s' % name)
+        if not granted:
+            snapshot = self.desktop.snapshot() or {}
+            holder = snapshot.get('holder') or (state if isinstance(state, str) else 'human')
+            return error_result(HUMAN_HAS_CONTROL_CODE,
+                                'người dùng đang điều khiển máy — agent chưa có quyền, '
+                                'không gửi thao tác nào', holder=holder)
+        if name == 'inspect_element':
+            return self._inspect_element(args)
+        if name == 'computer_screen_capture':
+            return self._capture_screen(args, session)
+        return await self._computer_use(args, session)
+
+    # ``inspect_element`` — chỉ đọc, không cần mutex input.
+    def _inspect_element(self, args):
+        from ..agent_core import inspect_host
+        try:
+            x, y = int(args.get('x')), int(args.get('y'))
+        except (TypeError, ValueError):
+            return error_result('TOOL_ARGUMENT_INVALID', 'cần toạ độ nguyên (x, y)')
+        try:
+            payload = inspect_host.inspect_element(x, y, platform=self._desktop_platform())
+        except Exception as exc:
+            code = getattr(exc, 'code', None) or 'INSPECT_FAILED'
+            return error_result(code, str(exc))
+        return payload if isinstance(payload, dict) else {'content': str(payload)}
+
+    # ``computer_screen_capture`` — cùng khuôn payload với box (`SandboxExecutor`), để tầng trên
+    # không phải biết ảnh đến từ đâu.
+    def _capture_screen(self, args, session):
+        capture_module = self._win_capture or self._load_capture()
+        if capture_module is None:
+            return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun chụp màn hình của Windows')
+        target = {'kind': 'screen'}
+        window = None
+        raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
+        if raw_window not in (None, ''):
+            try:
+                window = self._window_for(int(raw_window))
+            except (TypeError, ValueError):
+                window = None
+            if window is None:
+                return error_result(TARGET_UNKNOWN_CODE, 'không thấy cửa sổ %s' % raw_window)
+            target = {'kind': 'window', 'windowId': int(raw_window)}
+        try:
+            win_platform = self._desktop_platform()
+            shot = (capture_module.capture_window(int(raw_window), platform=win_platform)
+                    if window is not None
+                    else capture_module.capture_screen(platform=win_platform))
+            data = capture_module.encode_png(shot)
+        except Exception as exc:
+            code = getattr(exc, 'code', None) or 'CAPTURE_FAILED'
+            return error_result(code, str(exc))
+        dimensions = (int(shot.width), int(shot.height))
+        payload = {
+            'content': 'Host screenshot %dx%d' % dimensions,
+            'image': base64.b64encode(data).decode('ascii'),
+            'mime': 'image/png',
+            'dimensions': dimensions,
+            'target': target,
+            'sha256': sha256_of(data),
+            'label': {'integrity': 'khong_tin_duoc', 'confidentiality': 'noi_bo',
+                      'source_kind': 'screen_capture',
+                      'source_uri': 'screen://capture/%s' % (target.get('windowId') or 'screen'),
+                      'tool_name': 'computer_screen_capture', 'content_hash': sha256_of(data)},
+        }
+        if shot.occluded:
+            payload['occluded'] = True
+        caption = args.get('caption')
+        if isinstance(caption, str) and caption.strip():
+            payload['caption'] = caption.strip()[:200]
+        try:
+            target_dir = Path(self.artifacts_dir) / 'captures'
+            target_dir.mkdir(parents=True, exist_ok=True)
+            path = target_dir / self._capture_name(target, session)
+            path.write_bytes(data)
+            payload['artifact'] = str(path)
+        except Exception as exc:            # ảnh vẫn dùng được dù không ghi được tệp
+            payload['artifactError'] = '%s: %s' % (type(exc).__name__, exc)
+        return payload
+
+    def _capture_name(self, target, session):
+        stamp = time.strftime('%Y%m%d-%H%M%S')
+        suffix = '-%s' % target.get('windowId') if target.get('windowId') else ''
+        prefix = _slug(session)[:24] if session else 'host'
+        return '%s-capture-%s%s.png' % (prefix, stamp, suffix)
+
+    def _load_capture(self):
+        try:
+            from .win import capture as win_capture
+        except Exception:
+            return None
+        self._win_capture = win_capture
+        return win_capture
+
+    # ``computer_use`` — tiêm input thật, có lease + mutex + fence.
+    async def _computer_use(self, args, session):
+        input_module = self._load_input()
+        if input_module is None:
+            return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun tiêm input của Windows')
+        action = str(args.get('action') or '').strip().lower()
+        if action not in ('click', 'double_click', 'right_click', 'middle_click', 'type', 'key'):
+            return error_result(UNSUPPORTED_ACTION_CODE,
+                                'hành động %r chưa có trên host (nhận: click, double_click, '
+                                'right_click, middle_click, type, key)' % (action or ''))
+        window, code = self._input_target(args)
+        if window is None:
+            return error_result(code, 'không xác định được cửa sổ đích cho %s' % action)
+        hwnd = int(getattr(window, 'hwnd', 0) or 0)
+        token, code = self.desktop.begin_action('computer_use:%s' % action, {'windowId': hwnd})
+        if token is None:
+            return error_result(code, 'không lấy được quyền điều khiển desktop')
+        try:
+            stale = self.desktop.fence(token)
+            if stale:
+                return error_result(stale, 'quyền điều khiển đã đổi tay — thao tác bị huỷ')
+            outcome = self._send_input(input_module, action, args, window)
+        except Exception as exc:
+            self.desktop.end_action(token, effect='failed', verified=False, route='send_input',
+                                    note='%s: %s' % (type(exc).__name__, exc))
+            code = getattr(exc, 'code', None) or 'INPUT_FAILED'
+            return error_result(code, str(exc))
+        result = self.desktop.end_action(token, effect='unverifiable', verified=None,
+                                         route='send_input', note=action)
+        payload = {'content': 'Host input %s → window %s' % (action, hwnd)}
+        if isinstance(outcome, dict):
+            payload.update(outcome)
+        payload.update({'leaseEpoch': result.get('lease_epoch'), 'effect': result.get('effect'),
+                        'verified': result.get('verified')})
+        return payload
+
+    def _send_input(self, input_module, action, args, window):
+        win_platform = self._desktop_platform()
+        if action == 'type':
+            return input_module.type_text(str(args.get('text') or ''), window=window,
+                                          platform=win_platform)
+        if action == 'key':
+            modifiers = args.get('modifiers') or args.get('keys') or ()
+            if isinstance(modifiers, str):
+                modifiers = [part for part in re.split(r'[+,]', modifiers) if part]
+            return input_module.press_key(str(args.get('key') or ''), modifiers=tuple(modifiers),
+                                          window=window, platform=win_platform)
+        try:
+            x, y = int(args.get('x')), int(args.get('y'))
+        except (TypeError, ValueError):
+            raise ValueError('cần toạ độ nguyên (x, y) cho %s' % action)
+        button = {'click': 'left', 'double_click': 'left', 'right_click': 'right',
+                  'middle_click': 'middle'}[action]
+        outcome = input_module.click(x, y, window=window, button=button, platform=win_platform)
+        if action == 'double_click':
+            outcome = input_module.click(x, y, window=window, button=button, platform=win_platform)
+        return outcome
+
+    def _load_input(self):
+        try:
+            from .win import input as win_input
+        except Exception:
+            return None
+        self._win_input = win_input
+        return win_input
+
+    def _window_for(self, hwnd):
+        """`WindowInfo` của một hwnd, hoặc `None`. Nền tảng ném lỗi ⇒ coi như không có cửa sổ."""
+        platform = self._desktop_platform()
+        describe = getattr(platform, 'describe_window', None)
+        if describe is None:
+            return None
+        try:
+            return describe(int(hwnd))
+        except Exception:
+            return None
+
+    def _input_target(self, args):
+        """Cửa sổ đích: `windowId` model đưa → cửa sổ chứa điểm (x, y) → cửa sổ đang hoạt động.
+
+        Chốt cuối chỉ dùng cho `type`/`key`: gõ vào cửa sổ người dùng đang mở là hành vi tự nhiên
+        nhất, và cửa sổ đó vẫn phải qua `check_preconditions` của tầng input.
+        """
+        raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
+        if raw_window not in (None, ''):
+            try:
+                window = self._window_for(int(raw_window))
+            except (TypeError, ValueError):
+                window = None
+            return (window, TARGET_UNKNOWN_CODE) if window is None else (window, '')
+        if args.get('x') is None or args.get('y') is None:
+            platform = self._desktop_platform()
+            foreground = getattr(platform, 'get_foreground_window', None)
+            hwnd = foreground() if foreground is not None else None
+            window = self._window_for(hwnd) if hwnd else None
+            return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
+        try:
+            x, y = int(args.get('x')), int(args.get('y'))
+        except (TypeError, ValueError):
+            return None, TARGET_UNKNOWN_CODE
+        platform = self._desktop_platform()
+        window = None
+        finder = getattr(platform, 'window_from_point', None)
+        if finder is not None:
+            try:
+                hwnd = finder(x, y)
+            except Exception:
+                hwnd = None
+            if hwnd:
+                window = self._window_for(hwnd)
+        return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
+
+    def _desktop_platform(self):
+        if self.desktop is not None and getattr(self.desktop, 'platform', None) is not None:
+            return self.desktop.platform
+        try:
+            from .win import windows_platform
+        except Exception:
+            return None
+        try:
+            return windows_platform.get_platform()
+        except Exception:
+            return None
 
     async def cleanup(self, session):
         """Dừng tiến trình còn chạy của phiên (tương ứng `SandboxExecutor.cleanup`)."""

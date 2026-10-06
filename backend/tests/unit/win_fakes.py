@@ -397,6 +397,11 @@ class FakePlatform:
         self._record("close_handle", handle)
         return bool(handle)
 
+    def call_next_hook(self, code: int, wparam: int, lparam: int, *, hook: int | None = None) -> int:
+        """``CallNextHookEx`` — H7 khoá bất biến "không bao giờ nuốt phím của người dùng" ở đây."""
+        self._record("call_next_hook", code, wparam, lparam)
+        return 0
+
     # -- UIA ---------------------------------------------------------------
     def uia_accessor(self) -> Any:
         return self._uia_accessor

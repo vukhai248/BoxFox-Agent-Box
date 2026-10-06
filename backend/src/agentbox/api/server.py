@@ -59,6 +59,7 @@ from ..memory.session_store import SessionStore
 from ..observability.system_log import (DEFAULT_READ_LINES, MAX_READ_LINES, clamp_lines,
                                         redact_entry, system_log)
 from ..sandbox.executor import SandboxExecutor
+from ..agent_core.desktop_control import DesktopControl
 from ..sandbox.host_executor import HostExecutor
 from .owner_settings import OwnerSettings
 
@@ -402,9 +403,39 @@ def build_executor(data, env=None):
                            'alpha này — chọn `docker` (mặc định) hoặc `host`.' % EXECUTION_MODE_ENV)
     if mode == 'host':
         workspace = host_workspace(source)
-        policy = permissions_module.PermissionPolicy(str(workspace), profile_dir=Path(data), env=source)
-        return HostExecutor(str(workspace), policy=policy, env=source)
+        profile_dir = Path(data)
+        policy = permissions_module.PermissionPolicy(str(workspace), profile_dir=profile_dir, env=source)
+        executor = HostExecutor(str(workspace), policy=policy, env=source,
+                                desktop=build_desktop_control(profile_dir, source))
+        return executor
     return SandboxExecutor(api_key=source.get('BOXFOX_API_KEY', 'boxfox-local-dev-token'))
+
+
+def build_desktop_control(profile_dir, env=None):
+    """`DesktopControl` cho host mode, hoặc `None` khi máy này không điều khiển desktop được.
+
+    Không ném: máy không phải Windows (hoặc thiếu pywin32) vẫn phải khởi động harness — các công cụ
+    tệp/lệnh chạy bình thường, còn công cụ CUA trả `CUA_UNAVAILABLE`.
+    """
+    source = os.environ if env is None else env
+    if str(source.get('BOXFOX_DESKTOP_CONTROL') or '').strip().lower() in ('0', 'off', 'false'):
+        return None
+    if sys.platform != 'win32':
+        return None
+    try:
+        from ..sandbox.win import windows_platform
+    except Exception:
+        return None
+    try:
+        platform = windows_platform.get_platform()
+    except Exception:
+        return None
+    if platform is None or getattr(platform, 'name', '') in ('', 'unavailable'):
+        return None
+    try:
+        return DesktopControl(profile_dir=Path(profile_dir), platform=platform)
+    except Exception:
+        return None
 
 
 def create_app(runtime):
@@ -503,6 +534,30 @@ def create_app(runtime):
         except Exception as exc:
             return {'error': type(exc).__name__, 'reason': str(exc)[:200]}
 
+    def desktop_control():
+        """Bộ điều khiển desktop của executor đang chạy. Docker mode KHÔNG có ⇒ lỗi có mã."""
+        control = getattr(runtime.executor, 'desktop', None)
+        if control is None:
+            raise ApiError('DESKTOP_CONTROL_UNAVAILABLE',
+                           'chế độ đang chạy không điều khiển được desktop (chỉ host mode trên '
+                           'Windows có)', 409)
+        return control
+
+    def desktop_lease_snapshot():
+        """Snapshot lease cho health/UI — `None` khi không có hàng rào (docker mode)."""
+        control = getattr(runtime.executor, 'desktop', None)
+        if control is None:
+            return None
+        try:
+            snapshot = control.snapshot()
+        except Exception as exc:      # health không bao giờ được ném vì một tệp hỏng
+            return {'holder': 'human', 'epoch': 0, 'error': '%s: %s' % (type(exc).__name__, exc)}
+        return {'holder': snapshot.get('holder'), 'epoch': snapshot.get('epoch'),
+                'generation': snapshot.get('generation'),
+                'hooksInstalled': snapshot.get('hooksInstalled'),
+                'mutexHeld': snapshot.get('mutexHeld'), 'mutexName': snapshot.get('mutexName'),
+                'since': snapshot.get('since'), 'reason': snapshot.get('reason')}
+
     def execution_status():
         """Khối `execution` của health: đang chạy chế độ nào, quyền nào, sàn cứng chạm mấy lần.
 
@@ -524,9 +579,9 @@ def create_app(runtime):
             'permissionMode': permission_mode,
             'policy': True,
             'cuaEnabled': bool(permissions_module.MODE_CAPABILITIES[permission_mode]['cua']),
-            # H7 gắn lease thật vào đây; `None` nghĩa là "chưa có hàng rào đồng thời", không phải
-            # "đã khoá" — người đọc health phải phân biệt được hai thứ đó.
-            'lease': None,
+            # `lease` là hàng rào đồng thời thật (H7): `None` nghĩa là "máy này không có hàng rào",
+            # khác hẳn `holder: human` nghĩa là "có hàng rào và người đang giữ".
+            'lease': desktop_lease_snapshot(),
             'hardlineHits': policy.hardline_hits,
             'workspace': policy.workspace,
         })
@@ -839,6 +894,64 @@ def create_app(runtime):
         snapshot = policy.snapshot()
         return web.json_response({'rules': snapshot['rules'], 'sources': snapshot['ruleSources'],
                                   'layers': snapshot['layers']})
+
+    # -- H7: bề mặt CUA (lease + soi phần tử) -------------------------------
+
+    async def desktop_lease(request):
+        """`GET` đọc lease; `POST` đổi người giữ quyền.
+
+        `claim` là nút "Trả quyền cho agent" của NGƯỜI DÙNG — đường duy nhất được phép `force`; agent
+        không có cách nào tự gọi nó. `release` là nút "Dừng/Trả quyền" (đưa về người). `stop` là nút
+        Dừng khẩn: tăng epoch + generation, nhả phím/chuột đang giữ, đưa lease về người.
+        """
+        control = desktop_control()
+        if request.method == 'GET':
+            return web.json_response(desktop_lease_snapshot() or {})
+        payload = await request.json()
+        action = str(payload.get('action') or '').strip().lower()
+        reason = str(payload.get('reason') or '').strip()
+        viewer_id = payload.get('viewerId') or None
+        if action == 'claim':
+            ok, state, error = control.agent_lease(reason or 'người dùng trả quyền cho agent',
+                                                   viewer_id=viewer_id, force=True)
+            code = '' if ok else state
+            if not ok:
+                raise ApiError('DESKTOP_LEASE_FAILED', str(error or code), 409)
+        elif action == 'release':
+            control.release_to_human(reason or 'người dùng lấy lại quyền', viewer_id=viewer_id)
+        elif action == 'stop':
+            control.emergency_stop(reason or 'nút Dừng khẩn')
+        else:
+            raise ApiError('DESKTOP_LEASE_ACTION_UNKNOWN',
+                           'hành động `%s` không có (nhận: claim, release, stop)' % action, 400)
+        system_log.write('desktop.lease', level='info', message='lease đổi từ UI',
+                         data={'action': action, 'reason': reason})
+        return web.json_response(desktop_lease_snapshot() or {})
+
+    async def desktop_inspect_element(request):
+        """Soi phần tử tại một điểm framebuffer — đường của khung Element Selector ở host mode.
+
+        Cùng hình dạng phản hồi với `/__box/inspect-element` của box, nên giao diện không phải biết
+        mình đang ở chế độ nào. Lỗi nền tảng giữ NGUYÊN mã (`ELEMENT_STALE`, `DESKTOP_LOCKED`, …).
+        """
+        from ..agent_core import inspect_host
+        control = desktop_control()
+        granted, state, _error = control.agent_lease('người dùng soi phần tử')
+        if not granted:
+            snapshot = control.snapshot() or {}
+            raise ApiError('HUMAN_HAS_CONTROL', 'người dùng đang điều khiển máy — chưa soi được',
+                           409, {'holder': snapshot.get('holder')})
+        payload = await request.json()
+        try:
+            x, y = int(payload.get('x')), int(payload.get('y'))
+        except (TypeError, ValueError):
+            raise ApiError('INSPECT_POINT_INVALID', 'cần toạ độ nguyên (x, y)', 400)
+        try:
+            result = inspect_host.inspect_element(x, y)
+        except Exception as exc:
+            code = getattr(exc, 'code', None) or 'INSPECT_FAILED'
+            raise ApiError(code, str(exc), 409)
+        return web.json_response(result)
 
     async def skill(request):
         return web.json_response(runtime.catalog.read(request.match_info['skill']))
@@ -2082,6 +2195,9 @@ def create_app(runtime):
     app.router.add_put('/api/agent/commands/{slug}', command)
     app.router.add_delete('/api/agent/commands/{slug}', command)
     app.router.add_get('/api/agent/executors/claude-code', executor_status)
+    app.router.add_get('/api/agent/desktop/lease', desktop_lease)
+    app.router.add_post('/api/agent/desktop/lease', desktop_lease)
+    app.router.add_post('/api/agent/desktop/inspect-element', desktop_inspect_element)
     app.router.add_get('/api/agent/permissions', permissions)
     app.router.add_put('/api/agent/permissions', permissions)
     app.router.add_post('/api/agent/permissions/decide', permissions_decide)
@@ -2141,9 +2257,20 @@ def create_app(runtime):
 def main():
     data = Path(os.environ.get('BOXFOX_AGENT_DATA_DIR', str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'BoxFox/harness')))
     port = harness_port()
-    runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), build_executor(data))
+    executor = build_executor(data)
+    runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
+    # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN
+    # cho cả tiến trình. Hook hỏng ⇒ fail-closed ở tầng lease, KHÔNG làm chết khởi động: agent vẫn
+    # dùng được công cụ tệp/lệnh.
+    if getattr(executor, 'desktop', None) is not None:
+        prepared, prepare_code = executor.prepare()
+        hooks_ok, hooks_code = executor.desktop.install_hooks()
+        system_log.write('desktop.ready', level='info' if prepared else 'warn',
+                         message='điều khiển desktop đã sẵn sàng' if prepared else 'chưa sẵn sàng',
+                         data={'prepared': prepared, 'prepareCode': prepare_code,
+                               'hooks': hooks_ok, 'hooksCode': hooks_code})
     try:
         web.run_app(create_app(runtime), host='127.0.0.1', port=port, print=None)
     finally:
