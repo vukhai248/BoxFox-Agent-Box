@@ -9,30 +9,64 @@
 #         ②b độc lập, xem box-firewall).
 #
 # Chạy root. Trạng thái ghi /run/box-power-state cho ide-proxy đọc.
+#
+# BUG đã đo (06/10/2026): `on` tin tuyệt đối vào tệp trạng thái. Tệp đó nằm trên
+# lớp ghi của container, KHÔNG phải tmpfs, nên sống qua `docker restart`. Container
+# box khởi động lại ⇒ entrypoint gọi `box-power on` ⇒ đọc thấy "on" cũ ⇒ in
+# "[box-power] đã ON từ trước — bỏ qua" ⇒ KHÔNG chạy box-services.sh. Kết quả:
+# Xvnc, XFCE, websockify, tty-bridge, code-server đều chết trong khi giao diện
+# vẫn hiện "Machine ON" và tab IDE báo "LIVE CODE-SERVER"; người dùng chỉ thấy
+# `Proxy error: <urlopen error [Errno 111] Connection refused>`.
+#
+# Vì vậy `on` chỉ bỏ qua khi tệp trạng thái nói "on" VÀ dịch vụ còn sống thật
+# (`services_alive`). Tệp trạng thái là gợi ý, không phải bằng chứng.
 # ==============================================================================
 set -eu
-STATE=/run/box-power-state
+STATE="${BOX_POWER_STATE_FILE:-/run/box-power-state}"
+SERVICES_BIN="${BOX_POWER_SERVICES_BIN:-/usr/local/bin/box-services.sh}"
+GOSU_BIN="${BOX_POWER_GOSU_BIN:-gosu}"
+AGENT_HOME="${BOX_POWER_AGENT_HOME:-/home/agent}"
+
+# Hạ đủ bộ dịch vụ dài hạn. Dùng cho cả `off` lẫn nhánh khởi động lại của `on`:
+# khởi động chồng lên tiến trình cũ sẽ tranh cổng (8080/5900/6080/7681) và
+# `box-services.sh` thất bại ngầm.
+stop_services() {
+  pkill -f 'code-server.*--bind-addr' 2>/dev/null || true
+  pkill -f 'websockify 6080' 2>/dev/null || true
+  pkill -f 'tty-bridge.py' 2>/dev/null || true
+  pkill -f 'xfce4-session' 2>/dev/null || true
+  # Xvnc là X server VÀ VNC server ⇒ chỉ còn một tiến trình phải hạ (trước đây
+  # là Xvfb + x11vnc). Bỏ sót dòng này thì display :99 vẫn bị chiếm và
+  # `box-power on` sau đó khởi động Xvnc thất bại ngầm.
+  pkill -f 'Xvnc :99' 2>/dev/null || true
+}
+
+# Ba nhóm dịch vụ mà ba tab của giao diện cần: Machine (Xvnc), IDE (code-server),
+# Terminal (tty-bridge). Thiếu một nhóm là "ON" đã thành lời nói dối.
+services_alive() {
+  pgrep -f 'Xvnc :99' >/dev/null 2>&1 || return 1
+  pgrep -f 'code-server.*--bind-addr' >/dev/null 2>&1 || return 1
+  pgrep -f 'tty-bridge.py' >/dev/null 2>&1 || return 1
+  return 0
+}
 
 case "${1:-}" in
   off)
-    pkill -f 'code-server.*--bind-addr' 2>/dev/null || true
-    pkill -f 'websockify 6080' 2>/dev/null || true
-    pkill -f 'tty-bridge.py' 2>/dev/null || true
-    pkill -f 'xfce4-session' 2>/dev/null || true
-    # Xvnc là X server VÀ VNC server ⇒ chỉ còn một tiến trình phải hạ (trước đây
-    # là Xvfb + x11vnc). Bỏ sót dòng này thì display :99 vẫn bị chiếm và
-    # `box-power on` sau đó khởi động Xvnc thất bại ngầm.
-    pkill -f 'Xvnc :99' 2>/dev/null || true
+    stop_services
     echo off > "$STATE"
     chmod 644 "$STATE"
     echo "[box-power] OFF — các dịch vụ của box đã dừng"
     ;;
   on)
-    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ]; then
+    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ] && services_alive; then
       echo "[box-power] đã ON từ trước — bỏ qua"
       exit 0
     fi
-    gosu agent /usr/local/bin/box-services.sh >/home/agent/services.log 2>&1 &
+    if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "on" ]; then
+      echo "[box-power] trạng thái ghi ON nhưng dịch vụ không chạy — khởi động lại"
+    fi
+    stop_services
+    "$GOSU_BIN" agent "$SERVICES_BIN" >"$AGENT_HOME/services.log" 2>&1 &
     echo on > "$STATE"
     chmod 644 "$STATE"
     echo "[box-power] ON — đang khởi động dịch vụ"
