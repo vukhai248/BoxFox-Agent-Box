@@ -17,7 +17,8 @@ pytestmark = pytest.mark.legacy_path
 
 
 # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research`/`research-review`,
-# nên nút `research` của Work Graph đóng `needs_user` (xem `test_work_research_boundary.py`).
+# nên nút `research` của Work Graph đóng `needs_user` (xem bài `test_research_node_cannot_be_produced_from_main`
+# dưới đây, và `test_work_graph.py::test_research_only_run_has_nothing_to_execute`).
 # Các bài đo máy móc chung (admission/check/handoff) dùng nút discovery vẫn chạy được từ main:
 # `explore` + risk `consequential` ⇒ cùng bộ kiểm `evidence`/`critique` (người kiểm `review`/`plan-review`).
 CHECKED = {'id': 'R1', 'kind': 'explore', 'risk': 'consequential', 'title': 'Compare approaches',

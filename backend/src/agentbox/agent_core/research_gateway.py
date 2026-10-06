@@ -1,7 +1,7 @@
 """Biên Research versioned: main gửi câu hỏi, lead riêng sở hữu engine và bản công bố.
 
 Không scheduler mới, không cấp consent từ chuỗi ref. Thiếu admission backend thì chỉ lưu
-needs_consent; resume không gọi model. Bản lịch sử không tự chuyển chủ khi bật công tắc.
+needs_consent; resume không gọi model. Bản lịch sử không tự chuyển chủ.
 """
 import copy
 import json
@@ -481,7 +481,7 @@ def guard_request(rt, sid):
 
 
 def guard_tool(rt, actor, name, args):
-    """Cửa dispatch canonical, kể cả sau kill switch; không lấy quyền từ prompt/config tự khai."""
+    """Cửa dispatch canonical; không lấy quyền từ prompt/config tự khai."""
     row = _binding(rt.store, controller_id=actor['id'])
     if name in GATEWAY_TOOLS or name == PUBLISH_TOOL:
         return
@@ -546,7 +546,7 @@ def apply_profile(rt, actor, profile):
 
 
 def tool_schemas():
-    """Lược đồ gateway để registry dùng cùng tên và công tắc."""
+    """Lược đồ gateway để registry dùng cùng tên."""
     def tool(name, properties, required, description):
         return {'type': 'function', 'function': {'name': name, 'description': description,
             'parameters': {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}}}

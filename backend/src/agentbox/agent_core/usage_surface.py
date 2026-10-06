@@ -140,7 +140,7 @@ async def complete(rt, sid, messages, tools, route, *, purpose='completion', **k
     ledger = service(rt)
     call_key = 'call-' + uuid.uuid4().hex
     rows = await route_rows(rt, route)
-    # snapshot là await point: đọc lại authority, allocation và kill switch sau đó.
+    # snapshot là await point: đọc lại authority và allocation sau đó.
     job_surface.guard_request(rt, sid)
     research_gateway.guard_request(rt, sid)
     session = rt.store.get(sid)

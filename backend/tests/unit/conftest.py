@@ -5,7 +5,6 @@ rỗng vì cả bảy bề mặt đã xoá), nên nhãn này KHÔNG còn điều
 `pytestmark = pytest.mark.legacy_path` chỉ ghi lại rằng nội dung của nó được viết cho cấu hình
 TRƯỚC v2 (#6599). Không còn nhánh legacy nào để bật hay tắt, nên không còn gì để pin.
 """
-import pytest
 
 
 def pytest_configure(config):

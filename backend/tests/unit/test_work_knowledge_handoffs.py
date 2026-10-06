@@ -26,7 +26,7 @@ def setup(tmp_path, role='explore', helpers=1):
                 # (`RESEARCH_MAIN_READ_ONLY`), nên helper tra cứu dùng vai `explore` — vẫn là đường
                 # đọc nguồn gốc thật mà `answer_knowledge` gieo ref cho producer.
                 return '## Draft\n## Knowledge requests\n' + '\n'.join(
-                    f'- {r}: inspect original evidence for question {i}?' for i,r in enumerate(['explore'] * helpers))
+                    f'- explore: inspect original evidence for question {i}?' for i in range(helpers))
         return ok_script(kind, text)
     store,rt,model,executor,sid=build(tmp_path,script)
     model.latest_assignment=True

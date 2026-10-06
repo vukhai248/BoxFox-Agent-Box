@@ -205,7 +205,6 @@ def test_usd_price_cannot_consume_non_usd_allocation(env):
 
 def research_lead(env, monkeypatch, *, admit=True):
     from agentbox.agent_core import research_gateway
-    monkeypatch.setenv(research_gateway.SWITCH, 'on')
     store, rt, session, client = env
     config = store.get(session['id'])['config']
     # Trần output 100 giữ upper bound admission (contextWindow fixture 1000) trong ngân sách .01.
