@@ -58,7 +58,7 @@ Sáu ý chủ nhà chốt (#6490–#6499) và phần đã làm tương ứng:
 | H10 | Khép harness + handoff | `1253707`, `b219f57` | drill rollback 11/11; nghiệm thu vòng chạy 29/29 trên `c836822`; review cuối 2/10 | partial — pilot sống hoãn |
 | H10.1/H10.2 | Calibration sống + phần giới hạn ngân sách | — | `financial_consent_ref = null`, `measured = false` | tương lai (#6531) |
 | H11 | Quản lý con (#6545–#6548) | `84022bf`, `9a04c16`, `2bd3886`, `0e9b6df`, `f7ebbc9` | 37 ca H11; nhóm 18 file 271 passed; live 5/5 kịch bản 37/37 phép kiểm; chạy toàn bộ unit suite bắt một hồi quy của H11 (phần nới hạn chót lượt plan hết chỗ vì mặc định 7200 s đã chạm trần) — đã sửa kèm hai bài chốt lại hợp đồng | verified |
-| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | commit H12 | 19 ca mới (`test_reform_master_switch.py`) | verified |
+| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | commit H12 | 19 ca mới (`test_reform_master_switch.py`) | **đã xoá ở v4** (B5, `0404356`) |
 | Vá #6535 | Phòng kế hoạch: kẹp `.plans`, thư mục con, schema `directory` | `79f024b`, `17b146b`, `ad3b5f8` | unit + live `folders2/3/4` | verified |
 
 Ngoài ra: origin knobs (`82550cc`, `f7e4a9b`), phủ kiểm và soát tuân thủ (`c6c88bb`, `fcc6819`,
@@ -80,7 +80,6 @@ Ngoài ra: origin knobs (`82550cc`, `f7e4a9b`), phủ kiểm và soát tuân th�
 | Research | `research_owner.py`, `research_gateway.py`, `research_runtime.py` | chủ quyền kết luận thuộc Research; main chỉ gửi câu hỏi/đọc kết quả published |
 | Main thích ứng | `adaptive_main.py`, `adaptive_surface.py`, `recovery_policy.py` | quyết định theo tiến triển; phân loại hồi phục theo lớp lỗi |
 | Vòng đời con (H11) | `child_lifecycle.py`, `peer_watchdog.py`, `roles.py` | cờ `timedOut`/`partial`/`resumable`; watchdog; vai nào thấy công cụ nào |
-| Công tắc | `feature_switches.py` | khóa tổng `BOXFOX_REFORM` + bảy thành viên; một chỗ đọc duy nhất |
 
 ### 4.2 Bảng dữ liệu mới (additive — không đổi bảng cũ)
 
@@ -106,6 +105,11 @@ main turn → execution_kernel.admission (policy của run)
 
 ## 5. Các công tắc — bảng đầy đủ
 
+**Trạng thái v4 (2026-10-06): NHÓM NÀY ĐÃ XOÁ HẲN.** Chủ nhà chốt xoá nốt bề mặt 7 rồi xoá hẳn khóa
+tổng (§10.7). Không còn env nào của đợt cải tổ, và `GET /api/agent/runtime-info` không còn khối
+`switches`. Bảng dưới là HỒ SƠ LỊCH SỬ của đợt bật dần — giữ để tra cứu cách tổ chức và cách kiểm
+từng công tắc; đọc "đã xoá — `<commit>`" là commit xoá bề mặt đó.
+
 **Nguyên tắc (v2, #6599):** mặc định **BẬT** — env trống nghĩa là cả nhóm chạy đường mới. Tắt là
 hành động TƯỜNG MINH: một lệnh `BOXFOX_REFORM=off` (cả nhóm) hoặc `BOXFOX_<TÊN>=off` (một bề mặt),
 rồi khởi động lại. Tắt thì hành vi y như trước đợt cải tổ; dữ liệu `harness_*` đã ghi vẫn đọc được,
@@ -119,8 +123,8 @@ commit cho mỗi bề mặt, vì ba việc đó chỉ có nghĩa khi đi cùng n
 
 | Công tắc | Nhóm | Trạng thái | Ghi chú |
 |---|---|---|---|
-| `BOXFOX_REFORM` | **khóa tổng** | còn (B5 chưa làm) | `off` ⇒ tắt các thành viên còn lại bằng một lệnh (lối thoát hiểm); env trống = BẬT |
-| `BOXFOX_RESEARCH_GATEWAY` | H7 | còn — bề mặt 7/7 chưa xoá | `off` ⇒ công cụ gateway ẩn, main quay lại đường uỷ thác cũ; xem §10.6 |
+| `BOXFOX_REFORM` | **khóa tổng** | **đã xoá** — `0404356` (B5) | xoá cùng `feature_switches.py` và khối `switches`; không còn lối thoát hiểm một lệnh (không còn nhánh legacy nào để thoát) |
+| `BOXFOX_RESEARCH_GATEWAY` | H7 | **đã xoá** — `6c8fe6b` | công cụ gateway luôn mở cho main; main không còn đường uỷ thác `research` (`RESEARCH_MAIN_READ_ONLY`) — xem §10.7 |
 | `BOXFOX_TASK_SURFACE` | H3 | **đã xoá** — `64f960d` | bốn công cụ `task_*` luôn mở; không còn `TASK_SURFACE_OFF` |
 | `BOXFOX_CONTROLLER_JOBS` | H4 | **đã xoá** — `64f960d` | `start_job`/`get_job`/`subscribe_job`/`wait_jobs`/`cancel_job` luôn mở; `job_surface`/`job_wake` luôn sống |
 | `BOXFOX_CONTEXT_SURFACE` | H5 | **đã xoá** — `42b337a` | context bundle + pin skill luôn chạy qua surface; `_active()` đã xoá |
@@ -133,10 +137,9 @@ commit cho mỗi bề mặt, vì ba việc đó chỉ có nghĩa khi đi cùng n
 giá trị khác — kể cả chuỗi chỉ có khoảng trắng — là TẮT. Trước H12, năm module chỉ nhận đúng `on`,
 nên nay chúng nhận rộng hơn cho khớp khóa tổng; muốn giữ y hành vi cũ thì chỉ đặt `on`.
 
-Kiểm tra đang bật gì, vì đâu: `GET /api/agent/runtime-info` → khối `switches` (khóa tổng + từng
-thành viên kèm `source`: `explicit` / `master` / `default`). Không cần đọc env của tiến trình nữa.
-Sau v3, `feature_switches.MEMBERS` chỉ còn `BOXFOX_RESEARCH_GATEWAY`, nên khối `switches` chỉ còn
-khóa tổng + một thành viên; khối sẽ biến mất ở B5.
+Kiểm tra đang bật gì, vì đâu (hồ sơ): `GET /api/agent/runtime-info` từng trả khối `switches` (khóa
+tổng + từng thành viên kèm `source`: `explicit` / `master` / `default`). Khối đó đã bị xoá ở B5 cùng
+khóa tổng (`0404356`); env của tiến trình nay không còn công tắc nào của đợt cải tổ.
 
 ## 6. Bật dần từng công tắc — quy trình và thứ tự
 
@@ -304,9 +307,8 @@ công tắc, không đổi tên env, không hạ mặc định của thành viê
 
 ### 10.3 Thứ tự an toàn nếu chọn B (mỗi dòng là một checkpoint nhỏ)
 
-**Trạng thái 2026-10-05 (v3):** B1–B3 đã làm xong cho **6/7 bề mặt** (bỏ pin, bỏ nhánh code, bỏ tên
-env — gộp một commit mỗi bề mặt); B4 dở ở bề mặt 7 (RESEARCH_GATEWAY); B5–B6 chưa làm. Chi tiết +
-số đo: §10.6.
+**Trạng thái 2026-10-06 (v4):** B1–B5 đã xong — bảy bề mặt và cả khóa tổng đã xoá hẳn (§10.6, §10.7);
+B6 (dọn hạ tầng) xong phần còn lại trên máy này (§10.5). Bảng dưới giữ nguyên như hồ sơ thứ tự đã đi.
 
 | Bước | Việc | Điều kiện để bắt đầu | Cách kiểm sau khi làm |
 |---|---|---|---|
@@ -374,6 +376,38 @@ cuối bảng cho thấy **toàn bộ** số đỏ còn lại thuộc bề mặt
 xoá nốt. Xoá nó cần hai việc không cơ học: (a) chuyển phiên cũ khỏi `researchId` (§10.1 #4);
 (b) chốt luồng `research` của Work Graph (§10.4, §6.5) — quyết định chủ nhà; rồi (c) viết lại 35 tệp
 test ghim theo hành vi mới. Vì vậy B4 dừng ở đây thay vì xoá nửa vời; B5–B6 cũng chờ theo.
+
+### 10.7 Xoá nốt bề mặt 7 + khóa tổng (v4, 2026-10-06)
+
+**Bối cảnh:** chủ nhà chốt bốn điểm (2026-10-06): (1) xoá nốt bề mặt 7 **theo biến thể b1** — bỏ công
+tắc, nút `research` của Work Graph đóng `needs_user` kèm chỉ dẫn thay vì `failed`, sửa lời nhắc
+`/research`, viết lại nhóm test ghim; (2) xoá hẳn khóa tổng SAU khi xoá xong bề mặt 7; (3) **không**
+cần migration `researchId` (box này chỉ là môi trường thử, không có phiên sản xuất cần chuyển);
+(4) chạy nốt 5 driver E2E còn thiếu.
+
+| Bước | Commit | Quy mô | Kiểm chứng tại chỗ |
+|---|---|---|---|
+| Bề mặt 7/7 RESEARCH_GATEWAY (B1–B3) | `6c8fe6b` | 40 tệp, +565/−419: bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF`; bỏ toàn bộ lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user` / `RESEARCH_NEEDS_MAIN`; `MEMBERS = ()`; viết lại 33 tệp test | 169 + 155 + 105 + 204 + 121 + 59 ca xanh |
+| B5 — xoá hẳn khóa tổng | `0404356` | 41 tệp: xoá `feature_switches.py` + khối `switches` khỏi `runtime-info`; bỏ pin `legacy_path` ở `conftest.py`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py`; sửa comment đầu 35 tệp | 16 + 24 + 169 ca xanh; collect 4372 ca, không tệp nào vỡ import |
+| Bản sửa sau full suite | `762b159`, `a6a5881` | Feedback simplify/review (F1–F4); **9 bài đỏ còn sót** ở ba tệp KHÔNG mang nhãn `legacy_path` (`test_research_job_v2` 2, `test_research_phase_ledger` 2, `test_research_task_kinds` 5) — chúng tự khai `config['research']['researchId']` để main gọi `delegate_task role=research`, tức xanh nhờ đúng lối thoát đã xoá; nay dựng lead THẬT qua `research_intake.admit_lead` (`research_job_submit` → `resume`) | 21 + 8 + 12 ca xanh; nhóm research 196 ca xanh |
+
+**Blast radius đã về 0.** Phép đo cũ (gỡ pin ở 35 tệp ghim) cho 231 đỏ trên 33 tệp; nay không còn pin
+nào để gỡ — chính nhóm tệp đó chạy ở mặc định mới trong toàn bộ suite (số ở dòng dưới) và xanh.
+**Toàn bộ unit suite trên head cuối `a6a5881`:** `3 failed, 4357 passed, 12 skipped` (20:33) — ba ca đỏ
+là **baseline có sẵn** (`test_terminal_exec_echo`,
+`test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`,
+`test_revoked_grant_blocks_next_tool_call`), đã đối chứng trên `346da06`/`f6dbe2b`. Đợt suite đầu trên
+`762b159` cho 12 đỏ: 3 ca baseline + đúng 9 ca nói trên, không ca nào khác.
+
+**Việc còn lại của đợt (B6, §10.5):** các nhánh chết của đợt (`vorflux/boxfox-harness-reform`,
+`-docs`, `-plan`, `vorflux/w10-w12-completion`) và các worktree tạm (`/code/.worktrees/*`,
+`/tmp/wt-*`) đã không còn trên máy này; chỉ còn worktree tạm của phép đo driver E2E
+(`/var/tmp/boxfox-drivers-wt`, detached `544305b`) và nó bị xoá sau khi đo xong. KHÔNG xoá:
+`origin/main`, nhánh đang mở PR (`vorflux/boxfox-legacy-surface-removal`), dữ liệu `harness_*`.
+
+**Vì sao không cần migration `researchId`:** quyết định (3) ở trên — box này là môi trường thử, không
+có phiên sản xuất nào giữa chừng cần đường research cũ; phiên cũ vẫn đọc được dữ liệu đã ghi, chỉ
+không còn đường gọi công cụ research nội bộ từ main (`RESEARCH_MAIN_READ_ONLY`).
 
 
 ## 11. Nhật ký v2 (2026-10-05): đã làm / chưa làm / vướng mắc

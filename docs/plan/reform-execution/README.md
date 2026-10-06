@@ -27,8 +27,9 @@ Mỗi thư mục `H0/` … `H11/` gồm đúng 5 file:
 
 **Nhật ký bật dần công tắc:** `enablement-log.md` (append-only; bước 1–2 đã ĐẠT 2026-10-05).
 
-**H12 (khóa tổng) không tách thư mục** — nằm trọn trong `HANDOFF.md` §5 (bảng công tắc) và §6
-(quy trình bật dần từng công tắc); bảng theo dõi vẫn có dòng H12.
+**H12 (khóa tổng) không tách thư mục** — nằm trọn trong `HANDOFF.md` §5 (bảng công tắc, nay là
+hồ sơ lịch sử vì nhóm đã bị xoá ở v4) và §6 (quy trình bật dần từng công tắc); bảng theo dõi vẫn
+có dòng H12.
 
 Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) · `partial` (đạt một phần, nêu rõ điều kiện chưa đạt) · `blocked` (chờ consent/quyết định) · `tương lai` (hoãn có mác, theo #6531).
 
@@ -49,7 +50,7 @@ Quy ước trạng thái: `verified` (đủ bằng chứng theo nghiệm thu) ·
 | H10 | Khép harness + handoff | partial | tài liệu H0–H10 đã có; **drill rollback 11/11 PASS**; nghiệm thu mức vòng chạy H4–H8 **29/29 PASS** trên `c836822`; review toàn snapshot cuối (không phát hiện chặn, 2/10); còn: H9 live pilot, quyết định chủ nhà |
 | H10.1 | Calibration sống | tương lai | hoãn theo #6531 — cần consent tài chính riêng; mã giữ nguyên, công tắc TẮT; chưa tiêu |
 | H11 | Quản lý con/subagent (#6545–#6548): trần 1000/1500 + 7200 s, cờ kết cục, chặn đọc lại, nhắc/trần chờ hạn, `child_resume`, cha khai trần | partial | code `84022bf` + simplify `9a04c16` + phủ kiểm `2bd3886` + bảy sửa đổi sau review `0e9b6df` + ba siết sau vòng soát 2 `f7ebbc9`; `test_child_management_h11.py` **37 ca**, nhóm liên quan 18 file **271 passed**, scoped 22 file **582 passed** trên `84022bf`; trần mới đọc được từ `runtime-info` trên 3113; E2E thật `task-fix` 1/1 + `child` 1/1 (PASS); review risk 5/10 đã xử lý; testing chạy nốt |
-| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | verified | `feature_switches.py` (một chỗ đọc duy nhất), bảy read-site đổi sang đó, `runtime-info` thêm `switches`; `test_reform_master_switch.py`; **v2: mặc định BẬT (#6599); v3: sáu thành viên đã bị xoá khỏi mã, `MEMBERS` chỉ còn `BOXFOX_RESEARCH_GATEWAY`** |
+| H12 | Khóa tổng `BOXFOX_REFORM` + khối `switches` trong `runtime-info` | verified | `feature_switches.py` (một chỗ đọc duy nhất), bảy read-site đổi sang đó, `runtime-info` thêm `switches`; `test_reform_master_switch.py`; **v2: mặc định BẬT (#6599); v3: sáu thành viên đã bị xoá khỏi mã, `MEMBERS` chỉ còn `BOXFOX_RESEARCH_GATEWAY`; v4 (2026-10-06): XOÁ HẲN — khóa tổng, `feature_switches.py` và khối `switches` trong `runtime-info` biến mất (`0404356`), pin `legacy_path` cũng bỏ** |
 
 ## Ma trận yêu cầu → bằng chứng → nghiệm thu (tóm tắt)
 
