@@ -9,8 +9,8 @@ from test_work_graph import build, ok_script, answer, raw_tool
 from test_work_checks import setup, start
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 

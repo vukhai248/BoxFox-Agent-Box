@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import design_runtime, execution_kernel, feature_switches, plan_registry, research_runtime
+from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core import usage_surface
 from ..agent_core.plan_header import IDENTITY_PATTERN
@@ -475,8 +475,6 @@ def create_app(runtime):
         from ..agent_core import work_budget
         return web.json_response({
             'toolGroups': tool_groups(),
-            # H12 — khóa tổng `BOXFOX_REFORM`: nhìn một chỗ biết đang bật gì, vì đâu.
-            'switches': feature_switches.snapshot(),
             # H10.2 — khối `usage`: trần chi đang mở, chỉ đọc, trần cứng 20 hàng; bảng chưa
             # có thì `[]` để tab Harness không đỏ vì tính năng chưa dùng.
             'usage': {'allocations': _open_allocations(runtime)},

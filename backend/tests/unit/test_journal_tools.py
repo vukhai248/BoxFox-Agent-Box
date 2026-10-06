@@ -64,8 +64,8 @@ def test_the_two_journal_tools_are_advertised_and_held_by_the_orchestrator_only(
     # W6.1.3: thêm `verify_exec` để reviewer con thừa hưởng được (46 → 47).
     # H3: thêm bốn công cụ `task_*` của bề mặt task (47 → 51).
     # H4/H7: thêm năm công cụ job controller và bốn công cụ gateway Research (51 → 60).
-    # Từ v2 (#6599) ba công tắc này mặc định BẬT nên các bộ đó ĐƯỢC quảng cáo ở lượt main;
-    # muốn cắt chúng khỏi quảng cáo thì đặt tường minh `off` (hoặc `BOXFOX_REFORM=off`).
+    # Bước B5 (HANDOFF §10.3) đã xoá khóa tổng `BOXFOX_REFORM` cùng nhóm công tắc thành viên:
+    # các bộ công cụ đó được quảng cáo ở lượt main và không còn công tắc nào cắt được.
     # Danh sách dưới đây là đăng ký TĨNH, không phụ thuộc giá trị công tắc.
     # H11: thêm `child_resume` — gọi lại con đã bị cắt (60 → 61), cùng cổng `BOXFOX_PEER_MESH`.
     assert len(ORCHESTRATOR_TOOLS) == 61

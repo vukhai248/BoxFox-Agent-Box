@@ -14,10 +14,8 @@ import pytest
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
-from switch_isolation import isolate_default, isolate_off
 
 from agentbox.agent_core import failures, limits
-from agentbox.agent_core.feature_switches import MEMBERS
 from agentbox.agent_core import web as web_module
 from agentbox.agent_core import runtime as runtime_module
 from agentbox.agent_core import tool_groups as tool_groups_module
@@ -144,13 +142,12 @@ def test_the_turn_offers_the_model_exactly_the_narrowed_set(tmp_path, monkeypatc
         store.close()
         return client.offered[-1]
 
-    isolate_off(monkeypatch, 'BOXFOX_RESEARCH_GATEWAY')
     narrowed = asyncio.run(run('narrow.db', {'tools': ['file_read', 'sudo_rm_rf']}))
-    assert narrowed == ['file_read']
+    # Bề mặt 7 đã xoá: hồ sơ lượt LUÔN thêm bốn công cụ biên của Research (không còn công tắc).
+    assert sorted(narrowed) == sorted({'file_read'} | research_gateway.GATEWAY_TOOLS)
     full = asyncio.run(run('full.db', {}))
-    # Tắt TƯỜNG MINH bề mặt gateway còn lại: bộ task và bộ job LUÔN có mặt từ v2 (#6599).
-    other_off = research_gateway.GATEWAY_TOOLS
-    assert sorted(full) == sorted(ORCHESTRATOR_TOOLS - other_off)
+    assert sorted(full) == sorted((set(ORCHESTRATOR_TOOLS) - research_gateway.INTERNAL_TOOLS)
+                                  | research_gateway.GATEWAY_TOOLS)
 
 
 def test_the_fourteen_groups_cover_the_orchestrator_exactly():
@@ -172,21 +169,12 @@ def test_the_fourteen_groups_cover_the_orchestrator_exactly():
     assert set(questions['tools']) == {'ask_user', 'request_approval', 'interview'}
 
 
-def test_the_switch_block_shows_the_v2_default_of_the_whole_group(tmp_path, monkeypatch):
-    """V2 (#6599): env trống ⇒ khối `switches` của route THẬT báo cả nhóm BẬT, nguồn `default`."""
-    isolate_default(monkeypatch, *MEMBERS)
-    info = runtime_info(tmp_path, 'runtime-info-switches.db')
-    assert info['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': True, 'source': 'default'}
-    assert set(info['switches']['members']) == set(MEMBERS)
-    assert all(item == {'on': True, 'source': 'default'}
-               for item in info['switches']['members'].values())
-    # Một lệnh rollback: khóa tổng `off` ⇒ cả nhóm TẮT, nguồn `master`.
+def test_the_switch_block_is_gone_after_the_master_removal(tmp_path, monkeypatch):
+    """Bước B5 (HANDOFF §10.3) xoá khóa tổng `BOXFOX_REFORM`: `runtime_info` không còn khối
+    `switches`, và env cũ còn sót lại không còn đường nào đọc — giao diện hết nút vặn để hứa sai."""
     monkeypatch.setenv('BOXFOX_REFORM', 'off')
-    rolled = runtime_info(tmp_path, 'runtime-info-switches-off.db')
-    assert rolled['switches']['master'] == {'name': 'BOXFOX_REFORM', 'on': False, 'source': 'explicit'}
-    assert all(item == {'on': False, 'source': 'master'}
-               for item in rolled['switches']['members'].values())
-
+    info = runtime_info(tmp_path, 'runtime-info-no-switches.db')
+    assert 'switches' not in info
 
 def test_the_route_answers_the_same_fourteen_groups(tmp_path):
     info = runtime_info(tmp_path)
