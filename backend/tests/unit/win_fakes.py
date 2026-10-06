@@ -80,6 +80,16 @@ class FakePlatform:
         accept_events: int | None = None,
         point_map: dict[tuple[int, int], int | None] | None = None,
         uia_accessor: Any = None,
+        input_tick: int = 100_000,
+        now_tick: int = 100_000,
+        idle_value: float | None = None,
+        hook_ok: bool = True,
+        mouse_hook_handle: int = 0x2000,
+        keyboard_hook_handle: int = 0x1000,
+        hook_events: list[dict[str, Any]] | None = None,
+        mutex_ok: bool = True,
+        mutex_handle: int = 0x777,
+        mutex_acquired: bool = True,
     ) -> None:
         self.windows: dict[int, WindowInfo] = {w.hwnd: w for w in (windows or [make_window()])}
         self.virtual_screen = virtual_screen
@@ -106,6 +116,18 @@ class FakePlatform:
         self.selected: dict[int, int] = {}
         #: Mọi sự kiện đã đưa vào SendInput (kể cả phần bị Windows chặn).
         self.sent_events: list[Any] = []
+        self.input_tick = int(input_tick)
+        self.now_tick = int(now_tick)
+        self.idle_value = idle_value
+        self.hook_ok = hook_ok
+        self.mouse_hook_handle = int(mouse_hook_handle)
+        self.keyboard_hook_handle = int(keyboard_hook_handle)
+        self.hook_events = list(hook_events or [])
+        self.mutex_ok = mutex_ok
+        self.mutex_handle = int(mutex_handle)
+        self.mutex_acquired = mutex_acquired
+        self.mouse_callback: Any = None
+        self.keyboard_callback: Any = None
         self._next_dc = 10
         self._next_bitmap = 100
 
@@ -319,9 +341,85 @@ class FakePlatform:
         self.accept_events = max(0, accepted - len(events))
         return min(len(events), accepted)
 
+    # -- hook + thời gian nhàn rỗi + mutex (H7) ----------------------------
+    def set_mouse_hook(self, callback: Callable[[int, int, int], int]) -> int | None:
+        self._record("set_mouse_hook")
+        self.mouse_callback = callback
+        return self.mouse_hook_handle if self.hook_ok else None
+
+    def unhook_mouse(self) -> None:
+        self._record("unhook_mouse")
+        self.mouse_callback = None
+
+    def set_keyboard_hook(self, callback: Callable[[int, int, int], int]) -> int | None:
+        self._record("set_keyboard_hook")
+        self.keyboard_callback = callback
+        return self.keyboard_hook_handle if self.hook_ok else None
+
+    def unhook_keyboard(self) -> None:
+        self._record("unhook_keyboard")
+        self.keyboard_callback = None
+
+    def hook_event(self, kind: str, wparam: int, lparam: int) -> dict[str, Any]:
+        """Trả sự kiện đã xếp hàng (``hook_events``); hết hàng ⇒ ``{}``."""
+        self._record("hook_event", kind, wparam, lparam)
+        return dict(self.hook_events.pop(0)) if self.hook_events else {}
+
+    def last_input_tick(self) -> int:
+        self._record("last_input_tick")
+        return self.input_tick
+
+    def tick_count(self) -> int:
+        return self.now_tick
+
+    def idle_seconds(self, now_tick: int | None = None) -> float | None:
+        self._record("idle_seconds", now_tick)
+        if self.idle_value is not None:
+            return self.idle_value
+        if self.input_tick <= 0:
+            return None
+        now = int(now_tick) if now_tick else self.now_tick
+        return max(0, now - self.input_tick) / 1000.0
+
+    def create_mutex(self, name: str) -> int | None:
+        self._record("create_mutex", name)
+        return self.mutex_handle if self.mutex_ok else None
+
+    def acquire_mutex(self, handle: int, timeout_ms: int = 0) -> bool:
+        self._record("acquire_mutex", handle, timeout_ms)
+        return bool(handle) and self.mutex_acquired
+
+    def release_mutex(self, handle: int) -> bool:
+        self._record("release_mutex", handle)
+        return bool(handle)
+
+    def close_handle(self, handle: int) -> bool:
+        self._record("close_handle", handle)
+        return bool(handle)
+
     # -- UIA ---------------------------------------------------------------
     def uia_accessor(self) -> Any:
         return self._uia_accessor
+
+
+def hook_event_dict(
+    *,
+    injected: bool = False,
+    vkey: int | None = None,
+    scan_code: int | None = None,
+    flags: int = 0,
+    point: tuple[int, int] | None = None,
+    message: int = 0,
+) -> dict[str, Any]:
+    """Một sự kiện hook đúng hình dạng ``WindowsPlatform.hook_event`` trả về."""
+    return {
+        "injected": bool(injected),
+        "vkey": vkey,
+        "scanCode": scan_code,
+        "flags": int(flags),
+        "point": point,
+        "message": int(message),
+    }
 
 
 def uia_node(

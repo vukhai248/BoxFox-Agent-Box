@@ -96,6 +96,36 @@ UOI_NAME = 2
 WH_KEYBOARD_LL = 13
 WH_MOUSE_LL = 14
 
+# Cờ trong MSLLHOOKSTRUCT.flags / KBDLLHOOKSTRUCT.flags. Windows đặt cờ INJECTED cho
+# MỌI sự kiện sinh bởi SendInput (kể cả của chính ta) và LOWER_IL_INJECTED khi sự kiện
+# được tiêm từ tiến trình có integrity thấp hơn. Vì vậy: **cờ tắt ⇒ người thật**.
+LLMHF_INJECTED = 0x00000001
+LLMHF_LOWER_IL_INJECTED = 0x00000002
+LLKHF_EXTENDED = 0x00000001
+LLKHF_LOWER_IL_INJECTED = 0x00000002
+LLKHF_INJECTED = 0x00000010
+LLKHF_ALTDOWN = 0x00000020
+LLKHF_UP = 0x00000080
+#: Gộp hai cờ "có bàn tay máy" cho từng loại hook.
+MOUSE_INJECTED_FLAGS = LLMHF_INJECTED | LLMHF_LOWER_IL_INJECTED
+KEYBOARD_INJECTED_FLAGS = LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED
+#: Dưới ngưỡng này chắc chắn không phải con trỏ hợp lệ (trang NULL của tiến trình).
+HOOK_MIN_POINTER = 0x10000
+
+# GetLastInputInfo / GetTickCount64. ``dwTime`` là DWORD 32 bit nên tràn sau ~49,7 ngày;
+# mọi phép trừ phải làm theo modulo 2^32 rồi mới tới trần "không đo được".
+IDLE_TICK_MODULO = 0x1_0000_0000
+#: Nhàn rỗi quá 30 ngày thì không phân biệt được với tràn số ⇒ coi như không đo được.
+MAX_IDLE_MS = 30 * 24 * 60 * 60 * 1000
+
+# Mutex liên tiến trình (CreateMutexW / WaitForSingleObject)
+WAIT_OBJECT_0 = 0x00000000
+WAIT_ABANDONED = 0x00000080
+WAIT_TIMEOUT = 0x00000102
+WAIT_FAILED = 0xFFFFFFFF
+#: Tên mutex đã chốt cho khoá input desktop — namespace ``Local\`` là của phiên đăng nhập.
+DESKTOP_INPUT_MUTEX_NAME = "Local\\BoxFoxDesktopInput-v1"
+
 # UIA / COM
 COINIT_MULTITHREADED = 0x0
 RPC_E_CHANGED_MODE = -2147417850  # 0x80010106
@@ -208,6 +238,36 @@ class TOKEN_MANDATORY_LABEL(ctypes.Structure):
     _fields_ = [("Label", SID_AND_ATTRIBUTES)]
 
 
+class LASTINPUTINFO(ctypes.Structure):
+    """``GetLastInputInfo`` — 8 byte (cbSize 4 + dwTime 4)."""
+
+    _fields_ = [("cbSize", ctypes.c_uint32), ("dwTime", ctypes.c_uint32)]
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    """Tham số ``lParam`` của WH_MOUSE_LL — bố cục x64: 32 byte."""
+
+    _fields_ = [
+        ("pt", POINT),
+        ("mouseData", ctypes.c_uint32),
+        ("flags", ctypes.c_uint32),
+        ("time", ctypes.c_uint32),
+        ("dwExtraInfo", ctypes.c_void_p),
+    ]
+
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    """Tham số ``lParam`` của WH_KEYBOARD_LL — bố cục x64: 24 byte."""
+
+    _fields_ = [
+        ("vkCode", ctypes.c_uint32),
+        ("scanCode", ctypes.c_uint32),
+        ("flags", ctypes.c_uint32),
+        ("time", ctypes.c_uint32),
+        ("dwExtraInfo", ctypes.c_void_p),
+    ]
+
+
 #: Tham chiếu sống cho mọi callback đã đăng ký với Win32 (luật 2 ở docstring).
 _CALLBACK_REFS: list[Any] = []
 
@@ -257,6 +317,8 @@ class WindowsPlatform:
     """Hiện thực thật: nạp DLL/comtypes lười, ở lần dùng đầu tiên."""
 
     name = "windows"
+    #: False ở :class:`UnavailablePlatform` — xem :meth:`_require_available`.
+    available = True
 
     def __init__(self) -> None:
         self._libs: dict[str, Any] = {}
@@ -265,6 +327,7 @@ class WindowsPlatform:
         self._integrity_cache: dict[int, int | None] = {}
         self._process_name_cache: dict[int, str | None] = {}
         self._hook: int | None = None
+        self._mouse_hook: int | None = None
         self._uia_accessor: Any = None
         self._notes: list[str] = []
 
@@ -287,6 +350,20 @@ class WindowsPlatform:
             func.argtypes = argtypes
             func.restype = restype
         return lib
+
+    def _require_available(self) -> None:
+        """Chốt cho các hàm KHÔNG đi qua DLL: thuần Python, hoặc no-op khi chưa cài hook.
+
+        ``_load`` đã từ chối sẵn mọi hàm chạm DLL, nhưng ``hook_event`` (chỉ đọc
+        struct) và ``unhook_mouse`` (no-op khi chưa có hook) sẽ lặng lẽ "thành công"
+        ngoài Windows nếu không có chốt này.
+        """
+        if not self.available:
+            raise PlatformError(
+                UNSUPPORTED_IN_HOST_MODE,
+                "Tầng nền tảng Windows chỉ chạy trên Windows.",
+                platform=sys.platform,
+            )
 
     @property
     def user32(self) -> Any:
@@ -329,6 +406,7 @@ class WindowsPlatform:
                 ),
                 "EnumWindows": ([ctypes.c_void_p, ctypes.c_ssize_t], ctypes.c_int),
                 "GetCursorPos": ([ctypes.POINTER(POINT)], ctypes.c_int),
+                "GetLastInputInfo": ([ctypes.POINTER(LASTINPUTINFO)], ctypes.c_int),
                 "SetCursorPos": ([ctypes.c_int, ctypes.c_int], ctypes.c_int),
                 "GetDpiForWindow": ([ctypes.c_void_p], ctypes.c_uint),
                 "SetProcessDPIAware": ([], ctypes.c_int),
@@ -448,6 +526,13 @@ class WindowsPlatform:
                 "WTSGetActiveConsoleSessionId": ([], ctypes.c_uint32),
                 "GetModuleHandleW": ([ctypes.c_wchar_p], ctypes.c_void_p),
                 "GetLastError": ([], ctypes.c_uint32),
+                "GetTickCount64": ([], ctypes.c_uint64),
+                "CreateMutexW": (
+                    [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p],
+                    ctypes.c_void_p,
+                ),
+                "WaitForSingleObject": ([ctypes.c_void_p, ctypes.c_uint32], ctypes.c_uint32),
+                "ReleaseMutex": ([ctypes.c_void_p], ctypes.c_int),
             },
         )
 
@@ -847,7 +932,7 @@ class WindowsPlatform:
     def get_last_error(self) -> int:
         return int(self.kernel32.GetLastError())
 
-    # -- hook bàn phím -----------------------------------------------------
+    # -- hook input (bàn phím + chuột) -------------------------------------
     def set_keyboard_hook(self, callback: Callable[[int, int, int], int]) -> int | None:
         proc = make_hook_proc(callback)
         module = self.kernel32.GetModuleHandleW(None)
@@ -862,10 +947,137 @@ class WindowsPlatform:
             self.user32.UnhookWindowsHookEx(ctypes.c_void_p(self._hook))
             self._hook = None
 
-    def call_next_hook(self, code: int, wparam: int, lparam: int) -> int:
+    def set_mouse_hook(self, callback: Callable[[int, int, int], int]) -> int | None:
+        """``WH_MOUSE_LL`` — giống :meth:`set_keyboard_hook`, hook riêng cho chuột."""
+        proc = make_hook_proc(callback)
+        module = self.kernel32.GetModuleHandleW(None)
+        hook = self.user32.SetWindowsHookExW(WH_MOUSE_LL, proc, module, 0)
+        if not hook:
+            return None
+        self._mouse_hook = int(hook)
+        return self._mouse_hook
+
+    def unhook_mouse(self) -> None:
+        self._require_available()
+        if self._mouse_hook:
+            self.user32.UnhookWindowsHookEx(ctypes.c_void_p(self._mouse_hook))
+            self._mouse_hook = None
+
+    def hook_event(self, kind: str, wparam: int, lparam: int) -> dict:
+        """Đọc ``lParam`` của hook thành dict thuần — KHÔNG bao giờ ném ra ngoài.
+
+        Hàm này chạy bên trong callback của hook hệ thống, nơi một exception sẽ bị
+        Windows coi là lỗi nghiêm trọng, nên mọi trường hợp lạ (con trỏ rỗng/con trỏ
+        cụt, ``kind`` lạ) đều trả ``{}``.
+
+        ``injected`` gộp cả cờ INJECTED lẫn LOWER_IL_INJECTED: sự kiện do ta gửi
+        bằng ``SendInput`` luôn mang cờ, nên **cờ tắt nghĩa là người thật**.
+        """
+        self._require_available()
+        if not isinstance(kind, str):
+            return {}
+        message = int(wparam or 0)
+        pointer = int(lparam or 0)
+        if pointer < HOOK_MIN_POINTER:
+            return {}
+        try:
+            if kind == "mouse":
+                data = ctypes.cast(
+                    ctypes.c_void_p(pointer), ctypes.POINTER(MSLLHOOKSTRUCT)
+                ).contents
+                flags = int(data.flags)
+                return {
+                    "injected": bool(flags & MOUSE_INJECTED_FLAGS),
+                    "vkey": None,
+                    "scanCode": None,
+                    "flags": flags,
+                    "point": (int(data.pt.x), int(data.pt.y)),
+                    "message": message,
+                }
+            if kind == "keyboard":
+                data = ctypes.cast(
+                    ctypes.c_void_p(pointer), ctypes.POINTER(KBDLLHOOKSTRUCT)
+                ).contents
+                flags = int(data.flags)
+                return {
+                    "injected": bool(flags & KEYBOARD_INJECTED_FLAGS),
+                    "vkey": int(data.vkCode),
+                    "scanCode": int(data.scanCode),
+                    "flags": flags,
+                    "point": None,
+                    "message": message,
+                }
+        except (ValueError, OSError, ctypes.ArgumentError):
+            return {}
+        return {}
+
+    # -- thời gian nhàn rỗi ------------------------------------------------
+    def last_input_tick(self) -> int:
+        """Tick của sự kiện input cuối cùng trong phiên; 0 = không đọc được."""
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        if not self.user32.GetLastInputInfo(ctypes.byref(info)):
+            return 0
+        return int(info.dwTime)
+
+    def tick_count(self) -> int:
+        """``GetTickCount64`` — đồng hồ đơn điệu mili-giây từ lúc khởi động."""
+        return int(self.kernel32.GetTickCount64())
+
+    def idle_seconds(self, now_tick: int | None = None) -> float | None:
+        """Số giây kể từ input cuối; ``None`` khi không đo được.
+
+        ``now_tick`` là mốc "bây giờ" theo cùng đồng hồ (``0``/``None`` ⇒ đọc đồng hồ
+        thật). Phép trừ làm theo modulo 2^32 vì ``dwTime`` là DWORD 32 bit, nên tràn
+        sau ~49,7 ngày vẫn ra số dương đúng; quá :data:`MAX_IDLE_MS` thì trả ``None``
+        thay vì một con số vô lý.
+        """
+        last = self.last_input_tick()
+        if last <= 0:
+            return None
+        now = int(now_tick) if now_tick else self.tick_count()
+        if now <= 0:
+            return None
+        delta = (now - last) % IDLE_TICK_MODULO
+        if delta > MAX_IDLE_MS:
+            return None
+        return delta / 1000.0
+
+    # -- mutex liên tiến trình ---------------------------------------------
+    def create_mutex(self, name: str) -> int | None:
+        """``CreateMutexW`` — handle hoặc ``None``; tên nên là
+        :data:`DESKTOP_INPUT_MUTEX_NAME`."""
+        handle = self.kernel32.CreateMutexW(None, False, str(name))
+        return int(handle) if handle else None
+
+    def acquire_mutex(self, handle: int, timeout_ms: int = 0) -> bool:
+        """``WaitForSingleObject`` — ``WAIT_OBJECT_0``/``WAIT_ABANDONED`` ⇒ giữ được."""
+        if not handle:
+            return False
+        result = int(self.kernel32.WaitForSingleObject(int(handle), int(timeout_ms)))
+        return result in (WAIT_OBJECT_0, WAIT_ABANDONED)
+
+    def release_mutex(self, handle: int) -> bool:
+        if not handle:
+            return False
+        return bool(self.kernel32.ReleaseMutex(int(handle)))
+
+    def close_handle(self, handle: int) -> bool:
+        if not handle:
+            return False
+        return bool(self.kernel32.CloseHandle(int(handle)))
+
+    def call_next_hook(
+        self, code: int, wparam: int, lparam: int, *, hook: int | None = None
+    ) -> int:
+        """``CallNextHookEx`` — ``hook`` mặc định là hook đang cài (bàn phím, rồi chuột)."""
+        if hook is None:
+            handle = self._hook or self._mouse_hook
+        else:
+            handle = int(hook)
         return int(
             self.user32.CallNextHookEx(
-                ctypes.c_void_p(self._hook) if self._hook else None,
+                ctypes.c_void_p(handle) if handle else None,
                 int(code),
                 ctypes.c_size_t(wparam),
                 ctypes.c_ssize_t(lparam),
@@ -914,9 +1126,15 @@ class WindowsPlatform:
 
 
 class UnavailablePlatform(WindowsPlatform):
-    """Nền tảng giữ chỗ trên hệ điều hành không phải Windows."""
+    """Nền tảng giữ chỗ trên hệ điều hành không phải Windows.
+
+    Mọi hàm chạm DLL đều ném ``UNSUPPORTED_IN_HOST_MODE`` qua :meth:`_load`; các hàm
+    thuần Python (``hook_event``) hoặc no-op khi chưa cài hook (``unhook_mouse``) ném
+    qua ``available = False`` để H7 kiểm thử được bằng nền tảng giả trên Linux.
+    """
 
     name = "unavailable"
+    available = False
 
     def _load(self, lib_name: str, funcs: dict[str, tuple[list[Any], Any]]) -> Any:  # pragma: no cover - trivial
         raise PlatformError(
