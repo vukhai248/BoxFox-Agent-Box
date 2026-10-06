@@ -38,7 +38,7 @@ from fake_search_providers import FakeSearchProviders       # noqa: E402
 ROUTER_PORT = int(os.environ.get('BOXFOX_E2E_ROUTER_PORT', '3199'))
 ROUTER_URL = f'http://127.0.0.1:{ROUTER_PORT}'
 E2E_DIR = Path(os.environ.get('BOXFOX_E2E_DIR', '/var/tmp/boxfox-e2e'))
-ADMIN = {'x-boxfox-admin': '1', 'Origin': f'http://localhost:{ROUTER_PORT}'}
+ADMIN = {'x-boxfox-admin': '1', 'Origin': 'http://localhost:3100'}   # đúng origin mà Vite proxy gửi tới
 BRAVE_KEY = 'E2E-BRAVE-KEY'
 CF_KEY = 'E2E-CLOUDFLARE-KEY'
 CUSTOM_KEY = 'E2E-CUSTOM-KEY'
@@ -78,13 +78,15 @@ def wait_for_router(deadline: float = 30.0) -> None:
 
 
 class RouterProcess:
-    def __init__(self) -> None:
+    def __init__(self, extra_env: dict | None = None) -> None:
         self.data_dir = E2E_DIR / 'router'
         shutil.rmtree(self.data_dir, ignore_errors=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, BOXFOX_ROUTER_PORT=str(ROUTER_PORT),
                    BOXFOX_ROUTER_DATA_DIR=str(self.data_dir),
                    BOXFOX_MODEL_SYNC_MS='86400000')
+        # Nút "Kiểm tra" của tab chạy trong router ⇒ router cũng phải trỏ vào máy giả.
+        env.update(extra_env or {})
         self.log = open(E2E_DIR / 'router.log', 'wb')
         self.proc = subprocess.Popen(['node', str(REPO / 'router' / 'src' / 'main.mjs')],
                                      cwd=str(REPO / 'router'), env=env,
@@ -249,7 +251,7 @@ def _contract(fake: FakeSearchProviders) -> None:
     status, created = router_request('POST', '/api/router/search/providers',
                                      {'providerId': 'tavily', 'apiKey': 'E2E-TAVILY-KEY'})
     assert status == 201, f'{status} {created}'
-    assert 'apiKey' not in json.dumps(created), 'view không được chứa khoá thô'
+    assert 'E2E-TAVILY-KEY' not in json.dumps(created), 'view không được chứa khoá thô'
     status, patched = router_request('PATCH', '/api/router/search/providers/tavily',
                                      {'apiKey': 'E2E-TAVILY-KEY-2'})
     assert status == 200, f'{status} {patched}'
@@ -282,7 +284,7 @@ def main() -> int:
 
     with FakeSearchProviders(log_path=str(E2E_DIR / 'fake-calls.jsonl')) as fake:
         os.environ.update(fake.env())
-        router = RouterProcess()
+        router = RouterProcess(fake.env())
         try:
             wait_for_router()
             failures: list[str] = []

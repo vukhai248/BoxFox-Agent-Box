@@ -245,7 +245,7 @@ class FakeSearchProviders:
         """Biến môi trường trỏ harness/router vào máy chủ giả này (kèm hook loopback của test)."""
         return {
             'BOXFOX_WEB_TEST_ALLOW_LOOPBACK': '1',
-            'BOXFOX_SEARXNG_URL': self.url('searxng'),
+            'BOXFOX_SEARXNG_URL': self.base_url + '/searxng',   # gốc, KHÔNG kèm `/search`: cả harness lẫn router tự nối
             'BOXFOX_SEARXNG_AUTODETECT': 'off',
             'BOXFOX_SEARCH_PIPELINE': 'off',
             'BOXFOX_BRAVE_SEARCH_URL': self.url('brave'),
