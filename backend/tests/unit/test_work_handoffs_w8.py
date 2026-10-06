@@ -6,7 +6,6 @@ import pytest
 
 from agentbox.agent_core import work_graph, work_feedback
 from test_work_graph import build, raw_tool, ok_script, EXPLORE
-from test_work_checks import RESEARCH
 
 
 # Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
@@ -14,17 +13,25 @@ from test_work_checks import RESEARCH
 pytestmark = pytest.mark.legacy_path
 
 
+# Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research`/`research-review`,
+# nên bài handoff dùng nút `design` — main tự chạy được ở phase discover, chỉ có stage `produce` như nút
+# `research` cũ, và vẫn có đúng MỘT kiểm bắt buộc (`design_review`, người kiểm `plan-review`).
+DESIGN = {'id': 'R1', 'kind': 'design', 'title': 'Compare approaches',
+          'goal': 'Compare two export formats using the provided evidence',
+          'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
+
+
 def assign(graph, store, sid, rid, **extra):
     return graph.graph(store.get(sid), {'action':'assign_handoff','runId':rid,
         'revision':graph.current(rid)['revision'],'nodeId':'R1','stage':'produce',
-        'predicate':'artifact_finalized','target':{'kind':'check','checkIds':['evidence']},
+        'predicate':'artifact_finalized','target':{'kind':'check','checkIds':['design_review']},
         'invocationId':'assignment', **extra})
 
 
 def setup(tmp_path, script=ok_script, nodes=None, goal='Research exporter formats', flow='research'):
     store,rt,model,executor,sid=build(tmp_path,script)
     graph=work_graph.service(rt)
-    run=graph.create(store.get(sid),{'goal':goal,'flow':flow,'nodes':nodes or [RESEARCH]})
+    run=graph.create(store.get(sid),{'goal':goal,'flow':flow,'nodes':nodes or [DESIGN]})
     return store,rt,model,executor,sid,graph,run['runId']
 
 
@@ -151,7 +158,7 @@ def test_stale_unavailable_or_partial_handoff_never_admits_checker(tmp_path,muta
             elif mutation=='disabled':
                 config=store.get(sid)['config']
                 for role in config['subagents']:
-                    if role['id']=='research-review': role['enabled']=False
+                    if role['id']=='plan-review': role['enabled']=False
                 store.update_config(sid,config)
             elif mutation=='revoke':
                 graph.graph(store.get(sid),{'action':'revoke_handoff','runId':rid,'transitionId':assignment['transitionId'],'revision':assignment['revision'],'invocationId':'revoke'})
@@ -238,7 +245,7 @@ def test_restart_receipts_never_replay_an_admitted_action(tmp_path,status,expect
 
 
 def test_assignment_guards_root_scope_idempotency_and_artifact_only_execution(tmp_path):
-    store,rt,_,_,sid,graph,rid=setup(tmp_path,nodes=[RESEARCH,{'id':'B1','kind':'build','title':'Build','goal':'Implement exporter after R1 report','dependsOn':['R1'],'tests':['vitest ChatHeader.test.tsx']}])
+    store,rt,_,_,sid,graph,rid=setup(tmp_path,nodes=[DESIGN,{'id':'B1','kind':'build','title':'Build','goal':'Implement exporter after R1 report','dependsOn':['R1'],'tests':['vitest ChatHeader.test.tsx']}])
     # Synchronous guard test does not dispatch unfinished artifacts.
     original=assign(graph,store,sid,rid)
     with pytest.raises(ValueError,match='WORK_HANDOFF_EXISTS'):
@@ -271,7 +278,7 @@ def test_slot_wait_rechecks_permission_and_current_parent_budget(tmp_path,change
             config=store.get(sid)['config']
             if change=='disable':
                 for role in config['subagents']:
-                    if role['id']=='research-review':role['enabled']=False
+                    if role['id']=='plan-review':role['enabled']=False
             else:config.update(maxSteps=7,deadlineSeconds=120)
             store.update_config(sid,config)
         release.set();await drain(graph)
@@ -289,7 +296,9 @@ def test_slot_wait_rechecks_permission_and_current_parent_budget(tmp_path,change
 def test_fake_controller_flag_cannot_create_child_or_escape_root_cleanup(tmp_path):
     async def check():
         store,rt,_,_,sid,graph,rid=setup(tmp_path)
-        with pytest.raises(PermissionError,match='WORK_CONTROLLER_RIGHTS'):
+        # Bề mặt 7 đã xoá: biên Research chặn main giao vai `research` TRƯỚC cổng work-controller,
+        # nên mã lỗi đổi còn ý nghĩa giữ nguyên — cờ controller tự khai không tạo được child.
+        with pytest.raises(PermissionError,match='RESEARCH_MAIN_READ_ONLY'):
             await rt.delegate(store.get(sid),{'role':'research','goal':'Read CSV scope evidence'},
                 work={'runId':rid,'nodeId':'R1','stage':'produce','purpose':'produce','controllerAction':'invented'})
         assert not store.children_of(sid)
@@ -329,7 +338,7 @@ def test_manual_red_then_auto_assignment_reports_existing_finding_without_retry(
 def test_dependency_accepted_label_without_required_checks_cannot_handoff(tmp_path):
     async def check():
         dest=EXPLORE | {'id':'E2','dependsOn':['R1']}
-        store,rt,model,_,sid,graph,rid=setup(tmp_path,nodes=[RESEARCH,dest])
+        store,rt,model,_,sid,graph,rid=setup(tmp_path,nodes=[DESIGN,dest])
         await graph.run(store.get(sid),{'phase':'discover','nodeIds':['R1']})
         run=graph.get(rid);run['nodes'][0]['stages']['produce']['status']='accepted';graph.save(run,'fake_label')
         assign(graph,store,sid,rid,predicate='required_checks_passed',target={'kind':'node','nodeId':'E2','stage':'produce'})
@@ -343,14 +352,14 @@ def test_branch_waiting_for_user_does_not_block_independent_assigned_check(tmp_p
     from test_work_feedback_w7 import QUESTIONS
     from test_work_continuations_w7 import call
     async def check():
-        first=RESEARCH | {'goal':'Read scope then ask the owner before choosing data formats'}
-        second=RESEARCH | {'id':'R2','goal':'Compare the independent exporter alternatives using source facts'}
+        first=DESIGN | {'goal':'Read scope then ask the owner before choosing data formats'}
+        second=DESIGN | {'id':'R2','goal':'Compare the independent exporter alternatives using source facts'}
         store,rt,model,_,sid,graph,rid=setup(tmp_path,nodes=[first,second])
         original=model.complete
         async def waiting(*args,**kwargs):
             messages=args[0]
             prompt=next(m.get('content','') for m in messages if m['role']=='user')
-            if 'node R1 (research, produce)' in prompt and any(m.get('name')=='file_read' for m in messages):
+            if 'node R1 (design, produce)' in prompt and any(m.get('name')=='file_read' for m in messages):
                 return call('work_report',{'action':'needs_user','checkpoint':'Read source; need owner intent.',
                     'questions':QUESTIONS,'decisionKeys':['users','deploy']})
             return await original(*args,**kwargs)

@@ -17,9 +17,12 @@ pytestmark = pytest.mark.legacy_path
 async def fixture(tmp_path, large=False):
     store, rt, model, _, sid = build(tmp_path)
     graph = work_graph.service(rt)
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: nút `research` không còn producer chạy được từ main, nên
+    # đích kiểm dùng nút `explore` + risk `consequential` — cùng bộ kiểm `evidence`/`critique`, nhưng
+    # người kiểm là `review`/`plan-review` (vai main còn gọi được).
     run = graph.create(store.get(sid), {'goal': 'Research bounded facts only', 'flow': 'research', 'nodes': [
         EXPLORE | {'id': 'R0'}, EXPLORE | {'id': 'R1', 'dependsOn': ['R0']},
-        EXPLORE | {'id': 'E2', 'kind': 'research', 'dependsOn': ['R1']}, EXPLORE | {'id': 'OTHER'}]})
+        EXPLORE | {'id': 'E2', 'risk': 'consequential', 'dependsOn': ['R1']}, EXPLORE | {'id': 'OTHER'}]})
     metas = []
     for node in run['nodes']:
         meta = await graph.artifacts.put(run, node['id'], 'produce',
@@ -53,7 +56,7 @@ def test_checker_receives_and_reads_input_closure_with_explicit_run_and_target_i
     async def check():
         store, _, model, sid, graph, run, node, metas, lookup, primary = await fixture(tmp_path, large=True)
         result = await graph.checks.judge(store.get(sid), run, node, 'produce',
-            {'id': 'evidence', 'executorRole': 'research-review'}, [primary], {'C1': 'Check original sources'}, {'checkId': 'closure-check'})
+            {'id': 'evidence', 'executorRole': 'review'}, [primary], {'C1': 'Check original sources'}, {'checkId': 'closure-check'})
         assert result['status'] == 'pass', result
         child = store.get(result['childId'])
         refs = child['config']['workBinding']['artifactIds']
@@ -102,7 +105,7 @@ def test_invalid_bound_inputs_fail_before_spawning_checker(tmp_path, fault):
             primary = primary | {'version': 999}
         before = len(store.children_of(sid))
         result = await graph.checks.judge(store.get(sid), run, node, 'produce',
-            {'id': 'evidence', 'executorRole': 'research-review'}, [primary], {'C1': 'Check sources'}, {'checkId': 'bad-input'})
+            {'id': 'evidence', 'executorRole': 'review'}, [primary], {'C1': 'Check sources'}, {'checkId': 'bad-input'})
         assert result['status'] == 'unverified' and result['error'].startswith('WORK_ARTIFACT_'), result
         assert result['finishedAt'] and result['attempts'] == []
         assert len(store.children_of(sid)) == before
@@ -135,7 +138,7 @@ def test_skip_input_range_cannot_pass_even_when_target_and_source_read(tmp_path)
             return result
         model.complete = omit
         result = await graph.checks.judge(store.get(sid), run, node, 'produce',
-            {'id': 'evidence', 'executorRole': 'research-review'}, [primary], {'C1': 'Check sources'}, {'checkId': 'skip-input'})
+            {'id': 'evidence', 'executorRole': 'review'}, [primary], {'C1': 'Check sources'}, {'checkId': 'skip-input'})
         assert result['status'] == 'unverified' and 'ranges' in result['error'], result
     asyncio.run(check())
 
@@ -157,7 +160,7 @@ def test_oversized_check_definition_checkpoints_before_runtime_cuts_json(tmp_pat
     async def check():
         store, _, _, sid, graph, run, node, _, _, primary = await fixture(tmp_path)
         result = await graph.checks.judge(store.get(sid), run, node, 'produce',
-            {'id': 'evidence', 'executorRole': 'research-review', 'criterion': 'x' * 17000},
+            {'id': 'evidence', 'executorRole': 'review', 'criterion': 'x' * 17000},
             [primary], {'C1': 'Check sources'}, {'checkId': 'large-input'})
         assert result['status'] == 'unverified' and result['error'].startswith('WORK_CHECK_INPUT_CONTEXT_TOO_LARGE')
         assert not store.children_of(sid)
@@ -170,7 +173,9 @@ def test_historical_green_stays_readable_but_is_not_current_input_verification(t
     async def check():
         store, rt, _, _, sid = build(tmp_path)
         rid, draft = await setup(rt, sid)
-        first = await start(rt, sid, draft, invocationId='old-input-contract')
+        # Nút `explore` + risk `consequential` có hai bộ kiểm; bài này đo một lượt kiểm, nên ghim
+        # đúng `evidence` để đếm con theo nghĩa cũ (một con cũ + một con mới sau khi gia hạn).
+        first = await start(rt, sid, draft, checkIds=['evidence'], invocationId='old-input-contract')
         old = first['checks'][0]
         old.pop('inputVersion')
         rt.work_graph.checks.save(old)
@@ -178,8 +183,8 @@ def test_historical_green_stays_readable_but_is_not_current_input_verification(t
         assert not rt.work_graph.checks.valid(run, run['nodes'][0], 'produce')
         assert rt.work_graph.checks.records(rid)[0]['status'] == 'pass'
         with pytest.raises(ValueError, match='WORK_CHECK_RECEIPT_STALE'):
-            await start(rt, sid, draft, invocationId='old-input-contract')
-        renewed = await start(rt, sid, draft, invocationId='current-input-contract')
+            await start(rt, sid, draft, checkIds=['evidence'], invocationId='old-input-contract')
+        renewed = await start(rt, sid, draft, checkIds=['evidence'], invocationId='current-input-contract')
         assert renewed['checks'][0]['inputVersion'] == work_checks.INPUTS_VERSION
         assert renewed['checks'][0]['checkId'] != old['checkId']
         assert len(store.children_of(sid)) == 3

@@ -60,11 +60,15 @@ def setup(tmp_path, second=False):
     store, rt, _, executor, sid = build(tmp_path)
     model = Model(); rt.client = model
     graph = work_graph.service(rt)
-    nodes = [{'id': 'R1', 'kind': 'research', 'taskKind': 'lookup', 'title': 'Owner intent',
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research` (nút sẽ đóng
+    # `needs_user` với `RESEARCH_NEEDS_MAIN`). Cơ chế continuation/phỏng vấn không phụ thuộc kind, nên
+    # bài giữ nguyên ý nghĩa bằng nút `explore` + `taskKind: lookup` — main vẫn chạy được, và vì
+    # artifact là `knowledge`/risk thường nên không sinh check tự động, đúng như nút research cũ.
+    nodes = [{'id': 'R1', 'kind': 'explore', 'taskKind': 'lookup', 'title': 'Owner intent',
         'goal': 'Read source then confirm users and deployment of the CSV exporter',
         'acceptance': ['Use the owner answers and source'], 'dependsOn': []}]
     if second:
-        nodes.append({'id': 'R2', 'kind': 'research', 'taskKind': 'lookup', 'title': 'Independent R2',
+        nodes.append({'id': 'R2', 'kind': 'explore', 'taskKind': 'lookup', 'title': 'Independent R2',
                       'goal': 'Independent R2: inspect unrelated source while R1 needs the owner'})
     run = graph.create(store.get(sid), {'goal': 'Research exporter intent only; no implementation',
                                       'flow': 'research', 'nodes': nodes})

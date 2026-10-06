@@ -937,7 +937,7 @@ def replay_class(name, args=None):
     return REPLAY.get(name, 'unsafe')
 
 
-def schemas_for(names, *, research_receipts=False):
+def schemas_for(names):
     """Lược đồ của đúng những công cụ được yêu cầu.
 
     T13 — `BOXFOX_PEER_MESH=off` là công tắc GIẾT của cả mesh, nên nó chặn ở đây nữa: một phiên
@@ -948,9 +948,5 @@ def schemas_for(names, *, research_receipts=False):
         names = set(names) - PEER_TOOLS
     # Nạp muộn: gateway tái dùng research_runtime, tránh vòng nhập registry/runtime.
     from . import research_gateway
-    gateway_names = research_gateway.GATEWAY_TOOLS | {research_gateway.PUBLISH_TOOL}
-    if not research_gateway.enabled():
-        readable = {'research_job_get', 'research_job_result'} if research_receipts else set()
-        names = set(names) - (gateway_names - readable)
     schemas = SCHEMAS + research_gateway.tool_schemas()
     return [s for s in schemas if s['function']['name'] in names]

@@ -4095,7 +4095,7 @@ class HarnessRuntime(RuntimeCommands):
         start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
-        tools = schemas_for(profile['tools'], research_receipts=research_gateway.has_receipts(self, sid))
+        tools = schemas_for(profile['tools'])
         loop_guard = AntiLoopGuard(threshold=3)
         started = time.time()
         steps_used = 0
@@ -7286,11 +7286,9 @@ class HarnessRuntime(RuntimeCommands):
         such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
         bindings and per-turn child cap do not apply — the engine owns its own budget.
 
-        The research gateway guard runs BEFORE the `work=` branch on purpose: with the gateway on
-        (v2 default) the engine's own research/research-review spawns are refused too
-        (`RESEARCH_MAIN_READ_ONLY`) unless the session keeps a legacy research binding — research work
-        must go through the independent boundary. Escape hatches: `BOXFOX_RESEARCH_GATEWAY=off`, or the
-        legacy `researchId` binding of an old research session. Pinned by
+        The research boundary guard runs BEFORE the `work=` branch on purpose: the engine's own
+        research/research-review spawns are refused too (`RESEARCH_MAIN_READ_ONLY`) — research work
+        must go through the independent boundary (`research_job_submit`). Pinned by
         `tests/unit/test_research_gateway.py::test_engine_work_spawns_cannot_bypass_the_gateway_either`.
         """
         research_gateway.guard_delegate(self, self.store.get(session['id']), args, job_request=job_request)

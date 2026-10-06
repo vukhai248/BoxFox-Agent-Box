@@ -95,7 +95,10 @@ def test_multiturn_restart_and_isolation(tmp_path):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('role', [name for name in ROLES if name not in {'plan-review', 'research-review'}])
+# Bề mặt 7 đã xoá: main KHÔNG còn giao được vai `research` (`RESEARCH_MAIN_READ_ONLY` — xem
+# `test_delegation_contract.py::test_main_may_not_delegate_the_research_roles`), nên nó ra khỏi
+# tham số hoá cùng hai vai cần `reviewTarget`.
+@pytest.mark.parametrize('role', [name for name in ROLES if name not in {'plan-review', 'research', 'research-review'}])
 def test_each_specialist_policy_and_lineage(tmp_path, role):
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
@@ -107,10 +110,10 @@ def test_each_specialist_policy_and_lineage(tmp_path, role):
         child = store.get(event['data']['sessionId'])
         assert child['parent_id'] == s['id'] and child['role'] == role
         assert child['status'] == 'completed'
-        # Con không được vượt quyền cha, TRỪ những đường ghi CỐ Ý chỉ dành cho con mà
-        # orchestrator không giữ (`claim_assess` của research-review, `research_branch_report`
-        # của research — xem `roles.allowed_tools`).
-        assert set(child['config']['tools']) - {'research_branch_report'} <= set(s['config']['tools'])
+        # Con không được vượt quyền cha: `allowed_tools(role, parent_tools)` giao với bộ của cha.
+        # (Hai vai research — nguồn của các đường ghi chỉ-dành-cho-con như `research_branch_report`
+        # và `claim_assess` — nay không còn là con của main được nữa.)
+        assert set(child['config']['tools']) <= set(s['config']['tools'])
         assert 'delegate_task' not in child['config']['tools']
         assert ROLES[role].instructions in child['messages'][0]['content']
         assert any(m['role'] == 'tool' and 'child evidence' in m['content'] for m in store.get(s['id'])['messages'])
@@ -151,7 +154,9 @@ def test_denied_tool_and_malformed_args_never_execute(tmp_path):
 def test_disabled_child_and_budget(tmp_path):
     async def run():
         store = SessionStore(tmp_path / 'sessions.db')
-        runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([answer(calls=[call('delegate_task', {'role': 'research', 'goal': 'x'})])]))
+        # Con mang vai `explore` — vai main CÒN giao được, nhưng `subagents: []` tắt nó; vai
+        # `research` sẽ bị cổng Research chặn trước cả cổng `disabled` (RESEARCH_MAIN_READ_ONLY).
+        runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([answer(calls=[call('delegate_task', {'role': 'explore', 'goal': 'x'})])]))
         s = runtime.create({'skills': [], 'subagents': [], 'maxSteps': 1})
         await runtime.start(s['id'], 'Try disabled child')
         assert store.get(s['id'])['status'] == 'failed'

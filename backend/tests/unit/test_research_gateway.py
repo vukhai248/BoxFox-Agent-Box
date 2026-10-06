@@ -4,7 +4,6 @@ import copy
 
 import pytest
 
-from switch_isolation import isolate_off
 from agentbox.agent_core import research_gateway as gateway
 from agentbox.agent_core.research_owner import REPORT_SCHEMA
 from agentbox.agent_core.runtime import HarnessRuntime
@@ -38,7 +37,6 @@ def request():
 
 @pytest.fixture
 def rt(tmp_path, monkeypatch):
-    monkeypatch.setenv(gateway.SWITCH, 'on')
     monkeypatch.setenv('BOXFOX_WORK_GRAPH', 'off')
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, Executor(), NoModel())
@@ -85,18 +83,6 @@ def control_args(receipt, action='cancel', **changes):
             'invocationId': 'control-1', 'action': action, 'reason': 'Observed gap or owner control.'}
     args.update(changes)
     return args
-
-
-def test_switch_off_and_legacy_dispatch_parity(rt, monkeypatch):
-    runtime, root = rt
-    isolate_off(monkeypatch, gateway.SWITCH)
-    assert not gateway.enabled()
-    dispatch(runtime, root, 'file_write', {'path': 'legacy.txt', 'content': 'same legacy path'})
-    assert runtime.executor.calls[-1][0] == 'file_write'
-    assert not gateway._exists(runtime.store)
-    with pytest.raises(PermissionError, match='RESEARCH_GATEWAY_OFF'):
-        dispatch(runtime, root, 'research_job_submit', {'request': request(), 'invocationId': 'no'})
-    assert not gateway._exists(runtime.store)
 
 
 def test_real_engine_creates_separate_owner_not_main_and_replays_submit(rt):
@@ -208,15 +194,15 @@ def test_cancel_stale_revision_and_late_worker_writes_denied(rt):
         dispatch(runtime, lead, 'research_job_publish', {**publish_args(receipt, lead), 'expectedRevision': 2})
 
 
-def test_kill_switch_blocks_new_spend_keeps_records_readable(rt, monkeypatch):
+def test_unadmitted_job_keeps_records_readable_and_spend_blocked(rt):
+    """Không còn công tắc: bài này chốt trạng thái chưa consent vẫn đọc được và không tiêu gì."""
     runtime, root = rt
     receipt, lead = submit(rt)
-    monkeypatch.setenv(gateway.SWITCH, 'off')
     assert dispatch(runtime, root, 'research_job_get', {'jobId': receipt['researchJobId']})['state'] == 'needs_consent'
     assert dispatch(runtime, root, 'research_job_result', {'jobId': receipt['researchJobId']})['reports'] == []
-    with pytest.raises(PermissionError, match='RESEARCH_GATEWAY_OFF'):
+    with pytest.raises(ValueError, match='RESEARCH_NEEDS_CONSENT'):
         dispatch(runtime, root, 'research_job_control', control_args(receipt, 'resume'))
-    with pytest.raises(PermissionError, match='RESEARCH_JOB_STOPPED'):
+    with pytest.raises(PermissionError, match='RESEARCH_NEEDS_CONSENT'):
         dispatch(runtime, lead, 'delegate_task', {'role': 'research', 'goal': 'Find evidence'})
     with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
         dispatch(runtime, root, 'dossier_write', {})
@@ -247,33 +233,33 @@ def test_resume_no_consent_is_blocked_not_fabricated_from_refs(rt):
     assert not runtime.tasks
 
 
-def test_old_history_not_reassigned_when_switch_on(rt):
+def test_legacy_research_id_in_config_does_not_reopen_the_main_tool_path(rt):
+    """Bề mặt 7 đã xoá: nhánh `researchId` legacy không còn là cửa sau cho main."""
     runtime, root = rt
     runtime.store.research_job_save('legacy-run', root['id'], {'questions': []})
     config = root['config']
     config['research'] = {'researchId': 'legacy-run'}
     runtime.store.update_config(root['id'], config)
-    gateway.guard_tool(runtime, runtime.store.get(root['id']), 'source_add', {})
+    with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
+        gateway.guard_tool(runtime, runtime.store.get(root['id']), 'source_add', {})
     assert not gateway._exists(runtime.store)
     assert runtime.store.research_job('legacy-run')['session_id'] == root['id']
 
 
-def test_schema_and_profile_are_gated_but_readable_after_kill(rt, monkeypatch):
+def test_profile_exposes_gateway_tools_and_hides_internal_ones(rt):
     from agentbox.agent_core.tool_contracts import schemas_for
     runtime, root = rt
-    names = {s['function']['name'] for s in schemas_for(runtime.turn_profile(root)['tools'])}
-    assert gateway.GATEWAY_TOOLS <= names
     schemas = schemas_for(runtime.turn_profile(root)['tools'])
-    assert len(schemas) == len({schema['function']['name'] for schema in schemas})
+    names = {s['function']['name'] for s in schemas}
+    assert gateway.GATEWAY_TOOLS <= names
+    assert len(schemas) == len(names)
     intake = next(s for s in schemas if s['function']['name'] == 'research_job_submit')
     assert set(intake['function']['parameters']['properties']['request']['required']) == set(request())
-    assert 'dossier_write' not in names
+    assert not names & (gateway.INTERNAL_TOOLS | {gateway.PUBLISH_TOOL})
     submit(rt)
-    monkeypatch.setenv(gateway.SWITCH, 'off')
-    profile = runtime.turn_profile(runtime.store.get(root['id']))
-    names = {s['function']['name'] for s in schemas_for(profile['tools'], research_receipts=True)}
-    assert {'research_job_get', 'research_job_result'} <= names
-    assert not names & {'research_job_submit', 'research_job_control', gateway.PUBLISH_TOOL}
+    names = {s['function']['name'] for s in schemas_for(runtime.turn_profile(runtime.store.get(root['id']))['tools'])}
+    assert {'research_job_get', 'research_job_result', 'research_job_control'} <= names
+    assert not names & (gateway.INTERNAL_TOOLS | {gateway.PUBLISH_TOOL})
 
 
 def test_root_stop_reaches_independent_controller_and_preserves_receipts(rt):
@@ -516,7 +502,7 @@ def test_async_prepare_then_locked_sync_admission_and_start_once(rt, monkeypatch
     assert calls == ['prepare', 'sync', 'start']
 
 
-@pytest.mark.parametrize('changed', ['revision', 'request', 'owner', 'released', 'kill', 'revoke'])
+@pytest.mark.parametrize('changed', ['revision', 'request', 'owner', 'released', 'revoke'])
 def test_resume_rechecks_canonical_state_after_async_prepare(rt, monkeypatch, changed):
     import json
     runtime, root = rt
@@ -524,7 +510,7 @@ def test_resume_rechecks_canonical_state_after_async_prepare(rt, monkeypatch, ch
     calls = []
     expected = {'revision': 'RESEARCH_REVISION_CONFLICT', 'request': 'RESEARCH_REVISION_CONFLICT',
                 'owner': 'RESEARCH_CONTROL_FORBIDDEN', 'released': 'RESEARCH_JOB_STOPPED',
-                'kill': 'RESEARCH_GATEWAY_OFF', 'revoke': 'RESEARCH_CAPABILITY_REVOKED'}
+                'revoke': 'RESEARCH_CAPABILITY_REVOKED'}
     async def prepare(*_):
         assert not runtime.store.db.in_transaction
         await asyncio.sleep(0)
@@ -541,8 +527,6 @@ def test_resume_rechecks_canonical_state_after_async_prepare(rt, monkeypatch, ch
         elif changed == 'released':
             owner = gateway.service(runtime).ownership
             owner.release(receipt['researchJobId'], 'released during await', owner.get(receipt['researchJobId'])['revision'], actor_id=lead['id'])
-        elif changed == 'kill':
-            monkeypatch.setenv(gateway.SWITCH, 'off')
         else:
             config = runtime.store.get(root['id'])['config']
             config['tools'].remove('research_job_control')
@@ -577,10 +561,9 @@ def test_prepare_refuses_caller_transaction_without_awaiting_hook(rt):
 def test_engine_work_spawns_cannot_bypass_the_gateway_either(rt):
     """Đường Work Graph cũng không phải cửa sau: `work=` KHÔNG miễn kiểm của gateway.
 
-    Hệ quả có chủ đích của #6599: dưới mặc định mới, luồng `research` của Work Graph
-    (engine tự spawn producer research/research-review) dừng với `RESEARCH_MAIN_READ_ONLY`
-    cho tới khi phiên main có binding research legacy hoặc gateway tắt — Research phải đi
-    qua biên độc lập (H7.1/P5). Bài này chốt hành vi đó để nó không âm thầm đổi.
+    Bề mặt 7 đã xoá nên không còn lối thoát nào: luồng `research` của Work Graph
+    (engine tự spawn producer research/research-review) dừng với `RESEARCH_MAIN_READ_ONLY` —
+    Research phải đi qua biên độc lập (H7.1/P5). Bài này chốt hành vi đó để nó không âm thầm đổi.
     """
     runtime, root = rt
     submit(rt)

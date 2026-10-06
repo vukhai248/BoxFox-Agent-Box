@@ -327,13 +327,15 @@ def test_default_sessions_can_open_the_work_graph_skill():
 
 
 def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được helper `research`, nên lượt tra
+    # cứu dùng `explore` — vẫn đúng cơ chế knowledge request → child → artifact dán lại cho producer.
     produced = {'n': 0}
 
     def script(kind, text):
         if kind == 'produce':
             produced['n'] += 1
             if produced['n'] == 1:
-                return '## Draft\n## Knowledge requests\n- research: which Vite version supports Node 20 exactly?'
+                return '## Draft\n## Knowledge requests\n- explore: which Vite version supports Node 20 exactly?'
             return '## Findings\nfinal\n## Knowledge requests\n- none'
         return ok_script(kind, text)
 
@@ -353,7 +355,7 @@ def test_knowledge_requests_are_answered_by_children_and_fed_back(tmp_path):
     assert 'Lookup artifacts for your knowledge requests' in rerun and 'The answer is 42' not in rerun
     run_doc = runtime.work_graph.get(out['runId'])
     knowledge = run_doc['nodes'][0]['stages']['produce']['rounds'][0]['knowledge']
-    assert knowledge[0]['role'] == 'research' and knowledge[0]['childId']
+    assert knowledge[0]['role'] == 'explore' and knowledge[0]['childId']
     assert knowledge[0]['artifact']['artifactId'] in rerun
     assert knowledge[0]['artifact']['binding']['verification'] == 'unreviewed'
     producer = run_doc['nodes'][0]['stages']['produce']['rounds'][0]
@@ -532,21 +534,33 @@ def test_turning_autopilot_on_answers_a_waiting_approval(tmp_path):
 
 
 def test_research_only_run_has_nothing_to_execute(tmp_path):
-    _, runtime, _, _, sid = build(tmp_path)
+    """Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main KHÔNG tự chạy được nút `research`.
+
+    Producer `research`/`research-review` chỉ thuộc biên Research độc lập, nên nút đóng `needs_user`
+    với `RESEARCH_NEEDS_MAIN` (không phải `failed`) và không tiêu child/model nào. Vì thế lượt này
+    không có gì để `verify` (nút chưa đạt kiểm) và không có gì để chạy — `submit` vẫn từ chối bằng
+    `WORK_REQUIREMENTS_ONLY` như trước.
+    """
+    _, runtime, model, _, sid = build(tmp_path)
     node = {'id': 'R1', 'kind': 'research', 'title': 'Vite support', 'goal': 'Does Vite 8 support Node 20?'}
 
     async def run():
         await tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Vite 8 and Node 20', 'flow': 'research'})
         await tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [node]})
-        await tool(runtime, sid, 'work_run', {'phase': 'discover'})
-        verified = await tool(runtime, sid, 'work_graph', {'action': 'verify'})
+        draft = await tool(runtime, sid, 'work_run', {'phase': 'discover'})
+        with pytest.raises(ValueError, match='WORK_NOT_READY'):
+            await tool(runtime, sid, 'work_graph', {'action': 'verify'})
         with pytest.raises(ValueError, match='WORK_REQUIREMENTS_ONLY'):
             await tool(runtime, sid, 'work_graph', {'action': 'submit'})
-        return verified
+        return draft
 
-    verified = asyncio.run(run())
-    assert verified['status'] == 'verified' and 'Answer the owner' in verified['next']
-    assert [doc['path'].rsplit('/', 1)[-1] for doc in verified['documents']] == ['plan.md']
+    draft = asyncio.run(run())
+    assert draft['outputs'][0]['status'] == 'needs_user'
+    assert not draft['outputs'][0]['artifact'] and not draft['outputs'][0]['policy']
+    state = runtime.work_graph.get(draft['runId'])['nodes'][0]['stages']['produce']
+    assert state['status'] == 'needs_user' and state['error'].startswith('RESEARCH_NEEDS_MAIN:')
+    # Main không được sinh producer research: không child, không lượt model nào.
+    assert not runtime.store.children_of(sid) and not model.prompts
 
 
 def test_only_the_root_orchestrator_drives_the_engine_and_the_switch_turns_it_off(tmp_path, monkeypatch):
@@ -984,14 +998,16 @@ def test_work_check_children_also_enter_the_lifetime_counter(tmp_path):
     dài có thể tiêu hàng chục con mà sổ đời run vẫn đứng yên. Nay `spawn()` là chỗ duy nhất ghi sổ.
     """
     store, runtime, model, _, sid = build(tmp_path)
-    research = {'id': 'R1', 'kind': 'research', 'title': 'Compare approaches',
-                'goal': 'Compare two export formats using the provided evidence',
-                'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: nút `research` không còn producer chạy được từ main, nên
+    # bài đo sổ `lifetime` dùng nút `explore` + risk `consequential` — vẫn sinh con qua `work_check`.
+    checked = {'id': 'R1', 'kind': 'explore', 'risk': 'consequential', 'title': 'Compare approaches',
+               'goal': 'Compare two export formats using the provided evidence',
+               'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
 
     async def run():
         await raw_tool(runtime, sid, 'work_graph', {'action': 'create', 'goal': 'Compare the two approaches',
-                                                    'flow': 'research'})
-        await raw_tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [research]})
+                                                    'flow': 'mixed'})
+        await raw_tool(runtime, sid, 'work_graph', {'action': 'add', 'nodes': [checked]})
         draft = await raw_tool(runtime, sid, 'work_run', {'phase': 'discover'})
         node = draft['nodes'][0]
         before = dict(wg.service(runtime).get(draft['runId'])['lifetime'])

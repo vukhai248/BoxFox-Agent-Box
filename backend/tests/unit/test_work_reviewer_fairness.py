@@ -76,7 +76,9 @@ def test_prose_only_attempt_is_rejected_and_contract_error_survives_retry(tmp_pa
                 return answer('All facts match the opened original evidence. No blocking findings.')
             return result
         model.complete=missing
-        result=await start(rt,sid,draft)
+        # Nút `CHECKED` (explore + risk consequential) có hai bộ kiểm; bài này đo MỘT lượt kiểm và
+        # retry nội bộ của nó, nên ghim `evidence` để số hồ sơ kiểm vẫn là một.
+        result=await start(rt,sid,draft,checkIds=['evidence'])
         doc=result['checks'][0]
         assert doc['status']=='pass' and len(doc['attempts'])==2
         assert doc['attempts'][0]['status']=='error'

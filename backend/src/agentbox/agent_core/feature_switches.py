@@ -6,8 +6,8 @@ là BẬT**. Khóa tổng trở thành tay nắm để TẮT cả nhóm khi cầ
 - Thiếu `BOXFOX_REFORM` ⇒ mọi công tắc thành viên **BẬT** (mặc định mới, từ v2).
 - `BOXFOX_REFORM=off` ⇒ tắt cả nhóm bằng MỘT lệnh (lối thoát hiểm một lệnh).
 - `BOXFOX_REFORM=on` ⇒ giữ nguyên nghĩa cũ: nói rõ "bật cả nhóm" mà không cần env thành viên.
-- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng: `BOXFOX_RESEARCH_GATEWAY=off` tắt riêng
-  một bề mặt để điều tra sự cố trong khi phần còn lại vẫn chạy.
+- Công tắc thành viên đặt TƯỜNG MINH luôn thắng khóa tổng (dùng khi nhóm còn thành viên; nhóm nay
+  rỗng vì cả bảy bề mặt đã xoá).
 
 Lối thoát hiểm này KHÔNG bị xoá ở v2: nó là cách tổ chức để một agent sau quyết định giữ hay
 xoá nhánh legacy, và quyết định đó cần bằng chứng chạy thật dài ngày trước.
@@ -28,11 +28,11 @@ MASTER_DEFAULT = True
 
 ON_VALUES = {'1', 'on', 'true', 'yes'}
 
-#: Các công tắc của đợt cải tổ còn lại sau checkpoint xoá dần (H3–H8). Thứ tự này cũng là
-#: thứ tự hiện trong `runtime-info`.
-MEMBERS = (
-    'BOXFOX_RESEARCH_GATEWAY',
-)
+#: Các công tắc của đợt cải tổ còn lại sau checkpoint xoá dần (H3–H8).
+#: Bề mặt 7/7 (RESEARCH_GATEWAY) đã xoá ở nhánh `vorflux/boxfox-legacy-surface-removal`, nên nhóm
+#: nay RỖNG: không còn thành viên nào để khóa tổng tắt. Khóa tổng + khối `switches` được xoá ở
+#: bước B5 của HANDOFF §10.3.
+MEMBERS = ()
 
 
 def _value(raw):

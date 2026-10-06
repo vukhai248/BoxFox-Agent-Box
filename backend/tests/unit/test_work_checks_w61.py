@@ -17,11 +17,13 @@ pytestmark = pytest.mark.legacy_path
 def test_all_24_acceptance_items_reach_checker_and_missing_last_cannot_pass(tmp_path):
     _, rt, model, _, sid = build(tmp_path)
     async def run():
-        node = {'id': 'R1', 'kind': 'research', 'title': 'Detailed evidence',
+        # Bề mặt 7 đã xoá: nút `research` không còn producer từ main. Nút `explore` +
+        # risk `consequential` giữ đúng một lượt kiểm `evidence` (vai `review`), như bản cũ.
+        node = {'id': 'R1', 'kind': 'explore', 'risk': 'consequential', 'title': 'Detailed evidence',
                 'goal': 'Research all twenty-four explicitly assigned requirements',
                 'acceptance': [f'Requirement {i}' for i in range(24)]}
         _, draft = await setup(rt, sid, node)
-        checked = await start(rt, sid, draft)
+        checked = await start(rt, sid, draft, checkIds=['evidence'])
         coverage = checked['checks'][0]['coverage']
         assert {c['id'] for c in coverage} == {f'A{i+1}' for i in range(24)} | {'C1'}
         assert 'Requirement 23' in model.prompts[-1][1]
@@ -48,12 +50,14 @@ def test_disabled_checker_is_preflighted_without_spawn_or_retry_consumption(tmp_
     async def run():
         rid, draft = await setup(rt, sid)
         config = store.get(sid)['config']
-        config['subagents'] = [r | {'enabled': False} if r['id'] == 'research-review' else r
+        # Nút `explore` + risk `consequential` giao `evidence` cho vai `review` (không còn
+        # `research-review` cho main sau khi xoá bề mặt 7).
+        config['subagents'] = [r | {'enabled': False} if r['id'] == 'review' else r
                               for r in config['subagents']]
         store.update_config(sid, config)
         count = len(store.children_of(sid))
         for _ in range(4):
-            with pytest.raises(ValueError, match='WORK_CHECK_UNAVAILABLE.*research-review'):
+            with pytest.raises(ValueError, match='WORK_CHECK_UNAVAILABLE.*review'):
                 await start(rt, sid, draft, invocationId='retry-after-owner-enables')
         assert len(store.children_of(sid)) == count
         assert rt.work_graph.checks.records(rid) == []
@@ -87,7 +91,9 @@ def test_unopened_source_cannot_produce_confirmed_evidence_revise(tmp_path):
     executor.execute = unavailable
     async def run():
         _, draft = await setup(rt, sid)
-        checked = await start(rt, sid, draft)
+        # Chỉ chạy lượt kiểm `evidence`: nút CHECKED còn `critique` (plan-review) luôn, nhưng bài này
+        # đo cổng bằng chứng — nếu chạy cả hai, verdict `revise` của critique che mất `needs_checks`.
+        checked = await start(rt, sid, draft, checkIds=['evidence'])
         assert checked['checks'][0]['status'] == 'unverified'
         assert checked['nodes'][0]['stages']['produce'] == 'needs_checks'
         assert 'No successfully opened original evidence' in checked['checks'][0]['error']

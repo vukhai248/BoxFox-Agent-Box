@@ -180,16 +180,19 @@ class FixtureExecutor:
 
 
 def run_parent_with_a_delegation_on_turn_two(tmp_path):
-    """Lượt 1 không giao việc, lượt 2 mới giao: toạ độ lượt của con phải là 2, không phải 1."""
+    """Lượt 1 không giao việc, lượt 2 mới giao: toạ độ lượt của con phải là 2, không phải 1.
+
+    Con mang vai `explore` — vai main CÒN giao được; vai `research`/`research-review` đã bị cổng
+    Research vô điều kiện chặn từ main (`RESEARCH_MAIN_READ_ONLY`)."""
     from agentbox.agent_core.runtime import HarnessRuntime
 
     store = SessionStore(tmp_path / 'sessions.db')
     model = FixtureModel([answer('lượt một xong'),
-                          answer(calls=[call('delegate_task', {'role': 'research', 'goal': 'tra cứu'})]),
+                          answer(calls=[call('delegate_task', {'role': 'explore', 'goal': 'tra cứu'})]),
                           answer('con trả lời'),
                           answer('cha chốt')])
     runtime = HarnessRuntime(store, FixtureExecutor(), model)
-    sid = runtime.create({'skills': [], 'subagents': [{'id': 'research', 'enabled': True}]})['id']
+    sid = runtime.create({'skills': [], 'subagents': [{'id': 'explore', 'enabled': True}]})['id']
 
     async def run():
         await runtime.submit(sid, 'lượt một')
@@ -226,7 +229,7 @@ def test_hang_so_con_khop_voi_hai_event_child(tmp_path):
     rows = store.children_of(sid, turn=2)
     assert len(rows) == 1
     row = rows[0]
-    assert (row['session_id'], row['parent_id'], row['role']) == (started['sessionId'], sid, 'research')
+    assert (row['session_id'], row['parent_id'], row['role']) == (started['sessionId'], sid, 'explore')
     assert row['status'] == finished['status'] == 'completed'
     assert row['spawn_step'] == 1 and row['steps_used'] == finished['stepsUsed']
     assert row['answer_chars'] == finished['answerChars']

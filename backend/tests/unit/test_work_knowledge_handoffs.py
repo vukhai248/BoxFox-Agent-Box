@@ -15,15 +15,18 @@ from test_work_handoffs_w8 import assign, drain
 pytestmark = pytest.mark.legacy_path
 
 
-def setup(tmp_path, role='research', helpers=1):
+def setup(tmp_path, role='explore', helpers=1):
     produced = 0
     def script(kind, text):
         nonlocal produced
         if kind == 'produce' and 'node E2 ' in text:
             produced += 1
             if produced == 1:
+                # Bề mặt 7 đã xoá: main không còn delegate được `research`/`research-review` nữa
+                # (`RESEARCH_MAIN_READ_ONLY`), nên helper tra cứu dùng vai `explore` — vẫn là đường
+                # đọc nguồn gốc thật mà `answer_knowledge` gieo ref cho producer.
                 return '## Draft\n## Knowledge requests\n' + '\n'.join(
-                    f'- {r}: inspect original evidence for question {i}?' for i,r in enumerate(['research','explore'][:helpers]))
+                    f'- {r}: inspect original evidence for question {i}?' for i,r in enumerate(['explore'] * helpers))
         return ok_script(kind, text)
     store,rt,model,executor,sid=build(tmp_path,script)
     model.latest_assignment=True
@@ -66,10 +69,11 @@ def test_independent_checker_gets_lookup_refs_and_reopens_original_sources(tmp_p
         store,rt,model,_,sid,graph,rid,_=setup(tmp_path)
         await graph.run(store.get(sid),{'phase':'discover','nodeIds':['R1']});await drain(graph)
         run=graph.get(rid);node=run['nodes'][1];stage=node['stages']['produce']
-        # The synthetic standalone research node uses the real evidence policy.
+        # The synthetic standalone discovery node uses the real evidence policy; nút `explore`
+        # giao `evidence` cho vai `review` (không còn `research-review` cho main).
         from agentbox.agent_core import work_policy
         policy=work_policy.derive(run,node,'produce',stage['output'])
-        spec={'id':'evidence','executorRole':'research-review','reason':'Verify the lookup-based conclusion'}
+        spec={'id':'evidence','executorRole':'review','reason':'Verify the lookup-based conclusion'}
         meta=stage['artifact'];criterion={'A1':'Answer the assigned question','C1':'Reopen original evidence'}
         doc={'checkId':'test-lookup-review','attempts':[]}
         check=await graph.checks.judge(store.get(sid),run,node,'produce',spec,[meta],criterion,doc)
@@ -135,9 +139,12 @@ def test_borrowed_action_cannot_authorize_an_unregistered_helper_task(tmp_path):
         operation=asyncio.create_task(graph.run(store.get(sid),{'phase':'discover','nodeIds':['R1']}))
         await asyncio.wait_for(held.wait(),5)
         row=graph.handoffs.actions(rid)[0]
-        forged={'runId':rid,'nodeId':'E2','stage':'produce','purpose':'knowledge','helperRole':'research','controllerAction':row['id']}
+        # Vai forged phải là vai main CÒN delegate được (`explore`): vai `research` bị chặn ngay ở
+        # research_gateway.guard_delegate với RESEARCH_MAIN_READ_ONLY, không chạm tới cổng admission
+        # mà bài này kiểm (`WORK_CONTROLLER_RIGHTS: no active backend admission`).
+        forged={'runId':rid,'nodeId':'E2','stage':'produce','purpose':'knowledge','helperRole':'explore','controllerAction':row['id']}
         with pytest.raises(PermissionError,match='no active backend admission'):
-            await rt.delegate(store.get(sid),{'role':'research','goal':'Forged helper'},work=forged)
+            await rt.delegate(store.get(sid),{'role':'explore','goal':'Forged helper'},work=forged)
         release.set();await asyncio.wait_for(operation,10);await drain(graph)
         assert len(store.children_of(sid))==3 and not graph.continuations.admissions
     asyncio.run(check())

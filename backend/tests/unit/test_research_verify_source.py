@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from agentbox.agent_core import limits
+from agentbox.agent_core import limits, research_runtime
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
@@ -60,15 +60,18 @@ def harness(tmp_path):
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel())
     sid = runtime.create({'skills': []})['id']
     session = store.get(sid)
-    asyncio.run(runtime.dispatch(session, 'source_add',
-                                 {'claim': 'mức hưởng đúng tuyến', 'url': 'https://moh.gov.vn/a',
-                                  'excerpt': EXCERPT}))
+    # Gọi THẲNG engine: biên dispatch của main đã bị Research gateway đóng (`RESEARCH_MAIN_READ_ONLY`)
+    # — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
+    research_runtime.source_add(runtime, session,
+                                {'claim': 'mức hưởng đúng tuyến', 'url': 'https://moh.gov.vn/a',
+                                 'excerpt': EXCERPT})
     yield store, runtime, sid, session
     store.close()
 
 
 def verify(runtime, session, row_id='r1'):
-    return asyncio.run(runtime.dispatch(session, 'source_verify', {'rowId': row_id}))
+    """Mở lại nguồn qua ENGINE `source_verify` — cửa dispatch của main đã đóng (xem chú thích fixture)."""
+    return asyncio.run(research_runtime.source_verify(runtime, session, {'rowId': row_id}))
 
 
 def test_a_page_that_still_says_the_same_thing_is_ok(harness):
@@ -126,7 +129,7 @@ def test_verifying_a_row_that_is_not_in_the_ledger_asks_for_the_list(harness):
     with pytest.raises(ValueError, match='SOURCE_VERIFY_UNKNOWN'):
         verify(runtime, session, row_id='r99')
     with pytest.raises(ValueError, match='SOURCE_VERIFY_INVALID'):
-        asyncio.run(runtime.dispatch(session, 'source_verify', {}))
+        asyncio.run(research_runtime.source_verify(runtime, session, {}))
 
 
 def test_verifying_never_writes_the_excerpt_back(harness):

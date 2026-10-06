@@ -71,7 +71,7 @@ async def large_fixture(tmp_path):
 async def judge(store, rt, sid, graph, run, node, primary, model=None):
     rt.client = model or ManifestModel()
     return await graph.checks.judge(store.get(sid), run, node, 'produce',
-        {'id': 'evidence', 'executorRole': 'research-review'}, [primary], {'C1': 'Check original sources'}, {'checkId': 'manifest-check'})
+        {'id': 'evidence', 'executorRole': 'review'}, [primary], {'C1': 'Check original sources'}, {'checkId': 'manifest-check'})
 
 
 def test_manifest_keeps_large_exact_assignment_and_large_content_readable(tmp_path):

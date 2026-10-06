@@ -132,19 +132,19 @@ def test_send_schema_requires_an_expected_revision():
     assert 'expectedRevision' in schema['function']['parameters']['required']
 
 
-def test_turn_profile_keeps_the_surface_for_every_profile(monkeypatch, tmp_path):
+def test_turn_profile_keeps_the_surface_for_every_profile(tmp_path):
+    from agentbox.agent_core import research_gateway
     from agentbox.agent_core.runtime import HarnessRuntime
     from test_harness_runtime import FixtureExecutor, FixtureModel
-    from switch_isolation import isolate_off
 
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
     config = {'skills': [], 'tools': ['task_list', 'task_get', 'task_send', 'task_abandon', 'read_source']}
     sid = runtime.create(config)['id']
-    # Tắt bề mặt CÒN LẠI của nhóm cải tổ: phép so bằng bộ config chỉ đúng khi nó không tự thêm
-    # công cụ; bộ task LUÔN có mặt (v2, #6599) nên không cần bật tường minh.
-    isolate_off(monkeypatch, 'BOXFOX_RESEARCH_GATEWAY')
-    assert set(runtime.turn_profile(session(runtime, sid))['tools']) == set(config['tools'])
+    # Bộ task LUÔN có mặt (v2, #6599) nên không cần bật tường minh. Bề mặt 7 đã xoá nên hồ sơ lượt
+    # cũng LUÔN thêm bốn công cụ biên của Research — không còn công tắc nào để tắt chúng.
+    assert set(runtime.turn_profile(session(runtime, sid))['tools']) == (
+        set(config['tools']) | research_gateway.GATEWAY_TOOLS)
     store.close()
 
 

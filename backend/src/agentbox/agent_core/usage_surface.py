@@ -217,7 +217,7 @@ def research_admission(rt, lead, request):
     from . import research_gateway
     from .work_policy import digest
     current = rt.store.get(lead['id'])
-    if not research_gateway.enabled() or not research_gateway.is_lead(rt, current):
+    if not research_gateway.is_lead(rt, current):
         return False
     root = root_session(rt, lead['id'])
     if root.get('status') in ('cancelled', 'awaiting_decision'):

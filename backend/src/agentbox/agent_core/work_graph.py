@@ -1615,7 +1615,15 @@ class WorkGraph:
             self.save(run, 'node_interrupted', node['id'])
             raise
         except Exception as exc:
-            state.update(status='failed', error=str(exc)[:500])
+            if isinstance(exc, PermissionError) and 'RESEARCH_MAIN_READ_ONLY' in str(exc):
+                # #6599: the Research boundary owns research work; main submits through the envelope and
+                # brings the published report back. This is a decision for the owner, not a failed node.
+                state.update(status='needs_user', error='RESEARCH_NEEDS_MAIN: research nodes are executed by the '
+                             'independent Research boundary. Run research_job_submit from this main session, wait '
+                             'for the owner consent, then read the published report with research_job_result and '
+                             'close this node with the verified findings.')
+            else:
+                state.update(status='failed', error=str(exc)[:500])
         finally:
             if touchset:
                 self.worktrees.release_touchset(run, node)
@@ -2586,8 +2594,9 @@ class WorkGraph:
                              'research': 'FAST PATH: when the request is one fact, one version or a yes/no question, '
                                          'answer it yourself with web_search/web_fetch and cite the sources; do not '
                                          'create a run. Otherwise build research nodes (plus explore when the '
-                                         'repository matters), run them with review, verify, and answer with the '
-                                         'verified findings.',
+                                         'repository matters), then submit the questions with research_job_submit '
+                                         'and wait for the owner consent; read the published report with '
+                                         'research_job_result and answer with the verified findings.',
                              'design': 'Explore the current UI/code, build design nodes, run them with review, '
                                        'verify, and present the verified design.'}.get(flow, ''))
             lines.append(f'Owner request: {bounded(intent.get("text"), 1500)}')

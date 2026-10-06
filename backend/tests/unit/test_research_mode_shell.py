@@ -7,6 +7,7 @@ cuối cùng chứng minh công tắc TẮT thì hành vi quay về đúng f17d5
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 
 import pytest
@@ -80,6 +81,22 @@ def session_of(store, sid):
 
 def events(store, sid, kind=None):
     return [row['data'] for row in store.events(sid) if kind is None or row['type'] == kind]
+
+
+#: Engine của từng công cụ. Biên dispatch của main đã bị Research gateway đóng
+#: (`RESEARCH_MAIN_READ_ONLY`), nên các bài đo ENGINE gọi thẳng hàm luật; chính biên ấy được ghim ở
+#: `tests/unit/test_research_gateway.py`.
+_ENGINES = {'research_brief': research_runtime.research_brief,
+            'research_scope': research_runtime.research_scope,
+            'research_update': research_runtime.research_update,
+            'source_add': research_runtime.source_add,
+            'source_list': research_runtime.source_list}
+
+
+def engine_call(runtime, session, name, args):
+    """Gọi THẲNG engine `name` (sync hay async) — xem `_ENGINES`."""
+    out = _ENGINES[name](runtime, session, args)
+    return asyncio.run(out) if inspect.isawaitable(out) else out
 
 
 def run_turn(runtime, sid, prompt, invocation_id=None):
@@ -173,8 +190,8 @@ def test_m05_tier_three_outside_mode_is_refused_with_research_mode_required(harn
     session = session_of(store, sid)
     before = json.dumps(session['config'], sort_keys=True)
     with pytest.raises(ValueError, match=limits.RESEARCH_MODE_REQUIRED_CODE):
-        asyncio.run(runtime.dispatch(session, 'research_brief', {
-            'tier': 3, 'question': 'Toàn cảnh thị trường?', 'rationale': 'việc lớn'}))
+        engine_call(runtime, session, 'research_brief', {
+            'tier': 3, 'question': 'Toàn cảnh thị trường?', 'rationale': 'việc lớn'})
     assert json.dumps(session_of(store, sid)['config'], sort_keys=True) == before, \
         'từ chối chứ KHÔNG hạ mức im lặng (và không ghi brief)'
 
@@ -182,8 +199,8 @@ def test_m05_tier_three_outside_mode_is_refused_with_research_mode_required(harn
 def test_m05_tier_three_is_allowed_once_the_mode_is_on(harness):
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
-    answer = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_brief', {
-        'tier': 3, 'question': 'Toàn cảnh thị trường?', 'rationale': 'việc lớn'}))
+    answer = engine_call(runtime, session_of(store, sid), 'research_brief', {
+        'tier': 3, 'question': 'Toàn cảnh thị trường?', 'rationale': 'việc lớn'})
     assert answer['tier'] == 3
 
 
@@ -350,8 +367,8 @@ def test_m10b_background_finish_emits_the_report_and_the_notice_and_the_handoff_
                             status='researching')
     store.record_dossier(sid, 'run-done', 1, '.research/run-done/v1-done.md', quality_ok=True)
     store.dossier_critique_set('run-done', 1, 'ok')
-    answer = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_update',
-                                          {'researchId': 'run-done', 'status': 'completed'}))
+    answer = engine_call(runtime, session_of(store, sid), 'research_update',
+                         {'researchId': 'run-done', 'status': 'completed'})
     assert answer['status'] == 'completed'
     kinds = [row['type'] for row in store.events(sid)]
     assert 'research_report' in kinds and 'research_notice' in kinds
@@ -438,13 +455,13 @@ def test_m11_scope_edits_bump_the_revision_and_a_stale_revision_is_refused(harne
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     scope_job(store, sid)
-    first = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                         {'action': 'propose', 'researchId': 'run-scope',
-                                          'patch': {'purpose': 'chọn phương án dùng ngay'}}))
+    first = engine_call(runtime, session_of(store, sid), 'research_scope',
+                        {'action': 'propose', 'researchId': 'run-scope',
+                         'patch': {'purpose': 'chọn phương án dùng ngay'}})
     assert first['revision'] == 1
-    second = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                          {'action': 'update', 'researchId': 'run-scope',
-                                           'patch': {'depth': 'deep'}}))
+    second = engine_call(runtime, session_of(store, sid), 'research_scope',
+                         {'action': 'update', 'researchId': 'run-scope',
+                          'patch': {'depth': 'deep'}})
     assert second['revision'] == 2
     scope = store.research_job('run-scope')['state']['scope']
     assert scope['purpose']['status'] == 'assumed', 'agent đề xuất ⇒ giả định, không phải xác nhận'
@@ -456,14 +473,14 @@ def test_m17_answers_land_in_one_call_and_clear_needs_user(harness):
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     scope_job(store, sid)
-    asked = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                         {'action': 'ask', 'researchId': 'run-scope', 'questions': [
-                                             {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
-                                              'options': [{'id': 'o1', 'label': 'Dùng ngay'},
-                                                          {'id': 'o2', 'label': 'Bản đồ nghiên cứu'}]},
-                                             {'id': 'iq2', 'text': 'Cửa sổ thời gian?', 'blocking': True,
-                                              'options': [{'id': 'o1', 'label': '12 tháng'},
-                                                          {'id': 'o2', 'label': 'Mọi lúc'}]}]}))
+    asked = engine_call(runtime, session_of(store, sid), 'research_scope',
+                        {'action': 'ask', 'researchId': 'run-scope', 'questions': [
+                            {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
+                             'options': [{'id': 'o1', 'label': 'Dùng ngay'},
+                                         {'id': 'o2', 'label': 'Bản đồ nghiên cứu'}]},
+                            {'id': 'iq2', 'text': 'Cửa sổ thời gian?', 'blocking': True,
+                             'options': [{'id': 'o1', 'label': '12 tháng'},
+                                         {'id': 'o2', 'label': 'Mọi lúc'}]}]})
     assert asked['needsUser'] is True
     assert store.research_job('run-scope')['status'] == 'needs_user'
     job = store.research_job('run-scope')
@@ -487,13 +504,13 @@ def test_m12_the_scope_card_splits_what_the_user_confirmed_from_what_the_agent_a
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     scope_job(store, sid)
-    asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                 {'action': 'propose', 'researchId': 'run-scope',
-                                  'patch': {'purpose': 'chọn phương án dùng ngay', 'depth': 'deep'}}))
-    asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                 {'action': 'ask', 'researchId': 'run-scope', 'questions': [
-                                     {'id': 'iq1', 'text': 'Cửa sổ thời gian?', 'blocking': True,
-                                      'options': [{'id': 'o1', 'label': '12 tháng'}]}]}))
+    engine_call(runtime, session_of(store, sid), 'research_scope',
+                {'action': 'propose', 'researchId': 'run-scope',
+                 'patch': {'purpose': 'chọn phương án dùng ngay', 'depth': 'deep'}})
+    engine_call(runtime, session_of(store, sid), 'research_scope',
+                {'action': 'ask', 'researchId': 'run-scope', 'questions': [
+                    {'id': 'iq1', 'text': 'Cửa sổ thời gian?', 'blocking': True,
+                     'options': [{'id': 'o1', 'label': '12 tháng'}]}]})
     job = store.research_job('run-scope')
     prompt = job['state']['prompts'][0]
     research_runtime.answer_prompt(runtime, sid, job, {
@@ -603,13 +620,13 @@ def test_m18_outside_mode_main_may_only_pause_a_background_run(harness):
                                                 'budgetSeconds': 600, 'questions': []},
                             status='researching')
     with pytest.raises(PermissionError, match='RESEARCH_UPDATE_BACKGROUND_ONLY'):
-        asyncio.run(runtime.dispatch(session_of(store, sid), 'research_update',
-                                     {'researchId': 'foreground', 'action': 'pause'}))
+        engine_call(runtime, session_of(store, sid), 'research_update',
+                    {'researchId': 'foreground', 'action': 'pause'})
     store.research_job_save('background', sid, {'origin': 'mode', 'phase': 'searching', 'background': True,
                                                 'budgetSeconds': 600, 'questions': []},
                             status='researching')
-    answer = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_update',
-                                          {'researchId': 'background', 'action': 'cancel'}))
+    answer = engine_call(runtime, session_of(store, sid), 'research_update',
+                         {'researchId': 'background', 'action': 'cancel'})
     assert answer['status'] == 'cancelled'
     assert store.research_job('background')['status'] == 'cancelled'
 
@@ -623,8 +640,8 @@ def test_m18_pausing_a_background_run_keeps_the_session_alive(harness, monkeypat
         raise AssertionError('job control must never stop the session')
 
     monkeypatch.setattr(runtime, 'stop', forbidden)
-    answer = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_update',
-                                          {'researchId': 'bg2', 'action': 'pause'}))
+    answer = engine_call(runtime, session_of(store, sid), 'research_update',
+                         {'researchId': 'bg2', 'action': 'pause'})
     assert answer['status'] == 'paused'
 
 
@@ -664,22 +681,32 @@ def test_with_the_mode_switch_off_everything_behaves_like_before(monkeypatch, tm
 # đi qua hồ sơ lượt thật / tuyến bơm thật / API thật, không tự tay viết lại `state`.
 
 
-def test_f1_research_scope_is_offered_in_the_turn_when_the_mode_is_on(harness):
-    """F1: công cụ cấp thẻ phạm vi phải NẰM TRONG bộ công cụ của lượt + có schema."""
+def test_f1_the_turn_gets_the_gateway_boundary_and_no_internal_research_tool(harness):
+    """F1 (bề mặt 7 đã xoá): lượt của main chỉ được cấp CỔNG Research, KHÔNG cấp công cụ engine.
+
+    Bản cũ đòi `research_scope` nằm trong bộ công cụ của lượt. Từ khi Research đi qua biên độc lập,
+    main mở việc bằng `research_job_submit`; `research_scope`/`source_add`/… là công cụ của lead đã
+    bind, nên cấp chúng cho main là cấp một đường gọi sẽ bị `RESEARCH_MAIN_READ_ONLY` từ chối. Biên
+    đó ghim ở `tests/unit/test_research_gateway.py`.
+    """
     store, runtime, sid = harness
     model = RecordingModel()
     runtime.client = model
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     run_turn(runtime, sid, 'mở một run mới cho việc này')
     offered = model.offered[-1]
-    assert 'research_scope' in offered, 'mode ra lệnh dùng `research_scope` nhưng không cấp schema ⇒ vô nghĩa'
+    from agentbox.agent_core import research_gateway
+    assert set(research_gateway.GATEWAY_TOOLS) <= set(offered), \
+        'main mở việc research qua cổng ⇒ cổng phải nằm trong bộ công cụ của lượt'
+    assert set(offered) & set(research_gateway.INTERNAL_TOOLS) == set(), \
+        'công cụ engine thuộc lead đã bind — main không được cấp (sẽ bị RESEARCH_MAIN_READ_ONLY)'
     names = {schema['function']['name'] for schema in tool_contracts.schemas_for(offered)}
-    assert 'research_scope' in names
+    assert set(research_gateway.GATEWAY_TOOLS) <= names, 'tên được cấp phải có schema, không chỉ có tên'
     assert set(offered) & set(limits.RESEARCH_MODE_EXCLUDED_TOOLS) == set()
     # Và nhóm công cụ của runtime phải mô tả đúng: hợp của các nhóm = bộ orchestrator.
     from agentbox.agent_core.tool_groups import TOOL_GROUPS
     union = {tool for group in TOOL_GROUPS for tool in group['tools']}
-    assert 'research_scope' in union
+    assert set(research_gateway.GATEWAY_TOOLS) <= union
 
 
 def test_f2_research_halt_inside_its_own_resume_turn_writes_the_status_without_waiting_for_itself(harness):
@@ -711,19 +738,19 @@ def test_f3_a_run_opened_in_the_mode_becomes_the_active_run_and_is_pumpable(harn
     """F3: `research_brief` trong mode phải ghim `activeRunId`, nếu không bơm không bao giờ thấy run."""
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
-    answer = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_brief', {
+    answer = engine_call(runtime, session_of(store, sid), 'research_brief', {
         'tier': 2, 'question': 'Mức hưởng chuyển tuyến 2026?', 'rationale': 'cần dẫn nguồn văn bản',
         'goal': 'Toàn cảnh mức hưởng', 'methods': ['web'], 'output': 'báo cáo',
-        'questions': [{'text': 'Tuyến nào?', 'importance': 'high'}]}))
+        'questions': [{'text': 'Tuyến nào?', 'importance': 'high'}]})
     run_id = answer['researchId']
     assert session_of(store, sid)['config']['researchMode']['activeRunId'] == run_id, \
         'run do mode mở phải là run đang hoạt động'
     # Pha `clarifying` CHƯA bơm được (lượt của nó là lượt đang chờ người dùng) — nhưng phải thấy run.
     assert research_job_pumpable(runtime, store.research_job(run_id), session_of(store, sid)) is False
-    asked = asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope', {
+    asked = engine_call(runtime, session_of(store, sid), 'research_scope', {
         'action': 'ask', 'researchId': run_id, 'questions': [
             {'id': 'iq1', 'text': 'Tuyến nào?', 'blocking': True,
-             'options': [{'id': 'o1', 'label': 'Tuyến huyện'}]}]}))
+             'options': [{'id': 'o1', 'label': 'Tuyến huyện'}]}]})
     assert asked['needsUser'] is True
     job = store.research_job(run_id)
     prompt = job['state']['prompts'][0]
@@ -890,7 +917,12 @@ def test_f8_the_pump_turn_gets_the_research_block_not_the_background_one(harness
 
 
 def test_f9_the_mode_only_delegates_to_the_research_roles(harness):
-    """F9: trong mode chỉ `research`/`research-review`/`explore` được giao nhánh."""
+    """F9: trong mode chỉ `research`/`research-review`/`explore` được giao nhánh.
+
+    Nửa sau đã đổi theo bề mặt 7 (đã xoá): vai `research` vẫn nằm trong danh sách của mode, nhưng
+    cổng Research từ chối main TRƯỚC kiểm tra ngữ cảnh — không còn `researchId` legacy làm cửa sau.
+    Biên đó ghim ở `tests/unit/test_research_gateway.py`.
+    """
     store, runtime, sid = harness
     session = session_of(store, sid)
     session['config']['subagents'] = [{'id': 'build', 'enabled': True},
@@ -900,8 +932,8 @@ def test_f9_the_mode_only_delegates_to_the_research_roles(harness):
     session = session_of(store, sid)
     with pytest.raises(PermissionError, match='RESEARCH_MODE_DELEGATE_ROLE'):
         asyncio.run(runtime.delegate(session, {'role': 'build', 'goal': 'viết code'}))
-    # Vai được phép thì KHÔNG bị chặn ở cửa này (chỉ cần vượt qua kiểm tra vai).
-    with pytest.raises(ValueError, match='Child goal required'):
+    # Vai được mode cho phép vẫn bị CỔNG chặn khi main là người giao (biên độc lập của Research).
+    with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
         asyncio.run(runtime.delegate(session, {'role': 'research', 'goal': '   '}))
 
 
@@ -926,10 +958,10 @@ def test_f10_a_card_answered_after_the_scope_was_rewritten_is_refused(harness):
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     scope_job(store, sid)
-    asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                 {'action': 'ask', 'researchId': 'run-scope', 'questions': [
-                                     {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
-                                      'options': [{'id': 'o1', 'label': 'Dùng ngay'}]}]}))
+    engine_call(runtime, session_of(store, sid), 'research_scope',
+                {'action': 'ask', 'researchId': 'run-scope', 'questions': [
+                    {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
+                     'options': [{'id': 'o1', 'label': 'Dùng ngay'}]}]})
     job = store.research_job('run-scope')
     prompt = job['state']['prompts'][0]
     # Phạm vi bị viết lại SAU khi thẻ được tạo ⇒ revision SỐNG tăng, revision của thẻ đứng yên.
@@ -958,10 +990,10 @@ def test_d6_an_open_card_answers_after_the_owner_edits_the_scope(harness):
     store, runtime, sid = harness
     research_runtime.apply_research_mode(runtime, session_of(store, sid), {'on': True})
     scope_job(store, sid)
-    asyncio.run(runtime.dispatch(session_of(store, sid), 'research_scope',
-                                 {'action': 'ask', 'researchId': 'run-scope', 'questions': [
-                                     {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
-                                      'options': [{'id': 'o1', 'label': 'Dùng ngay'}]}]}))
+    engine_call(runtime, session_of(store, sid), 'research_scope',
+                {'action': 'ask', 'researchId': 'run-scope', 'questions': [
+                    {'id': 'iq1', 'text': 'Dùng để làm gì?', 'blocking': True,
+                     'options': [{'id': 'o1', 'label': 'Dùng ngay'}]}]})
     before = store.research_job('run-scope')
     prompt = before['state']['prompts'][0]
     live = int(before['state']['scope']['revision'])
@@ -993,12 +1025,12 @@ def test_the_ledger_list_keeps_the_run_filter_when_the_run_has_no_rows_yet(harne
     session = session_of(store, sid)
     session['config']['research'] = {'researchId': 'run-a'}
     store.update_config(sid, session['config'])
-    asyncio.run(runtime.dispatch(session_of(store, sid), 'source_add',
-                                 {'claim': 'x', 'url': 'https://moh.gov.vn/a', 'excerpt': LONG_EXCERPT}))
+    engine_call(runtime, session_of(store, sid), 'source_add',
+                {'claim': 'x', 'url': 'https://moh.gov.vn/a', 'excerpt': LONG_EXCERPT})
     session = session_of(store, sid)
     session['config']['research'] = {'researchId': 'run-b'}
     store.update_config(sid, session['config'])
-    listed = asyncio.run(runtime.dispatch(session_of(store, sid), 'source_list', {}))
+    listed = engine_call(runtime, session_of(store, sid), 'source_list', {})
     assert listed['rows'] == [], 'sổ của run mới không được mang dòng của run khác'
 
 

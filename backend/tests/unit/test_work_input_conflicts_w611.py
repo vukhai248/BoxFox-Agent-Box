@@ -89,7 +89,9 @@ def test_missing_target_retries_once_without_turning_into_producer_feedback(tmp_
 
     async def run():
         _, draft = await setup(rt, sid)
-        result = await start(rt, sid, draft)
+        # Nút `CHECKED` (explore + risk consequential) có hai bộ kiểm; bài này đo retry của MỘT lượt
+        # kiểm, nên ghim `evidence` để đếm con theo nghĩa cũ (một producer, hai reviewer).
+        result = await start(rt, sid, draft, checkIds=['evidence'])
         doc = result['checks'][0]
         assert doc['status'] == 'error' and len(doc['attempts']) == 2
         assert not doc['inputConflicts']

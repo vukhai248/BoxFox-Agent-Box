@@ -62,13 +62,15 @@ def test_depth_change_invalidates_definition():
 
 
 def test_helper_claim_on_unopened_path_is_unverified(tmp_path):
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được helper `research`; lượt tra cứu
+    # dùng `explore` — hợp đồng "claim phải có nguồn đã mở" không đổi theo vai.
     produced = {'n': 0}
 
     def script(kind, text):
         if kind == 'produce':
             produced['n'] += 1
             if produced['n'] == 1:
-                return '## Draft\n## Knowledge requests\n- research: what does docs/source.md say?'
+                return '## Draft\n## Knowledge requests\n- explore: what does docs/source.md say?'
             return '## Findings\nfinal\n## Knowledge requests\n- none'
         if kind == 'knowledge':
             return 'The file docs/source.md defines the contract.'
