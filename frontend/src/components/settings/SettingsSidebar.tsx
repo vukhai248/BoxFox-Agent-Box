@@ -18,6 +18,7 @@ import {
   BarChart3,
   Gift,
   CircleHelp,
+  ShieldCheck,
 } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
 import type { SettingSectionId, SettingTabId } from '../../types/harness'
@@ -60,6 +61,7 @@ const SECTIONS: NavSection[] = [
     title: 'MACHINES',
     items: [
       { id: 'configuration', label: 'Configuration', icon: Cpu },
+      { id: 'machine_permissions', label: 'Machine & Permissions', icon: ShieldCheck },
       { id: 'secrets', label: 'Secrets', icon: Lock },
       { id: 'browser', label: 'Browser', icon: Globe },
     ],

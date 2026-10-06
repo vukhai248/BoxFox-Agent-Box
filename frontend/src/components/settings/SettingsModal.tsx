@@ -8,6 +8,7 @@ import { HarnessEditor } from './HarnessEditor'
 import { ScheduledSessionsView } from './ScheduledSessionsView'
 import { AutomationsView } from './AutomationsView'
 import { SecretsView } from './SecretsView'
+import { MachinePermissionsView } from './MachinePermissionsView'
 import { BrowserView } from './BrowserView'
 import { PullRequestsView } from './PullRequestsView'
 import { AppearanceView } from './AppearanceView'
@@ -112,6 +113,8 @@ export function SettingsModal() {
         return <AutomationsView />
       case 'secrets':
         return <SecretsView />
+      case 'machine_permissions':
+        return <MachinePermissionsView />
       case 'browser':
         return <BrowserView />
       case 'pull_requests':

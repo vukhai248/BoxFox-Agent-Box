@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 from aiohttp import web
 from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
+from ..agent_core import permissions as permissions_module
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core import usage_surface
 from ..agent_core.plan_header import IDENTITY_PATTERN
@@ -58,6 +59,8 @@ from ..memory.session_store import SessionStore
 from ..observability.system_log import (DEFAULT_READ_LINES, MAX_READ_LINES, clamp_lines,
                                         redact_entry, system_log)
 from ..sandbox.executor import SandboxExecutor
+from ..agent_core.desktop_control import DesktopControl
+from ..sandbox.host_executor import HostExecutor
 from .owner_settings import OwnerSettings
 
 
@@ -361,6 +364,80 @@ def allowed_origins() -> set[str]:
     return origins
 
 
+# --- Chọn chế độ thi hành (H4) ---------------------------------------------------------------
+# `BOXFOX_EXECUTION_MODE=host|docker` — mặc định `docker` để hành vi cũ không đổi một byte khi
+# người dùng chỉ cài bản cập nhật. `cloud` được chừa chỗ nhưng CHƯA cài: báo lỗi rõ thay vì im
+# lặng rơi về docker (im lặng thì người dùng tưởng đã bật cloud).
+EXECUTION_MODE_ENV = 'BOXFOX_EXECUTION_MODE'
+EXECUTION_MODES = ('docker', 'host')
+# Chỗ chừa cho chế độ cloud. Giá trị này KHÔNG im lặng rơi về docker: người dùng gõ nó ra nghĩa là
+# họ muốn cloud, và im lặng chạy docker sẽ khiến họ tin nhầm là đã bật.
+EXECUTION_MODES_RESERVED = ('cloud',)
+EXECUTION_MODE_DEFAULT = 'docker'
+
+
+def execution_mode(env=None):
+    """`'docker'` | `'host'` (hoặc `'cloud'` chưa cài). Giá trị lạ ⇒ mặc định, không bao giờ ném."""
+    source = os.environ if env is None else env
+    raw = str(source.get(EXECUTION_MODE_ENV) or '').strip().lower()
+    if raw in EXECUTION_MODES or raw in EXECUTION_MODES_RESERVED:
+        return raw
+    return EXECUTION_MODE_DEFAULT
+
+
+def host_workspace(env=None):
+    """Thư mục làm việc của host mode — nơi mọi đường dẫn tương đối neo vào."""
+    source = os.environ if env is None else env
+    explicit = str(source.get('BOXFOX_HOST_WORKSPACE') or '').strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path.home() / 'BoxFox' / 'workspace'
+
+
+def build_executor(data, env=None):
+    """Executor theo chế độ đang chọn. `data` là thư mục hồ sơ (audit, luật, DB)."""
+    source = os.environ if env is None else env
+    mode = execution_mode(source)
+    if mode == 'cloud':
+        raise RuntimeError('EXECUTION_MODE_UNIMPLEMENTED: `%s=cloud` chưa được cài đặt trong bản '
+                           'alpha này — chọn `docker` (mặc định) hoặc `host`.' % EXECUTION_MODE_ENV)
+    if mode == 'host':
+        workspace = host_workspace(source)
+        profile_dir = Path(data)
+        policy = permissions_module.PermissionPolicy(str(workspace), profile_dir=profile_dir, env=source)
+        executor = HostExecutor(str(workspace), policy=policy, env=source,
+                                desktop=build_desktop_control(profile_dir, source))
+        return executor
+    return SandboxExecutor(api_key=source.get('BOXFOX_API_KEY', 'boxfox-local-dev-token'))
+
+
+def build_desktop_control(profile_dir, env=None):
+    """`DesktopControl` cho host mode, hoặc `None` khi máy này không điều khiển desktop được.
+
+    Không ném: máy không phải Windows (hoặc thiếu pywin32) vẫn phải khởi động harness — các công cụ
+    tệp/lệnh chạy bình thường, còn công cụ CUA trả `CUA_UNAVAILABLE`.
+    """
+    source = os.environ if env is None else env
+    if str(source.get('BOXFOX_DESKTOP_CONTROL') or '').strip().lower() in ('0', 'off', 'false'):
+        return None
+    if sys.platform != 'win32':
+        return None
+    try:
+        from ..sandbox.win import windows_platform
+    except Exception:
+        return None
+    try:
+        platform = windows_platform.get_platform()
+    except Exception:
+        return None
+    if platform is None or getattr(platform, 'name', '') in ('', 'unavailable'):
+        return None
+    try:
+        return DesktopControl(profile_dir=Path(profile_dir), platform=platform)
+    except Exception:
+        return None
+
+
 def create_app(runtime):
     @web.middleware
     async def boundary(request, handler):
@@ -457,6 +534,59 @@ def create_app(runtime):
         except Exception as exc:
             return {'error': type(exc).__name__, 'reason': str(exc)[:200]}
 
+    def desktop_control():
+        """Bộ điều khiển desktop của executor đang chạy. Docker mode KHÔNG có ⇒ lỗi có mã."""
+        control = getattr(runtime.executor, 'desktop', None)
+        if control is None:
+            raise ApiError('DESKTOP_CONTROL_UNAVAILABLE',
+                           'chế độ đang chạy không điều khiển được desktop (chỉ host mode trên '
+                           'Windows có)', 409)
+        return control
+
+    def desktop_lease_snapshot():
+        """Snapshot lease cho health/UI — `None` khi không có hàng rào (docker mode)."""
+        control = getattr(runtime.executor, 'desktop', None)
+        if control is None:
+            return None
+        try:
+            snapshot = control.snapshot()
+        except Exception as exc:      # health không bao giờ được ném vì một tệp hỏng
+            return {'holder': 'human', 'epoch': 0, 'error': '%s: %s' % (type(exc).__name__, exc)}
+        return {'holder': snapshot.get('holder'), 'epoch': snapshot.get('epoch'),
+                'generation': snapshot.get('generation'),
+                'hooksInstalled': snapshot.get('hooksInstalled'),
+                'mutexHeld': snapshot.get('mutexHeld'), 'mutexName': snapshot.get('mutexName'),
+                'since': snapshot.get('since'), 'reason': snapshot.get('reason')}
+
+    def execution_status():
+        """Khối `execution` của health: đang chạy chế độ nào, quyền nào, sàn cứng chạm mấy lần.
+
+        Rẻ như phần còn lại của health: chỉ đọc biến và bộ đếm trong bộ nhớ, KHÔNG chạm đĩa/mạng.
+        """
+        policy = getattr(runtime.executor, 'policy', None)
+        # `mode` là thứ ĐANG chạy (suy từ chính executor), không phải thứ được cấu hình: health phải
+        # nói được sự thật kể cả khi executor được dựng tay trong test hay bởi một bản cài khác.
+        mode = 'host' if policy is not None else execution_mode()
+        payload = {'mode': mode, 'modeDefault': EXECUTION_MODE_DEFAULT,
+                   'modes': list(EXECUTION_MODES), 'configured': execution_mode()}
+        if policy is None:
+            payload.update({'scope': None, 'permissionMode': None, 'policy': False,
+                            'cuaEnabled': None, 'lease': None, 'hardlineHits': 0, 'workspace': None})
+            return payload
+        permission_mode = policy.mode_value()
+        payload.update({
+            'scope': policy.scope_value(),
+            'permissionMode': permission_mode,
+            'policy': True,
+            'cuaEnabled': bool(permissions_module.MODE_CAPABILITIES[permission_mode]['cua']),
+            # `lease` là hàng rào đồng thời thật (H7): `None` nghĩa là "máy này không có hàng rào",
+            # khác hẳn `holder: human` nghĩa là "có hàng rào và người đang giữ".
+            'lease': desktop_lease_snapshot(),
+            'hardlineHits': policy.hardline_hits,
+            'workspace': policy.workspace,
+        })
+        return payload
+
     async def health(request):
         # W6.1.3: `?probe=verify` chạy probe bwrap trong box; mặc định chỉ trả lần quan sát gần nhất
         # (health phải rẻ, không docker exec mỗi lần gọi).
@@ -477,7 +607,8 @@ def create_app(runtime):
         return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION,
                                   'verifyExec': getattr(runtime, 'verify_exec_status', None)
                                   or {'available': None, 'reason': 'not probed yet'},
-                                  'search': _search_status()})
+                                  'search': _search_status(),
+                                  'execution': execution_status()})
 
     async def catalog(request):
         return web.json_response({'roles': [{'id': r.id, 'name': r.name, 'instructions': r.instructions, 'tools': sorted(r.tools)} for r in ROLES.values()], 'skills': runtime.catalog.list(runtime.commands.settings()['enabled'])})
@@ -651,7 +782,176 @@ def create_app(runtime):
 
     async def executor_status(request):
         from ..sandbox.claude_executor import ClaudeExecutor
-        return web.json_response(await ClaudeExecutor(runtime.executor.container).probe())
+        container = getattr(runtime.executor, 'container', None)
+        if container is None:
+            # Host mode không có container: trả lời được câu hỏi thay vì ném AttributeError.
+            return web.json_response({'status': 'unavailable', 'reason': 'executor has no container (host mode)'})
+        return web.json_response(await ClaudeExecutor(container).probe())
+
+    def permission_policy():
+        """Chính sách quyền của executor đang chạy. Docker mode KHÔNG có ⇒ lỗi có mã, không 500."""
+        policy = getattr(runtime.executor, 'policy', None)
+        if policy is None:
+            raise ApiError('PERMISSIONS_UNAVAILABLE',
+                           'chế độ đang chạy không có động cơ quyền (chỉ host mode có)', 409)
+        return policy
+
+    async def permissions(request):
+        """`GET` đọc toàn bộ chính sách; `PUT` đổi `mode`/`scope` và ghi xuống tầng đã chọn.
+
+        Ghi vào tầng nào là tham số (`layer`), mặc định tầng `user` (`~/.boxfox/settings.json`) —
+        đó là chỗ "sở thích của người dùng" nằm, còn `managed` là của bản cài và không sửa từ UI.
+        """
+        policy = permission_policy()
+        if request.method == 'PUT':
+            payload = await request.json()
+            layer = str(payload.get('layer') or permissions_module.LAYER_USER).strip().lower()
+            if layer not in policy.paths:
+                raise ApiError('PERMISSION_LAYER_UNKNOWN', 'tầng `%s` không tồn tại' % layer, 400)
+            data = dict(policy.layers.get(layer) or {})
+            changed = {}
+            mode = str(payload.get('mode') or '').strip().lower()
+            if mode:
+                if mode not in permissions_module.MODES:
+                    raise ApiError('PERMISSION_MODE_UNKNOWN', 'chế độ `%s` không có' % mode, 400)
+                data['mode'] = mode
+                changed['mode'] = mode
+            scope = str(payload.get('scope') or '').strip().lower()
+            if scope:
+                if scope not in permissions_module.SCOPES:
+                    raise ApiError('PERMISSION_SCOPE_UNKNOWN', 'phạm vi `%s` không có' % scope, 400)
+                data['scope'] = scope
+                changed['scope'] = scope
+            if not changed:
+                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode` hoặc `scope`', 400)
+            error = permissions_module._write_json(policy.paths[layer], data)
+            if error:
+                raise ApiError('PERMISSION_WRITE_FAILED', error, 409)
+            policy.reload()
+            system_log.write('permissions.updated', level='info', message='quyền đã đổi từ UI',
+                             data={'layer': layer, **changed})
+        snapshot = policy.snapshot()
+        snapshot['execution'] = execution_status()
+        return web.json_response(snapshot)
+
+    async def permissions_decide(request):
+        """Hỏi động cơ quyền, và (khi người dùng đã trả lời) ghi nhớ quyết định đó.
+
+        Thẻ duyệt của giao diện gọi đúng route này hai lần: lần đầu để lấy `reason`/`rule` hiện
+        lên thẻ, lần sau kèm `decision` để chốt. `allow_always` mới ghi luật xuống đĩa — và luật đó
+        vẫn phải qua kiểm tra phạm vi của động cơ.
+        """
+        payload = await request.json()
+        tool = str(payload.get('tool') or '').strip()
+        if not tool:
+            raise ApiError('PERMISSION_TOOL_REQUIRED', 'cần `tool`', 400)
+        args = payload.get('args') if isinstance(payload.get('args'), dict) else {}
+        session_id = payload.get('sessionId') or None
+        actor = str(payload.get('actor') or 'user')
+        policy = permission_policy()
+        decision = policy.decide(tool, args, session_id=session_id, actor=actor)
+        answer = str(payload.get('decision') or '').strip().lower()
+        extra = {}
+        if answer:
+            if answer not in ('allow', 'allow_session', 'allow_always', 'deny'):
+                raise ApiError('PERMISSION_DECISION_UNKNOWN', 'quyết định `%s` không có' % answer, 400)
+            if answer == 'deny':
+                policy.note_denial(session_id)
+                extra['breaker'] = policy.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
+            else:
+                policy.note_approval(session_id)
+                key = policy.session_key(tool, args, cwd=policy.workspace)
+                if answer in ('allow_session', 'allow_always'):
+                    policy.remember(key, permissions_module.allow('', 'user'), 'session')
+                if answer == 'allow_always':
+                    ok, code, message, rules = policy.save_rule(tool, args, actor=actor,
+                                                                session_id=session_id)
+                    extra.update({'saved': ok, 'saveCode': code, 'saveMessage': message, 'rules': rules})
+            extra['decision'] = answer
+        return web.json_response({'tool': tool, 'sessionId': session_id,
+                                  'outcome': decision.outcome, 'reason': decision.reason,
+                                  'rule': decision.rule, 'layer': decision.layer, **extra})
+
+    async def permissions_pending(request):
+        policy = permission_policy()
+        return web.json_response({'pending': policy.pending_items()})
+
+    async def permissions_rules(request):
+        """`GET` liệt kê luật kèm tệp nguồn; `DELETE` thu hồi một luật (màn Settings → Quyền)."""
+        policy = permission_policy()
+        if request.method == 'DELETE':
+            payload = await request.json()
+            rule = str(payload.get('rule') or '').strip()
+            if not rule:
+                raise ApiError('PERMISSION_RULE_REQUIRED', 'cần `rule`', 400)
+            layer = str(payload.get('layer') or '').strip().lower() or None
+            ok, code, message = policy.revoke_rule(rule, layer)
+            if not ok:
+                raise ApiError('PERMISSION_REVOKE_FAILED', message, 409)
+            system_log.write('permissions.revoked', level='info', message='luật đã bị thu hồi',
+                             data={'rule': rule})
+            return web.json_response({'ok': True, 'message': message})
+        snapshot = policy.snapshot()
+        return web.json_response({'rules': snapshot['rules'], 'sources': snapshot['ruleSources'],
+                                  'layers': snapshot['layers']})
+
+    # -- H7: bề mặt CUA (lease + soi phần tử) -------------------------------
+
+    async def desktop_lease(request):
+        """`GET` đọc lease; `POST` đổi người giữ quyền.
+
+        `claim` là nút "Trả quyền cho agent" của NGƯỜI DÙNG — đường duy nhất được phép `force`; agent
+        không có cách nào tự gọi nó. `release` là nút "Dừng/Trả quyền" (đưa về người). `stop` là nút
+        Dừng khẩn: tăng epoch + generation, nhả phím/chuột đang giữ, đưa lease về người.
+        """
+        control = desktop_control()
+        if request.method == 'GET':
+            return web.json_response(desktop_lease_snapshot() or {})
+        payload = await request.json()
+        action = str(payload.get('action') or '').strip().lower()
+        reason = str(payload.get('reason') or '').strip()
+        viewer_id = payload.get('viewerId') or None
+        if action == 'claim':
+            ok, state, error = control.agent_lease(reason or 'người dùng trả quyền cho agent',
+                                                   viewer_id=viewer_id, force=True)
+            code = '' if ok else state
+            if not ok:
+                raise ApiError('DESKTOP_LEASE_FAILED', str(error or code), 409)
+        elif action == 'release':
+            control.release_to_human(reason or 'người dùng lấy lại quyền', viewer_id=viewer_id)
+        elif action == 'stop':
+            control.emergency_stop(reason or 'nút Dừng khẩn')
+        else:
+            raise ApiError('DESKTOP_LEASE_ACTION_UNKNOWN',
+                           'hành động `%s` không có (nhận: claim, release, stop)' % action, 400)
+        system_log.write('desktop.lease', level='info', message='lease đổi từ UI',
+                         data={'action': action, 'reason': reason})
+        return web.json_response(desktop_lease_snapshot() or {})
+
+    async def desktop_inspect_element(request):
+        """Soi phần tử tại một điểm framebuffer — đường của khung Element Selector ở host mode.
+
+        Cùng hình dạng phản hồi với `/__box/inspect-element` của box, nên giao diện không phải biết
+        mình đang ở chế độ nào. Lỗi nền tảng giữ NGUYÊN mã (`ELEMENT_STALE`, `DESKTOP_LOCKED`, …).
+        """
+        from ..agent_core import inspect_host
+        control = desktop_control()
+        granted, state, _error = control.agent_lease('người dùng soi phần tử')
+        if not granted:
+            snapshot = control.snapshot() or {}
+            raise ApiError('HUMAN_HAS_CONTROL', 'người dùng đang điều khiển máy — chưa soi được',
+                           409, {'holder': snapshot.get('holder')})
+        payload = await request.json()
+        try:
+            x, y = int(payload.get('x')), int(payload.get('y'))
+        except (TypeError, ValueError):
+            raise ApiError('INSPECT_POINT_INVALID', 'cần toạ độ nguyên (x, y)', 400)
+        try:
+            result = inspect_host.inspect_element(x, y)
+        except Exception as exc:
+            code = getattr(exc, 'code', None) or 'INSPECT_FAILED'
+            raise ApiError(code, str(exc), 409)
+        return web.json_response(result)
 
     async def skill(request):
         return web.json_response(runtime.catalog.read(request.match_info['skill']))
@@ -1895,6 +2195,15 @@ def create_app(runtime):
     app.router.add_put('/api/agent/commands/{slug}', command)
     app.router.add_delete('/api/agent/commands/{slug}', command)
     app.router.add_get('/api/agent/executors/claude-code', executor_status)
+    app.router.add_get('/api/agent/desktop/lease', desktop_lease)
+    app.router.add_post('/api/agent/desktop/lease', desktop_lease)
+    app.router.add_post('/api/agent/desktop/inspect-element', desktop_inspect_element)
+    app.router.add_get('/api/agent/permissions', permissions)
+    app.router.add_put('/api/agent/permissions', permissions)
+    app.router.add_post('/api/agent/permissions/decide', permissions_decide)
+    app.router.add_get('/api/agent/permissions/pending', permissions_pending)
+    app.router.add_get('/api/agent/permissions/rules', permissions_rules)
+    app.router.add_delete('/api/agent/permissions/rules', permissions_rules)
     app.router.add_get('/api/agent/skills/{skill}', skill)
     app.router.add_get('/api/agent/skills/{skill}/readiness', readiness)
     app.router.add_get('/api/agent/sessions', list_sessions)
@@ -1948,10 +2257,20 @@ def create_app(runtime):
 def main():
     data = Path(os.environ.get('BOXFOX_AGENT_DATA_DIR', str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'BoxFox/harness')))
     port = harness_port()
-    runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), SandboxExecutor(
-        api_key=os.environ.get('BOXFOX_API_KEY', 'boxfox-local-dev-token')))
+    executor = build_executor(data)
+    runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
+    # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN
+    # cho cả tiến trình. Hook hỏng ⇒ fail-closed ở tầng lease, KHÔNG làm chết khởi động: agent vẫn
+    # dùng được công cụ tệp/lệnh.
+    if getattr(executor, 'desktop', None) is not None:
+        prepared, prepare_code = executor.prepare()
+        hooks_ok, hooks_code = executor.desktop.install_hooks()
+        system_log.write('desktop.ready', level='info' if prepared else 'warn',
+                         message='điều khiển desktop đã sẵn sàng' if prepared else 'chưa sẵn sàng',
+                         data={'prepared': prepared, 'prepareCode': prepare_code,
+                               'hooks': hooks_ok, 'hooksCode': hooks_code})
     try:
         web.run_app(create_app(runtime), host='127.0.0.1', port=port, print=None)
     finally:
