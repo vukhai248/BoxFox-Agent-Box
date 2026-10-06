@@ -23,8 +23,12 @@ URL="${BOXFOX_SEARXNG_URL:-http://127.0.0.1:$PORT}"
 # Instance thứ hai trên cùng máy: cổng 8888 giữ tên mặc định `boxfox-searxng`; cổng khác dùng
 # `boxfox-searxng-<cổng>` để không đụng container mặc định (compose đọc biến này; đặt
 # BOXFOX_SEARXNG_CONTAINER để tự chọn tên khác).
-if [ "$PORT" != "8888" ] && [ -z "${BOXFOX_SEARXNG_CONTAINER:-}" ]; then
-  BOXFOX_SEARXNG_CONTAINER="boxfox-searxng-$PORT"
+# Cùng lúc phải đổi CẢ tên dự án compose: compose đối chiếu theo dự án + dịch vụ, nên nếu giữ
+# nguyên dự án thì lần chạy cổng khác sẽ TÁI TẠO chính container mặc định (đo 06/10/2026).
+PROJECT="${BOXFOX_SEARXNG_PROJECT:-boxfox-searxng}"
+if [ "$PORT" != "8888" ] && [ -z "${BOXFOX_SEARXNG_PROJECT:-}" ]; then
+  BOXFOX_SEARXNG_CONTAINER="${BOXFOX_SEARXNG_CONTAINER:-boxfox-searxng-$PORT}"
+  PROJECT="boxfox-searxng-$PORT"
   export BOXFOX_SEARXNG_CONTAINER
 fi
 # Export để compose nội suy ĐÚNG cổng này cho cả vế publish lẫn granian, kể cả khi biến được
@@ -32,11 +36,11 @@ fi
 export SEARXNG_PORT="$PORT"
 
 logs() {
-  docker compose -f "$COMPOSE" logs --tail=40 2>&1 || true
+  docker compose -p "$PROJECT" -f "$COMPOSE" logs --tail=40 2>&1 || true
 }
 
-echo "[searxng] bật container (cổng $PORT, tên ${BOXFOX_SEARXNG_CONTAINER:-boxfox-searxng})..."
-if ! docker compose -f "$COMPOSE" up -d; then
+echo "[searxng] bật container (cổng $PORT, dự án $PROJECT, tên ${BOXFOX_SEARXNG_CONTAINER:-boxfox-searxng})..."
+if ! docker compose -p "$PROJECT" -f "$COMPOSE" up -d; then
   echo "[searxng] LỖI: 'docker compose up -d' thất bại. 40 dòng log cuối:" >&2
   logs >&2
   exit 1
@@ -99,7 +103,8 @@ cat <<EOF
     động lại harness (tự nhận trong ≤30 s). Tắt tự dò: BOXFOX_SEARXNG_AUTODETECT=off; đổi địa
     chỉ tự dò: BOXFOX_SEARXNG_AUTODETECT_URL.
   * Đường ống tìm 10 bước mặc định BOXFOX_SEARCH_PIPELINE=auto (chỉ chạy khi chưa có cấu hình
-    khác và SearXNG sống). Ép bật: =on; tắt hẳn: =off.
+    khác và SearXNG sống). Ép bật: =on (vẫn cần SearXNG sống — không có thì ống không chạy);
+    tắt hẳn: =off.
   * Xem trạng thái: GET /api/agent/health (khối 'search') hoặc
     python3 deploy/searxng/probe.py --json
 EOF

@@ -27,8 +27,9 @@ docker compose -f deploy/searxng/docker-compose.yml down
 **không lộ ra LAN**; trong container instance bind `0.0.0.0` (xem `settings.yml`).
 
 Đổi cổng: `SEARXNG_PORT=8899 bash deploy/searxng/up.sh` — biến này điều khiển cả vế publish lẫn
-cổng granian trong container; tên container thành `boxfox-searxng-8899` để không đụng instance
-mặc định (`BOXFOX_SEARXNG_CONTAINER` đổi được tên).
+cổng granian trong container; `up.sh` đổi **cả tên dự án compose** (`boxfox-searxng-8899`) lẫn tên
+container (`boxfox-searxng-8899`) để lần chạy cổng khác **không tái tạo** instance mặc định — compose
+đối chiếu theo dự án + dịch vụ, chỉ đổi tên container là chưa đủ. Đổi tên dự án: `BOXFOX_SEARXNG_PROJECT`.
 
 > **Đã đo 2026-10-06 (hai cái bẫy thật, ghi lại để lần sau không mất thời gian):**
 > 1. Ảnh `searxng/searxng:latest` mở cổng **8080** của granian và **không đọc `server.port`**
@@ -66,7 +67,8 @@ nhận trong ≤30 s; cache dò dương 30 s / âm 15 s). Env luôn **thắng** 
 
 **Ống 10 bước**: `auto` (mặc định) chỉ chạy khi `source="web"` ∧ SearXNG sống ∧ **không** có cấu
 hình nguồn tường minh (nguồn chọn trong Settings / khoá env). `on` = ép chạy ống trước cả nguồn
-chọn; `off` = không bao giờ dùng ống (công tắc giết một dòng). `pipeline_enabled()` giữ nghĩa cũ
+chọn, **vẫn cần SearXNG sống** (không có thì ống không chạy và health báo `applies: false`);
+`off` = không bao giờ dùng ống (công tắc giết một dòng). `pipeline_enabled()` giữ nghĩa cũ
 cho nhánh `papers`.
 
 ## 3. Kiểm tra mức sẵn sàng
@@ -93,7 +95,8 @@ Trạng thái trong harness: **`GET /api/agent/health`**, khối `search` (rẻ,
               "searxng": { "url": "http://127.0.0.1:8888", "origin": "autodetect", "reachable": true },
               "pipeline": { "mode": "auto", "applies": true },
               "keys": { "brave": false, "tavily": false, "exa": false, "parallel": false, "firecrawl": false },
-              "engines": [ { "engine": "brave", "blocked": 3, "suspendedUntil": 1759745100 } ],
+              "engines": [ { "engine": "brave", "blocked": 3, "suspended_until": 1759745100,
+                             "suspended": false, "fails_streak": 3, "p50_ms": 210 } ],
               "fallback": ["firecrawl-keyless"] } }
 ```
 

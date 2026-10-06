@@ -97,7 +97,8 @@ Không dùng ống (off, hoặc auto không đủ điều kiện) ⇒ chuỗi GE
 
 - `auto` ⇒ ống chỉ thay bậc 3 khi `source="web"` ∧ SearXNG sống ∧ **không** cấu hình tường minh (không
   bậc 1, không bậc 2). Nhờ vậy bậc 1/2 luôn thắng ống.
-- `on` ⇒ ống chạy trước cả bậc 1/2 cho `source="web"` (giới hạn v1 đã ghi ở PART 2 §Rủi ro R2).
+- `on` ⇒ ống chạy trước cả bậc 1/2 cho `source="web"` (giới hạn v1 đã ghi ở PART 2 §Rủi ro R2); **vẫn
+  cần SearXNG sống** — không có thì cổng thật (`_pipeline_applies`) vẫn đóng và health báo `applies: false`.
 - `off` ⇒ công tắc giết: không bao giờ dùng ống; chuỗi `GENERAL_PROVIDERS` chạy như hiện tại.
 - Ống không ra kết quả ⇒ rơi xuống **phần còn lại của chuỗi** một lần (kể cả bậc 4), payload ghi
   `searchFallback`; lỗi cuối do đường chuỗi phân loại.
@@ -108,7 +109,7 @@ Không dùng ống (off, hoặc auto không đủ điều kiện) ⇒ chuỗi GE
 | Ca | Điều kiện nhận biết (không đoán mò) | Mã | `searchFailure.kind` | Câu chữ bắt buộc có |
 |---|---|---|---|---|
 | Chưa cấu hình gì | không khoá env, không nguồn chọn, SearXNG không có (env + tự dò đều rỗng) | `WEB_SEARCH_UNAVAILABLE` | `config` | "not a query problem"; cách bật: `deploy/searxng/up.sh`, `BOXFOX_SEARXNG_URL`, danh sách biến khoá thiếu, `Settings → Provider → Web Search` |
-| Backend có cấu hình nhưng hỏng | có ≥ 1 backend cấu hình/được chọn mà mọi chân đều ném (refused/timeout/5xx) | `WEB_SEARCH_UNAVAILABLE` | `infra` | "backend problem, not a query problem"; tên backend + URL + lý do (`errors[:3]`); `deploy/searxng/probe.py`; "do not retry the same search" |
+| Backend có cấu hình nhưng hỏng | có ≥ 1 backend cấu hình/được chọn mà mọi chân đều ném (refused/timeout/5xx) | `WEB_SEARCH_UNAVAILABLE` | `infra` | "backend problem, not a query problem"; tên backend + lý do (`errors[:3]`); "do not retry the same search"; URL + `deploy/searxng/probe.py` **chỉ khi SearXNG nằm trong nhóm backend hỏng** (khoá Brave hỏng ⇒ chỉ vào khoá/quota/`Settings → Provider → Web Search`) |
 | Backend trả lời nhưng 0 hàng | mọi chân trả danh sách rỗng, không chân nào ném (`NO_PROVIDER_ANSWERED`) | `WEB_SEARCH_EMPTY` | — | "returned no rows"; nới/đổi truy vấn **một lần** hoặc đổi nguồn; không lặp y hệt |
 | Truy vấn sai (rỗng/quá dài/`count` sai) | `_search_queries`/`_validate` bắt trước khi gọi mạng | `WEB_URL_INVALID` / `TOOL_ARG_INVALID` (đã có) | — | sửa đúng trường — **không** đổi |
 | Nguồn cụ thể hỏng (`source="wikipedia"`, `"github"`, …) | `source != 'web'` | `WEB_SEARCH_UNAVAILABLE` | `source` | tên nguồn + lý do; gợi ý nguồn khác; không lặp y hệt |
@@ -140,7 +141,8 @@ runtime hợp nhất vào phong bì công cụ nên model thấy `kind`.
               "pipeline": { "mode": "auto", "applies": true },
               "keys": { "brave": false, "tavily": false, "exa": false, "parallel": false, "firecrawl": false },
               "engines": [ { "engine": "brave", "ok": 0, "empty": 0, "blocked": 3, "timeouts": 0,
-                             "suspendedUntil": 1759745100 } ],
+                             "suspended_until": 1759745100, "suspended": false,
+                             "fails_streak": 3, "p50_ms": 210 } ],
               "fallback": ["firecrawl-keyless"] } }
 ```
 
@@ -172,7 +174,7 @@ runtime hợp nhất vào phong bì công cụ nên model thấy `kind`.
 | E8 | `GET /healthz` của image `latest` | **200 `OK`** — dùng làm đầu dò tự dò |
 | E9 | `searxng_search` gọi thẳng | **251 ms**, **3 hàng** |
 | E10 | 8 instance SearXNG công khai + HTML front-end | 429 / bot check / 403 ⇒ **loại** |
-| E11 | Ba tầng test (chi tiết ở `docs/testing/builtin-search-e2e.md`) | đơn vị 140 xanh + 1 ca đỏ **có sẵn từ `main`**; stub **4 xanh**; live **5 xanh** (khi container vắng: 5 skip) |
+| E11 | Ba tầng test (chi tiết ở `docs/testing/builtin-search-e2e.md`) | đơn vị 148 xanh + 1 ca đỏ **có sẵn từ `main`**; stub **4 xanh**; live **5 xanh** (khi container vắng: 5 skip) |
 | E12 | Đo tối thiểu độ trễ (10 truy vấn đầu `split=test`, không LLM) | `auto`: p50 239,7 ms / p95 551,0 ms, 0 lỗi, 10/10 qua ống; `off`: p50 273,7 ms / p95 324,8 ms, 0 lỗi — **chưa kết luận được ống đắt hơn hay rẻ hơn** (mẫu 3 truy vấn trước đó cho hướng ngược lại) |
 
 ## 6. Vận hành & công tắc giết
@@ -180,7 +182,7 @@ runtime hợp nhất vào phong bì công cụ nên model thấy `kind`.
 | Việc | Lệnh / chỗ |
 |---|---|
 | Bật SearXNG (chuẩn) | `bash deploy/searxng/up.sh` (chờ `/healthz` ≤30 s rồi chạy `probe.py`) |
-| Instance thứ hai | `SEARXNG_PORT=8899 bash deploy/searxng/up.sh` (tên `boxfox-searxng-8899`) |
+| Instance thứ hai | `SEARXNG_PORT=8899 bash deploy/searxng/up.sh` (dự án + tên `boxfox-searxng-8899`; không tái tạo instance 8888) |
 | Kiểm sâu theo engine | `python3 deploy/searxng/probe.py [--json]` — mã thoát 0/2/3 |
 | Trạng thái trong harness | `GET /api/agent/health` khối `search`; `?probe=search` để dò lại ngay |
 | **Công tắc giết** | `BOXFOX_SEARCH_PIPELINE=off` — không bao giờ dùng ống; chuỗi cũ chạy như trước |
@@ -199,5 +201,5 @@ runtime hợp nhất vào phong bì công cụ nên model thấy `kind`.
 - **Hai thứ nhỏ thêm ngoài kế hoạch, có lý do:** compose nhận `BOXFOX_SEARXNG_CONTAINER`, và `up.sh` tự
   đặt tên `boxfox-searxng-<cổng>` khi `SEARXNG_PORT != 8888` — vì máy này đã có container thật
   `boxfox-searxng` ở cổng 8888, không thể test cổng thứ hai nếu dùng chung tên.
-- `backend/src/agentbox/api/server.py` trong diff còn một lần đổi CRLF→LF toàn tệp **không liên quan**
-  tìm kiếm; đừng gán nó cho PART 1 khi soát diff.
+- `backend/src/agentbox/api/server.py` là tệp **trộn CRLF/LF** từ trước; diff của PART 1 giữ nguyên
+  byte-ending gốc (31 thêm / 3 xoá) — đừng gán cho nó một lần đổi CRLF→LF toàn tệp, không có lần nào.

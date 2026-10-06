@@ -58,8 +58,12 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture()
-def stub(monkeypatch):
-    """SearXNG giả trên cổng trống; fixture trả `(url, stop)` và tự dọn."""
+def stub(monkeypatch, tmp_path):
+    """SearXNG giả trên cổng trống; fixture trả `(url, stop)` và tự dọn.
+
+    Fixture cũng KÍN môi trường: xoá sáu biến khoá tìm kiếm (máy dev có thể đang giữ khoá thật ⇒
+    `_pipeline_applies` đổi ý) và trỏ DB sức khoẻ vào `tmp_path` (không ghi ra `/var/tmp` dùng chung).
+    """
     _Handler.rows = [STUB_ROW]
     _Handler.unresponsive = []
     _Handler.seen = []
@@ -69,6 +73,10 @@ def stub(monkeypatch):
     url = f'http://127.0.0.1:{server.server_address[1]}'
     monkeypatch.delenv(sp.SEARXNG_URL_ENV, raising=False)
     monkeypatch.delenv(sp.SEARXNG_AUTODETECT_URL_ENV, raising=False)
+    for name in ('BRAVE_API_KEY', 'BOXFOX_BRAVE_API_KEY', 'TAVILY_API_KEY', 'EXA_API_KEY',
+                 'PARALLEL_API_KEY', 'FIRECRAWL_API_KEY'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('BOXFOX_SEARCH_DB', str(tmp_path / 'stub.sqlite'))
     sp.reset_autodetect()
     sp.reset_store()
     try:
@@ -108,10 +116,10 @@ def test_autodetect_finds_a_stub_on_the_configured_url(stub, monkeypatch):
     assert sp.search_status()['searxng']['origin'] == 'autodetect'
 
 
-def test_a_stub_that_answers_empty_is_empty_not_dead(stub, monkeypatch):
+def test_a_stub_that_answers_empty_is_empty_not_dead(stub, monkeypatch, tmp_path):
     url, _ = stub
     monkeypatch.setenv(sp.SEARXNG_URL_ENV, url)
-    monkeypatch.setenv('BOXFOX_SEARCH_DB', '/var/tmp/boxfox-stub-empty.sqlite')
+    monkeypatch.setenv('BOXFOX_SEARCH_DB', str(tmp_path / 'stub-empty.sqlite'))
     sp.reset_store()
     _Handler.rows = []
     try:

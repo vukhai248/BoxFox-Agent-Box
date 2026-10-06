@@ -31,3 +31,17 @@ def searxng_autodetect_off(monkeypatch):
     except Exception:  # pragma: no cover - mô-đun chưa nhập được thì cũng chẳng có cache để xoá
         pass
     yield
+
+
+#: Sáu biến khoá tìm kiếm mà `web._explicit_search_config` đọc. Máy dev có thể đang giữ một khoá
+#: thật (Brave/Tavily/…): khi đó `_pipeline_applies('web')` trả False và các bài chốt "ống auto"
+#: đỏ dù mã đúng. Bộ unit phải KÍN với môi trường — bài nào muốn thử khoá thì tự đặt tường minh.
+SEARCH_KEY_VARS = ('BRAVE_API_KEY', 'BOXFOX_BRAVE_API_KEY', 'TAVILY_API_KEY', 'EXA_API_KEY',
+                   'PARALLEL_API_KEY', 'FIRECRAWL_API_KEY')
+
+
+@pytest.fixture(autouse=True)
+def searxng_no_api_keys(monkeypatch):
+    for name in SEARCH_KEY_VARS:
+        monkeypatch.delenv(name, raising=False)
+    yield

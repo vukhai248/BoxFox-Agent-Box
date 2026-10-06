@@ -1,6 +1,6 @@
 # Test E2E tìm kiếm built-in không khoá (SearXNG tự host)
 
-> **Trạng thái:** ba tầng test đã chạy trên máy này ngày **2026-10-06** — tầng đơn vị 140 xanh + **1 ca
+> **Trạng thái:** ba tầng test đã chạy trên máy này ngày **2026-10-06** — tầng đơn vị 148 xanh + **1 ca
 > đỏ có sẵn từ `main`** (không phải hồi quy của đợt này, xem §1), tầng stub 4 xanh, tầng live 5 xanh.
 > Phạm vi: `web_search` chạy được **không cần khoá API bên thứ ba** nhờ SearXNG tự host + tự dò
 > `127.0.0.1:8888`, và lỗi F05 (thiếu cấu hình / backend chết) được phân loại thay vì xui sửa truy vấn.
@@ -13,7 +13,7 @@
 
 | Tầng | Lệnh (chạy từ gốc repo) | Cần gì | Kết quả đo 2026-10-06 |
 |---|---|---|---|
-| 1 — đơn vị | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/unit/test_search_pipeline.py tests/unit/test_searxng_provider.py tests/unit/test_search_failures.py tests/unit/test_health_search_status.py tests/unit/test_web_tools.py` | không mạng, không Docker | `140 passed, 1 failed` — ca đỏ là **có sẵn từ `main`**, xem ghi chú dưới |
+| 1 — đơn vị | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/unit/test_search_pipeline.py tests/unit/test_searxng_provider.py tests/unit/test_search_failures.py tests/unit/test_health_search_status.py tests/unit/test_web_tools.py` | không mạng, không Docker | `148 passed, 1 failed` — ca đỏ là **có sẵn từ `main`**, xem ghi chú dưới |
 | 2 — stub loopback | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/integration/test_search_searxng_stub.py` | một `http.server` trong tiến trình, **không** Docker, **không** Internet | `4 passed` (2,09 s) |
 | 3 — live (container thật) | `cd backend && TMPDIR=/var/tmp PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/integration/test_search_searxng_live.py -rs` | SearXNG đang chạy ở `http://127.0.0.1:8888` (hoặc `BOXFOX_SEARXNG_LIVE_URL`) | `5 passed` (2,86 s); khi container vắng: `5 skipped` kèm câu `SearXNG chưa chạy: bash deploy/searxng/up.sh (xem docs/testing/builtin-search-e2e.md)` |
 
@@ -216,24 +216,45 @@ Kết quả đo thử 2026-10-06 (các truy vấn đầu của `split=test`, Sea
 biết engine nào trả hàng, `unresponsive_engines` cho biết engine nào đang bị CAPTCHA/429/403.
 
 **Mẫu lớn hơn, cùng ngày 2026-10-06** — chạy `run_bench()` của §5.1 với `judge_pool` **thay bằng
-hàm rỗng** (`lambda pool, out_dir: {}`): không gọi model, nên không tiêu đồng nào, mà vẫn ra số đo
-độ trễ/độ lỗi trên **12 truy vấn × 2 cấu hình = 48 lời gọi mỗi cấu hình** (SearXNG cục bộ, không khoá,
-DB đệm riêng theo lượt chạy):
+hàm rỗng** (`lambda pool, out_dir, **kw: {}`): không gọi model, nên không tiêu đồng nào, mà vẫn ra
+số đo độ trễ/độ lỗi trên **48 truy vấn `split=dev`** (mặc định của `scripts/eval/search_queries.jsonl`;
+72 truy vấn `test` để dành cho lượt có chấm điểm) **× 2 cấu hình = 48 lời gọi mỗi cấu hình, 96 lượt**
+(SearXNG cục bộ, không khoá, DB đệm riêng theo lượt chạy). Đúng script đã chạy (dán vào tệp rồi gọi
+`python <tệp>` từ gốc repo):
+
+```python
+import json, os, pathlib, sys
+sys.path.insert(0, 'scripts/eval')
+os.environ.setdefault('BOXFOX_EVAL_ALLOW_SPEND', '1')
+os.environ.setdefault('BOXFOX_EVAL_BUDGET_USD', '1.0')
+os.environ['BOXFOX_SEARXNG_URL'] = 'http://127.0.0.1:8888'
+import search_bench
+search_bench.judge_pool = lambda pool, out_dir, **kw: {}
+bench = search_bench.run_bench(['legacy', 'pipeline'], split='dev',
+                               out_dir=pathlib.Path('/var/tmp/bench-builtin/out-dev'))
+print(json.dumps(bench['metrics'], ensure_ascii=False, indent=1))
+```
 
 | Cấu hình | Lời gọi | p50 | p95 | Tỉ lệ lỗi/hết giờ | nDCG@10 |
 |---|---|---|---|---|---|
-| `legacy` (ống tắt) | 48 | 160,0 ms | 314,8 ms | 0,0 | — (chưa chấm) |
-| `pipeline` (ống đầy đủ) | 48 | 233,5 ms | 414,6 ms | 0,0 | — (chưa chấm) |
+| `legacy` (ống tắt) | 48 | 166,5 ms | 301,4 ms | 0,0 | — (chưa chấm) |
+| `pipeline` (ống đầy đủ) | 48 | 234,5 ms | 599,1 ms | 0,0 | — (chưa chấm) |
 
-Đây là mẫu đủ lớn để **chốt R2**: `auto` đắt hơn đường cũ khoảng **+73 ms p50 / +100 ms p95** mỗi
-lời gọi `web_search`, đổi lấy 10 kết quả đã hợp nhất/khử trùng và bảng sức khoẻ engine. Không lời
-gọi nào lỗi ở cả hai cấu hình. Muốn số nDCG thì phải mở cổng chi tiêu cho phần chấm (§5.1).
+Hai lượt chạy 48 truy vấn (lượt trên và lượt 09:31 cùng ngày, p50 `legacy` 160,0 / `pipeline` 233,5)
+cho **cùng một kết luận về p50**: `auto` đắt hơn đường cũ khoảng **+68…+73 ms p50** mỗi lời gọi
+`web_search`, đổi lấy 10 kết quả đã hợp nhất/khử trùng và bảng sức khoẻ engine. p95 dao động mạnh
+giữa hai lượt (414,6 → 599,1 ms cho `pipeline`) vì nó phụ thuộc engine nào được luân phiên và lần
+chạm đầu — **chốt R2 bằng p50, đừng chốt bằng p95**. Không lời gọi nào lỗi ở cả hai cấu hình. Muốn
+số nDCG thì phải mở cổng chi tiêu cho phần chấm (§5.1).
 
 ## 6. Ghi chú vận hành khi chạy test
 
 - Tầng 3 dùng chung instance `127.0.0.1:8888` với harness thật: nó **không** tắt/bật container, chỉ
   gọi. Muốn kiểm nhánh `skip`, đặt `BOXFOX_SEARXNG_LIVE_URL=http://127.0.0.1:9`.
 - Mỗi bài tầng 3 tự trỏ `BOXFOX_SEARCH_DB` vào `tmp_path` — không đọc/ghi DB tìm kiếm thật của máy.
+- Tầng 1 và tầng 2 **kín với khoá API của máy chạy**: fixture chung của `tests/unit/conftest.py` và
+  fixture `stub` của tầng 2 xoá sáu biến khoá (`BRAVE_/BOXFOX_BRAVE_/TAVILY_/EXA_/PARALLEL_/FIRECRAWL_API_KEY`)
+  trước mỗi bài — máy dev đang giữ khoá thật vẫn cho kết quả xanh như trên CI.
 - Ca đối chiếu `test_probe_json_of_the_ops_script_agrees_with_the_harness` chạy `probe.py --json` bằng
   **chính trình thông dịch đang chạy test** và đòi `body['exit_code'] == returncode` — sửa `probe.py`
   mà đổi mã thoát thì ca này đỏ trước.

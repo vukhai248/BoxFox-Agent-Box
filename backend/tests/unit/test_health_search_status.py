@@ -53,6 +53,10 @@ def test_the_health_route_reports_the_search_block_without_touching_the_network(
 
     monkeypatch.setattr(search_pipeline, 'probe_searxng', counting_probe)
     monkeypatch.setenv('BOXFOX_SEARCH_DB', str(tmp_path / 'never-created.sqlite'))
+    # BẬT tự dò cho bài này: fixture chung pin `AUTODETECT=off`, mà khi tắt thì cả đường dò lẫn
+    # health đều không thể gọi `probe_searxng` — `calls == []` sẽ đúng một cách vô nghĩa.
+    monkeypatch.setenv(search_pipeline.SEARXNG_AUTODETECT_ENV, 'on')
+    search_pipeline.reset_autodetect()
 
     async def scenario(client, runtime):
         response = await client.get('/api/agent/health', headers=HEADERS)
