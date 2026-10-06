@@ -320,8 +320,8 @@ ORCHESTRATOR_TOOLS = WRITE | VISUAL | {'delegate_task', 'session_search', 'plan_
                                        # Work Graph (lớp điều phối mới): main dựng DAG, harness chạy vòng
                                        # sản xuất ↔ phản biện, chủ nhà duyệt, rồi DAG chạy song song.
                                        'work_graph', 'work_run', 'work_ship', 'work_check', 'work_report', 'work_artifact_read', 'interview',
-                                       # H3 — bề mặt task (plan v1 §4): chỉ orchestrator thấy; công
-                                       # tắc `BOXFOX_TASK_SURFACE` quyết định có quảng cáo hay không.
+                                       # H3 — bề mặt task (plan v1 §4): chỉ orchestrator thấy;
+                                       # LUÔN quảng cáo từ v2 (#6599).
                                        'task_list', 'task_get', 'task_send', 'task_abandon',
                                        'start_job', 'get_job', 'subscribe_job', 'wait_jobs', 'cancel_job',
                                        'research_job_submit', 'research_job_get', 'research_job_control', 'research_job_result'} | PEER | CHILD_CALLBACK \

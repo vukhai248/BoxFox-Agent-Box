@@ -1,6 +1,6 @@
 """W6.5 profiles, truthful clamps and metadata after long streamed responses.
 
-Số trong đây là số của #6457 (03/10/2026): nhà sản xuất 200 bước/3600 s, kiểm ngắn 40, kiểm dài 80.
+Số trong đây là số của #6457 (03/10/2026): nhà sản xuất 200 bước/7200 s, kiểm ngắn 40, kiểm dài 80.
 Trần phiên (`limits.py`) là 120/400 bước và 1800/7200 s; con luôn bị kẹp theo trần phiên cha.
 """
 import asyncio
@@ -16,9 +16,16 @@ from test_work_checks import setup, start
 from test_delegation_contract import FixtureExecutor, FixtureModel, answer, call
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
+
+
+# Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research`, nhưng `design`
+# vẫn là kind discovery main chạy được với đúng hồ sơ ngân sách "deliverable" (200 bước/7200 s) mà
+# các bài đo dưới đây chốt, nên dùng nó thay cho nút research cũ.
+DESIGN = {'id': 'R1', 'kind': 'design', 'title': 'Compare approaches',
+          'goal': 'Compare two export formats using the provided evidence'}
 
 
 @pytest.mark.parametrize('role,task,expected', [
@@ -47,13 +54,13 @@ def test_short_and_long_review_cap(hints, long):
 ])
 def test_actual_producer_child_respects_owner_and_reports_clamps(tmp_path, owner_steps, owner_seconds, expected_steps, expected_seconds):
     store, rt, _, _, sid = build(tmp_path, values={'maxSteps': owner_steps, 'deadlineSeconds': owner_seconds})
-    asyncio.run(setup(rt, sid))
+    asyncio.run(setup(rt, sid, node=DESIGN))
     child = store.get(store.children_of(sid)[0]['session_id'])
     budget = child['config']['workBudget']
     assert (child['config']['maxSteps'], child['config']['deadlineSeconds']) == (expected_steps, expected_seconds)
     assert budget['requestedMaxSteps'] == 200
     assert budget['effectiveMaxSteps'] == expected_steps
-    assert budget['clamped'] == (expected_steps < 200 or expected_seconds < 3600)
+    assert budget['clamped'] == (expected_steps < 200 or expected_seconds < 7200)
     assert child['config']['maxTokens'] == 16000
     assert store.get(sid)['config']['maxSteps'] == owner_steps
 
@@ -61,7 +68,7 @@ def test_actual_producer_child_respects_owner_and_reports_clamps(tmp_path, owner
 def test_checker_prompt_uses_effective_budget_and_short_check_profile(tmp_path):
     store, rt, model, _, sid = build(tmp_path, values={'maxSteps': 12})
     async def run():
-        _, draft = await setup(rt, sid)
+        _, draft = await setup(rt, sid, node=DESIGN)
         await start(rt, sid, draft)
     asyncio.run(run())
     child = store.get(store.children_of(sid)[-1]['session_id'])
@@ -82,8 +89,7 @@ def test_whole_review_nodeless_profile_preserves_read_and_coverage_gates(tmp_pat
     asyncio.run(run())
 
 
-def test_event_summary_does_not_drop_late_error_final_or_batched_tools(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_RESEARCH_MODE', 'off')
+def test_event_summary_does_not_drop_late_error_final_or_batched_tools(tmp_path):
     store = SessionStore(tmp_path / 'sessions.db')
     model = FixtureModel([answer('child final')])
     rt = HarnessRuntime(store, FixtureExecutor(), model)
@@ -97,7 +103,8 @@ def test_event_summary_does_not_drop_late_error_final_or_batched_tools(tmp_path,
             store.emit(cid, 'tool_start', {'name': 'file_read', 'id': f't{i}'})
         return original(cid, text, *args, **kwargs)
     rt.start = noisy
-    result = asyncio.run(rt.delegate(store.get(sid), {'role': 'research', 'goal': 'Bounded fixture lookup'}))
+    # Bề mặt 7 đã xoá: main chỉ delegate được các vai còn lại — `explore` là nhánh tra cứu tương đương.
+    result = asyncio.run(rt.delegate(store.get(sid), {'role': 'explore', 'goal': 'Bounded fixture lookup'}))
     assert result['last_error'] == 'A real late error'
     assert result['tools_run'] == ['file_read'] * 5
     assert result['answerChars'] == len('child final')
@@ -140,7 +147,7 @@ def test_partial_checkpoint_retains_real_reason_refs_and_budget_after_restart(tm
         return value
     model.complete = partial
     async def run():
-        rid, draft = await setup(rt, sid)
+        rid, draft = await setup(rt, sid, node=DESIGN)
         output = draft['outputs'][0]
         checkpoint = output['checkpoint']
         assert output['status'] == 'failed'

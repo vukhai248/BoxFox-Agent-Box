@@ -1,33 +1,52 @@
 # BoxFox — SearXNG tự host cho lớp tìm không khoá (P0b). Ảnh đã được kéo sẵn: searxng/searxng:latest.
 #
+# CÁCH DÙNG NHANH (khuyến nghị):
+#   bash deploy/searxng/up.sh     # bật + chờ sẵn sàng + kiểm engine + in URL dùng được
+#
+# Thủ công:
 #   docker compose -f deploy/searxng/docker-compose.yml up -d
 #   docker compose -f deploy/searxng/docker-compose.yml logs -f
 #   docker compose -f deploy/searxng/docker-compose.yml down
 #
-# `network_mode: host` để instance nghe ĐÚNG `127.0.0.1:8888` như `settings.yml` khai — không lộ
-# ra LAN. Trên Docker Desktop (Mac/Windows) host networking có thể không dùng được; khi đó thay
-# bằng biến thể port-mapping đã chú thích ở cuối tệp (đổi `bind_address` trong settings.yml thành
-# "0.0.0.0" và bỏ `network_mode`).
+# MẶC ĐỊNH = PORT-MAPPING `127.0.0.1:8888:8888`: chỉ loopback của HOST được publish nên KHÔNG
+# lộ ra LAN; trong container instance bind `0.0.0.0` (xem `bind_address` trong settings.yml).
+#
+# VÌ SAO không mặc định `network_mode: host` (ĐO ĐƯỢC 2026-10-06, và 2026-09-25): trong sandbox
+# này host networking KHÔNG bind được — `RuntimeError: Address already in use (os error 98)` từ
+# `granian._init_shared_socket()`, dù `ss` không thấy ai giữ cổng. Port-mapping chạy tốt ở cả
+# sandbox lẫn Docker Desktop. Muốn quay lại host networking: xem khối chú thích cuối tệp.
+#
+# ĐỔI CỔNG: `SEARXNG_PORT=8899 bash deploy/searxng/up.sh` — biến này điều khiển cả vế publish
+# của `ports:` lẫn cổng granian trong container (xem chú thích `SEARXNG_PORT` bên dưới).
 services:
   searxng:
     image: searxng/searxng:latest
-    container_name: boxfox-searxng
+    # Mặc định `boxfox-searxng`. Đặt BOXFOX_SEARXNG_CONTAINER khi cần chạy instance thứ hai
+    # (up.sh tự đặt `boxfox-searxng-<cổng>` khi cổng khác 8888, để không trùng tên instance
+    # mặc định).
+    container_name: ${BOXFOX_SEARXNG_CONTAINER:-boxfox-searxng}
     restart: unless-stopped
-    network_mode: host
+    # Chỉ loopback HOST được mở — không lộ ra LAN.
+    ports:
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:${SEARXNG_PORT:-8888}"
     volumes:
       # Chỉ đọc: container không được sửa cấu hình của chủ nhà.
       - ./settings.yml:/etc/searxng/settings.yml:ro
     environment:
       - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
-      # ĐO ĐƯỢC 2026-09-25: ảnh `searxng/searxng:latest` mở cổng 8080 của granian, KHÔNG đọc
+      # ĐO ĐƯỢC 2026-10-06: ảnh `searxng/searxng:latest` mở cổng 8080 của granian và KHÔNG đọc
       # `server.port` trong settings.yml. Thiếu biến này thì cổng 8888 không có ai nghe và mọi
-      # lời gọi bị "Connection reset by peer". `SEARXNG_PORT` mới là nút thật.
-      - SEARXNG_PORT=8888
+      # lời gọi bị "Connection reset by peer". `SEARXNG_PORT` mới là nút thật — phải khớp vế
+      # trong của `ports:` ở trên.
+      - SEARXNG_PORT=${SEARXNG_PORT:-8888}
 
-# --- Biến thể port-mapping (Docker Desktop / Mac / Windows, và môi trường sandbox nơi
-#     `network_mode: host` không bind được — đo 2026-09-25: báo `Address already in use`):
-#     bỏ `network_mode: host` ở trên, đặt `server.bind_address: "0.0.0.0"` trong settings.yml.
-#     Chỉ loopback HOST được publish, nên vẫn không lộ ra LAN:
+# --- Tuỳ chọn cũ: `network_mode: host` (chỉ khi port-mapping thực sự không chạy được) ----------
+# Cách đổi:
+#   1. bỏ khối `ports:` ở trên, thêm `network_mode: host` cho service;
+#   2. trong settings.yml đổi `server.bind_address` từ "0.0.0.0" thành "127.0.0.1"
+#      (host networking dùng thẳng network namespace của máy — bind 0.0.0.0 là LỘ RA LAN);
+#   3. `docker compose ... up -d` lại.
 #
-#     ports:
-#       - "127.0.0.1:8888:8888"
+# CẢNH BÁO ĐÃ ĐO (2026-09-25 và 2026-10-06): trong sandbox này cách đó KHÔNG lên được —
+# `RuntimeError: Address already in use (os error 98)` từ `granian._init_shared_socket()`, dù
+# `ss -ltnp` không thấy ai giữ cổng 8888. Đừng mất thời gian sửa; dùng port-mapping mặc định.

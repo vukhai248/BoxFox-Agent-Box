@@ -26,8 +26,8 @@ Bất biến:
 Quy ước chung H3–H8: bảng cộng thêm trên `SessionStore.db`, lỗi `ContractError` mã
 `USAGE_*`, docstring tiếng Việt, không thêm dependency ngoài stdlib.
 
-Nối runtime (H7): công tắc `BOXFOX_USAGE_LEDGER` (mặc định BẬT từ v2, #6599). Khi bật, runtime ghi
-một hàng `record()` cho mỗi lần gọi model hoàn tất (`record_completion`) với đúng
+Nối runtime (H7): sổ LUÔN sống từ v2 (#6599). Runtime ghi một hàng `record()` cho mỗi lần gọi model
+hoàn tất (`record_completion`) với đúng
 `input/output/reasoning/cached` mà router báo; giá lấy từ `pricing` của dòng model
 trong router (một snapshot admin cho mỗi request) — không có giá thì `certainty='unknown'`
 và `amount=None`, không bao giờ 0. `reserve`/`settle` nối khi root có `harnessAllocationId` do backend ghim tới
@@ -41,12 +41,8 @@ import math
 import sqlite3
 import time
 
-from . import feature_switches
 from .orchestration_contracts import identifier, invalid, object_fields, revision, text
 from .work_policy import digest
-
-#: Công tắc giết khi nối vào runtime: mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off` (khuôn `BOXFOX_TASK_SURFACE`).
-SWITCH = 'BOXFOX_USAGE_LEDGER'
 
 RECORD_SCHEMA_VERSION = 1
 PAGE_LIMIT = 100
@@ -97,13 +93,6 @@ _USAGE_PAYLOAD_KEYS = ('run_id', 'task_key', 'job_id', 'attempt_id', 'provider_i
 
 _READ_KEYS = ('read', 'readTokens', 'cached', 'cacheRead', 'cache_read_input_tokens')
 _WRITE_KEYS = ('write', 'writeTokens', 'cacheWrite', 'cacheWriteInput', 'cache_creation_input_tokens')
-
-
-def enabled(env=None):
-    """Sổ usage: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(SWITCH)
 
 
 def encode(value):

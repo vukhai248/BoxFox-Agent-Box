@@ -9,8 +9,8 @@ from agentbox.memory.session_store import SessionStore
 import pytest
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -145,7 +145,8 @@ def test_useful_partial_text_is_preserved_without_replaying_history(tmp_path):
 # --------------------------------------------------------------------------- #
 
 def test_the_parent_sees_a_truncated_child_as_partial(tmp_path):
-    client = FixtureModel([answer(calls=[call('delegate_task', {'role': 'research', 'goal': 'tra cứu'})]),
+    # Bề mặt 7 đã xoá: vai `research` bị cổng Research chặn từ main; `explore` là vai main còn giao được.
+    client = FixtureModel([answer(calls=[call('delegate_task', {'role': 'explore', 'goal': 'tra cứu'})]),
                            truncated('phần đầu của báo cáo', 4096),
                            answer('câu trả lời cuối của cha')])
     store, runtime, session, result = run_turn(tmp_path, client, prompt='nhờ chuyên gia')
@@ -292,18 +293,24 @@ def test_malformed_tool_json_never_reaches_executor(tmp_path):
         store.close()
 
 
-def test_default_research_budget_is_used_on_the_wire(tmp_path, monkeypatch):
+def test_main_research_delegation_is_refused_and_no_child_is_spawned(tmp_path, monkeypatch):
+    """Bề mặt 7 đã xoá: main không còn đường giao vai `research`.
+
+    Trước đây bài này chốt trần output research mặc định (`BOXFOX_RESEARCH_OUTPUT_TOKENS`,
+    `[4096, 16000, 4096]`) đi thẳng từ main sang con. Nay lời gọi thành lỗi tool
+    `RESEARCH_MAIN_READ_ONLY` mà model đọc được, không phiên con nào được sinh — trần research
+    chỉ còn đi qua Research lead có binding (miền của `test_research_gateway.py`)."""
     monkeypatch.delenv('BOXFOX_RESEARCH_OUTPUT_TOKENS', raising=False)
     client = FixtureModel([answer(calls=[call('delegate_task', {'role':'research','goal':'fixture research'})]),
-                           answer('child result'), answer('main result')])
-    store, runtime, session, _ = run_turn(tmp_path, client)
+                           answer('main result')])
+    store, runtime, session, result = run_turn(tmp_path, client)
     try:
-        assert [r['max_tokens'] for r in client.requests] == [4096,16000,4096]
-        child = next(e['data'] for e in store.events(session['id']) if e['type'] == 'child')
-        config = store.get(child['sessionId'])['config']
-        assert config['maxTokens'] == 16000
-        reopened = SessionStore(tmp_path / 'sessions.db')
-        assert reopened.get(child['sessionId'])['config']['maxTokens'] == 16000
-        reopened.close()
+        assert [r['max_tokens'] for r in client.requests] == [4096, 4096]
+        assert not [e for e in store.events(session['id']) if e['type'] == 'child'], 'không có con nào được sinh'
+        assert store.children_of(session['id']) == []
+        payload = json.loads(next(m['content'] for m in store.get(session['id'])['messages'] if m['role'] == 'tool'))
+        assert payload['is_error'] is True and payload['errorCode'] == 'TOOL_NOT_PERMITTED'
+        assert 'RESEARCH_MAIN_READ_ONLY' in payload['error']
+        assert result == 'main result'
     finally:
         store.close()

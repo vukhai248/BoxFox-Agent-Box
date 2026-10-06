@@ -3,12 +3,12 @@ import asyncio
 
 from agentbox.agent_core import work_graph, work_policy
 from test_work_graph import build, EXPLORE
-from test_work_checks import RESEARCH, start
+from test_work_checks import CHECKED, start
 import pytest
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -16,8 +16,10 @@ def test_old_input_contract_waits_for_recheck_while_independent_branch_proceeds(
     async def check():
         store, rt, _, _, sid = build(tmp_path)
         graph = work_graph.service(rt)
+        # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn chạy được nút `research`, nên nhánh gốc
+        # dùng `CHECKED` (explore + risk `consequential`) — vẫn có bộ kiểm thật để đo hợp đồng input cũ.
         run = graph.create(store.get(sid), {'goal': 'Research only', 'flow': 'research', 'nodes': [
-            RESEARCH, EXPLORE | {'id': 'E2', 'dependsOn': ['R1']}, EXPLORE | {'id': 'E3'}]})
+            CHECKED, EXPLORE | {'id': 'E2', 'dependsOn': ['R1']}, EXPLORE | {'id': 'E3'}]})
         draft = await graph.run(store.get(sid), {'phase': 'discover', 'nodeIds': ['R1']})
         first = await start(rt, sid, draft, invocationId='historical')
         old = first['checks'][0]

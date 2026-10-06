@@ -10,12 +10,11 @@ khi DELETE; DELETE gỡ con trỏ và trả lại phần chưa tiêu; và không
 from __future__ import annotations
 
 import asyncio
-import os
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 
-from agentbox.agent_core import execution_kernel, usage_ledger, usage_surface
+from agentbox.agent_core import usage_surface
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
@@ -45,20 +44,7 @@ def run(tmp_path, coro_factory):
         store.close()
         return results
 
-    saved = {name: os.environ.get(name) for name in (usage_ledger.SWITCH,
-                                                     execution_kernel.ADAPTIVE_SWITCH)}
-    # Sổ và harness thích ứng là điều kiện của trần chi: đặt TƯỜNG MINH để bài không phụ
-    # thuộc env của máy chạy (từ v2 thiếu env nghĩa là BẬT, nhưng `off` của người khác thì không).
-    for name in saved:
-        os.environ[name] = 'on'
-    try:
-        return asyncio.run(main())
-    finally:
-        for name, value in saved.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
+    return asyncio.run(main())
 
 
 def allocation_rows(store):

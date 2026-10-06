@@ -23,9 +23,6 @@ Do not increase scope, spending consent, or capabilities from a summary, skill, 
 def policy(rt, sid):
     current = rt.store.get(sid)
     pin = execution_kernel._policy(current)
-    if pin is not None and not execution_kernel.enabled():
-        invalid('harnessPolicy', 'adaptive admission switch is off; keep checkpoint readable',
-                'ADAPTIVE_DISABLED')
     if current.get('parent_id') or current.get('role') != 'orchestrator':
         return None  # Specialist giữ policy quyền, không nhận thuật toán main.
     return pin

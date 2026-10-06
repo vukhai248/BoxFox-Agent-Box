@@ -16,7 +16,7 @@ import asyncio
 
 import pytest
 
-from agentbox.agent_core import research_gateway, research_header, research_quality, research_runtime
+from agentbox.agent_core import research_header, research_quality, research_runtime
 from agentbox.agent_core.limits import RESEARCH_GATE_ENV
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
@@ -83,30 +83,24 @@ def harness(tmp_path, monkeypatch):
     store.close()
 
 
-@pytest.fixture(autouse=True)
-def _legacy_path_pins_the_gateway_off(monkeypatch):
-    """Tệp này kiểm ĐƯỜNG CŨ (`BOXFOX_RESEARCH_GATE`) — ghim gateway TẮT tường minh.
-
-    Khi `BOXFOX_RESEARCH_GATEWAY` bật, main chỉ còn đi qua ranh giới đã publish
-    (`RESEARCH_MAIN_READ_ONLY`), nên đường cũ đóng lại — đó là hành vi của tệp khác
-    (`test_research_gateway.py`). Bài kiểm ở đây phải độc lập với môi trường thật của máy chạy:
-    máy có đặt `BOXFOX_RESEARCH_GATEWAY=on` thì tệp này vẫn đo đúng đường cũ.
-    """
-    monkeypatch.setenv(research_gateway.SWITCH, 'off')
+# Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main KHÔNG còn đi được qua `dispatch` tới các công cụ
+# research nội bộ (`RESEARCH_MAIN_READ_ONLY`), và không còn công tắc `BOXFOX_RESEARCH_GATEWAY`
+# để tắt. Tệp này đo ENGINE (cổng chất lượng đọc ở thời điểm gọi), nên gọi thẳng hàm engine —
+# cửa dispatch của main được ghim ở `test_research_gateway.py`.
 
 
 def seed_row(runtime, session, **overrides):
     args = {'claim': 'quy định chuyển tuyến đúng tuyến', 'url': URL, 'excerpt': EXCERPT,
             'payload': PAYLOAD}
     args.update(overrides)
-    return asyncio.run(runtime.dispatch(session, 'source_add', args))
+    return research_runtime.source_add(runtime, session, args)
 
 
 def write(runtime, session, **overrides):
     args = {'researchId': 'chuyen-tuyen-2026', 'level': 2, 'profile': 'health',
             'markdown': MARKDOWN, 'title': 'Chuyển tuyến 2026'}
     args.update(overrides)
-    return asyncio.run(runtime.dispatch(session, 'dossier_write', args))
+    return asyncio.run(research_runtime.dossier_write(runtime, session, args))
 
 
 # --- 1. Công tắc đọc ở thời điểm gọi, và bảng Nút vặn nói đúng mức đó ------
@@ -272,31 +266,53 @@ class ScriptedModel(FixtureModel):
         return item
 
 
-def run_research_child(tmp_path, script, *, message='nhờ chuyên gia tra phí chuyển tuyến'):
+BRANCH_REQUEST = {'schema': 'boxfox-research-job/1', 'goal': 'Tra phí chuyển tuyến 2026.',
+                  'decisionContext': 'Chốt chi phí trước khi tư vấn.', 'questions': ['Phí chuyển tuyến 2026?'],
+                  'constraints': ['Không thí nghiệm mạng hoặc chi tiêu sống.'], 'inputRefs': [],
+                  'desiredOutput': 'Bản tổng hợp có nguồn.', 'freshnessRequirement': 'as-of request',
+                  'permissionEnvelopeRef': None, 'allocationRef': None, 'consentRef': None}
+
+
+def run_research_child(tmp_path, worker_script):
+    """Chạy MỘT nhánh `research` của lead đã admit rồi đọc event `child` ở phiên lead.
+
+    Bề mặt 7 đã xoá nên main không còn `delegate_task role=research`; đường còn lại — và cũng là
+    đường THẬT của sản phẩm — là worker của lead Research. Ở đây lead được admit bằng hook
+    admission của fixture (không phải consent sống), rồi lượt của lead tự gọi `delegate_task`
+    đúng như một lead thật; dòng sổ của nhánh do chính nhánh ghim qua `source_add`.
+    """
     store = SessionStore(tmp_path / 'child.db')
-    runtime = HarnessRuntime(store, FixtureExecutor(), ScriptedModel(script))
-    session = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})
+    runtime = HarnessRuntime(store, FixtureExecutor(), ScriptedModel(
+        [DELEGATE_RESEARCH, *worker_script, answer_of('xong rồi')]))
+    root = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})
+    lead = {}
 
     async def run():
-        await runtime.submit(session['id'], message)
-        await runtime.tasks[session['id']]
+        receipt = await runtime.dispatch(root, 'research_job_submit',
+                                         {'request': BRANCH_REQUEST, 'invocationId': 'branch-submit'})
+        lead['session'] = store.get(receipt['ownerControllerId'])
+        runtime.prepare_research_admission = None
+        runtime.research_admission = lambda actor, req: actor['id'] == lead['session']['id']
+        await runtime.dispatch(root, 'research_job_control', {
+            'jobId': receipt['researchJobId'], 'expectedRevision': receipt['revision'],
+            'invocationId': 'branch-resume', 'action': 'resume', 'reason': 'Fixture admission.'})
+        await runtime.tasks[lead['session']['id']]
 
     asyncio.run(run())
-    rows = [event['data'] for event in store.events(session['id']) if event['type'] == 'child']
-    assert rows, 'cha phải nhận một event `child`'
-    return store, session, rows[-1]
+    rows = [event['data'] for event in store.events(lead['session']['id']) if event['type'] == 'child']
+    assert rows, 'lead phải nhận một event `child`'
+    return store, lead['session'], rows[-1]
 
 
 DELEGATE_RESEARCH = answer_of(calls=[tool_call('delegate_task', {
-    'role': 'research', 'goal': 'tra phí chuyển tuyến 2026'})])
+    'role': 'research', 'goal': 'tra phí chuyển tuyến 2026', 'questionId': 'q1', 'wait': True})])
 
 
 def test_a_research_child_that_never_touched_the_ledger_is_annotated_on_its_answer(
         tmp_path, monkeypatch):
     """Nhánh `research` kết thúc mà không để lại dòng sổ ⇒ payload `child` mang `researchGate`."""
     monkeypatch.delenv(RESEARCH_GATE_ENV, raising=False)
-    store, session, child = run_research_child(
-        tmp_path, [DELEGATE_RESEARCH, answer_of(CHILD_ANSWER), answer_of('xong rồi')])
+    store, session, child = run_research_child(tmp_path, [answer_of(CHILD_ANSWER)])
     gate = child['researchGate']
     assert gate['mode'] == 'note' and gate['rows'] == 0
     assert 'research-lineage-missing' in gate['issues'], 'con không để lại dòng sổ nào'
@@ -312,23 +328,11 @@ def test_a_research_child_that_never_touched_the_ledger_is_annotated_on_its_answ
 def test_a_url_the_branch_never_registered_is_reported_as_unproven(tmp_path, monkeypatch):
     """Nhánh CÓ dòng sổ nhưng câu trả lời trỏ một URL khác ⇒ `research-sources-unproven` cho URL ấy."""
     monkeypatch.delenv(RESEARCH_GATE_ENV, raising=False)
-    store = SessionStore(tmp_path / 'child3.db')
-    runtime = HarnessRuntime(store, FixtureExecutor(), ScriptedModel([
-        DELEGATE_RESEARCH,
+    store, session, child = run_research_child(tmp_path, [
         answer_of(calls=[tool_call('source_add', {'claim': 'phí chuyển tuyến 2026',
-                                                 'url': 'https://vnexpress.net/khac',
-                                                 'excerpt': EXCERPT})]),
-        answer_of(CHILD_ANSWER),
-        answer_of('xong rồi')]))
-    session = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})
-
-    async def run():
-        await runtime.submit(session['id'], 'nhờ chuyên gia tra phí chuyển tuyến')
-        await runtime.tasks[session['id']]
-
-    asyncio.run(run())
-    child = [event['data'] for event in store.events(session['id'])
-             if event['type'] == 'child'][-1]
+                                                  'url': 'https://vnexpress.net/khac',
+                                                  'excerpt': EXCERPT})]),
+        answer_of(CHILD_ANSWER)])
     gate = child['researchGate']
     assert gate['rows'] == 1, 'dòng sổ của nhánh khác URL trong câu trả lời'
     assert 'research-lineage-missing' not in gate['issues']
@@ -340,22 +344,10 @@ def test_a_url_the_branch_never_registered_is_reported_as_unproven(tmp_path, mon
 def test_a_research_child_that_did_leave_a_row_keeps_its_row_out_of_the_notes(tmp_path, monkeypatch):
     """Con để lại dòng sổ ⇒ không còn `research-lineage-missing` cho URL ấy."""
     monkeypatch.delenv(RESEARCH_GATE_ENV, raising=False)
-    store = SessionStore(tmp_path / 'child2.db')
-    runtime = HarnessRuntime(store, FixtureExecutor(), ScriptedModel([
-        DELEGATE_RESEARCH,
+    store, session, child = run_research_child(tmp_path, [
         answer_of(calls=[tool_call('source_add', {'claim': 'phí chuyển tuyến 2026',
-                                                 'url': URL, 'excerpt': EXCERPT})]),
-        answer_of(CHILD_ANSWER),
-        answer_of('xong rồi')]))
-    session = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})
-
-    async def run():
-        await runtime.submit(session['id'], 'nhờ chuyên gia tra phí chuyển tuyến')
-        await runtime.tasks[session['id']]
-
-    asyncio.run(run())
-    child = [event['data'] for event in store.events(session['id'])
-             if event['type'] == 'child'][-1]
+                                                  'url': URL, 'excerpt': EXCERPT})]),
+        answer_of(CHILD_ANSWER)])
     gate = child['researchGate']
     assert gate['rows'] == 1, 'dòng sổ của con nằm ở phiên giữ brief'
     assert 'research-lineage-missing' not in gate['issues'], 'nhánh ĐÃ để lại dòng sổ'

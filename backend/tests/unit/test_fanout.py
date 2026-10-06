@@ -19,22 +19,21 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
-ARGS = {'role': 'research', 'goal': 'khảo sát'}
+ARGS = {'role': 'explore', 'goal': 'khảo sát'}
 
 
 @pytest.fixture(autouse=True)
 def _legacy_research_mode(monkeypatch):
     """Bộ kiểm này khoá CƠ CHẾ fan-out, không khoá chế độ Research.
 
-    Khi công tắc `BOXFOX_RESEARCH_MODE` bật (mặc định từ F4 của phiếu soát), cửa 2 đổi hành vi của
-    nhánh research KHÔNG brief: nhánh đầu bị kẹp mức 1 và từ nhánh thứ hai thì bị từ chối. Các ca ở
-    đây cố tình sinh nhiều nhánh research không brief nên phải chạy ở đường CŨ (công tắc tắt); hành vi
-    mới được khoá riêng trong `test_research_mode_shell.py` (M-07)."""
+    Các ca ở đây sinh nhiều nhánh `explore` — vai main CÒN giao được; vai `research`/`research-review`
+    đã bị cổng Research vô điều kiện chặn từ main (`RESEARCH_MAIN_READ_ONLY`). Giữ
+    `BOXFOX_RESEARCH_MODE=off` để bộ kiểm tách khỏi chế độ Research."""
     monkeypatch.setenv('BOXFOX_RESEARCH_MODE', 'off')
 
 
@@ -70,7 +69,7 @@ class Concurrency:
 def build(tmp_path, parents=1, values=None):
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), None)
-    base = {'skills': [], 'subagents': [{'id': 'research', 'enabled': True}], **(values or {})}
+    base = {'skills': [], 'subagents': [{'id': 'explore', 'enabled': True}], **(values or {})}
     sessions = [runtime.create(dict(base)) for _ in range(parents)]
     return store, runtime, sessions
 
@@ -130,7 +129,7 @@ def test_cha_thu_tu_khi_kin_tran_toan_cuc_nhan_fanout_busy(tmp_path):
     a, b, c = (session['id'] for session in sessions)
 
     async def run():
-        holding = [runtime.delegate(sessions[0], {'role': 'research', 'goal': f'việc {n}'})
+        holding = [runtime.delegate(sessions[0], {'role': 'explore', 'goal': f'việc {n}'})
                    for n in range(6)] + [runtime.delegate(sessions[1], ARGS) for _ in range(2)]
         spawned = asyncio.gather(*holding)
         await asyncio.sleep(0.1)

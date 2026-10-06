@@ -45,25 +45,17 @@ def row(rt, park_id):
 
 
 def adaptive(rt, sid):
-    from . import job_surface
     owner = rt.store.get(sid)
-    return (job_surface.enabled() and execution_kernel.enabled()
-            and execution_kernel._policy(owner) is not None
+    return (execution_kernel._policy(owner) is not None
             and not owner.get('parent_id') and owner.get('role') == 'orchestrator')
 
 
 def validate(rt, value):
     """Không waiver ancestor: owner root, subscription do canonical wait tạo."""
-    from . import job_surface, usage_ledger
+    from . import job_surface
     owner = rt.store.get(value['owner_id'])
-    if not job_surface.enabled():
-        raise PermissionError('JOB_WAKE_DISABLED: ' + job_surface.SWITCH + ' is off')
-    if not execution_kernel.enabled():
-        raise PermissionError('JOB_WAKE_DISABLED: BOXFOX_ADAPTIVE_HARNESS is off')
     if not adaptive(rt, owner['id']):
         raise PermissionError('JOB_WAKE_DISABLED: owner has no adaptive policy or is not the root')
-    if not usage_ledger.enabled():
-        raise PermissionError('JOB_WAKE_DISABLED: usage ledger accounting is off')
     if owner['config'].get(job_surface.STOP_KEY) or owner['status'] in ('cancelled', 'interrupted', 'awaiting_decision', 'failed'):
         raise PermissionError('JOB_STOPPED: parked owner no longer admitted')
     if 'wait_jobs' not in tool_recovery.owner_tools(rt.store, owner):

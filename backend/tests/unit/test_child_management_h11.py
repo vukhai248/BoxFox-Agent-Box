@@ -322,10 +322,9 @@ def contract(role='review', invocation='inv-create'):
 def test_child_resume_records_a_follow_up_attempt_on_the_same_task(tmp_path, monkeypatch):
     """Lỗ hổng 1 — con có task: gọi lại ghi attempt MỚI (`attempt_seq` 2) trên CÙNG session con.
 
-    `resume_attempt` chạy khi công tắc BẬT và con đã từng gắn task; khoá `harness_task_active`
+    `resume_attempt` chạy khi con đã từng gắn task; khoá `harness_task_active`
     buộc attempt trước phải đóng trước (đúng như đường đóng con thật làm qua `project_child`).
     """
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(),
                              FixtureModel(child_responses=[answer('đã làm nốt')]))
@@ -498,7 +497,6 @@ def test_a_resumed_child_that_finishes_cleanly_is_not_marked_partial(tmp_path):
 
 def test_child_resume_across_turns_records_every_attempt(tmp_path, monkeypatch):
     """Review H11 (finding 3) — gọi lại ở LƯỢT THỨ HAI cũng ghi được attempt (id không trùng)."""
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(),
                              FixtureModel(child_responses=[answer('lần hai xong'),

@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 from aiohttp import web
-from ..agent_core import design_runtime, execution_kernel, feature_switches, plan_registry, research_runtime
+from ..agent_core import design_runtime, execution_kernel, plan_registry, research_runtime
 from ..agent_core import plan_workflow, work_graph
 from ..agent_core import usage_surface
 from ..agent_core.plan_header import IDENTITY_PATTERN
@@ -23,6 +23,8 @@ from ..agent_core.limits import (CHILD_DEADLINE_SECONDS, CHILD_MAX_STEPS, DEADLI
 from ..agent_core.limits import parallel_read_tools_enabled, peer_mesh_enabled, peer_wait_max
 from ..agent_core.limits import (READ_STORE_MAX_ENTRIES, WEB_READER_DEFAULT_MODE, WEB_READER_MODES,
                                  WEB_READ_STORE_DEFAULT_MODE, WEB_READ_STORE_MODES)
+from ..agent_core.limits import (SEARCH_CACHE_TTL_SECONDS, SEARCH_ENGINE_ROTATION_N, SEARCH_PIPELINE_TOP_K,
+                                 SEARXNG_TIMEOUT_SECONDS)
 from ..agent_core.web import MAX_TEXT_HARD
 from ..agent_core.limits import (EVIDENCE_DEFAULT_MODE, EVIDENCE_MAX_ARTIFACTS, EVIDENCE_MODES,
                                  EVIDENCE_PROBE_MAX_FILES, EVIDENCE_PROBE_TIMEOUT_SECONDS,
@@ -41,7 +43,7 @@ from ..agent_core.limits import (CHILD_WALL_MAX_SECONDS, FANOUT_GLOBAL_CEILING, 
                                  PEER_WAIT_SAFETY_SECONDS, WATCHDOG_TICK_SECONDS)
 # Vòng 27 (đợt 5–8) — khối `research` của `runtime_info` đọc CÙNG hằng và CÙNG hàm với runtime:
 # bảng công tắc, hạn mức theo mức, danh mục hồ sơ và thang nguồn không thể lệch khỏi hành vi thật.
-from ..agent_core import research_profiles, research_quality, research_runtime, source_tiers
+from ..agent_core import research_profiles, research_quality, research_runtime, search_pipeline, source_tiers
 from ..agent_core.limits import (DOSSIER_MAX_BYTES, RESEARCH_BRIEF_DEFAULT_MODE, RESEARCH_BRIEF_MODES,
                                  RESEARCH_GATE_DEFAULT_MODE, RESEARCH_GATE_MODES,
                                  RESEARCH_MAX_ROWS_PER_DOSSIER, RESEARCH_PROGRESS_DEFAULT_MODE,
@@ -447,9 +449,24 @@ def create_app(runtime):
     app.on_startup.append(research_continuations)
     app.on_cleanup.append(stop_research_continuations)
 
+    def _search_status():
+        """Khối `search` của health: lỗi ở đây KHÔNG được kéo cả route xuống (chỉ đọc, không mạng)."""
+        try:
+            from ..agent_core import web as web_module
+            return web_module.search_status()
+        except Exception as exc:
+            return {'error': type(exc).__name__, 'reason': str(exc)[:200]}
+
     async def health(request):
         # W6.1.3: `?probe=verify` chạy probe bwrap trong box; mặc định chỉ trả lần quan sát gần nhất
         # (health phải rẻ, không docker exec mỗi lần gọi).
+        if request.query.get('probe') == 'search':
+            # Dò SearXNG CHỈ khi được hỏi: `probe_searxng` là lời gọi mạng thật (2 s), không được
+            # chạy trong đường health thường.
+            try:
+                search_pipeline.probe_now()
+            except Exception:
+                pass
         if request.query.get('probe') == 'verify':
             from ..agent_core import verify_exec
             try:
@@ -459,7 +476,8 @@ def create_app(runtime):
             runtime.verify_exec_status = verify_exec.observed(answer, getattr(runtime, 'verify_exec_status', None))
         return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION,
                                   'verifyExec': getattr(runtime, 'verify_exec_status', None)
-                                  or {'available': None, 'reason': 'not probed yet'}})
+                                  or {'available': None, 'reason': 'not probed yet'},
+                                  'search': _search_status()})
 
     async def catalog(request):
         return web.json_response({'roles': [{'id': r.id, 'name': r.name, 'instructions': r.instructions, 'tools': sorted(r.tools)} for r in ROLES.values()], 'skills': runtime.catalog.list(runtime.commands.settings()['enabled'])})
@@ -475,8 +493,6 @@ def create_app(runtime):
         from ..agent_core import work_budget
         return web.json_response({
             'toolGroups': tool_groups(),
-            # H12 — khóa tổng `BOXFOX_REFORM`: nhìn một chỗ biết đang bật gì, vì đâu.
-            'switches': feature_switches.snapshot(),
             # H10.2 — khối `usage`: trần chi đang mở, chỉ đọc, trần cứng 20 hàng; bảng chưa
             # có thì `[]` để tab Harness không đỏ vì tính năng chưa dùng.
             'usage': {'allocations': _open_allocations(runtime)},
@@ -594,7 +610,17 @@ def create_app(runtime):
                                'readStoreModes': list(WEB_READ_STORE_MODES),
                                'readStoreDefault': WEB_READ_STORE_DEFAULT_MODE,
                                'textHardChars': MAX_TEXT_HARD,
-                               'storeMaxEntries': READ_STORE_MAX_ENTRIES}},
+                               'storeMaxEntries': READ_STORE_MAX_ENTRIES},
+                       'search': {'pipelineMode': search_pipeline.pipeline_mode(),
+                                  'pipelineModes': ['off', 'on', 'auto'],
+                                  'pipelineDefault': 'auto',
+                                  'autodetect': search_pipeline.autodetect_enabled(),
+                                  'autodetectUrl': search_pipeline.autodetect_url(),
+                                  'autodetectEnv': search_pipeline.SEARXNG_AUTODETECT_ENV,
+                                  'engineRotation': SEARCH_ENGINE_ROTATION_N,
+                                  'topK': SEARCH_PIPELINE_TOP_K,
+                                  'cacheTtlSeconds': SEARCH_CACHE_TTL_SECONDS,
+                                  'searxngTimeoutSeconds': SEARXNG_TIMEOUT_SECONDS}},
         })
 
     async def skill_settings(request):
@@ -1674,7 +1700,7 @@ def create_app(runtime):
         """`GET|PUT /api/agent/sessions/{sid}/execution-policy` — mode của run (H8).
 
         Người vận hành là bên DUY NHẤT ghi được policy; model không có tool nào chạm tới nó.
-        Bật `adaptive` khi thiếu công tắc ⇒ 409 kèm mã, không đặt nửa vời.
+        Mode lạ ⇒ 400 kèm mã, không đặt nửa vời.
         """
         sid = request.match_info['sid']
         known_session(sid)
@@ -1686,7 +1712,7 @@ def create_app(runtime):
         try:
             return web.json_response(execution_kernel.set_policy(runtime, sid, body.get('mode')))
         except ValueError as exc:
-            raise _action_error(exc, {'POLICY_SWITCH_OFF': 409, 'POLICY_MODE_INVALID': 400}) from None
+            raise _action_error(exc, {'POLICY_MODE_INVALID': 400}) from None
 
     async def usage_allocation(request):
         """`GET|PUT|DELETE /api/agent/sessions/{sid}/usage-allocation` — trần chi của run (H10.2).

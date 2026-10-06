@@ -267,6 +267,28 @@ export function createRouterServer({ service, engine, oauth, frontendDir = null,
       const providerDetail = path.match(/^\/api\/router\/providers\/([^/]+)$/);
       if (providerDetail && method === 'GET') return json(res, 200, service.provider(decodeURIComponent(providerDetail[1])));
       if (providerDetail && method === 'PUT') return json(res, 200, service.setProviderConfig(decodeURIComponent(providerDetail[1]), await body(req)));
+      // Web Search (PART 2): khoá API tìm kiếm nằm trong kho riêng của router, không
+      // phải kho khoá mô hình. Mọi đường đi qua cổng admin chung ở trên và KHÔNG có
+      // mặt trong BRIDGE_PATHS — sandbox không bao giờ chạm được kho này.
+      const searchProvider = path.match(/^\/api\/router\/search\/providers(?:\/([^/]+)(?:\/(reveal|test))?)?$/);
+      if (searchProvider) {
+        const searchId = searchProvider[1] ? decodeURIComponent(searchProvider[1]) : null;
+        const searchAction = searchProvider[2] || null;
+        if (!searchId && method === 'POST') return json(res, 201, service.search.create(await body(req)));
+        if (searchId && !searchAction && method === 'PATCH') return json(res, 200, service.search.patch(searchId, await body(req)));
+        if (searchId && !searchAction && method === 'DELETE') { service.search.remove(searchId); return json(res, 200, { deleted: true }); }
+        if (searchId && searchAction === 'reveal' && method === 'POST') return json(res, 200, service.search.reveal(searchId));
+        if (searchId && searchAction === 'test' && method === 'POST') return json(res, 200, await service.search.probe(searchId));
+      }
+      if (path === '/api/router/search' && method === 'GET') return json(res, 200, service.search.snapshot());
+      if (path === '/api/router/search/active' && method === 'PUT') {
+        const active = await body(req);
+        assert(active.providerId === null || typeof active.providerId === 'string', 'providerId must be a string or null.');
+        return json(res, 200, service.search.setActive(active.providerId));
+      }
+      // Chỉ harness trong sandbox đọc đường này (qua loopback) để lấy khoá đang chọn;
+      // giao diện không dùng nó — giao diện chỉ thấy `prefix`.
+      if (path === '/api/router/search/resolve' && method === 'GET') return json(res, 200, service.search.resolve());
       // Vòng 29: danh sách connection đi qua `service.connections()` để mỗi dòng mang
       // theo `keys`/`activeKeyId` đã trang trí — cùng hình dạng với `GET /api/router/state`.
       if (path === '/api/router/connections' && method === 'GET') return json(res, 200, service.connections());

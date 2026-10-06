@@ -6,6 +6,7 @@ import { normalizePrice } from './pricing.mjs';
 import { isAntigravityModelValid } from './providers/antigravity-models.mjs';
 import { modelThinking } from './providers/common.mjs';
 import { MAX_KEYS_PER_CONNECTION, KeyRing, headOf } from './keyring.mjs';
+import { SearchService } from './search.mjs';
 export { PROVIDER_CATALOG };
 
 /** Provider gọi được mà không cần khoá (OpenCode Free: `Authorization: Bearer public`). */
@@ -126,9 +127,12 @@ function providerPublishedWindow(model = {}, fromProvider = null) {
 }
 
 export class ProviderService {
-  constructor({ store, providers }) {
+  constructor({ store, providers, fetchImpl = null }) {
     this.store = store;
     this.providers = providers;
+    // PART 2: khoá tìm kiếm là một kho độc lập với kho khoá mô hình — cùng bảng
+    // `credentials` đã mã hoá nhưng không đi qua `connection`/key ring/định tuyến.
+    this.search = new SearchService({ store: this.store, fetchImpl });
     this.refreshes = new Map();
     this.discoveries = new Map();
     this.active = new Map();
@@ -266,7 +270,7 @@ export class ProviderService {
     return Array.isArray(c.keys) ? { ...c, ...this.keyRing.state(c, Date.now()) } : { ...c };
   }
   snapshot() {
-    return { providers: PROVIDER_CATALOG, connections: this.connections(), providerConfigs: this.store.list('provider_config'), aliases: this.store.list('alias'), defaultRoute: this.store.getDefault(), keys: this.store.list('key').map(k => this.store.publicKey(k)), usage: this.store.list('usage').slice(0, 200), health: { status: 'ok', version: '0.1.0' } };
+    return { providers: PROVIDER_CATALOG, connections: this.connections(), providerConfigs: this.store.list('provider_config'), aliases: this.store.list('alias'), defaultRoute: this.store.getDefault(), keys: this.store.list('key').map(k => this.store.publicKey(k)), usage: this.store.list('usage').slice(0, 200), search: this.search.snapshot(), health: { status: 'ok', version: '0.1.0' } };
   }
   providerConfig(id) {
     this.provider(id);

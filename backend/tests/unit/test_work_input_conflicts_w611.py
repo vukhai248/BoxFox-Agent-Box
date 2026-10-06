@@ -10,8 +10,8 @@ from test_work_graph import build, raw_tool
 from test_work_checks import RESEARCH, setup, start
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -89,7 +89,9 @@ def test_missing_target_retries_once_without_turning_into_producer_feedback(tmp_
 
     async def run():
         _, draft = await setup(rt, sid)
-        result = await start(rt, sid, draft)
+        # Nút `CHECKED` (explore + risk consequential) có hai bộ kiểm; bài này đo retry của MỘT lượt
+        # kiểm, nên ghim `evidence` để đếm con theo nghĩa cũ (một producer, hai reviewer).
+        result = await start(rt, sid, draft, checkIds=['evidence'])
         doc = result['checks'][0]
         assert doc['status'] == 'error' and len(doc['attempts']) == 2
         assert not doc['inputConflicts']

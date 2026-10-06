@@ -464,7 +464,10 @@ def blocked_nodes(run, stage):
             state = node['stages'].get(stage)
             if not state or node['id'] in dead:
                 continue
-            if state['status'] in ('rejected', 'failed'):
+            if state['status'] in ('rejected', 'failed') or (state['status'] == 'needs_user'
+                    and str(state.get('error') or '').startswith('RESEARCH_NEEDS_MAIN')):
+                # Nút `research` do main dựng không còn đường đóng nào khác (bề mặt 7 đã xoá), nên nó là
+                # nút CHẾT: nút phụ thuộc phải được báo `blocked` thay vì im lặng chờ mãi.
                 dead.add(node['id'])
                 changed = True
                 continue
@@ -1116,6 +1119,13 @@ class WorkGraph:
             return ('Main: the tree moved inside these nodes\' declared files, so their current drafts cannot be '
                     'checked: ' + str(moved[:4]) + '. Call work_graph action=resolve to clear the barrier (the draft '
                     'and its history are kept), then work_run phase=execute to produce a fresh draft on the current code.')
+        parked = [(n['id'], stage) for n in self.all_nodes(run) for stage, s in n['stages'].items()
+                  if s['status'] == 'needs_user' and str(s.get('error') or '').startswith('RESEARCH_NEEDS_MAIN')]
+        if parked:
+            return ('Main: the Research boundary owns research work, so these nodes stay parked: ' + str(parked[:4]) +
+                    '. Send the question with research_job_submit, read the published report with '
+                    'research_job_result, then remove or replace the parked node (work_graph action=remove, or '
+                    'action=update with a kind main can produce) before running the rest of the graph.')
         needs = [(n['id'], stage, s['artifact']['artifactId']) for n in self.all_nodes(run) for stage, s in n['stages'].items() if s['status'] == 'needs_checks' and s.get('artifact')]
         if needs:
             return 'Main: inspect draft refs, then call work_check action=start with nodeId, stage, current artifactId, checkIds and unique invocationId: ' + str(needs)
@@ -1615,7 +1625,16 @@ class WorkGraph:
             self.save(run, 'node_interrupted', node['id'])
             raise
         except Exception as exc:
-            state.update(status='failed', error=str(exc)[:500])
+            if isinstance(exc, PermissionError) and str(exc).startswith('RESEARCH_MAIN_READ_ONLY'):
+                # #6599: the Research boundary owns research work; main submits through the envelope and
+                # brings the published report back. This is a decision for the owner, not a failed node.
+                state.update(status='needs_user', error='RESEARCH_NEEDS_MAIN: the independent Research boundary '
+                             'executes research work, so main cannot produce this node. Send the question with '
+                             'research_job_submit, read the published report with research_job_result, then remove or '
+                             'replace this node (work_graph action=remove, or action=update with a kind main can '
+                             'produce) before running the rest of the graph.')
+            else:
+                state.update(status='failed', error=str(exc)[:500])
         finally:
             if touchset:
                 self.worktrees.release_touchset(run, node)
@@ -2584,10 +2603,12 @@ class WorkGraph:
                                      'tests and dependencies, verify, and ask for approval. Do not execute before '
                                      'approval.',
                              'research': 'FAST PATH: when the request is one fact, one version or a yes/no question, '
-                                         'answer it yourself with web_search/web_fetch and cite the sources; do not '
-                                         'create a run. Otherwise build research nodes (plus explore when the '
-                                         'repository matters), run them with review, verify, and answer with the '
-                                         'verified findings.',
+                                          'answer it yourself with web_search/web_fetch and cite the sources; do not '
+                                          'create a run. Otherwise do NOT build research nodes — main cannot produce them, '
+                                          'because the independent Research boundary owns research work: build explore nodes when '
+                                          'the repository matters, submit the questions with research_job_submit and wait for '
+                                          'the owner consent; read the published report with research_job_result and answer '
+                                          'with the verified findings.',
                              'design': 'Explore the current UI/code, build design nodes, run them with review, '
                                        'verify, and present the verified design.'}.get(flow, ''))
             lines.append(f'Owner request: {bounded(intent.get("text"), 1500)}')

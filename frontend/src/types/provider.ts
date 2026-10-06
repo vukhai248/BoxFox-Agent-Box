@@ -107,7 +107,27 @@ export interface RouterUsage {
   costBasis?: 'reported' | 'ping' | 'documented' | 'manual' | null; estimated?: boolean;
   error: string | null; createdAt: string;
 }
-export interface ProviderSnapshot { providers: ProviderDefinition[]; connections: ProviderConnection[]; providerConfigs?: ProviderRoutingConfig[]; aliases: RouterAlias[]; defaultRoute: ProviderDefault; keys: RouterClientKey[]; usage: RouterUsage[]; health: { status: 'ok'; version: string } }
+/**
+ * One search source a user may enter a key for, as the router describes it. The view
+ * never carries the raw key: `prefix` is the leading characters the router is willing
+ * to show, and the secret itself only travels back through an explicit reveal call.
+ * `requires`/`optional` name the fields the entry needs (`apiKey`, `endpoint`,
+ * `accountId`), and `envKeys` names the host environment variables that keep the same
+ * provider working with no entry at all.
+ */
+export type SearchProviderId = 'brave' | 'tavily' | 'exa' | 'parallel' | 'firecrawl' | 'searxng' | 'cloudflare' | 'custom'
+export interface SearchProviderView {
+  id: SearchProviderId; name: string; requires: string[]; optional: string[]; envKeys: string[]
+  icon: string | null; credentialPresent: boolean; hasSecret: boolean; prefix: string | null
+  endpoint: string | null; accountId: string | null; lastTestedAt: string | null
+  lastTest: { status: 'passed' | 'failed'; httpStatus: number | null; latencyMs: number | null; code: string | null; message: string | null } | null
+}
+/** The search section of the router snapshot. `revision` moves on every write, which is
+ *  what lets the harness cache a resolved source without ever reusing a stale one. */
+export interface SearchSnapshot { activeProviderId: SearchProviderId | null; revision: number; providers: SearchProviderView[] }
+/** The verdict of one test call; `sample` is the first result the provider answered with. */
+export interface SearchTestResult { ok: boolean; providerId: string; status: number | null; latencyMs: number | null; code: string | null; message: string | null; sample: { title: string; url: string } | null }
+export interface ProviderSnapshot { providers: ProviderDefinition[]; connections: ProviderConnection[]; providerConfigs?: ProviderRoutingConfig[]; aliases: RouterAlias[]; defaultRoute: ProviderDefault; keys: RouterClientKey[]; usage: RouterUsage[]; health: { status: 'ok'; version: string }; /** Absent while the running router predates the search surface — the Web Search tab says so instead of crashing. */ search?: SearchSnapshot }
 export interface OAuthAttempt {
   id: string;
   connectionId: string;

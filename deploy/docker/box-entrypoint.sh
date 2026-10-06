@@ -44,6 +44,13 @@ if [ "$(id -u)" = "0" ]; then
   echo "[box-entrypoint] ide-proxy :8081 (/__box/* + /__tty/*)..."
   python3 /usr/local/bin/ide-proxy.py >/home/agent/ide-proxy.log 2>&1 &
 
+  # Container vừa khởi động ⇒ CHẮC CHẮN không dịch vụ nào đang chạy. Dấu vết
+  # "đang ON" của lần chạy trước còn nằm trong /run (lớp ghi của container, không
+  # phải tmpfs) nên sống qua `docker restart`; không xoá thì `box-power on` đọc
+  # thấy "on" cũ và bỏ qua việc khởi động — box "ON" mà IDE/Terminal/Machine chết
+  # câm (xem khối BUG ở đầu deploy/docker/box-power).
+  rm -f /run/box-power-state
+
   echo "[box-entrypoint] điện máy: ${BOX_DEFAULT_POWER:-on}..."
   box-power "${BOX_DEFAULT_POWER:-on}"
 

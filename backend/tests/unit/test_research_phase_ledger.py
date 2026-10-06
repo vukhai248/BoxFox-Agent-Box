@@ -23,6 +23,7 @@ import agentbox.agent_core.research_runtime as research_runtime
 from agentbox.api.server import research_continuation_step
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
+from research_intake import admit_lead
 
 
 class FixtureExecutor:
@@ -90,20 +91,21 @@ def test_set_phase_ignores_a_repeat_and_never_moves_off_done(harness):
 def test_delegating_a_research_branch_moves_the_run_to_searching(tmp_path):
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel())
-    main = runtime.create({'skills': []})
-    main['config']['research'] = {'researchId': 'study', 'jobMode': 'v2', 'tier': 1}
-    store.update_config(main['id'], main['config'])
-    _job(store, main['id'], 'study', phase='planning', status='scoping',
+    root = runtime.create({'skills': []})
+    # Bề mặt 7 đã xoá lối thoát của main: nhánh research chỉ còn giao được từ LEAD đã admit.
+    lead, run_id = admit_lead(store, runtime, root)
+    _job(store, lead['id'], run_id, phase='planning', status='scoping',
          extra={'questions': [{'id': 'q1', 'text': 'Which approach?', 'status': 'unexplored'}]})
+    before = store.research_job(run_id)['revision']
     runtime.start = lambda *_: asyncio.get_running_loop().create_future()
-    asyncio.run(runtime.delegate(main, {'role': 'research', 'goal': 'Find evidence',
-                                        'questionId': 'q1', 'wait': False}))
-    job = store.research_job('study')
+    asyncio.run(runtime.delegate(store.get(lead['id']), {'role': 'research', 'goal': 'Find evidence',
+                                                        'questionId': 'q1', 'wait': False}))
+    job = store.research_job(run_id)
     assert job['status'] == 'researching' and job['state']['questions'][0]['status'] == 'researching'
     assert job['state']['phase'] == 'searching'
     assert job['state']['phaseHistory'][-1]['reason'] == 'branch-delegated'
-    assert job['revision'] == 2, 'một lần ghi trạng thái + một lần ghim pha (không nhích `revision`)'
-    runs = _events(store, main['id'], 'research_run')
+    assert job['revision'] == before + 1, 'một lần ghi trạng thái + một lần ghim pha (không nhích `revision`)'
+    runs = _events(store, lead['id'], 'research_run')
     assert [item['phase'] for item in runs] == ['searching']
     store.close()
 
@@ -212,20 +214,20 @@ def test_a_coverage_verdict_lands_in_the_verifying_step(harness):
 def test_a_coverage_review_can_be_delegated_and_an_unknown_mode_is_still_refused(tmp_path):
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel())
-    main = runtime.create({'skills': []})
-    main['config']['research'] = {'researchId': 'study', 'jobMode': 'v2', 'tier': 2}
-    store.update_config(main['id'], main['config'])
-    _job(store, main['id'], 'study', phase='verifying', extra={'reviewModes': ['evidence', 'critique']})
-    store.record_dossier(main['id'], 'study', 1, '.research/study/v1-study.md', profile='deep',
+    root = runtime.create({'skills': []})
+    lead, run_id = admit_lead(store, runtime, root)
+    _job(store, lead['id'], run_id, phase='verifying', extra={'reviewModes': ['evidence', 'critique']})
+    store.record_dossier(lead['id'], run_id, 1, '.research/study/v1-study.md', profile='deep',
                          level=2, critique='none', gate='warn', rows=5, bytes=2000)
     runtime.start = lambda *_: asyncio.get_running_loop().create_future()
-    target = {'kind': 'research', 'researchId': 'study', 'version': 1, 'mode': 'coverage'}
-    asyncio.run(runtime.delegate(main, {'role': 'research-review', 'goal': 'soát bao phủ hướng',
-                                        'reviewTarget': target, 'wait': False}))
-    child = store.children_of(main['id'])[0]
+    target = {'kind': 'research', 'researchId': run_id, 'version': 1, 'mode': 'coverage'}
+    asyncio.run(runtime.delegate(store.get(lead['id']),
+                                 {'role': 'research-review', 'goal': 'soát bao phủ hướng',
+                                  'reviewTarget': target, 'wait': False}))
+    child = store.children_of(lead['id'])[0]
     assert store.get(child['session_id'])['config']['reviewTarget']['mode'] == 'coverage'
     with pytest.raises(ValueError, match='RESEARCH_REVIEW_MODE_INVALID'):
-        asyncio.run(runtime.delegate(main, {'role': 'research-review', 'goal': 'soát bừa',
-                                            'reviewTarget': {**target, 'mode': 'vibes'},
-                                            'wait': False}))
+        asyncio.run(runtime.delegate(store.get(lead['id']),
+                                     {'role': 'research-review', 'goal': 'soát bừa',
+                                      'reviewTarget': {**target, 'mode': 'vibes'}, 'wait': False}))
     store.close()

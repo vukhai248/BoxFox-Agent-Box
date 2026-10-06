@@ -1,11 +1,10 @@
-"""H3 — bề mặt task: công tắc giết, phân quyền, ghi bền vững và chiếu kết cục của con.
+"""H3 — bề mặt task: quảng cáo, phân quyền, ghi bền vững và chiếu kết cục của con.
 
 Không model, không provider, không mạng: chỉ `SessionStore` + `TaskService` thật trên SQLite tạm.
-Ba tầng được ghim riêng:
+Hai tầng được ghim riêng:
 
-1. **Quảng cáo** — `turn_profile`/`schemas_for` chỉ trả bốn công cụ `task_*` khi `BOXFOX_TASK_SURFACE=on`.
-2. **Thực thi** — `dispatch` từ chối khi công tắc tắt, kể cả phiên đã giữ tên công cụ từ trước.
-3. **Dữ liệu** — `task_list/get/send/abandon` chỉ gọi hàm có sẵn của `TaskService`, và bộ đóng con
+1. **Quảng cáo** — `turn_profile`/`schemas_for` LUÔN trả bốn công cụ `task_*` từ v2 (#6599).
+2. **Dữ liệu** — `task_list/get/send/abandon` chỉ gọi hàm có sẵn của `TaskService`, và bộ đóng con
    hiện có (`child_finish`, `child_close_once`) chiếu được kết cục vào attempt đang mở.
 """
 import asyncio
@@ -17,13 +16,12 @@ import sqlite3
 
 import pytest
 
-from agentbox.agent_core import roles, task_surface, tool_contracts, work_scope
+from agentbox.agent_core import roles, task_surface, work_scope
 from agentbox.agent_core.orchestration_contracts import ContractError, TASK_SCHEMA
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.task_service import TaskService
 from agentbox.agent_core.tool_contracts import TASK_SURFACE_TOOLS, schemas_for
 from agentbox.memory.session_store import SessionStore
-from switch_isolation import isolate_off
 
 
 def request(**updates):
@@ -59,8 +57,6 @@ class FakeRT:
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    # Bề mặt task mặc định TẮT; các ca dữ liệu bật công tắc tường minh, ca công tắc tự tắt lại.
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     owner = store.create({'skills': []})['id']
     rt = FakeRT(store)
@@ -114,23 +110,10 @@ def run(rt, sid, name, args):
     return asyncio.run(task_surface.handle(rt, session(rt, sid), name, args))
 
 
-# --- 1. Công tắc giết ---------------------------------------------------------------------
-
-def test_switch_is_off_only_when_the_env_says_off(monkeypatch):
-    # Từ v2 (mặc định BẬT) đường legacy chỉ còn khi env nói TẮT tường minh: bài này đặt `off`
-    # cho công tắc thành viên và cắt khóa tổng, để env ambient của vòng chạy nhóm
-    # (`BOXFOX_REFORM=on`) không chen vào.
-    isolate_off(monkeypatch, task_surface.SWITCH)
-    assert task_surface.enabled() is False
-    assert task_surface.enabled('off') is False
-    assert task_surface.enabled('') is False
-    assert task_surface.enabled('ON') is True
-    assert task_surface.enabled(' on ') is True
-
+# --- 1. Quảng cáo -------------------------------------------------------------------------
 
 def test_tool_names_are_one_contract_in_two_modules():
     assert task_surface.TASK_TOOLS == TASK_SURFACE_TOOLS
-    assert tool_contracts.task_surface_enabled('on') is True
     group = next(g for g in __import__('agentbox.agent_core.tool_groups', fromlist=['TOOL_GROUPS'])
                  .TOOL_GROUPS if g['key'] == 'taskSurface')
     assert group['alwaysOn'] is False
@@ -138,22 +121,19 @@ def test_tool_names_are_one_contract_in_two_modules():
     assert TASK_SURFACE_TOOLS <= roles.ORCHESTRATOR_TOOLS
 
 
-def test_schemas_for_drops_the_surface_when_off(monkeypatch):
+def test_schemas_for_keeps_the_surface_on_the_default():
     names = ['task_list', 'task_get', 'task_send', 'task_abandon', 'read_source']
-    isolate_off(monkeypatch, 'BOXFOX_TASK_SURFACE')
-    assert [s['function']['name'] for s in schemas_for(names)] == ['read_source']
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     assert {s['function']['name'] for s in schemas_for(names)} == set(names)
 
 
-def test_send_schema_requires_an_expected_revision(monkeypatch):
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
+def test_send_schema_requires_an_expected_revision():
     schema = next(s for s in schemas_for(['task_send']) if s['function']['name'] == 'task_send')
     # `TaskService.send` từ chối thiếu `expectedRevision`; hợp đồng quảng cáo phải nói cùng điều.
     assert 'expectedRevision' in schema['function']['parameters']['required']
 
 
-def test_turn_profile_hides_the_surface_for_every_profile(monkeypatch, tmp_path):
+def test_turn_profile_keeps_the_surface_for_every_profile(tmp_path):
+    from agentbox.agent_core import research_gateway
     from agentbox.agent_core.runtime import HarnessRuntime
     from test_harness_runtime import FixtureExecutor, FixtureModel
 
@@ -161,41 +141,14 @@ def test_turn_profile_hides_the_surface_for_every_profile(monkeypatch, tmp_path)
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
     config = {'skills': [], 'tools': ['task_list', 'task_get', 'task_send', 'task_abandon', 'read_source']}
     sid = runtime.create(config)['id']
-    # Cắt cả ba bề mặt mới: từ v2 mặc định BẬT, nếu chỉ tắt task thì job/Research vẫn
-    # quảng cáo công cụ của chúng và phép so bằng `['read_source']` sẽ sai vì lý do khác.
-    isolate_off(monkeypatch, 'BOXFOX_TASK_SURFACE', 'BOXFOX_CONTROLLER_JOBS',
-                'BOXFOX_RESEARCH_GATEWAY')
-    assert runtime.turn_profile(session(runtime, sid))['tools'] == ['read_source']
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
-    assert set(runtime.turn_profile(session(runtime, sid))['tools']) == set(config['tools'])
+    # Bộ task LUÔN có mặt (v2, #6599) nên không cần bật tường minh. Bề mặt 7 đã xoá nên hồ sơ lượt
+    # cũng LUÔN thêm bốn công cụ biên của Research — không còn công tắc nào để tắt chúng.
+    assert set(runtime.turn_profile(session(runtime, sid))['tools']) == (
+        set(config['tools']) | research_gateway.GATEWAY_TOOLS)
     store.close()
 
 
-# --- 2. Cổng thực thi ---------------------------------------------------------------------
-
-@pytest.mark.parametrize('name,args', [
-    ('task_list', {'runId': 'run-1'}),
-    ('task_get', {'runId': 'run-1', 'taskId': 'inspect-receipts'}),
-    ('task_send', {'runId': 'run-1', 'taskId': 'inspect-receipts', 'invocationId': 'inv-1',
-                   'messageId': 'msg-1', 'kind': 'information', 'body': 'x', 'expectedRevision': 1}),
-    ('task_abandon', {'runId': 'run-1', 'taskId': 'inspect-receipts', 'invocationId': 'inv-1',
-                      'expectedRevision': 1, 'reason': 'stop'}),
-])
-def test_dispatch_refuses_every_task_tool_when_the_switch_is_off(name, args, monkeypatch, tmp_path):
-    from agentbox.agent_core.runtime import HarnessRuntime
-    from test_harness_runtime import FixtureExecutor, FixtureModel
-
-    store = SessionStore(tmp_path / 'sessions.db')
-    runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([]))
-    config = {'skills': [], 'tools': [name]}
-    sid = runtime.create(config)['id']
-    isolate_off(monkeypatch, 'BOXFOX_TASK_SURFACE')
-    with pytest.raises(PermissionError, match='TASK_SURFACE_OFF'):
-        asyncio.run(runtime.dispatch(session(runtime, sid), name, args))
-    store.close()
-
-
-# --- 3. Đọc/ghi qua bề mặt ----------------------------------------------------------------
+# --- 2. Đọc/ghi qua bề mặt ----------------------------------------------------------------
 
 def test_list_and_get_read_back_the_contract(repo):
     store, rt, owner, _ = repo
@@ -381,29 +334,13 @@ def test_project_child_never_raises_and_logs(repo, monkeypatch):
     assert task_surface.project_child(rt, sid) is None
 
 
-def test_project_child_does_no_ddl_when_the_switch_is_off_and_no_task_ever_existed(monkeypatch, tmp_path):
-    isolate_off(monkeypatch, 'BOXFOX_TASK_SURFACE')
-    store = SessionStore(tmp_path / 'sessions.db')
-    owner = store.create({'skills': []})['id']
-    rt = FakeRT(store)
-    sid = store.create({'skills': []}, role='explore', parent_id=owner)['id']
-    store.child_start(sid, owner, 1, 2, 'explore', 'x')
-    store.child_finish(sid, 'completed', reason=None, steps_used=1, output_tokens=1, answer_chars=1)
-    assert task_surface.project_child(rt, sid) is None
-    # Dựng `TaskService` là chạy DDL: một triển khai chưa từng bật công tắc không được trả giá đó.
-    tables = {row['name'] for row in store.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert 'harness_tasks' not in tables
-    store.close()
-
-
-def test_project_child_still_projects_when_the_switch_is_off_but_the_table_exists(repo, monkeypatch):
+def test_project_child_projects_when_the_store_already_has_tasks(repo):
     store, rt, owner, _ = repo
     item = task(repo)
     sid = child(repo)
     attempt(repo, item, sid)
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'off')
     store.child_finish(sid, 'completed', reason=None, steps_used=1, output_tokens=1, answer_chars=1)
-    # Kho ĐÃ từng có task: tắt công tắc không được để attempt treo `running` — toàn vẹn sổ trước.
+    # Đóng con phải chiếu kết cục vào attempt đang mở — không để attempt treo `running`.
     assert task_surface.project_child(rt, sid)['status'] == 'succeeded'
     attempts = task_surface.service(rt).attempts(owner, 'run-1', item['taskKey'])['items']
     assert [a['status'] for a in attempts] == ['succeeded']
@@ -623,7 +560,6 @@ def runtime_repo(tmp_path, monkeypatch, answers):
     store = SessionStore(tmp_path / 'sessions.db')
     runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel(answers))
     sid = runtime.create({'skills': [], 'tools': ['delegate_task', 'task_list']})['id']
-    monkeypatch.setenv('BOXFOX_TASK_SURFACE', 'on')
     monkeypatch.setattr(task_surface, '_resolve_run',
                         lambda _rt, owner_id, run_id: {'runId': run_id, 'sessionId': owner_id}
                         if run_id == 'run-1' else None)
@@ -692,12 +628,10 @@ def test_delegate_contract_role_mismatch_fails_before_any_child(tmp_path, monkey
     store.close()
 
 
-def test_open_delegate_is_a_noop_for_a_non_root_session_and_a_disabled_switch(tmp_path, monkeypatch):
+def test_open_delegate_is_a_noop_for_a_non_root_session(tmp_path, monkeypatch):
     store, runtime, sid = runtime_repo(tmp_path, monkeypatch, [])
     child_id = runtime.create({'skills': []}, parent_id=sid, role='explore')['id']
     assert task_surface.open_delegate(runtime, store.get(child_id), delegate_args()) is None
-    isolate_off(monkeypatch, 'BOXFOX_TASK_SURFACE')
-    assert task_surface.open_delegate(runtime, store.get(sid), delegate_args()) is None
     store.close()
 
 

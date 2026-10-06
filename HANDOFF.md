@@ -47,6 +47,24 @@ Upon container initialization (`box-entrypoint.sh`), the following directories a
   - Uses `docker compose up -d --build` with layer cache for instant startup (<0.5s when unchanged, 1-2s when docker config changes).
   - Full argument pass-through via `%*` (`start.bat -Rebuild`).
 
+### D. Built-in Keyless Web Search (PART 1, 2026-10-06)
+- `web_search` now works **out of the box, no API key required**: a self-hosted SearXNG on `127.0.0.1:8888` is auto-detected (`BOXFOX_SEARXNG_AUTODETECT`, 30s positive / 15s negative cache) and used as the default keyless leg; the 10-step pipeline defaults to `BOXFOX_SEARCH_PIPELINE=auto`. Start it with `bash deploy/searxng/up.sh` (see `deploy/searxng/README.md`).
+- Failures are classified (`searchFailure.kind` = `config` / `infra` / `source`): infrastructure and config errors now say **"not a query problem"** instead of telling the agent to retry the query (fixes F05); an empty result set is a separate code (`WEB_SEARCH_EMPTY`).
+- Decision record and **PART 2 interface contract (§4)**: `docs/plan/builtin-search-default.md`; three test tiers (unit / stub / live) and the latency bench: `docs/testing/builtin-search-e2e.md`.
+
+### E. Web Search API Keys — tab "Web Search" của Settings (PART 2, 2026-10-06)
+- `Settings → Provider` có tab thứ ba **Web Search**: dán khoá Brave/Tavily/Exa/Parallel/Firecrawl/
+  Cloudflare/custom ngay trong giao diện thay vì sửa biến môi trường. Mục "Mặc định" là đường
+  built-in không khoá của PART 1; chọn một thẻ thì nó đứng đầu chuỗi ưu tiên của `web_search`.
+- Khoá lưu bằng **đúng cơ chế của tab API** (bảng `credentials`, AES-256-GCM, AAD = id dòng) qua hai
+  `kind` mới `search_provider`/`search_config` — không đổi schema, không đụng đường suy luận mô hình.
+  Khoá thô chỉ rời router qua nút **Hiện** và `GET /api/router/search/resolve` (harness, loopback).
+- Harness đọc nguồn đã chọn qua loopback (cache 15 s, `BOXFOX_SEARCH_SOURCE_TTL`); router chết ⇒
+  dùng giá trị cache, hết hạn thì coi như "Mặc định" — tìm kiếm không bao giờ chết vì tab này.
+- Hợp đồng HTTP: [`router/CONTRACT.md`](router/CONTRACT.md). Bốn tầng test + smoke test thủ công:
+  [`docs/testing/search-provider-e2e.md`](docs/testing/search-provider-e2e.md).
+- Giới hạn v1 đã biết: `BOXFOX_SEARCH_PIPELINE=on` (ống 10 bước) **không** áp dụng nguồn đã chọn.
+
 ---
 
 ## 3. High-Performance Architecture Reference

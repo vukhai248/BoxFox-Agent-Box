@@ -20,8 +20,8 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -246,7 +246,9 @@ def briefed_run(store, runtime, sid, session, question='Câu hỏi gốc của r
     `run()` ở trên ghi thẳng hàng job nên `config['research']` rỗng: `new_run and existing` sai, nhánh
     hậu tố `-r{n}` không chạy, và lỗi D-2 (mã chủ nhà chỉ định bị cộng hậu tố LẦN HAI) không lộ ra.
     """
-    asyncio.run(runtime.dispatch(session, 'research_brief', {
+    # Gọi THẲNG engine `research_brief`: biên dispatch của main đã bị Research gateway đóng
+    # (`RESEARCH_MAIN_READ_ONLY`) — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
+    asyncio.run(research_runtime.research_brief(runtime, session, {
         'tier': 2, 'question': question, 'rationale': 'vì cần nguồn mới',
         'goal': 'mục tiêu', 'methods': ['web'],
         'questions': [{'text': 'Câu hỏi 1', 'importance': 'high'}]}))

@@ -12,8 +12,6 @@ Mọi ca chạy tất định: không mạng, không gọi mô hình thật.
 """
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from agentbox.agent_core import limits, research_evidence, research_facets, research_runtime, search_store
@@ -21,8 +19,8 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -201,10 +199,12 @@ def test_seed_facets_records_where_each_direction_came_from(harness):
 def test_the_scope_card_seeds_the_map_and_carries_the_runtime_survey_date(harness):
     store, runtime, sid = harness
     session = store.get(sid)
-    answer = asyncio.run(runtime.dispatch(session, 'research_scope', {
+    # Gọi THẲNG engine `research_scope`: biên dispatch của main đã bị Research gateway đóng
+    # (`RESEARCH_MAIN_READ_ONLY`) — biên ấy được ghim ở `tests/unit/test_research_gateway.py`.
+    answer = research_runtime.research_scope(runtime, session, {
         'action': 'propose', 'researchId': RUN,
         'patch': {'questions': [{'id': 'q1', 'text': 'Độ chính xác?', 'importance': 'high'}]},
-        'survey': [{'title': 'Bản đồ tổng quan'}], 'citationClusters': ['Cụm trích dẫn A']}))
+        'survey': [{'title': 'Bản đồ tổng quan'}], 'citationClusters': ['Cụm trích dẫn A']})
     assert answer['facetsSeeded'] == 3
     assert answer['coverage']['counts']['total'] == 3
     assert len(answer['scope']['surveyDate']) == 10, 'mốc khảo sát do runtime cấp (YYYY-MM-DD)'
@@ -214,9 +214,9 @@ def test_the_scope_card_seeds_the_map_and_carries_the_runtime_survey_date(harnes
 def test_the_time_policy_takes_the_velocity_and_derives_the_window(harness):
     store, runtime, sid = harness
     session = store.get(sid)
-    answer = asyncio.run(runtime.dispatch(session, 'research_scope', {
+    answer = research_runtime.research_scope(runtime, session, {
         'action': 'update', 'researchId': RUN,
-        'patch': {'timePolicy': {'velocity': 'fast', 'reason': 'thị trường đổi nhanh'}}}))
+        'patch': {'timePolicy': {'velocity': 'fast', 'reason': 'thị trường đổi nhanh'}}})
     scope = answer['scope']
     assert scope['timePolicy']['velocity'] == 'fast'
     assert scope['window']['days'] == research_evidence.VELOCITY_WINDOW_DAYS['fast']
@@ -228,10 +228,10 @@ def test_the_time_policy_takes_the_velocity_and_derives_the_window(harness):
 def test_a_misspelled_velocity_keeps_the_old_value_and_notes_it(harness):
     store, runtime, sid = harness
     session = store.get(sid)
-    asyncio.run(runtime.dispatch(session, 'research_scope', {
-        'action': 'update', 'researchId': RUN, 'patch': {'timePolicy': {'velocity': 'fast'}}}))
-    answer = asyncio.run(runtime.dispatch(session, 'research_scope', {
-        'action': 'update', 'researchId': RUN, 'patch': {'timePolicy': {'velocity': 'nhanh-lam'}}}))
+    research_runtime.research_scope(runtime, session, {
+        'action': 'update', 'researchId': RUN, 'patch': {'timePolicy': {'velocity': 'fast'}}})
+    answer = research_runtime.research_scope(runtime, session, {
+        'action': 'update', 'researchId': RUN, 'patch': {'timePolicy': {'velocity': 'nhanh-lam'}}})
     policy = answer['scope']['timePolicy']
     assert policy['velocity'] == 'fast', 'giá trị sai KHÔNG được xoá giá trị đúng đang có'
     assert 'nhanh-lam' in policy['note']

@@ -17,7 +17,6 @@ from agentbox.agent_core.peer_watchdog import PeerWatchdog, PARENT_ALIVE_STATES
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.agent_core.tool_groups import TOOL_GROUPS
 from agentbox.memory.session_store import SessionStore
-from switch_isolation import isolate_off
 from test_harness_runtime import FixtureExecutor, answer, call
 
 
@@ -49,7 +48,6 @@ class ControlledModel:
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    monkeypatch.setenv('BOXFOX_CONTROLLER_JOBS', 'on')
     monkeypatch.setenv('BOXFOX_PEER_MESH', 'on')
     store = SessionStore(tmp_path / 'sessions.db')
     model = ControlledModel()
@@ -83,30 +81,6 @@ def test_tool_names_roles_groups_schema_contract():
     assert set(group['tools']) == job_surface.JOB_TOOLS and not group['alwaysOn']
     assert all(tool_contracts.replay_class(n) == 'unsafe' for n in job_surface.JOB_TOOLS)
     assert 'idle' not in PARENT_ALIVE_STATES
-
-
-@pytest.mark.parametrize('value', ['', 'off', 'true', '1'])
-def test_switch_defaults_off(value):
-    assert not job_surface.enabled(value)
-
-
-def test_switch_off_when_the_env_says_off(monkeypatch):
-    # Từ v2 (mặc định BẬT) đường legacy chỉ còn khi env nói TẮT tường minh; bài này đặt
-    # `off` thay vì tin vào mặc định, và cắt khóa tổng để env ambient của vòng chạy nhóm
-    # (`BOXFOX_REFORM=on`) không chen vào.
-    isolate_off(monkeypatch, job_surface.SWITCH)
-    assert not job_surface.enabled()
-
-
-def test_switch_off_runtime_profile_schemas_and_no_ddl(repo, monkeypatch):
-    store, rt, sid, _ = repo
-    isolate_off(monkeypatch, job_surface.SWITCH)
-    assert not job_surface.exists(rt)
-    assert not job_surface.JOB_TOOLS & set(rt.turn_profile(store.get(sid))['tools'])
-    assert not tool_contracts.schemas_for(job_surface.JOB_TOOLS)
-    with pytest.raises(PermissionError, match='JOB_SURFACE_OFF'):
-        asyncio.run(rt.dispatch(store.get(sid), 'start_job', request()))
-    assert not job_surface.exists(rt) and store.children_of(sid) == []
 
 
 @pytest.mark.parametrize('field,value', [('capabilityRef', {'epoch': 10}), ('controllerId', 'mine'),
@@ -277,25 +251,6 @@ def test_cancel_uses_canonical_child_stop_with_durable_epoch_receipt(repo):
     asyncio.run(drive())
 
 
-def test_kill_switch_blocks_starts_but_preserves_receipt_reads_and_cleanup(repo, monkeypatch):
-    async def drive():
-        store, rt, sid, model = repo
-        _, jid, child = await start(repo)
-        monkeypatch.setenv(job_surface.SWITCH, 'off')
-        assert job_surface.owns_child(rt, child)
-        names = set(rt.turn_profile(store.get(sid))['tools'])
-        assert 'start_job' not in names and job_surface.READ_TOOLS <= names
-        schemas = tool_contracts.schemas_for(names, job_receipts=True)
-        assert job_surface.READ_TOOLS <= {s['function']['name'] for s in schemas}
-        with pytest.raises(PermissionError, match='JOB_SURFACE_OFF'):
-            await rt.dispatch(store.get(sid), 'start_job', request(invocationId='second'))
-        model.gate.set()
-        await rt.tasks[child]
-        await asyncio.sleep(0)
-        assert (await rt.dispatch(store.get(sid), 'get_job', {'jobId': jid}))['state'] == 'succeeded'
-    asyncio.run(drive())
-
-
 def test_stop_blocks_queued_and_new_admission_but_fresh_user_turn_can_admit(repo):
     async def drive():
         store, rt, sid, _ = repo
@@ -364,7 +319,6 @@ def test_watchdog_restart_closes_canonical_child_and_job_without_respawn(repo):
 
 
 def test_constructor_restart_reconcile_does_not_trust_started_model_row(tmp_path, monkeypatch):
-    monkeypatch.setenv(job_surface.SWITCH, 'on')
     store = SessionStore(tmp_path / 'restart.db')
     rt = HarnessRuntime(store, FixtureExecutor(), ControlledModel())
     sid = rt.create({'skills': [], 'tools': sorted(job_surface.JOB_TOOLS | {'delegate_task'})})['id']
@@ -589,9 +543,8 @@ def test_model_request_guard_blocks_revoke_before_any_new_request(repo):
     asyncio.run(drive())
 
 
-def test_job_binds_persisted_canonical_context_checkpoint_not_caller_text(repo, monkeypatch):
+def test_job_binds_persisted_canonical_context_checkpoint_not_caller_text(repo):
     from agentbox.agent_core import context_surface
-    monkeypatch.setenv(context_surface.SWITCH, 'on')
 
     async def drive():
         store, rt, sid, _ = repo

@@ -1,6 +1,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { I18nProvider } from '../../i18n'
 import { ProviderView } from './ProviderView'
 import { useProviderStore } from '../../store/providerStore'
 import type { ConnectionKey, ProviderConnection, ProviderModel, ProviderSnapshot, RouterUsage } from '../../types/provider'
@@ -25,10 +26,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(snapshot), { headers: { 'content-type': 'application/json' } })))
 })
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.unstubAllGlobals() })
-async function render(tab: 'api' | 'router') { await act(async () => root.render(<ProviderView initialTab={tab} />)) }
+type ProviderTab = 'api' | 'router' | 'search'
+/** The tab always renders inside the app's i18n provider — the Web Search tab speaks
+ *  through `useT()`, while the API/Router copy stays the English it always was. */
+async function render(tab: ProviderTab) { await act(async () => root.render(<I18nProvider><ProviderView initialTab={tab} /></I18nProvider>)) }
 
 /** The same render with another snapshot — the page reads the store, not the fetch reply. */
-async function renderPage(page: ProviderSnapshot, tab: 'api' | 'router') {
+async function renderPage(page: ProviderSnapshot, tab: ProviderTab) {
   useProviderStore.setState({ snapshot: page, error: null, busy: false, loading: false })
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(page), { headers: { 'content-type': 'application/json' } })))
   await render(tab)
@@ -147,6 +151,45 @@ async function renderUsage() {
 }
 
 describe('Provider UI', () => {
+  it('exposes api, router and web search tabs and walks all three with the keyboard', async () => {
+    await render('api')
+    expect([...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(['API', 'Router', 'Web Search'])
+    const press = (id: string, key: string) =>
+      act(() => host.querySelector<HTMLButtonElement>(`#provider-tab-${id}`)!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })))
+    const selected = () => host.querySelector('[role="tab"][aria-selected="true"]')?.id
+
+    press('api', 'End')
+    expect(selected()).toBe('provider-tab-search')
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe('provider-tab-search')
+    press('search', 'ArrowRight')
+    expect(selected()).toBe('provider-tab-api')
+    press('api', 'ArrowLeft')
+    expect(selected()).toBe('provider-tab-search')
+    press('search', 'Home')
+    expect(selected()).toBe('provider-tab-api')
+  })
+  it('renders the web search tab inside the provider surface', async () => {
+    const withSearch: ProviderSnapshot = {
+      ...snapshot,
+      search: {
+        activeProviderId: 'brave',
+        revision: 3,
+        providers: [
+          { id: 'brave', name: 'Brave Search', requires: ['apiKey'], optional: [], envKeys: ['BRAVE_API_KEY'], icon: 'brave-search', credentialPresent: true, hasSecret: true, prefix: 'BSA12…', endpoint: null, accountId: null, lastTestedAt: null, lastTest: null },
+          { id: 'searxng', name: 'SearXNG (self-hosted)', requires: ['endpoint'], optional: [], envKeys: ['BOXFOX_SEARXNG_URL'], icon: 'searxng', credentialPresent: false, hasSecret: false, prefix: null, endpoint: null, accountId: null, lastTestedAt: null, lastTest: null },
+        ],
+      },
+    }
+    await renderPage(withSearch, 'search')
+
+    expect(host.textContent).toContain('Search API sources')
+    expect(host.textContent).toContain('In use: Brave Search')
+    expect(host.querySelector('[data-search-provider="default"]')).not.toBeNull()
+    expect(host.querySelector('[data-search-provider="brave"]')!.textContent).toContain('Saved · BSA12…')
+    expect(host.textContent).toContain('SearXNG (self-hosted)')
+    // The provider surface's own chrome is untouched by the new tab.
+    expect(host.textContent).toContain('Router engine ok')
+  })
   it('shows all API adapters with local icons and no redundant close button', async () => {
     await render('api')
     expect([...host.querySelectorAll('img')].map(image => image.alt)).toEqual(['OpenRouter icon', 'OpenAI icon', 'Anthropic icon', 'Google Gemini icon', 'OpenAI-compatible icon'])

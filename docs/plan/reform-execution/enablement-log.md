@@ -488,3 +488,47 @@ Review delta tìm thêm hai ca; cả hai đã sửa ngay:
 - Chạy lại sau vòng hai: **134 passed** (route 12 + ledger 57 + runtime-info 16 + gateway 49);
   **sweep hồi quy 152 passed** (chạy hai lần, EXIT=0); `live_allocation_check.py --base 3118` trên instance
   khởi động lại với code mới: vẫn **9/9**.
+
+## v3 — xoá dần 6/7 bề mặt legacy (2026-10-05)
+
+Chủ nhà chốt lựa chọn B của `HANDOFF.md` §10.2 ("xoá dần dần để công tắc mặc định là bật"). Mỗi bề
+mặt một commit, mỗi commit làm trọn B1–B3 (bỏ pin test + bỏ nhánh code `off` + bỏ tên env khỏi
+`feature_switches.MEMBERS`). Nhánh `vorflux/boxfox-legacy-surface-removal` (worktree
+`/var/tmp/boxfox-legacy-wt`), nền `main` @ `f8f33b3`.
+
+| Bề mặt | Commit | Quy mô | Test tại chỗ | Live |
+|---|---|---|---|---|
+| `BOXFOX_RECOVERY_POLICY` | `4a4bdac` | `recovery_policy.py` mất `SWITCH`/`enabled()`; 2 cổng `runtime.py` vô điều kiện | 95 + 26 passed | — |
+| `BOXFOX_CONTEXT_SURFACE` | `42b337a` | mất `SWITCH`/`enabled()`/`_active()`; 4 bài legacy-off xoá | 93 passed | — |
+| `BOXFOX_TASK_SURFACE` + `BOXFOX_CONTROLLER_JOBS` + `BOXFOX_USAGE_LEDGER` | `64f960d` | 25 tệp, +89/−381; `tool_groups` → `alwaysOn: True` | 34 + 219 + 122 passed | — |
+| `BOXFOX_ADAPTIVE_HARNESS` | `f2fceb0` | 14 tệp, +39/−166; giữ mode `adaptive`/`legacy` | 105 + 243 + 12 passed | — |
+
+- `feature_switches.MEMBERS` còn đúng một tên: `BOXFOX_RESEARCH_GATEWAY`.
+- **Bề mặt 7 (RESEARCH_GATEWAY) cố ý chưa xoá.** Số đo trên 35 tệp ghim `legacy_path` khi pin bị gỡ
+  (`strip_legacy_pin`): trước đợt `232 failed / 416 passed / 7 errors`; sau 6 bề mặt
+  `231 failed / 405 passed / 7 errors`; thêm `BOXFOX_RESEARCH_GATEWAY=off` → **`643 passed` (0 đỏ)**.
+  Nghĩa là mọi số đỏ còn lại thuộc đúng bề mặt 7, và xoá nó cần chủ nhà chốt luồng `research` của
+  Work Graph + chuyển phiên cũ khỏi `researchId` (`HANDOFF.md` §10.6).
+- Bằng chứng: `/var/tmp/wt-strip.log` (sau 6 bề mặt), `/var/tmp/wt-strip-gwoff.log` (đối chứng gateway
+  off), `/var/tmp/pin-strip-A.log` (trước đợt), plugin `/var/tmp/strip_legacy_pin.py`.
+
+## v4 — xoá nốt bề mặt 7 + khóa tổng (2026-10-06)
+
+Chủ nhà chốt bốn điểm: xoá nốt bề mặt 7 **theo biến thể b1** (bỏ công tắc; nút `research` của Work
+Graph đóng `needs_user` kèm `RESEARCH_NEEDS_MAIN` thay vì `failed`; sửa lời nhắc `/research`; viết lại
+nhóm test ghim), xoá hẳn khóa tổng SAU khi xoá xong bề mặt 7, **không** làm migration `researchId`
+(box này là môi trường thử), và chạy nốt 5 driver E2E. Nhánh `vorflux/boxfox-legacy-surface-removal`.
+
+| Bước | Commit | Quy mô | Test tại chỗ |
+|---|---|---|---|
+| Bề mặt 7/7 `BOXFOX_RESEARCH_GATEWAY` | `6c8fe6b` | 40 tệp, +565/−419; bỏ `SWITCH`/`enabled()`/`has_receipts()` + mọi cổng `RESEARCH_GATEWAY_OFF` + lối thoát legacy `researchId`; nút `research` của Work Graph → `needs_user`; viết lại 34 tệp test | 169 + 155 + 105 + 204 + 121 + 59 passed |
+| B5 — xoá hẳn khóa tổng | `0404356` | 42 tệp; xoá `feature_switches.py` + khối `switches` + pin `legacy_path`; xoá `test_reform_master_switch.py` (10 ca) + `switch_isolation.py` | 16 + 24 + 169 passed; collect 4372 ca |
+| Bản sửa sau full suite | `762b159`, `a6a5881` | Feedback simplify/review (F1–F4); **9 bài đỏ còn sót** ở ba tệp không mang nhãn `legacy_path` (chúng xanh nhờ đúng lối thoát legacy của main) — nay dựng lead THẬT qua `tests/unit/research_intake.py` | 21 + 8 + 12 passed; nhóm research 196 passed |
+
+- **Blast radius về 0:** phép đo cũ (gỡ pin 35 tệp) cho `231 failed / 405 passed / 7 errors`; sau v4
+  không còn pin nào để gỡ — nhóm tệp đó chạy ở mặc định mới và xanh trong toàn bộ suite.
+- **Toàn bộ unit suite trên head cuối `a6a5881`:** `3 failed, 4357 passed, 12 skipped` (20:33). Đợt
+  suite trước trên `762b159` cho 12 đỏ: 3 ca baseline + đúng 9 ca vừa sửa.
+- Ba ca đỏ còn lại của toàn bộ suite là baseline có sẵn (`test_terminal_exec_echo`,
+  `test_the_dispatcher_sends_web_tools_to_the_host_not_the_box`, `test_revoked_grant_blocks_next_tool_call`).
+- Số đo đầy đủ, quyết định và việc B6 còn lại: `HANDOFF.md` §10.7.

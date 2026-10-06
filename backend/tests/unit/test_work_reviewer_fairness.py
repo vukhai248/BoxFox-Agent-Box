@@ -9,8 +9,8 @@ from test_work_graph import build, ok_script, answer, raw_tool
 from test_work_checks import setup, start
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -76,7 +76,9 @@ def test_prose_only_attempt_is_rejected_and_contract_error_survives_retry(tmp_pa
                 return answer('All facts match the opened original evidence. No blocking findings.')
             return result
         model.complete=missing
-        result=await start(rt,sid,draft)
+        # Nút `CHECKED` (explore + risk consequential) có hai bộ kiểm; bài này đo MỘT lượt kiểm và
+        # retry nội bộ của nó, nên ghim `evidence` để số hồ sơ kiểm vẫn là một.
+        result=await start(rt,sid,draft,checkIds=['evidence'])
         doc=result['checks'][0]
         assert doc['status']=='pass' and len(doc['attempts'])==2
         assert doc['attempts'][0]['status']=='error'

@@ -9,7 +9,9 @@ venv/
 .ruff_cache/
 
 # Node
-node_modules/
+# `node_modules` KHÔNG có dấu `/`: mẫu kèm `/` chỉ khớp thư mục, nên một symlink
+# `frontend/node_modules` trỏ về máy cục bộ vẫn lọt vào chỉ mục (đã xảy ra một lần).
+node_modules
 dist/
 .vite/
 *.tsbuildinfo

@@ -11,17 +11,25 @@ from agentbox.agent_core import work_graph as wg, work_policy as policy, work_ch
 from test_work_graph import build, raw_tool, tool, PLAN, EXPLORE, ok_script, answer
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
+# Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được producer `research`/`research-review`,
+# nên nút `research` của Work Graph đóng `needs_user` (xem bài `test_research_node_cannot_be_produced_from_main`
+# dưới đây, và `test_work_graph.py::test_research_only_run_has_nothing_to_execute`).
+# Các bài đo máy móc chung (admission/check/handoff) dùng nút discovery vẫn chạy được từ main:
+# `explore` + risk `consequential` ⇒ cùng bộ kiểm `evidence`/`critique` (người kiểm `review`/`plan-review`).
+CHECKED = {'id': 'R1', 'kind': 'explore', 'risk': 'consequential', 'title': 'Compare approaches',
+           'goal': 'Compare two export formats using the provided evidence',
+           'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
 RESEARCH = {'id': 'R1', 'kind': 'research', 'title': 'Compare approaches',
             'goal': 'Compare two export formats using the provided evidence',
             'acceptance': ['Keep the exact owner constraints', 'Distinguish facts and proposals']}
 
 
-async def setup(rt, sid, node=RESEARCH, goal='Research the two approaches', flow='research'):
+async def setup(rt, sid, node=CHECKED, goal='Research the two approaches', flow='mixed'):
     created = await raw_tool(rt, sid, 'work_graph', {'action': 'create', 'goal': goal, 'flow': flow})
     await raw_tool(rt, sid, 'work_graph', {'action': 'add', 'nodes': [node]})
     result = await raw_tool(rt, sid, 'work_run', {'phase': 'discover' if node['kind'] in wg.DISCOVERY_KINDS + ('plan',) else 'execute'})
@@ -62,6 +70,18 @@ def test_V06_simple_lookup_reads_source_without_reviewer(tmp_path):
         assert result['outputs'][0]['status'] == 'accepted'
         assert result['outputs'][0]['policy']['required'] == []
         assert len(model.prompts) == 1
+    asyncio.run(run())
+
+
+def test_research_node_cannot_be_produced_from_main(tmp_path):
+    """Bề mặt 7 đã xoá: main không còn spawn được producer `research` — nút đóng `needs_user`, không `failed`."""
+    _, rt, model, _, sid = build(tmp_path)
+    async def run():
+        _, result = await setup(rt, sid, RESEARCH, 'Compare the two approaches', 'research')
+        assert result['nodes'][0]['stages']['produce'] == 'needs_user'
+        state = rt.work_graph.active(sid)['nodes'][0]['stages']['produce']
+        assert state['error'].startswith('RESEARCH_NEEDS_MAIN:')
+        assert not model.prompts and not rt.store.children_of(sid)
     asyncio.run(run())
 
 
@@ -202,15 +222,20 @@ def test_V02_diagnostic_is_not_forced_into_semantic_review(tmp_path):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('mutation', ['file_write', 'file_edit_block', 'write_plan', 'delegate_task'])
-def test_V05_checker_direct_write_or_delegation_blocked(tmp_path, mutation):
+@pytest.mark.parametrize('mutation,error', [
+    ('file_write', 'WORK_CHECK_READ_ONLY'), ('file_edit_block', 'WORK_CHECK_READ_ONLY'),
+    ('write_plan', 'WORK_CHECK_READ_ONLY'),
+    # Bề mặt 7 đã xoá: biên Research chặn delegate_task của mọi phiên không phải root TRƯỚC cổng
+    # work-check, nên mã lỗi đổi còn ý nghĩa giữ nguyên — người kiểm không tự giao việc cho ai.
+    ('delegate_task', 'RESEARCH_CONTROL_FORBIDDEN')])
+def test_V05_checker_direct_write_or_delegation_blocked(tmp_path, mutation, error):
     _, rt, _, _, sid = build(tmp_path)
     async def run():
         await setup(rt, sid)
         child = rt.create({}, parent_id=sid, role='testing')
         child['config']['workBinding'] = {'checkId': 'c-real'}
         rt.store.update_config(child['id'], child['config'])
-        with pytest.raises(PermissionError, match='WORK_CHECK_READ_ONLY'):
+        with pytest.raises(PermissionError, match=error):
             await rt.dispatch(child, mutation, {})
     asyncio.run(run())
 
@@ -304,7 +329,8 @@ def test_changed_definition_invalidates_checks_and_dependent_artifacts(tmp_path)
     _, rt, _, _, sid = build(tmp_path)
     async def run():
         await tool(rt, sid, 'work_graph', {'action': 'create', 'goal': 'Add export'})
-        await tool(rt, sid, 'work_graph', {'action': 'add', 'nodes': [RESEARCH, PLAN | {'dependsOn': ['R1']}]})
+        # Nút discovery main tự chạy được: đổi định nghĩa R1 phải vô hiệu kiểm của R1 và artifact của P1.
+        await tool(rt, sid, 'work_graph', {'action': 'add', 'nodes': [CHECKED, PLAN | {'dependsOn': ['R1']}]})
         await tool(rt, sid, 'work_run', {'phase': 'discover'})
         await tool(rt, sid, 'work_graph', {'action': 'verify'})
         old = rt.work_graph.active(sid)
@@ -344,12 +370,12 @@ def test_V13_no_reviewer_of_reviewer(tmp_path):
     _, rt, model, _, sid = build(tmp_path)
     async def run():
         _, result = await setup(rt, sid)
-        await start(rt, sid, result)
+        await start(rt, sid, result, checkIds=['evidence'])
         assert [k for k, _ in model.prompts] == ['produce', 'review']
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('flow', ['plan', 'research', 'design'])
+@pytest.mark.parametrize('flow', ['plan', 'design'])
 def test_V14_autopilot_cannot_execute_artifact_only_run(tmp_path, flow):
     _, rt, _, executor, sid = build(tmp_path)
     wg.set_autopilot(rt, sid, True)
@@ -362,6 +388,19 @@ def test_V14_autopilot_cannot_execute_artifact_only_run(tmp_path, flow):
             with pytest.raises(ValueError, match='WORK_REQUIREMENTS_ONLY'):
                 await raw_tool(rt, sid, name, args)
         assert not any('git checkout' in a.get('command', '') for n, a in executor.calls)
+    asyncio.run(run())
+
+
+def test_V14_research_flow_verify_waits_for_the_research_boundary(tmp_path):
+    """Luồng `research` không còn kiểm toàn kế hoạch từ main: vai `research-review` thuộc biên Research."""
+    _, rt, _, _, sid = build(tmp_path)
+    async def run():
+        await tool(rt, sid, 'work_graph', {'action': 'create', 'goal': 'Prepare the requested artifact', 'flow': 'research'})
+        await tool(rt, sid, 'work_graph', {'action': 'add', 'nodes': [PLAN | {'dependsOn': []}]})
+        await tool(rt, sid, 'work_run', {'phase': 'discover'})
+        with pytest.raises(PermissionError, match='RESEARCH_MAIN_READ_ONLY'):
+            await raw_tool(rt, sid, 'work_graph', {'action': 'verify'})
+        assert rt.work_graph.active(sid)['status'] == 'needs_revision'
     asyncio.run(run())
 
 

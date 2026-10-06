@@ -15,25 +15,20 @@ Bất biến (kiểm bằng test):
 5. Empty/reasoning-only/refusal phân biệt được: empty có đúng một lần thử lại, còn lại dừng/hỏi đổi route.
 6. Mã lạ ⇒ fail closed: checkpoint + hỏi, không đoán.
 
-Nối runtime (H8a): công tắc `BOXFOX_RECOVERY_POLICY` (mặc định BẬT từ v2, #6599). Khi bật, runtime
+Nối runtime (H8a): lớp này LUÔN sống từ v2 (#6599). Runtime
 (a) ghi quyết định của module vào kết quả tool lỗi và event `error`, và (b) dùng
 quyết định làm **cổng chỉ-chặn**: mã nào module nói `checkpoint_and_ask`/`stop` mà
 vòng retry cũ định thử lại thì bị chặn (`RECOVERY_POLICY_DENIED`). Cổng không bao giờ
 THÊM một lần thử lại — hôm nay nó khớp `failures.retry_advice` từng mã (H3.7), nên
-bật công tắc không đổi hành vi; nó là lưới cho các mã mới.
+nó không đổi hành vi; nó là lưới cho các mã mới.
 """
-
-from . import feature_switches
-
-#: Công tắc giết khi nối vào runtime: mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`.
-SWITCH = 'BOXFOX_RECOVERY_POLICY'
 
 #: Hai hành động mà module nói "được phép chạy lại việc"; mọi hành động khác là dừng/giữ.
 RETRY_ACTIONS = ('retry_backoff', 'recover_model')
 
 #: Lớp hồi phục. Thứ tự này cũng là thứ tự ưu tiên khi một mã khớp nhiều luật.
 CLASSES = ('transport', 'provider_stream', 'provider_empty', 'output_limit', 'tool_validation',
-           'tool_unknown', 'rights_budget', 'no_progress', 'unknown')
+           'tool_unknown', 'rights_budget', 'no_progress', 'capability_gap', 'unknown')
 
 #: Hành động đề xuất. `retry_backoff` và `recover_model` là hai hành động *được phép thử lại*;
 #: mọi hành động còn lại không tự chạy lại việc đã làm.
@@ -138,6 +133,10 @@ CODES = {
     'WORK_REPAIR_UNDIAGNOSED': 'no_progress',
     'WORK_REPAIR_LIMIT': 'no_progress',
     'WORK_LOOKUP_UNVERIFIED': 'no_progress',
+    # F05 (v1 cải tổ web search): thiếu cấu hình/hạ tầng tìm kiếm KHÔNG phải lỗi truy vấn — lớp
+    # riêng để thông báo nói đúng việc cần làm thay vì rơi vào `unknown` (fail closed) như trước.
+    'WEB_SEARCH_UNAVAILABLE': 'capability_gap',
+    'WEB_SEARCH_EMPTY': 'no_progress',
 }
 
 #: Lớp → hành động mặc định.
@@ -150,6 +149,7 @@ _ACTIONS = {
     'tool_unknown': 'inspect_only',
     'rights_budget': 'checkpoint_and_ask',
     'no_progress': 'change_approach',
+    'capability_gap': 'checkpoint_and_ask',
     'unknown': 'checkpoint_and_ask',
 }
 
@@ -174,13 +174,6 @@ _EMPTY_RETRIES = 1  # khớp `TURN_EMPTY_RESPONSE_RETRY` của runtime: rỗng t
 def classify(code):
     """Mã lỗi → lớp. Mã lạ trả `'unknown'` (không đoán, không coi là transient)."""
     return CODES.get(str(code or '').strip(), 'unknown')
-
-
-def enabled(env=None):
-    """Lớp chính sách hồi phục: đặt tường minh > khóa tổng `BOXFOX_REFORM` > mặc định BẬT từ v2 (#6599), tắt tường minh bằng `off`."""
-    if env is not None:
-        return str(env or '').strip().lower() == 'on'
-    return feature_switches.member_switch(SWITCH)
 
 
 def may_retry(decision_value):
@@ -244,6 +237,10 @@ def decision(code, *, replay_safe=False, has_receipt=False, attempts=0, retry_af
     elif cls == 'no_progress':
         replay = False
         reason = 'không có tiến triển thật: đổi cách/câu hỏi, lưu checkpoint; không lặp lại vô hạn'
+    elif cls == 'capability_gap':
+        replay = False
+        reason = ('backend tìm kiếm thiếu cấu hình hoặc đang hỏng: đừng lặp truy vấn; dùng nguồn khác, '
+                  'hoặc báo khoảng trống cho chủ nhà')
     if cls == 'tool_unknown' and replay_safe:
         # Nhãn "safe" của tool không biến một mutation chưa rõ kết quả thành replay được.
         replay = False

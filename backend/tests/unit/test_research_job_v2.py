@@ -11,6 +11,7 @@ from agentbox.agent_core import web as web_module
 from agentbox.memory.session_store import SessionStore
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import research_continuation_step
+from research_intake import admit_lead
 
 
 def test_openreview_search_records_submission_and_real_next_offset(monkeypatch):
@@ -360,15 +361,15 @@ def test_new_research_branch_requires_a_known_question(tmp_path):
         pass
     store = SessionStore(tmp_path / 'sessions.sqlite')
     runtime = HarnessRuntime(store, Executor(), Model())
-    main = runtime.create({'skills': []})
-    main['config']['research'] = {'researchId': 'study', 'jobMode': 'v2', 'tier': 1}
-    store.update_config(main['id'], main['config'])
-    store.research_job_save('study', main['id'], {
+    root = runtime.create({'skills': []})
+    # Bề mặt 7 đã xoá lối thoát của main, nên nhánh research chỉ còn giao được từ LEAD đã admit.
+    lead, run_id = admit_lead(store, runtime, root)
+    store.research_job_save(run_id, lead['id'], {
         'questions': [{'id': 'q1', 'text': 'Which approach?', 'status': 'unexplored'}],
         'budgetSeconds': 600}, status='researching')
     with pytest.raises(ValueError, match='RESEARCH_BRANCH_QUESTION_REQUIRED'):
-        asyncio.run(runtime.delegate(main, {'role': 'research', 'goal': 'Find evidence'}))
-    assert store.children_of(main['id']) == []
+        asyncio.run(runtime.delegate(store.get(lead['id']), {'role': 'research', 'goal': 'Find evidence'}))
+    assert store.children_of(lead['id']) == []
     store.close()
 
 
@@ -382,16 +383,16 @@ def test_delegating_a_v2_question_marks_it_researching(tmp_path):
         pass
     store = SessionStore(tmp_path / 'sessions.sqlite')
     runtime = HarnessRuntime(store, Executor(), Model())
-    main = runtime.create({'skills': []})
-    main['config']['research'] = {'researchId': 'study', 'jobMode': 'v2', 'tier': 1}
-    store.update_config(main['id'], main['config'])
-    store.research_job_save('study', main['id'], {
+    root = runtime.create({'skills': []})
+    lead, run_id = admit_lead(store, runtime, root)
+    store.research_job_save(run_id, lead['id'], {
         'questions': [{'id': 'q1', 'text': 'Which approach?', 'status': 'unexplored'}],
         'budgetSeconds': 600}, status='scoping')
     runtime.start = lambda *_: asyncio.get_running_loop().create_future()
-    result = asyncio.run(runtime.delegate(main, {'role': 'research', 'goal': 'Find evidence',
-                                                  'questionId': 'q1', 'wait': False}))
-    job = store.research_job('study')
+    result = asyncio.run(runtime.delegate(store.get(lead['id']),
+                                          {'role': 'research', 'goal': 'Find evidence',
+                                           'questionId': 'q1', 'wait': False}))
+    job = store.research_job(run_id)
     assert result['status'] == 'started'
     assert job['status'] == 'researching'
     assert job['state']['questions'][0]['status'] == 'researching'

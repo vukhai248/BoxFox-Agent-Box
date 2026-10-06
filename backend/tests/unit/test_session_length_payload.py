@@ -17,8 +17,8 @@ from agentbox.memory.session_store import SessionStore
 import pytest
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -85,9 +85,14 @@ def test_session_metrics_match_the_stored_transcript(tmp_path):
     assert metrics['messageCount'] == len(stored['messages']) == 5
     assert metrics['contextEstimate'] == estimate_tokens(stored['messages'],
                                                         schemas_for(stored['config']['tools']))
-    # Cùng một hàm ước lượng với `turn_end` của bước cuối → hai con số phải khớp.
+    # Bề mặt 7 đã xoá: hồ sơ LƯỢT của main gỡ các công cụ research nội bộ khỏi bộ tool
+    # (`research_gateway.apply_profile`), nên `turn_end` đo trên bộ ĐÃ LỌC còn `session_metrics`
+    # đọc `config.tools` đã lưu — hai con số khác nhau có chủ ý, mỗi con đúng với bộ tool của nó.
     last_end = [e['data'] for e in store.events(sid) if e['type'] == 'turn_end'][-1]
-    assert metrics['contextEstimate'] == last_end['contextEstimate']
+    assert last_end['contextEstimate'] == estimate_tokens(
+        stored['messages'], schemas_for(runtime.turn_profile(stored)['tools']))
+    assert last_end['contextEstimate'] < metrics['contextEstimate'], \
+        'main không còn giữ công cụ research nội bộ trong hồ sơ lượt ⇒ ước lượng của lượt nhỏ hơn'
     assert metrics['contextEstimate'] > 0
     assert metrics['compressionCount'] == 0
     assert metrics['deadlineClamped'] is False

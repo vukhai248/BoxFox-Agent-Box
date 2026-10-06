@@ -3775,13 +3775,6 @@ class HarnessRuntime(RuntimeCommands):
         nằm ở `dispatch`, còn đây chỉ để model không phí bước gọi thứ sẽ bị từ chối.
         """
         profile = work_scope.apply_profile(self, session, self.turn_profile_base(session, invocation_id))
-        if not task_surface.enabled():
-            # H3 — công tắc giết của bề mặt task, áp ở ĐÚNG một chỗ cho MỌI hồ sơ lượt (main,
-            # research, design, plan): tắt thì bốn công cụ `task_*` không được quảng cáo, kể cả
-            # khi tên đã nằm trong `config['tools']` từ một phiên cũ.
-            profile['tools'] = [name for name in profile['tools'] if name not in task_surface.TASK_TOOLS]
-        if not job_surface.enabled():
-            profile['tools'] = job_surface.visible_tools(self, session['id'], profile['tools'])
         return research_gateway.apply_profile(self, session, profile)
 
     def turn_profile_base(self, session, invocation_id=None):
@@ -4102,7 +4095,7 @@ class HarnessRuntime(RuntimeCommands):
         start_owner_tools = tool_recovery.owner_tools(self.store, session)
         # P1 (§5.5): lượt research nhắm ≤ 600 s rồi lưu pha, việc dài đi tiếp qua lượt bơm sau.
         turn_budget = self.turn_budget_seconds(session, self.turn_invocations.get(sid))
-        tools = schemas_for(profile['tools'], job_receipts=job_surface.has_receipts(self, sid), research_receipts=research_gateway.has_receipts(self, sid))
+        tools = schemas_for(profile['tools'])
         loop_guard = AntiLoopGuard(threshold=3)
         started = time.time()
         steps_used = 0
@@ -4565,14 +4558,13 @@ class HarnessRuntime(RuntimeCommands):
                                 continue
                             advice = retry_advice(exc, attempts, remaining_seconds=self.seconds_left(budget),
                                                   spent_seconds=retry_waited)
-                            if recovery_policy.enabled():
-                                recovery = recovery_policy.decision(code, attempts=attempts,
-                                                                    retry_after=(advice or {}).get('delay'))
-                                self.store.emit(sid, 'recovery_decision', recovery)
-                                if advice and not recovery_policy.may_retry(recovery):
-                                    self.store.emit(sid, 'notice', {'code': 'RECOVERY_POLICY_DENIED',
-                                        'message': recovery['reason'], 'recovery': recovery})
-                                    advice = None
+                            recovery = recovery_policy.decision(code, attempts=attempts,
+                                                                retry_after=(advice or {}).get('delay'))
+                            self.store.emit(sid, 'recovery_decision', recovery)
+                            if advice and not recovery_policy.may_retry(recovery):
+                                self.store.emit(sid, 'notice', {'code': 'RECOVERY_POLICY_DENIED',
+                                    'message': recovery['reason'], 'recovery': recovery})
+                                advice = None
                             if advice is None:
                                 if attempts:
                                     # The chat banner prints the LAST error, which on its own reads
@@ -4871,8 +4863,7 @@ class HarnessRuntime(RuntimeCommands):
                         safe = {k: v for k, v in result.items() if k not in {'image', 'base64'}}
                         if safe.get('is_error'):
                             safe['reflection_hint'] = reflection_hint(name, safe.get('errorCode'))
-                            if recovery_policy.enabled():
-                                safe['recovery'] = recovery_policy.decision(safe.get('errorCode'))
+                            safe['recovery'] = recovery_policy.decision(safe.get('errorCode'))
                         if loop_guard.check_and_record(name, args if isinstance(args, dict) else {}, bool(safe.get('is_error'))):
                             safe['warning'] = 'CRITICAL_LOOP_GUARD: This exact tool call has repeatedly failed 3 times. You MUST halt this approach immediately, analyze why it is failing, change parameters, or delegate to a specialist.'
                         text_result = json.dumps(safe, ensure_ascii=False)
@@ -5127,11 +5118,7 @@ class HarnessRuntime(RuntimeCommands):
         if name in job_surface.JOB_TOOLS:
             return await job_surface.handle(self, current, name, args)
         if name in task_surface.TASK_TOOLS:
-            # H3 — bề mặt task (plan v1 §4). Cổng ở đây là hàng rào cuối: phiên tạo lúc công tắc còn
-            # bật rồi công tắc tắt giữa chừng vẫn bị từ chối, không "chạy tạm".
-            if not task_surface.enabled():
-                raise PermissionError(f'TASK_SURFACE_OFF: {name} is unavailable while '
-                                      f'{task_surface.SWITCH} is off')
+            # H3 — bề mặt task (plan v1 §4).
             return await task_surface.handle(self, current, name, args)
         if name in WORK_TOOLS:
             result = await self.work_tool(session, name, args, call_id)
@@ -7299,11 +7286,9 @@ class HarnessRuntime(RuntimeCommands):
         such a child is bound to a node/stage of a Work Graph run, so the legacy mode gates, review-target
         bindings and per-turn child cap do not apply — the engine owns its own budget.
 
-        The research gateway guard runs BEFORE the `work=` branch on purpose: with the gateway on
-        (v2 default) the engine's own research/research-review spawns are refused too
-        (`RESEARCH_MAIN_READ_ONLY`) unless the session keeps a legacy research binding — research work
-        must go through the independent boundary. Escape hatches: `BOXFOX_RESEARCH_GATEWAY=off`, or the
-        legacy `researchId` binding of an old research session. Pinned by
+        The research boundary guard runs BEFORE the `work=` branch on purpose: the engine's own
+        research/research-review spawns are refused too (`RESEARCH_MAIN_READ_ONLY`) — research work
+        must go through the independent boundary (`research_job_submit`). Pinned by
         `tests/unit/test_research_gateway.py::test_engine_work_spawns_cannot_bypass_the_gateway_either`.
         """
         research_gateway.guard_delegate(self, self.store.get(session['id']), args, job_request=job_request)

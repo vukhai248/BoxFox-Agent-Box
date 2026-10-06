@@ -382,6 +382,9 @@ WEB_DECODE_DEFAULT_MODE = 'on'
 # Hai mã notice cho giá trị lạ của công tắc lớp đọc (cùng khuôn hai cổng vòng 25).
 WEB_READER_MODE_UNKNOWN_CODE = 'WEB_READER_MODE_UNKNOWN'
 WEB_READ_STORE_MODE_UNKNOWN_CODE = 'WEB_READ_STORE_MODE_UNKNOWN'
+#: Hook CHỈ DÙNG CHO TEST/E2E (PART 2): `1` ⇒ `assert_public_url` cho loopback đi qua để gọi được
+#: máy chủ giả cục bộ. Mặc định TẮT — không đặt biến thì loopback vẫn bị chặn (R9 của kế hoạch).
+WEB_TEST_ALLOW_LOOPBACK_ENV = 'BOXFOX_WEB_TEST_ALLOW_LOOPBACK'
 # Trần của bộ đệm đọc (A-4 dựng `ReadStore` theo đúng con số này); đợt 1 chỉ phơi ra cho giao diện.
 READ_STORE_MAX_ENTRIES = 24
 # ĐO ĐƯỢC 2026-09-23: trang dài nhất đã đo là `docs.python.org/3/whatsnew/3.13.html`
@@ -423,6 +426,24 @@ SEARCH_RETRY_ATTEMPTS = 2
 # §5.4.2 (mặc định riêng tư), §5.4.3 (học thuật), §5.4.4 (top-k). Mọi con số là [ƯỚC LƯỢNG] và
 # được chỉnh trên tập `dev` của 8.7, KHÔNG chỉnh trên tập `test`.
 SEARXNG_TIMEOUT_SECONDS = 8.0
+# Tự dò SearXNG tự host (v1 cải tổ web search): khi `BOXFOX_SEARXNG_URL` chưa đặt, harness thử
+# instance ở địa chỉ dưới đây. Đầu dò là `GET /healthz` (image `searxng/searxng` hiện tại trả
+# 200 + thân "OK"; đo 06/10/2026), đường lùi `GET /config` (JSON có khoá `engines`). Cache dương
+# 30 s / cache âm 15 s — đủ nhanh để `deploy/searxng/up.sh` xong là dùng được, đủ thưa để không
+# thăm dò mỗi lời gọi tìm kiếm.
+SEARXNG_AUTODETECT_URL_DEFAULT = 'http://127.0.0.1:8888'
+SEARXNG_AUTODETECT_TTL_SECONDS = 30.0
+SEARXNG_AUTODETECT_MISS_TTL_SECONDS = 15.0
+SEARXNG_HEALTH_PATH = '/healthz'
+SEARXNG_CONFIG_PATH = '/config'
+SEARXNG_PROBE_TIMEOUT_SECONDS = 2.0
+# Nguồn tìm kiếm người dùng chọn (PART 2 — Settings → Provider → Web Search): harness đọc qua
+# loopback router. Timeout 2 s vì router là tiến trình CÙNG MÁY (chờ lâu chỉ làm chậm tìm kiếm);
+# TTL 15 s để đổi nguồn trong UI được nhận nhanh mà mỗi lời gọi `web_search` không phải hỏi router.
+# Router chết/sai định dạng ⇒ `None` và đường built-in chạy như cũ, không bao giờ ném.
+ROUTER_SEARCH_RESOLVE_URL_DEFAULT = 'http://127.0.0.1:3101/api/router/search/resolve'
+SEARCH_SOURCE_TIMEOUT_SECONDS = 2.0
+SEARCH_SOURCE_TTL_SECONDS = 15.0
 ACADEMIC_TIMEOUT_SECONDS = 10.0
 SEARCH_PIPELINE_VARIANTS_L2 = 6
 SEARCH_PIPELINE_VARIANTS_L3 = 10

@@ -8,8 +8,8 @@ from agentbox.agent_core import work_graph as wg, work_prompts
 from test_work_graph import build, ok_script, tool, EXPLORE, PLAN
 
 
-# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ nên pin `BOXFOX_REFORM=off` cho mọi bài
-# (xem `tests/unit/conftest.py`). Bài nào cần đường mới thì đặt env tường minh trong bài.
+# Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
+# (HANDOFF §10.3) nên nhãn `legacy_path` không còn kèm env nào để pin.
 pytestmark = pytest.mark.legacy_path
 
 
@@ -62,13 +62,15 @@ def test_depth_change_invalidates_definition():
 
 
 def test_helper_claim_on_unopened_path_is_unverified(tmp_path):
+    # Bề mặt 7 (RESEARCH_GATEWAY) đã xoá: main không còn spawn được helper `research`; lượt tra cứu
+    # dùng `explore` — hợp đồng "claim phải có nguồn đã mở" không đổi theo vai.
     produced = {'n': 0}
 
     def script(kind, text):
         if kind == 'produce':
             produced['n'] += 1
             if produced['n'] == 1:
-                return '## Draft\n## Knowledge requests\n- research: what does docs/source.md say?'
+                return '## Draft\n## Knowledge requests\n- explore: what does docs/source.md say?'
             return '## Findings\nfinal\n## Knowledge requests\n- none'
         if kind == 'knowledge':
             return 'The file docs/source.md defines the contract.'
