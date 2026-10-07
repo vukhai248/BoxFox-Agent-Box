@@ -337,6 +337,10 @@ function handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer, 
       if (Array.isArray(value)) for (const item of value) headers.push(`${key}: ${item}`)
       else if (value !== undefined) headers.push(`${key}: ${value}`)
     }
+    // `proxyHeaders` bỏ header hop-by-hop, mà `Connection`/`Upgrade` chính là hop-by-hop: thiếu chúng
+    // thì upstream trả lời như một request thường (200) và socket không bao giờ thành WebSocket
+    // (DA5 của bản bàn giao). Đây là handshake nên hai header này phải có, và chỉ có một lần.
+    headers.push('Connection: Upgrade', `Upgrade: ${String(req.headers.upgrade || 'websocket')}`)
     upstream.write(`GET ${upstreamPath} HTTP/1.1\r\n${headers.join('\r\n')}\r\n\r\n`)
     if (head.length > 0) upstream.write(head)
     upstream.pipe(socket)
