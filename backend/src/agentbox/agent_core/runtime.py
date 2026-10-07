@@ -6315,7 +6315,8 @@ class HarnessRuntime(RuntimeCommands):
         (sandbox tự chọn số, không header) và `read_plan_index` đã ghi `PLAN_INDEX_UNAVAILABLE`
         vào nhật ký hệ thống: thà mất tính năng còn hơn bịa số version.
         """
-        index = await plan_registry.read_plan_index(self.executor)
+        # `session['id']` để host mode đọc đúng `<folder>/.plans` của phiên này; Docker bỏ qua.
+        index = await plan_registry.read_plan_index(self.executor, session=session.get('id'))
         reviews, submitted = {}, {}
         if index is not None:
             pending = list(getattr(self, 'pending', {}).values())

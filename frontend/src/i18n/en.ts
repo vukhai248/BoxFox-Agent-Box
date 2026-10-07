@@ -1082,6 +1082,8 @@ const en: SameShape<typeof vi> = {
     },
     noPlan: 'The agent has not written a plan yet.',
     sourceNotice: 'Plan documents are loaded directly from the sandbox machine.',
+    /** Same notice for host mode: there is no sandbox machine — the selected project folder is read. */
+    sourceNoticeHost: 'Plan documents are loaded directly from the selected project folder on this machine.',
     size: 'Size',
     updated: 'Updated',
     parentVersion: 'Previous version:',

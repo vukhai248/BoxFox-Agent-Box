@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SandboxPlanRepository } from './http'
+import { MachinePlanRepository, PlanRepositoryHttpError, SandboxPlanRepository } from './http'
 
 describe('SandboxPlanRepository', () => {
   it('loads the manifest from the sandbox endpoint and derives presentation status', async () => {
@@ -49,5 +49,49 @@ describe('SandboxPlanRepository', () => {
       signal: undefined,
     })
     expect(result).toEqual(content)
+  })
+})
+
+describe('MachinePlanRepository', () => {
+  it('loads host plan files through the harness with the admin header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plans: [
+          {
+            identity: 'demo',
+            relativeDirectory: '',
+            slug: 'demo',
+            versions: [
+              { version: 1, label: 'v1', relativePath: 'v1-demo.md', sizeBytes: 1, modifiedAt: '', status: 'draft' },
+            ],
+          },
+        ],
+        ignoredCount: 0,
+        warnings: [],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await new MachinePlanRepository('proj/1').list()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/agent/machines/projects/proj%2F1/plans', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-BoxFox-Admin': '1' },
+    })
+    expect(result.plans[0]!.identity).toBe('demo')
+  })
+
+  it('keeps the harness status on read errors so 404 handling stays the same', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'PlanNotFound: không có bản này', code: 'PlanNotFound' }),
+    }))
+
+    const failure = await new MachinePlanRepository('proj').read('demo', 9).catch((error) => error)
+
+    expect(failure).toBeInstanceOf(PlanRepositoryHttpError)
+    expect(failure.status).toBe(404)
   })
 })

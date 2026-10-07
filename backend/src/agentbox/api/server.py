@@ -1605,14 +1605,22 @@ def create_app(runtime):
                            'thư mục (ví dụ "clinical-patient-record-lookup-research")', 400)
         return text
 
-    async def plan_index_or_none():
+    def plan_session_arg(value):
+        """Mã phiên đi kèm lượt đọc/ghi plan; `None` khi chỗ gọi cũ không gửi.
+
+        Chỉ host mode cần: chỉ mục `.plans` nằm trong folder của CHÍNH phiên đó. Docker bỏ qua.
+        """
+        text = str(value or '').strip()
+        return text or None
+
+    async def plan_index_or_none(session=None):
         """Chỉ mục box, hoặc `None` khi không đọc được (đã ghi nhật ký `PLAN_INDEX_UNAVAILABLE`).
 
         Không bao giờ raise: mất chỉ mục chỉ làm mất phần *số đo* (nhóm nào có những bản nào), còn
         quyết định của người dùng vẫn phải ghi được.
         """
         try:
-            return await plan_registry.read_plan_index(runtime.executor)
+            return await plan_registry.read_plan_index(runtime.executor, session=session)
         except Exception:
             return None
 
@@ -1740,7 +1748,8 @@ def create_app(runtime):
         # Chốt số đo tại thời điểm duyệt, nếu đọc được: về sau box báo số khác thì bản duyệt này
         # đã cũ và không còn tính là "đã đồng ý" (§4.2). Không đọc được thì để `None` — thà không
         # có số đo còn hơn bịa một con số để rồi lặng lẽ coi là còn hiệu lực.
-        index = await plan_index_or_none()
+        session_arg = plan_session_arg(body.get('sessionId'))
+        index = await plan_index_or_none(session_arg)
         entry = None
         relative_path = None
         if index is not None:
@@ -1796,7 +1805,8 @@ def create_app(runtime):
         try:
             await runtime.executor.request('/__box/plans/review',
                                            {'identity': identity, 'version': version,
-                                            'decision': decision, 'note': note})
+                                            'decision': decision, 'note': note},
+                                           session=session_arg or owned)
         except Exception as exc:
             forwarded = False
             system_log.write('plan.review.forward_failed', level='warn', code='PLAN_REVIEW_FORWARD_FAILED',
@@ -1842,7 +1852,8 @@ def create_app(runtime):
                 raise ApiError('PLAN_STATUS_INVALID', 'version phải là số nguyên dương', 400)
             version = int(wanted)
 
-        index = await plan_index_or_none()
+        # `sessionId` (tuỳ chọn) để host mode đọc đúng `.plans` của phiên đang mở tab.
+        index = await plan_index_or_none(plan_session_arg(request.query.get('sessionId')))
         group = index.group(identity) if index is not None else None
         reviews = runtime.store.plan_reviews_for(identity)
         submitted = plan_registry.pending_submissions(getattr(runtime, 'pending', {}).values(), identity)
@@ -2266,10 +2277,13 @@ def main():
     port = harness_port()
     executor = build_executor(data)
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
-    # Web retains legacy Docker sessions; new IDE sessions have their own durable folder binding.
-    if execution_mode() == 'docker':
-        from ..sandbox.machine_router import attach
-        attach(runtime, data)
+    # Gắn ở CẢ HAI chế độ: host mode cũng cần `/api/agent/machines/*` (cấu hình folder, cây tệp,
+    # `.plans`) — trước đây thiếu ở host nên giao diện rơi về Docker binding và tab Plan trắng số.
+    # `default_mode`/`default_workspace` chỉ tạo cấu hình cho CSDL mới (bản desktop mở ra là host).
+    from ..sandbox.machine_router import attach
+    mode = execution_mode()
+    attach(runtime, data, default_mode=mode,
+           default_workspace=host_workspace() if mode == 'host' else None)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
     # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN

@@ -61,6 +61,19 @@ SOURCE_CHANGED_CODE = 'SOURCE_CHANGED'
 #: Hành động chưa có trên host (ví dụ `scroll`).
 UNSUPPORTED_ACTION_CODE = 'UNSUPPORTED_ACTION'
 
+#: Đường `/__box/*` chưa có bản host tương ứng (`HostExecutor.request`).
+HOST_REQUEST_UNSUPPORTED_CODE = 'HOST_REQUEST_UNSUPPORTED'
+
+
+class HostRequestUnsupported(RuntimeError):
+    """`HostExecutor.request` gặp đường chưa có bản host — nói ra thay vì trả payload rỗng."""
+
+    code = HOST_REQUEST_UNSUPPORTED_CODE
+
+    def __init__(self, route):
+        super().__init__(f'{HOST_REQUEST_UNSUPPORTED_CODE}: đường `{route}` chưa có bản host.')
+        self.route = route
+
 #: Công cụ v1 chạy được trên host. Danh sách này là HỢP ĐỒNG với tài liệu `docs/plan/desktop-host-mode.md`.
 HOST_TOOLS = ('file_read', 'codebase_glob', 'codebase_grep', 'file_write', 'file_edit_block',
               'terminal_exec')
@@ -187,6 +200,9 @@ def _slug(text):
 class HostExecutor:
     """Thi hành công cụ v1 trên máy thật. Mọi quyết định quyền đi qua `policy`."""
 
+    #: Chế độ thi hành của lớp này — `machine_router` đọc để biết một phiên host có box hay không.
+    execution_mode = 'host'
+
     def __init__(self, workspace=None, *, policy=None, platform=None, approver=None, env=None,
                  artifacts_dir=None, root=None, desktop=None):
         source = os.environ if env is None else env
@@ -240,6 +256,49 @@ class HostExecutor:
         self._win_capture = win_capture
         self._prepared = True
         return True, ''
+
+    # -- hợp đồng request (`/__box/*`) ---------------------------------------
+
+    async def request(self, path, body=None, session=None):
+        """Cùng hợp đồng `SandboxExecutor.request`, đổi chỗ đọc: **workspace của phiên**.
+
+        Harness đọc chỉ mục plan qua đúng một điểm nối này (`plan_registry.read_plan_index`), nên
+        host mode chỉ cần trả đúng ba payload của box là tab Plan chạy được y như Docker:
+
+        * `GET /__box/plans`, `GET /__box/plans/index` → `scan_plans(<workspace>/.plans)`;
+        * `GET /__box/plans/content?identity=&version=` → `read_plan(...)`;
+        * `POST /__box/plans/review` → `write_review(...)` (bản hiển thị; sổ duyệt của harness vẫn
+          là nguồn chân lý).
+
+        Đường chưa có ⇒ `HostRequestUnsupported`. Lỗi của bộ đọc giữ nguyên `status_code`/
+        `public_message` để tầng HTTP trả đúng mã, KHÔNG nuốt thành "rỗng".
+        """
+        from urllib.parse import parse_qs, urlsplit
+
+        from . import host_plans
+
+        parsed = urlsplit(str(path or ''))
+        route = parsed.path.rstrip('/') or '/'
+        query = parse_qs(parsed.query)
+        try:
+            if route in ('/__box/plans', '/__box/plans/index'):
+                if body is not None:
+                    raise HostRequestUnsupported(route)
+                return host_plans.plan_manifest(self.workspace)
+            if route == '/__box/plans/content':
+                if body is not None:
+                    raise HostRequestUnsupported(route)
+                return host_plans.plan_document(self.workspace, query.get('identity', [''])[0],
+                                                query.get('version', [''])[0])
+            if route == '/__box/plans/review':
+                payload = body if isinstance(body, dict) else {}
+                return host_plans.write_plan_review(self.workspace, payload.get('identity'),
+                                                    payload.get('decision'),
+                                                    payload.get('note', ''),
+                                                    payload.get('version'))
+        except host_plans.HostPlanReaderUnavailable:
+            raise
+        raise HostRequestUnsupported(route)
 
     # -- hợp đồng ------------------------------------------------------------
 

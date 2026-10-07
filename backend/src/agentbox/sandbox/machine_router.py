@@ -19,19 +19,37 @@ class MachineError(ValueError):
 
 
 class MachineRegistry:
-    def __init__(self, store):
+    def __init__(self, store, *, default_mode=None, default_workspace=None):
         self.store = store
         self.db = store.db
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS web_machine_settings (
                 singleton INTEGER PRIMARY KEY CHECK(singleton=1),
                 revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
-            INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,'docker',NULL);
             CREATE TABLE IF NOT EXISTS web_machine_projects (
                 id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
                 trusted INTEGER NOT NULL DEFAULT 0);
         ''')
+        # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
+        # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
+        # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
+        # Chỉ áp cho CSDL MỚI (`INSERT OR IGNORE`): cấu hình người dùng đã lưu không bị đổi.
+        self.process_mode = 'host' if default_mode == 'host' else 'docker'
+        project_id = None
+        if self.process_mode == 'host' and default_workspace:
+            project_id = self._bootstrap_project(default_workspace)
+        self.db.execute('INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,?,?)',
+                        (self.process_mode, project_id))
         self.db.commit()
+
+    def _bootstrap_project(self, path):
+        """Đăng ký sẵn folder mặc định của bản desktop (tạo nếu chưa có); lỗi thì để trống."""
+        try:
+            candidate = Path(str(path)).expanduser()
+            candidate.mkdir(parents=True, exist_ok=True)
+            return self.register(str(candidate))['id']
+        except (OSError, MachineError):
+            return None
 
     def project(self, project_id):
         row = self.db.execute('SELECT * FROM web_machine_projects WHERE id=?', (project_id,)).fetchone()
@@ -111,7 +129,11 @@ class MachineRegistry:
             return dict(binding)
         if session.get('parent_id'):
             return self.binding(session['parent_id'])
-        # Existing web sessions retain their Docker environment.
+        # Phiên web cũ giữ nguyên môi trường Docker của nó. Riêng tiến trình host (bản desktop) không
+        # có box nào để giữ, nên phiên thiếu binding đi theo cấu hình đang chọn — đúng thứ mà công cụ
+        # thật sự chạy trên đó.
+        if self.process_mode == 'host':
+            return self.new_binding({})
         return {'mode': 'docker', 'revision': 1, 'projectId': None, 'workspace': '/home/agent/workspace'}
 
 
@@ -277,6 +299,25 @@ class SessionMachineExecutor:
         except MachineError as exc:
             return error_result(exc.code, str(exc))
 
+    async def request(self, path, body=None, session=None):
+        """`/__box/*` theo ĐÚNG chế độ của phiên: host ⇒ `.plans` trong folder dự án của phiên.
+
+        Trước đây `request` chỉ được `__getattr__` chuyển tiếp thẳng xuống `legacy`, nên ở host mode
+        mọi lượt đọc chỉ mục plan đều nhắm vào box (không có) và tab Plan mất số liệu. Chỗ gọi cũ
+        không truyền `session` (ví dụ chỉ mục của luồng ghi plan) vẫn đi đường cũ.
+        """
+        if session:
+            record = self.registry.store.get(session)
+            if record is not None:
+                try:
+                    binding = self.registry.binding(session)
+                except MachineError:
+                    binding = None
+                if binding is not None and binding['mode'] == 'host':
+                    host, _project = self.host(session)
+                    return await host.request(path, body=body, session=session)
+        return await self.legacy.request(path, body=body, session=session)
+
     async def cleanup(self, sid):
         if sid in self.hosts:
             await self.hosts.pop(sid).cleanup(sid)
@@ -284,8 +325,9 @@ class SessionMachineExecutor:
             await self.legacy.cleanup(sid)
 
 
-def attach(runtime, profile_dir):
-    registry = MachineRegistry(runtime.store)
+def attach(runtime, profile_dir, *, default_mode=None, default_workspace=None):
+    registry = MachineRegistry(runtime.store, default_mode=default_mode,
+                               default_workspace=default_workspace)
     executor = SessionMachineExecutor(runtime.executor, registry, profile_dir)
     runtime.executor = executor
     runtime.machine_registry = registry
@@ -384,6 +426,41 @@ def register_routes(app, runtime):
             return web.json_response({'error': f'HOST_RESOURCE_INVALID: {exc}', 'code': 'HOST_RESOURCE_INVALID'}, status=400)
     app.router.add_get('/api/agent/machines/projects/{pid}/{op:files|file}', workspace)
     app.router.add_post('/api/agent/machines/projects/{pid}/{op:file|command}', workspace)
+
+    # Chỉ mục + nội dung `.plans` của một folder host. CÙNG payload với `/__box/plans` của box
+    # (một nguồn đọc: `deploy/docker/plan_files.py`), nên tab Plan không phải rẽ nhánh theo chế độ.
+    async def plans_response(request, *, content):
+        try:
+            project = registry.project(request.match_info['pid'])
+            if not Path(project['path']).is_dir():
+                raise MachineError('PROJECT_UNAVAILABLE', 'Folder không còn tồn tại.', 409)
+            from . import host_plans
+            try:
+                if content:
+                    result = await asyncio.to_thread(host_plans.plan_document, project['path'],
+                                                     request.query.get('identity', ''),
+                                                     request.query.get('version', ''))
+                else:
+                    result = await asyncio.to_thread(host_plans.plan_manifest, project['path'])
+            except host_plans.HostPlanReaderUnavailable as exc:
+                raise MachineError('PLAN_READER_UNAVAILABLE', str(exc), 501) from None
+            except Exception as exc:
+                # Lỗi của bộ đọc giữ nguyên mã HTTP của nó (404 thiếu bản, 400 identity sai...).
+                status, message = host_plans.error_status(exc)
+                raise MachineError('PLAN_REQUEST_INVALID' if status < 500 else 'PLAN_READ_FAILED',
+                                   message, status) from None
+            return web.json_response(result)
+        except MachineError as exc:
+            return web.json_response({'error': f'{exc.code}: {exc}', 'code': exc.code}, status=exc.status)
+
+    async def plans(request):
+        return await plans_response(request, content=False)
+
+    async def plans_content(request):
+        return await plans_response(request, content=True)
+
+    app.router.add_get('/api/agent/machines/projects/{pid}/plans', plans)
+    app.router.add_get('/api/agent/machines/projects/{pid}/plans/content', plans_content)
 
     # User-selected snapshot preview only. No hooks, input, personal browser attachment or auto capture.
     previews = {}

@@ -219,3 +219,89 @@ async def test_trust_revocation_is_checked_after_executor_cache(harness, tmp_pat
     assert (await rt.executor.execute('file_write', {'path': 'x.txt', 'content': 'Hai'}, session['id']))['errorCode'] == 'PROJECT_TRUST_REQUIRED'
     assert (Path(p['path']) / 'x.txt').read_text(encoding='utf-8') == 'Một'
     legacy.execute.assert_not_called()
+
+
+def test_host_process_bootstraps_host_configuration_and_workspace(tmp_path):
+    """Bản desktop mở ra là host: cấu hình mặc định và folder mặc định phải có sẵn.
+
+    Trước đây CSDL mới luôn ghi `docker`, nên tiến trình host hiện "Docker" trong khi mọi công cụ
+    chạy trên máy thật (DA3). Folder mặc định chưa tồn tại thì tạo — cài xong là có chỗ làm việc.
+    """
+    store = SessionStore(tmp_path / 'sessions.sqlite')
+    workspace = tmp_path / 'BoxFox' / 'workspace'
+    registry = MachineRegistry(store, default_mode='host', default_workspace=workspace)
+    state = registry.state()
+    assert state['mode'] == 'host'
+    assert state['projectId'] and workspace.is_dir()
+    assert [p for p in state['projects'] if p['id'] == state['projectId']][0]['trusted'] is False
+    # Phiên cũ không có binding: tiến trình host không có box nào để giữ, nên đi theo cấu hình.
+    legacy_session = store.create({}, 'orchestrator')
+    assert registry.binding(legacy_session['id'])['mode'] == 'host'
+    # CSDL đã có cấu hình thì không bị đổi (người dùng đã chọn thì tôn trọng).
+    again = MachineRegistry(store, default_mode='host', default_workspace=tmp_path / 'khác')
+    assert again.state()['projectId'] == state['projectId']
+    store.close()
+
+
+def test_machine_plans_route_serves_the_selected_folder(harness, tmp_path):
+    """`/api/agent/machines/projects/{pid}/plans` — cùng payload với `/__box/plans` của box."""
+    rt, _ = harness
+    p = project(rt, tmp_path)
+    room = Path(p['path']) / '.plans'
+    room.mkdir()
+    (room / 'v1-login-page.md').write_text('# Kế hoạch\n', encoding='utf-8')
+    app = web.Application()
+    register_routes(app, rt)
+
+    async def run():
+        async with TestClient(TestServer(app)) as client:
+            base = '/api/agent/machines/projects/' + p['id']
+            manifest = await client.get(base + '/plans')
+            payload = await manifest.json()
+            assert manifest.status == 200
+            assert payload['plans'][0]['identity'] == 'login-page'
+            content = await client.get(base + '/plans/content',
+                                       params={'identity': 'login-page', 'version': '1'})
+            assert (await content.json())['markdown'] == '# Kế hoạch\n'
+            missing = await client.get(base + '/plans/content',
+                                       params={'identity': 'login-page', 'version': '9'})
+            assert missing.status == 404
+            assert (await missing.json())['code'] == 'PLAN_REQUEST_INVALID'
+
+    asyncio.run(run())
+
+
+def test_session_request_reads_plans_from_its_own_folder(harness, tmp_path):
+    """Phiên host đọc `.plans` trong folder của chính nó, không nhắm vào box (DA4)."""
+    rt, legacy = harness
+    p = project(rt, tmp_path)
+    room = Path(p['path']) / '.plans'
+    room.mkdir()
+    (room / 'v1-login-page.md').write_text('# Trong folder\n', encoding='utf-8')
+    session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+    legacy.request = AsyncMock(side_effect=AssertionError('host mode không được gọi box'))
+
+    async def run():
+        index = await rt.executor.request('/__box/plans/index', session=session['id'])
+        assert index['plans'][0]['identity'] == 'login-page'
+        document = await rt.executor.request('/__box/plans/content?identity=login-page&version=1',
+                                             session=session['id'])
+        assert document['markdown'] == '# Trong folder\n'
+
+    asyncio.run(run())
+    legacy.request.assert_not_called()  # không lượt nào chạm box
+
+
+def test_docker_sessions_keep_reading_the_box(harness, tmp_path):
+    """Phiên Docker (và chỗ gọi cũ không truyền phiên) vẫn đi nguyên đường box."""
+    rt, legacy = harness
+    legacy.request = AsyncMock(return_value={'plans': [], 'ignoredCount': 0, 'warnings': []})
+    session = create(rt)
+
+    async def run():
+        assert await rt.executor.request('/__box/plans/index', session=session['id']) == {
+            'plans': [], 'ignoredCount': 0, 'warnings': []}
+        await rt.executor.request('/__box/plans/index')
+
+    asyncio.run(run())
+    assert legacy.request.await_count == 2

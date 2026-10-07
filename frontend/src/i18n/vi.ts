@@ -1073,6 +1073,8 @@ const vi = {
     },
     noPlan: 'Agent chưa viết kế hoạch nào.',
     sourceNotice: 'Tài liệu kế hoạch được tải trực tiếp từ máy ảo sandbox.',
+    /** Cùng câu, nhưng cho host mode: không có máy ảo nào — đọc từ folder dự án đã chọn. */
+    sourceNoticeHost: 'Tài liệu kế hoạch được tải trực tiếp từ folder dự án trên máy này.',
     size: 'Dung lượng',
     updated: 'Cập nhật',
     parentVersion: 'Bản trước:',

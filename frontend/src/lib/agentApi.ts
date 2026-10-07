@@ -19,11 +19,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function agentApi<T>(path: string, body?: unknown, method?: string): Promise<T> {
+export async function agentApi<T>(path: string, body?: unknown, method?: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/agent${path}`, {
     method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { 'Content-Type': 'application/json', 'X-BoxFox-Admin': '1' },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(signal ? { signal } : {}),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Harness engine unavailable. Start the BoxFox launcher.' }))
