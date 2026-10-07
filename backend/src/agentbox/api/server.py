@@ -591,14 +591,47 @@ def create_app(runtime):
                 'mutexHeld': snapshot.get('mutexHeld'), 'mutexName': snapshot.get('mutexName'),
                 'since': snapshot.get('since'), 'reason': snapshot.get('reason')}
 
+    def machine_policy():
+        """Policy của MÁY khi tiến trình chạy docker nhưng máy được cấu hình host, hoặc `None`.
+
+        Bản desktop có thể chạy tiến trình ở chế độ docker (máy có Docker Desktop) trong khi người
+        dùng chọn máy ở chế độ host: `runtime.executor.policy` khi đó là `None` nên health nói
+        `policy:false`, và tab Settings → Machine & Permissions hiện "Máy này không có động cơ
+        quyền" dù bốn route quyền trả 200 và phiên host vẫn chạy được (`permissions_policy()` đã
+        có sẵn đúng đường đọc ấy cho các route).
+
+        Trả `None` khi máy KHÔNG ở chế độ host hoặc chưa chọn folder: bản chỉ có Docker giữ nguyên
+        trạng thái trống, không mời người dùng vào một bảng quyền không gác gì.
+        """
+        engine = getattr(runtime, 'machine_registry', None)
+        # Đúng đối tượng mà các route quyền dùng: `SessionMachineExecutor.permissions_policy`.
+        reader = getattr(getattr(runtime, 'executor', None), 'permissions_policy', None)
+        if engine is None or reader is None:
+            return None
+        try:
+            state = engine.state()
+            if state.get('mode') != 'host' or not state.get('projectId'):
+                return None
+            if engine.active_project() is None:
+                return None
+            return reader()
+        except Exception:                # health không bao giờ được vỡ vì một tầng phụ
+            return None
+
     def execution_status():
         """Khối `execution` của health: đang chạy chế độ nào, quyền nào, sàn cứng chạm mấy lần.
 
-        Rẻ như phần còn lại của health: chỉ đọc biến và bộ đếm trong bộ nhớ, KHÔNG chạm đĩa/mạng.
+        Đường thường rẻ như phần còn lại của health: chỉ đọc biến và bộ đếm trong bộ nhớ, KHÔNG
+        chạm đĩa/mạng. Chỉ khi executor KHÔNG có policy (tiến trình docker) mới hỏi thêm sổ máy —
+        một lần đọc SQLite, chỉ để nói thật trạng thái của `permissions_policy()`.
         """
         policy = getattr(runtime.executor, 'policy', None)
+        if policy is None:
+            policy = machine_policy()
         # `mode` là thứ ĐANG chạy (suy từ chính executor), không phải thứ được cấu hình: health phải
         # nói được sự thật kể cả khi executor được dựng tay trong test hay bởi một bản cài khác.
+        # Tiến trình docker + máy cấu hình host ⇒ `policy` ở trên đến từ sổ máy, nên `mode` nói
+        # `host` (máy đang phục vụ phiên host) còn `configured` vẫn nói chế độ của tiến trình.
         mode = 'host' if policy is not None else execution_mode()
         payload = {'mode': mode, 'modeDefault': EXECUTION_MODE_DEFAULT,
                    'modes': list(EXECUTION_MODES), 'configured': execution_mode()}

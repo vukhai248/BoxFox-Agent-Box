@@ -25,6 +25,10 @@ HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
 class FixtureExecutor:
     """Executor kiểu docker: có `execute`/`cleanup` nhưng KHÔNG có `policy`."""
 
+    def __init__(self):
+        # `SessionMachineExecutor` đọc `legacy.visual_lock`; executor thật (docker) cũng có.
+        self.visual_lock = asyncio.Lock()
+
     async def execute(self, name, args, sid):
         return {'ok': True}
 
@@ -125,6 +129,72 @@ def test_health_reports_host_mode_and_hardline_hits(tmp_path, monkeypatch):
     assert execution['permissionMode'] == 'trusted'
     assert execution['hardlineHits'] == 1
     assert execution['lease'] is None
+
+
+def test_health_reads_the_machine_policy_when_the_process_runs_docker(tmp_path, monkeypatch):
+    """Tiến trình docker + máy cấu hình host ⇒ health phải nói CÓ động cơ quyền.
+
+    Đo được trên harness thật: tab Settings → Machine & Permissions hiện "Máy này không có động cơ
+    quyền" dù bốn route quyền trả 200, vì `execution.policy` chỉ suy từ `runtime.executor.policy`.
+    Bản desktop chạy tiến trình docker trong khi người dùng chọn máy host là trạng thái bình
+    thường, nên health phải đọc cùng nguồn với các route (`permissions_policy`).
+    """
+    from agentbox.sandbox import machine_router
+    workspace = tmp_path / 'ws'
+    workspace.mkdir()
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
+    monkeypatch.setenv('BOXFOX_AGENT_DATA_DIR', str(tmp_path / 'data'))
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), None)
+        machine_router.attach(runtime, tmp_path / 'data', default_mode='host',
+                              default_workspace=workspace)
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(server.make_url('/')) as client:
+                body = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+        store.close()
+        return body
+
+    execution = asyncio.run(main())['execution']
+    assert execution['policy'] is True
+    assert execution['mode'] == 'host', 'máy phục vụ phiên host ⇒ `mode` nói host'
+    assert execution['configured'] == 'docker', 'chế độ của TIẾN TRÌNH vẫn được nói thật'
+    assert Path(execution['workspace']).resolve() == workspace.resolve()
+    assert execution['permissionMode'] == 'ask'
+
+
+def test_health_keeps_the_empty_state_for_a_docker_only_machine(tmp_path, monkeypatch):
+    """Máy cấu hình docker (và máy host CHƯA chọn folder) vẫn phải nói `policy:false`.
+
+    Nếu không, tab quyền sẽ mời người dùng vào một bảng gác đúng không gì: bản chỉ có Docker không
+    có phiên host nào để cấp quyền.
+    """
+    from agentbox.sandbox import machine_router
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
+    monkeypatch.setenv('BOXFOX_AGENT_DATA_DIR', str(tmp_path / 'data'))
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), None)
+        registry = machine_router.attach(runtime, tmp_path / 'data', default_mode='docker')
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(server.make_url('/')) as client:
+                docker = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+                # Máy chọn host nhưng CHƯA có folder: chưa có phiên host nào để gác.
+                registry.update({'revision': registry.state()['revision'], 'mode': 'host',
+                                 'projectId': None})
+                hostless = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+        store.close()
+        return docker, hostless
+
+    docker, hostless = asyncio.run(main())
+    assert docker['execution']['policy'] is False and docker['execution']['mode'] == 'docker'
+    # Chưa có folder ⇒ chưa có phiên host nào để gác: `mode` nói sự thật của TIẾN TRÌNH.
+    assert hostless['execution']['policy'] is False and hostless['execution']['mode'] == 'docker'
+    assert hostless['execution']['workspace'] is None
 
 
 # ------------------------------------------------------------------ GET/PUT
