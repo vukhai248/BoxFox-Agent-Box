@@ -49,8 +49,10 @@ const vi = {
     createProject: 'Tạo dự án',
     projectName: 'Tên dự án',
     sourceFolder: 'Thư mục nguồn',
-    addLocalFolder: 'Thêm thư mục trên máy tính này',
     addFolder: 'Thêm',
+    folderPath: 'Đường dẫn folder',
+    folderPathPlaceholder: 'Ví dụ: C:\\Users\\ban\\du-an hoặc /home/ban/du-an',
+    folderPathHint: 'Nhập đường dẫn folder trên máy chạy BoxFox, hoặc bấm Thêm để mở hộp chọn folder.',
     cancelProject: 'Hủy',
     creatingProject: 'Đang tạo…',
     newProjectSession: 'Phiên mới trong {{project}}',
@@ -131,6 +133,30 @@ const vi = {
     send: 'Gửi',
     attach: 'Đính kèm',
     model: 'Model',
+    // Nút chọn quyền ở thanh chat (host mode) — tương đương `/approvals` của Codex. Bốn mức khớp
+    // đúng bảng `MODE_CAPABILITIES` của harness; đổi chữ ở đây thì phải đổi cả `en.ts`.
+    permission: {
+      label: 'Quyền',
+      unknown: 'Quyền: chưa đọc được',
+      sectionMode: 'Mức cho phép',
+      sectionScope: 'Phạm vi',
+      mode: {
+        plan: 'Chỉ đọc',
+        ask: 'Hỏi trước',
+        auto: 'Tự động',
+        trusted: 'Tin cậy',
+      },
+      hint: {
+        plan: 'Agent chỉ đọc — không sửa tệp, không chạy lệnh.',
+        ask: 'Hỏi trước mỗi lần ghi tệp hoặc chạy lệnh. Mặc định.',
+        auto: 'Tự ghi tệp và chạy lệnh trong folder dự án; điều khiển desktop vẫn hỏi.',
+        trusted: 'Không hỏi gì. Chỉ dùng khi bạn tin tuyệt đối — sàn cứng vẫn chặn.',
+      },
+      scope: {
+        workspace: 'Chỉ folder dự án',
+        machine: 'Cả máy',
+      },
+    },
     switchToPlan: 'Plan',
     switchToAct: 'Act',
     switchHint:

@@ -53,8 +53,10 @@ const en: SameShape<typeof vi> = {
     createProject: 'Create project',
     projectName: 'Project name',
     sourceFolder: 'Source folder',
-    addLocalFolder: 'Add a folder on this computer',
     addFolder: 'Add',
+    folderPath: 'Folder path',
+    folderPathPlaceholder: 'For example: C:\\Users\\you\\project or /home/you/project',
+    folderPathHint: 'Type the folder path on the machine running BoxFox, or click Add to open the folder dialog.',
     cancelProject: 'Cancel',
     creatingProject: 'Creating…',
     newProjectSession: 'New session in {{project}}',
@@ -135,6 +137,30 @@ const en: SameShape<typeof vi> = {
     send: 'Send',
     attach: 'Attach',
     model: 'Model',
+    // Chat-bar permission selector (host mode) — the Codex `/approvals` equivalent. The four levels
+    // match the harness `MODE_CAPABILITIES` table; change the wording here and in `vi.ts` together.
+    permission: {
+      label: 'Permissions',
+      unknown: 'Permissions: not loaded',
+      sectionMode: 'Approval level',
+      sectionScope: 'Scope',
+      mode: {
+        plan: 'Read only',
+        ask: 'Ask first',
+        auto: 'Auto',
+        trusted: 'Trusted',
+      },
+      hint: {
+        plan: 'The agent only reads — no file writes, no commands.',
+        ask: 'Ask before every file write or command. Default.',
+        auto: 'Write files and run commands inside the project folder; desktop control still asks.',
+        trusted: 'Never ask. Use only when you fully trust it — the hardline floor still blocks.',
+      },
+      scope: {
+        workspace: 'Project folder only',
+        machine: 'Whole machine',
+      },
+    },
     switchToPlan: 'Plan',
     switchToAct: 'Act',
     switchHint:
