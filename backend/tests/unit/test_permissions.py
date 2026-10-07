@@ -476,4 +476,3 @@ def test_snapshot_reports_the_network_axis(policy):
     snapshot = policy.snapshot()
     assert snapshot['network'] == perms.NETWORK_RESTRICTED
     assert snapshot['networks'] == list(perms.NETWORKS)
-    assert snapshot['guardedCount'] == len(perms.GUARDED)

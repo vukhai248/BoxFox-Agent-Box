@@ -33,8 +33,16 @@ class MachineRegistry:
                 trusted INTEGER NOT NULL DEFAULT 0);
         ''')
         # CSDL tạo trước commit `63fed3e` chưa có cột `trusted`: `CREATE TABLE IF NOT EXISTS` không
-        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`).
-        self._add_missing_columns('web_machine_projects', {'trusted': 'INTEGER NOT NULL DEFAULT 0'})
+        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`); hỏng thì bỏ qua,
+        # không chặn khởi động.
+        try:
+            columns = {row['name'] for row in self.db.execute('PRAGMA table_info(web_machine_projects)')}
+            if 'trusted' not in columns:
+                self.db.execute('ALTER TABLE web_machine_projects '
+                                'ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0')
+            self.db.commit()
+        except sqlite3.DatabaseError:
+            pass
         # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
         # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
         # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
@@ -48,21 +56,6 @@ class MachineRegistry:
             project_id = self._bootstrap_project(default_workspace)
         self.db.execute('INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,?,?)',
                         (self.process_mode, project_id))
-        self.db.commit()
-
-    def _add_missing_columns(self, table, columns):
-        """Thêm cột còn thiếu vào bảng đã tồn tại (bản cài cũ). Hỏng thì bỏ qua, không chặn khởi động."""
-        try:
-            have = {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}
-        except sqlite3.DatabaseError:
-            return
-        for name, kind in columns.items():
-            if name in have:
-                continue
-            try:
-                self.db.execute(f'ALTER TABLE {table} ADD COLUMN {name} {kind}')
-            except sqlite3.DatabaseError:
-                continue
         self.db.commit()
 
     def _bootstrap_project(self, path):

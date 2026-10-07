@@ -367,7 +367,7 @@ def test_approve_session_remembers_and_approve_always_writes_a_rule(tmp_path):
     assert 'terminal_exec(echo luon-cho)' in other.policy.paths[perms.LAYER_PROJECT].read_text(encoding='utf-8')
 
 
-def test_prompt_choices_map_to_verdicts(tmp_path):
+def test_prompt_choices_map_to_verdicts():
     """Bốn lựa chọn trên thẻ ⇒ verdict của executor; chữ tự nhập ⇒ từ chối."""
     ask_decision = perms.ask('cần hỏi', '', 'mode')
     guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')

@@ -75,6 +75,11 @@ class HostRequestUnsupported(RuntimeError):
         self.route = route
 
 
+def _is_guarded(decision):
+    """Quyết định thuộc nhóm LUÔN HỎI (`guarded:` của `permissions.py`) — một lần cho phép là một lần."""
+    return str(getattr(decision, 'rule', '') or '').startswith('guarded:')
+
+
 def approval_options(decision):
     """Lựa chọn hiện trên thẻ duyệt của host mode — MỘT nguồn cho cả hai đường nối `approver`.
 
@@ -82,7 +87,7 @@ def approval_options(decision):
     "cả phiên"/"luôn cho phép" là hứa điều `HostExecutor` sẽ không làm.
     """
     options = [{'id': 'approve', 'label': 'Cho phép một lần', 'kind': 'approve'}]
-    if not str(getattr(decision, 'rule', '') or '').startswith('guarded:'):
+    if not _is_guarded(decision):
         options.append({'id': 'approve_session', 'label': 'Cho phép cả phiên', 'kind': 'approve'})
         options.append({'id': 'approve_always', 'label': 'Luôn cho phép', 'kind': 'approve'})
     options.append({'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'})
@@ -94,10 +99,9 @@ def approval_verdict(outcome, decision):
     if not isinstance(outcome, dict) or outcome.get('status') != 'approved':
         return 'deny'
     choice = str(outcome.get('choice') or '')
-    guarded = str(getattr(decision, 'rule', '') or '').startswith('guarded:')
     if choice == 'approve':
         return 'allow'
-    if choice in ('approve_session', 'approve_always') and not guarded:
+    if choice in ('approve_session', 'approve_always') and not _is_guarded(decision):
         # Lựa chọn trên thẻ nói người dùng muốn gì; verdict nói executor sẽ ghi nhớ gì.
         return 'allow_session' if choice == 'approve_session' else 'allow_always'
     return 'deny'
@@ -106,7 +110,7 @@ def approval_verdict(outcome, decision):
 def approval_reason(decision):
     """Câu lý do trên thẻ duyệt, kèm lời nhắc khi lệnh thuộc nhóm luôn hỏi."""
     reason = f'{decision.reason}. Lệnh chạy bằng tài khoản của bạn; không có sandbox OS.'
-    if str(getattr(decision, 'rule', '') or '').startswith('guarded:'):
+    if _is_guarded(decision):
         reason += ' Lệnh này thuộc nhóm luôn hỏi: chỉ cho phép một lần.'
     return reason
 
@@ -354,7 +358,7 @@ class HostExecutor:
                                     decision.reason or 'người dùng đã từ chối lời gọi này')
             self.policy.note_approval(session)
             # Nhóm "luôn hỏi" (`guarded:`) là một lần cho một lần: không ghi nhớ phiên, không lưu luật.
-            if not str(decision.rule or '').startswith('guarded:'):
+            if not _is_guarded(decision):
                 key = self.policy.session_key(name, args, cwd=self._cwd(root), session_id=session)
                 if verdict == 'allow_session':
                     self.policy.remember(key, permissions_module.allow('', 'user'), 'session')

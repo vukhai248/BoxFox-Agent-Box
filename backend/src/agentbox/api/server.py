@@ -404,9 +404,7 @@ def attach_host_approver(runtime):
     vẫn phải là fail-closed, nên chỉ nối khi executor thật sự là host và chưa có thẻ duyệt.
     """
     executor = getattr(runtime, 'executor', None)
-    if executor is None or getattr(executor, 'policy', None) is None:
-        return False
-    if getattr(executor, 'approver', None) is not None or not hasattr(executor, 'request'):
+    if not isinstance(executor, HostExecutor) or executor.approver is not None:
         return False
 
     async def approve(name, args, decision, session_id=None):

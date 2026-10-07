@@ -146,12 +146,6 @@ const vi = {
         auto: 'Tự động',
         trusted: 'Tin cậy',
       },
-      hint: {
-        plan: 'Agent chỉ đọc — không sửa tệp, không chạy lệnh.',
-        ask: 'Hỏi trước mỗi lần ghi tệp hoặc chạy lệnh. Mặc định.',
-        auto: 'Tự ghi tệp và chạy lệnh trong folder dự án; điều khiển desktop vẫn hỏi.',
-        trusted: 'Không hỏi gì. Chỉ dùng khi bạn tin tuyệt đối — sàn cứng vẫn chặn.',
-      },
       scope: {
         workspace: 'Chỉ folder dự án',
         machine: 'Cả máy',

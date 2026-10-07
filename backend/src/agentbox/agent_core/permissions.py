@@ -505,6 +505,26 @@ def _canonical_text(command):
     return re.sub(r'\s+', ' ', canonicalize_command(str(command or '')).lower()).strip()
 
 
+def _list_reason(patterns, command):
+    """Mã của mẫu ĐẦU TIÊN khớp trong `patterns` (danh sách `(regex, mã)`), hoặc chuỗi rỗng.
+
+    Soi cả toàn văn lẫn từng lệnh con: mẫu `| sh` chỉ thấy được ở toàn văn (toán tử bị tách khi
+    chia lệnh), còn `^reg add` chỉ thấy được ở từng phần.
+    """
+    raw = str(command or '')
+    if not raw.strip():
+        return ''
+    texts = [_canonical_text(raw)]
+    texts.extend(_canonical_text(part) for part in (split_commands(raw) or []))
+    for text in texts:
+        if not text:
+            continue
+        for pattern, code in patterns:
+            if re.search(pattern, text):
+                return code
+    return ''
+
+
 # --- Kiểm tra phạm vi trước khi lưu (§3.3.3) --------------------------------
 
 def forbidden_prefix_reason(command):
@@ -686,8 +706,6 @@ class PermissionPolicy:
             'network': self.network_value(),
             'networkDefault': NETWORK_DEFAULT,
             'networks': list(NETWORKS),
-            'guardedCount': len(GUARDED),
-            'egressCount': len(EGRESS),
             'workspace': self.workspace,
             'layers': [
                 {'layer': layer, 'file': str(self.paths.get(layer) or ''),
@@ -727,38 +745,12 @@ class PermissionPolicy:
         return ''
 
     def guarded_reason(self, command):
-        """Lệnh thuộc nhóm LUÔN HỎI (§6.1) — trả mã, hoặc chuỗi rỗng.
-
-        Soi cả toàn văn lẫn từng lệnh con: mẫu `| sh` chỉ thấy được ở toàn văn (toán tử bị tách khi
-        chia lệnh), còn `^reg add` chỉ thấy được ở từng phần. Không có ngoại lệ cho `trusted`.
-        """
-        raw = str(command or '')
-        if not raw.strip():
-            return ''
-        texts = [_canonical_text(raw)]
-        texts.extend(_canonical_text(part) for part in (split_commands(raw) or []))
-        for text in texts:
-            if not text:
-                continue
-            for pattern, code in GUARDED:
-                if re.search(pattern, text):
-                    return code
-        return ''
+        """Lệnh thuộc nhóm LUÔN HỎI (§6.1) — trả mã, hoặc chuỗi rỗng. Không có ngoại lệ cho `trusted`."""
+        return _list_reason(GUARDED, command)
 
     def egress_reason(self, command):
         """Lệnh RA MẠNG (§6.1) — trả mã khi khớp danh sách hỏi, hoặc chuỗi rỗng."""
-        raw = str(command or '')
-        if not raw.strip():
-            return ''
-        texts = [_canonical_text(raw)]
-        texts.extend(_canonical_text(part) for part in (split_commands(raw) or []))
-        for text in texts:
-            if not text:
-                continue
-            for pattern, code in EGRESS:
-                if re.search(pattern, text):
-                    return code
-        return ''
+        return _list_reason(EGRESS, command)
 
     def decide(self, tool, args, *, cwd=None, session_id=None, actor='agent', remember=None):
         """Trả `Decision` cho một lời gọi. Không bao giờ ném, không bao giờ tự hỏi người dùng."""

@@ -150,12 +150,6 @@ const en: SameShape<typeof vi> = {
         auto: 'Auto',
         trusted: 'Trusted',
       },
-      hint: {
-        plan: 'The agent only reads — no file writes, no commands.',
-        ask: 'Ask before every file write or command. Default.',
-        auto: 'Write files and run commands inside the project folder; desktop control still asks.',
-        trusted: 'Never ask. Use only when you fully trust it — the hardline floor still blocks.',
-      },
       scope: {
         workspace: 'Project folder only',
         machine: 'Whole machine',
