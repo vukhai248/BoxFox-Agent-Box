@@ -89,9 +89,12 @@ public static class BoxFoxPickerProbe {
   [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
   public static bool Found, Visible, TopMost, Foreground, Modern;
   static Timer timer;
+  static int ticks;
   public static void Start() {
-    timer = new Timer(); timer.Interval = 500;
+    ticks = 0;
+    timer = new Timer(); timer.Interval = 200;
     timer.Tick += delegate {
+      ticks++;
       EnumWindows(delegate(IntPtr hwnd, IntPtr param) {
         uint pid; GetWindowThreadProcessId(hwnd, out pid);
         if (pid != (uint)Process.GetCurrentProcess().Id) return true;
@@ -105,8 +108,11 @@ public static class BoxFoxPickerProbe {
           if (childClass.ToString() == "DirectUIHWND" || childClass.ToString() == "DUIViewWndClassName") Modern = true;
           return true;
         }, IntPtr.Zero);
-        timer.Stop(); SendMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
-        return false;
+        if (Visible || ticks >= 15) {
+          timer.Stop(); SendMessage(hwnd, 0x0010, IntPtr.Zero, IntPtr.Zero);
+          return false;
+        }
+        return true;
       }, IntPtr.Zero);
     };
     timer.Start();
