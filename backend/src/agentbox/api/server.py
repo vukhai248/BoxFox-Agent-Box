@@ -789,8 +789,21 @@ def create_app(runtime):
         return web.json_response(await ClaudeExecutor(container).probe())
 
     def permission_policy():
-        """Chính sách quyền của executor đang chạy. Docker mode KHÔNG có ⇒ lỗi có mã, không 500."""
+        """Chính sách quyền của máy này. Docker mode KHÔNG có ⇒ lỗi có mã, không 500.
+
+        Ở bản desktop, tiến trình có thể đang chạy chế độ docker trong khi máy được cấu hình host
+        (phiên IDE chạy trên máy thật). Khi đó executor không có `policy` nhưng `SessionMachineExecutor`
+        vẫn dựng được policy của folder dự án — nhờ vậy nút chọn quyền ở thanh chat và tab
+        Settings → Machines đọc/ghi được thay vì trả 409.
+        """
         policy = getattr(runtime.executor, 'policy', None)
+        if policy is None:
+            provider = getattr(runtime.executor, 'permissions_policy', None)
+            if callable(provider):
+                try:
+                    policy = provider()
+                except Exception:      # thiếu folder/quyền đọc ⇒ coi như máy không có động cơ quyền
+                    policy = None
         if policy is None:
             raise ApiError('PERMISSIONS_UNAVAILABLE',
                            'chế độ đang chạy không có động cơ quyền (chỉ host mode có)', 409)

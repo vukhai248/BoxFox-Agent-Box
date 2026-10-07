@@ -351,3 +351,42 @@ def test_routes_need_the_admin_header(tmp_path):
         return (response.status,)
 
     assert run(tmp_path, scenario, executor=executor)[0] == 403
+
+
+def test_routes_answer_when_the_process_is_docker_but_the_machine_is_host(tmp_path, monkeypatch):
+    """Bản desktop: tiến trình docker, máy cấu hình host ⇒ route quyền vẫn trả lời.
+
+    Nút chọn quyền ở thanh chat và tab Settings → Machines đi qua đúng route này; nếu vẫn 409 thì
+    người dùng không đổi được mức cho phép dù phiên IDE đang chạy trên máy thật.
+    """
+    from aiohttp.test_utils import TestClient
+    from agentbox.sandbox.machine_router import attach as attach_machines
+
+    home = tmp_path / 'home'
+    (home / '.boxfox').mkdir(parents=True)
+    (home / '.boxfox' / 'settings.json').write_text('{"mode": "auto"}', encoding='utf-8')
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
+    workspace = tmp_path / 'ws'
+    workspace.mkdir(exist_ok=True)
+
+    async def main():
+        class Legacy(FixtureExecutor):
+            visual_lock = None
+
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, Legacy(), None)      # executor KHÔNG có `policy`
+        attach_machines(runtime, tmp_path / 'profile')
+        project = runtime.machine_registry.register(str(workspace))
+        runtime.machine_registry.update({'revision': 1, 'mode': 'host', 'projectId': project['id']})
+        async with TestClient(TestServer(create_app(runtime))) as client:
+            response = await client.get('/api/agent/permissions', headers=HEADERS)
+            payload = await response.json()
+            changed = await client.put('/api/agent/permissions', headers=HEADERS, json={'mode': 'plan'})
+        store.close()
+        return response.status, payload, changed.status
+
+    status, payload, changed_status = asyncio.run(main())
+    assert status == 200
+    assert payload['mode'] == 'auto'
+    assert payload['workspace'] == str(workspace)
+    assert changed_status == 200

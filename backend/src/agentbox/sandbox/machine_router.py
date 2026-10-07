@@ -63,6 +63,16 @@ class MachineRegistry:
                 'projects': [{**dict(p), 'trusted': bool(p['trusted'])} for p in
                              self.db.execute('SELECT * FROM web_machine_projects ORDER BY name,path')]}
 
+    def active_project(self):
+        """Folder dự án đang chọn, hoặc `None`. Không bao giờ ném — người gọi cần một giá trị để trả lời."""
+        project_id = self.state().get('projectId')
+        if not project_id:
+            return None
+        try:
+            return self.project(project_id)
+        except MachineError:
+            return None
+
     def register(self, path, name=None):
         if name is not None and (not isinstance(name, str) or not name.strip() or len(name.strip()) > 120 or any(ord(char) < 32 for char in name)):
             raise MachineError('PROJECT_NAME_INVALID', 'Tên dự án cần 1–120 ký tự, không có ký tự điều khiển.')
@@ -237,10 +247,40 @@ class SessionMachineExecutor:
         self.profile_dir = Path(profile_dir)
         self.runtime = None
         self.hosts = {}
+        # Chính sách quyền dùng chung cho các route `/api/agent/permissions*` — xem `permissions_policy`.
+        self.policies = {}
         self.visual_lock = legacy.visual_lock
 
     def __getattr__(self, key):
         return getattr(self.legacy, key)
+
+    def policy_for(self, project=None):
+        """`PermissionPolicy` của một folder dự án, dùng CHUNG hồ sơ `host-permissions`.
+
+        Chế độ (`plan`/`ask`/`auto`/`trusted`) và phạm vi (`workspace`/`machine`) KHÔNG được ghim ở
+        đây: chúng đọc từ bốn tầng luật (`PermissionPolicy.mode_value()`), nên nút chọn quyền ở thanh
+        chat và tab Settings → Machines có hiệu lực thật. Trước đây policy của phiên bị ghim
+        `mode='ask'` ⇒ mọi thay đổi của người dùng bị bỏ qua.
+        """
+        selected = project or self.registry.active_project() or {}
+        workspace = str(selected.get('path') or '')
+        key = str(selected.get('id') or 'default')
+        policy = self.policies.get(key)
+        if policy is None:
+            policy = PermissionPolicy(workspace, profile_dir=self.profile_dir / 'host-permissions')
+            self.policies[key] = policy
+        return policy
+
+    def permissions_policy(self):
+        """Policy cho các route quyền, kể cả khi tiến trình đang chạy ở chế độ docker.
+
+        Bản desktop có thể chạy tiến trình ở chế độ docker trong khi máy được cấu hình host; khi đó
+        `runtime.executor.policy` là `None` và mọi route quyền trả 409 dù phiên host vẫn chạy được.
+        Đọc lại từ đĩa mỗi lần gọi: người dùng vừa đổi mode ở thanh chat thì lần đọc sau phải thấy.
+        """
+        policy = self.policy_for()
+        policy.reload()
+        return policy
 
     def host(self, sid):
         binding = self.registry.binding(sid)
@@ -252,8 +292,7 @@ class SessionMachineExecutor:
         if project['path'] != binding['workspace'] or not Path(project['path']).is_dir():
             raise MachineError('PROJECT_UNAVAILABLE', 'Folder dự án không còn đúng binding.', 409)
         if sid not in self.hosts:
-            policy = PermissionPolicy(project['path'], mode='ask', scope='workspace',
-                                      profile_dir=self.profile_dir / 'host-permissions' / sid)
+            policy = self.policy_for(project)
             async def approve(name, args, decision):
                 session = self.registry.store.get(sid)
                 if not self.runtime:
@@ -272,7 +311,11 @@ class SessionMachineExecutor:
                 return 'allow' if outcome.get('status') == 'approved' and outcome.get('choice') == 'approve' else 'deny'
             self.hosts[sid] = HostExecutor(project['path'], policy=policy, approver=approve,
                                            artifacts_dir=self.profile_dir / 'host-artifacts' / project['id'] / sid)
-        return self.hosts[sid], project
+        executor = self.hosts[sid]
+        # Người dùng có thể đổi chế độ quyền giữa hai lượt (thanh chat hoặc Settings → Machines):
+        # đọc lại bốn tầng luật trước mỗi lời gọi tool để lượt sau không dùng bản cũ.
+        executor.policy.reload()
+        return executor, project
 
     async def execute(self, name, args, session, **identity):
         if not session:
@@ -307,15 +350,15 @@ class SessionMachineExecutor:
         không truyền `session` (ví dụ chỉ mục của luồng ghi plan) vẫn đi đường cũ.
         """
         if session:
-            record = self.registry.store.get(session)
-            if record is not None:
-                try:
-                    binding = self.registry.binding(session)
-                except MachineError:
-                    binding = None
-                if binding is not None and binding['mode'] == 'host':
-                    host, _project = self.host(session)
-                    return await host.request(path, body=body, session=session)
+            # `binding` tự ném `SESSION_NOT_FOUND` cho mã phiên không có trong sổ (chỗ gọi admin
+            # dùng mã tổng hợp), nên chỉ cần bắt `MachineError` là đủ để quay về đường box.
+            try:
+                binding = self.registry.binding(session)
+            except MachineError:
+                binding = None
+            if binding is not None and binding['mode'] == 'host':
+                host, _project = self.host(session)
+                return await host.request(path, body=body, session=session)
         return await self.legacy.request(path, body=body, session=session)
 
     async def cleanup(self, sid):

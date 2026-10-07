@@ -20,6 +20,7 @@ import { useT } from '../../i18n/context'
 import { useCompactComposer } from '../../hooks/useCompactComposer'
 import { HarnessModelPicker, type RouterSingleModel } from '../chat/HarnessModelPicker'
 import { ChatMoreOptionsPicker } from '../chat/ChatMoreOptionsPicker'
+import { PermissionModePicker } from '../chat/PermissionModePicker'
 import {
   AttachmentPicker,
   formatAttachmentSize,
@@ -494,6 +495,9 @@ export function ChatInputBar({
                 onRouterModelChange={router?.onModelChange}
               />
 
+              {/* Mức cho phép của host mode — ngay cạnh model, trước khi gõ câu lệnh. */}
+              <PermissionModePicker compact={compact} />
+
               {/* Quick Ask */}
               <button
                 type="button"
@@ -773,6 +777,9 @@ export function ChatInputBar({
                   activeRouterModelId={router?.activeModelId}
                   onRouterModelChange={router?.onModelChange}
                 />
+
+                {/* Mức cho phép của host mode — cùng nút với bản thu gọn, một nguồn dữ liệu. */}
+                <PermissionModePicker compact={compact} />
 
                 <button
                   type="button"

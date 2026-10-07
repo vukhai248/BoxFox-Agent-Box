@@ -305,3 +305,63 @@ def test_docker_sessions_keep_reading_the_box(harness, tmp_path):
 
     asyncio.run(run())
     assert legacy.request.await_count == 2
+
+
+# ---------------------------------------------------------------- nút chọn quyền ở thanh chat
+
+def test_host_session_policy_follows_the_user_layer_mode(harness, tmp_path, monkeypatch):
+    """Mức cho phép của phiên host đọc từ tầng `user` — nơi nút ở thanh chat và tab Settings ghi vào.
+
+    Trước đây policy của phiên bị ghim `mode='ask'`, nên đổi mức ở giao diện xong vẫn bị hỏi.
+    """
+    rt, _ = harness
+    home = tmp_path / 'home'
+    (home / '.boxfox').mkdir(parents=True)
+    (home / '.boxfox' / 'settings.json').write_text(json.dumps({'mode': 'auto'}), encoding='utf-8')
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
+    p = project(rt, tmp_path)
+    session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+    executor, _project = rt.executor.host(session['id'])
+    assert executor.policy.mode_value() == 'auto'
+
+
+@async_test
+async def test_chat_bar_mode_change_applies_to_the_next_tool_call(harness, tmp_path, monkeypatch):
+    """Đổi mức giữa hai lượt: lượt sau không được dùng bản luật cũ (policy đọc lại từ đĩa)."""
+    rt, _ = harness
+    home = tmp_path / 'home'
+    settings = home / '.boxfox' / 'settings.json'
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({'mode': 'plan'}), encoding='utf-8')
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
+    p = project(rt, tmp_path)
+    rt.machine_registry.trust(p['id'], True)
+    session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+
+    denied = await rt.executor.execute('file_write', {'path': 'plan.txt', 'content': 'x'}, session['id'])
+    assert denied['errorCode'] == 'PERMISSION_DENIED'
+    assert not (Path(p['path']) / 'plan.txt').exists()
+
+    settings.write_text(json.dumps({'mode': 'auto'}), encoding='utf-8')
+    allowed = await rt.executor.execute('file_write', {'path': 'auto.txt', 'content': 'x'}, session['id'])
+    assert allowed.get('errorCode') is None
+    assert (Path(p['path']) / 'auto.txt').read_text(encoding='utf-8') == 'x'
+
+
+def test_permissions_policy_answers_from_the_active_project(harness, tmp_path, monkeypatch):
+    """Tiến trình docker + máy cấu hình host: `permissions_policy()` phải dựng được policy của folder."""
+    rt, _ = harness
+    home = tmp_path / 'home'
+    (home / '.boxfox').mkdir(parents=True)
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
+    p = project(rt, tmp_path)
+    rt.machine_registry.update({'revision': 1, 'mode': 'host', 'projectId': p['id']})
+    policy = rt.executor.permissions_policy()
+    assert policy.workspace == p['path']
+    assert policy.mode_value() == 'ask'      # mặc định khi chưa ai đổi
+
+
+def test_permissions_policy_survives_without_a_project(harness):
+    """Chưa chọn folder: vẫn trả lời được (policy rỗng), không ném ra ngoài route."""
+    rt, _ = harness
+    assert rt.executor.permissions_policy().workspace == ''

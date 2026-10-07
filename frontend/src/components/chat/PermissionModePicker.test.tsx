@@ -1,0 +1,135 @@
+/**
+ * Nút chọn quyền ở thanh chat. Bài kiểm tra chạy qua `agentApi` GIẢ nên nó kiểm luôn hợp đồng
+ * `GET/PUT /api/agent/permissions` của `lib/permissions/http.ts`, không chỉ phần hiển thị.
+ */
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { I18nProvider } from '../../i18n'
+import { PermissionModePicker } from './PermissionModePicker'
+import { useAgentStore } from '../../store/agentStore'
+import { useMachineStore, type MachineBinding, type MachineConfiguration } from '../../store/machineStore'
+
+const { api } = vi.hoisted(() => ({ api: vi.fn() }))
+vi.mock('../../lib/agentApi', () => ({ agentApi: api }))
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+const HOST_BINDING: MachineBinding = { mode: 'host', revision: 1, projectId: 'a', workspace: 'D:\\projects\\App A' }
+const DOCKER_BINDING_LOCAL: MachineBinding = { mode: 'docker', revision: 1, projectId: null, workspace: null }
+
+let root: Root
+let host: HTMLDivElement
+let snapshot: Record<string, unknown>
+let putError: Error | null
+let puts: Array<Record<string, unknown>>
+const originalMachine = useMachineStore.getState()
+const originalAgent = useAgentStore.getState()
+
+function permissionSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    mode: 'ask', modeDefault: 'ask', modes: ['plan', 'ask', 'auto', 'trusted'],
+    capabilities: { read: true, write: 'ask', exec: 'ask', cua: 'ask' },
+    scope: 'workspace', scopeDefault: 'machine', scopes: ['workspace', 'machine'],
+    workspace: 'D:\\projects\\App A', layers: [], rules: { deny: [], ask: [], allow: [] },
+    ruleSources: {}, hardlineCount: 12, hardlineHits: 0, denialBreakerLimit: 3,
+    auditFile: '', sessionRuleCount: 0,
+    ...overrides,
+  }
+}
+
+async function render() {
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <PermissionModePicker />
+      </I18nProvider>,
+    )
+  })
+  await act(async () => {})
+}
+
+function chip(): HTMLButtonElement | null {
+  return host.querySelector<HTMLButtonElement>('[data-testid="composer-permission"]')
+}
+
+function menuItem(text: string): HTMLButtonElement | undefined {
+  return [...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+    .find((button) => button.textContent?.includes(text))
+}
+
+beforeEach(() => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  snapshot = permissionSnapshot()
+  putError = null
+  puts = []
+  useAgentStore.setState({ activeSessionId: 's1' })
+  useMachineStore.setState({
+    ...originalMachine,
+    configuration: { revision: 1, mode: 'host', projectId: 'a', projects: [] } as MachineConfiguration,
+    bindings: { s1: HOST_BINDING },
+    error: null,
+  })
+  api.mockReset()
+  api.mockImplementation(async (path: string, body?: Record<string, unknown>, method?: string) => {
+    if (path !== '/permissions') throw new Error(`unexpected path ${path}`)
+    if (method === 'PUT') {
+      if (putError) throw putError
+      puts.push(body ?? {})
+      snapshot = permissionSnapshot({ ...snapshot, ...(body ?? {}) })
+    }
+    return snapshot
+  })
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  host.remove()
+  useMachineStore.setState(originalMachine, true)
+  useAgentStore.setState(originalAgent, true)
+  vi.restoreAllMocks()
+})
+
+describe('PermissionModePicker', () => {
+  it('không hiện ở chế độ docker — máy này không có động cơ quyền', async () => {
+    useMachineStore.setState({ bindings: { s1: DOCKER_BINDING_LOCAL } })
+    await render()
+    expect(chip()).toBeNull()
+    expect(api).not.toHaveBeenCalled()
+  })
+
+  it('hiện mức hiện hành của máy và đọc từ /permissions', async () => {
+    await render()
+    expect(api).toHaveBeenCalledWith('/permissions')
+    expect(chip()?.dataset.permissionMode).toBe('ask')
+    expect(chip()?.textContent).toContain('Ask first')
+  })
+
+  it('đổi mức cho phép thì ghi xuống tầng `user` và cập nhật nhãn', async () => {
+    await render()
+    await act(async () => chip()?.click())
+    await act(async () => menuItem('Auto')?.click())
+    expect(puts).toEqual([{ mode: 'auto', layer: 'user' }])
+    expect(chip()?.dataset.permissionMode).toBe('auto')
+    expect(chip()?.textContent).toContain('Auto')
+  })
+
+  it('đổi phạm vi sang cả máy', async () => {
+    await render()
+    await act(async () => chip()?.click())
+    await act(async () => menuItem('Whole machine')?.click())
+    expect(puts).toEqual([{ scope: 'machine', layer: 'user' }])
+    expect(chip()?.dataset.permissionScope).toBe('machine')
+    expect(chip()?.title).toContain('Whole machine')
+  })
+
+  it('ghi lỗi thì giữ nguyên mức cũ và nói ra cho người dùng', async () => {
+    putError = new Error('PERMISSION_LAYER_UNKNOWN: tầng `user` không tồn tại')
+    await render()
+    await act(async () => chip()?.click())
+    await act(async () => menuItem('Trusted')?.click())
+    expect(chip()?.dataset.permissionMode).toBe('ask')
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('PERMISSION_LAYER_UNKNOWN')
+  })
+})
