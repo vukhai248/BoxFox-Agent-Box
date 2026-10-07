@@ -255,12 +255,15 @@ class SessionMachineExecutor:
         return getattr(self.legacy, key)
 
     def policy_for(self, project=None):
-        """`PermissionPolicy` của một folder dự án, dùng CHUNG hồ sơ `host-permissions`.
+        """`PermissionPolicy` dùng cho các ROUTE quyền (`GET/PUT /api/agent/permissions`).
 
         Chế độ (`plan`/`ask`/`auto`/`trusted`) và phạm vi (`workspace`/`machine`) KHÔNG được ghim ở
         đây: chúng đọc từ bốn tầng luật (`PermissionPolicy.mode_value()`), nên nút chọn quyền ở thanh
         chat và tab Settings → Machines có hiệu lực thật. Trước đây policy của phiên bị ghim
         `mode='ask'` ⇒ mọi thay đổi của người dùng bị bỏ qua.
+
+        Đối tượng này CHỈ để đọc/ghi cấu hình. Phiên chạy tool có policy riêng
+        (`session_policy`) để `session_rules` không rò giữa các phiên.
         """
         selected = project or self.registry.active_project() or {}
         workspace = str(selected.get('path') or '')
@@ -270,6 +273,15 @@ class SessionMachineExecutor:
             policy = PermissionPolicy(workspace, profile_dir=self.profile_dir / 'host-permissions')
             self.policies[key] = policy
         return policy
+
+    def session_policy(self, project, sid):
+        """Policy RIÊNG của một phiên: cùng tầng luật trên đĩa, nhưng `session_rules` tách biệt.
+
+        Dùng chung một đối tượng policy cho mọi phiên trong cùng folder sẽ khiến một lần "cho phép
+        trong phiên này" của phiên A có hiệu lực luôn ở phiên B — phiên là ranh giới của quyết định.
+        """
+        return PermissionPolicy(str(project['path']),
+                                profile_dir=self.profile_dir / 'host-permissions' / sid)
 
     def permissions_policy(self):
         """Policy cho các route quyền, kể cả khi tiến trình đang chạy ở chế độ docker.
@@ -292,7 +304,7 @@ class SessionMachineExecutor:
         if project['path'] != binding['workspace'] or not Path(project['path']).is_dir():
             raise MachineError('PROJECT_UNAVAILABLE', 'Folder dự án không còn đúng binding.', 409)
         if sid not in self.hosts:
-            policy = self.policy_for(project)
+            policy = self.session_policy(project, sid)
             async def approve(name, args, decision):
                 session = self.registry.store.get(sid)
                 if not self.runtime:

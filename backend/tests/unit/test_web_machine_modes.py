@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
+from agentbox.agent_core import permissions as permissions_module
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
 from agentbox.sandbox.machine_router import MachineError, MachineRegistry, attach, register_routes
@@ -365,3 +366,24 @@ def test_permissions_policy_survives_without_a_project(harness):
     """Chưa chọn folder: vẫn trả lời được (policy rỗng), không ném ra ngoài route."""
     rt, _ = harness
     assert rt.executor.permissions_policy().workspace == ''
+
+
+def test_two_sessions_in_one_project_keep_separate_session_rules(harness, tmp_path, monkeypatch):
+    """`session_rules` là ranh giới PHIÊN: cho phép ở phiên A không được tự cho phép ở phiên B.
+
+    Hai phiên cùng folder phải dùng hai đối tượng policy, nếu không một lần "cho phép trong phiên"
+    sẽ rò sang phiên khác (và sang cả policy của route).
+    """
+    rt, _ = harness
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    p = project(rt, tmp_path)
+    first = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+    second = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+    a, _ = rt.executor.host(first['id'])
+    b, _ = rt.executor.host(second['id'])
+    assert a.policy is not b.policy
+    assert a.policy is not rt.executor.policy_for(p)
+    key = a.policy.session_key('terminal_exec', {'command': 'ls'}, cwd=p['path'])
+    a.policy.remember(key, permissions_module.allow('', 'user'), 'session')
+    assert key in a.policy.session_rules
+    assert key not in b.policy.session_rules
