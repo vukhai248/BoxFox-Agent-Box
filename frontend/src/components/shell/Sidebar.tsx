@@ -368,7 +368,7 @@ export function Sidebar() {
             <span>{t('sidebar.ideProjects')}</span>
             {machine.mode === 'host' && <button onClick={handleChooseFolder} title={t('sidebar.chooseFolder')} aria-label={t('sidebar.chooseFolder')} className="rounded p-1 hover:bg-panel2 hover:text-fg"><FolderPlus className="size-3.5" /></button>}
           </div>
-          {machine.mode === 'host' && <button onClick={handleChooseFolder} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted hover:bg-panel2 hover:text-fg"><FolderOpen className="size-3.5" />{t('sidebar.chooseFolder')}</button>}
+          {machine.mode === 'host' && projects.length === 0 && <button onClick={handleChooseFolder} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted hover:bg-panel2 hover:text-fg"><FolderOpen className="size-3.5" />{t('sidebar.chooseFolder')}</button>}
           {machine.mode === 'host' && machineError && <div role="alert" className="px-2 py-1 text-[11px] text-red-400 break-all">{machineError}<button onClick={() => openSettings('configuration')} className="mt-1 block text-muted underline">{t('sidebar.openConfiguration')}</button></div>}
           {projects.map(project => <ProjectSessionSection key={project.id} project={project} selected={machine.mode === 'host' && machine.projectId === project.id}
             onNew={() => startMachineChat({mode: 'host', revision: 1, projectId: project.id, workspace: project.path})}
@@ -433,15 +433,15 @@ function ProjectSessionSection({project, selected, count, onNew, children}: {
   project: LocalProject; selected: boolean; count: number; onNew: () => void; children: ReactNode
 }) {
   const t = useT()
-  const [collapsed, setCollapsed] = useState(false)
   return <section data-testid={`project-sessions-${project.id}`} className="py-0.5">
-    <div className={`flex items-center rounded-md ${selected ? 'bg-panel2' : ''}`}>
-      <button aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)} title={project.path} className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-xs text-fg hover:bg-panel2">
-        {collapsed ? <ChevronRight className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}<Folder className="size-3.5 shrink-0 text-blue-400" /><span className="truncate">{project.name}</span>
-      </button>
-      <button aria-label={t('sidebar.newProjectSession', {project: project.name})} title={t('sidebar.newProjectSession', {project: project.name})} onClick={() => {setCollapsed(false); onNew()}} className="mr-1 rounded p-1 text-muted hover:bg-panel hover:text-fg"><Plus className="size-3.5" /></button>
+    <div className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted">
+      <div title={project.path} className="flex min-w-0 flex-1 items-center gap-1.5 text-fg">
+        <Folder className="size-3.5 shrink-0 text-blue-400" />
+        <span className="truncate">{project.name}</span>
+      </div>
+      <button aria-label={t('sidebar.newProjectSession', {project: project.name})} title={t('sidebar.newProjectSession', {project: project.name})} onClick={onNew} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><Plus className="size-3.5" /></button>
     </div>
-    {!collapsed && <div className="pl-4 space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>}
+    <div className="space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>
   </section>
 }
 
