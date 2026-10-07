@@ -165,7 +165,7 @@ const vi = {
         plan: 'Agent chỉ đọc — không sửa tệp, không chạy lệnh.',
         ask: 'Hỏi trước mỗi lần ghi tệp hoặc chạy lệnh. Mặc định.',
         auto: 'Tự ghi tệp và chạy lệnh trong folder dự án; điều khiển desktop vẫn hỏi.',
-        trusted: 'Không hỏi gì. Chỉ dùng khi bạn tin tuyệt đối — sàn cứng vẫn chặn.',
+        trusted: 'Tự chạy, trừ nhóm luôn hỏi và sàn cứng. Chỉ dùng khi bạn tin tuyệt đối.',
         networkRestricted: 'Lệnh ra mạng (curl, git push, cài gói…) phải hỏi trước khi tự chạy.',
         networkEnabled: 'Lệnh ra mạng tự chạy ở mức Tự động. Đây là danh sách hỏi, không phải tường lửa.',
       },

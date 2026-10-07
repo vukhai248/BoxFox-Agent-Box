@@ -159,6 +159,36 @@ describe('PermissionModePicker', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('PERMISSION_LAYER_UNKNOWN')
   })
 
+  // Đường ĐỌC: máy đã bật mạng từ trước thì chip phải nói đúng ngay lần vẽ đầu, không chỉ sau khi
+  // người dùng vừa bấm đổi.
+  it('đọc mức mạng đã lưu ngay từ lần vẽ đầu', async () => {
+    snapshot = permissionSnapshot({ network: 'enabled' })
+    await render()
+    expect(chip()?.dataset.permissionNetwork).toBe('enabled')
+    await act(async () => chip()?.click())
+    expect(menuItem('Allow network access')?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  // Máy chủ không trả `network` trong phản hồi PUT (bản cũ, hoặc route bỏ sót trường): chip phải
+  // giữ đúng giá trị vừa chọn, không được hiện 'unknown'.
+  it('phản hồi PUT thiếu `network` thì giữ giá trị vừa chọn', async () => {
+    api.mockImplementation(async (path: string, body?: Record<string, unknown>, method?: string) => {
+      if (path !== '/permissions') throw new Error(`unexpected path ${path}`)
+      if (method === 'PUT') {
+        const response: Record<string, unknown> = { ...permissionSnapshot({ ...snapshot, ...(body ?? {}) }) }
+        delete response.network
+        snapshot = response
+        return snapshot
+      }
+      return snapshot
+    })
+    await render()
+    await act(async () => chip()?.click())
+    await act(async () => menuItem('Allow network access')?.click())
+    expect(chip()?.dataset.permissionNetwork).toBe('enabled')
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+  })
+
   it('lỗi khi đổi mạng thì trả mức mạng về giá trị cũ', async () => {
     putError = new Error('PERMISSION_NETWORK_UNKNOWN: giá trị mạng không hợp lệ')
     await render()
