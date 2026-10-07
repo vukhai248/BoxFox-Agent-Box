@@ -373,13 +373,45 @@ def test_prompt_choices_map_to_verdicts():
     guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')
     approved = lambda choice: {'status': 'approved', 'choice': choice}
     assert host.approval_verdict(approved('approve'), ask_decision) == 'allow'
+    assert host.approval_verdict(approved('approve-session'), ask_decision) == 'allow_session'
+    assert host.approval_verdict(approved('approve-always'), ask_decision) == 'allow_always'
     assert host.approval_verdict(approved('approve_session'), ask_decision) == 'allow_session'
     assert host.approval_verdict(approved('approve_always'), ask_decision) == 'allow_always'
     assert host.approval_verdict(approved('reject'), ask_decision) == 'deny'
     assert host.approval_verdict(approved('chắc là được'), ask_decision) == 'deny'
     assert host.approval_verdict({'status': 'rejected'}, ask_decision) == 'deny'
+    assert host.approval_verdict(approved('approve-session'), guarded) == 'deny'
     assert host.approval_verdict(approved('approve_session'), guarded) == 'deny'
     assert [item['id'] for item in host.approval_options(guarded)] == ['approve', 'reject']
+
+
+def test_card_options_survive_the_runtime_normalization():
+    """Đúng id mà `resolve_decision` phát ra trên thẻ phải quy ra verdict.
+
+    Đây là bài kiểm tra bắt lỗi thật đo được trên harness: ba lựa chọn `kind='approve'` bị
+    `normalize_decision_options` ép id thành `approve`, `approve-2`, `approve-3`, nên bấm "Cho phép
+    cả phiên" gửi `approve-2` và executor TỪ CHỐI một lệnh vừa được duyệt.
+    """
+    from agentbox.agent_core.runtime import normalize_decision_options, with_other_option
+
+    ask_decision = perms.ask('cần hỏi', '', 'mode')
+    guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')
+    for decision, expected in ((ask_decision, {'approve': 'allow', 'approve-session': 'allow_session',
+                                               'approve-always': 'allow_always'}),
+                               (guarded, {'approve': 'allow'})):
+        options = with_other_option(normalize_decision_options(host.approval_options(decision),
+                                                               'approval'))
+        ids = [item['id'] for item in options]
+        assert len(ids) == len(set(ids)), f'id phải duy nhất, không bị đánh số lại: {ids}'
+        for option in options:
+            if option['id'] not in expected:
+                continue
+            outcome = {'status': 'approved', 'choice': option['id']}
+            assert host.approval_verdict(outcome, decision) == expected[option['id']], ids
+    options = with_other_option(normalize_decision_options(host.approval_options(ask_decision),
+                                                           'approval'))
+    assert [item['id'] for item in options] == ['approve', 'approve-session', 'approve-always',
+                                                'reject', 'other']
 
 
 def test_free_text_verdict_is_a_denial(tmp_path):
@@ -415,7 +447,8 @@ def test_approver_options_match_the_prompt_contract(tmp_path):
     executor = make_executor(tmp_path, approver=approver)
     executor.policy.mode = 'ask'
     run(executor.execute('terminal_exec', {'command': 'echo x'}, 's1'))
-    assert [item['id'] for item in seen['options']] == ['approve', 'approve_session', 'approve_always', 'reject']
+    assert [item['id'] for item in seen['options']] == ['approve', 'approve-session', 'approve-always',
+                                                        'reject']
 
     run(executor.execute('terminal_exec', {'command': 'git push --force'}, 's1'))
     assert [item['id'] for item in seen['options']] == ['approve', 'reject']

@@ -80,16 +80,29 @@ def _is_guarded(decision):
     return str(getattr(decision, 'rule', '') or '').startswith('guarded:')
 
 
+#: Hai lựa chọn "nhớ" của thẻ ⇒ verdict. Nhận cả gạch nối lẫn gạch dưới: `resolve_decision` slug hoá
+#: id trước khi phát ra thẻ, nên `approve_session` tới đây thành `approve-session`.
+_SESSION_CHOICES = frozenset({'approve-session', 'approve_session'})
+_ALWAYS_CHOICES = frozenset({'approve-always', 'approve_always'})
+
+
 def approval_options(decision):
     """Lựa chọn hiện trên thẻ duyệt của host mode — MỘT nguồn cho cả hai đường nối `approver`.
 
     Nhóm "luôn hỏi" (`guarded:`) chỉ có một lựa chọn cho phép: nó không ghi nhớ được, nên mời
     "cả phiên"/"luôn cho phép" là hứa điều `HostExecutor` sẽ không làm.
+
+    `kind` của hai lựa chọn nhớ là `alternative`, KHÔNG phải `approve`: `normalize_decision_options`
+    ép `id = kind` cho mọi lựa chọn `approve`/`reject`, nên ba lựa chọn `approve` biến thành
+    `approve`, `approve-2`, `approve-3` — và `approval_verdict` không nhận ra hai id sau, tức người
+    dùng bấm "Cho phép cả phiên" thì lệnh bị TỪ CHỐI (đo được trên harness thật). `alternative`
+    không bị ép id, nên id slug hoá vẫn ổn định, và `resolve_decision` vẫn chốt nó là `approved`.
     """
     options = [{'id': 'approve', 'label': 'Cho phép một lần', 'kind': 'approve'}]
     if not _is_guarded(decision):
-        options.append({'id': 'approve_session', 'label': 'Cho phép cả phiên', 'kind': 'approve'})
-        options.append({'id': 'approve_always', 'label': 'Luôn cho phép', 'kind': 'approve'})
+        options.append({'id': 'approve-session', 'label': 'Cho phép cả phiên',
+                        'kind': 'alternative'})
+        options.append({'id': 'approve-always', 'label': 'Luôn cho phép', 'kind': 'alternative'})
     options.append({'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'})
     return options
 
@@ -101,9 +114,13 @@ def approval_verdict(outcome, decision):
     choice = str(outcome.get('choice') or '')
     if choice == 'approve':
         return 'allow'
-    if choice in ('approve_session', 'approve_always') and not _is_guarded(decision):
-        # Lựa chọn trên thẻ nói người dùng muốn gì; verdict nói executor sẽ ghi nhớ gì.
-        return 'allow_session' if choice == 'approve_session' else 'allow_always'
+    if _is_guarded(decision):
+        # Thẻ của nhóm luôn hỏi không có lựa chọn nhớ nào; id lạ ⇒ từ chối.
+        return 'deny'
+    if choice in _SESSION_CHOICES:
+        return 'allow_session'
+    if choice in _ALWAYS_CHOICES:
+        return 'allow_always'
     return 'deny'
 
 
