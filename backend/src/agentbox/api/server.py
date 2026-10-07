@@ -1,6 +1,7 @@
 """Loopback harness API; UI uses the Vite /api/agent proxy."""
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -408,7 +409,11 @@ def attach_host_approver(runtime):
         return False
 
     async def approve(name, args, decision, session_id=None):
-        session = runtime.store.get(session_id) if session_id else None
+        # `SessionStore.get` ném `KeyError` khi thiếu phiên: thiếu phiên là TỪ CHỐI, không phải lỗi 500.
+        try:
+            session = runtime.store.get(session_id) if session_id else None
+        except KeyError:
+            session = None
         # Phiên con chạy trong lượt của cha và không có chat riêng: `runtime.decision` sẽ ném.
         if not session or session.get('parent_id'):
             return 'deny'
@@ -898,25 +903,41 @@ def create_app(runtime):
         actor = str(payload.get('actor') or 'user')
         policy = permission_policy()
         decision = policy.decide(tool, args, session_id=session_id, actor=actor)
+        # Quyết định phải vào ĐÚNG policy mà phiên đọc lúc gọi tool. Phiên IDE có policy riêng
+        # (`SessionMachineExecutor.session_policy`), nên ghi vào policy dùng chung của folder thì
+        # "cho phép cả phiên" trên thẻ chỉ là lời hứa suông (vòng review đợt 1b).
+        remember = policy
+        provider = getattr(runtime.executor, 'policy_for_session', None)
+        if session_id and callable(provider):
+            try:
+                remember = provider(session_id) or policy
+            except Exception:
+                remember = policy
         answer = str(payload.get('decision') or '').strip().lower()
         extra = {}
         if answer:
             if answer not in ('allow', 'allow_session', 'allow_always', 'deny'):
                 raise ApiError('PERMISSION_DECISION_UNKNOWN', 'quyết định `%s` không có' % answer, 400)
             if answer == 'deny':
-                policy.note_denial(session_id)
-                extra['breaker'] = policy.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
+                remember.note_denial(session_id)
+                extra['breaker'] = remember.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
             else:
-                policy.note_approval(session_id)
+                remember.note_approval(session_id)
                 # Cùng khoá với `decide()` — kể cả mã phiên và tài nguyên, nếu không thì lần hỏi sau
                 # lại thấy `ask` dù người dùng đã chọn "cho phép cả phiên".
-                key = policy.session_key(tool, args, cwd=policy.workspace, session_id=session_id)
-                if answer in ('allow_session', 'allow_always'):
-                    policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                if answer == 'allow_always':
-                    ok, code, message, rules = policy.save_rule(tool, args, actor=actor,
-                                                                session_id=session_id)
+                key = remember.session_key(tool, args, cwd=remember.workspace, session_id=session_id)
+                # Nhóm "luôn hỏi" là một lần cho một lần: ghi nhớ nó sẽ tạo một luật chết trong
+                # `.boxfox/settings.local.json` mà `decide()` không bao giờ đọc (vòng review đợt 1b).
+                guarded = str(decision.rule or '').startswith('guarded:')
+                if answer in ('allow_session', 'allow_always') and not guarded:
+                    remember.remember(key, permissions_module.allow('', 'user'), 'session')
+                if answer == 'allow_always' and not guarded:
+                    ok, code, message, rules = remember.save_rule(tool, args, actor=actor,
+                                                                  session_id=session_id)
                     extra.update({'saved': ok, 'saveCode': code, 'saveMessage': message, 'rules': rules})
+                elif answer == 'allow_always':
+                    extra.update({'saved': False, 'saveCode': 'GUARDED_SINGLE_SHOT',
+                                  'saveMessage': 'Lệnh thuộc nhóm luôn hỏi: chỉ cho phép một lần.'})
             extra['decision'] = answer
         return web.json_response({'tool': tool, 'sessionId': session_id,
                                   'outcome': decision.outcome, 'reason': decision.reason,

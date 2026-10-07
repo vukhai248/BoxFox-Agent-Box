@@ -33,16 +33,18 @@ class MachineRegistry:
                 trusted INTEGER NOT NULL DEFAULT 0);
         ''')
         # CSDL tạo trước commit `63fed3e` chưa có cột `trusted`: `CREATE TABLE IF NOT EXISTS` không
-        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`); hỏng thì bỏ qua,
-        # không chặn khởi động.
+        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`). Hỏng thì KHÔNG
+        # chặn khởi động, nhưng phải ghi log: thiếu cột mà im lặng thì mọi route máy đổ `IndexError`
+        # ở chỗ đọc `project['trusted']` (vòng review đợt 1b).
         try:
             columns = {row['name'] for row in self.db.execute('PRAGMA table_info(web_machine_projects)')}
             if 'trusted' not in columns:
                 self.db.execute('ALTER TABLE web_machine_projects '
                                 'ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0')
             self.db.commit()
-        except sqlite3.DatabaseError:
-            pass
+        except sqlite3.DatabaseError as exc:
+            self.db.rollback()
+            self._log('machine_trusted_column_failed', f'không vá được cột `trusted`: {exc}')
         # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
         # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
         # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
@@ -66,6 +68,14 @@ class MachineRegistry:
             return self.register(str(candidate))['id']
         except (OSError, MachineError):
             return None
+
+    def _log(self, event, message):
+        """Ghi log hệ thống nếu có; không có thì thôi, không được làm hỏng khởi động."""
+        try:
+            from ..observability.system_log import system_log
+            system_log.write(event, level='error', message=message)
+        except Exception:
+            pass
 
     def project(self, project_id):
         row = self.db.execute('SELECT * FROM web_machine_projects WHERE id=?', (project_id,)).fetchone()
@@ -156,7 +166,12 @@ class MachineRegistry:
                 'workspace': project['path'] if project else None}
 
     def binding(self, sid):
-        session = self.store.get(sid) if sid else None
+        # `SessionStore.get` NÉM `KeyError` khi thiếu phiên (không trả `None`), nên phải bắt ở đây;
+        # nếu không thì mã phiên tổng hợp của đường admin biến thành lỗi 500 thay vì `SESSION_NOT_FOUND`.
+        try:
+            session = self.store.get(sid) if sid else None
+        except KeyError:
+            session = None
         if not session:
             raise MachineError('SESSION_NOT_FOUND', 'Không tìm thấy phiên.', 404)
         binding = session['config'].get('machineBinding')
@@ -274,6 +289,9 @@ class SessionMachineExecutor:
         self.hosts = {}
         # Chính sách quyền dùng chung cho các route `/api/agent/permissions*` — xem `permissions_policy`.
         self.policies = {}
+        # Policy riêng của từng phiên, khoá `(project, sid)`: route quyết định phải ghi vào ĐÚNG đối
+        # tượng mà phiên đọc lúc gọi tool, nếu không thì "cho phép cả phiên" trên thẻ không thành sự thật.
+        self.session_policies = {}
         self.visual_lock = legacy.visual_lock
 
     def __getattr__(self, key):
@@ -304,9 +322,31 @@ class SessionMachineExecutor:
 
         Dùng chung một đối tượng policy cho mọi phiên trong cùng folder sẽ khiến một lần "cho phép
         trong phiên này" của phiên A có hiệu lực luôn ở phiên B — phiên là ranh giới của quyết định.
+        Đối tượng được NHỚ LẠI theo `(project, sid)`: `host()` và route quyết định phải dùng chung một
+        vật thể, nếu không thì quyết định ghi vào một bản sao rồi bị bỏ quên.
         """
-        return PermissionPolicy(str(project['path']),
-                                profile_dir=self.profile_dir / 'host-permissions' / sid)
+        key = (str(project.get('id') or project.get('path') or ''), str(sid))
+        policy = self.session_policies.get(key)
+        if policy is None:
+            policy = PermissionPolicy(str(project['path']),
+                                      profile_dir=self.profile_dir / 'host-permissions' / sid)
+            self.session_policies[key] = policy
+        return policy
+
+    def policy_for_session(self, sid):
+        """Policy của phiên host, hoặc `None` khi phiên không chạy host / không còn folder.
+
+        Dùng cho `POST /api/agent/permissions/decide`: quyết định phải vào policy mà phiên sẽ đọc.
+        Không bao giờ ném — người gọi cần một giá trị để trả lời.
+        """
+        try:
+            binding = self.registry.binding(sid)
+            if binding['mode'] != 'host' or not binding.get('projectId'):
+                return None
+            project = self.registry.project(binding['projectId'])
+        except MachineError:
+            return None
+        return self.session_policy(project, sid)
 
     def permissions_policy(self):
         """Policy cho các route quyền, kể cả khi tiến trình đang chạy ở chế độ docker.
@@ -331,7 +371,10 @@ class SessionMachineExecutor:
         if sid not in self.hosts:
             policy = self.session_policy(project, sid)
             async def approve(name, args, decision, session_id=None):
-                session = self.registry.store.get(session_id or sid)
+                try:
+                    session = self.registry.store.get(session_id or sid)
+                except KeyError:
+                    session = None
                 if not session or not self.runtime:
                     return 'deny'
                 while session.get('parent_id'):
@@ -356,7 +399,13 @@ class SessionMachineExecutor:
     async def execute(self, name, args, session, **identity):
         if not session:
             return await self.legacy.execute(name, args, session, **identity)
-        if self.registry.store.get(session) is None:
+        # `SessionStore.get` ném `KeyError` khi thiếu phiên, nên phải bắt: đường admin dùng mã tổng
+        # hợp, và trước đây chúng nổ 500 ở đây thay vì đi tiếp xuống executor cũ.
+        try:
+            known = self.registry.store.get(session) is not None
+        except KeyError:
+            known = False
+        if not known:
             # Existing admin readiness/index callers use synthetic identifiers, not sessions.
             return await self.legacy.execute(name, args, session, **identity)
         try:
@@ -398,6 +447,11 @@ class SessionMachineExecutor:
         return await self.legacy.request(path, body=body, session=session)
 
     async def cleanup(self, sid):
+        # Phiên kết thúc thì quyết định đã nhớ của nó cũng hết hiệu lực: `session_rules` là chuyện
+        # của một phiên, không phải một thuộc tính sống mãi của tiến trình (DA1).
+        for key, policy in [item for item in self.session_policies.items() if item[0][1] == str(sid)]:
+            policy.forget_session(sid)
+            self.session_policies.pop(key, None)
         if sid in self.hosts:
             await self.hosts.pop(sid).cleanup(sid)
         else:

@@ -432,3 +432,157 @@ def test_health_reports_the_network_axis(tmp_path):
 
     payload = run(tmp_path, scenario, executor=executor)
     assert payload['execution']['network'] == perms.NETWORK_RESTRICTED
+
+
+# ------------------------------------------- gắn thẻ duyệt mức tiến trình (DA2)
+
+class FakeStore:
+    """`SessionStore` tối thiểu: trả phiên theo mã, ném `KeyError` khi thiếu (như bản thật)."""
+
+    def __init__(self, sessions=None):
+        self.sessions = sessions or {}
+
+    def get(self, sid):
+        if sid not in self.sessions:
+            raise KeyError('Session not found')
+        return self.sessions[sid]
+
+
+def fake_runtime(executor, sessions=None, decide=None):
+    from types import SimpleNamespace
+
+    async def default_decision(session, name, args, call_id=None):
+        return {'status': 'approved', 'choice': 'approve'}
+
+    return SimpleNamespace(executor=executor, store=FakeStore(sessions), decision=decide or default_decision)
+
+
+def test_attach_host_approver_denies_when_the_session_is_gone(tmp_path):
+    executor = host_executor(tmp_path)
+    runtime = fake_runtime(executor, sessions={})
+    decision = executor.policy.decide('terminal_exec', {'command': 'npm test'}, session_id='s1')
+
+    assert server_module.attach_host_approver(runtime) is True
+    assert asyncio.run(executor.approver('terminal_exec', {'command': 'npm test'}, decision,
+                                         'missing')) == 'deny'
+
+
+def test_attach_host_approver_denies_a_child_session(tmp_path):
+    executor = host_executor(tmp_path)
+    runtime = fake_runtime(executor, sessions={'child': {'id': 'child', 'parent_id': 'root'}})
+    decision = executor.policy.decide('terminal_exec', {'command': 'npm test'}, session_id='child')
+
+    server_module.attach_host_approver(runtime)
+    assert asyncio.run(executor.approver('terminal_exec', {'command': 'npm test'}, decision,
+                                         'child')) == 'deny'
+
+
+def test_attach_host_approver_maps_the_card_choice_to_a_verdict(tmp_path):
+    executor = host_executor(tmp_path)
+    executor.policy.mode = 'ask'
+    seen = {}
+
+    async def decide(session, name, args, call_id=None):
+        seen['name'], seen['args'], seen['session'] = name, args, session
+        return {'status': 'approved', 'choice': seen.pop('choice', 'approve')}
+
+    runtime = fake_runtime(executor, sessions={'s1': {'id': 's1'}}, decide=decide)
+    server_module.attach_host_approver(runtime)
+    args = {'command': 'npm test'}
+    normal = executor.policy.decide('terminal_exec', args, session_id='s1')
+
+    seen['choice'] = 'approve_session'
+    assert asyncio.run(executor.approver('terminal_exec', args, normal, 's1')) == 'allow_session'
+    assert seen['name'] == 'request_approval'
+    assert seen['args']['options'] and seen['args']['reason'] and seen['args']['action']
+    assert seen['session'] == {'id': 's1'}
+
+    executor.policy.mode = 'trusted'
+    force = {'command': 'git push --force origin main'}
+    guarded = executor.policy.decide('terminal_exec', force, session_id='s1')
+    assert guarded.rule.startswith('guarded:')
+    seen['choice'] = 'approve_session'
+    assert asyncio.run(executor.approver('terminal_exec', force, guarded, 's1')) == 'deny', \
+        'lệnh luôn hỏi: "cho phép cả phiên" vẫn chỉ là một lần'
+
+
+def test_attach_host_approver_keeps_an_existing_approver_and_other_executors(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def existing(name, args, decision, session_id=None):
+        return 'allow'
+
+    executor.approver = existing
+    assert server_module.attach_host_approver(fake_runtime(executor)) is False
+    assert executor.approver is existing
+    assert server_module.attach_host_approver(fake_runtime(FixtureExecutor())) is False
+
+
+# ------------------------------------------------ quyết định của thẻ đi vào policy của phiên
+
+class SessionPolicyExecutor:
+    """`SessionMachineExecutor` tối thiểu: policy dùng chung + policy riêng của từng phiên."""
+
+    def __init__(self, shared, sessions):
+        self.policy = shared
+        self.approver = None
+        self.sessions = sessions
+
+    def policy_for_session(self, sid):
+        return self.sessions.get(sid)
+
+    async def execute(self, name, args, sid):
+        return {'ok': True}
+
+    async def cleanup(self, sid):
+        return None
+
+
+def test_decide_remembers_into_the_sessions_own_policy(tmp_path):
+    shared = host_executor(tmp_path).policy
+    session_policy = perms.PermissionPolicy(shared.workspace, profile_dir=tmp_path / 'profile' / 's1',
+                                           home=tmp_path / 'home', install_dir=tmp_path / 'install',
+                                           env={})
+    executor = SessionPolicyExecutor(shared, {'s1': session_policy})
+    args = {'command': 'npm test'}
+
+    async def scenario(client, runtime):
+        await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                          json={'tool': 'terminal_exec', 'args': args, 'sessionId': 's1',
+                                'decision': 'allow_session'})
+        return await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                        json={'tool': 'terminal_exec', 'args': args,
+                                              'sessionId': 's1'})).json()
+
+    run(tmp_path, scenario, executor=executor)
+    key = session_policy.session_key('terminal_exec', args, cwd=session_policy.workspace,
+                                     session_id='s1')
+    assert session_policy.session_rules[key].outcome == perms.OUTCOME_ALLOW
+    assert not shared.session_rules, 'policy dùng chung không được giữ luật của một phiên'
+
+
+def test_decide_never_remembers_a_guarded_command(tmp_path):
+    executor = host_executor(tmp_path)
+    executor.policy.mode = 'trusted'
+    args = {'command': 'git push --force origin main'}
+
+    async def scenario(client, runtime):
+        saved = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                         json={'tool': 'terminal_exec', 'args': args,
+                                               'sessionId': 's1',
+                                               'decision': 'allow_always'})).json()
+        session = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                           json={'tool': 'terminal_exec', 'args': args,
+                                                 'sessionId': 's1',
+                                                 'decision': 'allow_session'})).json()
+        again = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                        json={'tool': 'terminal_exec', 'args': args,
+                                              'sessionId': 's1'})).json()
+        rules = await (await client.get('/api/agent/permissions/rules', headers=HEADERS)).json()
+        return saved, session, again, rules
+
+    saved, session, again, rules = run(tmp_path, scenario, executor=executor)
+    assert saved['saved'] is False and saved['saveCode'] == 'GUARDED_SINGLE_SHOT'
+    assert session['decision'] == 'allow_session'
+    assert again['outcome'] == 'ask', 'lệnh luôn hỏi không bao giờ được ghi nhớ'
+    assert 'terminal_exec(git push --force origin main)' not in rules['rules']['allow']

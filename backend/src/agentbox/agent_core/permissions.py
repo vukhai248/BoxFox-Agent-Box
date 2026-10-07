@@ -95,12 +95,28 @@ HARDLINE = (
     (r'^dd\b[^|;]*of=/dev/', 'overwrite_device'),
 )
 
+#: Đuôi một tên lệnh: hết chuỗi, khoảng trắng, hoặc toán tử. `(?!\w)` không đủ vì `sh;x` phải khớp.
+_NAME_END = r'(?![\w.-])'
+
+#: PowerShell cho phép viết tắt MỌI tiền tố không nhập nhằng của `-EncodedCommand`/`-EncodedArguments`
+#: (`-ec`, `-enc`, `-enco`, …), nên mẫu phải nhận cả họ tiền tố. Cố ý bỏ `-e` một ký tự: nó trùng
+#: với cờ `-e` của `grep`/`sed` và sẽ hỏi oan. Xem `docs/plan/desktop-host-mode.md` §6.1.
+_ENCODED_FLAG = (r'-(?:ec|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|'
+                 r'encodedcomma|encodedcomman|encodedcommand|encodeda|encodedar|encodedarg|encodedargu|'
+                 r'encodedargum|encodedargume|encodedargumen|encodedarguments)\b')
+
 #: Nhóm "LUÔN HỎI" (§6.1): chạy được ở mọi chế độ, kể cả `trusted`, và **không bao giờ ghi nhớ** —
 #: một lần cho phép là một lần. Đây là các lệnh đổi trạng thái hệ thống hoặc đưa mã lạ vào máy.
+#:
+#: Mẫu phải nhận ĐÚNG cách viết tài liệu của chính lệnh đó, không chỉ cách gõ gọn nhất (vòng review
+#: đợt 1b): `git push origin +main` và `--force-with-lease=<ref>` là force-push, `git -C <dir> push`
+#: vẫn là push, `| sh;` vẫn là pipe-to-shell, `powershell -ec` vẫn là encoded command.
 GUARDED = (
-    (r'\bgit\s+push\b[^|;]*(\s-f(\s|$)|\s--force(-with-lease)?(\s|$))', 'git_force_push'),
-    (r'\|\s*(sh|bash|zsh|iex|invoke-expression|powershell|pwsh|cmd)(\.exe)?(\s|$)', 'pipe_to_shell'),
-    (r'-encodedcommand\b', 'encoded_command'),
+    (r'\bgit\b[^|;]*\bpush\b[^|;]*(--force(-with-lease)?(=|\s|$)'
+     r'|(^|\s)-\w*f\w*(\s|$)|(^|\s)\+\S+)', 'git_force_push'),
+    (r'\|\s*(sh|bash|zsh|dash|ksh|fish|busybox|env|python3?|perl|ruby|php|node|deno'
+     r'|iex|invoke-expression|powershell|pwsh|cmd)(\.exe)?' + _NAME_END, 'pipe_to_shell'),
+    (_ENCODED_FLAG, 'encoded_command'),
     (r'^reg(\.exe)?\s+(add|delete)\b', 'registry_write'),
     (r'^schtasks(\.exe)?\s+/(create|change|delete)\b', 'scheduled_task'),
     (r'^runas\b', 'runas'),
@@ -871,9 +887,14 @@ class PermissionPolicy:
             return ''
         root = _collapse(str(self.workspace).replace('\\', '/')) if self.workspace else ''
         if not (text.startswith('/') or (len(text) > 1 and text[1] == ':')):
+            # Bỏ tiền tố `./` theo vòng lặp, KHÔNG dùng `lstrip('./')`: `lstrip` cắt cả tập ký tự,
+            # nên `..foo/x` bị co thành `foo/x` và trùng khoá với một tệp khác (vòng review đợt 1b).
+            relative = text
+            while relative.startswith('./'):
+                relative = relative[2:]
             if not root:
-                return text.lstrip('./')
-            text = root + '/' + text.lstrip('./')
+                return relative
+            text = root + '/' + relative
         return _collapse(text)
 
     def in_workspace(self, args):
@@ -895,6 +916,11 @@ class PermissionPolicy:
         if tool == 'codebase_grep':
             query = args.get('query') if isinstance(args, dict) else args
             return str(query or '').strip()
+        if tool == 'web_fetch':
+            # `web_fetch` chỉ có `url`: không lấy nó làm tài nguyên thì mọi URL dùng chung khoá rỗng,
+            # và một lần "cho phép cả phiên" cho một URL sẽ mở luôn cho mọi URL khác.
+            url = args.get('url') if isinstance(args, dict) else args
+            return str(url or '').strip()
         value = _path_arg(args) or (args.get('pattern') if isinstance(args, dict) else '')
         return self.absolute_path(value)
 
