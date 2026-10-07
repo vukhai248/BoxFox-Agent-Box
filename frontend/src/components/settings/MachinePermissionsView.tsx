@@ -51,6 +51,7 @@ import type {
   PermissionDecision,
   PermissionLayer,
   PermissionMode,
+  PermissionNetwork,
   PermissionRulesSnapshot,
   PermissionScope,
   PermissionSnapshot,
@@ -62,9 +63,10 @@ const FIELD = 'mt-1 w-full rounded-md border border-line bg-panel2 px-2.5 py-1.5
 const BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[11px] font-semibold text-fg transition hover:border-brand/60 hover:text-brand disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer'
 const DANGER_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer dark:text-red-400'
 
-/** Bốn chế độ/phạm vi theo hợp đồng; chỉ dùng khi harness không trả danh sách. */
+/** Bốn chế độ/phạm vi/mạng theo hợp đồng; chỉ dùng khi harness không trả danh sách. */
 const MODE_FALLBACK: PermissionMode[] = ['plan', 'ask', 'auto', 'trusted']
 const SCOPE_FALLBACK: PermissionScope[] = ['workspace', 'machine']
+const NETWORK_FALLBACK: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Bốn dòng của bảng năng lực — nhãn người dùng, khoá lấy từ `capabilities`. */
 const CAPABILITY_ROWS: Array<{ key: keyof PermissionSnapshot['capabilities']; label: string }> = [
@@ -248,6 +250,11 @@ export function MachinePermissionsView() {
       await updatePermissions({ scope, layer: 'user' })
     }, 'Đã lưu phạm vi.')
 
+  const changeNetwork = (network: PermissionNetwork) =>
+    void runAction(async () => {
+      await updatePermissions({ network, layer: 'user' })
+    }, 'Đã lưu mức mạng.')
+
   const revokeRule = (row: RuleRow) => {
     const where = row.layer ? ` ở tầng ${row.layer}` : ''
     if (!window.confirm(`Thu hồi luật "${row.rule}"${where}? Luật có hiệu lực từ lần gọi kế tiếp.`)) return
@@ -274,6 +281,7 @@ export function MachinePermissionsView() {
   const ruleRows = useMemo(() => flattenRules(rules), [rules])
   const modeOptions = snapshot?.modes ?? MODE_FALLBACK
   const scopeOptions = snapshot?.scopes ?? SCOPE_FALLBACK
+  const networkOptions = snapshot?.networks ?? NETWORK_FALLBACK
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-6 py-7 select-text">
@@ -418,7 +426,28 @@ export function MachinePermissionsView() {
                       ))}
                     </select>
                   </label>
+                  <label className="text-xs text-muted">
+                    Mạng
+                    <select
+                      data-testid="mp-network"
+                      className={FIELD}
+                      value={snapshot.network ?? 'restricted'}
+                      disabled={busy}
+                      onChange={(event) => changeNetwork(event.target.value as PermissionNetwork)}
+                    >
+                      {networkOptions.map((network) => (
+                        <option key={network} value={network}>
+                          {network}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
+                <p className="mt-2 text-[10px] text-muted">
+                  Mạng là danh sách hỏi, không phải tường lửa: lệnh khớp danh sách (curl, git push, cài gói…)
+                  phải hỏi trước khi tự chạy ở mức Tự động. Phạm vi chỉ đổi chỗ HỎI — công cụ tệp luôn bị
+                  giới hạn trong folder dự án.
+                </p>
 
                 <div className="mt-4 overflow-hidden rounded-lg border border-line">
                   <table className="w-full text-xs">

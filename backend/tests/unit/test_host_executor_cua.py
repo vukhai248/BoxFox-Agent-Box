@@ -35,10 +35,12 @@ def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', 
     control = dc.DesktopControl(profile_dir=profile, platform=fake) if desktop else None
     source = {'BOXFOX_PERMISSION_MODE': 'ask'}
     source.update(env or {})
-    policy = permissions_module.PermissionPolicy(WORKSPACE, env=source)
+    # `home=tmp_path`: tầng `user` là `<home>/.boxfox/settings.json`. Không cô lập thì một máy đã
+    # từng đổi mức quyền từ giao diện sẽ ghi đè biến môi trường của bài kiểm này.
+    policy = permissions_module.PermissionPolicy(WORKSPACE, env=source, home=tmp_path)
     executor = host_module.HostExecutor(
         workspace=tmp_path / 'workspace', policy=policy, platform='win32', desktop=control,
-        approver=(lambda name, args, decision: approver) if approver else None,
+        approver=(lambda name, args, decision, session_id=None: approver) if approver else None,
         artifacts_dir=tmp_path / 'artifacts')
     return executor, control, fake
 

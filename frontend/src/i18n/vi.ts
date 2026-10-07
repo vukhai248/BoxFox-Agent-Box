@@ -156,6 +156,25 @@ const vi = {
         workspace: 'Chỉ folder dự án',
         machine: 'Cả máy',
       },
+      // Phạm vi chỉ đổi chỗ HỎI, không nới chỗ công cụ tệp được chạm tới: nói đúng để người
+      // dùng không tưởng rằng chọn `machine` là mở khoá cả ổ đĩa.
+      scopeHint: {
+        workspace: 'Chỉ hỏi khi đụng tới thứ ngoài folder dự án. Công cụ tệp luôn bị giới hạn trong folder.',
+        machine: 'Không hỏi khi đụng tới thứ ngoài folder dự án. Công cụ tệp vẫn bị giới hạn trong folder.',
+      },
+      sectionNetwork: 'Mạng',
+      network: {
+        restricted: 'Hỏi trước khi ra mạng',
+        enabled: 'Cho phép ra mạng',
+      },
+      hint: {
+        plan: 'Agent chỉ đọc — không sửa tệp, không chạy lệnh.',
+        ask: 'Hỏi trước mỗi lần ghi tệp hoặc chạy lệnh. Mặc định.',
+        auto: 'Tự ghi tệp và chạy lệnh trong folder dự án; điều khiển desktop vẫn hỏi.',
+        trusted: 'Không hỏi gì. Chỉ dùng khi bạn tin tuyệt đối — sàn cứng vẫn chặn.',
+        networkRestricted: 'Lệnh ra mạng (curl, git push, cài gói…) phải hỏi trước khi tự chạy.',
+        networkEnabled: 'Lệnh ra mạng tự chạy ở mức Tự động. Đây là danh sách hỏi, không phải tường lửa.',
+      },
     },
     switchToPlan: 'Plan',
     switchToAct: 'Act',

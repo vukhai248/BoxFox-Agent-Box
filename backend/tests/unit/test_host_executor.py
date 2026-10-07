@@ -81,8 +81,8 @@ def test_ask_without_approver_fails_closed(tmp_path):
 def test_approver_allow_session_removes_the_second_question(tmp_path):
     calls = []
 
-    def approver(tool, args, decision):
-        calls.append((tool, args.get('command')))
+    def approver(tool, args, decision, session_id=None):
+        calls.append((tool, args.get('command'), session_id))
         return 'allow_session'
 
     executor = make_executor(tmp_path, approver=approver)
@@ -95,7 +95,7 @@ def test_approver_allow_session_removes_the_second_question(tmp_path):
 
 
 def test_approver_allow_always_writes_a_rule(tmp_path):
-    executor = make_executor(tmp_path, approver=lambda tool, args, decision: 'allow_always')
+    executor = make_executor(tmp_path, approver=lambda tool, args, decision, session_id=None: 'allow_always')
     executor.policy.mode = 'ask'
     run(executor.execute('terminal_exec', {'command': 'echo mot-lan'}, 's1'))
     saved = executor.policy.paths[perms.LAYER_PROJECT]
@@ -104,7 +104,7 @@ def test_approver_allow_always_writes_a_rule(tmp_path):
 
 
 def test_denied_approvals_trip_the_breaker(tmp_path):
-    executor = make_executor(tmp_path, approver=lambda tool, args, decision: 'deny')
+    executor = make_executor(tmp_path, approver=lambda tool, args, decision, session_id=None: 'deny')
     executor.policy.mode = 'ask'
     for _ in range(perms.DENIAL_BREAKER_LIMIT):
         run(executor.execute('terminal_exec', {'command': 'echo a'}, 's1'))
@@ -113,7 +113,7 @@ def test_denied_approvals_trip_the_breaker(tmp_path):
 
 
 def test_approver_exception_is_a_denial(tmp_path):
-    def approver(tool, args, decision):
+    def approver(tool, args, decision, session_id=None):
         raise RuntimeError('giao diện hỏng')
 
     executor = make_executor(tmp_path, approver=approver)
@@ -335,3 +335,87 @@ def test_child_env_forces_utf8(tmp_path):
     env = executor._child_env()
     assert env['PYTHONIOENCODING'] == 'utf-8'
     assert env['PYTHONUTF8'] == '1'
+
+
+# ------------------------------------------- thẻ duyệt của host mode (slice 1b)
+
+def test_approver_receives_the_session(tmp_path):
+    seen = []
+
+    def approver(tool, args, decision, session_id=None):
+        seen.append(session_id)
+        return 'allow'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo xin-chao'}, 's1'))
+    assert seen == ['s1']
+
+
+def test_approve_session_remembers_and_approve_always_writes_a_rule(tmp_path):
+    executor = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'allow_session')
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo ca-phien'}, 's1'))
+    key = executor.policy.session_key('terminal_exec', {'command': 'echo ca-phien'},
+                                      cwd=executor.policy.workspace, session_id='s1')
+    assert key in executor.policy.session_rules
+    assert not executor.policy.paths[perms.LAYER_PROJECT].exists()
+
+    other = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'allow_always')
+    other.policy.mode = 'ask'
+    run(other.execute('terminal_exec', {'command': 'echo luon-cho'}, 's1'))
+    assert 'terminal_exec(echo luon-cho)' in other.policy.paths[perms.LAYER_PROJECT].read_text(encoding='utf-8')
+
+
+def test_prompt_choices_map_to_verdicts(tmp_path):
+    """Bốn lựa chọn trên thẻ ⇒ verdict của executor; chữ tự nhập ⇒ từ chối."""
+    ask_decision = perms.ask('cần hỏi', '', 'mode')
+    guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')
+    approved = lambda choice: {'status': 'approved', 'choice': choice}
+    assert host.approval_verdict(approved('approve'), ask_decision) == 'allow'
+    assert host.approval_verdict(approved('approve_session'), ask_decision) == 'allow_session'
+    assert host.approval_verdict(approved('approve_always'), ask_decision) == 'allow_always'
+    assert host.approval_verdict(approved('reject'), ask_decision) == 'deny'
+    assert host.approval_verdict(approved('chắc là được'), ask_decision) == 'deny'
+    assert host.approval_verdict({'status': 'rejected'}, ask_decision) == 'deny'
+    assert host.approval_verdict(approved('approve_session'), guarded) == 'deny'
+    assert [item['id'] for item in host.approval_options(guarded)] == ['approve', 'reject']
+
+
+def test_free_text_verdict_is_a_denial(tmp_path):
+    executor = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'chắc là được')
+    executor.policy.mode = 'ask'
+    result = run(executor.execute('terminal_exec', {'command': 'echo x'}, 's1'))
+    assert result['errorCode'] == host.PERMISSION_DENIED_CODE
+
+
+def test_guarded_command_stays_single_shot(tmp_path):
+    calls = []
+
+    def approver(tool, args, decision, session_id=None):
+        calls.append(decision.rule)
+        return 'allow_session'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'trusted'
+    for _ in range(2):
+        run(executor.execute('terminal_exec', {'command': 'git push --force origin main'}, 's1'))
+    assert len(calls) == 2, 'nhóm luôn hỏi không được ghi nhớ'
+    assert all(rule.startswith('guarded:') for rule in calls)
+    assert executor.policy.session_rules == {}
+
+
+def test_approver_options_match_the_prompt_contract(tmp_path):
+    seen = {}
+
+    def approver(tool, args, decision, session_id=None):
+        seen['options'] = host.approval_options(decision)
+        return 'deny'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo x'}, 's1'))
+    assert [item['id'] for item in seen['options']] == ['approve', 'approve_session', 'approve_always', 'reject']
+
+    run(executor.execute('terminal_exec', {'command': 'git push --force'}, 's1'))
+    assert [item['id'] for item in seen['options']] == ['approve', 'reject']

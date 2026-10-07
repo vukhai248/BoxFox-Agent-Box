@@ -390,3 +390,45 @@ def test_routes_answer_when_the_process_is_docker_but_the_machine_is_host(tmp_pa
     assert payload['mode'] == 'auto'
     assert payload['workspace'] == str(workspace)
     assert changed_status == 200
+
+
+# ------------------------------------------------------------- trục mạng (1b)
+
+def test_network_can_be_set_and_read_back(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        before = await (await client.get('/api/agent/permissions', headers=HEADERS)).json()
+        changed = await client.put('/api/agent/permissions', headers=HEADERS,
+                                   json={'network': 'enabled'})
+        after = await (await client.get('/api/agent/permissions', headers=HEADERS)).json()
+        return before, changed.status, await changed.json(), after
+
+    before, status, payload, after = run(tmp_path, scenario, executor=executor)
+    assert before['network'] == perms.NETWORK_RESTRICTED
+    assert status == 200
+    assert payload['network'] == perms.NETWORK_ENABLED
+    assert after['network'] == perms.NETWORK_ENABLED
+
+
+def test_unknown_network_value_is_rejected(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        response = await client.put('/api/agent/permissions', headers=HEADERS,
+                                    json={'network': 'mở-toang'})
+        return response.status, await response.json()
+
+    status, payload = run(tmp_path, scenario, executor=executor)
+    assert status == 400
+    assert payload['code'] == 'PERMISSION_NETWORK_UNKNOWN'
+
+
+def test_health_reports_the_network_axis(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        return await (await client.get('/api/agent/health', headers=HEADERS)).json()
+
+    payload = run(tmp_path, scenario, executor=executor)
+    assert payload['execution']['network'] == perms.NETWORK_RESTRICTED

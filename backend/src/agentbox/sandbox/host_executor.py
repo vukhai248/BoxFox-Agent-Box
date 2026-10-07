@@ -74,6 +74,42 @@ class HostRequestUnsupported(RuntimeError):
         super().__init__(f'{HOST_REQUEST_UNSUPPORTED_CODE}: đường `{route}` chưa có bản host.')
         self.route = route
 
+
+def approval_options(decision):
+    """Lựa chọn hiện trên thẻ duyệt của host mode — MỘT nguồn cho cả hai đường nối `approver`.
+
+    Nhóm "luôn hỏi" (`guarded:`) chỉ có một lựa chọn cho phép: nó không ghi nhớ được, nên mời
+    "cả phiên"/"luôn cho phép" là hứa điều `HostExecutor` sẽ không làm.
+    """
+    options = [{'id': 'approve', 'label': 'Cho phép một lần', 'kind': 'approve'}]
+    if not str(getattr(decision, 'rule', '') or '').startswith('guarded:'):
+        options.append({'id': 'approve_session', 'label': 'Cho phép cả phiên', 'kind': 'approve'})
+        options.append({'id': 'approve_always', 'label': 'Luôn cho phép', 'kind': 'approve'})
+    options.append({'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'})
+    return options
+
+
+def approval_verdict(outcome, decision):
+    """`runtime.decision(...)` trả về gì ⇒ verdict của `HostExecutor`. Lạ ⇒ `deny` (fail closed)."""
+    if not isinstance(outcome, dict) or outcome.get('status') != 'approved':
+        return 'deny'
+    choice = str(outcome.get('choice') or '')
+    guarded = str(getattr(decision, 'rule', '') or '').startswith('guarded:')
+    if choice == 'approve':
+        return 'allow'
+    if choice in ('approve_session', 'approve_always') and not guarded:
+        # Lựa chọn trên thẻ nói người dùng muốn gì; verdict nói executor sẽ ghi nhớ gì.
+        return 'allow_session' if choice == 'approve_session' else 'allow_always'
+    return 'deny'
+
+
+def approval_reason(decision):
+    """Câu lý do trên thẻ duyệt, kèm lời nhắc khi lệnh thuộc nhóm luôn hỏi."""
+    reason = f'{decision.reason}. Lệnh chạy bằng tài khoản của bạn; không có sandbox OS.'
+    if str(getattr(decision, 'rule', '') or '').startswith('guarded:'):
+        reason += ' Lệnh này thuộc nhóm luôn hỏi: chỉ cho phép một lần.'
+    return reason
+
 #: Công cụ v1 chạy được trên host. Danh sách này là HỢP ĐỒNG với tài liệu `docs/plan/desktop-host-mode.md`.
 HOST_TOOLS = ('file_read', 'codebase_glob', 'codebase_grep', 'file_write', 'file_edit_block',
               'terminal_exec')
@@ -212,8 +248,8 @@ class HostExecutor:
         self.policy = policy if policy is not None else permissions_module.PermissionPolicy(
             str(self.workspace), env=source)
         self.platform = platform or ('win32' if os.name == 'nt' else 'posix')
-        #: `approver(tool, args, decision)` ⇒ `'allow'` | `'allow_session'` | `'allow_always'` | `'deny'`.
-        #: Không có ⇒ mọi lời gọi cần hỏi đều bị từ chối (fail closed).
+        #: `approver(tool, args, decision, session)` ⇒ `'allow'` | `'allow_session'` | `'allow_always'`
+        #: | `'deny'`. Không có ⇒ mọi lời gọi cần hỏi đều bị từ chối (fail closed).
         self.approver = approver
         self.root = root
         self.artifacts_dir = Path(artifacts_dir) if artifacts_dir else self.workspace / '.generated_artifacts'
@@ -317,12 +353,14 @@ class HostExecutor:
                 return error_result(PERMISSION_DENIED_CODE,
                                     decision.reason or 'người dùng đã từ chối lời gọi này')
             self.policy.note_approval(session)
-            key = self.policy.session_key(name, args, cwd=self._cwd(root))
-            if verdict == 'allow_session':
-                self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
-            elif verdict == 'allow_always':
-                self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                self.policy.save_rule(name, args, actor='user', session_id=session)
+            # Nhóm "luôn hỏi" (`guarded:`) là một lần cho một lần: không ghi nhớ phiên, không lưu luật.
+            if not str(decision.rule or '').startswith('guarded:'):
+                key = self.policy.session_key(name, args, cwd=self._cwd(root), session_id=session)
+                if verdict == 'allow_session':
+                    self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
+                elif verdict == 'allow_always':
+                    self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
+                    self.policy.save_rule(name, args, actor='user', session_id=session)
         try:
             if name == 'file_read':
                 return self._file_read(args, root=root)
@@ -601,7 +639,8 @@ class HostExecutor:
         if self.approver is None:
             return 'deny'
         try:
-            verdict = self.approver(name, args, decision)
+            # `session` đi kèm để bề mặt duyệt biết thẻ này thuộc phiên nào (nhiều phiên cùng folder).
+            verdict = self.approver(name, args, decision, session)
             if asyncio.iscoroutine(verdict):
                 verdict = await verdict
         except Exception:

@@ -425,3 +425,29 @@ def test_two_sessions_in_one_project_keep_separate_session_rules(harness, tmp_pa
     a.policy.remember(key, permissions_module.allow('', 'user'), 'session')
     assert key in a.policy.session_rules
     assert key not in b.policy.session_rules
+
+
+def test_old_database_gains_the_trusted_column(tmp_path):
+    """CSDL tạo trước commit `63fed3e` chưa có cột `trusted` — phải tự vá, không được vỡ khởi động."""
+    import sqlite3
+
+    path = tmp_path / 'sessions.sqlite'
+    legacy = sqlite3.connect(path)
+    legacy.executescript('''
+        CREATE TABLE web_machine_settings (
+            singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+            revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
+        CREATE TABLE web_machine_projects (id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL,
+                                           name TEXT NOT NULL);
+        INSERT INTO web_machine_settings VALUES (1, 1, 'host', NULL);
+    ''')
+    legacy.commit()
+    legacy.close()
+
+    store = SessionStore(path)
+    registry = MachineRegistry(store, default_mode='host')
+
+    project = registry.register(str(tmp_path))
+    assert project['trusted'] is False
+    assert registry.trust(project['id'], True)['trusted'] is True
+    store.close()

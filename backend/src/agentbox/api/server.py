@@ -60,7 +60,8 @@ from ..observability.system_log import (DEFAULT_READ_LINES, MAX_READ_LINES, clam
                                         redact_entry, system_log)
 from ..sandbox.executor import SandboxExecutor
 from ..agent_core.desktop_control import DesktopControl
-from ..sandbox.host_executor import HostExecutor
+from ..sandbox.host_executor import (HostExecutor, approval_options, approval_reason,
+                                     approval_verdict)
 from .owner_settings import OwnerSettings
 
 
@@ -394,6 +395,35 @@ def host_workspace(env=None):
     return Path.home() / 'BoxFox' / 'workspace'
 
 
+def attach_host_approver(runtime):
+    """Nối thẻ duyệt vào executor host MỨC TIẾN TRÌNH (DA2 của bản bàn giao).
+
+    Phiên IDE đi qua `SessionMachineExecutor.host()` — đường đó đã có thẻ duyệt riêng. Nhưng khi
+    tiến trình chạy host mode mà phiên lại do executor mức tiến trình phục vụ (`build_executor`),
+    trước đây không có `approver` nên MỌI lời gọi cần hỏi bị từ chối im lặng. Không có `approver`
+    vẫn phải là fail-closed, nên chỉ nối khi executor thật sự là host và chưa có thẻ duyệt.
+    """
+    executor = getattr(runtime, 'executor', None)
+    if executor is None or getattr(executor, 'policy', None) is None:
+        return False
+    if getattr(executor, 'approver', None) is not None or not hasattr(executor, 'request'):
+        return False
+
+    async def approve(name, args, decision, session_id=None):
+        session = runtime.store.get(session_id) if session_id else None
+        # Phiên con chạy trong lượt của cha và không có chat riêng: `runtime.decision` sẽ ném.
+        if not session or session.get('parent_id'):
+            return 'deny'
+        outcome = await runtime.decision(session, 'request_approval', {
+            'action': f'{name} {json.dumps(args, ensure_ascii=False)[:1500]}',
+            'reason': approval_reason(decision),
+            'options': approval_options(decision)})
+        return approval_verdict(outcome, decision)
+
+    executor.approver = approve
+    return True
+
+
 def build_executor(data, env=None):
     """Executor theo chế độ đang chọn. `data` là thư mục hồ sơ (audit, luật, DB)."""
     source = os.environ if env is None else env
@@ -570,13 +600,14 @@ def create_app(runtime):
         payload = {'mode': mode, 'modeDefault': EXECUTION_MODE_DEFAULT,
                    'modes': list(EXECUTION_MODES), 'configured': execution_mode()}
         if policy is None:
-            payload.update({'scope': None, 'permissionMode': None, 'policy': False,
+            payload.update({'scope': None, 'permissionMode': None, 'policy': False, 'network': None,
                             'cuaEnabled': None, 'lease': None, 'hardlineHits': 0, 'workspace': None})
             return payload
         permission_mode = policy.mode_value()
         payload.update({
             'scope': policy.scope_value(),
             'permissionMode': permission_mode,
+            'network': policy.network_value(),
             'policy': True,
             'cuaEnabled': bool(permissions_module.MODE_CAPABILITIES[permission_mode]['cua']),
             # `lease` là hàng rào đồng thời thật (H7): `None` nghĩa là "máy này không có hàng rào",
@@ -835,8 +866,14 @@ def create_app(runtime):
                     raise ApiError('PERMISSION_SCOPE_UNKNOWN', 'phạm vi `%s` không có' % scope, 400)
                 data['scope'] = scope
                 changed['scope'] = scope
+            network = str(payload.get('network') or '').strip().lower()
+            if network:
+                if network not in permissions_module.NETWORKS:
+                    raise ApiError('PERMISSION_NETWORK_UNKNOWN', 'mức mạng `%s` không có' % network, 400)
+                data['network'] = network
+                changed['network'] = network
             if not changed:
-                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode` hoặc `scope`', 400)
+                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode`, `scope` hoặc `network`', 400)
             error = permissions_module._write_json(policy.paths[layer], data)
             if error:
                 raise ApiError('PERMISSION_WRITE_FAILED', error, 409)
@@ -873,7 +910,9 @@ def create_app(runtime):
                 extra['breaker'] = policy.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
             else:
                 policy.note_approval(session_id)
-                key = policy.session_key(tool, args, cwd=policy.workspace)
+                # Cùng khoá với `decide()` — kể cả mã phiên và tài nguyên, nếu không thì lần hỏi sau
+                # lại thấy `ask` dù người dùng đã chọn "cho phép cả phiên".
+                key = policy.session_key(tool, args, cwd=policy.workspace, session_id=session_id)
                 if answer in ('allow_session', 'allow_always'):
                     policy.remember(key, permissions_module.allow('', 'user'), 'session')
                 if answer == 'allow_always':
@@ -2290,6 +2329,7 @@ def main():
     port = harness_port()
     executor = build_executor(data)
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
+    attach_host_approver(runtime)
     # Gắn ở CẢ HAI chế độ: host mode cũng cần `/api/agent/machines/*` (cấu hình folder, cây tệp,
     # `.plans`) — trước đây thiếu ở host nên giao diện rơi về Docker binding và tab Plan trắng số.
     # `default_mode`/`default_workspace` chỉ tạo cấu hình cho CSDL mới (bản desktop mở ra là host).

@@ -78,6 +78,9 @@ function snapshot(mode = 'ask', scope = 'machine') {
     scope,
     scopeDefault: 'machine',
     scopes: ['workspace', 'machine'],
+    network: 'restricted',
+    networkDefault: 'restricted',
+    networks: ['restricted', 'enabled'],
     workspace: 'C:\\work',
     layers: LAYERS,
     rules: { deny: [], ask: [], allow: [RULE] },
@@ -168,6 +171,7 @@ function serverStub(options: StubOptions = {}) {
         ...state.snapshot,
         ...(body?.mode ? { mode: String(body.mode), capabilities: snapshot(String(body.mode), String(body?.scope ?? state.snapshot.scope)).capabilities } : {}),
         ...(body?.scope ? { scope: String(body.scope) } : {}),
+        ...(body?.network ? { network: String(body.network) } : {}),
       }
       return json(state.snapshot)
     }
@@ -299,6 +303,23 @@ describe('MachinePermissionsView', () => {
       body: { mode: 'trusted', layer: 'user' },
     })
     expect(testid('mp-capability-cua')?.textContent).toBe('Cho phép')
+  })
+
+  it('đổi mức mạng: PUT đúng body và ô chọn giữ giá trị mới', async () => {
+    const calls = serverStub()
+    await render()
+
+    await act(async () => {
+      selectValue(testid('mp-network') as HTMLSelectElement, 'enabled')
+    })
+    await settle()
+
+    expect(calls).toContainEqual({
+      path: '/api/agent/permissions',
+      method: 'PUT',
+      body: { network: 'enabled', layer: 'user' },
+    })
+    expect((testid('mp-network') as HTMLSelectElement).value).toBe('enabled')
   })
 
   it('PUT lỗi: hiện mã lỗi thay vì vỡ', async () => {

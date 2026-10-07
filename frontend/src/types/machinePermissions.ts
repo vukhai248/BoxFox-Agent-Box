@@ -17,6 +17,13 @@ export type PermissionMode = 'plan' | 'ask' | 'auto' | 'trusted'
 /** Phạm vi: `machine` là toàn máy, `workspace` siết thêm cho đường dẫn ngoài workspace. */
 export type PermissionScope = 'workspace' | 'machine'
 
+/**
+ * Trục mạng (Codex `NetworkAccess`): `restricted` hỏi trước các lệnh ra mạng khi chế độ
+ * sẽ chạy chúng im lặng (`auto`); `enabled` không hỏi. Đây là danh sách hỏi, không phải
+ * tường lửa — lệnh không khớp danh sách vẫn chạy, và tiến trình con không bị chặn.
+ */
+export type PermissionNetwork = 'restricted' | 'enabled'
+
 /** Bốn tầng luật, theo thứ tự đọc của harness (managed thắng tất cả). */
 export type PermissionLayer = 'managed' | 'profile' | 'user' | 'project'
 
@@ -55,6 +62,7 @@ export interface ExecutionStatus {
   configured: string
   scope: string | null
   permissionMode: string | null
+  network?: string | null
   policy: boolean
   cuaEnabled: boolean | null
   lease: DesktopLease | null
@@ -86,6 +94,9 @@ export interface PermissionSnapshot {
   scope: PermissionScope
   scopeDefault: PermissionScope
   scopes: PermissionScope[]
+  network: PermissionNetwork
+  networkDefault: PermissionNetwork
+  networks: PermissionNetwork[]
   workspace: string | null
   layers: PermissionLayerInfo[]
   rules: Record<RuleKind, string[]>

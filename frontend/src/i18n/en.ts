@@ -160,6 +160,24 @@ const en: SameShape<typeof vi> = {
         workspace: 'Project folder only',
         machine: 'Whole machine',
       },
+      // Scope only changes where the agent must ASK; it never widens what file tools may touch.
+      scopeHint: {
+        workspace: 'Ask before touching anything outside the project folder. File tools stay inside it.',
+        machine: 'Do not ask before touching things outside the project folder. File tools stay inside it.',
+      },
+      sectionNetwork: 'Network',
+      network: {
+        restricted: 'Ask before network access',
+        enabled: 'Allow network access',
+      },
+      hint: {
+        plan: 'The agent only reads — no file writes, no commands.',
+        ask: 'Ask before every file write or command. Default.',
+        auto: 'Write files and run commands inside the project folder; desktop control still asks.',
+        trusted: 'Never ask. Use only when you fully trust it — the hardline floor still blocks.',
+        networkRestricted: 'Network commands (curl, git push, package installs…) ask before running silently.',
+        networkEnabled: 'Network commands run silently at the Auto level. This is an ask list, not a firewall.',
+      },
     },
     switchToPlan: 'Plan',
     switchToAct: 'Act',

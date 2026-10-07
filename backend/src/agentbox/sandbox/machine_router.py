@@ -3,13 +3,15 @@ import asyncio
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import time
 import uuid
 from pathlib import Path
 
 from ..agent_core.permissions import PermissionPolicy
-from .host_executor import HostExecutor, error_result
+from .host_executor import (HostExecutor, approval_options, approval_reason, approval_verdict,
+                            error_result)
 
 
 class MachineError(ValueError):
@@ -30,6 +32,9 @@ class MachineRegistry:
                 id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
                 trusted INTEGER NOT NULL DEFAULT 0);
         ''')
+        # CSDL tạo trước commit `63fed3e` chưa có cột `trusted`: `CREATE TABLE IF NOT EXISTS` không
+        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`).
+        self._add_missing_columns('web_machine_projects', {'trusted': 'INTEGER NOT NULL DEFAULT 0'})
         # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
         # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
         # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
@@ -43,6 +48,21 @@ class MachineRegistry:
             project_id = self._bootstrap_project(default_workspace)
         self.db.execute('INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,?,?)',
                         (self.process_mode, project_id))
+        self.db.commit()
+
+    def _add_missing_columns(self, table, columns):
+        """Thêm cột còn thiếu vào bảng đã tồn tại (bản cài cũ). Hỏng thì bỏ qua, không chặn khởi động."""
+        try:
+            have = {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}
+        except sqlite3.DatabaseError:
+            return
+        for name, kind in columns.items():
+            if name in have:
+                continue
+            try:
+                self.db.execute(f'ALTER TABLE {table} ADD COLUMN {name} {kind}')
+            except sqlite3.DatabaseError:
+                continue
         self.db.commit()
 
     def _bootstrap_project(self, path):
@@ -317,22 +337,21 @@ class SessionMachineExecutor:
             raise MachineError('PROJECT_UNAVAILABLE', 'Folder dự án không còn đúng binding.', 409)
         if sid not in self.hosts:
             policy = self.session_policy(project, sid)
-            async def approve(name, args, decision):
-                session = self.registry.store.get(sid)
-                if not self.runtime:
+            async def approve(name, args, decision, session_id=None):
+                session = self.registry.store.get(session_id or sid)
+                if not session or not self.runtime:
                     return 'deny'
                 while session.get('parent_id'):
                     session = self.registry.store.get(session['parent_id'])
                 previous_status = session['status']
                 outcome = await self.runtime.decision(session, 'request_approval', {
                     'action': f'IDE [{sid}]: {name} {json.dumps(args, ensure_ascii=False)[:1500]}',
-                    'reason': f'{decision.reason}. Lệnh chạy bằng tài khoản Windows của bạn; không có sandbox OS.',
-                    'options': [{'id': 'approve', 'label': 'Cho phép một lần', 'kind': 'approve'},
-                                {'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'}]})
+                    'reason': approval_reason(decision),
+                    'options': approval_options(decision)})
                 if session['id'] != sid and self.registry.store.get(session['id'])['status'] == 'awaiting_decision':
                     current = self.registry.store.get(session['id'])
                     self.registry.store.save(session['id'], current['messages'], previous_status)
-                return 'allow' if outcome.get('status') == 'approved' and outcome.get('choice') == 'approve' else 'deny'
+                return approval_verdict(outcome, decision)
             self.hosts[sid] = HostExecutor(project['path'], policy=policy, approver=approve,
                                            artifacts_dir=self.profile_dir / 'host-artifacts' / project['id'] / sid)
         executor = self.hosts[sid]

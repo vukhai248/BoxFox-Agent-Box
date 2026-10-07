@@ -15,11 +15,12 @@ import { useActiveMachine } from '../../hooks/useActiveMachine'
 import { useAgentStore } from '../../store/agentStore'
 import { getPermissionSnapshot, updatePermissions } from '../../lib/permissions/http'
 import { useT } from '../../i18n/context'
-import type { PermissionMode, PermissionScope } from '../../types/machinePermissions'
+import type { PermissionMode, PermissionNetwork, PermissionScope } from '../../types/machinePermissions'
 
 /** Thứ tự hiển thị cố định: từ chặt nhất tới rộng nhất, không theo thứ tự máy chủ trả về. */
 const MODE_ORDER: PermissionMode[] = ['plan', 'ask', 'auto', 'trusted']
 const SCOPE_ORDER: PermissionScope[] = ['workspace', 'machine']
+const NETWORK_ORDER: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Chế độ `trusted` cho phép sửa và chạy không hỏi ⇒ tô đỏ để không ai bật nhầm. */
 function modeTone(mode: PermissionMode): string {
@@ -35,8 +36,10 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   const sessionId = useAgentStore((s) => s.activeSessionId)
   const [mode, setMode] = useState<PermissionMode | null>(null)
   const [scope, setScope] = useState<PermissionScope | null>(null)
+  const [network, setNetwork] = useState<PermissionNetwork | null>(null)
   const [modes, setModes] = useState<PermissionMode[]>(MODE_ORDER)
   const [scopes, setScopes] = useState<PermissionScope[]>(SCOPE_ORDER)
+  const [networks, setNetworks] = useState<PermissionNetwork[]>(NETWORK_ORDER)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -54,8 +57,10 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
         if (!alive) return
         setMode(snapshot.mode)
         setScope(snapshot.scope)
+        setNetwork(snapshot.network ?? 'restricted')
         if (snapshot.modes?.length) setModes(snapshot.modes as PermissionMode[])
         if (snapshot.scopes?.length) setScopes(snapshot.scopes as PermissionScope[])
+        if (snapshot.networks?.length) setNetworks(snapshot.networks as PermissionNetwork[])
         setError('')
       })
       .catch((exc: unknown) => {
@@ -85,27 +90,30 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   }, [open])
 
   const patch = useCallback(
-    async (next: { mode?: PermissionMode; scope?: PermissionScope }) => {
-      const previous = { mode, scope }
+    async (next: { mode?: PermissionMode; scope?: PermissionScope; network?: PermissionNetwork }) => {
+      const previous = { mode, scope, network }
       if (next.mode) setMode(next.mode)
       if (next.scope) setScope(next.scope)
+      if (next.network) setNetwork(next.network)
       setBusy(true)
       try {
         const snapshot = await updatePermissions({ ...next, layer: 'user' })
         setMode(snapshot.mode)
         setScope(snapshot.scope)
+        setNetwork(snapshot.network ?? next.network ?? previous.network)
         setError('')
         setOpen(false)
       } catch (exc) {
         // Không nuốt lỗi: trả về giá trị cũ và giữ thông báo cho người dùng đọc.
         setMode(previous.mode)
         setScope(previous.scope)
+        setNetwork(previous.network)
         setError(exc instanceof Error ? exc.message : String(exc))
       } finally {
         setBusy(false)
       }
     },
-    [mode, scope],
+    [mode, scope, network],
   )
 
   if (!hostMode) return null
@@ -128,6 +136,7 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
         data-testid="composer-permission"
         data-permission-mode={mode ?? 'unknown'}
         data-permission-scope={scope ?? 'unknown'}
+        data-permission-network={network ?? 'unknown'}
         title={title}
         className="flex items-center gap-1 rounded-lg border border-transparent px-2 py-1 text-[11px] font-medium text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
       >
@@ -191,11 +200,34 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
             </button>
           ))}
 
-          {scopeLabel && (
+          {scope && (
             <p className="px-2 pt-1 pb-0.5 text-[10px] text-muted" data-testid="composer-permission-scope">
-              {scopeLabel}
+              {t(`composer.permission.scopeHint.${scope}`)}
             </p>
           )}
+
+          <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {t('composer.permission.sectionNetwork')}
+          </p>
+          {networks.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="menuitemradio"
+              aria-checked={item === network}
+              onClick={() => void patch({ network: item })}
+              disabled={busy}
+              className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg transition hover:bg-panel2 disabled:opacity-50 cursor-pointer"
+            >
+              <Check className={`mt-0.5 size-3 shrink-0 ${item === network ? 'opacity-100' : 'opacity-0'}`} />
+              <span className="min-w-0">
+                <span className="block font-medium">{t(`composer.permission.network.${item}`)}</span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                  {t(`composer.permission.hint.network${item === 'restricted' ? 'Restricted' : 'Enabled'}`)}
+                </span>
+              </span>
+            </button>
+          ))}
           {error && (
             <p role="alert" className="px-2 pt-1 pb-0.5 text-[10px] text-amber-400">
               {error}
