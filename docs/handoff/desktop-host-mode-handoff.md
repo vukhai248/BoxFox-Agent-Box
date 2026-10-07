@@ -282,6 +282,24 @@ Các phát hiện dưới đây đã được đối chiếu tĩnh với source 
 | DA8 | [ ] Khóa build inputs và kiểm Windows CI/local | Fetch hiện resolve dependency theo khoảng phiên bản rồi ghi lock mới; hash PyPI không đọc được chỉ cảnh báo. Build thường phải dùng phiên bản/hash đã duyệt; cập nhật lock là thao tác riêng. Sửa nhánh `t.skip()` không return ở smoke; kiểm bộ cài và bundled runtime trên Windows sạch. |
 | DA9 | [ ] Hoàn thiện tài liệu và evidence trước merge | Khôi phục plan thiếu; cập nhật nhãn code/test/acceptance, cách chọn mode thật và giới hạn. Ghi SHA commit, inputs, installer, log và expected/actual từng ca; không dùng test Linux/stub để tick nghiệm thu Windows. |
 
+#### 9.2.1 Trạng thái tại nhánh `vorflux/host-mode-web-transport`
+
+Bảng dưới ghi việc ĐÃ làm trên nhánh và mức kiểm chứng thật của từng việc. Cột "kiểm" chỉ nói tới
+máy Linux này (harness thật ở cả hai chế độ + trình duyệt); **không** mục nào ở đây là nghiệm thu
+Windows, và các ô `[ ]` ở bảng 9.2 vẫn giữ nguyên nghĩa "chưa nghiệm thu trên Windows".
+
+| Mã | Trạng thái | Commit | Kiểm được gì ở đây | Còn lại |
+|---|---|---|---|---|
+| DA1 | Đã sửa | `2927660`, `7eef070` | `session_key` = `{phiên, tool, tài nguyên, cwd, scope, mode}`; tài nguyên file lấy từ `path`/`file_path`, `web_fetch` lấy `url`; `forget_session(sid)` có người gọi khi phiên dọn dẹp. Test: duyệt tệp A ở phiên 1 không cấp tệp B hay phiên 2, deny thắng allow sau đó, quên theo phiên. | Kiểm lại bằng thao tác thật trên Windows. |
+| DA2 | Đã sửa | `2927660`, `7eef070` | `attach_host_approver` nối thẻ duyệt vào executor mức tiến trình; thẻ có 4 lựa chọn (`approve`, `approve_session`, `approve_always`, `reject`), lệnh nhóm luôn hỏi chỉ nhận `approve`/`reject`; lựa chọn → verdict có test. Vòng soát tìm ra lỗi thật: `attach_host_approver` gọi `json.dumps` khi `server.py` thiếu `import json`, nên mọi lượt duyệt ở đường mức tiến trình đổ `NameError`; nay có 4 test phủ nhánh này. | `register_pending/resolve_pending` vẫn chưa có caller production; đường chờ/tiếp tục cần đối chiếu lại khi làm workflow. |
+| DA3 | Một phần | `27be789`, `89c3312` | CSDL mới của bản host ghi `mode=host` và dựng folder mặc định ngay lần đầu; tiến trình host từ chối đổi sang `docker` (`MACHINE_MODE_UNAVAILABLE`) và trả `processMode` để giao diện vô hiệu nút. | Docker thiếu image, engine tắt, box web cũ đang chạy, cổng bận: chưa kiểm. |
+| DA4 | Một phần | `27be789`, `e523f7a`, `b3509ee` | Router máy gắn ở mọi chế độ; `HostExecutor.request()` phục vụ route plan từ folder đã chọn; dialog tạo dự án nhận đường dẫn gõ tay; chip quyền ở thanh chat đọc/ghi cùng route với tab Settings; `permission_policy()` lùi về policy của máy khi tiến trình chạy docker. | Client box/IDE/VNC/terminal còn URL/token phát triển, CSP của gateway, và counterpart `/__box/*` cho file/status: chưa kiểm với stack đóng gói. |
+| DA5 | Đã sửa | `0f41cbf` | Đường nâng cấp tự thêm lại `Connection`/`Upgrade` mà `proxyHeaders` lọc mất; test dựng upstream `net` thật, đòi handshake 101 + `sec-websocket-accept` + echo hai chiều, và đỏ khi bỏ bản vá. | Origin lạ bị từ chối, và websockify/tty-bridge thật: cần chạy tay trên Windows. |
+| DA6 | Chưa | — | — | Cần trình phương án (cơ chế mới hoặc đổi ranh giới cách ly) TRƯỚC khi code. |
+| DA7 | Chưa | — | — | Như bảng 9.2. |
+| DA8 | Một phần | `0f41cbf` | Nhánh `t.skip()` không `return` ở `smoke.test.mjs`/`supervisor.test.mjs` đã bọc `{ t.skip(); return }`. | Khóa build inputs (phiên bản/hash đã duyệt, cập nhật lock là thao tác riêng); kiểm bộ cài trên Windows sạch. |
+| DA9 | Một phần | nhánh này | Mục này; mô tả PR có SHA, lệnh test, ảnh và video. | `docs/plan/desktop-alpha-packaging.md` vẫn thiếu và không khôi phục được (owner xác nhận không có ở máy local) — không đoán nội dung; nhãn code/test/acceptance và bộ cài Windows vẫn chờ. |
+
 ### 9.3 Ranh giới công việc tiếp tục
 
 Ưu tiên bug tích hợp, quyền và tái lập; app hai mode vẫn là mục tiêu cuối. QR/mobile/auto-update, thay DAG hoặc các đầu việc harness khác không thuộc checkpoint này. Không tự thay kiến trúc/quyền/workflow hoặc bật native/CUA rộng hơn để vượt lỗi. Những thay đổi cấu trúc cần trình phương án và đánh đổi trước khi triển khai. Test model nếu cần chỉ dùng OpenCode `opencode/space-bunny-free`; ưu tiên test xác định, CUA khi thật sự cần và có target phù hợp.
