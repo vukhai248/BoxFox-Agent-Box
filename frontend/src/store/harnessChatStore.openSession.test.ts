@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const calls: Array<{ path: string; body: Record<string, unknown> | null; method: string }> = []
 let ownerSettings: { instructions: string; revision: number } | null = { instructions: 'Be brief.', revision: 4 }
+let duringCatalogLoad: (() => void) | null = null
 
 vi.mock('../lib/agentApi', () => ({
   agentApi: async (path: string, body?: unknown, method?: string) => {
@@ -12,7 +13,7 @@ vi.mock('../lib/agentApi', () => ({
       if (!ownerSettings) throw new Error('Harness engine unavailable. Start the BoxFox launcher.')
       return ownerSettings
     }
-    if (path === '/catalog') return { skills: [] }
+    if (path === '/catalog') { duringCatalogLoad?.(); return { skills: [] } }
     if (path === '/skill-settings') return { enabled: [], revision: 0, initialized: true }
     if (path === '/sessions') return { id: 'sid-open-1', status: 'queued', events: [], config: { contextWindow: 200000, contextWindowSource: 'catalog' } }
     if (path.endsWith('/turns')) return {}
@@ -25,6 +26,7 @@ import { useHarnessChatStore } from './harnessChatStore'
 import { useHarnessStore } from './harnessStore'
 import { useOwnerSettingsStore } from './ownerSettingsStore'
 import { useSessionRecordStore } from './sessionRecordStore'
+import { useMachineStore } from './machineStore'
 
 const CHAT = 'chat-open-session'
 const pristineHarness = useHarnessStore.getState()
@@ -33,11 +35,13 @@ const sessionBody = () => calls.find((call) => call.path === '/sessions')?.body 
 
 beforeEach(() => {
   calls.length = 0
+  duringCatalogLoad = null
   ownerSettings = { instructions: 'Be brief.', revision: 4 }
   useHarnessStore.setState(pristineHarness, true)
   useOwnerSettingsStore.setState(pristineOwner, true)
   useSessionRecordStore.getState().reset()
   useHarnessChatStore.setState({ sessions: {} })
+  useMachineStore.setState({ configuration: null, bindings: {}, error: null })
   localStorage.clear()
 })
 
@@ -51,6 +55,24 @@ const sendWith = async (selection: Parameters<ReturnType<typeof useHarnessChatSt
   useHarnessChatStore.getState().send(CHAT, 'hello', selection)
 
 describe('openSession — đường gửi mang chỉ dẫn', () => {
+  it('snapshots the selected environment before asynchronous catalog loading', async () => {
+    useMachineStore.setState({configuration: {mode: 'host', revision: 4, projectId: 'project-a', projects: []}})
+    duringCatalogLoad = () => useMachineStore.setState({configuration: {mode: 'docker', revision: 5, projectId: null, projects: []}})
+    await send()
+    expect(sessionBody().machineSelection).toEqual({mode: 'host', projectId: 'project-a'})
+  })
+  it('uses the project draft binding even if the default environment changes before sending', async () => {
+    useMachineStore.getState().bind(CHAT, {mode: 'host', revision: 1, projectId: 'project-b', workspace: 'D:\\projects\\B'})
+    useMachineStore.setState({configuration: {mode: 'docker', revision: 7, projectId: null, projects: []}})
+    await send()
+    expect(sessionBody().machineSelection).toEqual({mode: 'host', projectId: 'project-b'})
+  })
+  it('uses an explicit Docker draft even if the default is a host project', async () => {
+    useMachineStore.getState().bind(CHAT, {mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace'})
+    useMachineStore.setState({configuration: {mode: 'host', revision: 4, projectId: 'project-a', projects: []}})
+    await send()
+    expect(sessionBody().machineSelection).toEqual({mode: 'docker', projectId: null})
+  })
   it('carries the owner directives and the harness id, and books the session', async () => {
     await send()
 

@@ -91,3 +91,33 @@ Web: `http://localhost:3100/`. Router :3101, harness :3102.
 Chỉ harness đã reload để nhận routes mới; giữ router và Docker hiện hữu.
 Ba phiên đã lưu đều completed trước reload; không chạy model/turn mới khi kiểm health.
 Log reload: `.tmp/web-start-20261007/harness-reloaded.stdout.log` và `harness-reloaded.stderr.log`.
+
+## Bổ sung sidebar theo phản hồi owner
+
+Neo trước thay đổi: `63fed3e6`. Vẫn nhánh `codex/web-machine-modes`.
+
+- IDE có section Projects, chọn folder, từng folder chứa các session của nó và nút `+` tạo phiên riêng trong project đó.
+- Docker có section Sessions riêng; các phiên legacy không có binding giữ Docker, không bị gán lại theo lựa chọn mặc định.
+- Giữ Recent/Groups; nhóm người dùng được phân bên trong từng project/môi trường.
+- Sidebar hiển thị môi trường của phiên đang mở. Mở phiên Docker không đổi binding các phiên IDE.
+- Bộ chọn môi trường vẫn chỉ ở Settings → Machines → Configuration; chọn folder trên sidebar là thao tác project.
+- Nút New session toàn cục kế thừa binding đang mở. Nút `+` project dùng folder của chính project; nút `+` Docker tạo draft Docker.
+- Draft giữ mode/project trước tin nhắn đầu. Đường gửi ưu tiên draft binding và chụp lựa chọn trước khi tải skill/directive bất đồng bộ.
+- Session backend vẫn tạo theo cơ chế hiện hữu khi gửi tin đầu; draft chưa gửi hiện ở sidebar của project đang mở, không tuyên bố đã lưu SQLite.
+- Sau khi phiên được lưu, alias frontend được đối chiếu ID backend để tránh hiện hai hàng draft/session.
+- Xóa phiên hiện tại chọn phiên tiếp theo cùng project/môi trường; nếu hết thì mở draft đúng binding cũ.
+- Không tự trust folder, không sửa router/provider, không làm desktop packaging.
+
+Source bổ sung: `frontend/src/components/shell/Sidebar.tsx`, `frontend/src/lib/machineSession.ts`, `frontend/src/components/shell/SearchSessionsModal.tsx`.
+
+Kiểm tra checkpoint sidebar:
+
+- Hồi quy Sidebar/responsive/Search/Configuration/openSession ban đầu: 30 passed (5 files), typecheck đạt.
+- Ca mới `Sidebar.machineModes.test.tsx` cùng `harnessChatStore.openSession.test.ts`: 20 passed trước khi thêm ca đổi default trong lúc catalog đang tải; typecheck đạt.
+- Kiểm phân nhóm, project mới, default khác binding, picker hủy/thành công, alias saved, Groups và xóa phiên bằng fixture; chưa gọi dialog Windows thật hoặc model.
+- Nhóm cuối gồm Sidebar/responsive/Search/Configuration/openSession và ca phân nhóm mới: 43 passed (6 files); typecheck đạt.
+- Đọc tab `http://localhost:3100/` bằng CUA: sidebar thực tế hiện IDE · Projects, Choose folder, Docker · Sessions và ba session legacy trong nhóm Docker. Không thay cấu hình, chọn folder, trust hoặc gọi model khi kiểm UI.
+- Lần suite tổng chạy đồng thời với nhóm tập trung bị SettingsModal timeout 5s rồi hai ca sau lỗi do phiên kiểm chưa kết thúc. Chạy lại bộ tổng riêng với `--maxWorkers=4` để kiểm; không sửa timeout/assertion nhằm che lỗi.
+- Bộ tổng chạy riêng `npm run test -- --maxWorkers=4`: 1491 passed / 3 failed (1494 ca, 152 file). Chỉ còn đúng ba lỗi Provider đã đối chiếu baseline; SettingsModal không timeout ở lượt này.
+- Kiểm whitespace bằng `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check`: đạt.
+- Commit checkpoint local lưu thay đổi sidebar; không push/merge. Các kết quả này không thay thế bằng chứng Windows thật còn mở ở trên.

@@ -12,6 +12,7 @@ import { useT } from '../../i18n/context'
 import { useUiStore } from '../../store/uiStore'
 import { useAgentStore } from '../../store/agentStore'
 import type { SessionSummary } from '../../types/session'
+import { startMachineChat } from '../../lib/machineSession'
 
 type NavEntry = { kind: 'newSession' } | { kind: 'session'; session: SessionSummary }
 
@@ -85,7 +86,7 @@ export function SearchSessionsModal() {
 
   const activateEntry = (entry: NavEntry) => {
     if (entry.kind === 'newSession') {
-      // mock: chưa có backend tạo phiên.
+      startMachineChat()
       closeSearch()
       return
     }

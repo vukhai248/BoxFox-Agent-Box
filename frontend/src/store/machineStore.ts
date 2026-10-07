@@ -52,9 +52,13 @@ export const useMachineStore = create<State>((set, get) => ({
 }))
 
 export const DOCKER_BINDING: MachineBinding = { mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace' }
+export function configuredBinding(): MachineBinding {
+  const configuration = useMachineStore.getState().configuration
+  if (!configuration || configuration.mode === 'docker') return { ...DOCKER_BINDING }
+  return { mode: 'host', revision: configuration.revision, projectId: configuration.projectId,
+    workspace: configuration.projects.find(project => project.id === configuration.projectId)?.path ?? null }
+}
 export function activeBinding(chatId: string): MachineBinding {
   const state = useMachineStore.getState()
-  return state.bindings[chatId] ?? (state.configuration
-    ? { ...state.configuration, workspace: state.configuration.projects.find(p => p.id === state.configuration?.projectId)?.path ?? null }
-    : DOCKER_BINDING)
+  return state.bindings[chatId] ?? configuredBinding()
 }

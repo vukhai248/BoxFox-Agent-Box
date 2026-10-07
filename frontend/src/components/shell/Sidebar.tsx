@@ -14,6 +14,7 @@ import {
   Archive,
   FileText,
   Folder,
+  FolderOpen,
   FolderPlus,
   ListFilter,
   Lock,
@@ -40,6 +41,9 @@ import type { SessionStatus, SessionSummary } from '../../types/session'
 import { ShortcutsPopover } from '../chat/ShortcutsPopover'
 import { useHarnessChatStore, type SavedSessionRow } from '../../store/harnessChatStore'
 import { isNarrowViewport, useViewportWidth } from './useViewportWidth'
+import { useActiveMachine } from '../../hooks/useActiveMachine'
+import { DOCKER_BINDING, useMachineStore, type MachineBinding, type LocalProject } from '../../store/machineStore'
+import { startMachineChat } from '../../lib/machineSession'
 
 /** F2 (đợt 7): session `failed` từng bị gộp vào `idle` nên hiện chip IDLE như phiên rảnh. */
 export function mapSavedSessionStatus(status: string): SessionStatus {
@@ -69,6 +73,13 @@ export function Sidebar() {
   const notifyOnComplete = useUiStore((s) => s.notifyOnComplete)
   const activeSessionId = useAgentStore((s) => s.activeSessionId)
   const setActiveSessionId = useAgentStore((s) => s.setActiveSessionId)
+  const machine = useActiveMachine()
+  const configuration = useMachineStore(s => s.configuration)
+  const bindings = useMachineStore(s => s.bindings)
+  const machineError = useMachineStore(s => s.error)
+  const serverSessionId = useHarnessChatStore(s => s.sessions[activeSessionId]?.id)
+  const selectedSessionId = serverSessionId ?? activeSessionId
+  const [choosingFolder, setChoosingFolder] = useState(false)
 
   // Nạp session thực tế từ SQLite backend
   const [savedDbSessions, setSavedDbSessions] = useState<SessionSummary[]>([])
@@ -77,17 +88,17 @@ export function Sidebar() {
   const handleDeleteSession = async (sessionId: string) => {
     try {
       await useHarnessChatStore.getState().deleteSession(sessionId)
-      setSavedDbSessions((prev) => {
-        const remaining = prev.filter((s) => s.session_id !== sessionId)
-        if (useAgentStore.getState().activeSessionId === sessionId) {
-          if (remaining.length > 0) {
-            useAgentStore.getState().setActiveSessionId(remaining[0].session_id)
-          } else {
-            useAgentStore.getState().setActiveSessionId(`session-${Date.now().toString(36)}`)
-          }
-        }
-        return remaining
-      })
+      setSavedDbSessions(prev => prev.filter(session => session.session_id !== sessionId))
+      const currentId = useAgentStore.getState().activeSessionId
+      if (selectedSessionId === sessionId || currentId === sessionId) {
+        const deletedBinding = useMachineStore.getState().bindings[sessionId] ?? DOCKER_BINDING
+        const next = useAgentStore.getState().sessions.find(session => {
+          const binding = useMachineStore.getState().bindings[session.session_id] ?? DOCKER_BINDING
+          return session.session_id !== sessionId && !session.is_archived && binding.mode === deletedBinding.mode && binding.projectId === deletedBinding.projectId
+        })
+        if (next) useAgentStore.getState().setActiveSessionId(next.session_id)
+        else startMachineChat(deletedBinding)
+      }
     } catch {
       // Handled in store
     }
@@ -99,10 +110,12 @@ export function Sidebar() {
       try {
         const rows = await fetchSavedSessions()
         if (unmounted) return
+        const previous = useAgentStore.getState().sessions
         const mapped: SessionSummary[] = rows.map((r: SavedSessionRow) => ({
+          ...previous.find(session => session.session_id === r.id),
           session_id: r.id,
           initials: 'BF',
-          title: `Session ${r.id.slice(0, 8)}`,
+          title: previous.find(session => session.session_id === r.id)?.title ?? `Session ${r.id.slice(0, 8)}`,
           relative_time: 'SQLite',
           status: mapSavedSessionStatus(r.status),
           mode: 'PLAN',
@@ -120,9 +133,16 @@ export function Sidebar() {
     return () => { unmounted = true; clearInterval(timer) }
   }, [fetchSavedSessions])
 
-  const handleNewSession = () => {
-    const newId = `session-${Date.now().toString(36)}`
-    setActiveSessionId(newId)
+  const handleNewSession = () => { startMachineChat() }
+  const handleChooseFolder = async () => {
+    setChoosingFolder(true)
+    try {
+      const store = useMachineStore.getState()
+      const project = await store.register()
+      if (project && await store.configure('host', project.id)) {
+        startMachineChat({mode: 'host', revision: 1, projectId: project.id, workspace: project.path})
+      }
+    } finally { setChoosingFolder(false) }
   }
 
   // Chỉ mở 1 menu `...` tại một thời điểm, quản lý ở cấp Sidebar.
@@ -137,6 +157,29 @@ export function Sidebar() {
       ? storeSessions
       : storeSessions.filter((s) => !s.session_id.startsWith('s-0'))
   const visibleSessions = effectiveSessions.filter((s) => !s.is_archived)
+  const projects: LocalProject[] = [...(configuration?.projects ?? [])]
+  // Keep sessions visible if their folder is temporarily absent from the registry response.
+  for (const session of visibleSessions) {
+    const binding = bindings[session.session_id]
+    if (binding?.mode === 'host' && binding.projectId && !projects.some(p => p.id === binding.projectId)) {
+      projects.push({id: binding.projectId, path: binding.workspace ?? '',
+        name: binding.workspace?.split(/[\\/]/).filter(Boolean).pop() ?? binding.projectId, trusted: false})
+    }
+  }
+  const sessionBinding = (session: SessionSummary): MachineBinding => bindings[session.session_id] ?? DOCKER_BINDING
+  const dockerSessions = visibleSessions.filter(session => sessionBinding(session).mode === 'docker')
+  const hostSessions = visibleSessions.filter(session => sessionBinding(session).mode === 'host')
+  const showDraft = activeSessionId.startsWith('session-') && !serverSessionId && !!bindings[activeSessionId]
+  const renderSessionList = (sessions: SessionSummary[]) => sessionTab === 'groups' ? (
+    <GroupsAccordion sessions={sessions} activeSessionId={selectedSessionId} menuOpenId={menuOpenId}
+      setMenuOpenId={setMenuOpenId} onOpen={setActiveSessionId} onDeleteSession={handleDeleteSession} />
+  ) : sessions.map(session => (
+    <SessionRow key={session.session_id} session={session} active={session.session_id === selectedSessionId}
+      menuOpen={menuOpenId === session.session_id}
+      onToggleMenu={() => setMenuOpenId(menuOpenId === session.session_id ? null : session.session_id)}
+      onOpen={() => setActiveSessionId(session.session_id)} onDeleteSession={handleDeleteSession} />
+  ))
+  const draftRow = <div data-testid="machine-session-draft" className="rounded-md border border-line bg-panel2 px-2 py-1.5 text-xs text-fg">{t('sidebar.newSession')}</div>
 
 
   // Dưới `NARROW_VIEWPORT_MAX_PX` cột 260px bóp cột chat xuống ~120px (BUG-23)
@@ -281,6 +324,9 @@ export function Sidebar() {
           <Plus className="size-3.5 text-blue-400" />
           <span>{t('sidebar.newSession')}</span>
         </button>
+        <p data-testid="sidebar-active-environment" className="px-1 pt-2 text-[10px] text-muted">
+          {t(machine.mode === 'host' ? 'sidebar.localMachine' : 'sidebar.isolatedMachine')}
+        </p>
       </div>
 
 
@@ -324,36 +370,34 @@ export function Sidebar() {
       </div>
 
       {/* Sessions List */}
-      <div className="mt-1 min-h-0 flex-1 overflow-y-auto px-2 space-y-0.5">
-        {visibleSessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 px-3 text-center text-xs text-muted/60 select-none">
-            <span className="text-zinc-400">{t('sidebar.noActiveSessions')}</span>
-            <span className="text-[11px] text-zinc-500 mt-1">{t('sidebar.startHint')}</span>
+      <div className="mt-1 min-h-0 flex-1 overflow-y-auto px-2 space-y-3">
+        {(machine.mode === 'host' || projects.length > 0 || hostSessions.length > 0) && <section data-testid="ide-project-sessions">
+          <div className="flex items-center justify-between px-2 py-2 text-xs font-medium text-muted">
+            <span>{t('sidebar.ideProjects')}</span>
+            {machine.mode === 'host' && <button disabled={choosingFolder} onClick={() => void handleChooseFolder()} title={t('sidebar.chooseFolder')} aria-label={t('sidebar.chooseFolder')} className="rounded p-1 hover:bg-panel2 hover:text-fg"><FolderPlus className="size-3.5" /></button>}
           </div>
-        ) : sessionTab === 'groups' ? (
-          <GroupsAccordion
-            sessions={visibleSessions}
-            activeSessionId={activeSessionId}
-            menuOpenId={menuOpenId}
-            setMenuOpenId={setMenuOpenId}
-            onOpen={setActiveSessionId}
-            onDeleteSession={handleDeleteSession}
-          />
-        ) : (
-          visibleSessions.map((session) => (
-            <SessionRow
-              key={session.session_id}
-              session={session}
-              active={session.session_id === activeSessionId}
-              menuOpen={menuOpenId === session.session_id}
-              onToggleMenu={() =>
-                setMenuOpenId(menuOpenId === session.session_id ? null : session.session_id)
-              }
-              onOpen={() => setActiveSessionId(session.session_id)}
-              onDeleteSession={handleDeleteSession}
-            />
-          ))
-        )}
+          {machine.mode === 'host' && <button disabled={choosingFolder} onClick={() => void handleChooseFolder()} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted hover:bg-panel2 hover:text-fg"><FolderOpen className="size-3.5" />{t(choosingFolder ? 'sidebar.choosingFolder' : 'sidebar.chooseFolder')}</button>}
+          {machine.mode === 'host' && machineError && <div role="alert" className="px-2 py-1 text-[11px] text-red-400 break-all">{machineError}<button onClick={() => openSettings('configuration')} className="mt-1 block text-muted underline">{t('sidebar.openConfiguration')}</button></div>}
+          {projects.map(project => <ProjectSessionSection key={project.id} project={project} selected={machine.mode === 'host' && machine.projectId === project.id}
+            onNew={() => startMachineChat({mode: 'host', revision: 1, projectId: project.id, workspace: project.path})}
+            count={hostSessions.filter(session => sessionBinding(session).projectId === project.id).length}>
+            {showDraft && machine.mode === 'host' && machine.projectId === project.id && draftRow}
+            {renderSessionList(hostSessions.filter(session => sessionBinding(session).projectId === project.id))}
+          </ProjectSessionSection>)}
+          {projects.length === 0 && <p className="px-2 py-2 text-[11px] text-muted">{t('sidebar.noLocalProjects')}</p>}
+          {(hostSessions.some(session => !sessionBinding(session).projectId) || (showDraft && machine.mode === 'host' && !machine.projectId)) && <div data-testid="ide-no-folder-sessions" className="py-1">
+            <p className="px-2 py-1 text-[11px] text-muted">{t('sidebar.noFolderSessions')}</p>
+            {showDraft && machine.mode === 'host' && !machine.projectId && draftRow}
+            {renderSessionList(hostSessions.filter(session => !sessionBinding(session).projectId))}
+          </div>}
+        </section>}
+        <section data-testid="docker-sessions">
+          <div className="flex items-center justify-between px-2 py-2 text-xs font-medium text-muted"><span>{t('sidebar.dockerSessions')}</span>
+            <button onClick={() => startMachineChat(DOCKER_BINDING)} aria-label={t('sidebar.newProjectSession', {project: 'Docker'})} title={t('sidebar.newProjectSession', {project: 'Docker'})} className="rounded p-1 hover:bg-panel2 hover:text-fg"><Plus className="size-3.5" /></button>
+          </div>
+          {showDraft && machine.mode === 'docker' && draftRow}
+          {dockerSessions.length === 0 ? <p className="px-2 py-2 text-[11px] text-muted">{t('sidebar.noActiveSessions')}</p> : renderSessionList(dockerSessions)}
+        </section>
       </div>
 
       {/* Bottom Footer: Settings & Shortcuts */}
@@ -390,6 +434,22 @@ export function Sidebar() {
   }
 
   return fullPanel
+}
+
+function ProjectSessionSection({project, selected, count, onNew, children}: {
+  project: LocalProject; selected: boolean; count: number; onNew: () => void; children: ReactNode
+}) {
+  const t = useT()
+  const [collapsed, setCollapsed] = useState(false)
+  return <section data-testid={`project-sessions-${project.id}`} className="py-0.5">
+    <div className={`flex items-center rounded-md ${selected ? 'bg-panel2' : ''}`}>
+      <button aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)} title={project.path} className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-xs text-fg hover:bg-panel2">
+        {collapsed ? <ChevronRight className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}<Folder className="size-3.5 shrink-0 text-blue-400" /><span className="truncate">{project.name}</span>
+      </button>
+      <button aria-label={t('sidebar.newProjectSession', {project: project.name})} title={t('sidebar.newProjectSession', {project: project.name})} onClick={() => {setCollapsed(false); onNew()}} className="mr-1 rounded p-1 text-muted hover:bg-panel hover:text-fg"><Plus className="size-3.5" /></button>
+    </div>
+    {!collapsed && <div className="pl-4 space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>}
+  </section>
 }
 
 /** Nhóm phiên theo `group_name`; phiên không nhóm gom vào một nhóm ngầm. */

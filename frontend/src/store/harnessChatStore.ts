@@ -724,6 +724,9 @@ export const useHarnessChatStore = create<State>((set, get) => ({
   },
   send: async (chatId, prompt, selection, image, modelLabel, thinkingLevels, images, attachments) => {
     const current = get().sessions[chatId] ?? empty()
+    // Capture before asynchronous skill/directive loading; another chat may change defaults meanwhile.
+    const machineState = useMachineStore.getState()
+    const selectedMachine = machineState.bindings[chatId] ?? machineState.configuration
     const control = /^\/(help|skills|agents|status|context|stop)\s*$/.test(prompt)
     // Vòng 27 / C-5 — lượt ĐANG chạy vẫn nhận chỉ thị của chủ nhà: câu này vào hàng đợi
     // (`session_steers` của harness) và main đọc ở BƯỚC KẾ, nên không còn bị chặn tại chỗ.
@@ -812,9 +815,9 @@ export const useHarnessChatStore = create<State>((set, get) => ({
 
         const session = await agentApi<HarnessSession>('/sessions', {
           ...route,
-          ...(useMachineStore.getState().configuration ? { machineSelection: {
-            mode: useMachineStore.getState().configuration!.mode,
-            projectId: useMachineStore.getState().configuration!.projectId,
+          ...(selectedMachine ? { machineSelection: {
+            mode: selectedMachine.mode,
+            projectId: selectedMachine.projectId,
           } } : {}),
           skills,
           ...(harness ? { harnessId: harness.id } : {}),

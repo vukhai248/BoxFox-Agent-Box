@@ -3,6 +3,8 @@ import { FolderOpen } from 'lucide-react'
 import { useMachineStore } from '../../store/machineStore'
 import { useAgentStore } from '../../store/agentStore'
 import { useHarnessChatStore } from '../../store/harnessChatStore'
+import { startMachineChat } from '../../lib/machineSession'
+import { configuredBinding } from '../../store/machineStore'
 
 export function MachineConfigurationView() {
   const { configuration, error, load, configure, register, trust, bindings } = useMachineStore()
@@ -20,7 +22,7 @@ export function MachineConfigurationView() {
     try {
       if (await configure(nextMode, nextProject)) {
         // A saved session keeps its binding. Switching creates a new chat, never mutates old work.
-        if (existing || binding) useAgentStore.getState().setActiveSessionId(`session-${crypto.randomUUID()}`)
+        if (existing || binding) startMachineChat(configuredBinding())
       }
     } finally { setBusy(false) }
   }
@@ -29,7 +31,7 @@ export function MachineConfigurationView() {
     try {
       const selected = await register(manual ? path : undefined)
       if (selected && await configure('host', selected.id)) {
-        if (existing || binding) useAgentStore.getState().setActiveSessionId(`session-${crypto.randomUUID()}`)
+        if (existing || binding) startMachineChat(configuredBinding())
         setPath('')
       }
     } finally { setBusy(false) }
