@@ -244,6 +244,44 @@ def test_host_process_bootstraps_host_configuration_and_workspace(tmp_path):
     store.close()
 
 
+def test_host_process_refuses_to_switch_to_docker(tmp_path):
+    """Tiến trình host không có box nào: nhận `docker` sẽ tạo phiên nói Docker mà chạy trên máy thật."""
+    store = SessionStore(tmp_path / 'sessions.sqlite')
+    registry = MachineRegistry(store, default_mode='host', default_workspace=tmp_path / 'ws')
+
+    with pytest.raises(MachineError) as caught:
+        registry.update({'revision': registry.state()['revision'], 'mode': 'docker'})
+
+    assert caught.value.code == 'MACHINE_MODE_UNAVAILABLE'
+    assert registry.state()['mode'] == 'host'
+    store.close()
+
+
+def test_process_mode_is_reported_next_to_the_choice(tmp_path):
+    """Giao diện cần biết chế độ của TIẾN TRÌNH để không mời chuyển sang Docker."""
+    store = SessionStore(tmp_path / 'sessions.sqlite')
+    registry = MachineRegistry(store, default_mode='host', default_workspace=tmp_path / 'ws')
+
+    assert registry.state()['processMode'] == 'host'
+    assert registry.state()['mode'] == 'host'
+    store.close()
+
+
+def test_deleted_default_workspace_is_not_recreated(tmp_path):
+    """Người dùng xoá folder mặc định thì lần mở sau tôn trọng quyết định đó, không dựng lại."""
+    store = SessionStore(tmp_path / 'sessions.sqlite')
+    workspace = tmp_path / 'BoxFox' / 'workspace'
+    first = MachineRegistry(store, default_mode='host', default_workspace=workspace)
+    assert workspace.is_dir()
+    workspace.rmdir()
+
+    again = MachineRegistry(store, default_mode='host', default_workspace=workspace)
+
+    assert not workspace.exists()
+    assert again.state()['projectId'] == first.state()['projectId']  # cấu hình cũ giữ nguyên
+    store.close()
+
+
 def test_machine_plans_route_serves_the_selected_folder(harness, tmp_path):
     """`/api/agent/machines/projects/{pid}/plans` — cùng payload với `/__box/plans` của box."""
     rt, _ = harness

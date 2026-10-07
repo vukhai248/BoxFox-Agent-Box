@@ -10,10 +10,13 @@ lệ nạp module này theo đường dẫn (`backend/tests/unit/test_plan_heade
 Vị trí module (theo thứ tự thử)
 -------------------------------
 1. `BOXFOX_PLAN_READER` — đường dẫn tường minh (test, hoặc bản đóng gói đặt chỗ khác).
-2. `<gốc>/deploy/docker/plan_files.py` — bản checkout.
+2. `<gốc gói>/deploy/docker/plan_files.py` — bản checkout.
 3. `<cạnh gói>/docker-context/plan_files.py` — bản desktop đóng gói: `resources/harness/` và
    `resources/docker-context/` nằm cạnh nhau (`desktop/scripts/build-app.mjs`).
-4. `<cwd>/deploy/docker/plan_files.py` — chạy từ gốc repo.
+
+Danh sách này chỉ gồm chỗ thuộc bản cài. KHÔNG thử theo thư mục làm việc (`cwd`) hay thư mục cha
+của gốc gói: đó là chỗ người khác ghi được, nạp `plan_files.py` ở đó là chạy mã lạ trong tiến trình
+harness. Ứng viên hỏng thì bỏ qua và thử tiếp — chỉ khi hết ứng viên mới báo thiếu bộ đọc.
 
 Không tìm thấy ⇒ `HostPlanReaderUnavailable`. Người gọi phải trả lỗi CÓ MÃ thay vì im lặng coi như
 `.plans` rỗng: "không đọc được" khác "chưa có kế hoạch nào".
@@ -41,14 +44,13 @@ class HostPlanReaderUnavailable(RuntimeError):
 def reader_candidates() -> tuple[Path, ...]:
     """Các đường dẫn sẽ thử, theo thứ tự ưu tiên (đường dẫn tuyệt đối, chưa lọc tồn tại)."""
     here = Path(__file__).resolve()
-    roots = [here.parents[4], here.parents[4].parent, Path.cwd()]
+    package_root = here.parents[4]  # gốc bản checkout, hoặc `resources/harness` của bản đóng gói
     paths: list[Path] = []
     override = os.environ.get(READER_ENV)
     if override:
         paths.append(Path(override).expanduser())
-    for root in roots:
-        paths.append(root / 'deploy' / 'docker' / 'plan_files.py')
-        paths.append(root / 'docker-context' / 'plan_files.py')
+    paths.append(package_root / 'deploy' / 'docker' / 'plan_files.py')
+    paths.append(package_root.parent / 'docker-context' / 'plan_files.py')
     return tuple(dict.fromkeys(paths))  # giữ thứ tự ưu tiên, bỏ đường dẫn trùng
 
 
@@ -57,6 +59,7 @@ def plan_reader() -> ModuleType:
     global _CACHE
     if _CACHE is not None:
         return _CACHE
+    failures: list[str] = []
     for candidate in reader_candidates():
         if not candidate.is_file():
             continue
@@ -69,14 +72,16 @@ def plan_reader() -> ModuleType:
         sys.modules[spec.name] = module
         try:
             spec.loader.exec_module(module)
-        except Exception:
+        except Exception as exc:  # ứng viên hỏng: bỏ qua để thử chỗ kế tiếp
             sys.modules.pop(spec.name, None)
-            raise
+            failures.append(f'{candidate}: {exc}')
+            continue
         _CACHE = module
         return module
+    detail = f' Đã thử nhưng lỗi: {"; ".join(failures)}.' if failures else ''
     raise HostPlanReaderUnavailable(
         'Không tìm thấy bộ đọc `.plans` (deploy/docker/plan_files.py). '
-        f'Đặt biến {READER_ENV} hoặc chạy harness từ gốc repo.')
+        f'Đặt biến {READER_ENV} hoặc chạy harness từ gốc repo.' + detail)
 
 
 def plans_root(workspace) -> Path:

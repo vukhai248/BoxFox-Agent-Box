@@ -104,3 +104,49 @@ def test_executor_request_says_which_route_is_missing(tmp_path):
         assert caught.value.route == '/__box/terminal/ws'
 
     asyncio.run(run())
+
+
+def test_reader_is_never_loaded_from_the_working_directory(tmp_path, monkeypatch):
+    """Chỉ nạp bộ đọc từ chỗ thuộc bản cài — không theo `cwd` hay thư mục cha của gói.
+
+    `plan_files.py` được `exec` trong tiến trình harness, nên một file đặt ở thư mục làm việc (nơi
+    người khác ghi được) sẽ là đường chạy mã lạ.
+    """
+    planted = tmp_path / 'deploy' / 'docker' / 'plan_files.py'
+    planted.parent.mkdir(parents=True)
+    planted.write_text('MARKER = "planted"\n', encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(host_plans, '_CACHE', None)
+
+    candidates = host_plans.reader_candidates()
+
+    assert planted not in candidates
+    assert not [path for path in candidates if tmp_path in path.parents]
+    assert getattr(host_plans.plan_reader(), 'MARKER', None) != 'planted'
+
+
+def test_broken_candidate_is_skipped_for_the_next_one(tmp_path, monkeypatch):
+    """Ứng viên hỏng (file rác, thiếu phụ thuộc) không được chặn bộ đọc thật ở chỗ kế tiếp."""
+    broken = tmp_path / 'broken' / 'plan_files.py'
+    broken.parent.mkdir()
+    broken.write_text('raise RuntimeError("hỏng")\n', encoding='utf-8')
+    good = tmp_path / 'good' / 'plan_files.py'
+    good.parent.mkdir()
+    good.write_text('MARKER = "good"\n', encoding='utf-8')
+    monkeypatch.setattr(host_plans, 'reader_candidates', lambda: (broken, good))
+    monkeypatch.setattr(host_plans, '_CACHE', None)
+
+    assert host_plans.plan_reader().MARKER == 'good'
+
+
+def test_all_candidates_broken_reports_why(tmp_path, monkeypatch):
+    broken = tmp_path / 'broken' / 'plan_files.py'
+    broken.parent.mkdir()
+    broken.write_text('raise RuntimeError("hỏng")\n', encoding='utf-8')
+    monkeypatch.setattr(host_plans, 'reader_candidates', lambda: (broken,))
+    monkeypatch.setattr(host_plans, '_CACHE', None)
+
+    with pytest.raises(host_plans.HostPlanReaderUnavailable) as caught:
+        host_plans.plan_reader()
+
+    assert 'hỏng' in str(caught.value)

@@ -283,18 +283,17 @@ class HostExecutor:
         if route in ('/__box/plans', '/__box/plans/index'):
             if body is not None:
                 raise HostRequestUnsupported(route)
-            return host_plans.plan_manifest(self.workspace)
+            return await asyncio.to_thread(host_plans.plan_manifest, self.workspace)
         if route == '/__box/plans/content':
             if body is not None:
                 raise HostRequestUnsupported(route)
-            return host_plans.plan_document(self.workspace, query.get('identity', [''])[0],
-                                            query.get('version', [''])[0])
+            return await asyncio.to_thread(host_plans.plan_document, self.workspace,
+                                           query.get('identity', [''])[0], query.get('version', [''])[0])
         if route == '/__box/plans/review':
             payload = body if isinstance(body, dict) else {}
-            return host_plans.write_plan_review(self.workspace, payload.get('identity'),
-                                                payload.get('decision'),
-                                                payload.get('note', ''),
-                                                payload.get('version'))
+            return await asyncio.to_thread(host_plans.write_plan_review, self.workspace,
+                                           payload.get('identity'), payload.get('decision'),
+                                           payload.get('note', ''), payload.get('version'))
         raise HostRequestUnsupported(route)
 
     # -- hợp đồng ------------------------------------------------------------

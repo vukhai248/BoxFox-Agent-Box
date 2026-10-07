@@ -35,8 +35,11 @@ class MachineRegistry:
         # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
         # Chỉ áp cho CSDL MỚI (`INSERT OR IGNORE`): cấu hình người dùng đã lưu không bị đổi.
         self.process_mode = 'host' if default_mode == 'host' else 'docker'
+        # Chỉ dựng folder mặc định khi CSDL CHƯA có cấu hình. Người dùng đã chạy một lần rồi xoá
+        # folder đó thì lần mở sau không được tạo lại sau lưng họ.
         project_id = None
-        if self.process_mode == 'host' and default_workspace:
+        first_run = self.db.execute('SELECT 1 FROM web_machine_settings WHERE singleton=1').fetchone() is None
+        if first_run and self.process_mode == 'host' and default_workspace:
             project_id = self._bootstrap_project(default_workspace)
         self.db.execute('INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,?,?)',
                         (self.process_mode, project_id))
@@ -60,6 +63,9 @@ class MachineRegistry:
     def state(self):
         row = dict(self.db.execute('SELECT * FROM web_machine_settings WHERE singleton=1').fetchone())
         return {'revision': row['revision'], 'mode': row['mode'], 'projectId': row['project_id'],
+                # Chế độ của TIẾN TRÌNH, khác `mode` (lựa chọn của người dùng). Giao diện dùng nó để
+                # không mời chuyển sang Docker khi bản này không có box nào (xem `update`).
+                'processMode': self.process_mode,
                 'projects': [{**dict(p), 'trusted': bool(p['trusted'])} for p in
                              self.db.execute('SELECT * FROM web_machine_projects ORDER BY name,path')]}
 
@@ -96,6 +102,12 @@ class MachineRegistry:
         mode = values.get('mode')
         if mode not in ('host', 'docker'):
             raise MachineError('MACHINE_MODE_INVALID', 'Chỉ hỗ trợ IDE hoặc Docker.')
+        # Tiến trình host không có box nào để trỏ tới: nhận `docker` ở đây sẽ tạo phiên nói "Docker"
+        # nhưng công cụ vẫn chạy trên máy thật — đúng thứ bản bàn giao cấm (DA3/DA4).
+        if mode == 'docker' and self.process_mode == 'host':
+            raise MachineError('MACHINE_MODE_UNAVAILABLE',
+                               'Bản này chạy trực tiếp trên máy (IDE), không có Docker box để chuyển sang.',
+                               409)
         project_id = values.get('projectId') if mode == 'host' else None
         if project_id:
             self.project(project_id)
