@@ -11,7 +11,8 @@ interface State {
   load: () => Promise<void>
   bind: (chatId: string, binding: MachineBinding) => void
   configure: (mode: 'host' | 'docker', projectId?: string | null) => Promise<boolean>
-  register: (path?: string) => Promise<LocalProject | null>
+  register: (path?: string, name?: string) => Promise<LocalProject | null>
+  selectFolder: () => Promise<string | null>
   trust: (projectId: string, trusted: boolean) => Promise<void>
 }
 
@@ -37,9 +38,18 @@ export const useMachineStore = create<State>((set, get) => ({
       return true
     } catch (error) { set({ error: String(error) }); await get().load(); set({ error: String(error) }); return false }
   },
-  register: async (path) => {
+  selectFolder: async () => {
+    set({error: null})
     try {
-      const result = await agentApi<LocalProject & { cancelled?: boolean }>(path === undefined ? '/machines/pick-folder' : '/machines/projects', path === undefined ? {} : { path })
+      const result = await agentApi<{path?: string; cancelled?: boolean}>('/machines/pick-folder', {selectOnly: true})
+      if (result.cancelled) return null
+      if (typeof result.path !== 'string' || !result.path.trim()) throw new Error('FOLDER_PICKER_UNAVAILABLE: invalid folder selection')
+      return result.path
+    } catch (error) {set({error: String(error)}); return null}
+  },
+  register: async (path, name) => {
+    try {
+      const result = await agentApi<LocalProject & { cancelled?: boolean }>(path === undefined ? '/machines/pick-folder' : '/machines/projects', path === undefined ? {} : { path, ...(name ? {name} : {}) })
       if (result.cancelled) return null
       await get().load()
       return result

@@ -45,7 +45,9 @@ class MachineRegistry:
                 'projects': [{**dict(p), 'trusted': bool(p['trusted'])} for p in
                              self.db.execute('SELECT * FROM web_machine_projects ORDER BY name,path')]}
 
-    def register(self, path):
+    def register(self, path, name=None):
+        if name is not None and (not isinstance(name, str) or not name.strip() or len(name.strip()) > 120 or any(ord(char) < 32 for char in name)):
+            raise MachineError('PROJECT_NAME_INVALID', 'Tên dự án cần 1–120 ký tự, không có ký tự điều khiển.')
         candidate = Path(str(path or '')).expanduser()
         if not path or not candidate.is_absolute() or not candidate.is_dir():
             raise MachineError('PROJECT_PATH_INVALID', 'Cần đường dẫn tuyệt đối tới folder đang tồn tại.')
@@ -55,7 +57,7 @@ class MachineRegistry:
         canonical = os.path.normcase(str(candidate))
         project_id = hashlib.sha256(canonical.encode('utf-8')).hexdigest()[:24]
         self.db.execute('INSERT OR IGNORE INTO web_machine_projects(id,path,name) VALUES(?,?,?)',
-                        (project_id, canonical, candidate.name))
+                        (project_id, canonical, name.strip() if name is not None else candidate.name))
         self.db.commit()
         return self.project(project_id)
 
@@ -113,27 +115,98 @@ class MachineRegistry:
         return {'mode': 'docker', 'revision': 1, 'projectId': None, 'workspace': '/home/agent/workspace'}
 
 
+FOLDER_PICKER_SCRIPT = r'''[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new();
+$ErrorActionPreference = 'Stop';
+Add-Type -AssemblyName System.Windows.Forms;
+[System.Windows.Forms.Application]::EnableVisualStyles();
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class BoxFoxFolderDialog {
+  [ComImport, Guid("42F85136-DB7E-439C-85F1-E4075D135FC8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IFileDialog {
+    [PreserveSig] int Show(IntPtr owner);
+    void SetFileTypes(uint count, IntPtr types);
+    void SetFileTypeIndex(uint index);
+    void GetFileTypeIndex(out uint index);
+    void Advise(IntPtr events, out uint cookie);
+    void Unadvise(uint cookie);
+    void SetOptions(uint options);
+    void GetOptions(out uint options);
+    void SetDefaultFolder(IShellItem item);
+    void SetFolder(IShellItem item);
+    void GetFolder(out IShellItem item);
+    void GetCurrentSelection(out IShellItem item);
+    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string name);
+    void GetFileName(out IntPtr name);
+    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string title);
+    void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string text);
+    void GetResult(out IShellItem item);
+  }
+  [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IShellItem {
+    void BindToHandler(IntPtr context, ref Guid handler, ref Guid iid, out IntPtr result);
+    void GetParent(out IShellItem parent);
+    void GetDisplayName(uint kind, out IntPtr name);
+    void GetAttributes(uint mask, out uint attributes);
+    void Compare(IShellItem other, uint hint, out int order);
+  }
+  public static string Pick(IntPtr owner) {
+    var dialog = (IFileDialog)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")));
+    try {
+      uint options; dialog.GetOptions(out options);
+      // PICKFOLDERS, FORCEFILESYSTEM, PATHMUSTEXIST, NOCHANGEDIR, DONTADDTORECENT.
+      dialog.SetOptions(options | 0x20u | 0x40u | 0x800u | 0x8u | 0x02000000u);
+      dialog.SetTitle("BoxFox - Select Project Folder");
+      int hr = dialog.Show(owner);
+      if (hr == unchecked((int)0x800704C7)) return null;
+      Marshal.ThrowExceptionForHR(hr);
+      IShellItem item; dialog.GetResult(out item);
+      try {
+        IntPtr name; item.GetDisplayName(0x80058000u, out name);
+        try { return Marshal.PtrToStringUni(name); } finally { Marshal.FreeCoTaskMem(name); }
+      } finally { Marshal.ReleaseComObject(item); }
+    } finally { Marshal.ReleaseComObject(dialog); }
+  }
+}
+'@;
+$owner = New-Object System.Windows.Forms.Form;
+$owner.Text = 'BoxFox - Choose project folder';
+$owner.ShowInTaskbar = $false;
+$owner.TopMost = $true;
+$owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen;
+$owner.Size = New-Object System.Drawing.Size(1,1);
+$owner.Opacity = 0;
+try {
+  # A hidden helper still needs an explicit foreground/topmost owner for its modal UI.
+  $owner.Show();
+  $owner.Activate();
+  $selectedPath = [BoxFoxFolderDialog]::Pick($owner.Handle);
+  if ($null -ne $selectedPath) {
+  @{path=$selectedPath} | ConvertTo-Json -Compress
+  } else { @{cancelled=$true} | ConvertTo-Json -Compress }
+} finally { $owner.Dispose() }
+'''
+
+
 def pick_folder():
     """Explicit UI action, on the server's Windows desktop. No browser upload/copy."""
     if os.name != 'nt':
         raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Nhập đường dẫn folder trên máy chạy BoxFox.')
-    script = '''[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new();
-Add-Type -AssemblyName System.Windows.Forms;
-$dialog = New-Object System.Windows.Forms.FolderBrowserDialog;
-$dialog.Description = 'BoxFox - Choose project folder';
-$dialog.ShowNewFolderButton = $false;
-try { if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  @{path=$dialog.SelectedPath} | ConvertTo-Json -Compress
-} else { @{cancelled=$true} | ConvertTo-Json -Compress } } finally { $dialog.Dispose() }
-'''
     try:
         result = subprocess.run(['powershell.exe', '-NoProfile', '-STA', '-WindowStyle', 'Hidden',
-                                 '-Command', script], capture_output=True, encoding='utf-8', timeout=180)
+                                 '-Command', FOLDER_PICKER_SCRIPT], capture_output=True, encoding='utf-8', timeout=180)
         if result.returncode != 0:
             raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Không mở được picker; dùng đường dẫn folder.')
-        return json.loads(result.stdout.strip().lstrip('\ufeff'))
+        value = json.loads(result.stdout.strip().lstrip('\ufeff'))
+        if not isinstance(value, dict) or not (isinstance(value.get('path'), str) and value['path'].strip() or value.get('cancelled') is True):
+            raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Picker không trả về đường dẫn hoặc thao tác hủy hợp lệ.')
+        return value
     except subprocess.TimeoutExpired:
-        return {'cancelled': True}
+        raise MachineError('FOLDER_PICKER_TIMEOUT', 'Hộp chọn folder hết thời gian chờ. Chọn lại hoặc nhập đường dẫn trong Configuration.', 408) from None
+    except (OSError, ValueError):
+        raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Không mở được picker; dùng đường dẫn folder.') from None
 
 
 class SessionMachineExecutor:
@@ -230,11 +303,14 @@ def register_routes(app, runtime):
                 result = registry.state() if request.method == 'GET' else registry.update(await request.json())
             elif op == 'projects':
                 value = await request.json()
-                result = registry.register(value.get('path'))
+                result = registry.register(value.get('path'), value.get('name'))
             elif op == 'pick-folder':
+                value = await request.json()
+                if picker_lock.locked():
+                    raise MachineError('FOLDER_PICKER_BUSY', 'Một hộp chọn folder đang mở. Chọn hoặc hủy hộp đó trước.', 409)
                 async with picker_lock:
                     result = await asyncio.to_thread(pick_folder)
-                    if result.get('path'):
+                    if result.get('path') and value.get('selectOnly') is not True:
                         result = registry.register(result['path'])
             elif op == 'trust':
                 value = await request.json()

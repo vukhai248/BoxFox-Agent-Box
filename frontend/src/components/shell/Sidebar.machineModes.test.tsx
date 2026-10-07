@@ -43,6 +43,7 @@ beforeEach(() => {
   api.mockImplementation(async (path: string, body?: Record<string, unknown>, method?: string) => {
     if (path === '/sessions') return {sessions: rows}
     if (path === '/machines/pick-folder') return picked
+    if (path === '/machines/projects') return picked
     if (path === '/machines/configuration' && method === 'PUT') {
       configuration = {...configuration, mode: body!.mode as 'host' | 'docker', projectId: body!.projectId as string | null, revision: configuration.revision + 1}
     }
@@ -61,6 +62,7 @@ afterEach(() => {
 async function render() {await act(async () => {root.render(<I18nProvider><Sidebar /></I18nProvider>)})}
 async function click(element: Element) {await act(async () => {element.dispatchEvent(new MouseEvent('click', {bubbles: true}))})}
 const button = (label: string) => host.querySelector(`[aria-label="${label}"]`)!
+const modalButton = (label: string) => [...document.querySelectorAll('[role="dialog"] button')].find(item => item.textContent?.trim() === label)!
 
 describe('IDE projects and Docker session boundaries', () => {
   it('keeps IDE sessions inside their project and legacy sessions inside Docker', async () => {
@@ -102,6 +104,7 @@ describe('IDE projects and Docker session boundaries', () => {
   it('canceling the picker preserves project and current session', async () => {
     await render()
     await click(button('Choose folder'))
+    await click(modalButton('Add'))
     expect(useAgentStore.getState().activeSessionId).toBe('ha')
     expect(configuration.projectId).toBe('a')
     expect(api.mock.calls.some(([path, , method]) => path === '/machines/configuration' && method === 'PUT')).toBe(false)
@@ -110,11 +113,40 @@ describe('IDE projects and Docker session boundaries', () => {
     picked = projectB
     await render()
     await click(button('Choose folder'))
+    await click(modalButton('Add'))
+    expect(useAgentStore.getState().activeSessionId).toBe('ha')
+    expect(api.mock.calls.some(([path]) => path === '/machines/projects')).toBe(false)
+    await click(modalButton('Create project'))
     const draft = useAgentStore.getState().activeSessionId
     expect(draft).not.toBe('ha')
     expect(useMachineStore.getState().bindings[draft]).toEqual(bindingB)
     expect(configuration.projectId).toBe('b')
     expect(api.mock.calls.some(([path]) => path === '/machines/trust')).toBe(false)
+  })
+  it('canceling Create project after choosing a folder does not register or start anything', async () => {
+    picked = projectB
+    await render()
+    await click(button('Choose folder'))
+    await click(modalButton('Add'))
+    await click(modalButton('Cancel'))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(useAgentStore.getState().activeSessionId).toBe('ha')
+    expect(api.mock.calls.some(([path]) => path === '/machines/projects')).toBe(false)
+  })
+  it('shows the selected path and sends the project name only when Create is confirmed', async () => {
+    picked = projectB
+    await render()
+    await click(button('Choose folder'))
+    expect(modalButton('Create project').hasAttribute('disabled')).toBe(true)
+    await click(modalButton('Add'))
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(projectB.path)
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Project name"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Custom project')
+      input.dispatchEvent(new Event('input', {bubbles: true}))
+    })
+    await click(modalButton('Create project'))
+    expect(api.mock.calls.find(([path]) => path === '/machines/projects')?.[1]).toEqual({path: projectB.path, name: 'Custom project'})
   })
   it('opening a saved Docker session changes the active environment but retains IDE history', async () => {
     await render()

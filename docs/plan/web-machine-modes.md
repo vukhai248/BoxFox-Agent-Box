@@ -121,3 +121,36 @@ Kiểm tra checkpoint sidebar:
 - Bộ tổng chạy riêng `npm run test -- --maxWorkers=4`: 1491 passed / 3 failed (1494 ca, 152 file). Chỉ còn đúng ba lỗi Provider đã đối chiếu baseline; SettingsModal không timeout ở lượt này.
 - Kiểm whitespace bằng `git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check`: đạt.
 - Commit checkpoint local lưu thay đổi sidebar; không push/merge. Các kết quả này không thay thế bằng chứng Windows thật còn mở ở trên.
+
+## Bổ sung chọn folder và form Tạo dự án (07/10/2026)
+
+Neo trước patch: `d6e19954`, nhánh `codex/web-machine-modes`.
+
+- Theo ảnh owner, hộp trắng cũ là `FolderBrowserDialog` dạng cây. Thay bằng Windows Common Item Dialog (`IFileDialog` + `FOS_PICKFOLDERS`): giao diện Explorer với đường dẫn và tìm kiếm. Không thay màu/theme của Windows hoặc theme BoxFox.
+- Helper chạy STA, có owner để dialog hiện phía trước. Probe so sánh cho thấy bản cũ cũng có thể hiện trong môi trường kiểm; chưa chứng minh mọi lần không hiện đều do cùng một nguyên nhân. Bản mới được kiểm riêng với helper hidden và cửa sổ Windows thật.
+- Sidebar mở form Tạo dự án: tên → Add/chọn folder → hiển thị đường dẫn → Create project. Chọn folder hoặc hủy form không thêm project, đổi môi trường hoặc tạo draft.
+- API `selectOnly: true` chỉ trả đường dẫn. Các caller cũ vẫn dùng hành vi đăng ký folder hiện hữu. API projects nhận tên tùy chọn, giới hạn 120 ký tự và cấm ký tự điều khiển; folder trùng giữ ID/tên/quyền cũ.
+- Create project mới đăng ký folder, chọn project host và mở draft đúng binding. Không tự trust project; quyền sửa/chạy vẫn theo cơ chế hiện có.
+- Picker đang mở trả `FOLDER_PICKER_BUSY`, không xếp thêm dialog trùng. Timeout trả lỗi riêng; không suy là user đã bấm Cancel. JSON sai hoặc không mở được helper có lỗi rõ.
+- Form giữ i18n vi/en, focus và Escape/Cancel; không sửa provider/model/thinking/DAG hoặc đóng gói app.
+
+Source: `backend/src/agentbox/sandbox/machine_router.py`, `frontend/src/components/shell/CreateProjectModal.tsx`, `frontend/src/store/machineStore.ts`, `Sidebar.tsx` và hai catalog i18n.
+API tham khảo: [Microsoft Common Item Dialog](https://learn.microsoft.com/en-us/windows/win32/shell/common-file-dialog).
+
+Kiểm chứng trên Windows hiện tại:
+
+| Lệnh/ca | Kết quả thật |
+|---|---|
+| `python -m pytest backend/tests/unit/test_web_folder_picker.py backend/tests/unit/test_web_machine_modes.py backend/tests/unit/test_harness_runtime.py -q` | 50 passed |
+| Probe native trong nhóm trên | Dialog thật được tìm thấy, visible/topmost và có lớp DirectUI của dialog hiện đại; timer hủy đúng dialog của chính tiến trình probe |
+| Sidebar.machineModes / Sidebar / Sidebar.responsive / MachineConfigurationView / harnessChatStore.openSession | 41 passed, 5 file |
+| `npm run typecheck` | Đạt |
+| `npm run test -- --maxWorkers=4`, chạy bộ frontend riêng | 1493 passed / 3 failed, 1496 ca; đúng ba lỗi Provider baseline đã đối chiếu ở trên |
+| Whitespace diff check có `cr-at-eol` | Đạt |
+| GET health và configuration qua Vite, header admin hiện hữu | HTTP 200 sau reload |
+
+Các fixture kiểm hủy picker, hủy form sau chọn folder, đường dẫn/tên chỉ gửi khi Create, không tự trust, folder trùng, và selectOnly không đổi registry/revision. Probe native kiểm mở/hủy; chưa thay bằng chứng user chọn folder cụ thể rồi chạy model trong project đó.
+
+Đã reload riêng harness sang bản mới sau khi kiểm các session lưu đều completed. Giữ Vite/router/Docker đang chạy. Log: `.tmp/web-start-20261007/harness-modern-picker.stdout.log` và `harness-modern-picker.stderr.log`. Bảng trắng trong ảnh gửi trước reload vẫn là dialog của bản cũ; lần mở mới dùng code Common Item Dialog.
+
+Các giới hạn host/Desktop còn mở ở phần trên tiếp tục giữ nguyên trạng thái. Patch này chỉ hoàn thiện thao tác thêm project/chọn folder trên web, không nghiệm thu toàn bộ roadmap desktop.

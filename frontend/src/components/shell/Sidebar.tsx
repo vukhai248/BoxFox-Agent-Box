@@ -44,6 +44,7 @@ import { isNarrowViewport, useViewportWidth } from './useViewportWidth'
 import { useActiveMachine } from '../../hooks/useActiveMachine'
 import { DOCKER_BINDING, useMachineStore, type MachineBinding, type LocalProject } from '../../store/machineStore'
 import { startMachineChat } from '../../lib/machineSession'
+import { CreateProjectModal } from './CreateProjectModal'
 
 /** F2 (đợt 7): session `failed` từng bị gộp vào `idle` nên hiện chip IDLE như phiên rảnh. */
 export function mapSavedSessionStatus(status: string): SessionStatus {
@@ -79,7 +80,7 @@ export function Sidebar() {
   const machineError = useMachineStore(s => s.error)
   const serverSessionId = useHarnessChatStore(s => s.sessions[activeSessionId]?.id)
   const selectedSessionId = serverSessionId ?? activeSessionId
-  const [choosingFolder, setChoosingFolder] = useState(false)
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false)
 
   // Nạp session thực tế từ SQLite backend
   const [savedDbSessions, setSavedDbSessions] = useState<SessionSummary[]>([])
@@ -134,16 +135,7 @@ export function Sidebar() {
   }, [fetchSavedSessions])
 
   const handleNewSession = () => { startMachineChat() }
-  const handleChooseFolder = async () => {
-    setChoosingFolder(true)
-    try {
-      const store = useMachineStore.getState()
-      const project = await store.register()
-      if (project && await store.configure('host', project.id)) {
-        startMachineChat({mode: 'host', revision: 1, projectId: project.id, workspace: project.path})
-      }
-    } finally { setChoosingFolder(false) }
-  }
+  const handleChooseFolder = () => {setProjectDialogOpen(true)}
 
   // Chỉ mở 1 menu `...` tại một thời điểm, quản lý ở cấp Sidebar.
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
@@ -374,9 +366,9 @@ export function Sidebar() {
         {(machine.mode === 'host' || projects.length > 0 || hostSessions.length > 0) && <section data-testid="ide-project-sessions">
           <div className="flex items-center justify-between px-2 py-2 text-xs font-medium text-muted">
             <span>{t('sidebar.ideProjects')}</span>
-            {machine.mode === 'host' && <button disabled={choosingFolder} onClick={() => void handleChooseFolder()} title={t('sidebar.chooseFolder')} aria-label={t('sidebar.chooseFolder')} className="rounded p-1 hover:bg-panel2 hover:text-fg"><FolderPlus className="size-3.5" /></button>}
+            {machine.mode === 'host' && <button onClick={handleChooseFolder} title={t('sidebar.chooseFolder')} aria-label={t('sidebar.chooseFolder')} className="rounded p-1 hover:bg-panel2 hover:text-fg"><FolderPlus className="size-3.5" /></button>}
           </div>
-          {machine.mode === 'host' && <button disabled={choosingFolder} onClick={() => void handleChooseFolder()} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted hover:bg-panel2 hover:text-fg"><FolderOpen className="size-3.5" />{t(choosingFolder ? 'sidebar.choosingFolder' : 'sidebar.chooseFolder')}</button>}
+          {machine.mode === 'host' && <button onClick={handleChooseFolder} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted hover:bg-panel2 hover:text-fg"><FolderOpen className="size-3.5" />{t('sidebar.chooseFolder')}</button>}
           {machine.mode === 'host' && machineError && <div role="alert" className="px-2 py-1 text-[11px] text-red-400 break-all">{machineError}<button onClick={() => openSettings('configuration')} className="mt-1 block text-muted underline">{t('sidebar.openConfiguration')}</button></div>}
           {projects.map(project => <ProjectSessionSection key={project.id} project={project} selected={machine.mode === 'host' && machine.projectId === project.id}
             onNew={() => startMachineChat({mode: 'host', revision: 1, projectId: project.id, workspace: project.path})}
@@ -412,6 +404,7 @@ export function Sidebar() {
         </button>
         <ShortcutsPopover variant="sidebar" />
       </div>
+      {projectDialogOpen && <CreateProjectModal onClose={() => setProjectDialogOpen(false)} />}
     </aside>
   )
 

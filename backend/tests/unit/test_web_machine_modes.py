@@ -57,6 +57,30 @@ def test_projects_are_canonical_and_stable(harness, tmp_path):
     assert p['trusted'] is False
 
 
+def test_named_project_deduplicates_folder_without_changing_existing_name(harness, tmp_path):
+    rt, _ = harness
+    root = tmp_path / 'source'
+    root.mkdir()
+    p = rt.machine_registry.register(str(root), 'Dự án của tôi')
+    assert p['name'] == 'Dự án của tôi' and not p['trusted']
+    assert rt.machine_registry.register(str(root), 'Tên khác')['name'] == 'Dự án của tôi'
+    with pytest.raises(MachineError):
+        rt.machine_registry.register(str(root), '\nInvalid')
+
+
+@async_test
+async def test_select_only_picker_does_not_register_or_change_configuration(harness, tmp_path, monkeypatch):
+    rt, _ = harness
+    monkeypatch.setattr('agentbox.sandbox.machine_router.pick_folder', lambda: {'path': str(tmp_path)})
+    app = web.Application()
+    register_routes(app, rt)
+    async with TestClient(TestServer(app)) as client:
+        response = await client.post('/api/agent/machines/pick-folder', json={'selectOnly': True})
+        assert await response.json() == {'path': str(tmp_path)}
+        assert rt.machine_registry.state()['projects'] == []
+        assert rt.machine_registry.state()['revision'] == 1
+
+
 def test_child_cannot_change_environment(harness, tmp_path):
     rt, _ = harness
     p = project(rt, tmp_path)
