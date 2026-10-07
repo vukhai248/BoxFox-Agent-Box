@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { resolveThinkingLevel } from '../lib/harnessThinking'
 import { agentApi } from '../lib/agentApi'
+import { useMachineStore, type MachineBinding } from './machineStore'
 import type { OutgoingAttachment } from '../lib/chat/attachmentUpload'
 import { useHarnessStore } from './harnessStore'
 import { useOwnerSettingsStore } from './ownerSettingsStore'
@@ -612,6 +613,8 @@ export const useHarnessChatStore = create<State>((set, get) => ({
     try {
       const lastServerSeq = current.events.filter(e => e.type !== 'model_change').at(-1)?.seq ?? 0
       const session = await agentApi<HarnessSession>(`/sessions/${id}?after=${lastServerSeq}`)
+      useMachineStore.getState().bind(chatId, (session.config?.machineBinding as MachineBinding | undefined)
+        ?? { mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace' })
       const prevEvents = current.events ?? []
       // Nhật ký đi cùng vòng poll này (hàng `E:` là bằng chứng của lượt); gộp theo `seq` như `events`.
       const journalPush = parseJournalPush(session.journal)
@@ -698,6 +701,8 @@ export const useHarnessChatStore = create<State>((set, get) => ({
   fetchSavedSessions: async () => {
     try {
       const data = await agentApi<{ sessions: Array<{ id: string; role: string; status: string; updated: number; config: Record<string, unknown> }> }>('/sessions')
+      for (const row of data.sessions) useMachineStore.getState().bind(row.id,
+        (row.config.machineBinding as MachineBinding | undefined) ?? { mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace' })
       return data.sessions || []
     } catch {
       return []
@@ -807,6 +812,10 @@ export const useHarnessChatStore = create<State>((set, get) => ({
 
         const session = await agentApi<HarnessSession>('/sessions', {
           ...route,
+          ...(useMachineStore.getState().configuration ? { machineSelection: {
+            mode: useMachineStore.getState().configuration!.mode,
+            projectId: useMachineStore.getState().configuration!.projectId,
+          } } : {}),
           skills,
           ...(harness ? { harnessId: harness.id } : {}),
           ...(directivesLoaded ? { instructions: ownerDirectives.instructions } : {}),
@@ -823,6 +832,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
           ...(directivesLoaded ? {} : { directivesSkipped: ownerDirectives.loadError ?? 'the harness did not answer' }),
         })
         localStorage.setItem(storageKey(session.id), session.id)
+        if (session.config?.machineBinding) useMachineStore.getState().bind(chatId, session.config.machineBinding as MachineBinding)
         // Phiên vừa mở đã mang sẵn cặp (số, nguồn): hiện ngay, không phải chờ vòng poll
         // đầu tiên. Cùng một phản hồi `/sessions`, không thêm lời gọi mạng nào.
         if (session.config) {

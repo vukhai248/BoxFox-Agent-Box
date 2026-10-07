@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from 'react'
 import { resolveBoxApiKey, resolveBoxApiUrl } from '../lib/boxApi'
+import { useActiveMachine } from './useActiveMachine'
 
 const API = resolveBoxApiUrl(import.meta.env)
 const BOX_API_KEY = resolveBoxApiKey(import.meta.env)
@@ -67,7 +68,9 @@ export function useBoxState(): BoxState & {
   toggleNetwork: () => void
 } {
   const [s, setS] = useState(cache)
+  const enabled = useActiveMachine().mode === 'docker'
   useEffect(() => {
+    if (!enabled) return
     listeners.add(setS)
     void refresh()
     const id = setInterval(refresh, 5000) // đồng bộ trạng thái thật định kỳ
@@ -75,10 +78,10 @@ export function useBoxState(): BoxState & {
       listeners.delete(setS)
       clearInterval(id)
     }
-  }, [])
+  }, [enabled])
   return {
-    ...s,
-    togglePower: () => void setBoxPower(s.power === 'on' ? 'off' : 'on'),
-    toggleNetwork: () => void setBoxNetwork(s.network === 'on' ? 'off' : 'on'),
+    ...(enabled ? s : { power: 'unknown' as const, network: 'unknown' as const }),
+    togglePower: () => { if (enabled) void setBoxPower(s.power === 'on' ? 'off' : 'on') },
+    toggleNetwork: () => { if (enabled) void setBoxNetwork(s.network === 'on' ? 'off' : 'on') },
   }
 }

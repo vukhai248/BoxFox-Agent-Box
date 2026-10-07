@@ -999,7 +999,11 @@ def create_app(runtime):
         # nó vẫn chỉ đọc `values['instructions']`, và chỉ dẫn client gửi kèm luôn thắng.
         if not str(value.get('instructions') or '').strip():
             value['instructions'] = owner_directives.for_engine()
-        return web.json_response(runtime.create(value), status=201)
+        from ..sandbox.machine_router import MachineError
+        try:
+            return web.json_response(runtime.create(value), status=201)
+        except MachineError as exc:
+            raise ApiError(exc.code, str(exc), exc.status) from None
 
     async def list_sessions(request):
         limit = min(100, max(1, int(request.query.get('limit', '50'))))
@@ -2206,6 +2210,9 @@ def create_app(runtime):
     app.router.add_delete('/api/agent/permissions/rules', permissions_rules)
     app.router.add_get('/api/agent/skills/{skill}', skill)
     app.router.add_get('/api/agent/skills/{skill}/readiness', readiness)
+    if getattr(runtime, 'machine_registry', None) is not None:
+        from ..sandbox.machine_router import register_routes
+        register_routes(app, runtime)
     app.router.add_get('/api/agent/sessions', list_sessions)
     app.router.add_get('/api/agent/research/jobs', research_jobs)
     app.router.add_get('/api/agent/research/jobs/{research_id}', research_job_detail)
@@ -2259,6 +2266,10 @@ def main():
     port = harness_port()
     executor = build_executor(data)
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
+    # Web retains legacy Docker sessions; new IDE sessions have their own durable folder binding.
+    if execution_mode() == 'docker':
+        from ..sandbox.machine_router import attach
+        attach(runtime, data)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
     # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN

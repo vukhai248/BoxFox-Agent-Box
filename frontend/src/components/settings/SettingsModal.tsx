@@ -9,6 +9,7 @@ import { ScheduledSessionsView } from './ScheduledSessionsView'
 import { AutomationsView } from './AutomationsView'
 import { SecretsView } from './SecretsView'
 import { MachinePermissionsView } from './MachinePermissionsView'
+import { MachineConfigurationView } from './MachineConfigurationView'
 import { BrowserView } from './BrowserView'
 import { PullRequestsView } from './PullRequestsView'
 import { AppearanceView } from './AppearanceView'
@@ -95,6 +96,8 @@ export function SettingsModal() {
     }
 
     switch (settingsTab) {
+      case 'configuration':
+        return <MachineConfigurationView />
       case 'harness':
         return <HarnessList />
       case 'instructions':

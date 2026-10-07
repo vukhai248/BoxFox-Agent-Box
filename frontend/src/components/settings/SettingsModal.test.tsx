@@ -37,7 +37,7 @@ const TAB_BODIES: Array<{ id: SettingTabId; marker?: string }> = [
   { id: 'router', marker: 'Provider' },
   { id: 'scheduled_sessions', marker: 'Scheduled Sessions' },
   { id: 'automations', marker: 'Automations' },
-  { id: 'configuration' },
+  { id: 'configuration', marker: 'Execution environment' },
   { id: 'machine_permissions', marker: 'Machine & Permissions' },
   { id: 'secrets', marker: 'Secrets' },
   { id: 'browser', marker: 'Browser Snapshots' },

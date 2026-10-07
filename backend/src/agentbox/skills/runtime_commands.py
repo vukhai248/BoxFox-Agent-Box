@@ -626,6 +626,9 @@ class RuntimeCommands:
             # thuộc vai GHI (hoặc claude-code) trong lượt đã gắn run là đường sửa mã không có node.
             work_scope.check_command(work_scope.resolve(self, session), roles, resolved.executor)
             if resolved.executor == 'claude-code':
+                registry = getattr(self, 'machine_registry', None)
+                if registry is not None and registry.binding(sid)['mode'] == 'host':
+                    raise ValueError('UNSUPPORTED_IN_HOST_MODE: Claude CLI adapter is Docker-only in this checkpoint')
                 # Pre-flight the CLI before creating any child: a missing CLI is a setup
                 # problem for the owner, not a failed subagent (HANDOFF §5.1).
                 from ..sandbox.claude_executor import ClaudeExecutor

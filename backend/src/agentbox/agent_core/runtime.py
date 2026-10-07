@@ -1943,6 +1943,9 @@ class HarnessRuntime(RuntimeCommands):
         # `thinkingLevel` (UI gửi ở mỗi lượt) và `start()` cần nó để đối chiếu.
         if model_metadata:
             config['modelMetadata'] = model_metadata
+        machine_registry = getattr(self, 'machine_registry', None)
+        if machine_registry is not None:
+            config['machineBinding'] = machine_registry.new_binding(values, parent_id)
         session = self.store.create(config, role, parent_id)
         if config.get('deadlineClamped'):
             self.store.emit(session['id'], 'notice', {
@@ -2004,6 +2007,19 @@ class HarnessRuntime(RuntimeCommands):
         )
         if config['instructions']:
             prompt += f"\n\n=== OWNER-CONFIGURED DIRECTIVES ===\n{config['instructions']}"
+        binding = config.get('machineBinding') or {}
+        if binding.get('mode') == 'host':
+            prompt = prompt.replace('operating in a dedicated Docker sandbox', 'operating on the user\'s host machine')
+            prompt = re.sub(r'^- \*\*Operating Environment\*\*:.*$',
+                            '- **Operating Environment**: The selected host project; native file tools and host shell. Docker-only tools are unavailable.',
+                            prompt, flags=re.MULTILINE)
+            prompt += (f"\n\n=== ACTIVE EXECUTION ENVIRONMENT: IDE / HOST ===\n"
+                       f"Project folder: {binding.get('workspace') or 'not selected'}. "
+                       "File tools and terminal_exec run on this host, NOT in Docker. "
+                       "Use the host OS syntax (PowerShell on Windows). Never assume /home/agent/workspace, "
+                       "Bash, Linux utilities, code-server or Docker access. No OS shell sandbox is claimed. "
+                       "Unsupported host tools return an explicit error; do not route them to Docker. "
+                       "Do not claim a document/test/control action succeeded unless its tool returned evidence.")
         self.store.save(session['id'], [{'role': 'system', 'content': prompt}])
         return self.store.get(session['id'])
 

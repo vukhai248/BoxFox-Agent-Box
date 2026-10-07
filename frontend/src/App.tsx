@@ -50,6 +50,10 @@ import { CompletionEmailNotice } from './components/CompletionEmailNotice'
 import { SearchSessionsModal } from './components/shell/SearchSessionsModal'
 import { useCompletionEmail } from './hooks/useCompletionEmail'
 import { useBoxState } from './hooks/useBoxState'
+import { useActiveMachine } from './hooks/useActiveMachine'
+import { useMachineStore } from './store/machineStore'
+import { HostWorkspacePanel } from './components/panels/HostWorkspacePanel'
+import { HostMachineScreen } from './components/panels/HostMachineScreen'
 import { ContextUsageBar, formatTokenCount } from './components/panels/ContextUsageBar'
 import { formatClock } from './components/panels/research/format'
 
@@ -117,7 +121,7 @@ const AVAILABLE_PANEL_TABS: { id: PanelTabId; label: string; desc: string; icon:
   { id: 'plan', label: 'Plan Document', desc: 'Architecture blueprint & step review', icon: TAB_ICON.plan },
   { id: 'work', label: 'Work Graph', desc: 'Nodes, review loops, DAG waves, approval & ship', icon: TAB_ICON.work },
   { id: 'research', label: 'Research', desc: 'Questions, evidence gaps & budget', icon: TAB_ICON.research },
-  { id: 'sandbox', label: 'Sandbox Machine', desc: 'Live container vision & browser frame', icon: TAB_ICON.sandbox },
+  { id: 'sandbox', label: 'Machine screen', desc: 'Screen of the selected execution environment', icon: TAB_ICON.sandbox },
   { id: 'subagents', label: 'Sub-agents Console', desc: 'Autonomous specialists activity & thinking', icon: TAB_ICON.subagents },
   { id: 'ide', label: 'IDE (VS Code Web)', desc: 'code-server running inside the box', icon: TAB_ICON.ide },
   { id: 'terminal', label: 'Integrated Terminal', desc: 'Interactive shell in sandbox container', icon: TAB_ICON.terminal },
@@ -194,6 +198,8 @@ export default function App() {
   }, [activeSessionId])
 
   const rawOpenTabs = useUiStore((s) => s.openTabs)
+  const machine = useActiveMachine()
+  useEffect(() => { void useMachineStore.getState().load() }, [])
   // Bảng nhật ký hệ thống là tab DEV: ở bản dựng sản phẩm nó không mở được, kể cả
   // khi trạng thái tab còn sót lại từ trước.
   const openTabs = rawOpenTabs.filter((tab) => ALL_PANEL_TABS.includes(tab) && isPanelTabAvailable(tab))
@@ -223,6 +229,9 @@ export default function App() {
     pendingIntents.filter((intent) => intent.tab === tab).length
 
   function renderActiveTab() {
+    if (machine.mode === 'host' && activeTab && ['plan', 'research', 'design', 'pull_requests'].includes(activeTab)) {
+      return <div className="p-6 text-xs text-muted">This panel's artifact transport is not connected to the selected host folder in this checkpoint. It will not load Docker data as host data. The tab remains available; use Docker for its existing document workflow until host artifact integration is verified.</div>
+    }
     if (showModeSwitch && activeTab === 'plan') {
       return <ModeSwitchCard proposal={proposal!} rejectBundle={rejectBundle} />
     }
@@ -234,14 +243,14 @@ export default function App() {
       case 'research':
         return <ResearchPanel />
       case 'sandbox':
-        return <SandboxScreenPanel />
+        return machine.mode === 'host' ? <HostMachineScreen key={activeSessionId} /> : <SandboxScreenPanel />
       case 'subagents':
         return <SubagentInspectorPanel />
       case 'ide':
-        return <IdePanel />
+        return machine.mode === 'host' ? <HostWorkspacePanel key={activeSessionId} view="editor" /> : <IdePanel />
 
       case 'terminal':
-        return <TerminalPanel />
+        return machine.mode === 'host' ? <HostWorkspacePanel key={activeSessionId} view="terminal" /> : <TerminalPanel />
       case 'design':
         // P5: tab Design là vỏ năm ngăn (Canvas mặc định + Brief/Nhánh/Soát/Báo cáo).
         return <DesignPanel />
@@ -254,7 +263,7 @@ export default function App() {
       case 'audit':
         return <AuditPanel />
       case 'files':
-        return <WorkspaceFilesPanel />
+        return machine.mode === 'host' ? <HostWorkspacePanel key={activeSessionId} view="files" /> : <WorkspaceFilesPanel />
       case 'system_log':
         // Cùng một hàng rào với menu: trạng thái tab sót lại từ trước cũng không mở
         // được bảng này ở bản dựng sản phẩm.
@@ -447,6 +456,7 @@ export function TopBar({
 }) {
   const t = useT()
   const box = useBoxState()
+  const machine = useActiveMachine()
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement>(null)
   const openTabs = useUiStore((s) => s.openTabs)
@@ -543,7 +553,7 @@ export function TopBar({
                               : 'text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
                           }`}
                         />
-                        <span className="truncate">{tabItem.label}</span>
+                        <span className="truncate">{tabItem.id === 'ide' && machine.mode === 'host' ? 'IDE (Local folder)' : tabItem.label}</span>
                       </div>
                       {shortcut && (
                         <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -563,6 +573,7 @@ export function TopBar({
               </div>
 
               {/* Section 2: Sandbox Machine & Network Controls */}
+              {machine.mode === 'docker' && <>
               <div className="my-1.5 border-t border-zinc-100 dark:border-line/40" />
               <div className="px-2.5 py-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
                 Sandbox Controls
@@ -608,6 +619,7 @@ export function TopBar({
                   </span>
                 </button>
               </div>
+              </>}
             </div>
           )}
         </div>
