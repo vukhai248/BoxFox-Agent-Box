@@ -65,7 +65,7 @@ class FixtureExecutor:
         self.calls.append((name, args, sid))
         return {'content': 'observed fixture result'}
 
-    async def request(self, path, body=None):
+    async def request(self, path, body=None, session=None):
         self.requests.append((path, body))
         if path == plan_registry.INDEX_PATH:
             return self.payload

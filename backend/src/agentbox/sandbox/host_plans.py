@@ -49,11 +49,7 @@ def reader_candidates() -> tuple[Path, ...]:
     for root in roots:
         paths.append(root / 'deploy' / 'docker' / 'plan_files.py')
         paths.append(root / 'docker-context' / 'plan_files.py')
-    seen: list[Path] = []
-    for path in paths:
-        if path not in seen:
-            seen.append(path)
-    return tuple(seen)
+    return tuple(dict.fromkeys(paths))  # giữ thứ tự ưu tiên, bỏ đường dẫn trùng
 
 
 def plan_reader() -> ModuleType:

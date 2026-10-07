@@ -39,7 +39,7 @@ def test_plan_write_outside_the_room_is_refused_before_the_sandbox_runs(tmp_path
 
 def empty_index(executor, plans=()):
     """Cho executor giả trả được `GET /__box/plans/index` (không có nó là nhánh suy giảm)."""
-    async def request(path, body=None):
+    async def request(path, body=None, session=None):
         assert path == plan_registry.INDEX_PATH
         return {'plans': list(plans), 'ignoredCount': 0, 'warnings': []}
     executor.request = request
