@@ -2189,7 +2189,14 @@ class HarnessRuntime(RuntimeCommands):
     async def stop(self, sid):
         job_surface.on_stop(self, sid)
         await research_gateway.on_stop(self, sid)
-        if not self.store.get(sid).get('parent_id') and getattr(self, 'work_graph', None):
+        # Hàng sổ có thể biến mất giữa hai `await` ở trên (người dùng xoá phiên trong lúc tiến trình
+        # đang tắt): thiếu hàng nghĩa là phiên đã dừng rồi, KHÔNG phải lỗi. Trước bản vá, `KeyError`
+        # ở đây làm cả vòng dừng phiên dừng giữa đường và bỏ luôn các phiên sau.
+        try:
+            session = self.store.get(sid)
+        except KeyError:
+            session = None
+        if session is not None and not session.get('parent_id') and getattr(self, 'work_graph', None):
             self.work_graph.decisions.cancel(sid)
             self.work_graph.progress.cancel(sid)
             self.work_graph.feedback.cancel(sid)
