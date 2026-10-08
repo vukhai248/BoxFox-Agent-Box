@@ -739,14 +739,14 @@ def test_a_fresh_geometry_read_bypasses_the_cache():
 
 
 # ------------------------------------------------- ghép hộp thoại vào ảnh cửa sổ
-def _capture_with_dialog(*, dialog_owner=0x10):
+def _capture_with_dialog(*, dialog_owner=0x10, foreground=0x20, wtype=_DIALOG):
     base = bytes([200, 200, 200, 255]) * (100 * 100)
     patch = bytes([40, 40, 40, 255]) * (60 * 40)
     props = {0x10: window_props(pid=7, title='Code'),
-             0x20: window_props(pid=7, title='Replace?', owner=dialog_owner, wtype=_DIALOG)}
+             0x20: window_props(pid=7, title='Replace?', owner=dialog_owner, wtype=wtype)}
     rects = {0x10: (0, 0, 100, 100), 0x20: (20, 20, 80, 60)}
-    # Hộp thoại modal đang giữ tiêu điểm — đúng trạng thái đo được trên máy thật.
-    platform, _tools = build(windows=[0x10, 0x20], props=props, rects=rects, foreground=0x20,
+    # Mặc định: hộp thoại modal đang giữ tiêu điểm — trạng thái đo được trên máy thật.
+    platform, _tools = build(windows=[0x10, 0x20], props=props, rects=rects, foreground=foreground,
                              raw_by_target={'16': base, '32': patch, 'root': base})
     return platform, base, patch
 
@@ -761,6 +761,32 @@ def test_the_targets_own_dialog_is_painted_into_the_window_capture():
     assert shot.pixels[inside:inside + 4] == patch[:4], 'hộp thoại phải được dán vào ảnh'
     assert shot.pixels[outside:outside + 4] == base[:4], 'phần còn lại giữ nguyên ảnh cửa sổ'
     assert any('hộp thoại của chính ứng dụng' in note for note in shot.notes)
+
+
+def test_the_targets_own_dialog_is_painted_even_when_the_target_holds_the_focus():
+    """Hộp thoại KHÔNG modal: cửa sổ đích vẫn giữ tiêu điểm, nhưng hộp thoại vẫn phải có trong ảnh.
+
+    Đây là ca lọt lưới của bản đầu: cổng cũ chỉ dò `transient_windows` khi cửa sổ bị che hoặc khi
+    tiêu điểm không còn ở đích, vì đoán "hộp thoại modal luôn giữ tiêu điểm". Đoán đó sai với
+    ``UTILITY``/``POPUP_MENU``/``TOOLTIP``/``NOTIFICATION`` — đích giữ tiêu điểm, phép thử che khuất
+    theo tỉ lệ bỏ qua hộp thoại nhỏ, nên ảnh trả về **thiếu đúng thứ đang che cửa sổ**: agent nhìn
+    hụt rồi bấm vào chỗ nó không thấy. `import -window` đọc bộ đệm riêng của cửa sổ nên hộp thoại
+    chỉ vào ảnh khi ta ghép — không có cổng đoán nào là đúng.
+    """
+    platform, base, patch = _capture_with_dialog(foreground=0x10)
+    assert platform.get_foreground_window() == 0x10, 'đích phải đang giữ tiêu điểm'
+    shot = xc.capture_window(0x10, platform=platform)
+    inside = (40 * 100 + 60) * 4
+    assert shot.pixels[inside:inside + 4] == patch[:4], 'hộp thoại vẫn phải được dán vào ảnh'
+    assert any('hộp thoại của chính ứng dụng' in note for note in shot.notes)
+
+
+def test_a_non_modal_dialog_type_is_composited_too():
+    """`UTILITY` cũng là hộp thoại của ứng dụng (bảng chọn, cửa sổ phụ) — cũng phải ghép."""
+    platform, base, patch = _capture_with_dialog(foreground=0x10, wtype='_NET_WM_WINDOW_TYPE_UTILITY')
+    shot = xc.capture_window(0x10, platform=platform)
+    inside = (40 * 100 + 60) * 4
+    assert shot.pixels[inside:inside + 4] == patch[:4]
 
 
 def test_a_dialog_of_another_application_is_not_painted_into_the_capture():

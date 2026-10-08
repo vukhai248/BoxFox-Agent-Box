@@ -2767,3 +2767,33 @@ Bài kiểm: `tests/unit/test_x11_platform.py` **81 đạt** (73 → 81), `tests
 2,1 ms, `capture_window` 35,6 ms (14), `capture_screen` 49,5 ms, `press_key` 26,8 ms, `click` 25,6 ms,
 `type_text` 200 ký tự 1 323 ms; `product` — `key` 60 ms (31 tiến trình con), `click` 65 ms (35),
 `type_text` 1 369 ms (47), `screenshot` 126 ms (21); `case` (giao → xong) 397–462 ms.
+
+### Vòng 2026-10-08 (tiếp) — lượt kiểm trên `f90d0ea`: 16/16 hạng mục ĐẠT, tìm thêm một lỗi và đã vá
+
+Lượt kiểm độc lập chạy 16/16 hạng mục kế hoạch (unit suite, gõ chữ có dấu/hoa qua đường sản phẩm,
+bấm hai lần cùng điểm, kịch bản hộp thoại, hồi quy `case`, đối kháng cửa sổ lạ che điểm bấm, bốn lệnh
+của bộ đo, và bảng Machine trên web) — **ĐẠT hết**. Kết quả đáng chú ý:
+
+- Gõ chữ: đường sản phẩm `utf8` 828,7 ms / `upper` 729,3 ms, tệp byte-exact; qua biểu mẫu web trong
+  Chrome ba payload `lower`/`mixed`/`upper` đều `exact_match=true` (473/564/473 ms).
+- Bấm hai lần cùng điểm: **126,7 ms và 65,7 ms**, không `SOURCE_CHANGED` — trước khi vá: 5084/5078 ms
+  kèm `mousemove` hết thời gian chờ.
+- Kịch bản hộp thoại 7/7 PASS (chụp 75,1/55,6 ms, ghép đúng, click 60,9 ms, key 55,3 ms, type 63,5 ms)
+  — trước khi vá: từ chối `SOURCE_CHANGED`, key/type treo 5,5 s.
+- Đối kháng (cửa sổ lạ che điểm bấm): từ chối `SOURCE_CHANGED` trong 62,7 ms — chốt vẫn chặt.
+- Bộ đo: mọi phép đo dưới trần; `budget` ĐẠT (exit 0); nâng trần giả ⇒ `VƯỢT TRẦN` exit 1; xoá số đo ⇒
+  `KHÔNG ĐO ĐƯỢC` exit 1; 200 ký tự sống ⇒ `đúng 200 chữ x: True`.
+- Bảng Machine: chạy được cả từ `localhost:3100` lẫn địa chỉ preview công khai; picker 9–10 cửa sổ.
+
+**Lỗi thứ tư do lượt kiểm tìm ra và đã vá (`10f8bee`) — BUG-126:** `capture_window` bỏ sót hộp thoại
+của chính ứng dụng khi cửa sổ đích **vẫn giữ tiêu điểm**. Khung hình trực tiếp trên bảng Machine là
+nền phẳng (mọi pixel `(32,48,64)`), hộp thoại con đang mở nằm trên nhưng không có trong ảnh. Nguyên
+nhân: cổng cũ đoán "hộp thoại modal luôn giữ tiêu điểm" nên chỉ dò khi cửa sổ bị che hoặc tiêu điểm đã
+đi — sai với hộp thoại **không modal** (`UTILITY`/`POPUP_MENU`/`TOOLTIP`/`NOTIFICATION`). Đã bỏ hẳn
+cổng đoán, luôn dò (`transient_windows` 1,19 ms ấm / 6,31 ms nguội; `capture_window` 49,0–49,4 ms so
+với trần 150 ms). Hai bài kiểm mới phủ đúng ca lọt lưới; tổng `test_x11_platform.py` **83 lượt xanh**,
+cộng 7 lượt của `test_cua_bench_budget.py` là **90**.
+
+Cấu hình cần nhớ: harness host 3112 phải có `BOXFOX_UI_ORIGINS` (nếu không, bảng Machine trả 403
+`Local administration required` khi mở từ địa chỉ preview công khai). Biến này mất khi harness khởi
+động lại bằng lệnh cũ — xem `/var/tmp/harness-3112.env.txt`.
