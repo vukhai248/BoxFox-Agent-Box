@@ -13,7 +13,8 @@ Hai nguồn **độc lập**, nên có hai cờ riêng:
   `events` của `sessions.sqlite`, các hàng `kind='tool_end'` có `result.is_error`
   — mã lỗi nằm ở `result.errorCode`. Đây là **bản ghi đầy đủ** của từng lời gọi công cụ. Sổ được đọc
   trên **bản sao tạm**: mở chỉ-đọc một sổ WAL vẫn để lại tệp `-shm` trong thư mục chủ nhà, nên công cụ
-  không bao giờ mở tệp gốc (xem `_snapshot`).
+  không bao giờ mở tệp gốc (xem `_snapshot`). `--db` thay `--data-dir` bằng đường dẫn thẳng tới tệp sổ
+  (tên tệp bất kỳ); dòng `nguồn sổ:` và khoá `db` của JSON luôn in **tệp đã mở**, không suy ra từ thư mục.
 * `--log-dir` — nhật ký dev (`BOXFOX_SYSTEM_LOG_DIR`, mặc định `~/BoxFox/logs`); đọc các dòng
   `tool.error` của `harness.jsonl`. Nhật ký **thiếu** hàng thành công, nên hai nguồn không thay nhau
   được: sổ cho tỉ lệ, nhật ký cho ca đã bị nén/xoay vòng.
@@ -207,12 +208,15 @@ def _join(values: list[str]) -> str:
     return ','.join(values[:2]) + f'+{len(values) - 2}'
 
 
-def print_table(rows: list[dict], *, data_dir: Path, store_note: str, store_total, log_path: Path,
+def print_table(rows: list[dict], *, db_path: Path, store_note: str, store_total, log_path: Path,
                 log_note: str, log_lines: int, limit: int) -> None:
     print('=== mã lỗi host/CUA đo được trên máy này ===')
     print(f'trần đọc: {limit} hàng sự kiện (mỗi nguồn)')
     total = '' if store_total is None else f'{store_total} hàng tool_end'
-    print(f'nguồn sổ:   {data_dir / "sessions.sqlite"} {("(" + total + ")") if total else ""}'
+    # In thẳng tệp ĐÃ MỞ, không ghép lại từ thư mục: `--db /var/tmp/x.sqlite` mà in
+    # `/var/tmp/sessions.sqlite` là chỉ sai tên một tệp khác (đo 2026-10-08, review của chủ nhà) —
+    # công cụ đo thì dòng đầu phải truy được đúng cái đã đọc.
+    print(f'nguồn sổ:   {db_path} {("(" + total + ")") if total else ""}'
           f'{(" — " + store_note) if store_note else ""}')
     print(f'nguồn nhật ký: {log_path} ({log_lines} dòng đã đọc)'
           f'{(" — " + log_note) if log_note else ""}')
@@ -258,10 +262,11 @@ def print_table(rows: list[dict], *, data_dir: Path, store_note: str, store_tota
         print(f"(cộng {no_code['count']} hàng không mang mã — đếm riêng, xem ghi chú ở trên)")
 
 
-def build_report(rows: list[dict], *, data_dir: Path, log_dir: Path, limit: int) -> dict:
+def build_report(rows: list[dict], *, db_path: Path, log_dir: Path, limit: int) -> dict:
     seen = [row for row in rows if row['code'] != NO_CODE]
     return {
-        'dataDir': str(data_dir),
+        # Khoá `db` là **tệp đã mở** (không phải thư mục suy ra): `--db` có thể trỏ bất kỳ tên tệp nào.
+        'db': str(db_path),
         'logDir': str(log_dir),
         'limit': limit,
         'codes': [{key: row[key] for key in ('code', 'count', 'tools', 'sessions', 'first', 'last',
@@ -293,12 +298,11 @@ def main(argv=None) -> int:
     store_observations, store_total, store_note = read_store(db_path, limit)
     log_observations, log_lines, log_note = read_log(log_path, limit)
     rows = aggregate(store_observations + log_observations)
-    print_table(rows, data_dir=data_dir if not args.db else db_path.parent, store_note=store_note,
+    print_table(rows, db_path=db_path, store_note=store_note,
                 store_total=store_total, log_path=log_path, log_note=log_note, log_lines=log_lines,
                 limit=limit)
     if args.json:
-        report = build_report(rows, data_dir=data_dir, log_dir=log_dir, limit=limit)
-        report['db'] = str(db_path)
+        report = build_report(rows, db_path=db_path, log_dir=log_dir, limit=limit)
         report['storeRows'] = store_total
         report['logLines'] = log_lines
         Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

@@ -112,8 +112,13 @@ def _load_xlib():
 
     Tách riêng để `unavailable_reason()` hỏi được "máy có gói chưa" mà không phải bắt lỗi import ở
     ba nơi, và để test bơm được một mô-đun giả (hoặc một mô-đun ném lỗi).
+
+    Phải nạp **cả mô-đun con** `Xlib.display`: `import Xlib` một mình KHÔNG đưa `Xlib.display` vào
+    namespace (đo được trên python-xlib 0.33: `hasattr(Xlib, 'display')` là `False` ngay sau
+    `import Xlib`), nên `open_display()` sẽ ném `AttributeError` trên mọi máy thật dù gói đã cài.
     """
     import Xlib
+    import Xlib.display               # noqa: F401 — chỉ để gắn mô-đun con vào gói cha
 
     return Xlib
 
@@ -318,6 +323,7 @@ class X11OverlayWindow:
         self._depth = 0
         self._window: Any = None
         self._gc: Any = None
+        self._mapped = False           # cửa sổ viền đang hiện (để nhịp rảnh biết có nên nâng lại không)
         self._bounds: tuple[int, int, int, int] | None = None
         self._band = 0
         self._accent = ACCENT_COLOR
@@ -363,7 +369,14 @@ class X11OverlayWindow:
         self._queue.put(('source', (self._source,), threading.Event()))
 
     def screen_bounds(self) -> tuple[int, int, int, int] | None:
-        """`(0, 0, rộng, cao)` của màn hình ảo, hoặc `None` khi chưa mở được `Display`."""
+        """`(0, 0, rộng, cao)` của màn hình ảo theo **chính mặt viền này** đọc, hoặc `None`.
+
+        Đây là đường đọc riêng của viền (mở `Display` rồi hỏi `screen`), KHÔNG phải đường mà
+        `HostExecutor` dùng để lấy hộp cho đích "cả máy": đường đó gọi
+        `platform.virtual_screen_bounds()` (qua `HostExecutor._screen_window()`), tức nền tảng desktop
+        đang chạy — một nguồn sự thật duy nhất cho cả ảnh chụp lẫn viền. Giữ hàm này vì nó là hợp
+        đồng của J1 và là cách rẻ nhất để test mặt viền biết màn hình lớn bao nhiêu.
+        """
         if not self._error:
             self._ensure_thread()
             self._ready.wait(timeout=COMMAND_TIMEOUT_SEC)
@@ -494,20 +507,38 @@ class X11OverlayWindow:
         # Shape Input RỖNG: cú bấm xuyên qua viền (đo được: `xdotool getmouselocation` trả cửa sổ
         # bên dưới). Không có bước này thì viền chặn mọi cú bấm trong băng của chính nó.
         self._window.shape_rectangles(SHAPE_SET, SHAPE_INPUT, SHAPE_UNSORTED, 0, 0, [])
+        # Lệnh đổi vùng cũng là lúc nâng lại: viền có thể đang bị cửa sổ khác che (xem
+        # `_raise_window`). Trước `map()` lời gọi này vô hại — thứ tự chồng áp dụng lúc map.
+        self._raise_window()
 
     def _map_window(self) -> None:
         self._window.map()
         self._window.configure(stack_mode=X_ABOVE)
+        self._mapped = True
         self._xdisplay.sync()
+
+    def _raise_window(self) -> None:
+        """Đặt lại viền lên TRÊN CÙNG (không cần `map` lại).
+
+        Chỉ nâng ở lúc `map()` là **không đủ**: cửa sổ `override_redirect` giữ nguyên chỗ trong
+        chồng cửa sổ, nên khi WM nâng một cửa sổ khác (hoặc ứng dụng mở hộp thoại) lên trên thì
+        viền bị che **giữa lượt CUA** và tín hiệu "đang bị điều khiển" biến mất cho tới lần `show`
+        sau — tới 15 s auto-hide — trong khi CUA vẫn chạy. Nâng lại ở mỗi lệnh đổi vùng và ở nhịp
+        rảnh 1 Hz. Giá đo được: một `configure` (không `sync`) — 0,05 ms, tối đa 1 lần/giây.
+        """
+        if self._window is not None:
+            self._window.configure(stack_mode=X_ABOVE)
 
     def _unmap_window(self) -> None:
         if self._window is not None:
             self._window.unmap()
+            self._mapped = False
             self._xdisplay.sync()
 
     def _destroy_window(self) -> None:
         window, self._window = self._window, None
         self._gc = None
+        self._mapped = False
         if window is not None:
             try:
                 window.unmap()
@@ -531,9 +562,14 @@ class X11OverlayWindow:
         self._xdisplay.sync()
 
     def _refresh(self) -> None:
-        """Nhịp rảnh: lấy lại màu nền, chỉ vẽ lại khi màu đổi ≥ `COLOUR_EPSILON` một kênh."""
+        """Nhịp rảnh: nâng lại viền lên trên cùng, lấy lại màu nền, vẽ lại chỉ khi màu đổi ≥ `COLOUR_EPSILON`."""
         if self._window is None or self._bounds is None:
             return
+        if self._mapped:
+            # Nâng lại TRƯỚC khi đọc mẫu: `get_image` bên dưới là một vòng khứ hồi nên lệnh
+            # `configure` được gửi đi ngay, và viền trở lại trên cùng trong vòng ≤ 1 giây kể cả khi
+            # không có lệnh nào khác. Không nâng khi đang ẩn (không có gì để nhìn).
+            self._raise_window()
         backdrop = self._sample_backdrop()
         if all(abs(backdrop[index] - self._backdrop[index]) < COLOUR_EPSILON for index in range(3)):
             return

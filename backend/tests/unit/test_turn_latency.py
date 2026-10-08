@@ -11,9 +11,14 @@ Sáu ca, theo K3 của kế hoạch:
 4. thiếu mốc (lượt chưa đóng) và hàng cũ thiếu `turn` (gom theo dãy `seq` giữa hai `user`);
 5. store rỗng / thiếu bảng / thiếu tệp: in `CHƯA ĐO ĐƯỢC`, thoát mã 2, không traceback;
 6. alias `cua_bench turn` trả ĐÚNG số của reader (không tính lại theo cách khác).
+
+Hai ca thêm sau soát 08/10/2026: đọc store WAL **không để lại dấu vết** trong thư mục sổ (kể cả thư mục
+chỉ-đọc) — cả ba ca đó ĐỔ nếu quay lại mở thẳng tệp gốc bằng `?mode=ro` — và câu `chưa đo được lượt CUA
+nào` phải nói rõ cửa sổ `--limit` khi ca CUA bị cắt khỏi báo cáo.
 """
 import importlib.util
 import json
+import os
 import pathlib
 import sqlite3
 
@@ -59,6 +64,21 @@ def _store(tmp_path, rows, *, session_id=_SID, name='sessions.sqlite'):
                     (session_id, kind, json.dumps(payload), created))
     con.commit()
     con.close()
+    return db
+
+
+def _wal_store(tmp_path, rows, *, wal=b'', shm=None):
+    """Store ở chế độ WAL, kèm dấu vết sidecar còn lại (`-wal` 0 byte như máy chủ nhà 08/10/2026)."""
+    db = _store(tmp_path, rows)
+    con = sqlite3.connect(db, isolation_level=None)
+    try:
+        assert con.execute('PRAGMA journal_mode=WAL').fetchone()[0] == 'wal'
+    finally:
+        con.close()
+    if wal is not None:
+        pathlib.Path(str(db) + '-wal').write_bytes(wal)
+    if shm is not None:
+        pathlib.Path(str(db) + '-shm').write_bytes(shm)
     return db
 
 
@@ -169,7 +189,8 @@ def test_a_failed_turn_without_tools_is_not_a_cua_case(tmp_path, capsys):
     assert round(turn['harnessMs'] + turn['outsideMs'], 1) == turn['wallMs']
 
     assert report['cases'] == [], 'lượt hỏng ở định tuyến không phải ca CUA'
-    assert 'chưa đo được lượt CUA nào' in report['notes']
+    assert report['notes'][0] == 'chưa đo được lượt CUA nào', \
+        'không có ca CUA nào ở BẤT KỲ lượt nào thì giữ nguyên câu cũ (không thêm "trong N lượt")'
 
     code = reader.main(['--db', str(db)])
     out = capsys.readouterr().out
@@ -233,6 +254,94 @@ def test_old_rows_without_turn_group_between_user_rows(tmp_path):
     assert len(report['turns']) == 1, 'hàng thiếu `turn` vẫn phải gom được theo mốc `user`'
     turn = report['turns'][0]
     assert turn['turn'] == 1 and turn['harnessMs'] == 300.0 and turn['wallMs'] == 600.0
+
+
+def test_the_reader_does_not_create_the_shm_of_a_wal_store(tmp_path, capsys):
+    """Sổ WAL còn `-wal` 0 byte (đúng dạng đo được trên máy chủ nhà): KHÔNG được tạo tệp trong thư mục sổ.
+
+    Mở thẳng `?mode=ro` vào sổ này làm SQLite tạo `sessions.sqlite-shm` — một dấu vết mới của công cụ
+    đo trong thư mục dữ liệu (đo 08/10/2026). Ca này ghim đường đọc qua bản sao tạm; nó ĐỔ nếu quay lại
+    mở thẳng tệp gốc.
+    """
+    reader = _reader()
+    db = _wal_store(tmp_path, _completed_rows(), wal=b'')
+    before = sorted(path.name for path in tmp_path.iterdir())
+
+    assert reader.main(['--db', str(db)]) == 0
+
+    out = capsys.readouterr().out
+    assert 'wall 1720.0 ms' in out, 'vẫn phải đọc đúng hàng của sổ WAL'
+    assert sorted(path.name for path in tmp_path.iterdir()) == before, \
+        'công cụ đã tạo tệp trong thư mục của sổ'
+
+
+def test_the_reader_does_not_rewrite_the_shm_of_a_wal_store(tmp_path, capsys):
+    """Sổ WAL còn `-shm`: KHÔNG được viết lại nó (đo được: 0 → 32 768 byte, mtime mới mỗi lần chạy)."""
+    reader = _reader()
+    db = _wal_store(tmp_path, _completed_rows(), wal=b'', shm=b'')
+    before = {path.name: (path.stat().st_size, path.stat().st_mtime_ns)
+              for path in tmp_path.iterdir()}
+
+    assert reader.main(['--db', str(db)]) == 0
+
+    out = capsys.readouterr().out
+    assert 'wall 1720.0 ms' in out
+    after = {path.name: (path.stat().st_size, path.stat().st_mtime_ns)
+             for path in tmp_path.iterdir()}
+    assert after == before, 'công cụ đã chạm vào thư mục của sổ (bản sao tạm bị rò)'
+
+
+def test_the_reader_still_works_when_the_store_directory_is_read_only(tmp_path, capsys):
+    """Thư mục store chỉ-đọc: vẫn đọc được, KHÔNG cần quyền ghi vào đó.
+
+    Mở thẳng `?mode=ro` trong thư mục chỉ-đọc thì SQLite báo `attempt to write a readonly database`
+    (đo 08/10/2026) vì nó cần tạo `-shm`; đọc qua bản sao tạm không chạm thư mục gốc. Ca này ĐỔ với
+    đường mở thẳng.
+    """
+    reader = _reader()
+    db = _wal_store(tmp_path, _completed_rows(), wal=b'')
+    for path in tmp_path.iterdir():
+        os.chmod(path, 0o444)
+    os.chmod(tmp_path, 0o555)
+    try:
+        assert reader.main(['--db', str(db)]) == 0
+        out = capsys.readouterr().out
+        assert '1 ca CUA' in out and 'wall 1720.0 ms' in out
+    finally:
+        os.chmod(tmp_path, 0o755)
+        for path in tmp_path.iterdir():
+            os.chmod(path, 0o644)
+
+
+def test_the_cua_note_says_which_window_when_a_cua_turn_is_outside_the_limit(tmp_path, capsys):
+    """Cửa sổ `--limit` cắt mất ca CUA cũ: câu "chưa đo được" phải nói rõ "trong N lượt gần nhất".
+
+    Không được để câu cũ khiến người đọc tưởng cả store không có ca CUA nào (soát 08/10/2026).
+    """
+    reader = _reader()
+    rows = _completed_rows() + [
+        ('user', {'text': 'Việc sau, không CUA', 'turn': 2, 'invocationId': _INVOCATION}, _BASE + 10),
+        ('turn_start', {'turn': 2, 'step': 1, 'modelId': None}, _BASE + 10.1),
+        ('turn_end', {'turn': 2, 'step': 1, 'status': 'completed', 'finishReason': 'stop',
+                      'toolCalls': 0, 'stepsUsed': 1, 'toolsRun': 0, 'deadlineUsedMs': 300},
+         _BASE + 10.3),
+        ('assistant', {'text': 'Xong.', 'final': True}, _BASE + 10.4),
+    ]
+    db = _store(tmp_path, rows)
+
+    windowed = reader.read_turns(db, limit=1)
+    assert windowed['cases'] == [], 'lượt gần nhất không phải ca CUA'
+    note = windowed['notes'][0]
+    assert note.startswith('chưa đo được lượt CUA nào trong 1 lượt gần nhất'), note
+    assert '1 lượt CUA cũ hơn' in note and '--limit 0' in note
+
+    code = reader.main(['--db', str(db), '--limit', '1'])
+    out = capsys.readouterr().out
+    assert code == 0 and note in out, 'dòng đầu báo cáo phải là câu đã nói rõ cửa sổ'
+
+    everything = reader.read_turns(db, limit=0)
+    assert len(everything['cases']) == 1, '`--limit 0` phải thấy ca CUA cũ'
+    assert not any(n.startswith('chưa đo được lượt CUA nào') for n in everything['notes'])
 
 
 @pytest.mark.parametrize('kind', ['empty', 'no_table', 'missing_file'])

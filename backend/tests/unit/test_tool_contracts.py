@@ -176,6 +176,43 @@ def test_the_tool_counts_each_code_and_marks_the_undeclared_ones(tmp_path, capsy
     assert report['storeRows'] == 3  # hàng thành công vẫn được đếm trong sổ, chỉ không vào bảng lỗi
 
 
+def _header_store_path(out: str) -> Path:
+    """Đường dẫn sổ in ở dòng `nguồn sổ:` — chính là tệp công cụ đã mở."""
+    line = next(line for line in out.splitlines() if line.startswith('nguồn sổ:'))
+    return Path(line.split('nguồn sổ:')[1].split(' (')[0].strip())
+
+
+def test_the_header_names_the_store_that_was_actually_opened(tmp_path, capsys):
+    """Dòng `nguồn sổ:` phải là tệp ĐÃ MỞ, không phải một tên suy ra từ thư mục.
+
+    Đo được 2026-10-08 (review của chủ nhà): `--db /var/tmp/x.sqlite` in ra `/var/tmp/sessions.sqlite`
+    — một tệp không tồn tại. Với công cụ đo, dòng đầu là thứ duy nhất truy được nguồn số liệu, nên nó
+    không được phép chỉ sang tệp khác. Ca này ghim **cả hai** đường: `--db` và mặc định `--data-dir`.
+    """
+    # (a) `--db` trỏ tới tên tệp KHÁC `sessions.sqlite` — đúng ca đã sai.
+    other = tmp_path / 'rev-live.sqlite'
+    _seed_store(other)
+    report_path = tmp_path / 'report.json'
+    assert tool_errors.main(['--db', str(other), '--log-dir', str(tmp_path / 'khong-co'),
+                             '--json', str(report_path)]) == 0
+    out = capsys.readouterr().out
+    assert _header_store_path(out) == other
+    assert '3 hàng tool_end' in out          # đọc đúng sổ đó
+    assert 'sessions.sqlite' not in out      # và không nhắc tới tệp nào khác
+    report = json.loads(report_path.read_text(encoding='utf-8'))
+    assert report['db'] == str(other)        # JSON cũng phải nói cùng một tệp
+    assert 'dataDir' not in report, 'khoá `dataDir` cũ ghi thư mục, không phải tệp đã đọc'
+
+    # (b) đường mặc định: không `--db` ⇒ tệp mở là `<data-dir>/sessions.sqlite`.
+    data_dir = tmp_path / 'harness'
+    data_dir.mkdir()
+    _seed_store(data_dir / 'sessions.sqlite')
+    assert tool_errors.main(['--data-dir', str(data_dir), '--log-dir', str(tmp_path / 'khong-co')]) == 0
+    out = capsys.readouterr().out
+    assert _header_store_path(out) == data_dir / 'sessions.sqlite'
+    assert '3 hàng tool_end' in out
+
+
 def test_the_tool_never_writes_to_the_store(tmp_path, capsys):
     db = tmp_path / 'sessions.sqlite'
     _seed_store(db)

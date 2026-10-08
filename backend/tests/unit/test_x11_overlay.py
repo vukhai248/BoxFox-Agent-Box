@@ -15,7 +15,11 @@ Ba nhóm ca, chạy được trên máy **không có X server**:
 """
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
+import textwrap
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -153,9 +157,52 @@ def test_unavailable_reason_names_the_package_only_when_xlib_is_missing(monkeypa
 
 
 def test_the_module_imports_without_xlib():
-    """Mô-đun phải nhập được khi máy chưa cài gói: hằng số giao thức khai tại chỗ, `Xlib` nạp lười."""
-    assert 'Xlib' not in sys.modules or True        # không bắt buộc, chỉ chốt rằng import ở trên đã chạy
-    assert ov.X_INPUT_OUTPUT == 1 and ov.SHAPE_INPUT == 2 and ov.SHAPE_BOUNDING == 0
+    """Mô-đun phải nhập được khi máy chưa cài gói: hằng số giao thức khai tại chỗ, `Xlib` nạp lười.
+
+    `python-xlib` **đã có** trong venv này (từ J3), nên tiến trình đang chạy không còn chứng minh
+    được cảnh "chưa cài gói": `agentbox.sandbox.x11.overlay` đã nhập xong từ trước. Phải dựng một
+    tiến trình con với `Xlib` bị **chặn** ở `sys.meta_path`.
+
+    Bộ chặn được kiểm là **có tác dụng** (`open_display()` phải ném `ImportError`) — thiếu bước đó
+    thì một bộ chặn hỏng vẫn cho ca này xanh, và nó lại thành câu khẳng định rỗng lần nữa.
+    """
+    root = Path(__file__).resolve().parents[2]         # backend/ (pytest.ini trỏ `pythonpath` vào src)
+    program = textwrap.dedent(
+        """
+        import sys
+
+
+        class ChanXlib:
+            '''Chặn `Xlib` và `Xlib.*` như thể gói chưa được cài.'''
+
+            def find_spec(self, name, path=None, target=None):
+                if name == 'Xlib' or name.startswith('Xlib.'):
+                    raise ImportError('No module named %r (bị chặn để kiểm tra)' % name)
+                return None
+
+
+        sys.meta_path.insert(0, ChanXlib())
+
+        from agentbox.sandbox.x11 import overlay as ov
+
+        assert 'Xlib' not in sys.modules, 'nhập mô-đun mà đã nạp `Xlib` là sai (phải nạp lười)'
+        assert ov.X_INPUT_OUTPUT == 1 and ov.SHAPE_INPUT == 2 and ov.SHAPE_BOUNDING == 0
+        try:
+            ov.open_display()
+        except ImportError:
+            pass
+        else:
+            raise AssertionError('bộ chặn `Xlib` không có tác dụng — ca kiểm này vô nghĩa')
+        assert 'python-xlib' in ov.unavailable_reason(), 'thiếu gói phải nói ra tên gói'
+        print('OK_KHONG_XLIB')
+        """
+    )
+    env = dict(os.environ)
+    env['PYTHONPATH'] = os.pathsep.join(
+        [str(root / 'src')] + [part for part in (env.get('PYTHONPATH') or '').split(os.pathsep) if part])
+    done = subprocess.run([sys.executable, '-c', program], capture_output=True, text=True, env=env,
+                          cwd=str(root), timeout=120)
+    assert done.returncode == 0 and 'OK_KHONG_XLIB' in done.stdout, done.stderr or done.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +380,47 @@ def test_the_border_repaints_when_the_window_moves(fake_display):
     created = [call for call in fake_display.root.calls if call[0] == 'create_window']
     assert len(created) == 1, 'không được tạo cửa sổ thứ hai'
     assert window.shapes[-2][1] == ov.ring_rectangles(400, 300, ov.band_width(400, 300, 1920, 1080))
+    overlay.overlay_close()
+
+
+def raised(window):
+    """Số lần cửa sổ viền được đặt lại lên trên cùng."""
+    return len([call for call in window.calls
+                if call[0] == 'configure' and call[2].get('stack_mode') == ov.X_ABOVE])
+
+
+def test_the_border_is_raised_again_on_every_region_change(fake_display):
+    """`override_redirect` giữ nguyên chỗ trong chồng cửa sổ: nâng ở lúc `map()` là chưa đủ.
+
+    WM nâng một cửa sổ khác lên trên thì viền bị che **giữa lượt CUA** — mà lúc đó `CuaOverlay`
+    chỉ gọi `overlay_set_bounds`. Đo trên `:1`: cửa sổ che phủ làm cả băng biến mất cho tới lần
+    `show` sau (tới 15 s auto-hide) trong khi CUA vẫn chạy.
+    """
+    overlay = ov.X11OverlayWindow()
+    overlay.overlay_show(BOUNDS)
+    window = fake_display.root.child
+    after_show = raised(window)
+    assert after_show >= 1, 'lần `show` đầu phải nâng viền'
+    overlay.overlay_set_bounds({'x': 0, 'y': 0, 'width': 400, 'height': 300})
+    assert raised(window) == after_show + 1, 'lệnh đổi vùng phải nâng lại viền'
+    overlay.overlay_set_bounds({'x': 0, 'y': 0, 'width': 400, 'height': 300})
+    assert raised(window) == after_show + 2, 'lần đổi vùng nào cũng phải nâng lại'
+    overlay.overlay_close()
+
+
+def test_the_idle_tick_raises_the_border_back_above(fake_display):
+    """Nhịp rảnh 1 Hz cũng nâng lại (và **không** vẽ lại khi màu nền không đổi — giá phải rẻ)."""
+    overlay = ov.X11OverlayWindow()
+    overlay.overlay_show(BOUNDS)
+    window = fake_display.root.child
+    after_show, painted = raised(window), len(window.painted)
+    overlay._refresh()                       # nhịp rảnh: `_loop` gọi hàm này mỗi `REFRESH_SEC`
+    assert raised(window) == after_show + 1, 'nhịp rảnh phải nâng lại viền'
+    assert len(window.painted) == painted, 'màu nền không đổi thì không được vẽ lại'
+    overlay.overlay_hide()
+    hidden = raised(window)
+    overlay._refresh()                       # đang ẩn: không có gì để nâng
+    assert raised(window) == hidden, 'viền đang ẩn thì không nâng'
     overlay.overlay_close()
 
 

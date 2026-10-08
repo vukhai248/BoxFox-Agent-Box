@@ -1,7 +1,13 @@
 """Đo MỘT LƯỢT CUA từ lúc chủ nhà ra đề nghị đến lúc trả lời — đọc bảng `events` của harness.
 
 Công cụ này **chỉ đọc** store SQLite của harness (chỉ thư viện chuẩn, không cần X server, không cần
-mạng), nên chạy được ở mọi máy có tệp store. Nguồn chân lý là bảng `events` (lược đồ ở
+mạng), nên chạy được ở mọi máy có tệp store. Store được đọc qua **bản sao tạm** (db + `-wal` + `-shm`,
+xoá trong `finally`) — không mở thẳng tệp gốc: đo được 2026-10-08 là mở chỉ-đọc (`?mode=ro`) một store
+WAL **vẫn** làm SQLite tạo `-wal` 0 byte và `-shm` (hoặc viết lại `-shm` sẵn có) trong thư mục dữ liệu
+của chủ nhà, tức công cụ đo để lại dấu vết. Bản sao cũng là cách duy nhất đọc được store nằm trong thư
+mục chỉ-đọc (mở thẳng ở đó thì SQLite báo `attempt to write a readonly database`). Đây là **chệch có
+chủ ý** so với §K của kế hoạch v2 — §K viết trước khi tác dụng phụ này được đo. Nguồn chân lý là bảng
+`events` (lược đồ ở
 `backend/src/agentbox/memory/session_store.py:24-26`). Payload của `turn_start`/`turn_end` **không**
 mang mốc thời gian — mọi số ms dưới đây đọc từ cột `created` (epoch, số thực), trừ `deadlineUsedMs`
 (bộ đếm ngân sách nội bộ của harness, bắt đầu ở `runtime.py:4123`).
@@ -32,10 +38,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.request import pathname2url
 
 #: Tên công cụ thuộc nhóm CUA: một lượt có ít nhất một `tool_start` tên trong đây là **ca CUA**.
 CUA_TOOLS = ('computer_use', 'computer_screen_capture', 'computer_screen_record', 'inspect_element')
@@ -67,36 +76,66 @@ def default_db_path() -> Path:
     return Path(base) / 'sessions.sqlite'
 
 
+def _snapshot(db_path: Path) -> Path:
+    """Bản sao tạm của sổ (kèm `-wal`/`-shm` nếu có) để đọc mà **không để lại dấu vết** ở thư mục gốc.
+
+    Vì sao không mở thẳng bằng `?mode=ro`: đo được 2026-10-08 là SQLite **vẫn** tạo `-wal` 0 byte và
+    `-shm` (hoặc viết lại `-shm` sẵn có, 0 → 32 768 byte) cho một sổ WAL ngay cả khi kết nối chỉ đọc —
+    tức là ghi vào thư mục dữ liệu của chủ nhà. Bản sao đẩy dấu vết đó vào thư mục tạm của chính công
+    cụ (cùng cách `tools/tool_errors.py:_snapshot` đã làm), và cũng nhờ thế mà đọc được sổ nằm trong
+    thư mục chỉ-đọc. Bản sao có thể lệch nếu tiến trình ghi đang chạy — SQLite sẽ **báo lỗi rõ ràng**
+    chứ không im lặng trả dữ liệu sai.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix='turn-latency-'))
+    for suffix in ('', '-wal', '-shm'):
+        source = Path(str(db_path) + suffix)
+        if source.exists():
+            shutil.copy2(source, tmp / (db_path.name + suffix))
+    return tmp / db_path.name
+
+
 def load_rows(db_path: Path) -> tuple[list[dict], int]:
     """Mọi hàng `events` theo `seq`, chỉ đọc — không bao giờ ghi vào store sống.
 
-    Trả `(rows, broken_payloads)`: hàng có payload không đọc được vẫn giữ (để gom lượt theo `seq`)
+    Đọc trên bản sao tạm (`_snapshot`): công cụ không mở tệp gốc — không tạo, không sửa, không migrate
+    sổ. Trả `(rows, broken_payloads)`: hàng có payload không đọc được vẫn giữ (để gom lượt theo `seq`)
     nhưng payload coi như rỗng, và số hàng hỏng được đếm để báo trung thực.
     """
     if not db_path.exists():
         raise StoreUnavailable('không thấy tệp %s' % db_path)
+    tmp: Path | None = None
     try:
-        # `mode=ro`: tuyệt đối không mở đường ghi vào store đang được harness dùng.
-        con = sqlite3.connect('file:%s?mode=ro' % db_path.resolve(), uri=True)
-    except sqlite3.Error as exc:
-        raise StoreUnavailable('không mở được %s (%s)' % (db_path, exc)) from None
-    rows: list[dict] = []
-    broken = 0
-    try:
-        con.row_factory = sqlite3.Row
-        cursor = con.execute('SELECT seq, session_id, kind, payload, created FROM events ORDER BY seq')
-        for row in cursor:
-            try:
-                payload = json.loads(row['payload'])
-            except (TypeError, ValueError):
-                payload, broken = {}, broken + 1
-            rows.append({'seq': int(row['seq']), 'sessionId': row['session_id'], 'kind': row['kind'],
-                         'payload': payload if isinstance(payload, dict) else {},
-                         'created': float(row['created'])})
-    except sqlite3.Error as exc:
-        raise StoreUnavailable('không đọc được bảng `events` của %s (%s)' % (db_path, exc)) from None
+        try:
+            tmp = _snapshot(db_path)
+        except OSError as exc:
+            raise StoreUnavailable('không sao chép được %s (%s)' % (db_path, exc)) from None
+        try:
+            # `mode=ro` trên bản sao: tuyệt đối không mở đường ghi vào store đang được harness dùng.
+            con = sqlite3.connect('file:%s?mode=ro' % pathname2url(str(tmp)), uri=True)
+        except sqlite3.Error as exc:
+            raise StoreUnavailable('không mở được %s (%s)' % (db_path, exc)) from None
+        rows: list[dict] = []
+        broken = 0
+        try:
+            con.row_factory = sqlite3.Row
+            cursor = con.execute('SELECT seq, session_id, kind, payload, created '
+                                 'FROM events ORDER BY seq')
+            for row in cursor:
+                try:
+                    payload = json.loads(row['payload'])
+                except (TypeError, ValueError):
+                    payload, broken = {}, broken + 1
+                rows.append({'seq': int(row['seq']), 'sessionId': row['session_id'],
+                             'kind': row['kind'],
+                             'payload': payload if isinstance(payload, dict) else {},
+                             'created': float(row['created'])})
+        except sqlite3.Error as exc:
+            raise StoreUnavailable('không đọc được bảng `events` của %s (%s)' % (db_path, exc)) from None
+        finally:
+            con.close()
     finally:
-        con.close()
+        if tmp is not None:
+            shutil.rmtree(tmp.parent, ignore_errors=True)
     return rows, broken
 
 
@@ -304,14 +343,15 @@ def read_turns(db_path: Path, *, session: str | None = None, limit: int = DEFAUL
     """Báo cáo đầy đủ: `{'generatedAt', 'db', 'sessions', 'turns', 'cases', 'notes'}`.
 
     `session` lọc theo tiền tố session id; `limit` lấy N lượt GẦN NHẤT (<= 0 = tất cả). `cases` là
-    các lượt có ít nhất một lời gọi CUA trong số lượt được báo cáo.
+    các lượt có ít nhất một lời gọi CUA trong số lượt được báo cáo. Khi `cases` rỗng, `notes[0]` LUÔN
+    nói rõ vì sao rỗng — "không có ca CUA nào", hay "không có ca CUA nào TRONG N lượt gần nhất" khi
+    cửa sổ `--limit` cắt mất ca cũ (câu này không được để người đọc tưởng store sạch).
     """
     rows, broken = load_rows(db_path)
     if session:
         rows = [row for row in rows if row['sessionId'].startswith(session)]
-    turns = [summarise_turn(turn) for turn in build_turns(rows)]
-    if limit and limit > 0:
-        turns = turns[-limit:]
+    all_turns = [summarise_turn(turn) for turn in build_turns(rows)]
+    turns = all_turns[-limit:] if limit and limit > 0 else all_turns
     if not turns:
         raise StoreUnavailable('store không có lượt nào để đo (%s)' % db_path)
 
@@ -339,7 +379,15 @@ def read_turns(db_path: Path, *, session: str | None = None, limit: int = DEFAUL
              'ba phần `model + vòng lặp` + `tool` + `thân harness` cộng đúng bằng `harnessMs`; '
              'thêm `ngoài lượt` là đúng bằng `wallMs`.']
     if not cases:
-        notes.insert(0, 'chưa đo được lượt CUA nào')
+        # Cửa sổ `--limit` có thể cắt mất ca CUA cũ: câu này phải nói rõ "trong N lượt gần nhất" kèm
+        # số ca còn ngoài cửa sổ, không được để người đọc tưởng cả store không có ca CUA nào.
+        hidden = sum(1 for turn in all_turns if turn['cua']) - len(cases)
+        if hidden > 0:
+            notes.insert(0, 'chưa đo được lượt CUA nào trong %d lượt gần nhất (còn %d lượt CUA cũ hơn '
+                             'ngoài cửa sổ `--limit` — dùng `--limit 0` để xem hết)'
+                        % (len(turns), hidden))
+        else:
+            notes.insert(0, 'chưa đo được lượt CUA nào')
     if broken:
         notes.append('%d hàng `events` có payload không đọc được — vẫn gom lượt theo `seq`' % broken)
     return {'generatedAt': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -357,7 +405,9 @@ def format_report(report: dict) -> list[str]:
              '%d phiên · %d lượt · %d ca CUA' % (len(report['sessions']), len(report['turns']),
                                                  len(report['cases']))]
     if not report['cases']:
-        lines.append('chưa đo được lượt CUA nào')
+        # `read_turns` bảo đảm `notes[0]` nói rõ vì sao rỗng (có thể kèm "trong N lượt gần nhất") —
+        # in đúng câu đó thay vì một câu cứng dễ gây hiểu sai khi cửa sổ `--limit` cắt mất ca cũ.
+        lines.append(report['notes'][0] if report['notes'] else 'chưa đo được lượt CUA nào')
     for turn in report['turns']:
         lines.append('')
         head = 'lượt %s · phiên %s' % (turn['turn'], turn['sessionId'][:8])

@@ -173,3 +173,22 @@ thì `db`/`sessions`/`turns`/`cases`/`notes` phải giống nhau (khác duy nh�
 khác thời điểm). `--max-total-ms N` là cổng tuỳ chọn: lượt nào vượt trần thì in `VƯỢT TRẦN` và thoát
 mã 1. Trần lượt **không** nằm trong `DEFAULT_BUDGET_MS`: `check_budget()` duyệt theo danh sách trần nên
 một khoá mới ở đó sẽ làm mọi lần `budget --baseline` cũ báo `KHÔNG ĐO ĐƯỢC` cho lượt.
+
+### Ghi chú sửa đổi — đọc qua bản sao tạm, không mở thẳng store (08/10/2026)
+
+Bản đầu của reader mở store bằng `?mode=ro`, đúng như §K của kế hoạch v2. **Chệch có chủ ý**: đo lại
+cùng ngày cho thấy mở chỉ-đọc một store WAL **vẫn** làm SQLite tạo `-wal` 0 byte và `-shm` (hoặc viết
+lại `-shm` sẵn có, 0 → 32 768 byte, mtime mới) trong thư mục dữ liệu của chủ nhà — nội dung sổ không
+đổi nhưng thư mục đổi, tức công cụ đo để lại dấu vết. §K viết trước khi tác dụng phụ này được đo.
+Reader nay đọc trên **bản sao tạm** (db + `-wal` + `-shm`, xoá trong `finally`), cùng cách
+`tools/tool_errors.py` đã làm. Hai hệ quả:
+
+- store nằm trong thư mục **chỉ-đọc** vẫn đọc được: mở thẳng `?mode=ro` ở đó thì SQLite báo
+  `attempt to write a readonly database` (vì cần tạo `-shm`), còn bản sao không cần chạm thư mục gốc;
+- ba ca trong `tests/unit/test_turn_latency.py` ghim tính "không dấu vết" — không tạo `-shm`, không
+  đổi size/mtime của `-shm` sẵn có, và đọc được trong thư mục chỉ-đọc — **cả ba đổ** nếu quay lại mở
+  thẳng tệp gốc (đã kiểm bằng cách vá tạm đường mở).
+
+Câu `chưa đo được lượt CUA nào` cũng được nói rõ khi cửa sổ `--limit` cắt mất ca CUA cũ:
+`chưa đo được lượt CUA nào trong N lượt gần nhất (còn M lượt CUA cũ hơn ngoài cửa sổ --limit — dùng
+--limit 0 để xem hết)`; store thật không có ca CUA nào ở bất kỳ lượt nào thì giữ nguyên câu cũ.
