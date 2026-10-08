@@ -568,6 +568,11 @@ def create_app(runtime):
             # văn xuôi — không đọc được bằng máy.
             body = {'error': str(exc)}
             code = getattr(exc, 'code', None)
+            if not code and isinstance(exc, json.JSONDecodeError):
+                # Thân JSON hỏng là lỗi của YÊU CẦU, không phải lỗi nội bộ: phải đọc được bằng máy.
+                # Trước đây nhánh này trả 400 với `code` rỗng, nên client chỉ thấy câu văn xuôi.
+                body['error'] = 'REQUEST_INVALID: body must be valid JSON'
+                code = 'REQUEST_INVALID'
             if code:
                 body['code'] = code
             status = getattr(exc, 'status', None)

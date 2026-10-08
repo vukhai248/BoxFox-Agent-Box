@@ -278,6 +278,35 @@ def test_http_router_auth_and_agent_session_api(tmp_path):
                     assert received[0]['messages'][-1]['content'] == 'hello'
     asyncio.run(run())
 
+def test_a_malformed_json_body_is_named_request_invalid_on_every_route(tmp_path):
+    """Thân JSON hỏng phải đọc được bằng máy: 400 kèm `code: REQUEST_INVALID`.
+
+    Trước đây chỉ nhóm route bề mặt bền tự dịch `JSONDecodeError`; các route cũ (tạo phiên, gửi
+    lượt) rơi vào nhánh `ValueError` của middleware và trả 400 với `code` RỖNG — client chỉ còn một
+    câu văn xuôi để đoán.
+    """
+    from aiohttp import ClientSession
+    from aiohttp.test_utils import TestServer
+
+    async def run():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), FixtureModel([answer('xong')]))
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(headers={'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}) as client:
+                url = str(server.make_url('/api/agent/sessions'))
+                bad = {'Content-Type': 'application/json'}
+                async with client.post(url, data='{"skills":', headers=bad) as resp:
+                    assert resp.status == 400
+                    payload = await resp.json()
+                assert payload['code'] == 'REQUEST_INVALID' and 'valid JSON' in payload['error']
+                async with client.post(url + '/nope/turns', data='{"prompt":', headers=bad) as resp:
+                    assert resp.status == 400
+                    assert (await resp.json())['code'] == 'REQUEST_INVALID'
+        store.close()
+
+    asyncio.run(run())
+
+
 def test_an_empty_provider_stream_keeps_the_router_verdict_and_stays_retryable():
     """Lượt sống 1130c2042b6c445db5f1bafc88d8bb94 (2026-09-23) chết vì ĐƯỜNG DỰ PHÒNG tự bắn
     vào chân mình: nhà cung cấp trả kênh SSE rỗng, `complete()` rơi xuống lời gọi KHÔNG streaming,

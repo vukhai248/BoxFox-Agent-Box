@@ -493,6 +493,23 @@ class HistoryStore:
             raise HistoryError('HISTORY_SCOPE_DENIED')
         return capsule
 
+    def project_capsules(self, caller_sid, *, limit=3):
+        """Capsule đã chốt của CÙNG project, mới nhất trước (LT-08: hội thoại mới đọc lại được).
+
+        Project lấy từ bản ghim của CHÍNH người gọi — không nhận project từ tham số, nên không có
+        đường đọc chéo project. Hàm chỉ trả id/thời điểm; nội dung vẫn phải qua `read_capsule` để
+        mọi đường đọc đi qua đúng một cổng quyền.
+        """
+        if type(limit) is not int or not 1 <= limit <= 20:
+            raise HistoryError('HISTORY_QUERY_INVALID')
+        caller = self.bind_session(caller_sid)
+        if not caller['project_id']:
+            return []
+        rows = self.db.execute("SELECT capsule_id,created FROM memory_capsules WHERE project_id=? "
+                               "AND status='committed' ORDER BY created DESC LIMIT ?",
+                               (caller['project_id'], limit)).fetchall()
+        return [{'capsuleId': row['capsule_id'], 'created': row['created']} for row in rows]
+
     def delete_with_capsule(self, sid, *, operation_id, expected_revision, confirm=False):
         operation = self.db.execute('SELECT * FROM history_deletions WHERE operation_id=?', (operation_id,)).fetchone()
         if not operation or operation['session_id'] != sid or not confirm:

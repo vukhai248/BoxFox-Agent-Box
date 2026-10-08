@@ -9,12 +9,15 @@ from __future__ import annotations
 import asyncio
 import json
 
+import pytest
+
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 
 from agentbox.agent_core import history_surface
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
+from agentbox.memory.history_store import HistoryError
 from agentbox.memory.session_store import SessionStore
 
 HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
@@ -207,6 +210,84 @@ def test_deletion_preview_then_confirm_keeps_the_capsule_and_hides_raw(tmp_path)
         raise AssertionError('payload thô đã xoá thì không đọc lại được')
     except Exception as exc:
         assert getattr(exc, 'code', '') == 'HISTORY_DELETED'
+    store.close()
+
+
+def test_a_new_conversation_in_the_same_project_reads_the_capsule(tmp_path):
+    """LT-08 ca 7: xoá raw rồi mở HỘI THOẠI MỚI cùng project — bài học/trạng thái còn đọc được.
+
+    Cửa sổ đọc là project (capsule không mang quyền thực thi), nhưng một root của project phải mở
+    được nó; nếu không thì "xoá có mang theo" chỉ là nửa đường: capsule ghi ra mà không ai đọc.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'yêu cầu gốc phải giữ', 'k1')
+    preview = history_surface.deletion_preview(runtime, sid, {
+        'mode': 'history_only', 'lessons': [{'fact': 'đọc giữa log là đủ'}]})
+    history_surface.deletion_confirm(runtime, sid, {
+        'operationId': preview['operationId'], 'expectedRevision': preview['expectedRevision'], 'confirm': True})
+
+    fresh = runtime.create(dict(BASE))
+    workspace = tmp_path / 'fresh-ws'
+    workspace.mkdir(exist_ok=True)
+    config = dict(fresh['config'])
+    config['machineBinding'] = {'mode': 'host', 'revision': 1, 'projectId': 'p1', 'workspace': str(workspace)}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), fresh['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (fresh['id'],))
+    store.db.commit()
+    bind(runtime, fresh['id'])
+
+    service = history_surface.service(runtime)
+    assert [item['capsuleId'] for item in service.project_capsules(fresh['id'])] == [preview['capsuleId']]
+    capsule = service.read_capsule(fresh['id'], preview['capsuleId'])
+    assert capsule['executionAuthority'] is False
+    assert capsule['critical'].keys() == set(history_surface.CAPSULE_KEYS)
+    assert capsule['lessons'] == [{'fact': 'đọc giữa log là đủ'}]
+    # Con của hội thoại mới không phải root ⇒ không mở được capsule.
+    child = runtime.create(dict(BASE), parent_id=fresh['id'])
+    with pytest.raises(HistoryError):
+        service.read_capsule(child['id'], preview['capsuleId'])
+    store.close()
+
+
+def test_the_retained_state_block_goes_into_the_brief_of_a_new_conversation(tmp_path, monkeypatch):
+    """Khối trạng thái chuyển tiếp (LT-08) nằm trong system prompt của hội thoại mới cùng project."""
+    from agentbox.agent_core import session_journal
+
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'giữ nguyên yêu cầu gốc này', 'k1')
+    preview = history_surface.deletion_preview(runtime, sid, {
+        'mode': 'history_only', 'lessons': [{'fact': 'đọc giữa log là đủ'}]})
+    history_surface.deletion_confirm(runtime, sid, {
+        'operationId': preview['operationId'], 'expectedRevision': preview['expectedRevision'], 'confirm': True})
+
+    fresh = runtime.create(dict(BASE))
+    workspace = tmp_path / 'fresh-ws'
+    workspace.mkdir(exist_ok=True)
+    config = dict(fresh['config'])
+    config['machineBinding'] = {'mode': 'host', 'revision': 1, 'projectId': 'p1', 'workspace': str(workspace)}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), fresh['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (fresh['id'],))
+    store.db.commit()
+    bind(runtime, fresh['id'])
+
+    block = session_journal.retained_state_block(store, fresh['id'])
+    assert block.startswith(session_journal.RETAINED_STATE_HEADER)
+    assert 'giữ nguyên yêu cầu gốc này' in block, 'yêu cầu chủ gốc phải còn trong bản chốt'
+    assert 'đọc giữa log là đủ' in block and 'tombstone' in block
+    assert len(block) <= session_journal.RETAINED_STATE_MAX_CHARS + len(session_journal.RETAINED_STATE_HEADER) + 200
+    # Khối vào system prompt, và chèn lại không chồng (cùng luật với khối ghim).
+    prompt = session_journal.inject_brief('SYSTEM', block)
+    assert block in prompt
+    assert session_journal.inject_brief(prompt, block) == prompt
+    # Con của hội thoại mới không phải hội thoại ⇒ không dựng khối.
+    child = runtime.create(dict(BASE), parent_id=fresh['id'])
+    assert session_journal.retained_state_block(store, child['id']) == ''
+    # Cờ tác vụ dài tắt thì khối rỗng (chế độ mặc định giữ nguyên prompt cũ).
+    monkeypatch.delenv('BOXFOX_LONGTASK_CONTINUITY')
+    assert session_journal.retained_state_block(store, fresh['id']) == ''
     store.close()
 
 

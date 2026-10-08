@@ -24,6 +24,17 @@ export function StorageContinuityView({ sessionId, onDeleted }: { sessionId: str
   }, [sessionId])
   const contribution = storage?.bySession?.[sessionId]
   const verified = capsuleVerified(preview)
+  // Sau khi xoá, `history/storage` của chính phiên đó trả 404 `SESSION_NOT_FOUND` — đó là KẾT QUẢ
+  // MONG ĐỢI của việc vừa xong, không phải lỗi. Hiện số đo cũ là sai (dữ liệu đã bị xoá), nên bỏ số
+  // đo và giữ nguyên thông báo thành công; mọi lỗi khác vẫn phải nói ra.
+  const reloadAfterDelete = async () => {
+    try {
+      await load()
+    } catch (reason) {
+      if (String(reason).includes('SESSION_NOT_FOUND')) setStorage(null)
+      else setError(String(reason))
+    }
+  }
   const prepare = async () => {
     setBusy(true); setPreview(null); setAck(false); setConfirm(false); setError(null); setOutcome(null)
     try {
@@ -41,7 +52,7 @@ export function StorageContinuityView({ sessionId, onDeleted }: { sessionId: str
         operationId: preview.operationId, expectedRevision: preview.expectedRevision! })
       setOutcome(result.status)
       setConfirm(false); setAck(false); setPreview(null)
-      await load().catch(reason => setError(String(reason)))
+      await reloadAfterDelete()
       if (result.status === 'deleted') onDeleted?.()
     } catch (reason) {
       setError(String(reason)); setPreview(null); setAck(false); setConfirm(false)

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 from . import journal
 from .limits import EVIDENCE_PRUNE_CODE, EVIDENCE_PRUNE_TIMEOUT_SECONDS
@@ -257,12 +258,99 @@ def critical_pins_block(store, sid) -> str:
     return '\n'.join(lines) if len(lines) > 1 else ''
 
 
+#: Khối trạng thái chuyển tiếp (LT-08). Cùng lý do với khối ghim: phải nhận ra được ở lượt sau.
+RETAINED_STATE_HEADER = "=== RETAINED PROJECT STATE (verified capsules; raw history may be deleted) ==="
+#: Trần ký tự của cả khối. Capsule là bản CHỐT tại `asOf`, không phải trạng thái sống: đủ để phiên
+#: mới biết phải hỏi gì và đọc tiếp bằng công cụ lịch sử, không phải để chép cả cuốn sổ vào prompt.
+RETAINED_STATE_MAX_CHARS = 1200
+RETAINED_STATE_OWNER_CHARS = 300
+RETAINED_STATE_FIELD_CHARS = 160
+
+
+def _payload_text(payload):
+    """Chữ của một bản ghi canonical (lượt có ảnh: phần chữ nằm trong các khối `text`)."""
+    if not isinstance(payload, dict):
+        return ''
+    content = payload.get('content')
+    if isinstance(content, list):
+        content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else ''
+
+
+def _capsule_line(capsule_id, capsule):
+    """Một dòng cho một capsule: yêu cầu chủ mới nhất + sổ trọng yếu + bài học đã giữ."""
+    parts = []
+    for contract in capsule.get('contracts') or []:
+        revisions = contract.get('revisions') or []
+        text = _payload_text((revisions[-1] or {}).get('exactPayload')) if revisions else ''
+        if text:
+            parts.append('ownerRequest=' + _pin_line(text, RETAINED_STATE_OWNER_CHARS))
+    critical = capsule.get('critical') if isinstance(capsule.get('critical'), dict) else {}
+    for key in ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans'):
+        value = critical.get(key)
+        if value in (None, [], {}):
+            continue
+        parts.append(f'{key}=' + _pin_line(json.dumps(value, ensure_ascii=False, sort_keys=True),
+                                           RETAINED_STATE_FIELD_CHARS))
+    lessons = [_pin_line(item.get('fact') if isinstance(item, dict) else item, RETAINED_STATE_FIELD_CHARS)
+               for item in (capsule.get('lessons') or [])]
+    lessons = [text for text in lessons if text]
+    if lessons:
+        parts.append('lessons=' + ' | '.join(lessons[:3]))
+    if not parts:
+        return ''
+    stamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(capsule.get('asOf') or 0))
+    head = (f"[capsule {str(capsule_id or '')[:8]} · asOf {stamp} · "
+            f"{len(capsule.get('sessionIds') or [])} phiên nguồn · raw đã thành tombstone] ")
+    return head + '; '.join(parts)
+
+
+def retained_state_block(store, sid) -> str:
+    """Manifest giới hạn của capsule đã xác minh trong cùng project (LT-08).
+
+    Raw bị xóa thì `history_read` chỉ còn tombstone; bài học và trạng thái chuyển tiếp nằm ở
+    capsule. Hội thoại MỚI cùng project phải đọc được nó — nhưng có trần, và nói thẳng nguồn là bản
+    chốt tại `asOf` chứ không phải trạng thái sống, để phiên mới không tin nhầm là hiện tại.
+
+    Chỉ root của cây mình (hội thoại mới là một root) mới dựng khối; mọi ca hỏng trả `''`.
+    """
+    from .longtask_runtime import enabled as longtask_enabled
+    if not longtask_enabled():
+        return ''
+    try:
+        history = getattr(store, 'history', None)
+        if history is None:
+            return ''
+        binding = history.bind_session(sid)
+        if binding['session_id'] != binding['root_session_id']:
+            return ''
+        entries = history.project_capsules(sid)
+    except Exception:  # pragma: no cover - phiên chưa ghim project / DB cũ
+        return ''
+    lines, used = [RETAINED_STATE_HEADER], 0
+    for entry in entries:
+        try:
+            capsule = history.read_capsule(sid, entry['capsuleId'])
+        except Exception:
+            continue
+        line = _capsule_line(entry['capsuleId'], capsule)
+        if not line:
+            continue
+        if used + len(line) > RETAINED_STATE_MAX_CHARS:
+            lines.append('… (còn capsule khác trong project — đọc bằng công cụ lịch sử)')
+            break
+        lines.append(line)
+        used += len(line)
+    return '\n'.join(lines) if len(lines) > 1 else ''
+
+
 def brief(store, sid, *, limit=60) -> str:
     """Khối "ký ức" của phiên (A5) — rỗng khi chưa có bản ghi nào **thuộc sáu nhóm** (lượt đầu
     không có gì để nhớ, và một phiên chỉ có hàng tra cứu — `F:`/`E:` — cũng vậy).
 
-    Khối ghim (LT-01) đi TRƯỚC khối ký ức: yêu cầu chủ là thứ phải sống sót, còn tail nhật ký là
-    thứ đọc lại được. Phiên chỉ có ghim (chưa có hàng nhật ký nào) vẫn dựng được khối.
+    Khối ghim (LT-01) và khối trạng thái chuyển tiếp (LT-08) đi TRƯỚC khối ký ức: yêu cầu chủ và
+    bài học đã giữ là thứ phải sống sót, còn tail nhật ký là thứ đọc lại được. Phiên chỉ có ghim
+    (chưa có hàng nhật ký nào) vẫn dựng được khối.
     """
     block = ''
     try:
@@ -278,7 +366,8 @@ def brief(store, sid, *, limit=60) -> str:
         if journal.brief_has_items(text):
             block = text
     pins = critical_pins_block(store, sid)
-    return '\n\n'.join(part for part in (pins, block) if part)
+    retained = retained_state_block(store, sid)
+    return '\n\n'.join(part for part in (pins, retained, block) if part)
 
 
 def record_view(row):
@@ -340,7 +429,8 @@ def _strip_brief(prompt):
     ký ức thì bản ghim cũ ở lại và mỗi lượt lại chồng thêm một bản.
     """
     text = str(prompt or '')
-    found = [index for index in (text.find(journal.JOURNAL_BRIEF_HEADER), text.find(CRITICAL_PINS_HEADER))
+    found = [index for index in (text.find(journal.JOURNAL_BRIEF_HEADER), text.find(CRITICAL_PINS_HEADER),
+                                   text.find(RETAINED_STATE_HEADER))
              if index >= 0]
     return text[:min(found)].rstrip() if found else text
 

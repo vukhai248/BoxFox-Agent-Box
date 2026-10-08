@@ -164,8 +164,26 @@ Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lị
 | LT-05 con trỏ output dài | Đã có | blob + segment có sha256 trong `history_store`; `history_read` phân trang | Chỉ giữ excerpt text đã checksum trong capsule; artifact nhị phân không được sao chép. |
 | LT-06 child xong mà attempt còn mở | Đã có | `task_service._close_attempt_locked`, `task_surface.reconcile_startup/finish_child`, `peer_watchdog` | Chưa có ca kill thật ở khe `child_finish`; chỉ mô phỏng ở mức đơn vị. |
 | LT-07 main tự tiếp tục | Đã có (opt-in) | `agent_core/longtask_store.py`, `longtask_runtime.py`, `runtime.configure_longtask/longtask_action/recover_longtasks/pump_longtasks` | Bật bằng `BOXFOX_LONGTASK_CONTINUITY=1`; run gắn plan/work chưa có seam `controller_continue` nên dừng ở `needs_user` + `LONGTASK_CONTROLLER_UNAVAILABLE`. |
-| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule`, `history_surface.settle_deleted_runs`, route preview/confirm, `DELETE` cũ trả 409 | `settle_deleted_runs` chạy trước cổng quiescent, nên ca `DELETE_NOT_QUIESCENT` vẫn đã huỷ run; cần đảo thứ tự ở vòng sau. |
+| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, `history_surface.settle_deleted_runs`, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | `settle_deleted_runs` chạy trước cổng quiescent, nên ca `DELETE_NOT_QUIESCENT` vẫn đã huỷ run; cần đảo thứ tự ở vòng sau. |
 | LT-09 summary lồng nhau | Một phần | `history_store.prepare_compaction/commit_compaction` + manifest theo `source_key`, `agent_id`; `restore_compaction` | **Chưa nối vào đường nén sống**: `runtime.py` vẫn chỉ ghi checkpoint cũ, nên manifest chỉ sinh trong ca kiểm. Đây là lựa chọn có ý thức của đợt này (đổi đường ghi canonical giữa lượt nén cần một vòng kiểm riêng, không vá ở cuối chu kỳ). Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
+
+### 11.2 Bề mặt đọc lại capsule (đợt soát cuối)
+
+Ca nghiệm thu LT-08 số 7 — "hội thoại mới: trạng thái then chốt và bài học còn sống" — trước đây
+**không thi hành được**: `HistoryStore.read_capsule` chỉ có bài kiểm đơn vị gọi tới, không có đường
+HTTP nào đọc capsule trả về. Đợt này khép khoảng trống đó bằng ba mảnh, đều nằm dưới cờ
+`BOXFOX_LONGTASK_CONTINUITY`:
+
+| Mảnh | Chỗ đứng | Hợp đồng |
+|---|---|---|
+| Liệt kê capsule của chính dự án | `memory/history_store.py` → `project_capsules(caller_sid, limit=3)` | Trả `[{capsuleId, created}]` cho các capsule `committed` của dự án người gọi; `HISTORY_QUERY_INVALID` khi `limit` sai; `[]` khi người gọi chưa có dự án. |
+| Quyền đọc capsule | `agent_core/history_surface.py` → `_authorization` nhánh capsule | Hội thoại MỚI (gốc cây riêng) trong cùng dự án đọc được capsule; cổng dự án phía trên vẫn chặn đọc chéo dự án. |
+| Khối trạng thái giữ lại trong prompt | `agent_core/session_journal.py` → `retained_state_block(store, sid)` | Ghép sau khối ghim, trần 1.200 ký tự (300 cho chủ, 160 mỗi trường), chỉ ở gốc cây của chính nó, mọi lỗi trả `''`. |
+
+Cùng đợt: `api/server.py` dịch thân JSON hỏng thành `400 REQUEST_INVALID` trên **mọi** route (trước
+đây nhánh `ValueError` của middleware trả 400 với `code` rỗng), và panel dung lượng
+(`StorageContinuityView.tsx`) nuốt đúng `SESSION_NOT_FOUND` sau khi xoá để không hiện lỗi giả trong
+khi vẫn dựng lại ảnh chụp dung lượng.
 
 ### 11.1 Giới hạn đã biết sau đợt soát mã
 

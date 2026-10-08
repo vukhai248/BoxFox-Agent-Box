@@ -141,7 +141,11 @@ def _authorization(rt):
         if not a.get('project_id') or a.get('project_id') != b.get('project_id'):
             return False
         if (meta or {}).get('capsule'):
-            return a['session_id'] == a['root_session_id'] and b['root_session_id'] == a['root_session_id']
+            # Capsule thuộc PROJECT chứ không thuộc cây: một hội thoại MỚI cùng project phải đọc
+            # được bài học/trạng thái chuyển tiếp còn lại sau khi raw bị xóa (LT-08, ca "xóa rồi
+            # mở phiên mới"). Cổng trên đã chặn khác project; ở đây chỉ root của cây mình mở được.
+            # Capsule không mang quyền thực thi (`executionAuthority: false`, `untrusted: true`).
+            return a['session_id'] == a['root_session_id']
         if a['session_id'] == a['root_session_id']:
             return True  # root sở hữu: cả project, trừ capsule của cây khác
         if b['root_session_id'] != a['root_session_id']:

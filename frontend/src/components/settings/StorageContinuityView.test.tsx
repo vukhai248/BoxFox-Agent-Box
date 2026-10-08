@@ -5,26 +5,30 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StorageContinuityView } from './StorageContinuityView'
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let host: HTMLDivElement, root: Root
-let validation = 'draft', fail = false, outcome = 'deleted'
+let validation = 'draft', fail = false, outcome = 'deleted', gone = false
 // Chỉ preview trả về revision này; bước confirm phải dùng lại đúng giá trị đó.
 const revision = 'c'.repeat(64)
 const calls: { path: string; body?: Record<string, unknown> }[] = []
 vi.mock('../../lib/agentApi', () => ({ agentApi: async (path: string, body?: Record<string, unknown>) => {
   calls.push({ path, body })
-  if (path.includes('/history/storage')) return { bytes: 4_300_000_000, level: 'warning', bySession: { sid: 1_200_000_000 }, measuredAt: '2026-10-08', measurementComplete: false }
+  if (path.includes('/history/storage')) {
+    // Phiên đã xoá: route kho trả 404 — đúng thứ xảy ra thật sau bước xác nhận.
+    if (gone) throw new Error('ApiError: SESSION_NOT_FOUND: session sid is not known to this harness')
+    return { bytes: 4_300_000_000, level: 'warning', bySession: { sid: 1_200_000_000 }, measuredAt: '2026-10-08', measurementComplete: false }
+  }
   if (path.endsWith('/deletion-preview')) {
     if (fail) throw new Error('CAPSULE_WRITE_FAILED')
     return { operationId: 'op', expectedRevision: revision, capsuleId: 'cap', sessionIds: ['sid', 'child'], estimatedReclaimBytes: 1_200_000_000,
       retainedSummary: 'Goal, unresolved blocker, next steps', validation: { status: validation, errors: [] }, warnings: ['Raw references become tombstones'] }
   }
-  if (path.endsWith('/deletion-confirm')) return { status: outcome }
+  if (path.endsWith('/deletion-confirm')) { if (outcome === 'deleted') gone = true; return { status: outcome } }
   // Không còn mock cho GET /sessions/{sid}: route đó không được gọi nữa, và một đường gọi lạ phải đổ vỡ rõ ràng.
   throw new Error(`unexpected path ${path}`)
 } }))
 const render = async () => { await act(async () => { root.render(<I18nProvider><StorageContinuityView sessionId="sid" /></I18nProvider>) }) }
 const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes(label))!
 const click = async (element: HTMLElement) => { await act(async () => { element.click() }) }
-beforeEach(() => { validation = 'draft'; fail = false; outcome = 'deleted'; calls.length = 0; host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
+beforeEach(() => { validation = 'draft'; fail = false; outcome = 'deleted'; gone = false; calls.length = 0; host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 it('shows decimal global GB, contribution and incomplete measurement; deletion starts disabled', async () => {
   await render()
@@ -60,4 +64,12 @@ it('cleanup_pending does not claim reclaimed space and blocks another delete', a
   await click(host.querySelector('input')!); await click(button('Delete raw history')); await click(button('Confirm deletion'))
   expect(host.textContent).toMatch(/dọn file còn chờ|cleanup is pending/)
   expect(button('Create preview').disabled).toBe(true)
+})
+
+it('a deleted scope does not surface the expected SESSION_NOT_FOUND as an error', async () => {
+  validation = 'validated'; await render(); await click(button('Create preview'))
+  await click(host.querySelector('input')!); await click(button('Delete raw history')); await click(button('Confirm deletion'))
+  expect(host.textContent).toMatch(/raw history deleted|đã xoá lịch sử thô/i)
+  expect(host.textContent).not.toContain('SESSION_NOT_FOUND')
+  expect(host.textContent).not.toContain('4.30 GB')
 })
