@@ -567,6 +567,14 @@ def create_app(runtime):
 
     app = web.Application(middlewares=[boundary], client_max_size=1048576)
 
+    # Bề mặt bền (history/longtask) phải có hook TRƯỚC khi có phiên nào: binding thô được ghim
+    # ngay lúc tạo phiên, còn hook completion/acceptance phải sẵn sàng khi lượt đầu kết thúc.
+    try:
+        from ..agent_core import history_surface
+        history_surface.configure_runtime(runtime)
+    except Exception:
+        logger.exception('history surface unavailable; history/longtask routes stay closed')
+
     async def heal_stored_context_windows(_app):
         """Lượt sửa một lần lúc khởi động: phiên cũ còn giữ cửa sổ ngữ cảnh đoán theo tên.
 
@@ -612,6 +620,12 @@ def create_app(runtime):
                     await work_feedback.pump(runtime)
                 except Exception:
                     logger.exception('plan continuation deferred; durable admission will retry')
+                # Tác vụ dài dùng chung một nhịp với các controller khác: hàng chờ đã ghi bền,
+                # nên một nhịp lỗi không mất việc, chỉ hoãn.
+                try:
+                    await runtime.pump_longtasks()
+                except Exception:
+                    logger.exception('long task continuation deferred; durable admission will retry')
         _app[RESEARCH_PUMP_KEY] = asyncio.create_task(pump())
 
     async def stop_research_continuations(_app):
@@ -622,6 +636,20 @@ def create_app(runtime):
 
     app.on_startup.append(research_continuations)
     app.on_cleanup.append(stop_research_continuations)
+
+    async def recover_longtasks(_app):
+        """Khôi phục tác vụ dài SAU khi graph/plan/watchdog đã dọn hàng cũ.
+
+        `recover()` chỉ mở lại việc đã ghi bền; nó không tự chạy nếu `BOXFOX_LONGTASK_CONTINUITY`
+        chưa bật, và không có hàng nào thì trả `{'spawned': 0}`. Lỗi ở đây không được làm sập
+        khởi động — nhịp `pump` phía trên sẽ không nhận việc cho tới khi lần khôi phục sau chạy xong.
+        """
+        try:
+            await runtime.recover_longtasks()
+        except Exception:
+            logger.exception('long task recovery deferred')
+
+    app.on_startup.append(recover_longtasks)
 
     async def idle_watch(_app):
         """Nhả quyền điều khiển về tay người khi họ chạm máy, trên nền tảng không có hook.
@@ -1702,6 +1730,7 @@ def create_app(runtime):
                                  {'events': page['events'], 'hasMore': page['hasMore'],
                                   'nextAfter': page['nextAfter'],
                                   'sessionMetrics': runtime.session_metrics(sid),
+                                  **durable_session_view(sid),
                                   # A9 (đợt 20): khối `journal` cộng thêm — chỗ đọc cũ không phải biết
                                   # tới nó, còn UI sau này có sẵn `records`/`lastSeq`/`degraded`.
                                   'journal': {'records': journal_tail['records'],
@@ -1736,9 +1765,14 @@ def create_app(runtime):
         sid = request.match_info['sid']
         try:
             result = runtime.resolve_decision(sid, body.get('decisionId'), body.get('choice'), body.get('note'),
-                                              body.get('answers'))
+                                              body.get('answers'), invocation_id=body.get('invocationId'),
+                                              expected_revision=body.get('expectedRevision'))
         except DecisionError as exc:
             return web.json_response({'error': str(exc)}, status=exc.status)
+        except Exception as exc:
+            if getattr(exc, 'code', None):
+                return surface_error(exc)
+            raise
         # A7 (đợt 20): quyết định của người dùng được ghim vào nhật ký phiên — bản ghi `D:` giữ cả
         # `choice`, nên đọc lại biết đã chốt phương án nào (phát hiện đợt 4: `alternative` từng bị
         # ghi thành `approved` trơ). Ghi nhật ký hỏng không bao giờ làm hỏng câu trả lời cho UI.
@@ -1765,15 +1799,235 @@ def create_app(runtime):
             return web.json_response({'error': 'JOURNAL_BAD_QUERY: limit phải là số'}, status=400)
         return web.json_response(runtime.journal_tasks(status=request.query.get('status') or None, limit=limit))
 
-    async def delete_session(request):
+    # --------------------------------------------------- bề mặt bền: history / longtask
+    #
+    # Đây là đường DUY NHẤT để UI chạm vào history, ngân sách tác vụ dài và xoá có mang theo.
+    # Không route nào nhận `projectId`, đường dẫn riêng hay id phiên khác từ client: phạm vi lấy
+    # từ chính phiên gọi (`callerSessionId`), còn thiếu nguồn canonical thì từ chối thay vì đoán.
+
+    def surface_error(exc):
+        raw = str(exc)
+        code = getattr(exc, 'code', None) or (raw.split(':', 1)[0].strip()
+                                             if raw.isupper() or ':' in raw else 'DURABLE_ERROR')
+        status = getattr(exc, 'status', None)
+        if status is None:
+            if code in ('HISTORY_SCOPE_DENIED', 'CAPSULE_EVIDENCE_SCOPE_DENIED'):
+                status = 403
+            elif code.endswith('_NOT_FOUND'):
+                status = 404
+            elif code.endswith(('_INVALID', '_REQUIRED', '_UNSUPPORTED', '_UNKNOWN')):
+                status = 400
+            else:
+                status = 409
+        message = raw if raw.startswith(code) else f'{code}: {raw}'
+        return web.json_response({'error': message, 'code': code}, status=status)
+
+    def surface():
+        from ..agent_core import history_surface
+        return history_surface
+
+    def query_int(request, name, default, maximum=None):
+        raw = request.query.get(name)
+        if raw in (None, ''):
+            return default
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError('HISTORY_QUERY_INVALID')
+        if value < 1:
+            raise ValueError('HISTORY_QUERY_INVALID')
+        return min(value, maximum) if maximum else value
+
+    def caller_session(request):
+        sid = request.query.get('callerSessionId') or request.query.get('sessionId')
+        if not sid:
+            raise ValueError('HISTORY_CALLER_REQUIRED')
+        known_session(sid)
+        return sid
+
+    def durable_session_view(sid):
+        """Ba khoá cho UI: `longtask` (null = có tính năng, chưa bật), `goalRevision`, `contractRef`.
+
+        Không có nguồn canonical thì trả `None` — UI sẽ giữ nút xác nhận ở trạng thái tắt thay vì
+        bật một tác vụ dài với số hiệu phiên bản bịa.
+        """
+        try:
+            from ..agent_core import history_surface
+            contract = history_surface.service(runtime).contract(sid)
+            return {'longtask': runtime.longtask_state(sid), 'goalRevision': contract['currentRevision'],
+                    'contractRef': history_surface.contract_hash(contract)}
+        except Exception:
+            return {'longtask': None, 'goalRevision': None, 'contractRef': None}
+
+    async def history_sessions(request):
+        try:
+            sid = caller_session(request)
+            result = surface().service(runtime).list_sessions(
+                sid, scope=request.query.get('scope', 'self'), session_id=request.query.get('targetSessionId'),
+                agent_id=request.query.get('agentId'), cursor=request.query.get('cursor'),
+                limit=query_int(request, 'limit', 20, 50))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_search(request):
+        try:
+            sid = caller_session(request)
+            service = surface().service(runtime)
+            scope, target = surface().scope_target(runtime, sid, request.query.get('scope', 'self'))
+            result = service.query_history(
+                sid, query=request.query.get('query', ''), scope=scope, session_id=target,
+                # `getall` ném KeyError khi thiếu khoá, nên hỏi `in` trước: thiếu `kind` là hợp lệ.
+                agent_id=request.query.get('agentId'),
+                kinds=request.query.getall('kind') if 'kind' in request.query else None,
+                cursor=request.query.get('cursor'), limit=query_int(request, 'limit', 10, 50),
+                mode=request.query.get('mode', 'search'))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_record(request):
+        try:
+            sid = caller_session(request)
+            result = surface().service(runtime).read_reference(
+                sid, request.match_info['recordId'], offset=query_int(request, 'offset', 0),
+                limit=query_int(request, 'maxChars', 16000, 16000))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_storage(request):
+        try:
+            sid = request.query.get('callerSessionId') or request.query.get('sessionId')
+            if sid:
+                known_session(sid)
+            result = surface().storage_snapshot(runtime, sid)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_deletion_preview(request):
         sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('DELETE_MODE_UNSUPPORTED')
+            result = surface().deletion_preview(runtime, sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_deletion_confirm(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('DELETE_REQUIRES_CARRY_FORWARD')
+            for target in surface().tree_ids(runtime, sid):
+                if target in runtime.tasks:
+                    try:
+                        await runtime.stop(target)
+                    except Exception:
+                        pass
+            result = surface().deletion_confirm(runtime, sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_decisions(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            result = runtime.pending_decisions(sid, request.query.get('state', 'pending'),
+                                               request.query.get('after') or None,
+                                               query_int(request, 'limit', 20, 100))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_longtask(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('LONGTASK_INVALID')
+            result = runtime.configure_longtask(sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_longtask_actions(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('LONGTASK_INVALID')
+            result = await runtime.longtask_action(sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_tasks(request):
+        """`GET /sessions/{sid}/tasks` — task của cả cây, bản tóm tắt, phân trang theo `taskKey`."""
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            limit = query_int(request, 'limit', 20, 50)
+            state = request.query.get('state') or 'active'
+            after = request.query.get('after') or None
+            if 'harness_tasks' not in {row[0] for row in runtime.store.db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}:
+                return web.json_response({'tasks': [], 'hasMore': False, 'nextAfter': None})
+            ids = surface().tree_ids(runtime, sid)
+            marks = ','.join('?' for _ in ids)
+            clauses, args = [f'a.session_id IN ({marks})'], list(ids)
+            if state == 'active':
+                clauses.append("t.state NOT IN ('completed','cancelled','failed')")
+            elif state != 'all':
+                clauses.append('t.state=?')
+                args.append(state)
+            rows = runtime.store.db.execute(
+                'SELECT t.task_key,t.run_id,t.owner_id,t.task_alias,t.revision,t.state,t.acceptance_state,'
+                't.control_state,t.updated_at,MAX(a.session_id) session_id,COUNT(a.attempt_id) attempts '
+                'FROM harness_tasks t JOIN harness_task_attempts a ON a.task_key=t.task_key WHERE '
+                + ' AND '.join(clauses) + ' AND (? IS NULL OR t.task_key>?) GROUP BY t.task_key '
+                'ORDER BY t.updated_at DESC LIMIT ?', (*args, after, after, limit + 1)).fetchall()
+            items = [{'taskKey': r['task_key'], 'runId': r['run_id'], 'ownerId': r['owner_id'],
+                      'alias': r['task_alias'], 'revision': r['revision'], 'state': r['state'],
+                      'acceptanceState': r['acceptance_state'], 'controlState': r['control_state'],
+                      'sessionId': r['session_id'], 'attempts': r['attempts'],
+                      'updatedAt': r['updated_at']} for r in rows[:limit]]
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'tasks': items, 'hasMore': len(rows) > limit,
+                                  'nextAfter': items[-1]['taskKey'] if items and len(rows) > limit else None})
+
+    async def delete_session(request):
+        """Xoá phiên: bản cũ nhận 409 kèm bản xem trước; chỉ xoá khi chủ xác nhận có capsule."""
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        if isinstance(body, dict) and body.get('confirm') is True and body.get('operationId'):
+            return await session_deletion_confirm(request)
         if sid in runtime.tasks:
             try:
                 await runtime.stop(sid)
             except Exception:
                 pass
-        runtime.store.delete(sid)
-        return web.json_response({'status': 'deleted', 'id': sid})
+        try:
+            preview = surface().deletion_preview(runtime, sid, {'mode': 'history_only'})
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'error': 'DELETE_REQUIRES_CARRY_FORWARD: xoá phiên cần xác nhận '
+                                          'với capsule mang theo', 'code': 'DELETE_REQUIRES_CARRY_FORWARD',
+                                  'preview': preview}, status=409)
 
     # ------------------------------------------------------------------ plan duyệt (vòng 20)
     #
@@ -2452,6 +2706,16 @@ def create_app(runtime):
     app.router.add_post('/api/agent/sessions/{sid}/turns', turn)
     app.router.add_post('/api/agent/sessions/{sid}/stop', stop)
     app.router.add_post('/api/agent/sessions/{sid}/decisions', decision)
+    app.router.add_get('/api/agent/sessions/{sid}/decisions', session_decisions)
+    app.router.add_put('/api/agent/sessions/{sid}/longtask', session_longtask)
+    app.router.add_post('/api/agent/sessions/{sid}/longtask/actions', session_longtask_actions)
+    app.router.add_get('/api/agent/sessions/{sid}/tasks', session_tasks)
+    app.router.add_post('/api/agent/sessions/{sid}/deletion-preview', session_deletion_preview)
+    app.router.add_post('/api/agent/sessions/{sid}/deletion-confirm', session_deletion_confirm)
+    app.router.add_get('/api/agent/history/sessions', history_sessions)
+    app.router.add_get('/api/agent/history/search', history_search)
+    app.router.add_get('/api/agent/history/storage', history_storage)
+    app.router.add_get('/api/agent/history/records/{recordId}', history_record)
     app.router.add_get('/api/agent/sessions/{sid}/journal', session_journal)
     app.router.add_get('/api/agent/journal/tasks', journal_tasks)
     app.router.add_post('/api/agent/plans/review', plan_review)
