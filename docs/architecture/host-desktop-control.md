@@ -223,7 +223,9 @@ cho tính đúng.
 
 1. `computer_use` **tắt mặc định**; bật phải qua một bước xác nhận riêng, có văn bản nói rõ rủi ro.
 2. **Mặc định duyệt từng hành động.** Phạm vi nhớ: `once` | `session` | `theo ứng dụng này` (`app_grant`
-   lưu `exe` + `aumid`). **Không có "luôn cho phép" vĩnh viễn cho CUA** — khác luật shell/tệp.
+   lưu `exe` + `aumid`). **Không có "luôn cho phép" vĩnh viễn cho CUA** — khác luật shell/tệp. `session`
+   không còn nghĩa "cả phiên với mọi cửa sổ": `resource_key` hẹp theo **đích của phiên** (§7.1), nên
+   "cho phép trong phiên" cho Notepad không mở đường cho Chrome. Xoá đích ⇒ quên grant của phiên.
 3. **Chặn cứng tổ hợp phím** (`_BLOCKED_KEY_COMBOS`): khoá máy/đăng xuất (`Win+L`), Task Manager
    (`Ctrl+Shift+Esc`), `Ctrl+Alt+Del`, `Alt+F4` khi đích là hộp thoại hệ thống; và **không bao giờ** tương
    tác với `consent.exe` (UAC) hay cửa sổ bảo mật của HĐH.
@@ -236,6 +238,30 @@ cho tính đúng.
    lease về `human`.
 7. **Nói thẳng trong tài liệu:** bật CUA nghĩa là agent có quyền chuột/phím của người dùng; ảnh chụp đi
    vào hội thoại nên có thể chứa dữ liệu nhạy cảm.
+
+### 7.1 Đích CUA của phiên (một máy, một đích)
+
+Người dùng chọn đích **một lần cho cả phiên** ở panel Máy, không phải theo từng lời gọi. Đích là một
+trong hai:
+
+| Đích | Khi nào | Hệ quả |
+|---|---|---|
+| `{kind:'window', windowId, pid, title, processName}` | `scope = workspace` mà chưa chọn gì ⇒ `TARGET_REQUIRED`; hoặc người dùng chọn một cửa sổ | agent chụp/gõ vào **đúng cửa sổ đó**; hwnd chết hoặc bị tái dùng (pid khác) ⇒ tìm lại theo `processName` + tiêu đề, không thấy ⇒ `TARGET_UNKNOWN` |
+| `{kind:'machine'}` | chỉ khi `scope = machine` | agent chụp cả màn hình ảo và được **tự mở ứng dụng** khi `app` chưa chạy (folder tin cậy, chờ ≤ 10 s) |
+
+- Lưu ở `sessions.config`: `cuaTarget`, `cuaTargetRevision`, `cuaTargetSetBy`, `cuaTargetAt`. **Phiên con
+  đọc và ghi cùng hàng với phiên gốc** — subagent không có đích riêng, cả hai không bao giờ lệch nhau.
+- Ba route: `GET|PUT|DELETE /api/agent/machines/target`. `PUT` đòi `consent: true` (người dùng tự chọn),
+  nhận `expectedRevision` để chống ghi đè, và trả `CUA_MACHINE_SCOPE_REQUIRED` khi `scope = workspace` mà
+  xin đích cả máy.
+- Chưa chọn gì: `scope = machine` ⇒ cả máy (giữ nguyên hành vi cũ); `scope = workspace` ⇒ `TARGET_REQUIRED`.
+- Lời gọi có `app`/`window` dùng đè cho **một lời gọi đó** rồi ghi lại vào phiên với `cuaTargetSetBy =
+  'agent'`; panel thấy `requestedBy = agent` và đi theo. Hai cửa sổ cùng khớp ⇒ `TARGET_AMBIGUOUS` kèm
+  `candidates` để model tự chọn, **không** mở thêm bản sao của ứng dụng đang chạy.
+- Đích cả máy không ghim cửa sổ nào (`_input_target` dùng toạ độ trong ảnh chụp); đích cửa sổ thì ghim.
+- **Viền xanh** (`cua_overlay.py`): hiện quanh cửa sổ agent đang thao tác, tự ẩn sau 15 s không hoạt động,
+  ẩn ngay khi người dùng giữ quyền (§5), khi xoá đích hoặc khi phiên dọn dẹp. Nền tảng lỗi ⇒ **tắt êm**,
+  không chặn CUA; `BOXFOX_CUA_OVERLAY=0` để tắt hẳn.
 
 ---
 

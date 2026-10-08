@@ -154,3 +154,39 @@ Các fixture kiểm hủy picker, hủy form sau chọn folder, đường dẫn/
 Đã reload riêng harness sang bản mới sau khi kiểm các session lưu đều completed. Giữ Vite/router/Docker đang chạy. Log: `.tmp/web-start-20261007/harness-modern-picker.stdout.log` và `harness-modern-picker.stderr.log`. Bảng trắng trong ảnh gửi trước reload vẫn là dialog của bản cũ; lần mở mới dùng code Common Item Dialog.
 
 Các giới hạn host/Desktop còn mở ở phần trên tiếp tục giữ nguyên trạng thái. Patch này chỉ hoàn thiện thao tác thêm project/chọn folder trên web, không nghiệm thu toàn bộ roadmap desktop.
+
+## Đích CUA theo phiên (08/10/2026)
+
+Nhánh `vorflux/host-mode-web-transport`. Neo trước patch: `752d9f7`.
+
+- CUA trên host trước đây **không gọi được**: `SessionMachineExecutor.execute` chặn cả ba công cụ bằng
+  `HOST_CUA_NOT_ENABLED`, executor của phiên dựng thiếu `DesktopControl`, và route lease trả 409 vì
+  `SessionMachineExecutor` chỉ chuyển tiếp thuộc tính sang executor Docker. Nay executor của phiên có
+  `desktop`/`overlay`/`targets` thật, cổng cũ đã gỡ (vẫn qua cổng tin cậy của project).
+- **Đích chọn một lần cho cả phiên** ở panel Máy: một cửa sổ (`windowId` + `pid`) hoặc cả máy. Lưu ở
+  `sessions.config.cuaTarget`; phiên con đọc/ghi cùng hàng với phiên gốc nên subagent và phiên cha không
+  bao giờ lệch đích. Hợp đồng ở §7.1 `docs/architecture/host-desktop-control.md`.
+- Ba route `GET|PUT|DELETE /api/agent/machines/target`; `PUT` đòi `consent: true` và nhận
+  `expectedRevision`; `scope = workspace` + đích cả máy ⇒ `CUA_MACHINE_SCOPE_REQUIRED`; phiên Docker ⇒
+  `HOST_SESSION_REQUIRED`; cửa sổ đã chết ⇒ `TARGET_UNKNOWN`, pid đổi ⇒ `TARGET_CHANGED`.
+- Đích cả máy được **tự mở ứng dụng** khi `app` chưa chạy (folder tin cậy, chờ cửa sổ ≤ 10 s, hết hạn ⇒
+  `TARGET_UNKNOWN` + `reason = 'launch_timeout'`). Tên ứng dụng có dạng đường dẫn hoặc có khoảng trắng
+  (`cmd /c ...`) **không bao giờ** tới `ShellExecuteW`.
+- Thẻ duyệt CUA còn `once` / `session` / `theo ứng dụng này` / `reject`; **không** có "luôn cho phép".
+  `resource_key` hẹp theo đích (`cua:app:<tên>`, `cua:machine`) nên "cho phép trong phiên" cho Notepad
+  không mở đường cho Chrome.
+- Viền xanh quanh cửa sổ đang bị điều khiển: hiện khi agent thao tác, ẩn khi người dùng giữ quyền / hết
+  15 s / xoá đích / phiên dọn dẹp; lỗi nền tảng ⇒ tắt êm; `BOXFOX_CUA_OVERLAY=0` để tắt.
+- Chưa chọn gì vẫn giữ hành vi cũ: `scope = machine` ⇒ cả máy, `scope = workspace` ⇒ `TARGET_REQUIRED`.
+
+Kiểm trên máy Linux này (không phải nghiệm thu Windows):
+
+| Lệnh/ca | Kết quả thật |
+|---|---|
+| `.venv/bin/python -m pytest tests/unit/test_cua_target.py tests/unit/test_cua_overlay.py tests/unit/test_host_executor_target.py tests/unit/test_machines_target_api.py -q` | 87 passed |
+| `.venv/bin/python -m pytest tests/unit -k 'host_executor or host_cua or permissions or machine_router or web_machine or cua or overlay' -q` | 347 passed, 1 skipped |
+| Route target qua `TestServer` thật | `consent`, `expectedRevision`, hai dạng thân yêu cầu, cửa sổ chết/đổi pid, cổng scope, phiên Docker, ghi từ phiên con |
+
+Chưa kiểm được ở đây (chỉ Windows mới chứng minh): cửa sổ viền thật, `ShellExecuteW`, `PrintWindow`,
+`SendInput`, UIA `comtypes`, DPI đa màn hình. Checklist nghiệm thu nằm ở `docs/testing/desktop-host-mode.md`
+§6; DA7 trong handoff **không** được tick.

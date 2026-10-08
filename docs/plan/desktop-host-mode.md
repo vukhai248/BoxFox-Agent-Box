@@ -170,6 +170,8 @@ Mỗi mục có unit test riêng, chạy cả ở `trusted` (`tests/unit/test_pe
 | `GET /api/agent/permissions/pending` | thẻ duyệt đang chờ |
 | `GET /api/agent/permissions/rules` | luật + tệp nguồn |
 | `DELETE /api/agent/permissions/rules` | thu hồi một luật |
+| `GET\|PUT\|DELETE /api/agent/machines/target` | đích CUA của phiên (§7.1 `host-desktop-control.md`): đọc/đặt/xoá, `consent`, `expectedRevision`, cổng `scope` |
+| `POST /api/agent/machines/screen` | `{kind:'window'}` như cũ; `{kind:'machine'}` chụp cả màn hình ảo, trả `captureOrigin`/`captureSize` |
 | `GET /api/agent/health` | thêm khối `execution`: `mode`, `configured`, `scope`, `permissionMode`, `policy`, `cuaEnabled`, `lease`, `hardlineHits`, `workspace` |
 
 Mọi route đi qua đúng hàng rào sẵn có của harness: `Host` phải nằm trong allowlist **và** request phải
@@ -189,6 +191,9 @@ có `X-BoxFox-Admin: 1` cùng `Origin` hợp lệ. Chế độ `docker` không c
 | H5 | Nền tảng Windows: capture/input/UIA | `sandbox/win/*.py` | đang làm |
 | H6 | Select element ba nhánh | `agent_core/inspect_host.py` | đang làm |
 | H7 | Lease/epoch/mutex/token/thang xác minh | `agent_core/desktop_control.py` | chờ H5/H6 |
+| H5b | Đích CUA theo phiên: kiểu, kiểm lại hwnd, phân giải `app`/`window`, khởi chạy ứng dụng | `agent_core/cua_target.py`, `sandbox/win/windows_platform.py` | xong (kiểm trên Linux) |
+| H6b | Route đích + ảnh cả máy cho panel | `sandbox/machine_router.py`, `api/server.py` | xong (kiểm trên Linux) |
+| H7b | Viền báo vùng đang bị điều khiển | `agent_core/cua_overlay.py`, `sandbox/win/windows_platform.py` | xong (kiểm trên Linux) |
 | D1 | Khung Electron + bundle runtime | `desktop/**` | đang làm |
 | D2 | Supervisor + gateway + profile | `desktop/src/**` | đang làm |
 | D3 | Tray + diagnostics + bộ cài NSIS | `desktop/**` | chờ D1/D2 |
@@ -210,6 +215,11 @@ có `X-BoxFox-Admin: 1` cùng `Origin` hợp lệ. Chế độ `docker` không c
 8. `permissions-audit.jsonl` có dòng cho mỗi quyết định, phân biệt `actor` user/agent.
 9. Test: `test_permissions.py` (47 ca), `test_host_executor.py` (34 ca), `test_permissions_api.py` (22 ca)
    — tất cả xanh; không ca nào chạm `~/.boxfox` thật.
+10. Đích CUA của phiên: `scope = machine` + chưa chọn ⇒ cả máy; `scope = workspace` + chưa chọn ⇒
+   `TARGET_REQUIRED`; đặt cả máy ở `workspace` ⇒ `CUA_MACHINE_SCOPE_REQUIRED`; `PUT` thiếu `consent` ⇒
+   `TARGET_CONSENT_REQUIRED`; xoá đích ⇒ grant của phiên bị quên; thẻ duyệt CUA **không** có "luôn cho phép".
+11. Viền xanh: hiện quanh cửa sổ agent thao tác, ẩn khi người dùng giữ quyền / hết 15 s / xoá đích / phiên
+   dọn dẹp; lỗi cửa sổ viền ⇒ tắt êm, CUA vẫn chạy.
 
 ---
 
