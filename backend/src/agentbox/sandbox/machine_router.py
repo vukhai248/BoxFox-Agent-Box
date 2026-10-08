@@ -674,9 +674,9 @@ def register_routes(app, runtime):
         overlay = getattr(runtime.executor, 'overlay', None)
         snapshot = overlay.snapshot() if overlay is not None else None
         if snapshot and snapshot.get('visible') and snapshot.get('windowId'):
-            hwnd = cua_target._as_int(snapshot['windowId'])
+            hwnd = cua_target.as_int(snapshot['windowId'])
             active = _window_payload(next((item for item in windows
-                                           if cua_target._as_int(item.get('windowId')) == hwnd), None))
+                                           if cua_target.as_int(item.get('windowId')) == hwnd), None))
         scope = _target_scope()
         payload = {'sessionId': sid, 'target': target, 'effective': effective,
                    'effectiveReason': reason, 'requestedBy': meta.get('requestedBy'),
@@ -753,16 +753,16 @@ def register_routes(app, runtime):
                 targets.write(sid, {'kind': cua_target.KIND_MACHINE}, set_by='user')
                 return web.json_response(_target_state(sid))
             windows = registry_windows()
-            hwnd = cua_target._as_int(merged.get('windowId'))
+            hwnd = cua_target.as_int(merged.get('windowId'))
             match = None
             for item in windows:
-                if cua_target._as_int(item.get('windowId')) == hwnd:
+                if cua_target.as_int(item.get('windowId')) == hwnd:
                     match = item
                     break
             if match is None:
                 raise MachineError('TARGET_UNKNOWN', 'Cửa sổ không còn tồn tại; chọn lại.', 409)
-            pid = cua_target._as_int(merged.get('pid'))
-            if pid is not None and cua_target._as_int(match.get('pid')) != pid:
+            pid = cua_target.as_int(merged.get('pid'))
+            if pid is not None and cua_target.as_int(match.get('pid')) != pid:
                 raise MachineError('TARGET_CHANGED', 'Cửa sổ đã đổi chủ; chọn lại.', 409)
             targets.write(sid, cua_target.window_entry(match), set_by='user')
             return web.json_response(_target_state(sid))

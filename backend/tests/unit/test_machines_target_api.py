@@ -34,6 +34,11 @@ WINDOW = {'windowId': 777, 'zOrder': 0, 'title': 'Untitled - Notepad', 'windowCl
 def harness(tmp_path, monkeypatch):
     monkeypatch.setenv('BOXFOX_PERMISSION_MODE', 'ask')
     monkeypatch.setenv('BOXFOX_PERMISSION_SCOPE', 'machine')
+    # Tầng `user` (`~/.boxfox/settings.json`) THẮNG hai biến trên: một `scope`/`mode` thật trên máy chạy
+    # phép thử sẽ đổi kết quả của cả file (ví dụ `scope=workspace` làm ca "cả máy" không còn 403).
+    # Cô lập HOME/INSTALL để phép thử chỉ phụ thuộc vào thứ nó muốn kiểm — hợp đồng của ba route.
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
     legacy = type('Legacy', (), {'visual_lock': asyncio.Lock(),
                                  'execute': AsyncMock(return_value={'content': 'docker'}),
                                  'cleanup': AsyncMock()})()

@@ -53,6 +53,8 @@ interface Server {
   /** `true` ⇒ backend kiểm lại thấy cửa sổ đã chết: `effective: null`. */
   effectiveGone: boolean
   leaseHolder: 'agent' | 'human'
+  /** `true` ⇒ máy KHÔNG báo cáo quyền điều khiển (Linux: chưa có `DesktopControl`). */
+  leaseUnknown: boolean
   revision: number
   windows: HostWindowEntry[]
   windowsFailure: { error: string; code: string; status: number } | null
@@ -81,6 +83,7 @@ function makeServer(overrides: Partial<Server> = {}): Server {
     machineAllowed: null,
     effectiveGone: false,
     leaseHolder: 'agent',
+    leaseUnknown: false,
     revision: 3,
     windows: [
       { windowId: 12, zOrder: 0, title: 'a.txt - Notepad', windowClass: 'Notepad', pid: 4, processName: 'notepad.exe', position: { x: 0, y: 0 }, size: { width: 800, height: 600 }, dpi: 96 },
@@ -177,7 +180,7 @@ function installFetch() {
           permissionMode: 'ask',
           policy: true,
           cuaEnabled: true,
-          lease: leaseBody(),
+          lease: server.leaseUnknown ? null : leaseBody(),
           hardlineHits: 0,
           workspace: null,
         },
@@ -238,6 +241,9 @@ function installFetch() {
     }
 
     if (url === '/api/agent/desktop/lease') {
+      if (server.leaseUnknown) {
+        return json({ error: 'desktop control chưa bật', code: 'CUA_UNAVAILABLE' }, { ok: false, status: 409 })
+      }
       if (body?.action === 'claim') server.leaseHolder = 'agent'
       return json(leaseBody())
     }
@@ -737,6 +743,24 @@ describe('chọn phần tử', () => {
     expect(pending[0].result).toMatchObject({ type: 'uia', name: 'Tệp' })
     // Ngăn kéo đóng lại sau khi thêm — chip nằm ở khung soạn tin, không ở đây.
     expect(panel.testId('inspector-drawer')).toBeNull()
+  })
+
+  it('máy không báo cáo quyền điều khiển ⇒ băng trạng thái trung tính, không nhận vơ là "bạn"', async () => {
+    // Linux chưa có `DesktopControl`: `/health` trả `lease: null` và route lease 409. Panel KHÔNG được
+    // nói "Bạn đang giữ quyền" (trong khi phần chú thích lại nói agent đang làm việc) — hai câu đó
+    // mâu thuẫn nhau, và người dùng đọc câu đầu.
+    server = makeServer({ leaseUnknown: true })
+    installFetch()
+    const panel = renderPanel()
+    await settle()
+    await pickWindow(panel, 12)
+
+    expect(panel.text()).toContain('Control not reported')
+    expect(panel.text()).not.toContain('You hold control')
+    expect(panel.text()).not.toContain('Agent is working')
+    expect(panel.text()).toContain('This machine does not report who holds control')
+    // Không có quyền nào để trả, nên nút trả quyền không được mời.
+    expect(panel.testId('ms-lease-claim')).toBeNull()
   })
 
   it('người dùng đang giữ quyền ⇒ nút chọn bị khoá + đường trả quyền ngay tại chỗ', async () => {

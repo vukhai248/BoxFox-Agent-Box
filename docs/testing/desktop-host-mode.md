@@ -100,7 +100,10 @@ glob/grep, `terminal_exec` (timeout, spill artifact), `shell_argv` hai nền t�
   `TARGET_REQUIRED`/`CUA_MACHINE_SCOPE_REQUIRED`; đích cả máy chụp cả màn hình và trả `cuaTarget` +
   `captureOrigin`/`captureSize`; tự mở ứng dụng khi chưa chạy, **không** mở khi folder chưa tin cậy hoặc
   tên có dạng đường dẫn/`cmd /c ...`; mở hỏng ⇒ `LAUNCH_FAILED`, không ra cửa sổ ⇒ `launch_timeout`; thẻ
-  duyệt có `approve-app`, **không** có `approve-always`; `resource_key` theo đích; viền nhận đúng `bounds`.
+  duyệt có `approve-app`, **không** có `approve-always`; `resource_key` theo đích; viền nhận đúng `bounds`;
+  `__target` giả mạo KHÔNG thành khoá duyệt (khoá vẫn theo đích thật — đường mở ứng dụng là chỗ hở, vì
+  chưa có đích nào để ghi đè); hwnd đổi chủ giữa lúc thẻ duyệt còn mở và lúc chụp/gõ ⇒ `TARGET_UNKNOWN`
+  với `reason = 'window_reused'`, không chụp và không gửi sự kiện nào.
 - `machines_target_api`: gọi route THẬT qua `TestServer` — `consent`, `expectedRevision`,
   `TARGET_KIND_INVALID`, cửa sổ chết ⇒ `TARGET_UNKNOWN`, pid đổi ⇒ `TARGET_CHANGED`, `scope = workspace` +
   cả máy ⇒ `CUA_MACHINE_SCOPE_REQUIRED`, phiên Docker ⇒ `HOST_SESSION_REQUIRED`, phiên lạ ⇒

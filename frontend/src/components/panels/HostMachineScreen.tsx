@@ -578,20 +578,32 @@ export function HostMachineScreen() {
                 className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-[11px] ${
                   humanHoldsLease
                     ? 'bg-amber-500/10 text-amber-800 dark:text-amber-200'
-                    : 'bg-cua/10 text-cua'
+                    : working
+                      ? 'bg-cua/10 text-cua'
+                      : 'bg-muted/15 text-muted'
                 }`}
               >
                 <span
                   aria-hidden="true"
-                  className={`size-1.5 shrink-0 rounded-full ${humanHoldsLease ? 'bg-amber-400' : 'animate-pulse bg-cua'}`}
+                  className={`size-1.5 shrink-0 rounded-full ${
+                    humanHoldsLease ? 'bg-amber-400' : working ? 'animate-pulse bg-cua' : 'bg-muted'
+                  }`}
                 />
-                <span className="font-semibold">{working ? t('machineScreen.targetWorking') : t('machineScreen.humanLeaseChip')}</span>
+                <span className="font-semibold">
+                  {working
+                    ? t('machineScreen.targetWorking')
+                    : humanHoldsLease
+                      ? t('machineScreen.humanLeaseChip')
+                      : t('machineScreen.leaseUnknownChip')}
+                </span>
                 <span className="text-muted">
                   {humanHoldsLease
                     ? t('machineScreen.bannerHumanLease')
-                    : target.kind === 'machine'
-                      ? t('machineScreen.bannerWorkingMachine')
-                      : t('machineScreen.bannerWorkingWindow')}
+                    : working
+                      ? target.kind === 'machine'
+                        ? t('machineScreen.bannerWorkingMachine')
+                        : t('machineScreen.bannerWorkingWindow')
+                      : t('machineScreen.bannerUnknownLease')}
                 </span>
               </div>
             )}

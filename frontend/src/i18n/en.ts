@@ -1128,6 +1128,7 @@ const en: SameShape<typeof vi> = {
     leaseHuman: 'Control: you',
     leaseClaim: 'Hand control back to the agent',
     humanLeaseChip: 'You hold control',
+    leaseUnknownChip: 'Control not reported',
     selectElement: 'Select element',
     selectElementCancel: 'Cancel select',
     selectElementHint: 'Click an element in the image to inspect it. Press Esc to exit.',
@@ -1144,6 +1145,7 @@ const en: SameShape<typeof vi> = {
     bannerWorkingWindow: 'The agent is working in this window',
     bannerWorkingMachine: 'The agent is working across the desktop — the border marks the active window',
     bannerHumanLease: 'The agent is paused in this window — you hold control',
+    bannerUnknownLease: 'This machine does not report who holds control',
     noteNoSession:
       'No session open yet — the CUA target is chosen per session, so there is nothing to show here.',
     noteNoTarget:

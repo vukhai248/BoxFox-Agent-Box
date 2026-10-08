@@ -373,3 +373,72 @@ def test_a_human_holding_the_lease_pauses_the_overlay(tmp_path):
     payload = run(executor, 'computer_screen_capture')
     assert payload['errorCode'] == host_module.HUMAN_HAS_CONTROL_CODE
     assert overlay.snapshot()['paused'] == 'human_has_control'
+
+
+# ------------------------------------------------- đích giả mạo & hwnd tái sử dụng
+
+def test_a_smuggled_target_cannot_narrow_the_approval_key(tmp_path):
+    """`__target` là kênh NỘI BỘ: giá trị model gửi kèm phải bị bỏ trước khi hỏi quyền.
+
+    Đường MỞ ỨNG DỤNG là chỗ hở: app còn chưa chạy nên chưa có đích nào để executor ghi đè, và
+    `__target` giả mạo sẽ thành khoá duyệt. Không có chốt này, một phiên được duyệt cho Notepad có
+    thể mở Chrome dưới đúng khoá `cua:app:notepad` — lựa chọn "theo app này" của người dùng bị dùng
+    cho một ứng dụng khác.
+    """
+    platform = FakePlatform(windows=[NOTEPAD])       # Notepad đang chạy, Chrome thì chưa
+
+    def launch(app):
+        platform.notes.append('launch:%s' % app)
+        platform.windows[888] = CHROME               # mở xong thì cửa sổ Chrome xuất hiện
+        return 42
+
+    platform.launch_app = launch
+    executor, _fake = build(tmp_path, platform=platform, targets=store_with(),
+                            env={'BOXFOX_PERMISSION_MODE': 'ask'},
+                            approver=lambda *args, **kwargs: 'allow_session')
+    smuggled = {'kind': 'window', 'windowId': 777, 'pid': 4242, 'processName': 'notepad.exe'}
+    payload = run(executor, 'computer_use', {'action': 'type', 'text': 'a', 'app': 'chrome',
+                                             '__target': smuggled})
+    assert payload.get('is_error') is not True, payload
+    assert platform.notes == ['launch:chrome']
+    assert payload['window']['windowId'] == 888
+    keys = list(executor.policy.session_rules)
+    assert any('cua:app:chrome' in key for key in keys), keys
+    assert not any('cua:app:notepad' in key for key in keys), keys
+
+
+def _reused_window():
+    """Cùng hwnd 777 nhưng đã thuộc tiến trình khác — hwnd bị Windows cấp lại."""
+    return make_window(hwnd=777, title='Ứng dụng khác', class_name='Other', pid=9999,
+                       process_name='other.exe', rect=(0, 0, 300, 200),
+                       extended_bounds=(0, 0, 300, 200))
+
+
+def _approver_that_replaces_the_window(fake):
+    """Đổi chủ cửa sổ ĐÚNG lúc thẻ duyệt còn mở: khe thời gian thật giữa `verify_window` và lúc chụp."""
+    def approver(name, args, decision, session_id=None):
+        fake.windows[777] = _reused_window()
+        return 'allow'
+    return approver
+
+
+def test_a_window_that_changes_owner_before_the_capture_is_refused(tmp_path):
+    executor, fake = build(tmp_path, windows=[NOTEPAD],
+                           targets=store_with(cua_target.window_entry(NOTEPAD)),
+                           env={'BOXFOX_PERMISSION_MODE': 'ask'}, approver=None)
+    executor.approver = _approver_that_replaces_the_window(fake)
+    payload = run(executor, 'computer_screen_capture')
+    assert payload['errorCode'] == host_module.TARGET_UNKNOWN_CODE
+    assert payload['reason'] == 'window_reused'
+    assert not fake.called('bitblt_window') and not fake.called('print_window')
+
+
+def test_input_is_refused_when_the_window_changes_owner(tmp_path):
+    executor, fake = build(tmp_path, windows=[NOTEPAD],
+                           targets=store_with(cua_target.window_entry(NOTEPAD)),
+                           env={'BOXFOX_PERMISSION_MODE': 'ask'}, approver=None)
+    executor.approver = _approver_that_replaces_the_window(fake)
+    payload = run(executor, 'computer_use', {'action': 'type', 'text': 'a'})
+    assert payload['errorCode'] == host_module.TARGET_UNKNOWN_CODE
+    assert payload['reason'] == 'window_reused'
+    assert not fake.sent_events, 'không được gửi sự kiện nào vào cửa sổ đã đổi chủ'

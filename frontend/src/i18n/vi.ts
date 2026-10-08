@@ -1120,6 +1120,7 @@ const vi = {
     leaseHuman: 'Quyền: bạn',
     leaseClaim: 'Trả quyền cho agent',
     humanLeaseChip: 'Bạn đang giữ quyền',
+    leaseUnknownChip: 'Chưa rõ quyền điều khiển',
     selectElement: 'Chọn phần tử',
     selectElementCancel: 'Huỷ chọn',
     selectElementHint: 'Bấm vào một phần tử trong ảnh để thanh tra. Bấm Esc để thoát.',
@@ -1137,6 +1138,7 @@ const vi = {
     bannerWorkingMachine:
       'Agent đang làm việc trên toàn desktop — viền xanh là cửa sổ đang hoạt động',
     bannerHumanLease: 'Agent tạm dừng trong cửa sổ này — bạn đang giữ quyền điều khiển',
+    bannerUnknownLease: 'Máy này chưa báo cáo ai đang giữ quyền điều khiển',
     noteNoSession:
       'Chưa mở phiên nào — đích CUA được chọn cho từng phiên, nên chưa có gì để xem ở đây.',
     noteNoTarget:

@@ -768,10 +768,10 @@ class HostExecutor:
             return error_result(UNSUPPORTED_ACTION_CODE,
                                 'hành động %r chưa có trên host (nhận: click, double_click, '
                                 'right_click, middle_click, type, key)' % (action or ''))
-        window, code = self._input_target(args, target)
+        window, code, why = self._input_target(args, target)
         if window is None:
             return error_result(code, 'không xác định được cửa sổ đích cho %s' % action,
-                                reason='window_gone' if code == TARGET_UNKNOWN_CODE else None)
+                                reason=why or None)
         hwnd = int(getattr(window, 'hwnd', 0) or 0)
         token, code = self.desktop.begin_action('computer_use:%s' % action, {'windowId': hwnd})
         if token is None:
@@ -867,6 +867,9 @@ class HostExecutor:
         Đích "cả máy" cố ý KHÔNG ghim một cửa sổ: nó giữ nguyên hành vi cũ — điểm (x, y) quyết định
         cửa sổ nào, `type`/`key` đi vào cửa sổ đang hoạt động. Chốt cuối vẫn phải qua
         `check_preconditions` của tầng input.
+
+        Trả `(window, code, reason)`: `reason` nói VÌ SAO không có cửa sổ, để chỗ gọi phân biệt được
+        "cửa sổ đã đóng" với "hwnd đã đổi chủ" — hai chuyện khác nhau với người đang gỡ lỗi.
         """
         raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
         if raw_window not in (None, ''):
@@ -874,24 +877,26 @@ class HostExecutor:
                 window = self._window_for(int(raw_window))
             except (TypeError, ValueError):
                 window = None
-            return (window, TARGET_UNKNOWN_CODE) if window is None else (window, '')
+            return (window, '', '') if window is not None else (None, TARGET_UNKNOWN_CODE, 'window_gone')
         if cua_target_module.is_window(target):
             # Cửa sổ người dùng đã chọn cho phiên: MỌI thao tác đi vào đó, kể cả `type`/`key` không
             # kèm toạ độ — nếu không, "đích theo phiên" chỉ đúng với một nửa công cụ.
             window = self._window_for(int(target.get('windowId')))
-            if window is None or not self._target_pid_ok(target, window):
-                return None, TARGET_UNKNOWN_CODE
-            return window, ''
+            if window is None:
+                return None, TARGET_UNKNOWN_CODE, 'window_gone'
+            if not self._target_pid_ok(target, window):
+                return None, TARGET_UNKNOWN_CODE, 'window_reused'
+            return window, '', ''
         if args.get('x') is None or args.get('y') is None:
             platform = self._desktop_platform()
             foreground = getattr(platform, 'get_foreground_window', None)
             hwnd = foreground() if foreground is not None else None
             window = self._window_for(hwnd) if hwnd else None
-            return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
+            return (window, '', '') if window is not None else (None, TARGET_UNKNOWN_CODE, 'window_gone')
         try:
             x, y = int(args.get('x')), int(args.get('y'))
         except (TypeError, ValueError):
-            return None, TARGET_UNKNOWN_CODE
+            return None, TARGET_UNKNOWN_CODE, 'point_invalid'
         platform = self._desktop_platform()
         window = None
         finder = getattr(platform, 'window_from_point', None)
@@ -902,7 +907,7 @@ class HostExecutor:
                 hwnd = None
             if hwnd:
                 window = self._window_for(hwnd)
-        return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
+        return (window, '', '') if window is not None else (None, TARGET_UNKNOWN_CODE, 'window_gone')
 
     def _desktop_platform(self):
         if self.desktop is not None and getattr(self.desktop, 'platform', None) is not None:
