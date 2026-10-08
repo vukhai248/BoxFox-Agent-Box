@@ -419,9 +419,9 @@ def attach_host_approver(runtime):
             return 'deny'
         outcome = await runtime.decision(session, 'request_approval', {
             'action': f'{name} {json.dumps(args, ensure_ascii=False)[:1500]}',
-            'reason': approval_reason(decision),
-            'options': approval_options(decision)})
-        return approval_verdict(outcome, decision)
+            'reason': approval_reason(decision, name, args),
+            'options': approval_options(decision, name, args)})
+        return approval_verdict(outcome, decision, name)
 
     executor.approver = approve
     return True
@@ -438,10 +438,33 @@ def build_executor(data, env=None):
         workspace = host_workspace(source)
         profile_dir = Path(data)
         policy = permissions_module.PermissionPolicy(str(workspace), profile_dir=profile_dir, env=source)
-        executor = HostExecutor(str(workspace), policy=policy, env=source,
-                                desktop=build_desktop_control(profile_dir, source))
+        desktop = build_desktop_control(profile_dir, source)
+        executor = HostExecutor(str(workspace), policy=policy, env=source, desktop=desktop,
+                                overlay=build_cua_overlay(source, desktop))
         return executor
     return SandboxExecutor(api_key=source.get('BOXFOX_API_KEY', 'boxfox-local-dev-token'))
+
+
+def build_cua_overlay(env=None, desktop=None):
+    """Viền báo vùng đang bị điều khiển trên màn hình thật, hoặc `None`.
+
+    Chỉ có nghĩa khi có `DesktopControl` (Windows thật). Biến `BOXFOX_CUA_OVERLAY=0` tắt hẳn viền —
+    một số môi trường (chụp màn hình tự động, VM không compositor) không muốn thêm cửa sổ luôn-trên-cùng.
+    """
+    source = os.environ if env is None else env
+    if str(source.get('BOXFOX_CUA_OVERLAY') or '').strip().lower() in ('0', 'off', 'false'):
+        return None
+    if sys.platform != 'win32' or desktop is None:
+        return None
+    try:
+        from ..agent_core.cua_overlay import CuaOverlay
+        from ..sandbox.win.windows_platform import CuaOverlayWindow
+    except Exception:
+        return None
+    try:
+        return CuaOverlay(CuaOverlayWindow(getattr(desktop, 'platform', None)))
+    except Exception:
+        return None
 
 
 def build_desktop_control(profile_dir, env=None):
@@ -2387,16 +2410,23 @@ def main():
     # `default_mode`/`default_workspace` chỉ tạo cấu hình cho CSDL mới (bản desktop mở ra là host).
     from ..sandbox.machine_router import attach
     mode = execution_mode()
+    # Bộ điều khiển desktop dùng CHUNG cho mọi phiên host: ở chế độ host nó đã có sẵn trên executor,
+    # còn ở chế độ docker (mặc định của bản desktop, máy vẫn cấu hình host) phải dựng riêng — thiếu
+    # nó thì mọi phiên host trả `CUA_UNAVAILABLE` và route lease trả 409.
+    shared_desktop = getattr(executor, 'desktop', None) or build_desktop_control(data)
+    shared_overlay = getattr(executor, 'overlay', None) or build_cua_overlay(None, shared_desktop)
     attach(runtime, data, default_mode=mode,
-           default_workspace=host_workspace() if mode == 'host' else None)
+           default_workspace=host_workspace() if mode == 'host' else None,
+           desktop=shared_desktop, overlay=shared_overlay)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
     # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN
     # cho cả tiến trình. Hook hỏng ⇒ fail-closed ở tầng lease, KHÔNG làm chết khởi động: agent vẫn
     # dùng được công cụ tệp/lệnh.
-    if getattr(executor, 'desktop', None) is not None:
-        prepared, prepare_code = executor.prepare()
-        hooks_ok, hooks_code = executor.desktop.install_hooks()
+    if shared_desktop is not None:
+        prepare = getattr(executor, 'prepare', None)
+        prepared, prepare_code = prepare() if prepare is not None else (True, '')
+        hooks_ok, hooks_code = shared_desktop.install_hooks()
         system_log.write('desktop.ready', level='info' if prepared else 'warn',
                          message='điều khiển desktop đã sẵn sàng' if prepared else 'chưa sẵn sàng',
                          data={'prepared': prepared, 'prepareCode': prepare_code,

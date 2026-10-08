@@ -208,15 +208,17 @@ SCHEMAS = [
     tool('computer_screen_capture',
          'Capture the actual sandbox display; returns an image and artifact. Pass target to shoot ONE '
          'browser tab or window instead of the whole screen, and a short caption naming the finished '
-         'feature the image is evidence for.',
+         'feature the image is evidence for. On the host machine, pass app or window to shoot the '
+         'window of that application or title; with no argument the session target is used.',
          {'target': CAPTURE_TARGET_SCHEMA,
+          'app': STRING, 'window': STRING,
           'caption': {'type': 'string', 'maxLength': CAPTURE_CAPTION_MAX_CHARS}},
          []),
     tool('computer_screen_record', 'Start/stop/status real sandbox screen recording for this session.', {'action': {'type': 'string', 'enum': ['start', 'stop', 'status']}}, ['action']),
     tool('inspect_element', 'Inspect UI or DOM element at X11 screen coordinates (x, y) without clicking. Returns window metadata, application name, or web DOM selector, tag, text, and bounding box.',
          {'x': {'type': 'integer'}, 'y': {'type': 'integer'}}, ['x', 'y']),
-    tool('computer_use', 'Send input to sandbox X11 display. Capture screen or inspect elements before deciding coordinates. Use double_click to launch desktop icons/applications.',
-         {'action': {'type': 'string', 'enum': ['click', 'double_click', 'right_click', 'middle_click', 'type', 'key', 'scroll']}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'text': STRING, 'key': STRING, 'direction': STRING, 'steps': {'type': 'integer'}}, ['action']),
+    tool('computer_use', 'Send input to sandbox X11 display. Capture screen or inspect elements before deciding coordinates. Use double_click to launch desktop icons/applications. On the host machine, pass app or window to act on the window of that application or title; with no argument the session target is used, and when the target is the whole machine the agent may open the app itself.',
+         {'action': {'type': 'string', 'enum': ['click', 'double_click', 'right_click', 'middle_click', 'type', 'key', 'scroll']}, 'x': {'type': 'integer'}, 'y': {'type': 'integer'}, 'text': STRING, 'key': STRING, 'direction': STRING, 'steps': {'type': 'integer'}, 'app': STRING, 'window': STRING}, ['action']),
     tool('browser_use', 'Control this session browser tab in the sandbox. MUST call action="navigate" with url first before snapshot or click/fill. Use current snapshot refs for click/fill.',
          {'action': {'type': 'string', 'enum': ['navigate', 'snapshot', 'click', 'fill', 'key', 'screenshot']}, 'url': STRING, 'ref': STRING, 'text': STRING, 'key': STRING}, ['action']),
     tool('web_search',

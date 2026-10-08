@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import cua_target as _cua_target
+
 MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED = 'plan', 'ask', 'auto', 'trusted'
 MODES = (MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED)
 MODE_DEFAULT = MODE_ASK
@@ -516,6 +518,47 @@ def _path_arg(args):
     return str(args.get('path') or args.get('file_path') or '').strip()
 
 
+def _cua_app_key(value):
+    """Khoá ỨNG DỤNG của một lời gọi CUA: tên tiến trình, bỏ đuôi `.exe`, không phân biệt hoa thường.
+
+    `notepad`, `Notepad.exe` và `processName` của Windows (`notepad.exe`) phải cho CÙNG một khoá.
+    Nếu không, lựa chọn "theo app này" trên thẻ duyệt (nhớ theo tên model xin) và lời gọi sau dùng
+    đích phiên (nhớ theo tên tiến trình) sẽ không khớp nhau, và người dùng bị hỏi lại vô ích.
+    """
+    text = str(value or '').strip().casefold()
+    if text.endswith('.exe'):
+        text = text[:-4]
+    return text.strip()
+
+
+def _cua_resource(args):
+    """Tài nguyên của một lời gọi CUA = ĐÍCH nó nhắm tới, không phải cả phiên.
+
+    `HostExecutor` gắn `__target` (đích đã phân giải) vào args TRƯỚC khi hỏi quyền, nên "cho phép cả
+    phiên" hẹp đúng theo cửa sổ/app đang làm việc: đổi cửa sổ là hỏi lại. Không có `__target` (đường
+    đọc bảng luật, hoặc app chưa mở) thì lấy theo tham số thô của lời gọi.
+    """
+    if not isinstance(args, dict):
+        return 'cua:session'
+    entry = _cua_target.normalize(args.get('__target'))
+    if entry is not None:
+        if entry.get('kind') == _cua_target.KIND_MACHINE:
+            return 'cua:machine'
+        app = _cua_app_key(entry.get('processName'))
+        if app:
+            return 'cua:app:%s' % app
+    app = _cua_app_key(args.get('app'))
+    if app:
+        return 'cua:app:%s' % app
+    window = str(args.get('window') or '').strip().casefold()
+    if window:
+        return 'cua:title:%s' % window
+    window_id = args.get('windowId')
+    if window_id not in (None, ''):
+        return 'cua:windowid:%s' % window_id
+    return 'cua:session'
+
+
 def _canonical_text(command):
     """Một dòng để so khớp mẫu: bỏ wrapper, chuẩn hoá alias, gộp khoảng trắng, viết thường."""
     return re.sub(r'\s+', ' ', canonicalize_command(str(command or '')).lower()).strip()
@@ -921,6 +964,11 @@ class PermissionPolicy:
             # và một lần "cho phép cả phiên" cho một URL sẽ mở luôn cho mọi URL khác.
             url = args.get('url') if isinstance(args, dict) else args
             return str(url or '').strip()
+        if tool in BARE_TOOLS:
+            # CUA: tài nguyên là ĐÍCH của lời gọi (app/cửa sổ/cả máy). Không có mục này thì một lần
+            # "cho phép cả phiên" khi bấm vào Notepad sẽ cho phép mọi thao tác trên MỌI cửa sổ khác
+            # trong cùng phiên — đúng thứ hợp đồng §7.2 cấm.
+            return _cua_resource(args)
         value = _path_arg(args) or (args.get('pattern') if isinstance(args, dict) else '')
         return self.absolute_path(value)
 

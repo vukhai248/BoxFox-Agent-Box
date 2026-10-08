@@ -37,6 +37,7 @@ import time
 import uuid
 from pathlib import Path
 
+from ..agent_core import cua_target as cua_target_module
 from ..agent_core import permissions as permissions_module
 
 #: Mã lỗi cho công cụ v1 chưa có trên host. Có mã để model phân biệt "chưa làm" với "hỏng".
@@ -54,6 +55,17 @@ CUA_UNAVAILABLE_CODE = 'CUA_UNAVAILABLE'
 HUMAN_HAS_CONTROL_CODE = 'HUMAN_HAS_CONTROL'
 #: Cửa sổ/điểm đích không xác định được (không có cửa sổ tại toạ độ, hwnd lạ).
 TARGET_UNKNOWN_CODE = 'TARGET_UNKNOWN'
+#: Phiên chưa chọn đích mà phạm vi quyền lại là `workspace` — chưa biết làm việc ở đâu.
+TARGET_REQUIRED_CODE = cua_target_module.TARGET_REQUIRED
+#: Nhiều cửa sổ cùng khớp tên app/tiêu đề — model phải chọn lại bằng `windowId`.
+TARGET_AMBIGUOUS_CODE = cua_target_module.TARGET_AMBIGUOUS
+#: Đích "cả máy" khi phạm vi quyền không phải `machine` (§7.2 hợp đồng).
+MACHINE_SCOPE_REQUIRED_CODE = cua_target_module.CUA_MACHINE_SCOPE_REQUIRED
+#: Không mở được ứng dụng mà agent xin (`ShellExecuteW` lỗi).
+LAUNCH_FAILED_CODE = 'LAUNCH_FAILED'
+#: Thời gian chờ cửa sổ của ứng dụng vừa mở. Quá hạn ⇒ `TARGET_UNKNOWN` (`launch_timeout`), không
+#: treo lượt: người dùng vẫn thấy lý do thay vì một lời gọi không bao giờ trả về.
+LAUNCH_TIMEOUT_SEC = 10.0
 #: Không lấy được mutex chuột/phím — tiến trình khác đang tiêm input.
 CONTROL_BUSY_CODE = 'CONTROL_BUSY'
 #: Cửa sổ đổi vị trí/kích thước/DPI sau khi agent đã soi — token cũ, phải soi lại.
@@ -84,13 +96,40 @@ def _is_guarded(decision):
 #: id trước khi phát ra thẻ, nên `approve_session` tới đây thành `approve-session`.
 _SESSION_CHOICES = frozenset({'approve-session', 'approve_session'})
 _ALWAYS_CHOICES = frozenset({'approve-always', 'approve_always'})
+#: Lựa chọn thứ ba của thẻ CUA: nhớ theo ỨNG DỤNG (exe + aumid), không theo lời gọi.
+_APP_CHOICES = frozenset({'approve-app', 'approve_app'})
 
 
-def approval_options(decision):
+def _is_cua(tool):
+    """Lời gọi này có phải công cụ điều khiển máy (CUA) không."""
+    return str(tool or '') in CUA_TOOLS
+
+
+def cua_app_hint(args):
+    """Tên ứng dụng để thẻ CUA nói đúng thứ người dùng đang cho phép, hoặc `''`.
+
+    Đọc từ chính lời gọi (`app` model xin, hoặc tên tiến trình của `windowId` đã phân giải) — thẻ
+    duyệt không được hứa một phạm vi rộng hơn thứ nó ghi nhớ.
+    """
+    if not isinstance(args, dict):
+        return ''
+    app = str(args.get('app') or '').strip()
+    if app:
+        return app
+    target = args.get('__target')
+    if isinstance(target, dict):
+        return str(target.get('processName') or '').strip()
+    return ''
+
+
+def approval_options(decision, tool='', args=None):
     """Lựa chọn hiện trên thẻ duyệt của host mode — MỘT nguồn cho cả hai đường nối `approver`.
 
     Nhóm "luôn hỏi" (`guarded:`) chỉ có một lựa chọn cho phép: nó không ghi nhớ được, nên mời
     "cả phiên"/"luôn cho phép" là hứa điều `HostExecutor` sẽ không làm.
+
+    CUA (§7.2 hợp đồng) KHÔNG có "luôn cho phép": lựa chọn thứ ba là **theo app này** (exe + aumid),
+    và chỉ hiện khi biết tên ứng dụng — thẻ không được mời một phạm vi mà nó không ghi nhớ được.
 
     `kind` của hai lựa chọn nhớ là `alternative`, KHÔNG phải `approve`: `normalize_decision_options`
     ép `id = kind` cho mọi lựa chọn `approve`/`reject`, nên ba lựa chọn `approve` biến thành
@@ -102,12 +141,18 @@ def approval_options(decision):
     if not _is_guarded(decision):
         options.append({'id': 'approve-session', 'label': 'Cho phép cả phiên',
                         'kind': 'alternative'})
-        options.append({'id': 'approve-always', 'label': 'Luôn cho phép', 'kind': 'alternative'})
+        if _is_cua(tool):
+            if cua_app_hint(args):
+                options.append({'id': 'approve-app', 'label': 'Theo app này',
+                                'kind': 'alternative'})
+        else:
+            options.append({'id': 'approve-always', 'label': 'Luôn cho phép',
+                            'kind': 'alternative'})
     options.append({'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'})
     return options
 
 
-def approval_verdict(outcome, decision):
+def approval_verdict(outcome, decision, tool=''):
     """`runtime.decision(...)` trả về gì ⇒ verdict của `HostExecutor`. Lạ ⇒ `deny` (fail closed)."""
     if not isinstance(outcome, dict) or outcome.get('status') != 'approved':
         return 'deny'
@@ -119,16 +164,24 @@ def approval_verdict(outcome, decision):
         return 'deny'
     if choice in _SESSION_CHOICES:
         return 'allow_session'
+    if choice in _APP_CHOICES:
+        # Thẻ CUA mới có id này. Công cụ khác gửi id đó là id lạ ⇒ từ chối.
+        return 'allow_app' if _is_cua(tool) else 'deny'
     if choice in _ALWAYS_CHOICES:
-        return 'allow_always'
+        # CUA không bao giờ có luật vĩnh viễn: id "luôn cho phép" tới đây là id lạ.
+        return 'deny' if _is_cua(tool) else 'allow_always'
     return 'deny'
 
 
-def approval_reason(decision):
-    """Câu lý do trên thẻ duyệt, kèm lời nhắc khi lệnh thuộc nhóm luôn hỏi."""
+def approval_reason(decision, tool='', args=None):
+    """Câu lý do trên thẻ duyệt, kèm lời nhắc khi lệnh thuộc nhóm luôn hỏi hoặc là thao tác CUA."""
     reason = f'{decision.reason}. Lệnh chạy bằng tài khoản của bạn; không có sandbox OS.'
     if _is_guarded(decision):
         reason += ' Lệnh này thuộc nhóm luôn hỏi: chỉ cho phép một lần.'
+    if _is_cua(tool):
+        app = cua_app_hint(args)
+        reason += (' Thao tác trên màn hình thật%s: không có luật vĩnh viễn, chỉ nhớ trong phiên.'
+                   % (f' — ứng dụng `{app}`' if app else ''))
     return reason
 
 #: Công cụ v1 chạy được trên host. Danh sách này là HỢP ĐỒNG với tài liệu `docs/plan/desktop-host-mode.md`.
@@ -178,7 +231,8 @@ def unsupported_result(name):
 
 def error_result(code, message, **extra):
     payload = {'is_error': True, 'errorCode': code, 'error': message}
-    payload.update(extra)
+    # Trường `None` bị bỏ: payload lỗi chỉ mang dữ kiện thật, không mang khoá rỗng.
+    payload.update({key: value for key, value in extra.items() if value is not None})
     return payload
 
 
@@ -261,7 +315,8 @@ class HostExecutor:
     execution_mode = 'host'
 
     def __init__(self, workspace=None, *, policy=None, platform=None, approver=None, env=None,
-                 artifacts_dir=None, root=None, desktop=None):
+                 artifacts_dir=None, root=None, desktop=None, targets=None, trusted=False,
+                 overlay=None):
         source = os.environ if env is None else env
         self.env = source
         self.workspace = Path(workspace or source.get('BOXFOX_HOST_WORKSPACE')
@@ -281,6 +336,13 @@ class HostExecutor:
         #: H7 — bộ điều khiển desktop (`DesktopControl`). `None` ⇒ CUA trả `CUA_UNAVAILABLE`
         #: thay vì ném: host mode vẫn chạy được các công cụ tệp/lệnh.
         self.desktop = desktop
+        #: Đích CUA theo phiên (`SessionTargetStore`). `None` ⇒ chưa nối sổ phiên (test/đường cũ).
+        self.targets = targets
+        #: Folder dự án đã được người dùng xác nhận tin cậy. Chỉ đường `computer_use` và việc MỞ
+        #: ứng dụng mới cần nó; chụp/soi (chỉ đọc) chạy được trong folder chưa tin cậy.
+        self.trusted = bool(trusted)
+        #: Viền báo vùng đang bị điều khiển trên màn hình thật (`CuaOverlay`), `None` ⇒ không vẽ.
+        self.overlay = overlay
         self._prepared = False
         self._win_capture = None
         self._win_input = None
@@ -361,6 +423,15 @@ class HostExecutor:
         args = args if isinstance(args, dict) else {}
         if name not in HOST_TOOLS:
             return unsupported_result(name)
+        cua_plan = None
+        if name in CUA_TOOLS:
+            # Đích CUA được phân giải TRƯỚC khi hỏi quyền: thẻ duyệt phải nói đúng cửa sổ/app mà
+            # lời gọi sắp chạm vào, và `resource_key` nhờ đó hẹp theo đích thay vì theo cả phiên.
+            cua_plan, failure = self._plan_target(args, session)
+            if failure is not None:
+                return failure
+            if cua_plan.get('target') is not None:
+                args = dict(args, __target=cua_plan['target'])
         decision = self.policy.decide(name, args, cwd=self._cwd(root), session_id=session)
         if decision.outcome == permissions_module.OUTCOME_DENY:
             return error_result(PERMISSION_DENIED_CODE, decision.reason or 'bị chính sách quyền từ chối',
@@ -376,12 +447,21 @@ class HostExecutor:
             self.policy.note_approval(session)
             # Nhóm "luôn hỏi" (`guarded:`) là một lần cho một lần: không ghi nhớ phiên, không lưu luật.
             if not _is_guarded(decision):
-                key = self.policy.session_key(name, args, cwd=self._cwd(root), session_id=session)
-                if verdict == 'allow_session':
+                if verdict == 'allow_app':
+                    # "Theo app này" nhớ theo ỨNG DỤNG, không theo cửa sổ vừa phân giải: cửa sổ đóng
+                    # rồi mở lại (pid khác) vẫn phải khớp, nếu không lựa chọn này vô nghĩa.
+                    app = cua_app_hint(args)
+                    key_args = {'app': app} if app else args
+                    key = self.policy.session_key(name, key_args, cwd=self._cwd(root),
+                                                  session_id=session)
                     self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                elif verdict == 'allow_always':
-                    self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                    self.policy.save_rule(name, args, actor='user', session_id=session)
+                else:
+                    key = self.policy.session_key(name, args, cwd=self._cwd(root), session_id=session)
+                    if verdict == 'allow_session':
+                        self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
+                    elif verdict == 'allow_always':
+                        self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
+                        self.policy.save_rule(name, args, actor='user', session_id=session)
         try:
             if name == 'file_read':
                 return self._file_read(args, root=root)
@@ -396,7 +476,7 @@ class HostExecutor:
             if name == 'terminal_exec':
                 return await self._terminal_exec(args, session, root=root)
             if name in CUA_TOOLS:
-                return await self._cua(name, args, session)
+                return await self._cua(name, args, session, cua_plan)
         except _PathEscape as exc:
             return error_result(PATH_ESCAPE_CODE, str(exc))
         except FileNotFoundError as exc:
@@ -411,7 +491,7 @@ class HostExecutor:
 
     # -- CUA: chụp màn hình, soi phần tử, tiêm input (H5–H7) ------------------
 
-    async def _cua(self, name, args, session):
+    async def _cua(self, name, args, session, plan=None):
         """Cổng chung của mọi công cụ CUA: lease trước, rồi mới đọc/tiêm.
 
         Ba tầng phòng thủ, theo thứ tự: (1) `DesktopControl` phải tồn tại; (2) lease phải thuộc
@@ -429,14 +509,144 @@ class HostExecutor:
         if not granted:
             snapshot = self.desktop.snapshot() or {}
             holder = snapshot.get('holder') or (state if isinstance(state, str) else 'human')
+            self._overlay_pause('human_has_control')
             return error_result(HUMAN_HAS_CONTROL_CODE,
                                 'người dùng đang điều khiển máy — agent chưa có quyền, '
                                 'không gửi thao tác nào', holder=holder)
+        self._overlay_resume()
         if name == 'inspect_element':
             return self._inspect_element(args)
+        # Đích đã phân giải trước khi hỏi quyền (nếu có) được dùng lại; nếu lúc đó chưa xác định
+        # được vì app chưa mở, giờ mới mở rồi phân giải lại — quyền đã được duyệt ở bước trên.
+        target, source, failure = await self._target_for_call(args, session, plan)
+        if failure is not None:
+            return failure
+        if source == 'agent':
+            # Model tự chọn đích: ghi vào sổ phiên để panel hiện ra ngay (chỉ khi giá trị đổi).
+            cua_target_module.apply_agent_target(self.targets, session, target, source)
         if name == 'computer_screen_capture':
-            return self._capture_screen(args, session)
-        return await self._computer_use(args, session)
+            return self._capture_screen(args, session, target, source)
+        return await self._computer_use(args, session, target, source)
+
+    # -- đích CUA theo phiên: chọn cửa sổ / cả máy ---------------------------
+
+    def window_list(self, *, include_minimized=True):
+        """Cửa sổ cấp cao nhất để phân giải đích. Nền tảng không đọc được ⇒ danh sách rỗng.
+
+        `include_minimized=True` cho đường PHÂN GIẢI: cửa sổ đang thu nhỏ vẫn là một đích hợp lệ
+        (`capture_window`/`SendInput` tự đưa nó lên trước), nhưng danh sách cho panel gọi với
+        `False` để người dùng chỉ thấy thứ họ nhìn thấy được.
+        """
+        capture = self._win_capture or self._load_capture()
+        if capture is None:
+            return []
+        try:
+            return capture.list_windows(platform=self._desktop_platform(),
+                                        include_minimized=include_minimized)
+        except Exception:
+            return []
+
+    def session_target(self, session):
+        """Đích người dùng/model đã chọn cho phiên, hoặc `None`."""
+        if self.targets is None or not session:
+            return None
+        return self.targets.read(session)
+
+    def _plan_target(self, args, session):
+        """→ `({'target': …, 'source': …}, None)` hoặc `(None, payload_lỗi)` cho bước HỎI QUYỀN.
+
+        Chỉ đọc: không mở ứng dụng, không ghi sổ phiên. Một app chưa mở mà MỞ ĐƯỢC thì không phải
+        lỗi ở bước này — thẻ duyệt vẫn phải hiện để người dùng quyết định, việc mở xảy ra sau khi
+        duyệt (`_target_for_call`).
+        """
+        target, source, failure = self._resolve_target(args, session)
+        if failure is not None:
+            # CHỈ "không thấy cửa sổ nào của app" mới được coi là "sẽ mở sau khi duyệt". Nhiều cửa sổ
+            # cùng khớp (`TARGET_AMBIGUOUS`) là câu hỏi cho model, không phải lý do mở thêm một bản sao.
+            if failure.get('reason') == 'not_found' and self._launchable_app(args):
+                return {'target': None, 'source': '', 'launch': self._launchable_app(args)}, None
+            return None, failure
+        return {'target': target, 'source': source, 'launch': ''}, None
+
+    def _resolve_target(self, args, session):
+        """→ `(target, source, payload_lỗi)`. Không chạm input, không mở ứng dụng."""
+        windows = self.window_list()
+        try:
+            target, source = cua_target_module.resolve(args, self.session_target(session), windows,
+                                                       self.policy.scope_value())
+        except cua_target_module.TargetError as exc:
+            return None, '', error_result(exc.code, exc.message, **exc.details)
+        return target, source, None
+
+    async def _target_for_call(self, args, session, plan=None):
+        """Đích THẬT SỰ dùng cho lời gọi này, mở ứng dụng nếu cần. `(target, source, lỗi)`."""
+        plan = plan or {}
+        planned = plan.get('target')
+        if planned is not None:
+            return planned, plan.get('source', ''), None
+        app = plan.get('launch') or self._launchable_app(args)
+        if app:
+            target, failure = await self._launch_and_wait(app)
+            if failure is not None:
+                return None, '', failure
+            return target, 'agent', None
+        target, source, failure = self._resolve_target(args, session)
+        return target, source, failure
+
+    def _launchable_app(self, args):
+        """Tên ứng dụng ĐƯỢC PHÉP mở cho lời gọi này, hoặc `''`.
+
+        Ba điều kiện, theo §7.2: phạm vi quyền là `machine`, folder dự án đã được người dùng xác
+        nhận tin cậy, và tên app là một tên tệp đơn giản — không đường dẫn, không ký tự điều khiển
+        shell. Mở ứng dụng là quyền của "cả máy"; folder chưa tin cậy thì agent không tự mở gì.
+        """
+        if not self.trusted or self.platform != 'win32':
+            return ''
+        if not cua_target_module.scope_allows_machine(self.policy.scope_value()):
+            return ''
+        app = str((args or {}).get('app') or '').strip()
+        if not app or not re.fullmatch(r'[A-Za-z0-9._+-]{1,64}', app):
+            return ''
+        return app
+
+    async def _launch_and_wait(self, app):
+        """Mở `app` rồi chờ cửa sổ của nó (≤ `LAUNCH_TIMEOUT_SEC`). `(target, lỗi)`."""
+        platform = self._desktop_platform()
+        launcher = getattr(platform, 'launch_app', None)
+        if launcher is None:
+            return None, error_result(CUA_UNAVAILABLE_CODE, 'nền tảng không mở được ứng dụng')
+        try:
+            launcher(app)
+        except Exception as exc:
+            code = getattr(exc, 'code', None) or LAUNCH_FAILED_CODE
+            return None, error_result(code, 'không mở được `%s`: %s' % (app, exc), app=app)
+        deadline = time.monotonic() + LAUNCH_TIMEOUT_SEC
+        while True:
+            try:
+                entry = cua_target_module.match_window(self.window_list(), app=app)
+            except cua_target_module.TargetError:
+                entry = None
+            if entry is not None:
+                return entry, None
+            if time.monotonic() >= deadline:
+                return None, error_result(TARGET_UNKNOWN_CODE,
+                                          'đã mở `%s` nhưng chưa thấy cửa sổ nào của nó' % app,
+                                          reason='launch_timeout', app=app)
+            await asyncio.sleep(0.25)
+
+    # -- viền báo vùng đang bị điều khiển ------------------------------------
+
+    def _overlay_note(self, window):
+        if self.overlay is not None and window is not None:
+            self.overlay.note(window)
+
+    def _overlay_pause(self, reason):
+        if self.overlay is not None:
+            self.overlay.pause(reason)
+
+    def _overlay_resume(self):
+        if self.overlay is not None:
+            self.overlay.resume()
 
     # ``inspect_element`` — chỉ đọc, không cần mutex input.
     def _inspect_element(self, args):
@@ -454,21 +664,24 @@ class HostExecutor:
 
     # ``computer_screen_capture`` — cùng khuôn payload với box (`SandboxExecutor`), để tầng trên
     # không phải biết ảnh đến từ đâu.
-    def _capture_screen(self, args, session):
+    def _capture_screen(self, args, session, target=None, source=''):
         capture_module = self._win_capture or self._load_capture()
         if capture_module is None:
             return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun chụp màn hình của Windows')
-        target = {'kind': 'screen'}
+        payload_target = {'kind': 'screen'}
         window = None
         raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
+        if raw_window in (None, '') and cua_target_module.is_window(target):
+            raw_window = target.get('windowId')
         if raw_window not in (None, ''):
             try:
                 window = self._window_for(int(raw_window))
             except (TypeError, ValueError):
                 window = None
             if window is None:
-                return error_result(TARGET_UNKNOWN_CODE, 'không thấy cửa sổ %s' % raw_window)
-            target = {'kind': 'window', 'windowId': int(raw_window)}
+                return error_result(TARGET_UNKNOWN_CODE, 'không thấy cửa sổ %s' % raw_window,
+                                    reason='window_gone')
+            payload_target = {'kind': 'window', 'windowId': int(raw_window)}
         try:
             win_platform = self._desktop_platform()
             shot = (capture_module.capture_window(int(raw_window), platform=win_platform)
@@ -479,18 +692,34 @@ class HostExecutor:
             code = getattr(exc, 'code', None) or 'CAPTURE_FAILED'
             return error_result(code, str(exc))
         dimensions = (int(shot.width), int(shot.height))
+        # Gốc của ảnh trên màn hình ảo (toạ độ vật lý). Cửa sổ có thể nằm ở màn hình phụ với gốc âm;
+        # panel cần gốc này để đặt viền/điểm soi đúng chỗ trên ảnh chụp.
+        bounds = getattr(shot, 'bounds', None)
+        origin = {'x': int(bounds[0]), 'y': int(bounds[1])} if bounds else {'x': 0, 'y': 0}
         payload = {
             'content': 'Host screenshot %dx%d' % dimensions,
             'image': base64.b64encode(data).decode('ascii'),
             'mime': 'image/png',
             'dimensions': dimensions,
-            'target': target,
+            'target': payload_target,
+            'captureOrigin': origin,
+            'captureSize': {'width': dimensions[0], 'height': dimensions[1]},
             'sha256': sha256_of(data),
             'label': {'integrity': 'khong_tin_duoc', 'confidentiality': 'noi_bo',
                       'source_kind': 'screen_capture',
-                      'source_uri': 'screen://capture/%s' % (target.get('windowId') or 'screen'),
+                      'source_uri': 'screen://capture/%s' % (payload_target.get('windowId') or 'screen'),
                       'tool_name': 'computer_screen_capture', 'content_hash': sha256_of(data)},
         }
+        if cua_target_module.is_machine(target):
+            # Đích "cả máy": ảnh là toàn bộ màn hình ảo. `target` giữ từ vựng của box
+            # (`screen`/`window` — hợp đồng `CAPTURE_TARGET_KINDS`); đích CUA nói riêng ở `cuaTarget`
+            # để hai hợp đồng không đè lên nhau trong cùng một khoá.
+            payload['cuaTarget'] = {'kind': 'machine'}
+        if source:
+            payload['resolvedFrom'] = source
+        if window is not None:
+            payload['window'] = cua_target_module.window_entry(window)
+            self._overlay_note(window)
         if shot.occluded:
             payload['occluded'] = True
         caption = args.get('caption')
@@ -499,7 +728,7 @@ class HostExecutor:
         try:
             target_dir = Path(self.artifacts_dir) / 'captures'
             target_dir.mkdir(parents=True, exist_ok=True)
-            path = target_dir / self._capture_name(target, session)
+            path = target_dir / self._capture_name(payload_target, session)
             path.write_bytes(data)
             payload['artifact'] = str(path)
         except Exception as exc:            # ảnh vẫn dùng được dù không ghi được tệp
@@ -521,7 +750,7 @@ class HostExecutor:
         return win_capture
 
     # ``computer_use`` — tiêm input thật, có lease + mutex + fence.
-    async def _computer_use(self, args, session):
+    async def _computer_use(self, args, session, target=None, source=''):
         input_module = self._load_input()
         if input_module is None:
             return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun tiêm input của Windows')
@@ -530,9 +759,10 @@ class HostExecutor:
             return error_result(UNSUPPORTED_ACTION_CODE,
                                 'hành động %r chưa có trên host (nhận: click, double_click, '
                                 'right_click, middle_click, type, key)' % (action or ''))
-        window, code = self._input_target(args)
+        window, code = self._input_target(args, target)
         if window is None:
-            return error_result(code, 'không xác định được cửa sổ đích cho %s' % action)
+            return error_result(code, 'không xác định được cửa sổ đích cho %s' % action,
+                                reason='window_gone' if code == TARGET_UNKNOWN_CODE else None)
         hwnd = int(getattr(window, 'hwnd', 0) or 0)
         token, code = self.desktop.begin_action('computer_use:%s' % action, {'windowId': hwnd})
         if token is None:
@@ -549,11 +779,15 @@ class HostExecutor:
             return error_result(code, str(exc))
         result = self.desktop.end_action(token, effect='unverifiable', verified=None,
                                          route='send_input', note=action)
+        self._overlay_note(window)
         payload = {'content': 'Host input %s → window %s' % (action, hwnd)}
         if isinstance(outcome, dict):
             payload.update(outcome)
         payload.update({'leaseEpoch': result.get('lease_epoch'), 'effect': result.get('effect'),
                         'verified': result.get('verified')})
+        payload['window'] = cua_target_module.window_entry(window)
+        if source:
+            payload['resolvedFrom'] = source
         return payload
 
     def _send_input(self, input_module, action, args, window):
@@ -597,11 +831,13 @@ class HostExecutor:
         except Exception:
             return None
 
-    def _input_target(self, args):
-        """Cửa sổ đích: `windowId` model đưa → cửa sổ chứa điểm (x, y) → cửa sổ đang hoạt động.
+    def _input_target(self, args, target=None):
+        """Cửa sổ đích: `windowId` model đưa → ĐÍCH PHIÊN (cửa sổ đã chọn) → cửa sổ chứa điểm (x, y)
+        → cửa sổ đang hoạt động.
 
-        Chốt cuối chỉ dùng cho `type`/`key`: gõ vào cửa sổ người dùng đang mở là hành vi tự nhiên
-        nhất, và cửa sổ đó vẫn phải qua `check_preconditions` của tầng input.
+        Đích "cả máy" cố ý KHÔNG ghim một cửa sổ: nó giữ nguyên hành vi cũ — điểm (x, y) quyết định
+        cửa sổ nào, `type`/`key` đi vào cửa sổ đang hoạt động. Chốt cuối vẫn phải qua
+        `check_preconditions` của tầng input.
         """
         raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
         if raw_window not in (None, ''):
@@ -610,6 +846,11 @@ class HostExecutor:
             except (TypeError, ValueError):
                 window = None
             return (window, TARGET_UNKNOWN_CODE) if window is None else (window, '')
+        if cua_target_module.is_window(target):
+            # Cửa sổ người dùng đã chọn cho phiên: MỌI thao tác đi vào đó, kể cả `type`/`key` không
+            # kèm toạ độ — nếu không, "đích theo phiên" chỉ đúng với một nửa công cụ.
+            window = self._window_for(int(target.get('windowId')))
+            return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
         if args.get('x') is None or args.get('y') is None:
             platform = self._desktop_platform()
             foreground = getattr(platform, 'get_foreground_window', None)
@@ -646,6 +887,10 @@ class HostExecutor:
 
     async def cleanup(self, session):
         """Dừng tiến trình còn chạy của phiên (tương ứng `SandboxExecutor.cleanup`)."""
+        # Viền báo vùng đang bị điều khiển phải tắt cùng phiên: để lại một vòng xanh quanh cửa sổ
+        # sau khi phiên kết thúc là nói dối người dùng rằng agent còn đang làm việc ở đó.
+        if self.overlay is not None:
+            self.overlay.hide('session_cleanup')
         process = self.processes.pop(session, None)
         if process is not None and process.returncode is None:
             _kill_group(process)
@@ -666,7 +911,8 @@ class HostExecutor:
                 verdict = await verdict
         except Exception:
             return 'deny'
-        return verdict if verdict in ('allow', 'allow_session', 'allow_always', 'deny') else 'deny'
+        return verdict if verdict in ('allow', 'allow_session', 'allow_always', 'allow_app',
+                                      'deny') else 'deny'
 
     # -- đường dẫn -----------------------------------------------------------
 

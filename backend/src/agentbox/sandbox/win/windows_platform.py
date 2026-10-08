@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -137,6 +138,36 @@ S_OK = 0
 DEFAULT_DESKTOP_NAME = "Default"
 #: Window station tương tác của phiên đăng nhập.
 INTERACTIVE_WINDOW_STATION = "WinSta0"
+
+# Cửa sổ viền báo vùng đang bị điều khiển (overlay). Một cửa sổ layered, trong suốt với chuột
+# (WS_EX_TRANSPARENT ⇒ mọi cú bấm xuyên qua), không hiện trên taskbar/Alt-Tab (TOOLWINDOW +
+# NOACTIVATE), và KHÔNG BAO GIỜ cướp tiêu điểm của ứng dụng đang bị điều khiển.
+WS_POPUP = 0x80000000
+WS_EX_LAYERED = 0x00080000
+WS_EX_TRANSPARENT = 0x00000020
+WS_EX_TOOLWINDOW = 0x00000080
+WS_EX_TOPMOST = 0x00000008
+WS_EX_NOACTIVATE = 0x08000000
+WM_PAINT = 0x000F
+WM_DESTROY = 0x0002
+WM_CLOSE = 0x0010
+WM_APP = 0x8000
+WM_LBUTTONDOWN = 0x0201
+GWL_EXSTYLE = -20
+SW_SHOWNORMAL = 1
+SW_SHOWNA = 8
+SW_HIDE = 0
+HWND_TOPMOST = -1
+SWP_NOSIZE = 0x0001
+SWP_NOMOVE = 0x0002
+SWP_NOACTIVATE = 0x0010
+SWP_SHOWWINDOW = 0x0040
+LWA_ALPHA = 0x00000002
+NULL_BRUSH = 5
+PS_DASH = 3
+ERROR_INSUFFICIENT_BUFFER = 122
+#: Mã `ShellExecuteW` trả về khi thành công là > 32 (giá trị nhỏ là mã lỗi).
+SHELL_EXECUTE_MIN_OK = 32
 
 
 # --- struct -----------------------------------------------------------------
@@ -272,6 +303,22 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
 _CALLBACK_REFS: list[Any] = []
 
 
+class WNDCLASSW(ctypes.Structure):
+    """``WNDCLASSW`` — bố cục x64 của lớp cửa sổ (dùng cho cửa sổ viền)."""
+
+    _fields_ = [
+        ("style", ctypes.c_uint32),
+        ("lpfnWndProc", ctypes.c_void_p),
+        ("cbClsExtra", ctypes.c_int32),
+        ("cbWndExtra", ctypes.c_int32),
+        ("hInstance", ctypes.c_void_p),
+        ("hIcon", ctypes.c_void_p),
+        ("hCursor", ctypes.c_void_p),
+        ("hbrBackground", ctypes.c_void_p),
+        ("lpszMenuName", ctypes.c_wchar_p),
+        ("lpszClassName", ctypes.c_wchar_p),
+    ]
+
 def make_hook_proc(callback: Callable[[int, int, int], int]) -> Any:
     """Bọc ``callback`` thành WINFUNCTYPE và giữ tham chiếu ở cấp module.
 
@@ -286,6 +333,25 @@ def make_hook_proc(callback: Callable[[int, int, int], int]) -> Any:
         )
     proc = factory(
         ctypes.c_ssize_t, ctypes.c_int, ctypes.c_size_t, ctypes.c_ssize_t
+    )(callback)
+    _CALLBACK_REFS.append(proc)
+    return proc
+
+
+def make_window_proc(callback: Callable[[int, int, int, int], int]) -> Any:
+    """Bọc ``callback`` thành ``WNDPROC`` và giữ tham chiếu ở cấp module (luật 2).
+
+    ``WNDPROC`` là ``LRESULT (HWND, UINT, WPARAM, LPARAM)`` — HWND/WPARAM/LPARAM khai báo theo
+    kích thước con trỏ để không bị cắt trên x64.
+    """
+    factory = getattr(ctypes, "WINFUNCTYPE", None)
+    if factory is None:
+        raise PlatformError(
+            UNSUPPORTED_IN_HOST_MODE,
+            "WINFUNCTYPE không tồn tại trên nền tảng này (không phải Windows).",
+        )
+    proc = factory(
+        ctypes.c_ssize_t, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_size_t, ctypes.c_ssize_t
     )(callback)
     _CALLBACK_REFS.append(proc)
     return proc
@@ -445,6 +511,37 @@ class WindowsPlatform:
                 "PostQuitMessage": ([ctypes.c_int], None),
                 "GetClassLongPtrW": ([ctypes.c_void_p, ctypes.c_int], ctypes.c_void_p),
                 "MessageBoxW": ([ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint], ctypes.c_int),
+                # Cửa sổ viền overlay (F). Mọi hàm ở đây phải có argtypes/restype tường minh:
+                # thiếu restype ⇒ HWND 64 bit bị cắt và cửa sổ viền "tạo được" nhưng không điều
+                # khiển được nữa.
+                "RegisterClassW": ([ctypes.POINTER(WNDCLASSW)], ctypes.c_uint16),
+                "CreateWindowExW": (
+                    [ctypes.c_uint32, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32,
+                     ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                     ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p],
+                    ctypes.c_void_p,
+                ),
+                "DefWindowProcW": (
+                    [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_size_t, ctypes.c_ssize_t],
+                    ctypes.c_ssize_t,
+                ),
+                "DestroyWindow": ([ctypes.c_void_p], ctypes.c_int),
+                "PostMessageW": (
+                    [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_size_t, ctypes.c_ssize_t],
+                    ctypes.c_int,
+                ),
+                "PostQuitMessage": ([ctypes.c_int], None),
+                "DispatchMessageW": ([ctypes.POINTER(MSG)], ctypes.c_ssize_t),
+                "TranslateMessage": ([ctypes.POINTER(MSG)], ctypes.c_int),
+                "BeginPaint": ([ctypes.c_void_p, ctypes.c_void_p], ctypes.c_void_p),
+                "EndPaint": ([ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int),
+                "InvalidateRect": ([ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int], ctypes.c_int),
+                "UpdateWindow": ([ctypes.c_void_p], ctypes.c_int),
+                "SetLayeredWindowAttributes": (
+                    [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint8, ctypes.c_uint32],
+                    ctypes.c_int,
+                ),
+                "LoadCursorW": ([ctypes.c_void_p, ctypes.c_wchar_p], ctypes.c_void_p),
             },
         )
 
@@ -470,6 +567,13 @@ class WindowsPlatform:
                 "DeleteDC": ([ctypes.c_void_p], ctypes.c_int),
                 "DeleteObject": ([ctypes.c_void_p], ctypes.c_int),
                 "GetDeviceCaps": ([ctypes.c_void_p, ctypes.c_int], ctypes.c_int),
+                # Vẽ viền overlay: pen đứt nét, tô bằng NULL_BRUSH để chỉ thấy đường viền.
+                "CreatePen": ([ctypes.c_int, ctypes.c_int, ctypes.c_uint32], ctypes.c_void_p),
+                "GetStockObject": ([ctypes.c_int], ctypes.c_void_p),
+                "Rectangle": (
+                    [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int],
+                    ctypes.c_int,
+                ),
             },
         )
 
@@ -530,6 +634,10 @@ class WindowsPlatform:
                 "CreateMutexW": (
                     [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p],
                     ctypes.c_void_p,
+                ),
+                "GetApplicationUserModelId": (
+                    [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_wchar_p],
+                    ctypes.c_int32,
                 ),
                 "WaitForSingleObject": ([ctypes.c_void_p, ctypes.c_uint32], ctypes.c_uint32),
                 "ReleaseMutex": ([ctypes.c_void_p], ctypes.c_int),
@@ -1103,6 +1211,68 @@ class WindowsPlatform:
             self._uia_accessor = ComUiaAccessor(self)
         return self._uia_accessor
 
+    # -- khởi chạy ứng dụng + danh tính app (CUA theo app) ------------------
+    def launch_app(self, app: str) -> int:
+        """Mở một ứng dụng bằng ``ShellExecuteW``. Ném ``LAUNCH_FAILED`` khi Windows từ chối.
+
+        Chỉ nhận TÊN tệp/ứng dụng đơn giản (`notepad`, `notepad.exe`, `chrome`): đường dẫn và tham
+        số là đường tiêm lệnh, và `HostExecutor._launchable_app` đã chặn chúng trước khi tới đây.
+        Trả về mã ``HINSTANCE`` > 32 (mọi giá trị nhỏ hơn là mã lỗi của ShellExecute).
+        """
+        self._require_available()
+        name = str(app or "").strip()
+        if not name:
+            raise PlatformError(LAUNCH_FAILED, "Thiếu tên ứng dụng.", app=app)
+        func = getattr(self.shell32, "ShellExecuteW", None)
+        if func is None:
+            raise PlatformError(LAUNCH_FAILED, "ShellExecuteW không khả dụng.", app=name)
+        func.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_wchar_p,
+                         ctypes.c_wchar_p, ctypes.c_int]
+        func.restype = ctypes.c_void_p
+        result = func(None, "open", name, None, None, SW_SHOWNORMAL)
+        value = int(result or 0)
+        if value <= SHELL_EXECUTE_MIN_OK:
+            raise PlatformError(LAUNCH_FAILED, f"ShellExecuteW trả mã {value}.", app=name, code=value)
+        self.note(f"launch_app:{name}")
+        return value
+
+    def process_aumid(self, pid: int) -> str | None:
+        """AppUserModelID của tiến trình (Win8+), hoặc ``None``.
+
+        App cổ điển (Notepad cũ, app tự viết) không có AUMID — ``None`` là câu trả lời hợp lệ, và
+        khoá quyền khi đó rơi về ``processName``.
+        """
+        if not pid:
+            return None
+        try:
+            kernel32 = self.kernel32
+        except PlatformError:
+            return None
+        func = getattr(kernel32, "GetApplicationUserModelId", None)
+        if func is None:
+            return None
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not handle:
+            return None
+        try:
+            length = ctypes.c_uint32(0)
+            status = func(handle, ctypes.byref(length), None)
+            if not length.value:
+                return None
+            if status != ERROR_INSUFFICIENT_BUFFER and status != 0:
+                return None
+            buffer = ctypes.create_unicode_buffer(length.value)
+            if func(handle, ctypes.byref(length), buffer) != 0:
+                return None
+            return buffer.value or None
+        except Exception:
+            return None
+        finally:
+            try:
+                kernel32.CloseHandle(handle)
+            except Exception:
+                pass
+
     # -- tiện ích ----------------------------------------------------------
     def describe_window(self, hwnd: int, *, with_process: bool = True) -> WindowInfo:
         """Danh tính + hình học một cửa sổ; ném ``CAPTURE_FAILED`` khi HWND chết."""
@@ -1123,6 +1293,142 @@ class WindowsPlatform:
             iconic=self.is_iconic(hwnd),
             process_name=self.process_image_name(pid) if (with_process and pid) else None,
         )
+
+
+class CuaOverlayWindow:
+    """Cửa sổ viền báo vùng đang bị điều khiển: layered, xuyên chuột, luôn trên cùng.
+
+    Win32 bắt cửa sổ và vòng lặp thông điệp của nó sống cùng một thread, nên lớp này giữ một thread
+    riêng; lệnh từ tiến trình (hiện/đổi vùng/ẩn/đóng) đi qua ``PostMessageW`` để không bao giờ chặn
+    đường CUA. Cửa sổ **không bao giờ** nhận tiêu điểm: `WS_EX_NOACTIVATE` + `SWP_NOACTIVATE`, nếu
+    không thì chính viền báo lại cướp tiêu điểm của ứng dụng đang bị điều khiển.
+
+    Đây là lớp "hỏng êm": mọi lỗi Win32 ném ra ngoài, và `CuaOverlay` (agent_core) tự tắt viền sau
+    ba lần lỗi thay vì chặn thao tác.
+    """
+
+    #: Thông điệp riêng của tiến trình (``WM_APP`` trở lên là vùng dành cho ứng dụng).
+    WM_SET_BOUNDS = WM_APP + 1
+    WM_HIDE = WM_APP + 2
+    WM_QUIT = WM_APP + 3
+    CLASS_NAME = "BoxFoxCuaOverlay"
+
+    def __init__(self, platform: "WindowsPlatform | None" = None, *, thickness: int = 3) -> None:
+        self.platform = platform or get_platform()
+        self.thickness = int(thickness)
+        self._thread: threading.Thread | None = None
+        self._hwnd = 0
+        self._ready = threading.Event()
+        self._lock = threading.Lock()
+        self._color = (0x38, 0xBD, 0xF8)
+
+    # -- API cho `CuaOverlay` ------------------------------------------------
+    def overlay_show(self, bounds: dict, color: tuple[int, int, int] | None = None) -> None:
+        """Hiện viền quanh `bounds` (`{x, y, width, height}`, toạ độ vật lý)."""
+        if color:
+            self._color = tuple(int(part) for part in color[:3])
+        self.overlay_set_bounds(bounds)
+        self.platform.user32.ShowWindow(self._hwnd, SW_SHOWNA)
+
+    def overlay_set_bounds(self, bounds: dict) -> None:
+        x, y = int(bounds['x']), int(bounds['y'])
+        width, height = max(1, int(bounds['width'])), max(1, int(bounds['height']))
+        self._ensure_window()
+        # `SetWindowPos` với `SWP_NOACTIVATE`: đổi vùng mà không cướp tiêu điểm.
+        user32 = self.platform.user32
+        user32.SetWindowPos(self._hwnd, HWND_TOPMOST, x, y, width, height,
+                            SWP_NOACTIVATE | SWP_SHOWWINDOW)
+        user32.InvalidateRect(self._hwnd, None, True)
+
+    def overlay_hide(self) -> None:
+        if self._hwnd:
+            self.platform.user32.ShowWindow(self._hwnd, SW_HIDE)
+
+    def overlay_close(self) -> None:
+        hwnd = self._hwnd
+        if hwnd:
+            self.platform.user32.PostMessageW(hwnd, self.WM_QUIT, 0, 0)
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=2)
+        self._hwnd = 0
+
+    # -- nội bộ --------------------------------------------------------------
+    def _ensure_window(self) -> None:
+        if self._hwnd:
+            return
+        with self._lock:
+            if self._hwnd:
+                return
+            thread = threading.Thread(target=self._run, name="boxfox-cua-overlay", daemon=True)
+            thread.start()
+            self._thread = thread
+            # Cửa sổ phải tồn tại trước khi đặt vùng: chờ tối đa 2 giây rồi bỏ cuộc (viền là phụ).
+            self._ready.wait(timeout=2.0)
+            if not self._hwnd:
+                raise PlatformError(CAPTURE_FAILED, "Không tạo được cửa sổ viền overlay.")
+
+    def _run(self) -> None:                                 # pragma: no cover - cần Windows thật
+        """Thread sở hữu cửa sổ: đăng ký lớp, tạo cửa sổ, chạy vòng lặp thông điệp."""
+        try:
+            user32, kernel32, gdi32 = self.platform.user32, self.platform.kernel32, self.platform.gdi32
+            instance = kernel32.GetModuleHandleW(None)
+            proc = make_window_proc(self._wnd_proc)
+            wc = WNDCLASSW()
+            wc.style = 0
+            wc.lpfnWndProc = ctypes.cast(proc, ctypes.c_void_p)
+            wc.hInstance = instance
+            wc.hCursor = user32.LoadCursorW(None, ctypes.cast(32512, ctypes.c_wchar_p))  # IDC_ARROW
+            wc.hbrBackground = None
+            wc.lpszClassName = self.CLASS_NAME
+            if not user32.RegisterClassW(ctypes.byref(wc)):
+                raise PlatformError(CAPTURE_FAILED, "RegisterClassW cho viền overlay thất bại.")
+            hwnd = user32.CreateWindowExW(
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+                self.CLASS_NAME, "", WS_POPUP, 0, 0, 1, 1, None, None, instance, None)
+            if not hwnd:
+                raise PlatformError(CAPTURE_FAILED, "CreateWindowExW cho viền overlay thất bại.")
+            self._hwnd = int(hwnd)
+            user32.SetLayeredWindowAttributes(hwnd, 0, 230, LWA_ALPHA)
+            self._ready.set()
+            msg = MSG()
+            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+        except Exception:
+            self._ready.set()
+        finally:
+            self._hwnd = 0
+
+    def _wnd_proc(self, hwnd, message, wparam, lparam):      # pragma: no cover - cần Windows thật
+        user32, gdi32 = self.platform.user32, self.platform.gdi32
+        if message == WM_PAINT:
+            ps = ctypes.create_string_buffer(72)             # PAINTSTRUCT (x64: 72 byte)
+            dc = user32.BeginPaint(hwnd, ctypes.byref(ps))
+            if dc:
+                pen = gdi32.CreatePen(PS_DASH, self.thickness,
+                                      self._color[0] | (self._color[1] << 8) | (self._color[2] << 16))
+                old_pen = gdi32.SelectObject(dc, pen) if pen else None
+                old_brush = gdi32.SelectObject(dc, gdi32.GetStockObject(NULL_BRUSH))
+                rect = RECT()
+                user32.GetClientRect(hwnd, ctypes.byref(rect))
+                gdi32.Rectangle(dc, 0, 0, rect.right, rect.bottom)
+                if old_brush:
+                    gdi32.SelectObject(dc, old_brush)
+                if old_pen:
+                    gdi32.SelectObject(dc, old_pen)
+                if pen:
+                    gdi32.DeleteObject(pen)
+                user32.EndPaint(hwnd, ctypes.byref(ps))
+            return 0
+        if message == self.WM_QUIT:
+            user32.DestroyWindow(hwnd)
+            user32.PostQuitMessage(0)
+            return 0
+        if message == WM_DESTROY:
+            user32.PostQuitMessage(0)
+            return 0
+        return user32.DefWindowProcW(hwnd, message, wparam, lparam)
 
 
 class UnavailablePlatform(WindowsPlatform):
