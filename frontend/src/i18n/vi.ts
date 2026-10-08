@@ -1099,6 +1099,8 @@ const vi = {
     targetWorking: 'Agent đang làm việc',
     targetWorkingHere: 'Agent đang làm việc ở đây',
     changeTarget: 'Đổi đích',
+    chooseTarget: 'Chọn đích',
+    chooseTargetHint: 'Chọn cửa sổ — hoặc cả máy — để agent làm việc trong đó.',
     revoke: 'Thu hồi đích',
     revokeHint: 'Dừng chụp và bỏ đích của phiên này.',
     viewOnly: 'Chỉ xem',
@@ -1106,7 +1108,7 @@ const vi = {
     viewOnlyNote: 'Bạn chỉ xem — panel không gửi chuột/phím',
     noLiveImage: 'Chưa có hình trực tiếp',
     noLiveImageHint:
-      'Mở ứng dụng bạn muốn agent làm việc trong đó. Bấm làm mới, rồi chọn cửa sổ ở bên trái.',
+      'Mở ứng dụng bạn muốn agent làm việc trong đó, rồi chọn cửa sổ ở thanh trên cùng của panel này.',
     noSessionTitle: 'Chưa mở phiên nào',
     noSessionHint:
       'Đích CUA thuộc về từng phiên. Mở một phiên host rồi chọn cửa sổ hoặc Cả máy cho phiên đó.',

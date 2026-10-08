@@ -1107,6 +1107,8 @@ const en: SameShape<typeof vi> = {
     targetWorking: 'Agent is working',
     targetWorkingHere: 'Agent is working here',
     changeTarget: 'Change target',
+    chooseTarget: 'Choose a target',
+    chooseTargetHint: 'Pick the window — or the whole machine — that the agent works in.',
     revoke: 'Revoke target',
     revokeHint: 'Stop capturing and drop this session’s target.',
     viewOnly: 'View only',
@@ -1114,7 +1116,7 @@ const en: SameShape<typeof vi> = {
     viewOnlyNote: 'You are view-only — the panel sends no mouse or keyboard',
     noLiveImage: 'No live image yet',
     noLiveImageHint:
-      'Open the app you want the agent to work in. Press refresh, then pick its window on the left.',
+      'Open the app you want the agent to work in, then pick its window at the top of this panel.',
     noSessionTitle: 'No session open yet',
     noSessionHint:
       'The CUA target belongs to a session. Open a host session, then pick a window or Whole machine for it.',

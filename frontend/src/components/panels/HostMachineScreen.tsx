@@ -19,7 +19,7 @@
  *      đúng hợp đồng, không phải một lỗi của panel.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, AppWindow, Crosshair, Eye, Monitor, Pause, Play, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, AppWindow, ChevronDown, Crosshair, Eye, Monitor, Pause, Play, RefreshCw, X } from 'lucide-react'
 import { useT, type TKey, type TVars } from '../../i18n/context'
 import { Chip, IconButton, PanelShell } from '../ui'
 import { useAgentStore } from '../../store/agentStore'
@@ -109,7 +109,10 @@ export function HostMachineScreen() {
   const [scope, setScope] = useState<PermissionScope | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showPicker, setShowPicker] = useState(true)
+  // Bộ chọn đích nằm trong THANH TIÊU ĐỀ (mục 6.2): nó là một menu bung ra, không
+  // phải một cột chiếm chỗ — cột đó đã bóp ảnh chụp xuống còn một phần ba bề ngang
+  // panel, đúng lỗi "màn hình bị co cụm" mà người dùng báo.
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   // `epochRef` là hàng rào duy nhất chống "response cũ vẽ đè": tăng nó lên là
   // mọi lượt đang bay trở thành vô hiệu, kể cả khi `fetch` không huỷ được.
@@ -396,23 +399,71 @@ export function HostMachineScreen() {
             ? t('machineScreen.noteNoWindowList')
             : t('machineScreen.noteNoTarget')
 
+  // Backend có thể trả `target` mảnh (chỉ `windowId`/`pid`) — nhất là ngay sau
+  // `PUT`. Danh sách cửa sổ đang có trong tay là nguồn bổ sung cho TÊN và TIẾN
+  // TRÌNH, để nút chọn luôn nói được "cửa sổ nào" chứ không chỉ một số.
+  const targetWindowEntry =
+    target && target.kind === 'window'
+      ? windows.find((entry) => String(entry.windowId) === String(target.windowId)) ?? null
+      : null
+  const identityTitle = target
+    ? target.kind === 'machine'
+      ? t('machineScreen.pickWholeMachine')
+      : target.title || targetWindowEntry?.title || t('machineScreen.pickWindow')
+    : ''
+  const identityMeta =
+    target && target.kind === 'window'
+      ? t('machineScreen.targetIdentityMeta', {
+          process: target.processName || target.windowClass || targetWindowEntry?.processName || targetWindowEntry?.windowClass || '—',
+          windowId: String(target.windowId),
+        })
+      : activeWindow
+        ? t('machineScreen.targetIdentityMeta', {
+            process: activeWindow.processName || '—',
+            windowId: String(activeWindow.windowId),
+          })
+        : ''
+
+  // Câu của băng trạng thái — một dòng, có cả chữ lẫn chấm màu (mục 6: màu không
+  // bao giờ là nơi duy nhất chứa thông tin).
+  const leaseLabel = working
+    ? t('machineScreen.targetWorking')
+    : humanHoldsLease
+      ? t('machineScreen.humanLeaseChip')
+      : t('machineScreen.leaseUnknownChip')
+  const leaseDetail = humanHoldsLease
+    ? t('machineScreen.bannerHumanLease')
+    : working
+      ? target?.kind === 'machine'
+        ? t('machineScreen.bannerWorkingMachine')
+        : t('machineScreen.bannerWorkingWindow')
+      : t('machineScreen.bannerUnknownLease')
+
+  // Thanh chọn đích — nằm CÙNG HÀNG với tiêu đề panel, đúng chỗ người dùng chỉ.
+  // Nhãn nút là đích đang có ("Whole machine" / tiêu đề cửa sổ) để thanh này vừa
+  // là bộ chọn vừa là chip nhận dạng; menu bung ra chứa danh sách cửa sổ đầy đủ.
   const toolbar = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      {target ? (
-        <Chip tone="brand" title={t('machineScreen.statusWorking', { time: clock })}>
-          {target.kind === 'machine' ? t('machineScreen.targetChipMachine') : t('machineScreen.targetChipWindow')}
-        </Chip>
-      ) : (
-        <Chip tone="warn" title={t('machineScreen.statusIdle', { time: clock })}>
-          {t('machineScreen.noTarget')}
-        </Chip>
-      )}
-      {lease && (
-        <Chip tone={humanHoldsLease ? 'warn' : 'neutral'} title={humanHoldsLease ? t('machineScreen.leaseClaim') : undefined}>
-          {humanHoldsLease ? t('machineScreen.leaseHuman') : t('machineScreen.leaseAgent')}
-        </Chip>
-      )}
-      <Chip title={t('machineScreen.viewOnlyHint')}>{t('machineScreen.viewOnly')}</Chip>
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={pickerOpen}
+        aria-label={t('machineScreen.changeTarget')}
+        title={target ? `${identityTitle}${identityMeta ? ` · ${identityMeta}` : ''}` : t('machineScreen.chooseTargetHint')}
+        onClick={() => setPickerOpen((value) => !value)}
+        data-testid="ms-change-target"
+        className={`inline-flex max-w-[11rem] items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${
+          target ? 'border-cua/50 bg-cua/10 text-cua' : 'border-line text-muted hover:text-fg'
+        }`}
+      >
+        {target?.kind === 'machine' ? (
+          <Monitor className="size-3.5 shrink-0" aria-hidden="true" />
+        ) : (
+          <AppWindow className="size-3.5 shrink-0" aria-hidden="true" />
+        )}
+        <span className="truncate">{target ? identityTitle : t('machineScreen.noTarget')}</span>
+        <ChevronDown className={`size-3.5 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
       <IconButton
         label={t('machineScreen.snapshotRefresh')}
         testId="ms-snapshot-refresh"
@@ -464,118 +515,104 @@ export function HostMachineScreen() {
     </div>
   )
 
-  // Backend có thể trả `target` mảnh (chỉ `windowId`/`pid`) — nhất là ngay sau
-  // `PUT`. Danh sách cửa sổ đang có trong tay là nguồn bổ sung cho TÊN và TIẾN
-  // TRÌNH, để chip nhận dạng luôn nói được "cửa sổ nào" chứ không chỉ một số.
-  const targetWindowEntry =
-    target && target.kind === 'window'
-      ? windows.find((entry) => String(entry.windowId) === String(target.windowId)) ?? null
-      : null
-  const identityTitle = target
-    ? target.kind === 'machine'
-      ? t('machineScreen.pickWholeMachine')
-      : target.title || targetWindowEntry?.title || t('machineScreen.pickWindow')
-    : ''
-  const identityMeta =
-    target && target.kind === 'window'
-      ? t('machineScreen.targetIdentityMeta', {
-          process: target.processName || target.windowClass || targetWindowEntry?.processName || targetWindowEntry?.windowClass || '—',
-          windowId: String(target.windowId),
-        })
-      : activeWindow
-        ? t('machineScreen.targetIdentityMeta', {
-            process: activeWindow.processName || '—',
-            windowId: String(activeWindow.windowId),
-          })
-        : ''
-
   return (
     <PanelShell title={t('machineScreen.title')} note={note} toolbar={toolbar}>
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3 md:flex-row">
-          {showPicker && (
-            <div className="w-full shrink-0 md:w-64">
-              <CuaTargetPicker
-                windows={windows}
-                windowsState={windowsState}
-                windowsError={windowsError}
-                platform={windowsState === 'unsupported' ? windowsError : null}
-                scope={scope}
-                machineAllowed={machineAllowed}
-                target={target}
-                activeWindowId={activeWindow?.windowId ?? null}
-                busy={busy || !hasSession}
-                onRefreshWindows={() => void refreshWindows()}
-                onPickMachine={() => void pickTarget({ sessionId, kind: 'machine', consent: true, expectedRevision: revisionRef.current >= 0 ? revisionRef.current : undefined })}
-                onPickWindow={(entry) =>
-                  void pickTarget({
-                    sessionId,
-                    kind: 'window',
-                    windowId: entry.windowId,
-                    pid: entry.pid,
-                    consent: true,
-                    expectedRevision: revisionRef.current >= 0 ? revisionRef.current : undefined,
-                  })
-                }
-                onOpenPermissions={() => useUiStore.getState().openSettings('configuration')}
-              />
+      <div className="relative flex h-full min-h-0 flex-col">
+        {/* Menu bung ra: che phần ảnh bằng một tấm chắn bấm-để-đóng, không đẩy
+            ảnh đi chỗ khác. Nó KHÔNG phải hộp thoại chặn — Esc và cú bấm ra
+            ngoài đều đóng, và mọi nút bên trong giữ nguyên `data-testid` cũ. */}
+        {pickerOpen && (
+          <>
+            <div
+              className="absolute inset-0 z-10"
+              data-testid="ms-picker-scrim"
+              onClick={() => setPickerOpen(false)}
+              aria-hidden="true"
+            />
+            <div
+              role="dialog"
+              aria-label={t('machineScreen.sectionTarget')}
+              data-testid="ms-picker-popover"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setPickerOpen(false)
+              }}
+              className="absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] w-[20rem] max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-line bg-panel shadow-xl"
+            >
+              <div className="flex min-h-0 flex-col gap-2 overflow-auto p-2">
+                <CuaTargetPicker
+                  windows={windows}
+                  windowsState={windowsState}
+                  windowsError={windowsError}
+                  platform={windowsState === 'unsupported' ? windowsError : null}
+                  scope={scope}
+                  machineAllowed={machineAllowed}
+                  target={target}
+                  activeWindowId={activeWindow?.windowId ?? null}
+                  busy={busy || !hasSession}
+                  onRefreshWindows={() => void refreshWindows()}
+                  onPickMachine={() => {
+                    setPickerOpen(false)
+                    void pickTarget({ sessionId, kind: 'machine', consent: true, expectedRevision: revisionRef.current >= 0 ? revisionRef.current : undefined })
+                  }}
+                  onPickWindow={(entry) => {
+                    setPickerOpen(false)
+                    void pickTarget({
+                      sessionId,
+                      kind: 'window',
+                      windowId: entry.windowId,
+                      pid: entry.pid,
+                      consent: true,
+                      expectedRevision: revisionRef.current >= 0 ? revisionRef.current : undefined,
+                    })
+                  }}
+                  onOpenPermissions={() => useUiStore.getState().openSettings('configuration')}
+                />
+              </div>
             </div>
+          </>
+        )}
+
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+          {error && (
+            <p
+              role="alert"
+              className="break-words rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200"
+            >
+              {error}
+            </p>
           )}
 
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-            {error && (
-              <p
-                role="alert"
-                className="break-words rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200"
+          {target && (
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span
+                data-testid="ms-target-identity"
+                title={`${t('machineScreen.targetIdentityTitle', { title: identityTitle })} · ${identityMeta}`}
+                className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line bg-panel2 px-2 py-0.5"
               >
-                {error}
-              </p>
-            )}
-
-            {target && (
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span
-                  data-testid="ms-target-identity"
-                  title={`${t('machineScreen.targetIdentityTitle', { title: identityTitle })} · ${identityMeta}`}
-                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line bg-panel2 px-2 py-0.5"
-                >
-                  {target.kind === 'machine' ? (
-                    <Monitor className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
-                  ) : (
-                    <AppWindow className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
-                  )}
-                  <span className="truncate text-[12px] font-semibold">{identityTitle}</span>
-                  {identityMeta && (
-                    <>
-                      <span className="text-muted" aria-hidden="true">
-                        ·
-                      </span>
-                      <span className="truncate font-mono text-[11px] text-muted">{identityMeta}</span>
-                    </>
-                  )}
-                </span>
-                {targetState?.requestedBy === 'agent' && (
-                  <span className="text-[11px] text-cua">{t('machineScreen.targetByAgent')}</span>
+                {target.kind === 'machine' ? (
+                  <Monitor className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
+                ) : (
+                  <AppWindow className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
                 )}
-                {targetState?.requestedBy === 'user' && (
-                  <span className="text-[11px] text-muted">{t('machineScreen.targetByUser')}</span>
+                <span className="truncate text-[12px] font-semibold">{identityTitle}</span>
+                {identityMeta && (
+                  <>
+                    <span className="text-muted" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="truncate font-mono text-[11px] text-muted">{identityMeta}</span>
+                  </>
                 )}
-                <button
-                  type="button"
-                  aria-pressed={showPicker}
-                  onClick={() => setShowPicker((value) => !value)}
-                  data-testid="ms-change-target"
-                  className="rounded-md border border-line px-2 py-0.5 text-[11px] font-semibold text-muted hover:text-fg"
-                >
-                  {t('machineScreen.changeTarget')}
-                </button>
-              </div>
-            )}
-
-            {target && (
+              </span>
+              {targetState?.requestedBy === 'agent' && (
+                <span className="text-[11px] text-cua">{t('machineScreen.targetByAgent')}</span>
+              )}
+              {targetState?.requestedBy === 'user' && (
+                <span className="text-[11px] text-muted">{t('machineScreen.targetByUser')}</span>
+              )}
               <div
                 role="status"
-                className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-[11px] ${
+                className={`flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-2 py-1 text-[11px] ${
                   humanHoldsLease
                     ? 'bg-amber-500/10 text-amber-800 dark:text-amber-200'
                     : working
@@ -589,84 +626,84 @@ export function HostMachineScreen() {
                     humanHoldsLease ? 'bg-amber-400' : working ? 'animate-pulse bg-cua' : 'bg-muted'
                   }`}
                 />
-                <span className="font-semibold">
-                  {working
-                    ? t('machineScreen.targetWorking')
-                    : humanHoldsLease
-                      ? t('machineScreen.humanLeaseChip')
-                      : t('machineScreen.leaseUnknownChip')}
-                </span>
-                <span className="text-muted">
-                  {humanHoldsLease
-                    ? t('machineScreen.bannerHumanLease')
-                    : working
-                      ? target.kind === 'machine'
-                        ? t('machineScreen.bannerWorkingMachine')
-                        : t('machineScreen.bannerWorkingWindow')
-                      : t('machineScreen.bannerUnknownLease')}
-                </span>
+                <span className="shrink-0 font-semibold">{leaseLabel}</span>
+                <span className="min-w-0 truncate text-muted">{leaseDetail}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex min-h-0 flex-1 flex-col gap-1">
+            {snapshot && target ? (
+              <>
+                <CuaTargetOverlay
+                  snapshot={snapshot}
+                  target={target}
+                  activeWindow={activeWindow}
+                  armed={inspector.armed}
+                  working={working}
+                  highlightBox={highlightBox}
+                  highlightLabel={highlightLabel}
+                  onPick={inspector.handlePick}
+                  onEscape={inspector.disarm}
+                >
+                  {inspector.drawer && (
+                    <ElementInspectorDrawer
+                      state={inspector.drawer}
+                      onClose={inspector.closeDrawer}
+                      onRetry={inspector.retry}
+                      onAddToChat={handleAddToChat}
+                    />
+                  )}
+                </CuaTargetOverlay>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
+                  <span>
+                    {t('machineScreen.snapshotMeta', { width: snapshot.width, height: snapshot.height })}
+                    {snapshotAt !== null && ` · ${clock}`}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <AlertTriangle className="size-3.5" aria-hidden="true" />
+                    {t('machineScreen.snapshotUntrusted')}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div
+                className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line p-4 text-center"
+                data-testid={hasSession ? undefined : 'ms-no-session'}
+              >
+                <Eye className="size-4 text-muted" aria-hidden="true" />
+                <p className="text-[12px] font-semibold">
+                  {t(hasSession ? 'machineScreen.noLiveImage' : 'machineScreen.noSessionTitle')}
+                </p>
+                <p className="max-w-md text-[11px] text-muted">
+                  {t(hasSession ? 'machineScreen.noLiveImageHint' : 'machineScreen.noSessionHint')}
+                </p>
+                {!target && hasSession && (
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    data-testid="ms-open-picker"
+                    className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-muted hover:text-fg"
+                  >
+                    {t('machineScreen.chooseTarget')}
+                  </button>
+                )}
+                {target && (
+                  <button
+                    type="button"
+                    onClick={() => void captureFor(target)}
+                    className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-muted hover:text-fg"
+                  >
+                    {t('machineScreen.snapshotRefresh')}
+                  </button>
+                )}
               </div>
             )}
-
-            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto">
-              {snapshot && target ? (
-                <>
-                  <CuaTargetOverlay
-                    snapshot={snapshot}
-                    target={target}
-                    activeWindow={activeWindow}
-                    armed={inspector.armed}
-                    working={working}
-                    highlightBox={highlightBox}
-                    highlightLabel={highlightLabel}
-                    onPick={inspector.handlePick}
-                    onEscape={inspector.disarm}
-                  >
-                    {inspector.drawer && (
-                      <ElementInspectorDrawer
-                        state={inspector.drawer}
-                        onClose={inspector.closeDrawer}
-                        onRetry={inspector.retry}
-                        onAddToChat={handleAddToChat}
-                      />
-                    )}
-                  </CuaTargetOverlay>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
-                    <span>{t('machineScreen.snapshotMeta', { width: snapshot.width, height: snapshot.height })}</span>
-                    <span className="inline-flex items-center gap-1">
-                      <AlertTriangle className="size-3.5" aria-hidden="true" />
-                      {t('machineScreen.snapshotUntrusted')}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div
-                  className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line p-4 text-center"
-                  data-testid={hasSession ? undefined : 'ms-no-session'}
-                >
-                  <Eye className="size-4 text-muted" aria-hidden="true" />
-                  <p className="text-[12px] font-semibold">
-                    {t(hasSession ? 'machineScreen.noLiveImage' : 'machineScreen.noSessionTitle')}
-                  </p>
-                  <p className="max-w-md text-[11px] text-muted">
-                    {t(hasSession ? 'machineScreen.noLiveImageHint' : 'machineScreen.noSessionHint')}
-                  </p>
-                  {target && (
-                    <button
-                      type="button"
-                      onClick={() => void captureFor(target)}
-                      className="rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-muted hover:text-fg"
-                    >
-                      {t('machineScreen.snapshotRefresh')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-line bg-panel2/60 px-3 py-1 text-[11px] text-muted">
+          <Chip title={t('machineScreen.viewOnlyHint')}>{t('machineScreen.viewOnly')}</Chip>
           <span className="inline-flex items-center gap-1">
             <Monitor className="size-3" aria-hidden="true" />
             {t('machineScreen.factRealWindow')}

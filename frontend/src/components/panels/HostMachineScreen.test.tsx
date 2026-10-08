@@ -297,8 +297,19 @@ function renderPanel(): Harness {
   }
 }
 
+/**
+ * Mở menu chọn đích trên THANH TIÊU ĐỀ. Danh sách cửa sổ không còn nằm thường
+ * trực trong thân panel — nó nằm trong menu này, nên mọi ca muốn bấm vào một lựa
+ * chọn đều phải mở menu trước.
+ */
+function openPicker(panel: Harness) {
+  if (panel.testId('ms-picker-popover')) return
+  panel.click('[data-testid="ms-change-target"]')
+}
+
 /** Chọn một cửa sổ rồi để panel chụp xong — dùng chung cho nhiều ca. */
 async function pickWindow(panel: Harness, windowId: string | number = 12) {
+  openPicker(panel)
   panel.click(`[data-testid="ms-window-option-${windowId}"]`)
   await settle()
 }
@@ -326,6 +337,9 @@ describe('chưa có đích', () => {
 
     expect(panel.text()).toContain('Machine screen')
     expect(panel.text()).toContain('Pick the window you want the agent to work in')
+    // Bộ chọn nằm trong menu của thanh tiêu đề: chưa mở thì chưa có lựa chọn nào.
+    expect(panel.testId('ms-target-picker')).toBeNull()
+    openPicker(panel)
     expect(panel.testId('ms-target-picker')).not.toBeNull()
     expect(panel.testId('ms-target-machine')).not.toBeNull()
     expect(panel.testId('ms-window-option-12')).not.toBeNull()
@@ -346,6 +360,7 @@ describe('chưa có đích', () => {
     installFetch()
     const panel = renderPanel()
     await settle()
+    openPicker(panel)
     expect(panel.testId('ms-window-list-empty')).not.toBeNull()
     expect(panel.testId('ms-window-list-error')).toBeNull()
   })
@@ -355,6 +370,7 @@ describe('chưa có đích', () => {
     installFetch()
     const panel = renderPanel()
     await settle()
+    openPicker(panel)
 
     const block = panel.testId('ms-window-list-unsupported')
     expect(block).not.toBeNull()
@@ -389,6 +405,7 @@ describe('chọn đích', () => {
   it('chọn "Cả máy" ⇒ PUT {kind: machine} + chụp toàn màn hình', async () => {
     const panel = renderPanel()
     await settle()
+    openPicker(panel)
     panel.click('[data-testid="ms-target-machine"]')
     await settle()
 
@@ -403,6 +420,7 @@ describe('chọn đích', () => {
     installFetch()
     const panel = renderPanel()
     await settle()
+    openPicker(panel)
 
     const machine = panel.testId<HTMLButtonElement>('ms-target-machine')
     expect(machine?.disabled).toBe(true)
@@ -422,6 +440,7 @@ describe('chọn đích', () => {
     installFetch()
     let panel = renderPanel()
     await settle()
+    openPicker(panel)
     expect(panel.testId<HTMLButtonElement>('ms-target-machine')?.disabled).toBe(false)
     panel.unmount()
 
@@ -429,6 +448,7 @@ describe('chọn đích', () => {
     server = makeServer({ scope: 'machine', machineAllowed: false })
     panel = renderPanel()
     await settle()
+    openPicker(panel)
     const machine = panel.testId<HTMLButtonElement>('ms-target-machine')
     expect(machine?.disabled).toBe(true)
     expect(panel.text()).toContain('Needs the Whole machine permission scope.')
@@ -506,7 +526,8 @@ describe('chọn đích', () => {
     expect(panel.testId('ms-no-session')).not.toBeNull()
     expect(panel.text()).toContain('No session open yet')
     expect(panel.text()).not.toContain('Session not found')
-    // Bộ chọn đích vẫn hiện, nhưng không nhận cú bấm (PUT với `sessionId` rỗng là 404).
+    // Bộ chọn đích vẫn mở được, nhưng không nhận cú bấm (PUT với `sessionId` rỗng là 404).
+    openPicker(panel)
     expect(panel.testId('ms-target-picker')).not.toBeNull()
     expect(panel.testId<HTMLButtonElement>('ms-target-machine')?.disabled).toBe(true)
     expect(panel.testId<HTMLButtonElement>('ms-window-option-12')?.disabled).toBe(true)
@@ -588,7 +609,8 @@ describe('theo agent', () => {
 
     const after = server.calls.filter((call) => call.url.startsWith('/api/agent/machines/target') && call.method === 'GET').length
     expect(after).toBeGreaterThan(before)
-    expect(panel.text()).toContain('Target: whole machine')
+    // Nhãn đích nằm trên NÚT CHỌN ở thanh tiêu đề, không còn là chip riêng.
+    expect(panel.testId('ms-change-target')?.textContent).toContain('Whole machine')
   })
 
   it('lượt chụp của đích CŨ về muộn ⇒ không được vẽ đè ảnh mới (epoch guard)', async () => {
@@ -597,6 +619,7 @@ describe('theo agent', () => {
 
     // Lượt chụp cho cửa sổ 12 bị treo ở tầng mạng.
     server.heldCapture = { resolve: () => {} }
+    openPicker(panel)
     panel.click('[data-testid="ms-window-option-12"]')
     await settle()
     expect(panel.testId('ms-snapshot-frame')).toBeNull()
@@ -773,7 +796,7 @@ describe('chọn phần tử', () => {
     const select = panel.testId<HTMLButtonElement>('ms-select-element')
     expect(select?.disabled).toBe(true)
     expect(select?.getAttribute('title')).toBe('Hand control back to the agent before selecting an element.')
-    expect(panel.text()).toContain('Control: you')
+    expect(panel.text()).toContain('You hold control')
 
     panel.click('[data-testid="ms-lease-claim"]')
     await settle()
@@ -782,7 +805,7 @@ describe('chọn phần tử', () => {
     expect(leaseCall?.body).toEqual({ action: 'claim' })
     // Trả xong ⇒ mở khoá được nút chọn.
     expect(panel.testId<HTMLButtonElement>('ms-select-element')?.disabled).toBe(false)
-    expect(panel.text()).toContain('Control: agent')
+    expect(panel.text()).toContain('Agent is working')
   })
 
   it('ELEMENT_STALE ⇒ ngăn kéo dịch theo mã máy và có nút Thử lại', async () => {
