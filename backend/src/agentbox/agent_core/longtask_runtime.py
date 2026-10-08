@@ -169,6 +169,12 @@ class LongtaskRuntime:
         run = self.root_run(sid)
         if not run or run['state'] in ('cancelled', 'paused'):
             return
+        if exc.code == 'LONGTASK_PENDING_DECISION' and run['state'] == 'budget_exhausted':
+            # Ngân sách cạn và thẻ của CHÍNH run này đang chờ chủ: lượt mới bị chặn là đúng, nhưng
+            # run phải Ở LẠI `budget_exhausted`. Hạ xuống `needs_user` làm `budget_effect` từ chối
+            # (`DECISION_STALE: budget revision changed`) — thẻ không còn đường trả lời, mọi lượt
+            # sau của chủ và mọi run mới trong phiên đều 409, tức kẹt vĩnh viễn.
+            return
         ref = self.checkpoint(run, exc.code)
         state = 'budget_exhausted' if exc.code == 'LONGTASK_BUDGET_EXHAUSTED' else 'needs_user'
         if exc.code == 'LONGTASK_WALL_DEADLINE':
@@ -214,7 +220,14 @@ class LongtaskRuntime:
         def apply(db):
             current = self.store.get(run_id=run['runId'])
             b = current['budget']
-            if current['state'] != 'budget_exhausted' or b['revision'] != record['budgetRevision']:
+            if b['revision'] != record['budgetRevision']:
+                raise LongtaskError('DECISION_STALE', 'budget revision changed')
+            if current['state'] in TERMINAL:
+                # Run đã đóng (chủ huỷ chạy, hoặc phiên dừng): thẻ chỉ còn để ĐÓNG SỔ — không cộng
+                # thêm ngân sách và không kéo run sống lại. Đây không phải lỗi stale: nếu ném ở đây
+                # thì `stop()`/`cancel` trả 409 sau khi run đã huỷ và thẻ còn nằm mãi, chặn cả phiên.
+                return
+            if current['state'] not in ('budget_exhausted', 'needs_user'):
                 raise LongtaskError('DECISION_STALE', 'budget revision changed')
             state = 'paused'
             if choice == 'extend':

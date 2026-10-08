@@ -534,3 +534,46 @@ def test_manual_turn_allowed_while_waiting_and_finish_never_raises(tmp_path, mon
     with pytest.raises(LongtaskError) as exc:
         rt.longtask.check(sid)
     assert exc.value.code == 'LONGTASK_BLOCKED'
+
+
+def test_a_pending_budget_card_keeps_the_run_answerable(tmp_path):
+    """Thẻ ngân sách đang chờ thì lượt mới KHÔNG được hạ run khỏi `budget_exhausted`.
+
+    Hạ xuống `needs_user` làm `budget_effect` từ chối (`DECISION_STALE: budget revision changed`) —
+    thẻ không còn đường trả lời, mọi lượt sau của chủ đều 409 và cả phiên kẹt.
+    """
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'budget_exhausted', 'LONGTASK_BUDGET_EXHAUSTED')
+    run = rt.longtask.store.get(sid)
+    did = rt.longtask.budget_card(run)
+    used = dict(run['budget'])
+    assert rt.longtask.store.get(sid)['state'] == 'budget_exhausted'
+    # Lượt của chủ khi thẻ còn treo: chặn bằng mã riêng, nhưng trạng thái run phải GIỮ NGUYÊN.
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid)
+    assert exc.value.code == 'LONGTASK_PENDING_DECISION'
+    rt.longtask.block(sid, exc.value)
+    assert rt.longtask.store.get(sid)['state'] == 'budget_exhausted'
+    # Nhờ vậy thẻ vẫn trả lời được: cộng đúng delta đã lưu (không reset limit/used) rồi chạy tiếp.
+    outcome = rt.resolve_decision(sid, did, 'extend', invocation_id='reply-1')
+    after = rt.longtask.store.get(sid)
+    assert outcome['choice'] == 'extend' and after['state'] == 'ready'
+    assert after['budget']['totalStepLimit'] == used['totalStepLimit'] * 2
+    assert after['budget']['activeTimeLimitMs'] == used['activeTimeLimitMs'] * 2
+    assert after['budget']['revision'] == used['revision'] + 1
+    assert rt.pending_decisions(sid)['decisions'] == []
+
+
+def test_cancelling_a_run_with_a_pending_budget_card_closes_the_card(tmp_path):
+    """Chủ huỷ chạy khi thẻ ngân sách còn treo: run đóng, thẻ đóng theo, không 409 sau khi đã huỷ."""
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'budget_exhausted', 'LONGTASK_BUDGET_EXHAUSTED')
+    run = rt.longtask.store.get(sid)
+    did = rt.longtask.budget_card(run)
+    result = asyncio.run(rt.longtask_action(sid, {'action': 'cancel', 'runId': run['runId'],
+                                                 'expectedRevision': run['revision'], 'invocationId': 'cancel-1'}))
+    assert result['state'] == 'cancelled'
+    assert rt.decision_store.get(sid, did)['status'] == 'cancelled'
+    assert rt.pending_decisions(sid)['decisions'] == []
