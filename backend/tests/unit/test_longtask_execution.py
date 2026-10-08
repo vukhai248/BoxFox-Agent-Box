@@ -459,6 +459,57 @@ def test_history_seams_are_optional_and_never_break_a_turn(tmp_path, monkeypatch
     assert rt.history_ingest(sid, {'role': 'user', 'content': 'x'}, 'k', owner=True) is None
 
 
+def test_an_owner_turn_rebases_the_run_on_the_new_owner_revision(tmp_path, monkeypatch):
+    """Yêu cầu mới của chính chủ không được giết run: ghim lại rồi chạy tiếp.
+
+    Đây là ca đã gặp thật: chủ cấu hình run, gửi lượt kế tiếp (ghi revision mới), lượt chết vì
+    `LONGTASK_STALE`, `resume` trả 409 ngay, và cách duy nhất là `cancel` + lập run mới.
+    """
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    rt, sid = runtime(tmp_path)
+    run = configure(rt, sid)
+    moved = {**binding(sid), 'goalRevision': 2, 'contractRevision': 2, 'contractHash': 'hash-2'}
+    rt.longtask.authority = lambda _sid, _run: moved
+    rebased = rt.longtask.check(sid)
+    assert rebased['goalRevision'] == 2 and rebased['binding']['contractHash'] == 'hash-2'
+    assert rebased['revision'] == run['revision'] + 1
+    assert rebased['state'] == 'ready'
+    # Tự chạy tiếp thì KHÔNG re-base: correction của chủ làm continuation cũ stale.
+    rt.longtask.authority = lambda _sid, _run: {**moved, 'goalRevision': 3, 'contractRevision': 3,
+                                               'contractHash': 'hash-3'}
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid, autonomous=True)
+    assert exc.value.code == 'LONGTASK_STALE'
+
+
+def test_a_scope_change_is_still_stale_for_an_owner_turn(tmp_path, monkeypatch):
+    """Đổi phạm vi (dự án/capability/allocation) vẫn chặn cứng, kể cả lượt của chủ."""
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    rt.longtask.authority = lambda _sid, _run: {**binding(sid), 'capabilityEpoch': 9}
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid)
+    assert exc.value.code == 'LONGTASK_STALE'
+
+
+def test_the_owner_can_repin_a_parked_run_and_a_too_small_allowance_is_named(tmp_path, monkeypatch):
+    """Chủ phải có đường thoát cho run đã park, và hạn mức nhỏ hơn một lượt phải đọc ra đúng."""
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'needs_user', 'LONGTASK_STALE')
+    rt.longtask.binding = lambda _sid, _body: {**binding(sid), 'goalRevision': 2, 'contractRevision': 2,
+                                               'contractHash': 'hash-2'}
+    repinned = rt.configure_longtask(sid, {'enabled': True, 'goalRevision': 2, 'invocationId': 'repin-1',
+                                           'expectedRevision': rt.longtask.store.get(sid)['revision']})
+    assert repinned['state'] == 'ready' and repinned['goalRevision'] == 2
+    # Hạn mức nhỏ hơn trần một lượt, chưa tiêu gì: mã riêng, không phải "hết ngân sách".
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.store.reserve(rt.longtask.store.get(sid), 'segment-1', 1, 7200_000, manual=True)
+    assert exc.value.code == 'LONGTASK_BUDGET_TOO_SMALL'
+
+
 def test_manual_turn_allowed_while_waiting_and_finish_never_raises(tmp_path, monkeypatch):
     monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
     rt, sid = runtime(tmp_path)

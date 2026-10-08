@@ -21,14 +21,25 @@ def identifier(value):
     return value
 
 
+def _component(name, code):
+    """Một thành phần đường dẫn hợp lệ: không `.`/`..`, không ký tự ngoài allowlist."""
+    if not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', name) or name in ('.', '..'):
+        raise ValueError(code)
+    return name
+
+
+def _parts(relative):
+    return [_component(part, 'HISTORY_PATH_INVALID') for part in relative.split('/')]
+
+
 def directory(root, components):
     """Walk with no-follow directory handles, including the root's ancestors."""
     path = Path(root).absolute()
     fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
     try:
         for name in (*path.parts[1:], *components):
-            if name in components and (not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', name) or name in ('.', '..')):
-                raise ValueError('HISTORY_PATH_INVALID')
+            if name in components:
+                _component(name, 'HISTORY_PATH_INVALID')
             try:
                 os.mkdir(name, 0o700, dir_fd=fd)
             except FileExistsError:
@@ -43,8 +54,7 @@ def directory(root, components):
 
 
 def write(root, components, name, data):
-    if not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', name) or name in ('.', '..'):
-        raise ValueError('HISTORY_FILENAME_INVALID')
+    _component(name, 'HISTORY_FILENAME_INVALID')
     fd = directory(root, components)
     temp = 'tmp_' + uuid.uuid4().hex
     try:
@@ -65,10 +75,7 @@ def write(root, components, name, data):
 
 
 def read(root, relative, checksum):
-    parts = relative.split('/')
-    for part in parts:
-        if not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', part) or part in ('.', '..'):
-            raise ValueError('HISTORY_PATH_INVALID')
+    parts = _parts(relative)
     fd = directory(root, parts[:-1])
     try:
         inp = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
@@ -82,10 +89,7 @@ def read(root, relative, checksum):
 
 
 def unlink(root, relative):
-    parts = relative.split('/')
-    for part in parts:
-        if not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', part) or part in ('.', '..'):
-            raise ValueError('HISTORY_PATH_INVALID')
+    parts = _parts(relative)
     fd = directory(root, parts[:-1])
     try:
         try:
@@ -99,8 +103,7 @@ def unlink(root, relative):
 
 def read_unverified(root, components, name, limit=1000000):
     """Read ownership markers only as a refusal guard, never as canonical metadata."""
-    if not re.fullmatch(r'[A-Za-z0-9_.-]{1,180}', name) or name in ('.', '..'):
-        raise ValueError('HISTORY_FILENAME_INVALID')
+    _component(name, 'HISTORY_FILENAME_INVALID')
     fd = directory(root, components)
     try:
         inp = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)

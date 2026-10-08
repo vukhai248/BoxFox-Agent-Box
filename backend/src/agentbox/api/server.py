@@ -563,7 +563,17 @@ def create_app(runtime):
         except PermissionError as exc:
             return web.json_response({'error': str(exc)}, status=403)
         except (ValueError, TypeError) as exc:
-            return web.json_response({'error': str(exc)}, status=409 if any(c in str(exc) for c in ('SESSION_BUSY', 'REVISION_CONFLICT', 'INVOCATION_CONFLICT')) else 400)
+            # `LongtaskError`/`HistoryError` là `ValueError` mang mã hợp đồng. Bỏ mã ở đây thì
+            # `LONGTASK_BLOCKED`/`LONGTASK_PENDING_DECISION` của route lượt về UI chỉ còn một câu
+            # văn xuôi — không đọc được bằng máy.
+            body = {'error': str(exc)}
+            code = getattr(exc, 'code', None)
+            if code:
+                body['code'] = code
+            status = getattr(exc, 'status', None)
+            if status is None:
+                status = 409 if any(c in str(exc) for c in ('SESSION_BUSY', 'REVISION_CONFLICT', 'INVOCATION_CONFLICT')) else 400
+            return web.json_response(body, status=status)
 
     app = web.Application(middlewares=[boundary], client_max_size=1048576)
 
@@ -1805,10 +1815,21 @@ def create_app(runtime):
     # Không route nào nhận `projectId`, đường dẫn riêng hay id phiên khác từ client: phạm vi lấy
     # từ chính phiên gọi (`callerSessionId`), còn thiếu nguồn canonical thì từ chối thay vì đoán.
 
+    # Mã lỗi hợp lệ của bề mặt này là CHỮ HOA có gạch dưới (`HISTORY_...`, `CAPSULE_...`,
+    # `DELETE_...`, `LONGTASK_...`). Chuỗi khác (thông báo của sqlite, `Expecting value`,
+    # tên khoá của `KeyError`) KHÔNG phải mã hợp đồng: trả 500 kèm `DURABLE_ERROR` thay vì
+    # gán nhãn 4xx cho một lỗi nội bộ.
+    _CODE = re.compile(r'[A-Z][A-Z0-9_]{2,}(?::|$)')
+
     def surface_error(exc):
+        if isinstance(exc, json.JSONDecodeError):
+            return web.json_response({'error': 'REQUEST_INVALID: body must be valid JSON',
+                                      'code': 'REQUEST_INVALID'}, status=400)
         raw = str(exc)
-        code = getattr(exc, 'code', None) or (raw.split(':', 1)[0].strip()
-                                             if raw.isupper() or ':' in raw else 'DURABLE_ERROR')
+        code = getattr(exc, 'code', None)
+        if not code and _CODE.match(raw):
+            code = raw.split(':', 1)[0].strip()
+        code = code or 'DURABLE_ERROR'
         status = getattr(exc, 'status', None)
         if status is None:
             if code in ('HISTORY_SCOPE_DENIED', 'CAPSULE_EVIDENCE_SCOPE_DENIED'):
@@ -1817,6 +1838,8 @@ def create_app(runtime):
                 status = 404
             elif code.endswith(('_INVALID', '_REQUIRED', '_UNSUPPORTED', '_UNKNOWN')):
                 status = 400
+            elif code == 'DURABLE_ERROR':
+                status = 500
             else:
                 status = 409
         message = raw if raw.startswith(code) else f'{code}: {raw}'
@@ -1826,7 +1849,7 @@ def create_app(runtime):
         from ..agent_core import history_surface
         return history_surface
 
-    def query_int(request, name, default, maximum=None):
+    def query_int(request, name, default, maximum=None, minimum=1):
         raw = request.query.get(name)
         if raw in (None, ''):
             return default
@@ -1834,7 +1857,7 @@ def create_app(runtime):
             value = int(raw)
         except (TypeError, ValueError):
             raise ValueError('HISTORY_QUERY_INVALID')
-        if value < 1:
+        if value < minimum:
             raise ValueError('HISTORY_QUERY_INVALID')
         return min(value, maximum) if maximum else value
 
@@ -1856,14 +1879,22 @@ def create_app(runtime):
             contract = history_surface.service(runtime).contract(sid)
             return {'longtask': runtime.longtask_state(sid), 'goalRevision': contract['currentRevision'],
                     'contractRef': history_surface.contract_hash(contract)}
-        except Exception:
+        except Exception as exc:
+            # Suy giảm thì phải NÓI RA: ba khoá `null` là hợp lệ cho phiên chat, nên nếu im lặng
+            # thì một bề mặt hỏng sẽ trông y hệt một phiên chưa bật tác vụ dài.
+            logger.warning('durable session view unavailable for %s: %s', sid, exc)
             return {'longtask': None, 'goalRevision': None, 'contractRef': None}
 
     async def history_sessions(request):
         try:
             sid = caller_session(request)
+            # `parent`/`root` là phạm vi CÓ THẬT nhưng riêng bảng phiên không phục vụ (403);
+            # một chuỗi lạ là yêu cầu sai (400) chứ không phải một lần từ chối.
+            scope = request.query.get('scope', 'self')
+            if scope not in ('self', 'project', 'parent', 'root'):
+                raise ValueError('HISTORY_QUERY_INVALID')
             result = surface().service(runtime).list_sessions(
-                sid, scope=request.query.get('scope', 'self'), session_id=request.query.get('targetSessionId'),
+                sid, scope=scope, session_id=request.query.get('targetSessionId'),
                 agent_id=request.query.get('agentId'), cursor=request.query.get('cursor'),
                 limit=query_int(request, 'limit', 20, 50))
         except Exception as exc:
@@ -1890,7 +1921,7 @@ def create_app(runtime):
         try:
             sid = caller_session(request)
             result = surface().service(runtime).read_reference(
-                sid, request.match_info['recordId'], offset=query_int(request, 'offset', 0),
+                sid, request.match_info['recordId'], offset=query_int(request, 'offset', 0, minimum=0),
                 limit=query_int(request, 'maxChars', 16000, 16000))
         except Exception as exc:
             return surface_error(exc)
@@ -1972,15 +2003,18 @@ def create_app(runtime):
         return web.json_response(result)
 
     async def session_tasks(request):
-        """`GET /sessions/{sid}/tasks` — task của cả cây, bản tóm tắt, phân trang theo `taskKey`."""
+        """`GET /sessions/{sid}/tasks` — task của cả cây, bản tóm tắt, phân trang theo `taskKey`.
+
+        Con trỏ khoá phải trùng cột sắp xếp (`task_key`), nếu không trang sau sẽ bỏ sót task
+        vừa được cập nhật hoặc lặp lại task đã trả.
+        """
         sid = request.match_info['sid']
         try:
             known_session(sid)
             limit = query_int(request, 'limit', 20, 50)
             state = request.query.get('state') or 'active'
             after = request.query.get('after') or None
-            if 'harness_tasks' not in {row[0] for row in runtime.store.db.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'")}:
+            if 'harness_tasks' not in surface()._tables(runtime.store.db):
                 return web.json_response({'tasks': [], 'hasMore': False, 'nextAfter': None})
             ids = surface().tree_ids(runtime, sid)
             marks = ','.join('?' for _ in ids)
@@ -1995,7 +2029,7 @@ def create_app(runtime):
                 't.control_state,t.updated_at,MAX(a.session_id) session_id,COUNT(a.attempt_id) attempts '
                 'FROM harness_tasks t JOIN harness_task_attempts a ON a.task_key=t.task_key WHERE '
                 + ' AND '.join(clauses) + ' AND (? IS NULL OR t.task_key>?) GROUP BY t.task_key '
-                'ORDER BY t.updated_at DESC LIMIT ?', (*args, after, after, limit + 1)).fetchall()
+                'ORDER BY t.task_key ASC LIMIT ?', (*args, after, after, limit + 1)).fetchall()
             items = [{'taskKey': r['task_key'], 'runId': r['run_id'], 'ownerId': r['owner_id'],
                       'alias': r['task_alias'], 'revision': r['revision'], 'state': r['state'],
                       'acceptanceState': r['acceptance_state'], 'controlState': r['control_state'],
@@ -2742,6 +2776,19 @@ def main():
     data = Path(os.environ.get('BOXFOX_AGENT_DATA_DIR', str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'BoxFox/harness')))
     port = harness_port()
     executor = build_executor(data)
+    # Single-writer: chỉ có nghĩa khi tác vụ dài được mở — đó là chế độ mà hai tiến trình trên
+    # cùng một profile vừa cùng quét `interrupted` vừa cùng nhận continuation. Chế độ mặc định giữ
+    # nguyên hành vi cũ (không khoá) nên không có hồi quy cho người dùng hiện tại; bật cờ thì
+    # tiến trình thứ hai TỪ CHỐI chạy trước cả bước quét, thay vì ghi đè lên tiến trình đang chạy.
+    from ..agent_core.longtask_runtime import ProfileWriterGuard, enabled as longtask_enabled
+    writer_guard = None
+    if longtask_enabled():
+        try:
+            writer_guard = ProfileWriterGuard(data / 'sessions.sqlite').acquire()
+        except Exception as exc:
+            system_log.write('harness.start.refused', level='error', dataDir=str(data),
+                             code=getattr(exc, 'code', 'PROFILE_WRITER_BUSY'), message=str(exc)[:300])
+            raise
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
     attach_host_approver(runtime)
     # Gắn ở CẢ HAI chế độ: host mode cũng cần `/api/agent/machines/*` (cấu hình folder, cây tệp,
@@ -2777,6 +2824,8 @@ def main():
         # startup that died before the aiohttp cleanup ran; it is a no-op when the file
         # was already reset, because then there is no active file left to rename.
         system_log.rotate_on_shutdown()
+        if writer_guard is not None:
+            writer_guard.close()
 
 
 if __name__ == '__main__':

@@ -190,21 +190,95 @@ def note_gap(store, sid, code, message, op=None):
     return _notice(store, sid, code, message, op=op)
 
 
+#: Tiêu đề khối ghim (LT-01). Ở cạnh tiêu đề khối ký ức vì `_strip_brief` phải nhận ra CẢ HAI:
+#: khối được dựng lại mỗi lượt, để bản cũ ở lại system prompt là lặp chữ mỗi lượt một lần.
+CRITICAL_PINS_HEADER = "=== PINNED OWNER REQUESTS (canonical revisions; independent of any summary) ==="
+#: Trần ký tự của cả khối ghim. Yêu cầu gốc là thứ dễ rơi khỏi `brief_text` nhất nên được nhiều
+#: chỗ nhất; các revision sau chỉ giữ một dòng nhận ra được, đọc đầy đủ bằng `history_read`.
+CRITICAL_PINS_MAX_CHARS = 1200
+CRITICAL_PINS_FIRST_CHARS = 600
+CRITICAL_PINS_OTHER_CHARS = 160
+
+
+def _pin_line(text, limit):
+    """Một dòng ghim: bỏ xuống dòng (khối này là chỉ dẫn, không phải transcript) rồi cắt trần."""
+    flat = ' '.join(str(text or '').split())
+    return flat if len(flat) <= limit else flat[:limit - 1] + '…'
+
+
+def _pin_text(history, sid, ref):
+    """Nguyên văn yêu cầu chủ từ bản ghi canonical; hỏng/thiếu thì trả '' (không bịa)."""
+    try:
+        raw = history.read_reference(sid, ref, limit=2000)['content']
+    except Exception:
+        return ''
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return raw
+    content = payload.get('content') if isinstance(payload, dict) else None
+    if isinstance(content, list):  # lượt có ảnh: phần chữ nằm trong các khối `text`
+        content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else raw
+
+
+def critical_pins_block(store, sid) -> str:
+    """Ghim nguyên văn yêu cầu chủ + số revision TRƯỚC khối ký ức (LT-01).
+
+    `journal.brief_text` chỉ đọc tail nên yêu cầu gốc — và cả quyết định trọng yếu — có thể rơi
+    khỏi cửa sổ sau vài lần nén. Khối này lấy từ `owner_contract_revisions`, tức là nguồn canonical
+    độc lập với summary, nên nó còn nguyên sau nén và sau restart.
+
+    Chỉ chạy khi tác vụ dài được bật (`BOXFOX_LONGTASK_CONTINUITY=1`): đó là chế độ mà hợp đồng chủ
+    được dùng để chạy tiếp. Mọi ca hỏng trả `''` — khối ký ức vẫn dựng như cũ.
+    """
+    from .longtask_runtime import enabled as longtask_enabled
+    if not longtask_enabled():
+        return ''
+    try:
+        history = getattr(store, 'history', None)
+        if history is None:
+            return ''
+        pins = history.critical_pins(sid)['pins']
+    except Exception:  # pragma: no cover - phiên chưa có hợp đồng / DB cũ
+        return ''
+    lines, used = [CRITICAL_PINS_HEADER], 0
+    for index, pin in enumerate(pins):
+        limit = CRITICAL_PINS_FIRST_CHARS if index == 0 else CRITICAL_PINS_OTHER_CHARS
+        text = _pin_line(_pin_text(history, sid, pin['historyRef']), limit)
+        if not text:
+            continue
+        line = f"[r{pin['revision']} · {pin['changeKind']} · {pin['historyRef']['recordId']}] {text}"
+        if used + len(line) > CRITICAL_PINS_MAX_CHARS:
+            lines.append(f'… (+{len(pins) - index} bản ghi hợp đồng nữa — đọc bằng history_read)')
+            break
+        lines.append(line)
+        used += len(line)
+    return '\n'.join(lines) if len(lines) > 1 else ''
+
+
 def brief(store, sid, *, limit=60) -> str:
     """Khối "ký ức" của phiên (A5) — rỗng khi chưa có bản ghi nào **thuộc sáu nhóm** (lượt đầu
-    không có gì để nhớ, và một phiên chỉ có hàng tra cứu — `F:`/`E:` — cũng vậy)."""
+    không có gì để nhớ, và một phiên chỉ có hàng tra cứu — `F:`/`E:` — cũng vậy).
+
+    Khối ghim (LT-01) đi TRƯỚC khối ký ức: yêu cầu chủ là thứ phải sống sót, còn tail nhật ký là
+    thứ đọc lại được. Phiên chỉ có ghim (chưa có hàng nhật ký nào) vẫn dựng được khối.
+    """
+    block = ''
     try:
         rows = store.journal_tail(sid, limit=limit)
     except Exception:  # pragma: no cover - phiên chưa có nhật ký / DB cũ
-        return ''
-    if not rows:
-        return ''
-    block = journal.brief_text([record_view(row) for row in rows])
-    # Đợt 3 vòng 22: hàng `E:` (bằng chứng của lượt) cố ý KHÔNG có nhóm trong khối ký ức, nên một
-    # phiên chỉ có hàng `E:`/`F:` sẽ dựng ra sáu nhóm rỗng. Ghép khối đó vào system message là đổi
-    # prompt giữa hai lượt mà không mang thêm thông tin nào — trả `''` thì `inject_brief` bỏ khối
-    # cũ và prompt giữ nguyên tiền tố (đúng thứ prompt cache cần).
-    return block if journal.brief_has_items(block) else ''
+        rows = []
+    if rows:
+        text = journal.brief_text([record_view(row) for row in rows])
+        # Đợt 3 vòng 22: hàng `E:` (bằng chứng của lượt) cố ý KHÔNG có nhóm trong khối ký ức, nên
+        # một phiên chỉ có hàng `E:`/`F:` sẽ dựng ra sáu nhóm rỗng. Ghép khối đó vào system message
+        # là đổi prompt giữa hai lượt mà không mang thêm thông tin nào — bỏ trống thì `inject_brief`
+        # bỏ khối cũ và prompt giữ nguyên tiền tố (đúng thứ prompt cache cần).
+        if journal.brief_has_items(text):
+            block = text
+    pins = critical_pins_block(store, sid)
+    return '\n\n'.join(part for part in (pins, block) if part)
 
 
 def record_view(row):
@@ -260,11 +334,15 @@ def inject_brief(prompt, block) -> str:
 
 
 def _strip_brief(prompt):
-    """Bỏ khối ký ức đã chèn ở lần trước (nhận diện bằng đúng dòng tiêu đề của `journal.brief_text`)."""
+    """Bỏ các khối đã chèn ở lần trước (nhận diện bằng đúng hai dòng tiêu đề).
+
+    Cắt từ tiêu đề XUẤT HIỆN SỚM NHẤT: khối ghim nằm trước khối ký ức, nên chỉ tìm tiêu đề khối
+    ký ức thì bản ghim cũ ở lại và mỗi lượt lại chồng thêm một bản.
+    """
     text = str(prompt or '')
-    header = journal.JOURNAL_BRIEF_HEADER
-    index = text.find(header)
-    return text[:index].rstrip() if index >= 0 else text
+    found = [index for index in (text.find(journal.JOURNAL_BRIEF_HEADER), text.find(CRITICAL_PINS_HEADER))
+             if index >= 0]
+    return text[:min(found)].rstrip() if found else text
 
 
 # Tên cũ dùng trong nội bộ mô-đun này; route/nhật ký dùng tên công khai `record_view`.

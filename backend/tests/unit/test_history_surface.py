@@ -210,6 +210,38 @@ def test_deletion_preview_then_confirm_keeps_the_capsule_and_hides_raw(tmp_path)
     store.close()
 
 
+def test_a_live_run_makes_the_first_confirm_conflict_and_the_second_one_delete(tmp_path):
+    """Huỷ run đang sống đổi bản ghim critical, nên lần xác nhận đầu phải trả conflict.
+
+    Đây là hệ quả đã biết của thứ tự `settle_deleted_runs` → `delete_with_capsule`: bản xem trước
+    thứ hai thấy cây đã yên và đi hết đường. Ca kiểm ghim đúng hành vi đó thay vì để nó thành
+    một lần hỏng không tên.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu còn dở', 'k1')
+    goal = history_surface.service(runtime).contract(sid)['currentRevision']
+    runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
+                                     'goalRevision': goal,
+                                     'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+    preview = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
+    assert preview['validation']['status'] == 'validated'
+    try:
+        history_surface.deletion_confirm(runtime, sid, {'operationId': preview['operationId'],
+                                                        'expectedRevision': preview['expectedRevision'],
+                                                        'confirm': True})
+        raise AssertionError('run đang sống bị huỷ làm đổi bản ghim: lần đầu phải conflict')
+    except Exception as exc:
+        assert getattr(exc, 'code', '') == 'DELETE_REVISION_CONFLICT'
+    second = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
+    assert second['operationId'] != preview['operationId']
+    result = history_surface.deletion_confirm(runtime, sid, {'operationId': second['operationId'],
+                                                             'expectedRevision': second['expectedRevision'],
+                                                             'confirm': True})
+    assert result['status'] == 'deleted' and result['capsuleId'] == second['capsuleId']
+    store.close()
+
+
 def test_deletion_preview_refuses_a_stale_revision_and_a_foreign_mode(tmp_path):
     store, runtime, session = build(tmp_path)
     sid = session['id']

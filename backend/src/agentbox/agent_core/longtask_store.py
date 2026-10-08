@@ -133,6 +133,26 @@ class LongtaskStore:
             event(self.db, sid, 'longtask', result)
             return self._remember(sid, body['invocationId'], digest, result)
 
+    def repin(self, run, binding, *, resume_policy=None):
+        """Ghim lại run vào hợp đồng HIỆN TẠI — không đụng ngân sách đã tiêu.
+
+        Yêu cầu chủ mới (hoặc quyền/không gian được cấp lại) làm bản ghim cũ hết hiệu lực. Run cũ
+        không được tự chạy tiếp theo bản cũ, nhưng chủ phải có đường thoát: nếu không thì cách duy
+        nhất là `cancel` rồi lập run mới — đã gặp thật ở vòng kiểm.
+        """
+        if resume_policy not in (None, 'manual', 'safe_auto'):
+            raise LongtaskError('LONGTASK_INVALID', 'resumePolicy must be manual or safe_auto', 400)
+        state = 'ready' if (run['state'] == 'needs_user' and run['blockedReason'] == 'LONGTASK_STALE') else run['state']
+        with write(self.db):
+            self.db.execute('UPDATE longtask_runs SET goal_revision=?,contract_hash=?,binding_json=?,'
+                            'resume_policy=COALESCE(?,resume_policy),state=?,blocked_reason=?,'
+                            'revision=revision+1,updated=? WHERE run_id=?',
+                            (binding['goalRevision'], binding['contractHash'], encode(binding), resume_policy,
+                             state, None if state == 'ready' else run['blockedReason'], time.time(), run['runId']))
+            result = self.get(run_id=run['runId'])
+            event(self.db, run['sessionId'], 'longtask', result)
+            return result
+
     def _barrier(self, run, state, reason):
         self.db.execute('UPDATE longtask_runs SET state=?,blocked_reason=?,revision=revision+1,stop_epoch=stop_epoch+1,'
                         'lease_epoch=lease_epoch+1,lease_owner=NULL,lease_expires=NULL,updated=? WHERE run_id=?',
@@ -273,6 +293,12 @@ class LongtaskStore:
                 raise LongtaskError('LONGTASK_WALL_DEADLINE', 'wall deadline reached')
             if (b['totalStepsUsed'] + steps + b['checkpointReserveSteps'] > b['totalStepLimit']
                     or b['activeTimeUsedMs'] + bound_ms + b['checkpointReserveMs'] > b['activeTimeLimitMs']):
+                # Chưa tiêu gì mà trần một lượt đã lớn hơn cả hạn mức thì đây KHÔNG phải "hết ngân
+                # sách": nói đúng chuyện (hạn mức nhỏ hơn trần một lượt) để chủ biết phải đặt lại
+                # bao nhiêu, thay vì một thẻ xin thêm đúng bằng phần vừa thiếu.
+                if b['activeTimeUsedMs'] == 0 and b['totalStepsUsed'] == 0:
+                    raise LongtaskError('LONGTASK_BUDGET_TOO_SMALL',
+                                        f'the allowance is smaller than one turn upper bound ({int(bound_ms)} ms)')
                 raise LongtaskError('LONGTASK_BUDGET_EXHAUSTED', 'not enough budget plus checkpoint reserve')
             b['totalStepsUsed'] += steps
             b['activeTimeUsedMs'] += bound_ms

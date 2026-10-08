@@ -49,6 +49,15 @@ class ProfileWriterGuard:
             self.file = None
 
 
+def _same_authority_scope(pinned, current):
+    """Hai bản ghim chỉ khác phần hợp đồng chủ (goal/revision/hash/event) hay khác cả phạm vi?
+
+    Chỉ khác phần hợp đồng ⇒ lượt của chủ được re-base. Khác phạm vi (dự án, capability epoch,
+    allocation, work/plan run) ⇒ stale thật: dừng lại, không tự chạy tiếp.
+    """
+    return all((pinned or {}).get(key) == (current or {}).get(key) for key in LongtaskRuntime.SCOPE_KEYS)
+
+
 def enabled():
     return os.environ.get('BOXFOX_LONGTASK_CONTINUITY', '0') == '1'
 
@@ -68,6 +77,10 @@ class LongtaskRuntime:
         self.autonomous = {}
         self.wait_ms = {}
 
+    #: Khoá phạm vi của bản ghim: khác một trong số này là mất quyền/đổi dự án, không phải
+    #: "chủ vừa nói thêm một câu" — nên chúng vẫn chặn cứng.
+    SCOPE_KEYS = ('projectId', 'capabilityEpoch', 'allocationRef', 'workRunId', 'planRunId')
+
     def root_run(self, sid):
         root = self.rt.root_session_id(sid)
         run = self.store.get(root)
@@ -79,7 +92,16 @@ class LongtaskRuntime:
             raise LongtaskError('LONGTASK_ROOT_ONLY', 'only owner root can configure', 403)
         current = self.store.get(sid)
         if current and current['state'] not in TERMINAL:
-            return self.store.configure(sid, body, current['binding'])
+            if body.get('enabled') is not True:
+                return self.store.configure(sid, body, current['binding'])
+            # Chủ chủ động ghim lại (route PUT): hợp đồng phải khớp canonical hiện tại, còn ngân sách
+            # đã tiêu thì giữ nguyên — đổi hạn mức vẫn phải qua quyết định của chủ.
+            if body.get('expectedRevision') != current['revision']:
+                raise LongtaskError('LONGTASK_STALE', 'run revision changed')
+            fresh = self.binding(sid, body) if callable(self.binding) else None
+            if not fresh:
+                raise LongtaskError('LONGTASK_CANONICAL_BINDING_UNAVAILABLE', 'canonical owner contract hook required')
+            return self.store.repin(current, fresh, resume_policy=body.get('resumePolicy'))
         if not callable(self.binding):
             raise LongtaskError('LONGTASK_CANONICAL_BINDING_UNAVAILABLE', 'canonical owner contract hook required')
         binding = self.binding(sid, body)
@@ -110,7 +132,12 @@ class LongtaskRuntime:
             raise LongtaskError('LONGTASK_REVALIDATION_UNAVAILABLE', 'current authority/workspace hook required')
         current = self.authority(run['sessionId'], run)
         if current != run['binding']:
-            raise LongtaskError('LONGTASK_STALE', 'canonical scope, permission or workspace binding changed')
+            if autonomous or not _same_authority_scope(run['binding'], current):
+                raise LongtaskError('LONGTASK_STALE', 'canonical scope, permission or workspace binding changed')
+            # Lượt của CHÍNH chủ: yêu cầu vừa gửi là chỉ thị hiện hành, nên run ghim lại vào revision
+            # mới rồi chạy tiếp. Đổi dự án/quyền/không gian (các khoá phạm vi) vẫn là stale thật —
+            # và tự chạy tiếp (`autonomous`) thì không bao giờ re-base sau correction.
+            run = self.store.repin(run, current)
         if self.rt.decision_store.page(run['sessionId'])['decisions']:
             raise LongtaskError('LONGTASK_PENDING_DECISION', 'owner decision unresolved')
         # Descendants included: a fresh callId must not dodge ambiguous old mutation.
@@ -149,6 +176,19 @@ class LongtaskRuntime:
         run = self.store.transition(run, state, exc.code, checkpoint=ref)
         if state == 'budget_exhausted':
             self.budget_card(run)
+
+    def park_failed_turn(self, sid, error):
+        """Lượt chết vì lỗi KHÁC `LongtaskError` vẫn phải đóng sổ run.
+
+        `reserve` đã đẩy run sang `running` và giữ lease. Bỏ mặc ở đó thì chủ đọc ra một tác vụ
+        "đang chạy" không có ai chạy, `blockedReason` rỗng, và chỉ `recover()` sau lần khởi động
+        sau mới sửa — trong khi lượt vừa chết đã biết rõ chuyện gì xảy ra.
+        """
+        run = self.root_run(sid)
+        if not run or run['state'] not in ('ready', 'running'):
+            return None
+        self.block(sid, LongtaskError('LONGTASK_TURN_FAILED', str(error)[:200]))
+        return self.root_run(sid)
 
     def budget_card(self, run):
         b = run['budget']

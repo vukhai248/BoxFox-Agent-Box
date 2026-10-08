@@ -19,12 +19,12 @@ import json
 import math
 import time
 
-from ..memory.history_store import HistoryError
+from ..memory.history_store import CAPSULE_KEYS, HistoryError
 from ..memory.storage_usage import StorageUsage
 from .longtask_store import LongtaskError
 
 HISTORY_TOOLS = frozenset({'history_list', 'history_search', 'history_read'})
-CAPSULE_KEYS = ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans')
+# Re-export: định nghĩa duy nhất nằm ở memory.history_store; tên này giữ cho caller/test cũ.
 TERMINAL_RUNS = ('completed', 'cancelled', 'failed')
 TERMINAL_WORK = ('shipped', 'cancelled', 'rejected')
 MAX_REFS = 20
@@ -68,7 +68,12 @@ def service(rt):
 
 
 def configure_runtime(rt):
-    """Gọi một lần lúc dựng app: gắn hook history + longtask, đo dung lượng nền."""
+    """Gọi một lần lúc dựng app: gắn hook history + longtask.
+
+    Không đo dung lượng ở đây: phép đo là một lượt `os.walk` toàn kho riêng, và bảng cảnh báo
+    vẫn được tạo ở lần đo thật đầu tiên (`storage_snapshot`). Đo lúc dựng app chỉ tốn I/O mà
+    kết quả bị bỏ đi.
+    """
     history = service(rt)
     longtask = getattr(rt, 'longtask', None)
     wired = False
@@ -79,10 +84,6 @@ def configure_runtime(rt):
         longtask.owner_acceptance = _owner_acceptance(rt)
         longtask._surface_wired = True
         wired = True
-    try:
-        StorageUsage(history).measure(_projection_roots(history))
-    except Exception:
-        pass
     return {'history': True, 'longtask': wired}
 
 
@@ -340,12 +341,18 @@ def _verify_evidence(rt, sid, ref):
         if not row or row['session_id'] not in ids or row['status'] != 'shipped':
             raise HistoryError('LONGTASK_ACCEPTANCE_REQUIRED')
         return {'kind': 'workRun', 'id': ref['workRunId'], 'revision': row['revision']}
-    if ref.get('taskKey') and 'harness_tasks' in names:
-        row = db.execute('SELECT state,acceptance_state,revision FROM harness_tasks WHERE task_key=?',
-                         (str(ref['taskKey']),)).fetchone()
-        if not row or row['acceptance_state'] not in ('accepted', 'satisfied'):
+    if ref.get('taskKey') and 'harness_tasks' in names and 'harness_task_attempts' in names:
+        # Task không có `session_id` riêng: chủ sở hữu là `owner_id`, còn phiên đã chạy nó nằm ở
+        # hàng attempt. Thiếu phép nối này thì một task của phiên/dự án KHÁC vẫn qua được cổng
+        # nghiệm thu (đã dựng lại được: bằng chứng ngoài cây bị nhận là hợp lệ).
+        rows = db.execute('SELECT t.acceptance_state,t.revision,t.owner_id,a.session_id '
+                          'FROM harness_tasks t LEFT JOIN harness_task_attempts a ON a.task_key=t.task_key '
+                          'WHERE t.task_key=?', (str(ref['taskKey']),)).fetchall()
+        if not rows or rows[0]['acceptance_state'] not in ('accepted', 'satisfied'):
             raise HistoryError('LONGTASK_ACCEPTANCE_REQUIRED')
-        return {'kind': 'task', 'id': ref['taskKey'], 'revision': row['revision']}
+        if rows[0]['owner_id'] not in ids or any(row['session_id'] not in ids for row in rows):
+            raise HistoryError('LONGTASK_ACCEPTANCE_REQUIRED')
+        return {'kind': 'task', 'id': ref['taskKey'], 'revision': rows[0]['revision']}
     raise HistoryError('LONGTASK_ACCEPTANCE_REQUIRED')
 
 
@@ -549,15 +556,5 @@ def settle_deleted_runs(rt, ids):
     return changed
 
 
-def deletion_revision(rt, sid):
-    """Chỉ dùng để trả 409 kèm số đo hiện tại; không ghi gì."""
-    _, _, revision = service(rt)._deletion_source(sid)
-    return revision
-
-
 def tree_ids(rt, sid):
     return _tree(rt, sid)
-
-
-def now():
-    return time.time()

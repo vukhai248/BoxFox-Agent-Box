@@ -157,7 +157,7 @@ Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lị
 
 | Thiếu sót | Trạng thái | Mốc mã / bằng chứng | Giới hạn còn lại |
 |---|---|---|---|
-| LT-01 ghim mục tiêu/decision | Đã có | `memory/history_store.py` (`owner_contract_revisions`, `contract()`), `memory/continuity_memory.py`, `history_surface._critical_snapshot` | Neo canonical cần ít nhất một yêu cầu chủ đã ghi (revision ≥ 1); chưa có mốc cho phiên chưa từng nhận yêu cầu. |
+| LT-01 ghim mục tiêu/decision | Đã có | `memory/history_store.py` (`owner_contract_revisions`, `contract()`, `critical_pins()`), `agent_core/session_journal.py` (`critical_pins_block`, ghép TRƯỚC khối ký ức), `history_surface._critical_snapshot` | Khối ghim chỉ dựng khi `BOXFOX_LONGTASK_CONTINUITY=1` (cờ tắt ⇒ prompt y như cũ). Trần 1.200 ký tự: yêu cầu gốc ≤600, các revision sau ≤160 kèm `recordId` để đọc đầy đủ bằng `history_read`. Neo canonical cần ít nhất một yêu cầu chủ đã ghi (revision ≥ 1); phiên chưa từng nhận yêu cầu thì không có mốc nào để ghim. |
 | LT-02 archive host đọc được | Một phần | `memory/history_projection.py`, `history_files.py`; `history_surface.export_projection` | Chưa có ai gọi `export_projection` từ runtime; workspace Docker/chưa ghim trả `projectionStored: false` thay vì ghi sai. |
 | LT-03 card hỏi đáp bền | Đã có | `agent_core/decision_store.py`, `runtime.hydrate_decisions/pending_decisions/resolve_decision`, route `GET/POST .../decisions` | Chưa kiểm với provider thật; idempotency theo `invocationId` + `expectedRevision`. |
 | LT-04 tìm giữa các phiên | Đã có | `history_store.query_history/list_sessions`, route `GET /history/sessions|search`, `scope_target` | Cursor ký theo filter; coverage `partial` khi bị cắt. Chưa đo recall trên >200 match thật. |
@@ -165,6 +165,21 @@ Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lị
 | LT-06 child xong mà attempt còn mở | Đã có | `task_service._close_attempt_locked`, `task_surface.reconcile_startup/finish_child`, `peer_watchdog` | Chưa có ca kill thật ở khe `child_finish`; chỉ mô phỏng ở mức đơn vị. |
 | LT-07 main tự tiếp tục | Đã có (opt-in) | `agent_core/longtask_store.py`, `longtask_runtime.py`, `runtime.configure_longtask/longtask_action/recover_longtasks/pump_longtasks` | Bật bằng `BOXFOX_LONGTASK_CONTINUITY=1`; run gắn plan/work chưa có seam `controller_continue` nên dừng ở `needs_user` + `LONGTASK_CONTROLLER_UNAVAILABLE`. |
 | LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule`, `history_surface.settle_deleted_runs`, route preview/confirm, `DELETE` cũ trả 409 | `settle_deleted_runs` chạy trước cổng quiescent, nên ca `DELETE_NOT_QUIESCENT` vẫn đã huỷ run; cần đảo thứ tự ở vòng sau. |
-| LT-09 summary lồng nhau | Đã có | `history_store.prepare_compaction` + manifest theo `source_key`, `agent_id` | Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
+| LT-09 summary lồng nhau | Một phần | `history_store.prepare_compaction/commit_compaction` + manifest theo `source_key`, `agent_id`; `restore_compaction` | **Chưa nối vào đường nén sống**: `runtime.py` vẫn chỉ ghi checkpoint cũ, nên manifest chỉ sinh trong ca kiểm. Đây là lựa chọn có ý thức của đợt này (đổi đường ghi canonical giữa lượt nén cần một vòng kiểm riêng, không vá ở cuối chu kỳ). Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
+
+### 11.1 Giới hạn đã biết sau đợt soát mã
+
+Ghi lại đúng những gì **chưa** làm, để vòng sau không phải suy lại từ đầu:
+
+| Việc | Vì sao hoãn | Điều kiện xem xét lại |
+|---|---|---|
+| Nối `prepare_compaction`/`commit_compaction` vào đường nén sống | Đổi bản ghi canonical của mọi lần nén; cần vòng kiểm riêng + đo dung lượng trên phiên thật | Trước khi bật `safe_auto` cho phiên dài thật |
+| `export_projection` (archive host đọc được) | Chưa có người gọi; workspace Docker trả `projectionStored: false` thay vì ghi sai — trung thực nhưng chưa dùng được | Cùng vòng với việc nối compaction |
+| Nhãn IFC: `_allowed` truyền `labels` cho hook, hook đang bỏ qua và runtime chưa từng gắn nhãn | Chưa có nguồn nhãn thật; gắn nhãn rỗng là giả vờ có kiểm soát | Khi có nguồn nhãn (dự án/người dùng) |
+| `recover()` không thử lại khi khởi động lỗi tạm thời | Hỏng lúc boot thì `pump()` từ chối nhận continuation; chủ vẫn chạy tay được | Khi có ca thật cần tự chạy tiếp ngay sau boot |
+| `search_text` giữ nguyên văn payload cạnh blob (ba bản cho output lớn) | Đo dung lượng đã có; chưa phải điểm nghẽn trên máy chủ nhà | Khi cảnh báo dung lượng bắt đầu nổ |
+| `history_files.py` chỉ chạy POSIX (`O_DIRECTORY`/`dir_fd`/`O_NOFOLLOW`) | Host Windows là nền chính của bản desktop; ở đó ghi lịch sử hỏng và `history_ingest` bỏ qua ⇒ tính năng chết ở tầng file | Trước khi phát hành tính năng này cho host Windows |
+| `work_feedback.py` vẫn đóng child không nguyên tử (`child_finish` + `project_child` hai bước) | Ngoài phạm vi đợt này; khe hở đã có reconcile lúc khởi động/bơm | Cùng vòng với LT-06 ở bề mặt work |
+| `ProfileWriterGuard` chỉ bật cùng cờ tác vụ dài | Chế độ mặc định giữ nguyên hành vi cũ (không khoá profile) | Khi làm supervisor sau reboot (§8) |
 
 Phần hoãn giữ nguyên như §8: supervisor sau reboot, durable shell/process job tổng quát, vector search, async compaction, auto-delete theo hạn, memory liên dự án, knowledge library lớn, sync nhiều máy, path ACL tổng quát, dashboard/PR connector, lossless CoT. Windows/Wayland vẫn chỉ có kiểm đơn vị với platform giả.

@@ -5046,6 +5046,9 @@ class HarnessRuntime(RuntimeCommands):
                          f'{getattr(exc, "retry_waited_seconds", 0.0):.1f}s]')
             if isinstance(exc, LongtaskError):
                 self.longtask.block(sid, exc)
+            else:
+                # Lỗi nhà cung cấp/công cụ cũng chấm dứt lượt: run không được ở lại `running`.
+                self.longtask.park_failed_turn(sid, error)
             self.store.save(sid, messages, 'failed')
             self.store.emit(sid, 'error', {'message': error, 'code': code})
             elapsed_ms = (time.time() - started) * 1000

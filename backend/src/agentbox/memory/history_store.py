@@ -11,6 +11,9 @@ from pathlib import Path
 
 from .history_files import digest, encode, identifier, read, write, unlink
 
+# Bảy nguồn critical mà một capsule phải phủ đủ trước khi cho xoá (đúng thứ tự này).
+CAPSULE_KEYS = ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans')
+
 
 class HistoryError(ValueError):
     def __init__(self, code):
@@ -93,9 +96,8 @@ class HistoryStore:
 
     def _allowed(self, caller, target, labels=None):
         a, b = self.bind_session(caller), self.bind_session(target)
-        if b['status'] == 'deleted' and caller != target:
-            # Tombstones remain readable through an explicitly authorized same-project caller.
-            pass
+        # Tombstone (status='deleted') vẫn đọc được — nhưng chỉ qua caller cùng project đã được
+        # hook authorization cho phép; hai cổng dưới đây là chỗ duy nhất quyết định điều đó.
         if caller != target and (not a['project_id'] or a['project_id'] != b['project_id']):
             raise HistoryError('HISTORY_SCOPE_DENIED')
         if caller != target or labels:
@@ -408,8 +410,7 @@ class HistoryStore:
         if not ids or not self.critical_snapshot:
             raise HistoryError('CAPSULE_CRITICAL_PROVIDER_REQUIRED')
         critical = self.critical_snapshot(ids)
-        required = ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans')
-        if not isinstance(critical, dict) or any(k not in critical for k in required):
+        if not isinstance(critical, dict) or any(k not in critical for k in CAPSULE_KEYS):
             raise HistoryError('CAPSULE_CRITICAL_COVERAGE_REQUIRED')
         # The hook returns safe retained state, never grants or credentials. Reject authority fields.
         from .continuity_memory import safe_state
@@ -473,9 +474,8 @@ class HistoryStore:
         if not row:
             raise HistoryError('CAPSULE_NOT_FOUND')
         capsule = json.loads(read(self.root, row['content_ref'], row['sha256']))
-        required = ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans')
         if (capsule.get('schemaVersion') != 1 or capsule.get('executionAuthority') is not False
-            or any(k not in capsule.get('critical', {}) for k in required)
+            or any(k not in capsule.get('critical', {}) for k in CAPSULE_KEYS)
             or not capsule.get('sessionIds') or 'contracts' not in capsule):
             raise HistoryError('CAPSULE_VERIFY_FAILED')
         for evidence in capsule.get('retainedEvidence', []):
@@ -531,9 +531,10 @@ class HistoryStore:
         operation = self.db.execute('SELECT * FROM history_deletions WHERE operation_id=?', (operation_id,)).fetchone()
         if not operation or operation['state'] not in ('cleanup_pending', 'deleted'):
             raise HistoryError('DELETE_REQUIRES_CARRY_FORWARD')
+        session_ids = json.loads(operation['session_ids_json'])
         reclaimed = 0
         try:
-            for sid in json.loads(operation['session_ids_json']):
+            for sid in session_ids:
                 for row in self.db.execute('SELECT * FROM history_records WHERE session_id=?', (sid,)):
                     path = self.root / row['payload_ref']
                     if path.exists() and not path.is_symlink():
@@ -541,12 +542,12 @@ class HistoryStore:
                     unlink(self.root, row['payload_ref'])
                     unlink(self.root, row['payload_ref'].rsplit('/', 1)[0] + '/segment_' + row['record_id'])
             if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='history_projection_files'").fetchone():
-                for sid in json.loads(operation['session_ids_json']):
+                for sid in session_ids:
                     for row in self.db.execute('SELECT * FROM history_projection_files WHERE session_id=?', (sid,)):
                         unlink(row['workspace'], row['relpath'])
                 from .history_projection import HistoryProjection
                 projection = HistoryProjection(self)
-                for workspace in {r[0] for sid in json.loads(operation['session_ids_json']) for r in self.db.execute('SELECT DISTINCT workspace FROM history_projection_files WHERE session_id=?', (sid,))}:
+                for workspace in {r[0] for sid in session_ids for r in self.db.execute('SELECT DISTINCT workspace FROM history_projection_files WHERE session_id=?', (sid,))}:
                     projection.refresh_index(workspace)
             with self.db:
                 self.db.execute("UPDATE history_deletions SET state='deleted',last_error=NULL WHERE operation_id=?", (operation_id,))
