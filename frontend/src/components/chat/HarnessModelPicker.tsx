@@ -22,12 +22,14 @@ import {
   Brain,
   Pin,
   KeyRound,
+  Loader2,
 } from 'lucide-react'
 import { useHarnessStore, AVAILABLE_MODELS } from '../../store/harnessStore'
 import { useUiStore } from '../../store/uiStore'
 import { useProviderStore } from '../../store/providerStore'
 import { ProviderIcon } from '../providers/ProviderIcon'
-import { composerModels, routerChatOptions, type RouterComposerModel } from '../../lib/routeOptions'
+import { api } from '../../lib/providerApi'
+import { composerModels, routable, routerChatOptions, type RouterComposerModel } from '../../lib/routeOptions'
 import type { ProviderSnapshot } from '../../types/provider'
 
 /**
@@ -64,6 +66,67 @@ interface HarnessModelPickerProps {
   onRouterModelChange?: (id: string) => void
 }
 
+/**
+ * `provider:<providerId>:<modelId>` / `model:<connectionId>:<modelId>` → `<modelId>`.
+ * Id model có thể chứa `:` nên phần đuôi phải nối lại, không lấy một mảnh.
+ */
+function rowModelId(id: string) {
+  return id.split(':').slice(2).join(':')
+}
+
+/**
+ * Đích dò reasoning của một hàng. Hàng ghim (`model:<connectionId>:<modelId>`) chỉ có một
+ * connection. Hàng nhóm phải dò MỌI connection định tuyến được, vì `thinkingLevels` của hàng
+ * nhóm là GIAO của các connection (`intersectThinkingLevels`): dò một cái rồi nạp lại snapshot
+ * thì bộ chọn mức vẫn không hiện, và người dùng vừa bấm một nút "không có tác dụng gì".
+ *
+ * Luật "định tuyến được" không chép lại ở đây — `routable()` là bản sao duy nhất phía UI.
+ */
+function probeTargets(id: string, snapshot: ProviderSnapshot | null | undefined) {
+  const parts = id.split(':')
+  if (parts[0] === 'model') return [{ connectionId: parts[1], modelId: rowModelId(id) }]
+  const providerId = parts[1]
+  const modelId = rowModelId(id)
+  return (snapshot?.connections ?? [])
+    .filter((connection) => connection.providerId === providerId
+      && (connection.models ?? []).some((model) => model.id === modelId && routable(connection, model)))
+    .map((connection) => ({ connectionId: connection.id, modelId }))
+}
+
+/** Câu trả lời của route `…/models/:modelId/reasoning-probe` — chỉ những trường dòng phụ cần. */
+interface ReasoningProbeResult {
+  status: string
+  thinkingLevels?: string[]
+  samples?: number
+  reasoningChars?: number
+  reasoningTokens?: number
+  thinkingEvidence?: string | null
+  retryAfterMs?: number | null
+}
+
+/**
+ * Một câu cho dòng phụ, đúng từ vựng trạng thái của router (`judgeReasoningProbe`) — không tự
+ * diễn giải thành lời hứa. "1 level measured" phải nói thẳng là bộ chọn mức KHÔNG hiện, vì bộ
+ * chọn đòi > 1 mức: thà nói ra còn hơn để người dùng đoán.
+ */
+function probeNote(result: ReasoningProbeResult | null) {
+  if (!result) return 'the router sent no answer'
+  if (result.status === 'supports') {
+    const levels = result.thinkingLevels?.length ?? 0
+    if (levels > 1) return `${levels} levels measured`
+    if (levels === 1) return '1 level measured — the picker needs more than one'
+    return 'reasoning without a level — nothing to pick'
+  }
+  if (result.status === 'refuses') return 'the provider refuses the reasoning field'
+  if (result.status === 'inconclusive') return `${result.samples ?? 0} samples, no reasoning seen`
+  if (result.status === 'rate_limited') return 'rate limited — try again later'
+  if (result.status === 'not_entitled') return 'this key is not entitled to the model'
+  if (result.status === 'not_in_catalogue') return 'the provider does not list the model any more'
+  if (result.status === 'not_on_connection') return 'the model is not on this connection'
+  if (result.status === 'unavailable') return 'the provider is unavailable right now'
+  return result.status
+}
+
 export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouterModelChange }: HarnessModelPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -89,6 +152,68 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
   useEffect(() => {
     if (!snapshot) void loadProviders().catch(() => {})
   }, [snapshot, loadProviders])
+
+  // ── Dò reasoning (nhóm M) ────────────────────────────────────────────────
+  // Vì sao nút này nằm Ở ĐÂY: bộ chọn mức chỉ hiện khi model công bố > 1 mức, nên model mới
+  // (`thinkingSource: 'unknown'`) hiện ra như thể nó không suy luận — người dùng chỉ thấy một
+  // điều khiển biến mất mà không có gì giải thích. Đây là chỗ họ nhận ra điều đó, nên cũng là
+  // chỗ phải có cách đo và câu trả lời vì sao.
+  const [probes, setProbes] = useState<Record<string, { state: 'running' | 'done' | 'error'; note: string }>>({})
+  const probeControllers = useRef(new Map<string, AbortController>())
+  useEffect(() => () => {
+    // Một phép dò có thể chạy tới 90 s; rời màn hình thì huỷ, đừng để nó ghi state vào hư không.
+    for (const controller of probeControllers.current.values()) controller.abort()
+  }, [])
+
+  const runReasoningProbe = useCallback(async (id: string) => {
+    const targets = probeTargets(id, useProviderStore.getState().snapshot)
+    if (targets.length === 0) {
+      setProbes((previous) => ({ ...previous, [id]: { state: 'error', note: 'no routable connection for this model' } }))
+      return
+    }
+    const controller = new AbortController()
+    probeControllers.current.set(id, controller)
+    setProbes((previous) => ({ ...previous, [id]: { state: 'running', note: targets.length > 1 ? `measuring ${targets.length} connections…` : 'measuring…' } }))
+    let note = ''
+    let answered = false
+    for (const target of targets) {
+      try {
+        const result = await api<ReasoningProbeResult>(
+          `/api/router/connections/${encodeURIComponent(target.connectionId)}/models/${encodeURIComponent(target.modelId)}/reasoning-probe`,
+          { method: 'POST', signal: controller.signal },
+        )
+        answered = true
+        note = probeNote(result)
+      } catch (error) {
+        // Không đi qua `useProviderStore.request()`: một phép dò có thể chạy 90 s và cờ `busy`
+        // toàn cục sẽ đóng băng mọi nút trên màn hình; câu trả lời cũng thuộc về ĐÚNG hàng này.
+        if (!answered) note = error instanceof Error ? error.message : 'Router request failed.'
+      }
+    }
+    if (controller.signal.aborted) return
+    probeControllers.current.delete(id)
+    // Bộ chọn mức đọc từ snapshot, nên phải nạp lại: hàng vừa đo xong mới có `thinkingLevels`.
+    await loadProviders().catch(() => {})
+    setProbes((previous) => ({ ...previous, [id]: { state: answered ? 'done' : 'error', note } }))
+  }, [loadProviders])
+
+  /**
+   * Nguồn của `thinkingLevels` theo model, để dòng phụ nói được "vì sao không có bộ chọn mức".
+   * Nguồn mạnh nhất thắng (`probe`/`live` nói được nhiều hơn `unknown`).
+   */
+  const thinkingFacts = useMemo(() => {
+    const facts = new Map<string, { source: string; asOf: string | null; stale: boolean }>()
+    for (const connection of snapshot?.connections ?? []) {
+      for (const model of connection.models ?? []) {
+        const key = `${connection.providerId}:${model.id}`
+        const current = facts.get(key)
+        const source = model.thinkingSource ?? 'unknown'
+        if (current && !(current.source === 'unknown' && source !== 'unknown')) continue
+        facts.set(key, { source, asOf: model.thinkingAsOf ?? null, stale: model.thinkingStale === true })
+      }
+    }
+    return facts
+  }, [snapshot])
 
   /**
    * Vòng 29 — MỘT dòng cho mỗi (provider, model): danh sách option sống ở `lib/routeOptions.ts`
@@ -452,6 +577,10 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                       const selectedLevels = pinned ? pinned.thinkingLevels : model.thinkingLevels
                       const hasThinking = Boolean(selectedLevels && selectedLevels.length > 1)
                       const pinsOpen = openPins === model.id || Boolean(pinned)
+                      // Nhóm connection đã bị dò hỏng thì KHÔNG dò reasoning được (router không
+                      // định tuyến được model đó), nên đừng bày nút bấm chắc chắn hỏng.
+                      const probe = probes[model.id]
+                      const facts = thinkingFacts.get(`${model.provider}:${rowModelId(model.id)}`)
                       return (
                         <div
                           key={model.id}
@@ -524,7 +653,55 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                     </span>
                                   </>
                                 )}
+                                {/* Nguồn của các mức thinking. Đây là câu trả lời cho "vì sao model
+                                    này không có bộ chọn mức": `unknown` nghĩa là chưa ai đo. */}
+                                {facts && (
+                                  <>
+                                    <span>·</span>
+                                    <span
+                                      data-component-id={`thinking-facts-${model.id}`}
+                                      className={`whitespace-nowrap ${facts.stale ? 'text-amber-400' : ''}`}
+                                      title={facts.source === 'unknown'
+                                        ? 'Nobody has measured whether this model returns reasoning, so there is no thinking level picker. Use “Measure thinking”.'
+                                        : `Thinking levels come from: ${facts.source}${facts.asOf ? ` (${facts.asOf})` : ''}.${facts.stale ? ' That reading is old — measure again.' : ''}`}
+                                    >
+                                      thinking: {facts.source === 'unknown' ? 'not measured' : `${facts.source}${facts.asOf ? ` ${facts.asOf}` : ''}`}
+                                      {facts.stale ? ' (old)' : ''}
+                                    </span>
+                                  </>
+                                )}
+                                {/* Nút dò: hiện khi KHÔNG có bộ chọn mức (chỗ người dùng đang thắc
+                                    mắc), và khi số đo cũ đã quá hạn. Đo xong thì nạp lại snapshot,
+                                    và bộ chọn mức tự hiện nếu đo được > 1 mức. */}
+                                {(!rowHasThinking || facts?.stale) && (
+                                  <>
+                                    <span>·</span>
+                                    <button
+                                      type="button"
+                                      disabled={probe?.state === 'running'}
+                                      aria-label={`Measure whether ${model.name} returns reasoning and at which levels`}
+                                      title="Ask the router to measure reasoning through this provider's own request shape."
+                                      data-component-id={`thinking-probe-${model.id}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        void runReasoningProbe(model.id)
+                                      }}
+                                      className="whitespace-nowrap text-brand hover:underline cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                                    >
+                                      {probe?.state === 'running' ? 'measuring…' : 'Measure thinking'}
+                                    </button>
+                                  </>
+                                )}
                               </div>
+                              {probe && (
+                                <div
+                                  data-component-id={`thinking-probe-note-${model.id}`}
+                                  className={`flex items-center gap-1 text-[10px] font-mono ${probe.state === 'error' ? 'text-amber-400' : 'text-zinc-500'}`}
+                                >
+                                  {probe.state === 'running' && <Loader2 className="size-2.5 shrink-0 animate-spin" />}
+                                  <span className="min-w-0 truncate">{probe.note}</span>
+                                </div>
+                              )}
                               {pinned && (
                                 <div className="flex items-center gap-1 text-[10px] text-brand font-mono">
                                   <Pin className="size-2.5" />

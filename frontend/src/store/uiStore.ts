@@ -69,6 +69,19 @@ export interface TabIntent {
   reason: string
 }
 
+/**
+ * Cổng §3 đã chặn một ý định mở tab — đi kèm hàng đợi để người dùng biết VÌ SAO
+ * chưa mở được, không chỉ biết "có gì đó đang chờ".
+ */
+export type TabIntentQueueReason = 'tabs off' | 'workspace hidden' | 'tab pinned' | 'user busy'
+
+/** Ý định xếp hàng gần nhất — hàng thông báo cạnh khung soạn tin đọc giá trị này. */
+export interface PendingIntentNotice {
+  tab: PanelTabId
+  reason: TabIntentQueueReason
+  at: number
+}
+
 /** Trạng thái lưu trữ Workspace Tabs của một phiên chat cụ thể. */
 export interface SessionTabState {
   openTabs: PanelTabId[]
@@ -213,6 +226,18 @@ interface UiState {
   setAutoOpenOnlyWhenIdle: (enabled: boolean) => void
   /** Ý định bị chặn, mới nhất ở cuối; tab đích hiện huy hiệu đếm. */
   pendingIntents: TabIntent[]
+  /**
+   * Ý định bị chặn GẦN NHẤT kèm lý do cổng đã chặn nó — hàng thông báo cạnh
+   * khung soạn tin (`ChatPanel`) đọc giá trị này để người dùng thấy ngay có gì
+   * đang chờ và mở được bằng một cú bấm. Huy hiệu số trên tab vẫn là dấu hiệu
+   * đếm đầy đủ; giá trị này chỉ thêm phần "vì sao".
+   *
+   * Xoá khi hàng đợi của chính tab đó được tiêu thụ (`openTab`, kể cả đường xả
+   * tự động khi hết cửa sổ rảnh) hoặc khi người dùng bấm bỏ qua.
+   */
+  pendingIntentNotice: PendingIntentNotice | null
+  /** Bỏ hàng thông báo (hàng đợi và huy hiệu vẫn còn nguyên). */
+  clearPendingIntentNotice: () => void
   requestTabIntent: (intent: TabIntent) => 'opened' | 'queued'
   /**
    * Mở lại các ý định đang xếp hàng khi điều kiện chặn đã hết (B12): hết cửa sổ
@@ -364,7 +389,8 @@ export const useUiStore = create<UiState>((set, get) => ({
       }
     }),
   // Mở tab cũng là "đã tiêu thụ" mọi ý định đang xếp hàng cho tab đó: huy hiệu
-  // tắt, và ngữ cảnh của ý định cuối cùng trở thành ngữ cảnh của lần mở này.
+  // tắt, hàng thông báo "đang chờ mở" biến mất, và ngữ cảnh của ý định cuối cùng
+  // trở thành ngữ cảnh của lần mở này.
   openTab: (tab, target) =>
     set((s) => {
       const queued = s.pendingIntents.filter((intent) => intent.tab === tab)
@@ -392,6 +418,10 @@ export const useUiStore = create<UiState>((set, get) => ({
         openTabs,
         activeTab,
         pendingIntents,
+        // Thông báo chỉ sống khi hàng đợi còn: mở tab này là tiêu thụ hàng đợi
+        // của nó, nên thông báo tự biến mất — kể cả đường xả tự động trong
+        // `flushPendingIntents` (đi qua chính `openTab`).
+        pendingIntentNotice: s.pendingIntentNotice?.tab === tab ? null : s.pendingIntentNotice,
         tabIntentTargets,
         sessionWorkspaceTabs,
       }
@@ -508,24 +538,29 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
 
   pendingIntents: [],
+  pendingIntentNotice: null,
+  clearPendingIntentNotice: () => set({ pendingIntentNotice: null }),
   requestTabIntent: (intent) => {
     const state = get()
-    const queue = () => {
+    // Lý do đi kèm hàng đợi: người dùng cần biết VÌ SAO chưa mở được (hàng
+    // thông báo cạnh khung soạn tin), không chỉ biết "có gì đó đang chờ".
+    const queue = (reason: TabIntentQueueReason) => {
       set((s) => ({
         pendingIntents: [...s.pendingIntents, intent].slice(-MAX_PENDING_TAB_INTENTS),
+        pendingIntentNotice: { tab: intent.tab, reason, at: Date.now() },
       }))
       return 'queued' as const
     }
-    if (!state.autoOpenTabs) return queue()
-    // Điều kiện 4 (Kế hoạch E2): bảng đang ẩn ⇒ mở tab là vô nghĩa (người dùng
+    if (!state.autoOpenTabs) return queue('tabs off')
+    // Cổng §3 thứ 2 (Kế hoạch E2): bảng đang ẩn ⇒ mở tab là vô nghĩa (người dùng
     // không thấy gì), nên xếp hàng và không cướp tab đã ghim. KHÔNG hẹn flush:
     // chỉ người dùng hiện bảng mới xả hàng đợi này.
-    if (state.workspaceHidden) return queue()
-    if (state.pinnedTab === intent.tab) return queue()
+    if (state.workspaceHidden) return queue('workspace hidden')
+    if (state.pinnedTab === intent.tab) return queue('tab pinned')
     if (state.autoOpenOnlyWhenIdle && Date.now() - state.lastUserActivityAt < AUTO_OPEN_IDLE_MS) {
       // Chỉ bị chặn vì người dùng đang bận → hẹn mở lại khi cửa sổ rảnh kết thúc.
       armIntentFlush(get)
-      return queue()
+      return queue('user busy')
     }
     state.openTab(intent.tab, intent.target ?? null)
     return 'opened' as const

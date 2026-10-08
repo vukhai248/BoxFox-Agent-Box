@@ -442,6 +442,26 @@ export function dispatchTabIntents(params: {
       }
       continue
     }
+    // Design/Canvas: `canvas_draw` phát `design_canvas` cho MỖI lần vẽ — đó là
+    // CẬP NHẬT trạng thái, không phải sự kiện "xong một artifact", nên chỉ mở
+    // tab ở lần vẽ ĐẦU của một `designId` (đúng tiền lệ `work_graph` ở trên;
+    // `plan_written` tần suất thấp nên mở mỗi bản có version mới là hợp lý).
+    // Không thêm producer `ui_intent` song song: `design_canvas` đã mang
+    // `designId` — bản sao thứ hai là chỗ trôi thứ hai của cùng một sự thật.
+    if (event.type === 'design_canvas') {
+      if (firstHydration) continue
+      const designId = asString(event.data.designId)
+      if (!designId) continue
+      // Cảnh do chính chủ nhà gửi (`persist_design_canvas` phát `actor: 'user'`)
+      // là cảnh họ vừa nhìn — không cướp tab.
+      if (asString(event.data.actor) === 'user') continue
+      const earlier = allEvents.some(
+        (other) =>
+          other.type === 'design_canvas' && other.seq < event.seq && String(other.data.designId) === designId,
+      )
+      if (!earlier) request('design', { designId }, 'canvas_drawn')
+      continue
+    }
     // `ui_intent` là gợi ý của harness (hợp đồng §1/§3): UI vẫn tự quyết theo luật
     // auto-open, và những ý định không có event gốc đi kèm (ví dụ tab Files) cũng
     // được tôn trọng. Tab lạ thì bỏ qua.

@@ -23,7 +23,7 @@ import { I18nProvider } from '../../i18n'
 import { useAgentStore } from '../../store/agentStore'
 import { useComposerStore } from '../../store/composerStore'
 import { HostMachineScreen } from './HostMachineScreen'
-import type { CuaActiveWindow, CuaTarget, HostWindowEntry } from '../../types/desktopTarget'
+import type { CuaActiveWindow, CuaTarget, CuaTargetActivity, HostWindowEntry } from '../../types/desktopTarget'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -50,6 +50,8 @@ interface Server {
   scope: 'workspace' | 'machine'
   /** Cờ backend tính sẵn; `null` ⇒ bỏ hẳn khỏi payload để panel tự suy từ `scope`. */
   machineAllowed: boolean | null
+  /** Nhịp hoạt động của viền báo CUA — `GET /machines/target` → `activity`. */
+  activity: CuaTargetActivity | null
   /** `true` ⇒ backend kiểm lại thấy cửa sổ đã chết: `effective: null`. */
   effectiveGone: boolean
   leaseHolder: 'agent' | 'human'
@@ -81,6 +83,7 @@ function makeServer(overrides: Partial<Server> = {}): Server {
     activeWindow: null,
     scope: 'machine',
     machineAllowed: null,
+    activity: null,
     effectiveGone: false,
     leaseHolder: 'agent',
     leaseUnknown: false,
@@ -128,7 +131,7 @@ function targetStateBody() {
     ...(server.machineAllowed === null ? {} : { machineAllowed: server.machineAllowed }),
     cuaEnabled: true,
     revision: server.revision,
-    activity: null,
+    activity: server.activity,
   }
 }
 
@@ -403,6 +406,39 @@ describe('quyền điều khiển', () => {
     // của MÁY nên vẫn phải hiện.
     expect(panel.testId('ms-target-identity')).toBeNull()
     expect(panel.text()).toContain('You hold control')
+  })
+})
+
+describe('viền báo trên desktop', () => {
+  it('viền tắt kèm lý do ⇒ hiện MỘT dòng cảnh báo, nói rõ vì sao', async () => {
+    server.target = { kind: 'machine' }
+    server.activity = { enabled: false, visible: false, reason: 'overlay_unavailable' }
+    const panel = renderPanel()
+    await settle()
+
+    const row = panel.testId('ms-overlay-off')
+    expect(row).not.toBeNull()
+    // Mã máy được DỊCH, không phô `overlay_unavailable` cho người dùng.
+    expect(row?.textContent).toBe('The desktop activity border is off: this machine lacks the border component')
+    expect(panel.text()).not.toContain('overlay_unavailable')
+  })
+
+  it('lý do là câu người đọc được (thiếu gói) ⇒ hiện nguyên văn, không nuốt mất', async () => {
+    server.target = { kind: 'machine' }
+    server.activity = { enabled: false, reason: 'thiếu `python-xlib` — cài gói python3-xlib để BoxFox vẽ viền báo trên Linux.' }
+    const panel = renderPanel()
+    await settle()
+
+    expect(panel.testId('ms-overlay-off')?.textContent).toContain('thiếu `python-xlib`')
+  })
+
+  it('viền đang bật ⇒ KHÔNG có dòng cảnh báo nào', async () => {
+    server.target = { kind: 'machine' }
+    server.activity = { enabled: true, visible: true, reason: 'agent_activity' }
+    const panel = renderPanel()
+    await settle()
+
+    expect(panel.testId('ms-overlay-off')).toBeNull()
   })
 })
 

@@ -449,6 +449,25 @@ export function HostMachineScreen() {
         : t('machineScreen.bannerWorkingWindow')
       : t('machineScreen.bannerUnknownLease')
 
+  // Viền báo trên desktop có thể KHÔNG dựng được: máy thiếu thành phần vẽ, người
+  // chủ tắt bằng `BOXFOX_CUA_OVERLAY=0`, hoặc lệnh vẽ hỏng ba lần rồi tự tắt. CUA
+  // vẫn chạy — nhưng người dùng phải đọc được VÌ SAO không thấy viền, nếu không họ
+  // tưởng agent đang không bị báo gì. Đây là một dòng chữ, không phải màn hình mới.
+  const overlayOff =
+    targetState?.activity && targetState.activity.enabled === false
+      ? (targetState.activity.reason ?? '').trim()
+      : ''
+  // `reason` hoặc là mã máy (`overlay_unavailable`, `overlay_failed:ValueError`),
+  // hoặc là câu người đọc được do backend gửi (ví dụ "thiếu python-xlib…"). Mã thì
+  // dịch; câu thì hiện nguyên văn — không nhét câu tiếng Việt vào khuôn tiếng Anh.
+  const overlayOffReason = !overlayOff
+    ? ''
+    : overlayOff === 'overlay_unavailable'
+      ? t('machineScreen.overlayOffUnavailable')
+      : overlayOff.startsWith('overlay_failed')
+        ? t('machineScreen.overlayOffFailed')
+        : overlayOff
+
   // Thanh chọn đích — nằm CÙNG HÀNG với tiêu đề panel, đúng chỗ người dùng chỉ.
   // Nhãn nút là đích đang có ("Whole machine" / tiêu đề cửa sổ) để thanh này vừa
   // là bộ chọn vừa là chip nhận dạng; menu bung ra chứa danh sách cửa sổ đầy đủ.
@@ -640,6 +659,15 @@ export function HostMachineScreen() {
                 <span className="shrink-0 font-semibold">{leaseLabel}</span>
                 <span className="min-w-0 truncate text-muted">{leaseDetail}</span>
               </div>
+              {overlayOffReason && (
+                <p
+                  data-testid="ms-overlay-off"
+                  className="flex min-w-0 items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200"
+                >
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0">{t('machineScreen.overlayOff', { reason: overlayOffReason })}</span>
+                </p>
+              )}
             </div>
           )}
 

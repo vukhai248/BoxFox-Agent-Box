@@ -4,7 +4,7 @@ import { validateEndpoint } from './network.mjs';
 import { PROVIDER_CATALOG, PROVIDER_ENDPOINTS } from './catalog.mjs';
 import { normalizePrice } from './pricing.mjs';
 import { isAntigravityModelValid } from './providers/antigravity-models.mjs';
-import { modelThinking } from './providers/common.mjs';
+import { EFFORT_LEVELS, modelThinking } from './providers/common.mjs';
 import { MAX_KEYS_PER_CONNECTION, KeyRing, headOf } from './keyring.mjs';
 import { SearchService } from './search.mjs';
 export { PROVIDER_CATALOG };
@@ -94,6 +94,178 @@ function modelPrice({ previous, found, provider, at }) {
   const documented = typeof provider?.documentedPricing === 'function' ? provider.documentedPricing(found, at) : null;
   return documented ?? previous?.pricing ?? null;
 }
+/**
+ * M3 — số đo reasoning của CHÍNH router (`thinkingProbe`) sống qua mọi lần dò danh
+ * sách. `thinkingProbe` là một phép ĐO trên một model, không phải kết quả dò; lần dò
+ * sau chỉ mang `id/object/created/owned_by` từ `/models` nên nếu không giữ lại, một
+ * cú "Refresh models" sẽ xoá mất kết quả vừa đo và hàng quay về `unknown` — đúng
+ * vòng lặp người dùng báo ("chưa hiện thinking với model mới").
+ *
+ * Chỉ payload provider tự khai thinking (`thinkingSource: 'live'`) mới thắng số đo:
+ * đó là nguồn mạnh hơn, đến thẳng từ provider tại thời điểm gọi. Hàng curated cũng
+ * không được ghi đè — bảng curated là ảnh chụp, số đo là thực nghiệm.
+ */
+function preservedThinkingProbe(before, incoming) {
+  if (before?.thinkingSource !== 'probe' || !before?.thinkingProbe) return null;
+  if (incoming?.thinkingSource === 'live') return null;
+  return {
+    thinkingType: before.thinkingType,
+    thinkingLevels: Array.isArray(before.thinkingLevels) ? before.thinkingLevels : [],
+    defaultThinking: before.defaultThinking ?? null,
+    thinkingSource: 'probe',
+    thinkingAsOf: before.thinkingAsOf ?? null,
+    thinkingEvidence: before.thinkingEvidence ?? null,
+    thinkingStale: before.thinkingStale === true,
+    thinkingProbe: before.thinkingProbe,
+    fieldSources: { ...(before.fieldSources || {}), ...(incoming?.fieldSources || {}), thinking: 'probe' },
+  };
+}
+/**
+ * M6 — vì sao một model thiếu. Ba câu trả lời KHÁC NHAU và phải phân biệt được:
+ *  * `not_in_catalogue` — nhà cung cấp không phục vụ id này cho bất kỳ ai (gõ sai
+ *    chính tả, hoặc model đã bị rút khỏi catalogue);
+ *  * `not_entitled` — id CÓ trong catalogue công khai nhưng tài khoản/khoá này không
+ *    được cấp (đúng ca `exo-free`);
+ *  * `null` — chưa tra được catalogue (offline/429). Không được đoán: "chưa biết" là
+ *    một câu trả lời, còn "đoán bừa" thì gửi người dùng đi sai hướng.
+ */
+function catalogueReason(publicCatalogue) {
+  if (publicCatalogue === true) return 'not_entitled';
+  if (publicCatalogue === false) return 'not_in_catalogue';
+  return null;
+}
+function missingModelMessage(modelId, publicCatalogue) {
+  const base = 'This model is not on the connection. Add the model id first, then test it.';
+  const reason = catalogueReason(publicCatalogue);
+  if (reason === 'not_entitled') return `${base} The provider lists ${modelId} in its public catalogue, but this account's credential is not entitled to it (not_entitled).`;
+  if (reason === 'not_in_catalogue') return `${base} The provider's public catalogue does not list ${modelId} either (not_in_catalogue) — check the spelling, or the model may have been withdrawn.`;
+  return `${base} The public catalogue could not be checked, so the router cannot say whether the id exists anywhere.`;
+}
+/**
+ * M1 — câu hỏi dò reasoning. Một câu hỏi có bước suy luận thật (đếm rồi trả lời)
+ * thay vì một câu chào: model không reasoning vẫn trả lời được câu chào, còn câu này
+ * buộc phải có bước trung gian mới ra đáp án, nên "có reasoning" là kết luận ĐO được.
+ * Đo trên Zen 2026-10-08: prompt này làm cả họ chat lẫn họ responses stream suy luận.
+ */
+const REASONING_PROBE_PROMPT = 'A farmer has 17 sheep and all but 9 run away. How many are left? Think step by step, then answer in one line.';
+/** Trần số mẫu một lượt dò: đủ rộng cho 4 mức + mẫu không mức, vẫn có trần. */
+const REASONING_PROBE_MAX_SAMPLES = 12;
+/** `max_tokens` tối thiểu: 64 token của `testInference` không đủ chỗ cho văn suy luận. */
+const REASONING_PROBE_MAX_TOKENS = 512;
+/**
+ * Mức KHÔNG phải mức: `none`/`auto` bị adapter tự bỏ (`normalizeOpencodeReasoning`),
+ * nên gửi chúng chỉ tạo ra một bản sao của mẫu "không gửi mức" và làm bảng kết quả
+ * hiểu sai rằng mức đó đã được đo.
+ */
+const REASONING_PROBE_SKIPPED_LEVELS = new Set(['none', 'auto']);
+/** Trường reasoning xuất hiện trong câu lỗi 400/422 ⇒ đáng thử cách viết còn lại. */
+const REASONING_FIELD_RE = /reasoning|thinking|effort/i;
+
+/**
+ * Bí mật không được đi vào câu trả lời hay hàng model. Câu lỗi của provider là văn bản
+ * do bên ngoài viết: nó có thể echo lại chính header `Authorization` mà router vừa gửi.
+ * Hàng đã lưu là hàng đọc được ở UI và trong log, nên cắt bí mật ngay tại nguồn.
+ */
+function redactSecrets(text, secrets = []) {
+  let out = typeof text === 'string' ? text : '';
+  for (const value of secrets) {
+    if (typeof value === 'string' && value.length >= 8 && out.includes(value)) out = out.split(value).join('[redacted]');
+  }
+  return out;
+}
+/** Khoảng giá trị của một tín hiệu đo được, dạng `min–max`, hoặc `null` khi mọi mẫu bằng 0. */
+function measuredRange(values) {
+  const numbers = values.filter(value => Number.isFinite(value) && value > 0);
+  if (!numbers.length) return null;
+  const min = Math.min(...numbers);
+  const max = Math.max(...numbers);
+  return min === max ? `${min}` : `${min}–${max}`;
+}
+/** Câu lỗi của provider khi nó nói "id này không tồn tại" (401 kèm câu này = không được cấp). */
+const REASONING_PROBE_MISSING_MODEL_RE = /not supported|not found|unknown model|does not exist|no such model|invalid model|unsupported model/i;
+/**
+ * M2 — luật phán xử của một lượt dò reasoning. Hàm THUẦN: chỉ đọc các mẫu đã đo, để
+ * luật này test được mà không cần mạng.
+ *
+ * Nguyên tắc khắt khe nhất nằm ở đây: **một mẫu rỗng chưa chứng minh được gì**. Đo
+ * được `fledge-alpha-free` có mẫu stream 0 ký tự dù model này reasoning thật, nên
+ * "không thấy suy luận" chỉ là `inconclusive` — kết luận `none` từ nó là sai theo
+ * hướng tệ nhất (xoá mất một điều khiển thật của người dùng). Chỉ một lời TỪ CHỐI
+ * trường reasoning (400/422 nhắc tới `reasoning`/`thinking`/`effort`) mới là bằng
+ * chứng âm, và phải có ít nhất 2 mẫu trước khi kết luận.
+ */
+export function judgeReasoningProbe(observations = []) {
+  const samples = observations.length;
+  const levelsTried = [...new Set(observations.map(sample => sample.level).filter(level => typeof level === 'string'))];
+  const reasoned = observations.filter(sample => sample.reasoningChars > 0 || sample.reasoningTokens > 0);
+  if (reasoned.length) {
+    return {
+      status: 'supports',
+      levelsTried,
+      levelsSupported: [...new Set(reasoned.map(sample => sample.level).filter(level => typeof level === 'string'))],
+    };
+  }
+  const errors = observations.filter(sample => sample.error);
+  if (samples > 0 && errors.length === samples) {
+    const first = errors[0];
+    const shared = { levelsTried, levelsSupported: [], httpStatus: first.httpStatus ?? null, message: first.message ?? null };
+    if (first.httpStatus === 429 || first.code === 'RATE_LIMIT') return { ...shared, status: 'rate_limited', httpStatus: 429, retryAfterMs: first.retryAfterMs ?? null };
+    if (first.httpStatus === 404 || first.code === 'MODEL_NOT_FOUND') return { ...shared, status: 'not_entitled', httpStatus: 404 };
+    if (first.httpStatus === 401 && REASONING_PROBE_MISSING_MODEL_RE.test(first.message || '')) return { ...shared, status: 'not_entitled', httpStatus: 401 };
+    if (first.httpStatus === 503 || first.httpStatus === 502 || first.httpStatus === 504 || first.httpStatus === 500 || first.code === 'TIMEOUT' || first.code === 'CAPACITY') {
+      return { ...shared, status: 'unavailable' };
+    }
+    return { ...shared, status: 'failed' };
+  }
+  const refused = observations.filter(sample => sample.refusedReasoningField);
+  if (refused.length && samples >= 2) return { status: 'refuses', levelsTried, levelsSupported: [] };
+  return { status: 'inconclusive', levelsTried, levelsSupported: [] };
+}
+/**
+ * M3 — phần hàng model được GHI sau một lượt dò, hoặc `null` khi không được ghi gì.
+ *
+ * Ba luật: (1) chỉ `supports`/`refuses` mới ghi — `inconclusive` giữ `unknown` và chỉ
+ * để lại khối `thinkingProbe`; (2) hàng đang `thinkingSource: 'live'` (payload provider
+ * tự khai) là nguồn MẠNH HƠN số đo, không bị đè; (3) mức chỉ được ghi khi chính mức đó
+ * đã sinh reasoning — không suy ra "chắc là nhận" từ việc model reasoning ở mức khác.
+ */
+export function reasoningProbeRowPatch(row, { verdict, evidence, at }) {
+  if (verdict.status !== 'supports' && verdict.status !== 'refuses') return null;
+  if (row?.thinkingSource === 'live' || row?.fieldSources?.thinking === 'live') return null;
+  const levels = verdict.status === 'supports' ? verdict.levelsSupported : [];
+  return {
+    // `effort` khi có ít nhất một mức đo được; model chỉ reasoning ở mẫu "không gửi
+    // mức" thì trung thực là `none` + không mức — không có điều khiển nào để chọn.
+    thinkingType: levels.length ? 'effort' : 'none',
+    thinkingLevels: levels,
+    defaultThinking: null,
+    thinkingSource: 'probe',
+    thinkingAsOf: at,
+    thinkingEvidence: evidence,
+    thinkingStale: false,
+    fieldSources: { ...(row?.fieldSources || {}), thinking: 'probe' },
+  };
+}
+/** Câu bằng chứng đi kèm hàng model, dạng người đọc được, dựng từ chính các mẫu đã đo. */
+function reasoningProbeEvidence({ verdict, observations, at }) {
+  const date = typeof at === 'string' ? at : new Date(at).toISOString().slice(0, 10);
+  const reasoned = observations.filter(sample => sample.reasoningChars > 0 || sample.reasoningTokens > 0);
+  const chars = measuredRange(reasoned.map(sample => sample.reasoningChars));
+  const tokens = measuredRange(reasoned.map(sample => sample.reasoningTokens));
+  const parts = [];
+  if (verdict.status === 'supports') {
+    parts.push(`${reasoned.length}/${observations.length} mẫu trả reasoning`);
+    if (chars) parts.push(`reasoning_content ${chars} ký tự`);
+    parts.push(tokens ? `reasoning_tokens ${tokens}` : 'reasoning_tokens không khai');
+    parts.push(verdict.levelsSupported.length ? `mức đo được: ${verdict.levelsSupported.join('/')}` : 'chỉ reasoning mặc định (không mức nào đo được)');
+  } else if (verdict.status === 'refuses') {
+    const status = observations.find(sample => sample.refusedReasoningField)?.httpStatus ?? 400;
+    parts.push(`${observations.length} mẫu, cả hai cách viết trường reasoning đều bị từ chối (${status})`);
+  } else {
+    parts.push(`${observations.length} mẫu, không mẫu nào trả reasoning — CHƯA kết luận được`);
+  }
+  return `probe ${date}: ${parts.join(', ')}`;
+}
 /** Ngày hôm nay, dạng `YYYY-MM-DD` — mốc `asOf` của giá người dùng tự đặt. */
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -135,6 +307,11 @@ export class ProviderService {
     this.search = new SearchService({ store: this.store, fetchImpl });
     this.refreshes = new Map();
     this.discoveries = new Map();
+    // M6: kết quả tra catalogue công khai (`Bearer public`) của một provider, cache theo
+    // (provider, ngày) — CHỈ để trả lời "vì sao thiếu model", chỉ gọi ở nhánh lỗi, và
+    // không bao giờ ghi xuống hàng model nào. Chỉ trong RAM: restart là tra lại, vì một
+    // danh sách miễn phí có thể đổi bất cứ lúc nào.
+    this.catalogueChecks = new Map();
     this.active = new Map();
     // Vòng 29: trạng thái nghỉ của từng khoá sống ở đây và được dùng CHUNG với
     // engine (`engine.keyRing` là chính đối tượng này), nên snapshot và vòng xoay
@@ -188,6 +365,13 @@ export class ProviderService {
           if (fromProvider.thinkingAsOf) m.thinkingAsOf = fromProvider.thinkingAsOf;
           if (fromProvider.thinkingEvidence) m.thinkingEvidence = fromProvider.thinkingEvidence;
           m.fieldSources = { ...(m.fieldSources || {}), ...(fromProvider.fieldSources || {}) };
+          modified = true;
+        }
+        // M4: `thinkingStale` là kết luận của adapter (mốc bằng chứng đã quá hạn), không
+        // phải giá trị của hàng — `modelThinking` không mang khoá này nên phải ghim riêng,
+        // nếu không cờ quá hạn chỉ sống trong RAM và mất sau lần khởi động lại.
+        if (typeof fromProvider?.thinkingStale === 'boolean' && m.thinkingStale !== fromProvider.thinkingStale) {
+          m.thinkingStale = fromProvider.thinkingStale;
           modified = true;
         }
         const manualNumber = m.contextWindowSource === 'manual' ? m.contextWindow : null;
@@ -612,6 +796,9 @@ export class ProviderService {
             declaredContextWindow: before?.contextWindowSource === 'manual' ? before.contextWindow : null,
             reportedContextWindow: m.contextWindow ?? before?.contextWindowReported ?? null,
           }),
+          // M3: giữ số đo reasoning của router qua lần dò danh sách này (xem
+          // `preservedThinkingProbe`), rồi mới tới capabilities của payload.
+          ...(preservedThinkingProbe(before, m) || {}),
           capabilities: { streaming: 'reported', tools: 'unknown', vision: 'unknown', reasoning: 'unknown', ...m.capabilities },
         };
         // Giá của dòng sau khi dò lại: giá tay người dùng đặt luôn thắng, rồi mới
@@ -668,7 +855,16 @@ export class ProviderService {
     // Phép thử thuộc về một model, không thuộc về cờ bật/tắt của nó: người dùng
     // phải Test được đúng id họ vừa khai (và cả id họ vừa tắt) trước khi quyết
     // định bất cứ điều gì về nó.
-    assert(connection.models.some(model => model.id === modelId), 'This model is not on the connection. Add the model id first, then test it.', 'MODEL_NOT_FOUND', 404);
+    // M6 — "không có hàng" có BA nguyên nhân và câu trả lời phải nói đúng cái nào:
+    // id gõ sai / provider đã rút id (không có trong catalogue công khai), hay id CÓ
+    // trong catalogue mà khoá không được cấp (đúng ca `exo-free`: 404 khi test nhưng
+    // vẫn nằm trong danh sách công khai). Câu gốc giữ nguyên làm tiền tố để không phá
+    // vỡ người đọc cũ.
+    const row = connection.models.find(model => model.id === modelId);
+    if (!row) {
+      const { publicCatalogue } = await this.#catalogueVerdict(connection, modelId, signal);
+      throw new RouterError('MODEL_NOT_FOUND', missingModelMessage(modelId, publicCatalogue), 404);
+    }
     const startedAt = Date.now();
     try {
       const credentials = await this.credentials(id, signal, keyId);
@@ -712,6 +908,222 @@ export class ProviderService {
       }
       throw error;
     }
+  }
+  /**
+   * M1 — dò REASONING của một model, không phải dò "gọi được hay không".
+   *
+   * `testInference` trả lời "model này gọi được không" bằng một câu hỏi 64 token KHÔNG
+   * mang trường reasoning nào, nên nó không bao giờ nói được model có suy luận hay
+   * không (đo được: `fledge-alpha-free` PASS phép thử đó mà không có một token suy
+   * luận nào). Phép dò này là ANH EM của nó, không phải bản thay thế: cùng adapter,
+   * cùng hình dạng request mà lượt gọi thật dùng (`generate` — nơi sở hữu giả trang,
+   * hai tool mồi, `stream: true` bắt buộc và định tuyến `/responses`), chỉ khác câu
+   * hỏi và việc ĐẾM hai tín hiệu: `reasoning_content` chảy về và `reasoning_tokens`.
+   *
+   * Vì sao phải nhiều mẫu: một mẫu rỗng KHÔNG chứng minh provider không hỗ trợ — nó
+   * chỉ là một mẫu rỗng. Xem `judgeReasoningProbe`.
+   */
+  async probeReasoning(id, modelId, { levels = null, samples = 2, prompt = null } = {}, signal = AbortSignal.timeout(90000), keyId = null) {
+    const connection = this.connection(id);
+    const provider = this.providers[connection.providerId];
+    assert(provider && typeof provider.generate === 'function', 'This provider cannot be probed.', 'ADAPTER_REQUIRED', 501);
+    const row = connection.models.find(model => model.id === modelId);
+    // Hàng không có trên connection: câu hỏi thật sự là "vì sao nó không có ở đây",
+    // và câu trả lời phải phân biệt được với "khoá chưa được cấp".
+    if (!row) {
+      const { publicCatalogue, reason } = await this.#catalogueVerdict(connection, modelId, signal);
+      return {
+        status: reason || 'not_on_connection', connectionId: id, modelId, publicCatalogue,
+        message: missingModelMessage(modelId, publicCatalogue),
+        thinkingType: null, thinkingLevels: [], thinkingSource: null, thinkingAsOf: null, thinkingEvidence: null,
+        httpStatus: null, latencyMs: null, reasoningChars: 0, reasoningTokens: 0,
+        samples: 0, levelsTried: [], levelsSupported: [], retryAfterMs: null,
+      };
+    }
+    const credentials = await this.credentials(id, signal, keyId);
+    // Bí mật không bao giờ được đi vào câu trả lời hay hàng model: câu lỗi của provider
+    // là văn bản do bên ngoài viết, và nó có thể echo lại chính header Authorization.
+    const secrets = [credentials.apiKey, credentials.accessToken, credentials.refreshToken]
+      .filter(value => typeof value === 'string' && value.length >= 8);
+    const published = Array.isArray(row.thinkingLevels) ? row.thinkingLevels.filter(level => typeof level === 'string' && level.trim()) : [];
+    const requested = Array.isArray(levels) && levels.length ? levels : (published.length ? published : [...EFFORT_LEVELS]);
+    const named = [...new Set(requested
+      .filter(level => typeof level === 'string' && level.trim())
+      .map(level => level.trim())
+      .filter(level => !REASONING_PROBE_SKIPPED_LEVELS.has(level.toLowerCase())))];
+    // `samples` là SÀN, không phải trần: luật M2 đòi ≥ 2 mẫu trước khi được kết luận
+    // "không", còn bảng mức thì phải dò hết. Dừng ở mẫu dương đầu tiên nghe tiết kiệm,
+    // nhưng `thinkingLevels` chính là bộ chọn mức người dùng nhìn thấy — đo được ngày
+    // 2026-10-08: `space-bunny-free` có 4 mức trong hàng, dò kiểu dừng sớm ghi lại 1 mức
+    // và bộ chọn (cần > 1 mức) biến mất. Đó đúng là kiểu hỏng đợt này sinh ra để chữa.
+    const floor = Math.max(1, Math.floor(Number(samples) || 1));
+    // Mẫu "không gửi mức" LUÔN có mặt: nó trả lời "model có tự suy luận không", và trên
+    // Zen nó là cách viết trung thực duy nhất cho `none`/`auto` — adapter bỏ hai giá trị
+    // đó, nên gửi chúng chỉ tạo ra một bản sao của mẫu này.
+    const schedule = [...named, null];
+    while (schedule.length < floor) schedule.push(...(named.length ? named : [null]));
+    const budget = Math.min(REASONING_PROBE_MAX_SAMPLES, Math.max(floor, schedule.length));
+    const question = typeof prompt === 'string' && prompt.trim() ? prompt.trim() : REASONING_PROBE_PROMPT;
+    const observations = [];
+    for (const level of schedule.slice(0, budget)) {
+      const sample = await this.#probeSample(provider, { connection, credentials, modelId, level, prompt: question, signal, secrets });
+      observations.push(sample);
+      // Lỗi hạ tầng (429/503/timeout) không phải "model không hỗ trợ": dừng ngay để
+      // không đốt thêm hạn mức và để kết luận nói đúng chuyện gì đã xảy ra.
+      if (sample.error) break;
+      // Từ chối trường reasoning là bằng chứng âm, nhưng luật M2 đòi ≥ 2 mẫu.
+      if (sample.refusedReasoningField && observations.length >= 2) break;
+    }
+    const verdict = judgeReasoningProbe(observations);
+    const at = today();
+    const evidence = reasoningProbeEvidence({ verdict, observations, at });
+    // M6 — provider nói "id này không được cấp": tra catalogue công khai để phân biệt
+    // "provider có model nhưng khoá không được cấp" với "provider đã rút id này".
+    let publicCatalogue = null;
+    let reason = null;
+    if (verdict.status === 'not_entitled') {
+      const found = await this.#catalogueVerdict(connection, modelId, signal);
+      publicCatalogue = found.publicCatalogue;
+      reason = found.reason;
+    }
+    const status = reason || verdict.status;
+    const block = {
+      status,
+      samples: observations.length,
+      httpStatus: verdict.httpStatus ?? observations.find(sample => sample.httpStatus === 200)?.httpStatus ?? null,
+      latencyMs: observations.reduce((total, sample) => total + (sample.latencyMs || 0), 0),
+      reasoningChars: observations.reduce((total, sample) => total + sample.reasoningChars, 0),
+      reasoningTokens: observations.reduce((max, sample) => Math.max(max, sample.reasoningTokens), 0),
+      levelsTried: verdict.levelsTried,
+      levelsSupported: verdict.levelsSupported,
+      at: new Date().toISOString(),
+      ...(reason ? { reason } : {}),
+      ...(publicCatalogue === null ? {} : { publicCatalogue }),
+      ...(verdict.retryAfterMs ? { retryAfterMs: verdict.retryAfterMs } : {}),
+      ...(verdict.message ? { message: verdict.message } : {}),
+    };
+    const patch = reasoningProbeRowPatch(row, { verdict, evidence, at });
+    // Ghi kèm bằng chứng vào ĐÚNG hàng đã đọc: revision đổi giữa chừng nghĩa là cấu
+    // hình vừa bị sửa (thêm/xoá khoá, đổi endpoint) nên kết quả này thuộc về một
+    // connection khác — bỏ ghi thay vì ghi đè lên thay đổi của người dùng.
+    const current = this.connection(id);
+    if (current.revision === connection.revision && current.models.some(model => model.id === modelId)) {
+      current.models = current.models.map(model => model.id === modelId
+        ? { ...model, ...(patch || {}), thinkingProbe: block }
+        : model);
+      this.store.put('connection', current);
+    }
+    return {
+      status, connectionId: id, modelId,
+      thinkingType: patch?.thinkingType ?? row.thinkingType ?? null,
+      thinkingLevels: patch?.thinkingLevels ?? (Array.isArray(row.thinkingLevels) ? row.thinkingLevels : []),
+      thinkingSource: patch?.thinkingSource ?? row.thinkingSource ?? null,
+      thinkingAsOf: patch?.thinkingAsOf ?? row.thinkingAsOf ?? null,
+      thinkingEvidence: patch?.thinkingEvidence ?? row.thinkingEvidence ?? null,
+      latencyMs: block.latencyMs, httpStatus: block.httpStatus,
+      reasoningChars: block.reasoningChars, reasoningTokens: block.reasoningTokens,
+      samples: observations.length, levelsTried: verdict.levelsTried, levelsSupported: verdict.levelsSupported,
+      publicCatalogue, reason, message: verdict.message ?? null, retryAfterMs: verdict.retryAfterMs ?? null,
+      thinkingProbe: block,
+    };
+  }
+  /**
+   * Một mẫu của phép dò, chạy qua CHÍNH `generate()` của adapter — nơi sở hữu giả trang,
+   * hai tool mồi, `stream: true` bắt buộc và định tuyến `/responses` cho họ
+   * `muse-spark*`. Chép lại hình dạng đó ở đây là tự tạo chỗ trôi thứ hai.
+   *
+   * `reasoning_tokens` đọc CẢ HAI chỗ (`usage.reasoning_tokens` và
+   * `usage.completion_tokens_details.reasoning_tokens`): đo được họ `muse-spark*` trả
+   * token suy luận ở trường thứ hai trong khi `reasoning_content` rỗng, nên chỉ đếm
+   * văn bản là kết luận sai cho cả một họ model.
+   */
+  async #probeSample(provider, { connection, credentials, modelId, level, prompt, signal, secrets }) {
+    const attempt = async body => {
+      const startedAt = Date.now();
+      let reasoningChars = 0;
+      let reasoningTokens = 0;
+      let contentChars = 0;
+      for await (const event of provider.generate({ connection, credentials, body, signal })) {
+        if (event.type === 'delta') {
+          reasoningChars += (event.delta?.reasoning_content || '').length;
+          contentChars += (event.delta?.content || '').length;
+        }
+        if (event.type === 'usage') {
+          const tokens = Number(event.usage?.reasoning_tokens ?? event.usage?.completion_tokens_details?.reasoning_tokens ?? 0);
+          if (Number.isFinite(tokens)) reasoningTokens = Math.max(reasoningTokens, tokens);
+        }
+      }
+      return { httpStatus: 200, latencyMs: Date.now() - startedAt, reasoningChars, reasoningTokens, contentChars };
+    };
+    const base = { model: modelId, messages: [{ role: 'user', content: prompt }], max_tokens: REASONING_PROBE_MAX_TOKENS, stream: true };
+    try {
+      return { level, ...(await attempt(level ? { ...base, thinkingLevel: level } : base)) };
+    } catch (error) {
+      const safe = safeError(error);
+      const refusedSpelling = (safe.status === 400 || safe.status === 422) && REASONING_FIELD_RE.test(safe.message || '');
+      if (!level || !refusedSpelling) {
+        return { level, error: true, httpStatus: safe.status ?? null, code: safe.code, message: redactSecrets(safe.message, secrets), retryAfterMs: safe.retryAfterMs ?? null };
+      }
+      // 400/422 nhắc tới trường reasoning: provider có thể chỉ không nhận CÁCH VIẾT
+      // này. Thử cách viết còn lại (`thinkingLevel` ↔ `reasoning_effort`) trước khi
+      // kết luận "không hỗ trợ" — kết luận sai ở đây xoá mất điều khiển của người dùng.
+      try {
+        return { level, alternateSpelling: 'reasoning_effort', ...(await attempt({ ...base, reasoning_effort: level })) };
+      } catch (retry) {
+        const retrySafe = safeError(retry);
+        if ((retrySafe.status === 400 || retrySafe.status === 422) && REASONING_FIELD_RE.test(retrySafe.message || '')) {
+          return { level, refusedReasoningField: true, httpStatus: retrySafe.status, code: retrySafe.code, message: redactSecrets(retrySafe.message, secrets) };
+        }
+        return { level, error: true, httpStatus: retrySafe.status ?? null, code: retrySafe.code, message: redactSecrets(retrySafe.message, secrets), retryAfterMs: retrySafe.retryAfterMs ?? null };
+      }
+    }
+  }
+  /**
+   * M6 — vì sao một model không nằm trên connection, trả lời bằng catalogue CÔNG KHAI
+   * của provider (`Bearer public` với OpenCode Zen). Chỉ gọi ở nhánh lỗi, cache theo
+   * `(providerId, ngày)`, và không bao giờ ghi vào hàng model: catalogue là danh sách
+   * người ta được phép dùng, không phải quyền của tài khoản này.
+   *
+   * Tra hỏng (offline/429) trả `null` — "chưa biết" chứ không đoán, và xoá cache để
+   * lần sau còn thử lại.
+   */
+  async #catalogueVerdict(connection, modelId, signal) {
+    const provider = this.providers[connection.providerId];
+    if (typeof provider?.publicCatalogue !== 'function') return { publicCatalogue: null, reason: null };
+    const key = `${connection.providerId}:${today()}`;
+    if (!this.catalogueChecks.has(key)) {
+      const timeout = AbortSignal.timeout(10000);
+      const check = provider.publicCatalogue({ connection, signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
+        .then(ids => new Set(ids))
+        .catch(() => null);
+      this.catalogueChecks.set(key, check);
+    }
+    const ids = await this.catalogueChecks.get(key);
+    if (!ids) { this.catalogueChecks.delete(key); return { publicCatalogue: null, reason: null }; }
+    return { publicCatalogue: ids.has(modelId), reason: catalogueReason(ids.has(modelId)) };
+  }
+  /**
+   * M6 — xoá một hàng GÕ TAY. Hàng do dò phát hiện KHÔNG xoá được (409
+   * `MODEL_NOT_CUSTOM`): lần dò sau nó mọc lại y hệt, nên xoá tay chỉ là một hành động
+   * vô nghĩa — hàng đó đã có `stale` để nói "đã biến mất khỏi provider".
+   */
+  removeCustomModel(id, modelId) {
+    const c = this.connection(id);
+    const row = c.models.find(model => model.id === modelId);
+    assert(row, 'This model is not on the connection.', 'MODEL_NOT_FOUND', 404);
+    assert(row.source === 'custom', 'Only a hand-typed model can be deleted. A discovered row comes back on the next refresh.', 'MODEL_NOT_CUSTOM', 409);
+    c.models = c.models.filter(model => model.id !== modelId);
+    // Alias trỏ vào hàng vừa xoá không còn đường đi nào: tắt nó kèm lý do, cùng luật
+    // với nhánh "model biến mất sau một lần dò" trong `#discover`.
+    for (const alias of this.store.list('alias')) {
+      if (!Array.isArray(alias.targets) || !alias.targets.some(target => target.connectionId === id && target.modelId === modelId)) continue;
+      alias.enabled = false;
+      alias.error = 'One or more target models are no longer available. Choose a current model and enable this alias again.';
+      this.store.put('alias', alias);
+    }
+    this.store.put('connection', c);
+    this.repairDefault();
+    return { removed: true, modelId };
   }
   async quota(id, signal = AbortSignal.timeout(30000)) {
     const c = this.connection(id); const credentials = await this.credentials(id, signal);

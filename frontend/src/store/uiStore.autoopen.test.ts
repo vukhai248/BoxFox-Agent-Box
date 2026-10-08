@@ -1,10 +1,13 @@
 /**
  * Luật tự mở tab — `docs/plan/next-batch-contract.md` §3.
  *
- * `ui_intent` (và các ý định suy ra từ `plan_written` / `decision_requested`) chỉ
- * là GỢI Ý: giao diện quyết định mở hay xếp hàng theo đúng ba điều kiện, dừng ở
- * điều kiện đầu tiên vi phạm. Ý định bị chặn nằm trong `pendingIntents` để tab
- * đích hiện huy hiệu đếm, và mở tab đó sẽ tiêu thụ hết hàng đợi của nó.
+ * `ui_intent` (và các ý định suy ra từ `plan_written` / `decision_requested` /
+ * `design_canvas`) chỉ là GỢI Ý: giao diện quyết định mở hay xếp hàng theo đúng
+ * bốn điều kiện, dừng ở điều kiện đầu tiên vi phạm. Ý định bị chặn nằm trong
+ * `pendingIntents` để tab đích hiện huy hiệu đếm, và mở tab đó sẽ tiêu thụ hết
+ * hàng đợi của nó. Ý định bị chặn gần nhất còn ghi lại LÝ DO cổng vào
+ * `pendingIntentNotice` — hàng thông báo cạnh khung soạn tin đọc giá trị này để
+ * người dùng thấy vì sao chưa mở được (không chỉ thấy huy hiệu số).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTO_OPEN_IDLE_MS, MAX_PENDING_TAB_INTENTS, useUiStore } from './uiStore'
@@ -16,6 +19,8 @@ function resetStore() {
     activeTab: null,
     panelFullscreen: false,
     pendingIntents: [],
+    pendingIntentNotice: null,
+    workspaceHidden: false,
     pinnedTab: null,
     lastUserActivityAt: 0,
     autoOpenTabs: true,
@@ -281,9 +286,103 @@ describe('uiStore — hàng đợi tự mở khi hết cửa sổ rảnh (B12)',
     expect(useUiStore.getState().tabIntentTargets.plan).toMatchObject({ identity: 'p2', version: 2 })
   })
 
+  it('hết cửa sổ rảnh thì hàng đợi tự mở và hàng thông báo tự biến mất', () => {
+    useUiStore.getState().noteUserActivity()
+    expect(
+      useUiStore.getState().requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' }),
+    ).toBe('queued')
+    expect(useUiStore.getState().pendingIntentNotice).toMatchObject({ tab: 'design', reason: 'user busy' })
+
+    tick(AUTO_OPEN_IDLE_MS + 10)
+
+    expect(useUiStore.getState().activeTab).toBe('design')
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+  })
+
   it('hàng đợi rỗng thì không hẹn giờ nào (không rò rỉ timer)', () => {
     tick(AUTO_OPEN_IDLE_MS * 2)
     expect(vi.getTimerCount()).toBe(0)
     expect(useUiStore.getState().activeTab).toBeNull()
+  })
+})
+
+/**
+ * N2 — ý định xếp hàng phải NHÌN THẤY ĐƯỢC, không chỉ huy hiệu số: mỗi cổng §3
+ * ghi lại LÝ DO vào `pendingIntentNotice`, và hàng đợi tiêu thụ thì thông báo tự
+ * biến mất. Cùng tinh thần với B12: "có gì đó đang chờ" mà không nói vì sao thì
+ * người dùng phải tự đoán.
+ */
+describe('uiStore — hàng thông báo ý định xếp hàng (hợp đồng §3)', () => {
+  it('mở được ngay thì không có thông báo nào', () => {
+    const outcome = useUiStore
+      .getState()
+      .requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' })
+
+    expect(outcome).toBe('opened')
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+  })
+
+  it.each([
+    ['tabs off', () => useUiStore.setState({ autoOpenTabs: false })],
+    ['workspace hidden', () => useUiStore.setState({ workspaceHidden: true })],
+    [
+      'tab pinned',
+      () => {
+        useUiStore.getState().openTab('design')
+        useUiStore.getState().pinTab('design')
+      },
+    ],
+    ['user busy', () => useUiStore.getState().noteUserActivity()],
+  ] as const)('cổng "%s" → xếp hàng + thông báo mang đúng lý do', (reason, arrange) => {
+    arrange()
+
+    const outcome = useUiStore
+      .getState()
+      .requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' })
+
+    expect(outcome).toBe('queued')
+    expect(useUiStore.getState().pendingIntents).toHaveLength(1)
+    const notice = useUiStore.getState().pendingIntentNotice
+    expect(notice).toMatchObject({ tab: 'design', reason })
+    expect(typeof notice?.at).toBe('number')
+  })
+
+  it('mở tab bằng tay tiêu thụ hàng đợi và xoá thông báo', () => {
+    useUiStore.setState({ autoOpenTabs: false })
+    useUiStore
+      .getState()
+      .requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' })
+    expect(useUiStore.getState().pendingIntentNotice?.tab).toBe('design')
+
+    useUiStore.getState().openTab('design')
+
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+    expect(useUiStore.getState().pendingIntents).toEqual([])
+  })
+
+  it('mở tab KHÁC không xoá thông báo của tab đang chờ', () => {
+    useUiStore.setState({ autoOpenTabs: false })
+    const { requestTabIntent } = useUiStore.getState()
+    requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' })
+    requestTabIntent({ tab: 'plan', target: { identity: 'p' }, reason: 'plan_written' })
+    // Thông báo luôn là ý định MỚI NHẤT — ở đây là plan.
+    expect(useUiStore.getState().pendingIntentNotice?.tab).toBe('plan')
+
+    useUiStore.getState().openTab('design')
+
+    expect(useUiStore.getState().pendingIntentNotice?.tab).toBe('plan')
+    expect(useUiStore.getState().pendingIntents.map((intent) => intent.tab)).toEqual(['plan'])
+  })
+
+  it('bỏ qua chỉ xoá thông báo — hàng đợi và huy hiệu vẫn còn', () => {
+    useUiStore.setState({ autoOpenTabs: false })
+    useUiStore
+      .getState()
+      .requestTabIntent({ tab: 'design', target: { designId: 'd1' }, reason: 'canvas_drawn' })
+
+    useUiStore.getState().clearPendingIntentNotice()
+
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+    expect(useUiStore.getState().pendingIntents).toHaveLength(1)
   })
 })

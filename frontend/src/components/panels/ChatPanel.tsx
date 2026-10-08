@@ -30,14 +30,15 @@ import {
   File,
   LoaderCircle,
   X,
+  PanelRight,
 } from 'lucide-react'
 import type { ChatMessage, ReferencedFile } from '../../types/ui'
 import { useAgentStore } from '../../store/agentStore'
-import { useUiStore } from '../../store/uiStore'
+import { useUiStore, type PanelTabId, type TabIntentQueueReason } from '../../store/uiStore'
 import { readingColumnClass } from '../../lib/readingColumn'
 import { useRouterChatStore, type RouterChatTurn } from '../../store/routerChatStore'
 import { useProviderStore } from '../../store/providerStore'
-import { useT } from '../../i18n/context'
+import { useT, type TKey } from '../../i18n/context'
 import { LabelDot } from '../LabelDot'
 import { ChatInputBar, type RouterComposerAdapter } from './ChatInputBar'
 import type { OutgoingAttachment } from '../../lib/chat/attachmentUpload'
@@ -92,6 +93,28 @@ export function shouldEmitMockInterrupt(activeType: string): boolean {
 /** Phiên chat thật (harness hoặc single-model) — không đi qua transport mock. */
 export function usesHarnessChat(activeType: string): boolean {
   return activeType === 'harness' || activeType === 'model'
+}
+
+/**
+ * Nhãn tab cho hàng thông báo ý định xếp hàng — dùng đúng khoá `tabs.*` mà
+ * thanh tab đang dùng, nên hai chỗ không thể lệch chữ.
+ */
+const INTENT_TAB_LABEL_KEY: Partial<Record<PanelTabId, TKey>> = {
+  plan: 'tabs.plan',
+  work: 'tabs.work',
+  research: 'tabs.research',
+  decisions: 'tabs.decisions',
+  files: 'tabs.files',
+  subagents: 'tabs.subagents',
+  design: 'tabs.design',
+}
+
+/** Lý do cổng §3 đã chặn một ý định mở tab → khoá i18n hiển thị cho người dùng. */
+const INTENT_REASON_KEY: Record<TabIntentQueueReason, TKey> = {
+  'tabs off': 'chat.pendingTabReasonTabsOff',
+  'workspace hidden': 'chat.pendingTabReasonWorkspaceHidden',
+  'tab pinned': 'chat.pendingTabReasonTabPinned',
+  'user busy': 'chat.pendingTabReasonUserBusy',
 }
 
 const HARNESS_ERROR_CODES = [
@@ -185,6 +208,10 @@ export function ChatPanel() {
   // `openTab` chỉ mở tab trong im lặng; khi bảng Workspace đang ẩn thì nó chỉ xếp hàng.
   // `showTab` mới là đường "người dùng vừa bấm một thứ cần bảng": hiện bảng + ghim + mở.
   const showTab = useUiStore((s) => s.showTab)
+  // Ý định mở tab đang xếp hàng: hàng thông báo ngay trên khung soạn tin nói VÌ SAO
+  // (cổng §3 nào đã chặn) và cho mở ngay — trước đây người dùng chỉ thấy huy hiệu số.
+  const pendingIntentNotice = useUiStore((s) => s.pendingIntentNotice)
+  const clearPendingIntentNotice = useUiStore((s) => s.clearPendingIntentNotice)
   // Bảng Workspace ẩn ⇒ cột chat giãn hết, nội dung đọc gom vào cột 768 px (việc 7).
   const workspaceHidden = useUiStore((s) => s.workspaceHidden)
   const openTabs = useUiStore((s) => s.openTabs)
@@ -768,6 +795,51 @@ export function ChatPanel() {
               aria-label={t('chat.errorDismiss')}
               title={t('chat.errorDismiss')}
               className="rounded p-0.5 text-rose-300/80 transition hover:text-rose-100 cursor-pointer"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Ý định mở tab bị xếp hàng (hợp đồng §3): hàng thông báo nói VÌ SAO chưa
+          mở được + một cú bấm mở ngay. Bấm mở = tiêu thụ hàng đợi của tab đó,
+          nên hàng này tự biến mất; nút X chỉ bỏ thông báo (huy hiệu còn). */}
+      {pendingIntentNotice && (
+        <div
+          data-testid="chat-pending-intent"
+          className="border-t border-line bg-panel2/60 px-4 py-2 text-xs"
+        >
+          <div className="flex items-center gap-2">
+            <PanelRight className="size-3.5 shrink-0 text-brand" />
+            <p className="min-w-0 flex-1 text-muted">
+              <span className="font-medium text-fg">
+                {t('chat.pendingTabNotice', {
+                  tab: t(INTENT_TAB_LABEL_KEY[pendingIntentNotice.tab] ?? 'tabs.plan'),
+                })}
+              </span>
+              <span className="ml-1.5">
+                · {t('chat.pendingTabReason', { reason: t(INTENT_REASON_KEY[pendingIntentNotice.reason]) })}
+              </span>
+            </p>
+            {/* `showTab` chứ không `openTab`: người dùng vừa bấm "cần thấy bảng",
+                nên bảng đang ẩn phải được hiện — cùng đường của mọi cú bấm trong
+                chat (BUG b18-review #2). Bấm mở tiêu thụ hàng đợi của tab đó. */}
+            <button
+              type="button"
+              data-testid="chat-pending-intent-open"
+              onClick={() => showTab(pendingIntentNotice.tab)}
+              className="shrink-0 rounded border border-brand/40 bg-brand/10 px-2 py-0.5 font-medium text-brand transition hover:bg-brand/20 cursor-pointer"
+            >
+              {t('chat.pendingTabOpen')}
+            </button>
+            <button
+              type="button"
+              data-testid="chat-pending-intent-dismiss"
+              onClick={clearPendingIntentNotice}
+              aria-label={t('chat.pendingTabDismiss')}
+              title={t('chat.pendingTabDismiss')}
+              className="shrink-0 rounded p-0.5 text-muted transition hover:text-fg cursor-pointer"
             >
               <X className="size-3.5" />
             </button>

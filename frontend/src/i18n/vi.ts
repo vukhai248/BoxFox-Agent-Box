@@ -586,6 +586,9 @@ const vi = {
     ide: 'IDE',
     terminal: 'Terminal',
     design: 'Design',
+    // Nhãn tab Sub-agents: App.tsx đang tạm dùng chuỗi cứng cho tab này; khoá ở
+    // đây để hàng thông báo ý định xếp hàng gọi được `tabs.subagents` (hợp đồng §3).
+    subagents: 'Sub-agents',
     labels: 'Nhãn & Giấy phép',
     audit: 'Sổ audit',
     pull_requests: 'Pull Requests',
@@ -622,6 +625,16 @@ const vi = {
     planWritten: 'Agent vừa viết kế hoạch',
     openPlanTab: 'Mở tab Kế hoạch',
     openSubagentTab: 'Mở tab Sub-agents',
+    // Hàng thông báo ý định mở tab đang xếp hàng (hợp đồng §3): nói VÌ SAO chưa
+    // mở được + một cú bấm để mở ngay. `{{tab}}` lấy từ nhãn `tabs.*`.
+    pendingTabNotice: 'Bảng {{tab}} đang chờ mở',
+    pendingTabReason: 'Lý do: {{reason}}',
+    pendingTabOpen: 'Mở ngay',
+    pendingTabDismiss: 'Bỏ qua thông báo này',
+    pendingTabReasonTabsOff: 'tự mở tab đang tắt',
+    pendingTabReasonWorkspaceHidden: 'bảng Workspace đang ẩn',
+    pendingTabReasonTabPinned: 'bạn đã ghim tab này',
+    pendingTabReasonUserBusy: 'bạn đang gõ',
     errorTitle: 'Yêu cầu tới agent thất bại',
     errorCodeLabel: 'Mã lỗi',
     errorDismiss: 'Bỏ qua lỗi',
@@ -1135,6 +1148,9 @@ const vi = {
       'Agent đang làm việc trên toàn desktop — viền xanh là cửa sổ đang hoạt động',
     bannerHumanLease: 'Agent tạm dừng trong cửa sổ này — bạn đang giữ quyền điều khiển',
     bannerUnknownLease: 'Máy này chưa báo cáo ai đang giữ quyền điều khiển',
+    overlayOff: 'Viền báo trên desktop không bật được: {{reason}}',
+    overlayOffUnavailable: 'máy này thiếu thành phần vẽ viền',
+    overlayOffFailed: 'lệnh vẽ viền bị lỗi ba lần nên đã tự tắt',
     noteNoSession:
       'Chưa mở phiên nào — đích CUA được chọn cho từng phiên, nên chưa có gì để xem ở đây.',
     noteNoTarget:

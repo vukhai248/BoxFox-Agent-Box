@@ -28,7 +28,17 @@ async function body(req) {
   try { const value = JSON.parse(Buffer.concat(chunks).toString('utf8')); assert(value && typeof value === 'object' && !Array.isArray(value), 'JSON object required.'); return value; }
   catch (e) { if (e instanceof RouterError) throw e; throw new RouterError('INVALID_REQUEST', 'Invalid JSON.'); }
 }
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+/**
+ * Thân request TUỲ CHỌN cho những đường POST mà mọi tham số đều có mặc định (ví dụ dò
+ * reasoning: `{levels, samples}` đều bỏ trống được). `body()` đòi
+ * `Content-Type: application/json` và trả 415 khi thiếu, nên dùng thẳng nó thì một nút
+ * bấm không thân request sẽ bị chặn oan; đọc hết request để không treo keep-alive.
+ */
+async function optionalBody(req) {
+  if (!req.headers['content-type']) { req.resume(); return {}; }
+  return await body(req);
+}
 const STREAM_HEADERS = { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' };
 // OpenAI dialect: `data: {json}\n\n` frames terminated by `data: [DONE]`.
 const openAIFrame = value => `data: ${typeof value === 'string' ? value : JSON.stringify(value)}\n\n`;
@@ -303,7 +313,16 @@ export function createRouterServer({ service, engine, oauth, frontendDir = null,
         return json(res, 201, service.connection(created.id));
       }
       const modelTest = path.match(/^\/api\/router\/connections\/([^/]+)\/models\/([^/]+)\/test$/);
-      if (modelTest && method === 'POST') return json(res, 200, await service.testInference(decodeURIComponent(modelTest[1]), decodeURIComponent(modelTest[2]), AbortSignal.timeout(90000)));
+      if (modelTest && method === 'POST') return json(res, 200, await service.testInference(decodeURIComponent(modelTest[1]), decodeURIComponent(modelTest[2]), AbortSignal.timeout(90000)));
+      // M5 — đo REASONING của một model, ngay cạnh nhánh `test` ở trên (mọi `/api/router/*`
+      // đã đi qua cổng admin ở đầu handler). Thân request tuỳ chọn `{levels, samples}`;
+      // timeout 90 s cùng khuôn vì một lượt dò có thể chạy nhiều mẫu.
+      const reasoningProbe = path.match(/^\/api\/router\/connections\/([^/]+)\/models\/([^/]+)\/reasoning-probe$/);
+      if (reasoningProbe && method === 'POST') return json(res, 200, await service.probeReasoning(decodeURIComponent(reasoningProbe[1]), decodeURIComponent(reasoningProbe[2]), await optionalBody(req), AbortSignal.timeout(90000)));
+      // M6 — xoá một hàng model GÕ TAY (`source: 'custom'`); hàng do dò phát hiện trả 409
+      // `MODEL_NOT_CUSTOM` vì lần dò sau nó sẽ mọc lại y hệt.
+      const modelRow = path.match(/^\/api\/router\/connections\/([^/]+)\/models\/([^/]+)$/);
+      if (modelRow && method === 'DELETE') return json(res, 200, service.removeCustomModel(decodeURIComponent(modelRow[1]), decodeURIComponent(modelRow[2])));
       const connection = path.match(/^\/api\/router\/connections\/([^/]+)(?:\/(test|models\/refresh|quota|reveal))?$/);
       if (connection) {
         const id = decodeURIComponent(connection[1]);

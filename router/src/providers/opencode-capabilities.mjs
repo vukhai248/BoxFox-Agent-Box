@@ -64,3 +64,21 @@ export function opencodeCapabilityFor(modelId) {
   if (!id) return null;
   return OPENCODE_CAPABILITY_REGISTRY.find(entry => entry.pattern.test(id)) || null;
 }
+
+/**
+ * Hạn dùng của một mốc bằng chứng thinking. Registry ghim `asOf` và bằng chứng dò
+ * cũng ghim `asOf`; cả hai đều là ẢNH CHỤP tại một thời điểm, không phải sự thật
+ * vĩnh viễn. Sau hạn, hàng vẫn giữ level (người dùng không mất điều khiển đang
+ * chạy) nhưng bị gắn `thinkingStale` để UI mời dò lại — nếu không, một mục registry
+ * viết một lần sẽ được tin mãi mãi và lặp lại đúng lỗi người dùng báo.
+ */
+export const THINKING_EVIDENCE_MAX_AGE_DAYS = 30;
+
+/** `asOf` (`YYYY-MM-DD` hoặc mốc ISO) đã quá `THINKING_EVIDENCE_MAX_AGE_DAYS` so với `now`. */
+export function thinkingEvidenceStale(asOf, now = new Date()) {
+  const at = typeof asOf === 'string' && asOf.trim() ? Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(asOf.trim()) ? `${asOf.trim()}T00:00:00Z` : asOf) : NaN;
+  if (!Number.isFinite(at)) return true;
+  const current = now instanceof Date ? now.getTime() : Date.parse(now);
+  if (!Number.isFinite(current)) return true;
+  return current - at > THINKING_EVIDENCE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+}

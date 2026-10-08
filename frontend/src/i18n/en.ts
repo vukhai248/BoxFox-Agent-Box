@@ -582,6 +582,10 @@ const en: SameShape<typeof vi> = {
     ide: 'IDE',
     terminal: 'Terminal',
     design: 'Design',
+    // Sub-agents tab label: App.tsx currently uses a hard-coded string for this
+    // tab; the key lives here so the queued-intent notice row can call
+    // `tabs.subagents` (contract §3).
+    subagents: 'Sub-agents',
     labels: 'Labels & Leases',
     audit: 'Audit log',
     pull_requests: 'Pull Requests',
@@ -618,6 +622,16 @@ const en: SameShape<typeof vi> = {
     planWritten: 'The agent just wrote a plan',
     openPlanTab: 'Open the Plan tab',
     openSubagentTab: 'Open the Sub-agents tab',
+    // Queued tab-intent notice row (contract §3): says WHY it is waiting and
+    // offers a one-click open. `{{tab}}` comes from the `tabs.*` labels.
+    pendingTabNotice: 'The {{tab}} panel is waiting to open',
+    pendingTabReason: 'Reason: {{reason}}',
+    pendingTabOpen: 'Open now',
+    pendingTabDismiss: 'Dismiss this notice',
+    pendingTabReasonTabsOff: 'auto-open tabs is off',
+    pendingTabReasonWorkspaceHidden: 'the workspace panel is hidden',
+    pendingTabReasonTabPinned: 'you pinned this tab',
+    pendingTabReasonUserBusy: 'you are typing',
     errorTitle: 'Agent request failed',
     errorCodeLabel: 'Error code',
     errorDismiss: 'Dismiss error',
@@ -1142,6 +1156,9 @@ const en: SameShape<typeof vi> = {
     bannerWorkingMachine: 'The agent is working across the desktop — the border marks the active window',
     bannerHumanLease: 'The agent is paused in this window — you hold control',
     bannerUnknownLease: 'This machine does not report who holds control',
+    overlayOff: 'The desktop activity border is off: {{reason}}',
+    overlayOffUnavailable: 'this machine lacks the border component',
+    overlayOffFailed: 'the border drawing call failed three times and switched itself off',
     noteNoSession:
       'No session open yet — the CUA target is chosen per session, so there is nothing to show here.',
     noteNoTarget:
