@@ -7,20 +7,27 @@ Vì sao có module này: ``windows_platform.py`` gọi thẳng DLL Win32, nên t
 công cụ X11 (``xdotool``, ``xprop``, ``xwininfo``) thay cho Win32. Không có dòng nào ở tầng trên
 phải biết máy đang chạy Windows hay Linux.
 
-Ba giới hạn **đã biết**, cố ý không giấu:
+Bốn giới hạn **đã biết**, cố ý không giấu:
 
 * **Không cài hook bàn phím/chuột.** Trên Windows, cờ ``LLMHF_INJECTED`` phân biệt input do agent
   tiêm với input của người thật; X11 không có tương đương. Thà KHÔNG có hook (⇒
   ``DesktopControl.install_hooks()`` trả ``UNSUPPORTED_IN_HOST_MODE``, lease fail-closed) còn hơn có
   một hook luôn báo "người thật" — hook như vậy sẽ tự huỷ quyền của agent sau mỗi cú bấm của chính
-  nó. Hệ quả: trên Linux, quyền điều khiển chỉ được trả lại bằng đường tường minh
-  (``/desktop/release``, nút "Thu hồi", dừng phiên).
+  nó. Thay vào đó, việc phát hiện người can thiệp chạy bằng **lấy mẫu** (``last_input_tick``): nó
+  chỉ thấy chuột và tiêu điểm, **không** thấy bàn phím, và có thể báo nhầm khi ứng dụng khác tự
+  đổi tiêu điểm. Xem :meth:`X11Platform.last_input_tick`.
 * **``window_from_point`` là phép thử hình học** trên danh sách cửa sổ EWMH, không phải
   ``XQueryPointer``: X11 không có cách hỏi "cửa sổ nào tại điểm (x, y)" cho một điểm bất kỳ. Đủ
   chính xác cho cửa sổ cấp cao nhất — đúng phạm vi sản phẩm hỗ trợ.
-* **``last_input_tick``/``idle_seconds`` không tồn tại**, nên ``poll_idle()`` không bao giờ tự phát
-  hiện người thật. Đây là lựa chọn có chủ ý, không phải thiếu sót: một tín hiệu sai còn tệ hơn
-  không có tín hiệu.
+* **Cửa sổ override-redirect không nằm trong phép thử đó** — không chỉ viền báo của BoxFox mà cả
+  menu thả xuống, tooltip, bong bóng thông báo của ứng dụng khác. Nếu một menu đang mở ngay trên
+  điểm bấm, ``check_point_ownership`` vẫn cho qua và cú bấm rơi vào menu. Đây là lỗ đã biết của
+  nền tảng, không phải điều bất ngờ; vá nó cần một phép thử điểm ảnh theo cây cửa sổ
+  (``xwininfo -root -children`` + so ngăn xếp), việc còn lại của nền tảng Linux.
+* **``type_text`` gửi từng khối 64 ký tự** và kiểm lại tiêu điểm giữa các khối, nhưng bàn phím X11
+  không gắn với cửa sổ: vẫn có khe hở giữa lúc kiểm và lúc gõ. ``check_geometry_revision`` và
+  chốt ô mật khẩu là **hợp đồng dùng chung** với bản Windows; đường ``computer_use`` hiện không
+  truyền ``element``/``sourceId`` nên hai chốt đó chỉ chạy khi lớp gọi cung cấp tham số.
 """
 from __future__ import annotations
 
@@ -168,15 +175,36 @@ class X11Platform:
         self._runner = runner
         self._props_cache: dict[int, tuple[float, dict[str, str]]] = {}
         self._notes: list[str] = []
+        if self._env_source().get('WAYLAND_DISPLAY'):
+            self._notes.append(
+                'phiên Wayland: chỉ thấy được cửa sổ X11/XWayland, ứng dụng Wayland thuần không '
+                'hiện trong danh sách và không nhận được input XTEST'
+            )
+        # Theo dõi "người thật vừa chạm máy" bằng cách lấy mẫu con trỏ + tiêu điểm
+        # (quyết định #6785). X11 không có bộ đếm input toàn cục như `GetLastInputInfo`, nên
+        # "tick" ở đây là bộ đếm của CHÍNH TA: nó tăng khi con trỏ hoặc tiêu điểm đổi mà lần đổi
+        # đó không do ta gây ra.
+        # Bắt đầu từ 1, không phải 0: `DesktopControl.poll_idle` dùng 0 làm nghĩa "chưa có mốc nào"
+        # (`if not previous: return False`), mà bộ đếm của ta thì bắt đầu từ con số không. Trên
+        # Windows, `GetLastInputInfo` là số tick của hệ thống nên chưa bao giờ bằng 0 — giữ đúng
+        # tính chất đó để lần chạm ĐẦU TIÊN của người cũng nhả được quyền, không phải đợi lần thứ hai.
+        self._input_tick = 1
+        self._last_pointer: tuple[int, int] | None = None
+        self._last_foreground: int | None = None
+        self._own_pointer: tuple[int, int] | None = None
+        self._own_foreground: int | None = None
+        self._last_change_at: float | None = None
 
     # -- hạ tầng --------------------------------------------------------------
+
+    def _env_source(self) -> Any:
+        return self._env if self._env is not None else os.environ
 
     @property
     def display(self) -> str:
         if self._display:
             return self._display
-        source = self._env if self._env is not None else os.environ
-        return str(source.get('DISPLAY') or ':0')
+        return str(self._env_source().get('DISPLAY') or ':0')
 
     def notes(self) -> list[str]:
         return list(self._notes)
@@ -466,6 +494,8 @@ class X11Platform:
                 tool='xdotool',
             )
         result = self._run([tool, 'windowactivate', '--sync', str(int(hwnd))])
+        if result.ok:
+            self._own_foreground = int(hwnd)
         return result.ok
 
     def virtual_screen_bounds(self) -> tuple[int, int, int, int]:
@@ -503,13 +533,75 @@ class X11Platform:
         tool = self._tool('xdotool')
         if tool is None:
             return False
+        # Ghi trước khi di chuyển (xem `input.click`): bộ theo dõi ở luồng khác không được đọc cú
+        # di chuyển của chính ta thành người thật.
+        self.note_own_pointer(int(x), int(y))
         return self._run([tool, 'mousemove', str(int(x)), str(int(y))]).ok
+
+    # -- phát hiện người thật chạm máy ----------------------------------------
+    #
+    #: Nền tảng này tự theo dõi được người can thiệp (không cần hook của HĐH).
+    supports_idle_watch = True
+
+    def note_own_pointer(self, x: int, y: int) -> None:
+        """Ghi vị trí con trỏ mà CHÍNH TA vừa đặt, để không đọc nó là người thật.
+
+        ``click`` tự di chuyển con trỏ rồi trả về chỗ cũ; cả hai lần đều phải đi qua đây.
+        """
+        self._own_pointer = (int(x), int(y))
+
+    def last_input_tick(self) -> int:
+        """Bộ đếm thô của "người vừa tương tác", lấy mẫu từ con trỏ và tiêu điểm.
+
+        Mỗi lời gọi lấy mẫu một lần (một ``xdotool``, một ``xprop``) và tăng bộ đếm khi:
+
+        * con trỏ đổi vị trí mà không phải vị trí ta vừa đặt, hoặc
+        * cửa sổ đang có tiêu điểm đổi mà không phải cửa sổ ta vừa kích hoạt.
+
+        Cách này **không** nhìn thấy bàn phím (X11 không có hook) và có thể báo nhầm khi một ứng
+        dụng khác tự đổi tiêu điểm (ví dụ cửa sổ mới mở đòi focus). Đổi lại, nó không bao giờ
+        tự kích hoạt bằng chính cú click của agent — điều tệ nhất trong một cơ chế tự nhả quyền.
+        """
+        pointer = self.get_cursor_pos()
+        if pointer is not None:
+            if self._last_pointer is not None and pointer != self._last_pointer:
+                if pointer != self._own_pointer:
+                    self._input_tick += 1
+                    self._last_change_at = time.monotonic()
+            self._last_pointer = pointer
+        foreground = self.get_foreground_window()
+        if foreground is not None:
+            if self._last_foreground is not None and int(foreground) != int(self._last_foreground):
+                if int(foreground) != int(self._own_foreground or 0):
+                    self._input_tick += 1
+                    self._last_change_at = time.monotonic()
+            self._last_foreground = int(foreground)
+        if self._last_change_at is None:
+            # Mẫu đầu tiên: ta biết trạng thái hiện tại, nên đồng hồ "yên ắng" bắt đầu từ đây.
+            self._last_change_at = time.monotonic()
+        return self._input_tick
+
+    def idle_seconds(self) -> float | None:
+        """Số giây kể từ lần đổi con trỏ/tiêu điểm cuối cùng mà ta QUAN SÁT được.
+
+        X11 không có "thời điểm người cuối cùng tương tác"; đây là suy luận từ chính các mẫu của
+        :meth:`last_input_tick`, nên nó chỉ đúng kể từ lần lấy mẫu đầu tiên.
+        """
+        if self._last_change_at is None:
+            return None
+        return max(0.0, time.monotonic() - self._last_change_at)
 
     # -- phiên / quyền ---------------------------------------------------------
 
     def is_interactive_session(self) -> bool:
-        """Có ``DISPLAY`` và X server trả lời ⇒ đây là phiên tương tác được."""
-        return bool(self.virtual_screen_bounds()[2:])
+        """Có ``DISPLAY`` **và** X server trả lời ⇒ đây là phiên tương tác được.
+
+        Phải hỏi kích thước màn hình ảo: ``DISPLAY`` trỏ vào X server đã tắt thì mọi lời gọi đều
+        rỗng và kích thước là 0×0. (Đừng viết ``bool(bounds[2:])`` — tuple ``(0, 0)`` vẫn là
+        truthy, nên phép thử đó nhận mọi máy hỏng.)
+        """
+        width, height = self.virtual_screen_bounds()[2:]
+        return int(width) > 0 and int(height) > 0
 
     def desktop_locked(self) -> bool:
         """Màn hình khoá của X11 là một cửa sổ toàn màn hình; không có API chuẩn để hỏi.

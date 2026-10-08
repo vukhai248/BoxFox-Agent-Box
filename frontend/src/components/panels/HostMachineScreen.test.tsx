@@ -358,6 +358,52 @@ describe('menu chọn đích', () => {
     openPicker(panel)
     expect(panel.testId('ms-picker-popover')).not.toBeNull()
   })
+
+  it('nút trên thanh tiêu đề báo trạng thái mở/đóng cho trình đọc màn hình', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    const trigger = () => panel.testId<HTMLButtonElement>('ms-change-target')!
+    expect(trigger().getAttribute('aria-expanded')).toBe('false')
+    // Tên trợ năng phải chứa nhãn đang nhìn thấy, không được thay thế nó.
+    expect(trigger().getAttribute('aria-label')).toContain('Change target')
+    expect(trigger().getAttribute('aria-label')).toContain('No target')
+
+    openPicker(panel)
+    expect(trigger().getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('chọn xong một đích thì menu tự đóng', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    await pickWindow(panel, 12)
+
+    expect(panel.testId('ms-picker-popover')).toBeNull()
+    expect(panel.testId('ms-target-identity')).not.toBeNull()
+  })
+
+  it('trạng thái rỗng có nút mở menu chọn đích', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    panel.click('[data-testid="ms-open-picker"]')
+
+    expect(panel.testId('ms-picker-popover')).not.toBeNull()
+  })
+})
+
+describe('quyền điều khiển', () => {
+  it('hiện băng "bạn đang giữ quyền" cả khi phiên chưa chọn đích', async () => {
+    server.leaseHolder = 'human'
+    const panel = renderPanel()
+    await settle()
+
+    // Không có đích ⇒ không có chip nhận dạng, nhưng quyền điều khiển là thông tin
+    // của MÁY nên vẫn phải hiện.
+    expect(panel.testId('ms-target-identity')).toBeNull()
+    expect(panel.text()).toContain('You hold control')
+  })
 })
 
 describe('chưa có đích', () => {

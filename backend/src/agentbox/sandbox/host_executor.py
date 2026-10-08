@@ -362,7 +362,10 @@ class HostExecutor:
         if self._prepared:
             return True, ''
         capture_module = self._load_capture()
-        if capture_module is None:
+        # `_load_capture()` chỉ nạp MÔ-ĐUN; máy còn phải có một nền tảng thật đứng sau nó (X server
+        # trả lời, hoặc Windows). Không có nền tảng thì `prepare()` phải nói "chưa điều khiển được",
+        # nếu không panel sẽ báo CUA sẵn sàng trên một máy chẳng chụp được gì.
+        if capture_module is None or self._desktop_platform() is None:
             return False, UNSUPPORTED_CODE
         try:
             capture_module.set_dpi_awareness()
@@ -509,7 +512,7 @@ class HostExecutor:
         if self.desktop is None:
             return error_result(CUA_UNAVAILABLE_CODE,
                                 'host mode chưa bật điều khiển desktop (thiếu DesktopControl)')
-        if self._load_capture() is None:
+        if self._load_capture() is None or self._desktop_platform() is None:
             return error_result(UNSUPPORTED_CODE,
                                 'máy này chưa có nền tảng desktop điều khiển được '
                                 '(Windows, hoặc Linux có X11)')

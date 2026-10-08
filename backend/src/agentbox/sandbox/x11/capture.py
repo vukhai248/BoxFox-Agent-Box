@@ -228,6 +228,9 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
 
         Không có ``hwnd`` thì tầng trên tưởng đây là ảnh cả màn hình và mất liên hệ với cửa sổ
         người dùng đã chọn; ``notes`` nói rõ vì sao ảnh không phải bản đọc riêng của cửa sổ.
+
+        Ảnh này là **những gì đang hiện trên màn hình**, nên nó mang đúng phán quyết che khuất ban
+        đầu (``occluded``): có cửa sổ nằm trên thì ảnh có thể là của cửa sổ đó.
         """
         region = capture_region(x, y, width, height, platform=p)
         region.hwnd = int(hwnd)
@@ -246,9 +249,11 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
                      bounds=(x, y, width, height), dpi=96, occluded=occluded)
         if occluded and not _pixels_are_the_screen(shot, platform=p):
             # Compositor đã cho ta pixmap riêng của cửa sổ: ảnh dùng được, chỉ ghi chú lại.
-            occluded = False
+            # Ghi chú đi theo CHÍNH ảnh này (``shot.notes``), không vào ``notes`` dùng chung: nếu
+            # khung gần như đen ở dưới phải chụp lại theo vùng màn hình thì ảnh dự phòng đó là ảnh
+            # màn hình, và nói "đọc từ bộ đệm riêng" về nó là mâu thuẫn với chính các điểm ảnh.
             shot.occluded = False
-            notes.append('cửa sổ có cửa sổ khác nằm trên, nhưng ảnh đọc từ bộ đệm riêng của nó')
+            shot.notes.append('cửa sổ có cửa sổ khác nằm trên, nhưng ảnh đọc từ bộ đệm riêng của nó')
     except PlatformError:
         if occluded:
             notes.append('cửa sổ bị che nên không đọc được nội dung riêng của nó')

@@ -64,11 +64,24 @@ def test_cua_without_a_desktop_controller_returns_a_coded_error(tmp_path):
     assert payload['errorCode'] == host_module.CUA_UNAVAILABLE_CODE
 
 
-def test_cua_on_a_non_windows_host_is_unsupported(tmp_path):
+def test_cua_without_a_desktop_platform_is_unsupported(tmp_path, monkeypatch):
+    """Không có nền tảng desktop nào (Linux không có X11, hệ điều hành lạ) ⇒ lỗi có mã."""
+    executor, _control, _fake = build(tmp_path)
+    monkeypatch.setattr(executor, '_desktop_platform', lambda: None)
+    payload = run(executor, 'inspect_element', {'x': 1, 'y': 2})
+    assert payload['errorCode'] == host_module.UNSUPPORTED_CODE
+
+
+def test_a_linux_host_with_a_desktop_platform_passes_the_platform_gate(tmp_path):
+    """Đổi hành vi có chủ ý (08/10/2026): Linux có X11 không còn bị chặn ở cổng nền tảng.
+
+    Trước đây cổng này hỏi `sys.platform`, nên mọi máy `posix` đều trả `UNSUPPORTED_CODE`. Nay nó
+    hỏi *có nền tảng desktop hay không* — `posix` + X11 là hợp lệ.
+    """
     executor, _control, _fake = build(tmp_path)
     executor.platform = 'posix'
     payload = run(executor, 'inspect_element', {'x': 1, 'y': 2})
-    assert payload['errorCode'] == host_module.UNSUPPORTED_CODE
+    assert payload.get('errorCode') != host_module.UNSUPPORTED_CODE
 
 
 def test_a_human_holding_the_lease_blocks_every_cua_tool(tmp_path):
@@ -317,10 +330,17 @@ def test_a_hook_that_cannot_be_installed_does_not_block_a_capture(tmp_path):
     assert payload.get('is_error') is not True
 
 
-def test_prepare_reports_unsupported_on_linux(tmp_path):
+def test_prepare_reports_unsupported_without_a_desktop_platform(tmp_path, monkeypatch):
+    executor, _control, _fake = build(tmp_path)
+    monkeypatch.setattr(executor, '_desktop_platform', lambda: None)
+    assert executor.prepare() == (False, host_module.UNSUPPORTED_CODE)
+
+
+def test_prepare_succeeds_on_a_linux_host_with_a_desktop_platform(tmp_path):
+    """`posix` không còn là lý do để `prepare()` từ chối — có X11 thì vẫn dùng được."""
     executor, _control, _fake = build(tmp_path)
     executor.platform = 'posix'
-    assert executor.prepare() == (False, host_module.UNSUPPORTED_CODE)
+    assert executor.prepare() == (True, '')
 
 
 def test_the_lease_file_lives_in_the_profile_directory(tmp_path):

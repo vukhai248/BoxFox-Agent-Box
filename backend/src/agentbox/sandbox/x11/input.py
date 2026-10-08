@@ -8,10 +8,16 @@ biệt được với người dùng (khác hẳn ``XSendEvent`` mà Chrome/Elec
 
 Bốn chốt chặn giữ nguyên thứ tự của bản Windows, vì lý do của chúng không đổi:
 
-1. ``check_geometry_revision`` — ảnh soi đã cũ ⇒ không bấm.
+1. ``check_geometry_revision`` — ảnh soi đã cũ ⇒ không bấm. (Chỉ chạy khi lớp gọi truyền
+   ``source_id``/``geometry_revision``; đường ``computer_use`` hiện chưa truyền.)
 2. ``check_preconditions`` — phiên tương tác, cửa sổ còn sống, không có UIPI (X11 không có).
-3. ``check_point_ownership`` — điểm bấm phải thuộc đúng cửa sổ đích, nếu không là bị che.
+3. ``check_point_ownership`` — điểm bấm phải thuộc đúng cửa sổ đích, nếu không là bị che. Chốt này
+   chỉ thấy cửa sổ trong ``_NET_CLIENT_LIST_STACKING``; menu/tooltip override-redirect thì không.
 4. ``ensure_foreground`` — cửa sổ đích phải đang có tiêu điểm, nếu không thì dừng thay vì gõ nhầm chỗ.
+
+``type_text`` gửi theo từng khối 64 ký tự và **kiểm lại** tiêu điểm giữa các khối, đúng như bản
+Windows: X11 không gắn bàn phím với một cửa sổ, nên gõ một mạch 4096 ký tự là gõ vào bất cứ cửa sổ
+nào đang có tiêu điểm lúc đó.
 """
 from __future__ import annotations
 
@@ -34,6 +40,10 @@ MOUSE_BUTTONS = {'left': 1, 'middle': 2, 'right': 3}
 
 #: Nhịp gõ mặc định (ms/ký tự) — đủ chậm để ứng dụng không nuốt ký tự, đủ nhanh để không chờ lâu.
 TYPE_DELAY_MS = 12
+
+#: Số ký tự mỗi khối ``xdotool type``. Giữa hai khối ta kiểm lại tiêu điểm, nên khối càng nhỏ thì
+#: khe hở "gõ nhầm cửa sổ" càng hẹp — 64 khớp với ``TEXT_CHUNK_UNITS`` của bản Windows.
+TEXT_CHUNK_CHARS = 64
 
 #: Tên phím của Windows/``keysym`` → tên phím của X11. Không có bảng này thì "Enter" thành "enter"
 #: và ``xdotool`` báo lỗi khó hiểu.
@@ -238,6 +248,11 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
     previous_cursor = p.get_cursor_pos()
     ensure_foreground(hwnd, platform=p, timeout=timeout)
     try:
+        # Ghi vị trí con trỏ mà CHÍNH TA sắp đặt TRƯỚC khi di chuyển: bộ theo dõi "người thật chạm
+        # máy" lấy mẫu ở luồng khác, nên ghi sau khi di chuyển là có một khe hở để nó đọc cú di
+        # chuyển của chính ta thành người thật. Ghi sớm mà lệnh hỏng thì cùng lắm là nhả quyền về
+        # tay người — hướng an toàn.
+        p.note_own_pointer(int(x), int(y))
         moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
         _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
         pressed = _xdotool(p, 'click', str(MOUSE_BUTTONS[button]))
@@ -310,10 +325,17 @@ def type_text(text: str, *, window: Any, element: Any = None, platform: Any = No
     previous_foreground = p.get_foreground_window()
     previous_cursor = p.get_cursor_pos()
     ensure_foreground(hwnd, platform=p, timeout=timeout)
+    sent = 0
     try:
-        result = _xdotool(p, 'type', '--clearmodifiers', '--delay', str(TYPE_DELAY_MS), '--', text,
-                          timeout=max(5.0, 0.05 * len(text) + 2.0))
-        _fail(result, 'type')
+        for start in range(0, len(text), TEXT_CHUNK_CHARS):
+            chunk = text[start:start + TEXT_CHUNK_CHARS]
+            # Không nâng cửa sổ lại (người dùng có thể đã cố tình đổi), chỉ KIỂM: mất tiêu điểm
+            # giữa chừng ⇒ dừng ngay, phần còn lại không rơi vào cửa sổ của người.
+            ensure_foreground(hwnd, platform=p, timeout=timeout, raise_window=False)
+            result = _xdotool(p, 'type', '--clearmodifiers', '--delay', str(TYPE_DELAY_MS), '--',
+                              chunk, timeout=max(5.0, 0.05 * len(chunk) + 2.0))
+            _fail(result, 'type')
+            sent += len(chunk)
     finally:
         restore_context(previous_foreground, previous_cursor, platform=p)
     return {
@@ -321,7 +343,7 @@ def type_text(text: str, *, window: Any, element: Any = None, platform: Any = No
         'action': 'type_text',
         'windowId': hwnd,
         'chars': len(text),
-        'units': len(text),
+        'units': sent,
     }
 
 

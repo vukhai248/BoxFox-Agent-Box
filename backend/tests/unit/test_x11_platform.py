@@ -259,6 +259,24 @@ def test_a_covered_window_that_only_shows_the_screen_is_still_reported_as_occlud
     assert shot.occluded is True
 
 
+def test_the_black_frame_fallback_keeps_the_occlusion_verdict_and_drops_the_own_buffer_note():
+    """Khung đen ⇒ chụp lại theo vùng màn hình: ảnh đó LÀ màn hình, nên phải giữ `occluded=True`.
+
+    Lỗi cũ: nhánh compositor đặt `occluded = False` (đúng cho ảnh đọc từ bộ đệm riêng), rồi nhánh
+    khung-đen trả ảnh vùng màn hình **kèm cờ đó** — ảnh của cửa sổ đang che mà nói là không bị che.
+    """
+    props = {0x10: window_props(pid=7), 0x20: window_props(pid=8)}
+    rects = {0x10: (0, 0, 20, 20), 0x20: (0, 0, 20, 20)}
+    black = bytes(4) * (20 * 20)                 # ảnh cửa sổ gần như đen
+    screen = bytes([200, 100, 50, 255]) * (20 * 20)
+    platform, _tools = build(windows=[0x10, 0x20], props=props, rects=rects,
+                             raw_by_target={'16': black, 'root': screen})
+    shot = xc.capture_window(0x10, platform=platform)
+    assert shot.method == 'import_region'
+    assert shot.occluded is True, 'ảnh vùng màn hình có thể là của cửa sổ đang che'
+    assert not any('bộ đệm riêng' in note for note in shot.notes)
+
+
 def test_the_region_capture_crops_before_it_silences_the_tool():
     """`-crop` phải đứng trước `-silent`: đảo lại thì ImageMagick trả nguyên màn hình (đã đo)."""
     platform, tools = build(windows=[], screen=(0, 0, 20, 20), raw=bytes(4) * (20 * 20))
@@ -434,3 +452,133 @@ def test_subprocess_output_is_decoded_and_errors_are_kept(monkeypatch):
     done = subprocess.CompletedProcess(['/bin/echo', 'hi'], 0, b'hi\n', b'')
     monkeypatch.setattr(xp.subprocess, 'run', lambda *a, **k: done)
     assert platform._run(['echo', 'hi']).out.strip() == 'hi'
+
+
+# ------------------------------------------------- người thật chạm máy (mẫu con trỏ)
+def _tick_runner(state):
+    """Runner giả có trạng thái: con trỏ, tiêu điểm — để kiểm bộ đếm của `last_input_tick`."""
+    def runner(argv, timeout):
+        tool, args = os.path.basename(argv[0]), argv[1:]
+        if tool == 'xdotool' and args and args[0] == 'getmouselocation':
+            return xp._CommandResult(0, 'X=%d\nY=%d\nSCREEN=0\nWINDOW=99\n' % state['pointer'])
+        if tool == 'xdotool' and args and args[0] == 'mousemove':
+            state['pointer'] = (int(args[1]), int(args[2]))
+            return xp._CommandResult(0, '')
+        if tool == 'xdotool' and args and args[0] == 'windowactivate':
+            state['own_foreground_calls'] = state.get('own_foreground_calls', 0) + 1
+            return xp._CommandResult(0, '')
+        if tool == 'xprop':
+            return xp._CommandResult(0, '_NET_ACTIVE_WINDOW(WINDOW): window id # 0x%x\n' % state['foreground'])
+        return xp._CommandResult(127, '', 'không có công cụ %s' % tool)
+    return runner
+
+
+def _tick_platform(state):
+    return xp.X11Platform(display=':1', runner=_tick_runner(state), env={'DISPLAY': ':1'})
+
+
+def test_a_pointer_move_we_did_not_cause_counts_as_a_person():
+    """Đây là toàn bộ tín hiệu "người thật" trên X11: con trỏ đổi chỗ mà không phải do ta."""
+    state = {'pointer': (100, 100), 'foreground': 0x1001}
+    platform = _tick_platform(state)
+    baseline = platform.last_input_tick()
+    assert baseline > 0, 'mốc 0 có nghĩa "chưa có mốc" trong `poll_idle`, nên phải khác 0'
+    state['pointer'] = (300, 400)
+    assert platform.last_input_tick() == baseline + 1
+
+
+def test_the_agents_own_pointer_move_does_not_count_as_a_person():
+    """Cú bấm của agent tự di chuyển con trỏ rồi trả về chỗ cũ — không lần nào được tính."""
+    state = {'pointer': (100, 100), 'foreground': 0x1001}
+    platform = _tick_platform(state)
+    baseline = platform.last_input_tick()
+    assert platform.set_cursor_pos(700, 700) is True
+    assert platform.last_input_tick() == baseline
+    assert platform.set_cursor_pos(100, 100) is True
+    assert platform.last_input_tick() == baseline
+
+
+def test_a_focus_change_we_did_not_cause_counts_as_a_person():
+    state = {'pointer': (100, 100), 'foreground': 0x1001}
+    platform = _tick_platform(state)
+    baseline = platform.last_input_tick()
+    state['foreground'] = 0x2002
+    assert platform.last_input_tick() == baseline + 1
+
+
+def test_the_window_we_activated_ourselves_does_not_count_as_a_person():
+    state = {'pointer': (100, 100), 'foreground': 0x1001}
+    platform = _tick_platform(state)
+    baseline = platform.last_input_tick()
+    state['foreground'] = 0x3003
+    assert platform.set_foreground_window(0x3003) is True
+    assert platform.last_input_tick() == baseline
+
+
+def test_idle_seconds_is_none_until_the_first_sample():
+    state = {'pointer': (100, 100), 'foreground': 0x1001}
+    platform = _tick_platform(state)
+    assert platform.idle_seconds() is None
+    platform.last_input_tick()
+    assert platform.idle_seconds() is not None
+
+
+def test_a_machine_whose_x_server_does_not_answer_has_no_platform(monkeypatch):
+    """`DISPLAY` có mà X server chết ⇒ kích thước 0×0 ⇒ KHÔNG có nền tảng (đừng nhận máy hỏng).
+
+    Lỗi cũ: `bool(bounds[2:])` — tuple `(0, 0)` vẫn là truthy, nên phép thử không bao giờ từ chối.
+    """
+    tools = FakeTools(screen=(0, 0, 0, 0))
+    real = xp.X11Platform
+    monkeypatch.setenv('DISPLAY', ':1')
+    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+    monkeypatch.setattr(xp, 'X11Platform', lambda *a, **k: real(display=':1', runner=tools))
+    xp.reset_platform()
+    try:
+        assert xp.get_platform() is None
+    finally:
+        xp.reset_platform()
+
+
+def test_a_wayland_session_says_that_only_x11_windows_are_reachable():
+    platform = xp.X11Platform(display=':1', runner=FakeTools(),
+                              env={'DISPLAY': ':1', 'WAYLAND_DISPLAY': 'wayland-0'})
+    assert any('wayland' in note.casefold() for note in platform.notes())
+
+
+# ----------------------------------------------------------------- gõ theo khối
+def test_type_text_sends_one_chunk_at_a_time_and_keeps_the_text_whole():
+    """Văn bản dài phải đi thành nhiều khối, mỗi khối nguyên vẹn và đúng thứ tự."""
+    text = 'a' * 200
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    xi.type_text(text, window=0x11, platform=platform)
+    typed = [call[call.index('type') + 1:] for call in tools.calls
+             if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    chunks = [call[call.index('--') + 1] for call in typed]
+    assert len(chunks) == 4                      # 200 ký tự / 64
+    assert ''.join(chunks) == text
+    assert all(len(chunk) <= xi.TEXT_CHUNK_CHARS for chunk in chunks)
+
+
+def test_type_text_stops_when_the_target_loses_focus_between_chunks():
+    """Mất tiêu điểm giữa chừng ⇒ dừng ngay, phần còn lại không rơi vào cửa sổ của người."""
+    platform, tools = build(windows=[0x11, 0x22], props={0x11: window_props(), 0x22: window_props()},
+                            rects={0x11: (0, 0, 100, 100), 0x22: (0, 0, 100, 100)}, foreground=0x11)
+    typed: list[int] = []
+
+    class ChunkWatcher:
+        """Đổi tiêu điểm ngay sau khối đầu tiên — như người dùng bấm sang cửa sổ khác."""
+
+        def __call__(self, argv, timeout):
+            if os.path.basename(argv[0]) == 'xdotool' and 'type' in argv:
+                typed.append(1)
+                if len(typed) == 1:
+                    tools.foreground = 0x22
+            return tools(argv, timeout)
+
+    platform._runner = ChunkWatcher()
+    with pytest.raises(PlatformError) as caught:
+        xi.type_text('b' * 200, window=0x11, platform=platform)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert len(typed) == 1                       # khối thứ hai không bao giờ được gửi

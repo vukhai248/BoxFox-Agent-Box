@@ -458,7 +458,7 @@ export function HostMachineScreen() {
         type="button"
         aria-haspopup="dialog"
         aria-expanded={pickerOpen}
-        aria-label={t('machineScreen.changeTarget')}
+        aria-label={`${t('machineScreen.changeTarget')}: ${target ? identityTitle : t('machineScreen.noTarget')}`}
         title={target ? `${identityTitle}${identityMeta ? ` · ${identityMeta}` : ''}` : t('machineScreen.chooseTargetHint')}
         onClick={() => setPickerOpen((value) => !value)}
         data-testid="ms-change-target"
@@ -591,32 +591,34 @@ export function HostMachineScreen() {
             </p>
           )}
 
-          {target && (
+          {(target || lease) && (
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span
-                data-testid="ms-target-identity"
-                title={`${t('machineScreen.targetIdentityTitle', { title: identityTitle })} · ${identityMeta}`}
-                className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line bg-panel2 px-2 py-0.5"
-              >
-                {target.kind === 'machine' ? (
-                  <Monitor className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
-                ) : (
-                  <AppWindow className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
-                )}
-                <span className="truncate text-[12px] font-semibold">{identityTitle}</span>
-                {identityMeta && (
-                  <>
-                    <span className="text-muted" aria-hidden="true">
-                      ·
-                    </span>
-                    <span className="truncate font-mono text-[11px] text-muted">{identityMeta}</span>
-                  </>
-                )}
-              </span>
-              {targetState?.requestedBy === 'agent' && (
+              {target && (
+                <span
+                  data-testid="ms-target-identity"
+                  title={`${t('machineScreen.targetIdentityTitle', { title: identityTitle })} · ${identityMeta}`}
+                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line bg-panel2 px-2 py-0.5"
+                >
+                  {target.kind === 'machine' ? (
+                    <Monitor className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
+                  ) : (
+                    <AppWindow className="size-3.5 shrink-0 text-cua" aria-hidden="true" />
+                  )}
+                  <span className="truncate text-[12px] font-semibold">{identityTitle}</span>
+                  {identityMeta && (
+                    <>
+                      <span className="text-muted" aria-hidden="true">
+                        ·
+                      </span>
+                      <span className="truncate font-mono text-[11px] text-muted">{identityMeta}</span>
+                    </>
+                  )}
+                </span>
+              )}
+              {target && targetState?.requestedBy === 'agent' && (
                 <span className="text-[11px] text-cua">{t('machineScreen.targetByAgent')}</span>
               )}
-              {targetState?.requestedBy === 'user' && (
+              {target && targetState?.requestedBy === 'user' && (
                 <span className="text-[11px] text-muted">{t('machineScreen.targetByUser')}</span>
               )}
               <div
@@ -641,7 +643,7 @@ export function HostMachineScreen() {
             </div>
           )}
 
-          <div className="flex min-h-0 flex-1 flex-col gap-1">
+          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto">
             {snapshot && target ? (
               <>
                 <CuaTargetOverlay

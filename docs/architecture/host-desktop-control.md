@@ -294,7 +294,7 @@ công cụ CUA trả `CUA_UNAVAILABLE` trên Linux** và bảng "Machine screen"
 | `backend/src/agentbox/sandbox/x11/platform.py` | liệt kê cửa sổ (EWMH), hình học, danh tính, tiêu điểm, mutex `flock`, `launch_app` | `xprop`, `xwininfo`, `xdotool` |
 | `backend/src/agentbox/sandbox/x11/capture.py` | `import -window <id>` → `bgra:-`; dự phòng chụp theo vùng màn hình; dùng lại toàn bộ hàm thuần của `win/capture.py` | ImageMagick `import` |
 | `backend/src/agentbox/sandbox/x11/input.py` | chuột/phím qua XTEST, bốn chốt chặn như bản Windows | `xdotool` |
-| `backend/src/agentbox/sandbox/x11/errors.py` | **dùng lại nguyên bộ mã lỗi** của `win/errors.py` — không có mã riêng cho Linux | — |
+| `backend/src/agentbox/sandbox/x11/__init__.py` | xuất `PlatformError` **từ `win/errors.py`** — Linux dùng chung bộ mã lỗi, không có mã riêng | — |
 
 `X11Platform` nhận `runner` tiêm vào, nên bài kiểm chạy được trên máy không có X server
 (`backend/tests/unit/test_x11_platform.py`).
@@ -309,10 +309,11 @@ không theo `sys.platform` — nhờ vậy bộ test giả-Windows vẫn chạy 
 
 | Điểm | Windows | Linux/X11 | Vì sao |
 |---|---|---|---|
-| Phát hiện người chạm chuột/phím | hook `WH_MOUSE_LL`/`WH_KEYBOARD_LL`, `LLMHF_INJECTED` | **không có** | X11 không có cờ "do XTEST sinh ra"; hook luôn báo "người" sẽ tự nhả lease ngay sau cú bấm của agent |
-| Nhả lease khi người chen vào | tự động | chỉ khi gọi route nhả/dừng | hệ quả của dòng trên |
-| `poll_idle()` | `GetLastInputInfo` | không bao giờ bắn | không có nguồn "lần cuối người tương tác" |
-| Cửa sổ tại một điểm | `WindowFromPoint` | thử hình học theo Z-order của `_NET_CLIENT_LIST_STACKING` | không cần thêm thư viện; cửa sổ override-redirect (viền báo) không nằm trong danh sách nên không che đích |
+| Phát hiện người chạm chuột/phím | hook `WH_MOUSE_LL`/`WH_KEYBOARD_LL`, `LLMHF_INJECTED` | **lấy mẫu** con trỏ + cửa sổ có tiêu điểm mỗi 1 s | X11 không có cờ "do XTEST sinh ra"; hook luôn báo "người" sẽ tự nhả lease ngay sau cú bấm của agent |
+| Nhả lease khi người chen vào | tự động, tức thời | tự động, chậm ≤ 1 s; **không thấy bàn phím** | hệ quả của dòng trên — xem §9.4 |
+| `poll_idle()` | `GetLastInputInfo` | `X11Platform.last_input_tick()` — bộ đếm của chính ta | không có nguồn "lần cuối người tương tác" của hệ thống |
+| Cửa sổ tại một điểm | `WindowFromPoint` | thử hình học theo Z-order của `_NET_CLIENT_LIST_STACKING` | không cần thêm thư viện; viền báo của BoxFox (override-redirect) không nằm trong danh sách nên không che đích |
+| Menu/tooltip override-redirect ngay trên điểm bấm | `WindowFromPoint` thấy | **không thấy** | chúng không có trong `_NET_CLIENT_LIST_STACKING`, nên `check_point_ownership` vẫn cho qua. Lỗ đã biết; vá cần phép thử điểm ảnh theo cây cửa sổ (`xwininfo -root -children`) |
 | Cửa sổ bị che | `PrintWindow` đọc được pixel riêng | chụp vùng màn hình, gắn `occluded=True` + `notes` | X11 không có tương đương `PrintWindow` |
 | Màn hình khoá | `DESKTOP_LOCKED` | luôn `False` | X11 không có khái niệm tương đương ở tầng này |
 | DPI / nhiều màn hình | pixel vật lý, DPI theo cửa sổ | một màn hình ảo, DPI luôn 96 | X11 hợp nhất mọi output thành một toạ độ |
@@ -320,9 +321,32 @@ không theo `sys.platform` — nhờ vậy bộ test giả-Windows vẫn chạy 
 
 Viền báo trên desktop là việc còn lại của nền tảng Linux, không phải "đã xong".
 
-### 9.4 Gói phải cài trên máy Linux
+### 9.4 Người thật chạm máy (quyết định #6785)
+
+Windows biết người vừa chạm máy nhờ cờ `LLMHF_INJECTED` của hook. X11 không có tín hiệu đó, nên
+`X11Platform.last_input_tick()` **lấy mẫu** hai thứ, mỗi lần `poll_idle()` gọi:
+
+* vị trí con trỏ (`xdotool getmouselocation`), và
+* cửa sổ đang có tiêu điểm (`xprop -root _NET_ACTIVE_WINDOW`).
+
+Bộ đếm tăng khi một trong hai đổi **mà không phải do ta vừa đặt** (`note_own_pointer()`,
+`set_foreground_window()`, `set_cursor_pos()` đều ghi lại việc của chính mình). Nhờ vậy cú bấm của
+agent không tự huỷ quyền của nó — điều tệ nhất có thể xảy ra với một cơ chế tự nhả quyền.
+
+Harness chạy vòng lấy mẫu này (`api/server.py`, `idle_watch`, nhịp 1 s, trong luồng riêng) **chỉ khi**
+nền tảng khai báo `supports_idle_watch` — X11 khai báo, Windows thì không, nên hành vi Windows đang
+chạy thật không đổi.
+
+Giới hạn phải nói rõ: **không thấy bàn phím** (gõ phím mà không đụng chuột thì không phát hiện được),
+và **có thể báo nhầm** khi một ứng dụng khác tự đổi tiêu điểm (cửa sổ mới mở đòi focus, thông báo,
+trình quản lý cửa sổ). Hướng báo nhầm là hướng an toàn: quyền về tay người, agent phải xin lại.
+
+### 9.5 Gói phải cài trên máy Linux
 
 `xdotool`, `xprop`, `xwininfo` (gói `x11-utils`), ImageMagick (`import`). Thiếu gói nào thì lời gọi
 trả lỗi **nêu đúng tên gói** (`CUA_UNAVAILABLE` / `CAPTURE_FAILED` với `details.tool`), không im lặng
-trả ảnh rỗng. `get_platform()` trả `None` khi không có `DISPLAY`/`WAYLAND_DISPLAY` — máy không có
-desktop thì CUA tắt, đúng như trước.
+trả ảnh rỗng. `get_platform()` trả `None` khi không có `DISPLAY`/`WAYLAND_DISPLAY`, **hoặc** khi X
+server không trả lời (kích thước màn hình ảo 0×0) — máy không có desktop thì CUA tắt, đúng như trước.
+
+Phiên **Wayland**: nếu có `WAYLAND_DISPLAY`, `notes()` nói thẳng rằng chỉ thấy được cửa sổ
+X11/XWayland; ứng dụng Wayland thuần không hiện trong danh sách và không nhận được XTEST.

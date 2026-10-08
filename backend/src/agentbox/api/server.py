@@ -68,6 +68,21 @@ from .owner_settings import OwnerSettings
 
 logger = logging.getLogger('boxfox.harness.api')
 RESEARCH_PUMP_KEY = web.AppKey('research_pump', asyncio.Task)
+IDLE_WATCH_KEY = web.AppKey('idle_watch', asyncio.Task)
+
+#: Nhịp lấy mẫu của bộ theo dõi "người thật chạm máy" trên nền tảng không có hook (X11).
+#: Mỗi mẫu là hai tiến trình con ngắn (~20 ms), chạy trong luồng riêng nên không chặn vòng lặp.
+IDLE_WATCH_INTERVAL_SEC = 1.0
+
+
+def idle_watch_supported(control) -> bool:
+    """Nền tảng của bộ điều khiển có TỰ theo dõi được người can thiệp mà không cần hook hệ điều hành?
+
+    Windows không cần: hook `WH_MOUSE_LL`/`WH_KEYBOARD_LL` đã lo việc đó (và đường `poll_idle` của
+    nó chưa được kiểm trên máy Windows thật). X11 thì cần — ở đó chỉ có mẫu con trỏ + tiêu điểm.
+    Cờ này nằm trên chính đối tượng nền tảng để chỗ gọi không phải rẽ nhánh theo `sys.platform`.
+    """
+    return bool(getattr(getattr(control, 'platform', None), 'supports_idle_watch', False))
 
 
 def research_job_pumpable(runtime, job, session):
@@ -585,6 +600,38 @@ def create_app(runtime):
 
     app.on_startup.append(research_continuations)
     app.on_cleanup.append(stop_research_continuations)
+
+    async def idle_watch(_app):
+        """Nhả quyền điều khiển về tay người khi họ chạm máy, trên nền tảng không có hook.
+
+        Windows phát hiện người thật bằng hook ``WH_MOUSE_LL``/``WH_KEYBOARD_LL``; X11 không có
+        tương đương, nên ở đó ``poll_idle()`` lấy mẫu con trỏ + cửa sổ đang có tiêu điểm
+        (:meth:`X11Platform.last_input_tick`) và tự nhả quyền khi thấy thay đổi mà chính agent
+        không gây ra. Chỉ chạy khi nền tảng khai báo ``supports_idle_watch`` — nhờ vậy hành vi
+        Windows đang chạy thật không đổi cho tới khi đường hook của nó được kiểm trên máy Windows.
+        """
+        control = getattr(runtime.executor, 'desktop', None)
+        if not idle_watch_supported(control):
+            return
+
+        async def pump():
+            while True:
+                await asyncio.sleep(IDLE_WATCH_INTERVAL_SEC)
+                try:
+                    await asyncio.to_thread(control.poll_idle)
+                except Exception:
+                    logger.exception('idle watch deferred')
+
+        _app[IDLE_WATCH_KEY] = asyncio.create_task(pump())
+
+    async def stop_idle_watch(_app):
+        task = _app.get(IDLE_WATCH_KEY)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    app.on_startup.append(idle_watch)
+    app.on_cleanup.append(stop_idle_watch)
 
     def _search_status():
         """Khối `search` của health: lỗi ở đây KHÔNG được kéo cả route xuống (chỉ đọc, không mạng)."""
