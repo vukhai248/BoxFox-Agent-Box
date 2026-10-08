@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import pytest
-from win_fakes import FakePlatform, decode_events, make_window, reset_win_state
+from win_fakes import (FakePlatform, decode_events, make_window, reset_win_state,
+                       wheel_delta)
 
 from agentbox.sandbox.win import capture, input as win_input, uia
 from agentbox.sandbox.win.errors import (
@@ -377,19 +378,13 @@ def test_post_message_rung_is_not_implemented():
 # ---------------------------------------------------------------------------
 # Cử chỉ: cuộn, kéo, giữ, vẽ nét (08/10/2026)
 # ---------------------------------------------------------------------------
-def _wheel_delta(data: int) -> int:
-    """``mouseData`` là DWORD; ``SendInput`` đọc 16 bit thấp như số CÓ DẤU."""
-    low = int(data) & 0xFFFF
-    return low - 65536 if low >= 32768 else low
-
-
 def test_scroll_sends_a_wheel_event_after_moving_the_pointer():
     fake = FakePlatform(foreground=100)
     result = win_input.scroll(400, 300, window=100, direction="down", steps=5, platform=fake)
     decoded = decode_events(fake.sent_events)
     assert decoded[0]["flags"] == MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
     assert decoded[1]["flags"] == MOUSEEVENTF_WHEEL
-    assert _wheel_delta(decoded[1]["data"]) == -5 * 120
+    assert wheel_delta(decoded[1]["data"]) == -5 * 120
     assert result["steps"] == 5
 
 
@@ -397,7 +392,7 @@ def test_scroll_maps_directions_and_clamps_the_steps():
     up = FakePlatform(foreground=100)
     win_input.scroll(10, 10, window=100, direction="up", steps=99, platform=up)
     decoded = decode_events(up.sent_events)
-    assert _wheel_delta(decoded[-1]["data"]) == win_input.MAX_SCROLL_STEPS * 120
+    assert wheel_delta(decoded[-1]["data"]) == win_input.MAX_SCROLL_STEPS * 120
     right = FakePlatform(foreground=100)
     win_input.scroll(10, 10, window=100, direction="right", steps=1, platform=right)
     assert decode_events(right.sent_events)[-1]["flags"] == MOUSEEVENTF_HWHEEL
@@ -457,6 +452,27 @@ def test_stroke_walks_every_point_of_the_path():
     assert flags[1] == MOUSEEVENTF_LEFTDOWN and flags[-1] == MOUSEEVENTF_LEFTUP
     assert len([flag for flag in flags[2:-1] if flag & MOUSEEVENTF_MOVE]) == 2
     assert result["points"] == 3 and result["to"] == {"x": 70, "y": 60}
+
+
+def test_a_pinned_stroke_refuses_a_path_that_ends_covered_by_another_window():
+    """Nét vẽ là cú kéo nhiều điểm — điểm CUỐI chịu cùng chốt như điểm cuối của `drag`.
+
+    Vòng soát mã đợt cử chỉ: `stroke` chỉ kiểm điểm đầu, nên một nét vẽ chạy quá mép cửa sổ đích
+    vẫn nhấn, đi rồi thả ở cửa sổ bên kia.
+    """
+    fake = FakePlatform(foreground=100, point_map={(70, 60): 200})
+    with pytest.raises(PlatformError) as error:
+        win_input.stroke([[10, 10], [40, 30], [70, 60]], window=100, platform=fake)
+    assert error.value.code == SOURCE_CHANGED
+    assert fake.sent_events == [], "chưa chứng minh được điểm cuối thì chưa được nhấn"
+
+
+def test_a_machine_scope_stroke_may_end_outside_the_target():
+    fake = FakePlatform(foreground=100, point_map={(70, 60): 200})
+    result = win_input.stroke([[10, 10], [40, 30], [70, 60]], window=100, platform=fake,
+                              guard_end=False)
+    assert result["to"] == {"x": 70, "y": 60}
+    assert decode_events(fake.sent_events)[-1]["flags"] == MOUSEEVENTF_LEFTUP
 
 
 def test_a_stroke_needs_two_points_and_has_a_cap():

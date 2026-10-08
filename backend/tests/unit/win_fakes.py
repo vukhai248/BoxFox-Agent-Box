@@ -535,6 +535,16 @@ def decode_events(events: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def wheel_delta(data: int) -> int:
+    """`mouseData` là DWORD: `SendInput` đọc 16 bit thấp như số CÓ DẤU, nên -600 hiện ra 64936.
+
+    Dùng chung cho các bài kiểm cuộn của `win_input` và của `host_executor` — hai bản sao của cùng
+    một phép đổi dấu là hai chỗ để lệch nhau.
+    """
+    low = int(data) & 0xFFFF
+    return low - 65536 if low >= 32768 else low
+
+
 def reset_win_state() -> None:
     """Dọn trạng thái cấp module giữa các test."""
     win_capture.reset_dpi_awareness()

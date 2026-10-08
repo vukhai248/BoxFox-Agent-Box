@@ -1190,10 +1190,11 @@ def test_keycodes_are_released_even_when_the_keystroke_fails():
 class CursorFake:
     """`xdotool` giả có con trỏ thật: `mousemove` cập nhật vị trí, `getmouselocation` đọc lại."""
 
-    def __init__(self, tools, at=(0, 0), fail_move_to=None):
+    def __init__(self, tools, at=(0, 0), fail_move_to=None, fail_verb=None):
         self.tools = tools
         self.at = tuple(at)
         self.fail_move_to = fail_move_to
+        self.fail_verb = fail_verb
 
     def __call__(self, argv, timeout):
         tool, args = os.path.basename(argv[0]), argv[1:]
@@ -1204,13 +1205,18 @@ class CursorFake:
             if self.fail_move_to is not None and target == self.fail_move_to:
                 return xp._CommandResult(1, '', 'XGetGeometry: BadWindow')
             self.at = target
+        if tool == 'xdotool' and args and args[0] == self.fail_verb:
+            # `_xdotool` KHÔNG ném lỗi khi lệnh thoát khác 0 — nó trả một kết quả hỏng. Đây là ca
+            # "chính lệnh nhả chuột hỏng", thứ mà `finally` cũ bỏ qua vì `released` khác `None`.
+            self.tools.calls.append(list(argv))
+            return xp._CommandResult(1, '', 'XTestFakeButtonEvent: BadValue')
         return self.tools(argv, timeout)
 
 
-def _gesture_platform(*, at=(0, 0), fail_move_to=None, rect=(0, 0, 100, 100)):
+def _gesture_platform(*, at=(0, 0), fail_move_to=None, rect=(0, 0, 100, 100), fail_verb=None):
     platform, tools = build(windows=[0x11], props={0x11: window_props()},
                             rects={0x11: rect}, foreground=0x11)
-    platform._runner = CursorFake(tools, at=at, fail_move_to=fail_move_to)
+    platform._runner = CursorFake(tools, at=at, fail_move_to=fail_move_to, fail_verb=fail_verb)
     window = platform.describe_window(0x11)
     return platform, tools, window
 
@@ -1357,3 +1363,41 @@ def test_a_stroke_leaves_the_pointer_at_the_last_point_of_the_path():
     xi.stroke([(10, 10), (40, 25), (70, 55)], window=window, platform=platform, restore=False)
     assert platform.get_cursor_pos() == (70, 55)
     assert platform.last_input_tick() == before, 'nét vẽ của ta không được tính là người thật'
+
+
+def test_a_pinned_stroke_refuses_a_path_that_ends_outside_the_target():
+    """Nét vẽ là cú kéo nhiều điểm: nét cụt ra ngoài cửa sổ đích là một cú thả vào cửa sổ khác.
+
+    Vòng soát mã đợt cử chỉ: `drag` đã canh điểm cuối từ đầu, còn `stroke` thì chỉ canh điểm đầu —
+    nên một nét vẽ chạy quá mép cửa sổ đích vẫn nhấn, đi rồi thả ở cửa sổ bên kia, đúng thứ mà
+    chốt của `drag` sinh ra để chặn.
+    """
+    platform, tools, window = _gesture_platform(at=(10, 10))
+    with pytest.raises(PlatformError) as caught:
+        xi.stroke([(10, 10), (50, 50), (300, 300)], window=window, platform=platform,
+                  restore=False)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert _xdotool_calls(tools, 'mousedown') == [], 'chưa chứng minh được điểm cuối thì chưa nhấn'
+
+
+def test_a_machine_scope_stroke_may_end_outside_the_target():
+    """Đích là CẢ MÁY thì nét vẽ được đi ra ngoài cửa sổ — cùng luật với `drag`."""
+    platform, tools, window = _gesture_platform(at=(10, 10))
+    outcome = xi.stroke([(10, 10), (50, 50), (300, 300)], window=window, platform=platform,
+                        guard_end=False, restore=False)
+    assert outcome['to'] == {'x': 300, 'y': 300}
+    verbs = [call[1] for call in tools.calls if os.path.basename(call[0]) == 'xdotool'
+             and call[1] in ('mousedown', 'mouseup')]
+    assert verbs == ['mousedown', 'mouseup']
+
+
+def test_a_failed_release_command_is_retried_because_the_button_may_still_be_down():
+    """`_xdotool` trả kết quả hỏng chứ không ném lỗi, nên `released is not None` chưa là đã nhả.
+
+    Đo trên máy thật: một lệnh `xdotool mouseup` hỏng để lại nút chuột đang giữ, và mọi cú bấm sau
+    đó thành cú kéo. `finally` phải nhìn vào `ok` của kết quả, không chỉ nhìn vào `None`.
+    """
+    platform, tools, window = _gesture_platform(at=(10, 10), fail_verb='mouseup')
+    with pytest.raises(PlatformError):
+        xi.hold(50, 50, window=window, seconds=0.1, platform=platform, restore=False)
+    assert len(_xdotool_calls(tools, 'mouseup')) == 2, 'lệnh nhả hỏng phải được nhả lại một lần nữa'

@@ -79,10 +79,6 @@ UNSUPPORTED_ACTION_CODE = 'UNSUPPORTED_ACTION'
 CUA_ACTIONS = ('click', 'double_click', 'right_click', 'middle_click', 'type', 'key', 'scroll',
                'drag', 'hold', 'stroke')
 
-#: Hành động cần toạ độ điểm bắt đầu.
-CUA_POINT_ACTIONS = ('click', 'double_click', 'right_click', 'middle_click', 'scroll', 'drag',
-                     'hold', 'stroke')
-
 #: Đường `/__box/*` chưa có bản host tương ứng (`HostExecutor.request`).
 HOST_REQUEST_UNSUPPORTED_CODE = 'HOST_REQUEST_UNSUPPORTED'
 
@@ -871,9 +867,11 @@ class HostExecutor:
             return input_module.press_key(str(args.get('key') or ''), modifiers=tuple(modifiers),
                                           window=window, platform=win_platform)
         if action == 'stroke':
-            # `stroke` đi theo CẢ danh sách điểm, nên nó không cần một cặp (x, y) mở đầu.
+            # `stroke` đi theo CẢ danh sách điểm, nên nó không cần một cặp (x, y) mở đầu — nhưng nó
+            # là một cú kéo nhiều điểm, nên nó nhận cùng chốt điểm cuối như `drag`.
             return self._gesture(input_module, 'stroke', window=window, points=args.get('path') or (),
-                                 button=self._button_arg(args), platform=win_platform)
+                                 button=self._button_arg(args), guard_end=pinned,
+                                 platform=win_platform)
         try:
             x, y = int(args.get('x')), int(args.get('y'))
         except (TypeError, ValueError):
@@ -881,7 +879,7 @@ class HostExecutor:
         if action == 'scroll':
             return self._gesture(input_module, 'scroll', x, y, window=window,
                                  direction=str(args.get('direction') or 'down').strip().lower(),
-                                 steps=args.get('steps') or 3, platform=win_platform)
+                                 steps=args.get('steps') or None, platform=win_platform)
         if action == 'drag':
             return self._gesture(input_module, 'drag', x, y, window=window,
                                  to_x=self._int_arg(args, 'toX', 'cần toạ độ đích (toX, toY)'),
@@ -891,7 +889,7 @@ class HostExecutor:
         if action == 'hold':
             return self._gesture(input_module, 'hold', x, y, window=window,
                                  button=self._button_arg(args),
-                                 seconds=args.get('seconds') or 1.0, platform=win_platform)
+                                 seconds=args.get('seconds') or None, platform=win_platform)
         button = {'click': 'left', 'double_click': 'left', 'right_click': 'right',
                   'middle_click': 'middle'}[action]
         outcome = input_module.click(x, y, window=window, button=button, platform=win_platform)
@@ -902,8 +900,9 @@ class HostExecutor:
     def _gesture(self, input_module, name, *args, **kwargs):
         """Gọi một thao tác cử chỉ (cuộn/kéo/giữ/vẽ) — thiếu thì nói rõ, không vỡ bằng `AttributeError`.
 
-        Nền tảng chưa có thao tác này (bản Windows đang theo sau bản X11) trả `UNSUPPORTED_ACTION`
-        kèm tên nền tảng, để chỗ gỡ lỗi biết là máy không làm được chứ không phải tham số sai.
+        Hai mô-đun của `_load_input` hiện có đủ bốn thao tác, nên nhánh dưới chỉ chạy khi thêm một
+        nền tảng mới còn thiếu thao tác: lúc đó trả `UNSUPPORTED_ACTION` kèm tên nền tảng, để chỗ gỡ
+        lỗi biết là máy không làm được chứ không phải tham số sai.
         """
         action = getattr(input_module, name, None)
         if action is None:

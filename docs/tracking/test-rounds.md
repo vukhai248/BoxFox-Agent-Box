@@ -2825,3 +2825,11 @@ khi chạy **ứng dụng thật**, không phải khi đọc mã.
 
 Môi trường cho lượt này: cài thêm `mtpaint` (`apt-get install mtpaint`) và một venv Jupyter riêng ở
 `/var/tmp/nbvenv` (`pip install notebook`, bản 7.6.3) — máy ảo không có sẵn cả hai.
+
+Vòng soát mã ngay sau đó (cùng ngày, trước khi mở PR) bắt **bốn** chỗ nữa và đã vá hết trong cùng
+nhánh: `stroke` thiếu chốt điểm cuối (một nét vẽ chạy quá mép cửa sổ đích là một cú thả vào cửa sổ
+khác — `drag` đã canh từ đầu, `stroke` thì chưa); lệnh nhả chuột hỏng không được nhả lại (vì
+`_xdotool` trả kết quả hỏng chứ không ném lỗi); `_box_button` im lặng biến tên nút sai thành chuột
+trái; và ba kế hoạch cử chỉ của box không có bài kiểm nào. Vòng đó thêm 17 bài kiểm (tổng 45 cho cả
+đợt cử chỉ) và sửa một lời khẳng định **sai** trong tài liệu về `_NET_WM_PID` (nó là gợi ý do ứng
+dụng tự khai, không phải dấu hiệu X server kiểm chứng — chốt này chống tai nạn, không chống kẻ xấu).

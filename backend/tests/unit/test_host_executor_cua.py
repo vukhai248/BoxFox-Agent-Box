@@ -10,8 +10,10 @@ import base64
 import json
 
 import pytest
-from win_fakes import FakePlatform, decode_events, make_window, reset_win_state
+from win_fakes import (FakePlatform, decode_events, make_window, reset_win_state,
+                       wheel_delta)
 
+from agentbox.agent_core import cua_target
 from agentbox.agent_core import desktop_control as dc
 from agentbox.agent_core import permissions as permissions_module
 from agentbox.sandbox import host_executor as host_module
@@ -28,7 +30,43 @@ def _clean_state():
     reset_win_state()
 
 
-def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', windows=None):
+class _SessionRows:
+    """Sổ phiên tối thiểu cho `SessionTargetStore` (get/update_config, `KeyError` như thật)."""
+
+    def __init__(self, rows):
+        self.rows = dict(rows)
+
+    def get(self, sid):
+        if sid not in self.rows:
+            raise KeyError('Session not found')
+        row = dict(self.rows[sid])
+        row.setdefault('config', {})
+        return row
+
+    def update_config(self, sid, config):
+        if sid not in self.rows:
+            raise KeyError('Session not found')
+        self.rows[sid]['config'] = dict(config)
+
+
+def _target_store(target):
+    return cua_target.SessionTargetStore(_SessionRows(
+        {'sess-1': {'config': {'cuaTarget': target, 'cuaTargetRevision': 1,
+                               'cuaTargetSetBy': 'user'}}}))
+
+
+def pinned_to(window):
+    """Sổ phiên đã chọn MỘT cửa sổ làm đích — `pinned=True` trong `_send_input`."""
+    return _target_store(cua_target.window_entry(window))
+
+
+def machine_scope():
+    """Sổ phiên chọn đích CẢ MÁY — `pinned=False`."""
+    return _target_store({'kind': 'machine'})
+
+
+def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', windows=None,
+          targets=None):
     """`(executor, control, platform)` — sẵn sàng cho một lời gọi CUA."""
     fake = platform if platform is not None else FakePlatform(windows=windows)
     profile = tmp_path / 'profile'
@@ -42,7 +80,7 @@ def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', 
     executor = host_module.HostExecutor(
         workspace=tmp_path / 'workspace', policy=policy, platform='win32', desktop=control,
         approver=(lambda name, args, decision, session_id=None: approver) if approver else None,
-        artifacts_dir=tmp_path / 'artifacts')
+        artifacts_dir=tmp_path / 'artifacts', targets=targets)
     return executor, control, fake
 
 
@@ -252,12 +290,6 @@ def test_an_unknown_action_is_refused_with_a_code(tmp_path):
     assert fake.sent_events == []
 
 
-def _wheel_delta(data):
-    """``mouseData`` là DWORD: ``SendInput`` đọc 16 bit thấp như số CÓ DẤU, nên -600 hiện ra 64936."""
-    low = int(data) & 0xFFFF
-    return low - 65536 if low >= 32768 else low
-
-
 def test_scroll_sends_one_wheel_event_with_the_requested_number_of_steps(tmp_path):
     executor, _control, fake = build(tmp_path)
     payload = run(executor, 'computer_use', {'action': 'scroll', 'x': 20, 'y': 30,
@@ -267,7 +299,7 @@ def test_scroll_sends_one_wheel_event_with_the_requested_number_of_steps(tmp_pat
     wheels = [event for event in decode_events(fake.sent_events)
               if event['flags'] & win_platform_module.MOUSEEVENTF_WHEEL]
     assert len(wheels) == 1
-    assert _wheel_delta(wheels[0]['data']) == -5 * win_platform_module.WHEEL_DELTA, 'xuống = số nấc âm'
+    assert wheel_delta(wheels[0]['data']) == -5 * win_platform_module.WHEEL_DELTA, 'xuống = số nấc âm'
 
 
 def test_drag_holds_the_button_across_the_steps_and_releases_it(tmp_path):
@@ -300,6 +332,36 @@ def test_stroke_follows_every_point_of_the_path(tmp_path):
     assert payload.get('is_error') is not True
     assert payload['points'] == 3
     assert payload['to'] == {'x': 100, 'y': 80}
+
+
+def test_a_pinned_session_refuses_a_stroke_that_ends_outside_the_target(tmp_path):
+    """Đích của phiên là MỘT cửa sổ thì nét vẽ không được kết thúc ở cửa sổ khác.
+
+    `drag` đã có chốt này từ đầu; `stroke` là cú kéo nhiều điểm nên nó phải chịu cùng luật — nếu
+    không, một nét vẽ chạy quá mép cửa sổ đích là một cú thả vào ứng dụng bên kia.
+    """
+    target = make_window(hwnd=100, rect=(0, 0, 400, 300), extended_bounds=(0, 0, 400, 300))
+    other = make_window(hwnd=200, rect=(400, 0, 400, 300), extended_bounds=(400, 0, 400, 300))
+    fake = FakePlatform(windows=[target, other], foreground=100)
+    executor, _control, fake = build(tmp_path, platform=fake, targets=pinned_to(target))
+    payload = run(executor, 'computer_use',
+                  {'action': 'stroke', 'path': [[50, 50], [90, 90], [600, 150]]})
+    assert payload['errorCode'] == win_errors.SOURCE_CHANGED
+    assert fake.sent_events == [], 'chưa chứng minh được điểm cuối thì chưa được nhấn'
+
+
+def test_a_machine_scope_stroke_may_end_outside_the_target(tmp_path):
+    """Đích là CẢ MÁY: kéo/nét vẽ đi từ cửa sổ này sang cửa sổ khác là việc hợp lệ."""
+    target = make_window(hwnd=100, rect=(0, 0, 400, 300), extended_bounds=(0, 0, 400, 300))
+    other = make_window(hwnd=200, rect=(400, 0, 400, 300), extended_bounds=(400, 0, 400, 300))
+    fake = FakePlatform(windows=[target, other], foreground=100)
+    executor, _control, fake = build(tmp_path, platform=fake,
+                                     env={'BOXFOX_PERMISSION_SCOPE': 'machine'},
+                                     targets=machine_scope())
+    payload = run(executor, 'computer_use',
+                  {'action': 'stroke', 'path': [[50, 50], [90, 90], [600, 150]]})
+    assert payload.get('is_error') is not True
+    assert payload['to'] == {'x': 600, 'y': 150}
 
 
 def test_a_stroke_without_a_usable_path_is_refused(tmp_path):

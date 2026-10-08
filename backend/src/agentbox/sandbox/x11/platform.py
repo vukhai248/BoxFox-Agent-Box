@@ -604,9 +604,15 @@ class X11Platform:
         ``WM_TRANSIENT_FOR`` trỏ về cửa sổ chính nhưng tự khai ``_NET_WM_WINDOW_TYPE_NORMAL``, nên
         chốt cũ coi chúng là cửa sổ lạ: mọi ``type``/``key`` bị từ chối ``SOURCE_CHANGED`` trong lúc
         hộp thoại giữ tiêu điểm, tức là không thể gõ tên tệp để lưu — đúng kiểu "agent chết cứng"
-        mà hộp thoại ``_NET_WM_WINDOW_TYPE_DIALOG`` đã được cứu ở BUG-117. ``_NET_WM_PID`` là bằng
-        chứng mạnh hơn cả ``WM_TRANSIENT_FOR``: một tiến trình khác không tạo được cửa sổ mang PID
-        của ứng dụng đích, còn ứng dụng thì luôn đặt đúng.
+        mà hộp thoại ``_NET_WM_WINDOW_TYPE_DIALOG`` đã được cứu ở BUG-117.
+
+        Chốt này chống **tai nạn**, không chống kẻ xấu — đừng đọc nó như một ranh giới an ninh.
+        ``_NET_WM_PID`` là gợi ý do ứng dụng tự khai, không phải dữ kiện X server kiểm chứng: một
+        tiến trình khác trên cùng display đọc được PID của đích rồi khai đúng PID đó, y như nó khai
+        ``WM_TRANSIENT_FOR`` hay ``_NET_WM_WINDOW_TYPE``. Cùng lắm thì ``_NET_WM_PID`` khó **vô tình**
+        trùng hơn: một ứng dụng lạ khai PID của chính nó, nên nó không trùng PID của đích. Cái chặn
+        được là ca hay gặp thật: một cửa sổ của ứng dụng khác "bám theo" cửa sổ đang hoạt động.
+        Ai đã gửi được input qua XTEST thì không cần qua chốt này.
         """
         value = int(candidate)
         target = int(hwnd)
@@ -624,7 +630,10 @@ class X11Platform:
         return False
 
     def same_process(self, first: int, second: int) -> bool:
-        """Hai cửa sổ do cùng một tiến trình tạo ra? (``_NET_WM_PID``, chỉ đọc từ bộ đệm)."""
+        """Hai cửa sổ khai cùng một tiến trình? (``_NET_WM_PID``, chỉ đọc từ bộ đệm).
+
+        Đây là gợi ý của ứng dụng, không phải dữ kiện X server kiểm chứng — xem ``is_own_window``.
+        """
         pid = self.get_window_pid(first)
         return pid is not None and pid == self.get_window_pid(second)
 

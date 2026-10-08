@@ -403,28 +403,11 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
     p = _platform(platform)
     if button not in MOUSE_BUTTONS:
         raise PlatformError(SOURCE_CHANGED, 'nút chuột không hợp lệ: %r' % (button,), button=button)
-    check_geometry_revision(source_id, geometry_revision, platform=p)
-    hwnd = check_preconditions(window, platform=p)
-    check_point_ownership(x, y, hwnd, platform=p)
-    previous_foreground = p.get_foreground_window()
-    previous_cursor = p.get_cursor_pos()
-    ensure_foreground(hwnd, platform=p, timeout=timeout)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
     try:
-        # Ghi vị trí con trỏ mà CHÍNH TA sắp đặt TRƯỚC khi di chuyển: bộ theo dõi "người thật chạm
-        # máy" lấy mẫu ở luồng khác, nên ghi sau khi di chuyển là có một khe hở để nó đọc cú di
-        # chuyển của chính ta thành người thật. Ghi sớm mà lệnh hỏng thì cùng lắm là nhả quyền về
-        # tay người — hướng an toàn.
-        p.note_own_pointer(int(x), int(y))
-        # `mousemove --sync` chờ một sự kiện MotionNotify tới đúng toạ độ; con trỏ đã ở đúng chỗ thì
-        # X server KHÔNG sinh sự kiện nào và `xdotool` chờ tới hết thời gian chờ (đo được: bấm hai
-        # lần liên tiếp vào cùng một điểm làm lần thứ hai treo đủ 5 s rồi báo `SOURCE_CHANGED`).
-        # Vì vậy con trỏ đã ở đúng chỗ thì đi KHÔNG đồng bộ — vẫn kéo con trỏ về đúng điểm đã kiểm
-        # quyền nếu người thật vừa di chuột trong lúc chờ tiêu điểm, mà không chờ sự kiện không tới.
-        if previous_cursor != (int(x), int(y)):
-            moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
-        else:
-            moved = _xdotool(p, 'mousemove', str(int(x)), str(int(y)))
-        _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
+        _move_to(p, int(x), int(y), sync=previous_cursor != (int(x), int(y)))
         pressed = _xdotool(p, 'click', '--delay', str(CLICK_DELAY_MS), str(MOUSE_BUTTONS[button]))
         _fail(pressed, 'click', button=button)
     finally:
@@ -567,7 +550,10 @@ def drag(x: int, y: int, to_x: int, to_y: int, *, window: Any, button: str = 'le
         time.sleep(GESTURE_SETTLE_SEC)
         released = _xdotool(p, 'mouseup', str(code))
     finally:
-        if released is None:
+        # `released` khác `None` KHÔNG có nghĩa là đã nhả được: `_xdotool` trả về một kết quả hỏng
+        # (mã thoát khác 0, hoặc hết thời gian chờ) chứ không ném lỗi, nên lệnh nhả hỏng vẫn đi tới
+        # đây với một kết quả. Nhả lại khi `not released.ok` — nút còn giữ là cả máy không dùng được.
+        if released is None or not released.ok:
             _release_button(p, code)
         if restore:
             restore_context(previous_foreground, previous_cursor, platform=p)
@@ -610,7 +596,10 @@ def hold(x: int, y: int, *, window: Any, button: str = 'left', seconds: float = 
         time.sleep(duration)
         released = _xdotool(p, 'mouseup', str(code))
     finally:
-        if released is None:
+        # `released` khác `None` KHÔNG có nghĩa là đã nhả được: `_xdotool` trả về một kết quả hỏng
+        # (mã thoát khác 0, hoặc hết thời gian chờ) chứ không ném lỗi, nên lệnh nhả hỏng vẫn đi tới
+        # đây với một kết quả. Nhả lại khi `not released.ok` — nút còn giữ là cả máy không dùng được.
+        if released is None or not released.ok:
             _release_button(p, code)
         if restore:
             restore_context(previous_foreground, previous_cursor, platform=p)
@@ -627,13 +616,19 @@ def hold(x: int, y: int, *, window: Any, button: str = 'left', seconds: float = 
 
 
 def stroke(points: Any, *, window: Any, button: str = 'left', platform: Any = None,
-           restore: bool = True, timeout: float = 0.5, source_id: str | None = None,
+           restore: bool = True, timeout: float = 0.5, guard_end: bool = True,
+           source_id: str | None = None,
            geometry_revision: int | None = None) -> dict[str, Any]:
     """Vẽ một nét tự do qua danh sách điểm: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối.
 
     Đây là "kéo" nhưng cho nhiều điểm, tức là cú kéo mà ứng dụng vẽ (Paint, công cụ chú thích ảnh,
     bảng vẽ). Mỗi điểm là một lệnh ``xdotool``, nên trần ``MAX_STROKE_POINTS`` giữ cho một nét không
     biến thành một lượt chạy dài.
+
+    ``guard_end`` kiểm điểm CUỐI có thuộc cửa sổ đích không — cùng hợp đồng với ``drag``, vì nét vẽ
+    chính là một cú kéo nhiều điểm: nét cụt ra ngoài cửa sổ đích là một cú thả vào cửa sổ khác.
+    Không kiểm từng điểm giữa: X11 đã đặt một lệnh giữ chuột ngầm cho cửa sổ nhận ``mousedown``, nên
+    các điểm giữa không tới được cửa sổ nào khác — chốt ở điểm cuối là chốt đúng chỗ sự kiện thoát ra.
     """
     p = _platform(platform)
     if button not in MOUSE_BUTTONS:
@@ -655,6 +650,8 @@ def stroke(points: Any, *, window: Any, button: str = 'left', platform: Any = No
     p, hwnd, previous_foreground, previous_cursor = _prepare_point(
         start_x, start_y, window=window, platform=p, timeout=timeout, source_id=source_id,
         geometry_revision=geometry_revision)
+    if guard_end:
+        check_point_ownership(path[-1][0], path[-1][1], hwnd, platform=p)
     code = MOUSE_BUTTONS[button]
     released = None
     try:
@@ -667,7 +664,10 @@ def stroke(points: Any, *, window: Any, button: str = 'left', platform: Any = No
         time.sleep(GESTURE_SETTLE_SEC)
         released = _xdotool(p, 'mouseup', str(code))
     finally:
-        if released is None:
+        # `released` khác `None` KHÔNG có nghĩa là đã nhả được: `_xdotool` trả về một kết quả hỏng
+        # (mã thoát khác 0, hoặc hết thời gian chờ) chứ không ném lỗi, nên lệnh nhả hỏng vẫn đi tới
+        # đây với một kết quả. Nhả lại khi `not released.ok` — nút còn giữ là cả máy không dùng được.
+        if released is None or not released.ok:
             _release_button(p, code)
         if restore:
             restore_context(previous_foreground, previous_cursor, platform=p)

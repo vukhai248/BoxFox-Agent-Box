@@ -560,6 +560,30 @@ def _release_button(platform: WindowsPlatform, event: INPUT) -> None:
         _stuck_mouse.append(event)
 
 
+def _prepare_point(
+    x: int,
+    y: int,
+    *,
+    window: Any,
+    platform: WindowsPlatform,
+    timeout: float = 0.5,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> tuple[WindowsPlatform, int, int | None, tuple[int, int] | None]:
+    """Bốn chốt chặn của một thao tác bắt đầu bằng một điểm, trả ``(p, hwnd, tiền cảnh, con trỏ)``.
+
+    Dùng chung cho ``click``, ``scroll``, ``drag``, ``hold`` và ``stroke``: cả năm đều bắt đầu bằng
+    "điểm này phải thuộc cửa sổ đích, và cửa sổ đích phải đang có tiêu điểm".
+    """
+    check_geometry_revision(source_id, geometry_revision, platform=platform)
+    hwnd = check_preconditions(window, platform=platform)
+    check_point_ownership(int(x), int(y), hwnd, platform=platform)
+    previous_foreground = platform.get_foreground_window()
+    previous_cursor = platform.get_cursor_pos()
+    ensure_foreground(hwnd, platform=platform, timeout=timeout)
+    return platform, hwnd, previous_foreground, previous_cursor
+
+
 def scroll(
     x: int,
     y: int,
@@ -581,12 +605,9 @@ def scroll(
     p = platform or get_platform()
     if direction not in SCROLL_AXIS:
         raise PlatformError(SOURCE_CHANGED, f"Hướng cuộn không hợp lệ: {direction!r}", direction=direction)
-    check_geometry_revision(source_id, geometry_revision, platform=p)
-    hwnd = check_preconditions(window, platform=p)
-    check_point_ownership(x, y, hwnd, platform=p)
-    previous_foreground = p.get_foreground_window()
-    previous_cursor = p.get_cursor_pos()
-    ensure_foreground(hwnd, platform=p, timeout=timeout)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
     try:
         count = max(1, min(MAX_SCROLL_STEPS, int(steps)))
     except (TypeError, ValueError):
@@ -638,14 +659,13 @@ def drag(
     if button not in MOUSE_BUTTONS:
         raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
     start_x, start_y, end_x, end_y = int(x), int(y), int(to_x), int(to_y)
-    check_geometry_revision(source_id, geometry_revision, platform=p)
-    hwnd = check_preconditions(window, platform=p)
-    check_point_ownership(start_x, start_y, hwnd, platform=p)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        start_x, start_y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    # Chốt điểm cuối chạy SAU `_prepare_point` (bản X11 cũng vậy): cả hai thứ tự đều từ chối trước
+    # khi gửi bất cứ sự kiện nào, chỉ khác là điểm đầu được kiểm trước điểm cuối.
     if guard_end:
         check_point_ownership(end_x, end_y, hwnd, platform=p)
-    previous_foreground = p.get_foreground_window()
-    previous_cursor = p.get_cursor_pos()
-    ensure_foreground(hwnd, platform=p, timeout=timeout)
     try:
         count = max(1, min(MAX_DRAG_STEPS, int(steps)))
     except (TypeError, ValueError):
@@ -705,12 +725,9 @@ def hold(
     p = platform or get_platform()
     if button not in MOUSE_BUTTONS:
         raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
-    check_geometry_revision(source_id, geometry_revision, platform=p)
-    hwnd = check_preconditions(window, platform=p)
-    check_point_ownership(x, y, hwnd, platform=p)
-    previous_foreground = p.get_foreground_window()
-    previous_cursor = p.get_cursor_pos()
-    ensure_foreground(hwnd, platform=p, timeout=timeout)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
     try:
         duration = max(0.05, min(MAX_HOLD_SEC, float(seconds)))
     except (TypeError, ValueError):
@@ -750,10 +767,15 @@ def stroke(
     platform: WindowsPlatform | None = None,
     restore: bool = True,
     timeout: float = 0.5,
+    guard_end: bool = True,
     source_id: str | None = None,
     geometry_revision: int | None = None,
 ) -> dict[str, Any]:
-    """Vẽ một nét tự do qua danh sách điểm: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối."""
+    """Vẽ một nét tự do qua danh sách điểm: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối.
+
+    ``guard_end`` kiểm điểm CUỐI có thuộc cửa sổ đích không — cùng hợp đồng với ``drag``, vì nét vẽ
+    chính là một cú kéo nhiều điểm: nét cụt ra ngoài cửa sổ đích là một cú thả vào cửa sổ khác.
+    """
     p = platform or get_platform()
     if button not in MOUSE_BUTTONS:
         raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
@@ -772,12 +794,11 @@ def stroke(
             f"Nét vẽ có {len(path)} điểm, quá trần {MAX_STROKE_POINTS} — chia thành nhiều nét.",
             points=len(path),
         )
-    check_geometry_revision(source_id, geometry_revision, platform=p)
-    hwnd = check_preconditions(window, platform=p)
-    check_point_ownership(path[0][0], path[0][1], hwnd, platform=p)
-    previous_foreground = p.get_foreground_window()
-    previous_cursor = p.get_cursor_pos()
-    ensure_foreground(hwnd, platform=p, timeout=timeout)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        path[0][0], path[0][1], window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    if guard_end:
+        check_point_ownership(path[-1][0], path[-1][1], hwnd, platform=p)
     down_flag, up_flag = MOUSE_BUTTONS[button]
     up_event = mouse_input(0, 0, up_flag)
     down_batch = EventBatch(label="mouse_stroke_down")

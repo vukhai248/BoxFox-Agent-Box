@@ -539,7 +539,16 @@ BOX_MAX_STROKE_POINTS = 400
 
 
 def _box_button(args) -> str:
-    return BOX_MOUSE_BUTTONS.get(str(args.get('button') or 'left').strip().lower(), '1')
+    """Số hiệu nút chuột của X11, hoặc nói thẳng ra là tên nút sai.
+
+    Bản X11/Windows từ chối tên nút lạ; ở đây cũng vậy. Trước đây tên sai im lặng thành chuột trái
+    — một cú kéo bằng "nút giữa" gõ sai chính tả sẽ chạy như chuột trái và không ai biết.
+    """
+    name = str(args.get('button') or 'left').strip().lower()
+    code = BOX_MOUSE_BUTTONS.get(name)
+    if code is None:
+        raise ValueError('nút chuột không hợp lệ: %r' % (name,))
+    return code
 
 
 def _drag_plan(args) -> list:
@@ -1704,13 +1713,16 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
         # Nút chuột phải được nhả kể cả khi một bước giữa hỏng: một nút còn giữ là cả màn hình trong
         # box không dùng được nữa (mọi cú bấm sau đó thành kéo).
         release = next((argv for argv, _ in plan if argv[:2] == ['xdotool', 'mouseup']), None)
-        sent = 0
+        released = release is None      # không có bước nhả thì không có gì phải nhả lại
         try:
             for argv, sleep_after in plan:
                 proc = subprocess.run(argv, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
-                sent += 1
                 if proc.returncode:
                     raise ValueError(proc.stderr.decode(errors='replace'))
+                # Đánh dấu theo KẾT QUẢ chứ không theo thứ tự: lệnh nhả chạy tới nơi mà thoát khác 0
+                # vẫn là nút còn giữ, và khi đó nó là bước CUỐI nên `sent < len(plan)` không bắt được.
+                if argv == release:
+                    released = True
                 # F3 (đợt 7): `xdotool key NotARealKey` in 'No such key name ... Ignoring it.' ra
                 # stdout rồi thoát 0. Coi cảnh báo đó là thất bại, kèm tên phím sai.
                 noisy = (proc.stdout + proc.stderr).decode(errors='replace')
@@ -1718,9 +1730,14 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
                     raise ValueError('Unsupported key name: ' + str(args.get('key', '')) + '. Use an X keysym such as Return, Tab, ctrl+c.')
                 if sleep_after:
                     time.sleep(sleep_after)
-        except Exception:
-            if release is not None and sent < len(plan):
-                subprocess.run(release, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+        except BaseException:
+            # `BaseException` chứ không phải `Exception`: lượt bị huỷ (`CancelledError`) cũng phải nhả
+            # nút, vì một nút còn giữ là mọi cú bấm sau đó trong box thành cú kéo.
+            if not released:
+                try:
+                    subprocess.run(release, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+                except Exception:  # noqa: BLE001 - nhả là best-effort; lỗi thật đang trên đường ra
+                    pass
             raise
         payload = {'content': 'Input delivered; capture the screen to verify the effect.'}
         if desktop_note:
