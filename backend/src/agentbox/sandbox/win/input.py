@@ -654,6 +654,12 @@ def drag(
     với cú bấm bằng thời gian giữ, mà ba lô gửi liền nhau thì không có thời gian nào cả. Nút chuột
     được nhả trong ``finally`` và, nếu lần nhả đó cũng hỏng, được ghi vào sổ nút kẹt để
     ``release_stuck_input`` dọn sau.
+
+    Khác bản X11 một chỗ, có chủ ý: các bước đi nằm trong MỘT lô ``SendInput`` chứ không nghỉ 10 ms
+    giữa từng bước. Ứng dụng vẽ theo ``WM_MOUSEMOVE`` vẫn nhận đủ từng điểm theo thứ tự (hàng đợi
+    thư xử lý lần lượt), nên đường đi không mất; chỉ ứng dụng TỰ ĐO con trỏ theo đồng hồ thay vì
+    nghe thư mới thấy một cú nhảy. Thêm nhịp ở đây là đổi một rủi ro chưa đo được trên máy Windows
+    thật lấy một khoản chờ chắc chắn, nên để nguyên — ghi lại để lần sau ai đụng vào thì biết.
     """
     p = platform or get_platform()
     if button not in MOUSE_BUTTONS:
@@ -775,6 +781,8 @@ def stroke(
 
     ``guard_end`` kiểm điểm CUỐI có thuộc cửa sổ đích không — cùng hợp đồng với ``drag``, vì nét vẽ
     chính là một cú kéo nhiều điểm: nét cụt ra ngoài cửa sổ đích là một cú thả vào cửa sổ khác.
+
+    Cả đường đi nằm trong một lô ``SendInput`` (xem ``drag`` về khác biệt có chủ ý này với bản X11).
     """
     p = platform or get_platform()
     if button not in MOUSE_BUTTONS:
