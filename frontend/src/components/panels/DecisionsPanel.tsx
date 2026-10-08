@@ -249,9 +249,11 @@ export function DecisionsPanel() {
                 data-decision-id={decision.id}
                 ref={decision.id === targetRequestId ? targetRef : undefined}
               >
+                {decision.restored && <p className="mb-1 text-xs text-muted">{t('continuity.restored')}</p>}
+                {decision.actionable === false && <p className="mb-1 text-xs text-amber-400">{t('continuity.stale')}</p>}
                 <PermissionCard
                   decision={decision}
-                  busy={sendingId === decision.id}
+                  busy={sendingId === decision.id || decision.actionable === false}
                   onAnswer={(choice, note, answers) => void handleAnswer(decision, choice, note, answers)}
                 />
               </div>

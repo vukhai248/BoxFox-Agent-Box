@@ -298,6 +298,10 @@ interface UiState {
   settingsTab: SettingTabId
   providerInitialTab: 'api' | 'router' | 'search'
   editingHarnessId: string | null
+  /** Hội thoại xoá có capsule: mọi lối xoá đi qua đây, không còn DELETE trực tiếp. */
+  deletingSessionId: string | null
+  openDeleteDialog: (sessionId: string) => void
+  closeDeleteDialog: () => void
   openSettings: (tab?: SettingTabId) => void
   closeSettings: () => void
   setSettingsTab: (tab: SettingTabId, category?: SettingSectionId) => void
@@ -638,6 +642,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   setAuditQuery: (query) => set({ auditQuery: query }),
 
   // Settings
+  deletingSessionId: null,
+  openDeleteDialog: (sessionId) => set({ deletingSessionId: sessionId }),
+  closeDeleteDialog: () => set({ deletingSessionId: null }),
   isSettingsOpen: false,
   settingsCategory: 'AGENTS',
   settingsTab: 'harness',

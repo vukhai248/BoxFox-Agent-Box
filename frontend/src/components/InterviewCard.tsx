@@ -64,7 +64,7 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
     const draft = drafts[question.id]
     return draft?.optionId === INTERVIEW_OTHER && !draftDone(draft)
   })
-  const disabled = busy || !pending || !onAnswer
+  const disabled = busy || !pending || !onAnswer || decision.actionable === false
 
   const answersById = useMemo(
     () => new Map((decision.answers ?? []).map((answer) => [answer.questionId, answer])),

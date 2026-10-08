@@ -1,3 +1,4 @@
+import { LongTaskControls } from '../chat/LongTaskControls'
 /**
  * Khung Chat phong cách Devin / BoxFox (Seamless Agent Stream).
  * - Tin nhắn người dùng: Thẻ gọn gàng bên phải kèm timestamp & avatar KV.
@@ -801,6 +802,8 @@ export function ChatPanel() {
           </div>
         </div>
       )}
+
+      <LongTaskControls key={chatId} chatId={chatId} />
 
       {/* Ý định mở tab bị xếp hàng (hợp đồng §3): hàng thông báo nói VÌ SAO chưa
           mở được + một cú bấm mở ngay. Bấm mở = tiêu thụ hàng đợi của tab đó,
