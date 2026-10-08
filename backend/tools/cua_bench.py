@@ -75,6 +75,31 @@ def image_tokens(width: int, height: int) -> int:
     return max(1, int(width * height / PIXELS_PER_VISION_TOKEN))
 
 
+def _image_size(payload) -> tuple[int, int] | None:
+    """Kích thước ảnh trong payload công cụ, nếu payload có ảnh.
+
+    Payload chụp màn hình của sản phẩm ghi kích thước ở ``captureSize`` (dict) và ``dimensions``
+    (mảng ``[w, h]``); lớp nền tảng ghi ``width``/``height``. Đọc cả ba để không phải sửa lại khi
+    payload đổi chỗ.
+    """
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get('data') if isinstance(payload.get('data'), dict) else payload
+    for width_key, height_key in (('width', 'height'), ('imageWidth', 'imageHeight')):
+        width, height = data.get(width_key), data.get(height_key)
+        if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+            return int(width), int(height)
+    size = data.get('captureSize')
+    if isinstance(size, dict) and size.get('width') and size.get('height'):
+        return int(size['width']), int(size['height'])
+    dimensions = data.get('dimensions')
+    if isinstance(dimensions, (list, tuple)) and len(dimensions) == 2:
+        width, height = dimensions
+        if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+            return int(width), int(height)
+    return None
+
+
 def summarise(samples: list[float]) -> dict:
     """min/p50/p95/max của một dãy số đo (ms)."""
     if not samples:
@@ -88,12 +113,17 @@ def summarise(samples: list[float]) -> dict:
 
 
 def check_budget(measurements: dict) -> list[str]:
-    """Danh sách các mục vượt trần, dạng ``'tên: p95 350.0 ms > 300 ms'``."""
-    limits = DEFAULT_BUDGET_MS
+    """Danh sách các mục vượt trần (hoặc **không đo được**), dạng ``'tên: p95 350.0 ms > 300 ms'``.
+
+    Duyệt theo TRẦN chứ không theo số đo: một phép đo biến mất hoặc lỗi (``n = 0``) là đúng loại
+    hồi quy mà chốt này sinh ra để bắt (ví dụ `click` hỏng hẳn thì không còn số đo nào), nên thiếu
+    số đo cũng là VƯỢT. Duyệt theo số đo thì chốt sẽ im lặng cho qua đúng lúc cần nó nhất.
+    """
     over: list[str] = []
-    for name, stats in measurements.items():
-        limit = limits.get(name)
-        if limit is None or not stats.get('n'):
+    for name, limit in DEFAULT_BUDGET_MS.items():
+        stats = measurements.get(name) or {}
+        if not stats.get('n'):
+            over.append('%s: KHÔNG ĐO ĐƯỢC (%s)' % (name, stats.get('error') or 'thiếu số đo'))
             continue
         if stats['p95'] > limit:
             over.append('%s: p95 %.1f ms > %s ms' % (name, stats['p95'], limit))
@@ -133,35 +163,53 @@ def list_windows(platform) -> list[dict]:
             info = platform.describe_window(hwnd)
         except Exception:
             continue
-        left, top, right, bottom = info.bounds
+        # `WindowInfo.bounds` là (x, y, w, h) — không phải (left, top, right, bottom). Trừ lần nữa
+        # là ra kích thước sai (đo được: terminal 715×141 thành 671×33, panel thành 1632×-998) và
+        # mọi điểm bấm tính từ đó đều lệch.
+        left, top, width, height = info.bounds
         out.append({'windowId': int(hwnd), 'title': info.title, 'class': info.class_name,
                     'position': {'x': int(left), 'y': int(top)},
-                    'size': {'width': int(right - left), 'height': int(bottom - top)}})
+                    'size': {'width': int(width), 'height': int(height)}})
     return out
 
 
 #: Cửa sổ không nên đo: panel, desktop, và mọi thứ nhỏ hơn một cửa sổ ứng dụng thật.
-_SKIP_CLASSES = ('xfce4-panel', 'xfdesktop', 'Desktop', 'plasmashell', 'gnome-shell')
+#: So KHÔNG phân biệt hoa/thường: `WM_CLASS` thật là `Xfce4-panel`, `Xfdesktop` (chữ hoa đầu) nên
+#: danh sách viết thường cũ đã bỏ sót đúng hai cửa sổ cần bỏ sót nhất.
+_SKIP_CLASSES = ('xfce4-panel', 'xfdesktop', 'desktop', 'plasmashell', 'gnome-shell')
+
+#: Dấu hiệu nhận ra terminal — nơi an toàn nhất để bấm và gõ thử.
+_TERMINAL_HINTS = ('terminal', 'xterm', 'konsole', 'alacritty', 'kitty', 'wezterm', 'tilix',
+                   'urxvt', 'rxvt', 'gnome-term', 'ptyxis', 'foot')
 
 
-def pick_target_window(platform, wanted: str | None = None):
+def pick_target_window(platform, wanted: str | None = None, *, for_input: bool = False):
     """Cửa sổ để đo: ưu tiên terminal (gõ vào đó là an toàn), hoặc ``wanted`` theo tiêu đề.
 
     Bỏ qua panel/desktop: bấm vào đó vừa vô nghĩa vừa bị chốt "điểm bấm bị che" từ chối.
+    ``for_input=True`` (đo bấm/gõ) KHÔNG chấp nhận nhánh dự phòng "cửa sổ lớn nhất": nhánh đó có
+    thể gõ thử vào trình duyệt hay trình soạn thảo đang mở dở của người dùng.
     """
     windows = [info for info in list_windows(platform)
-               if info['class'] not in _SKIP_CLASSES and info['size']['width'] > 200
-               and info['size']['height'] > 150]
+               if (info.get('class') or '').lower() not in _SKIP_CLASSES
+               and info['size']['width'] > 200 and info['size']['height'] > 100]
     for info in windows:
         title = info.get('title') or ''
         if wanted and wanted in title:
             return info
     for info in windows:
-        title, klass = (info.get('title') or ''), (info.get('class') or '')
-        if 'Terminal' in title or 'terminal' in klass or 'ubuntu@' in title:
+        haystack = ((info.get('title') or '') + ' ' + (info.get('class') or '')).lower()
+        if 'ubuntu@' in haystack or any(hint in haystack for hint in _TERMINAL_HINTS):
             return info
-    return max(windows, key=lambda info: info['size']['width'] * info['size']['height'],
-               default=None)
+    if not for_input:
+        return max(windows, key=lambda info: info['size']['width'] * info['size']['height'],
+                   default=None)
+    # Đo INPUT mà không chỉ rõ cửa sổ thì phải từ chối: nhánh dự phòng cũ chọn cửa sổ LỚN NHẤT trên
+    # màn hình rồi bấm vào giữa và gõ thử vào đó — có thể là trình duyệt hay trình soạn thảo đang
+    # mở dở của người dùng. Thà báo lỗi còn hơn gõ bậy.
+    print('  không thấy cửa sổ nào giống terminal để đo input; hãy mở một terminal hoặc dùng '
+          '--window <id>', flush=True)
+    return None
 
 
 def measure(platform, call, times: int, *, warmup: int = 1) -> dict:
@@ -242,10 +290,11 @@ def run_product(platform, window, times: int, *, payload: str) -> dict:
 
     platform.set_foreground_window(hwnd)
 
-    def timed(name, action, **extra):
+    def timed(name, action, *, tool='computer_use', **extra):
         def call():
+            args = {'action': action, 'windowId': hwnd, **extra} if tool == 'computer_use' else dict(extra)
             return asyncio.new_event_loop().run_until_complete(
-                executor.execute('computer_use', {'action': action, 'windowId': hwnd, **extra}, session))
+                executor.execute(tool, args, session))
 
         try:
             stats = measure(platform, call, times)
@@ -257,12 +306,24 @@ def run_product(platform, window, times: int, *, payload: str) -> dict:
         print('  %-34s %s' % (name, _format(stats)), flush=True)
         payload_json = json.dumps(call(), ensure_ascii=False)
         tokens[name] = text_tokens(payload_json)
-        print('      payload %d byte ≈ %d token chữ' % (len(payload_json), tokens[name]), flush=True)
+        print('      payload %d byte' % len(payload_json), flush=True)
+        # Ảnh trả về ở dạng base64: đếm token theo ký tự base64 là vô nghĩa (một ảnh 1,4 MP thành
+        # ~27 000 "token chữ"). Với ảnh, con số có nghĩa là token THỊ GIÁC = điểm ảnh / 750.
+        box = _image_size(call())
+        if box:
+            width, height = box
+            tokens[name] = image_tokens(width, height)
+            print('      ảnh %dx%d ≈ %d token thị giác' % (width, height, tokens[name]), flush=True)
+        else:
+            print('      ≈ %d token chữ' % tokens[name], flush=True)
 
     timed('product.key', 'key', key='End')
     timed('product.click', 'click', x=centre[0], y=centre[1])
     timed('product.type_text_200', 'type', text=exactly(payload, 200))
-    timed('product.screenshot', 'screenshot')
+    # `computer_use` KHÔNG nhận `action='screenshot'` (trả `UNSUPPORTED_ACTION` trước khi chụp) — đo
+    # ở đó là đo đường báo lỗi, không phải đường chụp ảnh thật. Đường chụp thật của sản phẩm là
+    # `computer_screen_capture`.
+    timed('product.screenshot', '', tool='computer_screen_capture')
     return results, tokens
 
 
@@ -345,15 +406,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--payload', default='a = 2\nb = 3\nprint(a + b)\n',
                         help='văn bản để đo `type_text`')
     parser.add_argument('--json', help='ghi kết quả ra tệp JSON')
-    parser.add_argument('--baseline', help='tệp JSON của lần chạy trước, cho `budget`')
+    parser.add_argument('--baseline', action='append',
+                        help='tệp JSON của lần chạy trước, cho `budget`; lặp lại được '
+                             '(primitives và product ghi hai tệp riêng)')
+    parser.add_argument('--list-budget', action='store_true',
+                        help='in danh sách trần rồi thoát')
     args = parser.parse_args(argv)
+
+    if args.list_budget:
+        for name, limit in DEFAULT_BUDGET_MS.items():
+            print('%-36s %s ms (p95)' % (name, limit))
+        return 0
 
     if args.command == 'budget':
         if not args.baseline:
-            print('cần --baseline <tệp JSON>', file=sys.stderr)
+            print('cần --baseline <tệp JSON> (lặp lại được)', file=sys.stderr)
             return 2
-        previous = json.loads(Path(args.baseline).read_text())
-        over = check_budget(previous.get('measurements', {}))
+        # Gộp nhiều tệp: `primitives` và `product` là hai lượt đo khác nhau, mỗi lượt một tệp, mà
+        # chốt thì so với CẢ danh sách trần — thiếu tệp nào là "KHÔNG ĐO ĐƯỢC" tệp đó.
+        measurements: dict = {}
+        for path in args.baseline:
+            measurements.update(json.loads(Path(path).read_text()).get('measurements', {}))
+        over = check_budget(measurements)
         for line in over:
             print('VƯỢT TRẦN: %s' % line)
         print('ngân sách: %s' % ('ĐẠT' if not over else '%d mục vượt trần' % len(over)))
@@ -368,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == 'case':
         report['case'] = run_case(platform, args.case, args.times)
     else:
-        window = pick_target_window(platform, args.window)
+        window = pick_target_window(platform, args.window, for_input=True)
         if window is None:
             print('không thấy cửa sổ nào để đo.', file=sys.stderr)
             return 2

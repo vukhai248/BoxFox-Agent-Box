@@ -260,6 +260,10 @@ def check_point_ownership(x: int, y: int, hwnd: int, *, platform: Any = None) ->
     không bấm được nút của hộp thoại, vừa không làm gì được với cửa sổ chính — chết cứng.
     """
     p = _platform(platform)
+    # Đọc lại hình học cửa sổ đích NGAY TRƯỚC khi soi điểm. Bộ đệm 0,5 s rất rẻ, nhưng nếu người
+    # dùng vừa di chuyển cửa sổ đích thì hình học cũ vẫn chứa điểm bấm, chốt sẽ cho qua một cú bấm
+    # thật ra rơi vào cửa sổ khác. Một lệnh `xwininfo` để đổi lấy điều đó là rẻ.
+    p.get_window_rect(int(hwnd), fresh=True)
     top = p.window_from_point(int(x), int(y))
     root = (p.get_ancestor_root(top) or top) if top else None
     if root is None or not p.is_own_window(hwnd, root):
@@ -379,10 +383,13 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
         # `mousemove --sync` chờ một sự kiện MotionNotify tới đúng toạ độ; con trỏ đã ở đúng chỗ thì
         # X server KHÔNG sinh sự kiện nào và `xdotool` chờ tới hết thời gian chờ (đo được: bấm hai
         # lần liên tiếp vào cùng một điểm làm lần thứ hai treo đủ 5 s rồi báo `SOURCE_CHANGED`).
-        # Vì vậy chỉ gọi `mousemove` khi con trỏ còn ở chỗ khác.
+        # Vì vậy con trỏ đã ở đúng chỗ thì đi KHÔNG đồng bộ — vẫn kéo con trỏ về đúng điểm đã kiểm
+        # quyền nếu người thật vừa di chuột trong lúc chờ tiêu điểm, mà không chờ sự kiện không tới.
         if previous_cursor != (int(x), int(y)):
             moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
-            _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
+        else:
+            moved = _xdotool(p, 'mousemove', str(int(x)), str(int(y)))
+        _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
         pressed = _xdotool(p, 'click', '--delay', str(CLICK_DELAY_MS), str(MOUSE_BUTTONS[button]))
         _fail(pressed, 'click', button=button)
     finally:

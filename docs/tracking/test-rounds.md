@@ -2726,6 +2726,14 @@ khi vá BUG-117 thao tác này hoặc bị từ chối, hoặc treo).
 `Xin chào Cửa sổ! áàảãạ ăâđôơư` — trước khi vá 0/3 lượt khớp (nhận `Xin cho Ca s!`), sau khi vá
 **35/35 ký tự khớp trên 3/3 lượt**, kể cả khi có luồng nền chụp ảnh cửa sổ 50 ms một lần để tạo tải
 cho X server. Gõ chữ hoa ngoài ASCII còn sai (BUG-118, giới hạn `xdotool`) — ghi nhận, chưa vá.
+**Gõ khi máy bận (BUG-119, cùng vòng):** quay phim màn hình bằng ffmpeg 12 fps rồi gõ lại đúng câu
+trên vào biểu mẫu web (máy chủ ghi lại đúng byte nhận được): đường cũ chỉ **3/6** lượt sạch (mất
+`ăơ`, `ãơ`, `ử`), mỗi ký tự một lệnh **8/10**, nhịp 60 ms **7/10**; ánh xạ sẵn keysym rồi giữ nguyên
+trong suốt lần gõ: **16/16 lượt sạch** (361–387 ms cho câu 29 ký tự). Chữ hoa tiếng Việt cũng hết
+mất dấu hoa: kiểm byte-chính-xác **26/26 ký tự** `ÁÀẢÃẠĂÂĐÊÔƠƯÉÈẼÍÌĨÓÒÕÚÙŨÝỲ` (440 ms) và 27/27
+chữ thường. Ca dùng web quay lại được trọn vẹn: `/tmp/cua-web/ca-dung-web.mp4` (29/29 ký tự khớp
+trong lúc đang quay).
+
 
 **Đo latency và token** (`backend/tools/cua_bench.py`, chi tiết ở `docs/testing/cua-latency-token.md`):
 `primitives` p50 — `click` 252 → **23 ms**, `press_key` 152 → **26 ms**, `capture_window` 67 → 41 ms
@@ -2737,3 +2745,25 @@ trên 3 lượt, trong đó 154–157 ms là hệ điều hành mở cửa sổ 
 Chỗ còn chậm nhất: **gõ chữ ~6,6 ms/ký tự** (`TYPE_DELAY_MS = 12`).
 
 **Bài kiểm đơn vị:** `backend/tests/unit/test_x11_platform.py` **65 lượt xanh** (44 trước vòng này).
+### Vòng 2026-10-08 (tiếp) — gia cố sau soát mã: chốt hộp thoại, hình học lúc bấm, chốt trần
+
+Vòng soát mã độc lập trên `464af30`+`a7a7454` trả về 8 điểm (3 điểm mức trung bình), trong đó 3
+điểm là hệ quả của chính các bản vá trong vòng này. Đã vá hết:
+
+| Điểm soát | Cách vá | Bằng chứng |
+|---|---|---|
+| Chốt hộp thoại chỉ đòi `WM_TRANSIENT_FOR` — cửa sổ lạ cùng màn hình cũng đặt được | Cửa sổ KHÁC phải khai thêm `_NET_WM_WINDOW_TYPE` là hộp thoại/popup | 3 bài kiểm mới; đo lại trên máy thật với `CuaDialogMain`/`CuaDialogChild`: chốt điểm bấm và chốt tiêu điểm vẫn NHẬN hộp thoại của chính ứng dụng (BUG-117 vẫn được vá), gõ được 2 ký tự |
+| Bộ đệm hình học 0,5 s lọt vào chốt điểm bấm | `check_point_ownership` đọc lại hình học đích tươi ngay trước khi soi điểm | `primitives.click` sau vá: p50 25,3 ms, 9 tiến trình con (thêm 1 `xwininfo`) |
+| Chốt trần im lặng khi thiếu số đo | Duyệt theo danh sách trần: thiếu số đo ⇒ `KHÔNG ĐO ĐƯỢC` + thoát 1 | `{"product.click": {"n": 0, "error": …}}` → 14 mục vượt trần, thoát 1; baseline đủ (primitives+product) → ĐẠT, thoát 0 |
+| `product.screenshot` đo đường báo lỗi `UNSUPPORTED_ACTION` | Đo đúng `computer_screen_capture` | 126 ms, 21 tiến trình con, 1920×1080 ≈ 2 764 token thị giác (số cũ 19 ms là thời gian trả lỗi) |
+| Con trỏ lệch trong lúc chờ tiêu điểm | Vẫn gửi `mousemove`, chỉ bỏ `--sync` khi con trỏ đã đúng chỗ | 2 bài kiểm mới; bấm hai lần cùng điểm: 2 lệnh `mousemove` không `--sync`, 2 lệnh bấm, con trỏ vẫn ở (50,50) |
+| Ghi chú locale hứa hão khi máy không cài locale UTF-8 | Tách `installed_utf8_locale()` và nói thẳng khi máy không có | 4 bài kiểm mới (máy không có locale ⇒ `None` + ghi chú "không cài"; `vi_VN.UTF-8` được dùng) |
+| `list_windows` của công cụ đo đọc sai kích thước và không bỏ qua panel | Đọc thẳng `(x, y, w, h)`, so lớp không phân biệt hoa/thường | Trước: terminal 715×141 → 671×33, panel 1632×−998. Sau: 715×141, chọn đúng `cua-truoc` |
+| Đo INPUT có thể gõ vào cửa sổ bất kỳ của người dùng | Không có cửa sổ chỉ định thì TỪ CHỐI, thay vì chọn cửa sổ lớn nhất | `product` không tham số in "không thấy cửa sổ nào giống terminal để đo input" và thoát 2 |
+
+Bài kiểm: `tests/unit/test_x11_platform.py` **81 đạt** (73 → 81), `tests/unit/test_cua_bench_budget.py`
+**7 đạt** (mới). Số đo sau gia cố: `primitives` — `get_foreground_window` 1,4 ms, `get_cursor_pos`
+2,6 ms, `get_window_rect` 0,0 ms (0 tiến trình), `window_from_point` 1,2 ms (1), `window_properties`
+2,1 ms, `capture_window` 35,6 ms (14), `capture_screen` 49,5 ms, `press_key` 26,8 ms, `click` 25,6 ms,
+`type_text` 200 ký tự 1 323 ms; `product` — `key` 60 ms (31 tiến trình con), `click` 65 ms (35),
+`type_text` 1 369 ms (47), `screenshot` 126 ms (21); `case` (giao → xong) 397–462 ms.

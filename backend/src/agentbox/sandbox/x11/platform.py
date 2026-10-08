@@ -63,6 +63,9 @@ MAX_WINDOWS = 200
 #: Đây là lỗi im lặng: lệnh gõ vẫn trả về thành công, chỉ có chữ trên màn hình là mất dấu.
 _UTF8_LOCALE_CANDIDATES = ('C.UTF-8', 'C.utf8', 'en_US.UTF-8', 'en_US.utf8')
 _utf8_locale_cache: str | None = None
+#: Kết quả dò ``locale -a`` (``None`` = máy không có locale UTF-8 nào), nhớ một lần cho cả tiến trình.
+_installed_utf8_cache: str | None = None
+_installed_utf8_probed = False
 
 #: Chữ hoa từng bị **mất dấu hoa** khi `xdotool type` tự ánh xạ keysym (đo 08/10/2026: `Á` → `á`,
 #: 16/26 ký tự hoa sai). Nay `sandbox/x11/input.py` ánh xạ sẵn keysym vào keycode trống và giữ
@@ -86,20 +89,46 @@ def has_utf8_locale(env: dict[str, str]) -> bool:
     return False
 
 
-def utf8_locale() -> str:
-    """Tên locale UTF-8 có thật trên máy này (dò một lần cho cả tiến trình)."""
-    global _utf8_locale_cache
-    if _utf8_locale_cache is None:
-        _utf8_locale_cache = _UTF8_LOCALE_CANDIDATES[0]
+def installed_utf8_locale() -> str | None:
+    """Tên locale UTF-8 **có thật** trên máy (đọc ``locale -a``), hoặc ``None`` khi không có.
+
+    ``None`` cũng là kết quả khi máy thiếu lệnh ``locale``, khi lệnh hỏng, hoặc khi máy không cài
+    locale UTF-8 nào. Người gọi cần biết CHẮC thì dùng hàm này; cần một giá trị để đặt biến môi
+    trường thì dùng :func:`utf8_locale`.
+    """
+    global _installed_utf8_cache, _installed_utf8_probed
+    if not _installed_utf8_probed:
+        _installed_utf8_probed = True
         try:
             done = subprocess.run(['locale', '-a'], capture_output=True, text=True, timeout=5.0)
         except (OSError, subprocess.SubprocessError):      # pragma: no cover - máy thiếu `locale`
-            return _utf8_locale_cache
-        names = {line.strip() for line in done.stdout.splitlines()}
-        for candidate in _UTF8_LOCALE_CANDIDATES:
-            if candidate in names:
-                _utf8_locale_cache = candidate
-                break
+            return None
+        if done.returncode == 0:
+            names = [line.strip() for line in done.stdout.splitlines() if line.strip()]
+            folded = {name.lower(): name for name in names}
+            for candidate in _UTF8_LOCALE_CANDIDATES:      # ưu tiên tên quen thuộc
+                found = folded.get(candidate.lower())
+                if found:
+                    _installed_utf8_cache = found
+                    break
+            else:                                          # rồi tới bất kỳ locale UTF-8 nào đã cài
+                for key, name in folded.items():
+                    if 'utf-8' in key or 'utf8' in key:
+                        _installed_utf8_cache = name
+                        break
+    return _installed_utf8_cache
+
+
+def utf8_locale() -> str:
+    """Locale UTF-8 để đặt cho tiến trình con: bản có thật, hoặc ``C.UTF-8`` khi máy không có.
+
+    ``C.UTF-8`` chỉ là **nỗ lực tốt nhất** cho máy tối giản (glibc hiện đại vẫn hiểu tên này). Khi
+    máy không cài locale UTF-8 nào thì việc gán ``LANG`` không cứu được chữ có dấu, nên
+    :meth:`X11Platform._utf8_note` nói thẳng điều đó thay vì hứa hão.
+    """
+    global _utf8_locale_cache
+    if _utf8_locale_cache is None:
+        _utf8_locale_cache = installed_utf8_locale() or _UTF8_LOCALE_CANDIDATES[0]
     return _utf8_locale_cache
 
 #: Bao lâu thì dùng lại hình học cửa sổ đã đọc (giây). Một thao tác soi gọi ``window_from_point``
@@ -122,6 +151,23 @@ _WINDOW_PROPERTIES = (
     '_NET_WM_WINDOW_TYPE',
     'WM_TRANSIENT_FOR',
     '_NET_FRAME_EXTENTS',
+)
+
+#: Loại cửa sổ EWMH được coi là "hộp thoại/popup của ứng dụng" khi xét quyền nhận input.
+#:
+#: Trên X11 KHÔNG có ranh giới quyền giữa các ứng dụng cùng một màn hình: cửa sổ lạ hoàn toàn có
+#: thể đặt ``WM_TRANSIENT_FOR`` trỏ vào cửa sổ đích — đó là thói quen của các công cụ "bám theo cửa
+#: sổ đang hoạt động" (bảng chọn nhanh, công cụ chụp màn hình, cửa sổ IME/portal). Chỉ một thuộc
+#: tính là quá dễ dãi để nhận input, nên cửa sổ KHÁC còn phải tự khai mình là hộp thoại/popup.
+_DIALOG_TYPES = (
+    '_NET_WM_WINDOW_TYPE_DIALOG',
+    '_NET_WM_WINDOW_TYPE_UTILITY',
+    '_NET_WM_WINDOW_TYPE_POPUP_MENU',
+    '_NET_WM_WINDOW_TYPE_DROPDOWN_MENU',
+    '_NET_WM_WINDOW_TYPE_COMBO',
+    '_NET_WM_WINDOW_TYPE_TOOLTIP',
+    '_NET_WM_WINDOW_TYPE_NOTIFICATION',
+    '_NET_WM_WINDOW_TYPE_SPLASH',
 )
 
 #: Loại cửa sổ EWMH không phải ứng dụng người dùng (bỏ khỏi danh sách đích).
@@ -237,11 +283,19 @@ class X11Platform:
                 'hiện trong danh sách và không nhận được input XTEST'
             )
         if not has_utf8_locale(self._env_source()):
+            # Nói THẬT: máy không cài locale UTF-8 nào thì gán `LANG` cũng không cứu được chữ có
+            # dấu, nên đừng hứa hão là "ứng dụng do BoxFox mở thì đã được cấp locale".
+            granted = installed_utf8_locale()
+            if granted:
+                tail = ('Ứng dụng do BoxFox mở thì đã được cấp locale `%s`; muốn gõ chữ có dấu vào '
+                        'ứng dụng có sẵn, hãy mở lại ứng dụng đó từ BoxFox.' % granted)
+            else:
+                tail = ('Máy này **không cài** locale UTF-8 nào (`locale -a` không liệt kê tên nào '
+                        'chứa utf8), nên ứng dụng mở từ BoxFox cũng không nhận được chữ có dấu. Hãy '
+                        'cài một locale UTF-8 (ví dụ `C.UTF-8` hoặc `vi_VN.UTF-8`) rồi mở lại ứng dụng.')
             self._notes.append(
                 'phiên này không có locale UTF-8: ứng dụng **đang chạy** sẽ nuốt mọi ký tự ngoài '
-                'ASCII khi nhận input (chữ có dấu biến mất, lệnh vẫn báo thành công). Ứng dụng do '
-                'BoxFox mở thì đã được cấp locale `%s`; muốn gõ chữ có dấu vào ứng dụng có sẵn, hãy '
-                'mở lại ứng dụng đó từ BoxFox.' % utf8_locale()
+                'ASCII khi nhận input (chữ có dấu biến mất, lệnh vẫn báo thành công). ' + tail
             )
         if shutil.which('xmodmap') is None:
             self._notes.append(
@@ -521,25 +575,43 @@ class X11Platform:
             return None
         return int(owner)
 
+    def is_dialog_window(self, hwnd: int) -> bool:
+        """Cửa sổ tự khai là hộp thoại/popup (``_NET_WM_WINDOW_TYPE``) hay không?
+
+        Điều kiện thứ hai của :meth:`is_own_window`: ``WM_TRANSIENT_FOR`` một mình không đủ để nhận
+        input, vì ứng dụng lạ cùng màn hình cũng đặt được thuộc tính đó.
+        """
+        raw = str(self._cached_props(hwnd).get('_NET_WM_WINDOW_TYPE') or '')
+        return any(name in raw for name in _DIALOG_TYPES)
+
     def is_own_window(self, hwnd: int, candidate: int) -> bool:
         """``candidate`` có phải chính ``hwnd`` hoặc một hộp thoại của ``hwnd`` không.
 
         Dùng cho hai chốt chặn input: khi một ứng dụng mở hộp thoại modal của chính nó (VS Code,
         Chrome, trình soạn thảo…), cửa sổ hộp thoại **có** tiêu điểm và **nằm trên** cửa sổ đích.
-        Chốt cũ coi đó là \"bị cửa sổ khác che\" nên mọi thao tác vào ứng dụng đều bị từ chối, và
+        Chốt cũ coi đó là "bị cửa sổ khác che" nên mọi thao tác vào ứng dụng đều bị từ chối, và
         không có đường nào để bấm nút của hộp thoại — agent chết cứng. Hộp thoại của chính ứng dụng
         thì vẫn là ứng dụng đích, nên nhận.
+
+        Một cửa sổ KHÁC chỉ được nhận khi hội đủ hai điều: khai ``WM_TRANSIENT_FOR`` trỏ về đích
+        (theo chuỗi, tối đa 4 mắt) **và** tự khai là hộp thoại/popup. Thiếu điều kiện thứ hai thì
+        một công cụ lạ "bám theo cửa sổ đang hoạt động" sẽ được nhận input thay cho ứng dụng đích —
+        đúng thứ mà chốt này sinh ra để chặn.
         """
         value = int(candidate)
         target = int(hwnd)
+        if value == target:
+            return True
         for _ in range(4):      # chuỗi hộp thoại lồng nhau (hộp thoại của hộp thoại) hiếm khi sâu hơn
-            if value == target:
-                return True
+            if not self.is_dialog_window(value):
+                return False
             owner = self.get_window_owner(value)
             if owner is None:
                 return False
+            if owner == target:
+                return True
             value = owner
-        return value == target
+        return False
 
     def transient_windows(self, hwnd: int) -> list[int]:
         """Các hộp thoại/popup của ``hwnd`` đang hiển thị, **dưới → trên** theo chồng cửa sổ.
@@ -556,7 +628,11 @@ class X11Platform:
         for candidate in stacking[start:]:
             if candidate == target:
                 continue
-            if self.get_window_owner(candidate) == target and self.is_window_visible(candidate):
+            # Dùng chung `is_own_window` với chốt input: hộp thoại của hộp thoại (ví dụ hộp thoại
+            # xác nhận mở ra từ hộp thoại "Replace?") cũng nằm trong ảnh, đúng như khi chốt input
+            # đã nhận nó. Trước đây chốt input nhận tới 2 mắt còn ảnh chỉ vẽ 1 mắt, nên agent có
+            # thể bấm vào một nút bị hộp thoại lồng nhau che mà không thấy nó trong ảnh.
+            if self.is_own_window(target, candidate) and self.is_window_visible(candidate):
                 found.append(candidate)
         return found
 
