@@ -23,7 +23,8 @@ class FakeTools:
     """Giả lập `xprop`/`xwininfo`/`xdotool`/`import`; ghi lại lệnh đã gọi để kiểm."""
 
     def __init__(self, *, windows=None, props=None, rects=None, screen=(0, 0, 1920, 1080),
-                 foreground=None, raw=b'', raw_by_target=None, import_fails=False, visible=None):
+                 foreground=None, raw=b'', raw_by_target=None, import_fails=False, visible=None,
+                 children=None):
         self.windows = list(windows or [])          # thứ tự DƯỚI → TRÊN, như EWMH
         self.props = dict(props or {})
         self.rects = dict(rects or {})
@@ -33,6 +34,9 @@ class FakeTools:
         self.raw_by_target = dict(raw_by_target or {})
         self.import_fails = import_fails
         self.visible = dict(visible or {})
+        #: Cửa sổ cấp cao nhất theo `xwininfo -root -children` — RỘNG HƠN `windows`: có cả cửa sổ
+        #: override-redirect (viền báo của BoxFox, menu) vốn KHÔNG nằm trong EWMH.
+        self.children = list(self.windows if children is None else children)
         self.calls: list[list[str]] = []
 
     # -- dựng đầu ra giả ---------------------------------------------------
@@ -56,6 +60,13 @@ class FakeTools:
                       'IsViewable' if self.visible.get(int(hwnd), True) else 'IsUnMapped')), ''
 
     def _xwininfo_root(self):
+        if self.children:
+            lines = ''.join('     0x%x "cửa sổ"\n' % hwnd for hwnd in self.children)
+            return 0, ('xwininfo: Window id: 0x3a5 (the root window) (has no name)\n\n'
+                       '  Root window id: 0x3a5 (the root window) (has no name)\n'
+                       '  -geometry %dx%d+0+0\n  Width: %d\n  Height: %d\n'
+                       '  Children:\n%s'
+                       % (self.screen[2], self.screen[3], self.screen[2], self.screen[3], lines)), ''
         return 0, ('  -geometry %dx%d+0+0\n  Width: %d\n  Height: %d\n'
                    % (self.screen[2], self.screen[3], self.screen[2], self.screen[3])), ''
 
@@ -193,6 +204,29 @@ def test_window_from_point_ignores_an_unmapped_window():
     platform, _tools = build(windows=[0x10, 0x20], props=props, rects=rects,
                              visible={0x20: False})
     assert platform.window_from_point(50, 50) == 0x10
+
+
+def test_the_border_window_never_counts_as_covering_the_target():
+    """J0.4 — viền báo là cửa sổ override-redirect: có trong `-children`, KHÔNG có trong EWMH.
+
+    Đo trên `DISPLAY=:1` (08/10/2026): `_NET_CLIENT_LIST_STACKING` liệt kê 9 cửa sổ, không có cửa
+    sổ viền nào của BoxFox; `xwininfo -root -children` thì có nó. Vì `window_from_point` chỉ duyệt
+    danh sách EWMH, viền phủ trên cửa sổ đích mà **không** bị coi là "cửa sổ đang che" — cú bấm
+    xuyên qua viền vẫn thuộc về đích, đúng thứ tự mà `shape Input` rỗng đã lo ở phía vẽ.
+    """
+    border = 0x2300C3                              # cửa sổ viền giả, phủ đúng chỗ cửa sổ đích
+    props = {0x10: window_props(pid=7)}
+    rects = {0x10: (0, 0, 100, 100), border: (0, 0, 100, 100)}
+    platform, tools = build(windows=[0x10], props=props, rects=rects,
+                            children=[0x10, border], foreground=0x10)
+
+    assert platform.window_from_point(50, 50) == 0x10
+    xi.check_point_ownership(50, 50, 0x10, platform=platform)   # không ném: đích vẫn là chủ điểm bấm
+    # Nếu ai đó đổi `window_from_point` sang duyệt `-children`, viền sẽ che đích và bài này đỏ:
+    # viền nằm trong danh sách đó VÀ phủ đúng điểm bấm.
+    assert border in tools.children
+    assert platform.get_window_rect(border) == (0, 0, 100, 100)
+    assert not any('-children' in call for call in tools.calls)
 
 
 # --------------------------------------------------------------- mutex

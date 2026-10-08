@@ -1,6 +1,7 @@
 """Only tools with an executable v0 adapter are advertised."""
 
 
+from . import recovery_policy
 from .limits import peer_mesh_enabled
 
 # Hai công cụ PEER nằm ở đây chứ không nhập từ `roles`: `roles` nhập `limits`, và một vòng nhập
@@ -122,6 +123,14 @@ def reflection_hint(name, code=None):
         return prefix + ('Read `error` for the HTTP status or transport failure. Verify the source URL '
                          'or try another accessible source; do not assume the argument schema is wrong '
                          'and do not retry identical arguments repeatedly.')
+    # Họ mã host/CUA: lớp + hành động + lời khuyên nằm trong bảng của `recovery_policy` (một nguồn
+    # duy nhất — `advice()`), vì việc cần làm ở đây KHÔNG phải "sửa một trường đối số": phải chụp
+    # lại màn hình, chờ quyền trả lại, cài gói còn thiếu, hoặc đổi hẳn cách làm.
+    host = recovery_policy.advice(code)
+    if host is not None:
+        klass, action, advice = host
+        return prefix + (f'Not an argument-shape error (recovery policy: {klass} → {action}). '
+                         f'{advice}. Do not resend the identical call.')
     if name == 'delegate_task' and not code:
         return prefix + ('Read status, last_error, and reason in the result metadata, and use summary '
                          'or the child transcript to locate unfinished work. A partial or failed child '
@@ -145,6 +154,13 @@ def reflection_hint(name, code=None):
     if code == 'WORK_CAPABILITY_REVOKED':
         return prefix + ('The owner removed this capability during the turn. Do not retry it; continue with '
                          'the remaining tools or report the capability gap.')
+    if not code:
+        # Kết quả `is_error` mà KHÔNG mang `errorCode` (ví dụ `terminal_exec` chỉ trả `content` +
+        # `exit_code`): câu "đọc `error`, sửa đúng trường" là sai việc cần làm — phải đọc chính kết
+        # quả đã chạy. Giữ nguyên luật "không gửi lại y nguyên".
+        return prefix + ('The result carries no error code, so this is not an argument-shape error. '
+                         'Read the result body: `content` and `exit_code` (or `error`) say what actually '
+                         'happened. Fix that and call again once; never resend identical arguments.')
     schema = next((item['function'] for item in SCHEMAS if item['function']['name'] == name), None)
     base = (prefix + 'Read `error`: it names the '
             'field and the rule. Fix only that input and call again once; never resend identical arguments.')

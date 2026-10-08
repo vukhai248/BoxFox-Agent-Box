@@ -78,9 +78,11 @@ def store_with(target=None, rows=None):
     return cua_target.SessionTargetStore(store)
 
 
+# `rect`/`extended_bounds` là **(left, top, right, bottom)** — như `WindowInfo` thật trên cả hai nền
+# tảng. NOTEPAD là cửa sổ 640×480 ở (10, 20); đọc bốn số đó như `(x, y, w, h)` là lỗi §0.2.
 NOTEPAD = make_window(hwnd=777, title='Untitled - Notepad', class_name='Notepad',
-                      pid=4242, process_name='notepad.exe', rect=(10, 20, 640, 480),
-                      extended_bounds=(10, 20, 640, 480))
+                      pid=4242, process_name='notepad.exe', rect=(10, 20, 650, 500),
+                      extended_bounds=(10, 20, 650, 500))
 CHROME = make_window(hwnd=888, title='Trang mới', class_name='Chrome_WidgetWin_1',
                      pid=5151, process_name='chrome.exe', rect=(0, 0, 1280, 800),
                      extended_bounds=(0, 0, 1280, 800))

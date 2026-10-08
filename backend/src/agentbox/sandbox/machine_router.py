@@ -282,6 +282,41 @@ def pick_folder():
         raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Không mở được picker; dùng đường dẫn folder.') from None
 
 
+def window_rect_payload(window):
+    """`{x, y, width, height}` của một cửa sổ cho panel vẽ viền, hoặc `None`.
+
+    **Vì sao có hàm này:** cả hai nền tảng trả hình chữ nhật cửa sổ theo `(left, top, right, bottom)`
+    (`windows_platform.py::get_window_rect`, `sandbox/x11/platform.py::get_window_rect`), còn panel cần
+    `{x, y, width, height}`. Đọc thẳng bốn số đó như `(x, y, w, h)` là lỗi đã đo được — cửa sổ
+    `(96, 1039, 1824, 1080)` (thanh tác vụ XFCE) cho ra `width=1824, height=1080` thay vì
+    `1728 × 41`. `WindowInfo.bounds` mới là chỗ đổi đúng, nên ưu tiên nó; mapping
+    (`{position, size}` của danh sách cửa sổ) đi nhánh riêng.
+    """
+    if window is None:
+        return None
+    bounds = getattr(window, 'bounds', None)
+    if bounds is not None:
+        try:
+            left, top, width, height = (int(part) for part in tuple(bounds)[:4])
+        except (TypeError, ValueError):
+            return None
+        return {'x': left, 'y': top, 'width': max(0, width), 'height': max(0, height)}
+    if isinstance(window, dict):
+        position, size = window.get('position') or {}, window.get('size') or {}
+        if 'x' in position and 'width' in size:
+            return {'x': int(position.get('x', 0)), 'y': int(position.get('y', 0)),
+                    'width': int(size.get('width', 0)), 'height': int(size.get('height', 0))}
+        return None
+    rect = getattr(window, 'extended_bounds', None) or getattr(window, 'rect', None)
+    if not rect:
+        return None
+    try:
+        left, top, right, bottom = (int(part) for part in tuple(rect)[:4])
+    except (TypeError, ValueError):
+        return None
+    return {'x': left, 'y': top, 'width': max(0, right - left), 'height': max(0, bottom - top)}
+
+
 class SessionMachineExecutor:
     def __init__(self, legacy, registry, profile_dir, *, desktop=None, overlay=None, targets=None):
         self.legacy, self.registry = legacy, registry
@@ -648,15 +683,9 @@ def register_routes(app, runtime):
         if window is None:
             return None
         entry = cua_target.window_entry(window)
-        rect = getattr(window, 'extended_bounds', None) or getattr(window, 'rect', None)
+        rect = window_rect_payload(window)
         if rect:
-            entry['rect'] = {'x': int(rect[0]), 'y': int(rect[1]),
-                             'width': int(rect[2]), 'height': int(rect[3])}
-        elif isinstance(window, dict):
-            position, size = window.get('position') or {}, window.get('size') or {}
-            if 'x' in position and 'width' in size:
-                entry['rect'] = {'x': int(position.get('x', 0)), 'y': int(position.get('y', 0)),
-                                 'width': int(size.get('width', 0)), 'height': int(size.get('height', 0))}
+            entry['rect'] = rect
         return entry
 
     def _target_state(sid):

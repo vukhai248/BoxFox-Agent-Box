@@ -463,23 +463,45 @@ def build_executor(data, env=None):
 def build_cua_overlay(env=None, desktop=None):
     """Viền báo vùng đang bị điều khiển trên màn hình thật, hoặc `None`.
 
-    Chỉ có nghĩa khi có `DesktopControl` (Windows thật). Biến `BOXFOX_CUA_OVERLAY=0` tắt hẳn viền —
-    một số môi trường (chụp màn hình tự động, VM không compositor) không muốn thêm cửa sổ luôn-trên-cùng.
+    Chỉ có nghĩa khi có `DesktopControl` (Windows hoặc X11 thật). Biến `BOXFOX_CUA_OVERLAY=0` tắt hẳn
+    viền — một số môi trường (chụp màn hình tự động, VM không compositor) không muốn thêm cửa sổ
+    luôn-trên-cùng.
+
+    Trên Linux, máy **thiếu `python-xlib`** vẫn trả về một `CuaOverlay` **đang tắt** kèm câu nói rõ
+    thiếu gói gì (`snapshot()['reason']`) — CUA chạy bình thường, chỉ mất tín hiệu thị giác, nhưng
+    người dùng đọc được vì sao (quyết định J0.8).
     """
     source = os.environ if env is None else env
     if str(source.get('BOXFOX_CUA_OVERLAY') or '').strip().lower() in ('0', 'off', 'false'):
         return None
-    if sys.platform != 'win32' or desktop is None:
+    if desktop is None:
         return None
     try:
         from ..agent_core.cua_overlay import CuaOverlay
-        from ..sandbox.win.windows_platform import CuaOverlayWindow
     except Exception:
         return None
-    try:
-        return CuaOverlay(CuaOverlayWindow(getattr(desktop, 'platform', None)))
-    except Exception:
-        return None
+    if sys.platform == 'win32':
+        try:
+            from ..sandbox.win.windows_platform import CuaOverlayWindow
+        except Exception:
+            return None
+        try:
+            return CuaOverlay(CuaOverlayWindow(getattr(desktop, 'platform', None)))
+        except Exception:
+            return None
+    if sys.platform.startswith('linux'):
+        try:
+            from ..sandbox.x11 import overlay as x11_overlay
+        except Exception:
+            return None
+        reason = x11_overlay.unavailable_reason()
+        if reason:
+            return CuaOverlay(None, reason=reason)
+        try:
+            return CuaOverlay(x11_overlay.X11OverlayWindow(getattr(desktop, 'platform', None)))
+        except Exception:
+            return None
+    return None
 
 
 def build_desktop_control(profile_dir, env=None):

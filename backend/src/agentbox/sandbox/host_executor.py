@@ -48,6 +48,10 @@ APPROVAL_REQUIRED_CODE = 'APPROVAL_REQUIRED'
 APPROVAL_DENIAL_BREAKER_CODE = 'APPROVAL_DENIAL_BREAKER'
 PATH_ESCAPE_CODE = 'PATH_OUTSIDE_WORKSPACE'
 COMMAND_TIMEOUT_CODE = 'COMMAND_TIMEOUT'
+#: Lệnh chạy xong nhưng thoát khác 0. Có mã riêng để tầng phân loại không rơi vào nhánh "chưa biết"
+#: (đo được ở sổ thật: hàng `terminal_exec` chỉ có `exit_code`, thiếu `errorCode`, nên agent nhận lời
+#: khuyên dành cho lỗi sai tham số trong khi việc cần làm là đọc đầu ra rồi sửa lệnh).
+COMMAND_EXIT_NONZERO_CODE = 'COMMAND_EXIT_NONZERO'
 
 # -- H7: mã lỗi của đường CUA (điều khiển desktop máy thật) --------------------
 #: Host mode chạy nhưng KHÔNG có `DesktopControl` (thiếu nền tảng/cấu hình) ⇒ không có CUA.
@@ -676,6 +680,29 @@ class HostExecutor:
         if self.overlay is not None and window is not None:
             self.overlay.note(window)
 
+    def _screen_window(self):
+        """Cửa sổ tổng hợp phủ toàn màn hình ảo cho đích CUA "cả máy", hoặc `None`.
+
+        Đích "cả máy" cũng phải có viền (chủ nhà nói "CUA **máy** hoặc app"), nhưng nó không có
+        `hwnd` nào để bám. Dùng `hwnd = 0` (⇒ `snapshot()['windowId']` là `None`) và hộp màn hình ảo
+        làm vùng viền. Đọc kích thước hỏng ⇒ trả `None`: viền là tính năng phụ, KHÔNG được làm hỏng
+        kết quả chụp.
+        """
+        try:
+            platform = self._desktop_platform()
+            bounds = platform.virtual_screen_bounds() if platform is not None else None
+        except Exception:
+            return None
+        try:
+            width, height = int(bounds[2]), int(bounds[3])
+        except (TypeError, ValueError, IndexError):
+            return None
+        if width <= 0 or height <= 0:
+            return None
+        from ..agent_core import cua_overlay as cua_overlay_module
+
+        return cua_overlay_module.screen_window(bounds)
+
     def _overlay_pause(self, reason):
         if self.overlay is not None:
             self.overlay.pause(reason)
@@ -759,6 +786,10 @@ class HostExecutor:
         if window is not None:
             payload['window'] = cua_target_module.window_entry(window)
             self._overlay_note(window)
+        elif cua_target_module.is_machine(target):
+            # Đích "cả máy": viền phủ toàn màn hình ảo qua cửa sổ tổng hợp (J0.6). `_screen_window()`
+            # đã tự nuốt lỗi đọc kích thước màn hình nên nhánh này không bao giờ làm hỏng ảnh chụp.
+            self._overlay_note(self._screen_window())
         if shot.occluded:
             payload['occluded'] = True
         caption = args.get('caption')
@@ -1233,7 +1264,15 @@ class HostExecutor:
         if len(text) > READ_TRUNCATE_ARTIFACT_CHARS:
             artifact = self._spill(text)
         preview = text[:OUTPUT_PREVIEW_CHARS] + ('\n[truncated; see artifact]' if artifact else '')
-        return {'content': preview, 'exit_code': process.returncode, 'is_error': process.returncode != 0,
+        if process.returncode != 0:
+            # Lỗi phải MANG MÃ (L4): thiếu mã thì `recovery_policy` xếp vào nhánh "chưa biết" và
+            # `reflection_hint` gửi cho model câu dành cho lỗi sai tham số — sai việc cần làm.
+            return error_result(
+                COMMAND_EXIT_NONZERO_CODE,
+                'lệnh thoát với mã %d; mã đó cũng nằm ở `exit_code`, đầu ra đầy đủ ở `content`%s' % (
+                    process.returncode, ' và tệp đính kèm' if artifact else ''),
+                exit_code=process.returncode, content=preview, artifact=artifact)
+        return {'content': preview, 'exit_code': process.returncode, 'is_error': False,
                 'artifact': artifact}
 
     def _child_env(self):

@@ -217,6 +217,48 @@ cho tính đúng.
 `UIPI_BLOCKED`, `SESSION_NOT_INTERACTIVE`, `APPROVAL_DENIED`, `APPROVAL_DENIAL_BREAKER`,
 `UNSUPPORTED_IN_HOST_MODE`.
 
+### 6.2.1 Ba bề mặt giải thích một mã lỗi (bổ sung 08/10/2026)
+
+Danh sách phẩy ở trên là **một phần** của bảng dưới đây — bảng này phủ thêm `CAPTURE_FAILED`,
+`WINDOW_MINIMIZED`, `WINDOW_CLOAKED`, `PASSWORD_FIELD_REFUSED`, `TARGET_*`, `COMMAND_*`, `HOST_TOOL_FAILED`,
+`FILE_*` của đường host và họ mã soi DOM/UIA viết chữ thường (`no_window_at_point`, `uia_no_element`, …).
+
+Một mã lỗi chỉ hữu ích khi **ba bề mặt** nói cùng một việc. Thứ tự chân lý:
+
+| Bề mặt | Nằm ở đâu | Chân lý cho ai |
+|---|---|---|
+| **agent-policy** | `backend/src/agentbox/agent_core/recovery_policy.py` (`CODES`, `_HOST_ADVICE`) | **Nguồn chân lý của máy:** lớp hồi phục + hành động + lời khuyên riêng của từng mã. Có test ghim (`tests/unit/test_recovery_policy.py`). |
+| **agent-hint** | `backend/src/agentbox/agent_core/tool_contracts.py` (`reflection_hint`) | Câu **gửi cho model** ngay sau lỗi. Đọc lại lời khuyên qua `recovery_policy.advice()` nên hai nơi không chép chữ của nhau. |
+| **panel-i18n** | `frontend/src/i18n/vi.ts` (`hostError.*`, `desktopReason.*`) | Câu **cho chủ nhà** đọc trong panel. Đây là bản hiển thị, không phải nguồn chân lý của máy. |
+
+Luật chống trôi: **mã mới phải vào bảng dưới đây trước**, rồi mới vào `_HOST_ADVICE` (kèm test ghim),
+rồi `reflection_hint` tự lấy, cuối cùng mới thêm câu tiếng Việt cho panel. Hai chốt ở §9 của
+`backend/tests/unit/test_recovery_policy.py` ghim đúng luật này: bảng dưới đây ⇄ `_HOST_ADVICE`
+(lệch một mã là đỏ) và câu panel (`hostError`/`desktopReason`) ⇄ `CODES` (mã mới chưa khai lớp là đỏ).
+Mã chưa khai **không** được
+đoán lớp: `classify()` trả `unknown` ⇒ `checkpoint_and_ask` ⇒ agent nhận câu "không rõ loại lỗi: dừng ở
+checkpoint và hỏi chủ nhà". Đo mã thật trên máy chủ nhà bằng
+`cd backend && .venv/bin/python tools/tool_errors.py` (chỉ đọc sổ phiên + nhật ký dev).
+
+| Mã (nhóm) | Lớp hồi phục | Hành động | Việc cần làm | Ai sửa |
+|---|---|---|---|---|
+| `HUMAN_HAS_CONTROL`, `HUMAN_TOOK_OVER`, `DESKTOP_LOCKED` | `rights_budget` | `checkpoint_and_ask` | Người thật đang giữ quyền / màn hình đang khoá — **không** gửi thao tác nào; chờ rồi **chụp lại** | người |
+| `APPROVAL_REQUIRED`, `APPROVAL_DENIED`, `APPROVAL_DENIAL_BREAKER`, `PERMISSION_DENIED`, `PATH_OUTSIDE_WORKSPACE`, `FILE_PERMISSION_DENIED`, `OS_PERMISSION_REQUIRED`, `UIPI_BLOCKED`, `SESSION_NOT_INTERACTIVE` | `rights_budget` | `checkpoint_and_ask` | Quyền/mức hiện tại (hoặc quyền tệp của HĐH) từ chối việc này — **xin chủ nhà** hoặc đổi cách; không lặp y nguyên | người |
+| `ELEMENT_STALE`, `SOURCE_CHANGED`, `SOURCE_IDENTITY_UNAVAILABLE`, `WINDOW_IDENTITY_UNAVAILABLE`, `window_identity_unavailable`, `WINDOW_MINIMIZED`, `WINDOW_CLOAKED`, `TARGET_UNKNOWN`, `no_window_at_point`, `ambiguous_target`, `uia_no_element`, `no_node_at_point`, `outside_viewport`, `frame_extents_unknown`, `viewport_origin_unknown`, `no_cdp_target`, `devtools_docked`, `INSPECT_FAILED` | `tool_unknown` | `inspect_only` | **Chụp lại / chọn lại đích**; toạ độ và mã cửa sổ cũ không dùng lại được | agent |
+| `CONTROL_BUSY`, `cdp_timeout`, `cdp_unreachable`, `extract_failed`, `uia_timeout`, `uia_provider_hang`, `UIA_TIMEOUT`, `UIA_PROVIDER_HANG`, `INPUT_SHORT_SEND`, `POST_MESSAGE_UNSUPPORTED` | `tool_unknown` | `inspect_only` | Một nhịp tay máy hỏng hoặc chậm: **một** lần nữa với cách khác; không lặp y nguyên | agent |
+| `TARGET_REQUIRED`, `TARGET_AMBIGUOUS`, `TARGET_KIND_INVALID`, `CUA_MACHINE_SCOPE_REQUIRED`, `UNSUPPORTED_ACTION`, `UNSUPPORTED_IN_HOST_MODE`, `HOST_REQUEST_UNSUPPORTED`, `TOOL_ARGUMENT_INVALID`, `FILE_NOT_FOUND` | `tool_validation` | `fix_input` | **Sửa tham số** (thiếu đích / đích mơ hồ / ngoài phạm vi / tệp không tồn tại) rồi gọi lại một lần | agent |
+| `CUA_UNAVAILABLE`, `UIA_UNAVAILABLE`, `uia_unavailable`, `LAUNCH_FAILED`, `CAPTURE_FAILED`, `PASSWORD_FIELD_REFUSED` | `capability_gap` | `checkpoint_and_ask` | Máy này **không có** khả năng đó (thiếu gói / bị từ chối có chủ ý) — nói thẳng, đổi cách | người |
+| `COMMAND_TIMEOUT` | `no_progress` | `change_approach` | Lệnh vượt trần thời gian: **chia nhỏ** hoặc đổi cách; đừng chạy lại y nguyên | agent |
+| `COMMAND_EXIT_NONZERO` | `tool_validation` | `fix_input` | Lệnh đã chạy và thoát khác 0: đọc `content`/`exit_code` rồi sửa lệnh — **không** phải lỗi schema | agent |
+| `HOST_TOOL_FAILED` | `no_progress` | `change_approach` | Lỗi bất ngờ của công cụ host: đọc `error`, **đổi cách**, đừng lặp y nguyên | agent |
+| `INSPECT_POINT_INVALID` | `tool_validation` | `fix_input` | Điểm soi ngoài vùng chụp (hoặc toạ độ không phải số nguyên) — **chỉ route của panel** gọi, agent không nhận mã này: chọn lại điểm trong vùng chụp | người |
+
+Hai luật không đổi: **chỉ họ `transport` mới được tự thử lại** (`is_transient` chỉ đúng với
+`transport`), và mã CUA **không bao giờ** tự thử lại — CUA là tay máy thật, thử lại là quyết định của
+model sau khi đã nhìn lại màn hình. Hàng `tool_end` lỗi mà kết quả **không mang mã** (ca "đỏ mà không có
+gì để sửa") phải biến mất: `terminal_exec` nay trả `COMMAND_EXIT_NONZERO` cho lệnh thoát khác 0 và
+`HOST_TOOL_FAILED` cho lỗi bất ngờ.
+
 ---
 
 ## 7. Cổng an toàn CUA
@@ -317,9 +359,7 @@ không theo `sys.platform` — nhờ vậy bộ test giả-Windows vẫn chạy 
 | Cửa sổ bị che | `PrintWindow` đọc được pixel riêng | chụp vùng màn hình, gắn `occluded=True` + `notes` | X11 không có tương đương `PrintWindow` |
 | Màn hình khoá | `DESKTOP_LOCKED` | luôn `False` | X11 không có khái niệm tương đương ở tầng này |
 | DPI / nhiều màn hình | pixel vật lý, DPI theo cửa sổ | một màn hình ảo, DPI luôn 96 | X11 hợp nhất mọi output thành một toạ độ |
-| Viền báo vùng bị điều khiển | cửa sổ overlay riêng | **chưa có** trên desktop; viền trong panel vẫn hiện | ngoài phạm vi đợt này |
-
-Viền báo trên desktop là việc còn lại của nền tảng Linux, không phải "đã xong".
+| Viền báo vùng bị điều khiển | cửa sổ overlay riêng, viền nét | **có**, cùng hợp đồng bốn hàm (`overlay_show`/`overlay_set_bounds`/`overlay_hide`/`overlay_close`); khác cách vẽ: **băng mờ dần** thay vì viền nét đứt — xem §9.6 | máy này không có compositor, nên băng đặc pha màu là cách duy nhất chắc chắn thấy được |
 
 ### 9.4 Người thật chạm máy (quyết định #6785)
 
@@ -348,5 +388,42 @@ trả lỗi **nêu đúng tên gói** (`CUA_UNAVAILABLE` / `CAPTURE_FAILED` vớ
 trả ảnh rỗng. `get_platform()` trả `None` khi không có `DISPLAY`/`WAYLAND_DISPLAY`, **hoặc** khi X
 server không trả lời (kích thước màn hình ảo 0×0) — máy không có desktop thì CUA tắt, đúng như trước.
 
+`python-xlib` (`>=0.33,<1`, trong `requirements.txt`) — **chỉ cần cho viền báo**, không cần cho CUA.
+Thiếu nó thì CUA vẫn chạy đủ và viền tắt êm kèm lý do nêu tên gói (§9.6, điều 4). Đây là lý do nó nằm
+ngoài `requirements.runtime.txt`.
+
 Phiên **Wayland**: nếu có `WAYLAND_DISPLAY`, `notes()` nói thẳng rằng chỉ thấy được cửa sổ
 X11/XWayland; ứng dụng Wayland thuần không hiện trong danh sách và không nhận được XTEST.
+
+### 9.6 Viền báo trên desktop Linux
+
+Cùng hợp đồng bốn hàm với Windows (`CuaOverlay` chỉ ra lệnh vẽ; nền tảng không có thì mọi lệnh là
+no-op). Khác cách vẽ, và khác vì **máy này không có compositor** (`_NET_WM_CM_S0` vắng): một cửa sổ
+trong suốt thật sẽ không được tô đúng, nên viền Linux là một **băng đặc đã pha màu nền** chứ không
+phải viền nét đứt.
+
+| Thành phần | Giá trị / luật |
+|---|---|
+| Cửa sổ | `override_redirect=True`, SHAPE Bounding = các hình chữ nhật dày 1 px của băng, SHAPE Input = `[]` (bấm xuyên qua), nâng `X.Above`, **không** `set_input_focus` |
+| Bề dày băng | `min(cạnh ngắn vùng đích) / 8` — 1920×1080 ⇒ **135 px**; chặn trên `1/3` cạnh ngắn |
+| Màu | nhấn `#38bdf8` (cùng token với panel), pha dần về màu nền đọc được ở bốn điểm giữa cạnh |
+| Lấy mẫu nền | bốn điểm giữa cạnh, làm mới **tối đa 1 Hz**; chỉ vẽ lại khi một kênh đổi ≥ 4 mức |
+| Vẽ | một hình chữ nhật 1 px cho mỗi vòng băng; vòng 0 sát mép ngoài, vòng cuối trùng màu nền |
+| Nguồn nền của đích "cả máy" | đọc ở root **ngoài** băng (`băng + 2`), vì trong băng root trả về chính màu viền của ta |
+| Tắt hẳn | `BOXFOX_CUA_OVERLAY=0` ⇒ không dựng viền, không thử lại |
+
+**Bốn điều "không bao giờ"** (J0.4 — cùng luật với Windows, có bài kiểm ghim):
+
+1. Không bao giờ nhận input: SHAPE Input rỗng và cửa sổ **không** nằm trong `_NET_CLIENT_LIST_STACKING`
+   (đo trên máy thật: 13 cửa sổ trước và sau khi viền lên).
+2. Không bao giờ được tính là cửa sổ che đích — nếu không, chốt điểm bấm (`check_point_ownership`) sẽ tự
+   từ chối mọi cú bấm của agent.
+3. Không bao giờ được lọt vào ảnh chụp CUA của cửa sổ đích: `import -window <đích>` đọc bộ đệm riêng của
+   cửa sổ (đo: 540 000 byte **giống hệt** trước và sau khi viền lên).
+4. Không bao giờ chặn CUA: thiếu `python-xlib` ⇒ viền tắt **êm**, CUA vẫn chạy, và
+   `GET /api/agent/machines/target` trả `activity.enabled=false` + `activity.reason` **nêu tên gói thiếu**
+   (panel hiện đúng câu đó bằng một dòng cảnh báo).
+
+Giới hạn đã biết: ảnh chụp đích "cả máy" **dính** băng của chính ta ở 135 px ngoài cùng (giống Windows);
+máy không có X (Wayland thuần) thì không có viền và không có đường thoái; tác động CPU/điện của một lượt
+CUA dài chưa đo.

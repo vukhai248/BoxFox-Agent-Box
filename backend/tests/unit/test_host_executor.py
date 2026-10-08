@@ -452,3 +452,50 @@ def test_approver_options_match_the_prompt_contract(tmp_path):
 
     run(executor.execute('terminal_exec', {'command': 'git push --force'}, 's1'))
     assert [item['id'] for item in seen['options']] == ['approve', 'reject']
+
+
+# ------------------------------------------------- lỗi phải mang mã (nhóm L)
+
+def test_nonzero_exit_is_a_coded_error_not_a_bare_dict(tmp_path):
+    """L4: lệnh thoát khác 0 phải trả `errorCode`, không phải dict "thành công".
+
+    Trước đây `terminal_exec` trả `{'content', 'exit_code', 'is_error': True}` mà KHÔNG có
+    `errorCode`; `recovery_policy` xếp mọi mã thiếu vào nhánh "chưa biết", và `reflection_hint`
+    khuyên model sửa tham số theo khuôn schema — sai việc cần làm với một lệnh hỏng.
+    """
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('terminal_exec', {'command': 'exit 3'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    # Đầu ra vẫn phải tới tay model: mã lỗi không được nuốt `content` hay `exit_code`.
+    assert result['exit_code'] == 3
+    assert 'content' in result and 'exit_code' in result['error']
+
+
+def test_nonzero_exit_keeps_the_output_and_the_artifact(tmp_path):
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('terminal_exec', {'command': 'echo BOXFOX_NOISE; exit 7'}, 's1'))
+    assert result['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert result['exit_code'] == 7
+    assert 'BOXFOX_NOISE' in result['content']
+
+
+def test_an_unexpected_tool_failure_still_returns_a_coded_error(tmp_path, monkeypatch):
+    """Một công cụ ném lỗi lạ KHÔNG được giết lượt: phải thành `HOST_TOOL_FAILED` có mã."""
+    executor = make_executor(tmp_path)
+
+    def boom(args, *, root=None):
+        raise RuntimeError('hỏng bất ngờ')
+
+    monkeypatch.setattr(executor, '_file_read', boom)
+    result = run(executor.execute('file_read', {'path': 'a.txt'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] == 'HOST_TOOL_FAILED'
+    assert 'RuntimeError' in result['error']
+
+
+def test_missing_file_names_the_path_it_could_not_find(tmp_path):
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('file_read', {'path': 'khong-co-that.txt'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] in ('FILE_NOT_FOUND', 'PATH_ESCAPE')

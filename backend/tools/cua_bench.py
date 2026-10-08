@@ -5,8 +5,9 @@ Chạy trên máy có X server (không phải bài kiểm tự động; xem `doc
     cd backend && DISPLAY=:1 .venv/bin/python tools/cua_bench.py primitives --json /var/tmp/bench.json
     cd backend && DISPLAY=:1 .venv/bin/python tools/cua_bench.py product --json /var/tmp/bench.json
     cd backend && DISPLAY=:1 .venv/bin/python tools/cua_bench.py budget --baseline /var/tmp/bench.json
+    cd backend && .venv/bin/python tools/cua_bench.py turn --db ~/BoxFox/harness/sessions.sqlite
 
-Ba nhóm số đo, theo đúng ba câu hỏi cần trả lời:
+Bốn nhóm số đo, theo đúng bốn câu hỏi cần trả lời:
 
 1. **Latency từng thao tác** — nguyên thuỷ (tầng nền tảng) và qua đúng đường sản phẩm
    (``HostExecutor.execute``). Kèm **số tiến trình con** mỗi thao tác: trên X11 mỗi lời gọi
@@ -16,6 +17,10 @@ Ba nhóm số đo, theo đúng ba câu hỏi cần trả lời:
    cảm nhận con số này chứ không cảm nhận từng thao tác.
 3. **Token** — kích thước payload mà model nhận sau mỗi thao tác (JSON + ảnh), quy ra token ước
    lượng. Ảnh chụp cửa sổ là phần đắt nhất, nên harness tách riêng "token chữ" và "token ảnh".
+4. **Một LƯỢT trọn vẹn** (`turn`) — từ lúc chủ nhà ra đề nghị đến lúc trả lời, tách thành
+   model + vòng lặp · tool · thân harness · ngoài lượt. Số đọc từ bảng `events` của harness
+   (`tools/turn_latency.py` — nguồn chân lý), nên nhánh này **không cần X server**: nó nằm TRƯỚC
+   `xp.get_platform()` và chạy được trên máy không có DISPLAY.
 
 Ngân sách (`budget`) so một lần chạy với một lần chạy trước và **thoát mã 1** khi vượt trần, để
 dùng được như một chốt chặn hồi quy trong CI hoặc trước khi phát hành.
@@ -411,9 +416,24 @@ def _format(stats: dict) -> str:
         stats['p50'], stats['p95'], stats['max'], stats.get('child_processes', 0))
 
 
+def _load_reader():
+    """Nạp `tools/turn_latency.py` cạnh tệp này bằng `importlib` (không phụ thuộc `sys.path`).
+
+    Cùng kỹ thuật mà `tests/unit/test_cua_bench_budget.py` dùng để nạp chính tệp này; nhờ vậy
+    `cua_bench turn` dùng ĐÚNG reader làm nguồn chân lý, không tính lại số theo cách khác, và
+    không kéo tầng X11 vào đường đọc.
+    """
+    import importlib.util
+    path = Path(__file__).resolve().parent / 'turn_latency.py'
+    spec = importlib.util.spec_from_file_location('turn_latency_reader', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Đo latency và token của CUA trên X11.')
-    parser.add_argument('command', choices=('primitives', 'product', 'case', 'budget'))
+    parser.add_argument('command', choices=('primitives', 'product', 'case', 'turn', 'budget'))
     parser.add_argument('--times', type=int, default=5, help='số lần lặp mỗi phép đo (mặc định 5)')
     parser.add_argument('--window', help='tiêu đề cửa sổ đích (mặc định: terminal đầu tiên)')
     parser.add_argument('--case', default='terminal', help='việc CUA cho `case` (mặc định terminal)')
@@ -425,6 +445,15 @@ def main(argv: list[str] | None = None) -> int:
                              '(primitives và product ghi hai tệp riêng)')
     parser.add_argument('--list-budget', action='store_true',
                         help='in danh sách trần rồi thoát')
+    # Ba cờ của `turn` (nhóm K). Không nhét trần lượt vào `DEFAULT_BUDGET_MS`: `check_budget()`
+    # duyệt theo danh sách trần nên một khoá mới sẽ làm mọi lần `budget --baseline` cũ báo
+    # KHÔNG ĐO ĐƯỢC cho lượt. Trần lượt đi bằng `--max-total-ms` — tuỳ chọn, đúng tinh thần
+    # "không bịa trần khi chưa có số đo".
+    parser.add_argument('--db', help='tệp store của harness, cho `turn` (mặc định: '
+                                     '$BOXFOX_AGENT_DATA_DIR/sessions.sqlite → ~/BoxFox/harness/sessions.sqlite)')
+    parser.add_argument('--session', help='lọc theo tiền tố session id, cho `turn`')
+    parser.add_argument('--max-total-ms', type=int,
+                        help='cổng tuỳ chọn cho `turn`: lượt vượt trần thì in VƯỢT TRẦN và thoát mã 1')
     args = parser.parse_args(argv)
 
     if args.list_budget:
@@ -446,6 +475,32 @@ def main(argv: list[str] | None = None) -> int:
             print('VƯỢT TRẦN: %s' % line)
         print('ngân sách: %s' % ('ĐẠT' if not over else '%d mục vượt trần' % len(over)))
         return 0 if not over else 1
+
+    if args.command == 'turn':
+        # Đo một LƯỢT (đề nghị → trả lời) từ sổ `events` — KHÔNG cần X server, nên nhánh này phải
+        # nằm TRƯỚC `xp.get_platform()`: máy không có DISPLAY vẫn đọc được số (K2).
+        reader = _load_reader()
+        db_path = Path(args.db) if args.db else reader.default_db_path()
+        try:
+            turn_report = reader.read_turns(db_path, session=args.session)
+        except reader.StoreUnavailable as exc:
+            print('CHƯA ĐO ĐƯỢC: %s' % exc)
+            return 2
+        # Cùng khuôn báo cáo đang có: khối `turn` mang NGUYÊN báo cáo của reader (nguồn chân lý),
+        # `notes` lặp lại ở cấp ngoài như các nhánh khác.
+        report = {'turn': turn_report, 'notes': list(turn_report['notes'])}
+        for line in reader.format_report(turn_report):
+            print(line)
+        if args.json:
+            Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2))
+            print('đã ghi %s' % args.json)
+        if args.max_total_ms is not None:
+            over = reader.check_gate(turn_report, args.max_total_ms)
+            for line in over:
+                print('VƯỢT TRẦN: %s' % line)
+            if over:
+                return 1
+        return 0
 
     platform = xp.get_platform()
     if platform is None:

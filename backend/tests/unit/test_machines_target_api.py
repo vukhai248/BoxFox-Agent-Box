@@ -298,3 +298,76 @@ async def test_the_window_list_for_the_picker_hides_minimized_windows(harness, t
         capture_module.list_windows = original
     assert payload['windows'][0]['windowId'] == 777
     assert calls == [False]
+
+
+
+@async_test
+async def test_active_window_rect_is_the_size_the_panel_draws_with(harness, tmp_path):
+    """J5 — `activeWindow.rect` là `{x, y, width, height}`, nguồn là danh sách cửa sổ của nền tảng.
+
+    Danh sách đó (`win.capture.list_windows`) dựng `position`/`size` từ `WindowInfo.bounds`, tức là
+    đã đổi đúng `(left, top, right, bottom)` → `(x, y, w, h)`; route phải giữ nguyên nghĩa đó khi
+    chuyển tiếp cho panel. Ca `(96, 1039, 1824, 1080)` (thanh tác vụ XFCE, đo trên máy này) là ca
+    đã từng bị đọc thành 1824×1080 ở `cua_overlay._bounds_of` — cùng một phép đọc sai (§0.2).
+    """
+    session = host_session(harness, tmp_path)
+    window = {'windowId': 777, 'zOrder': 0, 'title': 'Untitled - Notepad',
+              'windowClass': 'Notepad', 'pid': 4242, 'processName': 'notepad.exe',
+              'position': {'x': 96, 'y': 1039}, 'size': {'width': 1728, 'height': 41}, 'dpi': 96}
+
+    from agentbox.agent_core.cua_overlay import CuaOverlay
+    from test_cua_overlay import FakeOverlaySurface
+    from win_fakes import make_window
+
+    harness.executor.overlay = CuaOverlay(FakeOverlaySurface())
+    harness.executor.overlay.note(make_window(hwnd=777, title='Untitled - Notepad',
+                                              rect=(96, 1039, 1824, 1080),
+                                              extended_bounds=(96, 1039, 1824, 1080)))
+
+    import agentbox.sandbox.win.capture as capture_module
+    original = capture_module.list_windows
+    capture_module.list_windows = lambda platform=None, include_minimized=False: [window]
+    try:
+        async def body(client):
+            response = await get_target(client, session['id'])
+            assert response.status == 200
+            return await response.json()
+
+        payload = await with_client(harness, body)
+    finally:
+        capture_module.list_windows = original
+
+    assert payload['activeWindow']['windowId'] == 777
+    assert payload['activeWindow']['rect'] == {'x': 96, 'y': 1039, 'width': 1728, 'height': 41}
+
+
+@async_test
+async def test_a_window_at_the_origin_keeps_the_same_rect_as_before(harness, tmp_path):
+    """Cửa sổ ở gốc `(0, 0)` là ca "may mắn đúng" của phép đọc cũ — kết quả không được đổi."""
+    session = host_session(harness, tmp_path)
+    window = {'windowId': 777, 'zOrder': 0, 'title': 'Trang mới', 'windowClass': 'Chrome_WidgetWin_1',
+              'pid': 5151, 'processName': 'chrome.exe', 'position': {'x': 0, 'y': 0},
+              'size': {'width': 1280, 'height': 800}, 'dpi': 96}
+
+    from agentbox.agent_core.cua_overlay import CuaOverlay
+    from test_cua_overlay import FakeOverlaySurface
+    from win_fakes import make_window
+
+    harness.executor.overlay = CuaOverlay(FakeOverlaySurface())
+    harness.executor.overlay.note(make_window(hwnd=777, rect=(0, 0, 1280, 800),
+                                              extended_bounds=(0, 0, 1280, 800)))
+
+    import agentbox.sandbox.win.capture as capture_module
+    original = capture_module.list_windows
+    capture_module.list_windows = lambda platform=None, include_minimized=False: [window]
+    try:
+        async def body(client):
+            response = await get_target(client, session['id'])
+            assert response.status == 200
+            return await response.json()
+
+        payload = await with_client(harness, body)
+    finally:
+        capture_module.list_windows = original
+
+    assert payload['activeWindow']['rect'] == {'x': 0, 'y': 0, 'width': 1280, 'height': 800}
