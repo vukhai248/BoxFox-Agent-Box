@@ -106,9 +106,9 @@ nghĩa đầy đủ (gateway trỏ `/__box/*` sang `/api/agent/desktop/*`).
 - `BOXFOX_HOST_WORKSPACE` = thư mục làm việc của host mode (mặc định `~/BoxFox/workspace`).
 - `BOXFOX_AGENT_DATA_DIR` = hồ sơ harness (audit, luật, `desktop_lease.json`, DB phiên).
 - `BOXFOX_DESKTOP_CONTROL=0` ⇒ tắt **điều khiển** desktop dù đang ở host mode (dùng khi gỡ lỗi):
-  công cụ CUA của agent và route lease trả `CUA_UNAVAILABLE`/409. Panel "Màn hình máy" **vẫn chụp
-  được** — đó là đường chỉ-đọc cho người dùng xem máy, không đi qua `DesktopControl`; ai cần tắt cả
-  đường chụp thì chặn route `POST /api/agent/machines/screen`.
+  công cụ CUA của agent trả `CUA_UNAVAILABLE` và route lease trả 409 `DESKTOP_CONTROL_UNAVAILABLE`.
+  Panel "Màn hình máy" **vẫn chụp được** — đó là đường chỉ-đọc cho người dùng xem máy, không đi qua
+  `DesktopControl`; ai cần tắt cả đường chụp thì chặn route `POST /api/agent/machines/screen`.
 - `mode` trong health là thứ **đang chạy** (suy từ executor), không phải thứ được cấu hình.
 
 ### 4.2 Động cơ quyền
