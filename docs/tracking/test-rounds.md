@@ -2707,3 +2707,33 @@ thay bằng `{}` mà model chỉ nhận một câu *"Invalid tool arguments"* �
   connection sau. Ghi ở `docs/handoff/v29-keyring-handoff.md` §8 kèm cách sửa gợi ý.
 - **Vẫn KHÔNG có lượt research thật nào** ghi `.research/**`; `manifest.json` còn `measured: false`; **C-7** và
   **F19** giữ nguyên hiệu lực.
+
+## Vòng 2026-10-08 — CUA trên Linux/X11: ca dùng VS Code, độ trung thực khi gõ, và đo latency/token
+
+Vòng này theo yêu cầu chủ sở hữu: *"test kỹ hơn về CUA… mò ra các usecase để test CUA"* và
+*"đo token và latency… đo latency từ lúc 1 task CUA giao đến khi hoàn tất"*.
+
+**Ca dùng thật đã chạy hết (mở VS Code → mở tệp → gõ mã → lưu → mở terminal → chạy):**
+`code --reuse-window /var/tmp/cua-work/hello.py` → gõ chương trình 111 ký tự → `Ctrl+S`
+(`tệp trên đĩa: 111 ký tự KHỚP`) → mở terminal (`Ctrl+`` ``, rồi **bấm vào trong khung** vì
+`Ctrl+`` `` không đưa tiêu điểm bàn phím vào terminal) → `cd /var/tmp/cua-work && python3 hello.py`
+→ `ran.txt: 5` ⇒ **ĐẠT**. Hai hộp thoại chặn giữa đường được xử lý bằng chính CUA: hộp thoại ghi đè
+tệp (bấm bằng CUA) và hộp thoại *"Do you trust the authors of the files in this workspace?"* (bấm
+`Trust Workspace & Continue` tại toạ độ ảnh (721, 496) → màn hình (1081, 636) trong **89 ms**; trước
+khi vá BUG-117 thao tác này hoặc bị từ chối, hoặc treo).
+
+**Độ trung thực khi gõ (đo trước/sau khi vá BUG-115):** cùng một payload
+`Xin chào Cửa sổ! áàảãạ ăâđôơư` — trước khi vá 0/3 lượt khớp (nhận `Xin cho Ca s!`), sau khi vá
+**35/35 ký tự khớp trên 3/3 lượt**, kể cả khi có luồng nền chụp ảnh cửa sổ 50 ms một lần để tạo tải
+cho X server. Gõ chữ hoa ngoài ASCII còn sai (BUG-118, giới hạn `xdotool`) — ghi nhận, chưa vá.
+
+**Đo latency và token** (`backend/tools/cua_bench.py`, chi tiết ở `docs/testing/cua-latency-token.md`):
+`primitives` p50 — `click` 252 → **23 ms**, `press_key` 152 → **26 ms**, `capture_window` 67 → 41 ms
+(và 42 → 14 tiến trình con), `window_from_point` 7,1 → **1,3 ms** (7 → 1 tiến trình),
+`get_window_rect` 1,0 → **0,0 ms** (1 → 0 tiến trình), `type_text` 200 ký tự 1 487 → 1 330 ms.
+`product` — `key` 53 ms, `click` 54 ms, `type_text` 1 358 ms, `screenshot` 19 ms; payload chữ
+94–102 token, một ảnh cửa sổ 1 015×483 ≈ **653 token ảnh**. `case` (giao → xong) **395–408 ms**
+trên 3 lượt, trong đó 154–157 ms là hệ điều hành mở cửa sổ và 220–235 ms là ba thao tác CUA.
+Chỗ còn chậm nhất: **gõ chữ ~6,6 ms/ký tự** (`TYPE_DELAY_MS = 12`).
+
+**Bài kiểm đơn vị:** `backend/tests/unit/test_x11_platform.py` **65 lượt xanh** (44 trước vòng này).
