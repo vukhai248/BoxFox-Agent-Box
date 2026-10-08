@@ -674,7 +674,12 @@ export function ChatInputBar({
                     className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1 text-[11px] text-fg shadow-2xs"
                   >
                     <Crosshair className="size-3 text-muted shrink-0" />
-                    <span className="truncate max-w-[160px] font-mono">{inspectChipLabel(el.result, t('screen.inspector.chipDesktopFallback'))}</span>
+                    <span className="truncate max-w-[160px] font-mono">
+                      {inspectChipLabel(
+                        el.result,
+                        t(el.result.type === 'uia' ? 'screen.inspector.chipUiaFallback' : 'screen.inspector.chipDesktopFallback'),
+                      )}
+                    </span>
                     <LabelDot integrity="khong_tin_duoc" />
                     <button
                       type="button"

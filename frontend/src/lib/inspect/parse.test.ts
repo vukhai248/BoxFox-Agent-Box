@@ -178,6 +178,124 @@ describe('parseInspectElementResult — desktop', () => {
   })
 })
 
+function validUiaPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'uia',
+    name: 'Tệp',
+    controlType: 'menu item',
+    controlTypeId: 50011,
+    automationId: 'FileMenu',
+    className: 'MenuItem',
+    helpText: '',
+    isEnabled: true,
+    isOffscreen: false,
+    isPassword: false,
+    bounds: { screenBox: { x: 10, y: 20, width: 42, height: 22 }, dpi: 120 },
+    patterns: ['Invoke', 7, null],
+    // `_window_id()` của backend trả CHUỖI.
+    windowId: '394820',
+    pid: 4,
+    processName: 'notepad.exe',
+    elementToken: 'tok-1',
+    generation: 2,
+    sourceId: 'src-1',
+    frameId: 'f-1',
+    geometryRevision: 7,
+    label: {
+      integrity: 'duoc_nguoi_dung_cho_phep',
+      confidentiality: 'noi_bo',
+      source_kind: 'screen_capture',
+      source_uri: 'screen://element/394820',
+      tool_name: 'inspect_element',
+      content_hash: 'sha256:abc',
+    },
+    ...overrides,
+  }
+}
+
+describe('parseInspectElementResult — uia (host mode)', () => {
+  it('parse payload uia hợp lệ giữ đủ trường', () => {
+    expect(parseInspectElementResult(validUiaPayload())).toMatchObject({
+      type: 'uia',
+      name: 'Tệp',
+      controlType: 'menu item',
+      controlTypeId: 50011,
+      automationId: 'FileMenu',
+      className: 'MenuItem',
+      isEnabled: true,
+      isOffscreen: false,
+      isPassword: false,
+      bounds: { screenBox: { x: 10, y: 20, width: 42, height: 22 }, dpi: 120 },
+      windowId: '394820',
+      pid: 4,
+      processName: 'notepad.exe',
+      elementToken: 'tok-1',
+      generation: 2,
+      geometryRevision: 7,
+    })
+  })
+
+  it('patterns chỉ nhận chuỗi — số/null bị bỏ, không làm rớt cả payload', () => {
+    const result = parseInspectElementResult(validUiaPayload())
+    expect((result as { patterns?: string[] } | null)?.patterns).toEqual(['Invoke'])
+  })
+
+  it('label.integrity bị ÉP về khong_tin_duoc (quy tắc M1)', () => {
+    const result = parseInspectElementResult(validUiaPayload())
+    expect(result?.label.integrity).toBe('khong_tin_duoc')
+  })
+
+  it('bounds méo ⇒ hộp 0 và bỏ dpi (không ném)', () => {
+    const result = parseInspectElementResult(validUiaPayload({ bounds: { screenBox: 'nope', dpi: 'cao' } }))
+    expect((result as { bounds?: unknown } | null)?.bounds).toEqual({ screenBox: { x: 0, y: 0, width: 0, height: 0 } })
+  })
+
+  it('thiếu name/controlType ⇒ chuỗi rỗng, KHÔNG rớt payload (khác nhánh dom)', () => {
+    const result = parseInspectElementResult(validUiaPayload({ name: undefined, controlType: undefined }))
+    expect(result).toMatchObject({ type: 'uia', name: '', controlType: '' })
+  })
+
+  it('thiếu elementToken ⇒ null: không có định danh thì kết quả không kiểm được', () => {
+    expect(parseInspectElementResult(validUiaPayload({ elementToken: undefined }))).toBeNull()
+    expect(parseInspectElementResult(validUiaPayload({ elementToken: '' }))).toBeNull()
+  })
+
+  it('payload uia rác (không phải object) ⇒ null, không vỡ', () => {
+    expect(parseInspectElementResult({ type: 'uia' })).toBeNull()
+    expect(parseInspectElementResult({ type: 'uia', elementToken: 42 })).toBeNull()
+  })
+
+  it('cờ thiếu ⇒ mặc định an toàn: isEnabled true, isOffscreen/isPassword false', () => {
+    const result = parseInspectElementResult(
+      validUiaPayload({ isEnabled: undefined, isOffscreen: undefined, isPassword: undefined }),
+    )
+    expect(result).toMatchObject({ isEnabled: true, isOffscreen: false, isPassword: false })
+  })
+})
+
+describe('parseInspectElementResult — reason của host mode (Windows)', () => {
+  const windowsReasons = [
+    'uia_unavailable',
+    'uia_timeout',
+    'uia_provider_hang',
+    'uia_no_element',
+    'no_window_at_point',
+    'window_identity_unavailable',
+  ]
+
+  it('sáu mã Windows mới giữ nguyên (khớp sandbox/win/errors.py)', () => {
+    for (const reason of windowsReasons) {
+      const result = parseInspectElementResult(validDesktopPayload({ reason }))
+      expect((result as { reason?: unknown } | null)?.reason, reason).toBe(reason)
+    }
+  })
+
+  it('reason lạ vẫn bị bỏ — danh sách là allowlist, không phải "nhận mọi chuỗi"', () => {
+    const result = parseInspectElementResult(validDesktopPayload({ reason: 'uia_made_up' }))
+    expect((result as { reason?: unknown } | null)?.reason).toBeUndefined()
+  })
+})
+
 describe('parseInspectElementResult — chung', () => {
   it('payload không phải object ⇒ null', () => {
     expect(parseInspectElementResult('nope')).toBeNull()

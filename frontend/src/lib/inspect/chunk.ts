@@ -23,7 +23,10 @@ export const INSPECTED_ELEMENT_CONFIDENTIALITY: Confidentiality = 'noi_bo'
 /** Tên tool dự phòng khi `label.tool_name` box trả về rỗng. */
 export const INSPECTED_ELEMENT_TOOL = 'inspect_element'
 
-/** `windowId` của cửa sổ chứa phần tử — cùng một trường cho cả hai nhánh. */
+/**
+ * `windowId` của cửa sổ chứa phần tử — `dom` lồng trong `target`, `uia`/`desktop`
+ * để ở cấp cao nhất (cùng một trường `windowId`).
+ */
 function resultWindowId(ctx: InspectedElementContext): string {
   return ctx.result.type === 'dom' ? ctx.result.target.windowId : ctx.result.windowId
 }

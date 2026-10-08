@@ -21,6 +21,15 @@ export class InspectHttpError extends Error {
     readonly kind: InspectErrorKind,
     readonly status: number,
     message: string,
+    /**
+     * Mã máy của backend (`ELEMENT_STALE`, `HUMAN_HAS_CONTROL`, `UIPI_BLOCKED`, …).
+     *
+     * Vì sao cần: cùng một `status` 409 mang nhiều nghĩa rất khác nhau — "bạn đang
+     * giữ quyền" phải mời người dùng trả quyền, còn "phần tử đã cũ" phải mời chụp
+     * lại. Nếu chỉ có `status` thì ngăn kéo buộc phải đoán theo `kind`. Box không
+     * gửi mã ⇒ `undefined`, và ngăn kéo lùi về câu theo `kind` như trước.
+     */
+    readonly code?: string,
   ) {
     super(message)
     this.name = 'InspectHttpError'
