@@ -127,6 +127,35 @@ function probeNote(result: ReasoningProbeResult | null) {
   return result.status
 }
 
+/** Một đích dò đã trả lời. `measured` theo ĐÚNG luật của router: chỉ `supports`/`refuses` mới ghi được hàng. */
+interface ProbeOutcome {
+  measured: boolean
+  error: boolean
+  note: string
+}
+
+/**
+ * Gộp kết quả của MỌI đích thành MỘT câu. Hàng nhóm lấy `thinkingLevels` là GIAO của các
+ * connection, nên ghi đè bằng câu của đích chạy được ("4 levels measured") là hứa hão khi một
+ * đích khác hỏng hoặc bị rate-limit: nạp lại xong bộ chọn mức vẫn không hiện, mà chẳng có gì
+ * nói vì sao. Vì vậy hàng nhiều đích luôn nói "mấy trên mấy", và lỗi đầu tiên giữ nguyên văn.
+ */
+function probeRun(outcomes: ProbeOutcome[], total: number): { state: 'done' | 'error'; note: string } {
+  if (total === 1) {
+    const only = outcomes[0]
+    if (!only) return { state: 'error', note: 'the router sent no answer' }
+    return { state: only.error ? 'error' : 'done', note: only.note }
+  }
+  const measured = outcomes.filter((outcome) => outcome.measured)
+  const failed = outcomes.filter((outcome) => !outcome.measured)
+  const counted = `${measured.length}/${total} connections measured`
+  if (!failed.length) return { state: 'done', note: `${counted} — ${[...new Set(measured.map((outcome) => outcome.note))].join(' · ')}` }
+  return {
+    state: 'error',
+    note: measured.length ? `${counted} — ${failed.length} failed: ${failed[0].note}` : `${failed.length}/${total} failed: ${failed[0].note}`,
+  }
+}
+
 export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouterModelChange }: HarnessModelPickerProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -174,27 +203,31 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
     const controller = new AbortController()
     probeControllers.current.set(id, controller)
     setProbes((previous) => ({ ...previous, [id]: { state: 'running', note: targets.length > 1 ? `measuring ${targets.length} connections…` : 'measuring…' } }))
-    let note = ''
-    let answered = false
+    const outcomes: ProbeOutcome[] = []
     for (const target of targets) {
       try {
         const result = await api<ReasoningProbeResult>(
           `/api/router/connections/${encodeURIComponent(target.connectionId)}/models/${encodeURIComponent(target.modelId)}/reasoning-probe`,
           { method: 'POST', signal: controller.signal },
         )
-        answered = true
-        note = probeNote(result)
+        // Chỉ `supports`/`refuses` mới ghi được hàng (xem `reasoningProbeRowPatch` phía router):
+        // mọi kết luận khác — kể cả `rate_limited` — là CHƯA đo được, không được tính là xong.
+        outcomes.push({
+          measured: result.status === 'supports' || result.status === 'refuses',
+          error: false,
+          note: probeNote(result),
+        })
       } catch (error) {
         // Không đi qua `useProviderStore.request()`: một phép dò có thể chạy 90 s và cờ `busy`
         // toàn cục sẽ đóng băng mọi nút trên màn hình; câu trả lời cũng thuộc về ĐÚNG hàng này.
-        if (!answered) note = error instanceof Error ? error.message : 'Router request failed.'
+        outcomes.push({ measured: false, error: true, note: error instanceof Error ? error.message : 'Router request failed.' })
       }
     }
     if (controller.signal.aborted) return
     probeControllers.current.delete(id)
     // Bộ chọn mức đọc từ snapshot, nên phải nạp lại: hàng vừa đo xong mới có `thinkingLevels`.
     await loadProviders().catch(() => {})
-    setProbes((previous) => ({ ...previous, [id]: { state: answered ? 'done' : 'error', note } }))
+    setProbes((previous) => ({ ...previous, [id]: probeRun(outcomes, targets.length) }))
   }, [loadProviders])
 
   /**

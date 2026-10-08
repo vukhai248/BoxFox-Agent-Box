@@ -144,19 +144,20 @@ test('M2: mẫu đầu rỗng KHÔNG kết luận none — mẫu sau có suy lu�
   assert.equal(f.row('space-bunny-free').thinkingSource, 'probe');
 });
 
-test('M2: không mẫu nào trả reasoning ⇒ inconclusive — giữ unknown, chỉ ghi khối probe', async t => {
+test('M2: không mẫu nào trả reasoning ⇒ inconclusive — giữ unknown, hàng không bị ghi', async t => {
   const stub = zenStub({ chat: () => emptyAnswer(), models: catalogue('fledge-alpha-free') });
   const f = await fixture(t, stub);
 
   const result = await f.service.probeReasoning(f.id, 'fledge-alpha-free', { levels: ['minimal'] });
 
   assert.equal(result.status, 'inconclusive');
+  assert.equal(result.thinkingProbe.status, 'inconclusive', 'route vẫn báo lần dò này vì sao chưa kết luận');
+  assert.equal(result.thinkingProbe.samples, 2, 'luật M2: ≥ 2 mẫu mới được nói "không thấy suy luận"');
   const row = f.row('fledge-alpha-free');
   assert.equal(row.thinkingType, 'none', 'không có bằng chứng thì không đổi kết luận');
   assert.deepEqual(row.thinkingLevels, []);
   assert.equal(row.thinkingSource, 'unknown');
-  assert.equal(row.thinkingProbe.status, 'inconclusive');
-  assert.equal(row.thinkingProbe.samples, 2, 'luật M2: ≥ 2 mẫu mới được nói "không thấy suy luận"');
+  assert.equal(row.thinkingProbe, undefined, 'chưa đo được gì thì hàng không có khối nào để đọc lệch với bằng chứng');
 });
 
 test('M2: 400 vì trường reasoning ⇒ thử CÁCH VIẾT CÒN LẠI trước khi kết luận', async t => {
@@ -252,8 +253,8 @@ test('M6: provider nói id không được cấp mà catalogue công khai CÓ id
   const row = f.row('exo-free');
   assert.equal(row.thinkingType, 'none', 'ca lỗi không được ghi thinkingType');
   assert.equal(row.thinkingSource, 'unknown');
-  assert.equal(row.thinkingProbe.status, 'not_entitled');
-  assert.equal(row.thinkingProbe.publicCatalogue, true);
+  assert.equal(row.thinkingProbe, undefined, 'ca lỗi không ghi khối lên hàng');
+  assert.equal(result.thinkingProbe.publicCatalogue, true, 'catalogue công khai nằm trong câu trả lời của lần dò');
   assert.equal(stub.calls.filter(call => call.url.endsWith('/chat/completions')).length, 1, 'lỗi hạng nặng thì dừng, không đốt hạn mức');
 });
 
@@ -270,7 +271,8 @@ test('M6: id không có trong catalogue công khai ⇒ not_in_catalogue', async 
 
   assert.equal(result.status, 'not_in_catalogue');
   assert.equal(result.publicCatalogue, false);
-  assert.equal(f.row('fledge-alpha-free').thinkingProbe.status, 'not_in_catalogue');
+  assert.equal(result.thinkingProbe.status, 'not_in_catalogue');
+  assert.equal(f.row('fledge-alpha-free').thinkingProbe, undefined, 'lần dò không đo được gì thì không ghi hàng');
 });
 
 test('M6: 404 vì hàng không nằm trên connection ⇒ nói rõ vì sao, không ghi gì', async t => {
@@ -305,9 +307,10 @@ test('M2: 503 là unavailable — không kết luận gì về suy luận', asyn
   assert.equal(result.status, 'unavailable');
   assert.equal(result.httpStatus, 503);
   assert.equal(stub.calls.filter(call => call.url.endsWith('/chat/completions')).length, 1);
+  assert.equal(result.thinkingProbe.status, 'unavailable');
   const row = f.row('exo-free');
   assert.equal(row.thinkingSource, 'unknown');
-  assert.equal(row.thinkingProbe.status, 'unavailable');
+  assert.equal(row.thinkingProbe, undefined, 'hỏng hạ tầng thì hàng giữ nguyên, không ghi khối');
 });
 
 test('M2: 429 là rate_limited và giữ retryAfterMs', async t => {
@@ -321,7 +324,32 @@ test('M2: 429 là rate_limited và giữ retryAfterMs', async t => {
 
   assert.equal(result.status, 'rate_limited');
   assert.equal(result.thinkingType, 'none');
-  assert.equal(f.row('ling-3.1-flash-free').thinkingProbe.status, 'rate_limited');
+  assert.equal(result.thinkingProbe.status, 'rate_limited', 'lần hỏng vẫn được báo cho người gọi');
+  assert.equal(f.row('ling-3.1-flash-free').thinkingProbe, undefined, 'hàng chưa có số đo nào thì không ghi khối hỏng hạ tầng');
+});
+
+test('M3: lần dò hỏng hạ tầng KHÔNG đè khối bằng chứng của lần ĐO ĐƯỢC trước đó', async t => {
+  let call = 0;
+  const stub = zenStub({
+    chat: () => (call++ === 0 ? reasoningAnswer() : json({ error: { message: 'Too many requests' } }, 429)),
+    models: catalogue('space-bunny-free'),
+  });
+  const f = await fixture(t, stub);
+
+  const first = await f.service.probeReasoning(f.id, 'space-bunny-free', { samples: 2 });
+  const before = f.row('space-bunny-free');
+  assert.equal(first.status, 'supports');
+  assert.equal(before.thinkingProbe.status, 'supports');
+
+  const second = await f.service.probeReasoning(f.id, 'space-bunny-free', { samples: 2 });
+
+  assert.equal(second.status, 'rate_limited', 'route vẫn nói được lần này hỏng vì sao');
+  assert.equal(second.thinkingProbe.status, 'rate_limited');
+  const after = f.row('space-bunny-free');
+  assert.equal(after.thinkingProbe.status, 'supports', 'khối trên hàng vẫn là lần đo được');
+  assert.equal(after.thinkingProbe.at, before.thinkingProbe.at);
+  assert.equal(after.thinkingEvidence, before.thinkingEvidence, 'bằng chứng và khối phải cùng một lần đo');
+  assert.deepEqual(after.thinkingLevels, before.thinkingLevels);
 });
 
 test('M1/M6: câu lỗi của provider echo lại khoá ⇒ khoá không vào kết quả, hàng model, hay log', async t => {
@@ -465,6 +493,23 @@ test('M6: xoá hàng gõ tay được; hàng do dò phát hiện trả 409 MODEL
     () => f.service.removeCustomModel(f.id, 'never-added'),
     error => error.code === 'MODEL_NOT_FOUND' && error.status === 404,
   );
+});
+
+test('M6: luật tắt alias là MỘT hàm — hàng alias hỏng bị bỏ qua, lý do giống nhau ở cả hai đường', async t => {
+  const stub = zenStub({ chat: () => emptyAnswer(), models: catalogue('fledge-alpha-free') });
+  const f = await fixture(t, stub);
+  f.service.patch(f.id, { customModel: { id: 'hand-typed', capabilities: { reasoning: false } } });
+  const alias = f.service.alias({ name: 'shared-rule', strategy: 'fallback', enabled: true, targets: [{ connectionId: f.id, modelId: 'hand-typed' }] });
+  // Hàng alias cũ/hỏng: `targets` không phải mảng. Cờ `Array.isArray` sống trong hàm dùng
+  // chung, nên nó phải che CẢ đường xoá hàng gõ tay, không chỉ đường dò danh sách.
+  f.service.store.put('alias', { id: 'broken-alias', name: 'Broken', strategy: 'fallback', enabled: true, targets: null });
+
+  f.service.removeCustomModel(f.id, 'hand-typed');
+
+  const stored = f.service.store.get('alias', alias.id);
+  assert.equal(stored.enabled, false, 'alias mất đường đi thì phải tắt');
+  assert.equal(stored.error, 'One or more target models are no longer available. Choose a current model and enable this alias again.');
+  assert.equal(f.service.store.get('alias', 'broken-alias').enabled, true, 'hàng alias hỏng bị bỏ qua, không ném lỗi và không bị sửa');
 });
 
 /** Cùng phép dò nhưng qua HTTP thật, để khoá cổng admin và hình dạng câu trả lời. */

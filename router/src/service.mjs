@@ -248,6 +248,11 @@ export function reasoningProbeRowPatch(row, { verdict, evidence, at }) {
 }
 /** Câu bằng chứng đi kèm hàng model, dạng người đọc được, dựng từ chính các mẫu đã đo. */
 function reasoningProbeEvidence({ verdict, observations, at }) {
+  // Chỉ hai kết luận ghi được lên hàng (`supports`/`refuses` — xem `reasoningProbeRowPatch`) mới
+  // có câu bằng chứng để nói. Kết luận khác (`inconclusive`/`rate_limited`/…) đã có khối
+  // `thinkingProbe` trên hàng và dòng phụ trên UI nói lại từ `status` + `samples`; dựng một câu
+  // rồi để nó bị bỏ đi chỉ tạo chỗ trôi thứ hai.
+  if (verdict.status !== 'supports' && verdict.status !== 'refuses') return null;
   const date = typeof at === 'string' ? at : new Date(at).toISOString().slice(0, 10);
   const reasoned = observations.filter(sample => sample.reasoningChars > 0 || sample.reasoningTokens > 0);
   const chars = measuredRange(reasoned.map(sample => sample.reasoningChars));
@@ -258,11 +263,9 @@ function reasoningProbeEvidence({ verdict, observations, at }) {
     if (chars) parts.push(`reasoning_content ${chars} ký tự`);
     parts.push(tokens ? `reasoning_tokens ${tokens}` : 'reasoning_tokens không khai');
     parts.push(verdict.levelsSupported.length ? `mức đo được: ${verdict.levelsSupported.join('/')}` : 'chỉ reasoning mặc định (không mức nào đo được)');
-  } else if (verdict.status === 'refuses') {
+  } else {
     const status = observations.find(sample => sample.refusedReasoningField)?.httpStatus ?? 400;
     parts.push(`${observations.length} mẫu, cả hai cách viết trường reasoning đều bị từ chối (${status})`);
-  } else {
-    parts.push(`${observations.length} mẫu, không mẫu nào trả reasoning — CHƯA kết luận được`);
   }
   return `probe ${date}: ${parts.join(', ')}`;
 }
@@ -762,6 +765,21 @@ export class ProviderService {
     this.discoveries.set(id, promise);
     return promise;
   }
+  /**
+   * Một luật, hai chỗ gọi: alias trỏ vào hàng model không còn tồn tại thì không còn đường đi
+   * nào, nên tắt nó kèm lý do — `#discover` (provider rút model khỏi danh sách) và
+   * `removeCustomModel` (người dùng xoá hàng gõ tay) phải nói cùng MỘT câu. `missing` là
+   * phép thử của từng chỗ; cờ `Array.isArray` nằm ở đây để một hàng alias cũ/hỏng (`targets`
+   * không phải mảng) không làm cả vòng lặp ném lỗi — đi qua đường nào cũng vậy.
+   */
+  #disableAliases(missing) {
+    for (const alias of this.store.list('alias')) {
+      if (!Array.isArray(alias.targets) || !alias.targets.some(missing)) continue;
+      alias.enabled = false;
+      alias.error = 'One or more target models are no longer available. Choose a current model and enable this alias again.';
+      this.store.put('alias', alias);
+    }
+  }
   async #discover(id, signal) {
     const initial = this.connection(id);
     // Ghi mốc thời gian TRƯỚC khi gọi mạng: một lần dò thất bại là trạng thái
@@ -820,13 +838,8 @@ export class ProviderService {
       current.authState = 'ready'; current.discoveryState = 'ready'; current.lastModelSyncAt = new Date().toISOString(); current.nextModelSyncAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(); current.error = null;
       if (current.providerId === 'antigravity') current.projectState = found.projectState || (current.projectId ? 'ready' : 'required');
       this.store.put('connection', current);
-      for (const alias of this.store.list('alias')) {
-        const invalidTargets = alias.targets.filter(target => target.connectionId === id && !current.models.some(model => model.id === target.modelId));
-        if (!invalidTargets.length) continue;
-        alias.enabled = false;
-        alias.error = 'One or more target models are no longer available. Choose a current model and enable this alias again.';
-        this.store.put('alias', alias);
-      }
+      // Alias mất đường đi thì tắt kèm lý do — cùng một luật với `removeCustomModel`.
+      this.#disableAliases(target => target.connectionId === id && !current.models.some(model => model.id === target.modelId));
       this.repairDefault(); return current;
     } catch (error) {
       const current = this.store.get('connection', id);
@@ -962,7 +975,8 @@ export class ProviderService {
     // đó, nên gửi chúng chỉ tạo ra một bản sao của mẫu này.
     const schedule = [...named, null];
     while (schedule.length < floor) schedule.push(...(named.length ? named : [null]));
-    const budget = Math.min(REASONING_PROBE_MAX_SAMPLES, Math.max(floor, schedule.length));
+    // Vòng `while` ngay trên đã bảo đảm `schedule.length >= floor`, nên chỉ còn lại cái trần.
+    const budget = Math.min(REASONING_PROBE_MAX_SAMPLES, schedule.length);
     const question = typeof prompt === 'string' && prompt.trim() ? prompt.trim() : REASONING_PROBE_PROMPT;
     const observations = [];
     for (const level of schedule.slice(0, budget)) {
@@ -1002,12 +1016,19 @@ export class ProviderService {
       ...(verdict.retryAfterMs ? { retryAfterMs: verdict.retryAfterMs } : {}),
       ...(verdict.message ? { message: verdict.message } : {}),
     };
+    // M3/M6 — chỉ lần ĐO ĐƯỢC mới ghi khối `thinkingProbe` (và `reasoningProbeRowPatch` cũng chỉ
+    // ghi hàng cho đúng hai kết luận đó): khối này là bằng chứng đứng cạnh
+    // `thinkingEvidence`/`thinkingLevels`, nên một lần hỏng hạ tầng (`rate_limited`,
+    // `unavailable`, …) ghi đè nó sẽ để lại một cặp đọc lệch nhau — bằng chứng "4/5 mẫu trả
+    // reasoning" cạnh khối "rate limited". Lần hỏng vẫn tới người dùng ngay: câu trả lời của
+    // route (kèm `retryAfterMs`) và dòng phụ trên UI, còn hàng giữ nguyên số đo cũ.
+    const carriesEvidence = verdict.status === 'supports' || verdict.status === 'refuses';
     const patch = reasoningProbeRowPatch(row, { verdict, evidence, at });
     // Ghi kèm bằng chứng vào ĐÚNG hàng đã đọc: revision đổi giữa chừng nghĩa là cấu
     // hình vừa bị sửa (thêm/xoá khoá, đổi endpoint) nên kết quả này thuộc về một
     // connection khác — bỏ ghi thay vì ghi đè lên thay đổi của người dùng.
     const current = this.connection(id);
-    if (current.revision === connection.revision && current.models.some(model => model.id === modelId)) {
+    if (carriesEvidence && current.revision === connection.revision && current.models.some(model => model.id === modelId)) {
       current.models = current.models.map(model => model.id === modelId
         ? { ...model, ...(patch || {}), thinkingProbe: block }
         : model);
@@ -1115,12 +1136,7 @@ export class ProviderService {
     c.models = c.models.filter(model => model.id !== modelId);
     // Alias trỏ vào hàng vừa xoá không còn đường đi nào: tắt nó kèm lý do, cùng luật
     // với nhánh "model biến mất sau một lần dò" trong `#discover`.
-    for (const alias of this.store.list('alias')) {
-      if (!Array.isArray(alias.targets) || !alias.targets.some(target => target.connectionId === id && target.modelId === modelId)) continue;
-      alias.enabled = false;
-      alias.error = 'One or more target models are no longer available. Choose a current model and enable this alias again.';
-      this.store.put('alias', alias);
-    }
+    this.#disableAliases(target => target.connectionId === id && target.modelId === modelId);
     this.store.put('connection', c);
     this.repairDefault();
     return { removed: true, modelId };

@@ -449,10 +449,14 @@ export function HostMachineScreen() {
         : t('machineScreen.bannerWorkingWindow')
       : t('machineScreen.bannerUnknownLease')
 
-  // Viền báo trên desktop có thể KHÔNG dựng được: máy thiếu thành phần vẽ, người
-  // chủ tắt bằng `BOXFOX_CUA_OVERLAY=0`, hoặc lệnh vẽ hỏng ba lần rồi tự tắt. CUA
-  // vẫn chạy — nhưng người dùng phải đọc được VÌ SAO không thấy viền, nếu không họ
-  // tưởng agent đang không bị báo gì. Đây là một dòng chữ, không phải màn hình mới.
+  // Viền báo trên desktop có thể KHÔNG dựng được: máy thiếu thành phần vẽ, hoặc lệnh vẽ
+  // hỏng ba lần rồi tự tắt. CUA vẫn chạy — nhưng người dùng phải đọc được VÌ SAO không
+  // thấy viền, nếu không họ tưởng agent đang không bị báo gì. Đây là một dòng chữ, không
+  // phải màn hình mới.
+  //
+  // KHÔNG phải đường của `BOXFOX_CUA_OVERLAY=0`: công tắc đó trả `None` hẳn (không có mặt
+  // viền nào), nên `activity` là `null` và panel không có gì để nói — chủ nhà tự tắt thì
+  // im lặng là đúng.
   const overlayOff =
     targetState?.activity && targetState.activity.enabled === false
       ? (targetState.activity.reason ?? '').trim()

@@ -220,6 +220,51 @@ describe('HarnessModelPicker — dò reasoning ngay tại hàng model', () => {
     ])
   })
 
+  it('hàng NHÓM: một connection đo được, một connection bị rate-limit ⇒ nói "1/2" và giữ lỗi, không hứa hão', async () => {
+    let seen = 0
+    const stub = routerStub({
+      onProbe: () => {
+        seen += 1
+        // c1 đo được 4 mức; c2 thì không. Hàng nhóm là GIAO của hai connection, nên bộ chọn mức
+        // vẫn KHÔNG hiện sau khi nạp lại — câu "4 levels measured" một mình là lời hứa sai.
+        if (seen === 1) {
+          stub.setSnapshot(snapshotWith([
+            connection('c1', 'OpenCode Free (key 1)', [model(MODEL, {
+              thinkingType: 'effort', thinkingLevels: ['minimal', 'low', 'medium', 'high'],
+              thinkingSource: 'probe', thinkingAsOf: '2026-10-08',
+            })]),
+            connection('c2', 'OpenCode Free (key 2)', [model(MODEL)]),
+          ]))
+        }
+      },
+      probe: () => (seen === 1
+        ? { status: 200, body: { status: 'supports', thinkingLevels: ['minimal', 'low', 'medium', 'high'], samples: 5 } }
+        : { status: 200, body: { status: 'rate_limited', samples: 1, retryAfterMs: 60000 } }),
+    })
+    vi.stubGlobal('fetch', stub.fetchMock)
+    useProviderStore.setState({
+      snapshot: snapshotWith([
+        connection('c1', 'OpenCode Free (key 1)', [model(MODEL)]),
+        connection('c2', 'OpenCode Free (key 2)', [model(MODEL)]),
+      ]),
+    })
+    const host = render(<HarnessModelPicker />)
+    openModels(host)
+
+    await act(async () => {
+      byId(`thinking-probe-${PROVIDER_ROW}`)!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const note = byId(`thinking-probe-note-${PROVIDER_ROW}`)
+    expect(note?.textContent).toContain('1/2 connections measured')
+    expect(note?.textContent).toContain('1 failed')
+    expect(note?.textContent).toContain('rate limited')
+    expect(note?.className).toContain('text-amber-400')
+    // Đích chạy được vẫn không làm bộ chọn mức hiện: hàng nhóm chỉ có 0 mức chung.
+    expect(modelRows()[0].textContent).not.toContain('Thinking:')
+    expect(byId(`thinking-probe-${PROVIDER_ROW}`)?.textContent).toContain('Measure thinking')
+  })
+
   it('số đo cũ (thinkingStale) ⇒ nút hiện lại và dòng phụ nói rõ là số cũ', () => {
     useProviderStore.setState({
       snapshot: snapshotWith([connection('c1', 'OpenCode Free (key 1)', [model(MODEL, {
