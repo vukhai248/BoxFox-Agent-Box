@@ -661,6 +661,44 @@ def test_a_foreign_window_with_a_dialog_type_still_cannot_take_the_keyboard():
     assert platform.is_dialog_window(0x20) is True
 
 
+def test_a_same_process_window_claiming_the_target_as_owner_is_accepted():
+    """Cửa sổ CÙNG TIẾN TRÌNH khai `WM_TRANSIENT_FOR` về đích thì vẫn là cửa sổ của ứng dụng.
+
+    Đo trên máy thật (08/10/2026, mtPaint 3.50): hộp thoại "Save Image File" và cửa sổ "Settings
+    Toolbar" đều khai `WM_TRANSIENT_FOR` trỏ về cửa sổ chính nhưng tự khai
+    `_NET_WM_WINDOW_TYPE_NORMAL`. Chốt cũ đòi loại hộp thoại nên từ chối: không gõ được tên tệp để
+    lưu. `_NET_WM_PID` giống nhau là bằng chứng mạnh hơn `WM_TRANSIENT_FOR` — tiến trình khác không
+    tạo được cửa sổ mang PID của ứng dụng đích.
+    """
+    props = {0x10: window_props(pid=656623, title='mtPaint 3.50 - Untitled'),
+             # Cùng PID, `owner=0x10`, KHÔNG khai `_NET_WM_WINDOW_TYPE` (mặc định là NORMAL).
+             0x20: window_props(pid=656623, title='Save Image File', owner=0x10)}
+    platform, tools = build(windows=[0x10, 0x20], props=props,
+                            rects={0x10: (0, 0, 100, 100), 0x20: (20, 20, 80, 60)},
+                            foreground=0x20)
+    assert platform.is_dialog_window(0x20) is False
+    assert platform.same_process(0x20, 0x10) is True
+    assert platform.is_own_window(0x10, 0x20) is True
+    outcome = xi.type_text('anh.png', window=0x10, platform=platform)
+    assert outcome['chars'] == 7
+    typed = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert typed, 'phím phải được gửi thật'
+
+
+def test_a_same_process_window_still_needs_the_transient_chain():
+    """Cùng tiến trình nhưng KHÔNG khai `WM_TRANSIENT_FOR`: không phải hộp thoại của đích.
+
+    mtPaint có nhiều cửa sổ cấp cao nhất cùng tiến trình; chỉ nhận theo PID là quá rộng — cửa sổ
+    không nằm trong chuỗi `WM_TRANSIENT_FOR` vẫn có thể là một cửa sổ khác của người dùng.
+    """
+    props = {0x10: window_props(pid=656623, title='mtPaint 3.50 - Untitled'),
+             0x20: window_props(pid=656623, title='Ảnh khác')}
+    platform, _tools = build(windows=[0x10, 0x20], props=props,
+                             rects={0x10: (0, 0, 100, 100), 0x20: (20, 20, 80, 60)},
+                             foreground=0x10)
+    assert platform.is_own_window(0x10, 0x20) is False
+
+
 def test_a_dialog_of_a_dialog_is_painted_into_the_capture_too():
     """Hộp thoại LỒNG NHAU cũng phải có trong ảnh: chốt input đã nhận nó thì ảnh cũng phải thấy nó."""
     props = {0x10: window_props(pid=7, title='Code'),

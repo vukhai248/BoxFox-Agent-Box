@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -62,6 +63,11 @@ DEFAULT_BUDGET_MS = {
     'product.click': 150,                            # 55
     'product.type_text_200': 2500,                   # 1 365
     'product.screenshot': 150,                       # 20
+    # Bốn thao tác cử chỉ (08/10/2026). `hold` gồm cả thời gian giữ, nên trần = thời gian giữ + 500 ms.
+    'product.scroll_5': 400,                         # 112
+    'product.drag_12': 700,                          # 258
+    'product.hold_0_5': 1000,                        # ~564 (500 ms là thời gian giữ)
+    'product.stroke_61': 1600,                       # 727
 }
 
 
@@ -324,6 +330,14 @@ def run_product(platform, window, times: int, *, payload: str) -> dict:
     # ở đó là đo đường báo lỗi, không phải đường chụp ảnh thật. Đường chụp thật của sản phẩm là
     # `computer_screen_capture`.
     timed('product.screenshot', '', tool='computer_screen_capture')
+    # Bốn thao tác cử chỉ. Đo trên chính cửa sổ đích: cú kéo sẽ kéo nội dung trong cửa sổ đó, nên
+    # chạy trên cửa sổ nào cũng được — con số cần đo là thời gian gửi sự kiện, không phải kết quả.
+    timed('product.scroll_5', 'scroll', x=centre[0], y=centre[1], direction='down', steps=5)
+    timed('product.drag_12', 'drag', x=centre[0], y=centre[1],
+          toX=centre[0] + 120, toY=centre[1] + 40, steps=12)
+    timed('product.hold_0_5', 'hold', x=centre[0], y=centre[1], seconds=0.5)
+    path = [[centre[0] - 200 + index * 8, centre[1] + int(60 * math.sin(index / 4))] for index in range(61)]
+    timed('product.stroke_61', 'stroke', path=path)
     return results, tokens
 
 

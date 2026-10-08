@@ -2797,3 +2797,31 @@ cộng 7 lượt của `test_cua_bench_budget.py` là **90**.
 Cấu hình cần nhớ: harness host 3112 phải có `BOXFOX_UI_ORIGINS` (nếu không, bảng Machine trả 403
 `Local administration required` khi mở từ địa chỉ preview công khai). Biến này mất khi harness khởi
 động lại bằng lệnh cũ — xem `/var/tmp/harness-3112.env.txt`.
+### Vòng 2026-10-08 (tiếp) — bốn ca dùng thật cho cử chỉ: Jupyter, cuộn, kéo thả, giữ, vẽ như Paint
+
+Người dùng hỏi bốn việc: gõ mã vào sổ tay `.ipynb`, cuộn, kéo thả, giữ chuột, và vẽ như Paint. Cả
+bốn ca đều chạy qua **đúng đường sản phẩm** (`HostExecutor.execute` → `computer_use`), và mỗi ca có
+bằng chứng nằm ngoài ảnh chụp — máy chủ của trang ghi lại sự kiện, tệp `.ipynb` ghi lại nguồn và đầu
+ra, tệp PNG ghi lại điểm ảnh.
+
+| Ca | Cách làm | Bằng chứng (ngoài ảnh chụp) |
+|---|---|---|
+| Gõ mã vào sổ tay `.ipynb` | Mở `http://127.0.0.1:3210/notebooks/phep-tinh.ipynb` (Jupyter Notebook 7.6.3, `ipykernel`), bấm vào ô trống, gõ 2 dòng mã có dấu tiếng Việt, `Ctrl+Enter`, `Ctrl+S` | Tệp `.ipynb` sau khi lưu: `source = ["ten = 'Cửa sổ Việt Nam'\n", "print(ten, len(ten), 6 * 7)"]`, `outputs = [{"name": "stdout", "text": ["Cửa sổ Việt Nam 15 42\n"]}]`, `execution_count = 1`. Chữ có dấu **nguyên byte**, `len(ten) = 15` và `6 * 7 = 42` do **kernel thật** tính. Dấu ngoặc và dấu nháy không bị ô tự đóng ngoặc làm hỏng |
+| Cuộn | Bấm vào vùng cuộn rồi `scroll` xuống 5 bước × 3 lượt | Trang gửi `{"kind": "scroll", "scrollTop": 1800, "scrollHeight": 14525}` |
+| Kéo thả | `drag` từ ô "KÉO Ô NÀY" sang ô "THẢ VÀO ĐÂY" (`steps=24`) | Sự kiện `drop` của HTML5: `{"kind": "drop", "text": "bo-dat-42"}` — dữ liệu do `dragstart` đặt tới được đích |
+| Kéo thanh trượt | `drag` từ đầu trái sang đầu phải thanh trượt | `{"kind": "slider", "value": 95}` |
+| Giữ chuột | `hold` 1,5 giây trên nút | Trang tự đo: `{"kind": "hold", "ms": 1504}` |
+| Vẽ như Paint | mtPaint 3.50: `F4` (công cụ Paint), Size 4, rồi ba nét `stroke` (vòng tròn 49 điểm, sóng 60, tam giác 64), `Ctrl+S`, gõ tên tệp vào hộp thoại lưu | Tệp `mtpaint-ve.png` 640×480: **7 172 điểm ảnh `(255,0,0)`** trên nền đen — đúng ba hình đã vẽ |
+
+Số đo cử chỉ qua đường sản phẩm (p50/p95, 3 lượt): `scroll` 5 bước 115,0/116,2 ms; `drag` 12 bước
+251,1/255,1 ms; `hold` 0,5 giây 567,9/568,4 ms; `stroke` 61 điểm 709,2/711,4 ms. Chốt trần (gộp ba
+tệp đo, đã thêm bốn trần mới) báo **ĐẠT**, mã thoát 0.
+
+Lượt này **tìm thêm một lỗi** (BUG-127, xem `bug-register.md` §6.43) đúng lúc đang làm ca Paint: hộp
+thoại lưu của mtPaint khai `WM_TRANSIENT_FOR` nhưng không khai loại hộp thoại, nên chốt từ chối mọi
+`type`/`key` và **không gõ được tên tệp**. Đã vá (`_NET_WM_PID` cùng tiến trình được nhận), 2 bài
+kiểm mới, và ca Paint chạy lại thành công. Bài học lặp lại lần thứ hai trong ngày: lỗi chỉ hiện ra
+khi chạy **ứng dụng thật**, không phải khi đọc mã.
+
+Môi trường cho lượt này: cài thêm `mtpaint` (`apt-get install mtpaint`) và một venv Jupyter riêng ở
+`/var/tmp/nbvenv` (`pip install notebook`, bản 7.6.3) — máy ảo không có sẵn cả hai.

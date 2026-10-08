@@ -73,6 +73,33 @@ vô nghĩa. Với ảnh, dùng `điểm ảnh / 750`.
 `case` (giao việc → xong, 3 lượt): **395–408 ms**, trong đó chờ hệ điều hành mở cửa sổ 154–157 ms và
 ba thao tác CUA 220–235 ms (chụp 18–27 ms, gõ 155 ms, `Enter` 47–54 ms).
 
+### Bốn thao tác cử chỉ (thêm 08/10/2026)
+
+Đo qua đường sản phẩm trên cửa sổ Chrome 1920×1039, 3 lượt mỗi phép đo:
+
+| Thao tác | p50 | p95 | Tiến trình con | Token payload |
+| --- | --- | --- | --- | --- |
+| `scroll` 5 bước | 115,0 ms | 116,2 ms | 35 | 117 |
+| `drag` 12 bước | 251,1 ms | 255,1 ms | 51 | 123 |
+| `hold` 0,5 giây | 567,9 ms | 568,4 ms | 45 | 116 |
+| `stroke` 61 điểm | 709,2 ms | 711,4 ms | 105 | 124 |
+
+Đọc bảng này theo hai ý:
+
+1. **Cử chỉ không đắt hơn một cú bấm là bao.** `scroll` 115 ms so với `click` 67 ms; phần tăng thêm
+   là một lệnh `xdotool click --repeat` (một tiến trình con cho cả loạt bước) cộng việc di chuyển con
+   trỏ vào đúng cửa sổ trước. `hold` gồm **cả thời gian giữ** — 0,5 giây giữ thì 568 ms là hợp lý,
+   không phải chậm.
+2. **Nét vẽ tốn ~11,6 ms mỗi điểm** (`stroke` 61 điểm = 709 ms). Đây là chỗ đắt nhất trong bốn thao
+   tác, và cũng là chỗ dễ tối ưu nhất: mỗi điểm hiện là một lệnh `mousemove` riêng (61 điểm = 61
+   tiến trình con, xem cột "tiến trình con" = 105). Gộp nhiều điểm vào một lệnh `xdotool` (nó nhận
+   cả dãy lệnh trong một tiến trình) sẽ cắt phần lớn con số này; giữ nguyên nhịp `STROKE_STEP_SEC`
+   để ứng dụng kịp vẽ.
+
+Trần trong `cua_bench.py` (`DEFAULT_BUDGET_MS`) đặt theo bảng trên: `scroll_5` 400 ms, `drag_12`
+700 ms, `hold_0_5` 1 000 ms (thời gian giữ + 500 ms), `stroke_61` 1 600 ms. Lượt chốt trần ngày
+08/10/2026 (gộp ba tệp đo) báo **ĐẠT**, mã thoát 0.
+
 ## Chỗ còn chậm (tính đến 08/10/2026)
 
 0. **Mỗi cú bấm tốn thêm một `xwininfo`** để đọc lại hình học cửa sổ đích ngay trước khi soi điểm

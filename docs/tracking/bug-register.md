@@ -1741,3 +1741,34 @@ nó chỉ hiện ra khi cửa sổ đích **vẫn giữ tiêu điểm**.
 Bài học ghi lại: ba vòng soát mã đọc mã mà không thấy, vì cả ba đều kiểm "chốt input có nhận hộp thoại
 không" — còn câu hỏi "**ảnh** có chứa hộp thoại không" chỉ trả lời được bằng cách chạy sản phẩm thật
 và đọc pixel. Đây là lý do lượt kiểm phải chạy qua đường sản phẩm chứ không chỉ chạy unit test.
+
+### 6.43 Vòng 2026-10-08 (tiếp) — bốn thao tác cử chỉ, và hộp thoại khai `NORMAL` bị coi là cửa sổ lạ
+
+Đợt này trả lời câu hỏi của người dùng: *"còn test CUA nhập code vào notebook ipynb thì sao? Hay
+scroll? Hiện có tool chưa? Kéo thả chẳng hạn, giữ, thử nghiệm vẽ như paint"*. Đọc mã trước khi làm:
+`scroll` **có tên trong `enum`** của `computer_use` nhưng mọi lời gọi đều trả `UNSUPPORTED_ACTION`;
+`drag`, `hold`, `stroke` **không tồn tại** ở đâu cả trên đường host (Docker box có một dòng `scroll`
+bằng `xdotool click --repeat`, không có ba thao tác kia).
+
+**Bốn thao tác mới** (cùng hợp đồng trên ba nền tảng: Windows, Linux/X11, Docker box):
+
+| Thao tác | Tham số | Cơ chế X11 | Cơ chế Windows |
+|---|---|---|---|
+| `scroll` | `direction` (up/down/left/right), `steps` (≤20) | nút cuộn 4/5/6/7, một lệnh `xdotool click --repeat N --delay 12` | `MOUSEEVENTF_WHEEL`/`HWHEEL`, `mouseData = ±steps × 120` |
+| `drag` | `toX`, `toY`, `button`, `steps` (≤60) | `mousedown` → N `mousemove` → `mouseup`, `GESTURE_SETTLE_SEC = 0,03` sau khi nhấn | ba lô `SendInput` (move+down, N move, up) |
+| `hold` | `seconds` (0,05–5) | `mousedown` → ngủ → `mouseup` | như trên, hai lô |
+| `stroke` | `path` (≥2 điểm, ≤400) | mỗi điểm một `mousemove`, `STROKE_STEP_SEC = 0,008` | một lô `SendInput` cho cả đường |
+
+Chốt an toàn giữ nguyên cho cả bốn: điểm phải thuộc đích (`check_point_ownership`), đích phải giữ
+tiêu điểm, và **cú kéo của đích là một cửa sổ thì cả điểm đầu lẫn điểm cuối phải nằm trong cửa sổ
+đó** — chỉ chế độ "cả máy" mới cho kéo từ cửa sổ này sang cửa sổ khác. Nhả chuột nằm trong `finally`
+nên một bước hỏng giữa chừng không để lại nút chuột đang giữ. 28 bài kiểm mới (13 X11 + 9 Windows +
+6 host executor).
+
+| Mã | Mức | Vấn đề | Cách vá |
+|---|---|---|---|
+| BUG-127 | MEDIUM | **Hộp thoại khai `_NET_WM_WINDOW_TYPE_NORMAL` bị coi là cửa sổ lạ.** Đo trên máy thật (mtPaint 3.50): hộp thoại "Save Image File" và cửa sổ "Settings Toolbar" đều khai `WM_TRANSIENT_FOR` trỏ về cửa sổ chính nhưng **không** khai loại hộp thoại. Chốt BUG-120 đòi đủ hai điều kiện nên từ chối: mọi `type`/`key` trả `SOURCE_CHANGED: cửa sổ đích không giữ được tiêu điểm` trong lúc hộp thoại đang mở, tức là **không gõ được tên tệp để lưu** — đúng kiểu "agent chết cứng" mà BUG-117 đã vá cho hộp thoại `DIALOG`. Cùng lúc, cú bấm vào nút "+" của cửa sổ "Settings Toolbar" bị từ chối `điểm bấm đang bị cửa sổ khác che` dù đó là cửa sổ của chính ứng dụng | `is_own_window` nhận thêm điều kiện thứ hai: cửa sổ trong chuỗi `WM_TRANSIENT_FOR` được nhận nếu **cùng tiến trình** với cửa sổ mà nó khai (`_NET_WM_PID`, đọc từ bộ đệm). Điều kiện chuỗi vẫn giữ, nên bảo vệ của BUG-120 không mất: công cụ lạ khác tiến trình vẫn bị từ chối (bài kiểm cũ `test_a_foreign_window_claiming_the_target_as_owner_is_refused_without_a_dialog_type` vẫn xanh). `_NET_WM_PID` là bằng chứng **mạnh hơn** `WM_TRANSIENT_FOR`: tiến trình khác không tạo được cửa sổ mang PID của ứng dụng đích. 2 bài kiểm mới (nhận khi cùng tiến trình; vẫn từ chối khi cùng tiến trình nhưng **không** khai chuỗi) |
+
+Kiểm chứng trên máy thật sau khi vá: bấm "+" trong "Settings Toolbar" được nhận (Size 1 → 4), và gõ
+14 ký tự tên tệp vào hộp thoại lưu được nhận — mtPaint lưu ra PNG 640×480 với **7 172 điểm ảnh đỏ**
+(vòng tròn + sóng + tam giác do `stroke` vẽ). Trước khi vá cả hai thao tác đều bị từ chối.

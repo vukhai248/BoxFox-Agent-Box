@@ -594,24 +594,39 @@ class X11Platform:
         thì vẫn là ứng dụng đích, nên nhận.
 
         Một cửa sổ KHÁC chỉ được nhận khi hội đủ hai điều: khai ``WM_TRANSIENT_FOR`` trỏ về đích
-        (theo chuỗi, tối đa 4 mắt) **và** tự khai là hộp thoại/popup. Thiếu điều kiện thứ hai thì
-        một công cụ lạ "bám theo cửa sổ đang hoạt động" sẽ được nhận input thay cho ứng dụng đích —
-        đúng thứ mà chốt này sinh ra để chặn.
+        (theo chuỗi, tối đa 4 mắt) **và** chứng minh được mình thuộc về đích — hoặc tự khai là
+        hộp thoại/popup (``_NET_WM_WINDOW_TYPE``), hoặc do **cùng một tiến trình** tạo ra
+        (``_NET_WM_PID``). Thiếu cả hai thì một công cụ lạ "bám theo cửa sổ đang hoạt động" sẽ được
+        nhận input thay cho ứng dụng đích — đúng thứ mà chốt này sinh ra để chặn.
+
+        Vì sao cần thêm điều kiện "cùng tiến trình": đo trên máy thật (08/10/2026, mtPaint 3.50) —
+        hộp thoại "Save Image File" và cửa sổ "Settings Toolbar" của mtPaint đều khai
+        ``WM_TRANSIENT_FOR`` trỏ về cửa sổ chính nhưng tự khai ``_NET_WM_WINDOW_TYPE_NORMAL``, nên
+        chốt cũ coi chúng là cửa sổ lạ: mọi ``type``/``key`` bị từ chối ``SOURCE_CHANGED`` trong lúc
+        hộp thoại giữ tiêu điểm, tức là không thể gõ tên tệp để lưu — đúng kiểu "agent chết cứng"
+        mà hộp thoại ``_NET_WM_WINDOW_TYPE_DIALOG`` đã được cứu ở BUG-117. ``_NET_WM_PID`` là bằng
+        chứng mạnh hơn cả ``WM_TRANSIENT_FOR``: một tiến trình khác không tạo được cửa sổ mang PID
+        của ứng dụng đích, còn ứng dụng thì luôn đặt đúng.
         """
         value = int(candidate)
         target = int(hwnd)
         if value == target:
             return True
         for _ in range(4):      # chuỗi hộp thoại lồng nhau (hộp thoại của hộp thoại) hiếm khi sâu hơn
-            if not self.is_dialog_window(value):
-                return False
             owner = self.get_window_owner(value)
             if owner is None:
+                return False
+            if not (self.is_dialog_window(value) or self.same_process(value, owner)):
                 return False
             if owner == target:
                 return True
             value = owner
         return False
+
+    def same_process(self, first: int, second: int) -> bool:
+        """Hai cửa sổ do cùng một tiến trình tạo ra? (``_NET_WM_PID``, chỉ đọc từ bộ đệm)."""
+        pid = self.get_window_pid(first)
+        return pid is not None and pid == self.get_window_pid(second)
 
     def transient_windows(self, hwnd: int) -> list[int]:
         """Các hộp thoại/popup của ``hwnd`` đang hiển thị, **dưới → trên** theo chồng cửa sổ.
