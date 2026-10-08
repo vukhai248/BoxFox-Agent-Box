@@ -13,6 +13,7 @@ from pathlib import Path
 class SessionStore:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = Path(path)
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
@@ -302,6 +303,14 @@ class SessionStore:
         self.db.execute("UPDATE sessions SET status='interrupted' WHERE status IN ('running','awaiting_decision')")
         self.db.commit()
 
+    @property
+    def history(self):
+        """Một dịch vụ history cộng thêm trên cùng DB này; khởi tạo ở lần dùng đầu tiên."""
+        if not hasattr(self, "_history"):
+            from .history_store import HistoryStore
+            self._history = HistoryStore(self, self.path.parent)
+        return self._history
+
     def _add_missing_columns(self, table, columns):
         """Thêm cột còn thiếu, không bao giờ làm sập khởi động.
 
@@ -461,7 +470,13 @@ class SessionStore:
         self.get(sid)
         rows = self.db.execute('SELECT * FROM checkpoints WHERE session_id=? ORDER BY id LIMIT ?',
                                (sid, limit)).fetchall()
-        return [{**dict(row), 'messages': json.loads(row['messages'])} for row in rows]
+        result = []
+        for row in rows:
+            messages = json.loads(row['messages'])
+            if isinstance(messages, dict) and 'historyManifest' in messages:
+                messages = self.history.restore_compaction(messages['historyManifest'])
+            result.append({**dict(row), 'messages': messages})
+        return result
 
     def journal_add(self, sid, kind, text, payload=None):
         """Một bản ghi nhật ký (A2). Chỉ ghi thêm: không sửa, không xoá, không đánh số lại."""
@@ -1021,32 +1036,11 @@ class SessionStore:
         return self.plan_review(identity, version)
 
     def delete(self, sid):
-        with self.db:
-            child_rows = self.db.execute('SELECT id FROM sessions WHERE parent_id=?', (sid,)).fetchall()
-            all_sids = [sid] + [r['id'] for r in child_rows]
-            placeholders = ','.join('?' for _ in all_sids)
-            self.db.execute(f'DELETE FROM checkpoints WHERE session_id IN ({placeholders})', all_sids)
-            self.db.execute(f'DELETE FROM events WHERE session_id IN ({placeholders})', all_sids)
-            self.db.execute(f'DELETE FROM sessions WHERE id IN ({placeholders})', all_sids)
-            # Vòng 22 (T1): sổ con và biên nhận đi theo phiên — xoá phiên mà để lại hàng sổ con
-            # thì watchdog sẽ đi tìm một phiên không còn tồn tại (và bắn event vào luồng đã xoá).
-            self.db.execute(f'DELETE FROM children WHERE session_id IN ({placeholders})', all_sids)
-            self.db.execute(f'DELETE FROM children WHERE parent_id IN ({placeholders})', all_sids)
-            self.db.execute(f'DELETE FROM child_deliveries WHERE child_id IN ({placeholders})', all_sids)
-            self.db.execute(f'DELETE FROM child_deliveries WHERE recipient IN ({placeholders})', all_sids)
-            # Vòng 25 (D-33): HAI SỔ CỦA VÒNG LẶP KẾ HOẠCH **CỐ Ý** không nằm trong cascade này.
-            # `plan_verifications`/`plan_owners` nói về một NHÓM KẾ HOẠCH, không về một phiên: cùng
-            # một kế hoạch có thể được sửa ở phiên khác, và xoá phiên cũ mà làm biến mất phán quyết
-            # phản biện của bản đang nằm trên đĩa thì cổng duyệt sẽ từ chối một bản đã được phản
-            # biện thật. Xoá hàng `.plans/` mới là cách kết thúc vòng đời của một kế hoạch.
-            #
-            # Vòng 27 (đợt 3, B-1): `source_ledger`, `research_dossiers`, `session_steers` cũng **CỐ Ý**
-            # KHÔNG nằm trong cascade — cùng một lý do. Sổ nguồn là BẰNG CHỨNG của một hồ sơ đang nằm
-            # trên đĩa (`.research/<slug>/vN-<slug>.md` + `sources.jsonl`): hồ sơ vẫn đọc được sau khi
-            # phiên bị xoá, và một sổ nguồn biến mất trong im lặng sẽ biến hồ sơ ấy thành lời nói suông
-            # — đúng thứ mà cả vòng 27 dựng lên để chặn. Dọn `.research/` là cách kết thúc vòng đời.
-            pass
-        return True
+        # Không còn đường xoá thẳng: API phải đi qua preview → capsule đã xác minh → confirm,
+        # kèm cổng quiescence; xoá cây con là đệ quy (xem history_store.delete_with_capsule).
+        from .history_store import HistoryError
+        raise HistoryError('DELETE_REQUIRES_CARRY_FORWARD')
+
 
     # ------------------------------------------------------------------
     # Sổ nguồn (vòng 27 đợt 3, B-1) — bằng chứng của một hồ sơ research
