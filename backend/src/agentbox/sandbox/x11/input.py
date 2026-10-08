@@ -41,6 +41,11 @@ MOUSE_BUTTONS = {'left': 1, 'middle': 2, 'right': 3}
 #: Nhịp gõ mặc định (ms/ký tự) — đủ chậm để ứng dụng không nuốt ký tự, đủ nhanh để không chờ lâu.
 TYPE_DELAY_MS = 12
 
+#: Khoảng giữa lúc NHẤN và lúc NHẢ chuột (ms). ``xdotool click`` mặc định 100 ms và ta trả đủ số đó
+#: cho mỗi cú bấm (đo được: 102 ms một cú, tức gần một nửa giá thành của ``click``). 12 ms là mức
+#: thông thường của XTEST và đã kiểm lại trên terminal, VS Code và Chrome.
+CLICK_DELAY_MS = 12
+
 #: Số ký tự mỗi khối ``xdotool type``. Giữa hai khối ta kiểm lại tiêu điểm, nên khối càng nhỏ thì
 #: khe hở "gõ nhầm cửa sổ" càng hẹp — 64 khớp với ``TEXT_CHUNK_UNITS`` của bản Windows.
 TEXT_CHUNK_CHARS = 64
@@ -141,11 +146,16 @@ def check_preconditions(window: Any, *, pid: int | None = None, platform: Any = 
 
 
 def check_point_ownership(x: int, y: int, hwnd: int, *, platform: Any = None) -> None:
-    """Điểm bấm phải thuộc cửa sổ đích — nếu không, cửa sổ đã bị che từ lúc soi."""
+    """Điểm bấm phải thuộc cửa sổ đích — nếu không, cửa sổ đã bị che từ lúc soi.
+
+    Cửa sổ của **chính ứng dụng đích** cũng được nhận: hộp thoại modal của ứng dụng (VS Code,
+    Chrome, trình soạn thảo…) nằm trên cửa sổ đích và có tiêu điểm, nên nếu từ chối thì agent vừa
+    không bấm được nút của hộp thoại, vừa không làm gì được với cửa sổ chính — chết cứng.
+    """
     p = _platform(platform)
     top = p.window_from_point(int(x), int(y))
     root = (p.get_ancestor_root(top) or top) if top else None
-    if root is None or int(root) != int(hwnd):
+    if root is None or not p.is_own_window(hwnd, root):
         raise PlatformError(
             SOURCE_CHANGED,
             'điểm bấm đang bị cửa sổ khác che — không gửi input.',
@@ -180,11 +190,16 @@ def check_geometry_revision(source_id: str | None, revision: int | None, *,
 # Tiêu điểm
 # ---------------------------------------------------------------------------
 def foreground_matches(hwnd: int, *, platform: Any = None) -> bool:
+    """Cửa sổ đích (hoặc hộp thoại của chính nó) đang có tiêu điểm?
+
+    Nhận cả hộp thoại của ứng dụng đích: khi ứng dụng mở hộp thoại modal, WM **không cho** cửa sổ
+    chính lấy lại tiêu điểm, nên đòi hỏi tuyệt đối là tự khoá mọi thao tác bàn phím vào ứng dụng.
+    """
     p = _platform(platform)
     current = p.get_foreground_window()
     if not current:
         return False
-    if int(current) == int(hwnd):
+    if p.is_own_window(hwnd, current):
         return True
     root = p.get_ancestor_root(current)
     return bool(root) and int(root) == int(hwnd)
@@ -253,9 +268,14 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
         # chuyển của chính ta thành người thật. Ghi sớm mà lệnh hỏng thì cùng lắm là nhả quyền về
         # tay người — hướng an toàn.
         p.note_own_pointer(int(x), int(y))
-        moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
-        _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
-        pressed = _xdotool(p, 'click', str(MOUSE_BUTTONS[button]))
+        # `mousemove --sync` chờ một sự kiện MotionNotify tới đúng toạ độ; con trỏ đã ở đúng chỗ thì
+        # X server KHÔNG sinh sự kiện nào và `xdotool` chờ tới hết thời gian chờ (đo được: bấm hai
+        # lần liên tiếp vào cùng một điểm làm lần thứ hai treo đủ 5 s rồi báo `SOURCE_CHANGED`).
+        # Vì vậy chỉ gọi `mousemove` khi con trỏ còn ở chỗ khác.
+        if tuple(previous_cursor or ()) != (int(x), int(y)):
+            moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
+            _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
+        pressed = _xdotool(p, 'click', '--delay', str(CLICK_DELAY_MS), str(MOUSE_BUTTONS[button]))
         _fail(pressed, 'click', button=button)
     finally:
         if restore:

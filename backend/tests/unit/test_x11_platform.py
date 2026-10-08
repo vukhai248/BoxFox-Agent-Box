@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 
 import pytest
 
@@ -97,8 +98,8 @@ class FakeTools:
 
 
 def window_props(*, pid=4242, title='Untitled - Notepad', cls='notepad, Notepad', state='',
-                 frame='0, 0, 0, 0'):
-    return {
+                 frame='0, 0, 0, 0', owner=None):
+    props = {
         '_NET_WM_PID': str(pid),
         'WM_CLASS': '"%s"' % cls,
         '_NET_WM_NAME': '"%s"' % title,
@@ -106,6 +107,9 @@ def window_props(*, pid=4242, title='Untitled - Notepad', cls='notepad, Notepad'
         '_NET_WM_STATE': state,
         '_NET_FRAME_EXTENTS': frame,
     }
+    if owner is not None:
+        props['WM_TRANSIENT_FOR'] = '0x%x' % int(owner)
+    return props
 
 
 def build(**kwargs):
@@ -345,7 +349,10 @@ def test_click_moves_and_presses_through_xtest():
     assert outcome['route'] == 'xtest' and outcome['windowId'] == 0x10
     xdotool = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool']
     assert any(call[1:3] == ['mousemove', '--sync'] and call[3:5] == ['30', '40'] for call in xdotool)
-    assert any(call[1:3] == ['click', '1'] for call in xdotool)
+    pressed = [call for call in xdotool if call[1] == 'click']
+    assert pressed and pressed[0][-1] == '1'
+    # Không để `xdotool click` dùng mặc định 100 ms: đó là gần một nửa giá thành của một cú bấm.
+    assert pressed[0][2] == '--delay' and int(pressed[0][3]) <= 20
 
 
 def test_click_on_a_window_that_lost_the_foreground_is_refused():
@@ -582,3 +589,262 @@ def test_type_text_stops_when_the_target_loses_focus_between_chunks():
         xi.type_text('b' * 200, window=0x11, platform=platform)
     assert caught.value.code == 'SOURCE_CHANGED'
     assert len(typed) == 1                       # khối thứ hai không bao giờ được gửi
+
+
+# ------------------------------------------------- hộp thoại của chính ứng dụng đích
+# Đo trên máy thật (VS Code, 08/10/2026): khi ứng dụng mở hộp thoại modal, hộp thoại là một cửa sổ
+# X11 riêng có `WM_TRANSIENT_FOR` trỏ vào cửa sổ chính. WM giữ tiêu điểm ở hộp thoại và **từ chối**
+# kích hoạt cửa sổ chính, nên chốt "đích phải có tiêu điểm" làm mọi thao tác vào ứng dụng hỏng, còn
+# chốt "điểm bấm phải thuộc đích" thì không cho bấm nút của hộp thoại — agent chết cứng.
+def _app_with_dialog(*, dialog_owner=0x10, foreground=0x10):
+    """Ứng dụng 0x10 + hộp thoại 0x20 (mặc định là hộp thoại CỦA chính nó)."""
+    props = {0x10: window_props(pid=7, title='Code'), 0x20: window_props(pid=7, title='Replace?',
+                                                                       owner=dialog_owner)}
+    rects = {0x10: (0, 0, 100, 100), 0x20: (20, 20, 80, 60)}
+    platform, tools = build(windows=[0x10, 0x20], props=props, rects=rects, foreground=foreground)
+    return platform, tools
+
+
+def test_a_click_lands_on_a_dialog_of_the_target_window():
+    """Nút nằm trong hộp thoại của chính ứng dụng đích: bấm được, và vẫn gắn với cửa sổ đích."""
+    platform, _tools = _app_with_dialog()
+    window = platform.describe_window(0x10)
+    outcome = xi.click(50, 40, window=window, platform=platform, restore=False)
+    assert outcome['windowId'] == 0x10 and outcome['point'] == {'x': 50, 'y': 40}
+
+
+def test_a_click_on_a_dialog_of_another_application_is_still_refused():
+    """Hộp thoại của ứng dụng KHÁC thì vẫn là che khuất — không được bấm vào."""
+    platform, _tools = _app_with_dialog(dialog_owner=0x30)
+    window = platform.describe_window(0x10)
+    with pytest.raises(PlatformError) as caught:
+        xi.click(50, 40, window=window, platform=platform)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert caught.value.details['window_at_point'] == 0x20
+
+
+def test_typing_goes_ahead_while_the_targets_own_dialog_holds_the_focus():
+    platform, tools = _app_with_dialog(foreground=0x20)
+    outcome = xi.type_text('y', window=0x10, platform=platform)
+    assert outcome['chars'] == 1
+    typed = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert typed, 'phím phải được gửi thật'
+
+
+def test_typing_still_stops_when_an_unrelated_window_holds_the_focus():
+    platform, _tools = _app_with_dialog(foreground=0x30)
+    with pytest.raises(PlatformError) as caught:
+        xi.type_text('y', window=0x10, platform=platform, timeout=0.05)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert caught.value.details['foreground'] == 0x30
+
+
+def test_a_dialog_chain_is_followed_up_to_a_few_levels():
+    """Hộp thoại của hộp thoại vẫn thuộc ứng dụng đích."""
+    props = {0x10: window_props(pid=7), 0x20: window_props(pid=7, owner=0x10),
+             0x30: window_props(pid=7, owner=0x20)}
+    platform, _tools = build(windows=[0x10, 0x20, 0x30], props=props,
+                             rects={0x10: (0, 0, 100, 100), 0x20: (0, 0, 100, 100),
+                                    0x30: (0, 0, 100, 100)}, foreground=0x30)
+    assert platform.is_own_window(0x10, 0x30) is True
+
+
+# ------------------------------------------------- kích hoạt cửa sổ không chặn
+def test_activation_never_asks_xdotool_to_wait_for_the_window_manager():
+    """`--sync` chặn tới hết thời gian chờ khi WM từ chối kích hoạt (đo được > 12 s một lời gọi)."""
+    platform, tools = build(windows=[0x10], props={0x10: window_props()},
+                            rects={0x10: (0, 0, 10, 10)}, foreground=0x10)
+    assert platform.set_foreground_window(0x10) is True
+    calls = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool']
+    assert calls and calls[0][1:3] == ['windowactivate', '16']
+    assert '--sync' not in calls[0]
+
+
+def test_activation_reports_failure_instead_of_blocking_when_the_manager_refuses():
+    platform, _tools = build(windows=[0x10, 0x20], props={0x10: window_props(), 0x20: window_props()},
+                             rects={0x10: (0, 0, 10, 10), 0x20: (0, 0, 10, 10)}, foreground=0x20)
+    started = time.monotonic()
+    assert platform.set_foreground_window(0x10, wait=0.05) is False
+    assert time.monotonic() - started < 1.0
+
+
+# ------------------------------------------------- hình học đọc một lần
+def test_repeated_geometry_reads_use_a_single_xwininfo():
+    """Một lần soi duyệt chồng cửa sổ năm lần; mỗi cửa sổ chỉ được đọc `xwininfo` một lần."""
+    platform, tools = build(windows=[0x10], props={0x10: window_props()},
+                            rects={0x10: (0, 0, 10, 10)})
+    assert platform.get_window_rect(0x10) == (0, 0, 10, 10)
+    assert platform.is_window_visible(0x10) is True
+    assert platform.get_window_rect(0x10) == (0, 0, 10, 10)
+    calls = [call for call in tools.calls if os.path.basename(call[0]) == 'xwininfo' and '-id' in call]
+    assert len(calls) == 1
+
+
+def test_a_fresh_geometry_read_bypasses_the_cache():
+    """Sau khi cửa sổ bị di chuyển, `fresh=True` phải đọc lại — nếu không thì bấm sai chỗ."""
+    platform, tools = build(windows=[0x10], props={0x10: window_props()},
+                            rects={0x10: (0, 0, 10, 10)})
+    assert platform.get_window_rect(0x10) == (0, 0, 10, 10)
+    tools.rects[0x10] = (100, 100, 110, 110)
+    assert platform.get_window_rect(0x10) == (0, 0, 10, 10), 'bản còn hạn thì dùng lại'
+    assert platform.get_window_rect(0x10, fresh=True) == (100, 100, 110, 110)
+
+
+# ------------------------------------------------- ghép hộp thoại vào ảnh cửa sổ
+def _capture_with_dialog(*, dialog_owner=0x10):
+    base = bytes([200, 200, 200, 255]) * (100 * 100)
+    patch = bytes([40, 40, 40, 255]) * (60 * 40)
+    props = {0x10: window_props(pid=7, title='Code'),
+             0x20: window_props(pid=7, title='Replace?', owner=dialog_owner)}
+    rects = {0x10: (0, 0, 100, 100), 0x20: (20, 20, 80, 60)}
+    # Hộp thoại modal đang giữ tiêu điểm — đúng trạng thái đo được trên máy thật.
+    platform, _tools = build(windows=[0x10, 0x20], props=props, rects=rects, foreground=0x20,
+                             raw_by_target={'16': base, '32': patch, 'root': base})
+    return platform, base, patch
+
+
+def test_the_targets_own_dialog_is_painted_into_the_window_capture():
+    """Agent phải NHÌN THẤY hộp thoại: ảnh cửa sổ được ghép hộp thoại đúng vị trí tuyệt đối."""
+    platform, base, patch = _capture_with_dialog()
+    shot = xc.capture_window(0x10, platform=platform)
+    assert shot.method == 'import_window' and len(shot.pixels) == len(base)
+    inside = (40 * 100 + 60) * 4          # điểm (60, 40) nằm trong hộp thoại (20,20)-(80,60)
+    outside = (10 * 100 + 10) * 4
+    assert shot.pixels[inside:inside + 4] == patch[:4], 'hộp thoại phải được dán vào ảnh'
+    assert shot.pixels[outside:outside + 4] == base[:4], 'phần còn lại giữ nguyên ảnh cửa sổ'
+    assert any('hộp thoại của chính ứng dụng' in note for note in shot.notes)
+
+
+def test_a_dialog_of_another_application_is_not_painted_into_the_capture():
+    platform, base, _patch = _capture_with_dialog(dialog_owner=0x30)
+    shot = xc.capture_window(0x10, platform=platform)
+    inside = (40 * 100 + 60) * 4
+    assert shot.pixels[inside:inside + 4] == base[:4]
+    assert not any('hộp thoại của chính ứng dụng' in note for note in shot.notes)
+
+
+# ------------------------------------------------- locale UTF-8 cho tiến trình con
+# Đo trên máy thật (08/10/2026): `xfce4-terminal` mở bằng `env -i` (không LANG) **nuốt sạch dấu** khi
+# nhận input XTEST — "Xin chào Cửa sổ! áàảãạ" nhận về "Xin cho Ca s!"; mở kèm `LANG=C.UTF-8` thì nhận
+# đủ từng byte, còn `LC_ALL=C` thì lại mất. Lệnh gõ vẫn báo thành công, nên đây là lỗi im lặng: ứng
+# dụng do BoxFox mở phải có locale UTF-8, và chính `xdotool` cũng giải mã đối số theo locale.
+def test_a_child_process_gets_a_utf8_locale_when_the_host_has_none():
+    platform = xp.X11Platform(display=':1', runner=FakeTools(), env={'DISPLAY': ':1', 'PATH': '/usr/bin'})
+    env = platform._child_env()
+    assert xp.has_utf8_locale(env), env
+    assert env['LANG'] == xp.utf8_locale()
+
+
+def test_a_utf8_locale_from_the_host_is_kept_untouched():
+    platform = xp.X11Platform(display=':1', runner=FakeTools(),
+                              env={'DISPLAY': ':1', 'LANG': 'vi_VN.UTF-8'})
+    assert platform._child_env()['LANG'] == 'vi_VN.UTF-8'
+
+
+def test_a_non_utf8_locale_is_replaced_for_child_processes():
+    """`LC_ALL=C` làm mất dấu: tiến trình con phải được cấp lại locale UTF-8."""
+    platform = xp.X11Platform(display=':1', runner=FakeTools(),
+                              env={'DISPLAY': ':1', 'LC_ALL': 'C', 'LANG': 'C'})
+    env = platform._child_env()
+    assert 'LC_ALL' not in env and xp.has_utf8_locale(env)
+
+
+def test_has_utf8_locale_follows_the_libc_order():
+    assert xp.has_utf8_locale({'LANG': 'C.UTF-8'})
+    assert not xp.has_utf8_locale({'LANG': 'C'})
+    assert not xp.has_utf8_locale({})
+    # LC_ALL thắng LANG — đúng thứ tự libc
+    assert not xp.has_utf8_locale({'LANG': 'C.UTF-8', 'LC_ALL': 'C'})
+    assert xp.has_utf8_locale({'LANG': 'C', 'LC_ALL': 'C.utf8'})
+
+
+def test_utf8_locale_names_a_locale_that_exists_on_this_machine():
+    name = xp.utf8_locale()
+    assert name and ('utf-8' in name.lower() or 'utf8' in name.lower())
+
+
+def test_the_platform_warns_that_a_non_utf8_session_drops_accented_text():
+    platform = xp.X11Platform(display=':1', runner=FakeTools(), env={'DISPLAY': ':1', 'LANG': 'C'})
+    notes = ' '.join(platform.notes())
+    assert 'không có locale UTF-8' in notes and 'nuốt' in notes
+
+
+def test_a_utf8_session_gets_no_locale_warning():
+    platform = xp.X11Platform(display=':1', runner=FakeTools(),
+                              env={'DISPLAY': ':1', 'LANG': 'C.UTF-8'})
+    assert not any('locale UTF-8' in note for note in platform.notes())
+
+
+def test_launch_app_hands_the_utf8_locale_to_the_application(monkeypatch):
+    """Ứng dụng do BoxFox mở phải nhận locale UTF-8, nếu không chữ có dấu gõ vào sẽ biến mất."""
+    platform = xp.X11Platform(display=':1', env={'DISPLAY': ':1', 'LANG': 'C'})
+    seen = {}
+
+    class FakeProcess:
+        pid = 4242
+
+    def fake_popen(args, **kwargs):
+        seen['args'] = args
+        seen['env'] = kwargs.get('env')
+        return FakeProcess()
+
+    monkeypatch.setattr(xp.shutil, 'which', lambda name: '/usr/bin/%s' % name)
+    monkeypatch.setattr(xp.subprocess, 'Popen', fake_popen)
+    assert platform.launch_app('xfce4-terminal') == 4242
+    assert xp.has_utf8_locale(seen['env']), seen['env']
+    assert seen['env']['DISPLAY'] == ':1'
+
+
+# ------------------------------------------------- bấm hai lần vào cùng một điểm
+# Đo trên máy thật (08/10/2026, xfce4-terminal): `xdotool mousemove --sync <x> <y>` **chờ một sự kiện
+# MotionNotify tới đúng toạ độ**; con trỏ đã đứng đúng chỗ thì X server không sinh sự kiện nào, nên
+# lệnh chờ tới hết thời gian chờ (5 s) rồi hỏng. Hệ quả: cú bấm thứ hai vào cùng một điểm treo 5 s và
+# báo `SOURCE_CHANGED` — agent thấy như "cửa sổ đổi chỗ", còn người dùng thấy agent đứng hình.
+def test_clicking_the_same_point_twice_does_not_move_the_pointer_again():
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    pointer = {'at': (50, 50)}
+
+    class CursorAware:
+        """Giả lập đúng hành vi thật: `mousemove --sync` tới chỗ con trỏ đang đứng thì hết giờ."""
+
+        def __call__(self, argv, timeout):
+            tool, args = os.path.basename(argv[0]), argv[1:]
+            if tool == 'xdotool' and args and args[0] == 'getmouselocation':
+                return xp._CommandResult(0, 'X=%d\nY=%d\nSCREEN=0\nWINDOW=17\n' % pointer['at'])
+            if tool == 'xdotool' and args and args[0] == 'mousemove':
+                target = (int(args[-2]), int(args[-1]))
+                if target == pointer['at']:
+                    return xp._CommandResult(124, '', 'hết thời gian chờ xdotool')
+                pointer['at'] = target
+            return tools(argv, timeout)
+
+    platform._runner = CursorAware()
+    window = platform.describe_window(0x11)
+    outcome = xi.click(50, 50, window=window, platform=platform, restore=False)
+    assert outcome['point'] == {'x': 50, 'y': 50}
+    moves = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'mousemove' in call]
+    presses = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'click' in call]
+    assert not moves, 'con trỏ đã đúng chỗ thì không được gọi mousemove'
+    assert presses, 'cú bấm vẫn phải được gửi'
+
+
+def test_a_click_at_another_point_still_moves_the_pointer_first():
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    pointer = {'at': (10, 10)}
+
+    class CursorAware:
+        def __call__(self, argv, timeout):
+            tool, args = os.path.basename(argv[0]), argv[1:]
+            if tool == 'xdotool' and args and args[0] == 'getmouselocation':
+                return xp._CommandResult(0, 'X=%d\nY=%d\n' % pointer['at'])
+            if tool == 'xdotool' and args and args[0] == 'mousemove':
+                pointer['at'] = (int(args[-2]), int(args[-1]))
+            return tools(argv, timeout)
+
+    platform._runner = CursorAware()
+    window = platform.describe_window(0x11)
+    xi.click(70, 80, window=window, platform=platform, restore=False)
+    moves = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'mousemove' in call]
+    assert moves and (int(moves[-1][-2]), int(moves[-1][-1])) == (70, 80)

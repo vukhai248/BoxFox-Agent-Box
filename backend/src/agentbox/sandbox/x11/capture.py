@@ -205,6 +205,60 @@ def _pixels_are_the_screen(shot: Capture, *, platform: Any, samples: int = 64) -
     return checked > 0 and (same / checked) >= 0.9
 
 
+def _paste_bgra(base: bytearray, base_w: int, base_h: int, patch: bytes,
+                patch_w: int, patch_h: int, dx: int, dy: int) -> None:
+    """Dán ``patch`` (BGRA) vào ``base`` tại ``(dx, dy)``, tự cắt phần tràn ra ngoài."""
+    for row in range(patch_h):
+        by = dy + row
+        if by < 0 or by >= base_h:
+            continue
+        left = max(0, dx)
+        right = min(base_w, dx + patch_w)
+        if right <= left:
+            continue
+        src = (row * patch_w + (left - dx)) * 4
+        dst = (by * base_w + left) * 4
+        base[dst:dst + (right - left) * 4] = patch[src:src + (right - left) * 4]
+
+
+def _compose_own_dialogs(shot: Capture, hwnd: int, *, platform: Any) -> list[str]:
+    """Ghép hộp thoại của **chính ứng dụng đích** vào ảnh cửa sổ; trả về các dòng ghi chú.
+
+    X11 vẽ hộp thoại modal trong một cửa sổ riêng, nên ``import -window <cửa sổ chính>`` không có
+    chúng: agent nhìn ảnh tưởng ứng dụng đang bình thường, trong khi mọi phím gõ vào lại rơi vào hộp
+    thoại. Ghép đúng vị trí tuyệt đối nên toạ độ trong ảnh vẫn là toạ độ bấm thật.
+    """
+    dialogs = platform.transient_windows(int(hwnd))
+    if not dialogs:
+        return []
+    x, y, width, height = shot.bounds
+    base = bytearray(shot.pixels)
+    notes: list[str] = []
+    for dialog in dialogs:
+        rect = platform.get_window_rect(int(dialog))
+        if rect is None:
+            continue
+        left, top, right, bottom = rect
+        patch_w, patch_h = right - left, bottom - top
+        if patch_w <= 0 or patch_h <= 0:
+            continue
+        try:
+            patch = _import_raw(int(dialog), platform=platform)
+        except PlatformError:
+            continue
+        if len(patch) != patch_w * patch_h * 4:
+            continue
+        _paste_bgra(base, width, height, patch, patch_w, patch_h, left - x, top - y)
+        title = (platform.get_window_text(int(dialog)) or '').strip()
+        notes.append(
+            'hộp thoại của chính ứng dụng đang mở và đã được ghép vào ảnh: %s (%dx%d tại %d,%d)'
+            % (title[:60] or 'không tên', patch_w, patch_h, left, top)
+        )
+    if notes:
+        shot.pixels = bytes(base)
+    return notes
+
+
 def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
     """Chụp một cửa sổ theo ``windowId``; gắn ``occluded`` khi cửa sổ bị che."""
     p = _platform(platform)
@@ -222,6 +276,12 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
     if not p.is_window_visible(int(hwnd)):
         notes.append('cửa sổ không ở trạng thái IsViewable — ảnh có thể là nền màn hình')
     occluded = win_capture.is_occluded(p, int(hwnd), (x, y, width, height))
+    # Hộp thoại của chính ứng dụng: tìm khi cửa sổ bị che, hoặc khi tiêu điểm không còn ở cửa sổ
+    # đích — hộp thoại modal luôn giữ tiêu điểm, mà phép thử che khuất theo tỉ lệ nên một hộp thoại
+    # nhỏ có thể không đủ để bật cờ `occluded`. Mỗi lần tìm là một vòng đọc thuộc tính của cả chồng
+    # cửa sổ (có bộ đệm), nên chỉ tìm khi có dấu hiệu.
+    own_dialogs = (p.transient_windows(int(hwnd))
+                   if occluded or p.get_foreground_window() != int(hwnd) else [])
 
     def _region(note: str) -> Capture:
         """Ảnh dự phòng chụp theo vùng màn hình, nhưng vẫn mang danh tính cửa sổ đích.
@@ -254,6 +314,10 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
             # màn hình, và nói "đọc từ bộ đệm riêng" về nó là mâu thuẫn với chính các điểm ảnh.
             shot.occluded = False
             shot.notes.append('cửa sổ có cửa sổ khác nằm trên, nhưng ảnh đọc từ bộ đệm riêng của nó')
+        if own_dialogs:
+            # Chỉ ghép lên ảnh ĐỌC RIÊNG của cửa sổ: ảnh dự phòng theo vùng màn hình đã có sẵn hộp
+            # thoại trong đó rồi, ghép thêm là dán hai lần.
+            shot.notes.extend(_compose_own_dialogs(shot, int(hwnd), platform=p))
     except PlatformError:
         if occluded:
             notes.append('cửa sổ bị che nên không đọc được nội dung riêng của nó')

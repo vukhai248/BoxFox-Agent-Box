@@ -58,6 +58,59 @@ TOOL_TIMEOUT_SEC = 5.0
 #: Số cửa sổ tối đa đọc từ ``_NET_CLIENT_LIST_STACKING`` (tránh payload phình như bên Windows).
 MAX_WINDOWS = 200
 
+#: Locale UTF-8 dùng khi phiên không có locale nào. Đo trên máy thật (08/10/2026): ứng dụng chạy
+#: trong phiên ``LC_ALL=C`` **nuốt mọi ký tự ngoài ASCII** khi nhận input XTEST — "chào" thành "cho".
+#: Đây là lỗi im lặng: lệnh gõ vẫn trả về thành công, chỉ có chữ trên màn hình là mất dấu.
+_UTF8_LOCALE_CANDIDATES = ('C.UTF-8', 'C.utf8', 'en_US.UTF-8', 'en_US.utf8')
+_utf8_locale_cache: str | None = None
+
+#: Chữ hoa `xdotool` gõ **mất dấu hoa** (đo 08/10/2026, xfce4-terminal có locale UTF-8): keysym trong
+#: dải Latin-1/2 bị hạ thành chữ thường. Đây là hạn chế của chính `xdotool` — `xdotool key Aacute`
+#: cũng cho "á", `xdotool key U00C1` cũng vậy — không phải lỗi của lớp gọi.
+_CASE_LOST = ('Á', 'À', 'Ã', 'Â', 'Ê', 'Ô', 'É', 'È', 'Í', 'Ì', 'Ó', 'Ò', 'Õ', 'Ú', 'Ù', 'Ý')
+#: Chữ hoa Latin Extended (3 byte UTF-8) thì gõ ĐÚNG — đo cùng lượt.
+_CASE_KEPT = ('Ả', 'Ạ', 'Ă', 'Đ', 'Ơ', 'Ư', 'Ẽ', 'Ĩ', 'Ũ', 'Ỳ')
+
+
+def has_utf8_locale(env: dict[str, str]) -> bool:
+    """``True`` khi locale *hiệu lực* của môi trường là UTF-8.
+
+    Thứ tự ưu tiên đúng như libc: ``LC_ALL`` > ``LC_CTYPE`` > ``LANG``.
+    """
+    for key in ('LC_ALL', 'LC_CTYPE', 'LANG'):
+        value = str(env.get(key) or '').strip()
+        if value:
+            folded = value.lower()
+            return 'utf-8' in folded or 'utf8' in folded
+    return False
+
+
+def utf8_locale() -> str:
+    """Tên locale UTF-8 có thật trên máy này (dò một lần cho cả tiến trình)."""
+    global _utf8_locale_cache
+    if _utf8_locale_cache is None:
+        _utf8_locale_cache = _UTF8_LOCALE_CANDIDATES[0]
+        try:
+            done = subprocess.run(['locale', '-a'], capture_output=True, text=True, timeout=5.0)
+        except (OSError, subprocess.SubprocessError):      # pragma: no cover - máy thiếu `locale`
+            return _utf8_locale_cache
+        names = {line.strip() for line in done.stdout.splitlines()}
+        for candidate in _UTF8_LOCALE_CANDIDATES:
+            if candidate in names:
+                _utf8_locale_cache = candidate
+                break
+    return _utf8_locale_cache
+
+#: Bao lâu thì dùng lại hình học cửa sổ đã đọc (giây). Một thao tác soi gọi ``window_from_point``
+#: tới năm lần, mỗi lần duyệt cả chồng cửa sổ — đo được 42 tiến trình con cho MỘT ảnh chụp. Giữ
+#: ngắn (0,5 s) để một cửa sổ vừa bị di chuyển vẫn được đọc lại trước thao tác kế tiếp.
+GEOMETRY_CACHE_SEC = 0.5
+
+#: Bao lâu thì chờ ``_NET_ACTIVE_WINDOW`` đổi sau khi xin WM kích hoạt (giây). Ngắn vì đây là
+#: vòng thăm dò của chính ta, không phải ``--sync`` của ``xdotool`` (thứ chặn tới hết thời gian
+#: chờ công cụ khi WM từ chối kích hoạt — xem :meth:`X11Platform.set_foreground_window`).
+ACTIVATE_WAIT_SEC = 0.25
+
 #: Thuộc tính EWMH cần cho một cửa sổ. Một lời gọi ``xprop`` trả về TẤT CẢ — rẻ hơn 6 lời gọi.
 _WINDOW_PROPERTIES = (
     '_NET_WM_PID',
@@ -66,6 +119,7 @@ _WINDOW_PROPERTIES = (
     '_NET_WM_NAME',
     'WM_NAME',
     '_NET_WM_WINDOW_TYPE',
+    'WM_TRANSIENT_FOR',
     '_NET_FRAME_EXTENTS',
 )
 
@@ -174,12 +228,25 @@ class X11Platform:
         self._env = dict(env) if env is not None else None
         self._runner = runner
         self._props_cache: dict[int, tuple[float, dict[str, str]]] = {}
+        self._geometry_cache: dict[int, tuple[float, str]] = {}
         self._notes: list[str] = []
         if self._env_source().get('WAYLAND_DISPLAY'):
             self._notes.append(
                 'phiên Wayland: chỉ thấy được cửa sổ X11/XWayland, ứng dụng Wayland thuần không '
                 'hiện trong danh sách và không nhận được input XTEST'
             )
+        if not has_utf8_locale(self._env_source()):
+            self._notes.append(
+                'phiên này không có locale UTF-8: ứng dụng **đang chạy** sẽ nuốt mọi ký tự ngoài '
+                'ASCII khi nhận input (chữ có dấu biến mất, lệnh vẫn báo thành công). Ứng dụng do '
+                'BoxFox mở thì đã được cấp locale `%s`; muốn gõ chữ có dấu vào ứng dụng có sẵn, hãy '
+                'mở lại ứng dụng đó từ BoxFox.' % utf8_locale()
+            )
+        self._notes.append(
+            'gõ chữ hoa ngoài ASCII: các chữ hoa Latin-1/2 (%s) bị `xdotool` hạ thành chữ thường — '
+            'chữ thường và các chữ hoa Latin Extended (%s) thì đúng. Muốn chắc, hãy đọc lại ảnh cửa '
+            'sổ sau khi gõ.' % (', '.join(_CASE_LOST), ', '.join(_CASE_KEPT))
+        )
         # Theo dõi "người thật vừa chạm máy" bằng cách lấy mẫu con trỏ + tiêu điểm
         # (quyết định #6785). X11 không có bộ đếm input toàn cục như `GetLastInputInfo`, nên
         # "tick" ở đây là bộ đếm của CHÍNH TA: nó tăng khi con trỏ hoặc tiêu điểm đổi mà lần đổi
@@ -211,10 +278,18 @@ class X11Platform:
 
     def _child_env(self) -> dict[str, str]:
         source = self._env if self._env is not None else os.environ
-        env = {key: str(source[key]) for key in ('PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'XAUTHORITY')
+        env = {key: str(source[key]) for key in ('PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'LC_CTYPE', 'XAUTHORITY')
                if source.get(key)}
         env.setdefault('PATH', '/usr/local/bin:/usr/bin:/bin')
         env['DISPLAY'] = self.display
+        # Không có locale UTF-8 thì mọi ký tự ngoài ASCII gõ vào ứng dụng sẽ **biến mất** (đo trên máy
+        # thật 08/10/2026: `xfce4-terminal` mở bằng `env -i` nuốt sạch dấu — "chào" thành "cho"; mở
+        # kèm `LANG=C.UTF-8` thì nhận đủ). Tiến trình con ở đây gồm cả `xdotool` (nó giải mã đối số
+        # theo locale) và cả ứng dụng mà BoxFox mở, nên thiếu locale là lỗi im lặng rất khó lần.
+        if not has_utf8_locale(env):
+            env['LANG'] = utf8_locale()
+            env.pop('LC_ALL', None)
+            env.pop('LC_CTYPE', None)
         return env
 
     def _spawn(self, args: list[str], timeout: float) -> Any:
@@ -325,13 +400,10 @@ class X11Platform:
 
     def is_window_visible(self, hwnd: int) -> bool:
         """Cửa sổ có đang được vẽ (``Map State: IsViewable``) hay không."""
-        tool = self._tool('xwininfo')
-        if tool is None:
+        text = self._xwininfo_text(int(hwnd))
+        if text is None:
             return False
-        result = self._run([tool, '-id', str(int(hwnd))])
-        if not result.ok:
-            return False
-        return 'Map State: IsViewable' in result.out
+        return 'Map State: IsViewable' in text
 
     def is_iconic(self, hwnd: int) -> bool:
         """Thu nhỏ = ``_NET_WM_STATE_HIDDEN`` (cùng nghĩa ``IsIconic``)."""
@@ -354,24 +426,45 @@ class X11Platform:
             return value
         return None
 
-    def get_window_rect(self, hwnd: int) -> tuple[int, int, int, int] | None:
+    def _xwininfo_text(self, hwnd: int, *, fresh: bool = False) -> str | None:
+        """Đầu ra thô của ``xwininfo -id <hwnd>``, dùng lại trong :data:`GEOMETRY_CACHE_SEC` giây.
+
+        Cả hình học lẫn trạng thái ``Map State`` đều nằm trong **cùng một** lời gọi này; trước đây
+        mỗi thứ gọi riêng một lần, nên chỉ một phép thử \"cửa sổ tại điểm\" đã tốn hai tiến trình con
+        cho mỗi cửa sổ trong chồng.
+        """
+        key = int(hwnd)
+        if not fresh:
+            cached = self._geometry_cache.get(key)
+            if cached is not None and time.monotonic() - cached[0] <= GEOMETRY_CACHE_SEC:
+                return cached[1]
+        tool = self._tool('xwininfo')
+        if tool is None:
+            return None
+        result = self._run([tool, '-id', str(key)])
+        if not result.ok:
+            return None
+        self._geometry_cache[key] = (time.monotonic(), result.out)
+        return result.out
+
+    def get_window_rect(self, hwnd: int, *, fresh: bool = False) -> tuple[int, int, int, int] | None:
         """``(left, top, right, bottom)`` tuyệt đối — tương đương ``GetWindowRect``.
 
         ``xwininfo`` cho toạ độ tuyệt đối của **vùng khách** (vùng vẽ của ứng dụng). Viền trang trí
         của X11 do WM vẽ trong một cửa sổ khác, nên nó không nằm trong vùng này — xem
         :meth:`get_extended_frame_bounds`.
+
+        Kết quả được dùng lại trong :data:`GEOMETRY_CACHE_SEC` giây (trừ khi ``fresh=True``): một
+        lần soi duyệt cả chồng cửa sổ năm lần, mỗi lần một ``xwininfo`` cho từng cửa sổ.
         """
-        tool = self._tool('xwininfo')
-        if tool is None:
-            return None
-        result = self._run([tool, '-id', str(int(hwnd))])
-        if not result.ok:
+        text = self._xwininfo_text(int(hwnd), fresh=fresh)
+        if text is None:
             return None
         numbers = {
-            'x': re.search(r'Absolute upper-left X:\s*(-?\d+)', result.out),
-            'y': re.search(r'Absolute upper-left Y:\s*(-?\d+)', result.out),
-            'width': re.search(r'Width:\s*(\d+)', result.out),
-            'height': re.search(r'Height:\s*(\d+)', result.out),
+            'x': re.search(r'Absolute upper-left X:\s*(-?\d+)', text),
+            'y': re.search(r'Absolute upper-left Y:\s*(-?\d+)', text),
+            'width': re.search(r'Width:\s*(\d+)', text),
+            'height': re.search(r'Height:\s*(\d+)', text),
         }
         if any(match is None for match in numbers.values()):
             return None
@@ -412,6 +505,56 @@ class X11Platform:
         props = self._cached_props(hwnd)
         return _first_int(props.get('_NET_WM_PID') or '')
 
+    def get_window_owner(self, hwnd: int) -> int | None:
+        """``WM_TRANSIENT_FOR`` — cửa sổ mà cửa sổ này thuộc về (hộp thoại modal, popup của app).
+
+        Đây là cách EWMH nói \"tôi là hộp thoại của cửa sổ kia\". ``None`` khi cửa sổ không khai báo
+        (mọi cửa sổ cấp cao nhất bình thường), hoặc khi thuộc tính trỏ vào chính nó.
+        """
+        props = self._cached_props(hwnd)
+        owner = _first_int(props.get('WM_TRANSIENT_FOR') or '')
+        if owner is None or int(owner) == int(hwnd):
+            return None
+        return int(owner)
+
+    def is_own_window(self, hwnd: int, candidate: int) -> bool:
+        """``candidate`` có phải chính ``hwnd`` hoặc một hộp thoại của ``hwnd`` không.
+
+        Dùng cho hai chốt chặn input: khi một ứng dụng mở hộp thoại modal của chính nó (VS Code,
+        Chrome, trình soạn thảo…), cửa sổ hộp thoại **có** tiêu điểm và **nằm trên** cửa sổ đích.
+        Chốt cũ coi đó là \"bị cửa sổ khác che\" nên mọi thao tác vào ứng dụng đều bị từ chối, và
+        không có đường nào để bấm nút của hộp thoại — agent chết cứng. Hộp thoại của chính ứng dụng
+        thì vẫn là ứng dụng đích, nên nhận.
+        """
+        value = int(candidate)
+        target = int(hwnd)
+        for _ in range(4):      # chuỗi hộp thoại lồng nhau (hộp thoại của hộp thoại) hiếm khi sâu hơn
+            if value == target:
+                return True
+            owner = self.get_window_owner(value)
+            if owner is None:
+                return False
+            value = owner
+        return value == target
+
+    def transient_windows(self, hwnd: int, *, above_only: bool = True) -> list[int]:
+        """Các hộp thoại/popup của ``hwnd`` đang hiển thị, **dưới → trên** theo chồng cửa sổ.
+
+        ``above_only=True`` chỉ trả những cửa sổ nằm trên ``hwnd`` — đúng thứ tự cần để ghép ảnh.
+        """
+        stacking = self._client_list()
+        if not stacking:
+            return []
+        target = int(hwnd)
+        start = stacking.index(target) + 1 if target in stacking else 0
+        found: list[int] = []
+        for candidate in stacking[start:] if above_only else stacking:
+            if candidate == target:
+                continue
+            if self.get_window_owner(candidate) == target and self.is_window_visible(candidate):
+                found.append(candidate)
+        return found
+
     def process_image_name(self, pid: int | None) -> str | None:
         """Tên tệp thực thi của tiến trình, đọc từ ``/proc`` (không cần ``ps``)."""
         if not pid:
@@ -435,7 +578,7 @@ class X11Platform:
         props = self.window_properties(value)
         if not props:
             raise PlatformError(CAPTURE_FAILED, 'cửa sổ X11 không còn tồn tại.', hwnd=value)
-        rect = self.get_window_rect(value)
+        rect = self.get_window_rect(value, fresh=True)
         if rect is None:
             raise PlatformError(CAPTURE_FAILED, 'không đọc được hình học cửa sổ X11.', hwnd=value)
         # Lời gọi `window_properties` ngay trên vừa ghi cache, nên các hàm đọc dưới đây dùng lại
@@ -482,8 +625,15 @@ class X11Platform:
             return None
         return _first_int(result.out.split('=')[-1])
 
-    def set_foreground_window(self, hwnd: int) -> bool:
-        """Đưa cửa sổ lên trước và cho nó tiêu điểm (``xdotool windowactivate``)."""
+    def set_foreground_window(self, hwnd: int, *, wait: float = ACTIVATE_WAIT_SEC) -> bool:
+        """Đưa cửa sổ lên trước và cho nó tiêu điểm (``xdotool windowactivate``).
+
+        **Không** dùng ``--sync``. Khi cửa sổ đích đang có hộp thoại modal của chính nó, WM từ chối
+        kích hoạt, và ``--sync`` chặn cho tới hết thời gian chờ của công cụ: đo trên máy này là
+        **hơn 12 giây cho một lời gọi** (mỗi thao tác input của agent treo theo, rồi vẫn hỏng). Ở
+        đây gửi yêu cầu rồi tự thăm dò ``_NET_ACTIVE_WINDOW`` trong ``wait`` giây — biết ngay kết quả
+        và rẻ hơn ``--sync`` (đo được 62 ms → 3 ms cho mỗi lần kích hoạt).
+        """
         tool = self._tool('xdotool')
         if tool is None:
             # Máy thiếu công cụ là lỗi triển khai, không phải "cửa sổ vừa đổi": nói thẳng tên gói,
@@ -493,10 +643,22 @@ class X11Platform:
                 'thiếu `xdotool` — cài gói xdotool để BoxFox điều khiển cửa sổ trên Linux.',
                 tool='xdotool',
             )
-        result = self._run([tool, 'windowactivate', '--sync', str(int(hwnd))])
+        result = self._run([tool, 'windowactivate', str(int(hwnd))])
+        # Ghi NGAY khi yêu cầu đã gửi, không đợi WM: tiêu điểm đổi ở phía WM vài ms sau đó, và bộ
+        # theo dõi "người thật chạm máy" lấy mẫu ở luồng khác — ghi muộn là có khe hở để nó đọc
+        # cú kích hoạt của chính ta thành người thật.
         if result.ok:
             self._own_foreground = int(hwnd)
-        return result.ok
+        target = int(hwnd)
+        if not result.ok or wait <= 0:
+            return result.ok
+        deadline = time.monotonic() + wait
+        while True:
+            if self.get_foreground_window() == target:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.01)
 
     def virtual_screen_bounds(self) -> tuple[int, int, int, int]:
         """``(0, 0, rộng, cao)`` của màn hình ảo — X11 một màn hình ảo duy nhất cho mọi output."""
