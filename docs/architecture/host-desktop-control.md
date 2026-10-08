@@ -1,6 +1,6 @@
 # Kiến trúc — Điều khiển desktop trên máy người dùng (host mode)
 
-> **Trạng thái:** hợp đồng đã chốt (H1), phần nền tảng Windows đang được cài (H5–H7).
+> **Trạng thái:** hợp đồng đã chốt (H1); nền tảng Windows đang được cài (H5–H7); nền tảng Linux/X11 có bản chạy được (xem §9).
 > Những mục ghi *(đang cài)* là hợp đồng đã ký với phần còn lại của hệ thống, chưa phải mã đã xong.
 >
 > **Ngày:** 2026-10-06. **Quyết định liên quan:** ADR-0002 (đã chốt: kết hợp lựa chọn 1 + 2).
@@ -278,3 +278,51 @@ trong hai:
 | Console ARM64 | gõ chữ có thể không tới | `text_input_unsupported` |
 | UIA provider treo (SAL/VCL/Chromium) | treo cả lần soi | watchdog mỗi lời gọi UIA, không chạy trên luồng input |
 | Nhiều màn hình, DPI khác nhau | toạ độ sai nếu ảo hoá | pixel vật lý end-to-end + gốc ảo có dấu |
+
+---
+
+## 9. Nền tảng thứ hai: Linux/X11 (bổ sung 08/10/2026)
+
+Trước mục này, `build_desktop_control()` chỉ dựng nền tảng khi `sys.platform == 'win32'`, nên **mọi
+công cụ CUA trả `CUA_UNAVAILABLE` trên Linux** và bảng "Machine screen" không có gì để hiện. Gói
+`sandbox/x11` bổ sung nền tảng thứ hai; hợp đồng duck-typed của `desktop_control` không đổi.
+
+### 9.1 Bản đồ mô-đun
+
+| Tệp | Việc | Công cụ ngoài |
+|---|---|---|
+| `backend/src/agentbox/sandbox/x11/platform.py` | liệt kê cửa sổ (EWMH), hình học, danh tính, tiêu điểm, mutex `flock`, `launch_app` | `xprop`, `xwininfo`, `xdotool` |
+| `backend/src/agentbox/sandbox/x11/capture.py` | `import -window <id>` → `bgra:-`; dự phòng chụp theo vùng màn hình; dùng lại toàn bộ hàm thuần của `win/capture.py` | ImageMagick `import` |
+| `backend/src/agentbox/sandbox/x11/input.py` | chuột/phím qua XTEST, bốn chốt chặn như bản Windows | `xdotool` |
+| `backend/src/agentbox/sandbox/x11/errors.py` | **dùng lại nguyên bộ mã lỗi** của `win/errors.py` — không có mã riêng cho Linux | — |
+
+`X11Platform` nhận `runner` tiêm vào, nên bài kiểm chạy được trên máy không có X server
+(`backend/tests/unit/test_x11_platform.py`).
+
+### 9.2 Chọn nền tảng
+
+`HostExecutor._desktop_family()` trả `'windows'`/`'x11'` theo **`self.platform`** (chuỗi tiêm được),
+không theo `sys.platform` — nhờ vậy bộ test giả-Windows vẫn chạy trên Linux. `api/server.py` chọn
+`win.windows_platform` hay `x11.platform` theo `sys.platform` thật.
+
+### 9.3 Khác biệt so với Windows (có chủ đích)
+
+| Điểm | Windows | Linux/X11 | Vì sao |
+|---|---|---|---|
+| Phát hiện người chạm chuột/phím | hook `WH_MOUSE_LL`/`WH_KEYBOARD_LL`, `LLMHF_INJECTED` | **không có** | X11 không có cờ "do XTEST sinh ra"; hook luôn báo "người" sẽ tự nhả lease ngay sau cú bấm của agent |
+| Nhả lease khi người chen vào | tự động | chỉ khi gọi route nhả/dừng | hệ quả của dòng trên |
+| `poll_idle()` | `GetLastInputInfo` | không bao giờ bắn | không có nguồn "lần cuối người tương tác" |
+| Cửa sổ tại một điểm | `WindowFromPoint` | thử hình học theo Z-order của `_NET_CLIENT_LIST_STACKING` | không cần thêm thư viện; cửa sổ override-redirect (viền báo) không nằm trong danh sách nên không che đích |
+| Cửa sổ bị che | `PrintWindow` đọc được pixel riêng | chụp vùng màn hình, gắn `occluded=True` + `notes` | X11 không có tương đương `PrintWindow` |
+| Màn hình khoá | `DESKTOP_LOCKED` | luôn `False` | X11 không có khái niệm tương đương ở tầng này |
+| DPI / nhiều màn hình | pixel vật lý, DPI theo cửa sổ | một màn hình ảo, DPI luôn 96 | X11 hợp nhất mọi output thành một toạ độ |
+| Viền báo vùng bị điều khiển | cửa sổ overlay riêng | **chưa có** trên desktop; viền trong panel vẫn hiện | ngoài phạm vi đợt này |
+
+Viền báo trên desktop là việc còn lại của nền tảng Linux, không phải "đã xong".
+
+### 9.4 Gói phải cài trên máy Linux
+
+`xdotool`, `xprop`, `xwininfo` (gói `x11-utils`), ImageMagick (`import`). Thiếu gói nào thì lời gọi
+trả lỗi **nêu đúng tên gói** (`CUA_UNAVAILABLE` / `CAPTURE_FAILED` với `details.tool`), không im lặng
+trả ảnh rỗng. `get_platform()` trả `None` khi không có `DISPLAY`/`WAYLAND_DISPLAY` — máy không có
+desktop thì CUA tắt, đúng như trước.

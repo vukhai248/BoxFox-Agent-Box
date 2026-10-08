@@ -332,8 +332,12 @@ def test_app_scope_remembers_the_app_so_the_next_call_does_not_ask_again(tmp_pat
             executor.policy, name, args))
         return 'allow_app' if len(seen) == 1 else 'deny'
 
-    executor, _fake = build(tmp_path, windows=[NOTEPAD], targets=store_with(),
-                            env={'BOXFOX_PERMISSION_MODE': 'ask'}, approver=approver)
+    executor, fake = build(tmp_path, windows=[NOTEPAD], targets=store_with(),
+                           env={'BOXFOX_PERMISSION_MODE': 'ask'}, approver=approver)
+    # `launch_app` phải có: `_launchable_app` chỉ cho mở ứng dụng khi NỀN TẢNG mở được (Windows
+    # `ShellExecuteW`, Linux `execv`). Thiếu nó thì lời gọi bị chặn TRƯỚC thẻ duyệt — mà bài này
+    # kiểm chính chuyện thẻ duyệt có hỏi lại hay không.
+    fake.launch_app = lambda app: 42
     first = run(executor, 'computer_use', {'action': 'type', 'text': 'a', 'app': 'notepad'})
     assert first.get('is_error') is not True
     assert len(seen) == 1

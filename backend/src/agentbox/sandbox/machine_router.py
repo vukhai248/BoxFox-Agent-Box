@@ -701,12 +701,44 @@ def register_routes(app, runtime):
         except Exception:
             return ''
 
+    def _desktop_platform():
+        """Nền tảng desktop mà executor đang dùng (Windows: Win32; Linux: X11), hoặc `None`.
+
+        Route PHẢI hỏi executor chứ không tự chọn: panel và agent phải nhìn cùng một màn hình. Chỉ
+        khi executor không có nền tảng nào (chế độ Docker, hoặc bản cũ) mới rơi về mặc định Windows —
+        giữ nguyên hành vi cũ ở đó.
+        """
+        executor = getattr(runtime, 'executor', None)
+        getter = getattr(executor, 'desktop_platform', None)
+        if callable(getter):
+            try:
+                platform = getter()
+            except Exception:
+                platform = None
+            if platform is not None:
+                return platform
+        from .win import windows_platform
+        return windows_platform.get_platform()
+
+    def _capture_module():
+        """Mô-đun chụp khớp với :func:`_desktop_platform` (Windows: GDI; Linux: X11)."""
+        executor = getattr(runtime, 'executor', None)
+        getter = getattr(executor, 'desktop_capture', None)
+        if callable(getter):
+            try:
+                module = getter()
+            except Exception:
+                module = None
+            if module is not None:
+                return module
+        from .win import capture
+        return capture
+
     def registry_windows():
         """Danh sách cửa sổ để kiểm/khớp đích. Nền tảng không đọc được ⇒ danh sách rỗng."""
         try:
-            from .win import capture, windows_platform
-            return capture.list_windows(platform=windows_platform.get_platform(),
-                                        include_minimized=True)
+            return _capture_module().list_windows(platform=_desktop_platform(),
+                                                  include_minimized=True)
         except Exception:
             return []
 
@@ -778,8 +810,8 @@ def register_routes(app, runtime):
     previews = {}
     async def screen(request):
         try:
-            from .win import capture, windows_platform
-            platform = windows_platform.get_platform()
+            capture = _capture_module()
+            platform = _desktop_platform()
             if request.method == 'GET':
                 return web.json_response({'windows': capture.list_windows(platform=platform)})
             values = await request.json()

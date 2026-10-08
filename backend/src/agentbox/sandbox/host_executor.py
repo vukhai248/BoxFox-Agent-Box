@@ -353,26 +353,28 @@ class HostExecutor:
         """Bật DPI awareness + nạp bảng phần tử một lần cho tiến trình host.
 
         Gọi lúc khởi động host mode (`api/server.py`); gọi lại là vô hại. Trả `(ok, code)` để
-        chỗ gọi ghi log mà không phải bắt ngoại lệ — máy không phải Windows vẫn khởi động được.
+        chỗ gọi ghi log mà không phải bắt ngoại lệ — máy không điều khiển desktop được (không có
+        X11, thiếu công cụ) vẫn khởi động được.
+
+        Chọn mô-đun theo `sys.platform`: Windows dùng GDI + UIA, Linux dùng X11 + ImageMagick. Không
+        dùng `self.platform` (chuỗi `'win32'`/`'posix'` dành cho shell) vì đây là chuyện của **nền
+        tảng desktop**, không phải của shell.
         """
         if self._prepared:
             return True, ''
-        if self.platform != 'win32':
+        capture_module = self._load_capture()
+        if capture_module is None:
             return False, UNSUPPORTED_CODE
         try:
-            from .win import capture as win_capture
-            from ..agent_core import inspect_host
-        except Exception as exc:      # pragma: no cover - chỉ xảy ra khi thiếu pywin32
-            return False, f'{UNSUPPORTED_CODE}: {exc}'
-        try:
-            win_capture.set_dpi_awareness()
+            capture_module.set_dpi_awareness()
         except Exception:
             pass
         try:
+            from ..agent_core import inspect_host
+
             inspect_host.prepare()
         except Exception:
             pass
-        self._win_capture = win_capture
         self._prepared = True
         return True, ''
 
@@ -508,8 +510,10 @@ class HostExecutor:
         if self.desktop is None:
             return error_result(CUA_UNAVAILABLE_CODE,
                                 'host mode chưa bật điều khiển desktop (thiếu DesktopControl)')
-        if self.platform != 'win32':
-            return error_result(UNSUPPORTED_CODE, 'điều khiển desktop chỉ có trên Windows ở bản alpha')
+        if self._load_capture() is None:
+            return error_result(UNSUPPORTED_CODE,
+                                'máy này chưa có nền tảng desktop điều khiển được '
+                                '(Windows, hoặc Linux có X11)')
         self.prepare()
         granted, state, _error = self.desktop.agent_lease('agent gọi %s' % name)
         if not granted:
@@ -543,7 +547,7 @@ class HostExecutor:
         (`capture_window`/`SendInput` tự đưa nó lên trước), nhưng danh sách cho panel gọi với
         `False` để người dùng chỉ thấy thứ họ nhìn thấy được.
         """
-        capture = self._win_capture or self._load_capture()
+        capture = self.desktop_capture()
         if capture is None:
             return []
         try:
@@ -551,6 +555,18 @@ class HostExecutor:
                                         include_minimized=include_minimized)
         except Exception:
             return []
+
+    def desktop_capture(self):
+        """Mô-đun chụp của nền tảng đang chạy (Windows: GDI; Linux: X11), hoặc `None`.
+
+        Điểm nối công khai cho tầng route (`machine_router`) — route phải dùng **cùng** nền tảng với
+        executor, nếu không panel sẽ chụp bằng một nền tảng khác với thứ agent đang điều khiển.
+        """
+        return self._win_capture or self._load_capture()
+
+    def desktop_platform(self):
+        """Đối tượng nền tảng desktop đang dùng, hoặc `None` khi máy không có nền tảng nào."""
+        return self._desktop_platform()
 
     def session_target(self, session):
         """Đích người dùng/model đã chọn cho phiên, hoặc `None`."""
@@ -605,8 +621,14 @@ class HostExecutor:
         Ba điều kiện, theo §7.2: phạm vi quyền là `machine`, folder dự án đã được người dùng xác
         nhận tin cậy, và tên app là một tên tệp đơn giản — không đường dẫn, không ký tự điều khiển
         shell. Mở ứng dụng là quyền của "cả máy"; folder chưa tin cậy thì agent không tự mở gì.
+
+        Điều kiện nền tảng hỏi thẳng nền tảng desktop (`launch_app`) chứ không so `sys.platform`:
+        Windows mở bằng `ShellExecuteW`, Linux mở bằng `execv` trong session riêng.
         """
-        if not self.trusted or self.platform != 'win32':
+        if not self.trusted:
+            return ''
+        platform = self._desktop_platform()
+        if platform is None or getattr(platform, 'launch_app', None) is None:
             return ''
         if not cua_target_module.scope_allows_machine(self.policy.scope_value()):
             return ''
@@ -673,7 +695,7 @@ class HostExecutor:
     def _capture_screen(self, args, session, target=None, source=''):
         capture_module = self._win_capture or self._load_capture()
         if capture_module is None:
-            return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun chụp màn hình của Windows')
+            return error_result(CUA_UNAVAILABLE_CODE, 'máy này không có mô-đun chụp màn hình cho nền tảng đang chạy')
         payload_target = {'kind': 'screen'}
         window = None
         # `_cua` luôn đưa đích ĐÃ phân giải xuống đây (windowId → app/window → đích phiên → mặc định),
@@ -750,19 +772,36 @@ class HostExecutor:
         prefix = _slug(session)[:24] if session else 'host'
         return '%s-capture-%s%s.png' % (prefix, stamp, suffix)
 
+    def _desktop_family(self):
+        """``'windows'`` | ``'x11'`` — họ nền tảng desktop của máy đang chạy.
+
+        Hỏi `self.platform` (chuỗi `'win32'`/`'posix'`, đã tách khỏi `sys.platform` đúng để test bơm
+        được nền tảng giả) chứ không hỏi `sys.platform`: máy chạy test là Linux nhưng bài test dựng
+        một host Windows giả, và chính chuỗi đó đã là câu trả lời cho "máy này có phải Windows".
+        """
+        return 'windows' if self.platform == 'win32' else 'x11'
+
     def _load_capture(self):
+        """Mô-đun chụp của nền tảng đang chạy — Windows: GDI; Linux: X11 + ImageMagick.
+
+        `None` nghĩa là máy này không chụp được: chỗ gọi trả `CUA_UNAVAILABLE`/`UNSUPPORTED`, không
+        ném. Cùng một cái tên cho cả hai nền tảng để `_capture_screen` không phải rẽ nhánh.
+        """
         try:
-            from .win import capture as win_capture
+            if self._desktop_family() == 'windows':
+                from .win import capture as platform_capture
+            else:
+                from .x11 import capture as platform_capture
         except Exception:
             return None
-        self._win_capture = win_capture
-        return win_capture
+        self._win_capture = platform_capture
+        return platform_capture
 
     # ``computer_use`` — tiêm input thật, có lease + mutex + fence.
     async def _computer_use(self, args, session, target=None, source=''):
         input_module = self._load_input()
         if input_module is None:
-            return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun tiêm input của Windows')
+            return error_result(CUA_UNAVAILABLE_CODE, 'máy này không có mô-đun tiêm input cho nền tảng đang chạy')
         action = str(args.get('action') or '').strip().lower()
         if action not in ('click', 'double_click', 'right_click', 'middle_click', 'type', 'key'):
             return error_result(UNSUPPORTED_ACTION_CODE,
@@ -822,12 +861,16 @@ class HostExecutor:
         return outcome
 
     def _load_input(self):
+        """Mô-đun tiêm input của nền tảng đang chạy — Windows: SendInput; Linux: XTEST."""
         try:
-            from .win import input as win_input
+            if self._desktop_family() == 'windows':
+                from .win import input as platform_input
+            else:
+                from .x11 import input as platform_input
         except Exception:
             return None
-        self._win_input = win_input
-        return win_input
+        self._win_input = platform_input
+        return platform_input
 
     def _window_for(self, hwnd):
         """`WindowInfo` của một hwnd, hoặc `None`. Nền tảng ném lỗi ⇒ coi như không có cửa sổ."""
@@ -910,14 +953,21 @@ class HostExecutor:
         return (window, '', '') if window is not None else (None, TARGET_UNKNOWN_CODE, 'window_gone')
 
     def _desktop_platform(self):
+        """Nền tảng desktop đang dùng: của `DesktopControl` nếu có, không thì tự dựng theo hệ điều hành.
+
+        Đường dự phòng quan trọng cho các lời gọi CHỈ ĐỌC (`window_list`, `_window_for`) khi chưa có
+        `DesktopControl` — chúng cần một đối tượng nền tảng thật, không cần lease.
+        """
         if self.desktop is not None and getattr(self.desktop, 'platform', None) is not None:
             return self.desktop.platform
         try:
-            from .win import windows_platform
-        except Exception:
-            return None
-        try:
-            return windows_platform.get_platform()
+            if self._desktop_family() == 'windows':
+                from .win import windows_platform
+
+                return windows_platform.get_platform()
+            from .x11 import platform as x11_platform
+
+            return x11_platform.get_platform()
         except Exception:
             return None
 

@@ -470,20 +470,24 @@ def build_cua_overlay(env=None, desktop=None):
 def build_desktop_control(profile_dir, env=None):
     """`DesktopControl` cho host mode, hoặc `None` khi máy này không điều khiển desktop được.
 
-    Không ném: máy không phải Windows (hoặc thiếu pywin32) vẫn phải khởi động harness — các công cụ
-    tệp/lệnh chạy bình thường, còn công cụ CUA trả `CUA_UNAVAILABLE`.
+    Không ném: máy không có nền tảng desktop (không phải Windows, không có X11, thiếu công cụ) vẫn
+    phải khởi động harness — các công cụ tệp/lệnh chạy bình thường, còn công cụ CUA trả
+    `CUA_UNAVAILABLE`.
     """
     source = os.environ if env is None else env
     if str(source.get('BOXFOX_DESKTOP_CONTROL') or '').strip().lower() in ('0', 'off', 'false'):
         return None
-    if sys.platform != 'win32':
-        return None
     try:
-        from ..sandbox.win import windows_platform
-    except Exception:
-        return None
-    try:
-        platform = windows_platform.get_platform()
+        if sys.platform == 'win32':
+            from ..sandbox.win import windows_platform
+
+            platform = windows_platform.get_platform()
+        elif sys.platform.startswith('linux'):
+            from ..sandbox.x11 import platform as x11_platform
+
+            platform = x11_platform.get_platform()
+        else:
+            return None
     except Exception:
         return None
     if platform is None or getattr(platform, 'name', '') in ('', 'unavailable'):
