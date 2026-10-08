@@ -65,9 +65,10 @@
 {"tab": "plan", "target": {"identity": "workspace-plan", "version": 2}, "reason": "plan_written"}
 ```
 
-- `tab ∈ {plan, decisions, files, subagents}`.
-- `target`: `{identity, version}` cho `plan`, `{requestId}` cho `decisions`, `{path}` cho `files`, `{sessionId}` cho `subagents`; có thể là `null`.
-- `reason`: lý do gợi ý mở tab. **Hôm nay chỉ có hai giá trị được phát ra thật**: `plan_written` (khi agent ghi plan) và `decision_requested` (khi agent cần người dùng quyết định). Hai giá trị `file_selected` và `child_started` là **chỗ dành sẵn cho đợt sau** — chưa producer nào phát, nên đừng viết mã tiêu thụ dựa vào chúng; khi nào phát thật thì bổ sung vào đây trước.
+- `tab ∈ {plan, decisions, files, subagents, design}`.
+- `design`: **chưa có producer `ui_intent` nào phát tab này.** Tab Design tự mở bằng nhánh suy ra từ event gốc `design_canvas` trong `dispatchTabIntents` (`harnessChatStore.ts`): lần vẽ ĐẦU TIÊN của một `designId` thì mở (bỏ qua khi nạp lịch sử, khi `actor === 'user'`, và vẫn qua đủ bốn cổng §3); các lần vẽ sau chỉ cập nhật. Không thêm `ui_intent {tab:'design'}` song song — đó là bản sao thứ hai của cùng một sự thật, và là chỗ trôi thứ hai khi một trong hai bên đổi.
+- `target`: `{identity, version}` cho `plan`, `{requestId}` cho `decisions`, `{path}` cho `files`, `{sessionId}` cho `subagents`, `{designId}` cho `design`; có thể là `null`.
+- `reason`: lý do gợi ý mở tab. **Hôm nay có ba giá trị được phát ra thật**: `plan_written` (khi agent ghi plan), `decision_requested` (khi agent cần người dùng quyết định) và `canvas_drawn` (lần vẽ đầu tiên của một `designId` — xem gạch đầu dòng `design` ở trên; đây cũng là `reason` trong `pendingIntents`). Hai giá trị `file_selected` và `child_started` là **chỗ dành sẵn cho đợt sau** — chưa producer nào phát, nên đừng viết mã tiêu thụ dựa vào chúng; khi nào phát thật thì bổ sung vào đây trước.
 - Gợi ý cho UI, **không** phải mệnh lệnh: UI tự quyết định có mở hay không theo luật ở §3.
 
 ### `plan_evaluated` (đợt 20)
@@ -166,10 +167,11 @@ requestTabIntent: (intent: { tab: PanelTabId; target?: Record<string, unknown> |
 Thứ tự kiểm tra (dừng ở điều kiện đầu tiên vi phạm → `'queued'`):
 
 1. `autoOpenTabs === false` → `queued`.
-2. `pinnedTab === intent.tab` → `queued`. (`pinnedTab` đặt khi người dùng **tự bấm** vào tab trên thanh tab; xoá khi người dùng bấm tab khác hoặc đóng tab đó.)
-3. `autoOpenOnlyWhenIdle === true` và `Date.now() - lastUserActivityAt < 15000` → `queued`. (`lastUserActivityAt` cập nhật khi có `keydown` trong khung soạn tin hoặc `scroll` trong khung chat — đặt ở `ChatPanel`, chỉ ghi vào store, không đổi giao diện.)
+2. `workspaceHidden === true` → `queued`. (Bảng Workspace đang ẩn thì mở tab là vô nghĩa — người dùng không thấy gì. Hàng đợi **đóng băng**: chỉ khi người dùng hiện bảng lại mới xả. Cổng này có trong mã từ Kế hoạch E2 nhưng hợp đồng chỉ liệt kê ba điều kiện — nay ghi đủ bốn.)
+3. `pinnedTab === intent.tab` → `queued`. (`pinnedTab` đặt khi người dùng **tự bấm** vào tab trên thanh tab; xoá khi người dùng bấm tab khác hoặc đóng tab đó.)
+4. `autoOpenOnlyWhenIdle === true` và `Date.now() - lastUserActivityAt < 15000` → `queued`. (`lastUserActivityAt` cập nhật khi có `keydown` trong khung soạn tin hoặc `scroll` trong khung chat — đặt ở `ChatPanel`, chỉ ghi vào store, không đổi giao diện.)
 
-Khi `queued`: thêm vào `pendingIntents[]` (giữ tối đa 20, mới nhất ở cuối), tab đích hiện huy hiệu đếm. Khi người dùng mở tab đó thì xoá các intent thuộc tab đó.
+Khi `queued`: thêm vào `pendingIntents[]` (giữ tối đa 20, mới nhất ở cuối), tab đích hiện huy hiệu đếm, **và** `pendingIntentNotice` ghi lại `{tab, reason, at}` — `reason` là đúng cổng đã chặn (`'tabs off' | 'workspace hidden' | 'tab pinned' | 'user busy'`). `ChatPanel` vẽ hàng thông báo cạnh khung soạn tin từ giá trị này: “Bảng <tên tab> đang chờ mở”, lý do, nút **mở ngay** (đi qua `showTab` — hiện bảng + ghim + mở, nên tiêu thụ hàng đợi và hàng thông báo tự biến mất) và nút bỏ qua (chỉ xoá thông báo; huy hiệu vẫn còn). Khi người dùng mở tab đó thì xoá các intent thuộc tab đó.
 
 `openTab(tab)` giữ nguyên hành vi (mở + kích hoạt) để không phá các chỗ gọi hiện có.
 

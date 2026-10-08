@@ -166,3 +166,24 @@ Chạy trên Windows 11 x64. Các mục dưới đây **chỉ** Windows mới ch
 13. Select Element trên cửa sổ host: Notepad ⇒ nhánh `uia` có `name`/`controlType`; Chrome ⇒ nhánh `dom`;
     cửa sổ không có UIA ⇒ nhánh `desktop` (ảnh chụp), và khi người dùng đang giữ quyền ⇒ nút bị khoá kèm
     lời mời "Trả quyền cho agent".
+
+### 6.1 Nhóm mục kiểm được trên Linux/X11 (bổ sung 2026-10-08)
+
+Chạy trên desktop X11 thật (`DISPLAY=:1`), đã đo ngày 2026-10-08. Đích thử: một cửa sổ `xmessage`
+900×600. Viền Linux vẽ **băng mờ dần** (bề dày = cạnh ngắn/8) chứ không phải viền nét đứt — mục 8 ở trên
+là hình dạng của Windows, không phải tiêu chí cho Linux.
+
+14. Viền hiện quanh **cửa sổ** đang bị điều khiển: đúng khung, không lệch, bám đúng cửa sổ đích.
+15. Đích là **cả máy** ⇒ viền ôm trọn màn hình ảo; `activity.windowId` là `null` (không có cửa sổ nào).
+16. Màu băng đúng phép pha: đọc pixel **hai lần** (lần đầu có thể là khung cũ) tại vòng 0, vòng giữa và
+    vòng cuối ⇒ khớp giá trị `ring_colour()` tính tay, chênh ≤ 2 mức/kênh.
+17. Bấm xuyên qua: đưa chuột vào giữa băng ⇒ cửa sổ dưới con trỏ là **cửa sổ đích**, không bao giờ là viền.
+18. `xprop -root _NET_CLIENT_LIST_STACKING` **không đổi** số cửa sổ trước/sau khi viền lên.
+19. Ảnh chụp CUA **không dính viền**: `import -window <đích>` trước và sau khi viền lên ⇒ byte giống nhau.
+20. `BOXFOX_CUA_OVERLAY=0` ⇒ không có cửa sổ viền nào; CUA vẫn chạy đủ hai lượt (cửa sổ + cả máy).
+21. Máy **thiếu** `python-xlib` ⇒ CUA vẫn chạy, `GET /api/agent/machines/target` trả
+    `activity.enabled=false` với `activity.reason` nêu tên gói, panel hiện **một dòng** cảnh báo
+    (`machineScreen.overlayOff`), và không có cửa sổ viền nào.
+
+Vẫn **chỉ Windows** kiểm được: viền nét đứt, `UIA_*`, `UIPI_*`, `PrintWindow`, `DESKTOP_LOCKED`,
+`GetLastInputInfo` (§9.3 của `host-desktop-control.md`).

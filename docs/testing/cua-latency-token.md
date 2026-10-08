@@ -121,3 +121,55 @@ Trần trong `cua_bench.py` (`DEFAULT_BUDGET_MS`) đặt theo bảng trên: `scr
 Người dùng đã ghi nhận (08/10/2026) rằng model đã tự báo token vào/ra, và **đo token có thể hoãn
 lại**; việc cần đo trước là **latency từ lúc giao một việc CUA đến lúc hoàn tất** — đó chính là
 `case`. Phần token ở đây là giàn giáo để so sánh phương án, không phải hoá đơn.
+
+## Một lượt trọn vẹn — `turn_latency.py` và `cua_bench turn` (thêm 08/10/2026)
+
+`case` ở trên đo một việc CUA do chính công cụ giao. Câu hỏi *"thời gian CUA từ lúc user ra đề nghị
+đến khi xong task và trả lời user"* cần con số của **một lượt thật**, nên có thêm một reader đọc sổ
+`events` của harness (nguồn chân lý — không cần X server):
+
+```bash
+cd backend
+.venv/bin/python tools/turn_latency.py --db ~/BoxFox/harness/sessions.sqlite --json /var/tmp/turn-latency.json
+.venv/bin/python tools/cua_bench.py turn  --db ~/BoxFox/harness/sessions.sqlite --json /var/tmp/turn.json   # cùng số
+```
+
+Reader chỉ **đọc** store (`sqlite3` mở `mode=ro`). Payload `turn_start`/`turn_end` **không** mang mốc
+thời gian — mọi ms đọc từ cột `created`, trừ `deadlineUsedMs`. Vì thế `wallMs` là số chính cho "chủ
+nhà chờ bao lâu" (thời gian tường thật, gồm cả phần trước `_run`), còn `deadlineUsedMs` là số chính
+cho "lượt đã tiêu bao nhiêu ngân sách"; lệch quá 1 000 ms thì in dòng `LỆCH` và **vẫn** lấy `wallMs`
+làm số chính — không "sửa" số nào.
+
+Một lượt được chia thành các phần **cộng đúng bằng tổng**:
+`wall = model + vòng lặp + tool + thân harness + ngoài lượt`. Hai nhãn không được đọc sai:
+**`model + vòng lặp`** không phải thời gian model thuần (nó gồm dựng request, kiểm cổng bằng chứng,
+thử lại — muốn tách thật phải nối nhật ký router vào phiên, K5 chưa làm), và **`chờ bạn`** (`waitedMs`)
+là số báo kèm, không trừ vào phần nào vì nó chồng lấn với `model + vòng lặp`.
+
+### Số đo trên máy này (08/10/2026)
+
+```text
+$ cd backend && .venv/bin/python tools/turn_latency.py --db /home/ubuntu/BoxFox/harness/sessions.sqlite
+store: /home/ubuntu/BoxFox/harness/sessions.sqlite
+1 phiên · 1 lượt · 0 ca CUA
+chưa đo được lượt CUA nào
+
+lượt 1 · phiên dac7c517 · Summarize the quarterly report and flag any risks · 6b373920
+  wall 145.7 ms (đề nghị → trả lời; đọc từ cột `created` — số chính) · đóng sổ 153.8 ms
+  harness 142.0 ms (deadlineUsedMs — số ngân sách) · 1 bước · 0 tool · status error · finishReason —
+  chia lượt: model+vòng lặp 110.9 ms + tool 0.0 ms + thân harness 31.1 ms = harness 142.0 ms; + ngoài lượt 3.7 ms = wall 145.7 ms
+  chờ bạn: —
+```
+
+**Chưa đo được lượt CUA nào trên máy này**: store chỉ có đúng một lượt và lượt ấy **hỏng ở tầng định
+tuyến** (`turn_end.status: 'error'`, `toolsRun: 0`, `recovery_decision.code: UPSTREAM_HTTP_503`,
+`turn_start.modelId: null`) trước khi chạm tool nào (`tool_start` = 0 hàng trong cả store). Vì thế con
+số "một lượt CUA từ đề nghị đến trả lời" **chưa tồn tại**; mọi số trong bảng cử chỉ ở trên là **từng
+thao tác**, không phải một lượt. Reader in thẳng `chưa đo được lượt CUA nào` thay vì suy diễn — hành vi
+đó được ghim bằng test (`tests/unit/test_turn_latency.py`).
+
+Alias `cua_bench turn` ghi cùng số vào khối `turn` của báo cáo JSON: chạy hai lệnh trên rồi so hai tệp
+thì `db`/`sessions`/`turns`/`cases`/`notes` phải giống nhau (khác duy nhất `generatedAt` — hai lần chạy
+khác thời điểm). `--max-total-ms N` là cổng tuỳ chọn: lượt nào vượt trần thì in `VƯỢT TRẦN` và thoát
+mã 1. Trần lượt **không** nằm trong `DEFAULT_BUDGET_MS`: `check_budget()` duyệt theo danh sách trần nên
+một khoá mới ở đó sẽ làm mọi lần `budget --baseline` cũ báo `KHÔNG ĐO ĐƯỢC` cho lượt.

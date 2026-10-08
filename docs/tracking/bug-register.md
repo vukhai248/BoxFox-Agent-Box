@@ -1789,3 +1789,40 @@ bài kiểm mới** (16 X11 + 11 Windows + 8 host executor + 10 box).
 Kiểm chứng trên máy thật sau khi vá: bấm "+" trong "Settings Toolbar" được nhận (Size 1 → 4), và gõ
 14 ký tự tên tệp vào hộp thoại lưu được nhận — mtPaint lưu ra PNG 640×480 với **7 172 điểm ảnh đỏ**
 (vòng tròn + sóng + tam giác do `stroke` vẽ). Trước khi vá cả hai thao tác đều bị từ chối.
+
+### 6.44 Vòng 2026-10-08 (chiều) — năm yêu cầu của chủ nhà: viền báo trên Linux, đo một lượt CUA, mã lỗi tự giải thích, dò suy luận theo provider, panel tự mở
+
+Năm câu hỏi/yêu cầu: *(1)* "khi codex hay antigravity hay các app khác, nếu CUA máy hoặc app thì sẽ có một khung viền xanh nhạt đậm vừa và nhạt dần khi vào tầm 1/8 màn hình… tôi cũng cần phần này"; *(2)* "check thử thời gian CUA từ lúc user ra đề nghị đến khi xong task và trả lời user"; *(3)* "kiểm thử toàn diện"; *(4)* "thử với model fledge alpha free hoặc có trong opencode"; *(5)* "khi kiểm thử, ví dụ lên plan, harness có tự mở bảng plan cùng với plan nó mới làm ra cho user xem không".
+
+Đo trước khi sửa (không suy đoán): `build_cua_overlay()` trả `None` trừ `win32`; `sandbox/x11/` **không có** hàm viền nào ⇒ `activity` luôn `null`; 48 mã lỗi CUA/host **không mã nào** có trong `recovery_policy.CODES`; 44/48 model lưu `thinkingType: 'none'`, `thinkingSource: 'unknown'`; bảng plan **đã** tự mở, canvas thì không.
+
+| Mã | Mức | Lỗi | Cách sửa |
+|---|---|---|---|
+| BUG-128 | HIGH | **Đọc sai hình chữ nhật cửa sổ ở CẢ HAI nền tảng.** `cua_overlay._bounds_of()` và `machine_router._window_payload()` đọc bộ bốn số `(left, top, right, bottom)` như `(x, y, w, h)`. Đo được: `rect=(96,1039,1824,1080)` ⇒ viền và panel nhận `width=1824, height=1080` thay vì **1728×41**. Nghĩa là viền desktop trên Windows **đang vẽ sai kích thước** (toàn màn hình thay vì ôm cửa sổ), và viền trong panel sai với đích "cả máy". Bài kiểm cũ không bắt được vì dữ liệu giả tình cờ truyền `(10,20,300,200)` theo nghĩa `x,y,w,h` | `_bounds_of()` đổi sang đọc `(left, top, right, bottom)` rồi trừ; `machine_router` có hàm dùng chung `window_rect_payload()`; bài kiểm dùng **số đo thật** `(96,1039,1824,1080)` ⇒ 1728×41, cộng một ca cửa sổ ở gốc `(0,0)` để chắc rằng trường hợp "may mắn đúng" không đổi kết quả |
+| BUG-129 | MEDIUM | **Kết quả công cụ đỏ mà KHÔNG có mã.** Ba hàng `terminal_exec` thật trong sổ cũ chỉ có `['artifact','content','exit_code','is_error','recovery','reflection_hint']` — không `errorCode`. Hệ quả kép: `recovery_policy` xếp `unknown` ⇒ `checkpoint_and_ask`, và `reflection_hint` rơi vào câu mặc định dành cho **lỗi sai tham số** ("Read `error`: it names the field and the rule. Fix only that input and call again once") — lời khuyên sai việc cho một lệnh shell hỏng | `COMMAND_EXIT_NONZERO` (lệnh thoát khác 0, kèm `exit_code` + `content` + tệp đính kèm) và `HOST_TOOL_FAILED` (công cụ ném lỗi lạ); `reflection_hint` có nhánh **không có mã** chỉ vào `content`/`exit_code` thay vì khuôn schema. 4 bài kiểm mới trong `test_host_executor.py` |
+| BUG-130 | MEDIUM | **48 mã CUA/host không mã nào tự giải thích.** `recovery_policy.CODES` chỉ có mã của harness, nên **mọi** lỗi host (từ chối quyền, người thật giữ quyền, phần tử cũ, thiếu gói, đích mất…) đều ra `class: unknown`, `action: checkpoint_and_ask`, lý do "không rõ loại lỗi: dừng ở checkpoint và hỏi chủ nhà" — đúng ca đo được: `tool=terminal_exec code=PERMISSION_DENIED` | `_HOST_ADVICE`: **59 mã** → (lớp, hành động, lời khuyên riêng), `CODES` 78 → **137**; `FILE_NOT_FOUND`, `FILE_PERMISSION_DENIED`, `INSPECT_POINT_INVALID` khai thêm sau khi rà lại nguồn mã. Luật cũ giữ nguyên: **chỉ `transport` là tạm thời**, mã CUA **không** tự thử lại. Hai chốt chống trôi: bảng tài liệu §6.2.1 ⇄ `_HOST_ADVICE`, và khoá i18n của panel ⇄ `CODES` |
+| BUG-131 | MEDIUM | **Model suy luận mà UI không biết.** `fledge-alpha-free` (model chủ nhà nêu tên) **có** suy luận ở mọi mức: đo được 168–513 ký tự `reasoning_content` mỗi mẫu — nhưng hàng model lưu `thinkingType: 'none'`, `thinkingSource: 'unknown'`, nên harness bỏ mức suy luận trước khi gửi và bộ chọn mức **không hiện**. Phép dò cũ không thể thấy: `testInference()` gửi `max_tokens: 64`, không có trường `reasoning`, và `usage.reasoning_tokens` của model này luôn 0 dù nó vẫn stream chữ suy luận | Phép dò theo **từng provider** (đúng dạng request của provider đó, quét **mọi** mức đã công bố), phán quyết thuần tách khỏi I/O, bằng chứng ghi kèm `asOf` và **tự hết hạn sau 30 ngày**, hàng model giữ kết quả qua lần discovery sau, và bộ chọn model có nút **đo** ngay chỗ thiếu bộ chọn mức + một dòng kết quả cho mọi ngả (đo được N mức / provider từ chối trường / bị giới hạn nhịp / không có quyền). Một phát hiện phải ghi: chỉ nhìn **chữ** suy luận sẽ phán sai cả họ model — `muse-spark` trả `reasoningChars: 0` nhưng `reasoningTokens: 728` |
+| BUG-132 | LOW | **Ý định mở tab bị xếp hàng thì người dùng không thấy gì.** Bốn cổng chặn (`autoOpenTabs=false`, workspace đang ẩn, tab đang ghim, người dùng vừa gõ trong 15 s) đẩy ý định vào hàng đợi, và dấu hiệu duy nhất là **huy hiệu số** trên tab. Panel canvas thì **không** tự mở, và `design` còn không có trong hợp đồng `ui_intent` | Hàng thông báo ngay trên ô soạn: tên tab + **lý do chặn** + nút "Mở ngay" (mở cả workspace đang ẩn) + nút bỏ qua; mở tab là hàng tự biến mất. Canvas tự mở **một lần cho mỗi `designId`** (lần vẽ sau là cập nhật trạng thái), đi qua đúng bốn cổng chặn; hợp đồng `ui_intent` bổ sung `design` và cổng thứ tư |
+| BUG-133 | LOW | **Vẽ trước khi map thì X server vứt bản vẽ.** Lỗi do chính đợt này tạo ra trong `x11/overlay.py`: `overlay_show` vẽ khi cửa sổ còn chưa `map` ⇒ băng ra màu `background_pixel=0` (đen) thay vì màu pha. Chỉ phép đo trên X thật mới bắt được, bài kiểm đơn vị không thấy | `_apply_bounds → _map_window → _paint`, kèm chú thích ghi lại lý do |
+| BUG-134 | LOW | **Lý do bị ghi đè.** `note()`/`_call()` đặt `last_reason = 'overlay_unavailable'` mỗi khi viền đang tắt, nên sau lượt CUA đầu tiên panel sẽ hiện câu chung chung thay vì "thiếu `python-xlib`…" — đúng thứ mà J8 sinh ra để nói | `_unavailable_reason` đặt lúc dựng, cập nhật khi mặt viền chết; hai chỗ đọc dùng nó. Có bài kiểm ghim |
+
+**Viền báo trên desktop Linux — việc mới, không phải lỗi.** `sandbox/x11/overlay.py` (mới): cửa sổ
+`override_redirect`, SHAPE Bounding = các vòng 1 px của băng, SHAPE Input rỗng (bấm xuyên qua), nâng
+`X.Above`; bề dày băng = cạnh ngắn/8 (1920×1080 ⇒ 135 px, chặn trên 1/3); màu nhấn `#38bdf8` pha dần về
+màu nền đọc ở bốn điểm giữa cạnh, làm mới ≤ 1 Hz. Đo trên `DISPLAY=:1`: bấm xuyên qua đúng (cửa sổ dưới
+con trỏ luôn là đích), `_NET_CLIENT_LIST_STACKING` **13 → 13**, `import -window <đích>` **540 000 byte
+giống hệt** trước/sau, pixel ba vòng khớp phép pha **chênh 0** (cho phép ≤ 2), `BOXFOX_CUA_OVERLAY=0` ⇒
+không cửa sổ viền nào, thiếu `python-xlib` ⇒ CUA vẫn chạy và `activity.reason` nêu tên gói. Ảnh:
+`images/cua-border-window.png`, `images/cua-border-machine.png`.
+
+**Một lượt CUA mất bao lâu — chưa có số, và bộ đọc nói thẳng thế.** Máy này **chưa từng** có một lượt CUA
+trọn vẹn: sổ chỉ có một lượt hỏng ở tầng định tuyến (`UPSTREAM_HTTP_503`, `toolsRun: 0`), đo được
+**145,7 ms** từ lúc nhận đề nghị tới lúc trả lời. `tools/turn_latency.py` đọc thẳng bảng `events` (nguồn
+duy nhất), lấy cột `created` làm số chính cho "người dùng chờ bao lâu", `deadlineUsedMs` cho ngân sách, và
+in "chưa đo được lượt CUA nào" khi chỉ có lượt hỏng. Phần "model" trong bảng tách **không phải** thời gian
+model thuần (nhật ký router không mang mã phiên) nên được gọi đúng tên là **"model + vòng lặp"**.
+
+**`exo-free` không nằm trong quyền của tài khoản** (không phải lỗi của ta): `GET /zen/v1/models` công khai
+trả 88 mã, nhưng khoá thật của tài khoản chỉ thấy **48**; `POST .../models/exo-free/test` trả 404
+`MODEL_NOT_FOUND`. Router lưu đúng danh sách được cấp quyền, và giờ nói được **vì sao** một model thiếu
+("provider công bố trong danh mục công khai, nhưng khoá này không có quyền").
