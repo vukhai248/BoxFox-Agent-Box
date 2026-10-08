@@ -31,6 +31,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
+from agentbox.sandbox.x11 import capture as xc          # noqa: E402
+from agentbox.sandbox.x11 import input as xi            # noqa: E402
+from agentbox.sandbox.x11 import platform as xp         # noqa: E402
+from agentbox.sandbox.host_executor import HostExecutor  # noqa: E402
+
 #: Ước lượng token cho phần chữ: ~4 ký tự một token (đúng cho JSON/tiếng Anh, rộng rãi cho tiếng Việt).
 CHARS_PER_TOKEN = 4
 
@@ -82,9 +87,9 @@ def summarise(samples: list[float]) -> dict:
             'p95': round(pick(0.95), 1), 'max': round(ordered[-1], 1)}
 
 
-def check_budget(measurements: dict, budget: dict | None = None) -> list[str]:
+def check_budget(measurements: dict) -> list[str]:
     """Danh sách các mục vượt trần, dạng ``'tên: p95 350.0 ms > 300 ms'``."""
-    limits = dict(DEFAULT_BUDGET_MS if budget is None else budget)
+    limits = DEFAULT_BUDGET_MS
     over: list[str] = []
     for name, stats in measurements.items():
         limit = limits.get(name)
@@ -159,8 +164,8 @@ def pick_target_window(platform, wanted: str | None = None):
                default=None)
 
 
-def measure(platform, call, times: int, *, warmup: int = 1) -> tuple[dict, int]:
-    """Gọi ``call()`` nhiều lần, trả (thống kê ms, tổng số tiến trình con đã sinh)."""
+def measure(platform, call, times: int, *, warmup: int = 1) -> dict:
+    """Gọi ``call()`` nhiều lần, trả thống kê ms (kèm số tiến trình con mỗi lần)."""
     for _ in range(warmup):
         call()
     samples: list[float] = []
@@ -173,7 +178,7 @@ def measure(platform, call, times: int, *, warmup: int = 1) -> tuple[dict, int]:
             children += counter.count
     stats = summarise(samples)
     stats['child_processes'] = round(children / max(1, times), 1)
-    return stats, children
+    return stats
 
 
 def exactly(text: str, size: int) -> str:
@@ -194,7 +199,7 @@ def run_primitives(platform, window, times: int, *, payload: str) -> dict:
 
     def timed(name, call):
         try:
-            stats, _children = measure(platform, call, times)
+            stats = measure(platform, call, times)
         except Exception as exc:                       # thiếu tiêu điểm, cửa sổ bị che…
             results[name] = {'n': 0, 'error': str(exc)[:160]}
             print('  %-34s KHÔNG ĐO ĐƯỢC: %s' % (name, str(exc)[:90]), flush=True)
@@ -210,8 +215,8 @@ def run_primitives(platform, window, times: int, *, payload: str) -> dict:
     timed('primitives.get_window_rect', lambda: platform.get_window_rect(hwnd))
     timed('primitives.window_from_point', lambda: platform.window_from_point(*centre))
     timed('primitives.window_properties', lambda: platform.window_properties(hwnd))
-    timed('primitives.capture_window', lambda: platform_capture_window(platform, hwnd))
-    timed('primitives.capture_screen', lambda: platform_capture_screen(platform))
+    timed('primitives.capture_window', lambda: xc.capture_window(hwnd, platform=platform))
+    timed('primitives.capture_screen', lambda: xc.capture_screen(platform=platform))
     timed('primitives.press_key', lambda: xi.press_key('End', window=hwnd, platform=platform))
     timed('primitives.click', lambda: xi.click(*centre, window=hwnd, platform=platform, restore=False))
     typed = exactly(payload, 200)
@@ -220,22 +225,8 @@ def run_primitives(platform, window, times: int, *, payload: str) -> dict:
     return results
 
 
-def platform_capture_window(platform, hwnd: int):
-    from agentbox.sandbox.x11 import capture as xc
-
-    return xc.capture_window(hwnd, platform=platform)
-
-
-def platform_capture_screen(platform):
-    from agentbox.sandbox.x11 import capture as xc
-
-    return xc.capture_screen(platform=platform)
-
-
 def build_executor(platform, session: str):
     from agentbox.agent_core.desktop_control import DesktopControl
-    from agentbox.sandbox.host_executor import HostExecutor
-
     control = DesktopControl(profile_dir=Path('/var/tmp/cua-bench-profile'), platform=platform)
     return HostExecutor(desktop=control, approver=lambda *a, **k: 'allow_always'), session
 
@@ -257,7 +248,7 @@ def run_product(platform, window, times: int, *, payload: str) -> dict:
                 executor.execute('computer_use', {'action': action, 'windowId': hwnd, **extra}, session))
 
         try:
-            stats, _children = measure(platform, call, times)
+            stats = measure(platform, call, times)
         except Exception as exc:
             results[name] = {'n': 0, 'error': str(exc)[:160]}
             print('  %-34s KHÔNG ĐO ĐƯỢC: %s' % (name, str(exc)[:90]), flush=True)
@@ -357,14 +348,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--baseline', help='tệp JSON của lần chạy trước, cho `budget`')
     args = parser.parse_args(argv)
 
-    from agentbox.sandbox.x11 import platform as xp
-
-    platform = xp.get_platform()
-    if platform is None:
-        print('máy này không có X11 (thiếu DISPLAY hoặc thiếu công cụ).', file=sys.stderr)
-        return 2
-
-    report: dict = {'display': platform.display, 'platform': platform.name}
     if args.command == 'budget':
         if not args.baseline:
             print('cần --baseline <tệp JSON>', file=sys.stderr)
@@ -376,6 +359,12 @@ def main(argv: list[str] | None = None) -> int:
         print('ngân sách: %s' % ('ĐẠT' if not over else '%d mục vượt trần' % len(over)))
         return 0 if not over else 1
 
+    platform = xp.get_platform()
+    if platform is None:
+        print('máy này không có X11 (thiếu DISPLAY hoặc thiếu công cụ).', file=sys.stderr)
+        return 2
+
+    report: dict = {'display': platform.display, 'platform': platform.name}
     if args.command == 'case':
         report['case'] = run_case(platform, args.case, args.times)
     else:
@@ -392,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             measurements, tokens = run_product(platform, window, args.times, payload=args.payload)
             report['measurements'] = measurements
             report['tokens'] = tokens
-            shot = platform_capture_window(platform, int(window['windowId']))
+            shot = xc.capture_window(int(window['windowId']), platform=platform)
             report['capture'] = {'width': shot.width, 'height': shot.height,
                                  'bytes': len(shot.pixels),
                                  'image_tokens': image_tokens(shot.width, shot.height)}

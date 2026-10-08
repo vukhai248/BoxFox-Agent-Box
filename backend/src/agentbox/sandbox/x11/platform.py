@@ -64,9 +64,10 @@ MAX_WINDOWS = 200
 _UTF8_LOCALE_CANDIDATES = ('C.UTF-8', 'C.utf8', 'en_US.UTF-8', 'en_US.utf8')
 _utf8_locale_cache: str | None = None
 
-#: Chữ hoa `xdotool` gõ **mất dấu hoa** (đo 08/10/2026, xfce4-terminal có locale UTF-8): keysym trong
-#: dải Latin-1/2 bị hạ thành chữ thường. Đây là hạn chế của chính `xdotool` — `xdotool key Aacute`
-#: cũng cho "á", `xdotool key U00C1` cũng vậy — không phải lỗi của lớp gọi.
+#: Chữ hoa từng bị **mất dấu hoa** khi `xdotool type` tự ánh xạ keysym (đo 08/10/2026: `Á` → `á`,
+#: 16/26 ký tự hoa sai). Nay `sandbox/x11/input.py` ánh xạ sẵn keysym vào keycode trống và giữ
+#: nguyên trong suốt lần gõ, nên chữ hoa đi đúng; danh sách dưới chỉ còn dùng cho **ghi chú** khi
+#: máy thiếu `xmodmap` (khi đó phải quay lại đường `xdotool type`).
 _CASE_LOST = ('Á', 'À', 'Ã', 'Â', 'Ê', 'Ô', 'É', 'È', 'Í', 'Ì', 'Ó', 'Ò', 'Õ', 'Ú', 'Ù', 'Ý')
 #: Chữ hoa Latin Extended (3 byte UTF-8) thì gõ ĐÚNG — đo cùng lượt.
 _CASE_KEPT = ('Ả', 'Ạ', 'Ă', 'Đ', 'Ơ', 'Ư', 'Ẽ', 'Ĩ', 'Ũ', 'Ỳ')
@@ -242,11 +243,14 @@ class X11Platform:
                 'BoxFox mở thì đã được cấp locale `%s`; muốn gõ chữ có dấu vào ứng dụng có sẵn, hãy '
                 'mở lại ứng dụng đó từ BoxFox.' % utf8_locale()
             )
-        self._notes.append(
-            'gõ chữ hoa ngoài ASCII: các chữ hoa Latin-1/2 (%s) bị `xdotool` hạ thành chữ thường — '
-            'chữ thường và các chữ hoa Latin Extended (%s) thì đúng. Muốn chắc, hãy đọc lại ảnh cửa '
-            'sổ sau khi gõ.' % (', '.join(_CASE_LOST), ', '.join(_CASE_KEPT))
-        )
+        if shutil.which('xmodmap') is None:
+            self._notes.append(
+                'máy thiếu `xmodmap`: chữ có dấu vẫn gõ được nhưng phải đi đường dự phòng của '
+                '`xdotool type`, đường này từng làm mất ký tự khi máy bận và làm mất dấu hoa của '
+                'các chữ hoa Latin-1/2 (%s; các chữ hoa Latin Extended như %s thì đúng). Muốn chắc, '
+                'hãy đọc lại ảnh cửa sổ sau khi gõ.'
+                % (', '.join(_CASE_LOST), ', '.join(_CASE_KEPT))
+            )
         # Theo dõi "người thật vừa chạm máy" bằng cách lấy mẫu con trỏ + tiêu điểm
         # (quyết định #6785). X11 không có bộ đếm input toàn cục như `GetLastInputInfo`, nên
         # "tick" ở đây là bộ đếm của CHÍNH TA: nó tăng khi con trỏ hoặc tiêu điểm đổi mà lần đổi
@@ -537,10 +541,11 @@ class X11Platform:
             value = owner
         return value == target
 
-    def transient_windows(self, hwnd: int, *, above_only: bool = True) -> list[int]:
+    def transient_windows(self, hwnd: int) -> list[int]:
         """Các hộp thoại/popup của ``hwnd`` đang hiển thị, **dưới → trên** theo chồng cửa sổ.
 
-        ``above_only=True`` chỉ trả những cửa sổ nằm trên ``hwnd`` — đúng thứ tự cần để ghép ảnh.
+        Chỉ xét những cửa sổ nằm TRÊN ``hwnd``: đúng thứ tự cần để ghép ảnh, và cũng đúng thực tế —
+        hộp thoại của một ứng dụng luôn ở trên cửa sổ chính của nó.
         """
         stacking = self._client_list()
         if not stacking:
@@ -548,7 +553,7 @@ class X11Platform:
         target = int(hwnd)
         start = stacking.index(target) + 1 if target in stacking else 0
         found: list[int] = []
-        for candidate in stacking[start:] if above_only else stacking:
+        for candidate in stacking[start:]:
             if candidate == target:
                 continue
             if self.get_window_owner(candidate) == target and self.is_window_visible(candidate):

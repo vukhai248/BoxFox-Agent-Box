@@ -50,6 +50,113 @@ CLICK_DELAY_MS = 12
 #: khe hở "gõ nhầm cửa sổ" càng hẹp — 64 khớp với ``TEXT_CHUNK_UNITS`` của bản Windows.
 TEXT_CHUNK_CHARS = 64
 
+
+def typing_chunks(text: str, *, size: int = TEXT_CHUNK_CHARS) -> list[str]:
+    """Chia văn bản thành các khối để gõ: ký tự ngoài ASCII đi **một mình một lệnh**.
+
+    Đo trên máy thật (08/10/2026, Chrome, X server có tải vì đang quay phim màn hình): gõ cả câu
+    trong một lệnh làm **mất 1–2 ký tự có dấu ở 3/6 lượt**, còn mỗi ký tự ngoài ASCII một lệnh thì
+    **6/6 lượt đủ** (490 ms so với 241 ms cho câu 29 ký tự). Lý do: ``xdotool`` phải ánh xạ tạm một
+    keycode trống cho mỗi ký tự ngoài ASCII rồi trả lại; máy bận thì ứng dụng đọc sự kiện sau lúc
+    ánh xạ đã bị trả lại, và ký tự mất hẳn — thao tác vẫn báo thành công.
+
+    Ký tự ASCII không dính lỗi đó, nên chúng vẫn đi theo khối 64 ký tự cho nhanh.
+
+    Đây là đường **dự phòng**: ``type_text`` còn có đường tốt hơn (ánh xạ sẵn keysym vào keycode
+    trống) khi ``xmodmap`` dùng được — xem :func:`keysym_plan`.
+    """
+    chunks: list[str] = []
+    run = ''
+    for char in text:
+        if ord(char) < 128:
+            run += char
+            if len(run) >= size:
+                chunks.append(run)
+                run = ''
+            continue
+        if run:
+            chunks.append(run)
+            run = ''
+        chunks.append(char)
+    if run:
+        chunks.append(run)
+    return chunks
+
+
+#: Số keycode trống tối đa ta chiếm cùng lúc để ánh xạ keysym Unicode. Máy này có 30 chỗ trống;
+#: giữ trần thấp để không đụng vào vùng keycode mà bố cục bàn phím khác có thể dùng.
+MAX_REMAPPED_KEYCODES = 10
+
+
+def keysym_name(char: str) -> str:
+    """Tên keysym Unicode của một ký tự: ``đ`` → ``U0111``."""
+    return 'U%04X' % ord(char)
+
+
+def _spare_keycodes(platform: Any) -> list[int]:
+    """Các keycode chưa gán keysym nào, ưu tiên số lớn (vùng ``xdotool`` vẫn dùng để ánh xạ tạm)."""
+    tool = platform._tool('xmodmap')
+    if tool is None:
+        return []
+    result = platform._run([tool, '-pke'])
+    if not result.ok:
+        return []
+    spare: list[int] = []
+    for line in result.out.splitlines():
+        fields = line.split()
+        # `keycode 249 =` — dấu `=` đứng ngay sau số hiệu nghĩa là không có keysym nào.
+        if len(fields) == 3 and fields[0] == 'keycode' and fields[2] == '=':
+            try:
+                spare.append(int(fields[1]))
+            except ValueError:
+                continue
+    spare.sort(reverse=True)
+    return spare
+
+
+def keysym_plan(platform: Any, chars: list[str]) -> dict[str, int]:
+    """Ánh xạ các ký tự ngoài ASCII vào keycode trống **một lần cho cả lần gõ**; trả ``{}`` nếu không được.
+
+    Vì sao không để ``xdotool type`` tự lo: nó ánh xạ rồi **trả lại ngay** cho từng ký tự, nên khi
+    máy bận, ứng dụng đọc sự kiện sau lúc ánh xạ đã bị trả lại ⇒ ký tự mất hẳn; và với chữ hoa
+    Latin-1/2 thì nó gửi nhầm chữ thường (đo được: ``Á`` → ``á``). Ánh xạ **giữ nguyên trong suốt
+    lần gõ** thì ứng dụng luôn đọc đúng, kể cả chữ hoa: đo trên máy thật 08/10/2026,
+    ``ÁÀẢĐÊÔƠƯỔỢ`` đi đúng từng ký tự (trước đó mất hoa 16/26 ký tự).
+
+    Trả về ``{kí tự: keycode}``; người gọi phải trả keycode về ``NoSymbol`` sau khi gõ xong.
+    """
+    unique = list(dict.fromkeys(char for char in chars if ord(char) >= 128))
+    if not unique:
+        return {}
+    spare = _spare_keycodes(platform)
+    if len(spare) < len(unique):
+        return {}
+    chosen = spare[:len(unique)]
+    tool = platform._tool('xmodmap')
+    if tool is None:
+        return {}
+    args: list[str] = []
+    for char, keycode in zip(unique, chosen):
+        args += ['-e', 'keycode %d = %s' % (keycode, keysym_name(char))]
+    result = platform._run([tool] + args, timeout=5.0)
+    if not result.ok:
+        return {}
+    return dict(zip(unique, chosen))
+
+
+def release_keycodes(platform: Any, keycodes: Any) -> None:
+    """Trả các keycode đã chiếm về trạng thái trống (``NoSymbol``)."""
+    values = [int(code) for code in keycodes]
+    if not values:
+        return
+    tool = platform._tool('xmodmap')
+    if tool is None:
+        return
+    args: list[str] = []
+    for keycode in values:
+        args += ['-e', 'keycode %d = NoSymbol' % keycode]
+    platform._run([tool] + args, timeout=5.0)
+
 #: Tên phím của Windows/``keysym`` → tên phím của X11. Không có bảng này thì "Enter" thành "enter"
 #: và ``xdotool`` báo lỗi khó hiểu.
 _KEY_NAMES = {
@@ -199,10 +306,11 @@ def foreground_matches(hwnd: int, *, platform: Any = None) -> bool:
     current = p.get_foreground_window()
     if not current:
         return False
-    if p.is_own_window(hwnd, current):
-        return True
-    root = p.get_ancestor_root(current)
-    return bool(root) and int(root) == int(hwnd)
+    # ``is_own_window`` đã nhận cả trường hợp ``current`` CHÍNH LÀ cửa sổ đích (nó so danh tính
+    # trước khi đi theo chuỗi chủ sở hữu), và X11 chỉ trả về cửa sổ cấp cao nhất trong
+    # ``_NET_ACTIVE_WINDOW``. Nhánh ``get_ancestor_root`` cũ không bao giờ thêm được kết quả ĐÚNG nào
+    # mà mỗi vòng chờ lại tốn thêm một lệnh ``xprop``.
+    return p.is_own_window(hwnd, current)
 
 
 def ensure_foreground(hwnd: int, *, platform: Any = None, timeout: float = 0.5,
@@ -272,7 +380,7 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
         # X server KHÔNG sinh sự kiện nào và `xdotool` chờ tới hết thời gian chờ (đo được: bấm hai
         # lần liên tiếp vào cùng một điểm làm lần thứ hai treo đủ 5 s rồi báo `SOURCE_CHANGED`).
         # Vì vậy chỉ gọi `mousemove` khi con trỏ còn ở chỗ khác.
-        if tuple(previous_cursor or ()) != (int(x), int(y)):
+        if previous_cursor != (int(x), int(y)):
             moved = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
             _fail(moved, 'mousemove', point={'x': int(x), 'y': int(y)})
         pressed = _xdotool(p, 'click', '--delay', str(CLICK_DELAY_MS), str(MOUSE_BUTTONS[button]))
@@ -345,18 +453,26 @@ def type_text(text: str, *, window: Any, element: Any = None, platform: Any = No
     previous_foreground = p.get_foreground_window()
     previous_cursor = p.get_cursor_pos()
     ensure_foreground(hwnd, platform=p, timeout=timeout)
+    chunks = typing_chunks(text)
+    # Ánh xạ sẵn các keysym Unicode vào keycode trống, giữ nguyên trong suốt lần gõ: ứng dụng đọc
+    # đúng cả chữ hoa, và không còn khe hở "ánh xạ đã bị trả lại" làm mất ký tự khi máy bận.
+    plan = keysym_plan(p, [chunk for chunk in chunks if len(chunk) == 1 and ord(chunk) >= 128])
     sent = 0
     try:
-        for start in range(0, len(text), TEXT_CHUNK_CHARS):
-            chunk = text[start:start + TEXT_CHUNK_CHARS]
+        for chunk in chunks:
             # Không nâng cửa sổ lại (người dùng có thể đã cố tình đổi), chỉ KIỂM: mất tiêu điểm
             # giữa chừng ⇒ dừng ngay, phần còn lại không rơi vào cửa sổ của người.
             ensure_foreground(hwnd, platform=p, timeout=timeout, raise_window=False)
-            result = _xdotool(p, 'type', '--clearmodifiers', '--delay', str(TYPE_DELAY_MS), '--',
-                              chunk, timeout=max(5.0, 0.05 * len(chunk) + 2.0))
+            if len(chunk) == 1 and chunk in plan:
+                result = _xdotool(p, 'key', '--clearmodifiers', keysym_name(chunk),
+                                  timeout=max(5.0, 0.05 * len(chunk) + 2.0))
+            else:
+                result = _xdotool(p, 'type', '--clearmodifiers', '--delay', str(TYPE_DELAY_MS), '--',
+                                  chunk, timeout=max(5.0, 0.05 * len(chunk) + 2.0))
             _fail(result, 'type')
             sent += len(chunk)
     finally:
+        release_keycodes(p, plan.values())
         restore_context(previous_foreground, previous_cursor, platform=p)
     return {
         'route': 'xtest',

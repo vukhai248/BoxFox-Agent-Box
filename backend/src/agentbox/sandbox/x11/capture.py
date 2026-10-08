@@ -208,27 +208,26 @@ def _pixels_are_the_screen(shot: Capture, *, platform: Any, samples: int = 64) -
 def _paste_bgra(base: bytearray, base_w: int, base_h: int, patch: bytes,
                 patch_w: int, patch_h: int, dx: int, dy: int) -> None:
     """Dán ``patch`` (BGRA) vào ``base`` tại ``(dx, dy)``, tự cắt phần tràn ra ngoài."""
+    left = max(0, dx)
+    right = min(base_w, dx + patch_w)
+    if right <= left:
+        return
     for row in range(patch_h):
         by = dy + row
         if by < 0 or by >= base_h:
-            continue
-        left = max(0, dx)
-        right = min(base_w, dx + patch_w)
-        if right <= left:
             continue
         src = (row * patch_w + (left - dx)) * 4
         dst = (by * base_w + left) * 4
         base[dst:dst + (right - left) * 4] = patch[src:src + (right - left) * 4]
 
 
-def _compose_own_dialogs(shot: Capture, hwnd: int, *, platform: Any) -> list[str]:
+def _compose_own_dialogs(shot: Capture, dialogs: list[int], *, platform: Any) -> list[str]:
     """Ghép hộp thoại của **chính ứng dụng đích** vào ảnh cửa sổ; trả về các dòng ghi chú.
 
     X11 vẽ hộp thoại modal trong một cửa sổ riêng, nên ``import -window <cửa sổ chính>`` không có
     chúng: agent nhìn ảnh tưởng ứng dụng đang bình thường, trong khi mọi phím gõ vào lại rơi vào hộp
     thoại. Ghép đúng vị trí tuyệt đối nên toạ độ trong ảnh vẫn là toạ độ bấm thật.
     """
-    dialogs = platform.transient_windows(int(hwnd))
     if not dialogs:
         return []
     x, y, width, height = shot.bounds
@@ -317,7 +316,7 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
         if own_dialogs:
             # Chỉ ghép lên ảnh ĐỌC RIÊNG của cửa sổ: ảnh dự phòng theo vùng màn hình đã có sẵn hộp
             # thoại trong đó rồi, ghép thêm là dán hai lần.
-            shot.notes.extend(_compose_own_dialogs(shot, int(hwnd), platform=p))
+            shot.notes.extend(_compose_own_dialogs(shot, own_dialogs, platform=p))
     except PlatformError:
         if occluded:
             notes.append('cửa sổ bị che nên không đọc được nội dung riêng của nó')

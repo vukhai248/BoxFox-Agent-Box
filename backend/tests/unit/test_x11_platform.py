@@ -848,3 +848,143 @@ def test_a_click_at_another_point_still_moves_the_pointer_first():
     xi.click(70, 80, window=window, platform=platform, restore=False)
     moves = [call for call in tools.calls if os.path.basename(call[0]) == 'xdotool' and 'mousemove' in call]
     assert moves and (int(moves[-1][-2]), int(moves[-1][-1])) == (70, 80)
+
+
+# ------------------------------------------------- ký tự ngoài ASCII đi một mình một lệnh
+# Đo trên máy thật (Chrome, 08/10/2026, X server có tải): gõ cả câu trong một lệnh `xdotool type`
+# làm MẤT 1–2 ký tự có dấu ở 3/6 lượt (`ăơ`, `ãơ`, `ử` biến mất), trong khi mỗi ký tự ngoài ASCII
+# một lệnh thì 6/6 lượt đủ. `xdotool` ánh xạ tạm một keycode trống cho mỗi ký tự ngoài ASCII rồi
+# trả lại; máy bận thì ứng dụng đọc sự kiện sau lúc ánh xạ đã bị trả lại. Ký tự ASCII không dính lỗi.
+def test_non_ascii_characters_go_one_command_each():
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    xi.type_text('chào bạn', window=0x11, platform=platform)
+    chunks = [call[call.index('--') + 1] for call in tools.calls
+              if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert chunks == ['ch', 'à', 'o b', 'ạ', 'n'], chunks
+    assert ''.join(chunks) == 'chào bạn'
+
+
+def test_ascii_text_still_travels_in_one_command():
+    """Đường nhanh không được đổi: văn bản ASCII thuần vẫn là một lệnh duy nhất."""
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    xi.type_text('a = 2\nb = 3\nprint(a + b)\n', window=0x11, platform=platform)
+    calls = [call for call in tools.calls
+             if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert len(calls) == 1
+    assert calls[0][calls[0].index('--') + 1] == 'a = 2\nb = 3\nprint(a + b)\n'
+
+
+def test_typing_chunks_keeps_order_and_splits_only_non_ascii():
+    assert xi.typing_chunks('') == []
+    assert xi.typing_chunks('abc') == ['abc']
+    assert xi.typing_chunks('aábc') == ['a', 'á', 'bc']
+    assert xi.typing_chunks('á') == ['á']
+    assert xi.typing_chunks('a' * 70) == ['a' * 64, 'a' * 6]
+    assert ''.join(xi.typing_chunks('Xin chào Cửa sổ!')) == 'Xin chào Cửa sổ!'
+
+
+# ------------------------------------------------- ánh xạ sẵn keysym cho ký tự ngoài ASCII
+# Đo trên máy thật (08/10/2026): `xdotool type` ánh xạ rồi TRẢ LẠI ngay cho từng ký tự, nên máy bận
+# thì ký tự mất (3/6 lượt sạch) và chữ hoa Latin-1/2 bị gửi nhầm thành chữ thường (Á → á). Ánh xạ
+# sẵn vào keycode trống, giữ nguyên trong suốt lần gõ, cho `ÁÀẢĐÊÔƠƯỔỢ` đi đúng từng ký tự.
+def _xmodmap_runner(*, spare=(250, 249, 248), fail_map=False, fail_key=False):
+    """Runner giả có `xmodmap`: nhớ ánh xạ đã đặt để kiểm cả lúc trả lại."""
+    state = {'map': {}, 'calls': []}
+
+    def runner(argv, timeout):
+        tool, args = os.path.basename(argv[0]), argv[1:]
+        state['calls'].append(list(argv))
+        if tool == 'xmodmap':
+            if args and args[0] == '-pke':
+                lines = ['keycode %d =' % code for code in spare]
+                lines += ['keycode 38 = a A a A', 'keycode 39 = s S s S']
+                return xp._CommandResult(0, '\n'.join(lines) + '\n')
+            for index, flag in enumerate(args):
+                if flag != '-e':
+                    continue
+                fields = args[index + 1].split()
+                if len(fields) >= 4 and fields[0] == 'keycode' and fields[2] == '=':
+                    code = int(fields[1])
+                    if fields[3] == 'NoSymbol':
+                        state['map'].pop(code, None)
+                    elif fail_map:
+                        return xp._CommandResult(1, '', 'xmodmap: không đặt được')
+                    else:
+                        state['map'][code] = fields[3]
+            return xp._CommandResult(0, '')
+        if tool == 'xdotool' and args and args[0] == 'key' and fail_key:
+            return xp._CommandResult(1, '', 'xdotool: không gửi được phím')
+        return None
+
+    return runner, state
+
+
+def _platform_with_xmodmap(runner):
+    """Nền tảng giả có thêm `xmodmap`; mọi công cụ khác vẫn do `FakeTools` trả lời."""
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: (0, 0, 100, 100)}, foreground=0x11)
+    inner = platform._runner
+
+    def dispatch(argv, timeout):
+        got = runner(argv, timeout)
+        return inner(argv, timeout) if got is None else got
+
+    platform._runner = dispatch
+    return platform, tools
+
+
+def test_the_keysym_plan_maps_spare_keycodes_and_releases_them():
+    runner, state = _xmodmap_runner()
+    platform, _tools = _platform_with_xmodmap(runner)
+    plan = xi.keysym_plan(platform, ['đ', 'ổ', 'đ'])
+    assert plan == {'đ': 250, 'ổ': 249}
+    assert state['map'] == {250: 'U0111', 249: 'U1ED5'}
+    xi.release_keycodes(platform, plan.values())
+    assert state['map'] == {}
+
+
+def test_typing_uses_the_keysym_path_for_non_ascii_characters():
+    runner, state = _xmodmap_runner()
+    platform, tools = _platform_with_xmodmap(runner)
+    xi.type_text('ađb', window=0x11, platform=platform)
+    keys = [call for call in tools.calls
+            if os.path.basename(call[0]) == 'xdotool' and 'key' in call]
+    assert keys and keys[-1][-1] == 'U0111', keys
+    typed = [call for call in tools.calls
+             if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert [call[call.index('--') + 1] for call in typed] == ['a', 'b'], typed
+    assert state['map'] == {}, 'keycode phải được trả lại sau khi gõ'
+
+
+def test_the_keysym_path_is_skipped_when_there_are_not_enough_spare_keycodes():
+    runner, _state = _xmodmap_runner(spare=(250,))
+    platform, tools = _platform_with_xmodmap(runner)
+    xi.type_text('đổ', window=0x11, platform=platform)
+    keys = [call for call in tools.calls
+            if os.path.basename(call[0]) == 'xdotool' and 'key' in call]
+    assert not keys, 'thiếu chỗ thì không được ánh xạ dở dang'
+    typed = [call for call in tools.calls
+             if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert [call[call.index('--') + 1] for call in typed] == ['đ', 'ổ']
+
+
+def test_a_failed_mapping_falls_back_to_one_command_per_character():
+    runner, _state = _xmodmap_runner(fail_map=True)
+    platform, tools = _platform_with_xmodmap(runner)
+    xi.type_text('đ', window=0x11, platform=platform)
+    keys = [call for call in tools.calls
+            if os.path.basename(call[0]) == 'xdotool' and 'key' in call]
+    assert not keys
+    typed = [call for call in tools.calls
+             if os.path.basename(call[0]) == 'xdotool' and 'type' in call]
+    assert [call[call.index('--') + 1] for call in typed] == ['đ']
+
+
+def test_keycodes_are_released_even_when_the_keystroke_fails():
+    runner, state = _xmodmap_runner(fail_key=True)
+    platform, _tools = _platform_with_xmodmap(runner)
+    with pytest.raises(PlatformError):
+        xi.type_text('đ', window=0x11, platform=platform)
+    assert state['map'] == {}, 'lỗi giữa chừng vẫn phải trả keycode về trống'
