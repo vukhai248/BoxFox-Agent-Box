@@ -295,3 +295,36 @@ def test_a_platform_without_the_watch_capability_never_gets_a_pump(tmp_path, mon
 
     payload = run(tmp_path, main, executor)
     assert calls == [] and payload['holder'] == dc.HOLDER_AGENT
+
+
+class _BareRuntime:
+    """Runtime tối thiểu: `store` + `tasks`, KHÔNG có `executor`.
+
+    Một số bài kiểm dựng app đúng theo hình dạng này (`test_system_log_v2.py`), nên mọi hook khởi
+    động phải chịu được runtime thiếu `executor`.
+    """
+
+    def __init__(self, store):
+        self.store = store
+        self.tasks = {}
+
+    async def stop(self, sid):
+        return None
+
+
+def test_the_idle_watch_hook_tolerates_a_runtime_without_an_executor(tmp_path):
+    """Thiếu `executor` thì hook bỏ qua — không được làm app không dựng nổi.
+
+    Đúng lỗi đã xảy ra: hook đọc thẳng `runtime.executor.desktop`, nên app dựng bằng runtime tối
+    thiểu chết ngay lúc khởi động và 11 bài kiểm của hai tệp khác đỏ theo.
+    """
+    from agentbox.api import server as server_module
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        async with TestServer(create_app(_BareRuntime(store))) as server:
+            watching = server.app.get(server_module.IDLE_WATCH_KEY)
+        store.close()
+        return watching
+
+    assert asyncio.run(main()) is None

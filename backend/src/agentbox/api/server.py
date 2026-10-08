@@ -610,7 +610,9 @@ def create_app(runtime):
         không gây ra. Chỉ chạy khi nền tảng khai báo ``supports_idle_watch`` — nhờ vậy hành vi
         Windows đang chạy thật không đổi cho tới khi đường hook của nó được kiểm trên máy Windows.
         """
-        control = getattr(runtime.executor, 'desktop', None)
+        # `runtime` có thể là bản giả không có `executor` (bài kiểm dựng app với runtime tối thiểu),
+        # nên hỏi hai lớp bằng `getattr` — thiếu executor nghĩa là chưa có gì để theo dõi.
+        control = getattr(getattr(runtime, 'executor', None), 'desktop', None)
         if not idle_watch_supported(control):
             return
 
