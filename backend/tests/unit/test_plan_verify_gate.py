@@ -28,6 +28,7 @@ from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
 from agentbox.memory.session_store import SessionStore
 from agentbox.observability.system_log import SystemLog, read_entries
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 IDENTITY = 'clinical-patient-record-lookup-research'
 HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
@@ -63,6 +64,10 @@ class FixtureExecutor:
 
     async def execute(self, name, args, sid):
         self.calls.append((name, args, sid))
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def request(self, path, body=None, session=None):

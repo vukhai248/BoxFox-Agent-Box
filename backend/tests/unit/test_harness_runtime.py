@@ -12,6 +12,7 @@ from agentbox.agent_core.tool_contracts import schemas_for
 from agentbox.memory.session_store import SessionStore
 from agentbox.skills.catalog import SkillCatalog
 from agentbox.api.server import create_app
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 
 # Đường TRƯỚC v2 (#6599): file này chốt hành vi cũ; khóa tổng `BOXFOX_REFORM` đã bị xoá ở bước B5
@@ -45,6 +46,10 @@ class FixtureExecutor:
 
     async def execute(self, name, args, sid, **_identity):
         self.calls.append((name, args, sid))
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def cleanup(self, sid):

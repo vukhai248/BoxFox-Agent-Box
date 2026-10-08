@@ -5110,8 +5110,18 @@ class HarnessRuntime(RuntimeCommands):
                                  message=str(exc)[:300])
 
     async def dispatch(self, session, name, args, call_id=None):
+        """Một lời gọi công cụ, đi qua hộp đếm của long task **khi runtime có hộp đó**.
+
+        Runtime tối giản (bài kiểm cũ dựng `SimpleNamespace(store=…)`) không có `self.longtask`;
+        khi ấy đường gọi vẫn phải là `_dispatch` — đúng thứ bài kiểm H8 ghim.
+        """
+        longtask = getattr(self, 'longtask', None)
         try:
-            result = await self.longtask.tool(session['id'], lambda: self._dispatch(session, name, args, call_id))
+            if longtask is None:
+                result = await self._dispatch(session, name, args, call_id)
+            else:
+                result = await longtask.tool(session['id'],
+                                             lambda: self._dispatch(session, name, args, call_id))
         except Exception as exc:
             code, _ = classify_failure(exc)
             adaptive_surface.after_tool(self, session['id'], name, args,

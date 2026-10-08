@@ -28,6 +28,7 @@ from agentbox.agent_core.limits import (ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHAR
                                         EVIDENCE_PRUNE_EVERY, EVIDENCE_REPAIR_MAX_TOKENS)
 from agentbox.agent_core.runtime import HarnessRuntime, answer_truncation_tail
 from agentbox.memory.session_store import SessionStore
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 EVIDENCE_DIR = '.generated_artifacts/captures/evidence'
 ARTIFACT = f'{EVIDENCE_DIR}/abc/abc_001_app.py.diff'
@@ -123,6 +124,10 @@ class FixtureExecutor:
             if not self.prune_ok:
                 return {'ok': False, 'error': 'SESSION_OPS_UNAVAILABLE'}
             return {'ok': True, 'removedFiles': 0, 'removedBytes': 0, 'pinned': []}
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def cleanup(self, sid):
