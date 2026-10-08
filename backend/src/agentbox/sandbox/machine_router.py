@@ -428,11 +428,15 @@ class SessionMachineExecutor:
             if binding['mode'] == 'docker':
                 return await self.legacy.execute(name, args, session, **identity)
             host, project = self.host(session)
-            if name not in ('file_read', 'codebase_glob', 'codebase_grep') and not project['trusted']:
+            # Hai công cụ QUAN SÁT của CUA không đòi folder phải tin cậy (kế hoạch §"Đường CUA",
+            # mục 5): chúng chỉ đọc màn hình/cửa sổ mà người dùng đã chọn cho phiên, vẫn qua thẻ duyệt
+            # ở tầng executor. Mọi công cụ ghi/chạy — kể cả `computer_use` — vẫn phải tin cậy folder.
+            observed = name in ('file_read', 'codebase_glob', 'codebase_grep',
+                                'computer_screen_capture', 'inspect_element')
+            if not observed and not project['trusted']:
                 return error_result('PROJECT_TRUST_REQUIRED', 'Xác nhận tin cậy folder trước khi sửa/chạy lệnh.')
-            # CUA đã bật: chốt cũ `HOST_CUA_NOT_ENABLED` bị gỡ. Công cụ CUA vẫn đi qua chốt tin cậy
-            # folder ở trên như mọi công cụ khác; riêng việc MỞ ứng dụng còn cần phạm vi `machine`
-            # (xem `HostExecutor._launchable_app`).
+            # CUA đã bật: chốt cũ `HOST_CUA_NOT_ENABLED` bị gỡ. Riêng việc MỞ ứng dụng còn cần phạm
+            # vi `machine` và folder tin cậy (xem `HostExecutor._launchable_app`).
             root = identity.get('root')
             if root:
                 target = Path(root)

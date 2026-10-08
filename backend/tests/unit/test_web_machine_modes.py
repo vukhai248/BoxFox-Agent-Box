@@ -149,6 +149,37 @@ async def test_no_project_and_untrusted_mutation_fail_closed(harness, tmp_path):
 
 
 @async_test
+async def test_cua_observe_tools_work_in_an_untrusted_folder(monkeypatch, tmp_path):
+    """Hai công cụ QUAN SÁT đi qua chốt tin cậy folder; `computer_use` thì không.
+
+    Cửa sổ là do người dùng tự chọn cho phiên và mỗi lần chụp vẫn có thẻ duyệt riêng, còn folder
+    chưa tin cậy chỉ nói rằng agent không được chạy mã trong đó. Chế độ `trusted` ở đây để phép thử
+    không dựng thẻ duyệt thật (không có UI thì thẻ treo mãi) — điều đang kiểm là CHỐT TIN CẬY.
+    """
+    monkeypatch.setenv('BOXFOX_PERMISSION_MODE', 'trusted')
+    # Tầng `user` THẮNG biến môi trường, nên một `~/.boxfox/settings.json` thật trên máy chạy phép
+    # thử (ví dụ mức `auto`) sẽ biến lời gọi thành thẻ duyệt: không có UI thì thẻ treo mãi. Cô lập
+    # HOME để phép thử chỉ còn phụ thuộc vào thứ nó muốn kiểm — chốt tin cậy folder.
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    legacy = type('Legacy', (), {'visual_lock': asyncio.Lock(),
+                                 'execute': AsyncMock(return_value={'content': 'docker'}),
+                                 'cleanup': AsyncMock()})()
+    rt = HarnessRuntime(SessionStore(tmp_path / 'sessions.sqlite'), legacy)
+    attach(rt, tmp_path / 'profile')
+    try:
+        p = project(rt, tmp_path)
+        session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
+        for tool in ('computer_screen_capture', 'inspect_element'):
+            result = await rt.executor.execute(tool, {}, session['id'])
+            assert result.get('errorCode') != 'PROJECT_TRUST_REQUIRED', tool
+        assert (await rt.executor.execute('computer_use', {'action': 'type', 'text': 'a'},
+                                          session['id']))['errorCode'] == 'PROJECT_TRUST_REQUIRED'
+        legacy.execute.assert_not_called()
+    finally:
+        rt.store.close()
+
+
+@async_test
 async def test_host_unsupported_does_not_fall_back(harness, tmp_path):
     rt, legacy = harness
     p = project(rt, tmp_path)

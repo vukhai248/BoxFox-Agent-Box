@@ -423,6 +423,12 @@ class HostExecutor:
         args = args if isinstance(args, dict) else {}
         if name not in HOST_TOOLS:
             return unsupported_result(name)
+        # `__target` là kênh NỘI BỘ do executor tự gắn để `resource_key` thấy đích đã phân giải.
+        # Model gửi kèm khoá này là giả mạo: nó sẽ khiến thẻ duyệt và `resource_key` nói về một đích
+        # khác với đích thật sự bị chạm vào (ví dụ xin quyền theo `cua:app:notepad` rồi mở Chrome).
+        # Bỏ giá trị đi vào, chỉ nhận giá trị do chính `_plan_target` tạo ra.
+        if '__target' in args:
+            args = {key: value for key, value in args.items() if key != '__target'}
         cua_plan = None
         if name in CUA_TOOLS:
             # Đích CUA được phân giải TRƯỚC khi hỏi quyền: thẻ duyệt phải nói đúng cửa sổ/app mà
@@ -670,9 +676,9 @@ class HostExecutor:
             return error_result(CUA_UNAVAILABLE_CODE, 'thiếu mô-đun chụp màn hình của Windows')
         payload_target = {'kind': 'screen'}
         window = None
-        raw_window = args.get('windowId') if 'windowId' in args else (args.get('target') or {}).get('windowId')
-        if raw_window in (None, '') and cua_target_module.is_window(target):
-            raw_window = target.get('windowId')
+        # `_cua` luôn đưa đích ĐÃ phân giải xuống đây (windowId → app/window → đích phiên → mặc định),
+        # nên `windowId` trong args chỉ có thể lặp lại đúng giá trị đó. Một nguồn sự thật duy nhất.
+        raw_window = target.get('windowId') if cua_target_module.is_window(target) else None
         if raw_window not in (None, ''):
             try:
                 window = self._window_for(int(raw_window))
@@ -681,6 +687,9 @@ class HostExecutor:
             if window is None:
                 return error_result(TARGET_UNKNOWN_CODE, 'không thấy cửa sổ %s' % raw_window,
                                     reason='window_gone')
+            reused = self._window_reused(target, window, raw_window)
+            if reused is not None:
+                return reused
             payload_target = {'kind': 'window', 'windowId': int(raw_window)}
         try:
             win_platform = self._desktop_platform()
@@ -831,6 +840,26 @@ class HostExecutor:
         except Exception:
             return None
 
+    def _target_pid_ok(self, target, window):
+        """Cửa sổ này có đúng là tiến trình mà đích đã chốt không?
+
+        `verify_window` chỉ chạy TRƯỚC thẻ duyệt. Giữa lúc thẻ còn mở và lúc gửi input, cửa sổ có
+        thể đóng rồi hwnd được cấp cho tiến trình khác — lúc đó `describe_window` vẫn trả một cửa sổ
+        hợp lệ và input sẽ đi sai chỗ. Nên phải soát `pid` ngay trước khi chạm vào cửa sổ.
+        """
+        pid = cua_target_module.as_int((target or {}).get('pid'))
+        if not pid or window is None:
+            return True
+        live = getattr(window, 'pid', None)
+        return live is None or int(live) == pid
+
+    def _window_reused(self, target, window, raw_window):
+        """Lỗi `TARGET_UNKNOWN` khi hwnd đã đổi chủ, hoặc `None` khi còn đúng."""
+        if self._target_pid_ok(target, window):
+            return None
+        return error_result(TARGET_UNKNOWN_CODE, 'cửa sổ %s đã đổi chủ; chọn lại đích' % raw_window,
+                            reason='window_reused')
+
     def _input_target(self, args, target=None):
         """Cửa sổ đích: `windowId` model đưa → ĐÍCH PHIÊN (cửa sổ đã chọn) → cửa sổ chứa điểm (x, y)
         → cửa sổ đang hoạt động.
@@ -850,7 +879,9 @@ class HostExecutor:
             # Cửa sổ người dùng đã chọn cho phiên: MỌI thao tác đi vào đó, kể cả `type`/`key` không
             # kèm toạ độ — nếu không, "đích theo phiên" chỉ đúng với một nửa công cụ.
             window = self._window_for(int(target.get('windowId')))
-            return (window, '') if window is not None else (None, TARGET_UNKNOWN_CODE)
+            if window is None or not self._target_pid_ok(target, window):
+                return None, TARGET_UNKNOWN_CODE
+            return window, ''
         if args.get('x') is None or args.get('y') is None:
             platform = self._desktop_platform()
             foreground = getattr(platform, 'get_foreground_window', None)

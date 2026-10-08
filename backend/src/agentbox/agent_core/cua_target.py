@@ -60,7 +60,7 @@ def _bare_process(name: Any) -> str:
     return text[:-4] if text.endswith('.exe') else text
 
 
-def _as_int(value: Any) -> int | None:
+def as_int(value: Any) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -74,11 +74,11 @@ def window_entry(window: Any) -> dict:
             return window.get(key, default)
         return getattr(window, key, default)
 
-    hwnd = _as_int(read('windowId', read('hwnd')))
+    hwnd = as_int(read('windowId', read('hwnd')))
     if hwnd is None:
         raise TargetError(TARGET_UNKNOWN, 'cửa sổ không có windowId')
     entry = {'kind': KIND_WINDOW, 'windowId': hwnd}
-    pid = _as_int(read('pid'))
+    pid = as_int(read('pid'))
     if pid:
         entry['pid'] = pid
     title = _text(read('title'))
@@ -106,11 +106,11 @@ def normalize(raw: Any) -> dict | None:
         return {'kind': KIND_MACHINE}
     if kind != KIND_WINDOW:
         return None
-    hwnd = _as_int(raw.get('windowId'))
+    hwnd = as_int(raw.get('windowId'))
     if hwnd is None:
         return None
     entry = {'kind': KIND_WINDOW, 'windowId': hwnd}
-    pid = _as_int(raw.get('pid'))
+    pid = as_int(raw.get('pid'))
     if pid:
         entry['pid'] = pid
     for field in ('title', 'processName', 'windowClass'):
@@ -206,8 +206,8 @@ def verify_window(target: dict, windows: list) -> dict | None:
     hwnd = entry['windowId']
     pid = entry.get('pid')
     for item in items:
-        if _as_int(item.get('windowId')) == hwnd:
-            if pid and _as_int(item.get('pid')) not in (None, pid):
+        if as_int(item.get('windowId')) == hwnd:
+            if pid and as_int(item.get('pid')) not in (None, pid):
                 break                       # hwnd bị tái dùng: rơi xuống đường tìm theo tên
             return window_entry(item)
     by_name = {}
@@ -235,9 +235,9 @@ def resolve(args: dict, session_target: Any, windows: list, scope: Any) -> tuple
     if raw_window in (None, '') and isinstance(args.get('target'), dict):
         raw_window = args['target'].get('windowId')
     if raw_window not in (None, ''):
-        hwnd = _as_int(raw_window)
+        hwnd = as_int(raw_window)
         for item in items:
-            if _as_int(item.get('windowId')) == hwnd:
+            if as_int(item.get('windowId')) == hwnd:
                 return window_entry(item), 'arg'
         raise TargetError(TARGET_UNKNOWN, 'không thấy cửa sổ %s' % raw_window, reason='not_found')
 
@@ -353,7 +353,7 @@ class SessionTargetStore:
                 target = normalize(config.get(self.KEY))
                 return {'target': target,
                         'requestedBy': _text(config.get('cuaTargetSetBy')) or 'user',
-                        'revision': _as_int(config.get(self.REVISION_KEY)) or 0,
+                        'revision': as_int(config.get(self.REVISION_KEY)) or 0,
                         'at': config.get('cuaTargetAt'),
                         'inheritedFrom': None if (current == sid or target is None) else current}
             try:
@@ -369,7 +369,7 @@ class SessionTargetStore:
             raise TargetError(TARGET_KIND_INVALID, 'đích không hợp lệ')
         root = self.root(sid)
         config = dict(self._config(root))
-        revision = (_as_int(config.get(self.REVISION_KEY)) or 0) + 1
+        revision = (as_int(config.get(self.REVISION_KEY)) or 0) + 1
         config[self.KEY] = entry
         config['cuaTargetSetBy'] = set_by
         config[self.REVISION_KEY] = revision
@@ -381,7 +381,7 @@ class SessionTargetStore:
     def clear(self, sid: str) -> dict:
         root = self.root(sid)
         config = dict(self._config(root))
-        revision = (_as_int(config.get(self.REVISION_KEY)) or 0) + 1
+        revision = (as_int(config.get(self.REVISION_KEY)) or 0) + 1
         config[self.KEY] = None
         config['cuaTargetSetBy'] = 'user'
         config[self.REVISION_KEY] = revision
