@@ -1,6 +1,6 @@
 # BoxFox — đánh giá tác vụ dài, phạm vi cần bổ sung và lộ trình
 
-**Mốc đánh giá:** 2026-10-08, mã nguồn `cca864d`. **Trạng thái:** đã khảo sát; tính năng đề xuất chưa được duyệt hoặc triển khai. Tài liệu này là nơi ghi chung các phần đã có, cần bổ sung, bỏ qua và để sau. Không coi mô tả thiết kế là chức năng đang chạy.
+**Mốc đánh giá:** 2026-10-08, mã nguồn `cca864d`. **Mốc triển khai:** `fc964d8` (kế hoạch `v1-long-task-continuity` đã được duyệt). **Trạng thái:** chương 1–6 của kế hoạch đã có mã, kiểm thử đơn vị và bề mặt API/UI; phần hoãn ghi ở §8 và §11. Tài liệu này là nơi ghi chung các phần đã có, cần bổ sung, bỏ qua và để sau. Không coi mô tả thiết kế là chức năng đang chạy: mục nào chưa có mốc mã + lệnh kiểm chứng thì vẫn là đề xuất.
 
 ## 1. Kết luận và điều kiện thực hiện
 
@@ -110,7 +110,7 @@ Capsule sống ngoài session-delete cascade. Giữ excerpt/artifact cần thi�
 | Dashboard, PR connector và report service mới | F16/F17 outer tools không cần clone để giữ refs. | Tái dùng UI hiện có và work checks/ships; chỉ mở rộng khi có nhu cầu riêng. | Không tạo report/PR lặp qua restart; state không nhầm với chat finish. |
 | Lossless hidden CoT / exactly-once external effects | Không thể suy từ log có reasoning hoặc unique DB index. | Không hứa; lưu provider-visible output và committed receipts, ambiguous effects cần user inspect. | Fault injection quanh tool_start/tool_end; không chạy effect lần hai để “thử”. |
 
-Nếu người dùng không duyệt phần longtask opt-in, giữ manual resume. Toàn bộ thiết kế budget tổng/completion adapter nằm trong kế hoạch nhưng chưa thực hiện. Các sửa hardening cũng phải tuân phạm vi kế hoạch được duyệt.
+Nếu người dùng không duyệt phần longtask opt-in, giữ manual resume. Kế hoạch đã được duyệt nên phần budget tổng/completion adapter đã có mã (§11); phần chưa nối vào bộ điều khiển nào vẫn phải giữ ở dạng báo `needs_user` kèm lý do, không được đoán. Các sửa hardening cũng phải tuân phạm vi kế hoạch được duyệt.
 
 ## 9. Kiểm chứng bắt buộc trước khi gọi là tác vụ dài tin cậy
 
@@ -150,3 +150,21 @@ Khảo sát đã chạy các nhóm test hiện có: runtime audit 43 + 519 + 44;
 | F31 | Capsule lesson nhỏ là cần; knowledge library rộng là optional/hoãn. |
 
 **Nguyên tắc cập nhật:** khi một mục triển khai/kiểm chứng, ghi mốc mã, command/evidence và giới hạn thực tế. Khi bỏ qua, giữ lý do và điều kiện xem xét lại. Không đổi “đề xuất” thành “đã có” chỉ vì kế hoạch được duyệt.
+
+## 11. Trạng thái triển khai tại `fc964d8`
+
+Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lịch sử), `9743ba8` (chạy/khôi phục tác vụ dài), `cd2daf4` (bề mặt API), `fc964d8` (giao diện). Kiểm cục bộ: `pytest` 333 passed cho 14 tệp đơn vị liên quan (gồm `test_history_store.py`, `test_history_surface.py`, `test_longtask_execution.py`), `deploy/docker/tests/test_session_files.py` 32 passed, `tsc -b --noEmit` 0 lỗi và 20 ca continuity phía frontend.
+
+| Thiếu sót | Trạng thái | Mốc mã / bằng chứng | Giới hạn còn lại |
+|---|---|---|---|
+| LT-01 ghim mục tiêu/decision | Đã có | `memory/history_store.py` (`owner_contract_revisions`, `contract()`), `memory/continuity_memory.py`, `history_surface._critical_snapshot` | Neo canonical cần ít nhất một yêu cầu chủ đã ghi (revision ≥ 1); chưa có mốc cho phiên chưa từng nhận yêu cầu. |
+| LT-02 archive host đọc được | Một phần | `memory/history_projection.py`, `history_files.py`; `history_surface.export_projection` | Chưa có ai gọi `export_projection` từ runtime; workspace Docker/chưa ghim trả `projectionStored: false` thay vì ghi sai. |
+| LT-03 card hỏi đáp bền | Đã có | `agent_core/decision_store.py`, `runtime.hydrate_decisions/pending_decisions/resolve_decision`, route `GET/POST .../decisions` | Chưa kiểm với provider thật; idempotency theo `invocationId` + `expectedRevision`. |
+| LT-04 tìm giữa các phiên | Đã có | `history_store.query_history/list_sessions`, route `GET /history/sessions|search`, `scope_target` | Cursor ký theo filter; coverage `partial` khi bị cắt. Chưa đo recall trên >200 match thật. |
+| LT-05 con trỏ output dài | Đã có | blob + segment có sha256 trong `history_store`; `history_read` phân trang | Chỉ giữ excerpt text đã checksum trong capsule; artifact nhị phân không được sao chép. |
+| LT-06 child xong mà attempt còn mở | Đã có | `task_service._close_attempt_locked`, `task_surface.reconcile_startup/finish_child`, `peer_watchdog` | Chưa có ca kill thật ở khe `child_finish`; chỉ mô phỏng ở mức đơn vị. |
+| LT-07 main tự tiếp tục | Đã có (opt-in) | `agent_core/longtask_store.py`, `longtask_runtime.py`, `runtime.configure_longtask/longtask_action/recover_longtasks/pump_longtasks` | Bật bằng `BOXFOX_LONGTASK_CONTINUITY=1`; run gắn plan/work chưa có seam `controller_continue` nên dừng ở `needs_user` + `LONGTASK_CONTROLLER_UNAVAILABLE`. |
+| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule`, `history_surface.settle_deleted_runs`, route preview/confirm, `DELETE` cũ trả 409 | `settle_deleted_runs` chạy trước cổng quiescent, nên ca `DELETE_NOT_QUIESCENT` vẫn đã huỷ run; cần đảo thứ tự ở vòng sau. |
+| LT-09 summary lồng nhau | Đã có | `history_store.prepare_compaction` + manifest theo `source_key`, `agent_id` | Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
+
+Phần hoãn giữ nguyên như §8: supervisor sau reboot, durable shell/process job tổng quát, vector search, async compaction, auto-delete theo hạn, memory liên dự án, knowledge library lớn, sync nhiều máy, path ACL tổng quát, dashboard/PR connector, lossless CoT. Windows/Wayland vẫn chỉ có kiểm đơn vị với platform giả.
