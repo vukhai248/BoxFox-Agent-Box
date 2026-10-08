@@ -1107,6 +1107,9 @@ const vi = {
     noLiveImage: 'Chưa có hình trực tiếp',
     noLiveImageHint:
       'Mở ứng dụng bạn muốn agent làm việc trong đó. Bấm làm mới, rồi chọn cửa sổ ở bên trái.',
+    noSessionTitle: 'Chưa mở phiên nào',
+    noSessionHint:
+      'Đích CUA thuộc về từng phiên. Mở một phiên host rồi chọn cửa sổ hoặc Cả máy cho phiên đó.',
     snapshotAlt: 'Hình trực tiếp vùng agent đang điều khiển',
     snapshotMeta: '{{width}} × {{height}} · khung hình từ máy thật',
     snapshotUntrusted: 'Ảnh chụp · không tin được',
@@ -1134,6 +1137,8 @@ const vi = {
     bannerWorkingMachine:
       'Agent đang làm việc trên toàn desktop — viền xanh là cửa sổ đang hoạt động',
     bannerHumanLease: 'Agent tạm dừng trong cửa sổ này — bạn đang giữ quyền điều khiển',
+    noteNoSession:
+      'Chưa mở phiên nào — đích CUA được chọn cho từng phiên, nên chưa có gì để xem ở đây.',
     noteNoTarget:
       'Chọn cửa sổ để agent làm việc trong đó. Bạn có thể tự mở ứng dụng trước, rồi bấm làm mới để nó hiện ra trong danh sách.',
     noteTarget:

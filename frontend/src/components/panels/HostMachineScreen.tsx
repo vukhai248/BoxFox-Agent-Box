@@ -226,9 +226,17 @@ export function HostMachineScreen() {
   }, [])
 
   const tick = useCallback(async () => {
+    // Chưa có phiên thì không có đích nào để đọc: gọi `GET …/target?sessionId=`
+    // chỉ trả `SESSION_NOT_FOUND` và panel treo một băng lỗi vĩnh viễn.
+    if (!sessionId) return
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     try {
       const next = await getTarget(sessionId)
+      // Nhịp poll phát đi TRƯỚC câu trả lời `PUT` của người dùng có thể về SAU nó.
+      // `revision` thấp hơn nghĩa là trạng thái đã cũ: bỏ qua, nếu không panel
+      // giật về đích cũ tới 2 giây và `revisionRef` lùi theo — lượt PUT sau đó
+      // gửi `expectedRevision` cũ và ăn 409 oan.
+      if (next.revision < revisionRef.current) return
       const key = targetKey(next.target)
       if (key !== targetKeyRef.current || next.revision !== revisionRef.current) {
         applyTargetState(next)
@@ -290,6 +298,10 @@ export function HostMachineScreen() {
   const target = targetState?.target ?? null
   const activeWindow = targetState?.activeWindow ?? null
   const working = lease?.holder === 'agent'
+  // Không có phiên đang mở ⇒ không có đích nào để chọn hay xem. Panel vẫn hiện
+  // (để người dùng thấy nó ở đâu) nhưng ở trạng thái rỗng trung tính, và bộ chọn
+  // đích không nhận cú bấm — PUT với `sessionId` rỗng chỉ trả 404.
+  const hasSession = sessionId !== ''
   // Backend đã tính sẵn "cả máy có được phép không" cho phiên này; `/health` chỉ
   // là đường dự phòng khi hình dạng đích chưa về tới.
   const machineAllowed =
@@ -372,15 +384,17 @@ export function HostMachineScreen() {
       })
     : null
 
-  const note = inspector.armed
-    ? t('machineScreen.noteSelectArmed')
-    : target && humanHoldsLease
-      ? t('machineScreen.noteHumanLease')
-      : target
-        ? t('machineScreen.noteTarget')
-        : windowsState === 'unsupported'
-          ? t('machineScreen.noteNoWindowList')
-          : t('machineScreen.noteNoTarget')
+  const note = !hasSession
+    ? t('machineScreen.noteNoSession')
+    : inspector.armed
+      ? t('machineScreen.noteSelectArmed')
+      : target && humanHoldsLease
+        ? t('machineScreen.noteHumanLease')
+        : target
+          ? t('machineScreen.noteTarget')
+          : windowsState === 'unsupported'
+            ? t('machineScreen.noteNoWindowList')
+            : t('machineScreen.noteNoTarget')
 
   const toolbar = (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -490,7 +504,7 @@ export function HostMachineScreen() {
                 machineAllowed={machineAllowed}
                 target={target}
                 activeWindowId={activeWindow?.windowId ?? null}
-                busy={busy}
+                busy={busy || !hasSession}
                 onRefreshWindows={() => void refreshWindows()}
                 onPickMachine={() => void pickTarget({ sessionId, kind: 'machine', consent: true, expectedRevision: revisionRef.current >= 0 ? revisionRef.current : undefined })}
                 onPickWindow={(entry) =>
@@ -614,10 +628,17 @@ export function HostMachineScreen() {
                   </div>
                 </>
               ) : (
-                <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line p-4 text-center">
+                <div
+                  className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line p-4 text-center"
+                  data-testid={hasSession ? undefined : 'ms-no-session'}
+                >
                   <Eye className="size-4 text-muted" aria-hidden="true" />
-                  <p className="text-[12px] font-semibold">{t('machineScreen.noLiveImage')}</p>
-                  <p className="max-w-md text-[11px] text-muted">{t('machineScreen.noLiveImageHint')}</p>
+                  <p className="text-[12px] font-semibold">
+                    {t(hasSession ? 'machineScreen.noLiveImage' : 'machineScreen.noSessionTitle')}
+                  </p>
+                  <p className="max-w-md text-[11px] text-muted">
+                    {t(hasSession ? 'machineScreen.noLiveImageHint' : 'machineScreen.noSessionHint')}
+                  </p>
                   {target && (
                     <button
                       type="button"

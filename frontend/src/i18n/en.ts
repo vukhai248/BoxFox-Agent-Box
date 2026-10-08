@@ -1115,6 +1115,9 @@ const en: SameShape<typeof vi> = {
     noLiveImage: 'No live image yet',
     noLiveImageHint:
       'Open the app you want the agent to work in. Press refresh, then pick its window on the left.',
+    noSessionTitle: 'No session open yet',
+    noSessionHint:
+      'The CUA target belongs to a session. Open a host session, then pick a window or Whole machine for it.',
     snapshotAlt: 'Live image of the area the agent drives',
     snapshotMeta: '{{width}} × {{height}} · frame from the real machine',
     snapshotUntrusted: 'Capture · untrusted',
@@ -1141,6 +1144,8 @@ const en: SameShape<typeof vi> = {
     bannerWorkingWindow: 'The agent is working in this window',
     bannerWorkingMachine: 'The agent is working across the desktop — the border marks the active window',
     bannerHumanLease: 'The agent is paused in this window — you hold control',
+    noteNoSession:
+      'No session open yet — the CUA target is chosen per session, so there is nothing to show here.',
     noteNoTarget:
       'Pick the window you want the agent to work in. You can open the app yourself first, then press refresh to make it show up in the list.',
     noteTarget:

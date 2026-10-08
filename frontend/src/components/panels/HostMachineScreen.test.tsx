@@ -61,6 +61,12 @@ interface Server {
   captureRequests: { consent: boolean; kind: string; windowId?: string | number }[]
   /** Lượt chụp đang bị treo (ca "huỷ") — test tự quyết định khi nào trả về. */
   heldCapture: { resolve: (value: Response) => void } | null
+  /**
+   * Lượt ĐỌC ĐÍCH đang bị treo. Ảnh chụp trạng thái được lấy NGAY LÚC GỌI, nên
+   * khi test thả nó ra sau một `PUT`, nó về với trạng thái CŨ (đúng ca thật:
+   * `fetch` không huỷ được một response đang bay).
+   */
+  heldTargetGet: { resolve: () => void } | null
 }
 
 let server: Server
@@ -85,6 +91,7 @@ function makeServer(overrides: Partial<Server> = {}): Server {
     calls: [],
     captureRequests: [],
     heldCapture: null,
+    heldTargetGet: null,
     ...overrides,
   }
 }
@@ -185,7 +192,15 @@ function installFetch() {
     }
 
     if (url.startsWith('/api/agent/machines/target')) {
-      if (method === 'GET') return json(targetStateBody())
+      if (method === 'GET') {
+        if (server.heldTargetGet) {
+          const stale = json(targetStateBody())
+          return new Promise<Response>((resolve) => {
+            server.heldTargetGet = { resolve: () => resolve(stale) }
+          })
+        }
+        return json(targetStateBody())
+      }
       if (method === 'PUT') {
         server.target = body?.kind === 'machine' ? { kind: 'machine' } : { kind: 'window', windowId: body?.windowId as string | number, pid: body?.pid as number | undefined }
         server.requestedBy = 'user'
@@ -438,6 +453,71 @@ describe('chọn đích', () => {
     })
     await settle()
     expect(server.captureRequests.length).toBe(capturesBefore)
+  })
+
+  it('lượt đọc đích về muộn KHÔNG kéo panel lùi về trạng thái cũ (revision đơn điệu)', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    // Nhịp poll bị treo ở tầng mạng, mang trạng thái CŨ (chưa có đích, revision 3).
+    server.heldTargetGet = { resolve: () => {} }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    await settle()
+
+    // Trong lúc nó đang bay, người dùng chọn cửa sổ 12 ⇒ PUT áp revision 4.
+    await pickWindow(panel, 12)
+    expect(server.revision).toBe(4)
+    expect(panel.testId('ms-target-identity')?.textContent).toContain('a.txt - Notepad')
+
+    // Lượt đọc cũ về muộn: phải bị bỏ qua, không được vẽ đè.
+    server.heldTargetGet?.resolve()
+    server.heldTargetGet = null
+    await settle()
+
+    expect(panel.testId('ms-target-identity')?.textContent).toContain('a.txt - Notepad')
+    expect(panel.text()).not.toContain('No target yet')
+
+    // Và revision KHÔNG lùi: lượt PUT sau vẫn gửi số mới (4), không phải 3.
+    await pickWindow(panel, 99)
+    const put = [...server.calls].reverse().find((call) => call.method === 'PUT')
+    expect((put?.body as { expectedRevision?: number } | undefined)?.expectedRevision).toBe(4)
+  })
+
+  it('chưa có phiên ⇒ không gọi route đích, hiện trạng thái rỗng trung tính', async () => {
+    useAgentStore.setState({ activeSessionId: '' })
+    server = makeServer()
+    installFetch()
+    const panel = renderPanel()
+    await settle()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    await settle()
+
+    expect(server.calls.some((call) => call.url.startsWith('/api/agent/machines/target'))).toBe(false)
+    expect(panel.testId('ms-no-session')).not.toBeNull()
+    expect(panel.text()).toContain('No session open yet')
+    expect(panel.text()).not.toContain('Session not found')
+    // Bộ chọn đích vẫn hiện, nhưng không nhận cú bấm (PUT với `sessionId` rỗng là 404).
+    expect(panel.testId('ms-target-picker')).not.toBeNull()
+    expect(panel.testId<HTMLButtonElement>('ms-target-machine')?.disabled).toBe(true)
+    expect(panel.testId<HTMLButtonElement>('ms-window-option-12')?.disabled).toBe(true)
+  })
+
+  it('cửa sổ đang hoạt động nằm NGOÀI vùng chụp ⇒ không vẽ viền nào', async () => {
+    server = makeServer({
+      target: { kind: 'machine' },
+      activeWindow: { windowId: 5, title: 'Off-screen', rect: { x: 5000, y: 5000, width: 100, height: 100 } },
+    })
+    installFetch()
+    const panel = renderPanel()
+    await settle()
+
+    // Ảnh 1920 × 1080, cửa sổ ở (5000, 5000) ⇒ không có phần nào nhìn thấy được.
+    expect(panel.testId('ms-snapshot-frame')).not.toBeNull()
+    expect(panel.testId('ms-target-overlay')).toBeNull()
   })
 
   it('lỗi đặt đích ⇒ câu dịch theo MÃ MÁY, không phải chuỗi thô', async () => {

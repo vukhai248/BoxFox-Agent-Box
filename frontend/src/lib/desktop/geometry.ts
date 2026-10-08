@@ -7,7 +7,11 @@
  *      và của `captureOrigin` (gốc vùng chụp, CÓ THỂ ÂM: màn hình phụ nằm bên
  *      trái màn hình chính làm gốc chung âm).
  *   2. **Framebuffer của ảnh chụp** — toạ độ trong ẢNH: `0..width`, `0..height`.
- *      `POST /desktop/inspect-element` nhận đúng hệ này.
+ *      Đây là hệ NỘI BỘ của panel (vẽ lớp phủ, khoanh vùng phần tử). ⚠️
+ *      `POST /desktop/inspect-element` KHÔNG nhận hệ này: route kiểm điểm theo
+ *      màn hình ảo (`_validate_point` phía backend), nên phải CỘNG `captureOrigin`
+ *      trước khi gửi — đó là lý do `imagePointToFramebuffer` tồn tại. Bỏ phép
+ *      cộng đó là mọi cửa sổ có gốc chụp khác `(0, 0)` soi sai chỗ.
  *   3. **CSS pixel trên trang** — hệ của `getBoundingClientRect()` và của
  *      `style.left/top` khi vẽ lớp phủ.
  *
@@ -97,9 +101,11 @@ interface ImageBoxInput {
  * Đổi một hộp trong toạ độ màn hình vật lý sang CSS pixel TƯƠNG ĐỐI SO VỚI GỐC
  * CỦA KHUNG, để vẽ viền xanh / khung sáng.
  *
- * Hộp nằm ngoài vùng chụp (ví dụ cửa sổ agent ở màn hình khác) vẫn cho ra toạ
- * độ ÂM — khung chứa có `overflow-hidden` nên phần ngoài tự bị cắt; không clamp
- * vì clamp sẽ vẽ một khung sai chỗ thay vì không vẽ gì.
+ * Hộp nằm HOÀN TOÀN ngoài vùng chụp (ví dụ cửa sổ agent đang ở màn hình khác)
+ * ⇒ trả `null`, KHÔNG vẽ gì: khung chứa không cắt (`overflow-hidden` sẽ cắt luôn
+ * quầng sáng của viền), nên toạ độ âm sẽ vẽ viền tràn ra ngoài ảnh. Hộp chỉ nằm
+ * MỘT PHẦN ngoài vẫn cho toạ độ âm và KHÔNG clamp — clamp sẽ vẽ một khung sai
+ * chỗ thay vì vẽ đúng phần nhìn thấy được.
  */
 export function framebufferBoxToImageCss({
   box,
@@ -110,8 +116,11 @@ export function framebufferBoxToImageCss({
   captureOrigin,
 }: ImageBoxInput): CssBox | null {
   const origin = normalizeOrigin(captureOrigin)
+  const local = { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height }
+  if (local.x + local.width <= 0 || local.y + local.height <= 0) return null
+  if (local.x >= imageWidth || local.y >= imageHeight) return null
   return framebufferBoxToCanvasCss({
-    box: { x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height },
+    box: local,
     canvasRect: imageRect,
     overlayRect,
     canvasWidth: imageWidth,

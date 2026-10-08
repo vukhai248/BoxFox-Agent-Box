@@ -6,9 +6,11 @@
  *      hệ số đó (ảnh chụp là pixel framebuffer, rect là CSS pixel). Ca dưới đây
  *      dựng đúng tình huống DPR = 2 (ảnh rộng gấp đôi khung) và đòi kết quả
  *      KHÔNG bị nhân đôi lần nữa.
- *   2. `captureOrigin` có thể ÂM (màn hình phụ nằm bên trái màn hình chính), và
- *      hộp nằm ngoài vùng chụp phải ra toạ độ âm chứ không bị clamp — clamp sẽ
- *      vẽ một khung sai chỗ thay vì không vẽ gì.
+ *   2. `captureOrigin` có thể ÂM (màn hình phụ nằm bên trái màn hình chính).
+ *   3. Hộp nằm HOÀN TOÀN ngoài vùng chụp phải ra `null` (không vẽ gì): khung chứa
+ *      không cắt, nên toạ độ âm sẽ vẽ viền tràn ra ngoài ảnh. Hộp chỉ nằm MỘT
+ *      PHẦN ngoài thì vẫn ra toạ độ âm và KHÔNG bị clamp — clamp sẽ vẽ một khung
+ *      sai chỗ thay vì vẽ đúng phần nhìn thấy được.
  */
 import { describe, expect, it } from 'vitest'
 import { cssBoxStyle, framebufferBoxToImageCss, imagePointToFramebuffer } from './geometry'
@@ -145,16 +147,41 @@ describe('framebufferBoxToImageCss', () => {
     ).toEqual({ left: 40, top: 15, width: 20, height: 10 })
   })
 
-  it('hộp nằm ngoài vùng chụp ⇒ toạ độ âm, KHÔNG clamp', () => {
-    const box = framebufferBoxToImageCss({
-      box: { x: 0, y: 0, width: 100, height: 100 },
+  it('hộp nằm HOÀN TOÀN ngoài vùng chụp ⇒ null (không vẽ gì)', () => {
+    const base = {
       imageRect: IMAGE_RECT,
       overlayRect: OVERLAY_RECT,
       imageWidth: 800,
       imageHeight: 600,
-      captureOrigin: { x: 1000, y: 500 },
+    }
+    // Gốc chụp đẩy hộp ra hẳn bên trái / phía trên vùng chụp (cửa sổ ở màn hình khác).
+    expect(
+      framebufferBoxToImageCss({ ...base, box: { x: 0, y: 0, width: 100, height: 100 }, captureOrigin: { x: 1000, y: 500 } }),
+    ).toBeNull()
+    // Chạm đúng mép (x + width === 0) vẫn là ngoài: không có pixel nào để vẽ.
+    expect(
+      framebufferBoxToImageCss({ ...base, box: { x: 0, y: 0, width: 100, height: 100 }, captureOrigin: { x: 100, y: 0 } }),
+    ).toBeNull()
+    // Nằm hẳn bên phải / phía dưới vùng chụp.
+    expect(
+      framebufferBoxToImageCss({ ...base, box: { x: 800, y: 0, width: 100, height: 100 }, captureOrigin: { x: 0, y: 0 } }),
+    ).toBeNull()
+    expect(
+      framebufferBoxToImageCss({ ...base, box: { x: 0, y: 600, width: 100, height: 100 }, captureOrigin: { x: 0, y: 0 } }),
+    ).toBeNull()
+  })
+
+  it('hộp chỉ nằm MỘT PHẦN ngoài vùng chụp ⇒ toạ độ âm, KHÔNG clamp', () => {
+    // Gốc chụp lệch 50 px: hộp vắt qua mép trái/trên ⇒ vẫn vẽ, toạ độ âm.
+    const box = framebufferBoxToImageCss({
+      box: { x: 0, y: 0, width: 200, height: 200 },
+      imageRect: IMAGE_RECT,
+      overlayRect: OVERLAY_RECT,
+      imageWidth: 800,
+      imageHeight: 600,
+      captureOrigin: { x: 50, y: 50 },
     })
-    expect(box).toEqual({ left: -500, top: -250, width: 50, height: 50 })
+    expect(box).toEqual({ left: -25, top: -25, width: 100, height: 100 })
   })
 
   it('hộp suy biến (width/height ≤ 0) ⇒ null', () => {
