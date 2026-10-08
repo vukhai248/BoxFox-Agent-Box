@@ -275,12 +275,14 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
     if not p.is_window_visible(int(hwnd)):
         notes.append('cửa sổ không ở trạng thái IsViewable — ảnh có thể là nền màn hình')
     occluded = win_capture.is_occluded(p, int(hwnd), (x, y, width, height))
-    # Hộp thoại của chính ứng dụng: tìm khi cửa sổ bị che, hoặc khi tiêu điểm không còn ở cửa sổ
-    # đích — hộp thoại modal luôn giữ tiêu điểm, mà phép thử che khuất theo tỉ lệ nên một hộp thoại
-    # nhỏ có thể không đủ để bật cờ `occluded`. Mỗi lần tìm là một vòng đọc thuộc tính của cả chồng
-    # cửa sổ (có bộ đệm), nên chỉ tìm khi có dấu hiệu.
-    own_dialogs = (p.transient_windows(int(hwnd))
-                   if occluded or p.get_foreground_window() != int(hwnd) else [])
+    # Hộp thoại của chính ứng dụng: **luôn** dò, không đoán theo tiêu điểm. ``import`` đọc bộ đệm
+    # riêng của cửa sổ (đo trên máy thật: ảnh cửa sổ đích vẫn là nền của chính nó dù hộp thoại của
+    # nó đang nằm trên), nên hộp thoại chỉ vào ảnh khi ta ghép — và phép thử che khuất theo tỉ lệ bỏ
+    # qua một hộp thoại nhỏ. Đoán theo tiêu điểm sẽ bỏ sót hộp thoại **không modal**
+    # (``UTILITY``/``POPUP_MENU``/…): cửa sổ đích vẫn giữ tiêu điểm nên điều kiện cũ trả về rỗng,
+    # ảnh thiếu đúng thứ đang che cửa sổ. Vòng dò dùng bộ đệm thuộc tính (~1,3 ms đo được), rẻ hơn
+    # nhiều so với một ảnh sai.
+    own_dialogs = p.transient_windows(int(hwnd))
 
     def _region(note: str) -> Capture:
         """Ảnh dự phòng chụp theo vùng màn hình, nhưng vẫn mang danh tính cửa sổ đích.
