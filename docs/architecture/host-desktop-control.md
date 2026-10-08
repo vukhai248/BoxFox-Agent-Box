@@ -405,7 +405,7 @@ phải viền nét đứt.
 | Thành phần | Giá trị / luật |
 |---|---|
 | Cửa sổ | `override_redirect=True`, SHAPE Bounding = các hình chữ nhật dày 1 px của băng, SHAPE Input = `[]` (bấm xuyên qua), nâng `X.Above`, **không** `set_input_focus` |
-| Bề dày băng | `min(cạnh ngắn vùng đích) / 8` — 1920×1080 ⇒ **135 px**; chặn trên `1/3` cạnh ngắn |
+| Bề dày băng | `min(cạnh ngắn màn hình) / 10` — 1920×1080 ⇒ **108 px**; chặn trên `1/4` cạnh ngắn vùng đích; giảm từ 135 px theo yêu cầu chủ nhà |
 | Màu | nhấn `#38bdf8` (cùng token với panel), pha dần về màu nền đọc được ở bốn điểm giữa cạnh |
 | Lấy mẫu nền | bốn điểm giữa cạnh, làm mới **tối đa 1 Hz**; chỉ vẽ lại khi một kênh đổi ≥ 4 mức |
 | Vẽ | một hình chữ nhật 1 px cho mỗi vòng băng; vòng 0 sát mép ngoài, vòng cuối trùng màu nền |
@@ -424,6 +424,6 @@ phải viền nét đứt.
    `GET /api/agent/machines/target` trả `activity.enabled=false` + `activity.reason` **nêu tên gói thiếu**
    (panel hiện đúng câu đó bằng một dòng cảnh báo).
 
-Giới hạn đã biết: ảnh chụp đích "cả máy" **dính** băng của chính ta ở 135 px ngoài cùng (giống Windows);
+Giới hạn đã biết: ảnh chụp đích "cả máy" **dính** băng của chính ta ở 108 px ngoài cùng trên màn 1920×1080;
 máy không có X (Wayland thuần) thì không có viền và không có đường thoái; tác động CPU/điện của một lượt
 CUA dài chưa đo.

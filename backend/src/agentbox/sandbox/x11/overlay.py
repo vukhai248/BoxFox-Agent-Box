@@ -47,12 +47,12 @@ from ..win.errors import CAPTURE_FAILED, PlatformError
 # Hình dạng và màu — hằng số có tên để chỉnh một chỗ (kế hoạch §J0.1–J0.3)
 # ---------------------------------------------------------------------------
 
-#: Băng viền dày bằng 1/8 cạnh ngắn màn hình (1920×1080 ⇒ 135 px) — đúng lời chủ nhà
-#: "nhạt dần khi vào tầm 1/8 màn hình".
-BAND_DIVISOR = 8
+#: Chủ nhà yêu cầu giảm nhẹ băng cũ: 1/8 → 1/10 cạnh ngắn màn hình
+#: (1920×1080: 135 → 108 px, giảm 20%). Giữ màu và độ mờ đỉnh như cũ.
+BAND_DIVISOR = 10
 
-#: Trần băng viền theo cạnh ngắn của vùng viền: cửa sổ 200×150 ⇒ 50 px, không bị viền phủ kín.
-BAND_LIMIT_DIVISOR = 3
+#: Cửa sổ nhỏ cũng hẹp hơn: trần 1/3 → 1/4 cạnh ngắn (200×150: 50 → 37 px).
+BAND_LIMIT_DIVISOR = 4
 
 #: Số vòng ngoài cùng vẽ ở đỉnh alpha (lõi đặc của ảnh tham chiếu: 1–2 px).
 CORE_PX = 2
@@ -145,9 +145,9 @@ def unavailable_reason() -> str:
 def band_width(width: int, height: int, screen_width: int = 0, screen_height: int = 0) -> int:
     """Bề dày băng viền (px) cho một vùng `width`×`height` trên màn hình `screen_width`×`screen_height`.
 
-    Băng = 1/8 cạnh ngắn **màn hình**, nhưng không quá 1/3 cạnh ngắn **vùng viền** để một cửa sổ
-    nhỏ không bị viền phủ kín. Đo được: màn 1920×1080 ⇒ 135 px; cửa sổ 600×400 trên màn đó ⇒ 133 px
-    (trần 1/3 của 400); cửa sổ 200×150 ⇒ 50 px.
+    Băng = 1/10 cạnh ngắn **màn hình**, nhưng không quá 1/4 cạnh ngắn **vùng viền** để một cửa sổ
+    nhỏ không bị viền phủ kín. Màn 1920×1080 ⇒ 108 px; cửa sổ 600×400 trên màn đó ⇒ 100 px
+    (trần 1/4 của 400); cửa sổ 200×150 ⇒ 37 px.
     """
     width, height = int(width), int(height)
     if width <= 0 or height <= 0:

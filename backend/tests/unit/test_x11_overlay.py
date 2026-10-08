@@ -34,16 +34,22 @@ from test_cua_overlay import FakeOverlaySurface
 # ---------------------------------------------------------------------------
 
 
-def test_band_width_follows_the_eighth_of_the_screen_with_a_one_third_ceiling():
-    """Số đo trên máy này: màn 1920×1080 ⇒ 135 px; cửa sổ 600×400 ⇒ 133; cửa sổ 200×150 ⇒ 50."""
-    assert ov.band_width(1920, 1080, 1920, 1080) == 135
-    assert ov.band_width(600, 400, 1920, 1080) == 133
-    assert ov.band_width(200, 150, 1920, 1080) == 50
-    # Cửa sổ nhỏ hơn nữa: trần 1/3 vẫn giữ, không bao giờ trả 0 cho một vùng có kích thước thật.
-    assert ov.band_width(30, 30, 1920, 1080) == 10
+def test_band_width_follows_the_tenth_of_the_screen_with_a_one_quarter_ceiling():
+    """Băng hẹp hơn: màn 1920×1080 ⇒ 108 px; cửa sổ 600×400 ⇒ 100; cửa sổ 200×150 ⇒ 37."""
+    assert ov.band_width(1920, 1080, 1920, 1080) == 108
+    assert ov.band_width(600, 400, 1920, 1080) == 100
+    assert ov.band_width(200, 150, 1920, 1080) == 37
+    # Cửa sổ nhỏ hơn nữa: trần 1/4 vẫn giữ, không bao giờ trả 0 cho một vùng có kích thước thật.
+    assert ov.band_width(30, 30, 1920, 1080) == 7
     assert ov.band_width(0, 100, 1920, 1080) == 0
     # Chưa biết màn hình: lấy chính vùng viền làm mốc, không vẽ băng dày 0.
-    assert ov.band_width(800, 600) == 75
+    assert ov.band_width(800, 600) == 60
+
+
+@pytest.mark.parametrize('width,height', [(1920, 1080), (900, 600), (600, 400), (200, 150)])
+def test_the_default_band_is_narrower_than_the_previous_default(width, height):
+    old_band = min(1080 // 8, min(width, height) // 3)
+    assert ov.band_width(width, height, 1920, 1080) < old_band
 
 
 def test_ring_rectangles_are_one_pixel_thick_and_inside_the_box():
@@ -348,7 +354,7 @@ def test_overlay_show_creates_a_click_through_override_redirect_window(fake_disp
     window = fake_display.root.child
     shapes = dict(window.shapes)
     band = ov.band_width(900, 600, 1920, 1080)
-    assert band == 135
+    assert band == 108
     assert shapes[ov.SHAPE_BOUNDING] == ov.ring_rectangles(900, 600, band)
     assert shapes[ov.SHAPE_INPUT] == [], 'shape Input phải RỖNG thì cú bấm mới xuyên qua viền'
 
@@ -361,12 +367,12 @@ def test_overlay_show_creates_a_click_through_override_redirect_window(fake_disp
     overlay.overlay_close()
 
 
-def test_the_band_narrows_to_a_third_of_a_small_window(fake_display):
-    """Cửa sổ 600×400 ⇒ băng 133 px (trần 1/3), không phải 135 px của màn hình."""
+def test_the_band_narrows_to_a_quarter_of_a_small_window(fake_display):
+    """Cửa sổ 600×400 ⇒ băng 100 px (trần 1/4), không phải 108 px của màn hình."""
     overlay = ov.X11OverlayWindow()
     overlay.overlay_show({'x': 0, 'y': 0, 'width': 600, 'height': 400})
     window = fake_display.root.child
-    assert window.shapes[-2][1] == ov.ring_rectangles(600, 400, 133)
+    assert window.shapes[-2][1] == ov.ring_rectangles(600, 400, 100)
     overlay.overlay_close()
 
 
