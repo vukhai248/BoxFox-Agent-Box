@@ -523,6 +523,76 @@ def _pointer_click(args, *click_args) -> list:
     return ['xdotool', 'click', *click_args]
 
 
+#: Mã nút chuột của `xdotool` trong box.
+BOX_MOUSE_BUTTONS = {'left': '1', 'middle': '2', 'right': '3'}
+
+#: Khe hở sau khi NHẤN và trước khi NHẢ (giây). GTK/Cairo coi nhấn-rồi-nhả trong cùng một khung hình
+#: là **cú bấm**, không phải cú kéo — thiếu khe hở thì kéo thành bấm.
+BOX_GESTURE_SETTLE_SEC = 0.03
+
+#: Nhịp giữa hai điểm dừng của cú kéo / nét vẽ (giây).
+BOX_GESTURE_STEP_SEC = 0.01
+
+#: Trần số bước của cú kéo và số điểm của nét vẽ trong box (mỗi bước là một tiến trình).
+BOX_MAX_DRAG_STEPS = 60
+BOX_MAX_STROKE_POINTS = 400
+
+
+def _box_button(args) -> str:
+    return BOX_MOUSE_BUTTONS.get(str(args.get('button') or 'left').strip().lower(), '1')
+
+
+def _drag_plan(args) -> list:
+    """Kế hoạch kéo: nhấn ở điểm đầu, đi từng bước, nhả ở điểm cuối."""
+    x, y = int(args['x']), int(args['y'])
+    to_x, to_y = int(args['toX']), int(args['toY'])
+    steps = max(1, min(BOX_MAX_DRAG_STEPS, int(args.get('steps') or 12)))
+    code = _box_button(args)
+    plan = [(['xdotool', 'mousemove', str(x), str(y)], 0.0),
+            (['xdotool', 'mousedown', code], BOX_GESTURE_SETTLE_SEC)]
+    for index in range(1, steps + 1):
+        step_x = round(x + (to_x - x) * index / steps)
+        step_y = round(y + (to_y - y) * index / steps)
+        plan.append((['xdotool', 'mousemove', str(step_x), str(step_y)], BOX_GESTURE_STEP_SEC))
+    plan.append((['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC))
+    return plan
+
+
+def _hold_plan(args) -> list:
+    """Kế hoạch giữ chuột: nhấn, chờ, nhả."""
+    x, y = int(args['x']), int(args['y'])
+    code = _box_button(args)
+    try:
+        seconds = max(0.05, min(5.0, float(args.get('seconds') or 1.0)))
+    except (TypeError, ValueError):
+        seconds = 1.0
+    return [(['xdotool', 'mousemove', str(x), str(y)], 0.0),
+            (['xdotool', 'mousedown', code], seconds),
+            (['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC)]
+
+
+def _stroke_plan(args) -> list:
+    """Kế hoạch vẽ nét: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối."""
+    path = []
+    for point in (args.get('path') or ()):
+        try:
+            px, py = point
+            path.append((int(px), int(py)))
+        except (TypeError, ValueError) as exc:
+            raise ValueError('điểm của nét vẽ không hợp lệ: %r' % (point,)) from exc
+    if len(path) < 2:
+        raise ValueError('nét vẽ cần ít nhất hai điểm')
+    if len(path) > BOX_MAX_STROKE_POINTS:
+        raise ValueError('nét vẽ có %d điểm, quá trần %d' % (len(path), BOX_MAX_STROKE_POINTS))
+    code = _box_button(args)
+    plan = [(['xdotool', 'mousemove', str(path[0][0]), str(path[0][1])], 0.0),
+            (['xdotool', 'mousedown', code], BOX_GESTURE_SETTLE_SEC)]
+    for px, py in path[1:]:
+        plan.append((['xdotool', 'mousemove', str(px), str(py)], BOX_GESTURE_STEP_SEC))
+    plan.append((['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC))
+    return plan
+
+
 # W9 (CDP attach): cổng 9222 mở KHÔNG có nghĩa CDP dùng được. Khi một tab đang chạy vòng lặp JS
 # trên main thread, `connect_over_cdp` phải khởi tạo CHÍNH trang đó nên bị chặn cho tới khi vòng lặp
 # kết thúc — đo trong box (`deploy/docker/tests/probe_cdp_attach.py`): vòng lặp 40 s giữ attach 59,2 s,
@@ -1609,7 +1679,14 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
             'key': lambda: ['xdotool', 'key', '--clearmodifiers', args['key']],
             'scroll': lambda: ['xdotool', 'click', '--repeat', str(min(20, max(1, int(args.get('steps', 3))))), '5' if args.get('direction') == 'down' else '4'],
         }
-        if action not in commands:
+        # Cử chỉ cần NHIỀU lệnh liên tiếp (nhấn → đi → nhả), nên chúng là một kế hoạch chứ không phải
+        # một lệnh: mỗi phần tử là `(argv, giây nghỉ sau lệnh)`.
+        gestures = {
+            'drag': lambda: _drag_plan(args),
+            'hold': lambda: _hold_plan(args),
+            'stroke': lambda: _stroke_plan(args),
+        }
+        if action not in commands and action not in gestures:
             raise ValueError('Unknown computer action')
         # F6: các thao tác theo toạ độ phải chạy trên framebuffer đúng cỡ cấu hình.
         desktop_note = ensure_desktop_size() if action != 'type' and action != 'key' else None
@@ -1620,14 +1697,31 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
                                      capture_output=True, timeout=15)
             if focused.returncode:
                 raise ValueError('No focused window: click the target window first, then send keys.')
-        proc = subprocess.run(commands[action](), env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
-        if proc.returncode:
-            raise ValueError(proc.stderr.decode(errors='replace'))
-        # F3 (đợt 7): `xdotool key NotARealKey` in 'No such key name ... Ignoring it.' ra
-        # stdout rồi thoát 0. Coi cảnh báo đó là thất bại, kèm tên phím sai.
-        noisy = (proc.stdout + proc.stderr).decode(errors='replace')
-        if 'No such key name' in noisy or 'Ignoring it' in noisy:
-            raise ValueError('Unsupported key name: ' + str(args.get('key', '')) + '. Use an X keysym such as Return, Tab, ctrl+c.')
+        if action in commands:
+            plan = [(commands[action](), 0.0)]
+        else:
+            plan = gestures[action]()
+        # Nút chuột phải được nhả kể cả khi một bước giữa hỏng: một nút còn giữ là cả màn hình trong
+        # box không dùng được nữa (mọi cú bấm sau đó thành kéo).
+        release = next((argv for argv, _ in plan if argv[:2] == ['xdotool', 'mouseup']), None)
+        sent = 0
+        try:
+            for argv, sleep_after in plan:
+                proc = subprocess.run(argv, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+                sent += 1
+                if proc.returncode:
+                    raise ValueError(proc.stderr.decode(errors='replace'))
+                # F3 (đợt 7): `xdotool key NotARealKey` in 'No such key name ... Ignoring it.' ra
+                # stdout rồi thoát 0. Coi cảnh báo đó là thất bại, kèm tên phím sai.
+                noisy = (proc.stdout + proc.stderr).decode(errors='replace')
+                if 'No such key name' in noisy or 'Ignoring it' in noisy:
+                    raise ValueError('Unsupported key name: ' + str(args.get('key', '')) + '. Use an X keysym such as Return, Tab, ctrl+c.')
+                if sleep_after:
+                    time.sleep(sleep_after)
+        except Exception:
+            if release is not None and sent < len(plan):
+                subprocess.run(release, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+            raise
         payload = {'content': 'Input delivered; capture the screen to verify the effect.'}
         if desktop_note:
             payload['desktopRestored' if 'to' in desktop_note else 'desktopWarning'] = desktop_note

@@ -46,6 +46,41 @@ TYPE_DELAY_MS = 12
 #: thông thường của XTEST và đã kiểm lại trên terminal, VS Code và Chrome.
 CLICK_DELAY_MS = 12
 
+#: Nút cuộn của X11: 4 = lên, 5 = xuống, 6 = trái, 7 = phải. Đây là quy ước của X server, không
+#: phải lựa chọn của ta — ``xdotool click 4`` chính là một nấc cuộn lên.
+SCROLL_BUTTONS = {'up': 4, 'down': 5, 'left': 6, 'right': 7}
+
+#: Nhịp giữa hai nấc cuộn (ms). Chrome/GTK gộp các sự kiện dày quá thành một cú nhảy, còn quá thưa
+#: thì cuộn thành từng khúc rời. 12 ms là mức đã kiểm trên Chrome và trên danh sách dài của GTK.
+SCROLL_STEP_DELAY_MS = 12
+
+#: Trần số nấc cho một lệnh cuộn. 20 nấc ≈ một màn hình; xa hơn thì nên cuộn nhiều lần để còn nhìn
+#: thấy mình đang ở đâu (đúng cách người thật làm).
+MAX_SCROLL_STEPS = 20
+
+#: Số điểm dừng trên đường kéo. Ít quá thì ứng dụng thấy một cú nhảy thay vì một cú kéo; nhiều quá thì
+#: mỗi điểm là một tiến trình ``xdotool``. 12 điểm cho quãng vài trăm pixel là mức đã kiểm.
+DRAG_STEPS = 12
+
+#: Trần số điểm dừng (kéo qua màn hình rộng vẫn không nên sinh hàng trăm tiến trình).
+MAX_DRAG_STEPS = 60
+
+#: Khoảng nghỉ ngay sau khi NHẤN và ngay trước khi NHẢ (giây). Ứng dụng GTK/Cairo coi cú nhấn-rồi-nhả
+#: trong cùng một khung hình là **cú bấm**, không phải cú kéo — phải có khe hở thật thì mới thành kéo.
+GESTURE_SETTLE_SEC = 0.03
+
+#: Nhịp giữa hai điểm dừng của cú kéo (giây).
+DRAG_STEP_SEC = 0.01
+
+#: Nhịp giữa hai điểm của nét vẽ tự do (giây). Dày hơn cú kéo vì nét vẽ trông thô ngay khi thưa.
+STROKE_STEP_SEC = 0.008
+
+#: Trần thời gian giữ chuột của ``hold`` (giây) — giữ lâu hơn thì nên là nhiều lệnh, không phải một.
+MAX_HOLD_SEC = 5.0
+
+#: Trần số điểm của một nét vẽ. Mỗi điểm là một tiến trình, nên 400 điểm ≈ 2 s là mức tối đa hợp lý.
+MAX_STROKE_POINTS = 400
+
 #: Số ký tự mỗi khối ``xdotool type``. Giữa hai khối ta kiểm lại tiêu điểm, nên khối càng nhỏ thì
 #: khe hở "gõ nhầm cửa sổ" càng hẹp — 64 khớp với ``TEXT_CHUNK_UNITS`` của bản Windows.
 TEXT_CHUNK_CHARS = 64
@@ -402,6 +437,250 @@ def click(x: int, y: int, *, window: Any, button: str = 'left', platform: Any = 
         'point': {'x': int(x), 'y': int(y)},
         'windowId': hwnd,
         'events': 3,
+    }
+
+
+def _prepare_point(x: int, y: int, *, window: Any, platform: Any = None, timeout: float = 0.5,
+                   source_id: str | None = None, geometry_revision: int | None = None) -> tuple:
+    """Bốn chốt chặn của một thao tác bắt đầu bằng một điểm, trả ``(p, hwnd, tiêu điểm, con trỏ)``.
+
+    Dùng chung cho ``click``, ``scroll``, ``drag``, ``hold`` và ``stroke``: cả năm đều bắt đầu bằng
+    "điểm này phải thuộc cửa sổ đích, và cửa sổ đích phải đang có tiêu điểm".
+    """
+    p = _platform(platform)
+    check_geometry_revision(source_id, geometry_revision, platform=p)
+    hwnd = check_preconditions(window, platform=p)
+    check_point_ownership(int(x), int(y), hwnd, platform=p)
+    previous_foreground = p.get_foreground_window()
+    previous_cursor = p.get_cursor_pos()
+    ensure_foreground(hwnd, platform=p, timeout=timeout)
+    return p, hwnd, previous_foreground, previous_cursor
+
+
+def _move_to(p: Any, x: int, y: int, *, sync: bool = False) -> None:
+    """Di chuyển con trỏ, có ghi lại vị trí là "của chính ta" TRƯỚC khi di chuyển.
+
+    Ghi sớm là cố ý: bộ theo dõi "người thật chạm máy" lấy mẫu ở luồng khác, nên ghi sau khi di
+    chuyển là có một khe hở để nó đọc cú di chuyển của chính ta thành người thật. Ghi sớm mà lệnh
+    hỏng thì cùng lắm là nhả quyền về tay người — hướng an toàn.
+
+    ``sync`` chỉ dùng cho điểm ĐẦU TIÊN: ``mousemove --sync`` chờ một sự kiện ``MotionNotify`` tới
+    đúng toạ độ, mà con trỏ đã ở đúng chỗ thì X server không sinh sự kiện nào (đo được: treo đủ 5 s).
+    Các điểm giữa của cú kéo đi KHÔNG đồng bộ — chúng bắt buộc phải sinh sự kiện vì con trỏ đang đi.
+    """
+    p.note_own_pointer(int(x), int(y))
+    if sync:
+        result = _xdotool(p, 'mousemove', '--sync', str(int(x)), str(int(y)))
+    else:
+        result = _xdotool(p, 'mousemove', str(int(x)), str(int(y)))
+    _fail(result, 'mousemove', point={'x': int(x), 'y': int(y)})
+
+
+def _release_button(p: Any, code: int) -> None:
+    """Nhả nút chuột, nuốt mọi lỗi. Dùng trong ``finally`` — không được che lỗi thật của thân hàm."""
+    try:
+        _xdotool(p, 'mouseup', str(int(code)))
+    except Exception:       # pragma: no cover - best effort, đường thoát cuối
+        pass
+
+
+def scroll(x: int, y: int, *, window: Any, direction: str = 'down', steps: int = 3,
+           platform: Any = None, restore: bool = True, timeout: float = 0.5,
+           source_id: str | None = None, geometry_revision: int | None = None) -> dict[str, Any]:
+    """Cuộn con lăn tại một điểm, đúng cửa sổ dưới con trỏ.
+
+    X11 gửi sự kiện con lăn cho **cửa sổ nằm dưới con trỏ**, nên phải đưa con trỏ vào đúng cửa sổ
+    đích trước (và đã qua chốt ``check_point_ownership``) rồi mới cuộn — cuộn mà không nhìn con trỏ
+    là cuộn nhầm cửa sổ.
+    """
+    p = _platform(platform)
+    if direction not in SCROLL_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, 'hướng cuộn không hợp lệ: %r' % (direction,),
+                            direction=direction)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    try:
+        count = max(1, min(MAX_SCROLL_STEPS, int(steps)))
+    except (TypeError, ValueError):
+        count = 3
+    button = SCROLL_BUTTONS[direction]
+    try:
+        _move_to(p, int(x), int(y), sync=previous_cursor != (int(x), int(y)))
+        # Một tiến trình cho cả loạt nấc: `--repeat` sinh đúng số sự kiện nhấn-rồi-nhả cách nhau
+        # `--delay`, rẻ hơn nhiều so với gọi `xdotool` từng nấc.
+        rolled = _xdotool(p, 'click', '--repeat', str(count), '--delay',
+                          str(SCROLL_STEP_DELAY_MS), str(button))
+        _fail(rolled, 'scroll', direction=direction)
+    finally:
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    return {
+        'route': 'xtest',
+        'action': 'scroll',
+        'direction': direction,
+        'steps': count,
+        'point': {'x': int(x), 'y': int(y)},
+        'windowId': hwnd,
+        'events': count * 2,
+    }
+
+
+def drag(x: int, y: int, to_x: int, to_y: int, *, window: Any, button: str = 'left',
+         steps: int = DRAG_STEPS, platform: Any = None, restore: bool = True, timeout: float = 0.5,
+         guard_end: bool = True, source_id: str | None = None,
+         geometry_revision: int | None = None) -> dict[str, Any]:
+    """Kéo từ điểm này sang điểm khác: nhấn, đi từng bước, nhả.
+
+    ``guard_end`` kiểm cả điểm ĐÍCH có thuộc cửa sổ đích không. Bật khi đích của phiên là một cửa sổ
+    (mọi thứ phải nằm trong cửa sổ đó), tắt khi đích là **cả máy** — lúc đó kéo từ cửa sổ này sang
+    cửa sổ khác (thả tệp vào một ứng dụng khác, kéo thẻ trình duyệt ra ngoài) là việc hợp lệ.
+
+    Nút chuột được nhả trong ``finally``: một nút còn giữ là cả máy không dùng được nữa, kể cả khi
+    bước giữa của cú kéo hỏng.
+    """
+    p = _platform(platform)
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, 'nút chuột không hợp lệ: %r' % (button,), button=button)
+    start_x, start_y, end_x, end_y = int(x), int(y), int(to_x), int(to_y)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        start_x, start_y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    if guard_end:
+        check_point_ownership(end_x, end_y, hwnd, platform=p)
+    try:
+        count = max(1, min(MAX_DRAG_STEPS, int(steps)))
+    except (TypeError, ValueError):
+        count = DRAG_STEPS
+    code = MOUSE_BUTTONS[button]
+    released = None
+    try:
+        _move_to(p, start_x, start_y, sync=previous_cursor != (start_x, start_y))
+        _fail(_xdotool(p, 'mousedown', str(code)), 'mousedown', button=button)
+        time.sleep(GESTURE_SETTLE_SEC)
+        for index in range(1, count + 1):
+            step_x = round(start_x + (end_x - start_x) * index / count)
+            step_y = round(start_y + (end_y - start_y) * index / count)
+            _move_to(p, step_x, step_y)
+            if index < count:
+                time.sleep(DRAG_STEP_SEC)
+        time.sleep(GESTURE_SETTLE_SEC)
+        released = _xdotool(p, 'mouseup', str(code))
+    finally:
+        if released is None:
+            _release_button(p, code)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    _fail(released, 'mouseup', button=button)
+    return {
+        'route': 'xtest',
+        'action': 'drag',
+        'button': button,
+        'from': {'x': start_x, 'y': start_y},
+        'to': {'x': end_x, 'y': end_y},
+        'steps': count,
+        'windowId': hwnd,
+        'events': count + 3,
+    }
+
+
+def hold(x: int, y: int, *, window: Any, button: str = 'left', seconds: float = 1.0,
+         platform: Any = None, restore: bool = True, timeout: float = 0.5,
+         source_id: str | None = None, geometry_revision: int | None = None) -> dict[str, Any]:
+    """Nhấn giữ chuột tại một điểm trong ``seconds`` giây rồi nhả.
+
+    Dùng cho những chỗ ứng dụng phân biệt "bấm" với "giữ": nhấn giữ để mở menu ngữ cảnh, giữ nút
+    tăng tốc, hay giữ chuột phải để hiện bảng chọn. Nút chuột được nhả trong ``finally``.
+    """
+    p = _platform(platform)
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, 'nút chuột không hợp lệ: %r' % (button,), button=button)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    try:
+        duration = max(0.05, min(MAX_HOLD_SEC, float(seconds)))
+    except (TypeError, ValueError):
+        duration = 1.0
+    code = MOUSE_BUTTONS[button]
+    released = None
+    try:
+        _move_to(p, int(x), int(y), sync=previous_cursor != (int(x), int(y)))
+        _fail(_xdotool(p, 'mousedown', str(code)), 'mousedown', button=button)
+        time.sleep(duration)
+        released = _xdotool(p, 'mouseup', str(code))
+    finally:
+        if released is None:
+            _release_button(p, code)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    _fail(released, 'mouseup', button=button)
+    return {
+        'route': 'xtest',
+        'action': 'hold',
+        'button': button,
+        'point': {'x': int(x), 'y': int(y)},
+        'seconds': round(duration, 3),
+        'windowId': hwnd,
+        'events': 3,
+    }
+
+
+def stroke(points: Any, *, window: Any, button: str = 'left', platform: Any = None,
+           restore: bool = True, timeout: float = 0.5, source_id: str | None = None,
+           geometry_revision: int | None = None) -> dict[str, Any]:
+    """Vẽ một nét tự do qua danh sách điểm: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối.
+
+    Đây là "kéo" nhưng cho nhiều điểm, tức là cú kéo mà ứng dụng vẽ (Paint, công cụ chú thích ảnh,
+    bảng vẽ). Mỗi điểm là một lệnh ``xdotool``, nên trần ``MAX_STROKE_POINTS`` giữ cho một nét không
+    biến thành một lượt chạy dài.
+    """
+    p = _platform(platform)
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, 'nút chuột không hợp lệ: %r' % (button,), button=button)
+    path = []
+    for point in (points or ()):
+        try:
+            px, py = point
+            path.append((int(px), int(py)))
+        except (TypeError, ValueError) as exc:
+            raise PlatformError(SOURCE_CHANGED, 'điểm của nét vẽ không hợp lệ: %r' % (point,)) from exc
+    if len(path) < 2:
+        raise PlatformError(SOURCE_CHANGED, 'nét vẽ cần ít nhất hai điểm.', points=len(path))
+    if len(path) > MAX_STROKE_POINTS:
+        raise PlatformError(SOURCE_CHANGED,
+                            'nét vẽ có %d điểm, quá trần %d — chia thành nhiều nét.'
+                            % (len(path), MAX_STROKE_POINTS), points=len(path))
+    start_x, start_y = path[0]
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        start_x, start_y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    code = MOUSE_BUTTONS[button]
+    released = None
+    try:
+        _move_to(p, start_x, start_y, sync=previous_cursor != (start_x, start_y))
+        _fail(_xdotool(p, 'mousedown', str(code)), 'mousedown', button=button)
+        time.sleep(GESTURE_SETTLE_SEC)
+        for step_x, step_y in path[1:]:
+            _move_to(p, step_x, step_y)
+            time.sleep(STROKE_STEP_SEC)
+        time.sleep(GESTURE_SETTLE_SEC)
+        released = _xdotool(p, 'mouseup', str(code))
+    finally:
+        if released is None:
+            _release_button(p, code)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    _fail(released, 'mouseup', button=button)
+    return {
+        'route': 'xtest',
+        'action': 'stroke',
+        'button': button,
+        'points': len(path),
+        'from': {'x': start_x, 'y': start_y},
+        'to': {'x': path[-1][0], 'y': path[-1][1]},
+        'windowId': hwnd,
+        'events': len(path) + 2,
     }
 
 

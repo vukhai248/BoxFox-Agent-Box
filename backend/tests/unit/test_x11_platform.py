@@ -1142,3 +1142,180 @@ def test_keycodes_are_released_even_when_the_keystroke_fails():
     with pytest.raises(PlatformError):
         xi.type_text('đ', window=0x11, platform=platform)
     assert state['map'] == {}, 'lỗi giữa chừng vẫn phải trả keycode về trống'
+
+
+# ------------------------------------------- cuộn, kéo, giữ, vẽ nét (08/10/2026)
+# Bốn thao tác cử chỉ dùng chung bốn chốt chặn của `click`, nhưng khác ở chỗ chúng giữ chuột qua
+# NHIỀU lệnh. Ba chỗ dễ sai được kiểm ở đây: thứ tự lệnh, việc NHẢ chuột khi bước giữa hỏng (một nút
+# còn giữ là cả máy không dùng được), và việc ghi lại từng bước là "con trỏ của chính ta" (bộ theo dõi
+# người thật lấy mẫu ở luồng khác, đọc cú kéo của ta thành người thật là nó nhả quyền giữa cú kéo).
+class CursorFake:
+    """`xdotool` giả có con trỏ thật: `mousemove` cập nhật vị trí, `getmouselocation` đọc lại."""
+
+    def __init__(self, tools, at=(0, 0), fail_move_to=None):
+        self.tools = tools
+        self.at = tuple(at)
+        self.fail_move_to = fail_move_to
+
+    def __call__(self, argv, timeout):
+        tool, args = os.path.basename(argv[0]), argv[1:]
+        if tool == 'xdotool' and args and args[0] == 'getmouselocation':
+            return xp._CommandResult(0, 'X=%d\nY=%d\n' % self.at)
+        if tool == 'xdotool' and args and args[0] == 'mousemove':
+            target = (int(args[-2]), int(args[-1]))
+            if self.fail_move_to is not None and target == self.fail_move_to:
+                return xp._CommandResult(1, '', 'XGetGeometry: BadWindow')
+            self.at = target
+        return self.tools(argv, timeout)
+
+
+def _gesture_platform(*, at=(0, 0), fail_move_to=None, rect=(0, 0, 100, 100)):
+    platform, tools = build(windows=[0x11], props={0x11: window_props()},
+                            rects={0x11: rect}, foreground=0x11)
+    platform._runner = CursorFake(tools, at=at, fail_move_to=fail_move_to)
+    window = platform.describe_window(0x11)
+    return platform, tools, window
+
+
+def _xdotool_calls(tools, verb):
+    return [call for call in tools.calls
+            if os.path.basename(call[0]) == 'xdotool' and verb in call]
+
+
+def test_scroll_moves_the_pointer_onto_the_window_then_rolls_the_wheel():
+    platform, tools, window = _gesture_platform(at=(1, 1))
+    outcome = xi.scroll(50, 50, window=window, direction='down', steps=5, platform=platform,
+                        restore=False)
+    assert outcome['steps'] == 5 and outcome['direction'] == 'down'
+    rolls = _xdotool_calls(tools, 'click')
+    assert len(rolls) == 1, 'cả loạt nấc đi trong MỘT lệnh `xdotool`'
+    assert rolls[0][1:] == ['click', '--repeat', '5', '--delay', str(xi.SCROLL_STEP_DELAY_MS), '5']
+    assert _xdotool_calls(tools, 'mousemove'), 'phải đưa con trỏ vào cửa sổ đích trước khi cuộn'
+
+
+def test_scroll_maps_every_direction_to_the_x11_wheel_button():
+    for direction, button in (('up', '4'), ('down', '5'), ('left', '6'), ('right', '7')):
+        platform, tools, window = _gesture_platform()
+        xi.scroll(50, 50, window=window, direction=direction, steps=1, platform=platform,
+                  restore=False)
+        assert _xdotool_calls(tools, 'click')[0][-1] == button, direction
+
+
+def test_scroll_clamps_the_step_count_and_refuses_an_unknown_direction():
+    platform, tools, window = _gesture_platform()
+    outcome = xi.scroll(50, 50, window=window, direction='down', steps=999, platform=platform,
+                        restore=False)
+    assert outcome['steps'] == xi.MAX_SCROLL_STEPS
+    assert _xdotool_calls(tools, 'click')[0][1:] == [
+        'click', '--repeat', str(xi.MAX_SCROLL_STEPS), '--delay', str(xi.SCROLL_STEP_DELAY_MS), '5']
+    with pytest.raises(PlatformError) as caught:
+        xi.scroll(50, 50, window=window, direction='sideways', platform=platform, restore=False)
+    assert caught.value.code == 'SOURCE_CHANGED'
+
+
+def test_scroll_refuses_when_the_point_is_covered_before_sending_anything():
+    platform, tools, window = _gesture_platform(rect=(0, 0, 10, 10))
+    with pytest.raises(PlatformError) as caught:
+        xi.scroll(50, 50, window=window, direction='down', platform=platform, restore=False)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert _xdotool_calls(tools, 'click') == [], 'không được cuộn khi chưa chứng minh điểm thuộc đích'
+
+
+def test_drag_presses_moves_in_steps_and_releases():
+    platform, tools, window = _gesture_platform(at=(10, 10))
+    outcome = xi.drag(20, 20, 80, 60, window=window, steps=4, platform=platform, restore=False)
+    verbs = [call[1] for call in tools.calls if os.path.basename(call[0]) == 'xdotool'
+             and call[1] in ('mousemove', 'mousedown', 'mouseup')]
+    assert verbs == ['mousemove', 'mousedown', 'mousemove', 'mousemove', 'mousemove', 'mousemove',
+                     'mouseup'], verbs
+    assert outcome['from'] == {'x': 20, 'y': 20} and outcome['to'] == {'x': 80, 'y': 60}
+    assert platform.get_cursor_pos() == (80, 60), 'cú kéo kết thúc ở điểm đích'
+
+
+def test_a_drag_releases_the_button_even_when_a_step_in_the_middle_fails():
+    """Nút còn giữ là cả máy không dùng được nữa — kể cả khi bước giữa của cú kéo hỏng."""
+    platform, tools, window = _gesture_platform(at=(10, 10), fail_move_to=(50, 40))
+    with pytest.raises(PlatformError):
+        xi.drag(20, 20, 80, 60, window=window, steps=4, platform=platform, restore=False)
+    assert _xdotool_calls(tools, 'mousedown'), 'cú kéo đã bắt đầu'
+    assert _xdotool_calls(tools, 'mouseup'), 'nút chuột PHẢI được nhả dù bước giữa hỏng'
+
+
+def test_a_drag_out_of_a_pinned_window_is_refused_before_anything_is_sent():
+    """Đích là một cửa sổ: cả điểm đầu lẫn điểm cuối phải nằm trong cửa sổ đó."""
+    platform, tools, window = _gesture_platform(rect=(0, 0, 100, 100))
+    with pytest.raises(PlatformError) as caught:
+        xi.drag(20, 20, 900, 900, window=window, steps=4, platform=platform, restore=False,
+                guard_end=True)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    assert tools.calls and not _xdotool_calls(tools, 'mousedown'), 'chưa gửi gì thì chưa được nhấn'
+
+
+def test_a_drag_may_leave_the_window_when_the_target_is_the_whole_machine():
+    """Đích là cả máy: kéo từ cửa sổ này sang cửa sổ khác là việc hợp lệ (thả tệp sang app khác)."""
+    platform, tools, window = _gesture_platform(at=(10, 10))
+    outcome = xi.drag(20, 20, 900, 900, window=window, steps=3, platform=platform, restore=False,
+                      guard_end=False)
+    assert outcome['to'] == {'x': 900, 'y': 900}
+    assert _xdotool_calls(tools, 'mouseup')
+
+
+def test_hold_keeps_the_button_down_and_clamps_the_duration():
+    platform, tools, window = _gesture_platform(at=(10, 10))
+    outcome = xi.hold(50, 50, window=window, seconds=99, platform=platform, restore=False)
+    verbs = [call[1] for call in tools.calls if os.path.basename(call[0]) == 'xdotool'
+             and call[1] in ('mousedown', 'mouseup')]
+    assert verbs == ['mousedown', 'mouseup']
+    assert outcome['seconds'] == xi.MAX_HOLD_SEC
+
+
+def test_a_hold_releases_the_button_when_the_press_itself_fails():
+    platform, tools, window = _gesture_platform(at=(10, 10), fail_move_to=(50, 50))
+    with pytest.raises(PlatformError):
+        xi.hold(50, 50, window=window, seconds=0.2, platform=platform, restore=False)
+    assert _xdotool_calls(tools, 'mouseup'), 'nhấn hụt vẫn phải nhả (lệnh nhả là vô hại)'
+
+
+def test_a_stroke_walks_every_point_of_the_path():
+    platform, tools, window = _gesture_platform(at=(5, 5))
+    outcome = xi.stroke([(10, 10), (30, 20), (60, 40), (90, 90)], window=window, platform=platform,
+                        restore=False)
+    moves = [call[-2:] for call in tools.calls if os.path.basename(call[0]) == 'xdotool'
+             and 'mousemove' in call]
+    assert moves == [['10', '10'], ['30', '20'], ['60', '40'], ['90', '90']], moves
+    assert outcome['points'] == 4
+    verbs = [call[1] for call in tools.calls if os.path.basename(call[0]) == 'xdotool'
+             and call[1] in ('mousedown', 'mouseup')]
+    assert verbs == ['mousedown', 'mouseup']
+
+
+def test_a_stroke_needs_two_points_and_has_a_cap():
+    platform, _tools, window = _gesture_platform()
+    with pytest.raises(PlatformError) as caught:
+        xi.stroke([(10, 10)], window=window, platform=platform, restore=False)
+    assert caught.value.code == 'SOURCE_CHANGED'
+    with pytest.raises(PlatformError) as too_long:
+        xi.stroke([(10, 10)] * (xi.MAX_STROKE_POINTS + 1), window=window, platform=platform,
+                  restore=False)
+    assert too_long.value.code == 'SOURCE_CHANGED'
+    with pytest.raises(PlatformError):
+        xi.stroke([(10, 10), ('x', 'y')], window=window, platform=platform, restore=False)
+
+
+def test_every_step_of_a_gesture_is_recorded_as_our_own_pointer():
+    """Bộ theo dõi "người thật chạm máy" lấy mẫu ở luồng khác: đọc cú kéo của chính ta là người thật
+    thì nó nhả quyền GIỮA cú kéo. Nên từng bước phải được ghi vào sổ con trỏ của ta."""
+    platform, _tools, window = _gesture_platform(at=(10, 10))
+    before = platform.last_input_tick()
+    xi.drag(20, 20, 80, 60, window=window, steps=4, platform=platform, restore=False)
+    # Con trỏ đang ở điểm cuối của cú kéo (do CHÍNH TA đặt) — không được tính là người thật.
+    assert platform.last_input_tick() == before, 'cú kéo của ta bị đọc thành người thật'
+    assert platform._own_pointer == (80, 60)
+
+
+def test_a_stroke_leaves_the_pointer_at_the_last_point_of_the_path():
+    platform, _tools, window = _gesture_platform(at=(5, 5))
+    before = platform.last_input_tick()
+    xi.stroke([(10, 10), (40, 25), (70, 55)], window=window, platform=platform, restore=False)
+    assert platform.get_cursor_pos() == (70, 55)
+    assert platform.last_input_tick() == before, 'nét vẽ của ta không được tính là người thật'

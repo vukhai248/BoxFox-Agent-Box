@@ -527,7 +527,8 @@ def decode_events(events: list[Any]) -> list[dict[str, Any]]:
     for event in events:
         if event.type == INPUT_MOUSE:
             mouse = event.union.mi
-            out.append({"kind": "mouse", "flags": mouse.dwFlags, "dx": mouse.dx, "dy": mouse.dy})
+            out.append({"kind": "mouse", "flags": mouse.dwFlags, "dx": mouse.dx, "dy": mouse.dy,
+                        "data": mouse.mouseData})
         elif event.type == INPUT_KEYBOARD:
             key = event.union.ki
             out.append({"kind": "key", "vk": key.wVk, "scan": key.wScan, "flags": key.dwFlags})

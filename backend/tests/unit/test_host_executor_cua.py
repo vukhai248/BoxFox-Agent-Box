@@ -16,6 +16,7 @@ from agentbox.agent_core import desktop_control as dc
 from agentbox.agent_core import permissions as permissions_module
 from agentbox.sandbox import host_executor as host_module
 from agentbox.sandbox.win import errors as win_errors
+from agentbox.sandbox.win import windows_platform as win_platform_module
 
 WORKSPACE = '/var/tmp/boxfox-cua-ws'
 
@@ -246,8 +247,73 @@ def test_a_named_key_is_pressed(tmp_path):
 
 def test_an_unknown_action_is_refused_with_a_code(tmp_path):
     executor, _control, fake = build(tmp_path)
-    payload = run(executor, 'computer_use', {'action': 'scroll', 'x': 1, 'y': 1})
+    payload = run(executor, 'computer_use', {'action': 'teleport', 'x': 1, 'y': 1})
     assert payload['errorCode'] == host_module.UNSUPPORTED_ACTION_CODE
+    assert fake.sent_events == []
+
+
+def _wheel_delta(data):
+    """``mouseData`` là DWORD: ``SendInput`` đọc 16 bit thấp như số CÓ DẤU, nên -600 hiện ra 64936."""
+    low = int(data) & 0xFFFF
+    return low - 65536 if low >= 32768 else low
+
+
+def test_scroll_sends_one_wheel_event_with_the_requested_number_of_steps(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'scroll', 'x': 20, 'y': 30,
+                                             'direction': 'down', 'steps': 5})
+    assert payload.get('is_error') is not True
+    assert payload['action'] == 'scroll'
+    wheels = [event for event in decode_events(fake.sent_events)
+              if event['flags'] & win_platform_module.MOUSEEVENTF_WHEEL]
+    assert len(wheels) == 1
+    assert _wheel_delta(wheels[0]['data']) == -5 * win_platform_module.WHEEL_DELTA, 'xuống = số nấc âm'
+
+
+def test_drag_holds_the_button_across_the_steps_and_releases_it(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'drag', 'x': 20, 'y': 30, 'toX': 120, 'toY': 90,
+                                             'steps': 4})
+    assert payload.get('is_error') is not True
+    flags = [event['flags'] for event in decode_events(fake.sent_events) if event['kind'] == 'mouse']
+    down_at = flags.index(win_platform_module.MOUSEEVENTF_LEFTDOWN)
+    up_at = flags.index(win_platform_module.MOUSEEVENTF_LEFTUP)
+    assert down_at < up_at, 'nhả phải sau khi nhấn'
+    moves_while_held = [index for index, flag in enumerate(flags)
+                        if index > down_at and index < up_at and flag & win_platform_module.MOUSEEVENTF_MOVE]
+    assert len(moves_while_held) == 4, 'cú kéo đi qua bốn điểm dừng giữa lúc đang giữ nút'
+
+
+def test_hold_keeps_the_button_down_between_the_two_batches(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'hold', 'x': 20, 'y': 30, 'seconds': 0.05})
+    assert payload.get('is_error') is not True
+    assert payload['seconds'] == 0.05
+    flags = [event['flags'] for event in decode_events(fake.sent_events) if event['kind'] == 'mouse']
+    assert flags.index(win_platform_module.MOUSEEVENTF_LEFTDOWN) < flags.index(win_platform_module.MOUSEEVENTF_LEFTUP)
+
+
+def test_stroke_follows_every_point_of_the_path(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    path = [[20, 30], [60, 40], [100, 80]]
+    payload = run(executor, 'computer_use', {'action': 'stroke', 'path': path})
+    assert payload.get('is_error') is not True
+    assert payload['points'] == 3
+    assert payload['to'] == {'x': 100, 'y': 80}
+
+
+def test_a_stroke_without_a_usable_path_is_refused(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'stroke', 'path': [[20, 30]]})
+    assert payload.get('is_error') is True
+    assert payload['errorCode'] == win_errors.SOURCE_CHANGED
+    assert fake.sent_events == []
+
+
+def test_a_drag_without_the_end_point_is_refused(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'drag', 'x': 20, 'y': 30})
+    assert payload.get('is_error') is True
     assert fake.sent_events == []
 
 

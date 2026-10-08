@@ -39,6 +39,7 @@ from pathlib import Path
 
 from ..agent_core import cua_target as cua_target_module
 from ..agent_core import permissions as permissions_module
+from .win.errors import PlatformError
 
 #: Mã lỗi cho công cụ v1 chưa có trên host. Có mã để model phân biệt "chưa làm" với "hỏng".
 UNSUPPORTED_CODE = 'UNSUPPORTED_IN_HOST_MODE'
@@ -70,8 +71,17 @@ LAUNCH_TIMEOUT_SEC = 10.0
 CONTROL_BUSY_CODE = 'CONTROL_BUSY'
 #: Cửa sổ đổi vị trí/kích thước/DPI sau khi agent đã soi — token cũ, phải soi lại.
 SOURCE_CHANGED_CODE = 'SOURCE_CHANGED'
-#: Hành động chưa có trên host (ví dụ `scroll`).
+#: Hành động chưa có trên host.
 UNSUPPORTED_ACTION_CODE = 'UNSUPPORTED_ACTION'
+
+#: Hành động `computer_use` mà đường host gửi được. Danh sách này phải khớp `enum` trong
+#: `tool_contracts.py`: thiếu một cái ở đây thì model gọi được mà máy trả `UNSUPPORTED_ACTION`.
+CUA_ACTIONS = ('click', 'double_click', 'right_click', 'middle_click', 'type', 'key', 'scroll',
+               'drag', 'hold', 'stroke')
+
+#: Hành động cần toạ độ điểm bắt đầu.
+CUA_POINT_ACTIONS = ('click', 'double_click', 'right_click', 'middle_click', 'scroll', 'drag',
+                     'hold', 'stroke')
 
 #: Đường `/__box/*` chưa có bản host tương ứng (`HostExecutor.request`).
 HOST_REQUEST_UNSUPPORTED_CODE = 'HOST_REQUEST_UNSUPPORTED'
@@ -807,10 +817,10 @@ class HostExecutor:
         if input_module is None:
             return error_result(CUA_UNAVAILABLE_CODE, 'máy này không có mô-đun tiêm input cho nền tảng đang chạy')
         action = str(args.get('action') or '').strip().lower()
-        if action not in ('click', 'double_click', 'right_click', 'middle_click', 'type', 'key'):
+        if action not in CUA_ACTIONS:
             return error_result(UNSUPPORTED_ACTION_CODE,
-                                'hành động %r chưa có trên host (nhận: click, double_click, '
-                                'right_click, middle_click, type, key)' % (action or ''))
+                                'hành động %r chưa có trên host (nhận: %s)'
+                                % (action or '', ', '.join(CUA_ACTIONS)))
         window, code, why = self._input_target(args, target)
         if window is None:
             return error_result(code, 'không xác định được cửa sổ đích cho %s' % action,
@@ -823,7 +833,8 @@ class HostExecutor:
             stale = self.desktop.fence(token)
             if stale:
                 return error_result(stale, 'quyền điều khiển đã đổi tay — thao tác bị huỷ')
-            outcome = self._send_input(input_module, action, args, window)
+            outcome = self._send_input(input_module, action, args, window,
+                                       pinned=bool(cua_target_module.is_window(target)))
         except Exception as exc:
             self.desktop.end_action(token, effect='failed', verified=False, route='send_input',
                                     note='%s: %s' % (type(exc).__name__, exc))
@@ -842,7 +853,13 @@ class HostExecutor:
             payload['resolvedFrom'] = source
         return payload
 
-    def _send_input(self, input_module, action, args, window):
+    def _send_input(self, input_module, action, args, window, *, pinned=True):
+        """Gửi một hành động qua mô-đun input của nền tảng đang chạy.
+
+        ``pinned`` cho biết đích của phiên là **một cửa sổ đã chọn**. Cú kéo cần biết điều đó: đích
+        là một cửa sổ thì cả điểm đầu lẫn điểm cuối phải nằm trong cửa sổ đó, còn đích là **cả máy**
+        thì kéo từ cửa sổ này sang cửa sổ khác là việc hợp lệ (thả tệp sang ứng dụng khác).
+        """
         win_platform = self._desktop_platform()
         if action == 'type':
             return input_module.type_text(str(args.get('text') or ''), window=window,
@@ -853,16 +870,59 @@ class HostExecutor:
                 modifiers = [part for part in re.split(r'[+,]', modifiers) if part]
             return input_module.press_key(str(args.get('key') or ''), modifiers=tuple(modifiers),
                                           window=window, platform=win_platform)
+        if action == 'stroke':
+            # `stroke` đi theo CẢ danh sách điểm, nên nó không cần một cặp (x, y) mở đầu.
+            return self._gesture(input_module, 'stroke', window=window, points=args.get('path') or (),
+                                 button=self._button_arg(args), platform=win_platform)
         try:
             x, y = int(args.get('x')), int(args.get('y'))
         except (TypeError, ValueError):
             raise ValueError('cần toạ độ nguyên (x, y) cho %s' % action)
+        if action == 'scroll':
+            return self._gesture(input_module, 'scroll', x, y, window=window,
+                                 direction=str(args.get('direction') or 'down').strip().lower(),
+                                 steps=args.get('steps') or 3, platform=win_platform)
+        if action == 'drag':
+            return self._gesture(input_module, 'drag', x, y, window=window,
+                                 to_x=self._int_arg(args, 'toX', 'cần toạ độ đích (toX, toY)'),
+                                 to_y=self._int_arg(args, 'toY', 'cần toạ độ đích (toX, toY)'),
+                                 button=self._button_arg(args), steps=args.get('steps') or None,
+                                 guard_end=pinned, platform=win_platform)
+        if action == 'hold':
+            return self._gesture(input_module, 'hold', x, y, window=window,
+                                 button=self._button_arg(args),
+                                 seconds=args.get('seconds') or 1.0, platform=win_platform)
         button = {'click': 'left', 'double_click': 'left', 'right_click': 'right',
                   'middle_click': 'middle'}[action]
         outcome = input_module.click(x, y, window=window, button=button, platform=win_platform)
         if action == 'double_click':
             outcome = input_module.click(x, y, window=window, button=button, platform=win_platform)
         return outcome
+
+    def _gesture(self, input_module, name, *args, **kwargs):
+        """Gọi một thao tác cử chỉ (cuộn/kéo/giữ/vẽ) — thiếu thì nói rõ, không vỡ bằng `AttributeError`.
+
+        Nền tảng chưa có thao tác này (bản Windows đang theo sau bản X11) trả `UNSUPPORTED_ACTION`
+        kèm tên nền tảng, để chỗ gỡ lỗi biết là máy không làm được chứ không phải tham số sai.
+        """
+        action = getattr(input_module, name, None)
+        if action is None:
+            raise PlatformError(
+                UNSUPPORTED_ACTION_CODE,
+                'nền tảng %s chưa có thao tác `%s`.' % (self._desktop_family(), name),
+            )
+        return action(*args, **kwargs)
+
+    @staticmethod
+    def _int_arg(args, key, message):
+        try:
+            return int(args.get(key))
+        except (TypeError, ValueError):
+            raise ValueError(message)
+
+    @staticmethod
+    def _button_arg(args):
+        return str(args.get('button') or 'left').strip().lower()
 
     def _load_input(self):
         """Mô-đun tiêm input của nền tảng đang chạy — Windows: SendInput; Linux: XTEST."""
