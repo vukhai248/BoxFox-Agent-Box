@@ -518,3 +518,72 @@ def test_history_route_needs_an_explicit_caller_and_never_a_foreign_scope(tmp_pa
     assert denied[0] == 403 and denied[1]['code'] == 'HISTORY_SCOPE_DENIED'
     assert absent[0] == 404 and absent[1]['code'] == 'HISTORY_REFERENCE_NOT_FOUND'
     store.close()
+
+
+def test_the_capsule_reads_back_over_http_after_the_raw_history_is_gone(tmp_path, monkeypatch):
+    """LT-08 ca 7 qua ĐÚNG đường HTTP: xoá raw rồi mở hội thoại mới cùng project.
+
+    Ca này trước đây không thi hành được: `read_capsule` chỉ có bài kiểm đơn vị gọi tới, nên
+    "xoá có mang theo" ghi ra một capsule mà không bề mặt nào đọc lại. Hai route mới
+    (`GET /api/agent/history/capsules`, `.../capsules/{id}`) khép khoảng trống đó; ca này ghim cả
+    đường đọc lẫn ba cửa từ chối: khác project, con của hội thoại mới, và thiếu người gọi.
+    """
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'giữ nguyên yêu cầu gốc này', 'k1')
+    preview = history_surface.deletion_preview(runtime, sid, {
+        'mode': 'history_only', 'lessons': [{'fact': 'đọc giữa log là đủ'}]})
+    history_surface.deletion_confirm(runtime, sid, {
+        'operationId': preview['operationId'], 'expectedRevision': preview['expectedRevision'], 'confirm': True})
+
+    fresh = runtime.create(dict(BASE))
+    workspace = tmp_path / 'fresh-ws'
+    workspace.mkdir(exist_ok=True)
+    config = dict(fresh['config'])
+    config['machineBinding'] = {'mode': 'host', 'revision': 1, 'projectId': 'p1', 'workspace': str(workspace)}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), fresh['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (fresh['id'],))
+    store.db.commit()
+    bind(runtime, fresh['id'])
+    child = runtime.create(dict(BASE), parent_id=fresh['id'])
+    # Cùng kho, KHÁC project: ca từ chối phải chạy trên phiên có thật, nếu không thì 404 của
+    # `known_session` sẽ che mất phán quyết thật của cổng quyền.
+    other = runtime.create(dict(BASE))
+    other_ws = tmp_path / 'other-ws'
+    other_ws.mkdir(exist_ok=True)
+    other_config = dict(other['config'])
+    other_config['machineBinding'] = {'mode': 'host', 'revision': 1, 'projectId': 'p2',
+                                      'workspace': str(other_ws)}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(other_config), other['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (other['id'],))
+    store.db.commit()
+    bind(runtime, other['id'])
+
+    async def call():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession() as client:
+                base = str(server.make_url('')).rstrip('/')
+                capsules = base + '/api/agent/history/capsules'
+                one = capsules + '/' + preview['capsuleId']
+                async with client.get(f'{capsules}?callerSessionId={fresh["id"]}', headers=HEADERS) as response:
+                    listed = (response.status, await response.json())
+                async with client.get(f'{one}?callerSessionId={fresh["id"]}', headers=HEADERS) as response:
+                    capsule = (response.status, await response.json())
+                async with client.get(f'{one}?callerSessionId={other["id"]}', headers=HEADERS) as response:
+                    cross = (response.status, await response.json())
+                async with client.get(f'{one}?callerSessionId={child["id"]}', headers=HEADERS) as response:
+                    nested = (response.status, await response.json())
+                async with client.get(one, headers=HEADERS) as response:
+                    anonymous = (response.status, await response.json())
+                return listed, capsule, cross, nested, anonymous
+
+    listed, capsule, cross, nested, anonymous = asyncio.run(call())
+    assert listed[0] == 200 and [item['capsuleId'] for item in listed[1]['capsules']] == [preview['capsuleId']]
+    assert capsule[0] == 200
+    assert capsule[1]['lessons'] == [{'fact': 'đọc giữa log là đủ'}]
+    assert capsule[1]['executionAuthority'] is False and capsule[1]['untrusted'] is True
+    assert cross[0] == 403 and cross[1]['code'] == 'HISTORY_SCOPE_DENIED'
+    assert nested[0] == 403 and nested[1]['code'] == 'HISTORY_SCOPE_DENIED'
+    assert anonymous[0] == 400 and anonymous[1]['code'] == 'HISTORY_CALLER_REQUIRED'
+    store.close()

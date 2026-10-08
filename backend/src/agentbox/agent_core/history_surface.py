@@ -447,6 +447,20 @@ def _projection_roots(history):
     return sorted({row[0] for row in history.db.execute('SELECT DISTINCT workspace FROM history_projection_files')})
 
 
+def list_capsules(rt, caller_sid, *, limit=3):
+    """Capsule đã chốt của project người gọi — đường ĐỌC LẠI trên bề mặt quản trị (LT-08).
+
+    Ca nghiệm thu "xoá rồi mở hội thoại mới" cần một đường đọc được bằng máy; trước đây
+    `read_capsule` chỉ có bài kiểm đơn vị gọi tới nên ca đó không thi hành được.
+    """
+    return service(rt).project_capsules(caller_sid, limit=limit)
+
+
+def read_capsule(rt, caller_sid, capsule_id):
+    """Nội dung capsule, qua đúng một cổng quyền của store (cùng project, không mang quyền chạy)."""
+    return service(rt).read_capsule(caller_sid, capsule_id)
+
+
 def export_projection(rt, sid, checkpoint_id=None):
     """Bản đọc được trong workspace của phiên host. Workspace ở container thì không ghi từ host."""
     from ..memory.history_projection import HistoryProjection

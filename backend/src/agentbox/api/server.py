@@ -1932,6 +1932,23 @@ def create_app(runtime):
             return surface_error(exc)
         return web.json_response(result)
 
+    async def history_capsules(request):
+        """Capsule đã chốt của project người gọi (LT-08: hội thoại MỚI đọc lại được)."""
+        try:
+            sid = caller_session(request)
+            result = surface().list_capsules(runtime, sid, limit=query_int(request, 'limit', 3, 20))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'capsules': result})
+
+    async def history_capsule(request):
+        try:
+            sid = caller_session(request)
+            result = surface().read_capsule(runtime, sid, request.match_info['capsuleId'])
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
     async def history_storage(request):
         try:
             sid = request.query.get('callerSessionId') or request.query.get('sessionId')
@@ -2754,6 +2771,8 @@ def create_app(runtime):
     app.router.add_get('/api/agent/history/sessions', history_sessions)
     app.router.add_get('/api/agent/history/search', history_search)
     app.router.add_get('/api/agent/history/storage', history_storage)
+    app.router.add_get('/api/agent/history/capsules', history_capsules)
+    app.router.add_get('/api/agent/history/capsules/{capsuleId}', history_capsule)
     app.router.add_get('/api/agent/history/records/{recordId}', history_record)
     app.router.add_get('/api/agent/sessions/{sid}/journal', session_journal)
     app.router.add_get('/api/agent/journal/tasks', journal_tasks)

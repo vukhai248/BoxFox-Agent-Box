@@ -179,6 +179,7 @@ HTTP nào đọc capsule trả về. Đợt này khép khoảng trống đó b�
 | Liệt kê capsule của chính dự án | `memory/history_store.py` → `project_capsules(caller_sid, limit=3)` | Trả `[{capsuleId, created}]` cho các capsule `committed` của dự án người gọi; `HISTORY_QUERY_INVALID` khi `limit` sai; `[]` khi người gọi chưa có dự án. |
 | Quyền đọc capsule | `agent_core/history_surface.py` → `_authorization` nhánh capsule | Hội thoại MỚI (gốc cây riêng) trong cùng dự án đọc được capsule; cổng dự án phía trên vẫn chặn đọc chéo dự án. |
 | Khối trạng thái giữ lại trong prompt | `agent_core/session_journal.py` → `retained_state_block(store, sid)` | Ghép sau khối ghim, trần 1.200 ký tự (300 cho chủ, 160 mỗi trường), chỉ ở gốc cây của chính nó, mọi lỗi trả `''`. |
+| Đường đọc bằng máy | `api/server.py` → `GET /api/agent/history/capsules?callerSessionId=…` và `GET /api/agent/history/capsules/{capsuleId}?callerSessionId=…` | Cùng cổng `X-BoxFox-Admin` như các route lịch sử khác; liệt kê trả `{'capsules': [{capsuleId, created}]}`, đọc trả nguyên payload capsule. Khác project / con của hội thoại mới / thiếu người gọi lần lượt là 403 `HISTORY_SCOPE_DENIED` (hai ca đầu) và 400 `HISTORY_CALLER_REQUIRED`. |
 
 Cùng đợt: `api/server.py` dịch thân JSON hỏng thành `400 REQUEST_INVALID` trên **mọi** route (trước
 đây nhánh `ValueError` của middleware trả 400 với `code` rỗng), và panel dung lượng
