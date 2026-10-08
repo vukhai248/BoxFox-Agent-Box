@@ -40,6 +40,8 @@ async def _safe(executor, op, args, store, sid, code, label):
     người dùng phải thấy — chính nó là thứ đã thiếu trong 22 hàng checkpoint cũ.
     """
     if executor is None:
+        _notice(store, sid, code, f'{code}: {label} chưa có executor để ghi bản đọc được',
+                op=op, projectionStored=False)
         return None
     try:
         answer = await executor.execute(op, args, sid)
@@ -47,11 +49,21 @@ async def _safe(executor, op, args, store, sid, code, label):
         _notice(store, sid, code, f'{code}: {label} không ghi được trong box ({type(exc).__name__}: {exc})',
                 op=op)
         return None
-    if isinstance(answer, dict) and answer.get('ok') is False:
-        _notice(store, sid, code, f"{code}: {label} bị box từ chối ({answer.get('error') or answer.get('code')})",
-                op=op)
+    if not isinstance(answer, dict):
+        _notice(store, sid, code, f'{code}: {label} trả về dữ liệu không hợp lệ',
+                op=op, projectionStored=False)
         return None
-    return answer if isinstance(answer, dict) else None
+    if (answer.get('ok') is False or answer.get('is_error') is True
+            or answer.get('errorCode')):
+        error = answer.get('errorCode') or answer.get('error') or answer.get('code')
+        _notice(store, sid, code, f'{code}: {label} bị executor từ chối ({error})',
+                op=op, projectionStored=False, projectionError=error)
+        return None
+    if answer.get('ok') is not True:
+        _notice(store, sid, code, f'{code}: {label} chưa xác nhận ghi thành công',
+                op=op, projectionStored=False)
+        return None
+    return answer
 
 
 async def ensure_session(executor, store, sid, *, role=None, parent=None, goal=None) -> dict | None:

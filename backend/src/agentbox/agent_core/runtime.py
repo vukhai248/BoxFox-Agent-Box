@@ -14,6 +14,9 @@ import uuid
 import httpx
 from .attachments import (MAX_INLINE_MEDIA, attachment_prompt_block, validate_attachments,
                         validate_inline_images)
+from .decision_store import DecisionStore, DecisionStoreError, event as durable_event
+from .longtask_runtime import LongtaskRuntime
+from .longtask_store import LongtaskError
 from . import context_surface
 from .compression import ContextCompressor, estimate_tokens, usage_reading
 from .failures import (RETRY_BUDGET_SECONDS, classify_failure, failure_detail, level_refusal,
@@ -1679,6 +1682,8 @@ class HarnessRuntime(RuntimeCommands):
         self.tasks = {}
         # decisionId -> pending record; settled records are kept so a second answer is a real 409.
         self.pending = {}
+        self.decision_store = DecisionStore(store)
+        self.longtask = LongtaskRuntime(self)
         self.pending_replays = {}  # W7.2: sid -> read-only calls to re-run once at turn start
         # sessionId -> the asyncio.timeout budget of the live turn (paused while a decision blocks).
         self.run_budget = {}
@@ -1748,6 +1753,7 @@ class HarnessRuntime(RuntimeCommands):
         self.verify_exec_status = dict(verify_exec.UNPROBED)
         # web_search / web_fetch run on the HOST: the box has no Internet (only loopback).
         self.web = WebTools(snapshot_store=store)
+        task_surface.reconcile_startup(self)
         job_surface.reconcile_startup(self)
 
     async def heal_context_windows(self):
@@ -1947,6 +1953,15 @@ class HarnessRuntime(RuntimeCommands):
         if machine_registry is not None:
             config['machineBinding'] = machine_registry.new_binding(values, parent_id)
         session = self.store.create(config, role, parent_id)
+        # Raw history binding (main-owned history_surface) is minted HERE, before any raw
+        # ingestion, and also when unit tests construct HarnessRuntime directly. The module may
+        # not exist yet during integration; absence must not break session creation.
+        try:
+            from . import history_surface
+        except ImportError:
+            history_surface = None
+        if history_surface is not None and hasattr(history_surface, 'bind_created_session'):
+            history_surface.bind_created_session(self, session['id'])
         if config.get('deadlineClamped'):
             self.store.emit(session['id'], 'notice', {
                 'code': DEADLINE_CLAMP_NOTICE_CODE,
@@ -2054,7 +2069,7 @@ class HarnessRuntime(RuntimeCommands):
         return record if isinstance(record, dict) else None
 
     def start(self, sid, prompt, image=None, route=None, route_metadata=None, images=None,
-              attachments=None, invocation_id=None, btw=False, *, job_wake=None):
+              attachments=None, invocation_id=None, btw=False, *, job_wake=None, longtask_continuation=None):
         """Mở lượt mới. `images` là mảng ảnh inline của lượt (A7), `attachments` là tệp đã
         nằm thật trên đĩa box; cả hai đi qua `agent_core/attachments.py` để kiểm.
 
@@ -2064,6 +2079,23 @@ class HarnessRuntime(RuntimeCommands):
         """
         session = self.store.get(sid)
         wake_data, wake_binding = None, None
+        run = self.longtask.root_run(sid)
+        if run:
+            try:
+                run = self.longtask.check(sid, autonomous=longtask_continuation is not None)
+                run = self.longtask.store.claim_turn(run, self.longtask.runner_id,
+                    time.time() + self.turn_budget_seconds(session, invocation_id))
+                self.longtask.snapshots[sid] = run
+                self.longtask.autonomous[sid] = longtask_continuation is not None
+            except LongtaskError as exc:
+                self.longtask.block(sid, exc)
+                raise
+        if longtask_continuation is not None:
+            if not run or longtask_continuation.get('run_id') != run['runId']:
+                raise LongtaskError('LONGTASK_STALE', 'backend continuation binding required')
+            prompt = json.dumps({'origin': 'controller_continuation', 'runId': run['runId'],
+                                 'goalRevision': run['goalRevision'], 'contractRevision': run['contractRevision'],
+                                 'stopEpoch': run['stopEpoch'], 'sourceReceiptRefs': [longtask_continuation['source_key']]})
         if job_wake is not None:
             from . import job_wake as wake_surface
             if image or route or route_metadata or images or attachments or btw:
@@ -2142,7 +2174,14 @@ class HarnessRuntime(RuntimeCommands):
                                                          for row in checked_images]
         else:
             content = text
-        messages.append({'role': 'system' if wake_data else 'user', 'content': content})
+        messages.append({'role': 'system' if wake_data or longtask_continuation else 'user', 'content': content})
+        if wake_data is None and longtask_continuation is None and not session.get('parent_id'):
+            # Only the owner's own turn is an owner correction: job/longtask wakes and delegated
+            # child initial prompts are synthetic and must never become owner contract revisions.
+            self.history_ingest(sid, {'role': 'user', 'content': content, 'invocationId': invocation_id,
+                                      'btw': bool(btw)},
+                                'ingress:' + str(invocation_id or ('turn' + str(self._turn_index(sid) + 1))),
+                                owner=True)
         if wake_data is None:
             job_surface.begin_turn(self, sid)
         self.store.save(sid, messages, 'running')
@@ -2179,14 +2218,16 @@ class HarnessRuntime(RuntimeCommands):
             event['attachments'] = checked_attachments
         if checked_images:
             event['images'] = checked_images
-        self.store.emit(sid, 'job_wake' if wake_data else 'user', event)
+        self.store.emit(sid, 'longtask_continuation' if longtask_continuation else ('job_wake' if wake_data else 'user'), event)
         task = asyncio.create_task(self._run(sid))
         self.tasks[sid] = task
         if wake_data is not None:
             wake_surface.after_start(self, sid, job_wake)
         return task
 
-    async def stop(self, sid):
+    async def stop(self, sid, *, longtask_barrier=True):
+        if longtask_barrier:
+            self.longtask.store.barrier(sid)
         job_surface.on_stop(self, sid)
         await research_gateway.on_stop(self, sid)
         # Hàng sổ có thể biến mất giữa hai `await` ở trên (người dùng xoá phiên trong lúc tiến trình
@@ -2279,7 +2320,7 @@ class HarnessRuntime(RuntimeCommands):
                                    if event['type'] == 'error'), status)
             except KeyError:
                 status, reason = 'failed', 'SESSION_GONE'
-            self.store.child_finish(child_id, status, reason=reason, steps_used=steps_used,
+            task_surface.finish_child(self, child_id, status, reason=reason, steps_used=steps_used,
                                     output_tokens=output_tokens, answer_chars=answer_chars)
             # H3 — con `wait=false` tự xong: chiếu kết cục vào attempt đang mở của task (nếu có).
             task_surface.project_child(self, child_id)
@@ -2328,7 +2369,7 @@ class HarnessRuntime(RuntimeCommands):
             session = self.store.get(child_id)
             if str(session.get('status') or '') in ('running', 'idle'):
                 self.store.save(child_id, session['messages'], 'cancelled')
-            closed = self.store.child_close_once(child_id, 'cancelled', reason='OWNER_CANCELLED')
+            closed = task_surface.finish_child(self, child_id, 'cancelled', reason='OWNER_CANCELLED', once=True)
             if closed:
                 # H3 — huỷ nhánh là một bộ đóng con: chiếu biên nhận vào attempt đang mở.
                 task_surface.project_child(self, child_id)
@@ -2397,7 +2438,7 @@ class HarnessRuntime(RuntimeCommands):
                 # Con bị dọn giữa đường không có `finish` nào để đọc chi phí, nên đọc từ luồng
                 # của chính nó (T13 đo theo lượt: phần đã tiêu của con phải vào `childSteps`).
                 steps, tokens = self.store.child_usage_from_events(child_id)
-                self.store.child_finish(child_id, 'failed', reason=reason, steps_used=steps,
+                task_surface.finish_child(self, child_id, 'failed', reason=reason, steps_used=steps,
                                         output_tokens=tokens)
                 # H3 — người dọn T7 cũng là một bộ đóng con: chiếu kết cục vào attempt đang mở.
                 task_surface.project_child(self, child_id)
@@ -2940,6 +2981,11 @@ class HarnessRuntime(RuntimeCommands):
                                 safe = {key: value for key, value in result.items()
                                         if key not in {'image', 'base64'}} if isinstance(result, dict) else result
                                 if read_ok and isinstance(safe, dict):
+                                    self.history_ingest(sid, {'role': 'tool', 'name': name, 'args': args,
+                                                              'result': result, 'wrapUp': True},
+                                                        'tool:%s:wrapup:%s' % (self.turn_invocations.get(sid) or '',
+                                                                               call.get('id') or ''),
+                                                        tool_call_id=call.get('id'))
                                     self.store.emit(sid, 'tool_end', {'id': call.get('id'), 'name': name,
                                                                      'args': args, 'result': safe})
                                 request.append({'role': 'tool', 'tool_call_id': call.get('id') or '',
@@ -4091,7 +4137,9 @@ class HarnessRuntime(RuntimeCommands):
                 if item.get('role') == 'system' and isinstance(item.get('content'), str):
                     item['content'] = item['content'].replace(ORCHESTRATOR_SOP_GUIDANCE, adaptive_surface.GUIDANCE)
                     item['content'] = item['content'].replace(orchestrator_guidance(), adaptive_surface.GUIDANCE)
-        response = await usage_surface.complete(self, sid, messages, tools, route, **kwargs)
+        outbound = [{k: v for k, v in item.items() if k not in {'origin', 'summaryGeneration', 'sourceRanges'}}
+                    for item in messages]
+        response = await self.longtask.model(sid, lambda: usage_surface.complete(self, sid, outbound, tools, route, **kwargs))
         if decision is not None and isinstance(response, dict):
             response = dict(response, _harnessRequest={'maxTokens': kwargs.get('max_tokens', 4096)})
         return response
@@ -4360,6 +4408,9 @@ class HarnessRuntime(RuntimeCommands):
             self.plan_turn_notices(sid, turn_calls)
             messages.append({'role': 'assistant', 'content': text})
             self.store.save(sid, messages, 'completed')
+            self.history_ingest(sid, {'role': 'assistant', 'content': text, 'partial': True,
+                                      'code': reason_code},
+                                'assistant:%s:partial' % (self.turn_invocations.get(sid) or '',))
             payload = {'text': text, 'thought': '', 'final': True}
             if evidence_info:
                 payload['evidence'] = evidence_info
@@ -4763,6 +4814,9 @@ class HarnessRuntime(RuntimeCommands):
                         # F3 — `final` là tín hiệu "lượt đã xong" của giao diện (`turn.isCompleted`,
                         # thẻ câu trả lời cuối). Bước sắp bị nhắc thì lượt CHƯA xong, nên câu nói
                         # dở này phải đi ra như văn giữa lượt, không phải câu trả lời cuối.
+                        self.history_ingest(sid, {'role': 'assistant', 'content': text, 'thought': thought},
+                                            'assistant:%s:%s:%s' % (self.turn_invocations.get(sid) or '',
+                                                                     turn_no, step))
                         payload = {'text': text, 'thought': thought,
                                    'final': not calls and verdict_note is None}
                         if evidence_info:
@@ -4814,6 +4868,7 @@ class HarnessRuntime(RuntimeCommands):
                             # chứng nhận claim mới. Chỉ ghi lại (notice) để eval/UI đọc; không chặn.
                             for note in self.final_claim_notices(sid, text):
                                 self.store.emit(sid, 'work_notice', note)
+                        self.longtask.finish(sid)
                         partial = truncated_partial or answer_partial
                         close_turn('partial' if partial else 'completed', choice.get('finish_reason'), 0,
                                    response.get('usage'), extra={'partial': True} if partial else None)
@@ -4849,6 +4904,7 @@ class HarnessRuntime(RuntimeCommands):
                     if len(calls) > 16:
                         raise ValueError('Tool-call batch exceeds limit')
                     for call in calls:
+                        self.longtask.check(sid, self.longtask.snapshots.get(sid))
                         fn = call['function']
                         args, error = parse_tool_arguments(fn.get('arguments'))
                         name = fn.get('name', '')
@@ -4898,6 +4954,9 @@ class HarnessRuntime(RuntimeCommands):
                             tool_content = [{'type': 'text', 'text': text_result}, {'type': 'image_url', 'image_url': {'url': 'data:' + result.get('mime', 'image/png') + ';base64,' + result['image']}}]
                         # W7.2: tool_end is the commit point; a crash before the transcript save is
                         # recovered by reusing this exact result instead of running the tool again.
+                        self.history_ingest(sid, {'role': 'tool', 'name': name, 'args': args, 'result': result},
+                                            'tool:%s:%s:%s:%s' % (self.turn_invocations.get(sid) or '', turn_no,
+                                                                  step + 1, call['id']), tool_call_id=call['id'])
                         self.store.emit(sid, 'tool_end', {'id': call['id'], 'name': name, 'args': args, 'result': safe})
                         messages.append({'role': 'tool', 'tool_call_id': call['id'], 'name': name, 'content': tool_content})
                         self.store.save(sid, messages)
@@ -4985,6 +5044,8 @@ class HarnessRuntime(RuntimeCommands):
             if retries:
                 error = (f'{error} [after {retries} {self.retry_noun(retries)} in '
                          f'{getattr(exc, "retry_waited_seconds", 0.0):.1f}s]')
+            if isinstance(exc, LongtaskError):
+                self.longtask.block(sid, exc)
             self.store.save(sid, messages, 'failed')
             self.store.emit(sid, 'error', {'message': error, 'code': code})
             elapsed_ms = (time.time() - started) * 1000
@@ -5020,6 +5081,8 @@ class HarnessRuntime(RuntimeCommands):
             for record in self.pending_for(sid):
                 if not record.get('durable'):
                     self.settle(record, record['defaultChoice'], 'cancelled', 'session_cancelled', None)
+            self.longtask.snapshots.pop(sid, None)
+            self.longtask.autonomous.pop(sid, None)
             self.active_messages.pop(sid, None)
             self.active_step.pop(sid, None)
             self.progress_state.pop(sid, None)
@@ -5045,9 +5108,9 @@ class HarnessRuntime(RuntimeCommands):
 
     async def dispatch(self, session, name, args, call_id=None):
         try:
-            result = await self._dispatch(session, name, args, call_id)
+            result = await self.longtask.tool(session['id'], lambda: self._dispatch(session, name, args, call_id))
         except Exception as exc:
-            code, message = classify_failure(exc)
+            code, _ = classify_failure(exc)
             adaptive_surface.after_tool(self, session['id'], name, args,
                                         {'is_error': True, 'errorCode': code})
             raise
@@ -5055,6 +5118,10 @@ class HarnessRuntime(RuntimeCommands):
         return result
 
     async def _dispatch(self, session, name, args, call_id=None):
+        if name in {'history_list', 'history_search', 'history_read'}:
+            # Main-owned history service: trusted caller sid comes from the server-minted session.
+            from . import history_surface
+            return await history_surface.dispatch(self, session['id'], name, args)
         sid, config = session['id'], session['config']
         current = self.store.get(sid)
         graph = getattr(self, 'work_graph', None)
@@ -5778,11 +5845,156 @@ class HarnessRuntime(RuntimeCommands):
                 'messages': [{'role': item['role'], 'content': item['text']} for item in newest],
                 'truncated': bool(dropped) or bool(capped), 'dropped': dropped}
 
+    def longtask_state(self, sid):
+        run = self.longtask.store.get(sid)
+        if run:
+            run['pendingDecisionIds'] = [d['decisionId'] for d in self.decision_store.page(sid)['decisions']]
+        return run
+
+    def configure_longtask(self, sid, body):
+        return self.longtask.configure(sid, body)
+
+    async def longtask_action(self, sid, body):
+        acceptance = None
+        if body.get('action') in ('inspect', 'accept'):
+            run = self.longtask.store.get(sid)
+            if not run or not callable(self.longtask.authority) or self.longtask.authority(sid, run) != run['binding']:
+                raise LongtaskError('LONGTASK_STALE', 'current scope/workspace/authority must be verified')
+            if body.get('action') == 'accept':
+                if not callable(self.longtask.owner_acceptance):
+                    raise LongtaskError('LONGTASK_ACCEPTANCE_UNAVAILABLE', 'scoped owner acceptance hook required')
+                acceptance = self.longtask.owner_acceptance(sid, run, body)
+        result = self.longtask.store.action(sid, body, acceptance=acceptance)
+        if body.get('action') in ('pause', 'cancel'):
+            # Barrier is already committed before the first await.
+            await self.stop(sid, longtask_barrier=False)
+        elif body.get('action') == 'resume':
+            try:
+                run = self.longtask.check(sid)
+                if run['resumePolicy'] == 'safe_auto':
+                    if run['workRunId'] or run['planRunId']:
+                        if not callable(self.longtask.controller_continue):
+                            raise LongtaskError('LONGTASK_CONTROLLER_UNAVAILABLE', 'owning controller hook required')
+                        self.longtask.controller_continue(run, {'source': 'owner_resume'})
+                    else:
+                        self.longtask.store.queue(run, 'owner:' + body['invocationId'])
+            except LongtaskError as exc:
+                self.longtask.block(sid, exc)
+                raise
+        return self.longtask_state(sid)
+
+    async def recover_longtasks(self):
+        # Main calls after graph/plan/watchdog sweeps and after acquiring profile guard.
+        for row in self.store.db.execute('SELECT DISTINCT session_id FROM session_decisions'):
+            self.hydrate_decisions(row['session_id'])
+        return await self.longtask.recover()
+
+    async def pump_longtasks(self):
+        return await self.longtask.pump()
+
+    def history_ingest(self, sid, payload, source_key, *, owner=False, tool_call_id=None):
+        """Raw archive seams for the main-owned history surface. Failure is logged, never fatal:
+        the canonical raw record is best-effort while the live turn keeps its own receipts."""
+        history = getattr(self.store, 'history', None)
+        if history is None:
+            return None
+        try:
+            if owner:
+                from . import history_surface
+                return history.record_ingress(sid, payload, source_key=source_key, origin='owner_user',
+                                              actor_identity=history_surface.owner_identity(self))
+            if tool_call_id is not None:
+                return history.record_tool_result(sid, payload, source_key=source_key,
+                                                  tool_call_id=tool_call_id)
+            return history.record_observation(sid, payload, source_key=source_key)
+        except Exception as exc:
+            try:
+                system_log.write('history.record.failed', level='error', session_id=sid,
+                                 sourceKey=source_key, error=str(exc)[:300])
+            except Exception:
+                pass
+            return None
+
+    def decision_binding(self, sid, call_id, args):
+        run = self.longtask.root_run(sid)
+        binding = {'toolCallId': call_id, 'argsHash': tool_recovery.start_payload(call_id, '', args)['argsHash'],
+                   'stepSeq': tool_recovery.step_seq(self.store, sid)}
+        if run:
+            binding.update(runId=run['runId'], goalRevision=run['goalRevision'],
+                           contractRevision=run['contractRevision'], capabilityEpoch=run['capabilityEpoch'],
+                           stopEpoch=run['stopEpoch'], contractHash=run['contractHash'])
+        plan_id, version = plan_approval_target(args, 'request_approval')
+        if plan_id:
+            binding.update(planIdentity=plan_id, planVersion=version,
+                           planVerification=self.store.plan_verification(plan_id, version))
+        return binding
+
+    def current_decision_binding(self, record):
+        binding = dict(record.get('binding') or {})
+        run = self.longtask.root_run(record['sessionId'])
+        if binding.get('runId'):
+            if not run:
+                return None
+            binding.update(runId=run['runId'], goalRevision=run['goalRevision'],
+                           contractRevision=run['contractRevision'], capabilityEpoch=run['capabilityEpoch'],
+                           stopEpoch=run['stopEpoch'], contractHash=run['contractHash'])
+        if binding.get('planIdentity'):
+            binding['planVerification'] = self.store.plan_verification(binding['planIdentity'], binding['planVersion'])
+        return binding
+
+    def hydrate_decisions(self, sid):
+        after = None
+        while True:
+            page = self.decision_store.page(sid, 'all', after, 100)
+            for value in page['decisions']:
+                old = self.pending.get(value['decisionId'])
+                if old and old.get('future'):
+                    value['future'] = old['future']
+                value['restored'] = old is None or old.get('restored', False)
+                if old is not None:
+                    old.update(value)
+                    value = old
+                self.pending[value['decisionId']] = value
+                if not value['resolved'] and value.get('deadline') is not None and value['deadline'] <= time.time():
+                    self.settle(value, value['defaultChoice'], 'expired', 'timeout', None)
+            if not page['hasMore']:
+                break
+            after = page['nextAfter']
+        self.prune_pending()
+
+    def pending_decisions(self, sid, state='pending', after=None, limit=20):
+        self.hydrate_decisions(sid)
+        # Work feedback remains in its own store, not copied into session_decisions.
+        result = self.decision_store.page(sid, state, after, limit)
+        graph = getattr(self, 'work_graph', None)
+        if graph and state == 'pending' and after is None:
+            result['feedbackDecisions'] = graph.feedback.pending(sid)
+        return result
+
     def pending_for(self, sid):
         """Unresolved decisions of one session, in request order."""
+        self.hydrate_decisions(sid)
         records = [record for record in self.pending.values() if record['sessionId'] == sid and not record['resolved']]
         graph = getattr(self, 'work_graph', None)
         return records + (graph.feedback.pending(sid) if graph else [])
+
+    async def restored_decision(self, sid, call_id, args):
+        if not call_id:
+            return None
+        binding = self.decision_binding(sid, call_id, args)
+        stored = self.decision_store.bound(sid, call_id, binding)
+        if stored is None:
+            return None
+        self.hydrate_decisions(sid)
+        record = self.pending[stored['decisionId']]
+        if record.get('kind') == 'approval' and record.get('restored'):
+            # Card/fact may be answered, but a lost mutation coroutine cannot inherit authority.
+            raise DecisionError('DECISION_APPROVAL_REPLAY_UNSAFE', 'inspect interrupted mutation; approval is not replay authority', 409)
+        if record['resolved']:
+            return record['outcome']
+        if record.get('future') is None:
+            record['future'] = asyncio.get_running_loop().create_future()
+        return await self.wait_for_decision(record)
 
     async def decision(self, session, name, args, call_id=None):
         """ask_user / request_approval: emit decision_requested, block, return the honest outcome."""
@@ -5849,13 +6061,15 @@ class HarnessRuntime(RuntimeCommands):
         work_run_id = str(args.get('workRunId') or '').strip()
         if work_run_id:
             record['workRunId'] = work_run_id
+        binding = self.decision_binding(sid, call_id, args)
+        stored = self.decision_store.request(record, {
+            'decisionId': decision_id, 'kind': kind, 'question': question, 'action': action, 'reason': reason,
+            'options': options, 'deadline': record['deadline'], 'defaultChoice': record['defaultChoice'],
+            'toolCallId': call_id, **({'workRunId': work_run_id} if work_run_id else {})}, binding)
+        record.update(stored)
         self.pending[decision_id] = record
         self.prune_pending()
         self.store.save(sid, self.active_messages.get(sid, session['messages']), 'awaiting_decision')
-        self.store.emit(sid, 'decision_requested', {
-            'decisionId': decision_id, 'kind': kind, 'question': question, 'action': action, 'reason': reason,
-            'options': options, 'deadline': record['deadline'], 'defaultChoice': record['defaultChoice'],
-            'toolCallId': call_id, **({'workRunId': work_run_id} if work_run_id else {})})
         self.store.emit(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': decision_id},
                                           'reason': 'decision_requested'})
         return await self.wait_for_decision(sid, record)
@@ -5871,12 +6085,13 @@ class HarnessRuntime(RuntimeCommands):
             except RuntimeError:
                 paused = None
         try:
-            await asyncio.wait_for(asyncio.shield(record['future']), timeout=max(0.0, record['deadline'] - time.time()))
+            await asyncio.wait_for(asyncio.shield(record['future']), timeout=None if record['deadline'] is None else max(0.0, record['deadline'] - time.time()))
         except asyncio.TimeoutError:
             if self.settle(record, record['defaultChoice'], 'expired', 'timeout', None):
                 # A7: hết hạn là một cách chốt — nhật ký phải ghi cùng một khuôn như người bấm.
                 await self.pin_decision(record['sessionId'], record['outcome'])
         finally:
+            self.longtask.wait_ms[sid] = self.longtask.wait_ms.get(sid, 0) + (time.monotonic() - paused_at) * 1000
             if paused is not None:
                 try:
                     budget.reschedule(paused + (time.monotonic() - paused_at))
@@ -5884,35 +6099,49 @@ class HarnessRuntime(RuntimeCommands):
                     pass
         return record['outcome']
 
-    def settle(self, record, choice, status, reason, note):
-        """Resolve a decision exactly once: event first, then the blocked turn continues."""
+    def settle(self, record, choice, status, reason, note, *, invocation_id=None,
+               reply_payload=None, reply=None, expected_revision=None):
+        """Commit outcome/event/effects before touching Future. Canonical failure blocks approval."""
         if record['resolved']:
             return False
-        record['resolved'] = True
-        # P4 (vá vòng soát) — 'answered' (chủ nhà GÕ chữ vào ô tự nhập) là CÂU TRẢ LỜI, không phải
-        # một lời từ chối: khoá `decision` giữ đúng chữ ấy để mọi chỗ đọc outcome không gọi nó là
-        # "rejected" (bản trước hoá mọi thứ khác 'approved' thành 'rejected').
-        record['outcome'] = {'decision': status if status in ('approved', DECISION_ANSWERED_STATUS)
-                             else 'rejected',
-                             'choice': choice, 'status': status, 'reason': reason, 'note': note,
-                             'decisionId': record['decisionId'], 'message': DECISION_OUTCOME_MESSAGES[status]}
-        # §4.1: quyết định về một kế hoạch vào sổ duyệt TRƯỚC `decision_resolved`, để ai đọc sổ ngay
-        # sau sự kiện đó cũng thấy đúng trạng thái. Ghi hỏng không được làm hỏng lượt trả lời.
-        self.record_plan_decision(record, status, note)
+        outcome = {'decision': status if status in ('approved', DECISION_ANSWERED_STATUS) else 'rejected',
+                   'choice': choice, 'status': status, 'reason': reason, 'note': note,
+                   'decisionId': record['decisionId'], 'message': DECISION_OUTCOME_MESSAGES[status]}
         resolved = {'decisionId': record['decisionId'], 'choice': choice, 'status': status, 'note': note,
                     'reason': reason, 'resolvedAt': round(time.time(), 3)}
         if record.get('kind') == 'interview':
             if not record.get('answers'):
-                # Hết hạn/huỷ/"để agent quyết định": mọi câu về agent TRƯỚC event, để lịch sử có đủ.
                 record['answers'] = [self.interview_answer(q, None) for q in record.get('questions') or []]
-            record['outcome']['answers'] = record['answers']
-            resolved['answers'] = record['outcome']['answers']
-        self.store.emit(record['sessionId'], 'decision_resolved', resolved)
-        if not record['future'].done():
-            record['future'].set_result(record['outcome'])
-        if reason != 'session_cancelled':
+            outcome['answers'] = resolved['answers'] = record['answers']
+        def effects(db):
+            self.record_plan_decision(record, status, note)
+            if record.get('kind') == 'budget':
+                self.longtask.budget_effect(record, choice)(db)
+        if record.get('durable'):
+            current = self.current_decision_binding(record)
+            if reason == 'user' and current is None:
+                raise DecisionError('DECISION_STALE', 'canonical run no longer active', 409)
+            try:
+                self.decision_store.settle(record, outcome, resolved, invocation_id=invocation_id,
+                    reply_payload=reply_payload, reply=reply, expected_revision=expected_revision,
+                    current_binding=current if reason == 'user' else None, side_effect=effects)
+            except DecisionStoreError as exc:
+                raise DecisionError(exc.code, str(exc), exc.status) from exc
+        else:
+            effects(self.store.db)
+            self.store.emit(record['sessionId'], 'decision_resolved', resolved)
+        record.update(resolved=True, outcome=outcome, revision=record.get('revision', 1) + 1)
+        future = record.get('future')
+        if future is not None and not future.done():
+            future.set_result(outcome)
+        if reason != 'session_cancelled' and future is not None:
             self.resume(record['sessionId'])
         return True
+
+    def _decision_emit(self, sid, kind, data):
+        if self.store.db.in_transaction:
+            return durable_event(self.store.db, sid, kind, data)
+        return self.store.emit(sid, kind, data)
 
     def record_plan_decision(self, record, status, note):
         """Duyệt kế hoạch trong chat vào sổ thật (§4.1): `request_approval`/`ask_user` khai `planIdentity`/`planVersion`.
@@ -5944,7 +6173,7 @@ class HarnessRuntime(RuntimeCommands):
         if status in ('expired', 'cancelled'):
             # D-37: hết hạn KHÔNG phải một lời từ chối — không hàng nào, nhưng có dấu vết.
             reason = 'timeout' if status == 'expired' else 'session_cancelled'
-            self.store.emit(record['sessionId'], 'plan_decision_skipped',
+            self._decision_emit(record['sessionId'], 'plan_decision_skipped',
                             {'identity': identity, 'version': version, 'status': status,
                              'kind': record.get('kind'), 'reason': reason})
             event = 'plan.review.expired' if status == 'expired' else 'plan.review.cancelled'
@@ -5960,7 +6189,7 @@ class HarnessRuntime(RuntimeCommands):
             # P4 (vá vòng soát) — chủ nhà gõ câu trả lời vào ô tự nhập: đó là CÂU TRẢ LỜI, không phải
             # một lời duyệt kế hoạch. Cùng khuôn với `expired`/`cancelled`: KHÔNG hàng nào vào sổ duyệt,
             # nhưng `plan_decision_skipped` + một dòng `system_log` giữ lại sự thật đã xảy ra.
-            self.store.emit(record['sessionId'], 'plan_decision_skipped',
+            self._decision_emit(record['sessionId'], 'plan_decision_skipped',
                             {'identity': identity, 'version': version, 'status': status,
                              'kind': record.get('kind'), 'reason': 'free_text'})
             system_log.write('plan.review.answered', level='info', code='PLAN_REVIEW_ANSWERED',
@@ -5998,13 +6227,19 @@ class HarnessRuntime(RuntimeCommands):
                                      status=status, kind=record.get('kind'), mode=mode,
                                      **({'unknown': unknown} if unknown else {}))
                 if mode == 'enforce':
-                    self.store.emit(record['sessionId'], 'plan_decision_skipped',
+                    self._decision_emit(record['sessionId'], 'plan_decision_skipped',
                                     {'identity': identity, 'version': version, 'status': status,
                                      'kind': record.get('kind'), 'reason': 'unverified',
                                      'code': PLAN_APPROVAL_UNVERIFIED_CODE, 'message': blocked})
                     return None
         decision = 'approved' if status == 'approved' else 'changes_requested'
         try:
+            if self.store.db.in_transaction:
+                self.store.db.execute('INSERT OR REPLACE INTO plan_reviews '
+                    '(identity,version,decision,note,source,session_id,decided_at,content_size,content_modified_at) '
+                    'VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                    (identity, version, decision, note or '', 'approval', record['sessionId'], time.time()))
+                return self.store.plan_review(identity, version)
             return self.store.record_plan_review(identity, version, decision, note=(note or ''),
                                                  source='approval', session_id=record['sessionId'])
         except Exception as exc:  # pragma: no cover - sổ duyệt không bao giờ được giết một quyết định
@@ -6012,6 +6247,8 @@ class HarnessRuntime(RuntimeCommands):
                              message=f'không ghi được sổ duyệt cho {identity} v{version}: {exc}',
                              session_id=record['sessionId'], identity=identity, version=version,
                              decision=decision)
+            if record.get('durable'):
+                raise
             return None
 
     def resume(self, sid):
@@ -6029,8 +6266,16 @@ class HarnessRuntime(RuntimeCommands):
         for key in settled[:-keep]:
             self.pending.pop(key, None)
 
-    def resolve_decision(self, sid, decision_id, choice, note=None, answers=None):
+    def resolve_decision(self, sid, decision_id, choice, note=None, answers=None, *, invocation_id=None, expected_revision=None):
         """Answer a pending decision; raises DecisionError with the contract's status codes."""
+        payload = {'choice': choice, 'note': note, 'answers': answers, 'expectedRevision': expected_revision}
+        try:
+            cached = self.decision_store.retry(sid, decision_id, invocation_id, payload)
+        except DecisionStoreError as exc:
+            raise DecisionError(exc.code, str(exc), exc.status) from exc
+        if cached is not None:
+            return cached
+        self.hydrate_decisions(sid)
         if isinstance(decision_id, str) and decision_id.startswith('wr-'):
             try:
                 return work_graph.service(self).feedback.answer(sid, decision_id, choice, answers)
@@ -6038,7 +6283,8 @@ class HarnessRuntime(RuntimeCommands):
                 raise DecisionError(exc.code, str(exc), exc.status) from exc
         record = self.pending.get(decision_id) if isinstance(decision_id, str) else None
         if record is not None and record.get('kind') == 'interview' and record['sessionId'] == sid:
-            return self.resolve_interview(record, choice, note, answers)
+            return self.resolve_interview(record, choice, note, answers, invocation_id=invocation_id,
+                                          expected_revision=expected_revision, reply_payload=payload)
         if not isinstance(decision_id, str) or not decision_id:
             raise DecisionError('DECISION_INVALID', 'decisionId is required', 400)
         if not isinstance(choice, str) or not choice:
@@ -6074,8 +6320,12 @@ class HarnessRuntime(RuntimeCommands):
             status = DECISION_ANSWERED_STATUS
         else:
             status = 'approved' if option['kind'] in {'approve', 'alternative'} else 'rejected'
-        self.settle(record, choice, status, 'user', written or None)
-        return {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': status}
+        reply = {'status': 'resolved', 'decisionId': decision_id, 'choice': choice, 'outcome': status}
+        if invocation_id is not None or expected_revision is not None:
+            reply['revision'] = record.get('revision', 1) + 1
+        self.settle(record, choice, status, 'user', written or None, invocation_id=invocation_id,
+                    expected_revision=expected_revision, reply_payload=payload, reply=reply)
+        return reply
 
     # ---- Work Graph + interview ------------------------------------------------------------ #
 
@@ -6175,13 +6425,15 @@ class HarnessRuntime(RuntimeCommands):
                   'deadline': decision_deadline(args, 'interview'), 'defaultChoice': INTERVIEW_DECIDE,
                   'toolCallId': call_id, 'resolved': False, 'outcome': None, 'answers': [],
                   'future': asyncio.get_running_loop().create_future()}
+        binding = self.decision_binding(sid, call_id, args)
+        stored = self.decision_store.request(record, {
+            'decisionId': decision_id, 'kind': 'interview', 'question': title, 'title': title,
+            'questions': questions, 'options': options, 'deadline': record['deadline'],
+            'defaultChoice': record['defaultChoice'], 'toolCallId': call_id, 'runId': run_id}, binding)
+        record.update(stored)
         self.pending[decision_id] = record
         self.prune_pending()
         self.store.save(sid, self.active_messages.get(sid, session['messages']), 'awaiting_decision')
-        self.store.emit(sid, 'decision_requested', {
-            'decisionId': decision_id, 'kind': 'interview', 'question': title, 'title': title,
-            'questions': questions, 'options': options, 'deadline': record['deadline'],
-            'defaultChoice': record['defaultChoice'], 'toolCallId': call_id, 'runId': run_id})
         self.store.emit(sid, 'ui_intent', {'tab': 'decisions', 'target': {'requestId': decision_id},
                                           'reason': 'decision_requested'})
         outcome = await self.wait_for_decision(sid, record)
@@ -6229,7 +6481,7 @@ class HarnessRuntime(RuntimeCommands):
         return base | {'optionId': option_id, 'answer': option['label'], 'decidedBy': 'user',
                        **({'note': text[:DECISION_NOTE_MAX_CHARS]} if text else {})}
 
-    def resolve_interview(self, record, choice, note, answers):
+    def resolve_interview(self, record, choice, note, answers, *, invocation_id=None, expected_revision=None, reply_payload=None):
         if record['resolved']:
             raise DecisionError('DECISION_ALREADY_RESOLVED', 'decision ' + record['decisionId'] +
                                 ' was already answered', 409)
@@ -6248,9 +6500,13 @@ class HarnessRuntime(RuntimeCommands):
                 raise DecisionError('DECISION_INVALID', 'unknown questionId ' + ', '.join(sorted(unknown)), 400)
         record['answers'] = [self.interview_answer(q, by_id.get(q['id'])) for q in record['questions']]
         written = (note or '').strip() if isinstance(note, str) else ''
-        self.settle(record, choice, DECISION_ANSWERED_STATUS, 'user', written[:DECISION_NOTE_MAX_CHARS] or None)
-        return {'status': 'resolved', 'decisionId': record['decisionId'], 'choice': choice,
-                'outcome': DECISION_ANSWERED_STATUS, 'answers': record['answers']}
+        reply = {'status': 'resolved', 'decisionId': record['decisionId'], 'choice': choice,
+                 'outcome': DECISION_ANSWERED_STATUS, 'answers': record['answers']}
+        if invocation_id is not None or expected_revision is not None:
+            reply['revision'] = record.get('revision', 1) + 1
+        self.settle(record, choice, DECISION_ANSWERED_STATUS, 'user', written[:DECISION_NOTE_MAX_CHARS] or None,
+                    invocation_id=invocation_id, expected_revision=expected_revision, reply_payload=reply_payload, reply=reply)
+        return reply
 
     async def registration_or_refuse(self, session, sid, slug, args, declared):
         """MỘT đường đăng ký kế hoạch: từ chối ở đâu cũng để lại dòng nhật ký hệ thống + vé.
@@ -7291,7 +7547,7 @@ class HarnessRuntime(RuntimeCommands):
         reason = partial_reason or next((event['data'].get('code') for event in reversed(events)
                                          if event['type'] == 'error'), None)
         steps_used, output_tokens = self.store.child_usage_from_events(child_id)
-        self.store.child_finish(child_id, status, reason=reason, steps_used=steps_used,
+        task_surface.finish_child(self, child_id, status, reason=reason, steps_used=steps_used,
                                 output_tokens=output_tokens, answer_chars=len(answer_text or ''))
         task_surface.project_child(self, child_id)
         job_surface.project_child(self, child_id)
@@ -7814,7 +8070,7 @@ class HarnessRuntime(RuntimeCommands):
             output_tokens = child_end.get('outputTokens')
         wall_ms = round((time.time() - child_started) * 1000)
         final_reason = result.get('reason') or last_error
-        self.store.child_finish(child['id'], status, reason=final_reason, steps_used=steps_used,
+        task_surface.finish_child(self, child['id'], status, reason=final_reason, steps_used=steps_used,
                                 output_tokens=output_tokens, answer_chars=len(answer_text))
         # H3 — con `wait=true` xong: chiếu kết cục vào attempt đang mở của task (nếu có).
         task_surface.project_child(self, child['id'])

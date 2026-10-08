@@ -9,6 +9,7 @@ Ba điều phải đúng, vì cả ba đều là chỗ đã hỏng thật trên 
    khối lên nhau (system prompt phình ra là ngữ cảnh chết).
 """
 import asyncio
+import pytest
 
 from agentbox.agent_core import journal, session_journal
 from agentbox.memory.session_store import SessionStore
@@ -146,9 +147,35 @@ def test_rows_that_belong_to_no_group_leave_the_memory_block_empty(tmp_path):
     assert journal.brief_has_items(block) is True
 
 
-def test_a_missing_executor_skips_the_file_layer_silently(tmp_path):
-    """Harness không sandbox (test, chạy ngoài box): hàng SQLite vẫn có, không notice, không ném."""
+def test_a_missing_executor_keeps_the_row_and_reports_missing_projection(tmp_path):
+    """SQLite exists, but no executor does not prove a readable file exists."""
     store, sid = _store(tmp_path)
-    asyncio.run(session_journal.append(None, store, sid, 'step', 'bước 1 xong', status='done'))
+    answer = asyncio.run(session_journal.append(None, store, sid, 'step', 'bước 1 xong', status='done'))
     assert [row['kind'] for row in store.journal_tail(sid)] == ['step']
-    assert [event for event in store.events(sid) if event['type'] == 'notice'] == []
+    assert answer['degraded'] is True
+    notices = [event for event in store.events(sid) if event['type'] == 'notice']
+    assert len(notices) == 1
+    assert notices[0]['data']['code'] == session_journal.JOURNAL_FAILED_CODE
+    assert notices[0]['data']['projectionStored'] is False
+
+
+@pytest.mark.parametrize('answer', [
+    {'is_error': True, 'errorCode': 'HOST_TOOL_UNSUPPORTED', 'error': 'deferred'},
+    {'ok': True, 'errorCode': 'CHECKPOINT_WRITE_FAILED'},
+    {'is_error': True, 'error': 'write failed'},
+    {},
+    {'status': 'recorded'},
+    None,
+    'unexpected response',
+])
+def test_all_executor_failure_shapes_report_missing_checkpoint_file(tmp_path, answer):
+    store, sid = _store(tmp_path)
+    executor = _Executor()
+    executor.answer = answer
+    result = asyncio.run(session_journal.write_checkpoint_file(
+        executor, store, sid, [{'role': 'user', 'content': 'keep the original goal'}]))
+    assert result is None
+    notices = [event for event in store.events(sid) if event['type'] == 'notice']
+    assert len(notices) == 1
+    assert notices[0]['data']['code'] == session_journal.CHECKPOINT_FAILED_CODE
+    assert notices[0]['data']['projectionStored'] is False

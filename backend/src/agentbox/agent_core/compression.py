@@ -257,6 +257,22 @@ def _thin_message(message):
     return out
 
 
+def _summary_reference(message):
+    """Recognize harness summaries without treating user text as a synthetic instruction."""
+    content = message.get('content')
+    return (message.get('role') == 'assistant' and isinstance(content, str)
+            and (message.get('origin') == 'synthetic_handoff'
+                 or content.startswith(COMPACTION_BANNER)))
+
+
+def _summary_data(message):
+    """Retain prior progress, but do not recursively summarize the harness's instruction frame."""
+    content = message['content']
+    while content.startswith(COMPACTION_BANNER):
+        content = content[len(COMPACTION_BANNER):].lstrip('\n')
+    return {**message, 'content': content, 'origin': 'synthetic_handoff'}
+
+
 def summarizer_material(messages, ceiling=SUMMARY_INPUT_CHARS):
     """A summarizer-sized view of the history: the arc of the mission, not every byte of it.
 
@@ -269,7 +285,18 @@ def summarizer_material(messages, ceiling=SUMMARY_INPUT_CHARS):
     transcript is sampled evenly: the summarizer only writes prose, so a call and its result may be
     split across the sample.
     """
-    shaped = [_thin_message(message) for message in messages]
+    shaped = []
+    seen_summaries = set()
+    for message in messages:
+        if _summary_reference(message):
+            message = _summary_data(message)
+            # Only identical state and provenance is redundant. Different summaries can hold
+            # unique evidence; a generation number alone is not sufficient to discard one.
+            identity = (message['content'], json.dumps(message.get('sourceRanges'), sort_keys=True))
+            if identity in seen_summaries:
+                continue
+            seen_summaries.add(identity)
+        shaped.append(_thin_message(message))
     while len(shaped) > 1 and _chars(shaped) > ceiling:
         # Even sampling keeps both ends of the mission: the oldest is the goal, the newest is where
         # the model is.
@@ -583,7 +610,14 @@ class ContextCompressor:
                 raise ValueError('CONTEXT_LIMIT: summary failed; original transcript preserved.')
             self._arm_thrash(estimate_tokens(messages, tools))
             return messages, {'kind': 'summary_failed', 'beforeEstimate': before}
-        result = result[:1] + [{'role': 'assistant', 'content': COMPACTION_BANNER + '\n' + text}] + result[cut:]
+        generations = [m.get('summaryGeneration', 0) for m in result[1:cut]
+                       if _summary_reference(m) and type(m.get('summaryGeneration', 0)) is int]
+        generation = max(generations, default=0) + 1
+        summary_message = {'role': 'assistant', 'content': COMPACTION_BANNER + '\n' + text,
+                           'origin': 'synthetic_handoff', 'summaryGeneration': generation,
+                           'sourceRanges': [{'view': 'pre_compaction_active', 'startMessage': 1,
+                                             'endMessageExclusive': cut}]}
+        result = result[:1] + [summary_message] + result[cut:]
         after = estimate_tokens(result, tools)
         if after > self.budget:
             raise ValueError('CONTEXT_LIMIT: summary did not reduce context enough; original preserved.')
@@ -592,7 +626,8 @@ class ContextCompressor:
             # Compaction is then unnecessary, not a failure: keep the original and report honestly.
             return messages, {'kind': 'unchanged', 'beforeEstimate': before, 'afterEstimate': before,
                               'reason': 'summary_not_smaller'}
-        event = {'kind': 'summary', 'beforeEstimate': before, 'afterEstimate': after}
+        event = {'kind': 'summary', 'beforeEstimate': before, 'afterEstimate': after,
+                 'summaryGeneration': generation}
         if truncated:
             event['summaryTruncated'] = True
         # E — nén xong mà ngữ cảnh vẫn sát ngưỡng thì bước sau lại vượt ngưỡng và lại gọi tóm tắt:

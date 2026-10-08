@@ -14,7 +14,8 @@ cách chia nhóm, không cấp quyền gì thêm.
 
 TOOL_GROUPS = [
     {'key': 'repositoryReading',
-     'tools': ['file_read', 'codebase_glob', 'codebase_grep'],
+     'tools': ['file_read', 'codebase_glob', 'codebase_grep',
+               'history_list', 'history_search', 'history_read'],
      'alwaysOn': False},
     {'key': 'skills',
      'tools': ['skills_list', 'skill_view'],

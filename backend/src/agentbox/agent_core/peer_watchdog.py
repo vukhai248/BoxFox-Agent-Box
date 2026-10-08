@@ -137,8 +137,14 @@ class PeerWatchdog:
         # Cùng lý do như T7: con bị cắt giữa đường không có `finish`, chi phí đã tiêu đọc từ luồng
         # của nó để bộ số theo lượt của cha không đếm thiếu.
         steps, tokens = self.store.child_usage_from_events(child_id)
-        closed = self.store.child_close_once(child_id, 'failed', reason=reason, steps_used=steps,
-                                             output_tokens=tokens)
+        if self.runtime is not None and getattr(self.runtime, 'store', None) is self.store:
+            from . import task_surface
+            closed = task_surface.finish_child(self.runtime, child_id, 'failed', reason=reason,
+                                                steps_used=steps, output_tokens=tokens, once=True,
+                                                started=row['started'])
+        else:
+            closed = self.store.child_close_once(child_id, 'failed', reason=reason, steps_used=steps,
+                                                 output_tokens=tokens)
         if closed is None:
             return False
         if cancel:

@@ -392,6 +392,7 @@ class TaskService:
     def record_attempt(self, owner_id, run_id, task_key, *, invocation_id, expected_revision,
                        session_id, admission_id, capability_epoch):
         """Record an already-admitted canonical child, not permission to start it."""
+        self.reconcile_startup()
         self._run(owner_id, run_id)
         identifier(admission_id, 'admissionId')
         revision(expected_revision)
@@ -449,11 +450,14 @@ class TaskService:
         Trả `None` khi con này chưa từng được gắn vào task nào (đường cũ) — người gọi không phải
         phân nhánh. Con đã đóng mà attempt đã là snapshot đóng thì giữ nguyên (bất biến).
         """
-        if status not in CHILD_OUTCOMES:
-            return None
-        row = self.db.execute('SELECT * FROM harness_task_attempts WHERE session_id=? '
+        with self._write():
+            return self._close_attempt_locked(session_id)
+
+    def _close_attempt_locked(self, session_id):
+        # Đọc lại SAU BEGIN IMMEDIATE: hai reconciler không tăng revision hai lần.
+        row = self.db.execute("SELECT * FROM harness_task_attempts WHERE session_id=? "
                               "AND status IN ('running','waiting_input') AND closed_at IS NULL "
-                              'ORDER BY attempt_seq DESC LIMIT 1', (session_id,)).fetchone()
+                              "ORDER BY attempt_seq DESC LIMIT 1", (session_id,)).fetchone()
         if row is None:
             return None
         schema(row)
@@ -462,32 +466,61 @@ class TaskService:
             return None
         schema(task)
         child = self.store.child(session_id)
-        if child is None or child['finished'] is None or child['started'] != row['started_at']:
-            # Con chưa đóng thật, hoặc đã được mở lại (lượt mới): không đoán — để `project_attempt`
-            # của lượt sau làm việc đó với đúng biên nhận của nó. Áp cho CẢ nhánh task đã bỏ: kết
-            # cục của một con đã mở lại không được ghi vào attempt cũ.
+        provenance = json.loads(row['provenance_json'])
+        if (child is None or child['finished'] is None or child['started'] != row['started_at']
+                or child['parent_id'] != task['owner_id']
+                or child['role'] != json.loads(task['contract_json'])['role']
+                or provenance.get('admissionId') != row['admission_id']
+                or provenance.get('startedAt') != child['started']
+                or provenance.get('parentId') != child['parent_id']):
+            return None  # Không lấy receipt của lần mở lại, không phá unique blocker.
+        projected = CHILD_OUTCOMES.get(child['status'])
+        if projected is None:
             return None
-        with self._write():
-            if task['abandoned_at'] is not None:
-                # Task đã bỏ: không hồi sinh trạng thái; attempt vẫn đóng để không treo hàng mở.
-                # Trong `_write()` như mọi đường ghi khác: UPDATE ngoài đây không commit (kết nối
-                # thứ hai vẫn thấy `running`) và giữ khoá ghi ngoài kỷ luật của module.
-                self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
-                                'WHERE attempt_id=?',
-                                (CHILD_OUTCOMES[status], reason, time.time(), row['attempt_id']))
-                return self._attempt_view(self.db.execute(
-                    'SELECT * FROM harness_task_attempts WHERE attempt_id=?',
-                    (row['attempt_id'],)).fetchone())
-            projected = CHILD_OUTCOMES[child['status']] if child['status'] in CHILD_OUTCOMES else None
-            if projected is None:
-                return None
-            self.db.execute('UPDATE harness_task_attempts SET status=?, reason=?, closed_at=? '
-                            'WHERE attempt_id=?',
-                            (projected, child['reason'], child['finished'], row['attempt_id']))
-            self.db.execute('UPDATE harness_tasks SET state=?, revision=revision+1, updated_at=? '
-                            'WHERE task_key=?', (projected, time.time(), row['task_key']))
+        self.db.execute('UPDATE harness_task_attempts SET status=?,reason=?,closed_at=? WHERE attempt_id=?',
+                        (projected, child['reason'], child['finished'], row['attempt_id']))
+        if task['abandoned_at'] is None:
+            self.db.execute('UPDATE harness_tasks SET state=?,revision=revision+1,updated_at=? WHERE task_key=?',
+                            (projected, time.time(), row['task_key']))
         return self._attempt_view(self.db.execute('SELECT * FROM harness_task_attempts WHERE attempt_id=?',
                                                   (row['attempt_id'],)).fetchone())
+
+    def reconcile_startup(self):
+        """Sửa khe receipt/projection, không spawn và không tự cấp acceptance."""
+        report = {'closed': [], 'conflicts': [], 'spawned': 0}
+        with self._write():
+            rows = self.db.execute("SELECT a.session_id FROM harness_task_attempts a "
+                                   "LEFT JOIN children c ON c.session_id=a.session_id "
+                                   "WHERE a.status IN ('running','waiting_input') AND a.closed_at IS NULL "
+                                   "AND (c.finished IS NOT NULL OR c.session_id IS NULL)").fetchall()
+            for row in rows:
+                closed = self._close_attempt_locked(row['session_id'])
+                if closed:
+                    report['closed'].append(closed['attemptId'])
+                else:
+                    report['conflicts'].append(row['session_id'])
+                    # Durable conflict, open binding stays blocked until owner inspection.
+                    exists = self.db.execute("SELECT 1 FROM events WHERE session_id=? AND kind='task_projection_conflict'",
+                                             (row['session_id'],)).fetchone()
+                    if not exists:
+                        self.db.execute('INSERT INTO events(session_id,kind,payload,created) VALUES(?,?,?,?)',
+                                        (row['session_id'], 'task_projection_conflict',
+                                         encode({'code': 'TASK_ATTEMPT_BINDING', 'needsUser': True}), time.time()))
+        return report
+
+    def finish_child(self, child_id, status, reason=None, steps_used=None, output_tokens=None,
+                     answer_chars=None, *, once=False, started=None):
+        """Receipt con + attempt projection trong cùng transaction, event sau commit."""
+        with self._write():
+            child = self.store.child(child_id)
+            if child is None or child['status'] != 'started' or (started is not None and child['started'] != started):
+                return None if once else child
+            self.db.execute("UPDATE children SET status=?,reason=?,finished=?,steps_used=COALESCE(?,steps_used),"
+                            "output_tokens=COALESCE(?,output_tokens),answer_chars=COALESCE(?,answer_chars),"
+                            "waiting_for='[]',waiting_since=NULL WHERE session_id=? AND status='started'",
+                            (status, reason, time.time(), steps_used, output_tokens, answer_chars, child_id))
+            self._close_attempt_locked(child_id)
+            return self.store.child(child_id)
 
     def attempts(self, owner_id, run_id, task_key, *, after=None, limit=20):
         self._run(owner_id, run_id)
