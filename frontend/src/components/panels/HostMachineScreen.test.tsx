@@ -330,6 +330,36 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('menu chọn đích', () => {
+  it('Esc đóng menu kể cả khi tiêu điểm không còn nằm trong menu', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    openPicker(panel)
+    expect(panel.testId('ms-picker-popover')).not.toBeNull()
+
+    // Người dùng bấm ra ngoài panel: tiêu điểm rời khỏi menu, nên phím Esc phải được nghe ở
+    // `document` chứ không phải ở `onKeyDown` của menu.
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+
+    expect(panel.testId('ms-picker-popover')).toBeNull()
+    expect(panel.testId('ms-picker-scrim')).toBeNull()
+  })
+
+  it('bấm ra ngoài menu thì đóng, và mở lại được', async () => {
+    const panel = renderPanel()
+    await settle()
+
+    openPicker(panel)
+    panel.click('[data-testid="ms-picker-scrim"]')
+    expect(panel.testId('ms-picker-popover')).toBeNull()
+    openPicker(panel)
+    expect(panel.testId('ms-picker-popover')).not.toBeNull()
+  })
+})
+
 describe('chưa có đích', () => {
   it('hiện lời dẫn + danh sách cửa sổ, và "Làm mới" đọc lại danh sách', async () => {
     const panel = renderPanel()

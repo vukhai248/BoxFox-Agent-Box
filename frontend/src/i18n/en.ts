@@ -1072,8 +1072,6 @@ const en: SameShape<typeof vi> = {
   // "Machine screen" panel (host mode) — per-session CUA target, plan §9.
   machineScreen: {
     title: 'Machine screen',
-    statusIdle: '{{time}} · waiting for you to pick a target',
-    statusWorking: '{{time}} · agent is working',
     sectionTarget: "The agent's target",
     noTarget: 'No target yet',
     pickWholeMachine: 'Whole machine',
@@ -1098,8 +1096,6 @@ const en: SameShape<typeof vi> = {
     windowListPlatform: 'platform · {{platform}} · window list: unsupported',
     windowMeta: '{{process}} · {{windowId}}',
     windowActiveFlag: 'on screen',
-    targetChipWindow: 'Target: 1 window',
-    targetChipMachine: 'Target: whole machine',
     targetIdentityTitle: '{{title}}',
     targetIdentityMeta: '{{process}} · windowId {{windowId}}',
     targetByUser: 'You picked this target.',
@@ -1126,8 +1122,6 @@ const en: SameShape<typeof vi> = {
     snapshotRefresh: 'Refresh',
     snapshotPause: 'Pause',
     snapshotResume: 'Resume',
-    leaseAgent: 'Control: agent',
-    leaseHuman: 'Control: you',
     leaseClaim: 'Hand control back to the agent',
     humanLeaseChip: 'You hold control',
     leaseUnknownChip: 'Control not reported',

@@ -344,8 +344,7 @@ class HostExecutor:
         #: Viền báo vùng đang bị điều khiển trên màn hình thật (`CuaOverlay`), `None` ⇒ không vẽ.
         self.overlay = overlay
         self._prepared = False
-        self._win_capture = None
-        self._win_input = None
+        self._capture_module = None
 
     # -- CUA: chuẩn bị nền tảng (H5) -----------------------------------------
 
@@ -562,7 +561,7 @@ class HostExecutor:
         Điểm nối công khai cho tầng route (`machine_router`) — route phải dùng **cùng** nền tảng với
         executor, nếu không panel sẽ chụp bằng một nền tảng khác với thứ agent đang điều khiển.
         """
-        return self._win_capture or self._load_capture()
+        return self._load_capture()
 
     def desktop_platform(self):
         """Đối tượng nền tảng desktop đang dùng, hoặc `None` khi máy không có nền tảng nào."""
@@ -693,7 +692,7 @@ class HostExecutor:
     # ``computer_screen_capture`` — cùng khuôn payload với box (`SandboxExecutor`), để tầng trên
     # không phải biết ảnh đến từ đâu.
     def _capture_screen(self, args, session, target=None, source=''):
-        capture_module = self._win_capture or self._load_capture()
+        capture_module = self._load_capture()
         if capture_module is None:
             return error_result(CUA_UNAVAILABLE_CODE, 'máy này không có mô-đun chụp màn hình cho nền tảng đang chạy')
         payload_target = {'kind': 'screen'}
@@ -787,6 +786,8 @@ class HostExecutor:
         `None` nghĩa là máy này không chụp được: chỗ gọi trả `CUA_UNAVAILABLE`/`UNSUPPORTED`, không
         ném. Cùng một cái tên cho cả hai nền tảng để `_capture_screen` không phải rẽ nhánh.
         """
+        if self._capture_module is not None:
+            return self._capture_module
         try:
             if self._desktop_family() == 'windows':
                 from .win import capture as platform_capture
@@ -794,7 +795,7 @@ class HostExecutor:
                 from .x11 import capture as platform_capture
         except Exception:
             return None
-        self._win_capture = platform_capture
+        self._capture_module = platform_capture
         return platform_capture
 
     # ``computer_use`` — tiêm input thật, có lease + mutex + fence.
@@ -869,7 +870,6 @@ class HostExecutor:
                 from .x11 import input as platform_input
         except Exception:
             return None
-        self._win_input = platform_input
         return platform_input
 
     def _window_for(self, hwnd):

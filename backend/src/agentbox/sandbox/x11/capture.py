@@ -22,7 +22,6 @@ Ba khác biệt thật so với Windows, không giấu:
 from __future__ import annotations
 
 import os
-import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -95,7 +94,7 @@ def screen_size(platform: Any = None) -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 def _import_raw(target: str, *, platform: Any, timeout: float = 10.0) -> bytes:
     """Gọi ``import -window <target> -depth 8 bgra:-`` và trả byte ảnh thô."""
-    tool = shutil.which('import') if getattr(platform, '_runner', None) is None else 'import'
+    tool = platform._tool('import')
     if tool is None:
         raise PlatformError(
             CAPTURE_FAILED,
@@ -152,7 +151,7 @@ def capture_region(x: int, y: int, width: int, height: int, *, platform: Any = N
     argv = ['import', '-window', 'root', '-depth', '8',
             '-crop', '%dx%d+%d+%d' % (crop_w, crop_h, clip_left - screen_x, clip_top - screen_y),
             '-silent', _RAW_FORMAT]
-    tool = shutil.which('import') if getattr(p, '_runner', None) is None else 'import'
+    tool = p._tool('import')
     if tool is None:
         raise PlatformError(CAPTURE_FAILED, 'thiếu ImageMagick `import`.', tool='import')
     argv[0] = tool
@@ -257,16 +256,11 @@ def capture_window(hwnd: int, *, platform: Any = None) -> Capture:
     if is_mostly_black(shot.pixels):
         # Khung gần như đen: X11 không có cờ "GPU composited" như Windows, nhưng cùng một hiện
         # tượng (cửa sổ chưa vẽ xong / bị che). Chụp lại vùng màn hình để có gì đó dùng được.
-        notes.append('khung gần như đen — đã chụp lại theo vùng màn hình')
         try:
-            region = capture_region(x, y, width, height, platform=p)
+            return _region('khung gần như đen — đã chụp lại theo vùng màn hình')
         except PlatformError:
             shot.notes.extend(notes)
             return shot
-        region.hwnd = int(hwnd)
-        region.occluded = occluded
-        region.notes = list(notes)
-        return region
     shot.notes.extend(notes)
     return shot
 
@@ -276,10 +270,3 @@ def list_windows(platform: Any = None, *, include_minimized: bool = False) -> li
     return win_capture.list_windows(platform=_platform(platform),
                                     include_minimized=include_minimized)
 
-
-def capture_time() -> float:
-    return time.time()
-
-
-def artifact_directory(root: str | os.PathLike[str] | None = None) -> Path:
-    return win_capture.capture_directory(root)

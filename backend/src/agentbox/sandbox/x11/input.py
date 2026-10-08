@@ -66,18 +66,13 @@ def _platform(platform: Any = None) -> Any:
 
 
 def _xdotool(platform: Any, *args: str, timeout: float = 5.0) -> Any:
-    tool = 'xdotool'
-    if getattr(platform, '_runner', None) is None:
-        import shutil
-
-        found = shutil.which('xdotool')
-        if found is None:
-            raise PlatformError(
-                CAPTURE_FAILED,
-                'thiếu `xdotool` — cài gói xdotool để điều khiển chuột/bàn phím trên Linux.',
-                tool='xdotool',
-            )
-        tool = found
+    tool = platform._tool('xdotool')
+    if tool is None:
+        raise PlatformError(
+            x11_platform.X11_UNAVAILABLE,
+            'thiếu `xdotool` — cài gói xdotool để điều khiển chuột/bàn phím trên Linux.',
+            tool='xdotool',
+        )
     return platform._run([tool, *args], timeout=timeout)
 
 

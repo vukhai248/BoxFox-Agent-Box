@@ -1064,8 +1064,6 @@ const vi = {
   // Panel "Màn hình máy" (host mode) — đích CUA theo phiên, plan §9.
   machineScreen: {
     title: 'Màn hình máy',
-    statusIdle: '{{time}} · đang chờ bạn chọn đích',
-    statusWorking: '{{time}} · agent đang làm việc',
     sectionTarget: 'Đích của agent',
     noTarget: 'Chưa chọn đích',
     pickWholeMachine: 'Cả máy',
@@ -1090,8 +1088,6 @@ const vi = {
     windowListPlatform: 'platform · {{platform}} · window list: không hỗ trợ',
     windowMeta: '{{process}} · {{windowId}}',
     windowActiveFlag: 'đang hiện',
-    targetChipWindow: 'Đích: 1 cửa sổ',
-    targetChipMachine: 'Đích: cả máy',
     targetIdentityTitle: '{{title}}',
     targetIdentityMeta: '{{process}} · windowId {{windowId}}',
     targetByUser: 'Bạn đã chọn đích này.',
@@ -1118,8 +1114,6 @@ const vi = {
     snapshotRefresh: 'Làm mới',
     snapshotPause: 'Tạm dừng',
     snapshotResume: 'Tiếp tục',
-    leaseAgent: 'Quyền: agent',
-    leaseHuman: 'Quyền: bạn',
     leaseClaim: 'Trả quyền cho agent',
     humanLeaseChip: 'Bạn đang giữ quyền',
     leaseUnknownChip: 'Chưa rõ quyền điều khiển',

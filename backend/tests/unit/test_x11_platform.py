@@ -290,7 +290,7 @@ def test_capture_window_reports_a_failure_when_even_the_region_fallback_fails(mo
     platform, _tools = build(windows=[0x10], props={0x10: window_props(pid=7)},
                              rects={0x10: (10, 20, 30, 40)}, import_fails=True)
     platform._runner = None                     # tắt runner giả để đường `import` chạy thật
-    monkeypatch.setattr(xc.shutil, 'which', lambda name: '/usr/bin/' + name)
+    monkeypatch.setattr(xp.shutil, 'which', lambda name: '/usr/bin/' + name)
     monkeypatch.setattr(platform, 'run_raw',
                         lambda argv, timeout: xp._CommandResult(1, '', 'boom', b''))
     with pytest.raises(PlatformError) as caught:

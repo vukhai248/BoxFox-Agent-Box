@@ -189,12 +189,10 @@ class X11Platform:
         env['DISPLAY'] = self.display
         return env
 
-    def _run(self, argv: Iterable[str], *, timeout: float = TOOL_TIMEOUT_SEC) -> _CommandResult:
-        args = [str(part) for part in argv]
-        if self._runner is not None:
-            return self._runner(args, timeout)
+    def _spawn(self, args: list[str], timeout: float) -> Any:
+        """Chạy tiến trình con; lỗi hệ điều hành trả ``_CommandResult`` thay vì ném ra ngoài."""
         try:
-            done = subprocess.run(args, capture_output=True, timeout=timeout, env=self._child_env(),
+            return subprocess.run(args, capture_output=True, timeout=timeout, env=self._child_env(),
                                   check=False)
         except FileNotFoundError as exc:
             return _CommandResult(127, '', str(exc))
@@ -202,13 +200,22 @@ class X11Platform:
             return _CommandResult(124, '', 'hết thời gian chờ %s' % args[0])
         except OSError as exc:      # pragma: no cover - phụ thuộc hệ điều hành
             return _CommandResult(126, '', str(exc))
+
+    def _run(self, argv: Iterable[str], *, timeout: float = TOOL_TIMEOUT_SEC) -> _CommandResult:
+        args = [str(part) for part in argv]
+        if self._runner is not None:
+            return self._runner(args, timeout)
+        done = self._spawn(args, timeout)
+        if isinstance(done, _CommandResult):
+            return done
         return _CommandResult(done.returncode, done.stdout.decode('utf-8', 'replace'),
                               done.stderr.decode('utf-8', 'replace'), done.stdout)
 
     def run_raw(self, argv: Iterable[str], *, timeout: float = TOOL_TIMEOUT_SEC) -> _CommandResult:
         """Chạy công cụ X11 và giữ nguyên **byte** đầu ra (ảnh thô của ``import``).
 
-        Cùng một ``runner`` được tiêm như :meth:`_run`, nên test vẫn thay được bằng hàm giả.
+        Cùng một ``runner`` được tiêm như :meth:`_run`, nên test vẫn thay được bằng hàm giả. Không
+        gọi lại :meth:`_run`: ở đây đầu ra là cả khung ảnh nhiều MB, giải mã sang ``str`` là vô ích.
         """
         args = [str(part) for part in argv]
         if self._runner is not None:
@@ -216,15 +223,9 @@ class X11Platform:
             if not isinstance(result, _CommandResult):
                 raise TypeError('runner phải trả _CommandResult')
             return result
-        try:
-            done = subprocess.run(args, capture_output=True, timeout=timeout, env=self._child_env(),
-                                  check=False)
-        except FileNotFoundError as exc:
-            return _CommandResult(127, '', str(exc))
-        except subprocess.TimeoutExpired:
-            return _CommandResult(124, '', 'hết thời gian chờ %s' % args[0])
-        except OSError as exc:      # pragma: no cover - phụ thuộc hệ điều hành
-            return _CommandResult(126, '', str(exc))
+        done = self._spawn(args, timeout)
+        if isinstance(done, _CommandResult):
+            return done
         return _CommandResult(done.returncode, '', done.stderr.decode('utf-8', 'replace'), done.stdout)
 
     def _tool(self, name: str) -> str | None:
@@ -238,20 +239,14 @@ class X11Platform:
 
     # -- đọc thuộc tính cửa sổ -------------------------------------------------
 
-    def window_properties(self, hwnd: int, *, fresh: bool = False,
-                          ttl: float = 0.0) -> dict[str, str]:
-        """Thuộc tính EWMH của một cửa sổ, một lời gọi ``xprop`` cho tất cả.
+    def window_properties(self, hwnd: int) -> dict[str, str]:
+        """Thuộc tính EWMH của một cửa sổ — MỘT lời gọi ``xprop`` cho cả sáu thuộc tính.
 
-        ``ttl`` cho phép dùng lại kết quả trong cùng một thao tác (``list_windows`` đọc 6 thuộc
-        tính của 3 cửa sổ = 3 lời gọi thay vì 18). Mặc định ``ttl=0`` — luôn đọc mới, vì trạng thái
-        cửa sổ đổi nhanh và một câu trả lời cũ nguy hiểm hơn một lời gọi thêm.
+        Kết quả được ghi vào ``_props_cache`` để các hàm đọc riêng lẻ (``get_window_pid``,
+        ``get_class_name``…) dùng lại trong cùng một thao tác thay vì gọi lại ``xprop``.
         """
         key = int(hwnd)
         now = time.monotonic()
-        if not fresh and ttl > 0:
-            cached = self._props_cache.get(key)
-            if cached is not None and now - cached[0] <= ttl:
-                return dict(cached[1])
         tool = self._tool('xprop')
         if tool is None:
             return {}
@@ -409,21 +404,20 @@ class X11Platform:
     def describe_window(self, hwnd: int, *, with_process: bool = True) -> WindowInfo:
         """Danh tính + hình học một cửa sổ; ném ``CAPTURE_FAILED`` khi cửa sổ không còn."""
         value = int(hwnd)
-        props = self.window_properties(value, fresh=True)
+        props = self.window_properties(value)
         if not props:
             raise PlatformError(CAPTURE_FAILED, 'cửa sổ X11 không còn tồn tại.', hwnd=value)
         rect = self.get_window_rect(value)
         if rect is None:
             raise PlatformError(CAPTURE_FAILED, 'không đọc được hình học cửa sổ X11.', hwnd=value)
-        pid = _first_int(props.get('_NET_WM_PID') or '')
-        raw_class = str(props.get('WM_CLASS') or '')
-        parts = [part.strip().strip('"') for part in raw_class.split(',') if part.strip()]
-        class_name = parts[-1] if len(parts) >= 2 else (parts[0] if parts else '')
+        # Lời gọi `window_properties` ngay trên vừa ghi cache, nên các hàm đọc dưới đây dùng lại
+        # đúng dict đó — không thêm lời gọi `xprop` nào.
+        pid = self.get_window_pid(value)
         state = str(props.get('_NET_WM_STATE') or '')
         return WindowInfo(
             hwnd=value,
-            title=str(props.get('_NET_WM_NAME') or props.get('WM_NAME') or ''),
-            class_name=class_name,
+            title=self.get_window_text(value),
+            class_name=self.get_class_name(value),
             pid=pid,
             rect=rect,
             extended_bounds=rect,

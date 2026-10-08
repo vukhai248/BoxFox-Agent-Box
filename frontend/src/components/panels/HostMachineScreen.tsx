@@ -114,6 +114,16 @@ export function HostMachineScreen() {
   // panel, đúng lỗi "màn hình bị co cụm" mà người dùng báo.
   const [pickerOpen, setPickerOpen] = useState(false)
 
+  // Esc đóng menu đích ở bất kỳ đâu trong trang, không phụ thuộc tiêu điểm đang ở đâu.
+  useEffect(() => {
+    if (!pickerOpen) return undefined
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPickerOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [pickerOpen])
+
   // `epochRef` là hàng rào duy nhất chống "response cũ vẽ đè": tăng nó lên là
   // mọi lượt đang bay trở thành vô hiệu, kể cả khi `fetch` không huỷ được.
   const epochRef = useRef(0)
@@ -520,7 +530,9 @@ export function HostMachineScreen() {
       <div className="relative flex h-full min-h-0 flex-col">
         {/* Menu bung ra: che phần ảnh bằng một tấm chắn bấm-để-đóng, không đẩy
             ảnh đi chỗ khác. Nó KHÔNG phải hộp thoại chặn — Esc và cú bấm ra
-            ngoài đều đóng, và mọi nút bên trong giữ nguyên `data-testid` cũ. */}
+            ngoài đều đóng, và mọi nút bên trong giữ nguyên `data-testid` cũ.
+            Esc nghe ở `document`: người dùng có thể mở menu rồi bấm ra ngoài
+            panel, lúc đó tiêu điểm không còn nằm trong menu nữa. */}
         {pickerOpen && (
           <>
             <div
@@ -533,9 +545,6 @@ export function HostMachineScreen() {
               role="dialog"
               aria-label={t('machineScreen.sectionTarget')}
               data-testid="ms-picker-popover"
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setPickerOpen(false)
-              }}
               className="absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] w-[20rem] max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-line bg-panel shadow-xl"
             >
               <div className="flex min-h-0 flex-col gap-2 overflow-auto p-2">
