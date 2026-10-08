@@ -5,14 +5,10 @@ export interface LongTask {
   revision: number
   goalRevision?: number
   contractRevision?: number
-  contractRef?: string
   resumePolicy: 'manual' | 'safe_auto'
   budget?: { totalStepLimit: number; totalStepsUsed: number; activeTimeLimitMs: number; activeTimeUsedMs: number }
-  remainingBudget?: {
-    steps?: number; activeTimeMs?: number
-    totalStepLimit?: number; totalStepsUsed?: number; remainingSteps?: number
-    activeTimeLimitMs?: number; activeTimeUsedMs?: number; remainingActiveTimeMs?: number
-  }
+  /** Đúng dạng backend gửi (`longtask_store.view`): chỉ `steps` và `activeTimeMs`. */
+  remainingBudget?: { steps: number; activeTimeMs: number }
   blockedReason?: string | null
   checkpointRef?: string | Record<string, unknown> | null
   pendingDecisionIds?: string[]
@@ -22,7 +18,7 @@ export interface StorageSnapshot {
   level: 'normal' | 'warning' | 'elevated'
   measurementComplete: boolean
   measuredAt: string | number
-  bySession?: Record<string, number> | { sessionId: string; bytes: number }[]
+  bySession?: Record<string, number>
 }
 export interface DeletionPreview {
   operationId: string

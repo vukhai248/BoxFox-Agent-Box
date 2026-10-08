@@ -1045,8 +1045,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         decisionId,
         choice,
         ...(target?.revision !== undefined ? { invocationId: continuityInvocation([id, decisionId, target.revision, choice, note, answers]) } : {}),
-        ...(get().decisions[chatId]?.find(entry => entry.id === decisionId)?.revision !== undefined
-          ? { expectedRevision: get().decisions[chatId]?.find(entry => entry.id === decisionId)?.revision } : {}),
+        ...(target?.revision !== undefined ? { expectedRevision: target.revision } : {}),
         ...(note ? { note } : {}),
         ...(answers ? { answers } : {}),
       })

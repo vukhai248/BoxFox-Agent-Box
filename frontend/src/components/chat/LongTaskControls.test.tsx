@@ -10,9 +10,10 @@ const calls: { path: string; body: Record<string, unknown>; method?: string }[] 
 vi.mock('../../lib/agentApi', () => ({ agentApi: async (path: string, body: Record<string, unknown>, method?: string) => { calls.push({ path, body, method }); return { status: 'accepted' } } }))
 let host: HTMLDivElement, root: Root
 const task: LongTask = { runId: 'run', revision: 4, state: 'budget_exhausted', resumePolicy: 'manual', checkpointRef: 'cp',
-  remainingBudget: { totalStepLimit: 20, totalStepsUsed: 20, remainingSteps: 0 }, pendingDecisionIds: ['budget-card'] }
-const render = async (longtask?: LongTask | null) => {
-  useHarnessChatStore.setState({ sessions: { sid: { id: 'sid', goalRevision: 1, status: 'completed', events: [], error: null, ...(longtask === undefined ? {} : { longtask }) } } })
+  budget: { totalStepLimit: 20, totalStepsUsed: 20, activeTimeLimitMs: 600000, activeTimeUsedMs: 600000 },
+  remainingBudget: { steps: 0, activeTimeMs: 0 }, pendingDecisionIds: ['budget-card'] }
+const render = async (longtask?: LongTask | null, contractRef?: string) => {
+  useHarnessChatStore.setState({ sessions: { sid: { id: 'sid', goalRevision: 1, contractRef, status: 'completed', events: [], error: null, ...(longtask === undefined ? {} : { longtask }) } } })
   await act(async () => { root.render(<I18nProvider><LongTaskControls chatId="sid" /></I18nProvider>) })
 }
 const click = async (element: HTMLElement) => { await act(async () => { element.click() }) }
@@ -48,6 +49,65 @@ it('failed run is terminal: no resume/pause/cancel offered', async () => {
   const actions = [...host.querySelectorAll<HTMLButtonElement>('button')].filter(b => /^(Resume|Pause|Cancel task)$/.test(b.textContent ?? ''))
   expect(actions).toHaveLength(3)
   expect(actions.every(b => b.disabled)).toBe(true)
+})
+it('opt-in takes contractRef from the session payload; the run view never carries one', async () => {
+  // Run view thật chỉ có `contractHash`, không có `contractRef`; nếu component đọc trường phantom
+  // của run view thì body sẽ là null thay vì giá trị session gửi.
+  await render(null, 'contract-from-session')
+  await click(host.querySelector('button')!)
+  await change(host.querySelector('select')!, 'manual')
+  const inputs = host.querySelectorAll('input'); await change(inputs[0], '25'); await change(inputs[1], '10')
+  await click([...host.querySelectorAll('button')].at(-1)!)
+  expect(calls[0].body.contractRef).toBe('contract-from-session')
+})
+it('a terminal run offers the setup form again and pins the NEW run to the session revision', async () => {
+  // Run đã xong không còn là ngõ cụt: backend cho lập run mới, và bản ghim mới phải theo revision mục
+  // tiêu HIỆN TẠI của phiên (1), không phải bản ghim cũ của run đã xong (7).
+  await render({ ...task, state: 'completed', blockedReason: null, checkpointRef: null, pendingDecisionIds: [], goalRevision: 7 })
+  const toggle = [...host.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === 'Set up long task')!
+  expect(toggle).toBeDefined()
+  await click(toggle)
+  await change(host.querySelector('select')!, 'manual')
+  const inputs = host.querySelectorAll('input'); await change(inputs[0], '15'); await change(inputs[1], '5')
+  await click([...host.querySelectorAll('button')].at(-1)!)
+  expect(calls[0]).toMatchObject({ path: '/sessions/sid/longtask', method: 'PUT',
+    body: { enabled: true, resumePolicy: 'manual', goalRevision: 1, budget: { totalStepLimit: 15, activeTimeLimitMs: 300000 } } })
+})
+it('re-pins a stale-parked run to the current contract without sending a budget', async () => {
+  await render({ ...task, state: 'needs_user', blockedReason: 'LONGTASK_STALE', revision: 9 }, 'contract-from-session')
+  const repin = [...host.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === 'Re-pin the task to the latest request')!
+  expect(repin).toBeDefined()
+  await click(repin)
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({ path: '/sessions/sid/longtask', method: 'PUT',
+    body: { enabled: true, goalRevision: 1, contractRef: 'contract-from-session', expectedRevision: 9 } })
+  // Ngân sách đã tiêu do backend giữ; đổi hạn mức trực tiếp bị từ chối nên không gửi kèm.
+  expect('budget' in calls[0].body).toBe(false)
+})
+it('offers re-pin only for a needs_user run parked on LONGTASK_STALE', async () => {
+  await render({ ...task, state: 'needs_user', blockedReason: 'LONGTASK_NO_PROGRESS' })
+  expect(host.textContent).not.toContain('Re-pin the task to the latest request')
+})
+it('does not offer re-pin while the run is not parked for the owner', async () => {
+  await render({ ...task, state: 'running', blockedReason: 'LONGTASK_STALE' })
+  expect(host.textContent).not.toContain('Re-pin the task to the latest request')
+})
+it('shows the small-allowance reason as text, not as the raw code', async () => {
+  await render({ ...task, state: 'needs_user', blockedReason: 'LONGTASK_BUDGET_TOO_SMALL' })
+  expect(host.textContent).toContain('smaller than the upper bound of one turn')
+  expect(host.textContent).not.toContain('LONGTASK_BUDGET_TOO_SMALL')
+  // "hạn mức quá nhỏ" KHÁC "đã dùng hết ngân sách": câu của ca hết ngân sách không được lẫn vào.
+  expect(host.textContent).not.toContain('finite budget is used up')
+})
+it('keeps the exhausted-budget reason distinct from the small-allowance one', async () => {
+  await render({ ...task, state: 'budget_exhausted', blockedReason: 'LONGTASK_BUDGET_EXHAUSTED' })
+  expect(host.textContent).toContain('finite budget is used up')
+  expect(host.textContent).not.toContain('smaller than the upper bound of one turn')
+})
+it('keeps unknown reason codes verbatim instead of guessing text', async () => {
+  // Mã lỗi lượt backend giữ nguyên (thay cho TURN_FAILED_<CLASS>) vẫn phải đọc được để tra cứu.
+  await render({ ...task, state: 'needs_user', blockedReason: 'UPSTREAM_HTTP_502' })
+  expect(host.textContent).toContain('UPSTREAM_HTTP_502')
 })
 it('resume accepted is not resumed; repeats retain invocation identity', async () => {
   await render({ ...task, state: 'interrupted' }); const resume = host.querySelector('button')!

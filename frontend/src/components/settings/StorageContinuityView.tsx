@@ -22,14 +22,14 @@ export function StorageContinuityView({ sessionId, onDeleted }: { sessionId: str
       .then(value => { if (active) setStorage(value) }).catch(reason => { if (active) setError(String(reason)) })
     return () => { active = false }
   }, [sessionId])
-  const contribution = Array.isArray(storage?.bySession) ? storage.bySession.find(row => row.sessionId === sessionId)?.bytes : storage?.bySession?.[sessionId]
+  const contribution = storage?.bySession?.[sessionId]
   const verified = capsuleVerified(preview)
   const prepare = async () => {
     setBusy(true); setPreview(null); setAck(false); setConfirm(false); setError(null); setOutcome(null)
     try {
-      const session = await agentApi<{ deletionRevision?: string; historyRevision?: string }>(`/sessions/${encodeURIComponent(sessionId)}`)
-      const value = await agentApi<DeletionPreview>(`/sessions/${encodeURIComponent(sessionId)}/deletion-preview`,
-        { mode: 'history_only', ...(session.deletionRevision ?? session.historyRevision ? { expectedRevision: session.deletionRevision ?? session.historyRevision } : {}) })
+      // Kho tính `expectedRevision` trong `deletion_preview` và trả về ở preview; GET session không có
+      // trường revision nào để prebind, nên gửi đúng một body tối thiểu.
+      const value = await agentApi<DeletionPreview>(`/sessions/${encodeURIComponent(sessionId)}/deletion-preview`, { mode: 'history_only' })
       setPreview(value)
     } catch (reason) { setError(String(reason)) } finally { setBusy(false) }
   }

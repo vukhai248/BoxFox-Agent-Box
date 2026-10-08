@@ -6,17 +6,20 @@ import { StorageContinuityView } from './StorageContinuityView'
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let host: HTMLDivElement, root: Root
 let validation = 'draft', fail = false, outcome = 'deleted'
+// Chỉ preview trả về revision này; bước confirm phải dùng lại đúng giá trị đó.
+const revision = 'c'.repeat(64)
 const calls: { path: string; body?: Record<string, unknown> }[] = []
 vi.mock('../../lib/agentApi', () => ({ agentApi: async (path: string, body?: Record<string, unknown>) => {
   calls.push({ path, body })
   if (path.includes('/history/storage')) return { bytes: 4_300_000_000, level: 'warning', bySession: { sid: 1_200_000_000 }, measuredAt: '2026-10-08', measurementComplete: false }
   if (path.endsWith('/deletion-preview')) {
     if (fail) throw new Error('CAPSULE_WRITE_FAILED')
-    return { operationId: 'op', expectedRevision: 'a'.repeat(64), capsuleId: 'cap', sessionIds: ['sid', 'child'], estimatedReclaimBytes: 1_200_000_000,
+    return { operationId: 'op', expectedRevision: revision, capsuleId: 'cap', sessionIds: ['sid', 'child'], estimatedReclaimBytes: 1_200_000_000,
       retainedSummary: 'Goal, unresolved blocker, next steps', validation: { status: validation, errors: [] }, warnings: ['Raw references become tombstones'] }
   }
   if (path.endsWith('/deletion-confirm')) return { status: outcome }
-  return { id: 'sid', deletionRevision: 'a'.repeat(64) }
+  // Không còn mock cho GET /sessions/{sid}: route đó không được gọi nữa, và một đường gọi lạ phải đổ vỡ rõ ràng.
+  throw new Error(`unexpected path ${path}`)
 } }))
 const render = async () => { await act(async () => { root.render(<I18nProvider><StorageContinuityView sessionId="sid" /></I18nProvider>) }) }
 const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes(label))!
@@ -34,7 +37,9 @@ it('draft capsule cannot enable acknowledgment or deletion', async () => {
   await render(); await click(button('Create preview'))
   expect(host.querySelector<HTMLInputElement>('input')?.disabled).toBe(true)
   expect(button('Delete raw history').disabled).toBe(true)
-  expect(calls.find(c => c.path.endsWith('/deletion-preview'))?.body).toEqual({ mode: 'history_only', expectedRevision: 'a'.repeat(64) })
+  // Preview không prebind revision nào: `expectedRevision` do chính kho tính và trả về ở preview.
+  expect(calls.find(c => c.path.endsWith('/deletion-preview'))?.body).toStrictEqual({ mode: 'history_only' })
+  expect(calls.some(c => c.path === '/sessions/sid')).toBe(false)
   expect(calls.some(c => c.path.endsWith('/deletion-confirm'))).toBe(false)
 })
 it('verified capsule plus acknowledgment still needs final confirmation before deletion', async () => {
@@ -43,7 +48,7 @@ it('verified capsule plus acknowledgment still needs final confirmation before d
   await click(host.querySelector('input')!); await click(button('Delete raw history'))
   expect(calls.some(c => c.path.endsWith('/deletion-confirm'))).toBe(false)
   await click(button('Confirm deletion'))
-  expect(calls.find(c => c.path.endsWith('/deletion-confirm'))?.body).toEqual({ operationId: 'op', expectedRevision: 'a'.repeat(64), confirm: true })
+  expect(calls.find(c => c.path.endsWith('/deletion-confirm'))?.body).toEqual({ operationId: 'op', expectedRevision: revision, confirm: true })
 })
 it('capsule write failure retains raw and keeps deletion disabled', async () => {
   fail = true; await render(); await click(button('Create preview'))
