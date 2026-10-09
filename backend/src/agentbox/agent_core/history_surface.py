@@ -19,6 +19,7 @@ import json
 import math
 import time
 
+from ..memory.history_files import encode
 from ..memory.history_store import CAPSULE_KEYS, HistoryError
 from ..memory.storage_usage import StorageUsage
 from .longtask_store import LongtaskError
@@ -462,20 +463,120 @@ def read_capsule(rt, caller_sid, capsule_id):
     return service(rt).read_capsule(caller_sid, capsule_id)
 
 
-def export_projection(rt, sid, checkpoint_id=None):
-    """Bản đọc được trong workspace của phiên host. Workspace ở container thì không ghi từ host."""
-    from ..memory.history_projection import HistoryProjection
-    history = service(rt)
+#: Lý do bỏ qua bản chiếu: workspace ở container (hoặc phiên chưa gắn máy) thì host không ghi được.
+PROJECTION_SKIPPED = 'remote_or_unbound_workspace'
+
+
+def _projection_workspace(rt, sid):
+    """Workspace host của phiên, hoặc `None` khi phải bỏ qua bản chiếu (container / chưa gắn máy)."""
     session = rt.store.get(sid)
     binding = (session.get('config') or {}).get('machineBinding') or {}
     workspace = binding.get('workspace')
     if not workspace or binding.get('mode') == 'docker':
-        return {'canonicalStored': True, 'projectionStored': False, 'projectionError': None,
-                'skipped': 'remote_or_unbound_workspace'}
+        return None
+    return workspace
+
+
+def _projection_skip():
+    return {'canonicalStored': True, 'projectionStored': False, 'projectionError': None,
+            'skipped': PROJECTION_SKIPPED}
+
+
+def export_projection(rt, sid, checkpoint_id=None):
+    """Bản đọc được trong workspace của phiên host. Workspace ở container thì không ghi từ host."""
+    from ..memory.history_projection import HistoryProjection
+    history = service(rt)
+    workspace = _projection_workspace(rt, sid)
+    if workspace is None:
+        return _projection_skip()
     projection = HistoryProjection(history)
     if checkpoint_id:
         return projection.export_compaction(checkpoint_id, workspace)
     return projection.ensure_session(sid, workspace)
+
+
+def export_journal(rt, sid):
+    """Bản chiếu nhật ký curated (`journal.md`) cạnh bản chiếu nén — cùng chỗ, cùng cách chặn.
+
+    §6 của kế hoạch: cây `.session-history/<sid>/<agent>/` có cả `journal.md` lẫn
+    `compaction_NNN.md`. Ghi ở đây (lúc context swap) chứ không phải mỗi lần thêm một hàng nhật ký:
+    mỗi lượt một lần ghi tệp cộng làm mới INDEX là giá không cần thiết, còn trước context swap thì
+    đây đúng là thứ phải bền.
+    """
+    from ..memory.history_projection import HistoryProjection
+    history = service(rt)
+    workspace = _projection_workspace(rt, sid)
+    if workspace is None:
+        return _projection_skip()
+    return HistoryProjection(history).export_journal(sid, workspace)
+
+
+#: Mã notice khi lượt nén không để lại được manifest thô / bản đọc được. Lượt vẫn đi tiếp:
+#: nén hỏng phần bền thì mất khả năng đọc lại, không mất lượt đang chạy.
+COMPACTION_DEGRADED_CODE = 'HISTORY_COMPACTION_DEGRADED'
+#: Mã notice khi bản thô đã commit nhưng bản chiếu ra workspace không ghi xong. Khác mã trên ở chỗ
+#: **không** mất khả năng đọc lại: manifest vẫn còn, chỉ tệp đọc được là thiếu.
+PROJECTION_DEGRADED_CODE = 'HISTORY_COMPACTION_PROJECTION_DEGRADED'
+
+
+def _compaction_numbers(event):
+    event = event if isinstance(event, dict) else {}
+    numbers = {'reason': event.get('kind'), 'beforeEstimate': event.get('beforeEstimate'),
+               'afterEstimate': event.get('afterEstimate'), 'ineffective': event.get('ineffective')}
+    return {key: value for key, value in numbers.items() if value is not None}
+
+
+def record_compaction(rt, sid, saved, compacted, event=None):
+    """F02/F09/F19 — giữ bản thô của lượt nén vào kho bền, rồi ghi bản đọc được ra workspace host.
+
+    Ba việc, đúng thứ tự và đúng lý do:
+
+    1. `prepare_compaction` ghi MỌI tin nhắn của active view **trước** nén thành history record
+       (blob + segment + sha256) và dựng manifest theo `source_key`/`agent_id`. Đây là bước
+       externalize trước prune: sau lời gọi này, danh sách sống có bị cắt cũng không mất bản thô.
+    2. `commit_compaction` chốt manifest thành hàng `checkpoints` đọc lại được —
+       `SessionStore.checkpoints()` dựng lại đúng active view cũ qua `restore_compaction`.
+    3. `export_projection` ghi bản đọc được có đánh số, đúng namespace agent, ra workspace host.
+       Phiên container không có workspace host thì bỏ qua và **nói rõ** lý do, không giả là đã ghi.
+    4. `export_journal` ghi `journal.md` cạnh đó — cây archive của §6 có cả hai, không chỉ bản nén.
+
+    `source_key` suy từ chính nội dung active view, nên gọi lại cùng một lượt nén là no-op chứ
+    không sinh bản thứ hai. Hàm **không bao giờ ném**: lượt đang chạy không được chết vì kho lịch
+    sử hỏng — mọi lỗi thành một notice bền `HISTORY_COMPACTION_DEGRADED` kèm mã gốc.
+    """
+    from . import session_journal
+    history = service(rt)
+    try:
+        key = 'compaction:' + hashlib.sha256(encode(saved).encode()).hexdigest()[:16]
+        manifest = history.prepare_compaction(sid, saved, source_key=key,
+                                              numbers=_compaction_numbers(event))
+        history.commit_compaction(manifest['checkpointId'], compacted)
+    except Exception as exc:
+        code = getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or 'HISTORY_COMPACTION_FAILED'
+        session_journal.note_gap(
+            rt.store, sid, COMPACTION_DEGRADED_CODE,
+            f'{COMPACTION_DEGRADED_CODE}: bản thô của lượt nén không vào được kho lịch sử ({code}) — '
+            'lượt vẫn đi tiếp, nhưng lần nén này không có manifest đọc lại được',
+            op='compaction_record')
+        return {'recorded': False, 'checkpointId': None, 'projection': None, 'journal': None,
+                'error': code}
+    # Bản chiếu ghi SAU khi bản thô đã commit, và hỏng bản chiếu không được nói dối là bản thô hỏng
+    # (§6: canonical còn bền thì bản chiếu được phép `degraded`).
+    try:
+        projection = export_projection(rt, sid, manifest['checkpointId'])
+        journal = None if projection.get('skipped') else export_journal(rt, sid)
+    except Exception as exc:
+        code = getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or 'PROJECTION_FAILED'
+        session_journal.note_gap(
+            rt.store, sid, PROJECTION_DEGRADED_CODE,
+            f'{PROJECTION_DEGRADED_CODE}: bản thô của lượt nén đã vào kho, nhưng bản đọc được trong '
+            f'workspace thì không ghi xong ({code})', op='compaction_projection')
+        projection = {'canonicalStored': True, 'projectionStored': False,
+                      'projectionError': code, 'skipped': None}
+        journal = None
+    return {'recorded': True, 'checkpointId': manifest['checkpointId'], 'sourceKey': key,
+            'messages': len(saved) if isinstance(saved, list) else None,
+            'projection': projection, 'journal': journal, 'error': None}
 
 
 def scope_target(rt, sid, scope):

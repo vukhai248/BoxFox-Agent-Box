@@ -294,6 +294,14 @@ def test_terminal_exec_spills_long_output_to_an_artifact(tmp_path):
     assert artifact.is_file()
     assert 'dong-4000' in artifact.read_text(encoding='utf-8')
     assert payload['content'].endswith('[truncated; see artifact]')
+    # F30: cùng lượt spill ấy phải kèm ref có cấu trúc (hash nội dung + đường dẫn), không chỉ đường
+    # dẫn trần — nhờ vậy mảnh bằng chứng mang được hash của tệp.
+    import hashlib
+
+    ref = payload['outputRef']
+    assert ref['path'] == payload['artifact']
+    assert ref['contentHash'] == hashlib.sha256(artifact.read_bytes()).hexdigest()
+    assert ref['bytes'] == artifact.stat().st_size
 
 
 def test_terminal_exec_requires_a_command(tmp_path):

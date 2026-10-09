@@ -20,6 +20,13 @@ import time
 import urllib.request
 import uuid
 
+#: F30 — phần output tràn ra tệp: ngưỡng, bản xem trước, tên thư mục. Phải khớp
+#: `sandbox/output_refs.py` (bản host), nên có bài kiểm ghim hai bên thay vì để trôi im lặng.
+SPILL_THRESHOLD_CHARS = 20000
+SPILL_PREVIEW_CHARS = 15000
+SPILL_MARKER = '\n[truncated; see artifact]'
+SPILL_DIR = '.generated_artifacts/tools'
+
 ROOT = Path('/home/agent/workspace').resolve()
 # W8.A4.3: workspace cố định; `ROOT` chỉ đổi theo từng yêu cầu khi harness gửi worktree của run/node.
 WORKSPACE = ROOT
@@ -216,15 +223,22 @@ def shell(command, timeout=30, session='default'):
     finally:
         marker.unlink(missing_ok=True)
     output = output.decode('utf-8', errors='replace')
-    artifact = None
-    if len(output) > 20000:
+    artifact, ref = None, None
+    if len(output) > SPILL_THRESHOLD_CHARS:
         # W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
-        spilled = WORKSPACE / '.generated_artifacts/tools/' + uuid.uuid4().hex + '.txt'
+        # F30: cùng hình dạng với host executor; script này chạy trong box nên không import được
+        # `sandbox/output_refs.py` — số và ref ở đây phải khớp bản host, và
+        # `tests/unit/test_output_refs.py` ghim hai bên khớp nhau.
+        spilled = WORKSPACE / SPILL_DIR / (uuid.uuid4().hex + '.txt')
         spilled.parent.mkdir(parents=True, exist_ok=True)
         spilled.write_text(output, encoding='utf-8')
         artifact = str(spilled.relative_to(WORKSPACE))
-    return {'content': output[:15000] + ('\n[truncated; see artifact]' if artifact else ''),
-            'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact}
+        content = hashlib.sha256(output.encode('utf-8')).hexdigest()
+        ref = {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
+               'path': artifact, 'bytes': len(output.encode('utf-8'))}
+    return {'content': output[:SPILL_PREVIEW_CHARS] + (SPILL_MARKER if artifact else ''),
+            'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact,
+            'outputRef': ref}
 
 
 # --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------

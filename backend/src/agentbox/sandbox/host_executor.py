@@ -39,6 +39,7 @@ from pathlib import Path
 
 from ..agent_core import cua_target as cua_target_module
 from ..agent_core import permissions as permissions_module
+from . import output_refs
 from .win.errors import PlatformError
 
 #: Mã lỗi cho công cụ v1 chưa có trên host. Có mã để model phân biệt "chưa làm" với "hỏng".
@@ -217,8 +218,10 @@ BINARY_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '
                      '.woff', '.woff2', '.ttf', '.otf', '.sqlite', '.db')
 BINARY_SNIFF_BYTES = 8192
 BINARY_READ_CHARS = 30000
-READ_TRUNCATE_ARTIFACT_CHARS = 20000
-OUTPUT_PREVIEW_CHARS = 15000
+# F30: hai số này là của `sandbox/output_refs.py` — giữ tên cũ cho ai đọc quen, nhưng không còn là
+# nguồn thứ hai.
+READ_TRUNCATE_ARTIFACT_CHARS = output_refs.SPILL_THRESHOLD_CHARS
+OUTPUT_PREVIEW_CHARS = output_refs.SPILL_PREVIEW_CHARS
 EVIDENCE_MAX_BYTES = 2 * 1024 * 1024
 COMMAND_TIMEOUT_DEFAULT = 30
 COMMAND_TIMEOUT_MAX = 120
@@ -1260,10 +1263,11 @@ class HostExecutor:
             if self.processes.get(session) is process and process.returncode is not None:
                 self.processes.pop(session, None)
         text = output.decode('utf-8', errors='replace')
-        artifact = None
-        if len(text) > READ_TRUNCATE_ARTIFACT_CHARS:
-            artifact = self._spill(text)
-        preview = text[:OUTPUT_PREVIEW_CHARS] + ('\n[truncated; see artifact]' if artifact else '')
+        # F30: cùng một hàm spill với worker trong box — ngưỡng, bản xem trước, tên tệp và ref chuẩn
+        # đều lấy từ `sandbox/output_refs.py`, không còn hai bản số trôi khỏi nhau.
+        preview, artifact, output = output_refs.spill(self.workspace, text)
+        if artifact:
+            artifact = self._artifact_path(artifact)
         if process.returncode != 0:
             # Lỗi phải MANG MÃ (L4): thiếu mã thì `recovery_policy` xếp vào nhánh "chưa biết" và
             # `reflection_hint` gửi cho model câu dành cho lỗi sai tham số — sai việc cần làm.
@@ -1271,9 +1275,9 @@ class HostExecutor:
                 COMMAND_EXIT_NONZERO_CODE,
                 'lệnh thoát với mã %d; mã đó cũng nằm ở `exit_code`, đầu ra đầy đủ ở `content`%s' % (
                     process.returncode, ' và tệp đính kèm' if artifact else ''),
-                exit_code=process.returncode, content=preview, artifact=artifact)
+                exit_code=process.returncode, content=preview, artifact=artifact, outputRef=output)
         return {'content': preview, 'exit_code': process.returncode, 'is_error': False,
-                'artifact': artifact}
+                'artifact': artifact, 'outputRef': output}
 
     def _child_env(self):
         env = dict(self.env if self.env is not None else os.environ)
@@ -1281,15 +1285,13 @@ class HostExecutor:
         env.setdefault('PYTHONUTF8', '1')
         return env
 
-    def _spill(self, text):
-        """Phần output vượt trần nằm ở `.generated_artifacts/tools/` — chỗ UI đọc được (W8.A4.3)."""
-        try:
-            target = self.artifacts_dir / 'tools' / (uuid.uuid4().hex + '.txt')
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(text, encoding='utf-8')
-            return self._relative(target)
-        except OSError:
-            return None
+    def _artifact_path(self, relative):
+        """Đường dẫn tệp spill theo workspace, chịu được `artifacts_dir` nằm ngoài workspace.
+
+        `output_refs.spill` trả đường dẫn tương đối workspace; khi `artifacts_dir` được cấu hình ra
+        ngoài thì `_relative` mới là bên biết đường thật, nên chỗ nối này hỏi nó.
+        """
+        return self._relative(Path(self.workspace) / relative)
 
 
 class _PathEscape(ValueError):

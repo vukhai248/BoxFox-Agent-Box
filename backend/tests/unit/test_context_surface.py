@@ -345,6 +345,24 @@ async def test_auto_compaction_calls_real_runtime_hook_and_passes_data_brief_to_
 
 
 @run_async
+async def test_the_auto_compaction_leaves_a_durable_manifest_behind_it(runtime):
+    """F02/F09/F19 qua vòng chạy thật: nén tự động để lại bản thô trong kho bền, không chỉ bundle."""
+    rt, session, _ = runtime
+    lossily_compact(rt)
+    await asyncio.wait_for(rt.start(session['id'], 'Carry out the bounded check.'), 3)
+    events = rt.store.events(session['id'])
+    event = next(e for e in events if e['type'] == 'compression')
+    record = event['data']['historyRecord']
+    assert record['recorded'] is True, [(e['type'], e['data']) for e in events if e['type'] in ('notice', 'error')]
+    row = rt.store.db.execute('SELECT * FROM history_compactions WHERE checkpoint_id=?',
+                              (record['checkpointId'],)).fetchone()
+    assert row['state'] == 'committed'
+    manifest = json.loads(row['manifest_json'])
+    restored = rt.store.history.restore_compaction(manifest)
+    assert any('bounded check' in str(m.get('content')) for m in restored), restored
+
+
+@run_async
 async def test_restart_revalidates_immutable_pins_and_bundle_hash(runtime):
     rt, session, _ = runtime
     enable(rt)

@@ -435,7 +435,9 @@ def artifacts_from_calls(calls):
         ok = not _call_failed(call)
         numbers = result.get('numbers') if isinstance(result.get('numbers'), dict) else {}
         base = {'tool': name, 'step': step, 'ok': ok}
-        artifact = result.get('artifact') or result.get('path') or numbers.get('artifact')
+        # F30: ref có cấu trúc (đường dẫn + hash nội dung) thắng đường dẫn trần khi cả hai cùng có.
+        ref = result.get('outputRef') if isinstance(result.get('outputRef'), dict) else {}
+        artifact = ref.get('path') or result.get('artifact') or result.get('path') or numbers.get('artifact')
         if name in ('terminal_exec', 'run_command'):
             # A command's evidence is the command and its exit code; its artifact is the OUTPUT
             # file (>20 000 chars of stdout), not a file the command changed.
@@ -444,6 +446,8 @@ def artifacts_from_calls(calls):
                 fragments.append(dict(base, kind='command', command=command,
                                       exitCode=box_exit_code(result),
                                       artifact=_clean_path(artifact),
+                                      **({'sha256': ref['contentHash'], 'bytes': ref['bytes']}
+                                         if isinstance(ref.get('contentHash'), str) else {}),
                                       stdoutTail=box_output_tail(result)))
             continue
         kind = _artifact_kind(artifact, name, result)

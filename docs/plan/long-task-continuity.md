@@ -230,8 +230,6 @@ Việc đã biết mà đợt này **không** làm, xếp theo mức độ:
 | Việc | Mức | Vì sao dừng lại |
 |---|---|---|
 | Run bị kẹt `LONGTASK_STALE` sau một lượt thử lại | Vừa | Gặp một lần khi kiểm lại thẻ ngân sách, không tái hiện theo yêu cầu: lượt thử lại vào `model()` với ảnh chụp lease cũ. Có đường lùi (nút "Re-pin"), không mất việc của chủ |
-| `history_files.py` chỉ chạy POSIX | Vừa | Host Windows là nền chính của bản desktop; phải làm trước khi phát hành tính năng này cho Windows |
-| Nối `prepare_compaction`/`commit_compaction` vào đường nén sống và `export_projection` | Vừa | Đổi bản ghi canonical của mọi lần nén; cần vòng kiểm riêng |
 | Nhãn IFC chưa có nguồn thật | Thấp | Gắn nhãn rỗng là giả vờ có kiểm soát |
 | `search_text` giữ nguyên văn cạnh blob | Thấp | Chưa phải điểm nghẽn dung lượng trên máy chủ nhà |
 
@@ -275,14 +273,14 @@ trạng thái từng mục sau khi đợt triển khai đóng lại, kèm mốc 
 | F | Ma trận | Đã làm gì / bằng chứng | Tick |
 |---|---|---|---|
 | F01 Snapshot | EXISTING | `history_records` + blob/segment có sha256, `SessionStore.checkpoint`; bản ghim giữ raw refs và coverage thay vì suy từ số message | `[x]` |
-| F02 Archive đánh số | PARTIAL | `memory/history_projection.py`, `history_files.py` (chỉ POSIX), `history_surface.export_projection`; chưa có người gọi từ runtime, workspace Docker trả `projectionStored: false` | `[~]` còn: nối `export_projection` + bản Windows của tầng file (§11.1) |
+| F02 Archive đánh số | PARTIAL | `memory/history_projection.py` + `history_surface.export_projection` nay có người gọi thật: mỗi lượt nén ghi một thư mục đánh số (`compaction_NNN.md`/`.json`/`identity.json`); `history_files.py` có nhánh portable (lstat từng thành phần, temp + `os.replace`) cho host Windows. Workspace Docker vẫn trả `projectionStored: false` kèm lý do `remote_or_unbound_workspace` — đúng thiết kế, không phải lỗi | `[x]` |
 | F03 Handoff | PARTIAL | `session_journal.brief` + khối ghim + khối trạng thái giữ lại (§11.2); locator đúng scope theo ca A1–A5 | `[x]` |
 | F04 Summary cấu trúc | PARTIAL | `prepare_compaction`/`commit_compaction` + manifest theo `source_key`/`agent_id`, `render_snapshot` giữ headings; ca 20 lần nén không mất yêu cầu gốc | `[x]` |
 | F05 Raw journal | PARTIAL | `history_records`/`events`/`checkpoints` có `origin`, `seq`, `source_key`; tách khỏi tám dấu curated của journal | `[x]` |
 | F06 Call/result ID | EXISTING | Giữ `tool_call_id`, `argsHash`, `tool_recovery`; checksum blob không đổi semantics commit | `[x]` |
 | F07 Search xuyên session | MISSING | `query_history`/`list_sessions` + route `GET /history/sessions|search`, phạm vi theo project, cursor ký; ca A1–A5 + `test_search_240_newest_pagination_append` | `[x]` |
 | F08 Read archive | PARTIAL | `read_reference` theo id/khoảng có provenance, tombstone khi đã xoá; `history_read` phân trang | `[x]` |
-| F09 Externalization | PARTIAL | blob/segment + `evidenceState` (`available`/`missing`/`deleted`) trung thực; việc externalize đồng nhất **trước prune** chưa nối vào đường nén sống (cùng LT-09) | `[~]` còn: nối vào đường nén sống |
+| F09 Externalization | PARTIAL | blob/segment + `evidenceState` (`available`/`missing`/`deleted`) trung thực; việc externalize đồng nhất **trước prune** nay nối vào đường nén sống: `context_surface.compact` gọi `history_surface.record_compaction` (externalize toàn bộ view hoạt động → manifest theo `source_key`/`agent_id` → commit checkpoint → export) cho cả đường nén tự động lẫn `/compact`. Lỗi kho lịch sử chỉ để lại mã `HISTORY_COMPACTION_DEGRADED`, không chặn lượt nén | `[x]` |
 | F10 Plan/approval | EXISTING | `plan_reviews`/registry/hash gates giữ nguyên; memory chỉ dẫn tham chiếu, không thay ledger | `[x]` |
 | F11 User decisions | PARTIAL | `decision_store` bền; mọi thẻ hỏi–đáp đi qua `decision_store.request` (`durable: true`), bản ghim giữ decision refs + revision | `[x]` |
 | F12 Workspace state | PARTIAL | `machineBinding` + worktree/hash giữ nguyên; live worktree vẫn là nguồn hiện tại, không tự khôi phục file từ summary | `[x]` |
@@ -292,19 +290,70 @@ trạng thái từng mục sau khi đợt triển khai đóng lại, kèm mốc 
 | F16 Versioned test report | PARTIAL | Giữ `work_checks`/invocations theo refs, status, run revision; không clone dịch vụ report | `[x]` |
 | F17 PR workflow | PARTIAL | Giữ `work_ships` (URL/branch/SHA) làm bằng chứng; không dựng dịch vụ PR song song | `[x]` |
 | F18 Resume verification | PARTIAL | `tool_recovery` + ref/hash gates + `validate_ref`; chạy tiếp chỉ khi có bằng chứng đã kiểm | `[x]` |
-| F19 Agent namespace | PARTIAL | Manifest self/parent/root theo `agent_id`, con tự nén được; phần archive host đọc vẫn thuộc F02 | `[~]` còn: như F02 |
+| F19 Agent namespace | PARTIAL | Manifest self/parent/root theo `agent_id`; con tự nén được và archive của con nằm trong thư mục riêng (`subagent_<agent_id>`) với `parent_agent_id` trỏ về gốc (ca kiểm `test_a_child_compaction_lands_in_its_own_agent_namespace`) | `[x]` |
 | F20 Pinned child contract | PARTIAL | `harness_tasks.contract_json/hash` + pin yêu cầu gốc (`owner_contract_revisions`, `exactPayload`); không giả có path ACL | `[x]` |
 | F21 Peer board | PARTIAL | `task_list/get/send` bền + cursor đã có; không dựng claim-note board (lý do ở §10) | `[–]` |
 | F22 Failure-aware state | PARTIAL | `journal`/`work_progress`/`work_handoffs` + deliverable IDs, `failedChecks`, `asOf` độc lập với summary | `[x]` |
 | F23 Self rehydration | PARTIAL | Search newest/cursor đã sửa + locator/read gốc đúng agent (scope A1–A5) | `[x]` |
-| F24 Misrouting | NOT_TO_COPY | Không có `general_agent` cứng trong repo; manifest mint locator từ identity, ca kiểm scope chặn đọc chéo | `[–]` |
+| F24 Misrouting | NOT_TO_COPY | Định danh mint từ identity (`identity.json`/`session.json`, chốt `HISTORY_GROUP_COLLISION`), ca kiểm scope chặn đọc chéo. Ghi chú cho đúng: chuỗi `general_agent` **có** hai chỗ trong repo — `history_projection.py:78` và `:162` — nhưng là **tên thư mục xuất** cho phiên gốc, chỉ ghi ra chứ không đọc lại để định tuyến; không phải khoá định danh | `[–]` |
 | F25 Handoff echo | NOT_TO_COPY | `_strip_brief` bỏ khối ghim/khối giữ lại khỏi transcript, dedupe theo `origin`/`source_key`/generation; tiến độ cũ không mất | `[x]` |
 | F26 Live correction | PARTIAL | `session_steers` bền + `record_ingress(change_kind='correction')` và chuỗi revision; correction không bị cắt bởi tail | `[x]` |
 | F27 Source hierarchy | MISSING | `critical_pins`/`critical_snapshot`/`contract()` là nguồn chủ nhiệm; summary/history không thành authority; `exactPayload` giữ nguyên văn lời chủ | `[x]` |
 | F28 Revalidation | PARTIAL | `context_surface.validate_ref` theo version/hash, `asOf`, tombstone khi nguồn đã xoá | `[x]` |
 | F29 Verification không gián đoạn | PARTIAL | `work_checks` + bằng chứng ghi rõ module/live/process revision; ca kiểm dùng fixture, không kill service đang phục vụ | `[x]` |
-| F30 Spill/reattach | PARTIAL | Job ledger/reconcile đã có; spill output chưa đồng nhất; không clone runner 270s, process unknown không tự spawn lại | `[~]` còn: thống nhất spill |
-| F31 Knowledge library | MISSING | Capsule giữ bài học bắt buộc (`lessons`, khối trạng thái giữ lại); thư viện tri thức theo project là optional, hoãn (§11.1) | `[~]` còn: thư viện project nếu có nhu cầu |
+| F30 Spill/reattach | PARTIAL | Job ledger/reconcile đã có; spill output nay **một hình dạng**: `sandbox/output_refs.py` giữ ngưỡng/bản xem trước/tên thư mục, cả host executor lẫn worker trong box trả `artifact` **và** `outputRef` (`artifactId`/`version`/`contentHash`/`path`/`bytes`), cổng bằng chứng ưu tiên ref và mang theo hash. Vẫn **không** clone runner 270s (đó là read-timeout của httpx) và process `unknown` không tự spawn lại — hai điều ấy là phần "không sao chép" của mục này | `[x]` |
+| F31 Knowledge library | MISSING | Capsule giữ bài học bắt buộc: `lessons` (chỉ nhận khi chủ gửi kèm lúc xem trước xoá, qua `safe_state`) và khối trạng thái giữ lại; thư viện tri thức theo project là optional và đã hoãn ở §11.1. Chưa có bảng thư viện, chưa có UI nào gửi `lessons` (0 chỗ trong `frontend/src`) | `[~]` còn: thư viện project — chỉ làm khi có nhu cầu thật |
 
-Tổng: **24 mục `[x]`**, **5 mục `[~]`** (F02, F09, F19, F30, F31), **2 mục `[–]`** (F21, F24).
-Không mục nào ở trạng thái "chưa bắt đầu".
+Tổng sau đợt hoàn thiện (§11.7): **28 mục `[x]`**, **1 mục `[~]`** (F31 — thư viện project, hoãn
+có lý do), **2 mục `[–]`** (F21, F24 — rủi ro phải tránh, không phải việc còn nợ). Không mục nào ở
+trạng thái "chưa bắt đầu".
+
+### 11.7 Đợt hoàn thiện: F02, F09, F19 (một phần) và F30
+
+Đợt này đi hết các mục `[~]` còn lại của bảng trên, trừ F31. Hai việc, cùng một nguyên tắc: **một
+nguồn duy nhất** cho mỗi thứ vốn có hai bản.
+
+**Nén để lại dấu vết đọc được (F02/F09/F19).** Trước đợt này, `prepare_compaction`,
+`commit_compaction` và `export_projection` đều có thật và có bài kiểm, nhưng **không ai gọi** từ
+đường chạy thật: lượt nén sống chỉ cắt bớt trong bộ nhớ. Nay `context_surface.compact` gọi
+`history_surface.record_compaction` ở cuối lượt nén, nên cả đường tự động (`runtime.py`) lẫn
+`/compact` đều để lại:
+
+- một hàng `checkpoints` khôi phục được (`restore_compaction`) — manifest theo `source_key` và
+  `agent_id`, mỗi message của view hoạt động đã externalize thành blob/segment có sha256;
+- một thư mục đánh số trong workspace (`compaction_NNN.md`/`.json`/`identity.json`) — chỗ chủ đọc
+  lại được — **cộng** `journal.md` của bản chiếu nhật ký, đúng cây của §6: cả nhật ký curated lẫn
+  bản nén, không chỉ bản nén;
+- `event['historyRecord']` trong bản ghi lượt nén, để UI/thẻ nén nói được nó đã ghi ở đâu.
+
+Hai giai đoạn hỏng được tách ra vì chúng khác nhau về hậu quả: bản thô vào kho hỏng ⇒
+`HISTORY_COMPACTION_DEGRADED` (mất khả năng đọc lại, `recorded: false`); bản thô đã commit mà bản
+chiếu ra workspace hỏng ⇒ `HISTORY_COMPACTION_PROJECTION_DEGRADED` (`recorded: true`, manifest vẫn
+đọc được, chỉ thiếu tệp). Gộp hai thứ ấy vào một mã là nói dối về phần còn giữ được (§6: canonical
+bền thì bản chiếu được phép `degraded`).
+
+`source_key` suy từ chính nội dung (`'compaction:' + sha256(saved)[:16]`), nên gọi lại cùng một lượt
+nén là **không ghi thêm gì**. Hàm này **không bao giờ ném**: mọi lỗi kho lịch sử biến thành mã
+`HISTORY_COMPACTION_DEGRADED` cùng một notice bền, lượt nén vẫn trả bình thường — mất archive là
+mất một tiện ích, không được phép làm hỏng lượt chạy.
+
+Tầng tệp (`memory/history_files.py`) có thêm nhánh portable cho host Windows: từ chối symlink bằng
+`lstat` ở **từng thành phần**, ghi qua tệp tạm rồi `os.replace`. Còn một khe TOCTOU giữa `lstat` và
+`open` trên Windows — ghi thẳng trong docstring, không giấu. Nhánh POSIX (dir_fd + `O_NOFOLLOW`) giữ
+nguyên; bài kiểm chạy **cả hai nhánh trên Linux** bằng cách ép `_HANDLES = False`.
+
+**Một hình dạng cho output tràn ra tệp (F30).** Hai producer (`host_executor._spill`,
+`worker.shell`) trả **đường dẫn trần**, trong khi job ledger đòi **dict ref**, nên phần đã tràn không
+vào được chuỗi bằng chứng có hash. Nay `sandbox/output_refs.py` là chỗ duy nhất định nghĩa ngưỡng
+(20.000), bản xem trước (15.000), tên thư mục và ref; host executor gọi nó, worker trong box (script
+độc lập, không import được package) giữ bản sao bằng số nhưng **có bài kiểm ghim hai bên khớp** —
+lệch số là đỏ, không còn trôi im lặng. Cổng bằng chứng ưu tiên `outputRef` và mang theo
+`sha256`/`bytes` của tệp. Phần "không sao chép" của F30 vẫn nguyên: không clone runner 270 s (đó là
+read-timeout của httpx) và process `unknown` không tự spawn lại.
+
+Bằng chứng đợt này: `tests/unit/test_output_refs.py` (8 bài, gồm bài ghim worker và bài ghim sàn đo
+`work_acceptance_bench`), `tests/unit/test_history_files.py` (13 bài, hai nhánh), năm bài mới trong
+`test_history_surface.py`, một bài mới trong `test_context_surface.py`; hai bài nén đã chứng minh
+**đỏ** khi bỏ dây nối trong `context_surface.compact` và xanh sau khi nối lại. Các bộ liên quan:
+`test_history_*` + `test_context_surface` 123 bài, `test_host_executor`/`test_evidence_gate`/
+`test_output_refs`/`test_job_surface`/`test_harness_jobs` 194 bài, `test_sandbox_worker_*` 48 bài.

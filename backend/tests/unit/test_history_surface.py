@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import pytest
 
 from aiohttp import ClientSession
 from aiohttp.test_utils import TestServer
 
-from agentbox.agent_core import history_surface
+from agentbox.agent_core import context_surface, history_surface
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
 from agentbox.memory.history_store import HistoryError
@@ -67,6 +68,167 @@ def bind(runtime, sid):
 
 def ingest(runtime, sid, text, key, owner=True):
     return runtime.history_ingest(sid, {'role': 'user', 'content': text}, key, owner=owner)
+
+
+# ------------------------------------------- F02/F09/F19: lượt nén để lại dấu vết đọc được
+
+def test_a_compaction_keeps_the_raw_view_and_writes_the_host_archive(tmp_path):
+    """Đường nén sống: bản thô vào kho bền TRƯỚC khi danh sách sống bị thay, rồi ra workspace host.
+
+    Ca này chạy đúng hàm mà runtime gọi (`context_surface.compact`), không gọi lẻ `prepare_compaction`,
+    nên nó bắt được cả việc nối dây lẫn thứ tự.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'yêu cầu gốc', 'k1')
+    saved = [{'role': 'user', 'content': 'yêu cầu gốc'}, {'role': 'assistant', 'content': 'đã làm xong'}]
+    compacted = [{'role': 'user', 'content': 'yêu cầu gốc'}]
+    event = {'kind': 'compression', 'beforeEstimate': 100, 'afterEstimate': 10}
+    context_surface.compact(runtime, sid, saved, compacted, event)
+    record = event['historyRecord']
+    assert record['recorded'] is True and record['error'] is None, record
+
+    row = store.db.execute('SELECT * FROM history_compactions WHERE checkpoint_id=?',
+                           (record['checkpointId'],)).fetchone()
+    assert row['state'] == 'committed' and row['session_id'] == sid
+    manifest = json.loads(row['manifest_json'])
+    assert manifest['agentId'] == sid and manifest['rootSessionId'] == sid
+    assert [m['role'] for m in store.history.restore_compaction(manifest)] == ['user', 'assistant']
+    kinds = [r['source_type'] for r in store.db.execute(
+        "SELECT source_type FROM history_records WHERE session_id=? AND source_type='active_view'", (sid,))]
+    assert len(kinds) == 2, 'mọi tin nhắn của active view cũ phải thành record thô'
+
+    # Bản ghim đọc lại được bằng chính bộ đọc checkpoint thường.
+    restored = [c for c in store.checkpoints(sid) if isinstance(c['messages'], list) and len(c['messages']) == 2]
+    assert restored and restored[-1]['messages'][1]['content'] == 'đã làm xong'
+
+    workspace = Path(session['config']['machineBinding']['workspace'])
+    base = workspace / '.session-history' / sid / 'general_agent'
+    assert (base / 'compaction_001.md').exists() and (base / 'compaction_001.json').exists()
+    identity = json.loads((base / 'identity.json').read_text())
+    assert identity == {'project_id': 'p1', 'root_session_id': sid, 'session_id': sid,
+                        'agent_id': sid, 'parent_agent_id': None}
+    assert record['projection']['projectionStored'] is True
+    # §6: cây archive có CẢ `journal.md` lẫn bản nén — nhật ký curated là bản chiếu, không phải
+    # transcript thô, và nó phải có mặt ngay khi context bị thay.
+    journal = (base / 'journal.md').read_text(encoding='utf-8')
+    assert journal.startswith('# Curated journal (not raw transcript)')
+    assert record['journal']['projectionStored'] is True
+    # INDEX là sổ phiên của bản chiếu (không phải danh sách tệp), và nó chỉ được làm mới khi bản
+    # chiếu ghi xong — nên nó có mặt là dấu hiệu cả hai tệp trên đã đi qua cùng một lượt ghi.
+    index = json.loads((workspace / '.session-history' / 'INDEX.json').read_text(encoding='utf-8'))
+    assert index['projectionOnly'] is True
+    assert [s['session_id'] for s in index['sessions']] == [sid]
+    stored = store.db.execute('SELECT projection_status FROM history_compactions WHERE checkpoint_id=?',
+                              (record['checkpointId'],)).fetchone()
+    assert stored['projection_status'] == 'stored'
+    store.db.close()
+
+
+def test_the_same_compaction_twice_does_not_write_a_second_archive(tmp_path):
+    """Gọi lại cùng một lượt nén là no-op: khoá suy từ nội dung, không sinh bản thứ hai."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+    saved = [{'role': 'user', 'content': 'mục tiêu'}]
+    first = history_surface.record_compaction(runtime, sid, saved, [], event={'kind': 'compression'})
+    second = history_surface.record_compaction(runtime, sid, saved, [], event={'kind': 'compression'})
+    assert first['checkpointId'] == second['checkpointId'] and first['sourceKey'] == second['sourceKey']
+    count = store.db.execute('SELECT COUNT(*) AS n FROM history_compactions WHERE session_id=?',
+                             (sid,)).fetchone()['n']
+    assert count == 1
+    store.db.close()
+
+
+def test_a_container_session_keeps_the_manifest_and_says_why_it_skips_the_archive(tmp_path):
+    """Phiên chạy trong container: bản thô vẫn được giữ, còn bản đọc được thì bỏ qua và NÓI RÕ lý do."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+    config = dict(store.get(sid)['config'])
+    config['machineBinding'] = {**config['machineBinding'], 'mode': 'docker'}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), sid))
+    store.db.commit()
+    record = history_surface.record_compaction(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [],
+                                               event={'kind': 'compression'})
+    assert record['recorded'] is True
+    assert record['projection']['projectionStored'] is False
+    assert record['projection']['skipped'] == 'remote_or_unbound_workspace'
+    assert record['journal'] is None, 'container thì không ghi bản chiếu nào, kể cả nhật ký'
+    assert not list((tmp_path).rglob('compaction_*.md')), 'không được ghi bản đọc được từ host'
+    store.db.close()
+
+
+def test_a_child_compaction_lands_in_its_own_agent_namespace(tmp_path):
+    """F19: con nén thì bản đọc được vào `subagent_<agentId>`, không lẫn vào namespace của root."""
+    store, runtime, root = build(tmp_path, project='p1')
+    child = runtime.create(dict(BASE), parent_id=root['id'])
+    config = dict(child['config'])
+    config['machineBinding'] = dict(root['config']['machineBinding'])
+    config['historyAgentId'] = 'worker7'
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), child['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (child['id'],))
+    store.db.commit()
+    bind(runtime, root['id'])
+    scope = bind(runtime, child['id'])
+    assert scope['root_session_id'] == root['id'] and scope['agent_id'] == 'worker7'
+    record = history_surface.record_compaction(runtime, child['id'], [{'role': 'user', 'content': 'việc con'}],
+                                               [], event={'kind': 'compression'})
+    workspace = Path(root['config']['machineBinding']['workspace'])
+    base = workspace / '.session-history' / root['id'] / 'subagent_worker7'
+    assert record['projection']['projectionStored'] is True
+    assert (base / 'identity.json').exists()
+    assert json.loads((base / 'identity.json').read_text())['parent_agent_id'] == root['id']
+    store.db.close()
+
+
+def test_a_broken_projection_does_not_claim_the_raw_copy_is_lost(tmp_path, monkeypatch):
+    """Bản chiếu hỏng thì phải nói ĐÚNG phần nào hỏng: manifest còn, tệp đọc được thì thiếu."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def boom(*args, **kwargs):
+        raise OSError('disk full')
+
+    monkeypatch.setattr(history_surface, 'export_projection', boom)
+    event = {'kind': 'compression'}
+    context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+    record = event['historyRecord']
+
+    assert record['recorded'] is True and record['checkpointId'], 'bản thô vẫn phải ở trong kho'
+    assert record['projection'] == {'canonicalStored': True, 'projectionStored': False,
+                                    'projectionError': 'disk full', 'skipped': None}
+    assert record['journal'] is None
+    row = store.db.execute('SELECT state FROM history_compactions WHERE checkpoint_id=?',
+                           (record['checkpointId'],)).fetchone()
+    assert row['state'] == 'committed', 'manifest đã commit thì không được hạ xuống theo bản chiếu'
+    codes = [e['data'].get('code') for e in store.events(sid) if e['type'] == 'notice']
+    assert history_surface.PROJECTION_DEGRADED_CODE in codes, codes
+    assert history_surface.COMPACTION_DEGRADED_CODE not in codes, 'bản thô KHÔNG hỏng, đừng nói là hỏng'
+    store.db.close()
+
+
+def test_a_broken_history_store_leaves_a_notice_and_the_compaction_still_returns(tmp_path):
+    """Kho lịch sử hỏng thì lượt nén không được chết: một notice bền, và không có manifest giả."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def boom(*args, **kwargs):
+        raise HistoryError('HISTORY_TEST_BOOM')
+
+    store.history.prepare_compaction = boom
+    event = {'kind': 'compression'}
+    receipt = context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+    assert receipt and receipt.get('ref')
+    assert event['historyRecord'] == {'recorded': False, 'checkpointId': None, 'projection': None,
+                                      'journal': None, 'error': 'HISTORY_TEST_BOOM'}
+    notices = [e for e in store.events(sid) if e['type'] == 'notice']
+    assert any(n['data'].get('code') == history_surface.COMPACTION_DEGRADED_CODE for n in notices), notices
+    assert store.db.execute('SELECT COUNT(*) AS n FROM history_compactions WHERE session_id=?',
+                            (sid,)).fetchone()['n'] == 0
+    store.db.close()
 
 
 # --------------------------------------------------------------- hook và phạm vi
