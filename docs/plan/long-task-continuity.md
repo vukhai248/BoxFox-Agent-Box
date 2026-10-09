@@ -368,9 +368,23 @@ dẫn **tuyệt đối** khi tệp nằm ngoài `root`. Bài kiểm dựng đún
 không có gì được ghi vào thư mục dự án. Phần "không sao chép" của F30 vẫn nguyên: không clone runner 270 s (đó là
 read-timeout của httpx) và process `unknown` không tự spawn lại.
 
-Bằng chứng đợt này: `tests/unit/test_output_refs.py` (8 bài, gồm bài ghim worker và bài ghim sàn đo
-`work_acceptance_bench`), `tests/unit/test_history_files.py` (13 bài, hai nhánh), năm bài mới trong
-`test_history_surface.py`, một bài mới trong `test_context_surface.py`; hai bài nén đã chứng minh
-**đỏ** khi bỏ dây nối trong `context_surface.compact` và xanh sau khi nối lại. Các bộ liên quan:
-`test_history_*` + `test_context_surface` 123 bài, `test_host_executor`/`test_evidence_gate`/
-`test_output_refs`/`test_job_surface`/`test_harness_jobs` 194 bài, `test_sandbox_worker_*` 48 bài.
+**Đợt kiểm thử sống tìm thêm hai lỗi, đã vá (`13ebb70`).** `HistoryProjection.export_compaction` tự
+bắt `(OSError, ValueError)` rồi **trả** dict `projectionStored: false` chứ không ném, nên
+`record_compaction` chỉ có `except` là bỏ lọt đúng ca hỏng thật: khoá tệp `compaction_NNN.md` bằng
+một thư mục thì lượt nén đi qua **im lặng**, không notice nào (L1d-A). Nay soi lại dict trả về, lấy
+mã của nhà sản xuất khi mã đúng dạng, và vẫn im lặng với `skipped`. Lỗi thứ hai nằm ở đầu kia của
+chuỗi: `evidence_gate._clean_path` hạ mọi đường dẫn về khuôn tương đối trong workspace, còn từ
+`0ba15a2` host mode ghi artifact vào profile của app **ngoài** workspace — `strip('/')` biến đường
+tuyệt đối ấy thành đường không mở được, nên mảnh bằng chứng trỏ vào hư không (`artifact` =
+`var/tmp/…` trong khi `ref.path` = `/var/tmp/…`, L3). `_artifact_path` giữ nguyên đường ngoài
+workspace; `_clean_path` không đổi nên `reads`/`writes`/`ui_paths`/`_path_backed` vẫn như cũ.
+
+Bằng chứng đợt này: `tests/unit/test_output_refs.py` (14 bài, gồm bài ghim worker, bài ghim sàn đo
+`work_acceptance_bench`, bài ghim cổng bằng chứng và ca target ngoài root), `tests/unit/test_history_files.py`
+(13 bài, hai nhánh), bảy bài mới trong `test_history_surface.py` (hai bài trong đó là ca "trả dict
+hỏng" và "mã lạ" của đợt kiểm thử), một bài mới trong `test_context_surface.py`, hai bài mới trong
+`test_evidence_gate.py`; các bài nén đã chứng minh **đỏ** khi bỏ dây nối trong `context_surface.compact`
+và xanh sau khi nối lại, và bốn bài mới của đợt kiểm thử cũng **đỏ** khi gỡ bản vá tương ứng. Các bộ
+liên quan: `test_history_*` + `test_context_surface` 123 bài,
+`test_host_executor`/`test_evidence_gate`/`test_output_refs`/`test_job_surface`/`test_harness_jobs`
+194 bài, `test_sandbox_worker_*` 48 bài.
