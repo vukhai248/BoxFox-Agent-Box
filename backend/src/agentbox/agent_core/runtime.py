@@ -52,7 +52,8 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      PLAN_VERIFY_DEFAULT_MODE, PLAN_VERIFY_ENV, PLAN_VERIFY_ISSUE_CHARS,
                      PLAN_VERIFY_MAX_ISSUES, PLAN_VERIFY_MODES, PLAN_VERIFY_REVISE_MAX,
                      PLAN_VERIFY_SUMMARY_CHARS,
-                     ROUTER_BODY_BUDGET, STEP_BUDGET_NOTICE_CODE, STEPS_CLAMP_NOTICE_CODE,
+                     ROUTER_BODY_BUDGET, ROUTER_LARGE_INPUT_BYTES, STEP_BUDGET_NOTICE_CODE,
+                     STEPS_CLAMP_NOTICE_CODE,
                      TRUNCATED_OUTPUT_NOTICE_CODE, TURN_INDEX_DRIFT_CODE,
                      READ_STORE_MAX_ENTRIES, WEB_READER_DEFAULT_MODE, WEB_READER_ENV,
                      # H11 — quản lý con/subagent: trần đọc lặp, nhắc hết hạn chờ, gọi lại con.
@@ -723,9 +724,18 @@ def aggregate_model_metadata(rows):
     return aggregate
 
 
-def router_http_timeout(max_tokens):
-    """HTTPX read inactivity, not total compute time; covers router's bounded 240s option."""
-    return httpx.Timeout(120, read=270 if max_tokens >= 8000 else 120)
+def router_http_timeout(max_tokens, body_bytes=None):
+    """HTTPX read inactivity, not total compute time; covers router's bounded 240s option.
+
+    `body_bytes` is the request as the router will receive it (`request_body_bytes`). A big
+    transcript is slow to its first token even when the output ceiling is small, so the router
+    now grants its large deadline on `max_tokens >= 8000` **or** a large body
+    (`router/src/request-budget.mjs` `LARGE_INPUT_CHARS`); this read backstop has to move with it,
+    otherwise the harness gives up (120 s) while the router is still waiting (240 s) — the
+    mismatch that killed two owner turns on 2026-10-09 with `chat.failed TIMEOUT` at 90 s.
+    """
+    large = max_tokens >= 8000 or (body_bytes or 0) >= ROUTER_LARGE_INPUT_BYTES
+    return httpx.Timeout(120, read=270 if large else 120)
 
 
 class RouterClient:
@@ -829,7 +839,10 @@ class RouterClient:
         if freed:
             system_log.write('model.request_trimmed', level='warn', session_id=route.get('sessionId'),
                              chars=freed, phase=phase, budgetBytes=ROUTER_BODY_BUDGET)
-        async with httpx.AsyncClient(timeout=router_http_timeout(max_tokens), trust_env=False) as client:
+        body_bytes = request_body_bytes({**route, 'messages': messages, 'tools': tools,
+                                         'stream': True, 'max_tokens': max_tokens})
+        async with httpx.AsyncClient(timeout=router_http_timeout(max_tokens, body_bytes),
+                                     trust_env=False) as client:
             content = ''
             reasoning_content = ''
             refusal = ''

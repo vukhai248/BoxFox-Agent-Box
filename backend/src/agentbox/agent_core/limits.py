@@ -49,6 +49,16 @@ CHILD_DEADLINE_SECONDS = 7200
 ROUTER_BODY_BUDGET = 900 * 1024
 ROUTER_BODY_OVERHEAD_TOKENS = 6000
 
+# Ranh giới "request lớn" của router, đo bằng ký tự của `messages` + `tools`
+# (`router/src/request-budget.mjs` `LARGE_INPUT_CHARS`). Router cấp hạn 90 s cho request nhỏ và
+# hạn lớn (mặc định 180 s, máy này 240 s) cho request lớn; trước đây nó chỉ nhìn `max_tokens`,
+# nên một lượt chủ phiên ~108k token xin 4096 token vẫn bị cắt ở đúng 90 s trong khi các con
+# 8k token cùng nhà cung cấp trả lời trong vài giây — đo sống 2026-10-09: ba dòng
+# `chat.failed TIMEOUT` ở 90006/90011/90007 ms làm chết hai lượt chủ phiên. Phía harness đo
+# body bằng BYTE (`request_body_bytes`) nên lấy cùng con số làm ngưỡng: byte ≥ ký tự, nhờ vậy
+# harness không bao giờ chờ ngắn hơn router.
+ROUTER_LARGE_INPUT_BYTES = 200 * 1000
+
 # Cửa sổ chống-thrash của bộ nén: hỏng một lượt tóm tắt (hoặc nén xong mà vẫn sát ngưỡng) thì
 # không thử lại cho tới khi hết cửa sổ này. HERMES `_ANTI_THRASH_RECOVERY_SECONDS = 300.0`
 # (agent/context_compressor.py:2501) — hết cửa sổ thì cho phép đúng một lần thử lại.

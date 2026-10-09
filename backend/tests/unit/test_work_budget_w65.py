@@ -9,6 +9,7 @@ import json
 import pytest
 
 from agentbox.agent_core import work_budget, work_graph as wg
+from agentbox.agent_core.limits import ROUTER_LARGE_INPUT_BYTES
 from agentbox.agent_core.runtime import HarnessRuntime, router_http_timeout
 from agentbox.memory.session_store import SessionStore
 from test_work_graph import build
@@ -134,6 +135,24 @@ def test_http_read_timeout_covers_bounded_large_router_option_without_unbounded_
     normal, large = router_http_timeout(4096), router_http_timeout(16000)
     assert normal.read == 120
     assert large.read == 270 > 240
+    assert large.connect == large.write == large.pool == 120
+
+
+def test_http_read_timeout_follows_the_router_large_input_rule():
+    """A big transcript must get the long read backstop even with a small output ceiling.
+
+    Measured 2026-10-09 on the long-task owner turns: the router cut a ~108k-token request at
+    exactly 90 s (`chat.failed TIMEOUT`, 90006/90011/90007 ms) while the harness's own backstop was
+    120 s — both sides keyed "large" on `max_tokens` alone.
+    """
+    small_body = ROUTER_LARGE_INPUT_BYTES - 1
+    assert router_http_timeout(4096, small_body).read == 120
+    assert router_http_timeout(4096, ROUTER_LARGE_INPUT_BYTES).read == 270
+    # The body measurement wins over the output ceiling, and an unknown size keeps the old default.
+    assert router_http_timeout(4096, None).read == 120
+    assert router_http_timeout(16000, small_body).read == 270
+    assert router_http_timeout(16000, None).read == 270
+    large = router_http_timeout(4096, ROUTER_LARGE_INPUT_BYTES)
     assert large.connect == large.write == large.pool == 120
 
 
