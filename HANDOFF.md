@@ -4,11 +4,12 @@
 Mọi handoff cũ đã gom về [`docs/handoff/`](docs/handoff/README.md) — mục lục đầy đủ nằm ở
 [`docs/handoff/README.md`](docs/handoff/README.md); không cần đi tìm ở chỗ khác.
 
-- **Nhánh:** `vorflux/host-mode-web-transport` (HEAD `f2b1129`, 85 commit trên `main`, `main` không có
+- **Nhánh:** `vorflux/host-mode-web-transport` (HEAD `7a8427b`, 87 commit trên `main`, `main` không có
   gì mới hơn).
 - **Pull request:** https://github.com/khaiv7221-ops/BoxFox-Agent-Box/pull/1 — **PR duy nhất** của repo,
   đang mở, không phải draft.
-- **Cập nhật lần cuối:** 2026-10-09, sau đợt kiểm thử đầu-cuối tác vụ dài (34 lượt sống, hai pha).
+- **Cập nhật lần cuối:** 2026-10-09, sau đợt kiểm thử đầu-cuối tác vụ dài (34 lượt sống, hai pha) và
+  lượt dựng bộ cài Windows Desktop (mục 3).
 
 ---
 
@@ -45,7 +46,41 @@ Báo cáo kiểm thử đầy đủ (34 KB) và cây bằng chứng:
 > dấu `error` **sau khi** đã ghi xong báo cáo và ma trận; phần còn lại không kiểm được là bốn ca A và Q2
 > nói trên.
 
-## 3. Mười tám lỗi harness đã sửa trong nhánh
+## 3. Bộ cài Windows Desktop (dựng 2026-10-09)
+
+`desktop/` là shell Electron đóng gói cả UI + router + harness + runtime (Node 24.9.0, CPython 3.13.7)
+thành một bộ cài NSIS. Bộ cài dưới đây dựng từ chính nhánh này (commit `eba9aad`), nên nó mang đủ F01–F17.
+
+| Hạng mục | Giá trị |
+| --- | --- |
+| Tệp | `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` — 167.123.853 B, Windows x64, **chưa ký số** |
+| SHA-256 | `fa2b965ca102e0797cc93048ce94750b5370f5828281b3a9d2b4938a0a4a077f` |
+| Gói bên trong | 5.189 tệp, khớp từng đường dẫn và kích thước với `desktop/release/win-unpacked` |
+| Hướng dẫn cài | `docs/plan/desktop-alpha-quickstart.md` (bản nhanh cho người dùng cuối) và `docs/plan/desktop-alpha-install.md` (bản đầy đủ, checklist 13 bước) |
+
+Dựng lại (máy Linux vẫn cross-build được):
+
+```bash
+cd desktop
+npm install
+npm run fetch-runtime      # ~190 MB: Node + CPython + wheel win_amd64, kiểm sha256 từng mục
+npm run build-app          # cần frontend/dist; tự dựng UI nếu chưa có
+DISPLAY=:1 npm run dist:win
+```
+
+- **Wine phải chạy được nhị phân 32-bit** (`wine` + `wine32:i386` trên Ubuntu). Thiếu 32-bit thì
+  electron-builder dừng ở bước đóng gói uninstaller với `wine process failed ENOENT`, và tệp `Setup.exe`
+  để lại chỉ là stub ~167 KB — **không phải** bộ cài thật. Đã ghi vào `desktop/README.md`.
+- `npm test` trong `desktop/`: **73/73 đạt**; `npm run fetch-runtime:check`: runtime khớp lock.
+- Thư mục cài mặc định là `%LOCALAPPDATA%\Programs\boxfox-desktop`, không phải tên sản phẩm
+  (`productName` có ngoặc đơn nên electron-builder dùng `name`); hai tài liệu cài đã sửa cho đúng.
+- **Chưa chạy cài đặt thật trên Windows**: máy này là Linux, và workflow `desktop-build.yml` (chạy trên
+  `windows-latest`) không gọi được vì token GitHub của phiên không có quyền Actions (dispatch trả 404).
+  Bộ cài đã được kiểm tới mức Linux cho phép: giải nén kho NSIS rồi so khớp byte với cây ứng dụng, và chạy
+  wizard dưới Wine (wizard hiện đúng; bước giải nén bị chặn bởi cảnh báo "cannot be closed" — dương tính
+  giả của `nsProcess` dưới Wine, không tái hiện trên Windows).
+
+## 4. Mười tám lỗi harness đã sửa trong nhánh
 
 Mọi lỗi dưới đây đều tái hiện được trước khi sửa (test đỏ trước, hoặc số đo sống) và đều có ca hồi quy
 trừ khi ghi chú khác.
@@ -69,7 +104,7 @@ trừ khi ghi chú khác.
 | F16 | `extend` trả run về `ready` nhưng để lại `blockedReason: LONGTASK_BUDGET_EXHAUSTED` | `d9f0293` |
 | F17 | Cổng nghiệm thu chỉ nhận `ok|passed`, work graph ghi `pass` → **không** check nào qua được cổng | `f2b1129` |
 
-## 4. Việc còn mở (đã ghi nhận, chưa sửa)
+## 5. Việc còn mở (đã ghi nhận, chưa sửa)
 
 | Mã | Việc | Gợi ý |
 | --- | --- | --- |
@@ -89,7 +124,7 @@ trừ khi ghi chú khác.
 
 Danh sách đầy đủ (F01–X18) nằm trong mục **Out-of-Scope Feedback** của PR #1 và trong báo cáo kiểm thử.
 
-## 5. Chạy lại môi trường (đã dùng cho đợt cuối)
+## 6. Chạy lại môi trường (đã dùng cho đợt cuối)
 
 ```bash
 # harness (host mode) — cổng 3116, dữ liệu và workspace riêng
@@ -109,7 +144,7 @@ bash /var/tmp/lt-longtask2/restart-3116.sh      # BOXFOX_* env ở đầu tệp
   → `ling-1.13-free` → `space-bunny-free`. Mọi lượt phải mang đủ `route`
   (`connectionId f6eef1e6-5fc3-47a9-bf14-34fa02e434a8`).
 
-## 6. Kiểm thử
+## 7. Kiểm thử
 
 - `backend/tests/unit/` — các tệp liên quan đợt này: `test_history_surface.py` (32 passed),
   `test_longtask_execution.py`, `test_await_children.py`, `test_work_budget_w65.py`.
@@ -118,7 +153,7 @@ bash /var/tmp/lt-longtask2/restart-3116.sh      # BOXFOX_* env ở đầu tệp
 - Bản sửa F17 được kiểm chứng thêm bằng cách chạy lại trên **bản sao** DB sống: trước bản sửa
   `acceptanceSatisfied: False` kèm `LONGTASK_ACCEPTANCE_REQUIRED`; sau bản sửa `True`, `failedChecks: []`.
 
-## 7. Những điều dễ vấp (đã tốn thời gian thật)
+## 8. Những điều dễ vấp (đã tốn thời gian thật)
 
 - **Đừng commit** ba tệp chưa theo dõi dùng cho preview: `deploy/docker/docker-compose.preview.yml`,
   `frontend/vite.preview.config.ts`, `router/package-lock.json`.
@@ -127,6 +162,8 @@ bash /var/tmp/lt-longtask2/restart-3116.sh      # BOXFOX_* env ở đầu tệp
   `runtime.py`, `longtask_store.py`, `api/server.py`, `limits.py`, `test_longtask_execution.py`,
   `test_await_children.py`, `test_work_budget_w65.py` là LF; `router/src/engine.mjs` trộn 218 CRLF/225
   dòng — sửa bằng script giữ nguyên kiểu cuối dòng.
+- **Cross-build bộ cài Windows trên Linux cần wine 32-bit** — xem mục 3; thiếu nó thì `dist:win` báo
+  thành công giả với một stub 167 KB.
 - **Thân PR không được chứa** đường dẫn `/code/...` (bước chuẩn bị media của `pr edit` sẽ từ chối) và
   không được chứa dấu quản lý `VORFLUX_AGENT_PR_BODY`.
 - Đồ thị việc: **mọi** `work_graph action=update` làm reset toàn bộ stage ⇒ node đã `accepted` bị mở lại.
@@ -134,11 +171,14 @@ bash /var/tmp/lt-longtask2/restart-3116.sh      # BOXFOX_* env ở đầu tệp
 - `mimo-v2.6-flash-free` từng chết vì hạn 90 s (F15); nay đã sửa, nhưng nếu thấy `chat.failed TIMEOUT`
   thì nâng `max_tokens` ≥ 8.000 hoặc đổi model.
 
-## 8. Việc nên làm tiếp
+## 9. Việc nên làm tiếp
 
 1. Sửa **X1** và **X3** (cổng nghiệm thu + nút nghiệm thu trên UI) — hai việc nhỏ, đóng được vòng
    nghiệm thu mà đợt cuối phải làm bằng tay.
 2. Bốn ca A còn `not-triggered` (A3 hai hội thoại song song, A5 `task_send`, A7 phiên unbound/container,
    A8 đổi model giữa run) — dựng ca chủ động trên harness phụ như đã làm với V3/V6.
 3. Cân nhắc `2ab` (ngân sách tính trọn bound) vì nó chạm trần ngân sách thật của mọi run fan-out.
-4. Gộp/tách PR nếu cần: hiện chỉ có **một** PR (#1), 85 commit trên `main`.
+4. Chạy bộ cài trên Windows thật (hoặc bật workflow `desktop-build.yml` trong tab Actions) để đóng
+   checklist 13 bước của `docs/plan/desktop-alpha-install.md` — đây là phần duy nhất của bộ cài chưa
+   được kiểm trên hệ điều hành đích.
+5. Gộp/tách PR nếu cần: hiện chỉ có **một** PR (#1), 87 commit trên `main`.
