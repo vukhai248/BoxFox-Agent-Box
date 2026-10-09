@@ -128,16 +128,42 @@ def context_estimate(messages, tools=(), usage=None):
 # có suy luận), nhưng BoxFox chỉ nhận bản `finish_reason == 'stop'`, nên một nhiệm vụ dài kết thúc
 # bằng `Incomplete summary` và cả lượt chết. PI đặt `min(0.8 * reserveTokens, model.maxTokens)`
 # (compaction.ts:684-687). BoxFox không có `reserveTokens`/`maxTokens` của model tóm tắt, nên lấy
-# 2 % ngân sách đang dùng — JUDGEMENT CALL, không phải bản sao: sàn 2048 giữ nguyên hành vi cũ cho
-# phiên nhỏ, trần 8192 chặn một lượt tóm tắt phình to hơn cả transcript nó thay thế.
-SUMMARY_MAX_TOKENS_FLOOR = 4096
-SUMMARY_MAX_TOKENS_CAP = 8192
-SUMMARY_MAX_TOKENS_RATIO = 0.02
+# một phần ngân sách đang dùng — JUDGEMENT CALL, không phải bản sao.
+#
+# Đo sống 2026-10-09 (phiên `72106f67`, tác vụ dài 26 lượt, chủ nhà chỉ đạo nâng trần): sàn 4096 là
+# TRẦN thật của mọi transcript dưới ~205k token, mà model tóm tắt hay tiêu hết ngần ấy token vào
+# phần suy luận rồi trả `content: null` (router: `finishReason: length, contentChars: 0`) — nén
+# hỏng, ngữ cảnh 182k không gộp được, cả phiên mắc `OUTPUT_CONTEXT_EXHAUSTED` và tác vụ dài chết ở
+# bước 539/2400. Tác vụ dài KHÔNG giữ trần 4k: sàn 8192, tỉ lệ 10 % (bản tóm tắt vẫn nhỏ hơn hẳn
+# phần nó thay thế — hai chốt `after > budget` và `after >= before` dưới đây vẫn chặn), trần 50 000
+# vẫn dưới trần `max_tokens` 64 000 mà router chấp nhận (`router/src/engine.mjs:68`).
+SUMMARY_MAX_TOKENS_FLOOR = 8192
+SUMMARY_MAX_TOKENS_CAP = 50_000
+SUMMARY_MAX_TOKENS_RATIO = 0.10
 
 
 def summary_max_tokens(before_estimate):
     scaled = int(before_estimate * SUMMARY_MAX_TOKENS_RATIO)
     return min(SUMMARY_MAX_TOKENS_CAP, max(SUMMARY_MAX_TOKENS_FLOOR, scaled))
+
+
+def usable_summary(response):
+    """Một lượt tóm tắt DÙNG ĐƯỢC: `stop` hoặc `length` kèm chữ — MỘT chỗ phán cho mọi đường gọi.
+
+    Phần D: bản bị nhà cung cấp cắt ở trần `max_tokens` vẫn hơn hẳn việc mất nguyên transcript.
+    Luật này từng chỉ sống ở đây, còn closure `summarize` của `runtime.py` chặn trước bằng
+    `completion_reason != 'complete'` — nên trên đường tự động nó không bao giờ chạy: phiên sống
+    `72106f67` (2026-10-09) ném đi một bản tóm tắt 2 898 ký tự đã viết xong (`finishReason: length`)
+    rồi chết ở `OUTPUT_CONTEXT_EXHAUSTED`. Hai đường giờ hỏi cùng hàm này.
+    """
+    if not isinstance(response, dict):
+        return False
+    choice = (response.get('choices') or [{}])[0]
+    if not isinstance(choice, dict):
+        return False
+    message = choice.get('message') if isinstance(choice.get('message'), dict) else {}
+    text = message.get('content')
+    return choice.get('finish_reason') in ('stop', 'length') and isinstance(text, str) and bool(text.strip())
 
 
 # Nén xong mà ngữ cảnh vẫn trên mức này của ngưỡng thì lần nén đó coi như không ăn thua: bước sau
@@ -668,8 +694,9 @@ class ContextCompressor:
             # Phần D — `length` vẫn nhận khi bản tóm tắt có chữ: ba phiên sống chết ở đây
             # (`summary_failed` tại 935 541 / 992 249 / 732 528) chỉ vì nhà cung cấp cắt ở trần
             # `max_tokens` của lượt tóm tắt. Bản bị cắt vẫn hơn hẳn việc mất nguyên transcript.
+            # Luật nằm ở `usable_summary` — closure `summarize` của `runtime.py` hỏi cùng hàm này.
             truncated = choice.get('finish_reason') == 'length'
-            if choice.get('finish_reason') not in ('stop', 'length') or not isinstance(text, str) or not text.strip():
+            if not usable_summary(summary):
                 raise ValueError('Incomplete summary')
         except Exception:
             if before > self.budget:

@@ -19,7 +19,7 @@ from .longtask_runtime import LongtaskRuntime
 from .longtask_store import LongtaskError
 from . import context_surface
 from .compression import (ContextCompressor, estimate_tokens, trim_message_count,
-                         usage_reading)
+                         usable_summary, usage_reading)
 from .failures import (RETRY_BUDGET_SECONDS, classify_failure, failure_detail, level_refusal,
                        log_safe_failure, retry_advice, stop_reason)
 from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHARS, ANSWER_TOO_LONG_CODE,
@@ -4480,7 +4480,13 @@ class HarnessRuntime(RuntimeCommands):
                     async def summarize(history, max_tokens=None):
                         response = await self.complete_model(sid, history, [], config['route'], purpose='summary', max_tokens=
                             output_policy.request_budget({**config, 'maxTokens': max_tokens or 2048}))
-                        if output_policy.completion_reason(response) != 'complete':
+                        # Một chỗ phán duy nhất cho "bản tóm tắt dùng được" là `usable_summary`
+                        # (`compression.py`), nơi Phần D đã nhận cả bản bị cắt ở trần `max_tokens`
+                        # miễn là có chữ. Cổng cũ ở ĐÂY chỉ nhận `completion_reason == 'complete'`
+                        # nên chặn trước luật đó: phiên sống `72106f67` (2026-10-09) ném đi một bản
+                        # tóm tắt 2 898 ký tự đã viết xong (`finishReason: length`), rồi mắc
+                        # `OUTPUT_CONTEXT_EXHAUSTED` ở bước 539/2400 của tác vụ dài.
+                        if not usable_summary(response):
                             raise ValueError('PROVIDER_SUMMARY_INCOMPLETE: context summary did not finish')
                         return response
                     compressor = self.compressors.get(sid)
