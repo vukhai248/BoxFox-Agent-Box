@@ -53,7 +53,7 @@ class BoxExecutor:
         self.forward_error = forward_error
         self.requests = []
 
-    async def request(self, path, body=None):
+    async def request(self, path, body=None, session=None):
         self.requests.append((path, body))
         if path == plan_registry.INDEX_PATH:
             if self.index_error is not None:

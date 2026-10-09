@@ -4,9 +4,15 @@ Electron shell that runs the whole BoxFox stack — the web UI, the router and t
 harness — as a normal Windows desktop app, without a developer checkout on the machine.
 Plan: `/.plans/desktop-alpha-packaging.md` §6 PR-2 (work items D1–D3).
 
-**Installing the alpha and testing it:** `docs/plan/desktop-alpha-install.md` (Vietnamese) —
-install, choosing host/docker mode, where the profile/logs live, how to export diagnostics,
-the host-mode warning and the 13-step acceptance checklist.
+**Installing the alpha and testing it:** four documents, pick by role and language.
+
+- End users, first install: `docs/plan/desktop-alpha-quickstart.md` (Vietnamese) and
+  `docs/plan/desktop-alpha-quickstart.en.md` (English) — download, verify the SHA-256, run the installer,
+  choose host/docker, where the profile lives, how to uninstall.
+- Whoever accepts the build: `docs/plan/desktop-alpha-install.md` (Vietnamese) and
+  `docs/plan/desktop-alpha-install.en.md` (English) — install, choosing host/docker mode, where the
+  profile/logs live, how to export diagnostics, the host-mode warning and the 13-step acceptance
+  checklist.
 
 ```
 desktop/
@@ -60,9 +66,14 @@ every push. It uploads the installer plus a `SHA256SUMS.txt` as a build artifact
 not publish a release (the installer is unsigned).
 
 Cross-building the Windows installer on Linux works (Wine is used for the NSIS step):
-`DISPLAY=:1 npx electron-builder --win nsis --x64`. `npm run pack:linux` produces an
-unpacked Linux tree for smoke tests, but it still bundles the Windows runtime, so the
-supervisor only starts there once a Linux runtime exists (see "Known limitations").
+`DISPLAY=:1 npx electron-builder --win nsis --x64`. **Wine must be able to run 32-bit binaries**
+(`wine` + `wine32:i386` on Debian/Ubuntu). electron-builder builds the uninstaller by running the
+installer stub under Wine, and that stub is a 32-bit PE: with a 64-bit-only Wine the build stops at
+`wine process failed ENOENT` (or `failed to load sysroot\...\ntdll.dll error c0000135`) *after*
+`win-unpacked/` is written, and the `Setup.exe` left behind is a ~167 KB stub, not an installer.
+`npm run pack:linux` produces an unpacked Linux tree for smoke tests, but it still bundles the
+Windows runtime, so the supervisor only starts there once a Linux runtime exists (see "Known
+limitations").
 
 ## Verifying the runtime
 

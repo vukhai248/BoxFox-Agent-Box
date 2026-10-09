@@ -34,6 +34,7 @@ from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
 from agentbox.agent_core.runtime import HarnessRuntime, get_agent_identity, turn_recap
 from agentbox.memory.session_store import SessionStore
 from agentbox.skills.catalog import DEFAULT_SKILLS, SkillCatalog
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 SECTION_34 = '### 3.4.'
 SKILL_ID = 'final-report'
@@ -75,6 +76,10 @@ class Executor:
             return {'content': f"Written {args.get('path')}"}
         if name in ('terminal_exec', 'run_command'):
             return {'content': 'ok', 'exit_code': 0}
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def cleanup(self, sid):
@@ -87,6 +92,9 @@ def run_turn(tmp_path, client, prompt, *, name='prompt.db', role='orchestrator',
     session = runtime.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'},
                              parent_id=parent_id, role=role)
     sid = session['id']
+    attach = getattr(client, 'attach', None)
+    if attach is not None:
+        attach(runtime, sid)
 
     async def run():
         await runtime.submit(sid, prompt)
@@ -408,19 +416,26 @@ def delivery_message(summary='Báo cáo của chuyên gia: đã soát xong.'):
 class DeliveryModel(Model):
     """`Model` giả bơm một kết quả bạn vào transcript SAU bước 1 — đúng nhịp `drain_peer_deliveries`.
 
-    Bơm ở đây (sau lời gọi model đầu tiên, trên chính danh sách transcript mà runtime đang giữ chứ
-    không phải bản sao của YÊU CẦU) vì đó là ranh giới bước thật: bước 2 dựng YÊU CẦU của nó từ
-    danh sách này, nên kết quả bạn có mặt ở cả YÊU CẦU lẫn nguồn của bản nhắc việc.
+    Bơm vào **chính danh sách transcript của runtime** (`runtime.active_messages[sid]`, ghim qua
+    `attach`), không phải danh sách message của YÊU CẦU: từ A4 runtime gửi nhà cung cấp một bản đã
+    lọc khoá nội bộ (`origin`/`summaryGeneration`/`sourceRanges`), nên bản ấy chỉ dùng một lần.
+    Ranh giới bước thì vẫn ở đây: bước 2 dựng YÊU CẦU của nó từ danh sách sống này, nên kết quả bạn
+    có mặt ở cả YÊU CẦU lẫn nguồn của bản nhắc việc.
     """
 
     def __init__(self, responses, delivery=None):
         super().__init__(responses)
         self.delivery = delivery
+        self.runtime = None
+        self.sid = None
+
+    def attach(self, runtime, sid):
+        self.runtime, self.sid = runtime, sid
 
     async def complete(self, messages, tools, route, max_tokens=4096, on_thought=None, on_content=None):
         response = await super().complete(messages, tools, route, max_tokens, on_thought, on_content)
         if self.delivery:
-            messages.append(self.delivery)
+            self.runtime.active_messages[self.sid].append(self.delivery)
             self.delivery = None
         return response
 

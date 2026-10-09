@@ -15,6 +15,7 @@ import pytest
 
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.memory.session_store import SessionStore
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 
 class StreamingModel:
@@ -63,6 +64,10 @@ class StubExecutor:
         self.container = None
 
     async def execute(self, name, args, sid):
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'fixture'}
 
     async def cleanup(self, sid):

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 from . import journal
 from .limits import EVIDENCE_PRUNE_CODE, EVIDENCE_PRUNE_TIMEOUT_SECONDS
@@ -40,6 +41,8 @@ async def _safe(executor, op, args, store, sid, code, label):
     người dùng phải thấy — chính nó là thứ đã thiếu trong 22 hàng checkpoint cũ.
     """
     if executor is None:
+        _notice(store, sid, code, f'{code}: {label} chưa có executor để ghi bản đọc được',
+                op=op, projectionStored=False)
         return None
     try:
         answer = await executor.execute(op, args, sid)
@@ -47,11 +50,21 @@ async def _safe(executor, op, args, store, sid, code, label):
         _notice(store, sid, code, f'{code}: {label} không ghi được trong box ({type(exc).__name__}: {exc})',
                 op=op)
         return None
-    if isinstance(answer, dict) and answer.get('ok') is False:
-        _notice(store, sid, code, f"{code}: {label} bị box từ chối ({answer.get('error') or answer.get('code')})",
-                op=op)
+    if not isinstance(answer, dict):
+        _notice(store, sid, code, f'{code}: {label} trả về dữ liệu không hợp lệ',
+                op=op, projectionStored=False)
         return None
-    return answer if isinstance(answer, dict) else None
+    if (answer.get('ok') is False or answer.get('is_error') is True
+            or answer.get('errorCode')):
+        error = answer.get('errorCode') or answer.get('error') or answer.get('code')
+        _notice(store, sid, code, f'{code}: {label} bị executor từ chối ({error})',
+                op=op, projectionStored=False, projectionError=error)
+        return None
+    if answer.get('ok') is not True:
+        _notice(store, sid, code, f'{code}: {label} chưa xác nhận ghi thành công',
+                op=op, projectionStored=False)
+        return None
+    return answer
 
 
 async def ensure_session(executor, store, sid, *, role=None, parent=None, goal=None) -> dict | None:
@@ -178,21 +191,183 @@ def note_gap(store, sid, code, message, op=None):
     return _notice(store, sid, code, message, op=op)
 
 
+#: Tiêu đề khối ghim (LT-01). Ở cạnh tiêu đề khối ký ức vì `_strip_brief` phải nhận ra CẢ HAI:
+#: khối được dựng lại mỗi lượt, để bản cũ ở lại system prompt là lặp chữ mỗi lượt một lần.
+CRITICAL_PINS_HEADER = "=== PINNED OWNER REQUESTS (canonical revisions; independent of any summary) ==="
+#: Trần ký tự của cả khối ghim. Yêu cầu gốc là thứ dễ rơi khỏi `brief_text` nhất nên được nhiều
+#: chỗ nhất; các revision sau chỉ giữ một dòng nhận ra được, đọc đầy đủ bằng `history_read`.
+CRITICAL_PINS_MAX_CHARS = 1200
+CRITICAL_PINS_FIRST_CHARS = 600
+CRITICAL_PINS_OTHER_CHARS = 160
+
+
+def _pin_line(text, limit):
+    """Một dòng ghim: bỏ xuống dòng (khối này là chỉ dẫn, không phải transcript) rồi cắt trần."""
+    flat = ' '.join(str(text or '').split())
+    return flat if len(flat) <= limit else flat[:limit - 1] + '…'
+
+
+def _pin_text(history, sid, ref):
+    """Nguyên văn yêu cầu chủ từ bản ghi canonical; hỏng/thiếu thì trả '' (không bịa)."""
+    try:
+        raw = history.read_reference(sid, ref, limit=2000)['content']
+    except Exception:
+        return ''
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return raw
+    content = payload.get('content') if isinstance(payload, dict) else None
+    if isinstance(content, list):  # lượt có ảnh: phần chữ nằm trong các khối `text`
+        content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else raw
+
+
+def critical_pins_block(store, sid) -> str:
+    """Ghim nguyên văn yêu cầu chủ + số revision TRƯỚC khối ký ức (LT-01).
+
+    `journal.brief_text` chỉ đọc tail nên yêu cầu gốc — và cả quyết định trọng yếu — có thể rơi
+    khỏi cửa sổ sau vài lần nén. Khối này lấy từ `owner_contract_revisions`, tức là nguồn canonical
+    độc lập với summary, nên nó còn nguyên sau nén và sau restart.
+
+    Chỉ chạy khi tác vụ dài được bật (`BOXFOX_LONGTASK_CONTINUITY=1`): đó là chế độ mà hợp đồng chủ
+    được dùng để chạy tiếp. Mọi ca hỏng trả `''` — khối ký ức vẫn dựng như cũ.
+    """
+    from .longtask_runtime import enabled as longtask_enabled
+    if not longtask_enabled():
+        return ''
+    try:
+        history = getattr(store, 'history', None)
+        if history is None:
+            return ''
+        pins = history.critical_pins(sid)['pins']
+    except Exception:  # pragma: no cover - phiên chưa có hợp đồng / DB cũ
+        return ''
+    lines, used = [CRITICAL_PINS_HEADER], 0
+    for index, pin in enumerate(pins):
+        limit = CRITICAL_PINS_FIRST_CHARS if index == 0 else CRITICAL_PINS_OTHER_CHARS
+        text = _pin_line(_pin_text(history, sid, pin['historyRef']), limit)
+        if not text:
+            continue
+        line = f"[r{pin['revision']} · {pin['changeKind']} · {pin['historyRef']['recordId']}] {text}"
+        if used + len(line) > CRITICAL_PINS_MAX_CHARS:
+            lines.append(f'… (+{len(pins) - index} bản ghi hợp đồng nữa — đọc bằng history_read)')
+            break
+        lines.append(line)
+        used += len(line)
+    return '\n'.join(lines) if len(lines) > 1 else ''
+
+
+#: Khối trạng thái chuyển tiếp (LT-08). Cùng lý do với khối ghim: phải nhận ra được ở lượt sau.
+RETAINED_STATE_HEADER = "=== RETAINED PROJECT STATE (verified capsules; raw history may be deleted) ==="
+#: Trần ký tự của cả khối. Capsule là bản CHỐT tại `asOf`, không phải trạng thái sống: đủ để phiên
+#: mới biết phải hỏi gì và đọc tiếp bằng công cụ lịch sử, không phải để chép cả cuốn sổ vào prompt.
+RETAINED_STATE_MAX_CHARS = 1200
+RETAINED_STATE_OWNER_CHARS = 300
+RETAINED_STATE_FIELD_CHARS = 160
+
+
+def _payload_text(payload):
+    """Chữ của một bản ghi canonical (lượt có ảnh: phần chữ nằm trong các khối `text`)."""
+    if not isinstance(payload, dict):
+        return ''
+    content = payload.get('content')
+    if isinstance(content, list):
+        content = ' '.join(part.get('text', '') for part in content if isinstance(part, dict))
+    return content if isinstance(content, str) else ''
+
+
+def _capsule_line(capsule_id, capsule):
+    """Một dòng cho một capsule: yêu cầu chủ mới nhất + sổ trọng yếu + bài học đã giữ."""
+    parts = []
+    for contract in capsule.get('contracts') or []:
+        revisions = contract.get('revisions') or []
+        text = _payload_text((revisions[-1] or {}).get('exactPayload')) if revisions else ''
+        if text:
+            parts.append('ownerRequest=' + _pin_line(text, RETAINED_STATE_OWNER_CHARS))
+    critical = capsule.get('critical') if isinstance(capsule.get('critical'), dict) else {}
+    for key in ('decisions', 'blockers', 'failedChecks', 'tasks', 'jobs', 'budget', 'plans'):
+        value = critical.get(key)
+        if value in (None, [], {}):
+            continue
+        parts.append(f'{key}=' + _pin_line(json.dumps(value, ensure_ascii=False, sort_keys=True),
+                                           RETAINED_STATE_FIELD_CHARS))
+    lessons = [_pin_line(item.get('fact') if isinstance(item, dict) else item, RETAINED_STATE_FIELD_CHARS)
+               for item in (capsule.get('lessons') or [])]
+    lessons = [text for text in lessons if text]
+    if lessons:
+        parts.append('lessons=' + ' | '.join(lessons[:3]))
+    if not parts:
+        return ''
+    stamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(capsule.get('asOf') or 0))
+    head = (f"[capsule {str(capsule_id or '')[:8]} · asOf {stamp} · "
+            f"{len(capsule.get('sessionIds') or [])} phiên nguồn · raw đã thành tombstone] ")
+    return head + '; '.join(parts)
+
+
+def retained_state_block(store, sid) -> str:
+    """Manifest giới hạn của capsule đã xác minh trong cùng project (LT-08).
+
+    Raw bị xóa thì `history_read` chỉ còn tombstone; bài học và trạng thái chuyển tiếp nằm ở
+    capsule. Hội thoại MỚI cùng project phải đọc được nó — nhưng có trần, và nói thẳng nguồn là bản
+    chốt tại `asOf` chứ không phải trạng thái sống, để phiên mới không tin nhầm là hiện tại.
+
+    Chỉ root của cây mình (hội thoại mới là một root) mới dựng khối; mọi ca hỏng trả `''`.
+    """
+    from .longtask_runtime import enabled as longtask_enabled
+    if not longtask_enabled():
+        return ''
+    try:
+        history = getattr(store, 'history', None)
+        if history is None:
+            return ''
+        binding = history.bind_session(sid)
+        if binding['session_id'] != binding['root_session_id']:
+            return ''
+        entries = history.project_capsules(sid)
+    except Exception:  # pragma: no cover - phiên chưa ghim project / DB cũ
+        return ''
+    lines, used = [RETAINED_STATE_HEADER], 0
+    for entry in entries:
+        try:
+            capsule = history.read_capsule(sid, entry['capsuleId'])
+        except Exception:
+            continue
+        line = _capsule_line(entry['capsuleId'], capsule)
+        if not line:
+            continue
+        if used + len(line) > RETAINED_STATE_MAX_CHARS:
+            lines.append('… (còn capsule khác trong project — đọc bằng công cụ lịch sử)')
+            break
+        lines.append(line)
+        used += len(line)
+    return '\n'.join(lines) if len(lines) > 1 else ''
+
+
 def brief(store, sid, *, limit=60) -> str:
     """Khối "ký ức" của phiên (A5) — rỗng khi chưa có bản ghi nào **thuộc sáu nhóm** (lượt đầu
-    không có gì để nhớ, và một phiên chỉ có hàng tra cứu — `F:`/`E:` — cũng vậy)."""
+    không có gì để nhớ, và một phiên chỉ có hàng tra cứu — `F:`/`E:` — cũng vậy).
+
+    Khối ghim (LT-01) và khối trạng thái chuyển tiếp (LT-08) đi TRƯỚC khối ký ức: yêu cầu chủ và
+    bài học đã giữ là thứ phải sống sót, còn tail nhật ký là thứ đọc lại được. Phiên chỉ có ghim
+    (chưa có hàng nhật ký nào) vẫn dựng được khối.
+    """
+    block = ''
     try:
         rows = store.journal_tail(sid, limit=limit)
     except Exception:  # pragma: no cover - phiên chưa có nhật ký / DB cũ
-        return ''
-    if not rows:
-        return ''
-    block = journal.brief_text([record_view(row) for row in rows])
-    # Đợt 3 vòng 22: hàng `E:` (bằng chứng của lượt) cố ý KHÔNG có nhóm trong khối ký ức, nên một
-    # phiên chỉ có hàng `E:`/`F:` sẽ dựng ra sáu nhóm rỗng. Ghép khối đó vào system message là đổi
-    # prompt giữa hai lượt mà không mang thêm thông tin nào — trả `''` thì `inject_brief` bỏ khối
-    # cũ và prompt giữ nguyên tiền tố (đúng thứ prompt cache cần).
-    return block if journal.brief_has_items(block) else ''
+        rows = []
+    if rows:
+        text = journal.brief_text([record_view(row) for row in rows])
+        # Đợt 3 vòng 22: hàng `E:` (bằng chứng của lượt) cố ý KHÔNG có nhóm trong khối ký ức, nên
+        # một phiên chỉ có hàng `E:`/`F:` sẽ dựng ra sáu nhóm rỗng. Ghép khối đó vào system message
+        # là đổi prompt giữa hai lượt mà không mang thêm thông tin nào — bỏ trống thì `inject_brief`
+        # bỏ khối cũ và prompt giữ nguyên tiền tố (đúng thứ prompt cache cần).
+        if journal.brief_has_items(text):
+            block = text
+    pins = critical_pins_block(store, sid)
+    retained = retained_state_block(store, sid)
+    return '\n\n'.join(part for part in (pins, retained, block) if part)
 
 
 def record_view(row):
@@ -248,11 +423,16 @@ def inject_brief(prompt, block) -> str:
 
 
 def _strip_brief(prompt):
-    """Bỏ khối ký ức đã chèn ở lần trước (nhận diện bằng đúng dòng tiêu đề của `journal.brief_text`)."""
+    """Bỏ các khối đã chèn ở lần trước (nhận diện bằng đúng hai dòng tiêu đề).
+
+    Cắt từ tiêu đề XUẤT HIỆN SỚM NHẤT: khối ghim nằm trước khối ký ức, nên chỉ tìm tiêu đề khối
+    ký ức thì bản ghim cũ ở lại và mỗi lượt lại chồng thêm một bản.
+    """
     text = str(prompt or '')
-    header = journal.JOURNAL_BRIEF_HEADER
-    index = text.find(header)
-    return text[:index].rstrip() if index >= 0 else text
+    found = [index for index in (text.find(journal.JOURNAL_BRIEF_HEADER), text.find(CRITICAL_PINS_HEADER),
+                                   text.find(RETAINED_STATE_HEADER))
+             if index >= 0]
+    return text[:min(found)].rstrip() if found else text
 
 
 # Tên cũ dùng trong nội bộ mô-đun này; route/nhật ký dùng tên công khai `record_view`.

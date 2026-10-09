@@ -20,6 +20,14 @@ import time
 import urllib.request
 import uuid
 
+#: F30 — phần output tràn ra tệp: ngưỡng, bản xem trước, tên thư mục. Phải khớp
+#: `sandbox/output_refs.py` (bản host), nên có bài kiểm ghim hai bên thay vì để trôi im lặng.
+SPILL_THRESHOLD_CHARS = 20000
+SPILL_PREVIEW_CHARS = 15000
+SPILL_MARKER = '\n[truncated; see artifact]'
+SPILL_FAILED_MARKER = '\n[truncated; artifact write failed]'
+SPILL_DIR = '.generated_artifacts/tools'
+
 ROOT = Path('/home/agent/workspace').resolve()
 # W8.A4.3: workspace cố định; `ROOT` chỉ đổi theo từng yêu cầu khi harness gửi worktree của run/node.
 WORKSPACE = ROOT
@@ -216,15 +224,56 @@ def shell(command, timeout=30, session='default'):
     finally:
         marker.unlink(missing_ok=True)
     output = output.decode('utf-8', errors='replace')
-    artifact = None
-    if len(output) > 20000:
-        # W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
-        spilled = WORKSPACE / '.generated_artifacts/tools/' + uuid.uuid4().hex + '.txt'
+    artifact, ref, failed = _spill(output)
+    content = output[:SPILL_PREVIEW_CHARS] + SPILL_FAILED_MARKER if failed \
+        else _spill_content(output, artifact)
+    return {'content': content, 'exit_code': proc.returncode,
+            'is_error': proc.returncode != 0, 'artifact': artifact, 'outputRef': ref}
+
+
+def _spill(output):
+    """Ghi phần tràn, trả `(artifact, ref, failed)`.
+
+    W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
+    F30: cùng hình dạng với host executor; script này chạy trong box nên không import được
+    `sandbox/output_refs.py` — số, ref và luật cắt ở đây phải khớp bản host, và
+    `tests/unit/test_output_refs.py` ghim hai bên khớp nhau.
+
+    `failed` tách "ghi hỏng" khỏi "dưới trần, không có gì để ghi": ghi hỏng (đĩa đầy, chỉ-đọc) mà để
+    `OSError` nổi lên thì cả kết quả lệnh thành 'Sandbox unavailable' — mất tệp là mất một tiện ích,
+    không phải mất lượt. Đối xứng với bản host (`sandbox/output_refs.py`).
+    """
+    if len(output) <= SPILL_THRESHOLD_CHARS:
+        return None, None, False
+    raw = output.encode('utf-8')
+    spilled = WORKSPACE / SPILL_DIR / (uuid.uuid4().hex + '.txt')
+    try:
         spilled.parent.mkdir(parents=True, exist_ok=True)
-        spilled.write_text(output, encoding='utf-8')
-        artifact = str(spilled.relative_to(WORKSPACE))
-    return {'content': output[:15000] + ('\n[truncated; see artifact]' if artifact else ''),
-            'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact}
+        spilled.write_bytes(raw)
+    except OSError:
+        return None, None, True
+    artifact = str(spilled.relative_to(WORKSPACE))
+    return artifact, _spill_ref(artifact, raw), False
+
+
+def _spill_content(output, artifact):
+    """Dưới trần thì trả NGUYÊN văn; chỉ cắt khi đã có tệp đầy đủ để chỉ tới.
+
+    Bản trước cắt ở 15.000 ký tự cả khi không có tệp: output 15.001–20.000 ký tự bị mất phần đuôi
+    mà không có dấu hiệu nào, trong khi host trả nguyên văn — đúng kiểu lệch im lặng mà F30 dẹp.
+    """
+    return output[:SPILL_PREVIEW_CHARS] + SPILL_MARKER if artifact else output
+
+
+def _spill_ref(path, raw):
+    """Ref của tệp spill trong box — bản sao của `sandbox/output_refs.output_ref` (script độc lập).
+
+    `tests/unit/test_output_refs.py` gọi thẳng hàm này và so với bản host, nên đổi khoá hay đổi
+    tiền tố id ở một bên là đỏ ngay.
+    """
+    content = hashlib.sha256(raw).hexdigest()
+    return {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
+            'path': path, 'bytes': len(raw)}
 
 
 # --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------
@@ -521,6 +570,85 @@ def _pointer_click(args, *click_args) -> list:
     """Lệnh bấm chuột tại (x, y): di chuyển (không `--sync`) rồi bấm."""
     _pointer_move(int(args['x']), int(args['y']))
     return ['xdotool', 'click', *click_args]
+
+
+#: Mã nút chuột của `xdotool` trong box.
+BOX_MOUSE_BUTTONS = {'left': '1', 'middle': '2', 'right': '3'}
+
+#: Khe hở sau khi NHẤN và trước khi NHẢ (giây). GTK/Cairo coi nhấn-rồi-nhả trong cùng một khung hình
+#: là **cú bấm**, không phải cú kéo — thiếu khe hở thì kéo thành bấm.
+BOX_GESTURE_SETTLE_SEC = 0.03
+
+#: Nhịp giữa hai điểm dừng của cú kéo / nét vẽ (giây).
+BOX_GESTURE_STEP_SEC = 0.01
+
+#: Trần số bước của cú kéo và số điểm của nét vẽ trong box (mỗi bước là một tiến trình).
+BOX_MAX_DRAG_STEPS = 60
+BOX_MAX_STROKE_POINTS = 400
+
+
+def _box_button(args) -> str:
+    """Số hiệu nút chuột của X11, hoặc nói thẳng ra là tên nút sai.
+
+    Bản X11/Windows từ chối tên nút lạ; ở đây cũng vậy. Trước đây tên sai im lặng thành chuột trái
+    — một cú kéo bằng "nút giữa" gõ sai chính tả sẽ chạy như chuột trái và không ai biết.
+    """
+    name = str(args.get('button') or 'left').strip().lower()
+    code = BOX_MOUSE_BUTTONS.get(name)
+    if code is None:
+        raise ValueError('nút chuột không hợp lệ: %r' % (name,))
+    return code
+
+
+def _drag_plan(args) -> list:
+    """Kế hoạch kéo: nhấn ở điểm đầu, đi từng bước, nhả ở điểm cuối."""
+    x, y = int(args['x']), int(args['y'])
+    to_x, to_y = int(args['toX']), int(args['toY'])
+    steps = max(1, min(BOX_MAX_DRAG_STEPS, int(args.get('steps') or 12)))
+    code = _box_button(args)
+    plan = [(['xdotool', 'mousemove', str(x), str(y)], 0.0),
+            (['xdotool', 'mousedown', code], BOX_GESTURE_SETTLE_SEC)]
+    for index in range(1, steps + 1):
+        step_x = round(x + (to_x - x) * index / steps)
+        step_y = round(y + (to_y - y) * index / steps)
+        plan.append((['xdotool', 'mousemove', str(step_x), str(step_y)], BOX_GESTURE_STEP_SEC))
+    plan.append((['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC))
+    return plan
+
+
+def _hold_plan(args) -> list:
+    """Kế hoạch giữ chuột: nhấn, chờ, nhả."""
+    x, y = int(args['x']), int(args['y'])
+    code = _box_button(args)
+    try:
+        seconds = max(0.05, min(5.0, float(args.get('seconds') or 1.0)))
+    except (TypeError, ValueError):
+        seconds = 1.0
+    return [(['xdotool', 'mousemove', str(x), str(y)], 0.0),
+            (['xdotool', 'mousedown', code], seconds),
+            (['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC)]
+
+
+def _stroke_plan(args) -> list:
+    """Kế hoạch vẽ nét: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối."""
+    path = []
+    for point in (args.get('path') or ()):
+        try:
+            px, py = point
+            path.append((int(px), int(py)))
+        except (TypeError, ValueError) as exc:
+            raise ValueError('điểm của nét vẽ không hợp lệ: %r' % (point,)) from exc
+    if len(path) < 2:
+        raise ValueError('nét vẽ cần ít nhất hai điểm')
+    if len(path) > BOX_MAX_STROKE_POINTS:
+        raise ValueError('nét vẽ có %d điểm, quá trần %d' % (len(path), BOX_MAX_STROKE_POINTS))
+    code = _box_button(args)
+    plan = [(['xdotool', 'mousemove', str(path[0][0]), str(path[0][1])], 0.0),
+            (['xdotool', 'mousedown', code], BOX_GESTURE_SETTLE_SEC)]
+    for px, py in path[1:]:
+        plan.append((['xdotool', 'mousemove', str(px), str(py)], BOX_GESTURE_STEP_SEC))
+    plan.append((['xdotool', 'mouseup', code], BOX_GESTURE_SETTLE_SEC))
+    return plan
 
 
 # W9 (CDP attach): cổng 9222 mở KHÔNG có nghĩa CDP dùng được. Khi một tab đang chạy vòng lặp JS
@@ -1609,7 +1737,14 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
             'key': lambda: ['xdotool', 'key', '--clearmodifiers', args['key']],
             'scroll': lambda: ['xdotool', 'click', '--repeat', str(min(20, max(1, int(args.get('steps', 3))))), '5' if args.get('direction') == 'down' else '4'],
         }
-        if action not in commands:
+        # Cử chỉ cần NHIỀU lệnh liên tiếp (nhấn → đi → nhả), nên chúng là một kế hoạch chứ không phải
+        # một lệnh: mỗi phần tử là `(argv, giây nghỉ sau lệnh)`.
+        gestures = {
+            'drag': lambda: _drag_plan(args),
+            'hold': lambda: _hold_plan(args),
+            'stroke': lambda: _stroke_plan(args),
+        }
+        if action not in commands and action not in gestures:
             raise ValueError('Unknown computer action')
         # F6: các thao tác theo toạ độ phải chạy trên framebuffer đúng cỡ cấu hình.
         desktop_note = ensure_desktop_size() if action != 'type' and action != 'key' else None
@@ -1620,14 +1755,39 @@ def execute(name, args, session, turn=None, step=None, tool_call_id=None, root=N
                                      capture_output=True, timeout=15)
             if focused.returncode:
                 raise ValueError('No focused window: click the target window first, then send keys.')
-        proc = subprocess.run(commands[action](), env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
-        if proc.returncode:
-            raise ValueError(proc.stderr.decode(errors='replace'))
-        # F3 (đợt 7): `xdotool key NotARealKey` in 'No such key name ... Ignoring it.' ra
-        # stdout rồi thoát 0. Coi cảnh báo đó là thất bại, kèm tên phím sai.
-        noisy = (proc.stdout + proc.stderr).decode(errors='replace')
-        if 'No such key name' in noisy or 'Ignoring it' in noisy:
-            raise ValueError('Unsupported key name: ' + str(args.get('key', '')) + '. Use an X keysym such as Return, Tab, ctrl+c.')
+        if action in commands:
+            plan = [(commands[action](), 0.0)]
+        else:
+            plan = gestures[action]()
+        # Nút chuột phải được nhả kể cả khi một bước giữa hỏng: một nút còn giữ là cả màn hình trong
+        # box không dùng được nữa (mọi cú bấm sau đó thành kéo).
+        release = next((argv for argv, _ in plan if argv[:2] == ['xdotool', 'mouseup']), None)
+        released = release is None      # không có bước nhả thì không có gì phải nhả lại
+        try:
+            for argv, sleep_after in plan:
+                proc = subprocess.run(argv, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+                if proc.returncode:
+                    raise ValueError(proc.stderr.decode(errors='replace'))
+                # Đánh dấu theo KẾT QUẢ chứ không theo thứ tự: lệnh nhả chạy tới nơi mà thoát khác 0
+                # vẫn là nút còn giữ, và khi đó nó là bước CUỐI nên `sent < len(plan)` không bắt được.
+                if argv == release:
+                    released = True
+                # F3 (đợt 7): `xdotool key NotARealKey` in 'No such key name ... Ignoring it.' ra
+                # stdout rồi thoát 0. Coi cảnh báo đó là thất bại, kèm tên phím sai.
+                noisy = (proc.stdout + proc.stderr).decode(errors='replace')
+                if 'No such key name' in noisy or 'Ignoring it' in noisy:
+                    raise ValueError('Unsupported key name: ' + str(args.get('key', '')) + '. Use an X keysym such as Return, Tab, ctrl+c.')
+                if sleep_after:
+                    time.sleep(sleep_after)
+        except BaseException:
+            # `BaseException` chứ không phải `Exception`: lượt bị huỷ (`CancelledError`) cũng phải nhả
+            # nút, vì một nút còn giữ là mọi cú bấm sau đó trong box thành cú kéo.
+            if not released:
+                try:
+                    subprocess.run(release, env={**os.environ, 'DISPLAY': ':99'}, capture_output=True, timeout=15)
+                except Exception:  # noqa: BLE001 - nhả là best-effort; lỗi thật đang trên đường ra
+                    pass
+            raise
         payload = {'content': 'Input delivered; capture the screen to verify the effect.'}
         if desktop_note:
             payload['desktopRestored' if 'to' in desktop_note else 'desktopWarning'] = desktop_note

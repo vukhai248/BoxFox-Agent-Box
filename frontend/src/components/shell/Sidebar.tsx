@@ -1,3 +1,4 @@
+import { StorageContinuityView } from '../settings/StorageContinuityView'
 /**
  * Thanh bên trái — phong cách BoxFox / Devin.
  *
@@ -86,9 +87,11 @@ export function Sidebar() {
   const [savedDbSessions, setSavedDbSessions] = useState<SessionSummary[]>([])
   const fetchSavedSessions = useHarnessChatStore((s) => s.fetchSavedSessions)
 
-  const handleDeleteSession = async (sessionId: string) => {
+  const deletingSessionId = useUiStore(s => s.deletingSessionId)
+  const handleDeleteSession = async (sessionId: string) => { useUiStore.getState().openDeleteDialog(sessionId) }
+  const handleDeletedSession = (sessionId: string) => {
     try {
-      await useHarnessChatStore.getState().deleteSession(sessionId)
+      useUiStore.getState().closeDeleteDialog()
       setSavedDbSessions(prev => prev.filter(session => session.session_id !== sessionId))
       const currentId = useAgentStore.getState().activeSessionId
       if (selectedSessionId === sessionId || currentId === sessionId) {
@@ -405,6 +408,12 @@ export function Sidebar() {
         <ShortcutsPopover variant="sidebar" />
       </div>
       {projectDialogOpen && <CreateProjectModal onClose={() => setProjectDialogOpen(false)} />}
+      {deletingSessionId && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-6" role="dialog" aria-modal="true" aria-label={t('continuity.storage')}>
+        <div className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-xl bg-panel p-4">
+          <button className="mb-3 text-xs text-muted" onClick={() => useUiStore.getState().closeDeleteDialog()}>{t('common.close')}</button>
+          <StorageContinuityView key={deletingSessionId} sessionId={deletingSessionId} onDeleted={() => handleDeletedSession(deletingSessionId)} />
+        </div>
+      </div>}
     </aside>
   )
 
@@ -846,7 +855,7 @@ function SessionRow({
               if (onDeleteSession) {
                 await onDeleteSession(session.session_id)
               } else {
-                await useHarnessChatStore.getState().deleteSession(session.session_id)
+                useUiStore.getState().openDeleteDialog(session.session_id)
               }
             }}
           />

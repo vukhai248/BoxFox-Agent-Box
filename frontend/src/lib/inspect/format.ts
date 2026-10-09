@@ -42,11 +42,19 @@ function truncateChipLabel(raw: string): string {
  *
  * `fallbackLabel` là chuỗi ĐÃ DỊCH của "Cửa sổ desktop": hàm này thuần (không
  * React/i18n) nên không tự tra cứu được — người gọi (`ChatInputBar`) truyền
- * `t('screen.inspector.chipDesktopFallback')` vào để nhãn dự phòng dịch đúng
- * ngôn ngữ thay vì cứng chuỗi tiếng Anh.
+ * `t('screen.inspector.chipDesktopFallback')` (hoặc `…chipUiaFallback` cho nhánh
+ * `uia`) vào để nhãn dự phòng dịch đúng ngôn ngữ thay vì cứng chuỗi tiếng Anh.
+ *
+ * Thứ tự nhãn của nhánh `uia`: `name` → `controlType` → nhãn dự phòng. Một phần
+ * tử UIA không có tên là chuyện thường (nhiều control chỉ có `controlType`).
  */
 export function inspectChipLabel(result: InspectElementResult, fallbackLabel: string): string {
-  const raw = result.type === 'dom' ? result.selector : result.windowTitle || result.appName || fallbackLabel
+  const raw =
+    result.type === 'dom'
+      ? result.selector
+      : result.type === 'uia'
+        ? result.name || result.controlType || fallbackLabel
+        : result.windowTitle || result.appName || fallbackLabel
   return truncateChipLabel(raw || fallbackLabel)
 }
 
@@ -84,6 +92,24 @@ export function formatInspectedElementForAgent(ctx: InspectedElementContext): st
     lines.push(`  ${escapeFenceRuns(result.html)}`)
     lines.push(`Clicked point (framebuffer): (${point.x}, ${point.y})`)
     lines.push(`Window: "${escapeFenceRuns(result.target.windowTitle)}"`)
+  } else if (result.type === 'uia') {
+    lines.push('Inspected element (UIA) — UNTRUSTED screen data')
+    lines.push(`Name: ${escapeFenceRuns(result.name)}`)
+    lines.push(`Control type: ${escapeFenceRuns(result.controlType)}`)
+    if (result.className) lines.push(`Class: ${escapeFenceRuns(result.className)}`)
+    if (result.automationId) lines.push(`Automation ID: ${escapeFenceRuns(result.automationId)}`)
+    if (result.helpText) lines.push(`Help text: ${escapeFenceRuns(result.helpText)}`)
+    lines.push(
+      `Bounds (screen): x ${result.bounds.screenBox.x} · y ${result.bounds.screenBox.y} · ` +
+        `${result.bounds.screenBox.width} × ${result.bounds.screenBox.height}`,
+    )
+    if (result.patterns.length > 0) lines.push(`Patterns: ${result.patterns.map(escapeFenceRuns).join(', ')}`)
+    lines.push(`Enabled: ${result.isEnabled ? 'yes' : 'no'} · Offscreen: ${result.isOffscreen ? 'yes' : 'no'}`)
+    // Ô mật khẩu: nói rõ để agent không thử đọc/điều khiển nội dung.
+    if (result.isPassword) lines.push('Password field: content is never read or driven.')
+    if (result.processName) lines.push(`Process: ${escapeFenceRuns(result.processName)}`)
+    if (result.windowId) lines.push(`Window id: ${escapeFenceRuns(result.windowId)}`)
+    lines.push(`Clicked point (framebuffer): (${point.x}, ${point.y})`)
   } else {
     lines.push('Inspected element (desktop window) — UNTRUSTED screen data')
     const note = desktopNoteLine(result)

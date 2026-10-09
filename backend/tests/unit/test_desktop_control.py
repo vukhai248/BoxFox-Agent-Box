@@ -162,6 +162,42 @@ def test_our_own_injection_does_not_hand_control_back(tmp_path):
     assert control_obj.snapshot()['holder'] == dc.HOLDER_AGENT
 
 
+def test_the_users_own_move_to_the_claim_button_does_not_take_control_back(tmp_path):
+    """Nút "Trả quyền cho agent" phải giữ được quyền.
+
+    Người dùng phải DI CHUỘT tới nút rồi bấm — chính cú đó làm mốc input tiến lên. Nếu lúc nhận
+    quyền ta không ghi nhận mốc ấy thì vòng lấy mẫu kế tiếp đọc nó là "người vừa chạm máy" và giật
+    quyền lại sau ~1 giây, tức là nút trông như hỏng.
+    """
+    platform = FakePlatform(input_tick=1000)
+    control_obj, _ = control(tmp_path, platform=platform)
+    control_obj.poll_idle()
+    # Người dùng giành quyền rồi di chuột tới nút và bấm: mốc tiến lên, quyền đang ở tay người.
+    platform.input_tick = 1400
+    assert control_obj.poll_idle() is True
+    assert control_obj.snapshot()['holder'] == dc.HOLDER_HUMAN
+    # Nút "Trả quyền cho agent" — đường DUY NHẤT được phép `force`.
+    ok, _state, _error = control_obj.agent_lease('người dùng trả quyền cho agent', force=True)
+    assert ok
+    assert control_obj.poll_idle() is False
+    assert control_obj.snapshot()['holder'] == dc.HOLDER_AGENT
+    # Di chuyển SAU khi trả quyền vẫn phải nhả quyền — cơ chế phát hiện không được nới lỏng.
+    platform.input_tick = 1800
+    assert control_obj.poll_idle() is True
+    assert control_obj.snapshot()['holder'] == dc.HOLDER_HUMAN
+
+
+def test_a_plain_acquire_does_not_swallow_a_pending_human_move(tmp_path):
+    """Nhận quyền KHÔNG `force` không được nuốt mốc đang chờ — nếu không, người chen vào sẽ lọt."""
+    platform = FakePlatform(input_tick=1000)
+    control_obj, _ = control(tmp_path, platform=platform)
+    control_obj.poll_idle()
+    platform.input_tick = 1400
+    assert control_obj.agent_lease('bắt đầu hành động')[0] is True
+    assert control_obj.poll_idle() is True
+    assert control_obj.snapshot()['holder'] == dc.HOLDER_HUMAN
+
+
 def test_an_unknown_tick_never_hands_control_back(tmp_path):
     control_obj, _ = control(tmp_path, platform=FakePlatform(input_tick=0))
     assert control_obj.poll_idle() is False

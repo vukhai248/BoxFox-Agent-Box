@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import pytest
-from win_fakes import FakePlatform, decode_events, make_window, reset_win_state
+from win_fakes import (FakePlatform, decode_events, make_window, reset_win_state,
+                       wheel_delta)
 
 from agentbox.sandbox.win import capture, input as win_input, uia
 from agentbox.sandbox.win.errors import (
@@ -20,10 +21,12 @@ from agentbox.sandbox.win.windows_platform import (
     KEYEVENTF_KEYUP,
     KEYEVENTF_UNICODE,
     MOUSEEVENTF_ABSOLUTE,
+    MOUSEEVENTF_HWHEEL,
     MOUSEEVENTF_LEFTDOWN,
     MOUSEEVENTF_LEFTUP,
     MOUSEEVENTF_MOVE,
     MOUSEEVENTF_VIRTUALDESK,
+    MOUSEEVENTF_WHEEL,
     SECURITY_MANDATORY_HIGH_RID,
 )
 
@@ -370,3 +373,115 @@ def test_post_message_rung_is_not_implemented():
     with pytest.raises(PlatformError) as error:
         win_input.post_message_background(100, "WM_LBUTTONDOWN")
     assert error.value.code == POST_MESSAGE_UNSUPPORTED
+
+
+# ---------------------------------------------------------------------------
+# Cử chỉ: cuộn, kéo, giữ, vẽ nét (08/10/2026)
+# ---------------------------------------------------------------------------
+def test_scroll_sends_a_wheel_event_after_moving_the_pointer():
+    fake = FakePlatform(foreground=100)
+    result = win_input.scroll(400, 300, window=100, direction="down", steps=5, platform=fake)
+    decoded = decode_events(fake.sent_events)
+    assert decoded[0]["flags"] == MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
+    assert decoded[1]["flags"] == MOUSEEVENTF_WHEEL
+    assert wheel_delta(decoded[1]["data"]) == -5 * 120
+    assert result["steps"] == 5
+
+
+def test_scroll_maps_directions_and_clamps_the_steps():
+    up = FakePlatform(foreground=100)
+    win_input.scroll(10, 10, window=100, direction="up", steps=99, platform=up)
+    decoded = decode_events(up.sent_events)
+    assert wheel_delta(decoded[-1]["data"]) == win_input.MAX_SCROLL_STEPS * 120
+    right = FakePlatform(foreground=100)
+    win_input.scroll(10, 10, window=100, direction="right", steps=1, platform=right)
+    assert decode_events(right.sent_events)[-1]["flags"] == MOUSEEVENTF_HWHEEL
+    with pytest.raises(PlatformError):
+        win_input.scroll(10, 10, window=100, direction="diagonal", platform=FakePlatform(foreground=100))
+
+
+def test_drag_sends_down_then_moves_then_up():
+    fake = FakePlatform(foreground=100)
+    result = win_input.drag(10, 10, 90, 50, window=100, steps=4, platform=fake)
+    flags = [event["flags"] for event in decode_events(fake.sent_events)]
+    assert flags[0] & MOUSEEVENTF_MOVE
+    assert flags[1] == MOUSEEVENTF_LEFTDOWN
+    assert flags[-1] == MOUSEEVENTF_LEFTUP
+    moves = [flag for flag in flags[2:-1] if flag & MOUSEEVENTF_MOVE]
+    assert len(moves) == 4, "bốn điểm dừng giữa lúc đang giữ nút"
+    assert result["to"] == {"x": 90, "y": 50}
+
+
+def test_drag_refuses_an_end_point_covered_by_another_window_when_the_target_is_pinned():
+    fake = FakePlatform(foreground=100, point_map={(90, 50): 200})
+    with pytest.raises(PlatformError) as error:
+        win_input.drag(10, 10, 90, 50, window=100, steps=2, platform=fake, guard_end=True)
+    assert error.value.code == SOURCE_CHANGED
+    assert fake.sent_events == [], "chưa chứng minh được điểm đích thì chưa được nhấn"
+
+
+def test_drag_may_leave_the_window_when_the_target_is_the_whole_machine():
+    fake = FakePlatform(foreground=100, point_map={(90, 50): 200})
+    win_input.drag(10, 10, 90, 50, window=100, steps=2, platform=fake, guard_end=False)
+    assert decode_events(fake.sent_events)[-1]["flags"] == MOUSEEVENTF_LEFTUP
+
+
+def test_a_drag_releases_the_button_when_a_batch_fails():
+    """Nút còn giữ là cả máy không dùng được: lần gửi hụt nào cũng phải kèm một lần nhả."""
+    fake = FakePlatform(foreground=100, accept_events=3)   # chỉ nhận được lô nhấn
+    with pytest.raises(PlatformError):
+        win_input.drag(10, 10, 90, 50, window=100, steps=3, platform=fake)
+    flags = [event["flags"] for event in decode_events(fake.sent_events)]
+    assert MOUSEEVENTF_LEFTDOWN in flags
+    assert flags.count(MOUSEEVENTF_LEFTUP) >= 1, "phải có lệnh nhả sau khi lô giữa hỏng"
+
+
+def test_hold_keeps_the_button_down_and_clamps_the_duration():
+    fake = FakePlatform(foreground=100)
+    result = win_input.hold(20, 30, window=100, seconds=99, platform=fake)
+    flags = [event["flags"] for event in decode_events(fake.sent_events)]
+    assert flags == [MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP]
+    assert result["seconds"] == win_input.MAX_HOLD_SEC
+
+
+def test_stroke_walks_every_point_of_the_path():
+    fake = FakePlatform(foreground=100)
+    result = win_input.stroke([[10, 10], [40, 30], [70, 60]], window=100, platform=fake)
+    flags = [event["flags"] for event in decode_events(fake.sent_events)]
+    assert flags[1] == MOUSEEVENTF_LEFTDOWN and flags[-1] == MOUSEEVENTF_LEFTUP
+    assert len([flag for flag in flags[2:-1] if flag & MOUSEEVENTF_MOVE]) == 2
+    assert result["points"] == 3 and result["to"] == {"x": 70, "y": 60}
+
+
+def test_a_pinned_stroke_refuses_a_path_that_ends_covered_by_another_window():
+    """Nét vẽ là cú kéo nhiều điểm — điểm CUỐI chịu cùng chốt như điểm cuối của `drag`.
+
+    Vòng soát mã đợt cử chỉ: `stroke` chỉ kiểm điểm đầu, nên một nét vẽ chạy quá mép cửa sổ đích
+    vẫn nhấn, đi rồi thả ở cửa sổ bên kia.
+    """
+    fake = FakePlatform(foreground=100, point_map={(70, 60): 200})
+    with pytest.raises(PlatformError) as error:
+        win_input.stroke([[10, 10], [40, 30], [70, 60]], window=100, platform=fake)
+    assert error.value.code == SOURCE_CHANGED
+    assert fake.sent_events == [], "chưa chứng minh được điểm cuối thì chưa được nhấn"
+
+
+def test_a_machine_scope_stroke_may_end_outside_the_target():
+    fake = FakePlatform(foreground=100, point_map={(70, 60): 200})
+    result = win_input.stroke([[10, 10], [40, 30], [70, 60]], window=100, platform=fake,
+                              guard_end=False)
+    assert result["to"] == {"x": 70, "y": 60}
+    assert decode_events(fake.sent_events)[-1]["flags"] == MOUSEEVENTF_LEFTUP
+
+
+def test_a_stroke_needs_two_points_and_has_a_cap():
+    fake = FakePlatform(foreground=100)
+    with pytest.raises(PlatformError) as error:
+        win_input.stroke([[10, 10]], window=100, platform=fake)
+    assert error.value.code == SOURCE_CHANGED
+    with pytest.raises(PlatformError):
+        win_input.stroke([[10, 10]] * (win_input.MAX_STROKE_POINTS + 1), window=100, platform=fake)
+    with pytest.raises(PlatformError):
+        win_input.stroke([[10, 10], ["x", "y"]], window=100, platform=fake)
+    assert fake.sent_events == []

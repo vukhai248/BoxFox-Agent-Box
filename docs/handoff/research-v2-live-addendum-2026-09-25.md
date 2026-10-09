@@ -1,6 +1,6 @@
 # Phụ lục bàn giao research v2 — 2026-09-25
 
-Tài liệu này bổ sung cho `HANDOFF.md` và `docs/handoff/v29-keyring-handoff.md` (Handoff 2). Không thay đổi quyết định hay số đo lịch sử trong hai tài liệu đó. Chủ nhà yêu cầu dừng thử nghiệm sống để tiết kiệm token; mọi phiên thử dưới đây đã dừng. Agent cloud đang làm cùng nhiệm vụ cải tổ research nên cần đọc trạng thái cây làm việc trước khi sửa trùng.
+Tài liệu này bổ sung cho bản bàn giao gốc (nay ở `docs/handoff/archive/box-agent-handoff-2026-09.md`) và `docs/handoff/v29-keyring-handoff.md` (Handoff 2). Không thay đổi quyết định hay số đo lịch sử trong hai tài liệu đó. Chủ nhà yêu cầu dừng thử nghiệm sống để tiết kiệm token; mọi phiên thử dưới đây đã dừng. Agent cloud đang làm cùng nhiệm vụ cải tổ research nên cần đọc trạng thái cây làm việc trước khi sửa trùng.
 
 ## Phạm vi đang có trong working tree
 

@@ -6,4 +6,9 @@ PyYAML>=6,<7
 # chụp PDF arXiv ra 10 bảng, còn `r.jina.ai` chỉ-chữ làm mất sạch bảng.
 pdfplumber>=0.11,<1
 pypdfium2>=5,<6
+# Viền báo "đang bị CUA" trên desktop Linux (`sandbox/x11/overlay.py`) — CHỈ Linux, và chỉ để VẼ VIỀN:
+# thiếu gói thì CUA vẫn chạy, viền tắt êm kèm câu nói rõ thiếu gì. Cố ý KHÔNG thêm vào
+# `requirements.runtime.txt`: bộ đó là thứ `desktop/scripts/fetch-runtime.mjs` đóng gói cho Windows,
+# nơi viền dùng Win32 và gói này là vô ích.
+python-xlib>=0.33,<1
 pytest>=8,<9

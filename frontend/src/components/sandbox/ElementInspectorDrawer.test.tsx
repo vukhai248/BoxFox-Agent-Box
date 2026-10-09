@@ -5,7 +5,7 @@ import { I18nProvider } from '../../i18n'
 import { InspectHttpError } from '../../lib/inspect'
 import { ElementInspectorDrawer } from './ElementInspectorDrawer'
 import type { InspectorDrawerState } from '../../hooks/useElementInspector'
-import type { DesktopInspectResult, DomInspectResult, InspectLabel } from '../../types/inspect'
+import type { DesktopInspectResult, DomInspectResult, InspectLabel, UiaInspectResult } from '../../types/inspect'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -82,6 +82,34 @@ function desktopWithReason(): DesktopInspectResult {
     size: { width: 1280, height: 800 },
     pid: 4242,
     label: label(),
+  }
+}
+
+/** Nhánh uia (host mode, Windows) — phần tử UI Automation. */
+function uia(overrides: Partial<UiaInspectResult> = {}): UiaInspectResult {
+  return {
+    type: 'uia',
+    name: 'Tệp',
+    controlType: 'menu item',
+    controlTypeId: 50011,
+    automationId: 'FileMenu',
+    className: 'MenuItem',
+    helpText: '',
+    isEnabled: true,
+    isOffscreen: false,
+    isPassword: false,
+    bounds: { screenBox: { x: 118, y: 96, width: 42, height: 22 }, dpi: 120 },
+    patterns: ['Invoke', 'ExpandCollapse'],
+    windowId: '394820',
+    pid: 4,
+    processName: 'notepad.exe',
+    elementToken: 'tok-1',
+    generation: 2,
+    sourceId: 'src-1',
+    frameId: 'f-1',
+    geometryRevision: 7,
+    label: label(),
+    ...overrides,
   }
 }
 
@@ -221,5 +249,105 @@ describe('ElementInspectorDrawer', () => {
       addButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(onAddToChat).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ElementInspectorDrawer — nhánh uia (host mode)', () => {
+  it('tiêu đề là "Phần tử UIA" và có đủ nhãn của thẻ UIA', () => {
+    const state: InspectorDrawerState = { status: 'success', point: { x: 812, y: 344 }, result: uia() }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('UIA Element')
+    expect(host.textContent).toContain('Name:')
+    expect(host.textContent).toContain('Tệp')
+    expect(host.textContent).toContain('Control type:')
+    expect(host.textContent).toContain('menu item')
+    expect(host.textContent).toContain('Class:')
+    expect(host.textContent).toContain('Automation ID:')
+    expect(host.textContent).toContain('Bounds:')
+    expect(host.textContent).toContain('x 118 · y 96 · 42 × 22 · dpi 120')
+    expect(host.textContent).toContain('Patterns:')
+    expect(host.textContent).toContain('Invoke, ExpandCollapse')
+  })
+
+  it('mọi chuỗi từ máy đi qua PlainText (<pre>), không có HTML sống', () => {
+    const state: InspectorDrawerState = {
+      status: 'success',
+      point: { x: 1, y: 2 },
+      result: uia({ name: '<img src=x onerror=alert(1)>' }),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+
+    // Không có phần tử nào được tạo từ chuỗi của máy…
+    expect(host.querySelector('img')).toBeNull()
+    // …và chuỗi vẫn hiện nguyên văn trong <pre>.
+    const pre = Array.from(host.querySelectorAll('pre')).find((node) => node.textContent === '<img src=x onerror=alert(1)>')
+    expect(pre).toBeTruthy()
+  })
+
+  it('ô mật khẩu ⇒ câu cảnh báo hiện ra (ranh giới an toàn, không phải chi tiết kỹ thuật)', () => {
+    const state: InspectorDrawerState = { status: 'success', point: { x: 1, y: 2 }, result: uia({ isPassword: true }) }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('Password field — it is never driven')
+  })
+
+  it('cờ tắt / ngoài màn hình cũng được nói ra', () => {
+    const state: InspectorDrawerState = {
+      status: 'success',
+      point: { x: 1, y: 2 },
+      result: uia({ isEnabled: false, isOffscreen: true }),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('Disabled')
+    expect(host.textContent).toContain('Offscreen')
+  })
+
+  it('không có dpi ⇒ dòng vùng không nhắc dpi', () => {
+    const state: InspectorDrawerState = {
+      status: 'success',
+      point: { x: 1, y: 2 },
+      result: uia({ bounds: { screenBox: { x: 0, y: 0, width: 10, height: 10 } } }),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('x 0 · y 0 · 10 × 10')
+    expect(host.textContent).not.toContain('dpi')
+  })
+})
+
+describe('ElementInspectorDrawer — lỗi host mode dịch theo MÃ MÁY', () => {
+  it('HUMAN_HAS_CONTROL ⇒ câu mời trả quyền, KHÔNG rơi về câu chung của 409', () => {
+    const state: InspectorDrawerState = {
+      status: 'error',
+      point: { x: 1, y: 2 },
+      error: new InspectHttpError('network', 409, 'HUMAN_HAS_CONTROL: human has control', 'HUMAN_HAS_CONTROL'),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('You hold control right now')
+    expect(host.textContent).toContain('hand control back to the agent, then pick again')
+  })
+
+  it('ELEMENT_STALE ⇒ câu theo mã + nút Thử lại', () => {
+    const onRetry = vi.fn()
+    const state: InspectorDrawerState = {
+      status: 'error',
+      point: { x: 1, y: 2 },
+      error: new InspectHttpError('network', 409, 'ELEMENT_STALE: stale', 'ELEMENT_STALE'),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={onRetry} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('The element is stale for this capture')
+    const retry = Array.from(host.querySelectorAll('button')).find((b) => b.textContent === 'Retry')
+    expect(retry).toBeTruthy()
+    act(() => retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('mã lạ ⇒ rơi về câu theo `kind` (đường của box, không đổi hành vi cũ)', () => {
+    const state: InspectorDrawerState = {
+      status: 'error',
+      point: { x: 1, y: 2 },
+      error: new InspectHttpError('timeout', 0, 'hết giờ'),
+    }
+    const host = render(<ElementInspectorDrawer state={state} onClose={vi.fn()} onRetry={vi.fn()} onAddToChat={vi.fn()} />)
+    expect(host.textContent).toContain('The inspect request timed out.')
   })
 })

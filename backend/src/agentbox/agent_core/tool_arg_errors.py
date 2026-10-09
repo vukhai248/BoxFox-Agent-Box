@@ -74,6 +74,64 @@ def parse_tool_arguments(raw_arguments: Any) -> tuple[dict, Optional[str]]:
     return arguments, describe_tool_arguments(raw_arguments)
 
 
+EMPTY_OBJECT = '{}'
+
+
+def is_json_object(raw_arguments: Any) -> bool:
+    """True when `arguments` is a string a provider accepts as one JSON object.
+
+    The cheap check in front of the parse is exact for the case this predicate exists for:
+    a call cut off at the output cap never ends with the closing brace, so it costs no
+    parse on the (long) arguments of every call that is fine.
+    """
+    if not isinstance(raw_arguments, str) or not raw_arguments.rstrip().endswith('}'):
+        return False
+    try:
+        return isinstance(json.loads(raw_arguments), dict)
+    except ValueError:
+        return False
+
+
+def replayable_messages(messages: list) -> list:
+    """Transcript gửi đi: lời gọi đã lưu mà nhà cung cấp không đọc được thì phát lại thành `{}`.
+
+    Lượt chạy sống 2026-10-09: nhà cung cấp trả `finish_reason: tool_calls` trong khi trần
+    output đã tiêu hết (4096/4096), nên tham số của `write_plan` đứt ở ký tự 52 và thiếu
+    dấu đóng. Vòng tool đọc được điều đó và trả lỗi cho model (đúng như W3 chốt: model tự
+    sửa), nhưng hàng `assistant` giữ nguyên chuỗi hỏng — và từ đó MỌI request sau bị từ
+    chối bằng `[400] Provider returned error`: ba lượt của chủ và cả lượt tóm tắt của
+    `/compact` chết ở bước 1 (đo trực tiếp: cùng transcript, tham số hợp lệ trả 200, tham
+    số đứt trả 400 trong 0,6 s).
+
+    Tham số của lời gọi bị cắt thì đã mất, nên nó không được phát lại để CHẠY — nó được
+    phát lại để request còn được nhận. Transcript trên đĩa giữ nguyên bản gốc: lỗi mà model
+    nhận được vẫn nói rõ chuỗi bị cắt ở đâu, và giao diện vẫn thấy đúng thứ model đã gửi.
+
+    Danh sách trả về là chính danh sách vào khi không có gì phải sửa, nên chỗ gọi không
+    phải phân nhánh.
+    """
+    out, changed = [], False
+    for message in messages:
+        calls = message.get('tool_calls') if isinstance(message, dict) else None
+        if not isinstance(calls, list) or not calls:
+            out.append(message)
+            continue
+        rewritten, local = [], False
+        for call in calls:
+            function = call.get('function') if isinstance(call, dict) else None
+            arguments = function.get('arguments') if isinstance(function, dict) else None
+            if isinstance(arguments, str) and arguments.strip() and not is_json_object(arguments):
+                call = {**call, 'function': {**function, 'arguments': EMPTY_OBJECT}}
+                local = True
+            rewritten.append(call)
+        if local:
+            changed = True
+            out.append({**message, 'tool_calls': rewritten})
+        else:
+            out.append(message)
+    return out if changed else messages
+
+
 # W7.2 — lỗi theo TRƯỜNG của một action (mẫu pi `validation.ts`: kèm đường dẫn trường và giá
 # trị đã nhận). Phong bì tool cũ `{is_error, error, errorCode}` giữ nguyên; các khoá dưới đây là
 # khoá CỘNG THÊM mà vòng tool của runtime gộp vào kết quả khi exception mang `details`.

@@ -242,3 +242,89 @@ def test_health_says_none_when_there_is_no_desktop_control(tmp_path):
     payload = run(tmp_path, main, executor)
     assert payload['execution']['mode'] == 'host'
     assert payload['execution']['lease'] is None
+
+
+# ------------------------------------------------- người thật chạm máy (X11)
+
+class WatchedPlatform(FakePlatform):
+    """Nền tảng có `supports_idle_watch` như X11: bộ đếm input là thứ ĐO ĐƯỢC, không phải hook."""
+
+    supports_idle_watch = True
+
+
+def test_the_idle_watch_releases_the_lease_when_the_machine_is_touched(tmp_path, monkeypatch):
+    """X11 không có hook bàn phím/chuột ⇒ bộ theo dõi lấy mẫu phải TỰ nhả quyền về tay người.
+
+    Quyết định #6785: trên Linux, con trỏ/tiêu điểm đổi mà không do agent gây ra được coi là người
+    can thiệp. Ca này kiểm đường thật: aiohttp khởi động → pump → `poll_idle()` → nhả quyền.
+    """
+    from agentbox.api import server as server_module
+
+    executor, control, fake = host_executor(tmp_path, platform=WatchedPlatform())
+    monkeypatch.setattr(server_module, 'IDLE_WATCH_INTERVAL_SEC', 0.02)
+
+    async def main(client, _runtime):
+        # Mốc nền: agent đã gửi input một lần (như mọi phiên đang làm việc thật).
+        fake.input_tick = 3
+        control.note_own_input()
+        first = await (await lease_get(client)).json()
+        fake.input_tick = 7                      # "người thật vừa chạm chuột"
+        await asyncio.sleep(0.3)
+        second = await (await lease_get(client)).json()
+        return first, second
+
+    first, second = run(tmp_path, main, executor)
+    assert first['holder'] == dc.HOLDER_AGENT
+    assert second['holder'] == dc.HOLDER_HUMAN
+    assert second['reason'], 'phải nói vì sao quyền về tay người'
+
+
+def test_a_platform_without_the_watch_capability_never_gets_a_pump(tmp_path, monkeypatch):
+    """Windows đang chạy thật: không có cờ ⇒ không dựng pump, hành vi không đổi."""
+    from agentbox.api import server as server_module
+
+    executor, control, fake = host_executor(tmp_path)
+    assert not getattr(fake, 'supports_idle_watch', False)
+    calls: list[int] = []
+    monkeypatch.setattr(control, 'poll_idle', lambda: calls.append(1))
+    monkeypatch.setattr(server_module, 'IDLE_WATCH_INTERVAL_SEC', 0.02)
+
+    async def main(client, _runtime):
+        await asyncio.sleep(0.2)
+        return (await (await lease_get(client)).json())
+
+    payload = run(tmp_path, main, executor)
+    assert calls == [] and payload['holder'] == dc.HOLDER_AGENT
+
+
+class _BareRuntime:
+    """Runtime tối thiểu: `store` + `tasks`, KHÔNG có `executor`.
+
+    Một số bài kiểm dựng app đúng theo hình dạng này (`test_system_log_v2.py`), nên mọi hook khởi
+    động phải chịu được runtime thiếu `executor`.
+    """
+
+    def __init__(self, store):
+        self.store = store
+        self.tasks = {}
+
+    async def stop(self, sid):
+        return None
+
+
+def test_the_idle_watch_hook_tolerates_a_runtime_without_an_executor(tmp_path):
+    """Thiếu `executor` thì hook bỏ qua — không được làm app không dựng nổi.
+
+    Đúng lỗi đã xảy ra: hook đọc thẳng `runtime.executor.desktop`, nên app dựng bằng runtime tối
+    thiểu chết ngay lúc khởi động và 11 bài kiểm của hai tệp khác đỏ theo.
+    """
+    from agentbox.api import server as server_module
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        async with TestServer(create_app(_BareRuntime(store))) as server:
+            watching = server.app.get(server_module.IDLE_WATCH_KEY)
+        store.close()
+        return watching
+
+    assert asyncio.run(main()) is None

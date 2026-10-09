@@ -46,6 +46,21 @@ describe('Web machine configuration', () => {
     expect(configure).toHaveBeenCalledWith('host', null)
     expect(useAgentStore.getState().activeSessionId).toBe('new-chat')
   })
+  it('does not offer Docker when this build runs directly on the machine', async () => {
+    useMachineStore.setState({configuration: {revision: 1, mode: 'host', projectId: null, projects: [], processMode: 'host'}})
+    await render(<MachineConfigurationView />)
+    const docker = [...host.querySelectorAll('button')].find(b => b.textContent?.includes('Docker ·'))!
+    expect(docker.hasAttribute('disabled')).toBe(true)
+    expect(docker.getAttribute('title')).toContain('no Docker box')
+    const ide = [...host.querySelectorAll('button')].find(b => b.textContent?.includes('IDE ·'))!
+    expect(ide.hasAttribute('disabled')).toBe(false)
+  })
+  it('keeps Docker selectable when the process can run a box', async () => {
+    useMachineStore.setState({configuration: {revision: 1, mode: 'docker', projectId: null, projects: [], processMode: 'docker'}})
+    await render(<MachineConfigurationView />)
+    const docker = [...host.querySelectorAll('button')].find(b => b.textContent?.includes('Docker ·'))!
+    expect(docker.hasAttribute('disabled')).toBe(false)
+  })
   it('keeps a saved session binding and opens a new chat when environment changes', async () => {
     useMachineStore.setState({bindings: {'new-chat': {mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace'}}, configure: vi.fn().mockResolvedValue(true)})
     await render(<MachineConfigurationView />)

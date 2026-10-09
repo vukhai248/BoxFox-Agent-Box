@@ -28,11 +28,18 @@ import { PlainText } from '../ui'
 import { LabelDot } from '../LabelDot'
 import { resolveBoxApiUrl } from '../../lib/boxApi'
 import { InspectHttpError, type InspectErrorKind } from '../../lib/inspect'
+import { isHostInspectErrorCode, type HostInspectErrorCode } from '../../lib/inspect/host'
 import type { FramebufferPoint } from '../../lib/vnc/inspect'
 import type { InspectorDrawerState } from '../../hooks/useElementInspector'
-import type { DesktopInspectResult, DomInspectResult, InspectDesktopReason, InspectNote } from '../../types/inspect'
+import type {
+  DesktopInspectResult,
+  DomInspectResult,
+  InspectDesktopReason,
+  InspectNote,
+  UiaInspectResult,
+} from '../../types/inspect'
 
-/** Map mã máy `reason` (11 giá trị, §5.2) → khoá i18n — Record chứ không nối chuỗi động, TKey vẫn kiểm được lúc biên dịch. */
+/** Map mã máy `reason` (11 giá trị của box + 6 của host mode) → khoá i18n — Record chứ không nối chuỗi động, TKey vẫn kiểm được lúc biên dịch. */
 const DESKTOP_REASON_KEY: Record<InspectDesktopReason, TKey> = {
   not_chromium: 'screen.inspector.drawer.desktopReason.not_chromium',
   outside_viewport: 'screen.inspector.drawer.desktopReason.outside_viewport',
@@ -45,6 +52,44 @@ const DESKTOP_REASON_KEY: Record<InspectDesktopReason, TKey> = {
   cdp_timeout: 'screen.inspector.drawer.desktopReason.cdp_timeout',
   no_node_at_point: 'screen.inspector.drawer.desktopReason.no_node_at_point',
   extract_failed: 'screen.inspector.drawer.desktopReason.extract_failed',
+  // Host mode (Windows) — xem `sandbox/win/errors.py`.
+  uia_unavailable: 'screen.inspector.drawer.desktopReason.uia_unavailable',
+  uia_timeout: 'screen.inspector.drawer.desktopReason.uia_timeout',
+  uia_provider_hang: 'screen.inspector.drawer.desktopReason.uia_provider_hang',
+  uia_no_element: 'screen.inspector.drawer.desktopReason.uia_no_element',
+  no_window_at_point: 'screen.inspector.drawer.desktopReason.no_window_at_point',
+  window_identity_unavailable: 'screen.inspector.drawer.desktopReason.window_identity_unavailable',
+}
+
+/**
+ * Map mã máy của host mode (`code` trong body lỗi) → khoá i18n.
+ *
+ * Tra bảng này TRƯỚC `ERROR_KIND_KEY`: cùng một 409 có thể là "bạn đang giữ
+ * quyền" (mời trả quyền) hoặc "phần tử đã cũ" (mời chụp lại) — câu theo `kind`
+ * chỉ nói được "bị từ chối", không nói được phải làm gì tiếp.
+ */
+const HOST_ERROR_KEY: Record<HostInspectErrorCode, TKey> = {
+  ELEMENT_STALE: 'screen.inspector.drawer.hostError.ELEMENT_STALE',
+  SOURCE_CHANGED: 'screen.inspector.drawer.hostError.SOURCE_CHANGED',
+  SOURCE_IDENTITY_UNAVAILABLE: 'screen.inspector.drawer.hostError.SOURCE_IDENTITY_UNAVAILABLE',
+  CONTROL_BUSY: 'screen.inspector.drawer.hostError.CONTROL_BUSY',
+  DESKTOP_LOCKED: 'screen.inspector.drawer.hostError.DESKTOP_LOCKED',
+  HUMAN_HAS_CONTROL: 'screen.inspector.drawer.hostError.HUMAN_HAS_CONTROL',
+  HUMAN_TOOK_OVER: 'screen.inspector.drawer.hostError.HUMAN_TOOK_OVER',
+  UIA_UNAVAILABLE: 'screen.inspector.drawer.hostError.UIA_UNAVAILABLE',
+  UIA_TIMEOUT: 'screen.inspector.drawer.hostError.UIA_TIMEOUT',
+  UIA_PROVIDER_HANG: 'screen.inspector.drawer.hostError.UIA_PROVIDER_HANG',
+  UIPI_BLOCKED: 'screen.inspector.drawer.hostError.UIPI_BLOCKED',
+  SESSION_NOT_INTERACTIVE: 'screen.inspector.drawer.hostError.SESSION_NOT_INTERACTIVE',
+  UNSUPPORTED_IN_HOST_MODE: 'screen.inspector.drawer.hostError.UNSUPPORTED_IN_HOST_MODE',
+  PASSWORD_FIELD_REFUSED: 'screen.inspector.drawer.hostError.PASSWORD_FIELD_REFUSED',
+  WINDOW_MINIMIZED: 'screen.inspector.drawer.hostError.WINDOW_MINIMIZED',
+  WINDOW_CLOAKED: 'screen.inspector.drawer.hostError.WINDOW_CLOAKED',
+  WINDOW_IDENTITY_UNAVAILABLE: 'screen.inspector.drawer.hostError.WINDOW_IDENTITY_UNAVAILABLE',
+  CAPTURE_FAILED: 'screen.inspector.drawer.hostError.CAPTURE_FAILED',
+  OS_PERMISSION_REQUIRED: 'screen.inspector.drawer.hostError.OS_PERMISSION_REQUIRED',
+  INSPECT_POINT_INVALID: 'screen.inspector.drawer.hostError.INSPECT_POINT_INVALID',
+  INSPECT_FAILED: 'screen.inspector.drawer.hostError.INSPECT_FAILED',
 }
 
 /** Map mã máy `notes` C3 (§5.3/§5.6) → khoá i18n — 5 giá trị, cùng khuôn Record để TKey vẫn được kiểm lúc biên dịch. */
@@ -91,7 +136,9 @@ export function ElementInspectorDrawer({ state, onClose, onRetry, onAddToChat }:
         ? t('screen.inspector.drawer.errorTitle')
         : state.result.type === 'dom'
           ? t('screen.inspector.drawer.domTitle')
-          : t('screen.inspector.drawer.desktopTitle')
+          : state.result.type === 'uia'
+            ? t('screen.inspector.drawer.uiaTitle')
+            : t('screen.inspector.drawer.desktopTitle')
 
   return (
     <div
@@ -133,6 +180,7 @@ export function ElementInspectorDrawer({ state, onClose, onRetry, onAddToChat }:
         {state.status === 'loading' && <LoadingBody point={state.point} />}
         {state.status === 'error' && <ErrorBody error={state.error} onRetry={onRetry} />}
         {state.status === 'success' && state.result.type === 'dom' && <DomBody result={state.result} />}
+        {state.status === 'success' && state.result.type === 'uia' && <UiaBody result={state.result} />}
         {state.status === 'success' && state.result.type === 'desktop' && <DesktopBody result={state.result} />}
       </div>
 
@@ -172,12 +220,15 @@ function ErrorBody({ error, onRetry }: { error: unknown; onRetry: () => void }) 
   const t = useT()
   const [showHelp, setShowHelp] = useState(false)
   const boxUrl = resolveBoxApiUrl()
-  // `InspectErrorKind` → khoá i18n (review): không phô `message` thô do box dựng.
-  // `message` (đã qua `PlainText`) chỉ còn là dự phòng cho lỗi KHÔNG phải
-  // `InspectHttpError` — vẫn an toàn vì không đi vào cây HTML.
+  // Thứ tự tra: MÃ MÁY của host mode (`ELEMENT_STALE`, `HUMAN_HAS_CONTROL`, …) →
+  // `InspectErrorKind` (đường của box) → `message` thô. `message` (đã qua
+  // `PlainText`) chỉ còn là dự phòng cho lỗi KHÔNG phải `InspectHttpError` —
+  // vẫn an toàn vì không đi vào cây HTML.
   const detail =
     error instanceof InspectHttpError
-      ? t(ERROR_KIND_KEY[error.kind])
+      ? isHostInspectErrorCode(error.code)
+        ? t(HOST_ERROR_KEY[error.code])
+        : t(ERROR_KIND_KEY[error.kind])
       : error instanceof Error
         ? error.message
         : String(error)
@@ -300,6 +351,63 @@ function DesktopBody({ result }: { result: DesktopInspectResult }) {
       </Field>
       <Field label={t('screen.inspector.drawer.sizeLabel')}>
         <PlainText text={`${result.size.width}×${result.size.height}`} />
+      </Field>
+    </div>
+  )
+}
+
+/**
+ * Nhánh `uia` (host mode, Windows) — thẻ "Phần tử UIA".
+ *
+ * Ba cờ trạng thái gom vào MỘT khối `noteLabel` thay vì mỗi cờ một dòng: người
+ * dùng cần thấy ngay "phần tử này có bị tắt / ngoài tầm nhìn / là ô mật khẩu
+ * không", không cần ba dòng rời. Cờ `isPassword` luôn được nói ra — đó là ranh
+ * giới an toàn, không phải chi tiết kỹ thuật.
+ */
+function UiaBody({ result }: { result: UiaInspectResult }) {
+  const t = useT()
+  const flags: string[] = []
+  if (!result.isEnabled) flags.push(t('screen.inspector.drawer.uiaDisabled'))
+  if (result.isOffscreen) flags.push(t('screen.inspector.drawer.uiaOffscreen'))
+  if (result.isPassword) flags.push(t('screen.inspector.drawer.uiaPassword'))
+  const bounds = result.bounds.screenBox
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-muted">{t('screen.inspector.drawer.uiaDisclaimer')}</p>
+      <Field label={t('screen.inspector.drawer.nameLabel')}>
+        <PlainText text={result.name} className="font-semibold" />
+      </Field>
+      <Field label={t('screen.inspector.drawer.controlTypeLabel')}>
+        <PlainText text={result.controlType} />
+      </Field>
+      {result.className && (
+        <Field label={t('screen.inspector.drawer.classLabel')}>
+          <PlainText text={result.className} />
+        </Field>
+      )}
+      {result.automationId && (
+        <Field label={t('screen.inspector.drawer.automationIdLabel')}>
+          <PlainText text={result.automationId} />
+        </Field>
+      )}
+      <Field label={t('screen.inspector.drawer.boundsLabel')}>
+        <PlainText
+          text={`x ${bounds.x} · y ${bounds.y} · ${bounds.width} × ${bounds.height}${result.bounds.dpi ? ` · dpi ${result.bounds.dpi}` : ''}`}
+        />
+      </Field>
+      {result.patterns.length > 0 && (
+        <Field label={t('screen.inspector.drawer.patternsLabel')}>
+          <PlainText text={result.patterns.join(', ')} />
+        </Field>
+      )}
+      {flags.length > 0 && (
+        <Field label={t('screen.inspector.drawer.noteLabel')}>
+          <PlainText text={flags.join('\n')} className="text-[11px] text-muted" />
+        </Field>
+      )}
+      <Field label={t('screen.inspector.drawer.windowLabel')}>
+        <PlainText text={`windowId ${result.windowId}`} />
       </Field>
     </div>
   )

@@ -184,7 +184,10 @@ test('waitForHttp resolves false instead of throwing when nothing answers', asyn
 })
 
 test('stopProcessTree kills a child and its descendants', async (t) => {
-  if (process.platform === 'win32') t.skip('POSIX process groups only')
+  if (process.platform === 'win32') {
+    t.skip('POSIX process groups only')
+    return
+  }
   const marker = path.join(tempDir(t), 'grandchild.pid')
   const script = `const { spawn } = require('node:child_process'); const fs = require('node:fs');
 const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });

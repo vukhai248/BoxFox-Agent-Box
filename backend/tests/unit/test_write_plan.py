@@ -424,7 +424,7 @@ class BoxIndexExecutor(PlanFixtureExecutor):
         self.raced = False
         self.index_reads = 0
 
-    async def request(self, path, body=None):
+    async def request(self, path, body=None, session=None):
         assert path == plan_registry.INDEX_PATH, 'chỉ chỉ mục plan được đọc bằng GET'
         self.index_reads += 1
         return {'plans': copy.deepcopy(self.plans)}

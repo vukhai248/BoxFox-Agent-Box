@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 import pytest
 from agentbox.memory.session_store import SessionStore
+from agentbox.memory.history_store import HistoryError
 from agentbox.agent_core.runtime import HarnessRuntime
 from agentbox.api.server import create_app
 from aiohttp.test_utils import TestClient, TestServer
@@ -42,8 +43,19 @@ def test_session_store_create_load_persistence(tmp_path):
     assert reloaded["status"] == "interrupted"
     assert reloaded["config"] == config
 
-    # 3. Delete session
-    assert store2.delete(sid) is True
+    # 3. Delete session — kể từ plan longtask, `SessionStore.delete` KHÔNG còn là đường xoá:
+    # xoá thẳng là bypass capsule, nên hàm luôn từ chối. Đường hợp lệ là preview → capsule
+    # đã xác minh → confirm (xem test_history_store.py).
+    with pytest.raises(HistoryError, match="CARRY_FORWARD"):
+        store2.delete(sid)
+    assert store2.get(sid)["status"] == "interrupted"
+    history = store2.history
+    history.critical_snapshot = lambda ids: {"decisions": [], "blockers": [], "failedChecks": [],
+                                             "tasks": [], "jobs": [], "budget": {}, "plans": []}
+    history.quiescence = lambda ids: True
+    preview = history.deletion_preview(sid)
+    assert history.delete_with_capsule(sid, operation_id=preview["operationId"],
+                                       expected_revision=preview["expectedRevision"], confirm=True)["status"] == "deleted"
     with pytest.raises(KeyError):
         store2.get(sid)
     with pytest.raises(KeyError):
@@ -61,8 +73,17 @@ def test_session_store_child_cascade_delete(tmp_path):
     store.emit(child["id"], "tool_start", {"name": "browser_use"})
     assert len(store.events(child["id"])) == 1
 
-    # Deleting parent should cascade delete child
-    store.delete(parent["id"])
+    # Xoá thẳng cha là bypass capsule — bị từ chối; đường hợp lệ xoá ĐỆ QUY cả cây con.
+    with pytest.raises(HistoryError, match="CARRY_FORWARD"):
+        store.delete(parent["id"])
+    history = store.history
+    history.critical_snapshot = lambda ids: {"decisions": [], "blockers": [], "failedChecks": [],
+                                             "tasks": [], "jobs": [], "budget": {}, "plans": []}
+    history.quiescence = lambda ids: True
+    preview = history.deletion_preview(parent["id"])
+    assert set(preview["sessionIds"]) == {parent["id"], child["id"]}
+    history.delete_with_capsule(parent["id"], operation_id=preview["operationId"],
+                                expected_revision=preview["expectedRevision"], confirm=True)
 
     with pytest.raises(KeyError):
         store.get(parent["id"])
@@ -86,19 +107,18 @@ def test_server_delete_session_endpoint(tmp_path):
             sess = store.create({"skills": [], "tools": []})
             sid = sess["id"]
 
-            # Call DELETE /api/agent/sessions/{sid}
+            # Client DELETE cũ KHÔNG được xoá thẳng: route phải từ chối với mã
+            # DELETE_REQUIRES_CARRY_FORWARD (main chốt 409 + body preview khi nối route;
+            # ở tầng storage hiện trả 400 qua middleware ValueError — điều quan trọng là
+            # KHÔNG có cascade im lặng và phiên vẫn còn nguyên).
             res = await client.delete(
                 f"/api/agent/sessions/{sid}",
                 headers={"Host": "127.0.0.1:3102", "X-BoxFox-Admin": "1", "Origin": "http://localhost:3100"}
             )
-            assert res.status == 200
+            assert res.status in (400, 409), res.status
             data = await res.json()
-            assert data["status"] == "deleted"
-            assert data["id"] == sid
-
-            # Check that session no longer exists in store
-            with pytest.raises(KeyError):
-                store.get(sid)
+            assert "DELETE_REQUIRES_CARRY_FORWARD" in data.get("error", "")
+            assert store.get(sid)["id"] == sid
         finally:
             await client.close()
             store.close()

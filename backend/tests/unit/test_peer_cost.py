@@ -30,6 +30,7 @@ from agentbox.agent_core.limits import (FANOUT_PER_PARENT_DEFAULT, FANOUT_PER_PA
 from agentbox.agent_core.runtime import HarnessRuntime  # noqa: E402
 from agentbox.agent_core.tool_contracts import schemas_for  # noqa: E402
 from agentbox.memory.session_store import SessionStore  # noqa: E402
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 GOAL = 'việc của con'
 
@@ -59,6 +60,10 @@ class FixtureModel:
 
 class FixtureExecutor:
     async def execute(self, name, args, sid):
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7) trả `{ok, …}` như worker thật: thiếu `ok` thì
+            # `session_journal._safe` coi là CHƯA ghi được và ghim `JOURNAL_DEGRADED`.
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def cleanup(self, sid):

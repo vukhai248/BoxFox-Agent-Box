@@ -234,7 +234,12 @@ def on_stop(rt, sid):
         return
     from . import job_wake
     job_wake.invalidate(rt, sid, 'user Stop')
-    current = rt.store.get(sid)
+    # Phiên đã bị xoá thì không còn gì để ghi dấu Stop; `SessionStore.get` ném `KeyError` và lượt
+    # dừng phiên (kể cả vòng dừng lúc tắt tiến trình) sẽ đổ giữa đường.
+    try:
+        current = rt.store.get(sid)
+    except KeyError:
+        return
     if not current.get('parent_id'):
         config = dict(current['config'], **{STOP_KEY: True})
         rt.store.update_config(sid, config)

@@ -10,7 +10,9 @@ Bốn luật:
 
 1. `started` mà `now - started > CHILD_WALL_MAX_SECONDS` ⇒ huỷ task, ghi `failed/WATCHDOG_TIMEOUT`.
 2. `started` mà phiên CHA không còn tồn tại, hoặc không còn `running`/`awaiting_decision` ⇒
-   `failed/ORPHAN`. Cha đã xong thì không ai đọc kết quả của con nữa.
+   `failed/ORPHAN`. Cha đã xong thì không ai đọc kết quả của con nữa. Hàng phiên là trạng thái
+   của PHIÊN chứ không phải của LƯỢT, và ai mở cùng file DB cũng ghi đè được nó — nên lượt đang
+   chạy NGAY trong tiến trình này (`runtime.tasks`, xem `_turn_live`) cũng là "cha còn sống".
 3. Hàng có `waiting_since` cũ hơn `PEER_WAIT_SAFETY_SECONDS + PEER_WAIT_FORCE_GRACE_SECONDS` ⇒
    ĐÁNH THỨC CƯỠNG BỨC người đang chờ. Người chờ chạy tiếp bình thường và lượt KHÔNG bị đánh
    `failed`: nó nhận một câu trả lời `timeout` với dữ liệu đang có. Đây là lưới thứ ba, sau lưới
@@ -137,8 +139,14 @@ class PeerWatchdog:
         # Cùng lý do như T7: con bị cắt giữa đường không có `finish`, chi phí đã tiêu đọc từ luồng
         # của nó để bộ số theo lượt của cha không đếm thiếu.
         steps, tokens = self.store.child_usage_from_events(child_id)
-        closed = self.store.child_close_once(child_id, 'failed', reason=reason, steps_used=steps,
-                                             output_tokens=tokens)
+        if self.runtime is not None and getattr(self.runtime, 'store', None) is self.store:
+            from . import task_surface
+            closed = task_surface.finish_child(self.runtime, child_id, 'failed', reason=reason,
+                                                steps_used=steps, output_tokens=tokens, once=True,
+                                                started=row['started'])
+        else:
+            closed = self.store.child_close_once(child_id, 'failed', reason=reason, steps_used=steps,
+                                                 output_tokens=tokens)
         if closed is None:
             return False
         if cancel:
@@ -199,11 +207,33 @@ class PeerWatchdog:
         """Cha còn cơ hội đọc kết quả của con không — `runtime.py` giữ từ vựng trạng thái."""
         if not parent_id:
             return False
+        if self._turn_live(parent_id):
+            return True
         try:
             parent = self.store.get(parent_id)
         except KeyError:
             return False
         return bool(parent) and parent.get('status') in PARENT_ALIVE_STATES
+
+    def _turn_live(self, sid):
+        """Lượt của `sid` có đang chạy NGAY trong tiến trình này không?
+
+        Hàng `sessions.status` là trạng thái của PHIÊN, không phải của LƯỢT (bất biến #1 của
+        `session_store`): nó chỉ được ghi lúc lượt MỞ (`runtime.py` `store.save(sid, messages,
+        'running')`) và bất kỳ ai mở cùng file DB cũng ghi đè được — `SessionStore.__init__` quét
+        khôi phục bằng `UPDATE sessions SET status='interrupted' WHERE status IN
+        ('running','awaiting_decision')`, nên một tiến trình khác (kể cả tiến trình chỉ ĐỌC sổ) mở
+        DB giữa lượt là hàng phiên thành `interrupted` ngay. Ca thật 2026-10-09 09:11: một tiến
+        trình soi DB mở `SessionStore` trên DB đang chạy, và nhịp quét #93 lúc 09:20:21 đọc hàng đó
+        thành "cha đã chết" rồi cắt con của nút P1 (`work_run`) sau 2.6 giây — trong khi lượt của
+        cha vẫn đang chạy và đang CHỜ chính con đó. Sổ task là bằng chứng sống: task của lượt còn
+        trong `runtime.tasks` và chưa `done()` nghĩa là cha vẫn ở đây để đọc kết quả.
+        """
+        tasks = getattr(self.runtime, 'tasks', None)
+        if not isinstance(tasks, dict):  # `runtime=None` (chỉ mở DB để soi) vẫn quét như cũ
+            return False
+        task = tasks.get(sid)
+        return task is not None and not task.done()
 
     def _force_wake(self, child_id):
         """Đánh thức người đang chờ (luật 3). Không có runtime thì thôi, hàng còn nguyên."""

@@ -94,6 +94,57 @@ def test_con_con_trong_tran_thi_khong_bi_cham(tmp_path):
     store.close()
 
 
+class TurnTask:
+    """Task của một lượt: luật 2 chỉ đọc đúng hợp đồng `done()`."""
+
+    def __init__(self, done=False):
+        self._done = done
+
+    def done(self):
+        return self._done
+
+
+class TurnRegistry:
+    """Runtime tối thiểu mang đúng thứ luật 2 cần: sổ task theo phiên (`runtime.tasks`)."""
+
+    def __init__(self, store, parent, done=False):
+        self.store = store
+        self.peer_force_wake = set()
+        self.tasks = {parent: TurnTask(done)}
+
+
+def test_hang_phien_bi_ghi_de_giua_luot_thi_con_khong_bi_coi_la_mo_coi(tmp_path):
+    """Ca thật E2E `lt-d0422232cc124fe9ae12ca847decb76b` (2026-10-09 09:20:21Z).
+
+    `sessions.status` là trạng thái của PHIÊN, không phải của LƯỢT (bất biến #1 của
+    `session_store`): một tiến trình KHÁC mở cùng file DB chỉ để ĐỌC cũng chạy bước quét khôi phục
+    trong `SessionStore.__init__` (`UPDATE sessions SET status='interrupted' WHERE status IN
+    ('running','awaiting_decision')`), nên hàng phiên của một lượt ĐANG CHẠY thành `interrupted`
+    giữa lượt. Nhịp quét #93 đọc hàng đó làm "cha đã chết" và cắt con của nút P1 (`work_run`) sau
+    2.6 giây, trước cả công cụ đầu tiên — trong khi lượt của cha vẫn đang chạy và đang CHỜ chính
+    con đó. Lượt đang chạy trong tiến trình này là bằng chứng sống, hàng phiên không được là bằng
+    chứng duy nhất.
+    """
+    store, parent, child, clock, watchdog = make(tmp_path, parent_status='interrupted')
+    watchdog.runtime = TurnRegistry(store, parent)
+    report = watchdog.sweep()
+
+    assert report['orphan'] == []
+    assert store.child(child)['status'] == 'started', 'con còn người đọc kết quả thì không bị cắt'
+    assert child_events(store, parent) == []
+    store.close()
+
+
+def test_luot_cua_cha_da_dong_thi_hang_phien_van_quyet_dinh(tmp_path):
+    """Mặt kia của cùng luật: task của lượt đã `done()` ⇒ hàng phiên nói gì thì luật 2 theo đó."""
+    store, parent, child, clock, watchdog = make(tmp_path, parent_status='interrupted')
+    watchdog.runtime = TurnRegistry(store, parent, done=True)
+
+    assert watchdog.sweep()['orphan'] == [child]
+    assert store.child(child)['reason'] == 'ORPHAN'
+    store.close()
+
+
 def test_cha_da_xong_thi_con_la_mo_coi(tmp_path):
     """Cha `idle`/`completed` không còn đọc kết quả của con — nhưng con còn trong trần thời gian."""
     store, parent, child, clock, watchdog = make(tmp_path, parent_status='idle')

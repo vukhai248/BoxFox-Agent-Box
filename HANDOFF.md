@@ -1,175 +1,185 @@
-# HANDOFF DOCUMENTATION — BoxFox Agent Box
+# HANDOFF — BoxFox Agent Box
 
-## 1. System Overview
-BoxFox Agent Box is a self-hosted AI Computer environment combining:
-- **Web UI (`frontend/`):** React 19 + TypeScript + Vite + Tailwind CSS with dark theme, responsive compact composer, and multi-panel layout (Chat, Plan, Sandbox Screen VNC, VS Code IDE).
-- **Sandbox Container (`deploy/docker/`):** Ubuntu 24.04-based container with XFCE4, TigerVNC, Playwright Chromium, code-server (VS Code Web), and `ide-proxy.py`.
-- **Security & IFC Architecture:** Root/non-root split, loopback isolation, no-store CORS headers, and safe path handling.
+**Đọc tệp này trước.** Đây là bản bàn giao hiện hành, viết cho agent (hoặc người) tiếp nhận công việc.
+Mọi handoff cũ đã gom về [`docs/handoff/`](docs/handoff/README.md) — mục lục đầy đủ nằm ở
+[`docs/handoff/README.md`](docs/handoff/README.md); không cần đi tìm ở chỗ khác.
 
----
-
-## 2. Recent Major Implementations
-
-### A. Workspace Foundation (7 Core Dot Directories)
-Upon container initialization (`box-entrypoint.sh`), the following directories are automatically created under `/home/agent/workspace/` with `0750` permissions and `agent:agent` ownership:
-- `.generated_artifacts`
-- `.plans`
-- `.session-history`
-- `.skills`
-- `.trimmed-tool-output`
-- `.uploaded_artifacts`
-- `.virtual_views`
-
-### B. Multi-version Plan Browser (`.plans/` Scanner)
-- **Backend Scanner (`deploy/docker/plan_files.py`):**
-  - Scans exclusively within `/home/agent/workspace/.plans/` (depth <= 16, entries <= 2000, size <= 1MB).
-  - Matches filenames via regex `^v([1-9][0-9]*)-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$`.
-  - Groups versions by slug identity, sorting descending `[v2, v1]`.
-  - Top version is tagged `draft`, older versions tagged `approved`.
-  - Enforces symlink rejection via `O_NOFOLLOW` / `dir_fd` on POSIX.
-  - **Directory Mtime Cache:** Uses `os.stat(root).st_mtime` to cache the manifest metadata (0ms on repeat reads), automatically refreshing whenever a new plan file is created.
-- **Proxy API Endpoints (`deploy/docker/ide-proxy.py`):**
-  - `GET /__box/plans` ➔ Manifest JSON tree of all available plan documents (0ms cached).
-  - `GET /__box/plans/content?identity={id}&version={v}` ➔ Direct, fast-path file stream (~1ms).
-- **Frontend Integration (`PlanPanel.tsx` & `usePlanFiles.ts`):**
-  - Custom Popover Dropdowns for Document selection and Version selection (`v1 (approved)`, `v2 (draft)`).
-  - Fluid width container (`w-full min-w-0`) ensuring seamless stretching across large monitors without blank margins.
-  - Sub-tabs:
-    - `Detailed Plan`: Renders full Markdown with KaTeX math equations, GFM tables, interactive task lists, and syntax highlighting.
-    - `Overview`: Architectural summary, file metadata, and navigation shortcut.
-  - Action buttons: `[ Plan | Diff ]` toggle, `[ 🔗 Share ]`, `[ ❐ ]` copy, and `[ ✓ Approve Plan ]`.
-
-### C. Responsive Chat Input Bar & Launcher Enhancements
-- **Auto-collapsing Composer (`useCompactComposer`):**
-  - Below 500px width: Shortens placeholder to `"Type..."` and collapses `Quick ask` / `Autopilot` to icon-only `[⚡]`.
-  - Min chat column floor lowered to 400px with `min-w-0` overflow prevention.
-- **Fast Docker Launcher (`scripts/start.bat` & `scripts/start.ps1`):**
-  - Uses `docker compose up -d --build` with layer cache for instant startup (<0.5s when unchanged, 1-2s when docker config changes).
-  - Full argument pass-through via `%*` (`start.bat -Rebuild`).
-
-### D. Built-in Keyless Web Search (PART 1, 2026-10-06)
-- `web_search` now works **out of the box, no API key required**: a self-hosted SearXNG on `127.0.0.1:8888` is auto-detected (`BOXFOX_SEARXNG_AUTODETECT`, 30s positive / 15s negative cache) and used as the default keyless leg; the 10-step pipeline defaults to `BOXFOX_SEARCH_PIPELINE=auto`. Start it with `bash deploy/searxng/up.sh` (see `deploy/searxng/README.md`).
-- Failures are classified (`searchFailure.kind` = `config` / `infra` / `source`): infrastructure and config errors now say **"not a query problem"** instead of telling the agent to retry the query (fixes F05); an empty result set is a separate code (`WEB_SEARCH_EMPTY`).
-- Decision record and **PART 2 interface contract (§4)**: `docs/plan/builtin-search-default.md`; three test tiers (unit / stub / live) and the latency bench: `docs/testing/builtin-search-e2e.md`.
-
-### E. Web Search API Keys — tab "Web Search" của Settings (PART 2, 2026-10-06)
-- `Settings → Provider` có tab thứ ba **Web Search**: dán khoá Brave/Tavily/Exa/Parallel/Firecrawl/
-  Cloudflare/custom ngay trong giao diện thay vì sửa biến môi trường. Mục "Mặc định" là đường
-  built-in không khoá của PART 1; chọn một thẻ thì nó đứng đầu chuỗi ưu tiên của `web_search`.
-- Khoá lưu bằng **đúng cơ chế của tab API** (bảng `credentials`, AES-256-GCM, AAD = id dòng) qua hai
-  `kind` mới `search_provider`/`search_config` — không đổi schema, không đụng đường suy luận mô hình.
-  Khoá thô chỉ rời router qua nút **Hiện** và `GET /api/router/search/resolve` (harness, loopback).
-- Harness đọc nguồn đã chọn qua loopback (cache 15 s, `BOXFOX_SEARCH_SOURCE_TTL`); router chết ⇒
-  dùng giá trị cache, hết hạn thì coi như "Mặc định" — tìm kiếm không bao giờ chết vì tab này.
-- Hợp đồng HTTP: [`router/CONTRACT.md`](router/CONTRACT.md). Bốn tầng test + smoke test thủ công:
-  [`docs/testing/search-provider-e2e.md`](docs/testing/search-provider-e2e.md).
-- Giới hạn v1 đã biết: `BOXFOX_SEARCH_PIPELINE=on` (ống 10 bước) **không** áp dụng nguồn đã chọn.
+- **Nhánh:** `vorflux/host-mode-web-transport` (HEAD `7a8427b`, 87 commit trên `main`, `main` không có
+  gì mới hơn).
+- **Pull request:** https://github.com/khaiv7221-ops/BoxFox-Agent-Box/pull/1 — **PR duy nhất** của repo,
+  đang mở, không phải draft.
+- **Cập nhật lần cuối:** 2026-10-09, sau đợt kiểm thử đầu-cuối tác vụ dài (34 lượt sống, hai pha) và
+  lượt dựng bộ cài Windows Desktop (mục 3).
 
 ---
 
-## 3. High-Performance Architecture Reference
-For handling heavy streaming data, large log files, or rich documents (>2,000 lines) at 60 FPS without UI jank, refer to the established 3-tier architecture guide:
-- 📖 **Architecture Playbook:** [`docs/architecture/high-performance-rendering.md`](file:///d:/create/BoxFox-Agent-Box/docs/architecture/high-performance-rendering.md) (covers Backend Mtime cache, React AST memoization, and CSS `content-visibility: auto` layout virtualization).
+## 1. Nhánh này làm gì
 
----
+Một lớp "host mode" cho BoxFox: harness chạy ngay trên máy chủ thay vì trong container, kèm
 
-## 4. Verification & Test Suite
-- **Frontend (Vitest):** `127 / 127 tests passed` across 18 test files (`npm run test`).
-- **Frontend Typecheck & Lint:** `0 errors` (`npm run typecheck`, `npm run lint`).
-- **Python Unit Tests:** `13 / 13 tests passed` (`conda run -n DL python -m unittest discover -s deploy/docker/tests -p "test_*.py"`).
+- API điều khiển máy (`/api/agent/machine/*`), quyền theo phiên, đích CUA theo phiên (chọn cửa sổ hoặc
+  cả máy), viền báo vùng đang bị điều khiển trên X11;
+- lớp **tác vụ dài** (long task): một run ghim vào hợp đồng của phiên, ngân sách bước/phút, checkpoint,
+  work graph (discover → approve → execute → ship), cổng nghiệm thu của chủ;
+- router model: khoá OAuth/API key, chọn model theo alias, hạn chót request theo kích thước thật;
+- nén context giữ được việc đang dở qua nhiều thế hệ nén.
 
----
+## 2. Trạng thái đã xác minh (đợt cuối, 2026-10-09)
 
-## 5. Chẩn Đoán & Kiến Trúc: Xử Lý `/claude-code` & Cơ Chế Nạp Skill BoxFox
+Một lượt chạy sống thật, hai pha, đề bài "QC dược":
 
-### 5.1. Vấn Đề Hiện Tại Với `/claude-code`
-- **Triệu chứng:** Khi người dùng gửi lệnh có tag `/claude-code` (ví dụ: `/claude-code day la test`), hệ thống lập tức mở sub-agent `Build Specialist` [FAILED 🔴], đồng thời chat chính báo lỗi:
-  `CHILD_FAILED: inspect child events for setup/error details`.
-- **Nguyên nhân gốc rễ:**
-  1. **Ép cứng vai trò (Hardcoded Role & Executor):** Trong [`backend/src/agentbox/skills/commands.py`](file:///d:/create/BoxFox-Agent-Box/backend/src/agentbox/skills/commands.py) (dòng 172-175):
-     ```python
-     elif key in {'claude-code', 'claude-design'}:
-         result.kind, result.skills = 'task', [key]
-         result.executor = 'claude-code' if key == 'claude-code' else 'native'
-         result.role = 'build' if key == 'claude-code' else 'orchestrator'
-     ```
-     Lệnh `/claude-code` bị gán cứng vào vai trò `build` và ép executor sang `claude-code` CLI.
-  2. **Thiếu kiểm tra tiền khả thi (Pre-flight Check Failure):** Khi executor là `claude-code`, backend gọi [`ClaudeExecutor`](file:///d:/create/BoxFox-Agent-Box/backend/src/agentbox/sandbox/claude_executor.py) thực thi lệnh docker vào container `agentbox-box`. Nếu container chưa chạy, hoặc binary `claude` chưa được cài đặt / chưa đăng nhập (`claude auth login`) bên trong sandbox:
-     - Worker ném ngoại lệ `setup_required: Check sandbox login, CLI version...`
-     - Backend bắt lỗi, đánh dấu session con thất bại và ném `CHILD_FAILED`, làm sập toàn bộ luồng xử lý của Main Agent mà không có hướng dẫn thân thiện cho người dùng.
+| Hạng mục | Kết quả |
+| --- | --- |
+| Phiên chủ | `72106f67490847a9be5b179a5cc92a6c`, 34 lượt, trạng thái `completed` |
+| Long task run | `lt-d0422232cc124fe9ae12ca847decb76b` — `completed` rev 163, `blockedReason: null`, 891/4800 bước, 734,1/1920 phút |
+| Work graph pha 2 | `w-45bc1f889e` — `executed`, cả hai node `B1` và `T1` **accepted** |
+| Sản phẩm pha 2 trên đĩa | `data/spec_registry.json` (3.440 B), `tests/test_spec_registry.py` (1.613 B) trong `/var/tmp/lt-longtask2/ws` |
+| Test chạy được | `python3 -m unittest discover -s tests -v` → 4/4 đạt, exit 0 (artifact `a-0790e163407344faaf96e9fe1cae8068` v23) |
+| Phán quyết phản biện độc lập | con `3be338ffd4d14334b74d56afec4c72c0` (role `review`), 2 bước, kết `VERDICT: ok` |
+| Kiểm thử độc lập | báo cáo `testing` — **PARTIAL, 16/20 dòng**; 12/12 dòng V đạt; A3/A5/A7/A8 và Q2 `not-triggered` |
 
-### 5.2. Giải Pháp Kiến Trúc: Luồng Riêng Cho Claude Code
-1. **Tách biệt Executor khỏi Role:**
-   - Không ép `/claude-code` thành vai trò `build`. Cho phép người dùng hoặc Orchestrator chỉ định vai trò linh hoạt (`explore`, `review`, `build`, v.v.).
-2. **Cơ chế Kiểm Tra Tiền Khả Thi & Graceful Fallback:**
-   - Trước khi dispatch sang docker CLI, hệ thống thực hiện probe trạng thái:
-     - Trạng thái Docker container (`agentbox-box` có đang active?).
-     - Trạng thái CLI binary & Authentication (`claude auth status`).
-   - **Nếu chưa sẵn sàng:** Không tạo sub-agent lỗi để làm bẩn pipeline. Trả về thông điệp hướng dẫn rõ ràng trên UI:
-     - Hướng dẫn mở Terminal Sandbox để chạy `claude auth login`.
-     - Hoặc cung cấp tùy chọn chuyển đổi tự động sang **Native Claude Model** (sử dụng API Anthropic qua BoxFox Router thay vì phụ thuộc CLI bên trong docker).
+Báo cáo kiểm thử đầy đủ (34 KB) và cây bằng chứng:
+`/code/.generated_artifacts/longtask-e2e/report.md` (mục 5 liệt kê `db/`, `events/`, `files/`, `logs/`,
+`matrix/`, `session-history/`, `active-cases-3118/`).
 
-### 5.3. Cơ Chế Nạp Skill Riêng Biệt Cho BoxFox & Phân Bổ Sub-Agent
-- **Thực trạng nạp Skill:**
-  - Hiện tại [`SkillCatalog`](file:///d:/create/BoxFox-Agent-Box/backend/src/agentbox/skills/catalog.py) chỉ quét thư mục `vendor/hermes/skills`.
-  - Thư mục `.skills/` của BoxFox (chứa các skill chuyên biệt: `browser-testing`, `electron-testing`, `web-preview`, `planning-workflow`, `canvas-spec`, `secrets-catalog`...) chưa được tự động tích hợp vào catalog.
-  - Bảng `ROLE_SKILLS` đang gán tĩnh danh sách skill Hermes cho từng role, không linh hoạt.
-- **Chiến lược nâng cấp:**
-  1. **Dual-source Skill Catalog:** Mở rộng `SkillCatalog` để quét cả `d:\create\BoxFox-Agent-Box\.skills` và `/home/agent/workspace/.skills`, gán namespace `source: 'boxfox'`.
-  2. **Sub-agent với Model & Skill Riêng Biệt:**
-     - Cho phép từng Specialist trong `Specialists Pipeline` được cấu hình model độc lập (ví dụ: `Explore` dùng model nhẹ/rẻ như `gemini-2.5-flash`, `Build` dùng `claude-3.7-sonnet`, `Review` dùng `deepseek-r1`).
-     - Cho phép gắn thẻ kỹ năng (skill tags) phù hợp cho từng vai trò:
-       - `Testing Specialist` ➔ nạp `browser-testing`, `web-preview`, `electron-testing`.
-       - `Plan Specialist` ➔ nạp `planning-workflow`, `canvas-spec`.
-       - `Review Specialist` ➔ nạp `git-pr-workflow`, `pr-description`.
+> **Lưu ý về agent kiểm thử:** tiến trình `e2e-verify-chang-b` **hết thời gian chờ 7.200 s** và bị đánh
+> dấu `error` **sau khi** đã ghi xong báo cáo và ma trận; phần còn lại không kiểm được là bốn ca A và Q2
+> nói trên.
 
----
+## 3. Bộ cài Windows Desktop (dựng 2026-10-09)
 
-## 6. Phân Tích & Chiến Lược Chuẩn Hóa Thinking Levels Cho Từng Model & Provider
+`desktop/` là shell Electron đóng gói cả UI + router + harness + runtime (Node 24.9.0, CPython 3.13.7)
+thành một bộ cài NSIS. Bộ cài dưới đây dựng từ chính nhánh này (commit `eba9aad`), nên nó mang đủ F01–F17.
 
-### 6.1. Thực Trạng Hiện Tại (Mock / Hardcode)
-- Trong [`router/src/providers/common.mjs`](file:///d:/create/BoxFox-Agent-Box/router/src/providers/common.mjs) và [`router/src/service.mjs`](file:///d:/create/BoxFox-Agent-Box/router/src/service.mjs), hệ thống dùng regex kiểm tra tên model (nếu có chứa `r1`, `o1`, `think`, `reason`...) rồi gán cứng:
-  `thinkingLevels: ['low', 'medium', 'high']`
-- Điều này dẫn đến sự vô lý khi:
-  - Một số model không hỗ trợ thay đổi mức độ suy nghĩ (như DeepSeek R1 luôn bật, không có 3 mức).
-  - Một số model không có tính năng suy nghĩ nhưng vẫn hiển thị selector.
-  - Các provider sử dụng định dạng tham số hoàn toàn khác nhau nhưng bị ép chung một danh sách tĩnh.
+| Hạng mục | Giá trị |
+| --- | --- |
+| Tệp | `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` — 167.123.853 B, Windows x64, **chưa ký số** |
+| SHA-256 | `fa2b965ca102e0797cc93048ce94750b5370f5828281b3a9d2b4938a0a4a077f` |
+| Gói bên trong | 5.189 tệp, khớp từng đường dẫn và kích thước với `desktop/release/win-unpacked` |
+| Hướng dẫn cài | `docs/plan/desktop-alpha-quickstart.md` + `.en.md` (bản nhanh cho người dùng cuối) và
+`docs/plan/desktop-alpha-install.md` + `.en.md` (bản đầy đủ, checklist 13 bước) — mỗi bản có tiếng Việt và tiếng Anh |
 
-### 6.2. Ma Trận Thinking Giữa Các Provider
-| Provider | Đại diện Model | Cơ chế Thinking | Tham số API Thực Tế | Mức độ hỗ trợ |
-| :--- | :--- | :--- | :--- | :--- |
-| **OpenAI** | `o1`, `o3-mini`, `gpt-5` | Discrete Effort | `reasoning_effort: 'low' \| 'medium' \| 'high'` | Chuẩn 3 mức |
-| **Anthropic** | `claude-3-7-sonnet` | Token Budget | `thinking: { type: 'enabled', budget_tokens: <number> }` hoặc `type: 'disabled'` | Budget linh hoạt (1024 - 128k), có thể tắt |
-| **Google Gemini** | `gemini-2.5-flash`, `gemini-2.5-pro` | Token Budget | `generationConfig.thinkingConfig = { thinkingBudget: <number> }` (0 để tắt, -1 auto) | Budget số nguyên, có thể tắt |
-| **Google DeepMind (Antigravity)** | `gemini-3.8-flash-high`, `gemini-3.8-pro` | Tier / Effort | `generationConfig.thinkingConfig = { thinkingLevel: 'low' \| 'medium' \| 'high' }` | Mức phân cấp theo tier định danh |
-| **DeepSeek** | `deepseek-reasoner` (R1) | Inherent Reasoning | Luôn sinh `reasoning_content`, không có tham số bật/tắt hoặc điều chỉnh mức | Cố định (`fixed`), không chọn mức |
+Dựng lại (máy Linux vẫn cross-build được):
 
-### 6.3. Chiến Lược Chuẩn Hóa Kiến Trúc
-1. **Phân loại Model Thinking Capability (Capability Registry):**
-   Thay vì regex chung chung, mỗi model metadata sẽ có cấu trúc năng lực rõ ràng:
-   - `thinkingType`:
-     - `'effort'`: Hỗ trợ các mức định danh (`['low', 'medium', 'high']`).
-     - `'budget'`: Hỗ trợ cấu hình số lượng token (`budget_tokens` hoặc `thinkingBudget`).
-     - `'fixed'`: Luôn suy nghĩ, không cho phép đổi mức (ví dụ DeepSeek R1).
-     - `'none'`: Model thông thường không có reasoning.
-   - `defaultThinking`: Mức mặc định khi kích hoạt.
-2. **Translation Layer Tại Từng Provider Adapter:**
-   - Adapter của Provider chịu trách nhiệm dịch mức quy ước từ UI (`low`, `medium`, `high`, `off`) thành payload chính xác của Upstream:
-     - Anthropic Adapter: `low` ➔ `2048`, `medium` ➔ `8192`, `high` ➔ `16384`, `off` ➔ `{ type: 'disabled' }`.
-     - Gemini Adapter: `low` ➔ `1024`, `medium` ➔ `4096`, `high` ➔ `16384`, `off` ➔ `thinkingBudget: 0`.
-     - OpenAI Adapter: Chuyển trực tiếp sang `reasoning_effort`.
-     - DeepSeek Adapter: Bỏ qua trường reasoning_effort (không gửi tham số không hợp lệ).
-3. **Đồng Bộ Lên Giao Diện (Frontend):**
-   - Chỉ hiển thị bộ chọn Thinking khi `m.thinkingLevels` có giá trị hợp lệ từ provider metadata thực tế.
-   - Ẩn hoàn toàn thanh chọn Thinking đối với model `thinkingType: 'fixed'` hoặc `thinkingType: 'none'`.
+```bash
+cd desktop
+npm install
+npm run fetch-runtime      # ~190 MB: Node + CPython + wheel win_amd64, kiểm sha256 từng mục
+npm run build-app          # cần frontend/dist; tự dựng UI nếu chưa có
+DISPLAY=:1 npm run dist:win
+```
 
----
+- **Wine phải chạy được nhị phân 32-bit** (`wine` + `wine32:i386` trên Ubuntu). Thiếu 32-bit thì
+  electron-builder dừng ở bước đóng gói uninstaller với `wine process failed ENOENT`, và tệp `Setup.exe`
+  để lại chỉ là stub ~167 KB — **không phải** bộ cài thật. Đã ghi vào `desktop/README.md`.
+- `npm test` trong `desktop/`: **73/73 đạt**; `npm run fetch-runtime:check`: runtime khớp lock.
+- Thư mục cài mặc định là `%LOCALAPPDATA%\Programs\boxfox-desktop`, không phải tên sản phẩm
+  (`productName` có ngoặc đơn nên electron-builder dùng `name`); hai tài liệu cài đã sửa cho đúng.
+- **Chưa chạy cài đặt thật trên Windows**: máy này là Linux, và workflow `desktop-build.yml` (chạy trên
+  `windows-latest`) không gọi được vì token GitHub của phiên không có quyền Actions (dispatch trả 404).
+  Bộ cài đã được kiểm tới mức Linux cho phép: giải nén kho NSIS rồi so khớp byte với cây ứng dụng, và chạy
+  wizard dưới Wine (wizard hiện đúng; bước giải nén bị chặn bởi cảnh báo "cannot be closed" — dương tính
+  giả của `nsProcess` dưới Wine, không tái hiện trên Windows).
 
-## 7. Vấn Đề Tồn Đọng Với CUA (Computer Use Agent)
-- CUA (Computer Use Agent) hiện tại chưa hoạt động đúng.
+## 4. Mười tám lỗi harness đã sửa trong nhánh
 
----
+Mọi lỗi dưới đây đều tái hiện được trước khi sửa (test đỏ trước, hoặc số đo sống) và đều có ca hồi quy
+trừ khi ghi chú khác.
 
-## Phụ lục mới 2026-09-25: research v2 và lượt thử chuyển tuyến
+| Mã | Triệu chứng | Commit |
+| --- | --- | --- |
+| F01 | Lời gọi tool đang chạy tự chặn chính nó bằng ý định của mình (`LONGTASK_UNSAFE_INTERRUPTION`) | `c67ef47` |
+| F02 | Con bị từ chối bởi lời gọi đang chạy của cha; rồi run chết `LONGTASK_STALE` | `f7ddaf9` |
+| F03 | Fan-out: lời gọi của phiên gốc bị con cháu từ chối oan | `f7ddaf9` |
+| F04 | Lời gọi tool bị cắt được phát lại nguyên trạng cho nhà cung cấp → `UPSTREAM_HTTP_400` giết ba lượt | `e90c72e` |
+| F05 | Cổng nguồn của plan chỉ đọc trang cũ nhất (500 event) → từ chối plan có nguồn thật | `35830f6` |
+| F06 | Mục "Nguồn dữ liệu đầu vào" che mục nguồn thật → `sources-vague` | `03cc20f` |
+| F07 | Con của node plan bị giết `ORPHAN` vì hàng phiên cha bị ghi đè giữa lượt | `9020247` |
+| F08 | Transcript quá trần 200 message của nhà cung cấp (nén chỉ theo token) | `458b42b` |
+| F09 | Bookkeeping của runner (con đóng) giết lượt đang chạy của chủ | `054b432` |
+| F10/F11 | `inspect` của chủ bị chính lượt nó mở khoá làm mất hiệu lực | `e1f801d` |
+| F12 | Trần tóm tắt nén 4.096 token giết bản nén tác vụ dài | `0011b47` |
+| F13a/b | Tắt máy êm bị ghi thành lệnh dừng của chủ; `resume` giữ lại lý do chặn | `c0e04b5` |
+| F14 | `await_children` nhận session id trần → cha quay ~100 bước vô ích | `1bfb677` |
+| F15 | Hạn 90 s áp cho cả request lớn chỉ vì `max_tokens` nhỏ → hai lượt chủ chết `PROVIDER_STREAM_INTERRUPTED` | `d5c5e69` |
+| F16 | `extend` trả run về `ready` nhưng để lại `blockedReason: LONGTASK_BUDGET_EXHAUSTED` | `d9f0293` |
+| F17 | Cổng nghiệm thu chỉ nhận `ok|passed`, work graph ghi `pass` → **không** check nào qua được cổng | `f2b1129` |
 
-Phần bổ sung này không sửa nội dung các mục trước. Chủ nhà yêu cầu dừng các lượt test sống để tiết kiệm token. Trạng thái code, số đo test, các lỗi quan sát được ở bài toán y tế, giới hạn route Muse/Gemini và việc cần soát tiếp được ghi trong [phụ lục research v2](docs/handoff/research-v2-live-addendum-2026-09-25.md). Lượt sống đã hủy; dossier còn nháp và benchmark chất lượng 12×3 chưa đo.
+## 5. Việc còn mở (đã ghi nhận, chưa sửa)
+
+| Mã | Việc | Gợi ý |
+| --- | --- | --- |
+| X1 | `accept` bị chặn khi run đang `waiting_children` — chủ phải `resume` trước, UI không nói | thêm `waiting_children`-không-con-sống vào tập state hợp lệ, hoặc trả lỗi nói rõ |
+| X3 | UI không có nút nghiệm thu (`accept`); cả bốn lệnh nghiệm thu trong lượt đều gọi API tay | thêm nút "Nghiệm thu" + danh sách ref đủ điều kiện |
+| 2ab | `reserve_segment` tính trọn `bound_ms` trước; một lời gọi model giữ 120 phút ⇒ con bị từ chối `LONGTASK_BUDGET_EXHAUSTED` trong khi UI ghi 724/960 | trừ dần theo thời gian thật, hoặc không tính bound của lời gọi đang chạy vào hạn mức |
+| 2ae | Lượt kết `partial` + `PROVIDER_STREAM_INTERRUPTED` để run đỗ `waiting_children` dù không còn con sống | dọn trạng thái khi lượt kết `partial` |
+| 2z | Lượt chết `OUTPUT_CONTEXT_EXHAUSTED` (219.641/256.000); harness không tự nén | tự nén khi vượt ngưỡng (UI đã cảnh báo 86%) |
+| 2aa | Router khoá **6 khoá** `opencode` cho một model (`step-5-preview-free`) tới ~6 h | khoá theo khoá, hoặc hạ trần `retryAfterMs` |
+| 2y | Panel Decisions đếm lệch server | đọc cùng một nguồn |
+| 2t | Cổng `test_proof` so lệnh **byte-for-byte** (thêm `; echo "EXIT=$?"` là fail cứng) | so sau khi chuẩn hoá |
+| 2u | Role `review` không chạy được gì trong host mode (`verify_exec` ∈ `DEFERRED_TOOLS`) | hoặc cho phép, hoặc ghi rõ trong hợp đồng |
+| 2v | `WORK_SCOPE_TERMINAL_MUTATING` chặn lệnh `;`-ghép chỉ-đọc | nhận diện lệnh ghép |
+| 2w | Sửa định nghĩa node làm reset toàn bộ stage của đồ thị | chỉ reset stage liên quan |
+| 2ac | Producer chỉ chạy `terminal_exec` không qua được `good_reads` | đã có mẹo ở `acceptance`; nên sửa gốc |
+| X17 | Preview tool cắt ở 1.200 ký tự trong khi artifact 1.325 ký tự | nâng trần hoặc nói rõ |
+
+Danh sách đầy đủ (F01–X18) nằm trong mục **Out-of-Scope Feedback** của PR #1 và trong báo cáo kiểm thử.
+
+## 6. Chạy lại môi trường (đã dùng cho đợt cuối)
+
+```bash
+# harness (host mode) — cổng 3116, dữ liệu và workspace riêng
+bash /var/tmp/lt-longtask2/restart-3116.sh      # BOXFOX_* env ở đầu tệp
+# router: cổng 3101 · UI dev: cổng 3117 · UI desktop app: 3100
+```
+
+- `/api/agent/*` (trừ `/health`) cần hai header: `X-BoxFox-Admin: 1` và `Origin: http://localhost:3117`.
+- Gửi lượt: `POST /api/agent/sessions/{sid}/turns` body `{prompt, route, invocationId}`.
+- Thao tác long task: `POST /api/agent/sessions/{sid}/longtask/actions` body
+  `{action, runId, expectedRevision, invocationId}` (thêm `confirm: true` + `evidenceRefs` cho `accept`).
+- **Đọc DB sống thì mở read-only** (`sqlite3.connect('file:…?mode=ro', uri=True)`); **không** mở bằng
+  `SessionStore` từ script dò — hàm khởi tạo của nó quét phục hồi và đánh dấu phiên `running` thành
+  `interrupted`. `sqlite3` CLI không có trên máy này; dùng `backend/.venv/bin/python`.
+- Model: `step-5-preview-free` và `longcat-2.5-preview-free` có thể bị khoá theo khoá/quota; thứ tự
+  thay thế: `mimo-v2.6-flash-free` → `muse-spark-1.3-contributor-free` → `nemotron-3.5-lightning-free`
+  → `ling-1.13-free` → `space-bunny-free`. Mọi lượt phải mang đủ `route`
+  (`connectionId f6eef1e6-5fc3-47a9-bf14-34fa02e434a8`).
+
+## 7. Kiểm thử
+
+- `backend/tests/unit/` — các tệp liên quan đợt này: `test_history_surface.py` (32 passed),
+  `test_longtask_execution.py`, `test_await_children.py`, `test_work_budget_w65.py`.
+- Router: `npm test` trong `router/` — **328 passed**.
+- Báo cáo kiểm thử của phiên: mục "What was tested" (bản 16, `PARTIAL`, coverage `16/20`).
+- Bản sửa F17 được kiểm chứng thêm bằng cách chạy lại trên **bản sao** DB sống: trước bản sửa
+  `acceptanceSatisfied: False` kèm `LONGTASK_ACCEPTANCE_REQUIRED`; sau bản sửa `True`, `failedChecks: []`.
+
+## 8. Những điều dễ vấp (đã tốn thời gian thật)
+
+- **Đừng commit** ba tệp chưa theo dõi dùng cho preview: `deploy/docker/docker-compose.preview.yml`,
+  `frontend/vite.preview.config.ts`, `router/package-lock.json`.
+- **Cuối dòng hỗn hợp:** `plan_quality.py`, `test_plan_sources_gate.py`, `compression.py`,
+  `test_compression_port.py`, `test_tail_and_summary_floors.py` là CRLF; `longtask_runtime.py`,
+  `runtime.py`, `longtask_store.py`, `api/server.py`, `limits.py`, `test_longtask_execution.py`,
+  `test_await_children.py`, `test_work_budget_w65.py` là LF; `router/src/engine.mjs` trộn 218 CRLF/225
+  dòng — sửa bằng script giữ nguyên kiểu cuối dòng.
+- **Cross-build bộ cài Windows trên Linux cần wine 32-bit** — xem mục 3; thiếu nó thì `dist:win` báo
+  thành công giả với một stub 167 KB.
+- **Thân PR không được chứa** đường dẫn `/code/...` (bước chuẩn bị media của `pr edit` sẽ từ chối) và
+  không được chứa dấu quản lý `VORFLUX_AGENT_PR_BODY`.
+- Đồ thị việc: **mọi** `work_graph action=update` làm reset toàn bộ stage ⇒ node đã `accepted` bị mở lại.
+  Muốn thêm yêu cầu cho con thì dùng `action=verify` hoặc lệnh trong goal, đừng update định nghĩa node.
+- `mimo-v2.6-flash-free` từng chết vì hạn 90 s (F15); nay đã sửa, nhưng nếu thấy `chat.failed TIMEOUT`
+  thì nâng `max_tokens` ≥ 8.000 hoặc đổi model.
+
+## 9. Việc nên làm tiếp
+
+1. Sửa **X1** và **X3** (cổng nghiệm thu + nút nghiệm thu trên UI) — hai việc nhỏ, đóng được vòng
+   nghiệm thu mà đợt cuối phải làm bằng tay.
+2. Bốn ca A còn `not-triggered` (A3 hai hội thoại song song, A5 `task_send`, A7 phiên unbound/container,
+   A8 đổi model giữa run) — dựng ca chủ động trên harness phụ như đã làm với V3/V6.
+3. Cân nhắc `2ab` (ngân sách tính trọn bound) vì nó chạm trần ngân sách thật của mọi run fan-out.
+4. Chạy bộ cài trên Windows thật (hoặc bật workflow `desktop-build.yml` trong tab Actions) để đóng
+   checklist 13 bước của `docs/plan/desktop-alpha-install.md` — đây là phần duy nhất của bộ cài chưa
+   được kiểm trên hệ điều hành đích.
+5. Gộp/tách PR nếu cần: hiện chỉ có **một** PR (#1), 87 commit trên `main`.

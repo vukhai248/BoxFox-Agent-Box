@@ -90,7 +90,10 @@ def test_interview_without_an_active_run_keeps_the_legacy_future(tmp_path):
                 break
             await asyncio.sleep(0.01)
         card = rt.pending_for(sid)[0]
-        assert not card.get('durable') and rt.pending
+        # Đợt dài hạn (A-F11): MỌI thẻ hỏi–đáp đi qua `decision_store`, kể cả khi không có run nào
+        # đang mở — nên thẻ nay BỀN. Phần còn lại của đường cũ vẫn nguyên: lượt chờ bằng Future
+        # trong tiến trình, và KHÔNG có hàng `work_requests` nào của Work Graph.
+        assert card.get('durable') and rt.pending
         assert not store.db.execute("SELECT 1 FROM work_requests WHERE owner_id=? AND json_extract(doc,'$.kind')='main_interview'",
                                     (sid,)).fetchone()
         rt.resolve_decision(sid, card['decisionId'], 'decide')

@@ -1,5 +1,5 @@
 import { resolveBoxApiUrl } from '../boxApi'
-import { SandboxPlanRepository } from './http'
+import { MachinePlanRepository, PlanRepositoryHttpError, SandboxPlanRepository } from './http'
 import { MockPlanRepository } from './mock'
 import type { PlanRepository } from './types'
 
@@ -57,9 +57,37 @@ export type { PlanRejection } from './rejection'
 
 export type PlanSource = 'sandbox' | 'mock'
 
+/** Nơi lấy manifest/nội dung plan: box (Docker) hay folder dự án của phiên host. */
+export interface PlanTransport {
+  mode: 'host' | 'docker'
+  projectId: string | null
+}
+
 /** Sandbox là mặc định; mock chỉ bật tường minh trong test hoặc demo. */
-export function createPlanRepository(env: ImportMetaEnv = import.meta.env): PlanRepository {
+export function createPlanRepository(
+  env: ImportMetaEnv = import.meta.env,
+  target?: PlanTransport,
+): PlanRepository {
   const source = env.VITE_PLAN_SOURCE?.trim().toLowerCase()
   if (source === 'mock') return new MockPlanRepository()
+  if (target?.mode === 'host') {
+    if (!target.projectId) {
+      return new UnavailablePlanRepository('Select a host project folder to load plan files.')
+    }
+    return new MachinePlanRepository(target.projectId)
+  }
   return new SandboxPlanRepository(resolveBoxApiUrl(env))
+}
+
+/** Không có nguồn nào để đọc (host mode chưa chọn folder): mọi lượt đọc trả đúng một câu lỗi. */
+class UnavailablePlanRepository implements PlanRepository {
+  constructor(private readonly message: string) {}
+
+  async list(): Promise<never> {
+    throw new PlanRepositoryHttpError(0, this.message)
+  }
+
+  async read(): Promise<never> {
+    throw new PlanRepositoryHttpError(0, this.message)
+  }
 }

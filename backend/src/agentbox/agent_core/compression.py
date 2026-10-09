@@ -128,16 +128,42 @@ def context_estimate(messages, tools=(), usage=None):
 # có suy luận), nhưng BoxFox chỉ nhận bản `finish_reason == 'stop'`, nên một nhiệm vụ dài kết thúc
 # bằng `Incomplete summary` và cả lượt chết. PI đặt `min(0.8 * reserveTokens, model.maxTokens)`
 # (compaction.ts:684-687). BoxFox không có `reserveTokens`/`maxTokens` của model tóm tắt, nên lấy
-# 2 % ngân sách đang dùng — JUDGEMENT CALL, không phải bản sao: sàn 2048 giữ nguyên hành vi cũ cho
-# phiên nhỏ, trần 8192 chặn một lượt tóm tắt phình to hơn cả transcript nó thay thế.
-SUMMARY_MAX_TOKENS_FLOOR = 4096
-SUMMARY_MAX_TOKENS_CAP = 8192
-SUMMARY_MAX_TOKENS_RATIO = 0.02
+# một phần ngân sách đang dùng — JUDGEMENT CALL, không phải bản sao.
+#
+# Đo sống 2026-10-09 (phiên `72106f67`, tác vụ dài 26 lượt, chủ nhà chỉ đạo nâng trần): sàn 4096 là
+# TRẦN thật của mọi transcript dưới ~205k token, mà model tóm tắt hay tiêu hết ngần ấy token vào
+# phần suy luận rồi trả `content: null` (router: `finishReason: length, contentChars: 0`) — nén
+# hỏng, ngữ cảnh 182k không gộp được, cả phiên mắc `OUTPUT_CONTEXT_EXHAUSTED` và tác vụ dài chết ở
+# bước 539/2400. Tác vụ dài KHÔNG giữ trần 4k: sàn 8192, tỉ lệ 10 % (bản tóm tắt vẫn nhỏ hơn hẳn
+# phần nó thay thế — hai chốt `after > budget` và `after >= before` dưới đây vẫn chặn), trần 50 000
+# vẫn dưới trần `max_tokens` 64 000 mà router chấp nhận (`router/src/engine.mjs:68`).
+SUMMARY_MAX_TOKENS_FLOOR = 8192
+SUMMARY_MAX_TOKENS_CAP = 50_000
+SUMMARY_MAX_TOKENS_RATIO = 0.10
 
 
 def summary_max_tokens(before_estimate):
     scaled = int(before_estimate * SUMMARY_MAX_TOKENS_RATIO)
     return min(SUMMARY_MAX_TOKENS_CAP, max(SUMMARY_MAX_TOKENS_FLOOR, scaled))
+
+
+def usable_summary(response):
+    """Một lượt tóm tắt DÙNG ĐƯỢC: `stop` hoặc `length` kèm chữ — MỘT chỗ phán cho mọi đường gọi.
+
+    Phần D: bản bị nhà cung cấp cắt ở trần `max_tokens` vẫn hơn hẳn việc mất nguyên transcript.
+    Luật này từng chỉ sống ở đây, còn closure `summarize` của `runtime.py` chặn trước bằng
+    `completion_reason != 'complete'` — nên trên đường tự động nó không bao giờ chạy: phiên sống
+    `72106f67` (2026-10-09) ném đi một bản tóm tắt 2 898 ký tự đã viết xong (`finishReason: length`)
+    rồi chết ở `OUTPUT_CONTEXT_EXHAUSTED`. Hai đường giờ hỏi cùng hàm này.
+    """
+    if not isinstance(response, dict):
+        return False
+    choice = (response.get('choices') or [{}])[0]
+    if not isinstance(choice, dict):
+        return False
+    message = choice.get('message') if isinstance(choice.get('message'), dict) else {}
+    text = message.get('content')
+    return choice.get('finish_reason') in ('stop', 'length') and isinstance(text, str) and bool(text.strip())
 
 
 # Nén xong mà ngữ cảnh vẫn trên mức này của ngưỡng thì lần nén đó coi như không ăn thua: bước sau
@@ -163,6 +189,72 @@ SUMMARY_INPUT_CHARS = 120_000
 TAIL_MAX_TOKENS = 25_000
 TAIL_MAX_CONTEXT_FRACTION = 0.20
 MAX_TAIL_MESSAGE_FLOOR = 8
+
+
+# Trần số THÔNG ĐIỆP của nhà cung cấp: `step-5-preview` từ chối bằng HTTP 400
+# "Provide 1–200 chat messages." (`router.jsonl` 2026-10-09T09:28:12.851Z, `INVALID_REQUEST`).
+# Bộ nén đo TOKEN, không đo số message, nên một transcript dài mà mỗi message ngắn vẫn vượt trần
+# đếm trong khi `before` còn dưới ngưỡng — và lượt chết ngay giữa đường, ở bước thứ 20.
+CHAT_MESSAGES_MAX = 200
+# Biên an toàn: request còn có thể được bơm thêm một thông điệp nhắc trước khi gửi.
+CHAT_MESSAGES_HEADROOM = 8
+
+
+def message_units(messages):
+    """`[(start, end)]` — một ĐƠN VỊ là lời gọi công cụ + mọi kết quả của nó, hoặc một message.
+
+    Cắt theo đơn vị là điều kiện sống còn: một hàng `assistant` mang `tool_calls` mà thiếu hàng
+    `tool` của nó (hoặc ngược lại) là request hỏng, không phải request ngắn hơn.
+    """
+    units, index = [], 0
+    while index < len(messages):
+        end = index + 1
+        if messages[index].get('role') == 'assistant' and messages[index].get('tool_calls'):
+            while end < len(messages) and messages[end].get('role') == 'tool':
+                end += 1
+        units.append((index, end))
+        index = end
+    return units
+
+
+def trim_message_count(messages, cap=CHAT_MESSAGES_MAX - CHAT_MESSAGES_HEADROOM):
+    """Giữ transcript dưới trần ĐẾM của nhà cung cấp: bỏ những đơn vị CŨ NHẤT còn bỏ được.
+
+    Đo vòng kiểm thử sống 2026-10-09 (phiên `72106f67490847a9be5b179a5cc92a6c`): transcript 202
+    message, router trả `UPSTREAM_HTTP_400: Provide 1–200 chat messages.` ở bước 20 của lượt 12,
+    lượt chết ở checkpoint và run phải chờ chủ. Bộ nén không cứu được: nó so `context_estimate`
+    neo hoá đơn thật (141 471 token) với ngưỡng 176 332 nên thấy mọi thứ bình thường, trong khi
+    trần bị vượt là trần ĐẾM.
+
+    Luật giữ: mọi `system` ở đầu, message `user` ĐẦU TIÊN (đề bài), và đơn vị CUỐI; phần giữa bị
+    bỏ từ cũ nhất, nguyên đơn vị. Không bỏ được gì (trần nhỏ hơn phần được bảo vệ) thì trả NGUYÊN
+    danh sách: thà để nhà cung cấp từ chối còn hơn im lặng cắt vào phần được bảo vệ.
+    """
+    if not isinstance(messages, list) or cap <= 0 or len(messages) <= cap:
+        return messages
+    protected = set()
+    first_user = None
+    for index, message in enumerate(messages):
+        role = message.get('role')
+        if role == 'system':
+            protected.add(index)
+        elif role == 'user' and first_user is None:
+            first_user = index
+    if first_user is not None:
+        protected.add(first_user)
+    units = message_units(messages)
+    if units:
+        protected.add(units[-1][0])
+    to_drop = len(messages) - cap
+    keep = []
+    for start, end in units:
+        if to_drop > 0 and start not in protected:
+            to_drop -= end - start
+            continue
+        keep.extend(range(start, end))
+    if to_drop > 0:
+        return messages
+    return [messages[index] for index in keep]
 
 
 def tail_cut(messages, budget, protect_tail_count=MISSION_TAIL):
@@ -257,6 +349,22 @@ def _thin_message(message):
     return out
 
 
+def _summary_reference(message):
+    """Recognize harness summaries without treating user text as a synthetic instruction."""
+    content = message.get('content')
+    return (message.get('role') == 'assistant' and isinstance(content, str)
+            and (message.get('origin') == 'synthetic_handoff'
+                 or content.startswith(COMPACTION_BANNER)))
+
+
+def _summary_data(message):
+    """Retain prior progress, but do not recursively summarize the harness's instruction frame."""
+    content = message['content']
+    while content.startswith(COMPACTION_BANNER):
+        content = content[len(COMPACTION_BANNER):].lstrip('\n')
+    return {**message, 'content': content, 'origin': 'synthetic_handoff'}
+
+
 def summarizer_material(messages, ceiling=SUMMARY_INPUT_CHARS):
     """A summarizer-sized view of the history: the arc of the mission, not every byte of it.
 
@@ -269,7 +377,18 @@ def summarizer_material(messages, ceiling=SUMMARY_INPUT_CHARS):
     transcript is sampled evenly: the summarizer only writes prose, so a call and its result may be
     split across the sample.
     """
-    shaped = [_thin_message(message) for message in messages]
+    shaped = []
+    seen_summaries = set()
+    for message in messages:
+        if _summary_reference(message):
+            message = _summary_data(message)
+            # Only identical state and provenance is redundant. Different summaries can hold
+            # unique evidence; a generation number alone is not sufficient to discard one.
+            identity = (message['content'], json.dumps(message.get('sourceRanges'), sort_keys=True))
+            if identity in seen_summaries:
+                continue
+            seen_summaries.add(identity)
+        shaped.append(_thin_message(message))
     while len(shaped) > 1 and _chars(shaped) > ceiling:
         # Even sampling keeps both ends of the mission: the oldest is the goal, the newest is where
         # the model is.
@@ -575,15 +694,23 @@ class ContextCompressor:
             # Phần D — `length` vẫn nhận khi bản tóm tắt có chữ: ba phiên sống chết ở đây
             # (`summary_failed` tại 935 541 / 992 249 / 732 528) chỉ vì nhà cung cấp cắt ở trần
             # `max_tokens` của lượt tóm tắt. Bản bị cắt vẫn hơn hẳn việc mất nguyên transcript.
+            # Luật nằm ở `usable_summary` — closure `summarize` của `runtime.py` hỏi cùng hàm này.
             truncated = choice.get('finish_reason') == 'length'
-            if choice.get('finish_reason') not in ('stop', 'length') or not isinstance(text, str) or not text.strip():
+            if not usable_summary(summary):
                 raise ValueError('Incomplete summary')
         except Exception:
             if before > self.budget:
                 raise ValueError('CONTEXT_LIMIT: summary failed; original transcript preserved.')
             self._arm_thrash(estimate_tokens(messages, tools))
             return messages, {'kind': 'summary_failed', 'beforeEstimate': before}
-        result = result[:1] + [{'role': 'assistant', 'content': COMPACTION_BANNER + '\n' + text}] + result[cut:]
+        generations = [m.get('summaryGeneration', 0) for m in result[1:cut]
+                       if _summary_reference(m) and type(m.get('summaryGeneration', 0)) is int]
+        generation = max(generations, default=0) + 1
+        summary_message = {'role': 'assistant', 'content': COMPACTION_BANNER + '\n' + text,
+                           'origin': 'synthetic_handoff', 'summaryGeneration': generation,
+                           'sourceRanges': [{'view': 'pre_compaction_active', 'startMessage': 1,
+                                             'endMessageExclusive': cut}]}
+        result = result[:1] + [summary_message] + result[cut:]
         after = estimate_tokens(result, tools)
         if after > self.budget:
             raise ValueError('CONTEXT_LIMIT: summary did not reduce context enough; original preserved.')
@@ -592,7 +719,8 @@ class ContextCompressor:
             # Compaction is then unnecessary, not a failure: keep the original and report honestly.
             return messages, {'kind': 'unchanged', 'beforeEstimate': before, 'afterEstimate': before,
                               'reason': 'summary_not_smaller'}
-        event = {'kind': 'summary', 'beforeEstimate': before, 'afterEstimate': after}
+        event = {'kind': 'summary', 'beforeEstimate': before, 'afterEstimate': after,
+                 'summaryGeneration': generation}
         if truncated:
             event['summaryTruncated'] = True
         # E — nén xong mà ngữ cảnh vẫn sát ngưỡng thì bước sau lại vượt ngưỡng và lại gọi tóm tắt:

@@ -16,6 +16,8 @@ export function MachineConfigurationView() {
   const project = configuration?.projects.find(p => p.id === projectId)
   const [busy, setBusy] = useState(false)
   const [path, setPath] = useState('')
+  // Bản desktop chạy trực tiếp trên máy: không có box nào để chuyển sang, backend cũng từ chối.
+  const dockerUnavailable = configuration?.processMode === 'host'
   useEffect(() => { void load() }, [load])
   const select = async (nextMode: 'host' | 'docker', nextProject: string | null = projectId ?? null) => {
     setBusy(true)
@@ -39,7 +41,8 @@ export function MachineConfigurationView() {
   return <section className="max-w-3xl space-y-4 p-8">
     <h2 className="text-xs font-semibold text-fg">Execution environment</h2>
     <div className="flex gap-2">
-      {(['host', 'docker'] as const).map(value => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || !configuration}
+      {(['host', 'docker'] as const).map(value => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || !configuration || (value === 'docker' && dockerUnavailable)}
+        title={value === 'docker' && dockerUnavailable ? 'This build runs directly on this machine; there is no Docker box to switch to.' : undefined}
         onClick={() => void select(value)} className={`rounded-lg border px-3 py-1.5 text-xs ${mode === value ? 'border-brand bg-brand/10 text-fg' : 'border-line text-muted'}`}>
         {value === 'host' ? 'IDE · This machine' : 'Docker · Isolated'}</button>)}
     </div>

@@ -335,11 +335,37 @@ _UNVERIFIED_RE = re.compile(r'\bunverified\b', re.IGNORECASE)
 _SOURCE_MARKER_RE = re.compile(r'https?://|\bwww\.', re.IGNORECASE)
 
 
+SOURCE_HEADING_KEYS = ('source', 'citation', 'reference', 'bibliography',
+                       'nguồn', 'trích dẫn', 'tham chiếu')
+
+
+def source_section(sections_):
+    """Mục nguồn THẬT khi nhiều tiêu đề cùng khớp khoá: mục CÓ URL thắng mục chỉ khớp tên.
+
+    Đo vòng kiểm thử sống (2026-10-09, run `lt-d0422232cc124fe9ae12ca847decb76b`): bản kế hoạch có
+    `## 5. Nguồn dữ liệu đầu vào` (nguồn ĐẦU VÀO của hệ thống, một dòng mô tả) đứng TRƯỚC mục
+    `## Sources / Citations` với 8 dòng URL thật. `_find_with_body` trả tiêu đề khớp ĐẦU TIÊN có thân
+    bài, nên cổng chỉ đọc mục đầu, kết luận `sources-vague`, và model sửa 4 lần không qua được —
+    đúng lớp lỗi đã sửa cho mục nghiệm thu ở `plan_quality_issues` (mục sau không được bị mục trước
+    che), chỉ khác là thân bài ở đây KHÔNG rỗng nên `_find_with_body` không cứu được.
+
+    Luật: mục nào có dòng URL/`www.` là mục nguồn; không mục nào có thì giữ nguyên luật cũ
+    (`_find_with_body`) — không nới cổng, chỉ chọn đúng mục để đọc.
+    """
+    matching = [(heading, body) for heading, body in sections_
+                if any(key in heading for key in SOURCE_HEADING_KEYS)]
+    for heading, body in matching:
+        if _SOURCE_MARKER_RE.search(str(body or '')):
+            return heading, body
+    for heading, body in matching:
+        if str(body or '').strip():
+            return heading, body
+    return matching[0] if matching else None
+
+
 def source_lines(markdown: str) -> list:
     """Các dòng của mục `Sources / Citations` (bỏ dòng trống) — phần văn bản phải tự chứng minh."""
-    found = _find_with_body(sections(str(markdown or '')),
-                            ('source', 'citation', 'reference', 'bibliography',
-                             'nguồn', 'trích dẫn', 'tham chiếu'))
+    found = source_section(sections(str(markdown or '')))
     if not found:
         return []
     return [line.strip() for line in found[1].splitlines() if line.strip()]

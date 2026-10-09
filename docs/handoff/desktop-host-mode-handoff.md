@@ -105,7 +105,10 @@ nghĩa đầy đủ (gateway trỏ `/__box/*` sang `/api/agent/desktop/*`).
   rõ `EXECUTION_MODE_UNIMPLEMENTED`).
 - `BOXFOX_HOST_WORKSPACE` = thư mục làm việc của host mode (mặc định `~/BoxFox/workspace`).
 - `BOXFOX_AGENT_DATA_DIR` = hồ sơ harness (audit, luật, `desktop_lease.json`, DB phiên).
-- `BOXFOX_DESKTOP_CONTROL=0` ⇒ tắt hẳn lớp CUA dù đang ở host mode (dùng khi gỡ lỗi).
+- `BOXFOX_DESKTOP_CONTROL=0` ⇒ tắt **điều khiển** desktop dù đang ở host mode (dùng khi gỡ lỗi):
+  công cụ CUA của agent trả `CUA_UNAVAILABLE` và route lease trả 409 `DESKTOP_CONTROL_UNAVAILABLE`.
+  Panel "Màn hình máy" **vẫn chụp được** — đó là đường chỉ-đọc cho người dùng xem máy, không đi qua
+  `DesktopControl`; ai cần tắt cả đường chụp thì chặn route `POST /api/agent/machines/screen`.
 - `mode` trong health là thứ **đang chạy** (suy từ executor), không phải thứ được cấu hình.
 
 ### 4.2 Động cơ quyền
@@ -281,6 +284,24 @@ Các phát hiện dưới đây đã được đối chiếu tĩnh với source 
 | DA7 | [ ] Hoàn thiện CUA và đường người dùng giành lại quyền | Hook chưa có caller `pump_messages`, `poll_idle` chưa được gọi; input hiện trả `unverifiable`. Cắm đúng message loop/thread và kiểm trên Windows thật: Esc, chạm chuột/phím, stop UI/tray, token cũ, password/UAC/lock, xác minh hiệu ứng. Giữ CUA chưa nghiệm thu ở trạng thái rõ ràng; không tự mở quyền để test dễ hơn. |
 | DA8 | [ ] Khóa build inputs và kiểm Windows CI/local | Fetch hiện resolve dependency theo khoảng phiên bản rồi ghi lock mới; hash PyPI không đọc được chỉ cảnh báo. Build thường phải dùng phiên bản/hash đã duyệt; cập nhật lock là thao tác riêng. Sửa nhánh `t.skip()` không return ở smoke; kiểm bộ cài và bundled runtime trên Windows sạch. |
 | DA9 | [ ] Hoàn thiện tài liệu và evidence trước merge | Khôi phục plan thiếu; cập nhật nhãn code/test/acceptance, cách chọn mode thật và giới hạn. Ghi SHA commit, inputs, installer, log và expected/actual từng ca; không dùng test Linux/stub để tick nghiệm thu Windows. |
+
+#### 9.2.1 Trạng thái tại nhánh `vorflux/host-mode-web-transport`
+
+Bảng dưới ghi việc ĐÃ làm trên nhánh và mức kiểm chứng thật của từng việc. Cột "kiểm" chỉ nói tới
+máy Linux này (harness thật ở cả hai chế độ + trình duyệt); **không** mục nào ở đây là nghiệm thu
+Windows, và các ô `[ ]` ở bảng 9.2 vẫn giữ nguyên nghĩa "chưa nghiệm thu trên Windows".
+
+| Mã | Trạng thái | Commit | Kiểm được gì ở đây | Còn lại |
+|---|---|---|---|---|
+| DA1 | Đã sửa | `2927660`, `7eef070` | `session_key` = `{phiên, tool, tài nguyên, cwd, scope, mode}`; tài nguyên file lấy từ `path`/`file_path`, `web_fetch` lấy `url`; `forget_session(sid)` có người gọi khi phiên dọn dẹp. Test: duyệt tệp A ở phiên 1 không cấp tệp B hay phiên 2, deny thắng allow sau đó, quên theo phiên. | Kiểm lại bằng thao tác thật trên Windows. |
+| DA2 | Đã sửa | `2927660`, `7eef070` | `attach_host_approver` nối thẻ duyệt vào executor mức tiến trình; thẻ có 4 lựa chọn (`approve`, `approve_session`, `approve_always`, `reject`), lệnh nhóm luôn hỏi chỉ nhận `approve`/`reject`; lựa chọn → verdict có test. Vòng soát tìm ra lỗi thật: `attach_host_approver` gọi `json.dumps` khi `server.py` thiếu `import json`, nên mọi lượt duyệt ở đường mức tiến trình đổ `NameError`; nay có 4 test phủ nhánh này. | `register_pending/resolve_pending` vẫn chưa có caller production; đường chờ/tiếp tục cần đối chiếu lại khi làm workflow. |
+| DA3 | Một phần | `27be789`, `89c3312` | CSDL mới của bản host ghi `mode=host` và dựng folder mặc định ngay lần đầu; tiến trình host từ chối đổi sang `docker` (`MACHINE_MODE_UNAVAILABLE`) và trả `processMode` để giao diện vô hiệu nút. | Docker thiếu image, engine tắt, box web cũ đang chạy, cổng bận: chưa kiểm. |
+| DA4 | Một phần | `27be789`, `e523f7a`, `b3509ee` | Router máy gắn ở mọi chế độ; `HostExecutor.request()` phục vụ route plan từ folder đã chọn; dialog tạo dự án nhận đường dẫn gõ tay; chip quyền ở thanh chat đọc/ghi cùng route với tab Settings; `permission_policy()` lùi về policy của máy khi tiến trình chạy docker. | Client box/IDE/VNC/terminal còn URL/token phát triển, CSP của gateway, và counterpart `/__box/*` cho file/status: chưa kiểm với stack đóng gói. |
+| DA5 | Đã sửa | `0f41cbf` | Đường nâng cấp tự thêm lại `Connection`/`Upgrade` mà `proxyHeaders` lọc mất; test dựng upstream `net` thật, đòi handshake 101 + `sec-websocket-accept` + echo hai chiều, và đỏ khi bỏ bản vá. | Origin lạ bị từ chối, và websockify/tty-bridge thật: cần chạy tay trên Windows. |
+| DA6 | Chưa | — | — | Cần trình phương án (cơ chế mới hoặc đổi ranh giới cách ly) TRƯỚC khi code. |
+| DA7 | Một phần | `8c3dd2a` | Đích CUA **theo phiên** (một cửa sổ hoặc cả máy) đã có: quyết định thuần `cua_target.py`, ba route `GET|PUT|DELETE /machines/target`, cổng `scope`, thẻ duyệt `once`/`session`/`theo ứng dụng` (không có "luôn cho phép"), `resource_key` hẹp theo đích, tự mở ứng dụng khi đích là cả máy + folder tin cậy (chờ ≤ 10 s), viền xanh bám cửa sổ đang bị điều khiển và tự ẩn khi người dùng giữ quyền / hết 15 s / xoá đích. 87 ca mới xanh trên Linux (quyết định thuần, hợp đồng route qua `TestServer`, luồng executor với nền tảng giả). | Hook vẫn **chưa** có caller `pump_messages`, `poll_idle` chưa được gọi; chưa kiểm trên Windows: cửa sổ viền thật, `ShellExecuteW`, Esc/chạm chuột thật, xác minh hiệu ứng. Ô `[ ]` ở bảng 9.2 giữ nguyên. |
+| DA8 | Một phần | `0f41cbf` | Nhánh `t.skip()` không `return` ở `smoke.test.mjs`/`supervisor.test.mjs` đã bọc `{ t.skip(); return }`. | Khóa build inputs (phiên bản/hash đã duyệt, cập nhật lock là thao tác riêng); kiểm bộ cài trên Windows sạch. |
+| DA9 | Một phần | nhánh này | Mục này; mô tả PR có SHA, lệnh test, ảnh và video. | `docs/plan/desktop-alpha-packaging.md` vẫn thiếu và không khôi phục được (owner xác nhận không có ở máy local) — không đoán nội dung; nhãn code/test/acceptance và bộ cài Windows vẫn chờ. |
 
 ### 9.3 Ranh giới công việc tiếp tục
 

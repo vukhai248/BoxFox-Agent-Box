@@ -5,9 +5,10 @@
 - Đợt 4 của vòng 29 làm phần **offline, 0 đồng, không gọi nhà cung cấp nào**: một giàn probe provider GIẢ
   hai tầng, bốn sửa nhỏ đo được từ các lượt thật, và chính tài liệu này. Lượt research SỐNG vẫn là việc
   của đợt sau (mục `### 1.` và `### 2.`).
-- Ghi chú vị trí: tệp khuôn của các handoff trước nằm **phẳng** (`docs/handoff-router-settings.md`); tệp
-  này nằm trong thư mục mới `docs/handoff/` theo đúng yêu cầu của đợt. Người đọc sau đi tìm ở gốc `docs/`
-  thì đó là lý do.
+- Ghi chú vị trí: lúc viết, tệp khuôn của các handoff trước còn nằm **phẳng** ở gốc `docs/`; tệp này
+  nằm trong thư mục `docs/handoff/` theo đúng yêu cầu của đợt. Người đọc sau đi tìm ở gốc `docs/` thì đó
+  là lý do. *(2026-10-09: mọi handoff đã gom về `docs/handoff/`; tệp khuôn nay là
+  `docs/handoff/router-settings.md`, và điểm bắt đầu là `docs/handoff/README.md`.)*
 
 ## Trạng thái
 

@@ -191,6 +191,13 @@ def classify_failure(exc: BaseException) -> tuple[str, str]:
     if isinstance(exc, ValueError) and reason.startswith('Tool-call batch exceeds limit'):
         return 'TURN_TOOL_BATCH', 'TURN_TOOL_BATCH: the model requested more tool calls in one step than allowed'
 
+    # Lỗi mang mã hợp đồng của chính nó (`LongtaskError`, `HistoryError`) phải đọc ra ĐÚNG mã đó:
+    # `TURN_FAILED_LONGTASKERROR` nói với chủ nhà là "một lớp Python nào đó đã nổ", còn
+    # `LONGTASK_STALE`/`LONGTASK_BUDGET_TOO_SMALL` mới nói được bước tiếp theo là gì.
+    explicit = getattr(exc, 'code', None)
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip(), f'{explicit.strip()}: {reason}'
+
     code = 'TURN_FAILED_' + ''.join(ch for ch in name.upper() if ch.isalnum())[:32]
     return code, f'{code}: {name}: {reason}'
 

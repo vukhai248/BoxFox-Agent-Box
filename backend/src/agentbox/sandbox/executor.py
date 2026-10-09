@@ -115,6 +115,9 @@ def box_error_message(response):
 
 
 class SandboxExecutor:
+#: Chế độ thi hành của lớp này — `machine_router` đọc để biết một phiên Docker có box hay không.
+    execution_mode = 'docker'
+
     def __init__(self, container='agentbox-box', api_url='http://127.0.0.1:8081', api_key='boxfox-local-dev-token'):
         self.container = container
         self.api_url = api_url
@@ -136,7 +139,8 @@ class SandboxExecutor:
         except Exception:
             pass
 
-    async def request(self, path, body=None):
+    async def request(self, path, body=None, session=None):
+        # `session` chỉ có nghĩa với host mode (workspace theo phiên); box dùng chung một API.
         async with httpx.AsyncClient(timeout=40, trust_env=False) as client:
             response = await client.request('POST' if body is not None else 'GET', self.api_url + path,
                 json=body, headers={'X-BoxFox-Api-Key': self.api_key})

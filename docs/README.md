@@ -2,6 +2,8 @@
 
 Đây là điểm bắt đầu duy nhất cho tài liệu dự án. Các tài liệu mô tả **hướng thiết kế hoặc kế hoạch** không phải xác nhận rằng runtime đã triển khai và bảo vệ các cơ chế đó. Trạng thái đã xác minh, giới hạn và lộ trình nằm trong [kế hoạch sản phẩm](plan/agent-box-plan.md).
 
+> **Vừa nhận việc?** Đọc [bàn giao hiện hành](../HANDOFF.md) trước; mục lục mọi bản bàn giao (kể cả bản lịch sử) nằm ở [docs/handoff/README.md](handoff/README.md).
+
 ## Chọn đường đọc
 
 | Nếu cần… | Đọc đầu tiên | Rồi đến |
@@ -41,6 +43,18 @@
 - [Workspace Files](architecture/workspace-files.md) — API truy cập tệp phía box.
 - [Thông báo email khi task hoàn thành](architecture/email-notification.md) và [đặc tả email](plan/task-completion-email-spec.md).
 - [Design Canvas](architecture/design-canvas.md) và [tối ưu hiệu năng render](architecture/high-performance-rendering.md).
+
+### 1.4 Ứng dụng desktop (Windows)
+
+- [Cài BoxFox Desktop (Alpha) — bản nhanh](plan/desktop-alpha-quickstart.md) (tiếng Việt) và
+  [quick start, English](plan/desktop-alpha-quickstart.en.md) — dành cho người dùng cuối: kiểm SHA-256,
+  4 bước cài, chế độ `host`/`docker`, dữ liệu ở đâu, gỡ cài đặt.
+- [Cài đặt, chế độ chạy và checklist nghiệm thu 13 bước](plan/desktop-alpha-install.md) (tiếng Việt) và
+  [install, run modes and acceptance checklist, English](plan/desktop-alpha-install.en.md) — bản đầy đủ,
+  kèm cảnh báo chế độ host.
+- Bộ cài `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (Windows x64, chưa ký số) dựng từ nhánh hiện hành; cách
+  dựng lại và các điểm cần biết khi cross-build trên Linux nằm ở [`desktop/README.md`](../desktop/README.md)
+  và mục 3 của [`HANDOFF.md`](../HANDOFF.md).
 
 ## 2. Nghiên cứu và bằng chứng
 

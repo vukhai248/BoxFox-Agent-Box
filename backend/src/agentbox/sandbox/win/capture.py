@@ -399,8 +399,14 @@ def is_occluded(
 # ---------------------------------------------------------------------------
 # Liệt kê cửa sổ + danh tính cửa sổ tại một điểm
 # ---------------------------------------------------------------------------
-def list_windows(platform: WindowsPlatform | None = None) -> list[dict[str, Any]]:
-    """Cửa sổ cấp cao nhất đang thực sự vẽ được, theo Z-order từ trên xuống."""
+def list_windows(platform: WindowsPlatform | None = None, *,
+                 include_minimized: bool = False) -> list[dict[str, Any]]:
+    """Cửa sổ cấp cao nhất đang thực sự vẽ được, theo Z-order từ trên xuống.
+
+    `include_minimized=True` dùng cho đường PHÂN GIẢI đích CUA: một cửa sổ đang thu nhỏ vẫn là đích
+    hợp lệ (tầng chụp/tiêm tự đưa nó lên trước). Danh sách cho picker giữ mặc định `False` — người
+    dùng chỉ chọn được thứ họ đang nhìn thấy.
+    """
     p = platform or get_platform()
     windows: list[dict[str, Any]] = []
     for index, hwnd in enumerate(p.enum_windows()):
@@ -408,7 +414,7 @@ def list_windows(platform: WindowsPlatform | None = None) -> list[dict[str, Any]
             break
         if not p.is_window_visible(hwnd):
             continue
-        if p.is_iconic(hwnd):
+        if p.is_iconic(hwnd) and not include_minimized:
             continue
         if p.is_cloaked(hwnd):
             continue

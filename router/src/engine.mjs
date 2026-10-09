@@ -4,12 +4,12 @@ import { normalizeUsage, reportedCost } from './usage.mjs';
 import { costFromUsage } from './pricing.mjs';
 import { RING_EXHAUSTED_MESSAGE } from './keyring.mjs';
 import { logEvent } from './system-log.mjs';
-import { LARGE_OUTPUT_TOKENS } from './request-budget.mjs';
+import { LARGE_OUTPUT_TOKENS, largeInput } from './request-budget.mjs';
 
 export class RouterEngine {
   constructor({ service, deadlineMs = 90000, largeDeadlineMs = null }) { this.service = service; this.store = service.store; this.rotation = new Map(); this.keyRing = service.keyRing; this.deadlineMs = deadlineMs; this.largeDeadlineMs = largeDeadlineMs; }
   requestDeadline(body) {
-    return body.max_tokens >= LARGE_OUTPUT_TOKENS && this.largeDeadlineMs !== null
+    return this.largeDeadlineMs !== null && (body.max_tokens >= LARGE_OUTPUT_TOKENS || largeInput(body))
       ? Math.max(this.deadlineMs, this.largeDeadlineMs) : this.deadlineMs;
   }
   selection(body, key) {

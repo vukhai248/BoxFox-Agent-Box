@@ -47,6 +47,7 @@ from .windows_platform import (
     KEYEVENTF_KEYUP,
     KEYEVENTF_UNICODE,
     MOUSEEVENTF_ABSOLUTE,
+    MOUSEEVENTF_HWHEEL,
     MOUSEEVENTF_LEFTDOWN,
     MOUSEEVENTF_LEFTUP,
     MOUSEEVENTF_MIDDLEDOWN,
@@ -55,6 +56,8 @@ from .windows_platform import (
     MOUSEEVENTF_RIGHTDOWN,
     MOUSEEVENTF_RIGHTUP,
     MOUSEEVENTF_VIRTUALDESK,
+    MOUSEEVENTF_WHEEL,
+    WHEEL_DELTA,
     MOUSEINPUT,
     KEYBDINPUT,
     SECURITY_MANDATORY_MEDIUM_RID,
@@ -118,6 +121,27 @@ MOUSE_BUTTONS: dict[str, tuple[int, int]] = {
     "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
     "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
 }
+#: Hướng cuộn → (cờ sự kiện, dấu của ``mouseData``). Dấu dương của bánh xe là cuộn LÊN.
+SCROLL_AXIS: dict[str, tuple[int, int]] = {
+    "up": (MOUSEEVENTF_WHEEL, 1),
+    "down": (MOUSEEVENTF_WHEEL, -1),
+    "right": (MOUSEEVENTF_HWHEEL, 1),
+    "left": (MOUSEEVENTF_HWHEEL, -1),
+}
+#: Trần số nấc cuộn một lệnh (mỗi nấc là 120 đơn vị bánh xe).
+MAX_SCROLL_STEPS = 20
+#: Số điểm dừng mặc định của một cú kéo.
+DRAG_STEPS = 12
+#: Trần số điểm dừng (một lô sự kiện khổng lồ sẽ bị SendInput cắt).
+MAX_DRAG_STEPS = 60
+#: Khe hở sau khi NHẤN và trước khi NHẢ (giây). Ứng dụng phân biệt "bấm" với "kéo" bằng thời gian
+#: giữ: nhấn-rồi-nhả trong cùng một khung hình bị hiểu là cú bấm.
+GESTURE_SETTLE_SEC = 0.03
+#: Trần thời gian giữ chuột của `hold` (giây).
+MAX_HOLD_SEC = 5.0
+#: Trần số điểm của một nét vẽ.
+MAX_STROKE_POINTS = 400
+
 #: Số đơn vị UTF-16 tối đa trong một lô gõ (kiểm tra foreground giữa các lô).
 TEXT_CHUNK_UNITS = 64
 #: Trần độ dài văn bản một lần gõ (chống lô sự kiện khổng lồ).
@@ -519,6 +543,300 @@ def click(
         "normalized": {"x": nx, "y": ny},
         "windowId": hwnd,
         "events": len(batch),
+    }
+
+
+def _move_event(x: int, y: int, platform: WindowsPlatform) -> INPUT:
+    """Sự kiện di chuyển tuyệt đối trong hệ toạ độ desktop ảo."""
+    nx, ny = normalize_coordinates(x, y, platform=platform)
+    return mouse_input(nx, ny, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK)
+
+
+def _release_button(platform: WindowsPlatform, event: INPUT) -> None:
+    """Nhả nút chuột, nuốt lỗi. Gọi trong ``finally`` — không được che lỗi thật của thân hàm."""
+    try:
+        platform.send_input([event])
+    except Exception:  # pragma: no cover - best effort, đường thoát cuối
+        _stuck_mouse.append(event)
+
+
+def _prepare_point(
+    x: int,
+    y: int,
+    *,
+    window: Any,
+    platform: WindowsPlatform,
+    timeout: float = 0.5,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> tuple[WindowsPlatform, int, int | None, tuple[int, int] | None]:
+    """Bốn chốt chặn của một thao tác bắt đầu bằng một điểm, trả ``(p, hwnd, tiền cảnh, con trỏ)``.
+
+    Dùng chung cho ``click``, ``scroll``, ``drag``, ``hold`` và ``stroke``: cả năm đều bắt đầu bằng
+    "điểm này phải thuộc cửa sổ đích, và cửa sổ đích phải đang có tiêu điểm".
+    """
+    check_geometry_revision(source_id, geometry_revision, platform=platform)
+    hwnd = check_preconditions(window, platform=platform)
+    check_point_ownership(int(x), int(y), hwnd, platform=platform)
+    previous_foreground = platform.get_foreground_window()
+    previous_cursor = platform.get_cursor_pos()
+    ensure_foreground(hwnd, platform=platform, timeout=timeout)
+    return platform, hwnd, previous_foreground, previous_cursor
+
+
+def scroll(
+    x: int,
+    y: int,
+    *,
+    window: Any,
+    direction: str = "down",
+    steps: int = 3,
+    platform: WindowsPlatform | None = None,
+    restore: bool = True,
+    timeout: float = 0.5,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> dict[str, Any]:
+    """Cuộn con lăn tại một điểm (``MOUSEEVENTF_WHEEL``/``HWHEEL``).
+
+    Windows gửi sự kiện bánh xe cho cửa sổ **dưới con trỏ**, nên con trỏ phải được đặt vào đúng
+    cửa sổ đích trước (và đã qua chốt ``check_point_ownership``) rồi mới cuộn.
+    """
+    p = platform or get_platform()
+    if direction not in SCROLL_AXIS:
+        raise PlatformError(SOURCE_CHANGED, f"Hướng cuộn không hợp lệ: {direction!r}", direction=direction)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    try:
+        count = max(1, min(MAX_SCROLL_STEPS, int(steps)))
+    except (TypeError, ValueError):
+        count = 3
+    flag, sign = SCROLL_AXIS[direction]
+    batch = EventBatch(label="mouse_scroll")
+    batch.add(_move_event(int(x), int(y), p))
+    batch.add(mouse_input(0, 0, flag, sign * count * WHEEL_DELTA))
+    try:
+        _send_batch(p, batch)
+    finally:
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    return {
+        "route": "send_input",
+        "action": "scroll",
+        "direction": direction,
+        "steps": count,
+        "point": {"x": int(x), "y": int(y)},
+        "windowId": hwnd,
+        "events": len(batch),
+    }
+
+
+def drag(
+    x: int,
+    y: int,
+    to_x: int,
+    to_y: int,
+    *,
+    window: Any,
+    button: str = "left",
+    steps: int = DRAG_STEPS,
+    platform: WindowsPlatform | None = None,
+    restore: bool = True,
+    timeout: float = 0.5,
+    guard_end: bool = True,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> dict[str, Any]:
+    """Kéo từ điểm này sang điểm khác: nhấn, đi từng bước, nhả.
+
+    Chia thành ba lô (nhấn → đi → nhả) có khe hở thời gian thật ở giữa: ứng dụng phân biệt cú kéo
+    với cú bấm bằng thời gian giữ, mà ba lô gửi liền nhau thì không có thời gian nào cả. Nút chuột
+    được nhả trong ``finally`` và, nếu lần nhả đó cũng hỏng, được ghi vào sổ nút kẹt để
+    ``release_stuck_input`` dọn sau.
+
+    Khác bản X11 một chỗ, có chủ ý: các bước đi nằm trong MỘT lô ``SendInput`` chứ không nghỉ 10 ms
+    giữa từng bước. Ứng dụng vẽ theo ``WM_MOUSEMOVE`` vẫn nhận đủ từng điểm theo thứ tự (hàng đợi
+    thư xử lý lần lượt), nên đường đi không mất; chỉ ứng dụng TỰ ĐO con trỏ theo đồng hồ thay vì
+    nghe thư mới thấy một cú nhảy. Thêm nhịp ở đây là đổi một rủi ro chưa đo được trên máy Windows
+    thật lấy một khoản chờ chắc chắn, nên để nguyên — ghi lại để lần sau ai đụng vào thì biết.
+    """
+    p = platform or get_platform()
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
+    start_x, start_y, end_x, end_y = int(x), int(y), int(to_x), int(to_y)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        start_x, start_y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    # Chốt điểm cuối chạy SAU `_prepare_point` (bản X11 cũng vậy): cả hai thứ tự đều từ chối trước
+    # khi gửi bất cứ sự kiện nào, chỉ khác là điểm đầu được kiểm trước điểm cuối.
+    if guard_end:
+        check_point_ownership(end_x, end_y, hwnd, platform=p)
+    try:
+        count = max(1, min(MAX_DRAG_STEPS, int(steps)))
+    except (TypeError, ValueError):
+        count = DRAG_STEPS
+    down_flag, up_flag = MOUSE_BUTTONS[button]
+    down_event = mouse_input(0, 0, down_flag)
+    up_event = mouse_input(0, 0, up_flag)
+    down_batch = EventBatch(label="mouse_drag_down")
+    down_batch.add(_move_event(start_x, start_y, p))
+    down_batch.add(down_event)
+    move_batch = EventBatch(label="mouse_drag_move")
+    for index in range(1, count + 1):
+        step_x = round(start_x + (end_x - start_x) * index / count)
+        step_y = round(start_y + (end_y - start_y) * index / count)
+        move_batch.add(_move_event(step_x, step_y, p))
+    up_batch = EventBatch(label="mouse_drag_up")
+    up_batch.add(up_event)
+    released = False
+    try:
+        _send_batch(p, down_batch)
+        time.sleep(GESTURE_SETTLE_SEC)
+        _send_batch(p, move_batch)
+        time.sleep(GESTURE_SETTLE_SEC)
+        _send_batch(p, up_batch)
+        released = True
+    finally:
+        if not released:
+            _release_button(p, up_event)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    return {
+        "route": "send_input",
+        "action": "drag",
+        "button": button,
+        "from": {"x": start_x, "y": start_y},
+        "to": {"x": end_x, "y": end_y},
+        "steps": count,
+        "windowId": hwnd,
+        "events": len(down_batch) + len(move_batch) + len(up_batch),
+    }
+
+
+def hold(
+    x: int,
+    y: int,
+    *,
+    window: Any,
+    button: str = "left",
+    seconds: float = 1.0,
+    platform: WindowsPlatform | None = None,
+    restore: bool = True,
+    timeout: float = 0.5,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> dict[str, Any]:
+    """Nhấn giữ chuột tại một điểm trong ``seconds`` giây rồi nhả."""
+    p = platform or get_platform()
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        x, y, window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    try:
+        duration = max(0.05, min(MAX_HOLD_SEC, float(seconds)))
+    except (TypeError, ValueError):
+        duration = 1.0
+    down_flag, up_flag = MOUSE_BUTTONS[button]
+    up_event = mouse_input(0, 0, up_flag)
+    down_batch = EventBatch(label="mouse_hold_down")
+    down_batch.add(_move_event(int(x), int(y), p))
+    down_batch.add(mouse_input(0, 0, down_flag))
+    released = False
+    try:
+        _send_batch(p, down_batch)
+        time.sleep(duration)
+        _send_batch(p, EventBatch(label="mouse_hold_up", events=[up_event], pairs=[None]))
+        released = True
+    finally:
+        if not released:
+            _release_button(p, up_event)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    return {
+        "route": "send_input",
+        "action": "hold",
+        "button": button,
+        "point": {"x": int(x), "y": int(y)},
+        "seconds": round(duration, 3),
+        "windowId": hwnd,
+        "events": len(down_batch) + 1,
+    }
+
+
+def stroke(
+    points: Any,
+    *,
+    window: Any,
+    button: str = "left",
+    platform: WindowsPlatform | None = None,
+    restore: bool = True,
+    timeout: float = 0.5,
+    guard_end: bool = True,
+    source_id: str | None = None,
+    geometry_revision: int | None = None,
+) -> dict[str, Any]:
+    """Vẽ một nét tự do qua danh sách điểm: nhấn ở điểm đầu, đi qua từng điểm, nhả ở điểm cuối.
+
+    ``guard_end`` kiểm điểm CUỐI có thuộc cửa sổ đích không — cùng hợp đồng với ``drag``, vì nét vẽ
+    chính là một cú kéo nhiều điểm: nét cụt ra ngoài cửa sổ đích là một cú thả vào cửa sổ khác.
+
+    Cả đường đi nằm trong một lô ``SendInput`` (xem ``drag`` về khác biệt có chủ ý này với bản X11).
+    """
+    p = platform or get_platform()
+    if button not in MOUSE_BUTTONS:
+        raise PlatformError(SOURCE_CHANGED, f"Nút chuột không hợp lệ: {button!r}", button=button)
+    path: list[tuple[int, int]] = []
+    for point in points or ():
+        try:
+            px, py = point
+            path.append((int(px), int(py)))
+        except (TypeError, ValueError) as exc:
+            raise PlatformError(SOURCE_CHANGED, f"Điểm của nét vẽ không hợp lệ: {point!r}") from exc
+    if len(path) < 2:
+        raise PlatformError(SOURCE_CHANGED, "Nét vẽ cần ít nhất hai điểm.", points=len(path))
+    if len(path) > MAX_STROKE_POINTS:
+        raise PlatformError(
+            SOURCE_CHANGED,
+            f"Nét vẽ có {len(path)} điểm, quá trần {MAX_STROKE_POINTS} — chia thành nhiều nét.",
+            points=len(path),
+        )
+    p, hwnd, previous_foreground, previous_cursor = _prepare_point(
+        path[0][0], path[0][1], window=window, platform=p, timeout=timeout, source_id=source_id,
+        geometry_revision=geometry_revision)
+    if guard_end:
+        check_point_ownership(path[-1][0], path[-1][1], hwnd, platform=p)
+    down_flag, up_flag = MOUSE_BUTTONS[button]
+    up_event = mouse_input(0, 0, up_flag)
+    down_batch = EventBatch(label="mouse_stroke_down")
+    down_batch.add(_move_event(path[0][0], path[0][1], p))
+    down_batch.add(mouse_input(0, 0, down_flag))
+    move_batch = EventBatch(label="mouse_stroke_move")
+    for px, py in path[1:]:
+        move_batch.add(_move_event(px, py, p))
+    released = False
+    try:
+        _send_batch(p, down_batch)
+        time.sleep(GESTURE_SETTLE_SEC)
+        _send_batch(p, move_batch)
+        time.sleep(GESTURE_SETTLE_SEC)
+        _send_batch(p, EventBatch(label="mouse_stroke_up", events=[up_event], pairs=[None]))
+        released = True
+    finally:
+        if not released:
+            _release_button(p, up_event)
+        if restore:
+            restore_context(previous_foreground, previous_cursor, platform=p)
+    return {
+        "route": "send_input",
+        "action": "stroke",
+        "button": button,
+        "points": len(path),
+        "from": {"x": path[0][0], "y": path[0][1]},
+        "to": {"x": path[-1][0], "y": path[-1][1]},
+        "windowId": hwnd,
+        "events": len(down_batch) + len(move_batch) + 1,
     }
 
 

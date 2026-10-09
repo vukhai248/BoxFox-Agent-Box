@@ -9,6 +9,7 @@ Ba điều phải đúng, vì cả ba đều là chỗ đã hỏng thật trên 
    khối lên nhau (system prompt phình ra là ngữ cảnh chết).
 """
 import asyncio
+import pytest
 
 from agentbox.agent_core import journal, session_journal
 from agentbox.memory.session_store import SessionStore
@@ -118,6 +119,60 @@ def test_the_brief_is_rebuilt_from_the_rows_and_replaces_itself(tmp_path):
     assert session_journal.inject_brief(once, '') == 'ROLE + HƯỚNG DẪN', 'không có khối thì bỏ khối cũ'
 
 
+def _owner_request(store, sid, text, key='ingress:i1'):
+    """Ghi một yêu cầu chủ đúng đường thật: `record_ingress` → `owner_contract_revisions`."""
+    return store.history.record_ingress(sid, {'role': 'user', 'content': text, 'invocationId': key},
+                                        source_key=key, actor_identity='owner:local')
+
+
+def test_the_brief_pins_the_owner_request_before_the_journal_tail(tmp_path, monkeypatch):
+    """LT-01: yêu cầu gốc phải sống sót qua nén, độc lập với tail nhật ký (≤60 hàng)."""
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    store, sid = _store(tmp_path)
+    executor = _Executor()
+    _owner_request(store, sid, 'Giữ đúng tác vụ dài qua nén context, nhiều hội thoại và restart')
+    asyncio.run(session_journal.append(executor, store, sid, 'task', 'việc: nén ngữ cảnh'))
+
+    block = session_journal.brief(store, sid)
+    assert block.startswith(session_journal.CRITICAL_PINS_HEADER), 'ghim đứng trước khối ký ức'
+    assert '[r1 · request' in block, 'mỗi ghim nói rõ số revision và loại thay đổi'
+    assert 'Giữ đúng tác vụ dài qua nén context, nhiều hội thoại và restart' in block, 'nguyên văn'
+    assert journal.JOURNAL_BRIEF_HEADER in block, 'khối ký ức vẫn còn nguyên sau khối ghim'
+    assert block.index(session_journal.CRITICAL_PINS_HEADER) < block.index(journal.JOURNAL_BRIEF_HEADER)
+
+    once = session_journal.inject_brief('ROLE', block)
+    twice = session_journal.inject_brief(once, block)
+    assert once == twice, 'ghim dựng lại mỗi lượt: không được chồng bản thứ hai'
+    assert once.count(session_journal.CRITICAL_PINS_HEADER) == 1
+    assert once.count(journal.JOURNAL_BRIEF_HEADER) == 1
+    assert session_journal.inject_brief(once, '') == 'ROLE', 'tắt khối thì bỏ CẢ khối ghim cũ'
+
+
+def test_pins_stay_out_of_the_brief_until_the_feature_is_enabled(tmp_path, monkeypatch):
+    """Cờ tắt thì prompt không đổi: ghim chỉ có nghĩa khi tác vụ dài được dùng để chạy tiếp."""
+    monkeypatch.delenv('BOXFOX_LONGTASK_CONTINUITY', raising=False)
+    store, sid = _store(tmp_path)
+    _owner_request(store, sid, 'yêu cầu chủ')
+    assert session_journal.critical_pins_block(store, sid) == ''
+    assert session_journal.CRITICAL_PINS_HEADER not in session_journal.brief(store, sid)
+
+
+def test_a_broken_history_layer_never_breaks_the_journal_brief(tmp_path, monkeypatch):
+    """Tầng history hỏng thì mất phần ghim, KHÔNG được làm mất khối ký ức hay ném lỗi."""
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    store, sid = _store(tmp_path)
+    asyncio.run(session_journal.append(_Executor(), store, sid, 'task', 'việc: nén ngữ cảnh'))
+
+    class _Broken:
+        def critical_pins(self, sid):
+            raise RuntimeError('history layer hỏng')
+
+    store._history = _Broken()
+    block = session_journal.brief(store, sid)
+    assert session_journal.CRITICAL_PINS_HEADER not in block
+    assert 'việc: nén ngữ cảnh' in block
+
+
 """A session whose journal holds only lookup rows must not change the system prompt.
 
 `E:` (evidence, P3.4 vòng 22) and `F:` (fact) belong to no brief group on purpose: they are there
@@ -146,9 +201,35 @@ def test_rows_that_belong_to_no_group_leave_the_memory_block_empty(tmp_path):
     assert journal.brief_has_items(block) is True
 
 
-def test_a_missing_executor_skips_the_file_layer_silently(tmp_path):
-    """Harness không sandbox (test, chạy ngoài box): hàng SQLite vẫn có, không notice, không ném."""
+def test_a_missing_executor_keeps_the_row_and_reports_missing_projection(tmp_path):
+    """SQLite exists, but no executor does not prove a readable file exists."""
     store, sid = _store(tmp_path)
-    asyncio.run(session_journal.append(None, store, sid, 'step', 'bước 1 xong', status='done'))
+    answer = asyncio.run(session_journal.append(None, store, sid, 'step', 'bước 1 xong', status='done'))
     assert [row['kind'] for row in store.journal_tail(sid)] == ['step']
-    assert [event for event in store.events(sid) if event['type'] == 'notice'] == []
+    assert answer['degraded'] is True
+    notices = [event for event in store.events(sid) if event['type'] == 'notice']
+    assert len(notices) == 1
+    assert notices[0]['data']['code'] == session_journal.JOURNAL_FAILED_CODE
+    assert notices[0]['data']['projectionStored'] is False
+
+
+@pytest.mark.parametrize('answer', [
+    {'is_error': True, 'errorCode': 'HOST_TOOL_UNSUPPORTED', 'error': 'deferred'},
+    {'ok': True, 'errorCode': 'CHECKPOINT_WRITE_FAILED'},
+    {'is_error': True, 'error': 'write failed'},
+    {},
+    {'status': 'recorded'},
+    None,
+    'unexpected response',
+])
+def test_all_executor_failure_shapes_report_missing_checkpoint_file(tmp_path, answer):
+    store, sid = _store(tmp_path)
+    executor = _Executor()
+    executor.answer = answer
+    result = asyncio.run(session_journal.write_checkpoint_file(
+        executor, store, sid, [{'role': 'user', 'content': 'keep the original goal'}]))
+    assert result is None
+    notices = [event for event in store.events(sid) if event['type'] == 'notice']
+    assert len(notices) == 1
+    assert notices[0]['data']['code'] == session_journal.CHECKPOINT_FAILED_CODE
+    assert notices[0]['data']['projectionStored'] is False

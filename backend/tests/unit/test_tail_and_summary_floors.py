@@ -6,6 +6,7 @@ sống chết vì bản tóm tắt bị nhà cung cấp cắt ở trần `max_to
 """
 import asyncio
 import json
+from pathlib import Path
 
 from agentbox.agent_core import compression
 from agentbox.agent_core.compression import (COMPACTION_BANNER, ContextCompressor, estimate_tokens,
@@ -75,11 +76,15 @@ def test_the_tail_floor_never_eats_the_summary_room_on_a_tiny_window():
 
 # ------------------------------------------------- N8: sàn `max_tokens` của lượt tóm tắt
 
-def test_the_summary_floor_is_4096_and_the_cap_is_unchanged():
-    assert summary_max_tokens(10_000) == 4_096
-    assert summary_max_tokens(200_000) == 4_096, '≈205k token mới vượt sàn'
-    assert summary_max_tokens(400_000) == 8_000
-    assert summary_max_tokens(10_000_000) == compression.SUMMARY_MAX_TOKENS_CAP == 8_192
+def test_the_summary_floor_is_8192_and_the_cap_is_50000():
+    # 2026-10-09 (phiên `72106f67`): tác vụ dài chết vì sàn 4096 là trần thật của mọi transcript
+    # dưới ~205k token, mà model tóm tắt tiêu hết ngần ấy token vào phần suy luận rồi trả
+    # `content: null`. Sàn 8192, tỉ lệ 10 %, trần 50 000.
+    assert summary_max_tokens(10_000) == 8_192
+    assert summary_max_tokens(200_000) == 20_000, 'tỉ lệ 10 % đã vượt sàn ở mức này'
+    assert summary_max_tokens(400_000) == 40_000
+    assert summary_max_tokens(10_000_000) == compression.SUMMARY_MAX_TOKENS_CAP == 50_000
+    assert compression.SUMMARY_MAX_TOKENS_CAP < 64_000, 'trần `max_tokens` của router'
 
 
 def test_a_summary_truncated_at_the_provider_cap_is_accepted_and_marked():
@@ -98,7 +103,38 @@ def test_a_summary_truncated_at_the_provider_cap_is_accepted_and_marked():
     assert event['summaryTruncated'] is True
     assert result is not messages, 'bản bị cắt vẫn thay được transcript cũ'
     assert result[1]['content'].startswith(COMPACTION_BANNER[:20])
-    assert calls == [4_096], 'lượt tóm tắt nhận sàn mới'
+    assert compression.SUMMARY_MAX_TOKENS_FLOOR == 8_192
+    assert calls == [compression.SUMMARY_MAX_TOKENS_FLOOR], 'lượt tóm tắt nhận sàn mới'
+
+
+def test_usable_summary_is_the_one_judge_for_both_paths():
+    """`usable_summary` — luật duy nhất cho \"bản tóm tắt dùng được\", hỏi bởi `compact()` VÀ closure
+    `summarize` của `runtime.py`.
+
+    Ca sống 2026-10-09 (phiên `72106f67`): closure cũ chỉ nhận `completion_reason == 'complete'`,
+    nên nó ném đi bản `finishReason: length` kèm 2 898 ký tự đã viết xong; phiên mắc
+    `OUTPUT_CONTEXT_EXHAUSTED` ở bước 539/2400. Bản bị cắt mà CÓ chữ phải dùng được.
+    """
+    assert compression.usable_summary({'choices': [{'message': {'content': 'Goal: x'},
+                                                     'finish_reason': 'stop'}]})
+    assert compression.usable_summary({'choices': [{'message': {'content': 'Goal: x'},
+                                                     'finish_reason': 'length'}]}), 'bản bị cắt vẫn dùng được'
+    assert not compression.usable_summary({'choices': [{'message': {'content': ''},
+                                                        'finish_reason': 'length'}]})
+    assert not compression.usable_summary({'choices': [{'message': {'content': None},
+                                                        'finish_reason': 'stop'}]})
+    assert not compression.usable_summary({'choices': [{'message': {'content': 'Goal: x'},
+                                                        'finish_reason': 'stream_incomplete'}]})
+    assert not compression.usable_summary({'choices': [{'message': {'content': 'x',
+                                                                    'refusal': 'no'}}]})
+    assert not compression.usable_summary({})
+    assert not compression.usable_summary(None)
+    # Closure `summarize` của `runtime.py` phải hỏi CHÍNH hàm này, không tự phán bằng
+    # `completion_reason` (cổng cũ nằm ở đó và chặn trước luật Phần D).
+    runtime_source = (Path(compression.__file__).with_name('runtime.py')).read_text(encoding='utf-8')
+    closure = runtime_source.split('async def summarize(history, max_tokens=None):')[1].split('compressor =')[0]
+    assert 'usable_summary(response)' in closure
+    assert "completion_reason(response) != 'complete'" not in closure
 
 
 def test_a_truncated_summary_without_text_is_still_a_failure():

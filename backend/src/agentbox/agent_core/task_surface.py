@@ -129,6 +129,14 @@ def resume_attempt(rt, session, child_id, attempt_no, turn=0):
         capability_epoch=execution_kernel.capability_epoch(rt, session))
 
 
+def reconcile_startup(rt):
+    return service(rt).reconcile_startup()
+
+
+def finish_child(rt, child_id, status, **kwargs):
+    return service(rt).finish_child(child_id, status, **kwargs)
+
+
 def project_child(rt, child_id):
     """Ghim kết cục của một con vào attempt đang mở của nó, nếu con đó có task.
 
