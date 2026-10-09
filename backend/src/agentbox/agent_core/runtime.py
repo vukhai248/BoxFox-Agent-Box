@@ -86,7 +86,7 @@ from ..skills.commands import CommandRegistry, ROLE_SKILLS, EXTERNAL
 from ..skills.lifecycle import SkillLoader
 from ..skills.runtime_commands import RuntimeCommands
 from ..observability.system_log import system_log
-from .tool_arg_errors import parse_tool_arguments
+from .tool_arg_errors import parse_tool_arguments, replayable_messages as tool_arg_replays
 from . import tool_recovery
 # P1 — vỏ chế độ Research: hằng và cổng của mode (plan v2 §5.2).
 from .limits import (RESEARCH_MODE_ENV, RESEARCH_MODE_MODES, RESEARCH_MODE_DEFAULT_MODE,
@@ -4140,6 +4140,10 @@ class HarnessRuntime(RuntimeCommands):
                     item['content'] = item['content'].replace(orchestrator_guidance(), adaptive_surface.GUIDANCE)
         outbound = [{k: v for k, v in item.items() if k not in {'origin', 'summaryGeneration', 'sourceRanges'}}
                     for item in messages]
+        # Một lời gọi có tham số đứt (bản cũ ghi vào transcript trước khi `completion_reason`
+        # biết nhận ra nó) làm nhà cung cấp từ chối MỌI request sau bằng 400; phát lại nó
+        # thành `{}` là cách duy nhất còn lại để phiên sống tiếp (lượt chạy sống 2026-10-09).
+        outbound = tool_arg_replays(outbound)
         response = await self.longtask.model(sid, lambda: usage_surface.complete(self, sid, outbound, tools, route, **kwargs))
         if decision is not None and isinstance(response, dict):
             response = dict(response, _harnessRequest={'maxTokens': kwargs.get('max_tokens', 4096)})
