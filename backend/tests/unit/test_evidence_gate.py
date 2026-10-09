@@ -11,7 +11,10 @@ Không box, không model, không đọc tệp: mọi ca dưới đây dựng d�
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from agentbox.agent_core import evidence_gate as gate
+from agentbox.sandbox import output_refs
 
 
 def write_call(path, ok=True, step=None, artifact=None, numbers=None):
@@ -145,6 +148,42 @@ def test_manh_bang_chung_giu_ca_tep_bang_chung_lan_tep_da_doi():
     assert fragments[0]['sha256'] == 'b' * 64 and fragments[0]['bytes'] == 812
     assert fragments[1]['exitCode'] == 0
     assert fragments[1]['artifact'] == '.generated_artifacts/tools/u1.txt'
+
+
+def test_artifact_ngoai_workspace_giu_duong_tuyet_doi_mo_duoc(tmp_path):
+    """Host mode ghi artifact vào profile của app (ngoài workspace chủ): mảnh phải mang ĐÚNG đường
+    của ref, không phải bản đã bị cắt mất dấu `/` đầu.
+
+    Đây là ca `machine_router` dựng thật (`artifacts_dir=self.profile_dir / 'host-artifacts' / …`).
+    ``_clean_path`` biến `/var/tmp/…/tools/x.txt` thành `var/tmp/…/tools/x.txt` — một đường tương
+    đối không mở được, và ref có cấu trúc (F30) là nguồn đúng cho cả `artifact` lẫn `path`.
+    """
+    root = tmp_path / 'ws'
+    root.mkdir()
+    text = 'v' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
+    _, ref = output_refs.spill(root, text, target_dir=tmp_path / 'profile' / 'tools')
+    assert Path(ref['path']).is_absolute(), 'điều kiện dựng ca: ref ngoài workspace phải tuyệt đối'
+
+    fragment, = evidence({'name': 'terminal_exec', 'args': {'command': 'seq 1 5000'}, 'step': 1,
+                          'result': {'content': 'v' * 32, 'exit_code': 0,
+                                     'artifact': ref['path'], 'outputRef': ref}})
+
+    assert fragment['artifact'] == ref['path']
+    assert Path(fragment['artifact']).is_file(), 'đường trong mảnh phải mở được'
+    assert fragment['sha256'] == ref['contentHash'] and fragment['bytes'] == ref['bytes']
+
+
+def test_manh_anh_ngoai_workspace_cung_giu_duong_tuyet_doi(tmp_path):
+    """Cùng luật cho khoá `path` của mảnh tệp: đường ngoài workspace đi nguyên vào mảnh."""
+    outside = tmp_path / 'profile' / 'captures' / 'shot.png'
+    outside.parent.mkdir(parents=True)
+    outside.write_bytes(b'png')
+
+    fragment, = evidence({'name': 'computer_screen_capture', 'args': {}, 'step': 2,
+                          'result': {'ok': True, 'image': 'base64…', 'artifact': str(outside)}})
+
+    assert fragment['kind'] == 'image'
+    assert fragment['path'] == str(outside)
 
 
 def test_khoa_cua_worker_duoc_doc_dung_ten():

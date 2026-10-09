@@ -244,6 +244,21 @@ def _clean_path(value):
     return text.replace('/home/agent/workspace/', '').strip('/')
 
 
+def _artifact_path(value):
+    """Đường dẫn artifact giữ đúng dạng MỞ ĐƯỢC của nó.
+
+    ``_clean_path`` hạ mọi đường dẫn về khuôn tương đối trong workspace — đúng cho tệp trong
+    workspace (``/home/agent/workspace/a`` → ``a``). Nhưng host mode ghi artifact vào profile của
+    app, NGOÀI workspace chủ (``machine_router`` dựng ``artifacts_dir``), và ``.strip('/')`` biến
+    đường tuyệt đối ấy thành một đường tương đối không mở được. Tệp ngoài workspace chỉ có một
+    dạng mở được: chính nó (cùng luật với ``output_refs.spill``).
+    """
+    text = str(value or '').strip().strip('\'"`')
+    if text.startswith('/') and not text.startswith('/home/agent/workspace/'):
+        return text.rstrip('/') or text
+    return _clean_path(text)
+
+
 def _clean_command(value):
     """A command token as the answer wrote it, without markdown dressing or sentence punctuation.
 
@@ -453,7 +468,7 @@ def artifacts_from_calls(calls):
             if command:
                 fragments.append(dict(base, kind='command', command=command,
                                       exitCode=box_exit_code(result),
-                                      artifact=_clean_path(artifact),
+                                      artifact=_artifact_path(artifact),
                                       **({'sha256': ref['contentHash'], 'bytes': ref['bytes']}
                                          if _ref_numbers(ref) else {}),
                                       stdoutTail=box_output_tail(result)))
@@ -467,7 +482,7 @@ def artifacts_from_calls(calls):
             # `test_worker_evidence.py`), nên đường dẫn workspace phải lấy từ chính lời gọi ghi —
             # thiếu nó thì mảnh diff không bao giờ khớp tệp đã đổi, và R1 phạt oan mọi lượt ghi.
             written = _clean_path(args.get('path')) if name in WRITE_TOOLS else None
-            fragment = dict(base, kind=kind, path=_clean_path(artifact),
+            fragment = dict(base, kind=kind, path=_artifact_path(artifact),
                             changed=written or (_clean_path(numbers.get('path'))
                                                 if numbers.get('path') else None),
                             sha256=numbers.get('sha256After') or numbers.get('sha256'),

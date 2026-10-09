@@ -102,6 +102,81 @@ def test_the_box_worker_has_the_same_ref_and_the_same_cut_rule():
         'x' * output_refs.SPILL_PREVIEW_CHARS + output_refs.SPILL_MARKER
 
 
+def test_the_box_worker_keeps_the_same_spill_numbers():
+    """Worker là script trong box: nó không import được `output_refs`, nên phải có bài ghim.
+
+    Số lệch nhau giữa hai bên là kiểu lỗi im lặng: bản host cắt ở 20000 còn box cắt ở 15000 thì
+    không ai đỏ, chỉ có model nhận hai độ dài khác nhau tuỳ chế độ chạy.
+    """
+    source = Path(worker.__file__).read_text(encoding='utf-8')
+
+    assert 'SPILL_THRESHOLD_CHARS = %d' % output_refs.SPILL_THRESHOLD_CHARS in source
+    assert 'SPILL_PREVIEW_CHARS = %d' % output_refs.SPILL_PREVIEW_CHARS in source
+    assert "SPILL_DIR = '%s'" % output_refs.SPILL_DIR in source
+    assert 'SPILL_MARKER = %r' % output_refs.SPILL_MARKER in source
+    assert 'SPILL_FAILED_MARKER = %r' % output_refs.SPILL_FAILED_MARKER in source
+    assert worker.SPILL_THRESHOLD_CHARS == output_refs.SPILL_THRESHOLD_CHARS
+    assert worker.SPILL_PREVIEW_CHARS == output_refs.SPILL_PREVIEW_CHARS
+    assert worker.SPILL_DIR == output_refs.SPILL_DIR
+
+
+def test_the_host_executor_has_no_second_copy_of_the_numbers():
+    source = Path(host.__file__).read_text(encoding='utf-8')
+    assert 'output_refs.spill(' in source, 'đường spill của host phải đi qua nguồn duy nhất'
+    assert 'READ_TRUNCATE_ARTIFACT_CHARS' not in source and 'OUTPUT_PREVIEW_CHARS' not in source, \
+        'tên cũ không được quay lại thành bản số thứ hai'
+
+
+def test_the_acceptance_bench_uses_the_same_two_numbers():
+    """Sàn đo (`scripts/eval/work_acceptance_bench.py`) phải cắt đúng như box thật.
+
+    Sàn là thứ quyết định điểm của cả một vòng đo, nên nếu nó lệch khỏi `output_refs` thì bảng điểm
+    vẫn xanh trong khi box thật cắt ở chỗ khác — kiểu lệch không ai thấy.
+    """
+    eval_dir = Path(__file__).resolve().parents[3] / 'scripts' / 'eval'
+    sys.path.insert(0, str(eval_dir))
+    try:
+        import work_acceptance_bench as bench
+    finally:
+        sys.path.pop(0)
+
+    assert bench.WorkspaceExecutor.TERMINAL_SPILL_CHARS == output_refs.SPILL_THRESHOLD_CHARS
+    assert bench.WorkspaceExecutor.TERMINAL_CONTENT_CHARS == output_refs.SPILL_PREVIEW_CHARS
+
+
+def test_the_evidence_gate_prefers_the_structured_ref(tmp_path):
+    text = 'w' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
+    _, ref = output_refs.spill(tmp_path, text)
+    call = {'name': 'terminal_exec', 'args': {'command': 'ls -la'}, 'step': 1,
+            # Cả hai cùng có: ref có cấu trúc phải thắng đường dẫn trần.
+            'result': {'content': 'ok', 'exit_code': 0, 'artifact': 'duong/dan/tran.txt',
+                       'outputRef': ref}}
+
+    fragment, = gate.artifacts_from_calls([call])
+
+    assert fragment['artifact'] == ref['path']
+    assert fragment['sha256'] == ref['contentHash'] and fragment['bytes'] == ref['bytes']
+
+
+def test_a_target_outside_the_root_keeps_an_openable_absolute_path(tmp_path):
+    """Host mode ghi artifact vào profile của app, ngoài workspace chủ: đường dẫn phải mở được.
+
+    Đây là ca `machine_router` dựng thật (`artifacts_dir=self.profile_dir / 'host-artifacts' / ...`).
+    Trả đường dẫn tương đối ở đây là trả một đường không mở được, và tệp thì rơi vào thư mục dự án
+    của chủ — cả hai đều sai.
+    """
+    root = tmp_path / 'ws'
+    root.mkdir()
+    outside = tmp_path / 'profile' / 'tools'
+    text = 'v' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
+
+    _, ref = output_refs.spill(root, text, target_dir=outside)
+
+    assert Path(ref['path']).is_absolute() and Path(ref['path']).is_file()
+    assert Path(ref['path']).parent == outside
+    assert list(root.iterdir()) == [], 'không được ghi vào thư mục dự án của chủ'
+
+
 def test_the_box_worker_degrades_a_failed_write_like_the_host_does(tmp_path, monkeypatch):
     """Box ghi hỏng thì vẫn phải trả đầu ra: trước đây `OSError` nổi lên thành 'Sandbox unavailable'.
 

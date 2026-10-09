@@ -214,6 +214,58 @@ def test_a_broken_projection_does_not_claim_the_raw_copy_is_lost(tmp_path, monke
     store.db.close()
 
 
+def test_a_projection_that_returns_degraded_still_leaves_a_notice(tmp_path, monkeypatch):
+    """`export_compaction` bắt lỗi rồi TRẢ dict hỏng chứ không ném: bỏ qua nhánh trả về là nén hỏng im.
+
+    Ca này đúng thứ tự thật: bản thô đã commit (`state=committed`), bản chiếu hỏng, lượt nén vẫn
+    trả về — nhưng phải có notice nói vì sao tệp đọc được không có. Bản trước chỉ bắt `except` nên
+    ca này đi qua im lặng (đợt soát 2026-10-09, L1d-A).
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def degraded(*args, **kwargs):
+        return {'canonicalStored': True, 'projectionStored': False, 'skipped': None,
+                'errorCode': 'CHECKPOINT_FILE_FAILED', 'projectionError': 'IsADirectoryError: …'}
+
+    monkeypatch.setattr(history_surface, 'export_projection', degraded)
+    event = {'kind': 'compression'}
+    context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+    record = event['historyRecord']
+
+    assert record['recorded'] is True and record['checkpointId'], 'bản thô vẫn phải ở trong kho'
+    assert record['projection']['projectionStored'] is False
+    notice = [e for e in store.events(sid) if e['type'] == 'notice'
+              and e['data'].get('code') == history_surface.PROJECTION_DEGRADED_CODE]
+    assert notice, 'hỏng bản chiếu thì không được im lặng'
+    assert 'CHECKPOINT_FILE_FAILED' in notice[0]['data']['message'], notice[0]['data']['message']
+    assert 'IsADirectoryError' in notice[0]['data']['message'], 'mã là mã, chuyện đã xảy ra vẫn phải có'
+    codes = [e['data'].get('code') for e in store.events(sid) if e['type'] == 'notice']
+    assert history_surface.COMPACTION_DEGRADED_CODE not in codes, 'bản thô KHÔNG hỏng, đừng nói là hỏng'
+    store.db.close()
+
+
+def test_a_projection_that_returns_a_junk_code_still_gets_a_stable_one(tmp_path, monkeypatch):
+    """`errorCode` lạ (không phải mã) thì notice phải mang mã ổn định, không mang chuỗi của nhà sản xuất."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def degraded(*args, **kwargs):
+        return {'canonicalStored': True, 'projectionStored': False, 'skipped': None,
+                'errorCode': 'vỡ ở đâu đó', 'projectionError': 'vỡ ở đâu đó'}
+
+    monkeypatch.setattr(history_surface, 'export_projection', degraded)
+    event = {'kind': 'compression'}
+    context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+
+    notice = [e for e in store.events(sid) if e['type'] == 'notice'
+              and e['data'].get('code') == history_surface.PROJECTION_DEGRADED_CODE]
+    assert notice and '(PROJECTION_FAILED;' in notice[0]['data']['message'], notice
+    store.db.close()
+
+
 def test_a_failed_journal_export_does_not_overwrite_a_stored_projection(tmp_path, monkeypatch):
     """Hai tệp là hai lần ghi: `journal.md` hỏng không được báo thành bản nén hỏng.
 

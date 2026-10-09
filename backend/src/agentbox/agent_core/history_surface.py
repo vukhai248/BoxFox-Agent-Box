@@ -600,6 +600,20 @@ def record_compaction(rt, sid, saved, compacted, event=None):
             f'workspace thì không ghi xong ({code}; {_failure_detail(exc)})', op='compaction_projection')
         projection = {'canonicalStored': True, 'projectionStored': False,
                       'projectionError': code, 'skipped': None}
+    else:
+        # `HistoryProjection.export_compaction` tự bắt `(OSError, ValueError)` rồi **trả** dict
+        # `projectionStored: false` chứ không ném, nên chỉ có `except` là bỏ lọt đúng ca hỏng thật:
+        # lượt nén ghi hỏng bản chiếu mà không ai nói gì (L1d-A của đợt soát 2026-10-09 bắt được).
+        # Vì thế phải soi lại dict trả về. `skipped` (workspace container) vẫn im lặng: bỏ qua là
+        # chủ ý, không phải hỏng.
+        if projection.get('projectionStored') is False and not projection.get('skipped'):
+            raw_code = str(projection.get('errorCode') or '')
+            code = raw_code if re.fullmatch(r'[A-Z][A-Z0-9_]{2,}', raw_code) else 'PROJECTION_FAILED'
+            detail = str(projection.get('projectionError') or raw_code or code)[:160]
+            session_journal.note_gap(
+                rt.store, sid, PROJECTION_DEGRADED_CODE,
+                f'{PROJECTION_DEGRADED_CODE}: bản thô của lượt nén đã vào kho, nhưng bản đọc được trong '
+                f'workspace thì không ghi xong ({code}; {detail})', op='compaction_projection')
     journal = None
     if not projection.get('skipped'):
         try:
