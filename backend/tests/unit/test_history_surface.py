@@ -811,6 +811,31 @@ def test_owner_acceptance_verifies_canonical_refs_only(tmp_path):
     store.close()
 
 
+def test_owner_acceptance_accepts_a_check_the_work_graph_marked_pass(tmp_path):
+    """Chủ nghiệm thu phải nhận đúng từ vựng trạng thái của work graph.
+
+    `work_checks` ghi `pass` khi một vòng kiểm đạt (`work_checks.py:249,267`,
+    `work_graph.py:2209` dịch `pass -> verdict ok`), còn `_verify_evidence` chỉ nhận `ok|passed`.
+    Đo sống 2026-10-09 (phiên `72106f67490847a9be5b179a5cc92a6c`): `accept` với ref
+    `workCheckId` của chính vòng kiểm đã đạt trả `LONGTASK_ACCEPTANCE_REQUIRED`, buộc chủ phải
+    nghiệm thu bằng một `workArtifactId` yếu hơn.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    from agentbox.agent_core import work_graph
+    work_graph.service(runtime)
+    doc = json.dumps({'nodeId': 'B1', 'stage': 'execute', 'kind': 'tests', 'status': 'pass',
+                      'verdict': 'ok', 'rounds': 1})
+    runtime.store.db.execute("INSERT INTO work_runs VALUES('w1',?,'executed',3,'{}',0,0)", (sid,))
+    runtime.store.db.execute("INSERT INTO work_checks VALUES('c1','w1','i1','h1',?)", (doc,))
+    runtime.store.db.commit()
+    acceptance = history_surface._owner_acceptance(runtime)
+
+    ok = acceptance(sid, {'runId': 'lt'}, {'evidenceRefs': [{'workCheckId': 'c1'}]})
+    assert ok['acceptanceSatisfied'] is True, ok['failedChecks']
+    store.close()
+
+
 def test_longtask_configure_needs_a_project_and_pins_the_contract(tmp_path):
     store, runtime, chat = build(tmp_path)
     try:

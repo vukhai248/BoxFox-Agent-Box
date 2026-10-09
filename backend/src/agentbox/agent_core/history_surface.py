@@ -330,7 +330,14 @@ def _verify_evidence(rt, sid, ref):
     if ref.get('workCheckId') and 'work_checks' in names and 'work_runs' in names:
         row = db.execute('SELECT c.doc,w.session_id FROM work_checks c JOIN work_runs w ON w.id=c.run_id '
                          'WHERE c.id=?', (str(ref['workCheckId']),)).fetchone()
-        if not row or row['session_id'] not in ids or json.loads(row['doc']).get('status') not in ('ok', 'passed'):
+        # `pass` là từ vựng của work graph cho một vòng kiểm đạt (`work_checks.py:249,267`;
+        # `work_graph.py:2209` dịch `pass -> verdict ok`). Thiếu nó thì KHÔNG hàng `work_checks` nào
+        # qua được cổng nghiệm thu của chủ: đo sống 2026-10-09 (phiên
+        # `72106f67490847a9be5b179a5cc92a6c`, run `lt-d0422232cc124fe9ae12ca847decb76b`), `accept`
+        # với `workCheckId` của chính vòng `tests` đã đạt trả `LONGTASK_ACCEPTANCE_REQUIRED`, buộc
+        # chủ phải lùi về một `workArtifactId` yếu hơn (chỉ nói "file tồn tại", không nói "test đạt").
+        if (not row or row['session_id'] not in ids
+                or json.loads(row['doc']).get('status') not in ('ok', 'passed', 'pass')):
             raise HistoryError('LONGTASK_ACCEPTANCE_REQUIRED')
         return {'kind': 'check', 'id': ref['workCheckId']}
     if ref.get('workArtifactId') and 'work_artifacts' in names:
