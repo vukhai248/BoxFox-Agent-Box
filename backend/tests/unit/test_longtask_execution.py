@@ -848,6 +848,31 @@ def test_a_pending_budget_card_keeps_the_run_answerable(tmp_path):
     assert rt.pending_decisions(sid)['decisions'] == []
 
 
+def test_extending_the_budget_clears_the_reason_that_was_blocking(tmp_path):
+    """`extend` phải xoá LÝ DO đang chặn: run đã `ready` mà còn giữ `LONGTASK_BUDGET_EXHAUSTED` là rào ma.
+
+    Chủ `extend` xong vẫn đọc ra "hết ngân sách" ở mọi cổng và ở giao diện, trong khi trạng thái
+    thật là `ready` (đo sống 2026-10-09, phiên `72106f67490847a9be5b179a5cc92a6c`: `extend` trả
+    `state: ready` kèm `blockedReason: LONGTASK_BUDGET_EXHAUSTED`). `reject` thì ngược lại — run
+    dừng thật vì đúng lý do đó nên lý do phải ở lại.
+    """
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'budget_exhausted', 'LONGTASK_BUDGET_EXHAUSTED')
+    run = rt.longtask.store.get(sid)
+    did = rt.longtask.budget_card(run)
+    rt.resolve_decision(sid, did, 'extend', invocation_id='extend-1')
+    after = rt.longtask.store.get(sid)
+    assert after['state'] == 'ready' and after['blockedReason'] is None
+
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'budget_exhausted', 'LONGTASK_BUDGET_EXHAUSTED')
+    run = rt.longtask.store.get(sid)
+    did = rt.longtask.budget_card(run)
+    rt.resolve_decision(sid, did, 'reject', invocation_id='reject-1')
+    rejected = rt.longtask.store.get(sid)
+    assert rejected['state'] == 'paused' and rejected['blockedReason'] == 'LONGTASK_BUDGET_EXHAUSTED'
+
+
 def test_cancelling_a_run_with_a_pending_budget_card_closes_the_card(tmp_path):
     """Chủ huỷ chạy khi thẻ ngân sách còn treo: run đóng, thẻ đóng theo, không 409 sau khi đã huỷ."""
     rt, sid = runtime(tmp_path)

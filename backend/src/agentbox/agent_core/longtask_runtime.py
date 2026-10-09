@@ -266,14 +266,23 @@ class LongtaskRuntime:
             if current['state'] not in ('budget_exhausted', 'needs_user'):
                 raise LongtaskError('DECISION_STALE', 'budget revision changed')
             state = 'paused'
+            # `blocked_reason` là LÝ DO đang chặn, không phải lịch sử (cùng luật với `resume`):
+            # `extend` đưa run về `ready` thì lý do cũ phải biến mất, nếu không giao diện và mọi
+            # cổng vẫn đọc ra "hết ngân sách" trong khi run đã chạy tiếp (đo sống 2026-10-09,
+            # phiên `72106f67490847a9be5b179a5cc92a6c`: `extend` trả `state: ready` kèm
+            # `blockedReason: LONGTASK_BUDGET_EXHAUSTED`). `reject` giữ nguyên lý do — run dừng
+            # thật vì đúng lý do đó.
+            reason = current['blockedReason']
             if choice == 'extend':
                 delta = option['budgetDelta']  # stored backend option, never free text/model payload.
                 b['totalStepLimit'] += delta['steps']
                 b['activeTimeLimitMs'] += delta['activeTimeMs']
                 b['revision'] += 1
                 state = 'ready'
-            db.execute('UPDATE longtask_runs SET budget_json=?,state=?,revision=revision+1,updated=? WHERE run_id=?',
-                       (encode(b), state, time.time(), run['runId']))
+                reason = None
+            db.execute('UPDATE longtask_runs SET budget_json=?,state=?,blocked_reason=?,'
+                       'revision=revision+1,updated=? WHERE run_id=?',
+                       (encode(b), state, reason, time.time(), run['runId']))
         return apply
 
     async def model(self, sid, callback):
