@@ -142,6 +142,14 @@ class LongtaskRuntime:
             # mới rồi chạy tiếp. Đổi dự án/quyền/không gian (các khoá phạm vi) vẫn là stale thật —
             # và tự chạy tiếp (`autonomous`) thì không bao giờ re-base sau correction.
             run = self.store.repin(run, current)
+            if snapshot:
+                # Bản ghim lại này rơi vào GIỮA lượt: `start()` nhận lượt trước rồi mới ghi ingress
+                # của chủ, nên canonical tiến một revision ngay sau khi ảnh chụp được lấy. Ảnh chụp
+                # phải đi theo bản ghim mới, nếu không cổng kế tiếp (vòng công cụ) so ảnh chụp cũ với
+                # run vừa ghim lại và ném `LONGTASK_STALE` — lượt chết trước công cụ đầu tiên, còn
+                # việc ghim lại thành vô nghĩa. Dừng/huỷ/quyền bị thu (`stopEpoch`/`capabilityEpoch`/
+                # `leaseEpoch` khác) vẫn chặn như cũ vì các nhánh đó ném TRƯỚC khi tới đây.
+                self.snapshots[sid] = run
         if self.rt.decision_store.page(run['sessionId'])['decisions']:
             raise LongtaskError('LONGTASK_PENDING_DECISION', 'owner decision unresolved')
         # Descendants included: a fresh callId must not dodge ambiguous old mutation.

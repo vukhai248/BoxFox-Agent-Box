@@ -333,6 +333,55 @@ def test_mutating_tool_runs_inside_a_pinned_run(tmp_path):
     assert starts[0]['replay'] == 'unsafe' and rt.longtask.root_run(sid) is not None
 
 
+def test_owner_turn_rebases_mid_turn_without_going_stale(tmp_path):
+    """F02 — `start()` NHẬN lượt trước rồi mới ghi ingress của chủ, nên canonical tiến một
+    revision ngay TRONG lượt: cổng model ghim lại run vào yêu cầu mới (đúng chủ ý), nhưng ảnh
+    chụp của lượt vẫn ở revision cũ nên cổng công cụ kế tiếp đọc ra `LONGTASK_STALE` và giết
+    lượt trước khi công cụ đầu tiên kịp chạy."""
+    class TurnExecutor(FixtureExecutor):
+        async def execute(self, name, args, sid, **_identity):
+            self.calls.append((name, args, sid))
+            return {'content': 'observed fixture result'}
+
+    store = SessionStore(tmp_path / 'sessions.db')
+    rt = HarnessRuntime(store, TurnExecutor(), FixtureModel([
+        answer('chạy lệnh', [call('terminal_exec', {'command': 'echo hi'}, 'call-1')]),
+        answer('xong'), answer('xong'), answer('xong')]))
+    sid = rt.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})['id']
+    state = {'revision': 1}
+    hashes = {1: 'canonical-hash', 2: 'canonical-hash-2'}
+
+    def canonical():
+        rev = state['revision']
+        return {'projectId': 'project-1', 'goalRevision': rev, 'contractRevision': rev,
+                'contractHash': hashes[rev], 'ownerEventRef': {'sessionId': sid, 'seq': rev},
+                'capabilityEpoch': 1}
+
+    def authority(_sid, run):
+        # Chủ gửi yêu cầu mới NGAY SAU khi lượt được nhận (lease đã giữ): canonical tiến lên
+        # revision 2 giữa lượt, đúng thứ tự thật của harness.
+        if run and run['leaseEpoch'] == 1 and state['revision'] == 1:
+            state['revision'] = 2
+        return canonical()
+
+    configure(rt, sid, budget={'totalStepLimit': 50, 'activeTimeLimitMs': 20000000})
+    rt.longtask.binding = lambda _sid, _body: canonical()
+    rt.longtask.authority = authority
+    rt.longtask.completion = lambda _sid, _run: {'state': 'runnable'}
+
+    async def run():
+        await rt.submit(sid, 'chạy một lệnh')
+        await rt.tasks[sid]
+
+    asyncio.run(run())
+    starts = [e['data']['name'] for e in store.events(sid) if e['type'] == 'tool_start']
+    assert starts == ['terminal_exec'], starts
+    ends = [e['data'] for e in store.events(sid) if e['type'] == 'tool_end']
+    assert ends and not ends[0]['result'].get('is_error'), ends
+    after = rt.longtask.root_run(sid)
+    assert after['state'] == 'ready' and after['goalRevision'] == 2
+
+
 def test_provider_metadata_stripped_without_mutating_stored_message(tmp_path):
     rt, sid = runtime(tmp_path)
     messages = [{'role': 'assistant', 'content': 'Summary', 'origin': 'synthetic_handoff',
