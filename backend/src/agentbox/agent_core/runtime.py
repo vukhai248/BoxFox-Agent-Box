@@ -58,6 +58,7 @@ from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHA
                      # H11 — quản lý con/subagent: trần đọc lặp, nhắc hết hạn chờ, gọi lại con.
                      PEER_READ_IDLE_MAX, PEER_READ_CAPPED_CODE,
                      PEER_WAIT_EXPIRED_MAX_PER_TURN, PEER_WAIT_CAPPED_CODE, PEER_WAIT_NUDGE_CODE,
+                     PEER_TARGET_UNRESOLVED_CODE,
                      CHILD_RESUME_MAX_PER_TURN, CHILD_RESUME_NOTE_MAX_CHARS,
                      CHILD_RESUME_NOTE_REQUIRED_CODE, CHILD_RESUME_NOT_CUT_CODE,
                      CHILD_RESUME_CAPPED_CODE, CHILD_RESUME_UNKNOWN_CODE, CHILD_RESUME_FORBIDDEN_CODE,
@@ -5567,6 +5568,15 @@ class HarnessRuntime(RuntimeCommands):
                 row = pool.get(address[5:].strip())
                 (found if row else missing).append(row or address)
                 continue
+            # Một SESSION ID TRẦN của bạn mình là địa chỉ hợp lệ: mọi công cụ bạn khác (`peer_read`,
+            # `child_resume`, `cancel_child`) đều nhận id trần, nên đòi đúng tiền tố `peer:` ở đây là
+            # một cái bẫy im lặng — id không khớp tên vai nào nên rơi vào `missing`, và chỗ gọi đọc
+            # `pending_target` thành "bạn chưa được sinh". Đo sống 09/10/2026: 100 bước tiêu vô ích.
+            row = pool.get(address)
+            if row is not None:
+                if row not in found:
+                    found.append(row)
+                continue
             role = address[5:].strip() if address.startswith('role:') else address
             hits = [row for row in pool.values() if row['role'] == role]
             if hits:
@@ -5742,8 +5752,18 @@ class HarnessRuntime(RuntimeCommands):
                     break
         if not found:
             system_log.write('peer.wait.missing', session_id=sid, missing=missing)
+            # `pending` một mình không phân biệt được "bạn chậm" với "địa chỉ sai dạng" (BUG đo sống
+            # 09/10/2026): nói thẳng địa chỉ nào không phân giải được, và đúng ba dạng hợp lệ.
+            self.store.emit(sid, 'notice', {
+                'code': PEER_TARGET_UNRESOLVED_CODE,
+                'message': (f'{PEER_TARGET_UNRESOLVED_CODE}: không phân giải được địa chỉ '
+                            f'{", ".join(str(item) for item in missing)}. `targets` chỉ nhận '
+                            '`peer:<sessionId>`, `role:<role>` hoặc tên vai — một session id trần '
+                            'bị coi là TÊN VAI. Đừng chờ tiếp địa chỉ này.'),
+                'missing': [str(item) for item in missing]})
             return {'status': 'pending_target', 'mode': mode, 'targets': [], 'done': [],
-                    'pending': missing, 'waitedMs': 0, 'extensionExhausted': False}
+                    'pending': missing, 'unresolved': list(missing), 'waitedMs': 0,
+                    'extensionExhausted': False}
         turn = self.active_turn.get(sid)
         wall_started = time.time()
         self.store.emit(sid, 'peer_wait', {

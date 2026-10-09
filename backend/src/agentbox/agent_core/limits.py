@@ -187,6 +187,11 @@ PEER_READ_CAPPED_CODE = 'PEER_READ_CAPPED'
 #: Số lần một lượt được phép chờ rồi hết hạn (`status='timeout'`) trước khi bị buộc quyết định.
 PEER_WAIT_EXPIRED_MAX_PER_TURN = 3
 PEER_WAIT_CAPPED_CODE = 'PEER_WAIT_CAPPED'
+# Đo sống 09/10/2026 (lượt 27 của vòng kiểm đầu-cuối tác vụ dài): cha truyền một session id TRẦN
+# vào `targets`; nó bị coi là tên vai, không phân giải được, và cha đọc `pending_target` +
+# `waitedMs: 0` thành "bạn còn đang chạy" — 20 vòng lặp, hơn 100 bước tiêu vô ích. `pending` thôi
+# không nói được "địa chỉ này KHÔNG phân giải được", nên nhánh đó phát một notice nói thẳng.
+PEER_TARGET_UNRESOLVED_CODE = 'PEER_TARGET_UNRESOLVED'
 #: Câu nhắc gắn vào kết quả chờ hết hạn — đây là "nhắc khi hết hạn chờ" của Vorflux.
 PEER_WAIT_NUDGE_CODE = 'PEER_WAIT_EXPIRED'
 #: Số lần cha được gọi lại CÙNG một con trong CÙNG một lượt (mỗi lần mở một attempt mới).
