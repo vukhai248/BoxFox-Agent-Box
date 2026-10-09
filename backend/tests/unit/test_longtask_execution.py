@@ -29,9 +29,11 @@ def runtime(tmp_path):
     return rt, sid
 
 
-def binding(sid):
-    return {'projectId': 'project-1', 'goalRevision': 1, 'contractRevision': 1, 'contractHash': 'canonical-hash',
-            'ownerEventRef': {'sessionId': sid, 'seq': 1}, 'capabilityEpoch': 1}
+def binding(sid, **changes):
+    value = {'projectId': 'project-1', 'goalRevision': 1, 'contractRevision': 1, 'contractHash': 'canonical-hash',
+             'ownerEventRef': {'sessionId': sid, 'seq': 1}, 'capabilityEpoch': 1}
+    value.update(changes)
+    return value
 
 
 def configure(rt, sid, **changes):
@@ -520,6 +522,45 @@ def test_owner_inspection_is_exact_revision_bound_and_invalidates_on_goal_change
     # Receipts survive: the unsafe tool_end is still there for the owner to read.
     assert rt.store.db.execute("SELECT COUNT(*) FROM events WHERE session_id=? AND kind='tool_end'",
                                (sid,)).fetchone()[0] == 1
+
+
+def test_owner_turn_repin_carries_the_inspection_forward(tmp_path):
+    """Chủ gửi chỉ thị mới NGAY TRONG lượt ⇒ canonical tiến revision và run ghim lại giữa lượt.
+
+    Lời `inspect` đã ghi phải sống qua lần ghim lại đó, nếu không rào
+    `LONGTASK_UNSAFE_INTERRUPTION` tự đóng lại ở bước đầu của chính lượt nó vừa mở — chủ `inspect`
+    xong vẫn chết, và mỗi lần thử lại chỉ tiến thêm một revision rồi chết tiếp. Đo sống 2026-10-09,
+    phiên `72106f67490847a9be5b179a5cc92a6c`: `inspect` trả `ready`/`blockedReason: null`, rồi hai
+    lượt `t20b`/`t20c` chết ở bước 1 với `toolCalls: 0`.
+    """
+    rt, sid = runtime(tmp_path)
+    run = configure(rt, sid)
+    seq = unsafe_seq(rt, sid)
+    result = asyncio.run(rt.longtask_action(sid, {'action': 'inspect', 'confirm': True, 'runId': run['runId'],
+                                                  'receiptRefs': [{'sessionId': sid, 'seq': seq}],
+                                                  'invocationId': 'inspect-1',
+                                                  'expectedRevision': run['revision']}))
+    assert result['state'] == 'ready' and result['blockedReason'] is None
+    before = rt.longtask.store.inspection_binding(rt.longtask.store.get(sid))
+    # Lượt kế của chủ: `start()` nhận lượt trước, ingress của chủ ghi sau, nên canonical tiến một
+    # revision trong khi ảnh chụp cổng công cụ còn là bản cũ.
+    snapshot = rt.longtask.store.get(sid)
+    rt.longtask.authority = lambda _sid, _run: binding(sid, goalRevision=2, contractRevision=2, contractHash='next-hash')
+    run = rt.longtask.check(sid, snapshot)
+    assert run['goalRevision'] == 2
+    after = rt.longtask.store.inspection_binding(run)
+    assert after != before
+    assert rt.longtask.store.inspected(run) == [{'sessionId': sid, 'seq': seq}]
+    assert rt.store.db.execute('SELECT binding_hash FROM longtask_inspections WHERE run_id=?',
+                               (run['runId'],)).fetchone()[0] == after
+    # Cổng công cụ ngay sau đó vẫn mở: lượt của chủ không bị chính lần ghim lại của nó giết.
+    assert rt.longtask.check(sid, run) is not None
+    # Quyền/nơi chạy đổi thì vẫn là stale thật — không có miễn trừ đứng.
+    rt.longtask.authority = lambda _sid, _run: binding(sid, goalRevision=2, contractRevision=2,
+                                                       contractHash='next-hash', capabilityEpoch=2)
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid, rt.longtask.store.get(sid))
+    assert exc.value.code == 'LONGTASK_STALE'
 
 
 def test_owner_acceptance_requires_scoped_canonical_projection_not_a_model_promise(tmp_path):

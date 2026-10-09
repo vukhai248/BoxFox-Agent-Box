@@ -150,6 +150,17 @@ class LongtaskStore:
                             (binding['goalRevision'], binding['contractHash'], encode(binding), resume_policy,
                              state, None if state == 'ready' else run['blockedReason'], time.time(), run['runId']))
             result = self.get(run_id=run['runId'])
+            # Lời `inspect` đã ghi ghim BIÊN NHẬN bị cắt, không ghim bản hợp đồng. Chỉ thị mới của
+            # chủ tiến goal/contract revision NGAY TRONG lượt của chính chủ (`start()` nhận lượt
+            # trước, ingress của chủ ghi sau), nên nếu lời xác nhận vẫn khoá theo vân tay cũ thì
+            # cổng `LONGTASK_UNSAFE_INTERRUPTION` mở ra rồi tự đóng lại ở bước đầu của chính lượt
+            # đó — rào không còn đường mở (đo sống 2026-10-09, phiên `72106f67490847a9be5b179a5cc92a6c`:
+            # `inspect` trả `ready`/`blockedReason: null`, rồi lượt `t20b` và `t20c` chết ở bước 1
+            # với `toolCalls: 0` và `deadlineUsedMs` 386/55 ms). Quyền/nơi chạy đổi vẫn là stale
+            # thật vì các khoá phạm vi (`capabilityEpoch`, dự án, allocation, work/plan run) bị chặn
+            # TRƯỚC khi tới đây, còn vân tay vẫn giữ `capabilityEpoch`.
+            self.db.execute('UPDATE longtask_inspections SET binding_hash=? WHERE run_id=?',
+                            (self.inspection_binding(result), run['runId']))
             event(self.db, run['sessionId'], 'longtask', result)
             return result
 
