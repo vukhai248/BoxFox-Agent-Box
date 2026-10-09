@@ -4,13 +4,16 @@ import copy
 import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import threading
 import time
 
 import pytest
+from aiohttp.test_utils import TestServer
 
+from agentbox.api.server import create_app
 from agentbox.agent_core.decision_store import DecisionStore, DecisionStoreError
 from agentbox.agent_core import tool_recovery
 from agentbox.agent_core.longtask_runtime import ProfileWriterGuard
@@ -752,6 +755,68 @@ def test_manual_turn_allowed_while_waiting_and_finish_never_raises(tmp_path, mon
     with pytest.raises(LongtaskError) as exc:
         rt.longtask.check(sid)
     assert exc.value.code == 'LONGTASK_BLOCKED'
+
+
+def test_resume_clears_the_reason_that_was_blocking(tmp_path, monkeypatch):
+    """`resume` phải xoá LÝ DO đang chặn: run đã `ready` mà còn giữ `OWNER_STOP` là rào ma.
+
+    Chủ `resume` xong vẫn đọc ra "chủ đã dừng" ở mọi cổng và ở giao diện, trong khi trạng thái
+    thật là `ready` (đo sống 2026-10-09, phiên `72106f67490847a9be5b179a5cc92a6c`: `resume` trả
+    `state: ready` kèm `blockedReason: OWNER_STOP`).
+    """
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid, resumePolicy='manual')
+    rt.longtask.store.barrier(sid)  # lệnh dừng của chủ: `paused` + `OWNER_STOP` + `stopEpoch`+1
+    stopped = rt.longtask.store.get(sid)
+    assert stopped['state'] == 'paused' and stopped['blockedReason'] == 'OWNER_STOP'
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid)
+    assert exc.value.code == 'LONGTASK_BLOCKED'
+    resumed = asyncio.run(rt.longtask_action(sid, {'action': 'resume', 'runId': stopped['runId'],
+                                                   'expectedRevision': stopped['revision'],
+                                                   'invocationId': 'resume-1'}))
+    assert resumed['state'] == 'ready' and resumed['blockedReason'] is None
+    assert rt.longtask.check(sid) is not None
+
+
+def test_a_graceful_shutdown_is_not_an_owner_stop(tmp_path, monkeypatch):
+    """Tắt máy là việc của người vận hành, không phải lệnh dừng của chủ.
+
+    Rào của `runtime.stop()` ở đường tắt máy từng biến mọi run đang sống thành
+    `paused`/`OWNER_STOP`, đẩy `stopEpoch` lên, và làm `recover()` không còn gì để đọc — lượt kế
+    tiếp của chủ bị từ chối `409 OWNER_STOP` dù chủ không hề dừng (đo sống 2026-10-09, phiên
+    `72106f67490847a9be5b179a5cc92a6c`: khởi động lại harness 15:27:34Z rồi lượt 27 bị
+    `LONGTASK_BLOCKED` cho tới khi chủ `resume` tay). Hàng `longtask` phải đi đúng đường khởi động
+    lại: `recover()` đọc `running` thành `interrupted`/`HARNESS_RESTART`, rồi `manual` park bằng
+    `LONGTASK_MANUAL_RESTART` còn `safe_auto` tự chạy tiếp.
+    """
+    monkeypatch.setenv('BOXFOX_LONGTASK_CONTINUITY', '1')
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid, resumePolicy='manual')
+    rt.longtask.store.transition(rt.longtask.store.get(sid), 'running')
+    before = rt.longtask.store.get(sid)
+
+    async def scenario():
+        # `runtime.tasks` giữ mọi phiên đã từng chạy lượt, nên đường tắt máy chạm tới cả phiên
+        # đang rảnh: một future đã xong đứng thay lượt cũ đã đóng.
+        done = asyncio.get_running_loop().create_future()
+        done.set_result(None)
+        rt.tasks[sid] = done
+        async with TestServer(create_app(rt)):
+            pass
+
+    asyncio.run(scenario())
+
+    db = sqlite3.connect(tmp_path / 'sessions.db')
+    db.row_factory = sqlite3.Row
+    row = db.execute('SELECT state,blocked_reason,stop_epoch FROM longtask_runs WHERE session_id=?',
+                     (sid,)).fetchone()
+    # `recover()` lúc khởi động đọc hàng `running` thành một lần restart THẬT; đường tắt máy không
+    # được ghi đè nó bằng `OWNER_STOP` (rào của lượt dừng) và không được đẩy `stopEpoch` thêm lần nữa.
+    assert row['state'] == 'paused' and row['blocked_reason'] == 'LONGTASK_MANUAL_RESTART'
+    assert row['stop_epoch'] == before['stopEpoch'] + 1
+    db.close()
 
 
 def test_a_pending_budget_card_keeps_the_run_answerable(tmp_path):

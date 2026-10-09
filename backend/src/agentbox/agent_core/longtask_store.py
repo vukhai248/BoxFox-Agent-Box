@@ -249,7 +249,13 @@ class LongtaskStore:
             elif action == 'resume':
                 if run['state'] in TERMINAL or run['state'] in ('budget_exhausted', 'needs_user'):
                     raise LongtaskError('LONGTASK_BLOCKED', 'resume cannot override budget/evidence/unsafe blocker')
-                self.db.execute("UPDATE longtask_runs SET state='ready',revision=revision+1,updated=? WHERE run_id=?",
+                # `blocked_reason` là LÝ DO đang chặn, không phải lịch sử: run đã `ready` mà còn giữ
+                # `OWNER_STOP`/`LONGTASK_MANUAL_RESTART` thì giao diện và mọi cổng đọc ra một rào
+                # không còn tồn tại — chủ `resume` xong vẫn thấy "chủ đã dừng" (đo sống 2026-10-09,
+                # phiên `72106f67490847a9be5b179a5cc92a6c`: `resume` trả `state: ready` kèm
+                # `blockedReason: OWNER_STOP`). `inspect`/`accept` xoá cùng trường theo cùng lý do.
+                self.db.execute("UPDATE longtask_runs SET state='ready',blocked_reason=NULL,"
+                                "revision=revision+1,updated=? WHERE run_id=?",
                                 (time.time(), run['runId']))
             else:
                 raise LongtaskError('LONGTASK_INVALID', 'action must be resume/pause/cancel/inspect/accept', 400)

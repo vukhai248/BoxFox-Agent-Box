@@ -2695,7 +2695,15 @@ def create_app(runtime):
         if watchdog is not None:
             await watchdog.stop()
         for sid in list(runtime.tasks):
-            await runtime.stop(sid)
+            # Tắt máy là việc của NGƯỜI VẬN HÀNH, không phải lệnh dừng của chủ: hàng `longtask`
+            # phải đi qua đúng đường khởi động lại (`recover()` đọc `running` thành `interrupted`/
+            # `HARNESS_RESTART`, rồi `safe_auto` tự chạy tiếp còn `manual` park bằng
+            # `LONGTASK_MANUAL_RESTART`). Rào của lượt dừng ở đây biến mọi run đang sống thành
+            # `paused`/`OWNER_STOP`, đẩy `stopEpoch` lên, và làm `recover()` không còn gì để đọc —
+            # lượt kế tiếp của chủ bị từ chối `409 OWNER_STOP` trong khi chủ không hề dừng gì
+            # (đo sống 2026-10-09, phiên `72106f67490847a9be5b179a5cc92a6c`: khởi động lại harness
+            # lúc 15:27:34Z rồi lượt 27 bị `LONGTASK_BLOCKED` cho tới khi chủ `resume` tay).
+            await runtime.stop(sid, longtask_barrier=False)
         runtime.store.close()
         # Graceful shutdown is the owner's "reset on shutdown": mark the end of the run
         # in the file it happened in, then reset it to `harness.previous.jsonl` so the
