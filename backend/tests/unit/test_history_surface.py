@@ -291,12 +291,14 @@ def test_the_retained_state_block_goes_into_the_brief_of_a_new_conversation(tmp_
     store.close()
 
 
-def test_a_live_run_makes_the_first_confirm_conflict_and_the_second_one_delete(tmp_path):
-    """Huỷ run đang sống đổi bản ghim critical, nên lần xác nhận đầu phải trả conflict.
+def test_a_live_run_is_closed_inside_the_delete_and_the_capsule_keeps_the_blocker(tmp_path):
+    """Một lần xác nhận là đủ, và bản chốt giữ ĐÚNG blocker/ngân sách mà chủ đã nhìn thấy.
 
-    Đây là hệ quả đã biết của thứ tự `settle_deleted_runs` → `delete_with_capsule`: bản xem trước
-    thứ hai thấy cây đã yên và đi hết đường. Ca kiểm ghim đúng hành vi đó thay vì để nó thành
-    một lần hỏng không tên.
+    Trước đây `settle_deleted_runs` chạy TRƯỚC cổng bản ghim, nên chính nó làm bản ghim lệch:
+    lần xác nhận đầu luôn trả `DELETE_REVISION_CONFLICT`, chủ phải làm lại preview → xác nhận,
+    và bản chốt được ghi là bản của lần xem trước thứ HAI — lúc đó run đã bị huỷ nên capsule
+    mất sạch blocker lẫn ngân sách. Nay việc đóng run nằm trong giao dịch xoá, sau bước kiểm
+    bản ghim, nên một lượt là xong và bản chốt vẫn mang theo thứ đáng giữ.
     """
     store, runtime, session = build(tmp_path, project='p1')
     sid = session['id']
@@ -305,21 +307,57 @@ def test_a_live_run_makes_the_first_confirm_conflict_and_the_second_one_delete(t
     runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
                                      'goalRevision': goal,
                                      'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+    # Run cạn ngân sách: chưa kết thúc, không còn nhịp chạy — đúng trạng thái mà cổng yên tĩnh
+    # cho qua và cũng đúng trạng thái đã làm bản ghim lệch ở lần xác nhận đầu.
+    runtime.longtask.store.transition(runtime.longtask.store.get(sid), 'budget_exhausted',
+                                      'LONGTASK_BUDGET_EXHAUSTED')
     preview = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
     assert preview['validation']['status'] == 'validated'
+    assert preview['retainedSummary']['critical']['blockers'], 'run chưa xong phải vào bản xem trước'
+
+    result = history_surface.deletion_confirm(runtime, sid, {'operationId': preview['operationId'],
+                                                             'expectedRevision': preview['expectedRevision'],
+                                                             'confirm': True})
+    assert result['status'] == 'deleted' and result['capsuleId'] == preview['capsuleId']
+    row = store.db.execute('SELECT state,blocked_reason FROM longtask_runs WHERE session_id=?', (sid,)).fetchone()
+    assert row['state'] == 'cancelled' and row['blocked_reason'] == 'HISTORY_DELETED'
+
+    # Hội thoại mới cùng project đọc lại bản chốt: blocker và ngân sách vẫn còn nguyên.
+    fresh = runtime.create(dict(BASE))
+    workspace = tmp_path / 'after-ws'
+    workspace.mkdir(exist_ok=True)
+    config = dict(fresh['config'])
+    config['machineBinding'] = {'mode': 'host', 'revision': 1, 'projectId': 'p1', 'workspace': str(workspace)}
+    store.db.execute('UPDATE sessions SET config=? WHERE id=?', (json.dumps(config), fresh['id']))
+    store.db.execute('DELETE FROM history_sessions WHERE session_id=?', (fresh['id'],))
+    store.db.commit()
+    bind(runtime, fresh['id'])
+    capsule = history_surface.service(runtime).read_capsule(fresh['id'], preview['capsuleId'])
+    assert capsule['critical']['blockers'], 'bản chốt phải giữ blocker của run'
+    assert capsule['critical']['budget'], 'bản chốt phải giữ ngân sách của run'
+    assert capsule['executionAuthority'] is False and capsule['untrusted'] is True
+    store.close()
+
+
+def test_a_refused_delete_does_not_close_the_run(tmp_path):
+    """Từ chối xoá (bản ghim lệch) không được để lại dấu vết: run vẫn sống để chủ còn đường lùi."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+    goal = history_surface.service(runtime).contract(sid)['currentRevision']
+    runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
+                                     'goalRevision': goal,
+                                     'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+    preview = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
     try:
         history_surface.deletion_confirm(runtime, sid, {'operationId': preview['operationId'],
-                                                        'expectedRevision': preview['expectedRevision'],
-                                                        'confirm': True})
-        raise AssertionError('run đang sống bị huỷ làm đổi bản ghim: lần đầu phải conflict')
+                                                        'expectedRevision': 'x' * 64, 'confirm': True})
+        raise AssertionError('bản ghim lệch phải bị từ chối')
     except Exception as exc:
         assert getattr(exc, 'code', '') == 'DELETE_REVISION_CONFLICT'
-    second = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
-    assert second['operationId'] != preview['operationId']
-    result = history_surface.deletion_confirm(runtime, sid, {'operationId': second['operationId'],
-                                                             'expectedRevision': second['expectedRevision'],
-                                                             'confirm': True})
-    assert result['status'] == 'deleted' and result['capsuleId'] == second['capsuleId']
+    row = store.db.execute('SELECT state,revision FROM longtask_runs WHERE session_id=?', (sid,)).fetchone()
+    assert row['state'] == 'ready' and row['revision'] == 1, 'lượt bị từ chối không được đóng run'
+    assert store.get(sid), 'phiên vẫn còn'
     store.close()
 
 
@@ -574,16 +612,19 @@ def test_the_capsule_reads_back_over_http_after_the_raw_history_is_gone(tmp_path
                     cross = (response.status, await response.json())
                 async with client.get(f'{one}?callerSessionId={child["id"]}', headers=HEADERS) as response:
                     nested = (response.status, await response.json())
+                async with client.get(f'{capsules}?callerSessionId={child["id"]}', headers=HEADERS) as response:
+                    nested_list = (response.status, await response.json())
                 async with client.get(one, headers=HEADERS) as response:
                     anonymous = (response.status, await response.json())
-                return listed, capsule, cross, nested, anonymous
+                return listed, capsule, cross, nested, nested_list, anonymous
 
-    listed, capsule, cross, nested, anonymous = asyncio.run(call())
+    listed, capsule, cross, nested, nested_list, anonymous = asyncio.run(call())
     assert listed[0] == 200 and [item['capsuleId'] for item in listed[1]['capsules']] == [preview['capsuleId']]
     assert capsule[0] == 200
     assert capsule[1]['lessons'] == [{'fact': 'đọc giữa log là đủ'}]
     assert capsule[1]['executionAuthority'] is False and capsule[1]['untrusted'] is True
     assert cross[0] == 403 and cross[1]['code'] == 'HISTORY_SCOPE_DENIED'
     assert nested[0] == 403 and nested[1]['code'] == 'HISTORY_SCOPE_DENIED'
+    assert nested_list[0] == 403 and nested_list[1]['code'] == 'HISTORY_SCOPE_DENIED', 'danh sách phải cùng luật với đường đọc'
     assert anonymous[0] == 400 and anonymous[1]['code'] == 'HISTORY_CALLER_REQUIRED'
     store.close()

@@ -63,6 +63,7 @@ def service(rt):
         history.authorization = history.authorization or _authorization(rt)
         history.critical_snapshot = history.critical_snapshot or _critical_snapshot(rt)
         history.quiescence = history.quiescence or _quiescence(rt)
+        history.run_closer = history.run_closer or _run_closer(rt)
         history._surface_wired = True
     return history
 
@@ -545,33 +546,36 @@ def deletion_confirm(rt, sid, body):
     body = body if isinstance(body, dict) else {}
     if body.get('confirm') is not True or not body.get('operationId'):
         raise HistoryError('DELETE_REQUIRES_CARRY_FORWARD')
-    ids = _tree(rt, sid)
-    settle_deleted_runs(rt, ids)
+    # Cổng yên tĩnh và bản ghim chạy TRƯỚC mọi thay đổi, rồi việc đóng run nằm trong chính giao
+    # dịch xoá: một lần xác nhận là đủ, và một lần từ chối không còn huỷ run oan.
     return service(rt).delete_with_capsule(sid, operation_id=str(body['operationId']),
                                            expected_revision=body.get('expectedRevision'), confirm=True)
 
 
-def settle_deleted_runs(rt, ids):
-    """Xoá phiên là quyết định của chủ: run không còn cơ hội chạy tiếp, nên đóng sổ ngay.
+def _run_closer(rt):
+    """Đóng sổ mọi run chưa kết thúc của cây, dùng NGAY TRONG giao dịch của người gọi.
 
-    Capsule đã giữ ngân sách/blocker của run. Hàng `longtask_runs` còn `ready/running` sau khi
-    phiên biến mất sẽ làm `recover()` mò vào một session không tồn tại, nên phải chốt trước khi xoá.
+    Xoá phiên là quyết định của chủ: run không còn cơ hội chạy tiếp. Hàng `longtask_runs` còn
+    `ready/running` sau khi phiên biến mất sẽ làm `recover()` mò vào một session không tồn tại,
+    nên phải chốt trong cùng giao dịch. Hàm KHÔNG tự mở giao dịch — nó chạy bên trong giao dịch
+    của `delete_with_capsule`, sau khi bản ghim đã khớp.
     """
-    names = _tables(rt.store.db)
-    if 'longtask_runs' not in names:
-        return 0
-    marks = ','.join('?' for _ in ids)
-    with rt.store.db:
-        changed = rt.store.db.execute(
+    def close(db, ids):
+        names = _tables(db)
+        if 'longtask_runs' not in names:
+            return 0
+        marks = ','.join('?' for _ in ids)
+        changed = db.execute(
             f"UPDATE longtask_runs SET state='cancelled',blocked_reason='HISTORY_DELETED',"
             f"revision=revision+1,stop_epoch=stop_epoch+1,lease_epoch=lease_epoch+1,"
             f"lease_owner=NULL,lease_expires=NULL,updated=? WHERE session_id IN ({marks}) "
             f"AND state NOT IN ('completed','cancelled','failed')", (time.time(), *ids)).rowcount
         if 'longtask_continuations' in names:
-            rt.store.db.execute(f"UPDATE longtask_continuations SET state='cancelled',updated=? "
-                                f"WHERE run_id IN (SELECT run_id FROM longtask_runs WHERE session_id IN ({marks})) "
-                                f"AND state IN ('pending','claimed','admitted')", (time.time(), *ids))
-    return changed
+            db.execute(f"UPDATE longtask_continuations SET state='cancelled',updated=? "
+                       f"WHERE run_id IN (SELECT run_id FROM longtask_runs WHERE session_id IN ({marks})) "
+                       f"AND state IN ('pending','claimed','admitted')", (time.time(), *ids))
+        return changed
+    return close
 
 
 def tree_ids(rt, sid):

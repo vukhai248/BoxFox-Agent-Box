@@ -22,13 +22,16 @@ class HistoryError(ValueError):
 
 
 class HistoryStore:
-    def __init__(self, store, private_root, *, authorization=None, critical_snapshot=None, quiescence=None, binding_resolver=None):
+    def __init__(self, store, private_root, *, authorization=None, critical_snapshot=None, quiescence=None, binding_resolver=None, run_closer=None):
         self.store, self.db = store, store.db
         self.root = Path(private_root)
         self.authorization = authorization
         self.critical_snapshot = critical_snapshot
         self.quiescence = quiescence
         self.binding_resolver = binding_resolver
+        # Đóng run của cây NGAY TRONG giao dịch xoá, sau khi bản ghim đã khớp: nếu chạy trước
+        # bước kiểm bản ghim thì chính nó làm bản ghim lệch, và lần xác nhận đầu luôn hỏng.
+        self.run_closer = run_closer
         self.db.executescript('''
         CREATE TABLE IF NOT EXISTS history_schema(version INTEGER PRIMARY KEY);
         INSERT OR IGNORE INTO history_schema VALUES(1);
@@ -505,6 +508,10 @@ class HistoryStore:
         caller = self.bind_session(caller_sid)
         if not caller['project_id']:
             return []
+        # Cùng luật với đường đọc: chỉ GỐC của cây mình mới thấy danh sách. Con của một hội thoại
+        # không đọc được capsule nào, nên trả id cho nó chỉ là một danh sách vô dụng mà lại lệch luật.
+        if caller['session_id'] != caller['root_session_id']:
+            raise HistoryError('HISTORY_SCOPE_DENIED')
         rows = self.db.execute("SELECT capsule_id,created FROM memory_capsules WHERE project_id=? "
                                "AND status='committed' ORDER BY created DESC LIMIT ?",
                                (caller['project_id'], limit)).fetchall()
@@ -525,6 +532,8 @@ class HistoryStore:
                 _, _, revision = self._deletion_source(sid)
                 if revision != expected_revision:
                     raise HistoryError('DELETE_REVISION_CONFLICT')
+                if self.run_closer:
+                    self.run_closer(self.db, ids)
                 for i in ids:
                     self.db.execute("UPDATE history_records SET evidence_state='deleted',search_text='',deleted_at=? WHERE session_id=?", (time.time(), i))
                     self.db.execute("UPDATE history_segments SET status='deleted' WHERE record_id IN (SELECT record_id FROM history_records WHERE session_id=?)", (i,))

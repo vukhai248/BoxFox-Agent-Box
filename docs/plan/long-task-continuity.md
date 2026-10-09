@@ -151,9 +151,9 @@ Khảo sát đã chạy các nhóm test hiện có: runtime audit 43 + 519 + 44;
 
 **Nguyên tắc cập nhật:** khi một mục triển khai/kiểm chứng, ghi mốc mã, command/evidence và giới hạn thực tế. Khi bỏ qua, giữ lý do và điều kiện xem xét lại. Không đổi “đề xuất” thành “đã có” chỉ vì kế hoạch được duyệt.
 
-## 11. Trạng thái triển khai tại `fc964d8`
+## 11. Trạng thái triển khai
 
-Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lịch sử), `9743ba8` (chạy/khôi phục tác vụ dài), `cd2daf4` (bề mặt API), `fc964d8` (giao diện). Kiểm cục bộ: `pytest` 333 passed cho 14 tệp đơn vị liên quan (gồm `test_history_store.py`, `test_history_surface.py`, `test_longtask_execution.py`), `deploy/docker/tests/test_session_files.py` 32 passed, `tsc -b --noEmit` 0 lỗi và 20 ca continuity phía frontend.
+Mười hai commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lịch sử), `9743ba8` (chạy/khôi phục tác vụ dài), `cd2daf4` (bề mặt API), `fc964d8` (giao diện), `5e0c130`/`7ef2050` (vá theo đợt soát mã), `59ed6a9` (mười lăm bài kiểm cũ theo hợp đồng mới), `14dacff` (thẻ ngân sách không còn làm kẹt phiên), `00d055a`/`6c4e17e` (đọc lại capsule, `REQUEST_INVALID`, panel dung lượng), và commit cuối đóng run trong giao dịch xoá. Kiểm cục bộ cuối: toàn bộ `tests/unit` → **5 hỏng / 5580 đạt / 14 bỏ qua** trên đỉnh nhánh, và cả 5 hỏng đều có trước đợt này (3 hỏng ở base `752d9f7`, 2 ca `bubblewrap` do môi trường); `tsc -b --noEmit` 0 lỗi; 29 ca continuity phía frontend đạt; `deploy/docker/tests/test_session_files.py` 32 đạt.
 
 | Thiếu sót | Trạng thái | Mốc mã / bằng chứng | Giới hạn còn lại |
 |---|---|---|---|
@@ -164,7 +164,7 @@ Bốn commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lị
 | LT-05 con trỏ output dài | Đã có | blob + segment có sha256 trong `history_store`; `history_read` phân trang | Chỉ giữ excerpt text đã checksum trong capsule; artifact nhị phân không được sao chép. |
 | LT-06 child xong mà attempt còn mở | Đã có | `task_service._close_attempt_locked`, `task_surface.reconcile_startup/finish_child`, `peer_watchdog` | Chưa có ca kill thật ở khe `child_finish`; chỉ mô phỏng ở mức đơn vị. |
 | LT-07 main tự tiếp tục | Đã có (opt-in) | `agent_core/longtask_store.py`, `longtask_runtime.py`, `runtime.configure_longtask/longtask_action/recover_longtasks/pump_longtasks` | Bật bằng `BOXFOX_LONGTASK_CONTINUITY=1`; run gắn plan/work chưa có seam `controller_continue` nên dừng ở `needs_user` + `LONGTASK_CONTROLLER_UNAVAILABLE`. |
-| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, `history_surface.settle_deleted_runs`, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | `settle_deleted_runs` chạy trước cổng quiescent, nên ca `DELETE_NOT_QUIESCENT` vẫn đã huỷ run; cần đảo thứ tự ở vòng sau. |
+| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, hook `run_closer` chạy trong giao dịch xoá, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | Một lượt xác nhận là đủ và bản chốt giữ nguyên blocker/ngân sách (§11.4); lượt bị từ chối không còn đóng run oan. |
 | LT-09 summary lồng nhau | Một phần | `history_store.prepare_compaction/commit_compaction` + manifest theo `source_key`, `agent_id`; `restore_compaction` | **Chưa nối vào đường nén sống**: `runtime.py` vẫn chỉ ghi checkpoint cũ, nên manifest chỉ sinh trong ca kiểm. Đây là lựa chọn có ý thức của đợt này (đổi đường ghi canonical giữa lượt nén cần một vòng kiểm riêng, không vá ở cuối chu kỳ). Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
 
 ### 11.2 Bề mặt đọc lại capsule (đợt soát cuối)
@@ -185,6 +185,37 @@ Cùng đợt: `api/server.py` dịch thân JSON hỏng thành `400 REQUEST_INVAL
 đây nhánh `ValueError` của middleware trả 400 với `code` rỗng), và panel dung lượng
 (`StorageContinuityView.tsx`) nuốt đúng `SESSION_NOT_FOUND` sau khi xoá để không hiện lỗi giả trong
 khi vẫn dựng lại ảnh chụp dung lượng.
+
+### 11.3 Đối chiếu điều kiện hoàn thành (§7 của kế hoạch)
+
+| Điều kiện | Bằng chứng | Trạng thái |
+|---|---|---|
+| Chuỗi ≥ 20 lần nén cho main và worker | `tests/unit/test_history_store.py::test_20_compactions_main_worker_complete_projection` — 20 checkpoint cho phiên gốc và 20 cho phiên worker, mỗi lượt nén đều kiểm `prepare` → `restore` → `commit` → `export_projection`, và yêu cầu gốc của chủ vẫn còn sau tất cả | Đạt (đơn vị) |
+| Khởi động lại ở biên side effect | `test_unsafe_missing_tool_cannot_restart_with_new_call_id`, `test_child_receipt_projection_atomic_rollback_and_gap_repair` | Đạt (đơn vị) |
+| Khởi động lại ở biên decision | `test_request_and_answer_process_death_persist`, `test_pending_card_same_id_outcome_and_retry_after_restart`, `test_expiry_one_settle_and_stale_contract` | Đạt (đơn vị) |
+| Khởi động lại ở biên attempt | `test_budget_reservation_crash_bound_restart_and_one_card_delta`, `test_two_reconcilers_and_reopened_child_do_not_close_wrong_attempt`, `test_restart_recovery_seeds_only_evidence_checked_auto_runs`, `test_restart_without_the_flag_never_continues` | Đạt (đơn vị) |
+| Delete-carry-forward sang hội thoại mới | LT-08 ca 7 chạy thật trên harness (`12/12`) + `test_the_capsule_reads_back_over_http_after_the_raw_history_is_gone` | Đạt (live + đơn vị) |
+| Goal/correction/evidence lỗi không mất | Ca 20 lần nén ở trên + `retained_state_block` (§11.2) + `test_the_retained_state_block_goes_into_the_brief_of_a_new_conversation` | Đạt |
+| Search đúng project và phân trang đầy đủ | `test_search_240_newest_pagination_append`, `test_scope_ifc_and_symlink`, các ca A1–A5 của đợt kiểm live | Đạt |
+| Ngân sách không reset | `test_budget_reservation_crash_bound_restart_and_one_card_delta`, `test_a_pending_budget_card_keeps_the_run_answerable` (13/13 live) | Đạt |
+| Effect không an toàn không replay | `test_unsafe_missing_tool_cannot_restart_with_new_call_id`, `test_stop_epoch_late_result_and_single_writer` | Đạt |
+| Hỏng canonical/đĩa không báo thành công giả | `test_owner_acceptance_requires_scoped_canonical_projection_not_a_model_promise`, `test_big_output_middle_and_missing` | Đạt |
+| UI không tự xoá hoặc tự duyệt | Đợt kiểm live: panel dung lượng khoá nút xoá trước khi capsule được xác minh; thẻ ngân sách chỉ chủ trả lời | Đạt (live) |
+| Legacy Q&A, graph controllers, plan approval gates giữ hồi quy | Toàn bộ `tests/unit` trên `6c4e17e`: 5 hỏng, tất cả đều có trước đợt này (3 hỏng ở base `752d9f7`, 2 ca `bubblewrap` do môi trường) | Đạt |
+
+Điều kiện **chưa** đạt: bản Windows của tầng file (`history_files.py` chỉ chạy POSIX) — xem §11.1.
+
+### 11.4 Việc còn lại
+
+Việc đã biết mà đợt này **không** làm, xếp theo mức độ:
+
+| Việc | Mức | Vì sao dừng lại |
+|---|---|---|
+| Run bị kẹt `LONGTASK_STALE` sau một lượt thử lại | Vừa | Gặp một lần khi kiểm lại thẻ ngân sách, không tái hiện theo yêu cầu: lượt thử lại vào `model()` với ảnh chụp lease cũ. Có đường lùi (nút "Re-pin"), không mất việc của chủ |
+| `history_files.py` chỉ chạy POSIX | Vừa | Host Windows là nền chính của bản desktop; phải làm trước khi phát hành tính năng này cho Windows |
+| Nối `prepare_compaction`/`commit_compaction` vào đường nén sống và `export_projection` | Vừa | Đổi bản ghi canonical của mọi lần nén; cần vòng kiểm riêng |
+| Nhãn IFC chưa có nguồn thật | Thấp | Gắn nhãn rỗng là giả vờ có kiểm soát |
+| `search_text` giữ nguyên văn cạnh blob | Thấp | Chưa phải điểm nghẽn dung lượng trên máy chủ nhà |
 
 ### 11.1 Giới hạn đã biết sau đợt soát mã
 
