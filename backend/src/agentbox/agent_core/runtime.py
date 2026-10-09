@@ -3127,9 +3127,11 @@ class HarnessRuntime(RuntimeCommands):
         children = self.store.children_of(sid)
         hosts, paths = [], []
         for pid in [sid] + [row['session_id'] for row in children]:
-            for event in self.store.events(pid):
-                if event['type'] != 'tool_end':
-                    continue
+            # `tool_results` đọc cả bảng, không phải một trang: `events()` cắt ở 500 hàng và trả
+            # trang cũ nhất, nên trên phiên dài nó không thấy kết quả công cụ nào (lượt chạy sống
+            # 2026-10-09: 500 hàng đầu của phiên 16 186 hàng không có một `tool_end` nào, và mọi
+            # kế hoạch bị `sources-unbacked` từ chối dù host đã được công cụ thật trả về).
+            for event in self.store.tool_results(pid):
                 payload = event['data']
                 if tool_call_failed(payload):
                     continue  # lời gọi hỏng không chứng minh được nguồn nào

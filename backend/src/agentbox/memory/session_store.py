@@ -407,6 +407,20 @@ class SessionStore:
         return [{'seq': r['seq'], 'type': r['kind'], 'data': json.loads(r['payload']),
                  'created': r['created']} for r in reversed(rows)]
 
+    def tool_results(self, sid):
+        """Every `tool_end` row of a session, unbounded — bằng chứng nguồn không phải một TRANG.
+
+        `events()` cắt ở `EVENTS_PAGE` (500) hàng mỗi lần đọc và trả về trang CŨ NHẤT, nên một
+        chỗ gọi đọc nó đúng một lần sẽ không thấy kết quả công cụ nào của phiên dài: cổng nguồn
+        của `write_plan` đo được trên phiên 16 186 hàng (lượt chạy sống 2026-10-09) — 500 hàng
+        đầu không có một `tool_end` nào, nên mọi host mà kế hoạch viện dẫn đều bị coi là không
+        bằng chứng, và kế hoạch bị từ chối mãi mãi. Đọc cả bảng như `execution_events` làm.
+        """
+        self.get(sid)
+        return [{'seq': r['seq'], 'type': r['kind'], 'data': json.loads(r['payload']), 'created': r['created']}
+                for r in self.db.execute("SELECT * FROM events WHERE session_id=? AND kind='tool_end' "
+                                         "ORDER BY seq", (sid,))]
+
     def execution_events(self, sid):
         """Internal execution summary, excluding streamed deltas and UI page limits.
 
