@@ -218,10 +218,6 @@ BINARY_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '
                      '.woff', '.woff2', '.ttf', '.otf', '.sqlite', '.db')
 BINARY_SNIFF_BYTES = 8192
 BINARY_READ_CHARS = 30000
-# F30: hai số này là của `sandbox/output_refs.py` — giữ tên cũ cho ai đọc quen, nhưng không còn là
-# nguồn thứ hai.
-READ_TRUNCATE_ARTIFACT_CHARS = output_refs.SPILL_THRESHOLD_CHARS
-OUTPUT_PREVIEW_CHARS = output_refs.SPILL_PREVIEW_CHARS
 EVIDENCE_MAX_BYTES = 2 * 1024 * 1024
 COMMAND_TIMEOUT_DEFAULT = 30
 COMMAND_TIMEOUT_MAX = 120
@@ -1264,10 +1260,11 @@ class HostExecutor:
                 self.processes.pop(session, None)
         text = output.decode('utf-8', errors='replace')
         # F30: cùng một hàm spill với worker trong box — ngưỡng, bản xem trước, tên tệp và ref chuẩn
-        # đều lấy từ `sandbox/output_refs.py`, không còn hai bản số trôi khỏi nhau.
-        preview, artifact, output = output_refs.spill(self.workspace, text)
-        if artifact:
-            artifact = self._artifact_path(artifact)
+        # đều lấy từ `sandbox/output_refs.py`, không còn hai bản số trôi khỏi nhau. Chỗ ghi trên host
+        # là `artifacts_dir` của app (profile riêng), không phải thư mục dự án của chủ.
+        preview, ref = output_refs.spill(self.workspace, text,
+                                         target_dir=Path(self.artifacts_dir) / 'tools')
+        artifact = ref['path'] if ref else None
         if process.returncode != 0:
             # Lỗi phải MANG MÃ (L4): thiếu mã thì `recovery_policy` xếp vào nhánh "chưa biết" và
             # `reflection_hint` gửi cho model câu dành cho lỗi sai tham số — sai việc cần làm.
@@ -1275,23 +1272,15 @@ class HostExecutor:
                 COMMAND_EXIT_NONZERO_CODE,
                 'lệnh thoát với mã %d; mã đó cũng nằm ở `exit_code`, đầu ra đầy đủ ở `content`%s' % (
                     process.returncode, ' và tệp đính kèm' if artifact else ''),
-                exit_code=process.returncode, content=preview, artifact=artifact, outputRef=output)
+                exit_code=process.returncode, content=preview, artifact=artifact, outputRef=ref)
         return {'content': preview, 'exit_code': process.returncode, 'is_error': False,
-                'artifact': artifact, 'outputRef': output}
+                'artifact': artifact, 'outputRef': ref}
 
     def _child_env(self):
         env = dict(self.env if self.env is not None else os.environ)
         env.setdefault('PYTHONIOENCODING', 'utf-8')
         env.setdefault('PYTHONUTF8', '1')
         return env
-
-    def _artifact_path(self, relative):
-        """Đường dẫn tệp spill theo workspace, chịu được `artifacts_dir` nằm ngoài workspace.
-
-        `output_refs.spill` trả đường dẫn tương đối workspace; khi `artifacts_dir` được cấu hình ra
-        ngoài thì `_relative` mới là bên biết đường thật, nên chỗ nối này hỏi nó.
-        """
-        return self._relative(Path(self.workspace) / relative)
 
 
 class _PathEscape(ValueError):

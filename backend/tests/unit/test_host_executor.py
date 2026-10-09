@@ -304,6 +304,24 @@ def test_terminal_exec_spills_long_output_to_an_artifact(tmp_path):
     assert ref['bytes'] == artifact.stat().st_size
 
 
+def test_terminal_exec_spills_into_the_app_profile_when_artifacts_live_outside(tmp_path):
+    """`machine_router` đặt `artifacts_dir` trong profile của app, ngoài workspace chủ.
+
+    Tệp spill phải nằm ở đó (cùng chỗ với `captures/`), và đường dẫn trả về phải mở được — không
+    phải một đường tương đối không tồn tại, cũng không phải một tệp rơi vào thư mục dự án của chủ.
+    """
+    profile_artifacts = tmp_path / 'profile' / 'host-artifacts' / 'p1' / 's1'
+    executor = make_executor(tmp_path, artifacts_dir=profile_artifacts)
+    payload = run(executor.execute('terminal_exec',
+                                   {'command': 'for i in $(seq 1 4000); do echo dong-$i; done'}, 's1'))
+
+    path = Path(payload['outputRef']['path'])
+    assert path.parent == profile_artifacts / 'tools' and path.is_file()
+    assert payload['artifact'] == str(path), 'ngoài workspace thì trả đường dẫn tuyệt đối'
+    assert not (executor.workspace / '.generated_artifacts' / 'tools').exists(), \
+        'không được ghi phần tràn vào thư mục dự án của chủ'
+
+
 def test_terminal_exec_requires_a_command(tmp_path):
     executor = make_executor(tmp_path)
     payload = run(executor.execute('terminal_exec', {'command': '   '}, 's1'))

@@ -19,7 +19,7 @@ import json
 import math
 import time
 
-from ..memory.history_files import encode
+from ..memory.history_files import digest, encode
 from ..memory.history_store import CAPSULE_KEYS, HistoryError
 from ..memory.storage_usage import StorageUsage
 from .longtask_store import LongtaskError
@@ -519,6 +519,11 @@ COMPACTION_DEGRADED_CODE = 'HISTORY_COMPACTION_DEGRADED'
 PROJECTION_DEGRADED_CODE = 'HISTORY_COMPACTION_PROJECTION_DEGRADED'
 
 
+def _failure_code(exc, fallback):
+    """Mã để notice nói đúng loại hỏng: `code` của ngoại lệ, hoặc phần trước `:` của thông điệp."""
+    return getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or fallback
+
+
 def _compaction_numbers(event):
     event = event if isinstance(event, dict) else {}
     numbers = {'reason': event.get('kind'), 'beforeEstimate': event.get('beforeEstimate'),
@@ -547,12 +552,12 @@ def record_compaction(rt, sid, saved, compacted, event=None):
     from . import session_journal
     history = service(rt)
     try:
-        key = 'compaction:' + hashlib.sha256(encode(saved).encode()).hexdigest()[:16]
+        key = 'compaction:' + digest(encode(saved).encode())[:16]
         manifest = history.prepare_compaction(sid, saved, source_key=key,
                                               numbers=_compaction_numbers(event))
         history.commit_compaction(manifest['checkpointId'], compacted)
     except Exception as exc:
-        code = getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or 'HISTORY_COMPACTION_FAILED'
+        code = _failure_code(exc, 'HISTORY_COMPACTION_FAILED')
         session_journal.note_gap(
             rt.store, sid, COMPACTION_DEGRADED_CODE,
             f'{COMPACTION_DEGRADED_CODE}: bản thô của lượt nén không vào được kho lịch sử ({code}) — '
@@ -566,7 +571,7 @@ def record_compaction(rt, sid, saved, compacted, event=None):
         projection = export_projection(rt, sid, manifest['checkpointId'])
         journal = None if projection.get('skipped') else export_journal(rt, sid)
     except Exception as exc:
-        code = getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or 'PROJECTION_FAILED'
+        code = _failure_code(exc, 'PROJECTION_FAILED')
         session_journal.note_gap(
             rt.store, sid, PROJECTION_DEGRADED_CODE,
             f'{PROJECTION_DEGRADED_CODE}: bản thô của lượt nén đã vào kho, nhưng bản đọc được trong '

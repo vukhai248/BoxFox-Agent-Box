@@ -8,6 +8,10 @@ Hai producer của "artifact output" (host executor và worker trong box) từng
 Module này là chỗ duy nhất định nghĩa ngưỡng, bản xem trước, thư mục và ref chuẩn. Worker trong box
 là script độc lập (không import được package này), nên nó giữ bản sao bằng số và
 `tests/unit/test_output_refs.py` ghim hai bản khớp nhau — thay vì để hai chỗ trôi khỏi nhau im lặng.
+
+Chỗ ghi tệp khác nhau theo chế độ, và đó là chủ ý: trong box, tệp nằm trong workspace của box (UI
+đọc được); trên host, tệp nằm trong `artifacts_dir` của app (profile riêng, **không** ghi vào thư mục
+dự án của chủ) — `target_dir` là tham số để nơi gọi truyền chỗ ấy vào.
 """
 import hashlib
 import uuid
@@ -23,27 +27,34 @@ SPILL_MARKER = '\n[truncated; see artifact]'
 SPILL_DIR = '.generated_artifacts/tools'
 
 
-def output_ref(path, data, *, version=1):
+def output_ref(path, data):
     """Ref chuẩn của một tệp output: đúng bộ khoá job ledger đòi, cộng đường dẫn để mở.
 
     `artifactId` suy từ chính nội dung, nên hai lần spill cùng nội dung ra cùng một id — ledger
     không phải phân biệt hai bản giống nhau.
     """
-    raw = data.encode('utf-8') if isinstance(data, str) else bytes(data)
+    raw = data.encode('utf-8')
     content = hashlib.sha256(raw).hexdigest()
-    return {'artifactId': 'spill-' + content[:20], 'version': version, 'contentHash': content,
+    return {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
             'path': path, 'bytes': len(raw)}
 
 
-def spill(workspace, text, *, threshold=SPILL_THRESHOLD_CHARS, preview=SPILL_PREVIEW_CHARS):
-    """Ghi phần tràn vào `SPILL_DIR` và trả `(content, path, ref)`.
+def spill(root, text, *, target_dir=None):
+    """Ghi phần tràn và trả `(content, ref)`; dưới ngưỡng thì trả nguyên văn cùng `None`.
 
-    Dưới ngưỡng thì trả nguyên văn và `None` cho cả hai — nơi gọi không phải tự đo lại ngưỡng.
+    `root` là mốc tính đường dẫn trong ref. Host mode ghi artifact vào profile của app (ngoài
+    workspace người dùng), nên đường dẫn ngoài `root` được trả **tuyệt đối**: người đọc tệp cần một
+    đường mở được, không cần một đường đẹp. `target_dir` mặc định là `<root>/.generated_artifacts/tools`.
     """
-    if len(text) <= threshold:
-        return text, None, None
-    target = Path(workspace) / SPILL_DIR / (uuid.uuid4().hex + '.txt')
+    if len(text) <= SPILL_THRESHOLD_CHARS:
+        return text, None
+    root_path = Path(root)
+    directory = Path(target_dir) if target_dir is not None else root_path / SPILL_DIR
+    target = directory / (uuid.uuid4().hex + '.txt')
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding='utf-8')
-    path = target.relative_to(Path(workspace)).as_posix()
-    return text[:preview] + SPILL_MARKER, path, output_ref(path, text)
+    try:
+        path = target.relative_to(root_path).as_posix()
+    except ValueError:
+        path = str(target)
+    return text[:SPILL_PREVIEW_CHARS] + SPILL_MARKER, output_ref(path, text)

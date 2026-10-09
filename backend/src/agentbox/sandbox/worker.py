@@ -233,9 +233,10 @@ def shell(command, timeout=30, session='default'):
         spilled.parent.mkdir(parents=True, exist_ok=True)
         spilled.write_text(output, encoding='utf-8')
         artifact = str(spilled.relative_to(WORKSPACE))
-        content = hashlib.sha256(output.encode('utf-8')).hexdigest()
+        raw = output.encode('utf-8')
+        content = hashlib.sha256(raw).hexdigest()
         ref = {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
-               'path': artifact, 'bytes': len(output.encode('utf-8'))}
+               'path': artifact, 'bytes': len(raw)}
     return {'content': output[:SPILL_PREVIEW_CHARS] + (SPILL_MARKER if artifact else ''),
             'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact,
             'outputRef': ref}

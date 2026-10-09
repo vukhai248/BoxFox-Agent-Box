@@ -20,18 +20,18 @@ from agentbox.sandbox import host_executor as host
 
 def test_text_under_the_threshold_is_returned_untouched(tmp_path):
     text = 'ngắn thôi'
-    content, path, ref = output_refs.spill(tmp_path, text)
+    content, ref = output_refs.spill(tmp_path, text)
 
-    assert (content, path, ref) == (text, None, None), 'dưới trần thì không tạo tệp, không ref'
+    assert (content, ref) == (text, None), 'dưới trần thì không tạo tệp, không ref'
     assert list(tmp_path.iterdir()) == []
 
 
 def test_over_the_threshold_the_file_lands_where_the_ui_reads_it(tmp_path):
     text = 'x' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
-    content, path, ref = output_refs.spill(tmp_path, text)
+    content, ref = output_refs.spill(tmp_path, text)
 
-    assert path.startswith(output_refs.SPILL_DIR + '/'), 'phần tràn phải nằm chỗ UI đọc được'
-    assert (tmp_path / path).read_text(encoding='utf-8') == text, 'tệp phải giữ NGUYÊN văn'
+    assert ref['path'].startswith(output_refs.SPILL_DIR + '/'), 'phần tràn phải nằm chỗ UI đọc được'
+    assert (tmp_path / ref['path']).read_text(encoding='utf-8') == text, 'tệp phải giữ NGUYÊN văn'
     assert len(content) == output_refs.SPILL_PREVIEW_CHARS + len(output_refs.SPILL_MARKER)
     assert content.endswith(output_refs.SPILL_MARKER)
 
@@ -40,21 +40,20 @@ def test_the_ref_carries_the_hash_of_what_is_in_the_file(tmp_path):
     import hashlib
 
     text = 'y' * (output_refs.SPILL_THRESHOLD_CHARS + 5)
-    _, path, ref = output_refs.spill(tmp_path, text)
+    _, ref = output_refs.spill(tmp_path, text)
 
     digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
     assert ref['contentHash'] == digest, 'hash phải của chính nội dung, không phải của bản xem trước'
-    assert ref['path'] == path and ref['version'] == 1
-    assert ref['bytes'] == len(text.encode('utf-8'))
-    assert (tmp_path / path).read_bytes() == text.encode('utf-8')
+    assert ref['version'] == 1 and ref['bytes'] == len(text.encode('utf-8'))
+    assert (tmp_path / ref['path']).read_bytes() == text.encode('utf-8')
 
 
 def test_the_same_text_twice_gets_the_same_artifact_id(tmp_path):
     text = 'z' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
-    _, first_path, first = output_refs.spill(tmp_path, text)
-    _, second_path, second = output_refs.spill(tmp_path, text)
+    _, first = output_refs.spill(tmp_path, text)
+    _, second = output_refs.spill(tmp_path, text)
 
-    assert first_path != second_path, 'mỗi lần spill một tệp, không ghi đè lần trước'
+    assert first['path'] != second['path'], 'mỗi lần spill một tệp, không ghi đè lần trước'
     assert first['artifactId'] == second['artifactId'], 'id suy từ nội dung nên hai bản giống nhau chung id'
 
 
@@ -76,10 +75,10 @@ def test_the_box_worker_keeps_the_same_spill_numbers():
 
 
 def test_the_host_executor_has_no_second_copy_of_the_numbers():
-    assert host.READ_TRUNCATE_ARTIFACT_CHARS is output_refs.SPILL_THRESHOLD_CHARS
-    assert host.OUTPUT_PREVIEW_CHARS is output_refs.SPILL_PREVIEW_CHARS
     source = Path(host.__file__).read_text(encoding='utf-8')
-    assert 'READ_TRUNCATE_ARTIFACT_CHARS = 20000' not in source, 'không được quay lại bản số thứ hai'
+    assert 'output_refs.spill(' in source, 'đường spill của host phải đi qua nguồn duy nhất'
+    assert 'READ_TRUNCATE_ARTIFACT_CHARS' not in source and 'OUTPUT_PREVIEW_CHARS' not in source, \
+        'tên cũ không được quay lại thành bản số thứ hai'
 
 
 def test_the_acceptance_bench_uses_the_same_two_numbers():
@@ -101,7 +100,7 @@ def test_the_acceptance_bench_uses_the_same_two_numbers():
 
 def test_the_evidence_gate_prefers_the_structured_ref(tmp_path):
     text = 'w' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
-    _, path, ref = output_refs.spill(tmp_path, text)
+    _, ref = output_refs.spill(tmp_path, text)
     call = {'name': 'terminal_exec', 'args': {'command': 'ls -la'}, 'step': 1,
             # Cả hai cùng có: ref có cấu trúc phải thắng đường dẫn trần.
             'result': {'content': 'ok', 'exit_code': 0, 'artifact': 'duong/dan/tran.txt',
@@ -109,5 +108,24 @@ def test_the_evidence_gate_prefers_the_structured_ref(tmp_path):
 
     fragment, = gate.artifacts_from_calls([call])
 
-    assert fragment['artifact'] == path
+    assert fragment['artifact'] == ref['path']
     assert fragment['sha256'] == ref['contentHash'] and fragment['bytes'] == ref['bytes']
+
+
+def test_a_target_outside_the_root_keeps_an_openable_absolute_path(tmp_path):
+    """Host mode ghi artifact vào profile của app, ngoài workspace chủ: đường dẫn phải mở được.
+
+    Đây là ca `machine_router` dựng thật (`artifacts_dir=self.profile_dir / 'host-artifacts' / ...`).
+    Trả đường dẫn tương đối ở đây là trả một đường không mở được, và tệp thì rơi vào thư mục dự án
+    của chủ — cả hai đều sai.
+    """
+    root = tmp_path / 'ws'
+    root.mkdir()
+    outside = tmp_path / 'profile' / 'tools'
+    text = 'v' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
+
+    _, ref = output_refs.spill(root, text, target_dir=outside)
+
+    assert Path(ref['path']).is_absolute() and Path(ref['path']).is_file()
+    assert Path(ref['path']).parent == outside
+    assert list(root.iterdir()) == [], 'không được ghi vào thư mục dự án của chủ'
