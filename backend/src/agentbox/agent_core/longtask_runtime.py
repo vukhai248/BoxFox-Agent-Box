@@ -120,9 +120,21 @@ class LongtaskRuntime:
         run = self.store.get(run_id=snapshot['runId']) if snapshot else self.root_run(sid)
         if not run:
             return None
-        if snapshot and (snapshot['revision'] != run['revision'] or snapshot['stopEpoch'] != run['stopEpoch']
-                         or snapshot['capabilityEpoch'] != run['capabilityEpoch'] or snapshot['leaseEpoch'] != run['leaseEpoch']):
+        if snapshot and (snapshot['stopEpoch'] != run['stopEpoch']
+                         or snapshot['capabilityEpoch'] != run['capabilityEpoch']
+                         or snapshot['leaseEpoch'] != run['leaseEpoch']):
             raise LongtaskError('LONGTASK_STALE', 'owner correction/stop/capability changed at boundary')
+        if snapshot and snapshot['revision'] != run['revision']:
+            # Bookkeeping của CHÍNH harness (con của nút Work Graph admit/đóng, một `transition` của
+            # runner) làm canonical tiến revision NGAY TRONG lượt của chủ, còn `stopEpoch` và
+            # `capabilityEpoch` y nguyên. Ảnh chụp phải đi theo bản mới: lượt chạy sống 2026-10-09
+            # (phiên `72106f67490847a9be5b179a5cc92a6c`, lượt 15) chết ở bước 3 bằng `LONGTASK_STALE`
+            # đúng sau khi con `plan` đóng `partial` — công cụ `work_run` đã chạy xong, và lượt bị
+            # giết ngay trước công cụ kế tiếp dù chủ không hề dừng, huỷ hay thu quyền.
+            # Nới ĐÚNG một trường không mở đường cho lượt đã bị chủ can thiệp: dừng/huỷ/thu quyền
+            # (`stopEpoch`/`capabilityEpoch`), lease đổi chủ, trạng thái `paused`, và thay đổi phạm vi
+            # ghim (`authority()` ngay dưới) vẫn chặn như cũ.
+            self.snapshots[sid] = run
         if autonomous:
             # Only automatic continuation is confined to an actively executing run.
             if run['state'] not in ('ready', 'running', 'interrupted'):

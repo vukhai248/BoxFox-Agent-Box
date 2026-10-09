@@ -382,6 +382,43 @@ def test_owner_turn_rebases_mid_turn_without_going_stale(tmp_path):
     assert after['state'] == 'ready' and after['goalRevision'] == 2
 
 
+def test_a_runner_side_revision_bump_does_not_kill_the_owner_turn(tmp_path):
+    """F09 — bookkeeping của CHÍNH runner (con của nút Work Graph admit/đóng) làm canonical tiến
+    một revision GIỮA lượt mà KHÔNG đổi phạm vi ghim: cổng công cụ kế tiếp đọc ảnh chụp cũ ra
+    `LONGTASK_STALE` và giết lượt, dù chủ không dừng, không huỷ và không thu quyền. Đo được ở lượt
+    chạy sống 2026-10-09 (phiên `72106f67490847a9be5b179a5cc92a6c`, lượt 15, bước 3): công cụ
+    `work_run` giữ lượt suốt 246 giây cho con `plan` chạy, con đóng `partial`, rồi lượt chết trước
+    công cụ kế tiếp."""
+    class BumpingExecutor(FixtureExecutor):
+        async def execute(self, name, args, sid, **_identity):
+            self.calls.append((name, args, sid))
+            # Con đóng trong lúc công cụ của cha đang chạy: runner ghi một `transition` và canonical
+            # tiến revision — y hệt `work_run` khi nút con kết thúc.
+            rt.longtask.store.transition(rt.longtask.root_run(sid), 'ready')
+            return {'content': 'observed fixture result'}
+
+    store = SessionStore(tmp_path / 'sessions.db')
+    rt = HarnessRuntime(store, BumpingExecutor(), FixtureModel([
+        answer('chạy lệnh', [call('terminal_exec', {'command': 'echo hi'}, 'call-1')]),
+        answer('chạy tiếp', [call('terminal_exec', {'command': 'echo again'}, 'call-2')]),
+        answer('xong'), answer('xong')]))
+    sid = rt.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})['id']
+    configure(rt, sid, budget={'totalStepLimit': 50, 'activeTimeLimitMs': 20000000})
+    rt.longtask.completion = lambda _sid, _run: {'state': 'runnable'}
+
+    async def run():
+        await rt.submit(sid, 'chạy hai lệnh')
+        await rt.tasks[sid]
+
+    asyncio.run(run())
+    starts = [e['data']['name'] for e in store.events(sid) if e['type'] == 'tool_start']
+    assert starts == ['terminal_exec', 'terminal_exec'], starts
+    ends = [e['data'] for e in store.events(sid) if e['type'] == 'tool_end']
+    assert len(ends) == 2 and not any(e['result'].get('is_error') for e in ends), ends
+    after = rt.longtask.root_run(sid)
+    assert after['revision'] > 1 and after['state'] == 'ready'
+
+
 def test_a_child_admission_is_not_refused_by_the_parent_call_in_flight(tmp_path):
     """F03 — cha đang chạy một công cụ GHI (`work_run`/`delegate_task` sinh con): `start()` của
     con chạy lại cổng và quét CẢ cây, nên `tool_start` của cha ĐANG chạy (chưa có `tool_end`)
