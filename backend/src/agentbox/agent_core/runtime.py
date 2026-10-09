@@ -18,7 +18,8 @@ from .decision_store import DecisionStore, DecisionStoreError, event as durable_
 from .longtask_runtime import LongtaskRuntime
 from .longtask_store import LongtaskError
 from . import context_surface
-from .compression import ContextCompressor, estimate_tokens, usage_reading
+from .compression import (ContextCompressor, estimate_tokens, trim_message_count,
+                         usage_reading)
 from .failures import (RETRY_BUDGET_SECONDS, classify_failure, failure_detail, level_refusal,
                        log_safe_failure, retry_advice, stop_reason)
 from .limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_CODE, ANSWER_MAX_CHARS, ANSWER_TOO_LONG_CODE,
@@ -4146,6 +4147,9 @@ class HarnessRuntime(RuntimeCommands):
         # biết nhận ra nó) làm nhà cung cấp từ chối MỌI request sau bằng 400; phát lại nó
         # thành `{}` là cách duy nhất còn lại để phiên sống tiếp (lượt chạy sống 2026-10-09).
         outbound = tool_arg_replays(outbound)
+        # Trần ĐẾM của nhà cung cấp (`Provide 1–200 chat messages.`): bộ nén chỉ đo token nên một
+        # transcript nhiều message ngắn vẫn vượt trần đếm và request bị từ chối ngay giữa lượt.
+        outbound = trim_message_count(outbound)
         response = await self.longtask.model(sid, lambda: usage_surface.complete(self, sid, outbound, tools, route, **kwargs))
         if decision is not None and isinstance(response, dict):
             response = dict(response, _harnessRequest={'maxTokens': kwargs.get('max_tokens', 4096)})

@@ -165,6 +165,72 @@ TAIL_MAX_CONTEXT_FRACTION = 0.20
 MAX_TAIL_MESSAGE_FLOOR = 8
 
 
+# Trần số THÔNG ĐIỆP của nhà cung cấp: `step-5-preview` từ chối bằng HTTP 400
+# "Provide 1–200 chat messages." (`router.jsonl` 2026-10-09T09:28:12.851Z, `INVALID_REQUEST`).
+# Bộ nén đo TOKEN, không đo số message, nên một transcript dài mà mỗi message ngắn vẫn vượt trần
+# đếm trong khi `before` còn dưới ngưỡng — và lượt chết ngay giữa đường, ở bước thứ 20.
+CHAT_MESSAGES_MAX = 200
+# Biên an toàn: request còn có thể được bơm thêm một thông điệp nhắc trước khi gửi.
+CHAT_MESSAGES_HEADROOM = 8
+
+
+def message_units(messages):
+    """`[(start, end)]` — một ĐƠN VỊ là lời gọi công cụ + mọi kết quả của nó, hoặc một message.
+
+    Cắt theo đơn vị là điều kiện sống còn: một hàng `assistant` mang `tool_calls` mà thiếu hàng
+    `tool` của nó (hoặc ngược lại) là request hỏng, không phải request ngắn hơn.
+    """
+    units, index = [], 0
+    while index < len(messages):
+        end = index + 1
+        if messages[index].get('role') == 'assistant' and messages[index].get('tool_calls'):
+            while end < len(messages) and messages[end].get('role') == 'tool':
+                end += 1
+        units.append((index, end))
+        index = end
+    return units
+
+
+def trim_message_count(messages, cap=CHAT_MESSAGES_MAX - CHAT_MESSAGES_HEADROOM):
+    """Giữ transcript dưới trần ĐẾM của nhà cung cấp: bỏ những đơn vị CŨ NHẤT còn bỏ được.
+
+    Đo vòng kiểm thử sống 2026-10-09 (phiên `72106f67490847a9be5b179a5cc92a6c`): transcript 202
+    message, router trả `UPSTREAM_HTTP_400: Provide 1–200 chat messages.` ở bước 20 của lượt 12,
+    lượt chết ở checkpoint và run phải chờ chủ. Bộ nén không cứu được: nó so `context_estimate`
+    neo hoá đơn thật (141 471 token) với ngưỡng 176 332 nên thấy mọi thứ bình thường, trong khi
+    trần bị vượt là trần ĐẾM.
+
+    Luật giữ: mọi `system` ở đầu, message `user` ĐẦU TIÊN (đề bài), và đơn vị CUỐI; phần giữa bị
+    bỏ từ cũ nhất, nguyên đơn vị. Không bỏ được gì (trần nhỏ hơn phần được bảo vệ) thì trả NGUYÊN
+    danh sách: thà để nhà cung cấp từ chối còn hơn im lặng cắt vào phần được bảo vệ.
+    """
+    if not isinstance(messages, list) or cap <= 0 or len(messages) <= cap:
+        return messages
+    protected = set()
+    first_user = None
+    for index, message in enumerate(messages):
+        role = message.get('role')
+        if role == 'system':
+            protected.add(index)
+        elif role == 'user' and first_user is None:
+            first_user = index
+    if first_user is not None:
+        protected.add(first_user)
+    units = message_units(messages)
+    if units:
+        protected.add(units[-1][0])
+    to_drop = len(messages) - cap
+    keep = []
+    for start, end in units:
+        if to_drop > 0 and start not in protected:
+            to_drop -= end - start
+            continue
+        keep.extend(range(start, end))
+    if to_drop > 0:
+        return messages
+    return [messages[index] for index in keep]
+
+
 def tail_cut(messages, budget, protect_tail_count=MISSION_TAIL):
     """Chỉ số message đầu tiên của đuôi được giữ nguyên văn, theo ngân sách token.
 
