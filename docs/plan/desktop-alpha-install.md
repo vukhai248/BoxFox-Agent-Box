@@ -1,5 +1,7 @@
 # BoxFox Desktop (Alpha) — cài đặt, chế độ chạy và checklist nghiệm thu
 
+> **Người dùng cuối chỉ muốn cài và dùng:** đọc bản ngắn [desktop-alpha-quickstart.md](desktop-alpha-quickstart.md) trước. Tài liệu dưới đây là bản đầy đủ dành cho người nghiệm thu build.
+>
 > **Trạng thái:** Hướng dẫn cài + checklist 13 bước để chủ nhà tự nghiệm thu D4. Đây là tài liệu của đầu việc D3/D4 trong kế hoạch `desktop-alpha-packaging.md` (§6 PR-2, §8) và §17.3 của `v1-machine-environments-roadmap.md`.
 >
 > **Ngày:** 2026-10-06. **Nhánh:** `vorflux/desktop-alpha`. **Bộ cài:** `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (Windows x64, **chưa ký Authenticode**).
@@ -8,7 +10,7 @@
 
 ## 1. Bộ cài có gì
 
-- **NSIS per-user** — cài vào `%LOCALAPPDATA%\Programs\BoxFox Desktop (Alpha)`, **không hỏi quyền admin**, không cài service, không ghi vào `Program Files`.
+- **NSIS per-user** — cài vào `%LOCALAPPDATA%\Programs\boxfox-desktop`, **không hỏi quyền admin**, không cài service, không ghi vào `Program Files`. (Tên thư mục mặc định lấy từ `name` trong `package.json`; `productName` có ngoặc đơn nên không dùng làm tên thư mục được. Người dùng đổi được ở trang "Choose Install Location".)
 - **Runtime đi kèm** — Node 24.9.0 + CPython 3.13.7 + wheel đã khoá (`runtime.lock.json`). Máy đích **không cần** Node, Python, Conda hay npm.
 - **Toàn bộ stack** — UI đã dựng sẵn, router, harness, và `docker-context/` để dựng image sandbox khi cần.
 - **Shortcut** — Desktop + Start Menu, tên `BoxFox Desktop (Alpha)`.
@@ -127,7 +129,7 @@ Gửi kèm zip này khi báo lỗi. **Không đưa API key/token vào đó**: m�
 
 | bước | cách làm | kết quả mong đợi |
 |---|---|---|
-| 1. Cài bộ cài | Chạy `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (qua cảnh báo SmartScreen), giữ thư mục mặc định | Cài xong dưới `%LOCALAPPDATA%\Programs\BoxFox Desktop (Alpha)`; có shortcut Desktop + Start Menu; mục `BoxFox Desktop (Alpha)` trong Apps & features; `%LOCALAPPDATA%\BoxFoxDesktopAlpha\` được tạo; app **không** tự mở sau khi cài |
+| 1. Cài bộ cài | Chạy `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (qua cảnh báo SmartScreen), giữ thư mục mặc định | Cài xong dưới `%LOCALAPPDATA%\Programs\boxfox-desktop` (tên mặc định của trình cài); có shortcut Desktop + Start Menu; mục `BoxFox Desktop (Alpha)` trong Apps & features; `%LOCALAPPDATA%\BoxFoxDesktopAlpha\` được tạo; app **không** tự mở sau khi cài |
 | 2. Mở app | Start Menu → `BoxFox Desktop (Alpha)` | Cửa sổ hiện đúng UI web; icon tray xuất hiện; `logs\router.stdout.log` và `logs\harness.stdout.log` có dòng mới; **không** đòi Node/Python/Docker; không mở terminal nào |
 | 3. Chọn chế độ chạy | Mở `desktop-settings.json`, đổi `executionMode`, khởi động lại; xem dòng `[desktop] mode:` trong log | `host` chạy được khi máy **không** có Docker; `docker` chỉ nhận khi Docker Desktop đang chạy; Docker thiếu ⇒ rơi về host **kèm lý do rõ** trong log + chẩn đoán, không hiện sandbox giả |
 | 4. Chạy một lượt hội thoại | Gõ một yêu cầu đơn giản trong khung chat, đợi trả lời, rồi Ctrl+R | Trả lời từ backend thật (không mock); session/history còn sau reload; status dịch vụ phản ánh đúng tiến trình đang chạy |
