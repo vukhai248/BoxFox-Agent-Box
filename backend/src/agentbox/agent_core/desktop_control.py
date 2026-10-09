@@ -284,6 +284,12 @@ class DesktopControl:
         ok, state, error = self.lease.acquire(reason, viewer_id=viewer_id, force=force)
         if not ok:
             return False, state, error
+        if force:
+            # Người dùng vừa tự tay bấm "Trả quyền cho agent". Chính cú di chuột tới nút đó vừa làm
+            # mốc input tiến lên, mà vòng lấy mẫu một giây (nền tảng không có hook) lại đọc mọi mốc
+            # tiến lên là "người vừa chạm máy" — không ghi nhận nó ở đây thì quyền bị giật lại sau
+            # ~1 giây và nút trông như hỏng. Di chuyển SAU lúc này vẫn nhả quyền bình thường.
+            self.note_own_input()
         return True, state, error
 
     def release_to_human(self, reason, *, viewer_id=None):

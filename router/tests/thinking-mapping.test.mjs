@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProviders } from '../src/providers/index.mjs';
 import { createAntigravityAdapter } from '../src/providers/antigravity.mjs';
+import { opencodeModelRow, opencodeThinkingMetadata } from '../src/providers/opencode.mjs';
 import { RouterStore } from '../src/store.mjs';
 import { ProviderService } from '../src/service.mjs';
 import { RouterEngine } from '../src/engine.mjs';
@@ -176,4 +177,23 @@ test('a model the provider reports as non-thinking receives no thinking field', 
   await collect(engine.generate({ connectionId: connection.id, modelId: plain.id, messages, stream: true, thinkingLevel: 'high', reasoning_effort: 'high' }));
   assert.equal('thinkingLevel' in seen[0], false, 'the stored default level of a non-thinking model is not forwarded');
   assert.equal('reasoning_effort' in seen[0], false);
+});
+
+test('M4: evidence past its age limit is flagged stale but the level still reaches the wire', async () => {
+  // The router's own measurement expires after 30 days. The flag says "this reading is
+  // old"; it must never delete the level, because dropping it silently removes a working
+  // user control (the exact regression this batch exists to fix).
+  const now = new Date('2026-10-08T00:00:00Z');
+  const stale = opencodeModelRow({ id: 'space-bunny-free' }, { now: new Date('2026-12-15T00:00:00Z') });
+  assert.equal(stale.thinkingStale, true);
+  assert.equal(stale.thinkingAsOf, '2026-10-02', 'the flag carries the date the reading was taken');
+  assert.deepEqual(stale.thinkingLevels, ['minimal', 'low', 'medium', 'high'], 'a stale row keeps every level it published');
+
+  const probeRow = { id: 'space-bunny-free', thinkingSource: 'probe', thinkingAsOf: '2026-01-01', thinkingLevels: ['low'], thinkingProbe: { status: 'supports' }, fieldSources: { thinking: 'probe' } };
+  assert.deepEqual(opencodeThinkingMetadata(probeRow, { now }), { thinkingStale: true }, 'the router measurement ages out too');
+
+  const { calls, fetchImpl } = recorder(() => sse({ type: 'response.completed', response: { output: [] } }));
+  const adapter = createProviders({ fetchImpl }).opencode;
+  await collect(adapter.generate({ connection: { endpoint: 'https://opencode.ai' }, credentials: {}, body: { model: stale.id, messages, stream: true, thinkingLevel: stale.thinkingLevels.at(-1) } }));
+  assert.deepEqual(calls[0].reasoning, { effort: 'high', summary: 'auto' }, 'a level taken from a stale row still maps onto the wire');
 });

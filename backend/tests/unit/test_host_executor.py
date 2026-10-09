@@ -81,8 +81,8 @@ def test_ask_without_approver_fails_closed(tmp_path):
 def test_approver_allow_session_removes_the_second_question(tmp_path):
     calls = []
 
-    def approver(tool, args, decision):
-        calls.append((tool, args.get('command')))
+    def approver(tool, args, decision, session_id=None):
+        calls.append((tool, args.get('command'), session_id))
         return 'allow_session'
 
     executor = make_executor(tmp_path, approver=approver)
@@ -95,7 +95,7 @@ def test_approver_allow_session_removes_the_second_question(tmp_path):
 
 
 def test_approver_allow_always_writes_a_rule(tmp_path):
-    executor = make_executor(tmp_path, approver=lambda tool, args, decision: 'allow_always')
+    executor = make_executor(tmp_path, approver=lambda tool, args, decision, session_id=None: 'allow_always')
     executor.policy.mode = 'ask'
     run(executor.execute('terminal_exec', {'command': 'echo mot-lan'}, 's1'))
     saved = executor.policy.paths[perms.LAYER_PROJECT]
@@ -104,7 +104,7 @@ def test_approver_allow_always_writes_a_rule(tmp_path):
 
 
 def test_denied_approvals_trip_the_breaker(tmp_path):
-    executor = make_executor(tmp_path, approver=lambda tool, args, decision: 'deny')
+    executor = make_executor(tmp_path, approver=lambda tool, args, decision, session_id=None: 'deny')
     executor.policy.mode = 'ask'
     for _ in range(perms.DENIAL_BREAKER_LIMIT):
         run(executor.execute('terminal_exec', {'command': 'echo a'}, 's1'))
@@ -113,7 +113,7 @@ def test_denied_approvals_trip_the_breaker(tmp_path):
 
 
 def test_approver_exception_is_a_denial(tmp_path):
-    def approver(tool, args, decision):
+    def approver(tool, args, decision, session_id=None):
         raise RuntimeError('giao diện hỏng')
 
     executor = make_executor(tmp_path, approver=approver)
@@ -294,6 +294,59 @@ def test_terminal_exec_spills_long_output_to_an_artifact(tmp_path):
     assert artifact.is_file()
     assert 'dong-4000' in artifact.read_text(encoding='utf-8')
     assert payload['content'].endswith('[truncated; see artifact]')
+    # F30: cùng lượt spill ấy phải kèm ref có cấu trúc (hash nội dung + đường dẫn), không chỉ đường
+    # dẫn trần — nhờ vậy mảnh bằng chứng mang được hash của tệp.
+    import hashlib
+
+    ref = payload['outputRef']
+    assert ref['path'] == payload['artifact']
+    assert ref['contentHash'] == hashlib.sha256(artifact.read_bytes()).hexdigest()
+    assert ref['bytes'] == artifact.stat().st_size
+
+
+def test_terminal_exec_spills_into_the_app_profile_when_artifacts_live_outside(tmp_path):
+    """`machine_router` đặt `artifacts_dir` trong profile của app, ngoài workspace chủ.
+
+    Tệp spill phải nằm ở đó (cùng chỗ với `captures/`), và đường dẫn trả về phải mở được — không
+    phải một đường tương đối không tồn tại, cũng không phải một tệp rơi vào thư mục dự án của chủ.
+    """
+    profile_artifacts = tmp_path / 'profile' / 'host-artifacts' / 'p1' / 's1'
+    executor = make_executor(tmp_path, artifacts_dir=profile_artifacts)
+    payload = run(executor.execute('terminal_exec',
+                                   {'command': 'for i in $(seq 1 4000); do echo dong-$i; done'}, 's1'))
+
+    path = Path(payload['outputRef']['path'])
+    assert path.parent == profile_artifacts / 'tools' and path.is_file()
+    assert payload['artifact'] == str(path), 'ngoài workspace thì trả đường dẫn tuyệt đối'
+    assert not (executor.workspace / '.generated_artifacts' / 'tools').exists(), \
+        'không được ghi phần tràn vào thư mục dự án của chủ'
+
+
+def test_a_failed_spill_keeps_the_exit_code_and_names_the_cut(tmp_path):
+    """Vượt trần mà tệp spill không ghi được: lượt lệnh vẫn sống, và câu mô tả phải nói đúng.
+
+    Trước F30 chỗ này cắt im lặng; bản gộp hai producer để `OSError` biến cả kết quả thành
+    `HOST_TOOL_FAILED`. Câu cũ ("đầu ra đầy đủ ở `content`") cũng sai trong ca này vì `content` chỉ
+    là bản xem trước.
+    """
+    blocked = tmp_path / 'blocked-artifacts'
+    blocked.write_text('tệp, không phải thư mục')
+    executor = make_executor(tmp_path, artifacts_dir=blocked)
+    payload = run(executor.execute(
+        'terminal_exec', {'command': 'for i in $(seq 1 4000); do echo dong-$i; done; exit 3'}, 's1'))
+
+    assert payload['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert payload['exit_code'] == 3 and payload.get('artifact') is None
+    assert payload['content'].endswith(host.output_refs.SPILL_FAILED_MARKER)
+    assert 'không ghi được' in payload['error'] and 'đầy đủ' not in payload['error']
+
+
+def test_a_short_failed_command_still_says_the_output_is_complete(tmp_path):
+    executor = make_executor(tmp_path)
+    payload = run(executor.execute('terminal_exec', {'command': 'echo vỡ; exit 3'}, 's1'))
+
+    assert payload['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert 'đầu ra đầy đủ ở `content`' in payload['error']
 
 
 def test_terminal_exec_requires_a_command(tmp_path):
@@ -335,3 +388,167 @@ def test_child_env_forces_utf8(tmp_path):
     env = executor._child_env()
     assert env['PYTHONIOENCODING'] == 'utf-8'
     assert env['PYTHONUTF8'] == '1'
+
+
+# ------------------------------------------- thẻ duyệt của host mode (slice 1b)
+
+def test_approver_receives_the_session(tmp_path):
+    seen = []
+
+    def approver(tool, args, decision, session_id=None):
+        seen.append(session_id)
+        return 'allow'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo xin-chao'}, 's1'))
+    assert seen == ['s1']
+
+
+def test_approve_session_remembers_and_approve_always_writes_a_rule(tmp_path):
+    executor = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'allow_session')
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo ca-phien'}, 's1'))
+    key = executor.policy.session_key('terminal_exec', {'command': 'echo ca-phien'},
+                                      cwd=executor.policy.workspace, session_id='s1')
+    assert key in executor.policy.session_rules
+    assert not executor.policy.paths[perms.LAYER_PROJECT].exists()
+
+    other = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'allow_always')
+    other.policy.mode = 'ask'
+    run(other.execute('terminal_exec', {'command': 'echo luon-cho'}, 's1'))
+    assert 'terminal_exec(echo luon-cho)' in other.policy.paths[perms.LAYER_PROJECT].read_text(encoding='utf-8')
+
+
+def test_prompt_choices_map_to_verdicts():
+    """Bốn lựa chọn trên thẻ ⇒ verdict của executor; chữ tự nhập ⇒ từ chối."""
+    ask_decision = perms.ask('cần hỏi', '', 'mode')
+    guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')
+    approved = lambda choice: {'status': 'approved', 'choice': choice}
+    assert host.approval_verdict(approved('approve'), ask_decision) == 'allow'
+    assert host.approval_verdict(approved('approve-session'), ask_decision) == 'allow_session'
+    assert host.approval_verdict(approved('approve-always'), ask_decision) == 'allow_always'
+    assert host.approval_verdict(approved('approve_session'), ask_decision) == 'allow_session'
+    assert host.approval_verdict(approved('approve_always'), ask_decision) == 'allow_always'
+    assert host.approval_verdict(approved('reject'), ask_decision) == 'deny'
+    assert host.approval_verdict(approved('chắc là được'), ask_decision) == 'deny'
+    assert host.approval_verdict({'status': 'rejected'}, ask_decision) == 'deny'
+    assert host.approval_verdict(approved('approve-session'), guarded) == 'deny'
+    assert host.approval_verdict(approved('approve_session'), guarded) == 'deny'
+    assert [item['id'] for item in host.approval_options(guarded)] == ['approve', 'reject']
+
+
+def test_card_options_survive_the_runtime_normalization():
+    """Đúng id mà `resolve_decision` phát ra trên thẻ phải quy ra verdict.
+
+    Đây là bài kiểm tra bắt lỗi thật đo được trên harness: ba lựa chọn `kind='approve'` bị
+    `normalize_decision_options` ép id thành `approve`, `approve-2`, `approve-3`, nên bấm "Cho phép
+    cả phiên" gửi `approve-2` và executor TỪ CHỐI một lệnh vừa được duyệt.
+    """
+    from agentbox.agent_core.runtime import normalize_decision_options, with_other_option
+
+    ask_decision = perms.ask('cần hỏi', '', 'mode')
+    guarded = perms.ask('nhóm luôn hỏi', 'guarded:git_force_push', 'guarded')
+    for decision, expected in ((ask_decision, {'approve': 'allow', 'approve-session': 'allow_session',
+                                               'approve-always': 'allow_always'}),
+                               (guarded, {'approve': 'allow'})):
+        options = with_other_option(normalize_decision_options(host.approval_options(decision),
+                                                               'approval'))
+        ids = [item['id'] for item in options]
+        assert len(ids) == len(set(ids)), f'id phải duy nhất, không bị đánh số lại: {ids}'
+        for option in options:
+            if option['id'] not in expected:
+                continue
+            outcome = {'status': 'approved', 'choice': option['id']}
+            assert host.approval_verdict(outcome, decision) == expected[option['id']], ids
+    options = with_other_option(normalize_decision_options(host.approval_options(ask_decision),
+                                                           'approval'))
+    assert [item['id'] for item in options] == ['approve', 'approve-session', 'approve-always',
+                                                'reject', 'other']
+
+
+def test_free_text_verdict_is_a_denial(tmp_path):
+    executor = make_executor(tmp_path, approver=lambda t, a, d, session_id=None: 'chắc là được')
+    executor.policy.mode = 'ask'
+    result = run(executor.execute('terminal_exec', {'command': 'echo x'}, 's1'))
+    assert result['errorCode'] == host.PERMISSION_DENIED_CODE
+
+
+def test_guarded_command_stays_single_shot(tmp_path):
+    calls = []
+
+    def approver(tool, args, decision, session_id=None):
+        calls.append(decision.rule)
+        return 'allow_session'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'trusted'
+    for _ in range(2):
+        run(executor.execute('terminal_exec', {'command': 'git push --force origin main'}, 's1'))
+    assert len(calls) == 2, 'nhóm luôn hỏi không được ghi nhớ'
+    assert all(rule.startswith('guarded:') for rule in calls)
+    assert executor.policy.session_rules == {}
+
+
+def test_approver_options_match_the_prompt_contract(tmp_path):
+    seen = {}
+
+    def approver(tool, args, decision, session_id=None):
+        seen['options'] = host.approval_options(decision)
+        return 'deny'
+
+    executor = make_executor(tmp_path, approver=approver)
+    executor.policy.mode = 'ask'
+    run(executor.execute('terminal_exec', {'command': 'echo x'}, 's1'))
+    assert [item['id'] for item in seen['options']] == ['approve', 'approve-session', 'approve-always',
+                                                        'reject']
+
+    run(executor.execute('terminal_exec', {'command': 'git push --force'}, 's1'))
+    assert [item['id'] for item in seen['options']] == ['approve', 'reject']
+
+
+# ------------------------------------------------- lỗi phải mang mã (nhóm L)
+
+def test_nonzero_exit_is_a_coded_error_not_a_bare_dict(tmp_path):
+    """L4: lệnh thoát khác 0 phải trả `errorCode`, không phải dict "thành công".
+
+    Trước đây `terminal_exec` trả `{'content', 'exit_code', 'is_error': True}` mà KHÔNG có
+    `errorCode`; `recovery_policy` xếp mọi mã thiếu vào nhánh "chưa biết", và `reflection_hint`
+    khuyên model sửa tham số theo khuôn schema — sai việc cần làm với một lệnh hỏng.
+    """
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('terminal_exec', {'command': 'exit 3'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    # Đầu ra vẫn phải tới tay model: mã lỗi không được nuốt `content` hay `exit_code`.
+    assert result['exit_code'] == 3
+    assert 'content' in result and 'exit_code' in result['error']
+
+
+def test_nonzero_exit_keeps_the_output_and_the_artifact(tmp_path):
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('terminal_exec', {'command': 'echo BOXFOX_NOISE; exit 7'}, 's1'))
+    assert result['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert result['exit_code'] == 7
+    assert 'BOXFOX_NOISE' in result['content']
+
+
+def test_an_unexpected_tool_failure_still_returns_a_coded_error(tmp_path, monkeypatch):
+    """Một công cụ ném lỗi lạ KHÔNG được giết lượt: phải thành `HOST_TOOL_FAILED` có mã."""
+    executor = make_executor(tmp_path)
+
+    def boom(args, *, root=None):
+        raise RuntimeError('hỏng bất ngờ')
+
+    monkeypatch.setattr(executor, '_file_read', boom)
+    result = run(executor.execute('file_read', {'path': 'a.txt'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] == 'HOST_TOOL_FAILED'
+    assert 'RuntimeError' in result['error']
+
+
+def test_missing_file_names_the_path_it_could_not_find(tmp_path):
+    executor = make_executor(tmp_path)
+    result = run(executor.execute('file_read', {'path': 'khong-co-that.txt'}, 's1'))
+    assert result['is_error'] is True
+    assert result['errorCode'] in ('FILE_NOT_FOUND', 'PATH_ESCAPE')

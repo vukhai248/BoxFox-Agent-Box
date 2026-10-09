@@ -14,6 +14,7 @@ from agentbox.agent_core.limits import (ANSWER_LENGTH_HINT, ANSWER_LENGTH_WARN_C
                                         ANSWER_TOO_LONG_CODE, ANSWER_WARN_CHARS)
 from agentbox.agent_core.runtime import HarnessRuntime, answer_truncation_tail
 from agentbox.memory.session_store import SessionStore
+from agentbox.sandbox.worker import SESSION_OP_NAMES
 
 
 def answer(text='done', calls=None, finish='stop'):
@@ -42,6 +43,10 @@ class FixtureModel:
 
 class FixtureExecutor:
     async def execute(self, name, args, sid):
+        if name in SESSION_OP_NAMES:
+            # Op nhật ký của box (A1/A7): hợp đồng thật là `{ok, …}` — thiếu `ok` thì harness coi
+            # là chưa ghi được và ghim `JOURNAL_DEGRADED` (đúng như worker thật trả).
+            return {'ok': True}
         return {'content': 'observed fixture result'}
 
     async def cleanup(self, sid):

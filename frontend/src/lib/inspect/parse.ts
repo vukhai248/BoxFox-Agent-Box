@@ -1,9 +1,12 @@
 /**
- * Validator phản hồi của `POST /__box/inspect-element` — KHÔNG TIN dữ liệu
+ * Validator phản hồi của `POST /__box/inspect-element` (box) và
+ * `POST /api/agent/desktop/inspect-element` (host mode) — KHÔNG TIN dữ liệu
  * mạng. `parseInspectElementResult` chạy TRƯỚC khi bất kỳ trường nào của
  * phản hồi tới được React; hình dạng sai ở bất kỳ đâu không làm rớt cả
  * payload, chỉ làm rớt đúng trường đó về một giá trị mặc định an toàn
  * (§5 `v1-element-selector.md`, bảng "Bước 3" của `frontend-detail.md`).
+ *
+ * Ba nhánh: `dom` / `uia` (chỉ host mode, Windows) / `desktop`.
  *
  * ⚠️ QUY TẮC M1 — BẮT `integrity`, KHÔNG đọc từ dữ liệu: nội dung phần tử là
  * màn hình máy nên LUÔN `khong_tin_duoc`, kể cả khi box trả giá trị khác (một
@@ -20,12 +23,13 @@ import type {
   InspectLabel,
   InspectNote,
   InspectTarget,
+  UiaInspectResult,
 } from '../../types/inspect'
 import { CONFIDENTIALITY_ORDER } from '../../types/labels'
 import type { SourceKind } from '../../types/labels'
 import { INSPECTED_ELEMENT_CONFIDENTIALITY, INSPECTED_ELEMENT_TOOL } from './chunk'
 
-/** Mười một mã `reason` hợp lệ ở nhánh desktop — bảng chuẩn §5.2. */
+/** Mười một mã `reason` của box + sáu mã Windows của host mode — bảng chuẩn §5.2 + §4.1. */
 const KNOWN_DESKTOP_REASONS: readonly InspectDesktopReason[] = [
   'not_chromium',
   'outside_viewport',
@@ -38,6 +42,13 @@ const KNOWN_DESKTOP_REASONS: readonly InspectDesktopReason[] = [
   'cdp_timeout',
   'no_node_at_point',
   'extract_failed',
+  // Host mode (Windows) — giá trị khớp nguyên văn `sandbox/win/errors.py`.
+  'uia_unavailable',
+  'uia_timeout',
+  'uia_provider_hang',
+  'uia_no_element',
+  'no_window_at_point',
+  'window_identity_unavailable',
 ]
 
 /** Năm mã `notes` hợp lệ (§5.6, cột C3). */
@@ -190,6 +201,58 @@ function parseDom(raw: Record<string, unknown>): DomInspectResult | null {
   }
 }
 
+/** Danh sách `patterns` — chỉ nhận chuỗi, bỏ mọi thứ khác (dữ liệu không tin được). */
+function parsePatterns(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((item): item is string => typeof item === 'string')
+}
+
+function parseUiaBounds(raw: unknown): { screenBox: InspectBox; dpi?: number } {
+  const obj = isRecord(raw) ? raw : {}
+  const dpi = asOptionalNumber(obj.dpi)
+  return dpi === undefined ? { screenBox: parseBox(obj.screenBox) } : { screenBox: parseBox(obj.screenBox), dpi }
+}
+
+/**
+ * Nhánh `uia` (host mode). KHÁC `parseDom`: không có trường nào là điều kiện
+ * sống-còn — `name`/`className`/… thiếu thì rơi về chuỗi rỗng (khuôn "rơi từng
+ * trường", không ném), vì một phần tử UIA thiếu tên vẫn là kết quả hợp lệ và
+ * người dùng cần thấy `controlType`/`bounds` của nó.
+ *
+ * `elementToken` là ngoại lệ duy nhất phải là chuỗi: nó là ĐỊNH DANH của lần
+ * đọc này. Không có định danh thì kết quả không đối chiếu được về sau ⇒ trả
+ * `null` để ngăn kéo hiện "phản hồi sai hình dạng" thay vì một thẻ trông như
+ * thật nhưng không kiểm được gì.
+ */
+function parseUia(raw: Record<string, unknown>): UiaInspectResult | null {
+  const elementToken = raw.elementToken
+  if (typeof elementToken !== 'string' || elementToken === '') return null
+
+  return {
+    type: 'uia',
+    name: asOptionalString(raw.name) ?? '',
+    controlType: asOptionalString(raw.controlType) ?? '',
+    controlTypeId: asOptionalNumber(raw.controlTypeId),
+    automationId: asOptionalString(raw.automationId) ?? '',
+    className: asOptionalString(raw.className) ?? '',
+    helpText: asOptionalString(raw.helpText) ?? '',
+    isEnabled: typeof raw.isEnabled === 'boolean' ? raw.isEnabled : true,
+    isOffscreen: typeof raw.isOffscreen === 'boolean' ? raw.isOffscreen : false,
+    isPassword: typeof raw.isPassword === 'boolean' ? raw.isPassword : false,
+    bounds: parseUiaBounds(raw.bounds),
+    patterns: parsePatterns(raw.patterns),
+    windowId: asOptionalString(raw.windowId) ?? '',
+    pid: asOptionalNumber(raw.pid),
+    processName: asOptionalString(raw.processName),
+    elementToken,
+    generation: asOptionalNumber(raw.generation),
+    sourceId: asOptionalString(raw.sourceId),
+    frameId: asOptionalString(raw.frameId),
+    geometryRevision: asOptionalNumber(raw.geometryRevision),
+    label: parseLabel(raw.label),
+  }
+}
+
 function parseDesktop(raw: Record<string, unknown>): DesktopInspectResult | null {
   const windowTitle = raw.windowTitle
   const windowId = raw.windowId
@@ -210,10 +273,18 @@ function parseDesktop(raw: Record<string, unknown>): DesktopInspectResult | null
   }
 }
 
-/** Validate phản hồi 200 của `/__box/inspect-element`. Hình dạng sai ⇒ `null`. */
+/**
+ * Validate phản hồi 200 của `/__box/inspect-element` (box) và
+ * `/api/agent/desktop/inspect-element` (host mode). Hình dạng sai ⇒ `null`.
+ *
+ * Ba nhánh: `dom` (trang web), `uia` (phần tử UI Automation trên Windows),
+ * `desktop` (thoái hoá mềm). Box chỉ trả hai nhánh đầu-cuối; `uia` là của host
+ * mode — nhưng ngăn kéo dùng chung nên hàm này phải hiểu cả ba.
+ */
 export function parseInspectElementResult(payload: unknown): InspectElementResult | null {
   if (!isRecord(payload)) return null
   if (payload.type === 'dom') return parseDom(payload)
+  if (payload.type === 'uia') return parseUia(payload)
   if (payload.type === 'desktop') return parseDesktop(payload)
   return null
 }

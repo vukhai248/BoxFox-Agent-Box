@@ -1,6 +1,8 @@
 /**
- * Huy hiệu trên thanh tab — dấu hiệu duy nhất cho người dùng biết có ý định tự
- * mở tab đang xếp hàng (hợp đồng §3: tab đích hiện số đếm; mở tab là xoá hàng).
+ * Huy hiệu trên thanh tab + hàng thông báo cạnh khung soạn tin — hai dấu hiệu
+ * cho người dùng biết có ý định tự mở tab đang xếp hàng (hợp đồng §3: tab đích
+ * hiện số đếm; mở tab là xoá hàng). Huy hiệu chỉ nói "đang chờ", hàng thông báo
+ * nói thêm VÌ SAO (cổng nào đã chặn) và cho mở ngay bằng một cú bấm.
  *
  * Vẽ nguyên `App` (thanh tab nằm trong đó) với mạng đã chặn.
  */
@@ -9,6 +11,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { I18nProvider } from '../../i18n'
+import en from '../../i18n/en'
 import { useAgentStore } from '../../store/agentStore'
 import { useHarnessChatStore } from '../../store/harnessChatStore'
 import { useUiStore } from '../../store/uiStore'
@@ -136,5 +139,78 @@ describe('Thanh tab — huy hiệu ý định đang xếp hàng', () => {
     })
 
     expect(tabBadge(host, 'decisions')?.textContent).toBe('1')
+  })
+})
+
+describe('Thanh tab — ý định xếp hàng cho tab Design', () => {
+  it('ý định suy ra từ `design_canvas` đếm trên huy hiệu của tab Design', () => {
+    useUiStore.setState({ openTabs: ['plan', 'design'], autoOpenOnlyWhenIdle: true, lastUserActivityAt: Date.now() })
+    const host = render()
+
+    act(() => {
+      const result = useUiStore
+        .getState()
+        .requestTabIntent({ tab: 'design', target: { designId: 'design-1' }, reason: 'canvas_drawn' })
+      expect(result).toBe('queued')
+    })
+
+    expect(tabBadge(host, 'design')?.textContent).toBe('1')
+  })
+})
+
+describe('Khung chat — hàng thông báo ý định đang xếp hàng (N2)', () => {
+  function queueDesignIntent() {
+    useUiStore.setState({
+      openTabs: ['plan', 'design'],
+      activeTab: 'plan',
+      autoOpenOnlyWhenIdle: true,
+      lastUserActivityAt: Date.now(),
+    })
+    const host = render()
+    act(() => {
+      useUiStore
+        .getState()
+        .requestTabIntent({ tab: 'design', target: { designId: 'design-1' }, reason: 'canvas_drawn' })
+    })
+    return host
+  }
+
+  it('người dùng nhìn thấy hàng thông báo kèm tên tab và LÝ DO bị chặn', () => {
+    const host = queueDesignIntent()
+
+    const notice = host.querySelector('[data-testid="chat-pending-intent"]')
+    expect(notice).not.toBeNull()
+    expect(notice?.textContent).toContain('Design')
+    // Cổng đã chặn ở đây là "người dùng đang bận" — lý do phải đọc được.
+    expect(notice?.textContent).toContain(en.chat.pendingTabReasonUserBusy)
+  })
+
+  it('bấm "mở ngay" mở tab đang chờ; hàng đợi và hàng thông báo tự biến mất', () => {
+    const host = queueDesignIntent()
+    const open = host.querySelector<HTMLButtonElement>('[data-testid="chat-pending-intent-open"]')
+    expect(open).not.toBeNull()
+
+    act(() => {
+      open?.click()
+    })
+
+    expect(useUiStore.getState().activeTab).toBe('design')
+    expect(useUiStore.getState().pendingIntents).toEqual([])
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+    expect(host.querySelector('[data-testid="chat-pending-intent"]')).toBeNull()
+  })
+
+  it('bấm "bỏ qua" chỉ ẩn hàng thông báo — hàng đợi và huy hiệu vẫn còn', () => {
+    const host = queueDesignIntent()
+    const dismiss = host.querySelector<HTMLButtonElement>('[data-testid="chat-pending-intent-dismiss"]')
+    expect(dismiss).not.toBeNull()
+
+    act(() => {
+      dismiss?.click()
+    })
+
+    expect(host.querySelector('[data-testid="chat-pending-intent"]')).toBeNull()
+    expect(useUiStore.getState().pendingIntentNotice).toBeNull()
+    expect(tabBadge(host, 'design')?.textContent).toBe('1')
   })
 })

@@ -441,11 +441,19 @@ export function planMeasureText(measures: Record<string, unknown>, key: string):
   return asText(measures[key])
 }
 
-/** `POST /api/agent/plans/review` + `GET /api/agent/plans/status` qua proxy `/api/agent`. */
+/**
+ * `POST /api/agent/plans/review` + `GET /api/agent/plans/status` qua proxy `/api/agent`.
+ *
+ * `sessionId` (tuỳ chọn) là phiên đang mở tab. Host mode cần nó để đọc `.plans` trong ĐÚNG folder dự
+ * án của phiên; Docker bỏ qua. Chỗ gọi cũ không truyền gì vẫn chạy nguyên.
+ */
 export class HarnessPlanStatusClient implements PlanStatusClient {
+  constructor(private readonly sessionId?: string) {}
+
   async read(identity: string, version: number | null): Promise<PlanStatusReport> {
     const query = new URLSearchParams({ identity })
     if (version !== null) query.set('version', String(version))
+    if (this.sessionId) query.set('sessionId', this.sessionId)
     const payload = await agentApi<unknown>(`/plans/status?${query.toString()}`)
     const report = readPlanStatus(payload)
     if (!report) throw new Error('The harness returned an unreadable plan status.')
@@ -461,7 +469,10 @@ export class HarnessPlanStatusClient implements PlanStatusClient {
   ): Promise<PlanReviewOutcome> {
     let payload: unknown
     try {
-      payload = await agentApi<unknown>('/plans/review', { identity, version, decision, note, ...workflow })
+      payload = await agentApi<unknown>('/plans/review', {
+        identity, version, decision, note, ...workflow,
+        ...(this.sessionId ? { sessionId: this.sessionId } : {}),
+      })
     } catch (error) {
       throw toPlanReviewError(error)
     }
@@ -478,6 +489,6 @@ export class HarnessPlanStatusClient implements PlanStatusClient {
   }
 }
 
-export function createPlanStatusClient(): PlanStatusClient {
-  return new HarnessPlanStatusClient()
+export function createPlanStatusClient(sessionId?: string): PlanStatusClient {
+  return new HarnessPlanStatusClient(sessionId)
 }

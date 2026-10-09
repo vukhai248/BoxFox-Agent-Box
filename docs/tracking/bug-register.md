@@ -1685,3 +1685,144 @@ Kèm theo cùng vòng: **N-5 đóng** (SearXNG tự host + tự dò là chân kh
 §6) và **R10-5 được rà lại, giữ nguyên**: hành vi "nhà cung cấp trả 200 với thân không phải JSON làm
 đứt cả chuỗi" vẫn đúng là đã sửa ở đợt 10
 (`test_web_tools.py::test_the_provider_chain_survives_a_challenge_page`).
+
+### 6.39 Vòng 2026-10-08 — CUA trên Linux/X11: ba lỗi gõ/bấm, một lỗi giao diện, một giới hạn còn lại
+
+Vòng này xuất phát từ yêu cầu của chủ sở hữu: *"kiểm, test kỹ hơn về CUA… tìm các bug nếu có"*.
+Ba lỗi đầu đều thuộc loại **im lặng**: thao tác trả về `OK` nhưng kết quả trên màn hình lại khác.
+
+| Mã | Mức | Triệu chứng | Bằng chứng | Nguyên nhân | Vá |
+|---|---|---|---|---|---|
+| BUG-115 | HIGH | Gõ chữ có dấu tiếng Việt qua CUA thì **mất sạch dấu**, khoảng trắng bị thay bằng ký tự lạ (`Xin chào Cửa sổ!` → `Xin cho Ca s!`); thao tác vẫn báo `OK` nên agent không hề biết mình vừa làm hỏng dữ liệu | `/var/tmp/cua-locale-probe.sh` (cùng một payload: terminal có `LANG` → KHỚP; `env -i` → mất dấu; `LC_ALL=C` → mất dấu) và `/var/tmp/cua-locale-verify.py` (sau khi vá: **35/35 ký tự, 3/3 lượt**; trước khi vá: 0/3) | `X11Platform._child_env()` chỉ chuyển `PATH/HOME/USER/LANG/LC_ALL/XAUTHORITY`; tiến trình harness chỉ có `DISPLAY=:1` (không `LANG`), nên **mọi ứng dụng do BoxFox mở** và mọi `xdotool` đều thừa hưởng môi trường không UTF-8. Chính locale của **ứng dụng đích** quyết định ký tự non-ASCII có sống sót qua XTEST hay không | `_child_env()` nay kiểm `has_utf8_locale(env)` và khi thiếu thì đặt `LANG = utf8_locale()` (dò `locale -a`: `C.UTF-8`, `C.utf8`, `en_US.UTF-8`, `en_US.utf8`), bỏ `LC_ALL`/`LC_CTYPE`; thêm ghi chú nền tảng khi phiên làm việc không có locale UTF-8. 8 bài kiểm mới trong `test_x11_platform.py` |
+| BUG-116 | HIGH | Bấm **hai lần liên tiếp vào cùng một điểm** làm cú thứ hai treo đủ **5 s** rồi báo `SOURCE_CHANGED: X11 từ chối 'mousemove': hết thời gian chờ` — agent hiểu sai thành "cửa sổ đã đổi chỗ", người dùng thấy agent đứng hình | `primitives.click` đo được `KHÔNG ĐO ĐƯỢC: … hết thời gian chờ /usr/bin/xdotool`; sau khi vá: `click` p50 **22,7 ms**, 5/5 lượt xanh | `xdotool mousemove --sync` chờ một sự kiện `MotionNotify` tới đúng toạ độ; con trỏ đã đứng đúng chỗ thì X server **không sinh sự kiện nào**, nên lệnh chờ tới hết thời gian chờ | `click()` chỉ gọi `mousemove` khi con trỏ còn ở chỗ khác; 2 bài kiểm mới (`test_clicking_the_same_point_twice_does_not_move_the_pointer_again`, `test_a_click_at_another_point_still_moves_the_pointer_first`) |
+| BUG-117 | HIGH | Mọi thao tác `key`/`type`/`click` nhắm vào cửa sổ chính bị từ chối bằng `SOURCE_CHANGED` khi ứng dụng đang mở hộp thoại của **chính nó** (ví dụ "Do you trust the authors of the files in this workspace?"); `xdotool windowactivate --sync` treo **>12 s**; ảnh chụp cửa sổ **không có** hộp thoại đang che nó | `/tmp/cua-vscode/run-04-terminal.png` (hộp thoại tin cậy thư mục), `/tmp/cua-vscode/composed.png` (ảnh đã ghép hộp thoại), `timeout 12 xdotool windowactivate --sync 33554436` → `exit=124` | Hộp thoại của ứng dụng là một cửa sổ X11 **riêng** (`WM_TRANSIENT_FOR`, `_NET_WM_WINDOW_TYPE_DIALOG`); mã cũ chỉ so **một** cửa sổ nên coi hộp thoại là "cửa sổ lạ đang che" | Thêm chuỗi chủ sở hữu `WM_TRANSIENT_FOR` (`get_window_owner`/`is_own_window`/`transient_windows`), chấp nhận hộp thoại của chính ứng dụng, **ghép** hộp thoại vào ảnh chụp, bỏ `--sync` khi kích hoạt và chờ `_NET_ACTIVE_WINDOW` 10 ms một lần (trần 0,25 s), đệm hình học 0,5 s. 11 bài kiểm mới; ca dùng VS Code nay chạy hết (`ran.txt: 5`) |
+| BUG-118 | MEDIUM | Gõ chữ hoa tiếng Việt ngoài ASCII bị **mất dấu hoa**: `Á À Ã Â Ê Ô É È Í Ì Ó Ò Õ Ú Ù Ý` đến nơi thành chữ thường; `Ả Ạ Ă Đ Ơ Ư Ẽ Ĩ Ũ Ỳ` thì đúng | `/var/tmp/cua-upper-probe2.sh` (gửi `ÁÀẢÃẠĂÂĐÊÔƠƯÉÈẼÍÌĨÓÒÕÚÙŨÝỲ`, nhận `áàẢãẠĂâĐêôƠƯéèẼíìĨóòõúùŨýỲ`); `xdotool key Aacute` và `xdotool key U00C1` cho cùng kết quả sai | `xdotool type` tự ánh xạ keysym cho **từng** ký tự rồi trả lại ngay; bảng mã tạm đó mất tính hoa/thường. Bàn phím `us`/`pc105`, 248 keycode, **0 keycode mang keysym Unicode** | **ĐÃ SỬA (20fe542, 08/10/2026)** cùng BUG-119: `keysym_plan()` ánh xạ sẵn keysym vào keycode trống, giữ nguyên trong suốt lần gõ. Kiểm byte-chính-xác qua biểu mẫu web: **26/26 ký tự hoa đúng** (`ÁÀẢÃẠĂÂĐÊÔƠƯÉÈẼÍÌĨÓÒÕÚÙŨÝỲ`, 440 ms), chữ thường 27/27. Chỉ còn đường dự phòng (thiếu `xmodmap`) mới mất dấu hoa — nay là ghi chú nền tảng |
+
+Kèm theo vòng này: `backend/tools/cua_bench.py` (đo latency + token, chốt trần `budget`) và
+`docs/testing/cua-latency-token.md` (ba nhóm số đo, cách quy đổi token, danh sách chỗ còn chậm).
+
+### 6.40 Vòng 2026-10-08 (tiếp) — gõ chữ có dấu trên X11: ký tự mất khi máy bận — ĐÃ SỬA
+
+Phát hiện khi **quay phim** ca dùng web: đúng lúc ffmpeg ghi màn hình 12 fps, câu
+`Xin chào Cửa sổ! áàảãạ ăâđơơư` đến máy chủ với 27/29 ký tự — `á` và `ã` biến mất, mà lệnh gõ vẫn
+báo thành công. Truy tiếp thì đây là cùng một gốc với BUG-118.
+
+| Mã | Mức | Triệu chứng | Bằng chứng | Nguyên nhân | Vá |
+|---|---|---|---|---|---|
+| BUG-119 | HIGH | Gõ chữ có dấu **mất ký tự khi máy bận** (quay phim, tải nặng): câu 29 ký tự mất 1–2 ký tự ở 3/6 lượt; thao tác vẫn trả `OK` nên agent không biết | `/var/tmp/cua-web/typing-load2.py` và `typing-delay.py` (máy chủ web ghi lại đúng byte nhận được, tải bằng chính ffmpeg x11grab): đường cũ **3/6** lượt sạch; mỗi ký tự một lệnh **8/10**; tăng nhịp lên 60 ms **7/10** (không đỡ, chỉ chậm gấp 3); ánh xạ sẵn + giữ nguyên **16/16 lượt sạch**, 361–387 ms cho 29 ký tự | `xdotool type` ánh xạ một keycode trống cho mỗi ký tự ngoài ASCII rồi **trả lại ngay**; máy bận thì ứng dụng đọc sự kiện sau lúc ánh xạ đã bị trả lại ⇒ ký tự mất hẳn. Nhịp gõ không liên quan (60 ms còn tệ hơn 12 ms) | `input.py`: `keysym_plan()` + `keysym_name()` + `release_keycodes()` — ánh xạ sẵn các keysym cần dùng vào keycode trống (`xmodmap -pke` để tìm chỗ trống, tối đa 10), gõ bằng `xdotool key`, **luôn** trả keycode về `NoSymbol` trong `finally` (kể cả khi lỗi giữa chừng). Không đủ chỗ/thiếu `xmodmap` ⇒ quay lại `typing_chunks()` (mỗi ký tự ngoài ASCII một lệnh). 5 bài kiểm mới |
+
+Ghi chú kèm theo: `typing_chunks()` vẫn là đường dự phòng nên vẫn được kiểm; nhịp gõ `TYPE_DELAY_MS = 12`
+giữ nguyên (đo được: 60 ms không giảm mất ký tự).
+
+### 6.41 Vòng 2026-10-08 (tiếp) — gia cố sau soát mã: chốt hộp thoại, hình học lúc bấm, và chốt trần
+
+Ba điểm do vòng soát mã độc lập chỉ ra, đều là **hệ quả của chính các bản vá trong §6.39–6.40** — vá
+xong thì lỗi cũ hết nhưng chốt an toàn bị nới ra hoặc công cụ đo nói không đúng.
+
+| Mã | Mức | Vấn đề | Cách vá |
+|---|---|---|---|
+| BUG-120 | MEDIUM | **Chốt hộp thoại quá dễ dãi**: `is_own_window` chỉ đòi `WM_TRANSIENT_FOR` trỏ về đích. Trên X11 không có ranh giới quyền giữa các ứng dụng cùng màn hình, nên một công cụ lạ "bám theo cửa sổ đang hoạt động" (bảng chọn nhanh, công cụ chụp ảnh, cửa sổ IME/portal) đặt được thuộc tính đó và sẽ **được nhận input thay cho ứng dụng đích** — đúng thứ mà chốt này sinh ra để chặn. Bản trước vá BUG-117 theo hướng "cứ có thuộc tính là nhận", đánh đổi quá nhiều | `is_dialog_window()` mới: cửa sổ KHÁC phải tự khai `_NET_WM_WINDOW_TYPE` là hộp thoại/popup (`DIALOG`, `UTILITY`, `POPUP_MENU`, `DROPDOWN_MENU`, `COMBO`, `TOOLTIP`, `NOTIFICATION`, `SPLASH`) **và** khai `WM_TRANSIENT_FOR` trỏ về đích (theo chuỗi, tối đa 4 mắt). Chính cửa sổ đích luôn được nhận. 3 bài kiểm mới. Đo lại trên máy thật với cặp cửa sổ thử `CuaDialogMain`/`CuaDialogChild` (loại `DIALOG`, chủ sở hữu `0x2c00001`): `is_own_window` = True, chốt điểm bấm NHẬN, chốt tiêu điểm NHẬN, gõ được 2 ký tự — tức BUG-117 vẫn được vá |
+| BUG-121 | MEDIUM | **Bộ đệm hình học 0,5 s lọt vào chốt điểm bấm**: người dùng vừa di chuyển cửa sổ đích thì hình học CŨ vẫn chứa điểm bấm, chốt cho qua, và cú bấm rơi vào cửa sổ của người dùng. Đây đúng là lúc tranh chấp mà chốt tồn tại vì nó | `check_point_ownership` đọc lại hình học cửa sổ đích NGAY trước khi soi điểm (`get_window_rect(hwnd, fresh=True)`): một tiến trình con `xwininfo` cho mỗi cú bấm, đổi lấy việc chốt luôn soi trên hình học thật |
+| BUG-122 | MEDIUM | **Chốt trần im lặng khi thiếu số đo**: `check_budget` duyệt theo *số đo có sẵn*, nên một hồi quy làm hỏng hẳn `click` (không còn số đo nào) lại in "ĐẠT" và thoát 0 — đúng lúc cần chốt nhất. Cùng lúc `product.screenshot` đo đường **báo lỗi** `UNSUPPORTED_ACTION` (vì `computer_use` không nhận `action='screenshot'`) mà tài liệu ghi như số đo thật | Duyệt theo **danh sách trần**: thiếu số đo hoặc số đo lỗi ⇒ `VƯỢT TRẦN: … KHÔNG ĐO ĐƯỢC` và thoát 1. `product.screenshot` đo đúng đường chụp của sản phẩm (`computer_screen_capture`): **126 ms**, 21 tiến trình con, 1920×1080 ≈ **2 764 token thị giác**. `--baseline` lặp lại được (primitives và product ghi hai tệp riêng). 7 bài kiểm mới trong `tests/unit/test_cua_bench_budget.py` |
+| BUG-123 | LOW | **Con trỏ lệch trong lúc chờ tiêu điểm**: bản vá BUG-116 bỏ hẳn `mousemove` khi con trỏ đã ở đúng chỗ, nên nếu người thật di chuột trong lúc `ensure_foreground` chờ thì cú bấm rơi vào chỗ đã lệch (điểm đã kiểm quyền là chỗ cũ) | Vẫn gửi `mousemove`, chỉ bỏ `--sync` khi con trỏ đã ở đúng chỗ: không bao giờ chờ sự kiện không tới (hết treo 5 s) mà vẫn kéo con trỏ về đúng điểm đã kiểm quyền. 1 bài kiểm mới cho đúng tình huống lệch |
+| BUG-124 | LOW | **Ghi chú locale hứa hão**: `utf8_locale()` trả `C.UTF-8` ngay cả khi `locale -a` không có tên UTF-8 nào, nên ghi chú nền tảng vẫn nói "ứng dụng do BoxFox mở thì đã được cấp locale" trên máy không cài locale UTF-8 — chữ có dấu lại mất mà ghi chú nói ngược lại. Hàm cũng chỉ so khớp bốn tên cứng, bỏ qua `vi_VN.UTF-8` | Tách `installed_utf8_locale()` (đọc `locale -a`, ưu tiên bốn tên quen thuộc rồi tới **bất kỳ** tên nào chứa utf8, trả `None` khi máy không có) khỏi `utf8_locale()` (vẫn trả `C.UTF-8` làm nỗ lực tốt nhất cho tiến trình con). Ghi chú nói thẳng khi máy không cài locale UTF-8 nào và hướng dẫn cài. 4 bài kiểm mới |
+| BUG-125 | LOW | **`list_windows` của công cụ đo đọc sai kích thước**: `WindowInfo.bounds` là `(x, y, w, h)` nhưng công cụ lại trừ thêm lần nữa (`right - left`), ra terminal 715×141 thành 671×33 và panel thành 1632×−998 — mọi điểm bấm tính từ đó đều lệch. Cùng lúc danh sách bỏ qua viết hoa/thường nên `Xfce4-panel`/`Xfdesktop` **không** bị bỏ qua như tên hàm ý | Đọc thẳng `(x, y, w, h)`; so lớp cửa sổ không phân biệt hoa/thường; thêm danh sách dấu hiệu terminal. Kèm luật an toàn: đo INPUT mà không chỉ rõ cửa sổ thì **từ chối** thay vì gõ thử vào cửa sổ lớn nhất trên màn hình (có thể là trình duyệt/trình soạn thảo đang mở dở của người dùng) |
+
+### 6.42 Vòng 2026-10-08 (tiếp) — lượt kiểm tìm ra: ảnh cửa sổ bỏ sót hộp thoại khi đích còn giữ tiêu điểm
+
+Lượt kiểm độc lập trên `f90d0ea` chạy kịch bản hộp thoại **qua đúng đường sản phẩm** (không chỉ
+unit test) và bắt được lỗi thứ tư của cùng vùng — lỗi mà cả ba vòng soát mã trước đó không thấy, vì
+nó chỉ hiện ra khi cửa sổ đích **vẫn giữ tiêu điểm**.
+
+| Mã | Mức | Triệu chứng | Nguyên nhân | Vá |
+|---|---|---|---|---|
+| BUG-126 | HIGH | Khung hình trực tiếp của đích là **nền phẳng**: `POST /api/agent/machines/screen` trả 520×360 PNG mà **mọi pixel** `(32,48,64)`, `hash=33265ed6…` — hộp thoại con đang mở, nằm trên, mất hẳn khỏi ảnh. Agent nhìn hụt rồi bấm vào chỗ nó không thấy | Cổng cũ chỉ dò `transient_windows` khi `occluded or get_foreground_window() != hwnd`, vì đoán "hộp thoại modal luôn giữ tiêu điểm". Đoán đó sai với hộp thoại **không modal** (`UTILITY`/`POPUP_MENU`/`TOOLTIP`/`NOTIFICATION` — vẫn nằm trong `_DIALOG_TYPES`): đích giữ tiêu điểm, phép thử che khuất theo tỉ lệ bỏ qua hộp thoại nhỏ ⇒ cổng trả về rỗng. `import -window` đọc **bộ đệm riêng** của cửa sổ (đo: 187200/187200 pixel là nền của chính nó dù hộp thoại con nằm trên, không có compositor), nên ảnh cửa sổ không bao giờ tự chứa cửa sổ chồng lên nó | `10f8bee`: bỏ hẳn cổng đoán, **luôn** dò `p.transient_windows(int(hwnd))`. Chi phí: 1,19 ms (bộ đệm ấm) / 6,31 ms (nguội); `capture_window` 49,0–49,4 ms so với trần 150 ms. Kiểm lại: API thật trả `hash=1c922e4b…` với **31200 px = đúng 260×120** diện tích hộp thoại; 2 bài kiểm mới phủ đúng ca lọt lưới (đích giữ tiêu điểm, và loại `UTILITY` không modal) |
+
+Bài học ghi lại: ba vòng soát mã đọc mã mà không thấy, vì cả ba đều kiểm "chốt input có nhận hộp thoại
+không" — còn câu hỏi "**ảnh** có chứa hộp thoại không" chỉ trả lời được bằng cách chạy sản phẩm thật
+và đọc pixel. Đây là lý do lượt kiểm phải chạy qua đường sản phẩm chứ không chỉ chạy unit test.
+
+### 6.43 Vòng 2026-10-08 (tiếp) — bốn thao tác cử chỉ, và hộp thoại khai `NORMAL` bị coi là cửa sổ lạ
+
+Đợt này trả lời câu hỏi của người dùng: *"còn test CUA nhập code vào notebook ipynb thì sao? Hay
+scroll? Hiện có tool chưa? Kéo thả chẳng hạn, giữ, thử nghiệm vẽ như paint"*. Đọc mã trước khi làm:
+`scroll` **có tên trong `enum`** của `computer_use` nhưng mọi lời gọi đều trả `UNSUPPORTED_ACTION`;
+`drag`, `hold`, `stroke` **không tồn tại** ở đâu cả trên đường host (Docker box có một dòng `scroll`
+bằng `xdotool click --repeat`, không có ba thao tác kia).
+
+**Bốn thao tác mới** (cùng hợp đồng trên ba nền tảng: Windows, Linux/X11, Docker box):
+
+| Thao tác | Tham số | Cơ chế X11 | Cơ chế Windows |
+|---|---|---|---|
+| `scroll` | `direction` (up/down/left/right), `steps` (≤20) | nút cuộn 4/5/6/7, một lệnh `xdotool click --repeat N --delay 12` | `MOUSEEVENTF_WHEEL`/`HWHEEL`, `mouseData = ±steps × 120` |
+| `drag` | `toX`, `toY`, `button`, `steps` (≤60) | `mousedown` → N `mousemove` → `mouseup`, `GESTURE_SETTLE_SEC = 0,03` sau khi nhấn | ba lô `SendInput` (move+down, N move, up) |
+| `hold` | `seconds` (0,05–5) | `mousedown` → ngủ → `mouseup` | như trên, hai lô |
+| `stroke` | `path` (≥2 điểm, ≤400) | mỗi điểm một `mousemove`, `STROKE_STEP_SEC = 0,008` | một lô `SendInput` cho cả đường |
+
+Chốt an toàn giữ nguyên cho cả bốn: điểm phải thuộc đích (`check_point_ownership`), đích phải giữ
+tiêu điểm, và **cú kéo của đích là một cửa sổ thì cả điểm đầu lẫn điểm cuối phải nằm trong cửa sổ
+đó** — chỉ chế độ "cả máy" mới cho kéo từ cửa sổ này sang cửa sổ khác. Nhả chuột nằm trong `finally`
+nên một bước hỏng giữa chừng không để lại nút chuột đang giữ. 28 bài kiểm mới (13 X11 + 9 Windows +
+6 host executor).
+
+**Vòng soát mã đợt cử chỉ** (cùng ngày, trước khi mở PR) tìm thêm bốn chỗ, đã vá hết trong cùng
+nhánh:
+
+| Chỗ | Vấn đề | Cách vá |
+|---|---|---|
+| `stroke` thiếu chốt điểm cuối | `drag` canh điểm cuối từ đầu, còn `stroke` chỉ canh điểm đầu — một nét vẽ chạy quá mép cửa sổ đích vẫn nhấn, đi rồi thả ở **cửa sổ khác**, đúng thứ mà chốt của `drag` sinh ra để chặn | `stroke` nhận `guard_end` và kiểm điểm CUỐI; `_send_input` truyền `guard_end=pinned` y như `drag`. Không kiểm từng điểm giữa: X11 đặt lệnh giữ chuột ngầm cho cửa sổ nhận `mousedown`, nên các điểm giữa không tới được cửa sổ nào khác |
+| Lệnh nhả chuột hỏng không được nhả lại | `_xdotool` trả **kết quả hỏng** chứ không ném lỗi, nên `released is not None` chưa phải là đã nhả — `finally` cũ bỏ qua đúng ca nút còn đang giữ | `finally` nhìn `ok` của kết quả (`released is None or not released.ok`), không chỉ nhìn `None`. Bản box: đánh dấu theo **kết quả** thay vì theo thứ tự bước, và nhả lại trong `except BaseException` (lượt bị huỷ cũng phải nhả) |
+| Nút chuột lạ im lặng thành chuột trái (box) | `_box_button` trả `'1'` cho mọi tên không nhận ra — một cú kéo "nút giữa" gõ sai chính tả chạy như chuột trái mà không ai biết | Từ chối bằng `ValueError`, cùng hợp đồng với bản X11/Windows |
+| Ba kế hoạch cử chỉ của box không có bài kiểm | Phần dễ sai nhất là **đường hỏng** (nhả lại khi lệnh nhả hỏng), mà nó không nhìn thấy được bằng mắt | `tests/unit/test_sandbox_worker_gestures.py` — 10 bài: thứ tự lệnh, trần bước/điểm, thời gian giữ, và ba ca đường hỏng |
+
+Vòng đó cũng dọn hai chỗ trùng lặp: `click` của X11 nay dùng chung `_prepare_point`/`_move_to` với
+bốn cử chỉ (bỏ ~25 dòng chép lại, gồm cả hai khối chú thích đã có trong docstring của `_move_to`),
+và bản Windows có `_prepare_point` riêng cho năm thao tác. `CUA_POINT_ACTIONS` (không nơi nào đọc)
+đã xoá; `_gesture` giữ nhánh "nền tảng chưa có thao tác" nhưng lời chú thích đã đúng lại (bản
+Windows nay có đủ bốn thao tác, nhánh đó chỉ chạy khi thêm nền tảng mới). Tổng sau vòng soát: **45
+bài kiểm mới** (16 X11 + 11 Windows + 8 host executor + 10 box).
+
+| Mã | Mức | Vấn đề | Cách vá |
+|---|---|---|---|
+| BUG-127 | MEDIUM | **Hộp thoại khai `_NET_WM_WINDOW_TYPE_NORMAL` bị coi là cửa sổ lạ.** Đo trên máy thật (mtPaint 3.50): hộp thoại "Save Image File" và cửa sổ "Settings Toolbar" đều khai `WM_TRANSIENT_FOR` trỏ về cửa sổ chính nhưng **không** khai loại hộp thoại. Chốt BUG-120 đòi đủ hai điều kiện nên từ chối: mọi `type`/`key` trả `SOURCE_CHANGED: cửa sổ đích không giữ được tiêu điểm` trong lúc hộp thoại đang mở, tức là **không gõ được tên tệp để lưu** — đúng kiểu "agent chết cứng" mà BUG-117 đã vá cho hộp thoại `DIALOG`. Cùng lúc, cú bấm vào nút "+" của cửa sổ "Settings Toolbar" bị từ chối `điểm bấm đang bị cửa sổ khác che` dù đó là cửa sổ của chính ứng dụng | `is_own_window` nhận thêm điều kiện thứ hai: cửa sổ trong chuỗi `WM_TRANSIENT_FOR` được nhận nếu **cùng tiến trình** với cửa sổ mà nó khai (`_NET_WM_PID`, đọc từ bộ đệm). Điều kiện chuỗi vẫn giữ, nên bảo vệ của BUG-120 không mất: công cụ lạ khác tiến trình vẫn bị từ chối (bài kiểm cũ `test_a_foreign_window_claiming_the_target_as_owner_is_refused_without_a_dialog_type` vẫn xanh). `_NET_WM_PID` **khó vô tình trùng** hơn `WM_TRANSIENT_FOR`: một ứng dụng lạ khai PID của chính nó, nên nó không trùng PID của đích. Đây là chốt chống **tai nạn**, không phải ranh giới an ninh — `_NET_WM_PID` là gợi ý do ứng dụng tự khai, không phải dữ kiện X server kiểm chứng, nên một tiến trình khác trên cùng display khai đúng PID của đích thì qua được (y như nó khai `WM_TRANSIENT_FOR` hay `_NET_WM_WINDOW_TYPE`; và ai gửi được input qua XTEST thì không cần qua chốt này). Vòng soát mã đợt cử chỉ bắt được lời khẳng định cũ — "tiến trình khác không tạo được cửa sổ mang PID của ứng dụng đích" — là **sai**; đã sửa ở cả mã nguồn lẫn tài liệu. 2 bài kiểm mới (nhận khi cùng tiến trình; vẫn từ chối khi cùng tiến trình nhưng **không** khai chuỗi) |
+
+Kiểm chứng trên máy thật sau khi vá: bấm "+" trong "Settings Toolbar" được nhận (Size 1 → 4), và gõ
+14 ký tự tên tệp vào hộp thoại lưu được nhận — mtPaint lưu ra PNG 640×480 với **7 172 điểm ảnh đỏ**
+(vòng tròn + sóng + tam giác do `stroke` vẽ). Trước khi vá cả hai thao tác đều bị từ chối.
+
+### 6.44 Vòng 2026-10-08 (chiều) — năm yêu cầu của chủ nhà: viền báo trên Linux, đo một lượt CUA, mã lỗi tự giải thích, dò suy luận theo provider, panel tự mở
+
+Năm câu hỏi/yêu cầu: *(1)* "khi codex hay antigravity hay các app khác, nếu CUA máy hoặc app thì sẽ có một khung viền xanh nhạt đậm vừa và nhạt dần khi vào tầm 1/8 màn hình… tôi cũng cần phần này"; *(2)* "check thử thời gian CUA từ lúc user ra đề nghị đến khi xong task và trả lời user"; *(3)* "kiểm thử toàn diện"; *(4)* "thử với model fledge alpha free hoặc có trong opencode"; *(5)* "khi kiểm thử, ví dụ lên plan, harness có tự mở bảng plan cùng với plan nó mới làm ra cho user xem không".
+
+Đo trước khi sửa (không suy đoán): `build_cua_overlay()` trả `None` trừ `win32`; `sandbox/x11/` **không có** hàm viền nào ⇒ `activity` luôn `null`; 48 mã lỗi CUA/host **không mã nào** có trong `recovery_policy.CODES`; 44/48 model lưu `thinkingType: 'none'`, `thinkingSource: 'unknown'`; bảng plan **đã** tự mở, canvas thì không.
+
+| Mã | Mức | Lỗi | Cách sửa |
+|---|---|---|---|
+| BUG-128 | HIGH | **Đọc sai hình chữ nhật cửa sổ ở CẢ HAI nền tảng.** `cua_overlay._bounds_of()` và `machine_router._window_payload()` đọc bộ bốn số `(left, top, right, bottom)` như `(x, y, w, h)`. Đo được: `rect=(96,1039,1824,1080)` ⇒ viền và panel nhận `width=1824, height=1080` thay vì **1728×41**. Nghĩa là viền desktop trên Windows **đang vẽ sai kích thước** (toàn màn hình thay vì ôm cửa sổ), và viền trong panel sai với đích "cả máy". Bài kiểm cũ không bắt được vì dữ liệu giả tình cờ truyền `(10,20,300,200)` theo nghĩa `x,y,w,h` | `_bounds_of()` đổi sang đọc `(left, top, right, bottom)` rồi trừ; `machine_router` có hàm dùng chung `window_rect_payload()`; bài kiểm dùng **số đo thật** `(96,1039,1824,1080)` ⇒ 1728×41, cộng một ca cửa sổ ở gốc `(0,0)` để chắc rằng trường hợp "may mắn đúng" không đổi kết quả |
+| BUG-129 | MEDIUM | **Kết quả công cụ đỏ mà KHÔNG có mã.** Ba hàng `terminal_exec` thật trong sổ cũ chỉ có `['artifact','content','exit_code','is_error','recovery','reflection_hint']` — không `errorCode`. Hệ quả kép: `recovery_policy` xếp `unknown` ⇒ `checkpoint_and_ask`, và `reflection_hint` rơi vào câu mặc định dành cho **lỗi sai tham số** ("Read `error`: it names the field and the rule. Fix only that input and call again once") — lời khuyên sai việc cho một lệnh shell hỏng | `COMMAND_EXIT_NONZERO` (lệnh thoát khác 0, kèm `exit_code` + `content` + tệp đính kèm) và `HOST_TOOL_FAILED` (công cụ ném lỗi lạ); `reflection_hint` có nhánh **không có mã** chỉ vào `content`/`exit_code` thay vì khuôn schema. 4 bài kiểm mới trong `test_host_executor.py` |
+| BUG-130 | MEDIUM | **48 mã CUA/host không mã nào tự giải thích.** `recovery_policy.CODES` chỉ có mã của harness, nên **mọi** lỗi host (từ chối quyền, người thật giữ quyền, phần tử cũ, thiếu gói, đích mất…) đều ra `class: unknown`, `action: checkpoint_and_ask`, lý do "không rõ loại lỗi: dừng ở checkpoint và hỏi chủ nhà" — đúng ca đo được: `tool=terminal_exec code=PERMISSION_DENIED` | `_HOST_ADVICE`: **59 mã** → (lớp, hành động, lời khuyên riêng), `CODES` 78 → **137**; `FILE_NOT_FOUND`, `FILE_PERMISSION_DENIED`, `INSPECT_POINT_INVALID` khai thêm sau khi rà lại nguồn mã. Luật cũ giữ nguyên: **chỉ `transport` là tạm thời**, mã CUA **không** tự thử lại. Hai chốt chống trôi: bảng tài liệu §6.2.1 ⇄ `_HOST_ADVICE`, và khoá i18n của panel ⇄ `CODES` |
+| BUG-131 | MEDIUM | **Model suy luận mà UI không biết.** `fledge-alpha-free` (model chủ nhà nêu tên) **có** suy luận ở mọi mức: đo được 168–513 ký tự `reasoning_content` mỗi mẫu — nhưng hàng model lưu `thinkingType: 'none'`, `thinkingSource: 'unknown'`, nên harness bỏ mức suy luận trước khi gửi và bộ chọn mức **không hiện**. Phép dò cũ không thể thấy: `testInference()` gửi `max_tokens: 64`, không có trường `reasoning`, và `usage.reasoning_tokens` của model này luôn 0 dù nó vẫn stream chữ suy luận | Phép dò theo **từng provider** (đúng dạng request của provider đó, quét **mọi** mức đã công bố), phán quyết thuần tách khỏi I/O, bằng chứng ghi kèm `asOf` và **tự hết hạn sau 30 ngày**, hàng model giữ kết quả qua lần discovery sau, và bộ chọn model có nút **đo** ngay chỗ thiếu bộ chọn mức + một dòng kết quả cho mọi ngả (đo được N mức / provider từ chối trường / bị giới hạn nhịp / không có quyền). Một phát hiện phải ghi: chỉ nhìn **chữ** suy luận sẽ phán sai cả họ model — `muse-spark` trả `reasoningChars: 0` nhưng `reasoningTokens: 728` |
+| BUG-132 | LOW | **Ý định mở tab bị xếp hàng thì người dùng không thấy gì.** Bốn cổng chặn (`autoOpenTabs=false`, workspace đang ẩn, tab đang ghim, người dùng vừa gõ trong 15 s) đẩy ý định vào hàng đợi, và dấu hiệu duy nhất là **huy hiệu số** trên tab. Panel canvas thì **không** tự mở, và `design` còn không có trong hợp đồng `ui_intent` | Hàng thông báo ngay trên ô soạn: tên tab + **lý do chặn** + nút "Mở ngay" (mở cả workspace đang ẩn) + nút bỏ qua; mở tab là hàng tự biến mất. Canvas tự mở **một lần cho mỗi `designId`** (lần vẽ sau là cập nhật trạng thái), đi qua đúng bốn cổng chặn; hợp đồng `ui_intent` bổ sung `design` và cổng thứ tư |
+| BUG-133 | LOW | **Vẽ trước khi map thì X server vứt bản vẽ.** Lỗi do chính đợt này tạo ra trong `x11/overlay.py`: `overlay_show` vẽ khi cửa sổ còn chưa `map` ⇒ băng ra màu `background_pixel=0` (đen) thay vì màu pha. Chỉ phép đo trên X thật mới bắt được, bài kiểm đơn vị không thấy | `_apply_bounds → _map_window → _paint`, kèm chú thích ghi lại lý do |
+| BUG-134 | LOW | **Lý do bị ghi đè.** `note()`/`_call()` đặt `last_reason = 'overlay_unavailable'` mỗi khi viền đang tắt, nên sau lượt CUA đầu tiên panel sẽ hiện câu chung chung thay vì "thiếu `python-xlib`…" — đúng thứ mà J8 sinh ra để nói | `_unavailable_reason` đặt lúc dựng, cập nhật khi mặt viền chết; hai chỗ đọc dùng nó. Có bài kiểm ghim |
+
+**Viền báo trên desktop Linux — việc mới, không phải lỗi.** `sandbox/x11/overlay.py` (mới): cửa sổ
+`override_redirect`, SHAPE Bounding = các vòng 1 px của băng, SHAPE Input rỗng (bấm xuyên qua), nâng
+`X.Above`; bề dày băng = cạnh ngắn/8 (1920×1080 ⇒ 135 px, chặn trên 1/3); màu nhấn `#38bdf8` pha dần về
+màu nền đọc ở bốn điểm giữa cạnh, làm mới ≤ 1 Hz. Đo trên `DISPLAY=:1`: bấm xuyên qua đúng (cửa sổ dưới
+con trỏ luôn là đích), `_NET_CLIENT_LIST_STACKING` **13 → 13**, `import -window <đích>` **540 000 byte
+giống hệt** trước/sau, pixel ba vòng khớp phép pha **chênh 0** (cho phép ≤ 2), `BOXFOX_CUA_OVERLAY=0` ⇒
+không cửa sổ viền nào, thiếu `python-xlib` ⇒ CUA vẫn chạy và `activity.reason` nêu tên gói. Ảnh:
+`images/cua-border-window.png`, `images/cua-border-machine.png`.
+
+**Một lượt CUA mất bao lâu — chưa có số, và bộ đọc nói thẳng thế.** Máy này **chưa từng** có một lượt CUA
+trọn vẹn: sổ chỉ có một lượt hỏng ở tầng định tuyến (`UPSTREAM_HTTP_503`, `toolsRun: 0`), đo được
+**145,7 ms** từ lúc nhận đề nghị tới lúc trả lời. `tools/turn_latency.py` đọc thẳng bảng `events` (nguồn
+duy nhất), lấy cột `created` làm số chính cho "người dùng chờ bao lâu", `deadlineUsedMs` cho ngân sách, và
+in "chưa đo được lượt CUA nào" khi chỉ có lượt hỏng. Phần "model" trong bảng tách **không phải** thời gian
+model thuần (nhật ký router không mang mã phiên) nên được gọi đúng tên là **"model + vòng lặp"**.
+
+**`exo-free` không nằm trong quyền của tài khoản** (không phải lỗi của ta): `GET /zen/v1/models` công khai
+trả 88 mã, nhưng khoá thật của tài khoản chỉ thấy **48**; `POST .../models/exo-free/test` trả 404
+`MODEL_NOT_FOUND`. Router lưu đúng danh sách được cấp quyền, và giờ nói được **vì sao** một model thiếu
+("provider công bố trong danh mục công khai, nhưng khoá này không có quyền").

@@ -15,6 +15,9 @@
   --c-muted: 0 0% 45%;
   --c-brand: 217 91% 60%;
   --c-brandfg: 0 0% 100%;
+  /* Vùng agent đang điều khiển (viền CUA). Cố ý KHÁC `brand`: màu này nghĩa là
+     "agent đang tác động ở đây", không phải "mục đang được chọn". */
+  --cua: #38bdf8;
 }
 
 .dark {
@@ -26,6 +29,7 @@
   --c-muted: 0 0% 55%;        /* #8c8c8c - High-legibility Muted Text */
   --c-brand: 217 91% 60%;     /* #3b82f6 - Electric Blue Accent for Selection */
   --c-brandfg: 0 0% 100%;
+  --cua: #38bdf8;             /* #38bdf8 - sky-400, sáng trên nền tối */
 }
 
 @theme inline {
@@ -37,6 +41,26 @@
   --color-muted: hsl(var(--c-muted));
   --color-brand: hsl(var(--c-brand));
   --color-brandfg: hsl(var(--c-brandfg));
+  --color-cua: var(--cua);
+}
+
+/* =========================================================
+   Viền CUA — vùng agent đang điều khiển (panel "Màn hình máy")
+   ========================================================= */
+
+/* "Thở" nhẹ 1.8 s: đủ để mắt thấy vùng đang bị điều khiển, không nháy như
+   cảnh báo lỗi. Người bật "giảm chuyển động" nhận bản đứng yên
+   (`motion-reduce:animate-none`) — viền vẫn sáng, chỉ không đổi nhịp. */
+@keyframes cua-target-glow {
+  0%,
+  100% {
+    border-color: rgb(56 189 248 / 1);
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.28);
+  }
+  50% {
+    border-color: rgb(125 211 252 / 0.75);
+    box-shadow: 0 0 0 6px rgb(56 189 248 / 0.1);
+  }
 }
 
 html,

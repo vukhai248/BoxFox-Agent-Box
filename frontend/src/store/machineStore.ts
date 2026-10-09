@@ -3,7 +3,7 @@ import { agentApi } from '../lib/agentApi'
 
 export interface MachineBinding { mode: 'host' | 'docker'; revision: number; projectId: string | null; workspace: string | null }
 export interface LocalProject { id: string; path: string; name: string; trusted: boolean }
-export interface MachineConfiguration { mode: 'host' | 'docker'; revision: number; projectId: string | null; projects: LocalProject[] }
+export interface MachineConfiguration { mode: 'host' | 'docker'; revision: number; projectId: string | null; projects: LocalProject[]; processMode?: 'host' | 'docker' }
 interface State {
   configuration: MachineConfiguration | null
   bindings: Record<string, MachineBinding>

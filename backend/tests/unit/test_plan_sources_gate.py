@@ -395,3 +395,40 @@ def test_a_host_the_model_named_only_in_its_own_call_args_is_not_evidence(tmp_pa
     assert result.get('is_error') and result['errorCode'] == 'PLAN_QUALITY_REJECTED', result
     assert '(sources-unbacked)' in result['error']
     assert written(store, sid) == []
+
+
+def test_an_input_sources_section_does_not_shadow_the_citations_section(tmp_path):
+    """Mục "Nguồn dữ liệu đầu vào" (nguồn ĐẦU VÀO của hệ thống) không được che mục nguồn THẬT.
+
+    Đo vòng kiểm thử sống 2026-10-09 (run `lt-d0422232cc124fe9ae12ca847decb76b`): bản kế hoạch có
+    `## 5. Nguồn dữ liệu đầu vào` với MỘT dòng mô tả, đứng TRƯỚC mục `Sources / Citations` gồm 8 dòng
+    URL thật đã được công cụ trả về. `_find_with_body` trả tiêu đề khớp ĐẦU TIÊN có thân bài, nên cổng
+    chỉ đọc mục đầu, kết luận `sources-vague`, và model bị từ chối bốn lần liên tiếp mà không có cách
+    nào đoán ra vì sao. Ca này ghim bản sửa ở cả hai tầng: hàm thuần và đường ghi thật.
+    """
+    from agentbox.agent_core import plan_quality
+
+    plan = SOURCED_PLAN.replace('## Milestones', """## 5. Nguồn dữ liệu đầu vào
+- Hồ sơ lô mẫu gắn nhãn MOCK; tiêu chuẩn Ph. Eur. 2.9.3 và 2.9.40.
+
+## Milestones""")
+    assert plan_quality.source_lines(plan) == [
+        '- https://docs.example.com/retry — the retry contract used by milestone 1.']
+    assert plan_quality.plan_quality_issues(plan) == []
+    assert plan_quality.sources_issues(plan, children=[{'role': 'research'}],
+                                       hosts=['docs.example.com'], paths=[]) == []
+
+    store, executor, sid = run_write(
+        tmp_path, plan,
+        seed=lambda s, sid: research_child(s, sid, 'fetched https://docs.example.com/retry page'))
+    result = tool_end_result(store, sid)
+    assert not result.get('is_error'), result
+    assert len(write_plan_calls(executor)) == 1 and written(store, sid)
+
+    # Không mục nguồn nào có URL thì luật cũ giữ nguyên — mục khớp ĐẦU TIÊN vẫn bị đo, và vẫn
+    # `sources-vague` khi nó chỉ có một câu chung chung (bản sửa không nới cổng).
+    vague = plan.replace('- https://docs.example.com/retry — the retry contract used by milestone 1.',
+                         '- official documentation of the retry library')
+    assert plan_quality.source_lines(vague) == [
+        '- Hồ sơ lô mẫu gắn nhãn MOCK; tiêu chuẩn Ph. Eur. 2.9.3 và 2.9.40.']
+    assert 'sources-vague' in plan_quality.sources_issues(vague, children=[{'role': 'research'}])

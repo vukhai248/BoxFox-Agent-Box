@@ -412,15 +412,20 @@ def parse_plan_index(payload) -> PlanIndex:
                      warnings=tuple(str(entry) for entry in warnings or []))
 
 
-async def read_plan_index(executor, *, log=None) -> PlanIndex | None:
+async def read_plan_index(executor, *, log=None, session=None) -> PlanIndex | None:
     """Đọc chỉ mục plan từ box. `None` = nhánh suy giảm (đã ghi nhật ký), không bao giờ raise.
 
     Nhánh suy giảm được gọi tên `PLAN_INDEX_UNAVAILABLE` để người đọc nhật ký biết vì sao lần ghi
     đó quay về hành vi cũ (sandbox chọn số, không header) — thà mất tính năng còn hơn bịa số version.
+
+    `session` (tuỳ chọn) là mã phiên đang hỏi. Chỉ **host mode** cần nó: chỉ mục nằm trong
+    `<folder dự án>/.plans` của chính phiên đó, nên không có phiên thì không biết đọc ở đâu. Chế độ
+    Docker bỏ qua tham số này (một box dùng chung), và chỗ gọi cũ không truyền gì vẫn chạy nguyên.
     """
     logger = log or system_log
     try:
-        payload = await executor.request(INDEX_PATH)
+        payload = (await executor.request(INDEX_PATH) if session is None
+                   else await executor.request(INDEX_PATH, session=session))
     except Exception as exc:  # mạng, 401, 500, JSON hỏng... đều là "không đọc được"
         _log_unavailable(logger, f'{type(exc).__name__}: {exc}')
         return None

@@ -524,6 +524,11 @@ def compact(rt, sid, saved, compacted, event):
     receipt = checkpoint(rt, rt.store.get(sid), reason='compaction', before_messages=saved,
                          after_messages=compacted)
     event['contextBundleRef'] = receipt['ref']
+    # F02/F09/F19 — cùng một chỗ nối cho cả hai đường nén: giữ bản thô trước khi danh sách sống
+    # bị thay, rồi ghi bản đọc được ra workspace host. Hàm này tự bắt lỗi thành notice nên lượt
+    # nén không đổi hành vi khi kho lịch sử hỏng.
+    from . import history_surface
+    event['historyRecord'] = history_surface.record_compaction(rt, sid, saved, compacted, event=event)
     return receipt
 
 

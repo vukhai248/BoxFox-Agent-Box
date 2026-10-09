@@ -35,7 +35,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { EFFORT_LEVELS, jsonOrProviderError, modelRecord, modelThinking, normalizeFinishReason, parseJson, parseRetryAfter, providerError, sseEvents, thinkingFromProviderPayload } from './common.mjs';
-import { opencodeCapabilityFor } from './opencode-capabilities.mjs';
+import { opencodeCapabilityFor, thinkingEvidenceStale } from './opencode-capabilities.mjs';
 import { documentedZenPrice, priceFromOpenRouter } from '../pricing.mjs';
 import { RouterError } from '../errors.mjs';
 
@@ -637,7 +637,7 @@ function opencodeError(status, statusText, errorText, retryAfterMs = null) {
  * Thứ tự ưu tiên: payload (live) > curated > registry. Không có nguồn nào thì
  * trường giữ `unknown` — KHÔNG đoán từ tên model.
  */
-export function opencodeModelRow(item = {}, { curated = null } = {}) {
+export function opencodeModelRow(item = {}, { curated = null, now = new Date() } = {}) {
   const id = typeof item.id === 'string' ? item.id.trim() : '';
   const payloadName = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : null;
   // Đọc payload MỘT lần bằng helper dùng chung: nó trả cả context window lẫn thinking,
@@ -663,6 +663,11 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
   // có tài liệu, `probe` cho số đo của chính router, `reported` cho context window
   // lấy từ payload, `ping` cho giá lấy từ endpoint models, `unknown` khi không có.
   const thinkingSource = published ? 'live' : curatedThinking ? 'documented' : registryThinking ? registry.source : 'unknown';
+  const thinkingAsOf = published || curatedThinking ? null : registry?.asOf ?? null;
+  // M4: bằng chứng có mốc `asOf` (registry, hoặc số đo của router) KHÔNG được tin mãi
+  // mãi. Quá hạn thì giữ nguyên level (không lấy mất điều khiển của người dùng) nhưng
+  // gắn cờ để UI mời dò lại. Payload live vừa đọc nên không bao giờ stale.
+  const thinkingStale = Boolean(thinkingAsOf) && thinkingEvidenceStale(thinkingAsOf, now);
   const capabilities = { ...(curated?.capabilities || {}), ...(published ? { reasoning: 'reported' } : {}) };
   const record = modelRecord(id, payloadName || curated?.name || id, capabilities, chosen);
   return {
@@ -674,8 +679,9 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
     // Chỉ id `-free` mới trả lời khi không có credential (đo 2026-09-21).
     enabled: id.includes('-free'),
     thinkingSource,
-    thinkingAsOf: published || curatedThinking ? null : registry?.asOf ?? null,
+    thinkingAsOf,
     thinkingEvidence: published || curatedThinking ? null : registry?.evidence ?? null,
+    thinkingStale,
     fieldSources: {
       inventory: 'live',
       name: payloadName ? 'live' : curated?.name ? 'documented' : 'unknown',
@@ -692,9 +698,15 @@ export function opencodeModelRow(item = {}, { curated = null } = {}) {
  * trả `{}` nghĩa là "không có gì mới", để hàng đang giữ dữ liệu payload không bị
  * ghi đè bằng nguồn bổ sung.
  */
-export function opencodeThinkingMetadata(model = {}) {
+export function opencodeThinkingMetadata(model = {}, { now = new Date() } = {}) {
   // Payload đã công bố thinking cho hàng này: nguồn bổ sung không được thay.
   if (model?.fieldSources?.thinking === 'live') return {};
+  // M3: hàng do CHÍNH router dò (`thinkingProbe` = số đo, không phải bảng tài liệu) không
+  // bị registry ghi đè — registry chỉ là ảnh chụp cũ hơn, và ghi đè nó là cách nhanh nhất
+  // để xoá một kết quả vừa đo. Chỉ cập nhật cờ quá hạn.
+  if (model?.thinkingProbe && model?.thinkingSource === 'probe') {
+    return { thinkingStale: thinkingEvidenceStale(model.thinkingAsOf, now) };
+  }
   const curated = OPENCODE_MODELS.find(m => m.id === model?.id) || null;
   const source = curated?.thinkingLevels?.length ? curated : opencodeCapabilityFor(model?.id);
   if (!source) return {};
@@ -707,7 +719,7 @@ export function opencodeThinkingMetadata(model = {}) {
     thinkingLevels: [...source.thinkingLevels],
     defaultThinking: source.defaultThinking ?? null,
     thinkingSource: label,
-    ...(source.asOf ? { thinkingAsOf: source.asOf } : {}),
+    ...(source.asOf ? { thinkingAsOf: source.asOf, thinkingStale: thinkingEvidenceStale(source.asOf, now) } : {}),
     ...(source.evidence ? { thinkingEvidence: source.evidence } : {}),
     fieldSources: { thinking: label },
   };
@@ -747,6 +759,22 @@ export function createOpenCodeAdapter({ fetchImpl }) {
     thinkingMetadata: model => opencodeThinkingMetadata(model || {}),
     // Dòng dự phòng không đến từ ping: nhãn từng trường phải nói đúng như vậy.
     fallbackModels: OPENCODE_MODELS.map(staticModelRow),
+
+    /**
+     * M6 — danh sách id Zen phục vụ cho MỌI người (`Bearer public`). Dùng để trả lời
+     * "vì sao thiếu model": id có trong catalogue mà khoá không được cấp
+     * (`not_entitled`), hay không có trong catalogue (`not_in_catalogue`). Chỉ gọi ở
+     * nhánh LỖI, gọi ẩn danh, và không ghi kết quả vào hàng model nào.
+     */
+    async publicCatalogue({ connection, signal } = {}) {
+      const response = await fetchImpl(`${baseFor(connection)}/models`, {
+        headers: opencodeHeaders({ stream: false, session: translateSessionId('discovery'), request: mintOpencodeId('msg', randomUUID()) }),
+        signal,
+      });
+      const data = await jsonOrProviderError(response);
+      const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      return list.map(item => (typeof item?.id === 'string' && item.id.trim() ? item.id.trim() : null)).filter(Boolean);
+    },
 
     async discover({ connection, credentials, signal } = {}) {
       // W12/T2 — lỗi dò PHẢI nổi lên `ProviderService.#discover`: nhánh catch ở đó mới giữ

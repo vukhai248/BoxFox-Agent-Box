@@ -601,3 +601,23 @@ def test_timed_out_wait_does_not_autonomously_reopen_completed_model_turn(repo):
         out = await rt.dispatch(store.get(sid), 'wait_jobs', {'jobIds': [jid], 'timeoutSeconds': 0})
         assert out['ready'] and out['events'] and not out['timedOut']
     asyncio.run(drive())
+
+
+def test_stop_tolerates_a_session_row_that_is_already_gone(repo):
+    """Dừng một phiên đã bị xoá là việc ĐÃ XONG, không phải lỗi.
+
+    Đo được trên harness thật: lúc tắt tiến trình, `close` đi qua các phiên đang chạy và gọi
+    `runtime.stop`; một hàng sổ bị xoá giữa đường làm `SessionStore.get` ném `KeyError`, cả vòng
+    dừng đổ giữa đường (traceback trong log) và các phiên sau không được dừng. Cùng đường đó cũng
+    chạy khi người dùng xoá phiên đúng lúc lượt đang dừng.
+    """
+    store, rt, sid, _ = repo
+
+    async def run():
+        await rt.stop(sid)                 # phiên thật: hành vi cũ giữ nguyên
+        store.db.execute('DELETE FROM sessions WHERE id=?', (sid,))
+        store.db.commit()
+        await rt.stop(sid)                 # hàng đã biến mất: phải im lặng đi qua
+        await rt.stop('khong-co-phien-nay')  # mã chưa từng tồn tại cũng vậy
+
+    asyncio.run(run())

@@ -68,7 +68,9 @@ def test_the_two_journal_tools_are_advertised_and_held_by_the_orchestrator_only(
     # các bộ công cụ đó được quảng cáo ở lượt main và không còn công tắc nào cắt được.
     # Danh sách dưới đây là đăng ký TĨNH, không phụ thuộc giá trị công tắc.
     # H11: thêm `child_resume` — gọi lại con đã bị cắt (60 → 61), cùng cổng `BOXFOX_PEER_MESH`.
-    assert len(ORCHESTRATOR_TOOLS) == 61
+    # A6 (đợt dài hạn): thêm ba công cụ `history_*` — đọc lại archive của chính phiên mình
+    # (`HISTORY_TOOLS`, nằm trong `READ`) (61 → 64).
+    assert len(ORCHESTRATOR_TOOLS) == 64
     assert 'work_report' in names & ORCHESTRATOR_TOOLS
     for role in ('build', 'explore', 'review', 'testing'):
         assert not ({'journal_write', 'journal_brief'} & allowed_tools(role)), \

@@ -181,15 +181,19 @@ async def replay_safe(rt, session, messages, replays, allowed_tools):
 
 
 def interrupted_calls(store, sid, after_seq=0):
-    """`tool_start` rows after a seq whose call has no `tool_end`, with their replay label."""
+    """`tool_start` rows after a seq whose call has no `tool_end`, with their replay label.
+
+    `seq` is the event row of the start: a caller that is running inside a call it already
+    committed can tell its OWN intent from an older orphan (see `LongtaskRuntime.check`).
+    """
     rows = store.db.execute(
-        "SELECT kind,payload FROM events WHERE session_id=? AND seq>? AND kind IN ('tool_start','tool_end') ORDER BY seq",
+        "SELECT seq,kind,payload FROM events WHERE session_id=? AND seq>? AND kind IN ('tool_start','tool_end') ORDER BY seq",
         (sid, after_seq)).fetchall()
     started, ended = {}, set()
     for row in rows:
         payload = json.loads(row['payload'])
         if row['kind'] == 'tool_start':
-            started[payload.get('id')] = payload
+            started[payload.get('id')] = payload | {'seq': row['seq']}
         else:
             ended.add(payload.get('id'))
     return [p | {'replay': p.get('replay') or replay_class(p.get('name'), p.get('args'))}

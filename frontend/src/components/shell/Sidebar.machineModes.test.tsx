@@ -139,7 +139,7 @@ describe('IDE projects and Docker session boundaries', () => {
     await click(button('Choose folder'))
     expect(modalButton('Create project').hasAttribute('disabled')).toBe(true)
     await click(modalButton('Add'))
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(projectB.path)
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] [aria-label="Folder path"]')?.value).toBe(projectB.path)
     const input = document.querySelector<HTMLInputElement>('[aria-label="Project name"]')!
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Custom project')

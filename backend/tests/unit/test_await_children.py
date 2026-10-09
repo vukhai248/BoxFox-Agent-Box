@@ -286,6 +286,49 @@ def test_await_children_dia_chi_vai_chua_ton_tai_thi_mo_cua_so_do(tmp_path):
     store.close()
 
 
+def test_await_children_nhan_session_id_tran_cua_ban_minh(tmp_path):
+    """BUG đo sống 09/10/2026 (lượt 27): id trần bị coi là tên vai nên cha chờ mãi một địa chỉ
+    không phân giải được — hơn 100 bước tiêu vô ích. Id trần của bạn mình phải chờ được."""
+    store, runtime, sid = build(tmp_path)
+    peer = add_peer(store, sid, 'review', status='started')
+
+    async def run():
+        async def hand_over():
+            await asyncio.sleep(0.2)
+            deliver(store, runtime, peer, sid)
+
+        task = asyncio.ensure_future(hand_over())
+        result = await runtime.await_children({'id': sid}, {'targets': [peer], 'mode': 'all'})
+        await task
+        return result
+
+    result = asyncio.run(run())
+    assert result['status'] == 'done', 'id trần của bạn mình phải phân giải được'
+    assert [item['sessionId'] for item in result['done']] == [peer]
+    store.close()
+
+
+def test_await_children_dia_chi_khong_phan_giai_duoc_thi_noi_thang(tmp_path):
+    """`pending_target` phải nói được "địa chỉ này KHÔNG phân giải được", kèm ba dạng hợp lệ."""
+    store, runtime, sid = build(tmp_path)
+    runtime.peer_target_grace = 0.05
+
+    async def run():
+        return await runtime.await_children({'id': sid},
+                                            {'targets': ['khong-phai-vai-nao'], 'mode': 'all'})
+
+    result = asyncio.run(run())
+    assert result['status'] == 'pending_target'
+    assert result['pending'] == ['khong-phai-vai-nao']
+    assert result['unresolved'] == ['khong-phai-vai-nao'], 'trường nói rõ địa chỉ không phân giải được'
+    notices = [event['data'] for event in store.events(sid)
+               if event['type'] == 'notice' and event['data'].get('code') == 'PEER_TARGET_UNRESOLVED']
+    assert len(notices) == 1, 'không phân giải được địa chỉ thì phải nói thẳng, không để cha đoán'
+    assert 'peer:<sessionId>' in notices[0]['message']
+    assert notices[0]['missing'] == ['khong-phai-vai-nao']
+    store.close()
+
+
 def test_await_children_cua_so_do_bat_duoc_ban_sinh_ngay_sau_do(tmp_path):
     """`role:` chưa tồn tại KHÔNG phải lỗi: anh em có thể được sinh ngay sau lời gọi này."""
     store, runtime, sid = build(tmp_path)

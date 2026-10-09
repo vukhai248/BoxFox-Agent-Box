@@ -10,12 +10,15 @@ import base64
 import json
 
 import pytest
-from win_fakes import FakePlatform, decode_events, make_window, reset_win_state
+from win_fakes import (FakePlatform, decode_events, make_window, reset_win_state,
+                       wheel_delta)
 
+from agentbox.agent_core import cua_target
 from agentbox.agent_core import desktop_control as dc
 from agentbox.agent_core import permissions as permissions_module
 from agentbox.sandbox import host_executor as host_module
 from agentbox.sandbox.win import errors as win_errors
+from agentbox.sandbox.win import windows_platform as win_platform_module
 
 WORKSPACE = '/var/tmp/boxfox-cua-ws'
 
@@ -27,7 +30,43 @@ def _clean_state():
     reset_win_state()
 
 
-def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', windows=None):
+class _SessionRows:
+    """Sổ phiên tối thiểu cho `SessionTargetStore` (get/update_config, `KeyError` như thật)."""
+
+    def __init__(self, rows):
+        self.rows = dict(rows)
+
+    def get(self, sid):
+        if sid not in self.rows:
+            raise KeyError('Session not found')
+        row = dict(self.rows[sid])
+        row.setdefault('config', {})
+        return row
+
+    def update_config(self, sid, config):
+        if sid not in self.rows:
+            raise KeyError('Session not found')
+        self.rows[sid]['config'] = dict(config)
+
+
+def _target_store(target):
+    return cua_target.SessionTargetStore(_SessionRows(
+        {'sess-1': {'config': {'cuaTarget': target, 'cuaTargetRevision': 1,
+                               'cuaTargetSetBy': 'user'}}}))
+
+
+def pinned_to(window):
+    """Sổ phiên đã chọn MỘT cửa sổ làm đích — `pinned=True` trong `_send_input`."""
+    return _target_store(cua_target.window_entry(window))
+
+
+def machine_scope():
+    """Sổ phiên chọn đích CẢ MÁY — `pinned=False`."""
+    return _target_store({'kind': 'machine'})
+
+
+def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', windows=None,
+          targets=None):
     """`(executor, control, platform)` — sẵn sàng cho một lời gọi CUA."""
     fake = platform if platform is not None else FakePlatform(windows=windows)
     profile = tmp_path / 'profile'
@@ -35,11 +74,13 @@ def build(tmp_path, *, platform=None, desktop=True, env=None, approver='allow', 
     control = dc.DesktopControl(profile_dir=profile, platform=fake) if desktop else None
     source = {'BOXFOX_PERMISSION_MODE': 'ask'}
     source.update(env or {})
-    policy = permissions_module.PermissionPolicy(WORKSPACE, env=source)
+    # `home=tmp_path`: tầng `user` là `<home>/.boxfox/settings.json`. Không cô lập thì một máy đã
+    # từng đổi mức quyền từ giao diện sẽ ghi đè biến môi trường của bài kiểm này.
+    policy = permissions_module.PermissionPolicy(WORKSPACE, env=source, home=tmp_path)
     executor = host_module.HostExecutor(
         workspace=tmp_path / 'workspace', policy=policy, platform='win32', desktop=control,
-        approver=(lambda name, args, decision: approver) if approver else None,
-        artifacts_dir=tmp_path / 'artifacts')
+        approver=(lambda name, args, decision, session_id=None: approver) if approver else None,
+        artifacts_dir=tmp_path / 'artifacts', targets=targets)
     return executor, control, fake
 
 
@@ -62,11 +103,24 @@ def test_cua_without_a_desktop_controller_returns_a_coded_error(tmp_path):
     assert payload['errorCode'] == host_module.CUA_UNAVAILABLE_CODE
 
 
-def test_cua_on_a_non_windows_host_is_unsupported(tmp_path):
+def test_cua_without_a_desktop_platform_is_unsupported(tmp_path, monkeypatch):
+    """Không có nền tảng desktop nào (Linux không có X11, hệ điều hành lạ) ⇒ lỗi có mã."""
+    executor, _control, _fake = build(tmp_path)
+    monkeypatch.setattr(executor, '_desktop_platform', lambda: None)
+    payload = run(executor, 'inspect_element', {'x': 1, 'y': 2})
+    assert payload['errorCode'] == host_module.UNSUPPORTED_CODE
+
+
+def test_a_linux_host_with_a_desktop_platform_passes_the_platform_gate(tmp_path):
+    """Đổi hành vi có chủ ý (08/10/2026): Linux có X11 không còn bị chặn ở cổng nền tảng.
+
+    Trước đây cổng này hỏi `sys.platform`, nên mọi máy `posix` đều trả `UNSUPPORTED_CODE`. Nay nó
+    hỏi *có nền tảng desktop hay không* — `posix` + X11 là hợp lệ.
+    """
     executor, _control, _fake = build(tmp_path)
     executor.platform = 'posix'
     payload = run(executor, 'inspect_element', {'x': 1, 'y': 2})
-    assert payload['errorCode'] == host_module.UNSUPPORTED_CODE
+    assert payload.get('errorCode') != host_module.UNSUPPORTED_CODE
 
 
 def test_a_human_holding_the_lease_blocks_every_cua_tool(tmp_path):
@@ -231,8 +285,97 @@ def test_a_named_key_is_pressed(tmp_path):
 
 def test_an_unknown_action_is_refused_with_a_code(tmp_path):
     executor, _control, fake = build(tmp_path)
-    payload = run(executor, 'computer_use', {'action': 'scroll', 'x': 1, 'y': 1})
+    payload = run(executor, 'computer_use', {'action': 'teleport', 'x': 1, 'y': 1})
     assert payload['errorCode'] == host_module.UNSUPPORTED_ACTION_CODE
+    assert fake.sent_events == []
+
+
+def test_scroll_sends_one_wheel_event_with_the_requested_number_of_steps(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'scroll', 'x': 20, 'y': 30,
+                                             'direction': 'down', 'steps': 5})
+    assert payload.get('is_error') is not True
+    assert payload['action'] == 'scroll'
+    wheels = [event for event in decode_events(fake.sent_events)
+              if event['flags'] & win_platform_module.MOUSEEVENTF_WHEEL]
+    assert len(wheels) == 1
+    assert wheel_delta(wheels[0]['data']) == -5 * win_platform_module.WHEEL_DELTA, 'xuống = số nấc âm'
+
+
+def test_drag_holds_the_button_across_the_steps_and_releases_it(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'drag', 'x': 20, 'y': 30, 'toX': 120, 'toY': 90,
+                                             'steps': 4})
+    assert payload.get('is_error') is not True
+    flags = [event['flags'] for event in decode_events(fake.sent_events) if event['kind'] == 'mouse']
+    down_at = flags.index(win_platform_module.MOUSEEVENTF_LEFTDOWN)
+    up_at = flags.index(win_platform_module.MOUSEEVENTF_LEFTUP)
+    assert down_at < up_at, 'nhả phải sau khi nhấn'
+    moves_while_held = [index for index, flag in enumerate(flags)
+                        if index > down_at and index < up_at and flag & win_platform_module.MOUSEEVENTF_MOVE]
+    assert len(moves_while_held) == 4, 'cú kéo đi qua bốn điểm dừng giữa lúc đang giữ nút'
+
+
+def test_hold_keeps_the_button_down_between_the_two_batches(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'hold', 'x': 20, 'y': 30, 'seconds': 0.05})
+    assert payload.get('is_error') is not True
+    assert payload['seconds'] == 0.05
+    flags = [event['flags'] for event in decode_events(fake.sent_events) if event['kind'] == 'mouse']
+    assert flags.index(win_platform_module.MOUSEEVENTF_LEFTDOWN) < flags.index(win_platform_module.MOUSEEVENTF_LEFTUP)
+
+
+def test_stroke_follows_every_point_of_the_path(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    path = [[20, 30], [60, 40], [100, 80]]
+    payload = run(executor, 'computer_use', {'action': 'stroke', 'path': path})
+    assert payload.get('is_error') is not True
+    assert payload['points'] == 3
+    assert payload['to'] == {'x': 100, 'y': 80}
+
+
+def test_a_pinned_session_refuses_a_stroke_that_ends_outside_the_target(tmp_path):
+    """Đích của phiên là MỘT cửa sổ thì nét vẽ không được kết thúc ở cửa sổ khác.
+
+    `drag` đã có chốt này từ đầu; `stroke` là cú kéo nhiều điểm nên nó phải chịu cùng luật — nếu
+    không, một nét vẽ chạy quá mép cửa sổ đích là một cú thả vào ứng dụng bên kia.
+    """
+    target = make_window(hwnd=100, rect=(0, 0, 400, 300), extended_bounds=(0, 0, 400, 300))
+    other = make_window(hwnd=200, rect=(400, 0, 400, 300), extended_bounds=(400, 0, 400, 300))
+    fake = FakePlatform(windows=[target, other], foreground=100)
+    executor, _control, fake = build(tmp_path, platform=fake, targets=pinned_to(target))
+    payload = run(executor, 'computer_use',
+                  {'action': 'stroke', 'path': [[50, 50], [90, 90], [600, 150]]})
+    assert payload['errorCode'] == win_errors.SOURCE_CHANGED
+    assert fake.sent_events == [], 'chưa chứng minh được điểm cuối thì chưa được nhấn'
+
+
+def test_a_machine_scope_stroke_may_end_outside_the_target(tmp_path):
+    """Đích là CẢ MÁY: kéo/nét vẽ đi từ cửa sổ này sang cửa sổ khác là việc hợp lệ."""
+    target = make_window(hwnd=100, rect=(0, 0, 400, 300), extended_bounds=(0, 0, 400, 300))
+    other = make_window(hwnd=200, rect=(400, 0, 400, 300), extended_bounds=(400, 0, 400, 300))
+    fake = FakePlatform(windows=[target, other], foreground=100)
+    executor, _control, fake = build(tmp_path, platform=fake,
+                                     env={'BOXFOX_PERMISSION_SCOPE': 'machine'},
+                                     targets=machine_scope())
+    payload = run(executor, 'computer_use',
+                  {'action': 'stroke', 'path': [[50, 50], [90, 90], [600, 150]]})
+    assert payload.get('is_error') is not True
+    assert payload['to'] == {'x': 600, 'y': 150}
+
+
+def test_a_stroke_without_a_usable_path_is_refused(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'stroke', 'path': [[20, 30]]})
+    assert payload.get('is_error') is True
+    assert payload['errorCode'] == win_errors.SOURCE_CHANGED
+    assert fake.sent_events == []
+
+
+def test_a_drag_without_the_end_point_is_refused(tmp_path):
+    executor, _control, fake = build(tmp_path)
+    payload = run(executor, 'computer_use', {'action': 'drag', 'x': 20, 'y': 30})
+    assert payload.get('is_error') is True
     assert fake.sent_events == []
 
 
@@ -315,10 +458,17 @@ def test_a_hook_that_cannot_be_installed_does_not_block_a_capture(tmp_path):
     assert payload.get('is_error') is not True
 
 
-def test_prepare_reports_unsupported_on_linux(tmp_path):
+def test_prepare_reports_unsupported_without_a_desktop_platform(tmp_path, monkeypatch):
+    executor, _control, _fake = build(tmp_path)
+    monkeypatch.setattr(executor, '_desktop_platform', lambda: None)
+    assert executor.prepare() == (False, host_module.UNSUPPORTED_CODE)
+
+
+def test_prepare_succeeds_on_a_linux_host_with_a_desktop_platform(tmp_path):
+    """`posix` không còn là lý do để `prepare()` từ chối — có X11 thì vẫn dùng được."""
     executor, _control, _fake = build(tmp_path)
     executor.platform = 'posix'
-    assert executor.prepare() == (False, host_module.UNSUPPORTED_CODE)
+    assert executor.prepare() == (True, '')
 
 
 def test_the_lease_file_lives_in_the_profile_directory(tmp_path):

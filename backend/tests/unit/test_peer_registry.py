@@ -142,7 +142,15 @@ def test_xoa_phien_thi_so_con_di_theo(tmp_path):
     store.child_start(child, parent, 1, 1, 'review', goal='soát')
     store.queue_delivery(child, 'peer-x', 1, 'peer', chars=10)
 
-    assert store.delete(parent) is True
+    # Đường xoá duy nhất còn lại: preview → capsule đã xác minh → confirm.
+    history = store.history
+    history.critical_snapshot = lambda ids: {'decisions': [], 'blockers': [], 'failedChecks': [],
+                                             'tasks': [], 'jobs': [], 'budget': {}, 'plans': []}
+    history.quiescence = lambda ids: True
+    preview = history.deletion_preview(parent)
+    assert history.delete_with_capsule(parent, operation_id=preview['operationId'],
+                                       expected_revision=preview['expectedRevision'],
+                                       confirm=True)['status'] == 'deleted'
     assert store.child(child) is None
     assert store.deliveries_of(child) == []
     assert store.db.execute('SELECT COUNT(*) AS n FROM child_deliveries').fetchone()['n'] == 0

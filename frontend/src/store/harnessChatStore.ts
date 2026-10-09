@@ -1,3 +1,5 @@
+import { continuityInvocation } from '../lib/continuityInvocation'
+import { newerTask, type LongTask } from '../types/longtask'
 import { create } from 'zustand'
 import { resolveThinkingLevel } from '../lib/harnessThinking'
 import { agentApi } from '../lib/agentApi'
@@ -12,7 +14,7 @@ import type { TabIntent } from './uiStore'
 import type { RouterChatSelection } from './routerChatStore'
 
 export interface HarnessEvent { seq: number; type: string; data: Record<string, unknown>; created: number }
-interface HarnessSession { id: string; status: string; events: HarnessEvent[]; config?: Record<string, unknown>
+interface HarnessSession { goalRevision?: number; contractRef?: string | null; longtask?: LongTask | null; id: string; status: string; events: HarnessEvent[]; config?: Record<string, unknown>
   /** Khối `journal` của `GET /sessions/{sid}` — đọc ở `parseJournalPush`, không dùng trực tiếp. */
   journal?: unknown }
 
@@ -52,7 +54,7 @@ export interface HarnessJournal {
   evidenceByTurn: Record<number, JournalRow>
 }
 
-interface RunView { id: string | null; status: string; events: HarnessEvent[]; error: string | null; lastModelLabel?: string
+interface RunView { goalRevision?: number; contractRef?: string | null; longtask?: LongTask | null; decisionsHydrated?: boolean; id: string | null; status: string; events: HarnessEvent[]; error: string | null; lastModelLabel?: string
   /** Cặp `(số, nguồn)` của cửa sổ ngữ cảnh trong `config` phiên — harness nén theo đúng số này. */
   contextWindow?: number | null; contextWindowSource?: string | null
   /**
@@ -98,7 +100,7 @@ export interface SavedSessionRow {
 
 // ── Quyết định thật của agent (hợp đồng §1 `decision_requested`/`decision_resolved`)
 
-export type DecisionKind = 'question' | 'approval' | 'interview'
+export type DecisionKind = 'question' | 'approval' | 'interview' | 'budget'
 export type DecisionOptionKind = 'approve' | 'reject' | 'alternative'
 // P4 (vá vòng soát) — `answered`: chủ nhà GÕ câu trả lời vào ô tự nhập. Đó là một hàng ĐÃ CHỐT
 // nhưng trung tính: không phải "đã duyệt" và cũng không phải "bị từ chối".
@@ -114,6 +116,7 @@ export interface DecisionOption {
    * Runtime LUÔN thêm một lựa chọn như vậy (`id='other'`) vào mọi quyết định.
    */
   allowFreeText?: boolean
+  budgetDelta?: { steps: number; activeTimeMs: number }
 }
 
 /**
@@ -121,6 +124,9 @@ export interface DecisionOption {
  * event của harness: không có hạn chót, lựa chọn hay lý do nào do giao diện bịa.
  */
 export interface DecisionEntry {
+  revision?: number
+  restored?: boolean
+  actionable?: boolean
   id: string
   kind: DecisionKind
   question: string | null
@@ -185,7 +191,7 @@ interface State {
   /** Số `seq` lớn nhất đã xử lý ý định mở tab — cùng một event không kích hoạt lại. */
   intentSeq: Record<string, number>
   fetchSavedSessions: () => Promise<SavedSessionRow[]>
-  deleteSession: (id: string) => Promise<void>
+  deleteSession: (id: string, operation: { operationId: string; expectedRevision: string }) => Promise<{ status: string }>
   send: (
     chatId: string,
     prompt: string,
@@ -222,7 +228,7 @@ export function parseDecisionOptions(value: unknown): DecisionOption[] {
   const options: DecisionOption[] = []
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue
-    const item = raw as { id?: unknown; label?: unknown; kind?: unknown; allowFreeText?: unknown }
+    const item = raw as { id?: unknown; label?: unknown; kind?: unknown; allowFreeText?: unknown; budgetDelta?: unknown }
     const id = asString(item.id)
     const label = asString(item.label)
     if (!id || !label) continue
@@ -230,7 +236,9 @@ export function parseDecisionOptions(value: unknown): DecisionOption[] {
       ? (item.kind as DecisionOptionKind)
       : 'alternative'
     // Cờ tự nhập đi nguyên từ server (đúng cả với `id='other'` runtime luôn thêm).
-    options.push(item.allowFreeText === true ? { id, label, kind, allowFreeText: true } : { id, label, kind })
+    const delta = item.budgetDelta as Record<string, unknown> | undefined
+    options.push({ id, label, kind, ...(item.allowFreeText === true ? { allowFreeText: true } : {}),
+      ...(delta && typeof delta.steps === 'number' && typeof delta.activeTimeMs === 'number' ? { budgetDelta: { steps: delta.steps, activeTimeMs: delta.activeTimeMs } } : {}) })
   }
   return options
 }
@@ -315,7 +323,8 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
       if (!id || byId.has(id)) continue
       byId.set(id, {
         id,
-        kind: event.data.kind === 'approval' ? 'approval' : event.data.kind === 'interview' ? 'interview' : 'question',
+        revision: asNumber(event.data.revision) ?? undefined,
+        kind: event.data.kind === 'budget' ? 'budget' : event.data.kind === 'approval' ? 'approval' : event.data.kind === 'interview' ? 'interview' : 'question',
         question: asString(event.data.question),
         action: asString(event.data.action),
         reason: asString(event.data.reason),
@@ -356,6 +365,7 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
       }
       byId.set(id, {
         ...entry,
+        revision: asNumber(event.data.revision) ?? entry.revision,
         status: decisionStatusFrom(event.data.status),
         choice: asString(event.data.choice),
         note: asString(event.data.note),
@@ -369,6 +379,32 @@ export function parseDecisions(events: HarnessEvent[]): DecisionEntry[] {
 }
 
 /** Quyết định đang chờ trả lời — agent đang bị chặn ở đúng những mục này. */
+/** Same-ID hydration; an older pending snapshot must never revive a settled card. */
+export function canonicalDecisionEntries(rows: Record<string, unknown>[]): DecisionEntry[] {
+  return rows.flatMap(row => {
+    const data = { ...row, decisionId: row.decisionId ?? row.id }
+    const entries = parseDecisions([{ seq: 0, type: 'decision_requested', data, created: Number(row.created ?? row.requestedAt ?? 0) }])
+    return entries.map(entry => ({ ...entry, status: decisionStatusFrom(row.status ?? 'pending'),
+      restored: true, actionable: row.actionable !== false, revision: asNumber(row.revision) ?? undefined }))
+  })
+}
+export function mergeCanonicalDecisions(previous: DecisionEntry[], events: DecisionEntry[], canonical?: DecisionEntry[]): DecisionEntry[] {
+  const byId = new Map<string, DecisionEntry>()
+  for (const entry of [...previous, ...events, ...(canonical ?? [])]) {
+    const old = byId.get(entry.id)
+    if (old && ((old.revision ?? 0) > (entry.revision ?? 0)
+      || (old.status !== 'pending' && entry.status === 'pending'))) continue
+    byId.set(entry.id, entry)
+  }
+  if (canonical !== undefined) {
+    const pendingIds = new Set(canonical.map(entry => entry.id))
+    for (const [id, entry] of byId) {
+      if (entry.status === 'pending' && !pendingIds.has(id)) byId.set(id, { ...entry, actionable: false })
+    }
+  }
+  return [...byId.values()]
+}
+
 export function pendingDecisions(decisions: DecisionEntry[]): DecisionEntry[] {
   return decisions.filter((entry) => entry.status === 'pending')
 }
@@ -440,6 +476,26 @@ export function dispatchTabIntents(params: {
       if (earlier.length === 0 || (statusIsNew && status === 'awaiting_approval')) {
         request('work', { runId }, 'work_graph')
       }
+      continue
+    }
+    // Design/Canvas: `canvas_draw` phát `design_canvas` cho MỖI lần vẽ — đó là
+    // CẬP NHẬT trạng thái, không phải sự kiện "xong một artifact", nên chỉ mở
+    // tab ở lần vẽ ĐẦU của một `designId` (đúng tiền lệ `work_graph` ở trên;
+    // `plan_written` tần suất thấp nên mở mỗi bản có version mới là hợp lý).
+    // Không thêm producer `ui_intent` song song: `design_canvas` đã mang
+    // `designId` — bản sao thứ hai là chỗ trôi thứ hai của cùng một sự thật.
+    if (event.type === 'design_canvas') {
+      if (firstHydration) continue
+      const designId = asString(event.data.designId)
+      if (!designId) continue
+      // Cảnh do chính chủ nhà gửi (`persist_design_canvas` phát `actor: 'user'`)
+      // là cảnh họ vừa nhìn — không cướp tab.
+      if (asString(event.data.actor) === 'user') continue
+      const earlier = allEvents.some(
+        (other) =>
+          other.type === 'design_canvas' && other.seq < event.seq && String(other.data.designId) === designId,
+      )
+      if (!earlier) request('design', { designId }, 'canvas_drawn')
       continue
     }
     // `ui_intent` là gợi ý của harness (hợp đồng §1/§3): UI vẫn tự quyết theo luật
@@ -613,6 +669,27 @@ export const useHarnessChatStore = create<State>((set, get) => ({
     try {
       const lastServerSeq = current.events.filter(e => e.type !== 'model_change').at(-1)?.seq ?? 0
       const session = await agentApi<HarnessSession>(`/sessions/${id}?after=${lastServerSeq}`)
+      // Thẻ quyết định bền nằm ở `session_decisions`, không phát lại trong `events`, nên phải
+      // hỏi bản chuẩn. Chỉ hỏi khi thật sự cần — lần nạp đầu, lúc lượt đang chờ quyết định,
+      // hoặc khi vòng poll này mang tới event quyết định mới — để không nhân đôi nhịp 1200ms
+      // trong suốt tác vụ dài.
+      const decisionEventsArrived = session.events.some(e => (e.type === 'decision_requested' || e.type === 'decision_resolved')
+        && !current.events.some(old => old.seq === e.seq && old.type === e.type))
+      let canonical: DecisionEntry[] | undefined
+      if ('longtask' in session && (!current.decisionsHydrated || session.status === 'awaiting_decision' || decisionEventsArrived)) {
+        canonical = []
+        let after = ''
+        for (let page = 0; page < 50; page++) {
+          const result = await agentApi<{ decisions: Record<string, unknown>[]; nextAfter?: string; hasMore?: boolean }>(
+            `/sessions/${id}/decisions?state=pending&after=${encodeURIComponent(after)}&limit=20`)
+          canonical.push(...canonicalDecisionEntries(result.decisions))
+          if (!result.hasMore) break
+          if (!result.nextAfter || result.nextAfter === after) throw new Error('DECISION_CURSOR_INVALID')
+          after = result.nextAfter
+          if (page === 49) throw new Error('DECISION_HYDRATION_INCOMPLETE')
+        }
+      }
+      if (get().sessions[chatId]?.id && get().sessions[chatId]?.id !== id) return
       useMachineStore.getState().bind(chatId, (session.config?.machineBinding as MachineBinding | undefined)
         ?? { mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace' })
       const prevEvents = current.events ?? []
@@ -644,10 +721,8 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         // Trả lời thành công đã ghi ngay vào chỗ chứa cục bộ; vòng poll tới muộn
         // hơn không được kéo mục đó về `pending` khi event `decision_resolved`
         // chưa kịp tới.
-        const decisions = parsed.map((entry) => {
-          const previous = previousDecisions.find((item) => item.id === entry.id)
-          return previous && previous.status !== 'pending' && entry.status === 'pending' ? previous : entry
-        })
+        const decisions = mergeCanonicalDecisions(previousDecisions, parsed, canonical)
+
         return {
           sessions: {
             ...state.sessions,
@@ -655,6 +730,10 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               ...current,
               id,
               status: session.status,
+              longtask: newerTask(state.sessions[chatId]?.longtask, session.longtask),
+              decisionsHydrated: canonical !== undefined || state.sessions[chatId]?.decisionsHydrated === true,
+              goalRevision: session.goalRevision,
+              contractRef: session.contractRef,
               error: sessionError,
               events: allEvents,
               journal: journalPush ? mergeJournal(current.journal, journalPush) : current.journal,
@@ -695,7 +774,10 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         })
         return
       }
-      set((state) => ({ sessions: { ...state.sessions, [chatId]: { ...current, id, status: 'failed', error: errStr } } }))
+      set((state) => ({
+        sessions: { ...state.sessions, [chatId]: { ...(state.sessions[chatId] ?? current), id, status: 'failed', error: errStr } },
+        ...(current.longtask !== undefined ? { decisions: { ...state.decisions, [chatId]: (state.decisions[chatId] ?? []).map(entry => ({ ...entry, actionable: false })) } } : {}),
+      }))
     }
   },
   fetchSavedSessions: async () => {
@@ -708,15 +790,18 @@ export const useHarnessChatStore = create<State>((set, get) => ({
       return []
     }
   },
-  deleteSession: async (id: string) => {
+  deleteSession: async (id: string, operation) => {
     try {
-      await agentApi(`/sessions/${id}`, undefined, 'DELETE')
+      if (!operation?.operationId || !(/^[a-f0-9]{64}$/.test(operation.expectedRevision))) throw new Error('DELETE_REQUIRES_CARRY_FORWARD')
+      const result = await agentApi<{ status: string }>(`/sessions/${id}/deletion-confirm`, { ...operation, confirm: true })
+      if (result.status !== 'deleted') return result
       localStorage.removeItem(storageKey(id))
       set((state) => {
         const next = { ...state.sessions }
         delete next[id]
         return { sessions: next }
       })
+      return result
     } catch (error) {
       console.error('Failed to delete session:', error)
       throw error
@@ -946,6 +1031,8 @@ export const useHarnessChatStore = create<State>((set, get) => ({
       }))
       return
     }
+    const target = get().decisions[chatId]?.find(entry => entry.id === decisionId)
+    if (target?.actionable === false || (target && target.status !== 'pending')) return
     try {
       const result = await agentApi<{
         status: string
@@ -953,20 +1040,24 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         choice: string
         outcome: string
         answers?: unknown
+        revision?: number
       }>(`/sessions/${id}/decisions`, {
         decisionId,
         choice,
+        ...(target?.revision !== undefined ? { invocationId: continuityInvocation([id, decisionId, target.revision, choice, note, answers]) } : {}),
+        ...(target?.revision !== undefined ? { expectedRevision: target.revision } : {}),
         ...(note ? { note } : {}),
         ...(answers ? { answers } : {}),
       })
       set((state) => {
         const list = state.decisions[chatId] ?? parseDecisions(current.events)
         const decisions = list.map((entry) => {
-          if (entry.id !== decisionId) return entry
+          if (entry.id !== decisionId || (result.revision !== undefined && (entry.revision ?? 0) > result.revision)) return entry
           const optionKind = entry.options.find((option) => option.id === choice)?.kind
           const outcome = decisionStatusFrom(result?.outcome)
           return {
             ...entry,
+            revision: result.revision ?? entry.revision,
             status: outcome !== 'pending' ? outcome : optionKind === 'reject' ? 'rejected' : 'approved',
             choice: result?.choice ?? choice,
             note: note ?? null,

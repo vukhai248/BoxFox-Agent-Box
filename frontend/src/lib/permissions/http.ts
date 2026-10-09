@@ -21,6 +21,7 @@ import type {
   PermissionDecideResult,
   PermissionLayer,
   PermissionMode,
+  PermissionNetwork,
   PermissionRulesSnapshot,
   PermissionScope,
   PermissionSnapshot,
@@ -39,10 +40,11 @@ export function getPermissionSnapshot(): Promise<PermissionSnapshot> {
   return agentApi<PermissionSnapshot>('/permissions')
 }
 
-/** `PUT /api/agent/permissions` — đổi `mode`/`scope`, ghi xuống tầng `user` (mặc định của UI). */
+/** `PUT /api/agent/permissions` — đổi `mode`/`scope`/`network`, ghi xuống tầng `user` (mặc định UI). */
 export function updatePermissions(patch: {
   mode?: PermissionMode
   scope?: PermissionScope
+  network?: PermissionNetwork
   layer?: PermissionLayer
 }): Promise<PermissionSnapshot> {
   return agentApi<PermissionSnapshot>('/permissions', patch, 'PUT')

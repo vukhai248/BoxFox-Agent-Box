@@ -1,6 +1,7 @@
 """Loopback harness API; UI uses the Vite /api/agent proxy."""
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -60,12 +61,28 @@ from ..observability.system_log import (DEFAULT_READ_LINES, MAX_READ_LINES, clam
                                         redact_entry, system_log)
 from ..sandbox.executor import SandboxExecutor
 from ..agent_core.desktop_control import DesktopControl
-from ..sandbox.host_executor import HostExecutor
+from ..sandbox.host_executor import (HostExecutor, approval_options, approval_reason,
+                                     approval_verdict)
 from .owner_settings import OwnerSettings
 
 
 logger = logging.getLogger('boxfox.harness.api')
 RESEARCH_PUMP_KEY = web.AppKey('research_pump', asyncio.Task)
+IDLE_WATCH_KEY = web.AppKey('idle_watch', asyncio.Task)
+
+#: Nhịp lấy mẫu của bộ theo dõi "người thật chạm máy" trên nền tảng không có hook (X11).
+#: Mỗi mẫu là hai tiến trình con ngắn (~20 ms), chạy trong luồng riêng nên không chặn vòng lặp.
+IDLE_WATCH_INTERVAL_SEC = 1.0
+
+
+def idle_watch_supported(control) -> bool:
+    """Nền tảng của bộ điều khiển có TỰ theo dõi được người can thiệp mà không cần hook hệ điều hành?
+
+    Windows không cần: hook `WH_MOUSE_LL`/`WH_KEYBOARD_LL` đã lo việc đó (và đường `poll_idle` của
+    nó chưa được kiểm trên máy Windows thật). X11 thì cần — ở đó chỉ có mẫu con trỏ + tiêu điểm.
+    Cờ này nằm trên chính đối tượng nền tảng để chỗ gọi không phải rẽ nhánh theo `sys.platform`.
+    """
+    return bool(getattr(getattr(control, 'platform', None), 'supports_idle_watch', False))
 
 
 def research_job_pumpable(runtime, job, session):
@@ -394,6 +411,37 @@ def host_workspace(env=None):
     return Path.home() / 'BoxFox' / 'workspace'
 
 
+def attach_host_approver(runtime):
+    """Nối thẻ duyệt vào executor host MỨC TIẾN TRÌNH (DA2 của bản bàn giao).
+
+    Phiên IDE đi qua `SessionMachineExecutor.host()` — đường đó đã có thẻ duyệt riêng. Nhưng khi
+    tiến trình chạy host mode mà phiên lại do executor mức tiến trình phục vụ (`build_executor`),
+    trước đây không có `approver` nên MỌI lời gọi cần hỏi bị từ chối im lặng. Không có `approver`
+    vẫn phải là fail-closed, nên chỉ nối khi executor thật sự là host và chưa có thẻ duyệt.
+    """
+    executor = getattr(runtime, 'executor', None)
+    if not isinstance(executor, HostExecutor) or executor.approver is not None:
+        return False
+
+    async def approve(name, args, decision, session_id=None):
+        # `SessionStore.get` ném `KeyError` khi thiếu phiên: thiếu phiên là TỪ CHỐI, không phải lỗi 500.
+        try:
+            session = runtime.store.get(session_id) if session_id else None
+        except KeyError:
+            session = None
+        # Phiên con chạy trong lượt của cha và không có chat riêng: `runtime.decision` sẽ ném.
+        if not session or session.get('parent_id'):
+            return 'deny'
+        outcome = await runtime.decision(session, 'request_approval', {
+            'action': f'{name} {json.dumps(args, ensure_ascii=False)[:1500]}',
+            'reason': approval_reason(decision, name, args),
+            'options': approval_options(decision, name, args)})
+        return approval_verdict(outcome, decision, name)
+
+    executor.approver = approve
+    return True
+
+
 def build_executor(data, env=None):
     """Executor theo chế độ đang chọn. `data` là thư mục hồ sơ (audit, luật, DB)."""
     source = os.environ if env is None else env
@@ -405,29 +453,78 @@ def build_executor(data, env=None):
         workspace = host_workspace(source)
         profile_dir = Path(data)
         policy = permissions_module.PermissionPolicy(str(workspace), profile_dir=profile_dir, env=source)
-        executor = HostExecutor(str(workspace), policy=policy, env=source,
-                                desktop=build_desktop_control(profile_dir, source))
+        desktop = build_desktop_control(profile_dir, source)
+        executor = HostExecutor(str(workspace), policy=policy, env=source, desktop=desktop,
+                                overlay=build_cua_overlay(source, desktop))
         return executor
     return SandboxExecutor(api_key=source.get('BOXFOX_API_KEY', 'boxfox-local-dev-token'))
+
+
+def build_cua_overlay(env=None, desktop=None):
+    """Viền báo vùng đang bị điều khiển trên màn hình thật, hoặc `None`.
+
+    Chỉ có nghĩa khi có `DesktopControl` (Windows hoặc X11 thật). Biến `BOXFOX_CUA_OVERLAY=0` tắt hẳn
+    viền — một số môi trường (chụp màn hình tự động, VM không compositor) không muốn thêm cửa sổ
+    luôn-trên-cùng.
+
+    Trên Linux, máy **thiếu `python-xlib`** vẫn trả về một `CuaOverlay` **đang tắt** kèm câu nói rõ
+    thiếu gói gì (`snapshot()['reason']`) — CUA chạy bình thường, chỉ mất tín hiệu thị giác, nhưng
+    người dùng đọc được vì sao (quyết định J0.8).
+    """
+    source = os.environ if env is None else env
+    if str(source.get('BOXFOX_CUA_OVERLAY') or '').strip().lower() in ('0', 'off', 'false'):
+        return None
+    if desktop is None:
+        return None
+    try:
+        from ..agent_core.cua_overlay import CuaOverlay
+    except Exception:
+        return None
+    if sys.platform == 'win32':
+        try:
+            from ..sandbox.win.windows_platform import CuaOverlayWindow
+        except Exception:
+            return None
+        try:
+            return CuaOverlay(CuaOverlayWindow(getattr(desktop, 'platform', None)))
+        except Exception:
+            return None
+    if sys.platform.startswith('linux'):
+        try:
+            from ..sandbox.x11 import overlay as x11_overlay
+        except Exception:
+            return None
+        reason = x11_overlay.unavailable_reason()
+        if reason:
+            return CuaOverlay(None, reason=reason)
+        try:
+            return CuaOverlay(x11_overlay.X11OverlayWindow(getattr(desktop, 'platform', None)))
+        except Exception:
+            return None
+    return None
 
 
 def build_desktop_control(profile_dir, env=None):
     """`DesktopControl` cho host mode, hoặc `None` khi máy này không điều khiển desktop được.
 
-    Không ném: máy không phải Windows (hoặc thiếu pywin32) vẫn phải khởi động harness — các công cụ
-    tệp/lệnh chạy bình thường, còn công cụ CUA trả `CUA_UNAVAILABLE`.
+    Không ném: máy không có nền tảng desktop (không phải Windows, không có X11, thiếu công cụ) vẫn
+    phải khởi động harness — các công cụ tệp/lệnh chạy bình thường, còn công cụ CUA trả
+    `CUA_UNAVAILABLE`.
     """
     source = os.environ if env is None else env
     if str(source.get('BOXFOX_DESKTOP_CONTROL') or '').strip().lower() in ('0', 'off', 'false'):
         return None
-    if sys.platform != 'win32':
-        return None
     try:
-        from ..sandbox.win import windows_platform
-    except Exception:
-        return None
-    try:
-        platform = windows_platform.get_platform()
+        if sys.platform == 'win32':
+            from ..sandbox.win import windows_platform
+
+            platform = windows_platform.get_platform()
+        elif sys.platform.startswith('linux'):
+            from ..sandbox.x11 import platform as x11_platform
+
+            platform = x11_platform.get_platform()
+        else:
+            return None
     except Exception:
         return None
     if platform is None or getattr(platform, 'name', '') in ('', 'unavailable'):
@@ -466,9 +563,32 @@ def create_app(runtime):
         except PermissionError as exc:
             return web.json_response({'error': str(exc)}, status=403)
         except (ValueError, TypeError) as exc:
-            return web.json_response({'error': str(exc)}, status=409 if any(c in str(exc) for c in ('SESSION_BUSY', 'REVISION_CONFLICT', 'INVOCATION_CONFLICT')) else 400)
+            # `LongtaskError`/`HistoryError` là `ValueError` mang mã hợp đồng. Bỏ mã ở đây thì
+            # `LONGTASK_BLOCKED`/`LONGTASK_PENDING_DECISION` của route lượt về UI chỉ còn một câu
+            # văn xuôi — không đọc được bằng máy.
+            body = {'error': str(exc)}
+            code = getattr(exc, 'code', None)
+            if not code and isinstance(exc, json.JSONDecodeError):
+                # Thân JSON hỏng là lỗi của YÊU CẦU, không phải lỗi nội bộ: phải đọc được bằng máy.
+                # Trước đây nhánh này trả 400 với `code` rỗng, nên client chỉ thấy câu văn xuôi.
+                body['error'] = 'REQUEST_INVALID: body must be valid JSON'
+                code = 'REQUEST_INVALID'
+            if code:
+                body['code'] = code
+            status = getattr(exc, 'status', None)
+            if status is None:
+                status = 409 if any(c in str(exc) for c in ('SESSION_BUSY', 'REVISION_CONFLICT', 'INVOCATION_CONFLICT')) else 400
+            return web.json_response(body, status=status)
 
     app = web.Application(middlewares=[boundary], client_max_size=1048576)
+
+    # Bề mặt bền (history/longtask) phải có hook TRƯỚC khi có phiên nào: binding thô được ghim
+    # ngay lúc tạo phiên, còn hook completion/acceptance phải sẵn sàng khi lượt đầu kết thúc.
+    try:
+        from ..agent_core import history_surface
+        history_surface.configure_runtime(runtime)
+    except Exception:
+        logger.exception('history surface unavailable; history/longtask routes stay closed')
 
     async def heal_stored_context_windows(_app):
         """Lượt sửa một lần lúc khởi động: phiên cũ còn giữ cửa sổ ngữ cảnh đoán theo tên.
@@ -515,6 +635,12 @@ def create_app(runtime):
                     await work_feedback.pump(runtime)
                 except Exception:
                     logger.exception('plan continuation deferred; durable admission will retry')
+                # Tác vụ dài dùng chung một nhịp với các controller khác: hàng chờ đã ghi bền,
+                # nên một nhịp lỗi không mất việc, chỉ hoãn.
+                try:
+                    await runtime.pump_longtasks()
+                except Exception:
+                    logger.exception('long task continuation deferred; durable admission will retry')
         _app[RESEARCH_PUMP_KEY] = asyncio.create_task(pump())
 
     async def stop_research_continuations(_app):
@@ -525,6 +651,54 @@ def create_app(runtime):
 
     app.on_startup.append(research_continuations)
     app.on_cleanup.append(stop_research_continuations)
+
+    async def recover_longtasks(_app):
+        """Khôi phục tác vụ dài SAU khi graph/plan/watchdog đã dọn hàng cũ.
+
+        `recover()` chỉ mở lại việc đã ghi bền; nó không tự chạy nếu `BOXFOX_LONGTASK_CONTINUITY`
+        chưa bật, và không có hàng nào thì trả `{'spawned': 0}`. Lỗi ở đây không được làm sập
+        khởi động — nhịp `pump` phía trên sẽ không nhận việc cho tới khi lần khôi phục sau chạy xong.
+        """
+        try:
+            await runtime.recover_longtasks()
+        except Exception:
+            logger.exception('long task recovery deferred')
+
+    app.on_startup.append(recover_longtasks)
+
+    async def idle_watch(_app):
+        """Nhả quyền điều khiển về tay người khi họ chạm máy, trên nền tảng không có hook.
+
+        Windows phát hiện người thật bằng hook ``WH_MOUSE_LL``/``WH_KEYBOARD_LL``; X11 không có
+        tương đương, nên ở đó ``poll_idle()`` lấy mẫu con trỏ + cửa sổ đang có tiêu điểm
+        (:meth:`X11Platform.last_input_tick`) và tự nhả quyền khi thấy thay đổi mà chính agent
+        không gây ra. Chỉ chạy khi nền tảng khai báo ``supports_idle_watch`` — nhờ vậy hành vi
+        Windows đang chạy thật không đổi cho tới khi đường hook của nó được kiểm trên máy Windows.
+        """
+        # `runtime` có thể là bản giả không có `executor` (bài kiểm dựng app với runtime tối thiểu),
+        # nên hỏi hai lớp bằng `getattr` — thiếu executor nghĩa là chưa có gì để theo dõi.
+        control = getattr(getattr(runtime, 'executor', None), 'desktop', None)
+        if not idle_watch_supported(control):
+            return
+
+        async def pump():
+            while True:
+                await asyncio.sleep(IDLE_WATCH_INTERVAL_SEC)
+                try:
+                    await asyncio.to_thread(control.poll_idle)
+                except Exception:
+                    logger.exception('idle watch deferred')
+
+        _app[IDLE_WATCH_KEY] = asyncio.create_task(pump())
+
+    async def stop_idle_watch(_app):
+        task = _app.get(IDLE_WATCH_KEY)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    app.on_startup.append(idle_watch)
+    app.on_cleanup.append(stop_idle_watch)
 
     def _search_status():
         """Khối `search` của health: lỗi ở đây KHÔNG được kéo cả route xuống (chỉ đọc, không mạng)."""
@@ -558,25 +732,59 @@ def create_app(runtime):
                 'mutexHeld': snapshot.get('mutexHeld'), 'mutexName': snapshot.get('mutexName'),
                 'since': snapshot.get('since'), 'reason': snapshot.get('reason')}
 
+    def machine_policy():
+        """Policy của MÁY khi tiến trình chạy docker nhưng máy được cấu hình host, hoặc `None`.
+
+        Bản desktop có thể chạy tiến trình ở chế độ docker (máy có Docker Desktop) trong khi người
+        dùng chọn máy ở chế độ host: `runtime.executor.policy` khi đó là `None` nên health nói
+        `policy:false`, và tab Settings → Machine & Permissions hiện "Máy này không có động cơ
+        quyền" dù bốn route quyền trả 200 và phiên host vẫn chạy được (`permissions_policy()` đã
+        có sẵn đúng đường đọc ấy cho các route).
+
+        Trả `None` khi máy KHÔNG ở chế độ host hoặc chưa chọn folder: bản chỉ có Docker giữ nguyên
+        trạng thái trống, không mời người dùng vào một bảng quyền không gác gì.
+        """
+        engine = getattr(runtime, 'machine_registry', None)
+        # Đúng đối tượng mà các route quyền dùng: `SessionMachineExecutor.permissions_policy`.
+        reader = getattr(getattr(runtime, 'executor', None), 'permissions_policy', None)
+        if engine is None or reader is None:
+            return None
+        try:
+            state = engine.state()
+            if state.get('mode') != 'host' or not state.get('projectId'):
+                return None
+            if engine.active_project() is None:
+                return None
+            return reader()
+        except Exception:                # health không bao giờ được vỡ vì một tầng phụ
+            return None
+
     def execution_status():
         """Khối `execution` của health: đang chạy chế độ nào, quyền nào, sàn cứng chạm mấy lần.
 
-        Rẻ như phần còn lại của health: chỉ đọc biến và bộ đếm trong bộ nhớ, KHÔNG chạm đĩa/mạng.
+        Đường thường rẻ như phần còn lại của health: chỉ đọc biến và bộ đếm trong bộ nhớ, KHÔNG
+        chạm đĩa/mạng. Chỉ khi executor KHÔNG có policy (tiến trình docker) mới hỏi thêm sổ máy —
+        một lần đọc SQLite, chỉ để nói thật trạng thái của `permissions_policy()`.
         """
         policy = getattr(runtime.executor, 'policy', None)
+        if policy is None:
+            policy = machine_policy()
         # `mode` là thứ ĐANG chạy (suy từ chính executor), không phải thứ được cấu hình: health phải
         # nói được sự thật kể cả khi executor được dựng tay trong test hay bởi một bản cài khác.
+        # Tiến trình docker + máy cấu hình host ⇒ `policy` ở trên đến từ sổ máy, nên `mode` nói
+        # `host` (máy đang phục vụ phiên host) còn `configured` vẫn nói chế độ của tiến trình.
         mode = 'host' if policy is not None else execution_mode()
         payload = {'mode': mode, 'modeDefault': EXECUTION_MODE_DEFAULT,
                    'modes': list(EXECUTION_MODES), 'configured': execution_mode()}
         if policy is None:
-            payload.update({'scope': None, 'permissionMode': None, 'policy': False,
+            payload.update({'scope': None, 'permissionMode': None, 'policy': False, 'network': None,
                             'cuaEnabled': None, 'lease': None, 'hardlineHits': 0, 'workspace': None})
             return payload
         permission_mode = policy.mode_value()
         payload.update({
             'scope': policy.scope_value(),
             'permissionMode': permission_mode,
+            'network': policy.network_value(),
             'policy': True,
             'cuaEnabled': bool(permissions_module.MODE_CAPABILITIES[permission_mode]['cua']),
             # `lease` là hàng rào đồng thời thật (H7): `None` nghĩa là "máy này không có hàng rào",
@@ -789,8 +997,21 @@ def create_app(runtime):
         return web.json_response(await ClaudeExecutor(container).probe())
 
     def permission_policy():
-        """Chính sách quyền của executor đang chạy. Docker mode KHÔNG có ⇒ lỗi có mã, không 500."""
+        """Chính sách quyền của máy này. Docker mode KHÔNG có ⇒ lỗi có mã, không 500.
+
+        Ở bản desktop, tiến trình có thể đang chạy chế độ docker trong khi máy được cấu hình host
+        (phiên IDE chạy trên máy thật). Khi đó executor không có `policy` nhưng `SessionMachineExecutor`
+        vẫn dựng được policy của folder dự án — nhờ vậy nút chọn quyền ở thanh chat và tab
+        Settings → Machines đọc/ghi được thay vì trả 409.
+        """
         policy = getattr(runtime.executor, 'policy', None)
+        if policy is None:
+            provider = getattr(runtime.executor, 'permissions_policy', None)
+            if callable(provider):
+                try:
+                    policy = provider()
+                except Exception:      # thiếu folder/quyền đọc ⇒ coi như máy không có động cơ quyền
+                    policy = None
         if policy is None:
             raise ApiError('PERMISSIONS_UNAVAILABLE',
                            'chế độ đang chạy không có động cơ quyền (chỉ host mode có)', 409)
@@ -822,8 +1043,14 @@ def create_app(runtime):
                     raise ApiError('PERMISSION_SCOPE_UNKNOWN', 'phạm vi `%s` không có' % scope, 400)
                 data['scope'] = scope
                 changed['scope'] = scope
+            network = str(payload.get('network') or '').strip().lower()
+            if network:
+                if network not in permissions_module.NETWORKS:
+                    raise ApiError('PERMISSION_NETWORK_UNKNOWN', 'mức mạng `%s` không có' % network, 400)
+                data['network'] = network
+                changed['network'] = network
             if not changed:
-                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode` hoặc `scope`', 400)
+                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode`, `scope` hoặc `network`', 400)
             error = permissions_module._write_json(policy.paths[layer], data)
             if error:
                 raise ApiError('PERMISSION_WRITE_FAILED', error, 409)
@@ -850,23 +1077,41 @@ def create_app(runtime):
         actor = str(payload.get('actor') or 'user')
         policy = permission_policy()
         decision = policy.decide(tool, args, session_id=session_id, actor=actor)
+        # Quyết định phải vào ĐÚNG policy mà phiên đọc lúc gọi tool. Phiên IDE có policy riêng
+        # (`SessionMachineExecutor.session_policy`), nên ghi vào policy dùng chung của folder thì
+        # "cho phép cả phiên" trên thẻ chỉ là lời hứa suông (vòng review đợt 1b).
+        remember = policy
+        provider = getattr(runtime.executor, 'policy_for_session', None)
+        if session_id and callable(provider):
+            try:
+                remember = provider(session_id) or policy
+            except Exception:
+                remember = policy
         answer = str(payload.get('decision') or '').strip().lower()
         extra = {}
         if answer:
             if answer not in ('allow', 'allow_session', 'allow_always', 'deny'):
                 raise ApiError('PERMISSION_DECISION_UNKNOWN', 'quyết định `%s` không có' % answer, 400)
             if answer == 'deny':
-                policy.note_denial(session_id)
-                extra['breaker'] = policy.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
+                remember.note_denial(session_id)
+                extra['breaker'] = remember.denials.get(str(session_id or ''), 0) >= permissions_module.DENIAL_BREAKER_LIMIT
             else:
-                policy.note_approval(session_id)
-                key = policy.session_key(tool, args, cwd=policy.workspace)
-                if answer in ('allow_session', 'allow_always'):
-                    policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                if answer == 'allow_always':
-                    ok, code, message, rules = policy.save_rule(tool, args, actor=actor,
-                                                                session_id=session_id)
+                remember.note_approval(session_id)
+                # Cùng khoá với `decide()` — kể cả mã phiên và tài nguyên, nếu không thì lần hỏi sau
+                # lại thấy `ask` dù người dùng đã chọn "cho phép cả phiên".
+                key = remember.session_key(tool, args, cwd=remember.workspace, session_id=session_id)
+                # Nhóm "luôn hỏi" là một lần cho một lần: ghi nhớ nó sẽ tạo một luật chết trong
+                # `.boxfox/settings.local.json` mà `decide()` không bao giờ đọc (vòng review đợt 1b).
+                guarded = str(decision.rule or '').startswith('guarded:')
+                if answer in ('allow_session', 'allow_always') and not guarded:
+                    remember.remember(key, permissions_module.allow('', 'user'), 'session')
+                if answer == 'allow_always' and not guarded:
+                    ok, code, message, rules = remember.save_rule(tool, args, actor=actor,
+                                                                  session_id=session_id)
                     extra.update({'saved': ok, 'saveCode': code, 'saveMessage': message, 'rules': rules})
+                elif answer == 'allow_always':
+                    extra.update({'saved': False, 'saveCode': 'GUARDED_SINGLE_SHOT',
+                                  'saveMessage': 'Lệnh thuộc nhóm luôn hỏi: chỉ cho phép một lần.'})
             extra['decision'] = answer
         return web.json_response({'tool': tool, 'sessionId': session_id,
                                   'outcome': decision.outcome, 'reason': decision.reason,
@@ -1500,6 +1745,7 @@ def create_app(runtime):
                                  {'events': page['events'], 'hasMore': page['hasMore'],
                                   'nextAfter': page['nextAfter'],
                                   'sessionMetrics': runtime.session_metrics(sid),
+                                  **durable_session_view(sid),
                                   # A9 (đợt 20): khối `journal` cộng thêm — chỗ đọc cũ không phải biết
                                   # tới nó, còn UI sau này có sẵn `records`/`lastSeq`/`degraded`.
                                   'journal': {'records': journal_tail['records'],
@@ -1534,9 +1780,14 @@ def create_app(runtime):
         sid = request.match_info['sid']
         try:
             result = runtime.resolve_decision(sid, body.get('decisionId'), body.get('choice'), body.get('note'),
-                                              body.get('answers'))
+                                              body.get('answers'), invocation_id=body.get('invocationId'),
+                                              expected_revision=body.get('expectedRevision'))
         except DecisionError as exc:
             return web.json_response({'error': str(exc)}, status=exc.status)
+        except Exception as exc:
+            if getattr(exc, 'code', None):
+                return surface_error(exc)
+            raise
         # A7 (đợt 20): quyết định của người dùng được ghim vào nhật ký phiên — bản ghi `D:` giữ cả
         # `choice`, nên đọc lại biết đã chốt phương án nào (phát hiện đợt 4: `alternative` từng bị
         # ghi thành `approved` trơ). Ghi nhật ký hỏng không bao giờ làm hỏng câu trả lời cho UI.
@@ -1563,15 +1814,275 @@ def create_app(runtime):
             return web.json_response({'error': 'JOURNAL_BAD_QUERY: limit phải là số'}, status=400)
         return web.json_response(runtime.journal_tasks(status=request.query.get('status') or None, limit=limit))
 
-    async def delete_session(request):
+    # --------------------------------------------------- bề mặt bền: history / longtask
+    #
+    # Đây là đường DUY NHẤT để UI chạm vào history, ngân sách tác vụ dài và xoá có mang theo.
+    # Không route nào nhận `projectId`, đường dẫn riêng hay id phiên khác từ client: phạm vi lấy
+    # từ chính phiên gọi (`callerSessionId`), còn thiếu nguồn canonical thì từ chối thay vì đoán.
+
+    # Mã lỗi hợp lệ của bề mặt này là CHỮ HOA có gạch dưới (`HISTORY_...`, `CAPSULE_...`,
+    # `DELETE_...`, `LONGTASK_...`). Chuỗi khác (thông báo của sqlite, `Expecting value`,
+    # tên khoá của `KeyError`) KHÔNG phải mã hợp đồng: trả 500 kèm `DURABLE_ERROR` thay vì
+    # gán nhãn 4xx cho một lỗi nội bộ.
+    _CODE = re.compile(r'[A-Z][A-Z0-9_]{2,}(?::|$)')
+
+    def surface_error(exc):
+        if isinstance(exc, json.JSONDecodeError):
+            return web.json_response({'error': 'REQUEST_INVALID: body must be valid JSON',
+                                      'code': 'REQUEST_INVALID'}, status=400)
+        raw = str(exc)
+        code = getattr(exc, 'code', None)
+        if not code and _CODE.match(raw):
+            code = raw.split(':', 1)[0].strip()
+        code = code or 'DURABLE_ERROR'
+        status = getattr(exc, 'status', None)
+        if status is None:
+            if code in ('HISTORY_SCOPE_DENIED', 'CAPSULE_EVIDENCE_SCOPE_DENIED'):
+                status = 403
+            elif code.endswith('_NOT_FOUND'):
+                status = 404
+            elif code.endswith(('_INVALID', '_REQUIRED', '_UNSUPPORTED', '_UNKNOWN')):
+                status = 400
+            elif code == 'DURABLE_ERROR':
+                status = 500
+            else:
+                status = 409
+        message = raw if raw.startswith(code) else f'{code}: {raw}'
+        return web.json_response({'error': message, 'code': code}, status=status)
+
+    def surface():
+        from ..agent_core import history_surface
+        return history_surface
+
+    def query_int(request, name, default, maximum=None, minimum=1):
+        raw = request.query.get(name)
+        if raw in (None, ''):
+            return default
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError('HISTORY_QUERY_INVALID')
+        if value < minimum:
+            raise ValueError('HISTORY_QUERY_INVALID')
+        return min(value, maximum) if maximum else value
+
+    def caller_session(request):
+        sid = request.query.get('callerSessionId') or request.query.get('sessionId')
+        if not sid:
+            raise ValueError('HISTORY_CALLER_REQUIRED')
+        known_session(sid)
+        return sid
+
+    def durable_session_view(sid):
+        """Ba khoá cho UI: `longtask` (null = có tính năng, chưa bật), `goalRevision`, `contractRef`.
+
+        Không có nguồn canonical thì trả `None` — UI sẽ giữ nút xác nhận ở trạng thái tắt thay vì
+        bật một tác vụ dài với số hiệu phiên bản bịa.
+        """
+        try:
+            from ..agent_core import history_surface
+            contract = history_surface.service(runtime).contract(sid)
+            return {'longtask': runtime.longtask_state(sid), 'goalRevision': contract['currentRevision'],
+                    'contractRef': history_surface.contract_hash(contract)}
+        except Exception as exc:
+            # Suy giảm thì phải NÓI RA: ba khoá `null` là hợp lệ cho phiên chat, nên nếu im lặng
+            # thì một bề mặt hỏng sẽ trông y hệt một phiên chưa bật tác vụ dài.
+            logger.warning('durable session view unavailable for %s: %s', sid, exc)
+            return {'longtask': None, 'goalRevision': None, 'contractRef': None}
+
+    async def history_sessions(request):
+        try:
+            sid = caller_session(request)
+            # `parent`/`root` là phạm vi CÓ THẬT nhưng riêng bảng phiên không phục vụ (403);
+            # một chuỗi lạ là yêu cầu sai (400) chứ không phải một lần từ chối.
+            scope = request.query.get('scope', 'self')
+            if scope not in ('self', 'project', 'parent', 'root'):
+                raise ValueError('HISTORY_QUERY_INVALID')
+            result = surface().service(runtime).list_sessions(
+                sid, scope=scope, session_id=request.query.get('targetSessionId'),
+                agent_id=request.query.get('agentId'), cursor=request.query.get('cursor'),
+                limit=query_int(request, 'limit', 20, 50))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_search(request):
+        try:
+            sid = caller_session(request)
+            service = surface().service(runtime)
+            scope, target = surface().scope_target(runtime, sid, request.query.get('scope', 'self'))
+            result = service.query_history(
+                sid, query=request.query.get('query', ''), scope=scope, session_id=target,
+                # `getall` ném KeyError khi thiếu khoá, nên hỏi `in` trước: thiếu `kind` là hợp lệ.
+                agent_id=request.query.get('agentId'),
+                kinds=request.query.getall('kind') if 'kind' in request.query else None,
+                cursor=request.query.get('cursor'), limit=query_int(request, 'limit', 10, 50),
+                mode=request.query.get('mode', 'search'))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_record(request):
+        try:
+            sid = caller_session(request)
+            result = surface().service(runtime).read_reference(
+                sid, request.match_info['recordId'], offset=query_int(request, 'offset', 0, minimum=0),
+                limit=query_int(request, 'maxChars', 16000, 16000))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_capsules(request):
+        """Capsule đã chốt của project người gọi (LT-08: hội thoại MỚI đọc lại được)."""
+        try:
+            sid = caller_session(request)
+            result = surface().list_capsules(runtime, sid, limit=query_int(request, 'limit', 3, 20))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'capsules': result})
+
+    async def history_capsule(request):
+        try:
+            sid = caller_session(request)
+            result = surface().read_capsule(runtime, sid, request.match_info['capsuleId'])
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def history_storage(request):
+        try:
+            sid = request.query.get('callerSessionId') or request.query.get('sessionId')
+            if sid:
+                known_session(sid)
+            result = surface().storage_snapshot(runtime, sid)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_deletion_preview(request):
         sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('DELETE_MODE_UNSUPPORTED')
+            result = surface().deletion_preview(runtime, sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_deletion_confirm(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('DELETE_REQUIRES_CARRY_FORWARD')
+            # KHÔNG dừng phiên ở đây: `runtime.stop` đẩy `revision`/`stop_epoch`/`lease_epoch` của
+            # run lên và huỷ decision/work_graph, mà đó chính là những trường vào bản ghim critical —
+            # nên nó làm bản ghim lệch ngay trước bước kiểm. Lượt chạy còn sống đã có cổng yên tĩnh
+            # trả `DELETE_NOT_QUIESCENT` (trung thực, chủ dừng tay rồi xoá), và run chưa kết thúc thì
+            # `run_closer` đóng trong chính giao dịch xoá.
+            result = surface().deletion_confirm(runtime, sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_decisions(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            result = runtime.pending_decisions(sid, request.query.get('state', 'pending'),
+                                               request.query.get('after') or None,
+                                               query_int(request, 'limit', 20, 100))
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_longtask(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('LONGTASK_INVALID')
+            result = runtime.configure_longtask(sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_longtask_actions(request):
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+            if not isinstance(body, dict):
+                raise ValueError('LONGTASK_INVALID')
+            result = await runtime.longtask_action(sid, body)
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response(result)
+
+    async def session_tasks(request):
+        """`GET /sessions/{sid}/tasks` — task của cả cây, bản tóm tắt, phân trang theo `taskKey`.
+
+        Con trỏ khoá phải trùng cột sắp xếp (`task_key`), nếu không trang sau sẽ bỏ sót task
+        vừa được cập nhật hoặc lặp lại task đã trả.
+        """
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            limit = query_int(request, 'limit', 20, 50)
+            state = request.query.get('state') or 'active'
+            after = request.query.get('after') or None
+            if 'harness_tasks' not in surface()._tables(runtime.store.db):
+                return web.json_response({'tasks': [], 'hasMore': False, 'nextAfter': None})
+            ids = surface().tree_ids(runtime, sid)
+            marks = ','.join('?' for _ in ids)
+            clauses, args = [f'a.session_id IN ({marks})'], list(ids)
+            if state == 'active':
+                clauses.append("t.state NOT IN ('completed','cancelled','failed')")
+            elif state != 'all':
+                clauses.append('t.state=?')
+                args.append(state)
+            rows = runtime.store.db.execute(
+                'SELECT t.task_key,t.run_id,t.owner_id,t.task_alias,t.revision,t.state,t.acceptance_state,'
+                't.control_state,t.updated_at,MAX(a.session_id) session_id,COUNT(a.attempt_id) attempts '
+                'FROM harness_tasks t JOIN harness_task_attempts a ON a.task_key=t.task_key WHERE '
+                + ' AND '.join(clauses) + ' AND (? IS NULL OR t.task_key>?) GROUP BY t.task_key '
+                'ORDER BY t.task_key ASC LIMIT ?', (*args, after, after, limit + 1)).fetchall()
+            items = [{'taskKey': r['task_key'], 'runId': r['run_id'], 'ownerId': r['owner_id'],
+                      'alias': r['task_alias'], 'revision': r['revision'], 'state': r['state'],
+                      'acceptanceState': r['acceptance_state'], 'controlState': r['control_state'],
+                      'sessionId': r['session_id'], 'attempts': r['attempts'],
+                      'updatedAt': r['updated_at']} for r in rows[:limit]]
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'tasks': items, 'hasMore': len(rows) > limit,
+                                  'nextAfter': items[-1]['taskKey'] if items and len(rows) > limit else None})
+
+    async def delete_session(request):
+        """Xoá phiên: bản cũ nhận 409 kèm bản xem trước; chỉ xoá khi chủ xác nhận có capsule."""
+        sid = request.match_info['sid']
+        try:
+            known_session(sid)
+            body = await request.json() if request.can_read_body else {}
+        except Exception:
+            body = {}
+        if isinstance(body, dict) and body.get('confirm') is True and body.get('operationId'):
+            return await session_deletion_confirm(request)
         if sid in runtime.tasks:
             try:
                 await runtime.stop(sid)
             except Exception:
                 pass
-        runtime.store.delete(sid)
-        return web.json_response({'status': 'deleted', 'id': sid})
+        try:
+            preview = surface().deletion_preview(runtime, sid, {'mode': 'history_only'})
+        except Exception as exc:
+            return surface_error(exc)
+        return web.json_response({'error': 'DELETE_REQUIRES_CARRY_FORWARD: xoá phiên cần xác nhận '
+                                          'với capsule mang theo', 'code': 'DELETE_REQUIRES_CARRY_FORWARD',
+                                  'preview': preview}, status=409)
 
     # ------------------------------------------------------------------ plan duyệt (vòng 20)
     #
@@ -1605,14 +2116,22 @@ def create_app(runtime):
                            'thư mục (ví dụ "clinical-patient-record-lookup-research")', 400)
         return text
 
-    async def plan_index_or_none():
+    def plan_session_arg(value):
+        """Mã phiên đi kèm lượt đọc/ghi plan; `None` khi chỗ gọi cũ không gửi.
+
+        Chỉ host mode cần: chỉ mục `.plans` nằm trong folder của CHÍNH phiên đó. Docker bỏ qua.
+        """
+        text = str(value or '').strip()
+        return text or None
+
+    async def plan_index_or_none(session=None):
         """Chỉ mục box, hoặc `None` khi không đọc được (đã ghi nhật ký `PLAN_INDEX_UNAVAILABLE`).
 
         Không bao giờ raise: mất chỉ mục chỉ làm mất phần *số đo* (nhóm nào có những bản nào), còn
         quyết định của người dùng vẫn phải ghi được.
         """
         try:
-            return await plan_registry.read_plan_index(runtime.executor)
+            return await plan_registry.read_plan_index(runtime.executor, session=session)
         except Exception:
             return None
 
@@ -1740,7 +2259,8 @@ def create_app(runtime):
         # Chốt số đo tại thời điểm duyệt, nếu đọc được: về sau box báo số khác thì bản duyệt này
         # đã cũ và không còn tính là "đã đồng ý" (§4.2). Không đọc được thì để `None` — thà không
         # có số đo còn hơn bịa một con số để rồi lặng lẽ coi là còn hiệu lực.
-        index = await plan_index_or_none()
+        session_arg = plan_session_arg(body.get('sessionId'))
+        index = await plan_index_or_none(session_arg)
         entry = None
         relative_path = None
         if index is not None:
@@ -1796,7 +2316,8 @@ def create_app(runtime):
         try:
             await runtime.executor.request('/__box/plans/review',
                                            {'identity': identity, 'version': version,
-                                            'decision': decision, 'note': note})
+                                            'decision': decision, 'note': note},
+                                           session=session_arg or owned)
         except Exception as exc:
             forwarded = False
             system_log.write('plan.review.forward_failed', level='warn', code='PLAN_REVIEW_FORWARD_FAILED',
@@ -1842,7 +2363,8 @@ def create_app(runtime):
                 raise ApiError('PLAN_STATUS_INVALID', 'version phải là số nguyên dương', 400)
             version = int(wanted)
 
-        index = await plan_index_or_none()
+        # `sessionId` (tuỳ chọn) để host mode đọc đúng `.plans` của phiên đang mở tab.
+        index = await plan_index_or_none(plan_session_arg(request.query.get('sessionId')))
         group = index.group(identity) if index is not None else None
         reviews = runtime.store.plan_reviews_for(identity)
         submitted = plan_registry.pending_submissions(getattr(runtime, 'pending', {}).values(), identity)
@@ -2173,7 +2695,15 @@ def create_app(runtime):
         if watchdog is not None:
             await watchdog.stop()
         for sid in list(runtime.tasks):
-            await runtime.stop(sid)
+            # Tắt máy là việc của NGƯỜI VẬN HÀNH, không phải lệnh dừng của chủ: hàng `longtask`
+            # phải đi qua đúng đường khởi động lại (`recover()` đọc `running` thành `interrupted`/
+            # `HARNESS_RESTART`, rồi `safe_auto` tự chạy tiếp còn `manual` park bằng
+            # `LONGTASK_MANUAL_RESTART`). Rào của lượt dừng ở đây biến mọi run đang sống thành
+            # `paused`/`OWNER_STOP`, đẩy `stopEpoch` lên, và làm `recover()` không còn gì để đọc —
+            # lượt kế tiếp của chủ bị từ chối `409 OWNER_STOP` trong khi chủ không hề dừng gì
+            # (đo sống 2026-10-09, phiên `72106f67490847a9be5b179a5cc92a6c`: khởi động lại harness
+            # lúc 15:27:34Z rồi lượt 27 bị `LONGTASK_BLOCKED` cho tới khi chủ `resume` tay).
+            await runtime.stop(sid, longtask_barrier=False)
         runtime.store.close()
         # Graceful shutdown is the owner's "reset on shutdown": mark the end of the run
         # in the file it happened in, then reset it to `harness.previous.jsonl` so the
@@ -2239,6 +2769,18 @@ def create_app(runtime):
     app.router.add_post('/api/agent/sessions/{sid}/turns', turn)
     app.router.add_post('/api/agent/sessions/{sid}/stop', stop)
     app.router.add_post('/api/agent/sessions/{sid}/decisions', decision)
+    app.router.add_get('/api/agent/sessions/{sid}/decisions', session_decisions)
+    app.router.add_put('/api/agent/sessions/{sid}/longtask', session_longtask)
+    app.router.add_post('/api/agent/sessions/{sid}/longtask/actions', session_longtask_actions)
+    app.router.add_get('/api/agent/sessions/{sid}/tasks', session_tasks)
+    app.router.add_post('/api/agent/sessions/{sid}/deletion-preview', session_deletion_preview)
+    app.router.add_post('/api/agent/sessions/{sid}/deletion-confirm', session_deletion_confirm)
+    app.router.add_get('/api/agent/history/sessions', history_sessions)
+    app.router.add_get('/api/agent/history/search', history_search)
+    app.router.add_get('/api/agent/history/storage', history_storage)
+    app.router.add_get('/api/agent/history/capsules', history_capsules)
+    app.router.add_get('/api/agent/history/capsules/{capsuleId}', history_capsule)
+    app.router.add_get('/api/agent/history/records/{recordId}', history_record)
     app.router.add_get('/api/agent/sessions/{sid}/journal', session_journal)
     app.router.add_get('/api/agent/journal/tasks', journal_tasks)
     app.router.add_post('/api/agent/plans/review', plan_review)
@@ -2265,19 +2807,43 @@ def main():
     data = Path(os.environ.get('BOXFOX_AGENT_DATA_DIR', str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'BoxFox/harness')))
     port = harness_port()
     executor = build_executor(data)
+    # Single-writer: chỉ có nghĩa khi tác vụ dài được mở — đó là chế độ mà hai tiến trình trên
+    # cùng một profile vừa cùng quét `interrupted` vừa cùng nhận continuation. Chế độ mặc định giữ
+    # nguyên hành vi cũ (không khoá) nên không có hồi quy cho người dùng hiện tại; bật cờ thì
+    # tiến trình thứ hai TỪ CHỐI chạy trước cả bước quét, thay vì ghi đè lên tiến trình đang chạy.
+    from ..agent_core.longtask_runtime import ProfileWriterGuard, enabled as longtask_enabled
+    writer_guard = None
+    if longtask_enabled():
+        try:
+            writer_guard = ProfileWriterGuard(data / 'sessions.sqlite').acquire()
+        except Exception as exc:
+            system_log.write('harness.start.refused', level='error', dataDir=str(data),
+                             code=getattr(exc, 'code', 'PROFILE_WRITER_BUSY'), message=str(exc)[:300])
+            raise
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
-    # Web retains legacy Docker sessions; new IDE sessions have their own durable folder binding.
-    if execution_mode() == 'docker':
-        from ..sandbox.machine_router import attach
-        attach(runtime, data)
+    attach_host_approver(runtime)
+    # Gắn ở CẢ HAI chế độ: host mode cũng cần `/api/agent/machines/*` (cấu hình folder, cây tệp,
+    # `.plans`) — trước đây thiếu ở host nên giao diện rơi về Docker binding và tab Plan trắng số.
+    # `default_mode`/`default_workspace` chỉ tạo cấu hình cho CSDL mới (bản desktop mở ra là host).
+    from ..sandbox.machine_router import attach
+    mode = execution_mode()
+    # Bộ điều khiển desktop dùng CHUNG cho mọi phiên host: ở chế độ host nó đã có sẵn trên executor,
+    # còn ở chế độ docker (mặc định của bản desktop, máy vẫn cấu hình host) phải dựng riêng — thiếu
+    # nó thì mọi phiên host trả `CUA_UNAVAILABLE` và route lease trả 409.
+    shared_desktop = getattr(executor, 'desktop', None) or build_desktop_control(data)
+    shared_overlay = getattr(executor, 'overlay', None) or build_cua_overlay(None, shared_desktop)
+    attach(runtime, data, default_mode=mode,
+           default_workspace=host_workspace() if mode == 'host' else None,
+           desktop=shared_desktop, overlay=shared_overlay)
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
     # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN
     # cho cả tiến trình. Hook hỏng ⇒ fail-closed ở tầng lease, KHÔNG làm chết khởi động: agent vẫn
     # dùng được công cụ tệp/lệnh.
-    if getattr(executor, 'desktop', None) is not None:
-        prepared, prepare_code = executor.prepare()
-        hooks_ok, hooks_code = executor.desktop.install_hooks()
+    if shared_desktop is not None:
+        prepare = getattr(executor, 'prepare', None)
+        prepared, prepare_code = prepare() if prepare is not None else (True, '')
+        hooks_ok, hooks_code = shared_desktop.install_hooks()
         system_log.write('desktop.ready', level='info' if prepared else 'warn',
                          message='điều khiển desktop đã sẵn sàng' if prepared else 'chưa sẵn sàng',
                          data={'prepared': prepared, 'prepareCode': prepare_code,
@@ -2289,6 +2855,8 @@ def main():
         # startup that died before the aiohttp cleanup ran; it is a no-op when the file
         # was already reset, because then there is no active file left to rename.
         system_log.rotate_on_shutdown()
+        if writer_guard is not None:
+            writer_guard.close()
 
 
 if __name__ == '__main__':

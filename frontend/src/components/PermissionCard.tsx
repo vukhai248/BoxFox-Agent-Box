@@ -210,14 +210,14 @@ function DecisionCard({
   const remainingSecPart = remainingSec === null ? null : remainingSec % 60
 
   const expired = decision.status === 'expired' || decision.resolvedReason === 'timeout'
-  const isPending = decision.status === 'pending'
+  const isPending = decision.status === 'pending' && decision.actionable !== false
   const chosenLabel =
     decision.choice === null
       ? null
       : (decision.options.find((option) => option.id === decision.choice)?.label ?? decision.choice)
   const headline = decision.question ?? decision.action ?? ''
 
-  const headlineLabel = decision.kind === 'approval' ? t('decisions.kind.approval') : t('decisions.kind.question')
+  const headlineLabel = decision.kind === 'budget' ? t('continuity.budgetDecision') : decision.kind === 'approval' ? t('decisions.kind.approval') : t('decisions.kind.question')
 
   const statusChip = () => {
     if (expired) return { tone: 'danger' as const, label: t('permission.timedOut') }
@@ -256,6 +256,12 @@ function DecisionCard({
         <PlainText text={headline} />
       </div>
 
+      {decision.kind === 'budget' && <div className="mb-2 text-xs text-amber-400">
+        <p>{t('continuity.budgetCheckpoint')}</p>
+        {decision.options.filter(option => option.budgetDelta).map(option => <p key={option.id}>
+          {option.label}: +{option.budgetDelta!.steps} {t('continuity.steps')} · +{option.budgetDelta!.activeTimeMs / 60000} {t('continuity.activeMinutes')}
+        </p>)}
+      </div>}
       {/* 3. Vì sao phải hỏi */}
       {decision.reason && (
         <>

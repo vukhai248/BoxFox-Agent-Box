@@ -71,8 +71,16 @@ http
 `
 
 test('the staged layout runs end to end: bundled binaries, supervisor, gateway', async (t) => {
-  if (process.platform === 'win32') t.skip('the smoke layout uses POSIX binary paths')
-  if (!PYTHON) t.skip('no system python3 available for the harness stub')
+  // `t.skip()` chỉ ĐÁNH DẤU bài kiểm tra là bỏ qua, nó không dừng thân hàm: thiếu `return` thì
+  // phần còn lại vẫn chạy và có thể nổ ở môi trường không có python3 (DA8 của bản bàn giao).
+  if (process.platform === 'win32') {
+    t.skip('the smoke layout uses POSIX binary paths')
+    return
+  }
+  if (!PYTHON) {
+    t.skip('no system python3 available for the harness stub')
+    return
+  }
 
   const resources = tempDir(t, 'boxfox-resources-')
   fs.mkdirSync(path.join(resources, 'router', 'src'), { recursive: true })

@@ -355,10 +355,11 @@ def test_the_fold_never_takes_the_whole_tail_of_a_parallel_batch():
 
 def test_the_summary_cap_scales_with_the_transcript():
     # Phần D đợt 20 nâng sàn 2048 → 4096: ba phiên sống chết vì bản tóm tắt bị cắt ở trần quá nhỏ
-    # (935 541 / 992 249 / 732 528). Trần và tỉ lệ không đổi.
-    assert summary_max_tokens(10_000) == SUMMARY_MAX_TOKENS_FLOOR == 4096
-    assert summary_max_tokens(200_000) == SUMMARY_MAX_TOKENS_FLOOR, 'dưới 205k thì sàn mới là thứ áp'
-    assert summary_max_tokens(10_000_000) == SUMMARY_MAX_TOKENS_CAP
+    # (935 541 / 992 249 / 732 528). Đợt 2026-10-09 nâng tiếp (sàn 8192, tỉ lệ 10 %, trần 50 000)
+    # vì sàn cũ là trần thật của tác vụ dài và model tiêu hết nó vào phần suy luận.
+    assert summary_max_tokens(10_000) == SUMMARY_MAX_TOKENS_FLOOR == 8_192
+    assert summary_max_tokens(200_000) == 20_000, 'tỉ lệ 10 % vượt sàn ở mức này'
+    assert summary_max_tokens(10_000_000) == SUMMARY_MAX_TOKENS_CAP == 50_000
 
 
 def test_the_summary_turn_gets_the_scaled_cap():

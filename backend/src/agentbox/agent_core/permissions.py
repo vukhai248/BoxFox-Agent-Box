@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import cua_target as _cua_target
+
 MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED = 'plan', 'ask', 'auto', 'trusted'
 MODES = (MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED)
 MODE_DEFAULT = MODE_ASK
@@ -37,6 +39,12 @@ MODE_DEFAULT = MODE_ASK
 SCOPE_WORKSPACE, SCOPE_MACHINE = 'workspace', 'machine'
 SCOPES = (SCOPE_WORKSPACE, SCOPE_MACHINE)
 SCOPE_DEFAULT = SCOPE_MACHINE
+
+#: Trục thứ ba (Codex `NetworkAccess`): `restricted` = lệnh ra mạng phải hỏi trước khi chúng được
+#: chạy im lặng (`auto`); `enabled` = không hỏi. Đây là DANH SÁCH HỎI, không phải tường lửa.
+NETWORK_RESTRICTED, NETWORK_ENABLED = 'restricted', 'enabled'
+NETWORKS = (NETWORK_RESTRICTED, NETWORK_ENABLED)
+NETWORK_DEFAULT = NETWORK_RESTRICTED
 
 OUTCOME_ALLOW, OUTCOME_ASK, OUTCOME_DENY = 'allow', 'ask', 'deny'
 
@@ -82,6 +90,52 @@ HARDLINE = (
     (r'^shutdown(\.exe)?\s+/(r|s|p|h|fw)', 'shutdown'),
     (r'^set-mppreference[^|;]*-disablerealtimemonitoring', 'disable_defender'),
     (r'^netsh\s+advfirewall\s+set[^|;]*state\s+off', 'disable_firewall'),
+    # POSIX: cùng nhóm "xoá cả ổ" như `format`/`diskpart` của Windows. `canonicalize_command` đổi
+    # `rm` thành `remove-item` (bảng alias PowerShell), nên mẫu phải nhận CẢ HAI tên.
+    (r'^(rm|remove-item)\s+[^|;]*\s/(\s|$|\*)', 'delete_root'),
+    (r'^mkfs(\.\w+)?(\s|$)', 'format_filesystem'),
+    (r'^dd\b[^|;]*of=/dev/', 'overwrite_device'),
+)
+
+#: Đuôi một tên lệnh: hết chuỗi, khoảng trắng, hoặc toán tử. `(?!\w)` không đủ vì `sh;x` phải khớp.
+_NAME_END = r'(?![\w.-])'
+
+#: PowerShell cho phép viết tắt MỌI tiền tố không nhập nhằng của `-EncodedCommand`/`-EncodedArguments`
+#: (`-ec`, `-enc`, `-enco`, …), nên mẫu phải nhận cả họ tiền tố. Cố ý bỏ `-e` một ký tự: nó trùng
+#: với cờ `-e` của `grep`/`sed` và sẽ hỏi oan. Xem `docs/plan/desktop-host-mode.md` §6.1.
+_ENCODED_FLAG = (r'-(?:ec|enc|enco|encod|encode|encoded|encodedc|encodedco|encodedcom|encodedcomm|'
+                 r'encodedcomma|encodedcomman|encodedcommand|encodeda|encodedar|encodedarg|encodedargu|'
+                 r'encodedargum|encodedargume|encodedargumen|encodedarguments)\b')
+
+#: Nhóm "LUÔN HỎI" (§6.1): chạy được ở mọi chế độ, kể cả `trusted`, và **không bao giờ ghi nhớ** —
+#: một lần cho phép là một lần. Đây là các lệnh đổi trạng thái hệ thống hoặc đưa mã lạ vào máy.
+#:
+#: Mẫu phải nhận ĐÚNG cách viết tài liệu của chính lệnh đó, không chỉ cách gõ gọn nhất (vòng review
+#: đợt 1b): `git push origin +main` và `--force-with-lease=<ref>` là force-push, `git -C <dir> push`
+#: vẫn là push, `| sh;` vẫn là pipe-to-shell, `powershell -ec` vẫn là encoded command.
+GUARDED = (
+    (r'\bgit\b[^|;]*\bpush\b[^|;]*(--force(-with-lease)?(=|\s|$)'
+     r'|(^|\s)-\w*f\w*(\s|$)|(^|\s)\+\S+)', 'git_force_push'),
+    (r'\|\s*(sh|bash|zsh|dash|ksh|fish|busybox|env|python3?|perl|ruby|php|node|deno'
+     r'|iex|invoke-expression|powershell|pwsh|cmd)(\.exe)?' + _NAME_END, 'pipe_to_shell'),
+    (_ENCODED_FLAG, 'encoded_command'),
+    (r'^reg(\.exe)?\s+(add|delete)\b', 'registry_write'),
+    (r'^schtasks(\.exe)?\s+/(create|change|delete)\b', 'scheduled_task'),
+    (r'^runas\b', 'runas'),
+    (r'^net(\.exe)?\s+(user|localgroup)\b', 'account_change'),
+    (r'^(takeown|icacls)(\.exe)?\b[^|;]*\s([a-z]:\\|%windir%|%systemroot%|/etc|/usr|/bin|/boot)',
+     'acl_change'),
+)
+
+#: Lệnh RA MẠNG (§6.1) — chỉ hỏi khi chế độ sẽ chạy im lặng (`auto`) và trục mạng là `restricted`.
+EGRESS = (
+    (r'\b(curl|wget|nc|netcat|telnet|ssh|scp|sftp|ftp)\b', 'remote_shell_or_fetch'),
+    (r'\b(invoke-webrequest|iwr|invoke-restmethod|irm)\b', 'remote_fetch'),
+    (r'\bgit\s+(push|pull|clone|fetch|ls-remote)\b', 'git_remote'),
+    (r'\b(npm|pnpm|yarn|bun|pip|pip3|poetry|cargo|go|dotnet|nuget|gem)\s+(install|add|i|ci|get|update|publish|restore)\b',
+     'package_install'),
+    (r'\bdocker\s+(pull|push|login|run|build)\b', 'container_registry'),
+    (r'\b(az|aws|gcloud|gh)\s+(login|auth|configure)\b', 'cloud_login'),
 )
 
 #: Fork bomb không có "lệnh con" nào để soi (nó là một khối `:|:&`), nên khớp trên TOÀN VĂN.
@@ -453,6 +507,83 @@ def _command_from_args(args):
     return ''
 
 
+def _path_arg(args):
+    """Tham số đường dẫn của một lời gọi (`path`/`file_path`), rỗng nếu không có.
+
+    Cố ý KHÔNG nhận `pattern`/`query`: `codebase_glob` không có đường dẫn nền, còn `codebase_grep`
+    có `path` tuỳ chọn — nhận `pattern` làm đường dẫn sẽ biến `**/*.py` thành một "đường dẫn" giả.
+    """
+    if not isinstance(args, dict):
+        return ''
+    return str(args.get('path') or args.get('file_path') or '').strip()
+
+
+def _cua_app_key(value):
+    """Khoá ỨNG DỤNG của một lời gọi CUA: tên tiến trình, bỏ đuôi `.exe`, không phân biệt hoa thường.
+
+    `notepad`, `Notepad.exe` và `processName` của Windows (`notepad.exe`) phải cho CÙNG một khoá.
+    Nếu không, lựa chọn "theo app này" trên thẻ duyệt (nhớ theo tên model xin) và lời gọi sau dùng
+    đích phiên (nhớ theo tên tiến trình) sẽ không khớp nhau, và người dùng bị hỏi lại vô ích.
+    """
+    text = str(value or '').strip().casefold()
+    if text.endswith('.exe'):
+        text = text[:-4]
+    return text.strip()
+
+
+def _cua_resource(args):
+    """Tài nguyên của một lời gọi CUA = ĐÍCH nó nhắm tới, không phải cả phiên.
+
+    `HostExecutor` gắn `__target` (đích đã phân giải) vào args TRƯỚC khi hỏi quyền, nên "cho phép cả
+    phiên" hẹp đúng theo cửa sổ/app đang làm việc: đổi cửa sổ là hỏi lại. Không có `__target` (đường
+    đọc bảng luật, hoặc app chưa mở) thì lấy theo tham số thô của lời gọi.
+    """
+    if not isinstance(args, dict):
+        return 'cua:session'
+    entry = _cua_target.normalize(args.get('__target'))
+    if entry is not None:
+        if entry.get('kind') == _cua_target.KIND_MACHINE:
+            return 'cua:machine'
+        app = _cua_app_key(entry.get('processName'))
+        if app:
+            return 'cua:app:%s' % app
+    app = _cua_app_key(args.get('app'))
+    if app:
+        return 'cua:app:%s' % app
+    window = str(args.get('window') or '').strip().casefold()
+    if window:
+        return 'cua:title:%s' % window
+    window_id = args.get('windowId')
+    if window_id not in (None, ''):
+        return 'cua:windowid:%s' % window_id
+    return 'cua:session'
+
+
+def _canonical_text(command):
+    """Một dòng để so khớp mẫu: bỏ wrapper, chuẩn hoá alias, gộp khoảng trắng, viết thường."""
+    return re.sub(r'\s+', ' ', canonicalize_command(str(command or '')).lower()).strip()
+
+
+def _list_reason(patterns, command):
+    """Mã của mẫu ĐẦU TIÊN khớp trong `patterns` (danh sách `(regex, mã)`), hoặc chuỗi rỗng.
+
+    Soi cả toàn văn lẫn từng lệnh con: mẫu `| sh` chỉ thấy được ở toàn văn (toán tử bị tách khi
+    chia lệnh), còn `^reg add` chỉ thấy được ở từng phần.
+    """
+    raw = str(command or '')
+    if not raw.strip():
+        return ''
+    texts = [_canonical_text(raw)]
+    texts.extend(_canonical_text(part) for part in (split_commands(raw) or []))
+    for text in texts:
+        if not text:
+            continue
+        for pattern, code in patterns:
+            if re.search(pattern, text):
+                return code
+    return ''
+
+
 # --- Kiểm tra phạm vi trước khi lưu (§3.3.3) --------------------------------
 
 def forbidden_prefix_reason(command):
@@ -589,6 +720,15 @@ class PermissionPolicy:
         raw = str(self.env.get('BOXFOX_PERMISSION_SCOPE') or '').strip().lower()
         return raw if raw in SCOPES else SCOPE_DEFAULT
 
+    def network_value(self):
+        """Trục mạng — cùng thứ tự tầng như `mode`/`scope` (tầng trên thắng)."""
+        for layer in reversed(LAYER_ORDER):
+            value = str((self.layers.get(layer) or {}).get('network') or '').strip().lower()
+            if value in NETWORKS:
+                return value
+        raw = str(self.env.get('BOXFOX_PERMISSION_NETWORK') or '').strip().lower()
+        return raw if raw in NETWORKS else NETWORK_DEFAULT
+
     def rules(self, layer=None):
         """Danh sách `Rule` của một tầng (hoặc cả bốn), kèm tệp nguồn để UI hiện được."""
         out = []
@@ -622,6 +762,9 @@ class PermissionPolicy:
             'scope': self.scope_value(),
             'scopeDefault': SCOPE_DEFAULT,
             'scopes': list(SCOPES),
+            'network': self.network_value(),
+            'networkDefault': NETWORK_DEFAULT,
+            'networks': list(NETWORKS),
             'workspace': self.workspace,
             'layers': [
                 {'layer': layer, 'file': str(self.paths.get(layer) or ''),
@@ -652,13 +795,21 @@ class PermissionPolicy:
         if FORK_BOMB.search(raw):
             return 'fork_bomb'
         for part in (split_commands(raw) or [raw]):
-            text = re.sub(r'\s+', ' ', canonicalize_command(part).lower()).strip()
+            text = _canonical_text(part)
             if not text:
                 continue
             for pattern, code in HARDLINE:
                 if re.search(pattern, text):
                     return code
         return ''
+
+    def guarded_reason(self, command):
+        """Lệnh thuộc nhóm LUÔN HỎI (§6.1) — trả mã, hoặc chuỗi rỗng. Không có ngoại lệ cho `trusted`."""
+        return _list_reason(GUARDED, command)
+
+    def egress_reason(self, command):
+        """Lệnh RA MẠNG (§6.1) — trả mã khi khớp danh sách hỏi, hoặc chuỗi rỗng."""
+        return _list_reason(EGRESS, command)
 
     def decide(self, tool, args, *, cwd=None, session_id=None, actor='agent', remember=None):
         """Trả `Decision` cho một lời gọi. Không bao giờ ném, không bao giờ tự hỏi người dùng."""
@@ -673,9 +824,18 @@ class PermissionPolicy:
                 self.record(tool=tool, command=command, decision=decision, actor=actor,
                             session_id=session_id, scope=self.scope_value())
                 return decision
+            guard = self.guarded_reason(command)
+            if guard:
+                # Chạy TRƯỚC danh sách luật và trước `session_rules`: một lần cho phép là một lần,
+                # nên đã cho phép trước đó (hay ở phiên khác) cũng không bỏ qua được bước hỏi này.
+                decision = ask('lệnh thuộc nhóm luôn hỏi `%s` — chỉ cho phép một lần' % guard,
+                               'guarded:%s' % guard, 'guarded')
+                self.record(tool=tool, command=command, decision=decision, actor=actor,
+                            session_id=session_id, scope=self.scope_value())
+                return decision
 
         cwd_value = str(cwd or self.workspace or '')
-        key = self.session_key(tool, args, cwd=cwd_value)
+        key = self.session_key(tool, args, cwd=cwd_value, session_id=session_id)
 
         for key_name in ('deny', 'ask', 'allow'):
             for rule_key, rule in self.rules():
@@ -728,12 +888,16 @@ class PermissionPolicy:
         return decision
 
     def default_decision(self, tool, args):
-        """Mặc định theo `mode` × `scope` khi không luật nào khớp."""
+        """Mặc định theo `mode` × `scope` (× `network` cho lệnh chạy) khi không luật nào khớp."""
         mode = self.mode_value()
         scope = self.scope_value()
         caps = MODE_CAPABILITIES[mode]
         if tool in READ_TOOLS:
             if scope == SCOPE_WORKSPACE and not self.in_workspace(args):
+                # `codebase_glob`/`codebase_grep` không có tham số đường dẫn thì executor đã neo chúng
+                # vào gốc dự án — hỏi ở đây chỉ thêm tiếng ồn mà không thêm ràng buộc nào.
+                if tool in ('codebase_glob', 'codebase_grep') and not _path_arg(args):
+                    return allow('', 'mode')
                 return ask('ngoài workspace mà phạm vi đang là `workspace`', '', 'mode')
             return allow('', 'mode')
         if tool in WRITE_TOOLS:
@@ -742,7 +906,16 @@ class PermissionPolicy:
                 return ask('ghi ngoài workspace', '', 'mode')
             return _from_capability(caps['write'], 'write', mode)
         if tool in EXEC_TOOLS:
-            return _from_capability(caps['exec'], 'exec', mode)
+            decision = _from_capability(caps['exec'], 'exec', mode)
+            if decision.outcome == OUTCOME_ALLOW and mode != MODE_TRUSTED \
+                    and self.network_value() == NETWORK_RESTRICTED:
+                # Chỉ hỏi khi chế độ sẽ chạy IM LẶNG: `ask` đã hỏi mọi lệnh, `plan` từ chối, còn
+                # `trusted` là toàn quyền (tương đương Full Access của Codex) — ghi rõ trong tài liệu.
+                code = self.egress_reason(_command_from_args(args))
+                if code:
+                    return ask('lệnh ra mạng `%s` khi mức mạng là `restricted`' % code,
+                               'network:%s' % code, 'network')
+            return decision
         if tool in BARE_TOOLS:
             return _from_capability(caps['cua'], 'cua', mode)
         # Công cụ lạ: không có luật ⇒ hỏi, trừ khi mode là plan (đọc/không làm gì).
@@ -750,27 +923,64 @@ class PermissionPolicy:
             return deny('chế độ `plan` chỉ cho phép đọc', '', 'mode')
         return ask('công cụ không nằm trong bảng quyền v1', '', 'mode')
 
+    def absolute_path(self, value):
+        """Đường dẫn tuyệt đối đã chuẩn hoá (tương đối ⇒ neo vào workspace); rỗng nếu không có."""
+        text = _expand_home(str(value or '').replace('\\', '/'), self.home).strip()
+        if not text:
+            return ''
+        root = _collapse(str(self.workspace).replace('\\', '/')) if self.workspace else ''
+        if not (text.startswith('/') or (len(text) > 1 and text[1] == ':')):
+            # Bỏ tiền tố `./` theo vòng lặp, KHÔNG dùng `lstrip('./')`: `lstrip` cắt cả tập ký tự,
+            # nên `..foo/x` bị co thành `foo/x` và trùng khoá với một tệp khác (vòng review đợt 1b).
+            relative = text
+            while relative.startswith('./'):
+                relative = relative[2:]
+            if not root:
+                return relative
+            text = root + '/' + relative
+        return _collapse(text)
+
     def in_workspace(self, args):
         if not self.workspace:
             return False
-        path = ''
-        if isinstance(args, dict):
-            path = args.get('path') or args.get('file_path') or ''
+        path = _path_arg(args)
         if not path:
             return False
-        text = _expand_home(str(path).replace('\\', '/'), self.home)
+        candidate = self.absolute_path(path)
         root = _collapse(str(self.workspace).replace('\\', '/'))
-        if not (text.startswith('/') or (len(text) > 1 and text[1] == ':')):
-            text = root + '/' + text.lstrip('./')
-        candidate = _collapse(text)
-        return candidate == root or candidate.startswith(root.rstrip('/') + '/')
+        return bool(candidate) and (candidate == root or candidate.startswith(root.rstrip('/') + '/'))
 
     # -- phiên --------------------------------------------------------------
 
-    def session_key(self, tool, args, *, cwd=None):
-        """Key phiên = `{tool, lệnh canonical, cwd, scope, mode}` — KHÔNG phải tên công cụ (bài học Codex)."""
-        command = canonicalize_command(_command_from_args(args))
-        return '|'.join((str(tool), command, str(cwd or ''), self.scope_value(), self.mode_value()))
+    def resource_key(self, tool, args):
+        """Tài nguyên mà lời gọi nhắm tới: đường dẫn tuyệt đối, lệnh canonical, hoặc truy vấn."""
+        if tool in EXEC_TOOLS:
+            return canonicalize_command(_command_from_args(args))
+        if tool == 'codebase_grep':
+            query = args.get('query') if isinstance(args, dict) else args
+            return str(query or '').strip()
+        if tool == 'web_fetch':
+            # `web_fetch` chỉ có `url`: không lấy nó làm tài nguyên thì mọi URL dùng chung khoá rỗng,
+            # và một lần "cho phép cả phiên" cho một URL sẽ mở luôn cho mọi URL khác.
+            url = args.get('url') if isinstance(args, dict) else args
+            return str(url or '').strip()
+        if tool in BARE_TOOLS:
+            # CUA: tài nguyên là ĐÍCH của lời gọi (app/cửa sổ/cả máy). Không có mục này thì một lần
+            # "cho phép cả phiên" khi bấm vào Notepad sẽ cho phép mọi thao tác trên MỌI cửa sổ khác
+            # trong cùng phiên — đúng thứ hợp đồng §7.2 cấm.
+            return _cua_resource(args)
+        value = _path_arg(args) or (args.get('pattern') if isinstance(args, dict) else '')
+        return self.absolute_path(value)
+
+    def session_key(self, tool, args, *, cwd=None, session_id=None):
+        """Key phiên = `{phiên, tool, tài nguyên, cwd, scope, mode}`.
+
+        Có mã phiên và tài nguyên vì "ghi nhớ" phải HẸP: cho phép `file_write a.txt` không được
+        cho phép `file_write b.txt`, và quyết định của phiên này không được rò sang phiên khác
+        (DA1 của bản bàn giao). `HostExecutor` gọi CÙNG hàm này khi ghi nhớ — không có bản thứ hai.
+        """
+        return '|'.join((str(session_id or ''), str(tool), self.resource_key(tool, args),
+                         str(cwd or ''), self.scope_value(), self.mode_value()))
 
     def remember(self, key, decision, lifetime='session'):
         """Ghi nhớ quyết định cho phiên (`session`) hoặc cho đúng một lần (`once`)."""
@@ -779,10 +989,18 @@ class PermissionPolicy:
         self.session_rules[key] = decision
         self.session_rules_lifetime[key] = lifetime
 
-    def forget_session(self):
-        self.session_rules.clear()
-        self.session_rules_lifetime.clear()
-        self.denials.clear()
+    def forget_session(self, session_id=None):
+        """Bỏ quyết định đã nhớ. Có mã phiên ⇒ chỉ bỏ của phiên đó; không có ⇒ bỏ hết."""
+        if session_id is None:
+            self.session_rules.clear()
+            self.session_rules_lifetime.clear()
+            self.denials.clear()
+            return
+        prefix = str(session_id) + '|'
+        for key in [key for key in self.session_rules if key.startswith(prefix)]:
+            self.session_rules.pop(key, None)
+            self.session_rules_lifetime.pop(key, None)
+        self.denials.pop(str(session_id), None)
 
     def note_denial(self, session_id=None):
         """3 lần từ chối liên tiếp ⇒ ngắt mạch. Trả `True` khi ĐÃ ngắt."""

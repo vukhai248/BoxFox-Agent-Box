@@ -56,7 +56,15 @@ def test_the_ledger_survives_a_session_delete_like_the_plan_ledgers_do(tmp_path)
     sid = store.create({'skills': []})['id']
     store.source_add(sid, {'claim': 'x', 'url': 'https://moh.gov.vn/a', 'host': 'moh.gov.vn',
                            'tier': 1, 'excerpt': 'x' * 250})
-    store.delete(sid)
+    # Đường xoá duy nhất còn lại: preview → capsule đã xác minh → confirm.
+    history = store.history
+    history.critical_snapshot = lambda ids: {'decisions': [], 'blockers': [], 'failedChecks': [],
+                                             'tasks': [], 'jobs': [], 'budget': {}, 'plans': []}
+    history.quiescence = lambda ids: True
+    preview = history.deletion_preview(sid)
+    assert history.delete_with_capsule(sid, operation_id=preview['operationId'],
+                                       expected_revision=preview['expectedRevision'],
+                                       confirm=True)['status'] == 'deleted'
     with pytest.raises(KeyError):
         store.get(sid)
     assert store.source_count(sid) == 1, 'sổ là bằng chứng của hồ sơ trên đĩa — không xoá theo phiên'

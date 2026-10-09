@@ -2714,7 +2714,7 @@ Không chạy lại toàn bộ24lượt trên bộ đo hiện tại. Các checkp
 
 ## 37. W11.PROMPT — hợp đồng giao việc và prompt/skill theo chuẩn SWE
 
-**03/10/2026 — đã đọc, đối chiếu và ghi đầu việc theo yêu cầu người dùng; chưa sửa prompt, skill hoặc runtime.** W này bổ sung phần tinh chỉnh/đánh giá đầu ra cho W6.2; không thay W7/W8, không áp pipeline mới. Triển khai cần chốt phạm vi cụ thể trước. Bản bàn giao ngắn cho cloud agent mới: [CLOUD-AGENT-HANDOFF-03_10.md](CLOUD-AGENT-HANDOFF-03_10.md).
+**03/10/2026 — đã đọc, đối chiếu và ghi đầu việc theo yêu cầu người dùng; chưa sửa prompt, skill hoặc runtime.** W này bổ sung phần tinh chỉnh/đánh giá đầu ra cho W6.2; không thay W7/W8, không áp pipeline mới. Triển khai cần chốt phạm vi cụ thể trước. Bản bàn giao ngắn cho cloud agent mới: [CLOUD-AGENT-HANDOFF-03_10.md](../handoff/archive/CLOUD-AGENT-HANDOFF-03_10.md).
 
 ### 37.1 Nguồn và điều prompt tham khảo thực sự làm tốt
 
@@ -2961,11 +2961,11 @@ Bạn tiếp nhận dự án BoxFox từ checkpoint, không có ký ức hội t
 
 1. ĐỌC VÀ XÁC MINH TRƯỚC KHI SỬA
 
-Đọc đầu tiên docs/plan/CLOUD-AGENT-HANDOFF-03_10.md. Đây chỉ là bản chỉ dẫn; trước khi quyết định hoặc sửa, phải đọc:
+Đọc đầu tiên docs/handoff/archive/CLOUD-AGENT-HANDOFF-03_10.md. Đây chỉ là bản chỉ dẫn; trước khi quyết định hoặc sửa, phải đọc:
 - docs/plan/Work-Graph-fix.md: mục27–29,30–36,37; mục38 nếu đã có, cùng phần chi tiết của W đang xử lý.
 - docs/plan/cloud-pr-audit-03_10.md, đặc biệt mục9.
 - docs/plan/cloud-w10-bundle-audit-03_10.json.
-- docs/plan/handoff-03_10.md và review-simplify-03_10.md.
+- docs/handoff/archive/handoff-03_10.md và review-simplify-03_10.md.
 - Source, callers, tests, evidence và raw bundle của từng vấn đề liên quan.
 
 Xác minh repo/remote, branch, HEAD và working tree thật. Chỉ làm trên B, bảo toàn WIP người dùng và tránh sửa chồng task đang chạy. Nếu file audit/bundle không có trong clone, báo đúng file cần và xin cung cấp; không đoán nội dung. Tiếp tục phần độc lập làm được trong lúc chờ.

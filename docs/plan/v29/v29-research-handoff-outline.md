@@ -7,12 +7,12 @@
 ## 1. Đường dẫn, khuôn, độ dài
 
 - **Đường dẫn:** `docs/handoff/research-verification.md` (đúng yêu cầu của đợt này).
-  - Ghi chú cấu trúc: tài liệu khuôn nằm **phẳng** ở `docs/handoff-router-settings.md`, và
-    `docs/handoff/` hiện **chưa tồn tại**. Nếu muốn theo đúng lối đặt tên đang có thì tên phẳng là
+  - Ghi chú cấu trúc: lúc viết, tài liệu khuôn nằm **phẳng** ở gốc `docs/`, và `docs/handoff/` **chưa
+    tồn tại** (2026-10-09: thư mục đã có, mọi handoff gom về đó — xem `docs/handoff/README.md`). Nếu muốn theo đúng lối đặt tên đang có thì tên phẳng là
     `docs/handoff-research-verification.md`; **khuyến nghị** cứ theo đường dẫn đã yêu cầu
     (`docs/handoff/research-verification.md`) và tạo thư mục — chọn xong thì nói một câu trong tài
     liệu để người đọc sau không đi tìm sai chỗ.
-- **Khuôn theo `docs/handoff-router-settings.md`** (146 dòng, đã đọc): mở đầu `# Handoff — <tiêu đề>`,
+- **Khuôn theo `docs/handoff/router-settings.md`** (146 dòng, đã đọc): mở đầu `# Handoff — <tiêu đề>`,
   rồi danh sách bullet `- Branch:` / `- Pull request:` và một đoạn "giai đoạn hiện tại"; các mục
   `## Trạng thái`, `## Đã hoàn thành`, `## Kiểm tra đã đạt tại commit <sha>`, `## Việc còn lại`
   (đánh số `### 0.` … `### 3.`), `## File chính`, `## Thiết kế và nghiên cứu`,

@@ -7,11 +7,12 @@
  * backend, thay bằng bản sinh tự động để tránh lệch kiểu giữa hai phía
  * (mục 9.3, 9.5.1 của bản kế hoạch).
  *
- * ⚠️ NHÃN: mọi chuỗi trong `DomInspectResult` / `DesktopInspectResult` là nội
- * dung màn hình máy ⇒ integrity LUÔN là `khong_tin_duoc` (quy tắc M1, mục 8.5),
- * kể cả khi box trả về giá trị khác. `parseInspectElementResult()` ghi đè cứng
- * (xem `lib/inspect/parse.ts`). Giao diện chỉ được render các chuỗi này qua
- * `PlainText` (mục 12.6) — không bao giờ `dangerouslySetInnerHTML`.
+ * ⚠️ NHÃN: mọi chuỗi trong `DomInspectResult` / `UiaInspectResult` /
+ * `DesktopInspectResult` là nội dung màn hình máy ⇒ integrity LUÔN là
+ * `khong_tin_duoc` (quy tắc M1, mục 8.5), kể cả khi box trả về giá trị khác.
+ * `parseInspectElementResult()` ghi đè cứng (xem `lib/inspect/parse.ts`). Giao
+ * diện chỉ được render các chuỗi này qua `PlainText` (mục 12.6) — không bao giờ
+ * `dangerouslySetInnerHTML`.
  *
  * ⚠️ PHASE 1 KHÔNG khai báo `InspectSource` — vị trí trong mã nguồn
  * (`{file, line, column}`) hoãn sang Phase 2 vì `data-boxfox-src` là thuộc
@@ -62,7 +63,12 @@ export interface InspectElementRequest {
 
 /**
  * Mã máy giải thích vì sao thanh tra suy biến sang nhánh `desktop` (§5.2).
- * Mười một giá trị — bảng này THẮNG mọi bộ tên cũ ở các tài liệu đào sâu.
+ * Mười một giá trị của box — bảng này THẮNG mọi bộ tên cũ ở các tài liệu đào sâu.
+ *
+ * Sáu giá trị cuối là của HOST MODE (Windows): box không bao giờ phát ra chúng,
+ * nhưng ngăn kéo là component DÙNG CHUNG nên bảng dịch phải phủ hết. Giá trị
+ * khớp nguyên văn `backend/src/agentbox/sandbox/win/errors.py` (hằng số, không
+ * phải chuỗi tự do) — lệch một ký tự là ngăn kéo rơi về câu mặc định.
  */
 export type InspectDesktopReason =
   | 'not_chromium'
@@ -76,6 +82,12 @@ export type InspectDesktopReason =
   | 'cdp_timeout'
   | 'no_node_at_point'
   | 'extract_failed'
+  | 'uia_unavailable'
+  | 'uia_timeout'
+  | 'uia_provider_hang'
+  | 'uia_no_element'
+  | 'no_window_at_point'
+  | 'window_identity_unavailable'
 
 /** Ghi chú best-effort đi kèm một `DomInspectResult` (§5.3, cột C3). */
 export type InspectNote = 'shadow_dom' | 'iframe_boundary' | 'selector_not_unique' | 'shadow_closed' | 'truncated_ancestors'
@@ -120,7 +132,56 @@ export interface DesktopInspectResult {
   label: InspectLabel
 }
 
-export type InspectElementResult = DomInspectResult | DesktopInspectResult
+/**
+ * Hộp bao của một phần tử UIA — cùng hệ toạ độ framebuffer/X11 với `screenBox`
+ * của nhánh `dom`, nên lớp phủ dùng CHUNG một hàm quy đổi cho cả hai.
+ */
+export interface UiaBounds {
+  screenBox: InspectBox
+  /** DPI của cửa sổ chứa phần tử; vắng khi nền tảng không đọc được. */
+  dpi?: number
+}
+
+/**
+ * Bấm vào một phần tử của ứng dụng desktop ⇒ box hỏi UI Automation (Windows).
+ *
+ * Đây là nhánh MỚI của host mode (`_uia_response` trong
+ * `backend/src/agentbox/agent_core/inspect_host.py`): box không bao giờ trả nó,
+ * nhưng ngăn kéo là component dùng chung nên phải hiểu cả ba nhánh.
+ *
+ * `elementToken` là định danh phần tử do box cấp cho lần đọc này — nó KHÔNG phải
+ * quyền điều khiển gì, chỉ để đối chiếu về sau (mã `ELEMENT_STALE` khi đã cũ).
+ * Mọi chuỗi ở đây là dữ liệu không tin được ⇒ render qua `PlainText`.
+ */
+export interface UiaInspectResult {
+  type: 'uia'
+  name: string
+  controlType: string
+  controlTypeId?: number
+  automationId: string
+  className: string
+  helpText: string
+  /** `false` ⇒ phần tử đang bị tắt; giao diện phải nói rõ. */
+  isEnabled: boolean
+  /** `true` ⇒ phần tử nằm ngoài vùng nhìn thấy được. */
+  isOffscreen: boolean
+  /** `true` ⇒ ô mật khẩu; KHÔNG BAO GIỜ đọc/điều khiển nội dung. */
+  isPassword: boolean
+  bounds: UiaBounds
+  /** Tên các mẫu UIA khả dụng, ví dụ `['Invoke', 'ExpandCollapse']`. */
+  patterns: string[]
+  windowId: string
+  pid?: number
+  processName?: string
+  elementToken: string
+  generation?: number
+  sourceId?: string
+  frameId?: string
+  geometryRevision?: number
+  label: InspectLabel
+}
+
+export type InspectElementResult = DomInspectResult | UiaInspectResult | DesktopInspectResult
 
 /**
  * Một phần tử người dùng đã đính kèm vào khung soạn tin (chip).

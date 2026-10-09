@@ -25,6 +25,10 @@ HEADERS = {'Host': '127.0.0.1:3102', 'X-BoxFox-Admin': '1'}
 class FixtureExecutor:
     """Executor kiểu docker: có `execute`/`cleanup` nhưng KHÔNG có `policy`."""
 
+    def __init__(self):
+        # `SessionMachineExecutor` đọc `legacy.visual_lock`; executor thật (docker) cũng có.
+        self.visual_lock = asyncio.Lock()
+
     async def execute(self, name, args, sid):
         return {'ok': True}
 
@@ -125,6 +129,72 @@ def test_health_reports_host_mode_and_hardline_hits(tmp_path, monkeypatch):
     assert execution['permissionMode'] == 'trusted'
     assert execution['hardlineHits'] == 1
     assert execution['lease'] is None
+
+
+def test_health_reads_the_machine_policy_when_the_process_runs_docker(tmp_path, monkeypatch):
+    """Tiến trình docker + máy cấu hình host ⇒ health phải nói CÓ động cơ quyền.
+
+    Đo được trên harness thật: tab Settings → Machine & Permissions hiện "Máy này không có động cơ
+    quyền" dù bốn route quyền trả 200, vì `execution.policy` chỉ suy từ `runtime.executor.policy`.
+    Bản desktop chạy tiến trình docker trong khi người dùng chọn máy host là trạng thái bình
+    thường, nên health phải đọc cùng nguồn với các route (`permissions_policy`).
+    """
+    from agentbox.sandbox import machine_router
+    workspace = tmp_path / 'ws'
+    workspace.mkdir()
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
+    monkeypatch.setenv('BOXFOX_AGENT_DATA_DIR', str(tmp_path / 'data'))
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), None)
+        machine_router.attach(runtime, tmp_path / 'data', default_mode='host',
+                              default_workspace=workspace)
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(server.make_url('/')) as client:
+                body = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+        store.close()
+        return body
+
+    execution = asyncio.run(main())['execution']
+    assert execution['policy'] is True
+    assert execution['mode'] == 'host', 'máy phục vụ phiên host ⇒ `mode` nói host'
+    assert execution['configured'] == 'docker', 'chế độ của TIẾN TRÌNH vẫn được nói thật'
+    assert Path(execution['workspace']).resolve() == workspace.resolve()
+    assert execution['permissionMode'] == 'ask'
+
+
+def test_health_keeps_the_empty_state_for_a_docker_only_machine(tmp_path, monkeypatch):
+    """Máy cấu hình docker (và máy host CHƯA chọn folder) vẫn phải nói `policy:false`.
+
+    Nếu không, tab quyền sẽ mời người dùng vào một bảng gác đúng không gì: bản chỉ có Docker không
+    có phiên host nào để cấp quyền.
+    """
+    from agentbox.sandbox import machine_router
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
+    monkeypatch.setenv('BOXFOX_AGENT_DATA_DIR', str(tmp_path / 'data'))
+
+    async def main():
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, FixtureExecutor(), None)
+        registry = machine_router.attach(runtime, tmp_path / 'data', default_mode='docker')
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession(server.make_url('/')) as client:
+                docker = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+                # Máy chọn host nhưng CHƯA có folder: chưa có phiên host nào để gác.
+                registry.update({'revision': registry.state()['revision'], 'mode': 'host',
+                                 'projectId': None})
+                hostless = await (await client.get('/api/agent/health', headers=HEADERS)).json()
+        store.close()
+        return docker, hostless
+
+    docker, hostless = asyncio.run(main())
+    assert docker['execution']['policy'] is False and docker['execution']['mode'] == 'docker'
+    # Chưa có folder ⇒ chưa có phiên host nào để gác: `mode` nói sự thật của TIẾN TRÌNH.
+    assert hostless['execution']['policy'] is False and hostless['execution']['mode'] == 'docker'
+    assert hostless['execution']['workspace'] is None
 
 
 # ------------------------------------------------------------------ GET/PUT
@@ -351,3 +421,238 @@ def test_routes_need_the_admin_header(tmp_path):
         return (response.status,)
 
     assert run(tmp_path, scenario, executor=executor)[0] == 403
+
+
+def test_routes_answer_when_the_process_is_docker_but_the_machine_is_host(tmp_path, monkeypatch):
+    """Bản desktop: tiến trình docker, máy cấu hình host ⇒ route quyền vẫn trả lời.
+
+    Nút chọn quyền ở thanh chat và tab Settings → Machines đi qua đúng route này; nếu vẫn 409 thì
+    người dùng không đổi được mức cho phép dù phiên IDE đang chạy trên máy thật.
+    """
+    from aiohttp.test_utils import TestClient
+    from agentbox.sandbox.machine_router import attach as attach_machines
+
+    home = tmp_path / 'home'
+    (home / '.boxfox').mkdir(parents=True)
+    (home / '.boxfox' / 'settings.json').write_text('{"mode": "auto"}', encoding='utf-8')
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
+    workspace = tmp_path / 'ws'
+    workspace.mkdir(exist_ok=True)
+
+    async def main():
+        class Legacy(FixtureExecutor):
+            visual_lock = None
+
+        store = SessionStore(tmp_path / 'sessions.db')
+        runtime = HarnessRuntime(store, Legacy(), None)      # executor KHÔNG có `policy`
+        attach_machines(runtime, tmp_path / 'profile')
+        project = runtime.machine_registry.register(str(workspace))
+        runtime.machine_registry.update({'revision': 1, 'mode': 'host', 'projectId': project['id']})
+        async with TestClient(TestServer(create_app(runtime))) as client:
+            response = await client.get('/api/agent/permissions', headers=HEADERS)
+            payload = await response.json()
+            changed = await client.put('/api/agent/permissions', headers=HEADERS, json={'mode': 'plan'})
+        store.close()
+        return response.status, payload, changed.status
+
+    status, payload, changed_status = asyncio.run(main())
+    assert status == 200
+    assert payload['mode'] == 'auto'
+    assert payload['workspace'] == str(workspace)
+    assert changed_status == 200
+
+
+# ------------------------------------------------------------- trục mạng (1b)
+
+def test_network_can_be_set_and_read_back(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        before = await (await client.get('/api/agent/permissions', headers=HEADERS)).json()
+        changed = await client.put('/api/agent/permissions', headers=HEADERS,
+                                   json={'network': 'enabled'})
+        after = await (await client.get('/api/agent/permissions', headers=HEADERS)).json()
+        return before, changed.status, await changed.json(), after
+
+    before, status, payload, after = run(tmp_path, scenario, executor=executor)
+    assert before['network'] == perms.NETWORK_RESTRICTED
+    assert status == 200
+    assert payload['network'] == perms.NETWORK_ENABLED
+    assert after['network'] == perms.NETWORK_ENABLED
+
+
+def test_unknown_network_value_is_rejected(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        response = await client.put('/api/agent/permissions', headers=HEADERS,
+                                    json={'network': 'mở-toang'})
+        return response.status, await response.json()
+
+    status, payload = run(tmp_path, scenario, executor=executor)
+    assert status == 400
+    assert payload['code'] == 'PERMISSION_NETWORK_UNKNOWN'
+
+
+def test_health_reports_the_network_axis(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def scenario(client, _runtime):
+        return await (await client.get('/api/agent/health', headers=HEADERS)).json()
+
+    payload = run(tmp_path, scenario, executor=executor)
+    assert payload['execution']['network'] == perms.NETWORK_RESTRICTED
+
+
+# ------------------------------------------- gắn thẻ duyệt mức tiến trình (DA2)
+
+class FakeStore:
+    """`SessionStore` tối thiểu: trả phiên theo mã, ném `KeyError` khi thiếu (như bản thật)."""
+
+    def __init__(self, sessions=None):
+        self.sessions = sessions or {}
+
+    def get(self, sid):
+        if sid not in self.sessions:
+            raise KeyError('Session not found')
+        return self.sessions[sid]
+
+
+def fake_runtime(executor, sessions=None, decide=None):
+    from types import SimpleNamespace
+
+    async def default_decision(session, name, args, call_id=None):
+        return {'status': 'approved', 'choice': 'approve'}
+
+    return SimpleNamespace(executor=executor, store=FakeStore(sessions), decision=decide or default_decision)
+
+
+def test_attach_host_approver_denies_when_the_session_is_gone(tmp_path):
+    executor = host_executor(tmp_path)
+    runtime = fake_runtime(executor, sessions={})
+    decision = executor.policy.decide('terminal_exec', {'command': 'npm test'}, session_id='s1')
+
+    assert server_module.attach_host_approver(runtime) is True
+    assert asyncio.run(executor.approver('terminal_exec', {'command': 'npm test'}, decision,
+                                         'missing')) == 'deny'
+
+
+def test_attach_host_approver_denies_a_child_session(tmp_path):
+    executor = host_executor(tmp_path)
+    runtime = fake_runtime(executor, sessions={'child': {'id': 'child', 'parent_id': 'root'}})
+    decision = executor.policy.decide('terminal_exec', {'command': 'npm test'}, session_id='child')
+
+    server_module.attach_host_approver(runtime)
+    assert asyncio.run(executor.approver('terminal_exec', {'command': 'npm test'}, decision,
+                                         'child')) == 'deny'
+
+
+def test_attach_host_approver_maps_the_card_choice_to_a_verdict(tmp_path):
+    executor = host_executor(tmp_path)
+    executor.policy.mode = 'ask'
+    seen = {}
+
+    async def decide(session, name, args, call_id=None):
+        seen['name'], seen['args'], seen['session'] = name, args, session
+        return {'status': 'approved', 'choice': seen.pop('choice', 'approve')}
+
+    runtime = fake_runtime(executor, sessions={'s1': {'id': 's1'}}, decide=decide)
+    server_module.attach_host_approver(runtime)
+    args = {'command': 'npm test'}
+    normal = executor.policy.decide('terminal_exec', args, session_id='s1')
+
+    seen['choice'] = 'approve_session'
+    assert asyncio.run(executor.approver('terminal_exec', args, normal, 's1')) == 'allow_session'
+    assert seen['name'] == 'request_approval'
+    assert seen['args']['options'] and seen['args']['reason'] and seen['args']['action']
+    assert seen['session'] == {'id': 's1'}
+
+    executor.policy.mode = 'trusted'
+    force = {'command': 'git push --force origin main'}
+    guarded = executor.policy.decide('terminal_exec', force, session_id='s1')
+    assert guarded.rule.startswith('guarded:')
+    seen['choice'] = 'approve_session'
+    assert asyncio.run(executor.approver('terminal_exec', force, guarded, 's1')) == 'deny', \
+        'lệnh luôn hỏi: "cho phép cả phiên" vẫn chỉ là một lần'
+
+
+def test_attach_host_approver_keeps_an_existing_approver_and_other_executors(tmp_path):
+    executor = host_executor(tmp_path)
+
+    async def existing(name, args, decision, session_id=None):
+        return 'allow'
+
+    executor.approver = existing
+    assert server_module.attach_host_approver(fake_runtime(executor)) is False
+    assert executor.approver is existing
+    assert server_module.attach_host_approver(fake_runtime(FixtureExecutor())) is False
+
+
+# ------------------------------------------------ quyết định của thẻ đi vào policy của phiên
+
+class SessionPolicyExecutor:
+    """`SessionMachineExecutor` tối thiểu: policy dùng chung + policy riêng của từng phiên."""
+
+    def __init__(self, shared, sessions):
+        self.policy = shared
+        self.approver = None
+        self.sessions = sessions
+
+    def policy_for_session(self, sid):
+        return self.sessions.get(sid)
+
+    async def execute(self, name, args, sid):
+        return {'ok': True}
+
+    async def cleanup(self, sid):
+        return None
+
+
+def test_decide_remembers_into_the_sessions_own_policy(tmp_path):
+    shared = host_executor(tmp_path).policy
+    session_policy = perms.PermissionPolicy(shared.workspace, profile_dir=tmp_path / 'profile' / 's1',
+                                           home=tmp_path / 'home', install_dir=tmp_path / 'install',
+                                           env={})
+    executor = SessionPolicyExecutor(shared, {'s1': session_policy})
+    args = {'command': 'npm test'}
+
+    async def scenario(client, runtime):
+        await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                          json={'tool': 'terminal_exec', 'args': args, 'sessionId': 's1',
+                                'decision': 'allow_session'})
+        return await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                        json={'tool': 'terminal_exec', 'args': args,
+                                              'sessionId': 's1'})).json()
+
+    run(tmp_path, scenario, executor=executor)
+    key = session_policy.session_key('terminal_exec', args, cwd=session_policy.workspace,
+                                     session_id='s1')
+    assert session_policy.session_rules[key].outcome == perms.OUTCOME_ALLOW
+    assert not shared.session_rules, 'policy dùng chung không được giữ luật của một phiên'
+
+
+def test_decide_never_remembers_a_guarded_command(tmp_path):
+    executor = host_executor(tmp_path)
+    executor.policy.mode = 'trusted'
+    args = {'command': 'git push --force origin main'}
+
+    async def scenario(client, runtime):
+        saved = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                         json={'tool': 'terminal_exec', 'args': args,
+                                               'sessionId': 's1',
+                                               'decision': 'allow_always'})).json()
+        session = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                           json={'tool': 'terminal_exec', 'args': args,
+                                                 'sessionId': 's1',
+                                                 'decision': 'allow_session'})).json()
+        again = await (await client.post('/api/agent/permissions/decide', headers=HEADERS,
+                                        json={'tool': 'terminal_exec', 'args': args,
+                                              'sessionId': 's1'})).json()
+        rules = await (await client.get('/api/agent/permissions/rules', headers=HEADERS)).json()
+        return saved, session, again, rules
+
+    saved, session, again, rules = run(tmp_path, scenario, executor=executor)
+    assert saved['saved'] is False and saved['saveCode'] == 'GUARDED_SINGLE_SHOT'
+    assert session['decision'] == 'allow_session'
+    assert again['outcome'] == 'ask', 'lệnh luôn hỏi không bao giờ được ghi nhớ'
+    assert 'terminal_exec(git push --force origin main)' not in rules['rules']['allow']

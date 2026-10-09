@@ -3,13 +3,16 @@ import asyncio
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import time
 import uuid
 from pathlib import Path
 
+from ..agent_core import cua_target
 from ..agent_core.permissions import PermissionPolicy
-from .host_executor import HostExecutor, error_result
+from .host_executor import (HostExecutor, approval_options, approval_reason, approval_verdict,
+                            error_result)
 
 
 class MachineError(ValueError):
@@ -19,19 +22,61 @@ class MachineError(ValueError):
 
 
 class MachineRegistry:
-    def __init__(self, store):
+    def __init__(self, store, *, default_mode=None, default_workspace=None):
         self.store = store
         self.db = store.db
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS web_machine_settings (
                 singleton INTEGER PRIMARY KEY CHECK(singleton=1),
                 revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
-            INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,'docker',NULL);
             CREATE TABLE IF NOT EXISTS web_machine_projects (
                 id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
                 trusted INTEGER NOT NULL DEFAULT 0);
         ''')
+        # CSDL tạo trước commit `63fed3e` chưa có cột `trusted`: `CREATE TABLE IF NOT EXISTS` không
+        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`). Hỏng thì KHÔNG
+        # chặn khởi động, nhưng phải ghi log: thiếu cột mà im lặng thì mọi route máy đổ `IndexError`
+        # ở chỗ đọc `project['trusted']` (vòng review đợt 1b).
+        try:
+            columns = {row['name'] for row in self.db.execute('PRAGMA table_info(web_machine_projects)')}
+            if 'trusted' not in columns:
+                self.db.execute('ALTER TABLE web_machine_projects '
+                                'ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0')
+            self.db.commit()
+        except sqlite3.DatabaseError as exc:
+            self.db.rollback()
+            self._log('machine_trusted_column_failed', f'không vá được cột `trusted`: {exc}')
+        # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
+        # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
+        # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
+        # Chỉ áp cho CSDL MỚI (`INSERT OR IGNORE`): cấu hình người dùng đã lưu không bị đổi.
+        self.process_mode = 'host' if default_mode == 'host' else 'docker'
+        # Chỉ dựng folder mặc định khi CSDL CHƯA có cấu hình. Người dùng đã chạy một lần rồi xoá
+        # folder đó thì lần mở sau không được tạo lại sau lưng họ.
+        project_id = None
+        first_run = self.db.execute('SELECT 1 FROM web_machine_settings WHERE singleton=1').fetchone() is None
+        if first_run and self.process_mode == 'host' and default_workspace:
+            project_id = self._bootstrap_project(default_workspace)
+        self.db.execute('INSERT OR IGNORE INTO web_machine_settings VALUES (1,1,?,?)',
+                        (self.process_mode, project_id))
         self.db.commit()
+
+    def _bootstrap_project(self, path):
+        """Đăng ký sẵn folder mặc định của bản desktop (tạo nếu chưa có); lỗi thì để trống."""
+        try:
+            candidate = Path(str(path)).expanduser()
+            candidate.mkdir(parents=True, exist_ok=True)
+            return self.register(str(candidate))['id']
+        except (OSError, MachineError):
+            return None
+
+    def _log(self, event, message):
+        """Ghi log hệ thống nếu có; không có thì thôi, không được làm hỏng khởi động."""
+        try:
+            from ..observability.system_log import system_log
+            system_log.write(event, level='error', message=message)
+        except Exception:
+            pass
 
     def project(self, project_id):
         row = self.db.execute('SELECT * FROM web_machine_projects WHERE id=?', (project_id,)).fetchone()
@@ -42,8 +87,21 @@ class MachineRegistry:
     def state(self):
         row = dict(self.db.execute('SELECT * FROM web_machine_settings WHERE singleton=1').fetchone())
         return {'revision': row['revision'], 'mode': row['mode'], 'projectId': row['project_id'],
+                # Chế độ của TIẾN TRÌNH, khác `mode` (lựa chọn của người dùng). Giao diện dùng nó để
+                # không mời chuyển sang Docker khi bản này không có box nào (xem `update`).
+                'processMode': self.process_mode,
                 'projects': [{**dict(p), 'trusted': bool(p['trusted'])} for p in
                              self.db.execute('SELECT * FROM web_machine_projects ORDER BY name,path')]}
+
+    def active_project(self):
+        """Folder dự án đang chọn, hoặc `None`. Không bao giờ ném — người gọi cần một giá trị để trả lời."""
+        project_id = self.state().get('projectId')
+        if not project_id:
+            return None
+        try:
+            return self.project(project_id)
+        except MachineError:
+            return None
 
     def register(self, path, name=None):
         if name is not None and (not isinstance(name, str) or not name.strip() or len(name.strip()) > 120 or any(ord(char) < 32 for char in name)):
@@ -68,6 +126,12 @@ class MachineRegistry:
         mode = values.get('mode')
         if mode not in ('host', 'docker'):
             raise MachineError('MACHINE_MODE_INVALID', 'Chỉ hỗ trợ IDE hoặc Docker.')
+        # Tiến trình host không có box nào để trỏ tới: nhận `docker` ở đây sẽ tạo phiên nói "Docker"
+        # nhưng công cụ vẫn chạy trên máy thật — đúng thứ bản bàn giao cấm (DA3/DA4).
+        if mode == 'docker' and self.process_mode == 'host':
+            raise MachineError('MACHINE_MODE_UNAVAILABLE',
+                               'Bản này chạy trực tiếp trên máy (IDE), không có Docker box để chuyển sang.',
+                               409)
         project_id = values.get('projectId') if mode == 'host' else None
         if project_id:
             self.project(project_id)
@@ -103,7 +167,12 @@ class MachineRegistry:
                 'workspace': project['path'] if project else None}
 
     def binding(self, sid):
-        session = self.store.get(sid) if sid else None
+        # `SessionStore.get` NÉM `KeyError` khi thiếu phiên (không trả `None`), nên phải bắt ở đây;
+        # nếu không thì mã phiên tổng hợp của đường admin biến thành lỗi 500 thay vì `SESSION_NOT_FOUND`.
+        try:
+            session = self.store.get(sid) if sid else None
+        except KeyError:
+            session = None
         if not session:
             raise MachineError('SESSION_NOT_FOUND', 'Không tìm thấy phiên.', 404)
         binding = session['config'].get('machineBinding')
@@ -111,7 +180,11 @@ class MachineRegistry:
             return dict(binding)
         if session.get('parent_id'):
             return self.binding(session['parent_id'])
-        # Existing web sessions retain their Docker environment.
+        # Phiên web cũ giữ nguyên môi trường Docker của nó. Riêng tiến trình host (bản desktop) không
+        # có box nào để giữ, nên phiên thiếu binding đi theo cấu hình đang chọn — đúng thứ mà công cụ
+        # thật sự chạy trên đó.
+        if self.process_mode == 'host':
+            return self.new_binding({})
         return {'mode': 'docker', 'revision': 1, 'projectId': None, 'workspace': '/home/agent/workspace'}
 
 
@@ -209,16 +282,127 @@ def pick_folder():
         raise MachineError('FOLDER_PICKER_UNAVAILABLE', 'Không mở được picker; dùng đường dẫn folder.') from None
 
 
+def window_rect_payload(window):
+    """`{x, y, width, height}` của một cửa sổ cho panel vẽ viền, hoặc `None`.
+
+    **Vì sao có hàm này:** cả hai nền tảng trả hình chữ nhật cửa sổ theo `(left, top, right, bottom)`
+    (`windows_platform.py::get_window_rect`, `sandbox/x11/platform.py::get_window_rect`), còn panel cần
+    `{x, y, width, height}`. Đọc thẳng bốn số đó như `(x, y, w, h)` là lỗi đã đo được — cửa sổ
+    `(96, 1039, 1824, 1080)` (thanh tác vụ XFCE) cho ra `width=1824, height=1080` thay vì
+    `1728 × 41`. `WindowInfo.bounds` mới là chỗ đổi đúng, nên ưu tiên nó; mapping
+    (`{position, size}` của danh sách cửa sổ) đi nhánh riêng.
+    """
+    if window is None:
+        return None
+    bounds = getattr(window, 'bounds', None)
+    if bounds is not None:
+        try:
+            left, top, width, height = (int(part) for part in tuple(bounds)[:4])
+        except (TypeError, ValueError):
+            return None
+        return {'x': left, 'y': top, 'width': max(0, width), 'height': max(0, height)}
+    if isinstance(window, dict):
+        position, size = window.get('position') or {}, window.get('size') or {}
+        if 'x' in position and 'width' in size:
+            return {'x': int(position.get('x', 0)), 'y': int(position.get('y', 0)),
+                    'width': int(size.get('width', 0)), 'height': int(size.get('height', 0))}
+        return None
+    rect = getattr(window, 'extended_bounds', None) or getattr(window, 'rect', None)
+    if not rect:
+        return None
+    try:
+        left, top, right, bottom = (int(part) for part in tuple(rect)[:4])
+    except (TypeError, ValueError):
+        return None
+    return {'x': left, 'y': top, 'width': max(0, right - left), 'height': max(0, bottom - top)}
+
+
 class SessionMachineExecutor:
-    def __init__(self, legacy, registry, profile_dir):
+    def __init__(self, legacy, registry, profile_dir, *, desktop=None, overlay=None, targets=None):
         self.legacy, self.registry = legacy, registry
         self.profile_dir = Path(profile_dir)
         self.runtime = None
         self.hosts = {}
+        # Chính sách quyền dùng chung cho các route `/api/agent/permissions*` — xem `permissions_policy`.
+        self.policies = {}
+        # Policy riêng của từng phiên, khoá `(project, sid)`: route quyết định phải ghi vào ĐÚNG đối
+        # tượng mà phiên đọc lúc gọi tool, nếu không thì "cho phép cả phiên" trên thẻ không thành sự thật.
+        self.session_policies = {}
         self.visual_lock = legacy.visual_lock
+        #: `DesktopControl` dùng CHUNG cho mọi phiên host của tiến trình (một lease, một mutex cho cả
+        #: máy — hai đối tượng riêng sẽ nói dối nhau về ai đang giữ quyền). Phải là thuộc tính THẬT:
+        #: `__getattr__` chuyển tiếp xuống executor Docker, nên thiếu nó thì route lease trả 409
+        #: `DESKTOP_CONTROL_UNAVAILABLE` trong bản hai mode.
+        self.desktop = desktop
+        #: Viền báo vùng đang bị điều khiển trên màn hình thật (`CuaOverlay`), dùng chung như trên.
+        self.overlay = overlay
+        #: Sổ đích CUA theo phiên; `None` ⇒ dựng muộn từ `runtime.store` ở `attach`.
+        self.targets = targets
 
     def __getattr__(self, key):
         return getattr(self.legacy, key)
+
+    def policy_for(self, project=None):
+        """`PermissionPolicy` dùng cho các ROUTE quyền (`GET/PUT /api/agent/permissions`).
+
+        Chế độ (`plan`/`ask`/`auto`/`trusted`) và phạm vi (`workspace`/`machine`) KHÔNG được ghim ở
+        đây: chúng đọc từ bốn tầng luật (`PermissionPolicy.mode_value()`), nên nút chọn quyền ở thanh
+        chat và tab Settings → Machines có hiệu lực thật. Trước đây policy của phiên bị ghim
+        `mode='ask'` ⇒ mọi thay đổi của người dùng bị bỏ qua.
+
+        Đối tượng này CHỈ để đọc/ghi cấu hình. Phiên chạy tool có policy riêng
+        (`session_policy`) để `session_rules` không rò giữa các phiên.
+        """
+        selected = project or self.registry.active_project() or {}
+        workspace = str(selected.get('path') or '')
+        key = str(selected.get('id') or 'default')
+        policy = self.policies.get(key)
+        if policy is None:
+            policy = PermissionPolicy(workspace, profile_dir=self.profile_dir / 'host-permissions')
+            self.policies[key] = policy
+        return policy
+
+    def session_policy(self, project, sid):
+        """Policy RIÊNG của một phiên: cùng tầng luật trên đĩa, nhưng `session_rules` tách biệt.
+
+        Dùng chung một đối tượng policy cho mọi phiên trong cùng folder sẽ khiến một lần "cho phép
+        trong phiên này" của phiên A có hiệu lực luôn ở phiên B — phiên là ranh giới của quyết định.
+        Đối tượng được NHỚ LẠI theo `(project, sid)`: `host()` và route quyết định phải dùng chung một
+        vật thể, nếu không thì quyết định ghi vào một bản sao rồi bị bỏ quên.
+        """
+        key = (str(project.get('id') or project.get('path') or ''), str(sid))
+        policy = self.session_policies.get(key)
+        if policy is None:
+            policy = PermissionPolicy(str(project['path']),
+                                      profile_dir=self.profile_dir / 'host-permissions' / sid)
+            self.session_policies[key] = policy
+        return policy
+
+    def policy_for_session(self, sid):
+        """Policy của phiên host, hoặc `None` khi phiên không chạy host / không còn folder.
+
+        Dùng cho `POST /api/agent/permissions/decide`: quyết định phải vào policy mà phiên sẽ đọc.
+        Không bao giờ ném — người gọi cần một giá trị để trả lời.
+        """
+        try:
+            binding = self.registry.binding(sid)
+            if binding['mode'] != 'host' or not binding.get('projectId'):
+                return None
+            project = self.registry.project(binding['projectId'])
+        except MachineError:
+            return None
+        return self.session_policy(project, sid)
+
+    def permissions_policy(self):
+        """Policy cho các route quyền, kể cả khi tiến trình đang chạy ở chế độ docker.
+
+        Bản desktop có thể chạy tiến trình ở chế độ docker trong khi máy được cấu hình host; khi đó
+        `runtime.executor.policy` là `None` và mọi route quyền trả 409 dù phiên host vẫn chạy được.
+        Đọc lại từ đĩa mỗi lần gọi: người dùng vừa đổi mode ở thanh chat thì lần đọc sau phải thấy.
+        """
+        policy = self.policy_for()
+        policy.reload()
+        return policy
 
     def host(self, sid):
         binding = self.registry.binding(sid)
@@ -230,32 +414,48 @@ class SessionMachineExecutor:
         if project['path'] != binding['workspace'] or not Path(project['path']).is_dir():
             raise MachineError('PROJECT_UNAVAILABLE', 'Folder dự án không còn đúng binding.', 409)
         if sid not in self.hosts:
-            policy = PermissionPolicy(project['path'], mode='ask', scope='workspace',
-                                      profile_dir=self.profile_dir / 'host-permissions' / sid)
-            async def approve(name, args, decision):
-                session = self.registry.store.get(sid)
-                if not self.runtime:
+            policy = self.session_policy(project, sid)
+            async def approve(name, args, decision, session_id=None):
+                try:
+                    session = self.registry.store.get(session_id or sid)
+                except KeyError:
+                    session = None
+                if not session or not self.runtime:
                     return 'deny'
                 while session.get('parent_id'):
                     session = self.registry.store.get(session['parent_id'])
                 previous_status = session['status']
                 outcome = await self.runtime.decision(session, 'request_approval', {
                     'action': f'IDE [{sid}]: {name} {json.dumps(args, ensure_ascii=False)[:1500]}',
-                    'reason': f'{decision.reason}. Lệnh chạy bằng tài khoản Windows của bạn; không có sandbox OS.',
-                    'options': [{'id': 'approve', 'label': 'Cho phép một lần', 'kind': 'approve'},
-                                {'id': 'reject', 'label': 'Từ chối', 'kind': 'reject'}]})
+                    'reason': approval_reason(decision, name, args),
+                    'options': approval_options(decision, name, args)})
                 if session['id'] != sid and self.registry.store.get(session['id'])['status'] == 'awaiting_decision':
                     current = self.registry.store.get(session['id'])
                     self.registry.store.save(session['id'], current['messages'], previous_status)
-                return 'allow' if outcome.get('status') == 'approved' and outcome.get('choice') == 'approve' else 'deny'
+                return approval_verdict(outcome, decision, name)
             self.hosts[sid] = HostExecutor(project['path'], policy=policy, approver=approve,
-                                           artifacts_dir=self.profile_dir / 'host-artifacts' / project['id'] / sid)
-        return self.hosts[sid], project
+                                           artifacts_dir=self.profile_dir / 'host-artifacts' / project['id'] / sid,
+                                           desktop=self.desktop, targets=self.targets,
+                                           trusted=bool(project.get('trusted')), overlay=self.overlay)
+        executor = self.hosts[sid]
+        # Người dùng có thể đổi chế độ quyền giữa hai lượt (thanh chat hoặc Settings → Machines):
+        # đọc lại bốn tầng luật trước mỗi lời gọi tool để lượt sau không dùng bản cũ.
+        executor.policy.reload()
+        # Cùng lý do với quyền: người dùng có thể xác nhận tin cậy folder SAU khi phiên đã mở. Đọc
+        # lại ở đây để "tin cậy" không bị ghim ở giá trị lúc dựng executor.
+        executor.trusted = bool(project.get('trusted'))
+        return executor, project
 
     async def execute(self, name, args, session, **identity):
         if not session:
             return await self.legacy.execute(name, args, session, **identity)
-        if self.registry.store.get(session) is None:
+        # `SessionStore.get` ném `KeyError` khi thiếu phiên, nên phải bắt: đường admin dùng mã tổng
+        # hợp, và trước đây chúng nổ 500 ở đây thay vì đi tiếp xuống executor cũ.
+        try:
+            known = self.registry.store.get(session) is not None
+        except KeyError:
+            known = False
+        if not known:
             # Existing admin readiness/index callers use synthetic identifiers, not sessions.
             return await self.legacy.execute(name, args, session, **identity)
         try:
@@ -263,10 +463,15 @@ class SessionMachineExecutor:
             if binding['mode'] == 'docker':
                 return await self.legacy.execute(name, args, session, **identity)
             host, project = self.host(session)
-            if name not in ('file_read', 'codebase_glob', 'codebase_grep') and not project['trusted']:
+            # Hai công cụ QUAN SÁT của CUA không đòi folder phải tin cậy (kế hoạch §"Đường CUA",
+            # mục 5): chúng chỉ đọc màn hình/cửa sổ mà người dùng đã chọn cho phiên, vẫn qua thẻ duyệt
+            # ở tầng executor. Mọi công cụ ghi/chạy — kể cả `computer_use` — vẫn phải tin cậy folder.
+            observed = name in ('file_read', 'codebase_glob', 'codebase_grep',
+                                'computer_screen_capture', 'inspect_element')
+            if not observed and not project['trusted']:
                 return error_result('PROJECT_TRUST_REQUIRED', 'Xác nhận tin cậy folder trước khi sửa/chạy lệnh.')
-            if name.startswith('computer_') or name == 'inspect_element':
-                return error_result('HOST_CUA_NOT_ENABLED', 'CUA host chưa bật trong checkpoint web hai mode.')
+            # CUA đã bật: chốt cũ `HOST_CUA_NOT_ENABLED` bị gỡ. Riêng việc MỞ ứng dụng còn cần phạm
+            # vi `machine` và folder tin cậy (xem `HostExecutor._launchable_app`).
             root = identity.get('root')
             if root:
                 target = Path(root)
@@ -277,16 +482,46 @@ class SessionMachineExecutor:
         except MachineError as exc:
             return error_result(exc.code, str(exc))
 
+    async def request(self, path, body=None, session=None):
+        """`/__box/*` theo ĐÚNG chế độ của phiên: host ⇒ `.plans` trong folder dự án của phiên.
+
+        Trước đây `request` chỉ được `__getattr__` chuyển tiếp thẳng xuống `legacy`, nên ở host mode
+        mọi lượt đọc chỉ mục plan đều nhắm vào box (không có) và tab Plan mất số liệu. Chỗ gọi cũ
+        không truyền `session` (ví dụ chỉ mục của luồng ghi plan) vẫn đi đường cũ.
+        """
+        if session:
+            # `binding` tự ném `SESSION_NOT_FOUND` cho mã phiên không có trong sổ (chỗ gọi admin
+            # dùng mã tổng hợp), nên chỉ cần bắt `MachineError` là đủ để quay về đường box.
+            try:
+                binding = self.registry.binding(session)
+            except MachineError:
+                binding = None
+            if binding is not None and binding['mode'] == 'host':
+                host, _project = self.host(session)
+                return await host.request(path, body=body, session=session)
+        return await self.legacy.request(path, body=body, session=session)
+
     async def cleanup(self, sid):
+        # Phiên kết thúc thì quyết định đã nhớ của nó cũng hết hiệu lực: `session_rules` là chuyện
+        # của một phiên, không phải một thuộc tính sống mãi của tiến trình (DA1).
+        for key, policy in [item for item in self.session_policies.items() if item[0][1] == str(sid)]:
+            policy.forget_session(sid)
+            self.session_policies.pop(key, None)
         if sid in self.hosts:
             await self.hosts.pop(sid).cleanup(sid)
         else:
             await self.legacy.cleanup(sid)
 
 
-def attach(runtime, profile_dir):
-    registry = MachineRegistry(runtime.store)
-    executor = SessionMachineExecutor(runtime.executor, registry, profile_dir)
+def attach(runtime, profile_dir, *, default_mode=None, default_workspace=None,
+           desktop=None, overlay=None):
+    registry = MachineRegistry(runtime.store, default_mode=default_mode,
+                               default_workspace=default_workspace)
+    # Sổ đích CUA dùng CHUNG một đối tượng cho route và executor: hai bản sao sẽ mất cập nhật của
+    # nhau trong cùng tiến trình (`SessionStore` không phát tín hiệu).
+    targets = cua_target.SessionTargetStore(runtime.store)
+    executor = SessionMachineExecutor(runtime.executor, registry, profile_dir,
+                                      desktop=desktop, overlay=overlay, targets=targets)
     runtime.executor = executor
     runtime.machine_registry = registry
     executor.runtime = runtime
@@ -385,17 +620,244 @@ def register_routes(app, runtime):
     app.router.add_get('/api/agent/machines/projects/{pid}/{op:files|file}', workspace)
     app.router.add_post('/api/agent/machines/projects/{pid}/{op:file|command}', workspace)
 
+    # Chỉ mục + nội dung `.plans` của một folder host. CÙNG payload với `/__box/plans` của box
+    # (một nguồn đọc: `deploy/docker/plan_files.py`), nên tab Plan không phải rẽ nhánh theo chế độ.
+    async def plans_response(request, *, content):
+        try:
+            project = registry.project(request.match_info['pid'])
+            if not Path(project['path']).is_dir():
+                raise MachineError('PROJECT_UNAVAILABLE', 'Folder không còn tồn tại.', 409)
+            from . import host_plans
+            try:
+                if content:
+                    result = await asyncio.to_thread(host_plans.plan_document, project['path'],
+                                                     request.query.get('identity', ''),
+                                                     request.query.get('version', ''))
+                else:
+                    result = await asyncio.to_thread(host_plans.plan_manifest, project['path'])
+            except host_plans.HostPlanReaderUnavailable as exc:
+                raise MachineError('PLAN_READER_UNAVAILABLE', str(exc), 501) from None
+            except Exception as exc:
+                # Lỗi của bộ đọc giữ nguyên mã HTTP của nó (404 thiếu bản, 400 identity sai...).
+                status, message = host_plans.error_status(exc)
+                raise MachineError('PLAN_REQUEST_INVALID' if status < 500 else 'PLAN_READ_FAILED',
+                                   message, status) from None
+            return web.json_response(result)
+        except MachineError as exc:
+            return web.json_response({'error': f'{exc.code}: {exc}', 'code': exc.code}, status=exc.status)
+
+    async def plans(request):
+        return await plans_response(request, content=False)
+
+    async def plans_content(request):
+        return await plans_response(request, content=True)
+
+    app.router.add_get('/api/agent/machines/projects/{pid}/plans', plans)
+    app.router.add_get('/api/agent/machines/projects/{pid}/plans/content', plans_content)
+
+    # -- Đích CUA theo phiên: người dùng chọn cửa sổ / cả máy ------------------
+    def _session_targets():
+        targets = getattr(runtime.executor, 'targets', None)
+        if targets is None:
+            raise MachineError('CUA_UNAVAILABLE', 'Đích CUA chưa sẵn sàng trên tiến trình này.', 409)
+        return targets
+
+    def _target_session(sid):
+        """Kiểm mã phiên rồi trả `(sid, binding)`. Lỗi ⇒ `MachineError` như mọi route khác."""
+        if not sid:
+            raise MachineError('SESSION_NOT_FOUND', 'Thiếu mã phiên.', 404)
+        try:
+            binding = registry.binding(sid)
+        except MachineError as exc:
+            raise MachineError('SESSION_NOT_FOUND', str(exc), 404) from None
+        if binding['mode'] != 'host':
+            raise MachineError('HOST_SESSION_REQUIRED', 'Phiên này sử dụng Docker.', 409)
+        return sid, binding
+
+    def _cua_enabled():
+        desktop = getattr(runtime.executor, 'desktop', None)
+        return bool(desktop is not None and getattr(desktop, 'platform', None) is not None)
+
+    def _window_payload(window):
+        """`{windowId, pid, title, processName, rect}` — thứ panel cần để vẽ viền."""
+        if window is None:
+            return None
+        entry = cua_target.window_entry(window)
+        rect = window_rect_payload(window)
+        if rect:
+            entry['rect'] = rect
+        return entry
+
+    def _target_state(sid):
+        """Hình dạng chung của `GET|PUT|DELETE /api/agent/machines/target`."""
+        targets = _session_targets()
+        meta = targets.read_meta(sid)
+        target = meta.get('target')
+        windows = registry_windows()
+        effective, reason = target, None
+        if cua_target.is_window(target):
+            # Cửa sổ phải được kiểm lại mỗi lần đọc: hwnd bị tái dùng sau restart là chuyện thật.
+            alive = cua_target.verify_window(target, windows)
+            effective, reason = alive, (None if alive is not None else 'window_gone')
+        active = None
+        overlay = getattr(runtime.executor, 'overlay', None)
+        snapshot = overlay.snapshot() if overlay is not None else None
+        if snapshot and snapshot.get('visible') and snapshot.get('windowId'):
+            hwnd = cua_target.as_int(snapshot['windowId'])
+            active = _window_payload(next((item for item in windows
+                                           if cua_target.as_int(item.get('windowId')) == hwnd), None))
+        scope = _target_scope()
+        payload = {'sessionId': sid, 'target': target, 'effective': effective,
+                   'effectiveReason': reason, 'requestedBy': meta.get('requestedBy'),
+                   'inheritedFrom': meta.get('inheritedFrom'), 'revision': meta.get('revision') or 0,
+                   'updatedAt': _iso_time(meta.get('at')),
+                   'scope': scope, 'cuaEnabled': _cua_enabled(), 'activeWindow': active,
+                   'activity': snapshot or None,
+                   'machineAllowed': cua_target.scope_allows_machine(scope)}
+        return payload
+
+    def _iso_time(value):
+        """Mốc thời gian của sổ phiên (giây epoch) ⇒ ISO-8601 UTC cho panel, hoặc `None`."""
+        try:
+            return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(float(value)))
+        except (TypeError, ValueError):
+            return None
+
+    def _target_scope():
+        policy = getattr(runtime.executor, 'permissions_policy', None)
+        try:
+            return str(policy().scope_value()) if callable(policy) else ''
+        except Exception:
+            return ''
+
+    def _desktop_platform():
+        """Nền tảng desktop mà executor đang dùng (Windows: Win32; Linux: X11), hoặc `None`.
+
+        Route PHẢI hỏi executor chứ không tự chọn: panel và agent phải nhìn cùng một màn hình. Chỉ
+        khi executor không có nền tảng nào (chế độ Docker, hoặc bản cũ) mới rơi về mặc định Windows —
+        giữ nguyên hành vi cũ ở đó.
+        """
+        executor = getattr(runtime, 'executor', None)
+        getter = getattr(executor, 'desktop_platform', None)
+        if callable(getter):
+            try:
+                platform = getter()
+            except Exception:
+                platform = None
+            if platform is not None:
+                return platform
+        from .win import windows_platform
+        return windows_platform.get_platform()
+
+    def _capture_module():
+        """Mô-đun chụp khớp với :func:`_desktop_platform` (Windows: GDI; Linux: X11)."""
+        executor = getattr(runtime, 'executor', None)
+        getter = getattr(executor, 'desktop_capture', None)
+        if callable(getter):
+            try:
+                module = getter()
+            except Exception:
+                module = None
+            if module is not None:
+                return module
+        from .win import capture
+        return capture
+
+    def registry_windows():
+        """Danh sách cửa sổ để kiểm/khớp đích. Nền tảng không đọc được ⇒ danh sách rỗng."""
+        try:
+            return _capture_module().list_windows(platform=_desktop_platform(),
+                                                  include_minimized=True)
+        except Exception:
+            return []
+
+    async def target(request):
+        try:
+            if request.method == 'GET':
+                sid, _binding = _target_session(request.query.get('sessionId'))
+                return web.json_response(_target_state(sid))
+            if request.method == 'DELETE':
+                sid, _binding = _target_session(request.query.get('sessionId'))
+                _session_targets().clear(sid)
+                overlay = getattr(runtime.executor, 'overlay', None)
+                if overlay is not None:
+                    overlay.hide('target_cleared')
+                return web.json_response(_target_state(sid))
+            values = await request.json()
+            if not isinstance(values, dict):
+                raise MachineError('TARGET_KIND_INVALID', 'Thân yêu cầu phải là JSON object.', 400)
+            # Nhận CẢ hai dạng: phẳng (`{sessionId, kind, windowId}`) và lồng (`{sessionId, target:{…}}`).
+            # Hai bản mô tả hợp đồng trong bộ kế hoạch dùng hai dạng khác nhau; nhận cả hai rẻ hơn
+            # một lần lệch hợp đồng giữa backend và panel.
+            nested = values.get('target')
+            merged = dict(values)
+            if isinstance(nested, dict):
+                merged.update(nested)
+            sid, _binding = _target_session(values.get('sessionId'))
+            if values.get('consent') is not True:
+                raise MachineError('TARGET_CONSENT_REQUIRED',
+                                   'Người dùng phải tự chọn đích cho phiên này.', 403)
+            kind = str(merged.get('kind') or '').strip()
+            if kind not in cua_target.KINDS:
+                raise MachineError('TARGET_KIND_INVALID',
+                                   'Đích phải là `window` hoặc `machine`.', 400)
+            targets = _session_targets()
+            expected = values.get('expectedRevision')
+            if expected is not None and int(expected) != (targets.read_meta(sid).get('revision') or 0):
+                raise MachineError('TARGET_REVISION_CONFLICT',
+                                   'Đích vừa đổi ở nơi khác; tải lại rồi chọn lại.', 409)
+            if kind == cua_target.KIND_MACHINE:
+                scope = _target_scope()
+                if not cua_target.scope_allows_machine(scope):
+                    raise MachineError('CUA_MACHINE_SCOPE_REQUIRED',
+                                       'Đích cả máy cần phạm vi quyền `machine`.', 403)
+                targets.write(sid, {'kind': cua_target.KIND_MACHINE}, set_by='user')
+                return web.json_response(_target_state(sid))
+            windows = registry_windows()
+            hwnd = cua_target.as_int(merged.get('windowId'))
+            match = None
+            for item in windows:
+                if cua_target.as_int(item.get('windowId')) == hwnd:
+                    match = item
+                    break
+            if match is None:
+                raise MachineError('TARGET_UNKNOWN', 'Cửa sổ không còn tồn tại; chọn lại.', 409)
+            pid = cua_target.as_int(merged.get('pid'))
+            if pid is not None and cua_target.as_int(match.get('pid')) != pid:
+                raise MachineError('TARGET_CHANGED', 'Cửa sổ đã đổi chủ; chọn lại.', 409)
+            targets.write(sid, cua_target.window_entry(match), set_by='user')
+            return web.json_response(_target_state(sid))
+        except MachineError as exc:
+            return web.json_response({'error': f'{exc.code}: {exc}', 'code': exc.code}, status=exc.status)
+        except (TypeError, ValueError) as exc:
+            return web.json_response({'error': f'TARGET_KIND_INVALID: {exc}', 'code': 'TARGET_KIND_INVALID'}, status=400)
+    app.router.add_get('/api/agent/machines/target', target)
+    app.router.add_put('/api/agent/machines/target', target)
+    app.router.add_delete('/api/agent/machines/target', target)
+
     # User-selected snapshot preview only. No hooks, input, personal browser attachment or auto capture.
     previews = {}
     async def screen(request):
         try:
-            from .win import capture, windows_platform
-            platform = windows_platform.get_platform()
+            capture = _capture_module()
+            platform = _desktop_platform()
             if request.method == 'GET':
                 return web.json_response({'windows': capture.list_windows(platform=platform)})
             values = await request.json()
             if values.get('consent') is not True:
                 raise MachineError('SCREEN_CONSENT_REQUIRED', 'Cấp quyền xem đúng cửa sổ trước khi chụp.', 403)
+            if values.get('kind') == 'machine':
+                # Cả màn hình ảo: đích "cả máy" của phiên. Vẫn cần `consent` như mọi lần chụp.
+                capture.set_dpi_awareness(platform=platform)
+                shot = capture.capture_screen(platform=platform)
+                import base64
+                png = capture.encode_png(shot)
+                left, top = (shot.bounds or (0, 0))[:2]
+                return web.json_response({'image': base64.b64encode(png).decode('ascii'), 'mime': 'image/png',
+                                          'width': shot.width, 'height': shot.height, 'kind': 'machine',
+                                          'captureOrigin': {'x': int(left), 'y': int(top)},
+                                          'captureSize': {'width': int(shot.width), 'height': int(shot.height)},
+                                          'hash': hashlib.sha256(png).hexdigest(), 'untrusted': True})
             hwnd, pid = int(values.get('windowId')), int(values.get('pid'))
             if platform.get_window_pid(hwnd) != pid:
                 raise MachineError('SCREEN_TARGET_CHANGED', 'Cửa sổ đã đổi; chọn lại.', 409)
@@ -441,8 +903,11 @@ def register_routes(app, runtime):
                 previews.pop(next(iter(previews)))
             previews[snapshot_id] = {'hwnd': hwnd, 'fingerprint': fingerprint, 'expires': time.monotonic() + 60,
                                      'hash': hashlib.sha256(png).hexdigest()}
+            left, top = (shot.bounds or (0, 0))[:2]
             return web.json_response({'image': base64.b64encode(png).decode('ascii'), 'mime': 'image/png',
                                       'width': shot.width, 'height': shot.height, 'windowId': hwnd, 'pid': pid,
+                                      'captureOrigin': {'x': int(left), 'y': int(top)},
+                                      'captureSize': {'width': int(shot.width), 'height': int(shot.height)},
                                       'hash': hashlib.sha256(png).hexdigest(), 'snapshotId': snapshot_id, 'untrusted': True})
         except MachineError as exc:
             return web.json_response({'error': f'{exc.code}: {exc}', 'code': exc.code}, status=exc.status)

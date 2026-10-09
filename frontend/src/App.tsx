@@ -229,8 +229,9 @@ export default function App() {
     pendingIntents.filter((intent) => intent.tab === tab).length
 
   function renderActiveTab() {
-    if (machine.mode === 'host' && activeTab && ['plan', 'research', 'design', 'pull_requests'].includes(activeTab)) {
-      return <div className="p-6 text-xs text-muted">This panel's artifact transport is not connected to the selected host folder in this checkpoint. It will not load Docker data as host data. The tab remains available; use Docker for its existing document workflow until host artifact integration is verified.</div>
+    if (machine.mode === 'host' && activeTab === 'pull_requests') {
+      // PR là bảng mock ở cả hai chế độ (chưa có tuyến backend) — nói đúng thế thay vì để trống.
+      return <div className="p-6 text-xs text-muted">Pull Requests has no backend feed yet, so this tab shows no data in either mode. The rest of the workspace reads the selected host folder.</div>
     }
     if (showModeSwitch && activeTab === 'plan') {
       return <ModeSwitchCard proposal={proposal!} rejectBundle={rejectBundle} />

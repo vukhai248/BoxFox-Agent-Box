@@ -2707,3 +2707,138 @@ thay bằng `{}` mà model chỉ nhận một câu *"Invalid tool arguments"* �
   connection sau. Ghi ở `docs/handoff/v29-keyring-handoff.md` §8 kèm cách sửa gợi ý.
 - **Vẫn KHÔNG có lượt research thật nào** ghi `.research/**`; `manifest.json` còn `measured: false`; **C-7** và
   **F19** giữ nguyên hiệu lực.
+
+## Vòng 2026-10-08 — CUA trên Linux/X11: ca dùng VS Code, độ trung thực khi gõ, và đo latency/token
+
+Vòng này theo yêu cầu chủ sở hữu: *"test kỹ hơn về CUA… mò ra các usecase để test CUA"* và
+*"đo token và latency… đo latency từ lúc 1 task CUA giao đến khi hoàn tất"*.
+
+**Ca dùng thật đã chạy hết (mở VS Code → mở tệp → gõ mã → lưu → mở terminal → chạy):**
+`code --reuse-window /var/tmp/cua-work/hello.py` → gõ chương trình 111 ký tự → `Ctrl+S`
+(`tệp trên đĩa: 111 ký tự KHỚP`) → mở terminal (`Ctrl+`` ``, rồi **bấm vào trong khung** vì
+`Ctrl+`` `` không đưa tiêu điểm bàn phím vào terminal) → `cd /var/tmp/cua-work && python3 hello.py`
+→ `ran.txt: 5` ⇒ **ĐẠT**. Hai hộp thoại chặn giữa đường được xử lý bằng chính CUA: hộp thoại ghi đè
+tệp (bấm bằng CUA) và hộp thoại *"Do you trust the authors of the files in this workspace?"* (bấm
+`Trust Workspace & Continue` tại toạ độ ảnh (721, 496) → màn hình (1081, 636) trong **89 ms**; trước
+khi vá BUG-117 thao tác này hoặc bị từ chối, hoặc treo).
+
+**Độ trung thực khi gõ (đo trước/sau khi vá BUG-115):** cùng một payload
+`Xin chào Cửa sổ! áàảãạ ăâđôơư` — trước khi vá 0/3 lượt khớp (nhận `Xin cho Ca s!`), sau khi vá
+**35/35 ký tự khớp trên 3/3 lượt**, kể cả khi có luồng nền chụp ảnh cửa sổ 50 ms một lần để tạo tải
+cho X server. Gõ chữ hoa ngoài ASCII còn sai (BUG-118, giới hạn `xdotool`) — ghi nhận, chưa vá.
+**Gõ khi máy bận (BUG-119, cùng vòng):** quay phim màn hình bằng ffmpeg 12 fps rồi gõ lại đúng câu
+trên vào biểu mẫu web (máy chủ ghi lại đúng byte nhận được): đường cũ chỉ **3/6** lượt sạch (mất
+`ăơ`, `ãơ`, `ử`), mỗi ký tự một lệnh **8/10**, nhịp 60 ms **7/10**; ánh xạ sẵn keysym rồi giữ nguyên
+trong suốt lần gõ: **16/16 lượt sạch** (361–387 ms cho câu 29 ký tự). Chữ hoa tiếng Việt cũng hết
+mất dấu hoa: kiểm byte-chính-xác **26/26 ký tự** `ÁÀẢÃẠĂÂĐÊÔƠƯÉÈẼÍÌĨÓÒÕÚÙŨÝỲ` (440 ms) và 27/27
+chữ thường. Ca dùng web quay lại được trọn vẹn: `/tmp/cua-web/ca-dung-web.mp4` (29/29 ký tự khớp
+trong lúc đang quay).
+
+
+**Đo latency và token** (`backend/tools/cua_bench.py`, chi tiết ở `docs/testing/cua-latency-token.md`):
+`primitives` p50 — `click` 252 → **23 ms**, `press_key` 152 → **26 ms**, `capture_window` 67 → 41 ms
+(và 42 → 14 tiến trình con), `window_from_point` 7,1 → **1,3 ms** (7 → 1 tiến trình),
+`get_window_rect` 1,0 → **0,0 ms** (1 → 0 tiến trình), `type_text` 200 ký tự 1 487 → 1 330 ms.
+`product` — `key` 53 ms, `click` 54 ms, `type_text` 1 358 ms, `screenshot` 19 ms; payload chữ
+94–102 token, một ảnh cửa sổ 1 015×483 ≈ **653 token ảnh**. `case` (giao → xong) **395–408 ms**
+trên 3 lượt, trong đó 154–157 ms là hệ điều hành mở cửa sổ và 220–235 ms là ba thao tác CUA.
+Chỗ còn chậm nhất: **gõ chữ ~6,6 ms/ký tự** (`TYPE_DELAY_MS = 12`).
+
+**Bài kiểm đơn vị:** `backend/tests/unit/test_x11_platform.py` **65 lượt xanh** (44 trước vòng này).
+### Vòng 2026-10-08 (tiếp) — gia cố sau soát mã: chốt hộp thoại, hình học lúc bấm, chốt trần
+
+Vòng soát mã độc lập trên `464af30`+`a7a7454` trả về 8 điểm (3 điểm mức trung bình), trong đó 3
+điểm là hệ quả của chính các bản vá trong vòng này. Đã vá hết:
+
+| Điểm soát | Cách vá | Bằng chứng |
+|---|---|---|
+| Chốt hộp thoại chỉ đòi `WM_TRANSIENT_FOR` — cửa sổ lạ cùng màn hình cũng đặt được | Cửa sổ KHÁC phải khai thêm `_NET_WM_WINDOW_TYPE` là hộp thoại/popup | 3 bài kiểm mới; đo lại trên máy thật với `CuaDialogMain`/`CuaDialogChild`: chốt điểm bấm và chốt tiêu điểm vẫn NHẬN hộp thoại của chính ứng dụng (BUG-117 vẫn được vá), gõ được 2 ký tự |
+| Bộ đệm hình học 0,5 s lọt vào chốt điểm bấm | `check_point_ownership` đọc lại hình học đích tươi ngay trước khi soi điểm | `primitives.click` sau vá: p50 25,3 ms, 9 tiến trình con (thêm 1 `xwininfo`) |
+| Chốt trần im lặng khi thiếu số đo | Duyệt theo danh sách trần: thiếu số đo ⇒ `KHÔNG ĐO ĐƯỢC` + thoát 1 | `{"product.click": {"n": 0, "error": …}}` → 14 mục vượt trần, thoát 1; baseline đủ (primitives+product) → ĐẠT, thoát 0 |
+| `product.screenshot` đo đường báo lỗi `UNSUPPORTED_ACTION` | Đo đúng `computer_screen_capture` | 126 ms, 21 tiến trình con, 1920×1080 ≈ 2 764 token thị giác (số cũ 19 ms là thời gian trả lỗi) |
+| Con trỏ lệch trong lúc chờ tiêu điểm | Vẫn gửi `mousemove`, chỉ bỏ `--sync` khi con trỏ đã đúng chỗ | 2 bài kiểm mới; bấm hai lần cùng điểm: 2 lệnh `mousemove` không `--sync`, 2 lệnh bấm, con trỏ vẫn ở (50,50) |
+| Ghi chú locale hứa hão khi máy không cài locale UTF-8 | Tách `installed_utf8_locale()` và nói thẳng khi máy không có | 4 bài kiểm mới (máy không có locale ⇒ `None` + ghi chú "không cài"; `vi_VN.UTF-8` được dùng) |
+| `list_windows` của công cụ đo đọc sai kích thước và không bỏ qua panel | Đọc thẳng `(x, y, w, h)`, so lớp không phân biệt hoa/thường | Trước: terminal 715×141 → 671×33, panel 1632×−998. Sau: 715×141, chọn đúng `cua-truoc` |
+| Đo INPUT có thể gõ vào cửa sổ bất kỳ của người dùng | Không có cửa sổ chỉ định thì TỪ CHỐI, thay vì chọn cửa sổ lớn nhất | `product` không tham số in "không thấy cửa sổ nào giống terminal để đo input" và thoát 2 |
+
+Bài kiểm: `tests/unit/test_x11_platform.py` **81 đạt** (73 → 81), `tests/unit/test_cua_bench_budget.py`
+**7 đạt** (mới). Số đo sau gia cố: `primitives` — `get_foreground_window` 1,4 ms, `get_cursor_pos`
+2,6 ms, `get_window_rect` 0,0 ms (0 tiến trình), `window_from_point` 1,2 ms (1), `window_properties`
+2,1 ms, `capture_window` 35,6 ms (14), `capture_screen` 49,5 ms, `press_key` 26,8 ms, `click` 25,6 ms,
+`type_text` 200 ký tự 1 323 ms; `product` — `key` 60 ms (31 tiến trình con), `click` 65 ms (35),
+`type_text` 1 369 ms (47), `screenshot` 126 ms (21); `case` (giao → xong) 397–462 ms.
+
+### Vòng 2026-10-08 (tiếp) — lượt kiểm trên `f90d0ea`: 16/16 hạng mục ĐẠT, tìm thêm một lỗi và đã vá
+
+Lượt kiểm độc lập chạy 16/16 hạng mục kế hoạch (unit suite, gõ chữ có dấu/hoa qua đường sản phẩm,
+bấm hai lần cùng điểm, kịch bản hộp thoại, hồi quy `case`, đối kháng cửa sổ lạ che điểm bấm, bốn lệnh
+của bộ đo, và bảng Machine trên web) — **ĐẠT hết**. Kết quả đáng chú ý:
+
+- Gõ chữ: đường sản phẩm `utf8` 828,7 ms / `upper` 729,3 ms, tệp byte-exact; qua biểu mẫu web trong
+  Chrome ba payload `lower`/`mixed`/`upper` đều `exact_match=true` (473/564/473 ms).
+- Bấm hai lần cùng điểm: **126,7 ms và 65,7 ms**, không `SOURCE_CHANGED` — trước khi vá: 5084/5078 ms
+  kèm `mousemove` hết thời gian chờ.
+- Kịch bản hộp thoại 7/7 PASS (chụp 75,1/55,6 ms, ghép đúng, click 60,9 ms, key 55,3 ms, type 63,5 ms)
+  — trước khi vá: từ chối `SOURCE_CHANGED`, key/type treo 5,5 s.
+- Đối kháng (cửa sổ lạ che điểm bấm): từ chối `SOURCE_CHANGED` trong 62,7 ms — chốt vẫn chặt.
+- Bộ đo: mọi phép đo dưới trần; `budget` ĐẠT (exit 0); nâng trần giả ⇒ `VƯỢT TRẦN` exit 1; xoá số đo ⇒
+  `KHÔNG ĐO ĐƯỢC` exit 1; 200 ký tự sống ⇒ `đúng 200 chữ x: True`.
+- Bảng Machine: chạy được cả từ `localhost:3100` lẫn địa chỉ preview công khai; picker 9–10 cửa sổ.
+
+**Lỗi thứ tư do lượt kiểm tìm ra và đã vá (`10f8bee`) — BUG-126:** `capture_window` bỏ sót hộp thoại
+của chính ứng dụng khi cửa sổ đích **vẫn giữ tiêu điểm**. Khung hình trực tiếp trên bảng Machine là
+nền phẳng (mọi pixel `(32,48,64)`), hộp thoại con đang mở nằm trên nhưng không có trong ảnh. Nguyên
+nhân: cổng cũ đoán "hộp thoại modal luôn giữ tiêu điểm" nên chỉ dò khi cửa sổ bị che hoặc tiêu điểm đã
+đi — sai với hộp thoại **không modal** (`UTILITY`/`POPUP_MENU`/`TOOLTIP`/`NOTIFICATION`). Đã bỏ hẳn
+cổng đoán, luôn dò (`transient_windows` 1,19 ms ấm / 6,31 ms nguội; `capture_window` 49,0–49,4 ms so
+với trần 150 ms). Hai bài kiểm mới phủ đúng ca lọt lưới; tổng `test_x11_platform.py` **83 lượt xanh**,
+cộng 7 lượt của `test_cua_bench_budget.py` là **90**.
+
+Cấu hình cần nhớ: harness host 3112 phải có `BOXFOX_UI_ORIGINS` (nếu không, bảng Machine trả 403
+`Local administration required` khi mở từ địa chỉ preview công khai). Biến này mất khi harness khởi
+động lại bằng lệnh cũ — xem `/var/tmp/harness-3112.env.txt`.
+### Vòng 2026-10-08 (tiếp) — bốn ca dùng thật cho cử chỉ: Jupyter, cuộn, kéo thả, giữ, vẽ như Paint
+
+Người dùng hỏi bốn việc: gõ mã vào sổ tay `.ipynb`, cuộn, kéo thả, giữ chuột, và vẽ như Paint. Cả
+bốn ca đều chạy qua **đúng đường sản phẩm** (`HostExecutor.execute` → `computer_use`), và mỗi ca có
+bằng chứng nằm ngoài ảnh chụp — máy chủ của trang ghi lại sự kiện, tệp `.ipynb` ghi lại nguồn và đầu
+ra, tệp PNG ghi lại điểm ảnh.
+
+| Ca | Cách làm | Bằng chứng (ngoài ảnh chụp) |
+|---|---|---|
+| Gõ mã vào sổ tay `.ipynb` | Mở `http://127.0.0.1:3210/notebooks/phep-tinh.ipynb` (Jupyter Notebook 7.6.3, `ipykernel`), bấm vào ô trống, gõ 2 dòng mã có dấu tiếng Việt, `Ctrl+Enter`, `Ctrl+S` | Tệp `.ipynb` sau khi lưu: `source = ["ten = 'Cửa sổ Việt Nam'\n", "print(ten, len(ten), 6 * 7)"]`, `outputs = [{"name": "stdout", "text": ["Cửa sổ Việt Nam 15 42\n"]}]`, `execution_count = 1`. Chữ có dấu **nguyên byte**, `len(ten) = 15` và `6 * 7 = 42` do **kernel thật** tính. Dấu ngoặc và dấu nháy không bị ô tự đóng ngoặc làm hỏng |
+| Cuộn | Bấm vào vùng cuộn rồi `scroll` xuống 5 bước × 3 lượt | Trang gửi `{"kind": "scroll", "scrollTop": 1800, "scrollHeight": 14525}` |
+| Kéo thả | `drag` từ ô "KÉO Ô NÀY" sang ô "THẢ VÀO ĐÂY" (`steps=24`) | Sự kiện `drop` của HTML5: `{"kind": "drop", "text": "bo-dat-42"}` — dữ liệu do `dragstart` đặt tới được đích |
+| Kéo thanh trượt | `drag` từ đầu trái sang đầu phải thanh trượt | `{"kind": "slider", "value": 95}` |
+| Giữ chuột | `hold` 1,5 giây trên nút | Trang tự đo: `{"kind": "hold", "ms": 1504}` |
+| Vẽ như Paint | mtPaint 3.50: `F4` (công cụ Paint), Size 4, rồi ba nét `stroke` (vòng tròn 49 điểm, sóng 60, tam giác 64), `Ctrl+S`, gõ tên tệp vào hộp thoại lưu | Tệp `mtpaint-ve.png` 640×480: **7 172 điểm ảnh `(255,0,0)`** trên nền đen — đúng ba hình đã vẽ |
+
+Số đo cử chỉ qua đường sản phẩm (p50/p95, 3 lượt): `scroll` 5 bước 115,0/116,2 ms; `drag` 12 bước
+251,1/255,1 ms; `hold` 0,5 giây 567,9/568,4 ms; `stroke` 61 điểm 709,2/711,4 ms. Chốt trần (gộp ba
+tệp đo, đã thêm bốn trần mới) báo **ĐẠT**, mã thoát 0.
+
+Lượt này **tìm thêm một lỗi** (BUG-127, xem `bug-register.md` §6.43) đúng lúc đang làm ca Paint: hộp
+thoại lưu của mtPaint khai `WM_TRANSIENT_FOR` nhưng không khai loại hộp thoại, nên chốt từ chối mọi
+`type`/`key` và **không gõ được tên tệp**. Đã vá (`_NET_WM_PID` cùng tiến trình được nhận), 2 bài
+kiểm mới, và ca Paint chạy lại thành công. Bài học lặp lại lần thứ hai trong ngày: lỗi chỉ hiện ra
+khi chạy **ứng dụng thật**, không phải khi đọc mã.
+
+Môi trường cho lượt này: cài thêm `mtpaint` (`apt-get install mtpaint`) và một venv Jupyter riêng ở
+`/var/tmp/nbvenv` (`pip install notebook`, bản 7.6.3) — máy ảo không có sẵn cả hai.
+
+Vòng soát mã ngay sau đó (cùng ngày, trước khi mở PR) bắt **bốn** chỗ nữa và đã vá hết trong cùng
+nhánh: `stroke` thiếu chốt điểm cuối (một nét vẽ chạy quá mép cửa sổ đích là một cú thả vào cửa sổ
+khác — `drag` đã canh từ đầu, `stroke` thì chưa); lệnh nhả chuột hỏng không được nhả lại (vì
+`_xdotool` trả kết quả hỏng chứ không ném lỗi); `_box_button` im lặng biến tên nút sai thành chuột
+trái; và ba kế hoạch cử chỉ của box không có bài kiểm nào. Vòng đó thêm 17 bài kiểm (tổng 45 cho cả
+đợt cử chỉ) và sửa một lời khẳng định **sai** trong tài liệu về `_NET_WM_PID` (nó là gợi ý do ứng
+dụng tự khai, không phải dấu hiệu X server kiểm chứng — chốt này chống tai nạn, không chống kẻ xấu).
+## Vòng 2026-10-08 (chiều) — viền báo CUA trên Linux, đo một lượt, mã lỗi tự giải thích, dò suy luận theo provider, panel tự mở
+
+- Phạm vi: năm yêu cầu của chủ nhà (viền xanh báo vùng đang bị CUA trên desktop; thời gian từ đề nghị tới trả lời; kiểm thử toàn diện; thử model `fledge-alpha-free`/`exo-free` của OpenCode; harness có tự mở bảng plan/canvas không). Năm nhóm việc J/K/L/M/N.
+- Kết quả đơn vị: nhóm J **578 passed, 1 skipped** (14 tệp CUA/host, gồm `test_x11_overlay.py` mới 31 ca); nhóm L **348 passed** (`test_recovery_policy.py` 211 + `test_tool_contracts.py` 137); nhóm K `test_turn_latency.py` **10 passed** + `test_cua_bench_budget.py` 17; nhóm M router **325/325** và frontend 170 ca; nhóm N frontend **43 passed** (ba tệp ý định tab) + `tsc -b` sạch. Ba bài hỏng sẵn trên `main` vẫn hỏng, cộng hai bài `test_claude_worker_router.py` hỏng vì máy này **có** `bubblewrap` (bài kiểm khẳng định là không có) — không do đợt này.
+- Chạy thật trên máy này (`DISPLAY=:1`, Xvnc 1920×1080, XFCE, **không compositor**): viền Linux hiện quanh cửa sổ thật (băng 135 px, `#38bdf8` pha dần), bấm xuyên qua đúng, `_NET_CLIENT_LIST_STACKING` 13 → 13, ảnh chụp cửa sổ **540 000 byte giống hệt** trước/sau, pixel ba vòng khớp phép pha **chênh 0**, `BOXFOX_CUA_OVERLAY=0` tắt hẳn, thiếu `python-xlib` ⇒ CUA vẫn chạy + `activity.reason` nêu tên gói.
+- Bộ đọc thời gian: `tools/turn_latency.py` in **145,7 ms** cho lượt hỏng duy nhất trong sổ thật và nói thẳng **"chưa đo được lượt CUA nào"** (máy này chưa từng có lượt CUA trọn vẹn). Phép dò suy luận: `fledge-alpha-free` đo được 4 mức, `space-bunny-free` 4 mức; `exo-free` không có trong quyền của tài khoản (404) — router giờ nói rõ vì sao.
+- Lỗi tìm được: **BUG-128** (đọc sai `(left,top,right,bottom)` thành `(x,y,w,h)` ở cả hai nền tảng — viền Windows đang vẽ sai kích thước), **BUG-129** (kết quả công cụ đỏ mà không có mã ⇒ lời khuyên sai), **BUG-130** (48 mã CUA/host không mã nào tự giải thích), **BUG-131** (model suy luận mà UI không biết), **BUG-132** (ý định mở tab bị xếp hàng thì không thấy), **BUG-133**/**BUG-134** (hai lỗi của chính viền Linux mới, bắt được bằng phép đo trên X thật). Chi tiết ở `bug-register.md` §6.44.
+- Bằng chứng: `images/cua-border-window.png`, `images/cua-border-machine.png`, `images/cua-vien-x11-spike*.png`; số thô `/var/tmp/j7_final_report.txt`.
+- Chưa kiểm chứng được: viền trên **Windows** (máy này là Linux — cần ảnh chụp của chủ nhà), máy **có compositor**, **Wayland**, harness **docker**, tác động CPU/điện của một lượt CUA dài, và "agent có hành xử khôn hơn không" sau khi có lời khuyên (chỉ ghim được cái agent **nhận**).

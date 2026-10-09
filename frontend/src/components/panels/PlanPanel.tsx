@@ -26,8 +26,9 @@ import { useUiStore } from '../../store/uiStore'
 import { PlainText } from '../ui'
 import { MarkdownRenderer } from '../chat/MarkdownRenderer'
 import { usePlanFiles } from '../../hooks/usePlanFiles'
+import { useActiveMachine } from '../../hooks/useActiveMachine'
 import { useT, type TKey } from '../../i18n/context'
-import { planRejection, planStamp } from '../../lib/plans'
+import { createPlanRepository, createPlanStatusClient, planRejection, planStamp } from '../../lib/plans'
 import type { PlanReviewState } from '../../lib/plans'
 import { PlanEvalCard } from './PlanEvalCard'
 import { PlanReviewCard, VERIFY_CHIP, type KnownVerificationState } from './PlanReviewCard'
@@ -94,8 +95,23 @@ export function PlanPanel() {
   /** Ý định tự mở tab của agent có thể chỉ đích danh một identity/version. */
   const planTarget = useUiStore((s) => s.tabIntentTargets.plan)
 
-  /** Nguồn plan duy nhất: thư mục .plans của sandbox (không còn danh sách version giả). */
-  const planFiles = usePlanFiles()
+  /**
+   * Nguồn plan duy nhất: thư mục `.plans` của máy đang chọn (không còn danh sách version giả).
+   *
+   * Docker đọc qua box; host đọc qua harness theo folder dự án của phiên. Hai đường, MỘT payload
+   * (`deploy/docker/plan_files.py`), nên phần render bên dưới không phải biết mình đang ở máy nào.
+   */
+  const machine = useActiveMachine()
+  const planRepository = useMemo(
+    () => createPlanRepository(import.meta.env, { mode: machine.mode, projectId: machine.projectId }),
+    [machine.mode, machine.projectId],
+  )
+  // Sổ duyệt là của harness; host mode cần mã phiên để biết đọc `.plans` ở folder nào.
+  const planStatusClient = useMemo(
+    () => createPlanStatusClient(machine.mode === 'host' ? activeSessionId : undefined),
+    [machine.mode, activeSessionId],
+  )
+  const planFiles = usePlanFiles(planRepository, planStatusClient)
   const workflowRun = usePlanStore(s => s.runs.find(r =>
     (r.document?.identity === planFiles.selection?.identity && r.document?.version === planFiles.selection?.version) ||
     r.documents?.some(d => d.identity === planFiles.selection?.identity && d.version === planFiles.selection?.version)))
@@ -1139,7 +1155,7 @@ export function PlanPanel() {
                   {planFiles.document ? (
                     <div className="space-y-2 text-xs text-muted">
                       <p className="leading-relaxed">
-                        {t('plan.sourceNotice')}
+                        {t(machine.mode === 'host' ? 'plan.sourceNoticeHost' : 'plan.sourceNotice')}
                       </p>
                       <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
                         <div>{t('plan.size')}: <span className="text-fg">{(planFiles.document.sizeBytes / 1024).toFixed(1)} KB</span></div>

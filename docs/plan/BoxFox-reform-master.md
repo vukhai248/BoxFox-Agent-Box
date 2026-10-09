@@ -1194,7 +1194,7 @@ Rule recorded in §39.17.5: commits after `6adbe78` are NOT part of this measure
 | Field | Detail |
 |---|---|
 | IDs | W6.1 C4 (integration verification), W6.1 C5 (handoff/finalization) |
-| Source | `docs/plan/Work-Graph-fix.md:1111` ("C1–C3 và retest mục tiêu đã đạt. C4 tích hợp, C5 báo cáo/evidence và chốt nghiệm thu còn mở"); `:1535` (C4 checklist line); `:1567–1568` (C4/C5 definitions); `:3120` (§39.6 open list); `docs/plan/CLOUD-AGENT-HANDOFF-03_10.md:105`; `docs/plan/W6.Q-adjudication.md:243` |
+| Source | `docs/plan/Work-Graph-fix.md:1111` ("C1–C3 và retest mục tiêu đã đạt. C4 tích hợp, C5 báo cáo/evidence và chốt nghiệm thu còn mở"); `:1535` (C4 checklist line); `:1567–1568` (C4/C5 definitions); `:3120` (§39.6 open list); `docs/handoff/archive/CLOUD-AGENT-HANDOFF-03_10.md:105`; `docs/plan/W6.Q-adjudication.md:243` |
 | Status | `DECISION` + partial `CODE` (C1–C3 committed `814736f5`); C4/C5 acceptance not started |
 | Dependency | Runs after W10.F completes (#6477); needs one real round: main → producer → checks → repair/version mới → whole review; then handoff + evidence + CUA (CUA not run = NOT RUN) |
 | Evidence | `W6.1.3-verify-findings-evidence.json`, `W6.1-integration-assessment.md/json`, `W6.1-plan-baseline-final-evidence.json`, etc. |
@@ -1659,7 +1659,7 @@ Machine env: §214 + ADR-0001/isolation ADR decisions → D1–D4 → M1–M7 �
 
 ## 18. Evidence index (key artifacts)
 
-**Canonical / handoff docs:** `docs/plan/Work-Graph-fix.md` (canonical; §34.2/34.4 open-W tables; §37 W11; §38 W12; §39 current rounds) · `docs/plan/CLOUD-AGENT-HANDOFF-03_10.md` · `docs/plan/cloud-pr-audit-03_10.md` · `docs/plan/handoff-03_10.md` · `docs/plan/review-simplify-03_10.md` · `docs/handoff/v29-keyring-handoff.md` · `docs/handoff/research-verification.md` · `docs/handoff/research-v2-live-addendum-2026-09-25.md` · `docs/tracking/owner-decisions.md` · `docs/tracking/bug-register.md` · `docs/tracking/test-rounds.md`.
+**Canonical / handoff docs:** `docs/plan/Work-Graph-fix.md` (canonical; §34.2/34.4 open-W tables; §37 W11; §38 W12; §39 current rounds) · `docs/handoff/archive/CLOUD-AGENT-HANDOFF-03_10.md` · `docs/plan/cloud-pr-audit-03_10.md` · `docs/handoff/archive/handoff-03_10.md` · `docs/plan/review-simplify-03_10.md` · `docs/handoff/v29-keyring-handoff.md` · `docs/handoff/research-verification.md` · `docs/handoff/research-v2-live-addendum-2026-09-25.md` · `docs/tracking/owner-decisions.md` · `docs/tracking/bug-register.md` · `docs/tracking/test-rounds.md`.
 
 **Evidence JSONs (docs/plan/):** `W1.P-preflight`, `W3-output-budget`, `W4-W5-bugfix`, `W5.LEGACY`, `W6-check`, `W6.1-*` (design-followup, input-conflict, integration-followup, notes-scope, plan-baseline-final, recovery, review-unit-version, scope-calibration, source-scope), `W6.1.2-review-followup`, `W6.1.3-*` (checker-duty, design-compact, design-repeat2, plan-compact, verify-findings), `W6.2-producer-quality`, `W6.5-*` (boundary, budget, concurrency, watchdog-boundary), `W6.5.3-helper-budget`, `W7-A2`, `W7-A3.3-card-history`, `W7-foundation`, `W7.1-interview-pagination`, `W7.2-schema-recovery`, `W8-A3.1/2/3`, `W8-A3.3-*` (helper, input, main-decisions, manifest, origin, progress), `W8-A4.1-retest`, `W8.A4.2-scope-guard`, `W8.A4.3-worktree`, `W8.A4.4-ship-scoped`, `W8.A4.5-repair-loop`, `W8.A4.5.N-repair-loop-native`, `W9-recorder-cdp`, `cloud-w10-bundle-audit-03_10.json`.
 
@@ -3315,7 +3315,7 @@ Danh sách dùng để đối chiếu coverage, không phải bảng hoàn thàn
 
 Có **72 file lịch sử** trong inventory này.
 
-- [CLOUD-AGENT-HANDOFF-03_10.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/CLOUD-AGENT-HANDOFF-03_10.md)
+- [CLOUD-AGENT-HANDOFF-03_10.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/handoff/archive/CLOUD-AGENT-HANDOFF-03_10.md)
 - [W11-p0b-inventory.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/W11-p0b-inventory.md)
 - [W11-p1-p2-report.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/W11-p1-p2-report.md)
 - [W12-metadata-inventory.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/W12-metadata-inventory.md)
@@ -3341,7 +3341,7 @@ Có **72 file lịch sử** trong inventory này.
 - [element-selector-plan-v1.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/element-selector-plan-v1.md)
 - [element-selector-spec.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/element-selector-spec.md)
 - [fix-plan-e2e-defects.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/fix-plan-e2e-defects.md)
-- [handoff-03_10.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/handoff-03_10.md)
+- [handoff-03_10.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/handoff/archive/handoff-03_10.md)
 - [next-batch-contract.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/next-batch-contract.md)
 - [next-batch-workspace-decisions-plan.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/next-batch-workspace-decisions-plan.md)
 - [plan-mode-evaluation-runbook.md](https://github.com/i3abyxinhdepqua-lang/BoxFox-Agent-Box/blob/346da069dc0818bb14a1cb49f30187695702f3de/docs/plan/plan-mode-evaluation-runbook.md)

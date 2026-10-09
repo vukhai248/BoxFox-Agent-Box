@@ -57,6 +57,12 @@ export interface ProviderModel {
   /** Nguồn của `thinkingLevels` (trùng `fieldSources.thinking`), kèm mốc và bằng chứng khi không phải dữ liệu live. */
   thinkingSource?: 'live' | 'documented' | 'probe' | 'unknown';
   thinkingAsOf?: string | null;
+  /**
+   * Bằng chứng `thinkingLevels` đã cũ (`opencode-capabilities.THINKING_EVIDENCE_MAX_AGE_DAYS`).
+   * Router tính sẵn theo `asOf`; UI chỉ đọc, không tự đo tuổi — đồng hồ máy khách lệch
+   * với máy chủ thì nhãn "(cũ)" sẽ sai.
+   */
+  thinkingStale?: boolean;
   thinkingEvidence?: string | null;
   health?: 'unknown' | 'ready' | 'unavailable' | 'rate_limited' | 'slow' | 'failed'
   lastProbe?: { status: 'passed' | 'failed'; httpStatus: number; latencyMs: number; testedAt: string; error: string | null }

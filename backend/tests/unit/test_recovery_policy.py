@@ -2,12 +2,21 @@
 
 Sáu bất biến của `recovery_policy` (ghi ở docstring module) mỗi cái có ít nhất một ca ghim riêng,
 cộng thêm ca "mã lạ ⇒ fail closed" và ca mã thật của hệ đều phải khai lớp (không rơi `unknown`).
-Không I/O, không model, không store: chỉ hàm thuần.
+Không model, không store, không mạng: chỉ hàm thuần — riêng §9 đọc hai tệp văn bản (tài liệu phân
+loại + i18n của panel) làm chốt chống trôi giữa ba bề mặt giải thích một mã lỗi.
 """
+import re
+from pathlib import Path
+
 import pytest
 
 from agentbox.agent_core import recovery_policy as policy
 from agentbox.agent_core.tool_contracts import REPLAY_SAFE, replay_class
+from agentbox.sandbox import host_executor as host_executor_module
+from agentbox.sandbox.win import errors as win_errors
+
+#: Câu mà MỌI mã chưa khai nhận được (fail closed). Mã host/CUA phải có câu riêng, khác câu này.
+UNKNOWN_SENTENCE = 'không rõ loại lỗi: dừng ở checkpoint và hỏi chủ nhà'
 
 
 def test_every_decision_has_the_same_shape():
@@ -245,3 +254,189 @@ def test_an_empty_search_changes_the_approach():
     assert result['class'] == 'no_progress'
     assert result['action'] == 'change_approach'
     assert result['replay'] is False
+
+
+# --- 8. Mã host/CUA (đo sống 2026-10-08): mỗi mã phải có lớp VÀ lời khuyên riêng ------------
+
+#: Mã đường host phát ra mà ba nguồn máy đọc được ở dưới KHÔNG liệt kê (đọc thẳng trong mã nguồn):
+#: `host_executor.py:503/505` (lỗi của công cụ tệp), `host_executor._inspect_element` và
+#: `agent_core/cua_target.py`, `machine_router.py:875` + `api/server.py:1150` (route của panel).
+#: Vẫn phải có lớp + lời khuyên: đo 2026-10-08 chúng rơi `unknown` ⇒ agent nhận câu "không rõ loại lỗi".
+EXTRA_HOST_PATH_CODES = ('TARGET_KIND_INVALID', 'INSPECT_FAILED', 'FILE_NOT_FOUND',
+                         'FILE_PERMISSION_DENIED', 'INSPECT_POINT_INVALID')
+
+#: Mọi mã mà bề mặt host/CUA phát ra, lấy từ chính mã nguồn chứ không gõ tay danh sách: hai bảng
+#: của `sandbox/win/errors.py` cộng các hằng `*_CODE` của `sandbox/host_executor.py`. Thiếu một mã ở
+#: đây nghĩa là lỗi CUA thật bị xếp `unknown` ⇒ agent nhận câu "không rõ loại lỗi" rồi nghĩ lại vô ích.
+HOST_SURFACE_CODES = sorted(
+    set(win_errors.ACTION_CODES) | set(win_errors.EMITTED_INSPECT_REASONS)
+    | {value for name, value in vars(host_executor_module).items()
+       if name.endswith('_CODE') and isinstance(value, str)}
+    | set(EXTRA_HOST_PATH_CODES))
+
+
+def test_the_host_surface_code_list_is_not_empty():
+    """Chốt chặn của chính danh sách: một lần đổi tên hằng sẽ làm bộ test rỗng im lặng."""
+    assert len(HOST_SURFACE_CODES) >= 40
+    assert 'PERMISSION_DENIED' in HOST_SURFACE_CODES  # mã đo được trong sổ thật
+    assert 'COMMAND_EXIT_NONZERO' in HOST_SURFACE_CODES  # mã của ca "đỏ mà không có mã"
+    assert 'uia_unavailable' in HOST_SURFACE_CODES  # mã chữ thường, dễ sót khi khai tay
+    assert set(EXTRA_HOST_PATH_CODES) <= set(HOST_SURFACE_CODES)
+
+
+@pytest.mark.parametrize('code', HOST_SURFACE_CODES)
+def test_every_host_surface_code_has_a_declared_class(code):
+    assert policy.classify(code) != 'unknown', f'{code} rơi vào unknown: lỗi CUA bị checkpoint oan'
+
+
+@pytest.mark.parametrize('code', HOST_SURFACE_CODES)
+def test_every_host_surface_code_gets_its_own_advice_not_the_unknown_sentence(code):
+    result = policy.decision(code)
+    assert result['reason'] != UNKNOWN_SENTENCE, f'{code} vẫn nhận câu "không rõ loại lỗi"'
+    assert policy.advice(code) == (result['class'], result['action'], result['reason'])
+
+
+def test_the_host_advice_table_and_the_class_table_cannot_drift():
+    for code, (klass, action, reason) in policy._HOST_ADVICE.items():
+        assert klass in policy.CLASSES, code
+        assert action in policy.ACTIONS, code
+        assert action == policy._ACTIONS[klass], f'{code}: hành động lệch bảng lớp'
+        assert reason and reason != UNKNOWN_SENTENCE, code
+        assert policy.CODES[code] == klass, f'{code}: CODES không khớp _HOST_ADVICE'
+
+
+def test_no_host_code_ever_retries_automatically():
+    """CUA là tay máy thật: thử lại là quyết định của model sau khi đã nhìn lại màn hình."""
+    assert policy._MAY_RETRY == {'transport'}
+    assert policy.RETRY_ACTIONS == ('retry_backoff', 'recover_model')
+    for code in HOST_SURFACE_CODES:
+        result = policy.decision(code, replay_safe=True, has_receipt=True)
+        assert policy.is_transient(code) is False, code
+        assert policy.may_retry(result) is False, code
+        assert result['replay'] is False, code
+
+
+@pytest.mark.parametrize('code,klass,action,needle', [
+    ('HUMAN_HAS_CONTROL', 'rights_budget', 'checkpoint_and_ask', 'KHÔNG gửi thao tác'),
+    ('DESKTOP_LOCKED', 'rights_budget', 'checkpoint_and_ask', 'khoá'),
+    ('PERMISSION_DENIED', 'rights_budget', 'checkpoint_and_ask', 'xin chủ nhà'),
+    ('APPROVAL_DENIED', 'rights_budget', 'checkpoint_and_ask', 'từ chối'),
+    ('ELEMENT_STALE', 'tool_unknown', 'inspect_only', 'chụp lại'),
+    ('SOURCE_CHANGED', 'tool_unknown', 'inspect_only', 'chọn lại'),
+    ('TARGET_UNKNOWN', 'tool_unknown', 'inspect_only', 'chọn lại đích'),
+    ('CONTROL_BUSY', 'tool_unknown', 'inspect_only', 'MỘT lần'),
+    ('cdp_timeout', 'tool_unknown', 'inspect_only', 'thời gian chờ'),
+    ('TARGET_REQUIRED', 'tool_validation', 'fix_input', 'chọn một cửa sổ'),
+    ('TARGET_AMBIGUOUS', 'tool_validation', 'fix_input', 'windowId'),
+    ('CUA_MACHINE_SCOPE_REQUIRED', 'tool_validation', 'fix_input', 'machine'),
+    ('UNSUPPORTED_ACTION', 'tool_validation', 'fix_input', 'enum'),
+    ('COMMAND_EXIT_NONZERO', 'tool_validation', 'fix_input', 'exit_code'),
+    ('CUA_UNAVAILABLE', 'capability_gap', 'checkpoint_and_ask', 'gói cần cài'),
+    ('UIA_UNAVAILABLE', 'capability_gap', 'checkpoint_and_ask', 'UIA'),
+    ('CAPTURE_FAILED', 'capability_gap', 'checkpoint_and_ask', 'chụp'),
+    ('PASSWORD_FIELD_REFUSED', 'capability_gap', 'checkpoint_and_ask', 'mật khẩu'),
+    ('COMMAND_TIMEOUT', 'no_progress', 'change_approach', 'chia nhỏ'),
+    ('HOST_TOOL_FAILED', 'no_progress', 'change_approach', 'đổi cách'),
+    ('FILE_NOT_FOUND', 'tool_validation', 'fix_input', 'không tìm thấy tệp'),
+    ('FILE_PERMISSION_DENIED', 'rights_budget', 'checkpoint_and_ask', 'xin chủ nhà'),
+    ('INSPECT_POINT_INVALID', 'tool_validation', 'fix_input', 'vùng chụp'),
+])
+def test_representative_host_codes_carry_the_decided_class_and_advice(code, klass, action, needle):
+    """Bảng quyết định của kế hoạch: đổi một dòng trong `_HOST_ADVICE` là lộ ngay ở đây."""
+    result = policy.decision(code)
+    assert (result['class'], result['action']) == (klass, action)
+    assert needle in result['reason'], result['reason']
+    assert result['replay'] is False
+
+
+def test_advice_is_none_outside_the_host_table():
+    for code in ('UPSTREAM_TIMEOUT', 'WORK_NO_PROGRESS', 'WEB_SEARCH_UNAVAILABLE',
+                 'NEW_UNKNOWN_CODE', None, ''):
+        assert policy.advice(code) is None, code
+
+
+def test_a_brand_new_code_still_fails_closed():
+    """Luật fail-closed KHÔNG bị nới: mã chưa từng khai vẫn `unknown`/`checkpoint_and_ask`."""
+    result = policy.decision('NEW_UNKNOWN_CODE')
+    assert result['class'] == 'unknown' and result['action'] == 'checkpoint_and_ask'
+    assert result['reason'] == UNKNOWN_SENTENCE
+    assert result['checkpoint'] is True and result['replay'] is False
+    assert result['keepsPartial'] is False
+
+
+# --- 9. Chống trôi giữa ba bề mặt: tài liệu phân loại + câu tiếng Việt của panel ---------------
+
+#: Mã chỉ có ở bề mặt **panel-i18n** (câu cho chủ nhà) và **không bao giờ** tới tay agent, nên
+#: không có lớp hồi phục — miễn trừ có lý do, không phải bỏ sót:
+#: - `not_chromium`: `sandbox/win/errors.py:119` ghi rõ "deliberately never emitted" — chỉ là từ
+#:   vựng của nhánh thoái hoá mềm, không phải mã lỗi; khai lớp cho nó là đoán.
+#: `INSPECT_POINT_INVALID` từng ở đây và đã được khai lớp (2026-10-08, chủ nhà quyết): hai route của
+#: panel ném nó ra thật, việc cần làm rõ ràng. Danh sách này KHÔNG được nới mà không ghi lý do — và
+#: tự nó cũng bị ghim: miễn trừ thừa (mã đã được khai lớp) sẽ làm test đỏ.
+PANEL_ONLY_CODES = {'not_chromium'}
+
+I18N_PATH = Path(__file__).resolve().parents[3] / 'frontend' / 'src' / 'i18n' / 'vi.ts'
+DOC_PATH = Path(__file__).resolve().parents[3] / 'docs' / 'architecture' / 'host-desktop-control.md'
+
+
+def _strip_string_literals(text):
+    """Bỏ mọi chuỗi trong dấu nháy để chữ trong câu tiếng Việt không bị đọc nhầm thành khoá."""
+    for quote in ("'", '"', '`'):
+        text = re.sub(quote + r'(?:[^' + quote + r'\\]|\\.)*' + quote, '""', text)
+    return text
+
+
+def _object_keys(text, name):
+    """Khoá trực tiếp của khối `<name>: { … }` — đếm ngoặc, không cần TypeScript."""
+    start = text.index(name + ': {') + len(name) + 3
+    depth, end = 1, start
+    while end < len(text) and depth:
+        depth += (text[end] == '{') - (text[end] == '}')
+        end += 1
+    body = _strip_string_literals(text[start:end - 1])
+    return re.findall(r'(?m)^\s*([A-Za-z_][A-Za-z0-9_]*):', body)
+
+
+def test_the_panel_i18n_surface_never_gains_a_code_without_a_class():
+    """Bề mặt thứ ba: câu tiếng Việt cho panel. Mã mới thêm vào đây mà chưa khai lớp là lộ ngay."""
+    if not I18N_PATH.exists():  # test vẫn chạy được khi chỉ có backend/
+        pytest.skip('không thấy frontend/src/i18n/vi.ts')
+    text = I18N_PATH.read_text(encoding='utf-8')
+    keys = _object_keys(text, 'hostError') + _object_keys(text, 'desktopReason')
+    assert len(keys) >= 30, f'chỉ đọc được {len(keys)} khoá — hàm đọc khoá đã hỏng'
+    unknown = {key for key in keys if policy.classify(key) == 'unknown'}
+    assert unknown == PANEL_ONLY_CODES, (
+        f'mã panel chưa khai lớp: {sorted(unknown - PANEL_ONLY_CODES)}; '
+        f'miễn trừ đã cũ: {sorted(PANEL_ONLY_CODES - unknown)}')
+
+
+def _doc_table_pairs():
+    """Bảng quyết định §6.2.1: gom mọi mã trong một ô thành `mã → (lớp, hành động)`."""
+    text = DOC_PATH.read_text(encoding='utf-8')
+    _, found, rest = text.partition('### 6.2.1')
+    if not found:  # mục bị dời/đổi tên: không ghim được, nhưng cũng không báo động giả
+        pytest.skip('mục §6.2.1 không còn trong tài liệu')
+    section = re.split(r'(?m)^#{1,6} ', rest, maxsplit=1)[0]
+    pairs = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if len(cells) < 3:
+            continue
+        klass, action = cells[1].strip('`'), cells[2].strip('`')
+        if klass in policy.CLASSES and action in policy.ACTIONS:
+            for code in re.findall(r'`([^`]+)`', cells[0]):
+                pairs[code] = (klass, action)
+    return pairs
+
+
+def test_the_doc_table_and_the_policy_cannot_drift():
+    """Luật ở §6.2.1: mã mới phải vào bảng tài liệu TRƯỚC, rồi mới vào `_HOST_ADVICE`."""
+    if not DOC_PATH.exists():
+        pytest.skip('không thấy docs/architecture/host-desktop-control.md')
+    pairs = _doc_table_pairs()
+    assert len(pairs) >= 8, f'bảng §6.2.1 đọc được {len(pairs)} mã — hàm đọc bảng đã hỏng'
+    assert set(pairs) == set(policy._HOST_ADVICE), (
+        f'thiếu ở tài liệu: {sorted(set(policy._HOST_ADVICE) - set(pairs))}; '
+        f'thừa trong tài liệu: {sorted(set(pairs) - set(policy._HOST_ADVICE))}')
+    for code, (klass, action) in pairs.items():
+        assert (klass, action) == policy._HOST_ADVICE[code][:2], code
