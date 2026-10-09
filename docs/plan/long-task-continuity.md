@@ -167,6 +167,24 @@ Mười hai commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kh
 | LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, hook `run_closer` chạy trong giao dịch xoá, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | Một lượt xác nhận là đủ và bản chốt giữ nguyên blocker/ngân sách (§11.4); lượt bị từ chối không còn đóng run oan. |
 | LT-09 summary lồng nhau | Một phần | `history_store.prepare_compaction/commit_compaction` + manifest theo `source_key`, `agent_id`; `restore_compaction` | **Chưa nối vào đường nén sống**: `runtime.py` vẫn chỉ ghi checkpoint cũ, nên manifest chỉ sinh trong ca kiểm. Đây là lựa chọn có ý thức của đợt này (đổi đường ghi canonical giữa lượt nén cần một vòng kiểm riêng, không vá ở cuối chu kỳ). Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
 
+### 11.1 Giới hạn đã biết sau đợt soát mã
+
+Ghi lại đúng những gì **chưa** làm, để vòng sau không phải suy lại từ đầu:
+
+| Việc | Vì sao hoãn | Điều kiện xem xét lại |
+|---|---|---|
+| Nối `prepare_compaction`/`commit_compaction` vào đường nén sống | Đổi bản ghi canonical của mọi lần nén; cần vòng kiểm riêng + đo dung lượng trên phiên thật | Trước khi bật `safe_auto` cho phiên dài thật |
+| `export_projection` (archive host đọc được) | Chưa có người gọi; workspace Docker trả `projectionStored: false` thay vì ghi sai — trung thực nhưng chưa dùng được | Cùng vòng với việc nối compaction |
+| Nhãn IFC: `_allowed` truyền `labels` cho hook, hook đang bỏ qua và runtime chưa từng gắn nhãn | Chưa có nguồn nhãn thật; gắn nhãn rỗng là giả vờ có kiểm soát | Khi có nguồn nhãn (dự án/người dùng) |
+| `recover()` không thử lại khi khởi động lỗi tạm thời | Hỏng lúc boot thì `pump()` từ chối nhận continuation; chủ vẫn chạy tay được | Khi có ca thật cần tự chạy tiếp ngay sau boot |
+| `search_text` giữ nguyên văn payload cạnh blob (ba bản cho output lớn) | Đo dung lượng đã có; chưa phải điểm nghẽn trên máy chủ nhà | Khi cảnh báo dung lượng bắt đầu nổ |
+| `history_files.py` chỉ chạy POSIX (`O_DIRECTORY`/`dir_fd`/`O_NOFOLLOW`) | Host Windows là nền chính của bản desktop; ở đó ghi lịch sử hỏng và `history_ingest` bỏ qua ⇒ tính năng chết ở tầng file | Trước khi phát hành tính năng này cho host Windows |
+| `work_feedback.py` vẫn đóng child không nguyên tử (`child_finish` + `project_child` hai bước) | Ngoài phạm vi đợt này; khe hở đã có reconcile lúc khởi động/bơm | Cùng vòng với LT-06 ở bề mặt work |
+| `ProfileWriterGuard` chỉ bật cùng cờ tác vụ dài | Chế độ mặc định giữ nguyên hành vi cũ (không khoá profile) | Khi làm supervisor sau reboot (§8) |
+
+Phần hoãn giữ nguyên như §8: supervisor sau reboot, durable shell/process job tổng quát, vector search, async compaction, auto-delete theo hạn, memory liên dự án, knowledge library lớn, sync nhiều máy, path ACL tổng quát, dashboard/PR connector, lossless CoT. Windows/Wayland vẫn chỉ có kiểm đơn vị với platform giả.
+
+
 ### 11.2 Bề mặt đọc lại capsule (đợt soát cuối)
 
 Ca nghiệm thu LT-08 số 7 — "hội thoại mới: trạng thái then chốt và bài học còn sống" — trước đây
@@ -217,19 +235,48 @@ Việc đã biết mà đợt này **không** làm, xếp theo mức độ:
 | Nhãn IFC chưa có nguồn thật | Thấp | Gắn nhãn rỗng là giả vờ có kiểm soát |
 | `search_text` giữ nguyên văn cạnh blob | Thấp | Chưa phải điểm nghẽn dung lượng trên máy chủ nhà |
 
-### 11.1 Giới hạn đã biết sau đợt soát mã
 
-Ghi lại đúng những gì **chưa** làm, để vòng sau không phải suy lại từ đầu:
+### 11.5 Đối chiếu F01–F31 sau khi triển khai
 
-| Việc | Vì sao hoãn | Điều kiện xem xét lại |
-|---|---|---|
-| Nối `prepare_compaction`/`commit_compaction` vào đường nén sống | Đổi bản ghi canonical của mọi lần nén; cần vòng kiểm riêng + đo dung lượng trên phiên thật | Trước khi bật `safe_auto` cho phiên dài thật |
-| `export_projection` (archive host đọc được) | Chưa có người gọi; workspace Docker trả `projectionStored: false` thay vì ghi sai — trung thực nhưng chưa dùng được | Cùng vòng với việc nối compaction |
-| Nhãn IFC: `_allowed` truyền `labels` cho hook, hook đang bỏ qua và runtime chưa từng gắn nhãn | Chưa có nguồn nhãn thật; gắn nhãn rỗng là giả vờ có kiểm soát | Khi có nguồn nhãn (dự án/người dùng) |
-| `recover()` không thử lại khi khởi động lỗi tạm thời | Hỏng lúc boot thì `pump()` từ chối nhận continuation; chủ vẫn chạy tay được | Khi có ca thật cần tự chạy tiếp ngay sau boot |
-| `search_text` giữ nguyên văn payload cạnh blob (ba bản cho output lớn) | Đo dung lượng đã có; chưa phải điểm nghẽn trên máy chủ nhà | Khi cảnh báo dung lượng bắt đầu nổ |
-| `history_files.py` chỉ chạy POSIX (`O_DIRECTORY`/`dir_fd`/`O_NOFOLLOW`) | Host Windows là nền chính của bản desktop; ở đó ghi lịch sử hỏng và `history_ingest` bỏ qua ⇒ tính năng chết ở tầng file | Trước khi phát hành tính năng này cho host Windows |
-| `work_feedback.py` vẫn đóng child không nguyên tử (`child_finish` + `project_child` hai bước) | Ngoài phạm vi đợt này; khe hở đã có reconcile lúc khởi động/bơm | Cùng vòng với LT-06 ở bề mặt work |
-| `ProfileWriterGuard` chỉ bật cùng cờ tác vụ dài | Chế độ mặc định giữ nguyên hành vi cũ (không khoá profile) | Khi làm supervisor sau reboot (§8) |
+Ma trận của kế hoạch (§10) đối chiếu 31 mục của đặc tả người gửi với nền có sẵn; đây **không** phải
+31 tính năng phải xây, mà là danh sách để không bỏ sót và không sao chép quá mức. Bảng dưới ghi
+trạng thái từng mục sau khi đợt triển khai đóng lại, kèm mốc mã hoặc bằng chứng. Ô "Tick" đọc là:
+`[x]` xong có bằng chứng, `[~]` một phần (phần còn lại ghi ngay trong ô), `[–]` không sao chép
+(rủi ro phải tránh, hoặc dịch vụ của nền ngoài).
 
-Phần hoãn giữ nguyên như §8: supervisor sau reboot, durable shell/process job tổng quát, vector search, async compaction, auto-delete theo hạn, memory liên dự án, knowledge library lớn, sync nhiều máy, path ACL tổng quát, dashboard/PR connector, lossless CoT. Windows/Wayland vẫn chỉ có kiểm đơn vị với platform giả.
+| F | Ma trận | Đã làm gì / bằng chứng | Tick |
+|---|---|---|---|
+| F01 Snapshot | EXISTING | `history_records` + blob/segment có sha256, `SessionStore.checkpoint`; bản ghim giữ raw refs và coverage thay vì suy từ số message | `[x]` |
+| F02 Archive đánh số | PARTIAL | `memory/history_projection.py`, `history_files.py` (chỉ POSIX), `history_surface.export_projection`; chưa có người gọi từ runtime, workspace Docker trả `projectionStored: false` | `[~]` còn: nối `export_projection` + bản Windows của tầng file (§11.1) |
+| F03 Handoff | PARTIAL | `session_journal.brief` + khối ghim + khối trạng thái giữ lại (§11.2); locator đúng scope theo ca A1–A5 | `[x]` |
+| F04 Summary cấu trúc | PARTIAL | `prepare_compaction`/`commit_compaction` + manifest theo `source_key`/`agent_id`, `render_snapshot` giữ headings; ca 20 lần nén không mất yêu cầu gốc | `[x]` |
+| F05 Raw journal | PARTIAL | `history_records`/`events`/`checkpoints` có `origin`, `seq`, `source_key`; tách khỏi tám dấu curated của journal | `[x]` |
+| F06 Call/result ID | EXISTING | Giữ `tool_call_id`, `argsHash`, `tool_recovery`; checksum blob không đổi semantics commit | `[x]` |
+| F07 Search xuyên session | MISSING | `query_history`/`list_sessions` + route `GET /history/sessions|search`, phạm vi theo project, cursor ký; ca A1–A5 + `test_search_240_newest_pagination_append` | `[x]` |
+| F08 Read archive | PARTIAL | `read_reference` theo id/khoảng có provenance, tombstone khi đã xoá; `history_read` phân trang | `[x]` |
+| F09 Externalization | PARTIAL | blob/segment + `evidenceState` (`available`/`missing`/`deleted`) trung thực; việc externalize đồng nhất **trước prune** chưa nối vào đường nén sống (cùng LT-09) | `[~]` còn: nối vào đường nén sống |
+| F10 Plan/approval | EXISTING | `plan_reviews`/registry/hash gates giữ nguyên; memory chỉ dẫn tham chiếu, không thay ledger | `[x]` |
+| F11 User decisions | PARTIAL | `decision_store` bền; mọi thẻ hỏi–đáp đi qua `decision_store.request` (`durable: true`), bản ghim giữ decision refs + revision | `[x]` |
+| F12 Workspace state | PARTIAL | `machineBinding` + worktree/hash giữ nguyên; live worktree vẫn là nguồn hiện tại, không tự khôi phục file từ summary | `[x]` |
+| F13 Task continuity | EXISTING | `task_service.py` + `_close_attempt_locked`, `task_surface.reconcile_startup/finish_child` (LT-06); contract/hash có sẵn | `[x]` |
+| F14 Background job | EXISTING | `harness_jobs.py` + wake; capsule ghi `interrupted`/unknown, không hứa process sống qua crash | `[x]` |
+| F15 Artifacts | PARTIAL | `work_artifacts` + `retainedEvidence` trong capsule + tombstone khi xoá (`evidence_state='deleted'`, payload bị unlink, `search_text` xoá) | `[x]` |
+| F16 Versioned test report | PARTIAL | Giữ `work_checks`/invocations theo refs, status, run revision; không clone dịch vụ report | `[x]` |
+| F17 PR workflow | PARTIAL | Giữ `work_ships` (URL/branch/SHA) làm bằng chứng; không dựng dịch vụ PR song song | `[x]` |
+| F18 Resume verification | PARTIAL | `tool_recovery` + ref/hash gates + `validate_ref`; chạy tiếp chỉ khi có bằng chứng đã kiểm | `[x]` |
+| F19 Agent namespace | PARTIAL | Manifest self/parent/root theo `agent_id`, con tự nén được; phần archive host đọc vẫn thuộc F02 | `[~]` còn: như F02 |
+| F20 Pinned child contract | PARTIAL | `harness_tasks.contract_json/hash` + pin yêu cầu gốc (`owner_contract_revisions`, `exactPayload`); không giả có path ACL | `[x]` |
+| F21 Peer board | PARTIAL | `task_list/get/send` bền + cursor đã có; không dựng claim-note board (lý do ở §10) | `[–]` |
+| F22 Failure-aware state | PARTIAL | `journal`/`work_progress`/`work_handoffs` + deliverable IDs, `failedChecks`, `asOf` độc lập với summary | `[x]` |
+| F23 Self rehydration | PARTIAL | Search newest/cursor đã sửa + locator/read gốc đúng agent (scope A1–A5) | `[x]` |
+| F24 Misrouting | NOT_TO_COPY | Không có `general_agent` cứng trong repo; manifest mint locator từ identity, ca kiểm scope chặn đọc chéo | `[–]` |
+| F25 Handoff echo | NOT_TO_COPY | `_strip_brief` bỏ khối ghim/khối giữ lại khỏi transcript, dedupe theo `origin`/`source_key`/generation; tiến độ cũ không mất | `[x]` |
+| F26 Live correction | PARTIAL | `session_steers` bền + `record_ingress(change_kind='correction')` và chuỗi revision; correction không bị cắt bởi tail | `[x]` |
+| F27 Source hierarchy | MISSING | `critical_pins`/`critical_snapshot`/`contract()` là nguồn chủ nhiệm; summary/history không thành authority; `exactPayload` giữ nguyên văn lời chủ | `[x]` |
+| F28 Revalidation | PARTIAL | `context_surface.validate_ref` theo version/hash, `asOf`, tombstone khi nguồn đã xoá | `[x]` |
+| F29 Verification không gián đoạn | PARTIAL | `work_checks` + bằng chứng ghi rõ module/live/process revision; ca kiểm dùng fixture, không kill service đang phục vụ | `[x]` |
+| F30 Spill/reattach | PARTIAL | Job ledger/reconcile đã có; spill output chưa đồng nhất; không clone runner 270s, process unknown không tự spawn lại | `[~]` còn: thống nhất spill |
+| F31 Knowledge library | MISSING | Capsule giữ bài học bắt buộc (`lessons`, khối trạng thái giữ lại); thư viện tri thức theo project là optional, hoãn (§11.1) | `[~]` còn: thư viện project nếu có nhu cầu |
+
+Tổng: **24 mục `[x]`**, **5 mục `[~]`** (F02, F09, F19, F30, F31), **2 mục `[–]`** (F21, F24).
+Không mục nào ở trạng thái "chưa bắt đầu".
