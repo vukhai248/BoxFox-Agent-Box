@@ -1270,11 +1270,24 @@ class HostExecutor:
             # `reflection_hint` gửi cho model câu dành cho lỗi sai tham số — sai việc cần làm.
             return error_result(
                 COMMAND_EXIT_NONZERO_CODE,
-                'lệnh thoát với mã %d; mã đó cũng nằm ở `exit_code`, đầu ra đầy đủ ở `content`%s' % (
-                    process.returncode, ' và tệp đính kèm' if artifact else ''),
+                'lệnh thoát với mã %d; mã đó cũng nằm ở `exit_code`, %s' % (
+                    process.returncode, self._where_is_the_output(text, artifact)),
                 exit_code=process.returncode, content=preview, artifact=artifact, outputRef=ref)
         return {'content': preview, 'exit_code': process.returncode, 'is_error': False,
                 'artifact': artifact, 'outputRef': ref}
+
+    @staticmethod
+    def _where_is_the_output(text, artifact):
+        """Nói ĐÚNG chỗ có đầu ra: `content` chỉ là bản xem trước khi đầu ra vượt trần.
+
+        Ca xấu nhất là vượt trần mà tệp spill không ghi được — khi ấy câu cũ ("đầu ra đầy đủ ở
+        `content`") vừa sai vừa làm model tin là nó đã có đủ.
+        """
+        if len(text) <= output_refs.SPILL_THRESHOLD_CHARS:
+            return 'đầu ra đầy đủ ở `content`'
+        if artifact:
+            return 'đầu ra đầy đủ ở tệp đính kèm'
+        return 'đầu ra bị cắt ở `content` vì tệp đính kèm không ghi được'
 
     def _child_env(self):
         env = dict(self.env if self.env is not None else os.environ)

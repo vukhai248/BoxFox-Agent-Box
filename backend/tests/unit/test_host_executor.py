@@ -322,6 +322,33 @@ def test_terminal_exec_spills_into_the_app_profile_when_artifacts_live_outside(t
         'không được ghi phần tràn vào thư mục dự án của chủ'
 
 
+def test_a_failed_spill_keeps_the_exit_code_and_names_the_cut(tmp_path):
+    """Vượt trần mà tệp spill không ghi được: lượt lệnh vẫn sống, và câu mô tả phải nói đúng.
+
+    Trước F30 chỗ này cắt im lặng; bản gộp hai producer để `OSError` biến cả kết quả thành
+    `HOST_TOOL_FAILED`. Câu cũ ("đầu ra đầy đủ ở `content`") cũng sai trong ca này vì `content` chỉ
+    là bản xem trước.
+    """
+    blocked = tmp_path / 'blocked-artifacts'
+    blocked.write_text('tệp, không phải thư mục')
+    executor = make_executor(tmp_path, artifacts_dir=blocked)
+    payload = run(executor.execute(
+        'terminal_exec', {'command': 'for i in $(seq 1 4000); do echo dong-$i; done; exit 3'}, 's1'))
+
+    assert payload['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert payload['exit_code'] == 3 and payload.get('artifact') is None
+    assert payload['content'].endswith(host.output_refs.SPILL_FAILED_MARKER)
+    assert 'không ghi được' in payload['error'] and 'đầy đủ' not in payload['error']
+
+
+def test_a_short_failed_command_still_says_the_output_is_complete(tmp_path):
+    executor = make_executor(tmp_path)
+    payload = run(executor.execute('terminal_exec', {'command': 'echo vỡ; exit 3'}, 's1'))
+
+    assert payload['errorCode'] == host.COMMAND_EXIT_NONZERO_CODE
+    assert 'đầu ra đầy đủ ở `content`' in payload['error']
+
+
 def test_terminal_exec_requires_a_command(tmp_path):
     executor = make_executor(tmp_path)
     payload = run(executor.execute('terminal_exec', {'command': '   '}, 's1'))

@@ -25,6 +25,7 @@ import uuid
 SPILL_THRESHOLD_CHARS = 20000
 SPILL_PREVIEW_CHARS = 15000
 SPILL_MARKER = '\n[truncated; see artifact]'
+SPILL_FAILED_MARKER = '\n[truncated; artifact write failed]'
 SPILL_DIR = '.generated_artifacts/tools'
 
 ROOT = Path('/home/agent/workspace').resolve()
@@ -223,20 +224,36 @@ def shell(command, timeout=30, session='default'):
     finally:
         marker.unlink(missing_ok=True)
     output = output.decode('utf-8', errors='replace')
-    artifact, ref = None, None
-    if len(output) > SPILL_THRESHOLD_CHARS:
-        # W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
-        # F30: cùng hình dạng với host executor; script này chạy trong box nên không import được
-        # `sandbox/output_refs.py` — số và ref ở đây phải khớp bản host, và
-        # `tests/unit/test_output_refs.py` ghim hai bên khớp nhau.
-        spilled = WORKSPACE / SPILL_DIR / (uuid.uuid4().hex + '.txt')
+    artifact, ref, failed = _spill(output)
+    content = output[:SPILL_PREVIEW_CHARS] + SPILL_FAILED_MARKER if failed \
+        else _spill_content(output, artifact)
+    return {'content': content, 'exit_code': proc.returncode,
+            'is_error': proc.returncode != 0, 'artifact': artifact, 'outputRef': ref}
+
+
+def _spill(output):
+    """Ghi phần tràn, trả `(artifact, ref, failed)`.
+
+    W8.A4.3: phần spill luôn nằm ở workspace người dùng (UI đọc được), không trong worktree.
+    F30: cùng hình dạng với host executor; script này chạy trong box nên không import được
+    `sandbox/output_refs.py` — số, ref và luật cắt ở đây phải khớp bản host, và
+    `tests/unit/test_output_refs.py` ghim hai bên khớp nhau.
+
+    `failed` tách "ghi hỏng" khỏi "dưới trần, không có gì để ghi": ghi hỏng (đĩa đầy, chỉ-đọc) mà để
+    `OSError` nổi lên thì cả kết quả lệnh thành 'Sandbox unavailable' — mất tệp là mất một tiện ích,
+    không phải mất lượt. Đối xứng với bản host (`sandbox/output_refs.py`).
+    """
+    if len(output) <= SPILL_THRESHOLD_CHARS:
+        return None, None, False
+    raw = output.encode('utf-8')
+    spilled = WORKSPACE / SPILL_DIR / (uuid.uuid4().hex + '.txt')
+    try:
         spilled.parent.mkdir(parents=True, exist_ok=True)
-        spilled.write_bytes(output.encode('utf-8'))
-        artifact = str(spilled.relative_to(WORKSPACE))
-        ref = _spill_ref(artifact, output.encode('utf-8'))
-    return {'content': _spill_content(output, artifact),
-            'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact,
-            'outputRef': ref}
+        spilled.write_bytes(raw)
+    except OSError:
+        return None, None, True
+    artifact = str(spilled.relative_to(WORKSPACE))
+    return artifact, _spill_ref(artifact, raw), False
 
 
 def _spill_content(output, artifact):

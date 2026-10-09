@@ -355,7 +355,9 @@ qua `write_text` — `write_text` dịch `\n` thành `\r\n` trên Windows, làm 
 tệp khác với tệp đã ghi; ghi hỏng (đĩa đầy, chỉ-đọc, `tools` là một tệp) trả bản xem trước kèm câu
 `[truncated; artifact write failed]` thay vì để `OSError` biến cả kết quả lệnh thành
 `HOST_TOOL_FAILED`; và worker trong box chỉ cắt khi **đã có** tệp đầy đủ để chỉ tới, nên output
-15.001–20.000 ký tự không còn bị mất đuôi im lặng ở một bên.
+15.001–20.000 ký tự không còn bị mất đuôi im lặng ở một bên. Ghi hỏng trong box cũng theo đúng
+đường ấy (`_spill` trả `failed` riêng) — trước đó `OSError` nổi lên thành `Sandbox unavailable` và
+lấy đi cả kết quả lệnh.
 
 Chỗ ghi tệp khác nhau theo chế độ và điều đó là bắt buộc: trong box, tệp nằm trong workspace của
 box; trên host, tệp nằm trong `artifacts_dir` của app (`host-artifacts/<project>/<sid>/tools`, cùng
