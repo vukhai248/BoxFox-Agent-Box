@@ -2967,11 +2967,12 @@ class HarnessRuntime(RuntimeCommands):
                                     # Lượt đọc lại này cũng là việc THẬT trên máy người dùng, nên
                                     # nó phải hiện trong dòng event như mọi lời gọi khác — nếu
                                     # không, giao diện đọc một câu chẩn đoán mà không thấy gốc.
-                                    self.store.emit(sid, 'tool_start', {'id': call.get('id'), 'name': name,
-                                                                        'args': args})
+                                    read_start_seq = self.store.emit(sid, 'tool_start', {'id': call.get('id'), 'name': name,
+                                                                                        'args': args})
                                     read_started = time.time()
                                     try:
-                                        result = await self.dispatch(self.store.get(sid), name, args, call.get('id'))
+                                        result = await self.dispatch(self.store.get(sid), name, args, call.get('id'),
+                                                                     tool_start_seq=read_start_seq)
                                     except Exception as exc:
                                         result = {'is_error': True, 'error': str(exc)}
                                     system_log.write('tool.end', session_id=sid, tool=name,
@@ -4908,7 +4909,8 @@ class HarnessRuntime(RuntimeCommands):
                         fn = call['function']
                         args, error = parse_tool_arguments(fn.get('arguments'))
                         name = fn.get('name', '')
-                        self.store.emit(sid, 'tool_start', tool_recovery.start_payload(call['id'], name, args))
+                        tool_start_seq = self.store.emit(sid, 'tool_start',
+                                                         tool_recovery.start_payload(call['id'], name, args))
                         tools_run += 1
                         tool_started = time.time()
                         try:
@@ -4919,7 +4921,8 @@ class HarnessRuntime(RuntimeCommands):
                             if name in start_owner_tools and name not in tool_recovery.owner_tools(self.store, session):
                                 raise PermissionError('WORK_CAPABILITY_REVOKED: the owner removed ' + name +
                                                       ' during this turn; it was not run')
-                            result = await self.dispatch(session, name, args, call['id'])
+                            result = await self.dispatch(session, name, args, call['id'],
+                                                         tool_start_seq=tool_start_seq)
                         except Exception as exc:
                             code, message = classify_failure(exc)
                             # The model gets `message` (it may name the query or the URL); the DEV
@@ -5109,11 +5112,14 @@ class HarnessRuntime(RuntimeCommands):
                 system_log.write('child.reap_failed', level='warn', session_id=sid,
                                  message=str(exc)[:300])
 
-    async def dispatch(self, session, name, args, call_id=None):
+    async def dispatch(self, session, name, args, call_id=None, tool_start_seq=None):
         """Một lời gọi công cụ, đi qua hộp đếm của long task **khi runtime có hộp đó**.
 
         Runtime tối giản (bài kiểm cũ dựng `SimpleNamespace(store=…)`) không có `self.longtask`;
         khi ấy đường gọi vẫn phải là `_dispatch` — đúng thứ bài kiểm H8 ghim.
+
+        `tool_start_seq` là dòng `tool_start` mà vòng lặp vừa ghi cho CHÍNH lời gọi này: hộp đếm
+        cần nó để không đọc ý định của chính mình thành một ý định cũ chưa giải quyết.
         """
         longtask = getattr(self, 'longtask', None)
         try:
@@ -5121,7 +5127,8 @@ class HarnessRuntime(RuntimeCommands):
                 result = await self._dispatch(session, name, args, call_id)
             else:
                 result = await longtask.tool(session['id'],
-                                             lambda: self._dispatch(session, name, args, call_id))
+                                             lambda: self._dispatch(session, name, args, call_id),
+                                             in_flight=(session['id'], tool_start_seq) if tool_start_seq else None)
         except Exception as exc:
             code, _ = classify_failure(exc)
             adaptive_surface.after_tool(self, session['id'], name, args,

@@ -12,6 +12,7 @@ import time
 import pytest
 
 from agentbox.agent_core.decision_store import DecisionStore, DecisionStoreError
+from agentbox.agent_core import tool_recovery
 from agentbox.agent_core.longtask_runtime import ProfileWriterGuard
 from agentbox.agent_core.longtask_store import LongtaskError, LongtaskStore
 from agentbox.agent_core.runtime import DecisionError, HarnessRuntime
@@ -281,6 +282,55 @@ def test_unsafe_missing_tool_cannot_restart_with_new_call_id(tmp_path, monkeypat
         rt.longtask.check(sid)
     assert exc.value.code == 'LONGTASK_UNSAFE_INTERRUPTION'
     assert rt.executor.calls == []
+
+
+def test_a_call_is_never_refused_by_its_own_tool_start(tmp_path):
+    """F01 — vòng lặp ghi `tool_start` TRƯỚC khi dispatch, nên hộp đếm đọc chính lời gọi đang chạy
+    thành "ý định cũ chưa giải quyết" và từ chối nó: mọi công cụ ghi trong run đều thành tường."""
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    mine = rt.store.emit(sid, 'tool_start',
+                         tool_recovery.start_payload('call-now', 'terminal_exec', {'command': 'ls'}))
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid)
+    assert exc.value.code == 'LONGTASK_UNSAFE_INTERRUPTION'
+    # Cùng nhật ký đó, nhưng người gọi nói rõ "dòng này là của tôi": lời gọi được nhận.
+    assert rt.longtask.check(sid, in_flight=(sid, mine)) is not None
+    # Một ý định CŨ vẫn chặn: miễn trừ đúng dòng, không phải ân xá cả phiên.
+    rt.store.emit(sid, 'tool_start',
+                  tool_recovery.start_payload('call-old', 'file_write', {'path': 'a', 'content': 'b'}))
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(sid, in_flight=(sid, mine))
+    assert exc.value.code == 'LONGTASK_UNSAFE_INTERRUPTION'
+
+
+def test_mutating_tool_runs_inside_a_pinned_run(tmp_path):
+    """F01 end-to-end: một lượt thật, run đã ghim, model gọi công cụ GHI — công cụ phải chạy."""
+    class TurnExecutor(FixtureExecutor):
+        """Như executor của máy: nhận thêm `identity` (turn/step) mà lượt thật truyền vào."""
+
+        async def execute(self, name, args, sid, **_identity):
+            self.calls.append((name, args, sid))
+            return {'content': 'observed fixture result'}
+
+    store = SessionStore(tmp_path / 'sessions.db')
+    rt = HarnessRuntime(store, TurnExecutor(), FixtureModel([
+        answer('chạy lệnh', [call('terminal_exec', {'command': 'echo hi'}, 'call-1')]),
+        answer('xong'), answer('xong'), answer('xong')]))
+    sid = rt.create({'skills': [], 'connectionId': 'c1', 'modelId': 'deepseek-v4-flash'})['id']
+    configure(rt, sid, budget={'totalStepLimit': 50, 'activeTimeLimitMs': 20000000})
+    rt.longtask.completion = lambda _sid, _run: {'state': 'runnable'}
+
+    async def run():
+        await rt.submit(sid, 'chạy một lệnh')
+        await rt.tasks[sid]
+
+    asyncio.run(run())
+    ends = [e['data'] for e in store.events(sid) if e['type'] == 'tool_end']
+    assert ends, 'lời gọi công cụ phải có kết quả trong nhật ký'
+    assert not ends[0]['result'].get('is_error'), ends[0]['result']
+    starts = [e['data'] for e in store.events(sid) if e['type'] == 'tool_start']
+    assert starts[0]['replay'] == 'unsafe' and rt.longtask.root_run(sid) is not None
 
 
 def test_provider_metadata_stripped_without_mutating_stored_message(tmp_path):

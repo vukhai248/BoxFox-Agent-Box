@@ -112,7 +112,11 @@ class LongtaskRuntime:
             raise LongtaskError('LONGTASK_STALE', 'owner goal revision changed')
         return self.store.configure(sid, body, binding)
 
-    def check(self, sid, snapshot=None, *, autonomous=False):
+    def check(self, sid, snapshot=None, *, autonomous=False, in_flight=None):
+        """Gate one owner turn against the pinned run. `in_flight=(sessionId, seq)` is the call
+        this frame is already executing: the loop commits its `tool_start` BEFORE dispatch, so
+        without it every mutating call would read its own intent as an unresolved one and refuse
+        itself (`LONGTASK_UNSAFE_INTERRUPTION`)."""
         run = self.store.get(run_id=snapshot['runId']) if snapshot else self.root_run(sid)
         if not run:
             return None
@@ -147,7 +151,10 @@ class LongtaskRuntime:
                        if row['id'] not in ids)
         inspected = {(ref['sessionId'], ref['seq']) for ref in self.store.inspected(run)}
         for target in ids:
-            if any(item.get('replay') != 'safe' for item in tool_recovery.interrupted_calls(self.rt.store, target)):
+            pending = tool_recovery.interrupted_calls(self.rt.store, target)
+            if in_flight and target == in_flight[0]:
+                pending = [item for item in pending if item.get('seq') != in_flight[1]]
+            if any(item.get('replay') != 'safe' for item in pending):
                 raise LongtaskError('LONGTASK_UNSAFE_INTERRUPTION', 'unresolved unsafe tool intent')
             rows = self.rt.store.db.execute("SELECT seq,payload FROM events WHERE session_id=? AND kind='tool_end'", (target,))
             if any((json.loads(row['payload']).get('result') or {}).get('errorCode') == tool_recovery.INTERRUPTED_UNSAFE
@@ -259,8 +266,8 @@ class LongtaskRuntime:
         finally:
             self.store.settle_segment(run, key, (time.monotonic() - started) * 1000)
 
-    async def tool(self, sid, callback):
-        run = self.check(sid, self.snapshots.get(sid))
+    async def tool(self, sid, callback, *, in_flight=None):
+        run = self.check(sid, self.snapshots.get(sid), in_flight=in_flight)
         if not run:
             return await callback()
         key = 'tool-' + uuid.uuid4().hex
