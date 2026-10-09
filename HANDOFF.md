@@ -56,7 +56,8 @@ thành một bộ cài NSIS. Bộ cài dưới đây dựng từ chính nhánh n
 | Tệp | `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` — 167.123.853 B, Windows x64, **chưa ký số** |
 | SHA-256 | `fa2b965ca102e0797cc93048ce94750b5370f5828281b3a9d2b4938a0a4a077f` |
 | Gói bên trong | 5.189 tệp, khớp từng đường dẫn và kích thước với `desktop/release/win-unpacked` |
-| Hướng dẫn cài | `docs/plan/desktop-alpha-quickstart.md` (bản nhanh cho người dùng cuối) và `docs/plan/desktop-alpha-install.md` (bản đầy đủ, checklist 13 bước) |
+| Hướng dẫn cài | `docs/plan/desktop-alpha-quickstart.md` + `.en.md` (bản nhanh cho người dùng cuối) và
+`docs/plan/desktop-alpha-install.md` + `.en.md` (bản đầy đủ, checklist 13 bước) — mỗi bản có tiếng Việt và tiếng Anh |
 
 Dựng lại (máy Linux vẫn cross-build được):
 

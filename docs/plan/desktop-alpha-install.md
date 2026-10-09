@@ -1,6 +1,6 @@
 # BoxFox Desktop (Alpha) — cài đặt, chế độ chạy và checklist nghiệm thu
 
-> **Người dùng cuối chỉ muốn cài và dùng:** đọc bản ngắn [desktop-alpha-quickstart.md](desktop-alpha-quickstart.md) trước. Tài liệu dưới đây là bản đầy đủ dành cho người nghiệm thu build.
+> **Người dùng cuối chỉ muốn cài và dùng:** đọc bản ngắn [desktop-alpha-quickstart.md](desktop-alpha-quickstart.md) trước. Tài liệu dưới đây là bản đầy đủ dành cho người nghiệm thu build. **Bản tiếng Anh:** [desktop-alpha-install.en.md](desktop-alpha-install.en.md).
 >
 > **Trạng thái:** Hướng dẫn cài + checklist 13 bước để chủ nhà tự nghiệm thu D4. Đây là tài liệu của đầu việc D3/D4 trong kế hoạch `desktop-alpha-packaging.md` (§6 PR-2, §8) và §17.3 của `v1-machine-environments-roadmap.md`.
 >
@@ -24,7 +24,8 @@ Get-FileHash .\BoxFox-Desktop-Alpha-0.1.0-Setup.exe -Algorithm SHA256
 # hoặc: certutil -hashfile BoxFox-Desktop-Alpha-0.1.0-Setup.exe SHA256
 ```
 
-Đối chiếu với `SHA256SUMS.txt` cạnh bộ cài.
+Đối chiếu với `SHA256SUMS.txt` cạnh bộ cài. Bản dựng 2026-10-09:
+`fa2b965ca102e0797cc93048ce94750b5370f5828281b3a9d2b4938a0a4a077f` (167.123.853 B).
 
 ## 2. Cài đặt
 

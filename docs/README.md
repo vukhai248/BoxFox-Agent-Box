@@ -44,6 +44,18 @@
 - [Thông báo email khi task hoàn thành](architecture/email-notification.md) và [đặc tả email](plan/task-completion-email-spec.md).
 - [Design Canvas](architecture/design-canvas.md) và [tối ưu hiệu năng render](architecture/high-performance-rendering.md).
 
+### 1.4 Ứng dụng desktop (Windows)
+
+- [Cài BoxFox Desktop (Alpha) — bản nhanh](plan/desktop-alpha-quickstart.md) (tiếng Việt) và
+  [quick start, English](plan/desktop-alpha-quickstart.en.md) — dành cho người dùng cuối: kiểm SHA-256,
+  4 bước cài, chế độ `host`/`docker`, dữ liệu ở đâu, gỡ cài đặt.
+- [Cài đặt, chế độ chạy và checklist nghiệm thu 13 bước](plan/desktop-alpha-install.md) (tiếng Việt) và
+  [install, run modes and acceptance checklist, English](plan/desktop-alpha-install.en.md) — bản đầy đủ,
+  kèm cảnh báo chế độ host.
+- Bộ cài `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (Windows x64, chưa ký số) dựng từ nhánh hiện hành; cách
+  dựng lại và các điểm cần biết khi cross-build trên Linux nằm ở [`desktop/README.md`](../desktop/README.md)
+  và mục 3 của [`HANDOFF.md`](../HANDOFF.md).
+
 ## 2. Nghiên cứu và bằng chứng
 
 [Nghiên cứu kỹ thuật](research/README.md) là chỉ mục cho mọi nguồn và mức bằng chứng:

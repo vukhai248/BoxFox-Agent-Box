@@ -1,8 +1,9 @@
 # Cài BoxFox Desktop (Alpha) trên Windows — bản nhanh
 
 > **Dành cho ai:** người dùng cuối, người cài app lần đầu. Chỉ cần đọc và làm theo.
+> **Bản tiếng Anh:** [desktop-alpha-quickstart.en.md](desktop-alpha-quickstart.en.md).
 > Bản đầy đủ — kiến trúc, biến môi trường, cảnh báo chế độ host, checklist nghiệm thu 13 bước — ở
-> [desktop-alpha-install.md](desktop-alpha-install.md).
+> [desktop-alpha-install.md](desktop-alpha-install.md) ([tiếng Anh](desktop-alpha-install.en.md)).
 >
 > **Bộ cài:** `BoxFox-Desktop-Alpha-0.1.0-Setup.exe` (Windows x64, **chưa ký Authenticode**).
 > **SHA-256:** `fa2b965ca102e0797cc93048ce94750b5370f5828281b3a9d2b4938a0a4a077f`

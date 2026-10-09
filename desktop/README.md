@@ -4,13 +4,15 @@ Electron shell that runs the whole BoxFox stack — the web UI, the router and t
 harness — as a normal Windows desktop app, without a developer checkout on the machine.
 Plan: `/.plans/desktop-alpha-packaging.md` §6 PR-2 (work items D1–D3).
 
-**Installing the alpha and testing it:** two documents, pick by role.
+**Installing the alpha and testing it:** four documents, pick by role and language.
 
-- End users, first install: `docs/plan/desktop-alpha-quickstart.md` (Vietnamese) — download, verify the
-  SHA-256, run the installer, choose host/docker, where the profile lives, how to uninstall.
-- Whoever accepts the build: `docs/plan/desktop-alpha-install.md` (Vietnamese) — install, choosing
-  host/docker mode, where the profile/logs live, how to export diagnostics, the host-mode warning and
-  the 13-step acceptance checklist.
+- End users, first install: `docs/plan/desktop-alpha-quickstart.md` (Vietnamese) and
+  `docs/plan/desktop-alpha-quickstart.en.md` (English) — download, verify the SHA-256, run the installer,
+  choose host/docker, where the profile lives, how to uninstall.
+- Whoever accepts the build: `docs/plan/desktop-alpha-install.md` (Vietnamese) and
+  `docs/plan/desktop-alpha-install.en.md` (English) — install, choosing host/docker mode, where the
+  profile/logs live, how to export diagnostics, the host-mode warning and the 13-step acceptance
+  checklist.
 
 ```
 desktop/
