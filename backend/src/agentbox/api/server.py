@@ -1978,12 +1978,11 @@ def create_app(runtime):
             body = await request.json() if request.can_read_body else {}
             if not isinstance(body, dict):
                 raise ValueError('DELETE_REQUIRES_CARRY_FORWARD')
-            for target in surface().tree_ids(runtime, sid):
-                if target in runtime.tasks:
-                    try:
-                        await runtime.stop(target)
-                    except Exception:
-                        pass
+            # KHÔNG dừng phiên ở đây: `runtime.stop` đẩy `revision`/`stop_epoch`/`lease_epoch` của
+            # run lên và huỷ decision/work_graph, mà đó chính là những trường vào bản ghim critical —
+            # nên nó làm bản ghim lệch ngay trước bước kiểm. Lượt chạy còn sống đã có cổng yên tĩnh
+            # trả `DELETE_NOT_QUIESCENT` (trung thực, chủ dừng tay rồi xoá), và run chưa kết thúc thì
+            # `run_closer` đóng trong chính giao dịch xoá.
             result = surface().deletion_confirm(runtime, sid, body)
         except Exception as exc:
             return surface_error(exc)

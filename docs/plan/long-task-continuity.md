@@ -164,7 +164,7 @@ Mười hai commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kh
 | LT-05 con trỏ output dài | Đã có | blob + segment có sha256 trong `history_store`; `history_read` phân trang | Chỉ giữ excerpt text đã checksum trong capsule; artifact nhị phân không được sao chép. |
 | LT-06 child xong mà attempt còn mở | Đã có | `task_service._close_attempt_locked`, `task_surface.reconcile_startup/finish_child`, `peer_watchdog` | Chưa có ca kill thật ở khe `child_finish`; chỉ mô phỏng ở mức đơn vị. |
 | LT-07 main tự tiếp tục | Đã có (opt-in) | `agent_core/longtask_store.py`, `longtask_runtime.py`, `runtime.configure_longtask/longtask_action/recover_longtasks/pump_longtasks` | Bật bằng `BOXFOX_LONGTASK_CONTINUITY=1`; run gắn plan/work chưa có seam `controller_continue` nên dừng ở `needs_user` + `LONGTASK_CONTROLLER_UNAVAILABLE`. |
-| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, hook `run_closer` chạy trong giao dịch xoá, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | Một lượt xác nhận là đủ và bản chốt giữ nguyên blocker/ngân sách (§11.4); lượt bị từ chối không còn đóng run oan. |
+| LT-08 xoá có mang theo | Đã có | `history_store.deletion_preview/delete_with_capsule/project_capsules`, hook `run_closer` chạy trong giao dịch xoá, route preview/confirm, `DELETE` cũ trả 409, khối `retained_state_block` (§11.2) | Một lượt xác nhận là đủ cho cây đã yên và không đổi từ lúc xem trước; bản chốt giữ nguyên blocker/ngân sách (§11.6). Lượt còn sống trả `DELETE_NOT_QUIESCENT` trung thực (chủ dừng tay rồi xoá), lượt bị từ chối không chạm vào run. |
 | LT-09 summary lồng nhau | Một phần | `history_store.prepare_compaction/commit_compaction` + manifest theo `source_key`, `agent_id`; `restore_compaction` | **Chưa nối vào đường nén sống**: `runtime.py` vẫn chỉ ghi checkpoint cũ, nên manifest chỉ sinh trong ca kiểm. Đây là lựa chọn có ý thức của đợt này (đổi đường ghi canonical giữa lượt nén cần một vòng kiểm riêng, không vá ở cuối chu kỳ). Chưa đo trên chuỗi >20 lần nén thật ở host; ca đơn vị đã phủ ≥20 lần. |
 
 ### 11.1 Giới hạn đã biết sau đợt soát mã
@@ -212,7 +212,7 @@ khi vẫn dựng lại ảnh chụp dung lượng.
 | Khởi động lại ở biên side effect | `test_unsafe_missing_tool_cannot_restart_with_new_call_id`, `test_child_receipt_projection_atomic_rollback_and_gap_repair` | Đạt (đơn vị) |
 | Khởi động lại ở biên decision | `test_request_and_answer_process_death_persist`, `test_pending_card_same_id_outcome_and_retry_after_restart`, `test_expiry_one_settle_and_stale_contract` | Đạt (đơn vị) |
 | Khởi động lại ở biên attempt | `test_budget_reservation_crash_bound_restart_and_one_card_delta`, `test_two_reconcilers_and_reopened_child_do_not_close_wrong_attempt`, `test_restart_recovery_seeds_only_evidence_checked_auto_runs`, `test_restart_without_the_flag_never_continues` | Đạt (đơn vị) |
-| Delete-carry-forward sang hội thoại mới | LT-08 ca 7 chạy thật trên harness (`12/12`) + `test_the_capsule_reads_back_over_http_after_the_raw_history_is_gone` | Đạt (live + đơn vị) |
+| Delete-carry-forward sang hội thoại mới | LT-08 ca 7 chạy thật trên harness (`12/12`) + `test_the_capsule_reads_back_over_http_after_the_raw_history_is_gone` + hai ca mức route của §11.6 (xoá một lượt qua handler HTTP, và từ chối không chạm run) | Đạt (live + đơn vị) |
 | Goal/correction/evidence lỗi không mất | Ca 20 lần nén ở trên + `retained_state_block` (§11.2) + `test_the_retained_state_block_goes_into_the_brief_of_a_new_conversation` | Đạt |
 | Search đúng project và phân trang đầy đủ | `test_search_240_newest_pagination_append`, `test_scope_ifc_and_symlink`, các ca A1–A5 của đợt kiểm live | Đạt |
 | Ngân sách không reset | `test_budget_reservation_crash_bound_restart_and_one_card_delta`, `test_a_pending_budget_card_keeps_the_run_answerable` (13/13 live) | Đạt |
@@ -235,6 +235,34 @@ Việc đã biết mà đợt này **không** làm, xếp theo mức độ:
 | Nhãn IFC chưa có nguồn thật | Thấp | Gắn nhãn rỗng là giả vờ có kiểm soát |
 | `search_text` giữ nguyên văn cạnh blob | Thấp | Chưa phải điểm nghẽn dung lượng trên máy chủ nhà |
 
+
+### 11.6 Đợt vá thứ tám: xoá trong một lượt (FINDING 9)
+
+Vòng kiểm live trên `8e0a632` trả `PARTIAL`: phiên có run chưa kết thúc vẫn 409
+`DELETE_REVISION_CONFLICT` qua đường HTTP, và lần thử lại cũng hỏng — trong khi trên `6c4e17e` lần
+thứ hai lại xong. Nguyên nhân có **hai** nửa, không phải một:
+
+| Nửa | Chỗ đứng | Vì sao hỏng |
+|---|---|---|
+| Đóng run sau bước kiểm bản ghim | `memory/history_store.py → delete_with_capsule` | Run chưa kết thúc bị đóng SAU khi bản ghim đã khớp, nên bản chốt ghi ra khác bản vừa xác minh. Đã vá ở `8e0a632`: hook `run_closer` chạy trong chính giao dịch, ngay sau bước kiểm |
+| Cổng dừng phiên trước khi xoá | `api/server.py → session_deletion_confirm` | `runtime.stop` đẩy `revision`/`stop_epoch`/`lease_epoch` của run lên rồi huỷ decision/work_graph — đúng những trường vào bản ghim critical. Sổ `runtime.tasks` không xoá hàng của phiên, nên vòng này chạy cả với phiên đã xong lượt; và vì run không kịp về trạng thái kết thúc, MỌI lần thử lại làm bản ghim lệch tiếp. Đợt này bỏ hẳn vòng ấy |
+
+Sau đợt vá: phiên giữ run `budget_exhausted`/`paused`/`needs_user` xoá được trong MỘT lần xác nhận —
+run đóng `cancelled`/`HISTORY_DELETED` ngay trong giao dịch xoá và capsule giữ nguyên blocker cùng
+ngân sách đã xem trước. Lượt còn sống (`ready`/`running`/`interrupted`) trả `DELETE_NOT_QUIESCENT`
+trung thực và **không chạm** vào run; chủ dừng tay rồi xoá. Đường `DELETE` cũ vẫn 409 như trước.
+
+Vì sao bộ kiểm cũ vẫn xanh: hai bài kiểm của `8e0a632` gọi thẳng
+`history_surface.deletion_confirm`, và đường HTTP duy nhất cũng dùng lời gọi surface cho bước xoá —
+không bài nào đi qua handler `session_deletion_confirm`, và không bài nào dựng run chưa kết thúc
+trước khi xoá. Đợt này thêm hai ca ở **mức route** (client HTTP thật; một ca run `budget_exhausted`,
+một ca run `ready`; sổ `runtime.tasks` có hàng như harness thật) — cả hai đã chứng minh **đỏ** khi
+dựng lại vòng dừng cũ và xanh sau khi bỏ.
+
+Cùng đợt, theo vòng soát mã (mức 2/10): `HistoryStore._open_runs` + mã lỗi
+`DELETE_RUN_CLOSER_MISSING` — kho chưa nối người đóng sổ thì TỪ CHỐI xoá khi cây còn run chưa kết
+thúc, thay vì xoá rồi để lại hàng run trỏ vào phiên đã biến mất (làm `recover()` hoãn vòng bơm tới
+lần khởi động sau).
 
 ### 11.5 Đối chiếu F01–F31 sau khi triển khai
 

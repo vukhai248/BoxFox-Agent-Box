@@ -517,6 +517,16 @@ class HistoryStore:
                                (caller['project_id'], limit)).fetchall()
         return [{'capsuleId': row['capsule_id'], 'created': row['created']} for row in rows]
 
+    def _open_runs(self, ids):
+        """Số run CHƯA kết thúc của cây; 0 khi kho chưa có bảng longtask."""
+        if not self.db.execute("SELECT 1 FROM sqlite_master WHERE name='longtask_runs'").fetchone():
+            return 0
+        marks = ','.join('?' for _ in ids)
+        row = self.db.execute(
+            f"SELECT COUNT(*) AS n FROM longtask_runs WHERE session_id IN ({marks}) "
+            f"AND state NOT IN ('completed','cancelled','failed')", tuple(ids)).fetchone()
+        return row['n']
+
     def delete_with_capsule(self, sid, *, operation_id, expected_revision, confirm=False):
         operation = self.db.execute('SELECT * FROM history_deletions WHERE operation_id=?', (operation_id,)).fetchone()
         if not operation or operation['session_id'] != sid or not confirm:
@@ -534,6 +544,11 @@ class HistoryStore:
                     raise HistoryError('DELETE_REVISION_CONFLICT')
                 if self.run_closer:
                     self.run_closer(self.db, ids)
+                elif self._open_runs(ids):
+                    # Kho chưa nối người đóng sổ: THÀ từ chối còn hơn để lại hàng `longtask_runs`
+                    # chưa kết thúc trỏ vào một phiên đã biến mất — `recover()` sẽ mò vào session
+                    # không tồn tại rồi hoãn luôn vòng bơm cho tới lần khởi động sau.
+                    raise HistoryError('DELETE_RUN_CLOSER_MISSING')
                 for i in ids:
                     self.db.execute("UPDATE history_records SET evidence_state='deleted',search_text='',deleted_at=? WHERE session_id=?", (time.time(), i))
                     self.db.execute("UPDATE history_segments SET status='deleted' WHERE record_id IN (SELECT record_id FROM history_records WHERE session_id=?)", (i,))

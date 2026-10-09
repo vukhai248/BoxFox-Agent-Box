@@ -361,6 +361,115 @@ def test_a_refused_delete_does_not_close_the_run(tmp_path):
     store.close()
 
 
+def test_the_confirm_route_deletes_a_session_with_a_parked_run_in_one_shot(tmp_path):
+    """Đường HTTP thật: preview → xác nhận MỘT lần, run chưa kết thúc vẫn được đóng trong giao dịch.
+
+    Hai bài kiểm trước gọi thẳng `history_surface.deletion_confirm`, nên chúng không thấy được
+    thứ nằm TRƯỚC bước ấy: handler `session_deletion_confirm` từng gọi `runtime.stop` cho mọi
+    phiên có task, và `runtime.stop` đẩy revision/stop_epoch/lease_epoch của run lên — đúng những
+    trường vào bản ghim critical. Hệ quả trên máy thật: bản ghim không bao giờ khớp, lần xác nhận
+    nào cũng 409, và lượt bị từ chối thì kịp đổi trạng thái run. Ca này ghim cả đường HTTP.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu còn dở', 'k1')
+    goal = history_surface.service(runtime).contract(sid)['currentRevision']
+    runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
+                                     'goalRevision': goal,
+                                     'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+    runtime.longtask.store.transition(runtime.longtask.store.get(sid), 'budget_exhausted',
+                                      'LONGTASK_BUDGET_EXHAUSTED')
+
+    async def call():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession() as client:
+                # Sổ task giữ một hàng cho phiên này kể cả sau khi lượt đã xong — đúng như harness
+                # thật, và đúng là điều kiện để vòng `runtime.stop` cũ trong handler chạy.
+                done = asyncio.get_running_loop().create_future()
+                done.set_result(None)
+                runtime.tasks[sid] = done
+                base = str(server.make_url('/api/agent/sessions')) + '/' + sid
+                async with client.post(base + '/deletion-preview', headers=HEADERS,
+                                       json={'mode': 'history_only'}) as response:
+                    preview = (response.status, await response.json())
+                async with client.post(base + '/deletion-confirm', headers=HEADERS,
+                                       json={'operationId': preview[1].get('operationId'),
+                                             'expectedRevision': preview[1].get('expectedRevision'),
+                                             'confirm': True}) as response:
+                    confirm = (response.status, await response.json())
+                # Đọc TRONG lúc app còn sống: `create_app` đóng kho lúc dọn dẹp.
+                row = store.db.execute('SELECT state,blocked_reason FROM longtask_runs WHERE session_id=?',
+                                       (sid,)).fetchone()
+                return preview, confirm, dict(row)
+
+    preview, confirm, row = asyncio.run(call())
+    assert preview[0] == 200 and preview[1]['validation']['status'] == 'validated'
+    assert confirm[0] == 200, confirm
+    assert confirm[1]['status'] == 'deleted' and confirm[1]['capsuleId'] == preview[1]['capsuleId']
+    assert row['state'] == 'cancelled' and row['blocked_reason'] == 'HISTORY_DELETED'
+
+
+def test_the_confirm_route_refuses_a_live_run_without_touching_it(tmp_path):
+    """Run đang ở `ready`: xác nhận trả `DELETE_NOT_QUIESCENT` và KHÔNG được đổi gì của run."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+    goal = history_surface.service(runtime).contract(sid)['currentRevision']
+    runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
+                                     'goalRevision': goal,
+                                     'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+
+    async def call():
+        async with TestServer(create_app(runtime)) as server:
+            async with ClientSession() as client:
+                # Sổ task giữ một hàng cho phiên này kể cả sau khi lượt đã xong — đúng như harness
+                # thật, và đúng là điều kiện để vòng `runtime.stop` cũ trong handler chạy.
+                done = asyncio.get_running_loop().create_future()
+                done.set_result(None)
+                runtime.tasks[sid] = done
+                base = str(server.make_url('/api/agent/sessions')) + '/' + sid
+                async with client.post(base + '/deletion-preview', headers=HEADERS,
+                                       json={'mode': 'history_only'}) as response:
+                    preview = (response.status, await response.json())
+                async with client.post(base + '/deletion-confirm', headers=HEADERS,
+                                       json={'operationId': preview[1].get('operationId'),
+                                             'expectedRevision': preview[1].get('expectedRevision'),
+                                             'confirm': True}) as response:
+                    confirm = (response.status, await response.json())
+                row = store.db.execute('SELECT state,revision,stop_epoch FROM longtask_runs WHERE session_id=?',
+                                       (sid,)).fetchone()
+                return preview, confirm, dict(row)
+
+    preview, confirm, row = asyncio.run(call())
+    assert preview[0] == 200
+    assert confirm[0] == 409 and confirm[1]['code'] == 'DELETE_NOT_QUIESCENT', confirm
+    assert row['state'] == 'ready' and row['revision'] == 1 and row['stop_epoch'] == 0, \
+        'lượt bị từ chối không được chạm vào run'
+
+
+def test_a_store_without_a_run_closer_refuses_to_delete_over_open_runs(tmp_path):
+    """Kho chưa nối người đóng sổ: từ chối, KHÔNG xoá phiên rồi bỏ lại run chưa kết thúc."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+    goal = history_surface.service(runtime).contract(sid)['currentRevision']
+    runtime.configure_longtask(sid, {'enabled': True, 'resumePolicy': 'manual', 'invocationId': 'i1',
+                                     'goalRevision': goal,
+                                     'budget': {'totalStepLimit': 5, 'activeTimeLimitMs': 60000}})
+    runtime.longtask.store.transition(runtime.longtask.store.get(sid), 'budget_exhausted',
+                                      'LONGTASK_BUDGET_EXHAUSTED')
+    preview = history_surface.deletion_preview(runtime, sid, {'mode': 'history_only'})
+    history = store.history
+    history.run_closer = None
+    with pytest.raises(HistoryError, match='DELETE_RUN_CLOSER_MISSING'):
+        history.delete_with_capsule(sid, operation_id=preview['operationId'],
+                                    expected_revision=preview['expectedRevision'], confirm=True)
+    assert store.get(sid), 'phiên phải còn nguyên khi kho thiếu người đóng sổ'
+    row = store.db.execute('SELECT state FROM longtask_runs WHERE session_id=?', (sid,)).fetchone()
+    assert row['state'] == 'budget_exhausted'
+    store.db.close()
+
+
 def test_deletion_preview_refuses_a_stale_revision_and_a_foreign_mode(tmp_path):
     store, runtime, session = build(tmp_path)
     sid = session['id']
