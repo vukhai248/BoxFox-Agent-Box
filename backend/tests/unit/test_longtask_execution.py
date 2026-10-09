@@ -382,6 +382,47 @@ def test_owner_turn_rebases_mid_turn_without_going_stale(tmp_path):
     assert after['state'] == 'ready' and after['goalRevision'] == 2
 
 
+def test_a_child_admission_is_not_refused_by_the_parent_call_in_flight(tmp_path):
+    """F03 — cha đang chạy một công cụ GHI (`work_run`/`delegate_task` sinh con): `start()` của
+    con chạy lại cổng và quét CẢ cây, nên `tool_start` của cha ĐANG chạy (chưa có `tool_end`)
+    bị đọc thành "ý định cũ chưa giải quyết" — con bị từ chối ngay lúc nhận, run bị chặn giữa
+    lúc công cụ của cha vẫn chạy, và cổng kế tiếp chết vì `LONGTASK_STALE`."""
+    rt, sid = runtime(tmp_path)
+    configure(rt, sid)
+    child = rt.store.create({}, role='explore', parent_id=sid)['id']
+    rt.store.emit(sid, 'tool_start',
+                  tool_recovery.start_payload('call-parent', 'work_run', {'phase': 'discover'}))
+
+    async def parent_is_running(expect):
+        # Đúng thứ tự thật: lượt của cha đã được đăng ký ở `rt.tasks` trước khi công cụ chạy.
+        rt.tasks[sid] = asyncio.get_running_loop().create_task(asyncio.sleep(5))
+        try:
+            expect()
+        finally:
+            rt.tasks[sid].cancel()
+            try:
+                await rt.tasks[sid]
+            except asyncio.CancelledError:
+                pass
+            rt.tasks.pop(sid, None)
+
+    asyncio.run(parent_is_running(lambda: rt.longtask.check(child)))
+    # Lượt của cha đã đóng mà dòng còn mồ côi ⇒ ý định cũ thật: vẫn chặn con.
+    with pytest.raises(LongtaskError) as exc:
+        rt.longtask.check(child)
+    assert exc.value.code == 'LONGTASK_UNSAFE_INTERRUPTION'
+    # Miễn trừ đúng dòng MỚI NHẤT của phiên đang chạy: một ý định cũ hơn vẫn chặn.
+    rt.store.emit(sid, 'tool_start',
+                  tool_recovery.start_payload('call-older', 'file_write', {'path': 'a', 'content': 'b'}))
+
+    def refused():
+        with pytest.raises(LongtaskError) as caught:
+            rt.longtask.check(child)
+        assert caught.value.code == 'LONGTASK_UNSAFE_INTERRUPTION'
+
+    asyncio.run(parent_is_running(refused))
+
+
 def test_provider_metadata_stripped_without_mutating_stored_message(tmp_path):
     rt, sid = runtime(tmp_path)
     messages = [{'role': 'assistant', 'content': 'Summary', 'origin': 'synthetic_handoff',

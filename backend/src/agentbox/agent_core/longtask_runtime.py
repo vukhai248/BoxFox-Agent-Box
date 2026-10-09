@@ -158,10 +158,19 @@ class LongtaskRuntime:
             ids.extend(row['id'] for row in self.rt.store.db.execute('SELECT id FROM sessions WHERE parent_id=?', (root,))
                        if row['id'] not in ids)
         inspected = {(ref['sessionId'], ref['seq']) for ref in self.store.inspected(run)}
+        # Phiên ĐANG chạy lượt thì lời gọi mới nhất chưa có `tool_end` của nó là lời gọi ĐANG chạy,
+        # không phải ý định mồ côi của một lượt đã chết. Thiếu luật này, cổng nhận con đọc chính
+        # lời gọi đang chạy của CHA (một `tool_start` chưa có `tool_end`) thành ý định cũ và từ chối
+        # con — run bị chặn bằng `LONGTASK_UNSAFE_INTERRUPTION` trong khi công cụ của cha vẫn chạy,
+        # rồi cổng kế tiếp chết vì `LONGTASK_STALE`. Ý định CŨ hơn trong cùng phiên vẫn chặn.
+        live = {key for key, task in getattr(self.rt, 'tasks', {}).items() if not task.done()}
         for target in ids:
             pending = tool_recovery.interrupted_calls(self.rt.store, target)
             if in_flight and target == in_flight[0]:
                 pending = [item for item in pending if item.get('seq') != in_flight[1]]
+            elif target in live and pending:
+                newest = max(item.get('seq') or 0 for item in pending)
+                pending = [item for item in pending if (item.get('seq') or 0) != newest]
             if any(item.get('replay') != 'safe' for item in pending):
                 raise LongtaskError('LONGTASK_UNSAFE_INTERRUPTION', 'unresolved unsafe tool intent')
             rows = self.rt.store.db.execute("SELECT seq,payload FROM events WHERE session_id=? AND kind='tool_end'", (target,))
