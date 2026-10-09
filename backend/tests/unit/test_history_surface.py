@@ -198,14 +198,72 @@ def test_a_broken_projection_does_not_claim_the_raw_copy_is_lost(tmp_path, monke
 
     assert record['recorded'] is True and record['checkpointId'], 'bản thô vẫn phải ở trong kho'
     assert record['projection'] == {'canonicalStored': True, 'projectionStored': False,
-                                    'projectionError': 'disk full', 'skipped': None}
-    assert record['journal'] is None
+                                    'projectionError': 'PROJECTION_FAILED', 'skipped': None}
+    # Hai tệp là hai lần ghi độc lập: bản nén hỏng không có nghĩa là nhật ký cũng hỏng, nên nó vẫn
+    # được ghi và vẫn được báo đúng.
+    assert record['journal']['projectionStored'] is True
+    notice = [e for e in store.events(sid)
+              if e['type'] == 'notice' and e['data'].get('code') == history_surface.PROJECTION_DEGRADED_CODE]
+    assert 'disk full' in notice[0]['data']['message'], 'mã là mã, còn chuyện đã xảy ra vẫn phải có'
     row = store.db.execute('SELECT state FROM history_compactions WHERE checkpoint_id=?',
                            (record['checkpointId'],)).fetchone()
     assert row['state'] == 'committed', 'manifest đã commit thì không được hạ xuống theo bản chiếu'
     codes = [e['data'].get('code') for e in store.events(sid) if e['type'] == 'notice']
     assert history_surface.PROJECTION_DEGRADED_CODE in codes, codes
     assert history_surface.COMPACTION_DEGRADED_CODE not in codes, 'bản thô KHÔNG hỏng, đừng nói là hỏng'
+    store.db.close()
+
+
+def test_a_failed_journal_export_does_not_overwrite_a_stored_projection(tmp_path, monkeypatch):
+    """Hai tệp là hai lần ghi: `journal.md` hỏng không được báo thành bản nén hỏng.
+
+    Ca này đúng thứ tự mà bản trước gộp nhầm: bản nén ghi xong (DB nói `stored`) rồi tới lượt
+    `journal.md` mới hỏng — báo "bản chiếu không ghi xong" ở đây là nói dối theo chiều ngược lại.
+    """
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def boom(*args, **kwargs):
+        raise OSError('read-only file system')
+
+    monkeypatch.setattr(history_surface, 'export_journal', boom)
+    event = {'kind': 'compression'}
+    context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+    record = event['historyRecord']
+
+    assert record['recorded'] is True and record['projection']['projectionStored'] is True, \
+        'bản nén đã ghi xong thì phải nói là đã ghi xong'
+    assert record['journal'] is None
+    row = store.db.execute('SELECT projection_status FROM history_compactions WHERE checkpoint_id=?',
+                           (record['checkpointId'],)).fetchone()
+    assert row['projection_status'] == 'stored'
+    workspace = Path(session['config']['machineBinding']['workspace'])
+    assert (workspace / '.session-history' / sid / 'general_agent' / 'compaction_001.md').exists()
+    codes = [e['data'].get('code') for e in store.events(sid) if e['type'] == 'notice']
+    assert history_surface.JOURNAL_DEGRADED_CODE in codes, codes
+    assert history_surface.PROJECTION_DEGRADED_CODE not in codes, 'bản nén không hỏng'
+    store.db.close()
+
+
+def test_a_history_store_that_never_materialized_does_not_kill_the_compaction(tmp_path, monkeypatch):
+    """Kho lịch sử dựng hỏng từ lúc khởi động: `service(rt)` ném, và lượt nén vẫn phải đi tiếp."""
+    store, runtime, session = build(tmp_path, project='p1')
+    sid = session['id']
+    ingest(runtime, sid, 'mục tiêu', 'k1')
+
+    def boom(*args, **kwargs):
+        raise HistoryError('HISTORY_SURFACE_UNAVAILABLE')
+
+    monkeypatch.setattr(history_surface, 'service', boom)
+    event = {'kind': 'compression'}
+    receipt = context_surface.compact(runtime, sid, [{'role': 'user', 'content': 'mục tiêu'}], [], event)
+
+    assert receipt and receipt.get('ref'), 'lượt nén vẫn phải trả về bản ghi của nó'
+    assert event['historyRecord'] == {'recorded': False, 'checkpointId': None, 'projection': None,
+                                      'journal': None, 'error': 'HISTORY_SURFACE_UNAVAILABLE'}
+    codes = [e['data'].get('code') for e in store.events(sid) if e['type'] == 'notice']
+    assert history_surface.COMPACTION_DEGRADED_CODE in codes, codes
     store.db.close()
 
 

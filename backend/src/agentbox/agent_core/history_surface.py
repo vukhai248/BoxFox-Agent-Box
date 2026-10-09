@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import time
 
 from ..memory.history_files import digest, encode
@@ -517,11 +518,29 @@ COMPACTION_DEGRADED_CODE = 'HISTORY_COMPACTION_DEGRADED'
 #: Mã notice khi bản thô đã commit nhưng bản chiếu ra workspace không ghi xong. Khác mã trên ở chỗ
 #: **không** mất khả năng đọc lại: manifest vẫn còn, chỉ tệp đọc được là thiếu.
 PROJECTION_DEGRADED_CODE = 'HISTORY_COMPACTION_PROJECTION_DEGRADED'
+#: Mã notice khi bản nén đã ghi xong mà chỉ `journal.md` không ghi xong. Tách khỏi mã trên vì hai
+#: tệp là hai lần ghi: gộp lại thì một trong hai lần hỏng sẽ bị báo thành lần kia.
+JOURNAL_DEGRADED_CODE = 'HISTORY_COMPACTION_JOURNAL_DEGRADED'
 
 
 def _failure_code(exc, fallback):
-    """Mã để notice nói đúng loại hỏng: `code` của ngoại lệ, hoặc phần trước `:` của thông điệp."""
-    return getattr(exc, 'code', None) or str(exc).split(':', 1)[0].strip() or fallback
+    """Mã để notice nói đúng loại hỏng — **mã**, không phải câu văn của ngoại lệ.
+
+    Lấy `code` của ngoại lệ khi có; nếu không thì chỉ nhận phần đầu thông điệp khi nó đúng dạng mã
+    (`HISTORY_SOURCE_CONFLICT`), còn `no such table: x` thì rơi về mã dự phòng và câu văn gốc đi
+    kèm trong thông điệp notice (`_failure_detail`).
+    """
+    code = getattr(exc, 'code', None)
+    if code:
+        return code
+    head = str(exc).split(':', 1)[0].strip()
+    return head if re.fullmatch(r'[A-Z][A-Z0-9_]{2,}', head) else fallback
+
+
+def _failure_detail(exc):
+    """Câu văn gốc của ngoại lệ (ngắn lại) — notice cần cả mã lẫn chuyện đã xảy ra."""
+    text = str(exc).strip()
+    return f'{exc.__class__.__name__}: {text[:160]}' if text else exc.__class__.__name__
 
 
 def _compaction_numbers(event):
@@ -550,8 +569,10 @@ def record_compaction(rt, sid, saved, compacted, event=None):
     sử hỏng — mọi lỗi thành một notice bền `HISTORY_COMPACTION_DEGRADED` kèm mã gốc.
     """
     from . import session_journal
-    history = service(rt)
     try:
+        # `service(rt)` cũng nằm TRONG try: kho lịch sử dựng hỏng lúc khởi động thì nó ném ở đây,
+        # và lượt nén vẫn phải đi tiếp như mọi kiểu hỏng khác của kho.
+        history = service(rt)
         key = 'compaction:' + digest(encode(saved).encode())[:16]
         manifest = history.prepare_compaction(sid, saved, source_key=key,
                                               numbers=_compaction_numbers(event))
@@ -560,25 +581,35 @@ def record_compaction(rt, sid, saved, compacted, event=None):
         code = _failure_code(exc, 'HISTORY_COMPACTION_FAILED')
         session_journal.note_gap(
             rt.store, sid, COMPACTION_DEGRADED_CODE,
-            f'{COMPACTION_DEGRADED_CODE}: bản thô của lượt nén không vào được kho lịch sử ({code}) — '
-            'lượt vẫn đi tiếp, nhưng lần nén này không có manifest đọc lại được',
-            op='compaction_record')
+            f'{COMPACTION_DEGRADED_CODE}: bản thô của lượt nén không vào được kho lịch sử ({code}; '
+            f'{_failure_detail(exc)}) — lượt vẫn đi tiếp, nhưng lần nén này không có manifest đọc '
+            'lại được', op='compaction_record')
         return {'recorded': False, 'checkpointId': None, 'projection': None, 'journal': None,
                 'error': code}
     # Bản chiếu ghi SAU khi bản thô đã commit, và hỏng bản chiếu không được nói dối là bản thô hỏng
-    # (§6: canonical còn bền thì bản chiếu được phép `degraded`).
+    # (§6: canonical còn bền thì bản chiếu được phép `degraded`). Hai tệp là hai lần ghi riêng, nên
+    # hai lần hỏng cũng phải là hai mã riêng: `journal.md` hỏng mà báo là "bản chiếu không ghi xong"
+    # thì lại là nói dối theo chiều ngược lại, đúng lúc `projection_status` trong DB nói `stored`.
     try:
         projection = export_projection(rt, sid, manifest['checkpointId'])
-        journal = None if projection.get('skipped') else export_journal(rt, sid)
     except Exception as exc:
         code = _failure_code(exc, 'PROJECTION_FAILED')
         session_journal.note_gap(
             rt.store, sid, PROJECTION_DEGRADED_CODE,
             f'{PROJECTION_DEGRADED_CODE}: bản thô của lượt nén đã vào kho, nhưng bản đọc được trong '
-            f'workspace thì không ghi xong ({code})', op='compaction_projection')
+            f'workspace thì không ghi xong ({code}; {_failure_detail(exc)})', op='compaction_projection')
         projection = {'canonicalStored': True, 'projectionStored': False,
                       'projectionError': code, 'skipped': None}
-        journal = None
+    journal = None
+    if not projection.get('skipped'):
+        try:
+            journal = export_journal(rt, sid)
+        except Exception as exc:
+            code = _failure_code(exc, 'JOURNAL_EXPORT_FAILED')
+            session_journal.note_gap(
+                rt.store, sid, JOURNAL_DEGRADED_CODE,
+                f'{JOURNAL_DEGRADED_CODE}: bản nén đã ghi xong, còn `journal.md` trong workspace '
+                f'thì không ({code}; {_failure_detail(exc)})', op='compaction_journal')
     return {'recorded': True, 'checkpointId': manifest['checkpointId'], 'sourceKey': key,
             'messages': len(saved) if isinstance(saved, list) else None,
             'projection': projection, 'journal': journal, 'error': None}
