@@ -2,6 +2,8 @@
 
 Đây là điểm bắt đầu duy nhất cho tài liệu dự án. Các tài liệu mô tả **hướng thiết kế hoặc kế hoạch** không phải xác nhận rằng runtime đã triển khai và bảo vệ các cơ chế đó. Trạng thái đã xác minh, giới hạn và lộ trình nằm trong [kế hoạch sản phẩm](plan/agent-box-plan.md).
 
+> **Vừa nhận việc?** Đọc [bàn giao hiện hành](../HANDOFF.md) trước; mục lục mọi bản bàn giao (kể cả bản lịch sử) nằm ở [docs/handoff/README.md](handoff/README.md).
+
 ## Chọn đường đọc
 
 | Nếu cần… | Đọc đầu tiên | Rồi đến |
