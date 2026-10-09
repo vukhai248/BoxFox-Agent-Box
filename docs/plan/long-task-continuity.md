@@ -153,7 +153,7 @@ Khảo sát đã chạy các nhóm test hiện có: runtime audit 43 + 519 + 44;
 
 ## 11. Trạng thái triển khai
 
-Mười hai commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lịch sử), `9743ba8` (chạy/khôi phục tác vụ dài), `cd2daf4` (bề mặt API), `fc964d8` (giao diện), `5e0c130`/`7ef2050` (vá theo đợt soát mã), `59ed6a9` (mười lăm bài kiểm cũ theo hợp đồng mới), `14dacff` (thẻ ngân sách không còn làm kẹt phiên), `00d055a`/`6c4e17e` (đọc lại capsule, `REQUEST_INVALID`, panel dung lượng), và commit cuối đóng run trong giao dịch xoá. Kiểm cục bộ cuối: toàn bộ `tests/unit` → **5 hỏng / 5580 đạt / 14 bỏ qua** trên đỉnh nhánh, và cả 5 hỏng đều có trước đợt này (3 hỏng ở base `752d9f7`, 2 ca `bubblewrap` do môi trường); `tsc -b --noEmit` 0 lỗi; 29 ca continuity phía frontend đạt; `deploy/docker/tests/test_session_files.py` 32 đạt.
+Mười hai commit trên nhánh `vorflux/host-mode-web-transport`: `b28cade` (kho lịch sử), `9743ba8` (chạy/khôi phục tác vụ dài), `cd2daf4` (bề mặt API), `fc964d8` (giao diện), `5e0c130`/`7ef2050` (vá theo đợt soát mã), `59ed6a9` (mười lăm bài kiểm cũ theo hợp đồng mới), `14dacff` (thẻ ngân sách không còn làm kẹt phiên), `00d055a`/`6c4e17e` (đọc lại capsule, `REQUEST_INVALID`, panel dung lượng), `8e0a632` (đóng run trong giao dịch xoá) và `04583e0` (bỏ cổng dừng phiên trước bước kiểm — §11.6). Kiểm cục bộ cuối: toàn bộ `tests/unit` → **5 hỏng / 5584 đạt / 14 bỏ qua** trên đỉnh `04583e0` (26 phút 47 giây), và cả 5 hỏng đều có trước đợt này (3 hỏng ở base `752d9f7`, 2 ca `bubblewrap` do môi trường); `tsc -b --noEmit` 0 lỗi; 29 ca continuity phía frontend đạt; `deploy/docker/tests/test_session_files.py` 32 đạt.
 
 | Thiếu sót | Trạng thái | Mốc mã / bằng chứng | Giới hạn còn lại |
 |---|---|---|---|
