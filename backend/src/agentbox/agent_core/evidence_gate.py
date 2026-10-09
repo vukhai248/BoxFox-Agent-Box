@@ -229,6 +229,14 @@ def _call_failed(call):
     return False
 
 
+def _ref_numbers(ref):
+    """Ref đủ hai con số để mảnh bằng chứng mang hash: thiếu `bytes` thì thôi, không đoán.
+
+    Đọc `ref['bytes']` trần là KeyError ở giữa đường dựng bằng chứng — chỗ ấy không có ai bắt.
+    """
+    return isinstance(ref.get('contentHash'), str) and isinstance(ref.get('bytes'), int)
+
+
 def _clean_path(value):
     text = str(value or '').strip().strip('\'"`')
     while text.startswith('./'):
@@ -447,7 +455,7 @@ def artifacts_from_calls(calls):
                                       exitCode=box_exit_code(result),
                                       artifact=_clean_path(artifact),
                                       **({'sha256': ref['contentHash'], 'bytes': ref['bytes']}
-                                         if isinstance(ref.get('contentHash'), str) else {}),
+                                         if _ref_numbers(ref) else {}),
                                       stdoutTail=box_output_tail(result)))
             continue
         kind = _artifact_kind(artifact, name, result)

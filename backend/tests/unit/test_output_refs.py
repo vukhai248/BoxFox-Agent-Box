@@ -10,6 +10,7 @@ không vào được chuỗi bằng chứng có hash. Bài kiểm này ghim ba t
 """
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -37,8 +38,6 @@ def test_over_the_threshold_the_file_lands_where_the_ui_reads_it(tmp_path):
 
 
 def test_the_ref_carries_the_hash_of_what_is_in_the_file(tmp_path):
-    import hashlib
-
     text = 'y' * (output_refs.SPILL_THRESHOLD_CHARS + 5)
     _, ref = output_refs.spill(tmp_path, text)
 
@@ -55,6 +54,50 @@ def test_the_same_text_twice_gets_the_same_artifact_id(tmp_path):
 
     assert first['path'] != second['path'], 'mỗi lần spill một tệp, không ghi đè lần trước'
     assert first['artifactId'] == second['artifactId'], 'id suy từ nội dung nên hai bản giống nhau chung id'
+
+
+def test_the_hash_describes_the_bytes_that_landed_on_disk(tmp_path):
+    """Hash và số byte phải tả ĐÚNG tệp, kể cả khi nội dung có xuống dòng.
+
+    `write_text` dịch `\n` thành `\r\n` trên Windows, nên hash tính trên chuỗi sẽ nói về một tệp
+    khác với tệp đã ghi — mất đúng tính chất mà F30 dựng ra. Bài kiểm này so hash với `read_bytes()`.
+    """
+    text = ('dong ' + 'x' * 40 + '\n') * 500
+    assert len(text) > output_refs.SPILL_THRESHOLD_CHARS
+    _, ref = output_refs.spill(tmp_path, text)
+
+    raw = (tmp_path / ref['path']).read_bytes()
+    assert ref['contentHash'] == hashlib.sha256(raw).hexdigest()
+    assert ref['bytes'] == len(raw) == len(text.encode('utf-8'))
+    # Trên Linux hai cách ghi ra cùng byte, nên ca này một mình không bắt được lỗi dịch xuống dòng
+    # của Windows; ghim thêm cách ghi để không ai quay lại `write_text`.
+    assert 'target.write_bytes(raw)' in Path(output_refs.__file__).read_text(encoding='utf-8')
+
+
+def test_a_failed_write_keeps_the_command_result_and_says_the_file_is_missing(tmp_path):
+    """Không ghi được tệp (đĩa đầy, chỉ-đọc, `tools` là một tệp) thì vẫn phải trả kết quả lệnh.
+
+    Bản trước F30 cắt im lặng; bản gộp hai producer thì để `OSError` nổi lên thành
+    `HOST_TOOL_FAILED`, mất cả exit code lẫn đầu ra. Nay: bản xem trước + một câu nói rõ.
+    """
+    blocker = tmp_path / 'tools'
+    blocker.write_text('tệp, không phải thư mục')
+    text = 'q' * (output_refs.SPILL_THRESHOLD_CHARS + 1)
+
+    content, ref = output_refs.spill(tmp_path, text, target_dir=blocker)
+
+    assert ref is None
+    assert content.endswith(output_refs.SPILL_FAILED_MARKER)
+    assert len(content) == output_refs.SPILL_PREVIEW_CHARS + len(output_refs.SPILL_FAILED_MARKER)
+
+
+def test_the_box_worker_has_the_same_ref_and_the_same_cut_rule():
+    """Worker giữ bản sao: ghim cả hình dạng ref lẫn luật cắt, không chỉ bốn con số."""
+    assert worker._spill_ref('a/b.txt', 'nội dung'.encode('utf-8')) == \
+        output_refs.output_ref('a/b.txt', 'nội dung')
+    assert worker._spill_content('x' * 17000, None) == 'x' * 17000, 'không có tệp thì không được cắt'
+    assert worker._spill_content('x' * 25000, 'a/b.txt') == \
+        'x' * output_refs.SPILL_PREVIEW_CHARS + output_refs.SPILL_MARKER
 
 
 def test_the_box_worker_keeps_the_same_spill_numbers():

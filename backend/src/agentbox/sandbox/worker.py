@@ -231,15 +231,32 @@ def shell(command, timeout=30, session='default'):
         # `tests/unit/test_output_refs.py` ghim hai bên khớp nhau.
         spilled = WORKSPACE / SPILL_DIR / (uuid.uuid4().hex + '.txt')
         spilled.parent.mkdir(parents=True, exist_ok=True)
-        spilled.write_text(output, encoding='utf-8')
+        spilled.write_bytes(output.encode('utf-8'))
         artifact = str(spilled.relative_to(WORKSPACE))
-        raw = output.encode('utf-8')
-        content = hashlib.sha256(raw).hexdigest()
-        ref = {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
-               'path': artifact, 'bytes': len(raw)}
-    return {'content': output[:SPILL_PREVIEW_CHARS] + (SPILL_MARKER if artifact else ''),
+        ref = _spill_ref(artifact, output.encode('utf-8'))
+    return {'content': _spill_content(output, artifact),
             'exit_code': proc.returncode, 'is_error': proc.returncode != 0, 'artifact': artifact,
             'outputRef': ref}
+
+
+def _spill_content(output, artifact):
+    """Dưới trần thì trả NGUYÊN văn; chỉ cắt khi đã có tệp đầy đủ để chỉ tới.
+
+    Bản trước cắt ở 15.000 ký tự cả khi không có tệp: output 15.001–20.000 ký tự bị mất phần đuôi
+    mà không có dấu hiệu nào, trong khi host trả nguyên văn — đúng kiểu lệch im lặng mà F30 dẹp.
+    """
+    return output[:SPILL_PREVIEW_CHARS] + SPILL_MARKER if artifact else output
+
+
+def _spill_ref(path, raw):
+    """Ref của tệp spill trong box — bản sao của `sandbox/output_refs.output_ref` (script độc lập).
+
+    `tests/unit/test_output_refs.py` gọi thẳng hàm này và so với bản host, nên đổi khoá hay đổi
+    tiền tố id ở một bên là đỏ ngay.
+    """
+    content = hashlib.sha256(raw).hexdigest()
+    return {'artifactId': 'spill-' + content[:20], 'version': 1, 'contentHash': content,
+            'path': path, 'bytes': len(raw)}
 
 
 # --- W6.1.3: verify_exec — reviewer thử MỘT claim trong sandbox tạm --------------------------------

@@ -348,7 +348,22 @@ vào được chuỗi bằng chứng có hash. Nay `sandbox/output_refs.py` là 
 (20.000), bản xem trước (15.000), tên thư mục và ref; host executor gọi nó, worker trong box (script
 độc lập, không import được package) giữ bản sao bằng số nhưng **có bài kiểm ghim hai bên khớp** —
 lệch số là đỏ, không còn trôi im lặng. Cổng bằng chứng ưu tiên `outputRef` và mang theo
-`sha256`/`bytes` của tệp. Phần "không sao chép" của F30 vẫn nguyên: không clone runner 270 s (đó là
+`sha256`/`bytes` của tệp.
+
+Ba chỗ vòng soát tìm ra và đã vá cùng đợt: tệp được ghi bằng **byte** (`write_bytes`) chứ không
+qua `write_text` — `write_text` dịch `\n` thành `\r\n` trên Windows, làm hash và số byte nói về một
+tệp khác với tệp đã ghi; ghi hỏng (đĩa đầy, chỉ-đọc, `tools` là một tệp) trả bản xem trước kèm câu
+`[truncated; artifact write failed]` thay vì để `OSError` biến cả kết quả lệnh thành
+`HOST_TOOL_FAILED`; và worker trong box chỉ cắt khi **đã có** tệp đầy đủ để chỉ tới, nên output
+15.001–20.000 ký tự không còn bị mất đuôi im lặng ở một bên.
+
+Chỗ ghi tệp khác nhau theo chế độ và điều đó là bắt buộc: trong box, tệp nằm trong workspace của
+box; trên host, tệp nằm trong `artifacts_dir` của app (`host-artifacts/<project>/<sid>/tools`, cùng
+chỗ với `captures/`) — **không** ghi vào thư mục dự án của chủ. Bản đầu của đợt này gọi
+`spill(workspace, …)` cho cả hai chế độ, tức là rơi tệp vào dự án của chủ và trả về một đường dẫn
+tương đối không mở được từ nơi khác; bản sửa (`0ba15a2`) cho `spill` nhận `target_dir` và trả đường
+dẫn **tuyệt đối** khi tệp nằm ngoài `root`. Bài kiểm dựng đúng ca `machine_router` và khẳng định
+không có gì được ghi vào thư mục dự án. Phần "không sao chép" của F30 vẫn nguyên: không clone runner 270 s (đó là
 read-timeout của httpx) và process `unknown` không tự spawn lại.
 
 Bằng chứng đợt này: `tests/unit/test_output_refs.py` (8 bài, gồm bài ghim worker và bài ghim sàn đo

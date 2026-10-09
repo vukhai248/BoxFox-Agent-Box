@@ -23,6 +23,8 @@ SPILL_THRESHOLD_CHARS = 20000
 SPILL_PREVIEW_CHARS = 15000
 #: Dấu hiệu nói rõ phần bị cắt nằm ở đâu, không để model đoán là đã có đủ.
 SPILL_MARKER = '\n[truncated; see artifact]'
+#: Ghi tệp không xong: vẫn phải nói ra, không cắt im lặng (bản cũ trả về bản xem trước trần).
+SPILL_FAILED_MARKER = '\n[truncated; artifact write failed]'
 #: Thư mục chứa phần tràn, tương đối workspace — chỗ UI đọc được (W8.A4.3).
 SPILL_DIR = '.generated_artifacts/tools'
 
@@ -31,7 +33,8 @@ def output_ref(path, data):
     """Ref chuẩn của một tệp output: đúng bộ khoá job ledger đòi, cộng đường dẫn để mở.
 
     `artifactId` suy từ chính nội dung, nên hai lần spill cùng nội dung ra cùng một id — ledger
-    không phải phân biệt hai bản giống nhau.
+    không phải phân biệt hai bản giống nhau. `data` là chuỗi đã mã hoá UTF-8 **đúng như byte đã ghi
+    xuống đĩa**; nơi gọi ghi byte thì hash mới tả đúng tệp.
     """
     raw = data.encode('utf-8')
     content = hashlib.sha256(raw).hexdigest()
@@ -51,8 +54,17 @@ def spill(root, text, *, target_dir=None):
     root_path = Path(root)
     directory = Path(target_dir) if target_dir is not None else root_path / SPILL_DIR
     target = directory / (uuid.uuid4().hex + '.txt')
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, encoding='utf-8')
+    raw = text.encode('utf-8')
+    try:
+        # Ghi BYTE, không ghi văn bản: `write_text` dịch `\n` thành `\r\n` trên Windows, nên hash và
+        # số byte sẽ nói về một chuỗi khác với chuỗi đã nằm trên đĩa — hỏng đúng thứ F30 dựng ra.
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+    except OSError:
+        # Không ghi được (đĩa đầy, chỉ-đọc, `tools` là một tệp…) thì lượt lệnh vẫn phải sống: trả bản
+        # xem trước kèm câu nói rõ phần đầy đủ đã mất, thay vì để `execute()` biến cả kết quả lệnh
+        # thành `HOST_TOOL_FAILED` — và thay vì cắt im lặng như bản trước F30.
+        return text[:SPILL_PREVIEW_CHARS] + SPILL_FAILED_MARKER, None
     try:
         path = target.relative_to(root_path).as_posix()
     except ValueError:
