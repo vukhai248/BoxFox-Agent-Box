@@ -80,3 +80,13 @@ Evidence tóm tắt: `desktop-startup-fix-evidence-2026-10-10.json`. Raw logs n�
 Đã sửa các đường khóa/cleanup và hook Windows có bằng chứng cụ thể. Bộ cài mới phục vụ kiểm chứng lại triệu chứng owner; không tuyên bố đã nghiệm thu toàn bộ Alpha. UI block hash giữ nguyên `00ca53c040f6e069f358f982f8eff155f3850a9ba59487a33fcc44fa456c5589`.
 
 Nguồn hợp đồng OS: [Electron app lifecycle/single instance](https://www.electronjs.org/docs/latest/api/app), [Microsoft LowLevelMouseProc](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelmouseproc). Windows yêu cầu hook có message loop và callback ngắn. Test Linux/fake không chứng minh hành vi Windows thật.
+
+## 6. Checkpoint đóng gói
+
+- Source được đóng gói: `1d1ef5286133170c4e874a9499f8da9ee3304255`.
+- `desktop/release/startup-fix-0.1.1/BoxFox-Desktop-Alpha-0.1.1-Setup.exe`: 167428303 bytes, SHA-256 `1e7af35507becca09beeeb86886c3e835b1522aee6dfec8a854eb9526f854e56`.
+- NSIS và payload `app-64.7z`: `7z t` đều `Everything is Ok`; bộ cài **NotSigned**. Chưa chạy installer/giao dịch upgrade trên profile của owner.
+- Run12 đọc chính `app.asar` và resources của `win-unpacked`, runtime/router/harness/UI thật, dưới Electron 33.4.11 và packaged-path test context. Không coi đây là đã tự cài trên máy Windows sạch.
+- UI hiện 5823 ms; quan sát thêm 25000 ms; renderer chậm nhất 67 ms; không gọi sandbox/tty ở Host; second-instance đúng một cửa sổ; Quit không còn khóa hoặc orphan.
+- Manifest `dirty=true` do các file untracked của owner được bảo toàn; không có sửa tracked source lúc package. Commit và hash từng block vẫn được ghi, UI giữ nguyên.
+- Kết luận giữ nguyên: candidate cho owner kiểm chứng lại lag sau UI; chưa tuyên bố hết lag toàn máy.

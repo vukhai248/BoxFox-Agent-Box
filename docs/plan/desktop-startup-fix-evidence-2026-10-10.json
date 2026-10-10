@@ -2,7 +2,7 @@
   "schema": 1,
   "baselineCommit": "ff59af8f040cc18f335ffa45e768b962111c54c1",
   "patchBranch": "codex/desktop-startup-fix",
-  "sourceState": "working patch before source checkpoint; installer receipt records packaged commit",
+  "sourceState": "Source checkpoint committed; post-build packaged evidence added separately",
   "scope": "Windows lifecycle/input hooks; post-UI system freeze not declared resolved",
   "runs": [
     {
@@ -342,6 +342,66 @@
       ],
       "rendererResponseMaxMs": 64,
       "boxOrTtyRequests": []
+    },
+    {
+      "run": "run12-packaged-first",
+      "kind": "Real shipped app.asar entry/runtime/UI under Electron 33.4.11 with packaged resources; test runner marks packaged context; not installer execution",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 5823,
+          "windowCount": 1
+        },
+        {
+          "phase": "post-ui-observed",
+          "elapsedMs": 30936,
+          "steadyMs": 25000
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 31218
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 31454,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 31455
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 33463
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 33791,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 33792
+        }
+      ],
+      "orphanPids": [],
+      "rendererResponseMaxMs": 67,
+      "boxOrTtyRequests": [],
+      "raw": [
+        {
+          "path": ".tmp\\desktop-startup-fix\\run12-packaged-first\\lifecycle.json",
+          "sha256": "778cfbd12204d0f4a9cad98d31e53cc2e2f7774501a9048d3743cb0aa5b9da9c"
+        },
+        {
+          "path": ".tmp\\desktop-startup-fix\\run12-packaged-first\\machine-performance.json",
+          "sha256": "2812ac9e5f2a4114620502207ef8a84f7657c76c89e0dd6884c402adf867c9d0"
+        },
+        {
+          "path": ".tmp\\desktop-startup-fix\\run12-packaged-first\\desktop.stdout.log",
+          "sha256": "f594ea53539ce0d841f1ae34ea41705d5d5c9f19c816363805405f71453790d5"
+        }
+      ]
     }
   ],
   "nativeHook": {
@@ -373,5 +433,6 @@
       "isolatedRerunPassed": 1,
       "status": "unresolved intermittent timer assertion; not claimed all-pass"
     }
-  }
+  },
+  "packagedSourceCommit": "1d1ef5286133170c4e874a9499f8da9ee3304255"
 }
