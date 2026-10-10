@@ -8,7 +8,7 @@ việc: **đọc [`../../HANDOFF.md`](../../HANDOFF.md) ở gốc repo trước*
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [`../../HANDOFF.md`](../../HANDOFF.md) | **Đọc trước.** Bàn giao đợt 2026-10-09: nhánh `vorflux/host-mode-web-transport`, PR #1, lượt chạy sống hai pha của tác vụ dài, 18 lỗi harness đã sửa (F01–F17), việc còn mở, cách chạy lại môi trường, và những chỗ dễ vấp. |
+| [`../../HANDOFF.md`](../../HANDOFF.md) | **Đọc trước, đặc biệt mục 0 cập nhật 2026-10-10:** checkpoint local đưa lên main; reasoning/feedback vẫn lỗi, sub đứng sau patch, source/commit, phép kiểm và việc cloud cần tái lập. Mục 1–9 giữ bối cảnh cloud 2026-10-09 về long task và F01–F17. |
 
 ## Bản lịch sử (còn giá trị tra cứu)
 

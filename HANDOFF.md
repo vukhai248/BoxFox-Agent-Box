@@ -4,12 +4,120 @@
 Mọi handoff cũ đã gom về [`docs/handoff/`](docs/handoff/README.md) — mục lục đầy đủ nằm ở
 [`docs/handoff/README.md`](docs/handoff/README.md); không cần đi tìm ở chỗ khác.
 
-- **Nhánh:** `vorflux/host-mode-web-transport` (HEAD `7a8427b`, 87 commit trên `main`, `main` không có
-  gì mới hơn).
-- **Pull request:** https://github.com/khaiv7221-ops/BoxFox-Agent-Box/pull/1 — **PR duy nhất** của repo,
-  đang mở, không phải draft.
-- **Cập nhật lần cuối:** 2026-10-09, sau đợt kiểm thử đầu-cuối tác vụ dài (34 lượt sống, hai pha) và
-  lượt dựng bộ cài Windows Desktop (mục 3).
+- **Nhánh bàn giao:** `main`, repo `https://github.com/vukhai248/BoxFox-Agent-Box.git`.
+  Checkpoint local được làm trên `codex/desktop-startup-fix`; owner yêu cầu đưa lên main.
+  Baseline main trước đợt local: `ff59af8f` (merge PR #13).
+- **Commit cần đọc:** `b9b0d60f` (web history), `d5ad6139` (stream), `dc60c43f`
+  (3 mức quyền), `2e686820` / `4871791f` (router/cổng), `1d1ef528` (startup/lock/hooks).
+- **Pull request lịch sử của cloud:** https://github.com/khaiv7221-ops/BoxFox-Agent-Box/pull/1.
+  Metadata nhánh/PR trong các mục 1–9 phía dưới là bối cảnh đợt cloud 2026-10-09,
+  không phải trạng thái Git hiện tại. Xác minh branch/HEAD thật trước khi làm.
+- **Cập nhật lần cuối:** 2026-10-10 (UTC+7), sau khi owner báo lỗi vẫn còn và sub đứng.
+
+## 0. Bàn giao local mới nhất — ưu tiên đọc trước
+
+### Trạng thái: CHƯA NGHIỆM THU luồng sub-agent
+
+Owner thử **web dùng chung backend desktop** tại `http://localhost:3110/` sau
+`b9b0d60f`, báo rằng **vẫn bug, và sau bản sửa sub-agent đứng, không hiện output**.
+Không được diễn giải 217 test xanh thành đã sửa xong ca chạy thật.
+Agent tiếp nhận cần kiểm từ request/provider → runtime/tool → event bền → API phân trang
+→ store/poll → panel; tách lỗi thực thi khỏi lỗi quan sát trước khi kết luận.
+
+**Phạm vi owner hiện tại:** tối ưu bản web trước, chưa build bộ cài mới. Long task
+được bàn giao cloud làm riêng; phần setup bằng tay chưa được local sửa. Không thay
+kiến trúc điều phối/quyền để chữa lỗi hiển thị. App giữ tiếng Anh.
+
+### Phải đọc file chi tiết trước khi quyết định hoặc sửa
+
+| Tài liệu | Dùng để hiểu |
+| --- | --- |
+| [`docs/plan/web-subagent-history-fix-2026-10-10.md`](docs/plan/web-subagent-history-fix-2026-10-10.md) | Bản sửa `b9b0d60f`, bằng chứng đọc event, cách chạy web chung gateway, giới hạn phép kiểm và báo lỗi mới của owner. |
+| [`docs/plan/desktop-stream-duplication-fix-2026-10-10.md`](docs/plan/desktop-stream-duplication-fix-2026-10-10.md) | `d5ad6139`: delta/snapshot/canonical thought/text, phân biệt duplicate receipt với hai bước model thật. |
+| [`docs/plan/desktop-router-port-fix-2026-10-10.md`](docs/plan/desktop-router-port-fix-2026-10-10.md) | Ping Settings và chat lệch endpoint; profile router/cổng và bằng chứng packaged-path. |
+| [`docs/plan/desktop-permission-levels-2026-10-10.md`](docs/plan/desktop-permission-levels-2026-10-10.md) | 3 mức Request approval / Auto approve / Full access; Network độc lập; project trust và CUA riêng. |
+| [`docs/plan/desktop-startup-fix-2026-10-10.md`](docs/plan/desktop-startup-fix-2026-10-10.md) | Lock stale/PID reuse, close/tray/Quit, hook Windows và lag sau khi UI hiện. |
+| [`docs/handoff/desktop-host-mode-handoff.md`](docs/handoff/desktop-host-mode-handoff.md) + các plan nó trỏ tới | Kiến trúc host/Docker, CUA và phần còn mở; mô tả quyền cũ bị checkpoint 3 mức thay thế. |
+| Các mục 4–9 bên dưới + source/tests/evidence được trỏ tới | Lỗi harness/long task cloud đã sửa và việc chưa xong; không coi đường dẫn `/var/tmp` là đã có ở clone mới. |
+
+### Các lỗi đã thấy và trạng thái bàn giao
+
+| Mã local | Triệu chứng / yêu cầu | Đã làm và việc còn lại |
+| --- | --- | --- |
+| L01 | Mới mở laptop, app báo đã chạy (`desktop.lock`, PID có thể cũ); close/reopen không đúng kỳ vọng. | Có patch `1d1ef528` và probe; xem docs startup. Owner báo lỗi cũ có vẻ tạm mất; chưa gọi là nghiệm thu mọi lifecycle/upgrade. X chỉ ẩn/tray khác Quit. |
+| L02 | UI hiện rồi khoảng 5 giây mới lag chuột/có thể toàn máy, delay 6–7 giây. | Đã xử lý/đo hook và startup trong checkpoint trên. Chưa chứng minh nguyên nhân duy nhất hay hiệu năng mọi máy; không gộp với thời gian chờ mở app. |
+| L03 | Ping model trong Settings được, chat lỗi `UPSTREAM_UNREACHABLE`; đóng app sang Windows có cổng/config khác web/cloud. | Patch router `2e686820`, probe `4871791f`; đọc report đúng commit. Không mặc định quy mọi lỗi mới cho quota/provider. |
+| L04 | `JOURNAL_DEGRADED … PROJECT_TRUST_REQUIRED` vẫn hiện khi chọn Full access. | Chưa sửa journal. Mức duyệt, trust folder, root lưu nội bộ và catalog journal là các tầng riêng. Cần trace `session_ensure`/journal/checkpoint tới executor và project/session binding; không tự trust mọi folder hay bỏ guard. |
+| L05 | Thought/text bị lặp; người dùng thấy hai khối giống nhau. | Patch `d5ad6139` giảm publication lặp và reconcile theo model step; có fixtures. Nội dung giống ở hai step thật không được xóa. Nghiệm thu live tổng thể vẫn mở. |
+| L06 | Sub trả kết quả nhưng internal feedback/reasoning không hiện, hiển thị thiếu; main nhận lượt 2 thì mất tiếp. | `b9b0d60f` sửa phân trang, cache, poll race, receipt cùng child và giữ reasoning đang mở. **Owner báo vẫn bug**, chưa giải quyết trọn vẹn; cần tái lập thật, không chỉ test fixture. |
+| L07 | Sau patch L06, owner thấy sub đứng, chỉ còn placeholder processing và RUNNING. | **MỚI, CHƯA XÁC ĐỊNH NGUYÊN NHÂN.** Đọc chi tiết ngay bên dưới; kiểm regression trước khi thêm patch. |
+| L08 | Long task phải bấm Set up long task / nhập recovery/budget bằng tay, chưa đúng kỳ vọng main tự điều phối. | Local chưa đụng; owner giao cloud. Đọc plan/source và các vấn đề long task dưới đây; thay đổi workflow/quyền cần trình owner duyệt. |
+| L09 | Harness nói Explore thiếu `terminal_exec`, child bị cancelled sau ít bước dù main giao maxSteps 18/20. | Đây là báo cáo của model, không phải nguyên nhân đã xác minh. Kiểm role catalog thực nhận, parent/child budget/deadline/cancel receipts và path/caller identity. Không tự mở shell cho Explore hoặc tin cancelled là đã dùng hết bước. |
+
+### L07 — ảnh mới của owner, thông tin để tái lập
+
+- Ảnh ngày 2026-10-10: web `localhost:3110`, Host/IDE, project
+  `agentic-RAG-for-e-commerce`, UI session prefix `5d4454af`, model hiển thị
+  `step-5-preview-f…` (ảnh không cho toàn bộ model ID).
+- Ba hàng Explore Specialist đều hiển thị **lượt 1 · bước 5**. Hàng thứ hai được chọn;
+  Output chỉ có `Specialist is processing instructions autonomously in the sandbox…`,
+  footer `RUNNING`, không có nội dung tool/thought/result. Nhãn sandbox ở Host cũng
+  cần rà độ chính xác, nhưng không dùng nhãn đó để suy executor thực tế.
+- Main có receipt `work_graph create`, run `w-49bc13ec17`, trạng thái `drafting`,
+  `autopilot: false`, `nodes: []`, `waves: []`; trên UI có Running commands (3).
+  Đây là trạng thái nhìn thấy trong ảnh, không chứng minh scheduler/provider deadlock.
+- Một lần đọc danh sách session qua web 3110 khi viết handoff không thấy prefix
+  `5d4454af`. Chưa đối chiếu được UI chat ID với harness ID / profile / giới hạn listing.
+  Không coi việc không tìm được prefix là bằng chứng session không tồn tại hay mất DB.
+- Owner nói đứng **sau** patch; quan hệ nhân quả chưa được chứng minh. So sánh
+  `b9b0d60f` với trước patch `0a19597b` và trước stream patch `02dc2df4` trên
+  profile/fixture riêng. Không rollback/xóa dữ liệu đang dùng để tạo một ca đẹp.
+
+### Cloud cần kiểm tiếp theo
+
+1. Xác minh commit/source **đang chạy** của UI, gateway, harness, router; local web
+   nạp source mới nhưng backend từ app đã cài. Dùng cùng source/backend/profile cho
+   ca đối chiếu. Clone mới không có app/profile/evidence riêng của Windows owner.
+2. Map UI chat ID → harness ID → child IDs/run/turn. Lấy hai snapshot có timestamp,
+   event cursor và liveness để biết thực sự không tiến triển hay UI không tải được.
+   Kiểm Network/Console: request bị abort liên tục, HTTP error, cursor loop, polling
+   bị dừng, exception render; không giấu lỗi dưới placeholder processing.
+3. Đối chiếu child durable events (đầy đủ mọi trang), assistant/thought/tool receipts,
+   status/updateSeq, resume cùng child qua lượt 2, main `await_children`/handoff receipt,
+   caller binding, runtime task registry, provider stream và deadline/budget/cancel.
+   Có event mà UI thiếu ⇒ sửa reader; chưa có event ⇒ trace execution/provider trước.
+4. Audit `b9b0d60f`: effect phụ thuộc receipt, abort/restart fetch, cursor validation,
+   cache, selected/pinned turn, stale refresh guard và hydration dài hơn nhịp poll.
+   Audit `d5ad6139`: step boundary, delta/tail/snapshot/final reconciliation. Không
+   xóa reasoning thật hoặc đổi quyền/DAG để làm UI trông đã hoàn thành.
+5. Regression cần có ca model/tool thật: main + fan-out 3 children → deliver cuối →
+   đọc reasoning → gửi lượt 2 → resume cùng child; thêm lịch sử >500 event, đổi child,
+   slow request/abort/API lỗi. Ghi source/commit/model/OS/config, expected/actual,
+   log/event refs và failures. Test Linux/DOM không thay nghiệm thu Windows/owner.
+6. Không gọi cloud có đủ tool là đã đủ bằng chứng: thiếu bundle/profile/runtime hoặc
+   không tái lập được phải báo rõ. Không commit API key, admin token, DB/session content.
+   Đọc DB bằng SQLite **mode=ro**, không khởi tạo SessionStore trên DB sống.
+
+### Đường chạy và bằng chứng local
+
+- `scripts/start-web-desktop.ps1 -WebPort 3110` đọc gateway từ machine.json của desktop,
+  không in token. Ở lần đo trước: 3110 → gateway 64557 → router 64558 / harness 64559.
+  Desktop phải còn mở. 3100 là stack standalone khác; không dùng 3100 để khẳng định
+  cùng profile với desktop. Cổng kể trên là số đo, không phải cấu hình cứng.
+- `b9b0d60f`: **217 test / 22 file + typecheck + lint đạt**, HTTP đọc cùng events và
+  cursor qua web/gateway. Parent cũ `7379d11f…` có 7.421 event/15 trang; hai child
+  trong ảnh cũ vẫn lưu reasoning cuối 400/150 ký tự. Không phải evidence của L07.
+- Không chạy model sống hay nghiệm thu browser thật ở checkpoint đó; browser tool
+  không khởi tạo được. Không dựng installer mới sau patch web. Vì owner đã tái hiện
+  lỗi, trạng thái acceptance hiện tại là **OPEN / FAILED theo báo cáo owner**.
+- Bộ cài trước đó tới 0.1.4 và các SHA/hash/giới hạn kiểm nằm trong docs tương ứng;
+  installer, `.tmp` log, profile và DB local **không được đưa lên Git**. Cloud thiếu
+  những bằng chứng đó phải nói thiếu, không đoán nội dung.
+
+---
+
+**Các mục 1–9 dưới đây giữ bối cảnh và kết quả cloud 2026-10-09.** Mục 0 trên là
+checkpoint hiện hành và thay kết luận "xong" nếu mâu thuẫn với lỗi owner mới báo.
 
 ---
 

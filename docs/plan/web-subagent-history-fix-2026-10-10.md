@@ -1,5 +1,11 @@
 # Web checkpoint — sub-agent reasoning/history across completion and later turns
 
+> **Owner repro, 2026-10-10: OPEN / not accepted.** After `b9b0d60f`, owner reports
+> feedback still missing and sub-agents now appear stuck at step 5 with a processing
+> placeholder. Root cause and causality are unconfirmed. Read `HANDOFF.md` §0 for
+> the current repro, diagnostic boundaries and cloud follow-up. The fixture/HTTP
+> results below do not establish that the live issue is fixed.
+
 ## Scope
 
 Baseline: `0a19597b`, branch `codex/desktop-startup-fix`. Owner requested web-first
