@@ -107,11 +107,99 @@ def test_thought_events_carry_only_the_new_part(tmp_path):
         await runtime.submit(session['id'], 'hỏi')
         await runtime.tasks[session['id']]
         thoughts = [event['data']['text'] for event in store.events(session['id']) if event['type'] == 'thought']
-        # Ba event đầu là phần MỚI; event cuối là bản ghi chuẩn của cả lượt
-        # (consumer ghép theo tiền tố nên bản ghi chuẩn không nhân đôi văn bản).
-        assert thoughts[:3] == ['Cần đọc', ' file', ' trước'], thoughts
-        assert thoughts[-1] == 'Cần đọc file trước', thoughts
+        assert thoughts == ['Cần đọc', ' file', ' trước'], thoughts
+        assistant = [event for event in store.events(session['id']) if event['type'] == 'assistant'][-1]
+        assert assistant['data']['thought'] == 'Cần đọc file trước'
+        assert client.calls == 1
         store.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('streamed,final,expected', [
+    ([], 'Final only', [{'text': 'Final only'}]),
+    (['Read'], 'Read files', [{'text': 'Read'}, {'text': ' files'}]),
+    (['Draft'], 'Revised', [{'text': 'Draft'}, {'text': 'Revised', 'snapshot': True}]),
+])
+def test_final_reasoning_flushes_only_missing_tail_or_explicit_snapshot(tmp_path, streamed, final, expected):
+    class FinalReasoningModel(StreamingModel):
+        async def complete(self, *args, **kwargs):
+            result = await super().complete(*args, **kwargs)
+            result['choices'][0]['message']['reasoning_content'] = final
+            return result
+
+    async def run():
+        client = FinalReasoningModel(content_sequence=['done'], thought_sequence=streamed)
+        store, runtime, session = _runtime(tmp_path, client)
+        try:
+            await runtime.submit(session['id'], 'inspect')
+            await runtime.tasks[session['id']]
+            events = store.events(session['id'])
+            assert [event['data'] for event in events if event['type'] == 'thought'] == expected
+            assert [event['data']['thought'] for event in events if event['type'] == 'assistant'] == [final]
+            assert client.calls == 1
+            assert store.get(session['id'])['status'] == 'completed'
+        finally:
+            store.close()
+
+    asyncio.run(run())
+
+
+def test_interleaved_reasoning_and_content_do_not_trigger_another_model_call(tmp_path):
+    class InterleavedModel(StreamingModel):
+        async def complete(self, messages, tools, route, max_tokens=4096, on_thought=None, on_content=None):
+            self.calls += 1
+            on_thought('Inspect ')
+            on_content('Have ')
+            on_thought('Inspect files.')
+            on_content('Have files.')
+            return {'choices': [{'message': {'content': 'Have files.', 'reasoning_content': 'Inspect files.'},
+                                 'finish_reason': 'stop'}], 'usage': None, 'boxfox': None}
+
+    async def run():
+        client = InterleavedModel()
+        store, runtime, session = _runtime(tmp_path, client)
+        try:
+            await runtime.submit(session['id'], 'inspect')
+            await runtime.tasks[session['id']]
+            events = store.events(session['id'])
+            assert [event['data']['text'] for event in events if event['type'] == 'thought'] == ['Inspect ', 'files.']
+            assert [event['data']['text'] for event in events if event['type'] == 'assistant_delta'] == ['Have ', 'files.']
+            assert len([event for event in events if event['type'] == 'assistant']) == 1
+            assert client.calls == 1
+        finally:
+            store.close()
+
+    asyncio.run(run())
+
+
+def test_retry_resets_reasoning_buffer_as_well_as_text(tmp_path, monkeypatch):
+    class RetryReasoningModel(StreamingModel):
+        async def complete(self, *args, **kwargs):
+            if self.calls == 0:
+                self.calls += 1
+                kwargs['on_thought']('Abandoned')
+                kwargs['on_content']('Abandoned')
+                raise ServerDisconnectedError()
+            return await super().complete(*args, **kwargs)
+
+    async def run():
+        async def fast_sleep(_seconds):
+            return None
+
+        monkeypatch.setattr(asyncio, 'sleep', fast_sleep)
+        client = RetryReasoningModel(content_sequence=['Done'], thought_sequence=['Fresh ', 'reasoning'])
+        store, runtime, session = _runtime(tmp_path, client)
+        try:
+            await runtime.submit(session['id'], 'inspect')
+            await runtime.tasks[session['id']]
+            events = store.events(session['id'])
+            reset = next(event['seq'] for event in events if event['type'] == 'notice' and event['data'].get('reset'))
+            assert [event['data']['text'] for event in events if event['type'] == 'thought' and event['seq'] > reset] == ['Fresh ', 'reasoning']
+            assert client.calls == 2
+            assert store.get(session['id'])['status'] == 'completed'
+        finally:
+            store.close()
 
     asyncio.run(run())
 

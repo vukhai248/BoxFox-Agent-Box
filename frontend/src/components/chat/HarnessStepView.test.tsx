@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   HarnessStepView,
+  buildHarnessTurns,
   activityReceipt,
   formatMediaLabel,
   splitAuthoredSummary,
@@ -73,6 +74,50 @@ afterEach(() => {
 })
 
 describe('HarnessStepView — F2 thứ tự thời gian', () => {
+  it('reconciles interleaved reasoning/text snapshots within a model step', () => {
+    const events = [
+      ev('user', { text: 'Inspect' }), ev('step'), ev('turn_start'),
+      ev('thought', { text: 'Read ' }), ev('thought', { text: 'files.' }),
+      ev('assistant_delta', { text: 'Have files.' }),
+      ev('thought', { text: 'Read files.' }), ev('usage'),
+      ev('assistant', { text: 'Have files.', thought: 'Read files.', final: false }),
+    ]
+    const turns = buildHarnessTurns([...events, ...events])
+    expect(turns).toHaveLength(1)
+    expect(turns[0].items.map(item => item.kind)).toEqual(['thought', 'text'])
+    expect(turns[0].items[0]).toMatchObject({ text: 'Read files.' })
+    expect(turns[0].items[1]).toMatchObject({ text: 'Have files.' })
+  })
+
+  it('does not rewrite previous steps and resets only the abandoned attempt', () => {
+    const turns = buildHarnessTurns([
+      ev('user'),
+      ev('assistant', { text: 'Same answer', thought: 'Same thought', final: false }),
+      ev('tool_start', { id: 'read', name: 'file_read' }),
+      ev('tool_end', { id: 'read', result: { content: 'ok' } }),
+      ev('step'), ev('turn_start'),
+      ev('thought', { text: 'Abandoned' }), ev('assistant_delta', { text: 'Abandoned' }),
+      ev('notice', { reset: true }),
+      ev('thought', { text: 'Draft' }), ev('assistant_delta', { text: 'Draft' }),
+      ev('thought', { text: 'Same thought', snapshot: true }),
+      ev('assistant', { text: 'Same answer', thought: 'Same thought', final: false }),
+    ])
+    expect(turns[0].items.filter(item => item.kind === 'thought').map(item => item.text)).toEqual(['Same thought', 'Same thought'])
+    expect(turns[0].items.filter(item => item.kind === 'text').map(item => item.text)).toEqual(['Same answer', 'Same answer'])
+    expect(turns[0].items.filter(item => item.kind === 'tool')).toHaveLength(1)
+  })
+
+  it('keeps only the final answer when reasoning interrupts its streamed text', () => {
+    const turn = buildHarnessTurns([
+      ev('user'), ev('assistant_delta', { text: 'Answer' }),
+      ev('thought', { text: 'Final reasoning' }),
+      ev('assistant', { text: 'Answer', thought: 'Final reasoning', final: true }),
+    ])[0]
+    expect(turn.items.filter(item => item.kind === 'text')).toHaveLength(0)
+    expect(turn.finalAssistant?.data.text).toBe('Answer')
+    expect(turn.items.filter(item => item.kind === 'thought')).toHaveLength(1)
+  })
+
   it('renders one flat timeline in event seq order: text → tool → text → tool → final answer', () => {
     const events = [
       ev('user', { text: 'Kiểm tra log' }),

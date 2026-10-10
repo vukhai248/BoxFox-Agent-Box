@@ -440,11 +440,32 @@ export interface SubagentTimelineItem {
 export function buildSubagentTimeline(events: readonly HarnessEvent[]): SubagentTimelineItem[] {
   const items: SubagentTimelineItem[] = []
   const toolMap = new Map<string, ParsedToolCall>()
+  const seen = new Set<string>()
+  let thoughtItem: SubagentTimelineItem | undefined
+  let textItem: SubagentTimelineItem | undefined
+  let stepStart = 0
+  const beginStep = () => {
+    thoughtItem = undefined
+    textItem = undefined
+    stepStart = items.length
+  }
 
   for (const ev of events) {
+    // Poll/reconnect can repeat a receipt; equal text in DIFFERENT steps is legitimate.
+    if (ev.seq > 0) {
+      const identity = `${ev.seq}:${ev.type}`
+      if (seen.has(identity)) continue
+      seen.add(identity)
+    }
+    if (ev.type === 'step' || ev.type === 'turn_start') {
+      beginStep()
+      continue
+    }
     if (ev.type === 'notice' && ev.data.reset) {
-      items.length = 0
-      toolMap.clear()
+      // A retry abandons this model attempt, not earlier steps or completed tools.
+      items.splice(stepStart, items.length - stepStart,
+        ...items.slice(stepStart).filter(item => item.kind === 'tool_group'))
+      beginStep()
       continue
     }
 
@@ -452,33 +473,43 @@ export function buildSubagentTimeline(events: readonly HarnessEvent[]): Subagent
       const raw = String(ev.data.thought ?? ev.data.text ?? '')
       if (!raw) continue
 
-      const last = items[items.length - 1]
-      if (last && last.kind === 'thought') {
-        last.thoughtText = appendStreamText(last.thoughtText ?? '', raw)
+      if (thoughtItem) {
+        thoughtItem.thoughtText = ev.data.snapshot === true ? raw
+          : appendStreamText(thoughtItem.thoughtText ?? '', raw)
       } else {
-        items.push({
+        thoughtItem = {
           id: `thought_${ev.seq || items.length}`,
           kind: 'thought',
           thoughtText: raw,
-        })
+        }
+        items.push(thoughtItem)
       }
       continue
     }
 
     if (ev.type === 'assistant_delta' || ev.type === 'assistant') {
+      // `assistant` is the canonical snapshot of this step, even when thought/usage
+      // events separate it from the text deltas. It is not another answer bubble.
+      if (ev.type === 'assistant' && ev.data.thought) {
+        const thought = String(ev.data.thought)
+        if (thoughtItem) thoughtItem.thoughtText = thought
+        else {
+          thoughtItem = { id: `thought_assistant_${ev.seq}`, kind: 'thought', thoughtText: thought }
+          items.push(thoughtItem)
+        }
+      }
       const raw = String(ev.data.text ?? '')
-      if (!raw) continue
-
-      const last = items[items.length - 1]
-      if (last && last.kind === 'text') {
-        last.text = appendStreamText(last.text ?? '', raw)
-      } else {
-        items.push({
+      if (raw && textItem) {
+        textItem.text = ev.type === 'assistant' ? raw : appendStreamText(textItem.text ?? '', raw)
+      } else if (raw) {
+        textItem = {
           id: `text_${ev.seq || items.length}`,
           kind: 'text',
           text: raw,
-        })
+        }
+        items.push(textItem)
       }
+      if (ev.type === 'assistant') beginStep()
       continue
     }
 
@@ -505,6 +536,8 @@ export function buildSubagentTimeline(events: readonly HarnessEvent[]): Subagent
           tools: [toolCall],
         })
       }
+      // Old histories may lack step markers. A tool dispatch ends their model response.
+      beginStep()
       continue
     }
 

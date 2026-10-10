@@ -17,7 +17,8 @@ import { I18nProvider } from '../../i18n'
 import { useAgentStore } from '../../store/agentStore'
 import { useHarnessChatStore } from '../../store/harnessChatStore'
 import { useUiStore } from '../../store/uiStore'
-import { SubagentInspectorPanel } from './SubagentInspectorPanel'
+import { SubagentInspectorPanel, buildSubagentTimeline } from './SubagentInspectorPanel'
+import type { HarnessEvent } from '../../store/harnessChatStore'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -86,6 +87,66 @@ afterEach(() => {
 })
 
 describe('SubagentInspectorPanel — văn bản streaming', () => {
+  it('merges interleaved legacy snapshots into one reasoning block and one text row', async () => {
+    const events = [
+      { seq: 1, type: 'turn_start', data: {}, created: 1 },
+      { seq: 2, type: 'thought', data: { text: 'Inspect ' }, created: 2 },
+      { seq: 3, type: 'thought', data: { text: 'files.' }, created: 3 },
+      { seq: 4, type: 'assistant_delta', data: { text: 'I have all ' }, created: 4 },
+      { seq: 5, type: 'assistant_delta', data: { text: 'three files.' }, created: 5 },
+      { seq: 6, type: 'thought', data: { text: 'Inspect files.' }, created: 6 },
+      { seq: 7, type: 'usage', data: {}, created: 7 },
+      { seq: 8, type: 'assistant', data: { text: 'I have all three files.', thought: 'Inspect files.', final: false }, created: 8 },
+    ]
+    const timeline = buildSubagentTimeline(events)
+    expect(timeline.map(item => item.kind)).toEqual(['thought', 'text'])
+    expect(timeline[0].thoughtText).toBe('Inspect files.')
+    expect(timeline[1].text).toBe('I have all three files.')
+    expect(buildSubagentTimeline([...events, ...events])).toEqual(timeline)
+    const host = await renderWith(events)
+    const toggles = [...host.querySelectorAll('button')].filter(button => button.textContent?.includes('Thinking'))
+    expect(toggles).toHaveLength(1)
+    act(() => toggles[0].dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(host.textContent?.split('Inspect files.').length).toBe(2)
+    expect(host.textContent?.split('I have all three files.').length).toBe(2)
+  })
+
+  it('keeps identical responses in distinct model steps, including histories without markers', () => {
+    for (const marked of [true, false]) {
+      let seq = 0
+      const event = (type: string, data: Record<string, unknown> = {}): HarnessEvent => ({ seq: ++seq, type, data, created: seq })
+      const events = [1, 2].flatMap(() => [
+        ...(marked ? [event('step'), event('turn_start')] : []),
+        event('thought', { text: 'Same thought' }),
+        event('assistant_delta', { text: 'Same answer' }),
+        event('assistant', { text: 'Same answer', thought: 'Same thought', final: false }),
+      ])
+      const items = buildSubagentTimeline(events)
+      expect(items.filter(item => item.kind === 'thought').map(item => item.thoughtText)).toEqual(['Same thought', 'Same thought'])
+      expect(items.filter(item => item.kind === 'text').map(item => item.text)).toEqual(['Same answer', 'Same answer'])
+    }
+  })
+
+  it('replaces rewritten snapshots and retains completed steps/tools when retry resets an attempt', () => {
+    let seq = 0
+    const event = (type: string, data: Record<string, unknown> = {}): HarnessEvent => ({ seq: ++seq, type, data, created: seq })
+    const items = buildSubagentTimeline([
+      event('assistant', { text: 'Earlier', thought: 'Earlier thought', final: false }),
+      event('tool_start', { id: 'read', name: 'file_read' }),
+      event('tool_end', { id: 'read', result: { content: 'ok' } }),
+      event('step'), event('thought', { text: 'Abandoned thought' }),
+      event('assistant_delta', { text: 'Abandoned text' }),
+      event('notice', { reset: true }),
+      event('thought', { text: 'Draft' }), event('assistant_delta', { text: 'Draft answer' }),
+      event('thought', { text: 'Revised thought', snapshot: true }),
+      event('assistant', { text: 'Revised answer', thought: 'Revised thought', final: true }),
+    ])
+    expect(items.map(item => item.kind)).toEqual(['thought', 'text', 'tool_group', 'thought', 'text'])
+    expect(items.filter(item => item.kind === 'thought').map(item => item.thoughtText)).toEqual(['Earlier thought', 'Revised thought'])
+    expect(items.filter(item => item.kind === 'text').map(item => item.text)).toEqual(['Earlier', 'Revised answer'])
+    expect(items[2].tools?.[0]).toMatchObject({ isRunning: false })
+  })
+
   it('event tích luỹ chỉ hiện câu trả lời một lần', async () => {
     const host = await renderWith(cumulativeEvents())
     const text = host.textContent ?? ''

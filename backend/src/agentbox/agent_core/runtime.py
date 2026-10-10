@@ -4842,7 +4842,13 @@ class HarnessRuntime(RuntimeCommands):
                     messages.append(row)
                     self.store.save(sid, messages)
                     if thought:
-                        self.store.emit(sid, 'thought', {'text': thought})
+                        # Callbacks already published the accumulated reasoning as deltas.
+                        # Flush only an unstreamed tail; a rewritten final value is explicitly
+                        # a snapshot, never another delta. The assistant row stays canonical.
+                        if thought.startswith(streamed['thought']):
+                            handle_thought(thought)
+                        else:
+                            self.store.emit(sid, 'thought', {'text': thought, 'snapshot': True})
                     self.store.emit(sid, 'usage', {'usage': response.get('usage'), 'target': response.get('boxfox'), 'requestId': response.get('id')})
                     if text:
                         # F3 — `final` là tín hiệu "lượt đã xong" của giao diện (`turn.isCompleted`,

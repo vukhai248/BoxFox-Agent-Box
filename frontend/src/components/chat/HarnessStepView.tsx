@@ -108,6 +108,7 @@ interface HarnessTurn {
   userEvent: HarnessEvent | null
   thought: string | null
   items: TurnTimelineItem[]
+  streamStart: number
   finalAssistant: HarnessEvent | null
   usage: {
     prompt_tokens?: number
@@ -1178,12 +1179,23 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
   }
 
   switch (event.type) {
+    case 'step':
+    case 'turn_start':
+      turn.streamStart = turn.items.length
+      return
     case 'thought': {
       // Event có thể là văn bản tích luỹ (harness cũ) hoặc mảnh rời (harness mới).
       const text = String(event.data.text ?? '')
+      if (event.data.snapshot === true) {
+        turn.thought = text
+        const previous = turn.items.slice(turn.streamStart).find(item => item.kind === 'thought')
+        if (previous && previous.kind === 'thought') previous.text = text
+        else turn.items.push({ kind: 'thought', id: `thought_${event.seq}`, seq: event.seq, text, live: true })
+        return
+      }
       turn.thought = appendStreamText(turn.thought ?? '', text)
-      const last = turn.items[turn.items.length - 1]
-      if (last && last.kind === 'thought' && last.live) {
+      const last = turn.items.slice(turn.streamStart).find(item => item.kind === 'thought')
+      if (last && last.kind === 'thought') {
         last.text = appendStreamText(last.text, text)
       } else {
         turn.items.push({ kind: 'thought', id: `thought_${event.seq}`, seq: event.seq, text, live: true })
@@ -1198,8 +1210,8 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
     }
     case 'assistant_delta': {
       const text = String(event.data.text ?? '')
-      const last = turn.items[turn.items.length - 1]
-      if (last && last.kind === 'text' && last.live) {
+      const last = turn.items.slice(turn.streamStart).find(item => item.kind === 'text')
+      if (last && last.kind === 'text') {
         last.text = appendStreamText(last.text, text)
       } else {
         turn.items.push({ kind: 'text', id: `text_${event.seq}`, seq: event.seq, text, live: true })
@@ -1209,9 +1221,10 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
     case 'assistant': {
       if (event.data.thought) {
         turn.thought = String(event.data.thought)
-        const hasThought = turn.items.some((it) => it.kind === 'thought')
-        if (!hasThought && String(event.data.thought).trim()) {
-          turn.items.unshift({
+        const previous = turn.items.slice(turn.streamStart).find(item => item.kind === 'thought')
+        if (previous && previous.kind === 'thought') previous.text = String(event.data.thought)
+        else if (String(event.data.thought).trim()) {
+          turn.items.push({
             kind: 'thought',
             id: `thought_assistant_${event.seq}`,
             seq: event.seq,
@@ -1222,13 +1235,13 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
       }
       const text = String(event.data.text ?? '')
       const isFinal = event.data.final !== false
-      const last = turn.items[turn.items.length - 1]
+      const last = turn.items.slice(turn.streamStart).find(item => item.kind === 'text')
       if (isFinal) {
         turn.finalAssistant = event
         turn.isCompleted = true
         // Văn bản đang stream chính là câu trả lời cuối: bỏ khỏi timeline để không lặp.
         if (last && last.kind === 'text' && (last.live || (text && text.startsWith(last.text)))) {
-          turn.items.pop()
+          turn.items.splice(turn.items.indexOf(last), 1)
         }
       } else if (last && last.kind === 'text') {
         // Event `assistant` (final:false) là bản đầy đủ của đúng đoạn vừa stream.
@@ -1237,6 +1250,7 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
       } else if (text) {
         turn.items.push({ kind: 'text', id: `text_${event.seq}`, seq: event.seq, text, live: false })
       }
+      turn.streamStart = turn.items.length
       return
     }
     case 'tool_start': {
@@ -1247,6 +1261,8 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
         start: event,
         end: null,
       })
+      // Legacy histories may not contain model step markers.
+      turn.streamStart = turn.items.length
       return
     }
     case 'tool_end': {
@@ -1300,12 +1316,8 @@ function applyTimelineEvent(turn: HarnessTurn, event: HarnessEvent) {
       // Harness báo thử lại yêu cầu model: câu trả lời vừa stream bị bỏ, nên phần văn bản
       // đang hiện của lượt này phải biến mất — nếu không, câu trả lời mới bị dán vào phần cũ.
       if (event.data.reset) {
-        while (turn.items.length > 0) {
-          const last = turn.items[turn.items.length - 1]
-          if (last.kind !== 'text' && last.kind !== 'thought') break
-          if (!last.live) break
-          turn.items.pop()
-        }
+        turn.items.splice(turn.streamStart, turn.items.length - turn.streamStart,
+          ...turn.items.slice(turn.streamStart).filter(item => item.kind !== 'text' && item.kind !== 'thought'))
         turn.thought = ''
       }
       turn.items.push({ kind: 'notice', id: `notice_${event.seq}`, seq: event.seq, event })
@@ -1412,6 +1424,7 @@ function emptyTurn(id: string, modelChange: { from: string; to: string } | null,
     userEvent,
     thought: null,
     items: [],
+    streamStart: 0,
     finalAssistant: null,
     usage: null,
     target: null,
@@ -1434,6 +1447,7 @@ export function buildHarnessTurns(events: HarnessEvent[]): HarnessTurn[] {
   // `command_resolved` được phát TRƯỚC `user` ở mọi lượt. F5: không dựng lượt "ma" từ
   // những event này — chỉ gắn vào lượt kế tiếp (và chúng vốn không được vẽ).
   let preUserEvents: HarnessEvent[] = []
+  const seen = new Set<string>()
 
   const closeTurn = () => {
     if (!current) return
@@ -1443,6 +1457,11 @@ export function buildHarnessTurns(events: HarnessEvent[]): HarnessTurn[] {
   }
 
   for (const event of events) {
+    if (event.seq > 0) {
+      const identity = `${event.seq}:${event.type}`
+      if (seen.has(identity)) continue
+      seen.add(identity)
+    }
     if (event.type === 'model_change') {
       pendingModelChange = { from: String(event.data.from || ''), to: String(event.data.to || '') }
       continue
