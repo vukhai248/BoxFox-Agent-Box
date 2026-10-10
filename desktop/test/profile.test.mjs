@@ -147,7 +147,11 @@ test('freePort/allocatePorts/isPortFree agree with a real listener', async (t) =
   const holder = await listen()
   t.after(() => close(holder.server))
   assert.equal(await isPortFree(holder.port), false)
-  assert.equal(await isPortFree(holder.port, 'localhost'), false, 'the listener binds loopback, not only 127.0.0.1')
+  // localhost can resolve to ::1 on Windows. Probe a listener on that same
+  // hostname rather than assuming an IPv4-only listener occupies both stacks.
+  const namedHolder = await listen(0, 'localhost')
+  t.after(() => close(namedHolder.server))
+  assert.equal(await isPortFree(namedHolder.port, 'localhost'), false)
 
   const ports = await allocatePorts(4)
   assert.equal(ports.length, 4)

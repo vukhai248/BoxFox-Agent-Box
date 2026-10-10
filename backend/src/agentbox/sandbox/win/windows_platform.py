@@ -399,6 +399,9 @@ class WindowsPlatform:
         self._process_name_cache: dict[int, str | None] = {}
         self._hook: int | None = None
         self._mouse_hook: int | None = None
+        self._input_hook_thread: threading.Thread | None = None
+        self._input_hook_stop = threading.Event()
+        self._input_hook_thread_id: int | None = None
         self._uia_accessor: Any = None
         self._notes: list[str] = []
 
@@ -507,6 +510,10 @@ class WindowsPlatform:
                 ),
                 "GetMessageW": (
                     [ctypes.POINTER(MSG), ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint],
+                    ctypes.c_int,
+                ),
+                "PeekMessageW": (
+                    [ctypes.POINTER(MSG), ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint],
                     ctypes.c_int,
                 ),
                 "PostThreadMessageW": (
@@ -619,6 +626,7 @@ class WindowsPlatform:
             "kernel32",
             {
                 "GetCurrentProcessId": ([], ctypes.c_uint32),
+                "GetCurrentThreadId": ([], ctypes.c_uint32),
                 "GetCurrentProcess": ([], ctypes.c_void_p),
                 "OpenProcess": ([ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32], ctypes.c_void_p),
                 "CloseHandle": ([ctypes.c_void_p], ctypes.c_int),
@@ -1046,6 +1054,56 @@ class WindowsPlatform:
         return int(self.kernel32.GetLastError())
 
     # -- hook input (bàn phím + chuột) -------------------------------------
+    def install_input_hooks(self, keyboard_callback, mouse_callback) -> bool:
+        """Install and pump both hooks on their OWN thread, never the aiohttp thread.
+
+        Callbacks must return immediately; callers defer filesystem/lease work.
+        Partial installs and timeout are cleaned up on the owning thread.
+        """
+        self._require_available()
+        if self._input_hook_thread is not None and self._input_hook_thread.is_alive():
+            return bool(self._hook and self._mouse_hook and not self._input_hook_stop.is_set())
+        ready = threading.Event()
+        result = [False]
+        self._input_hook_stop.clear()
+
+        def run():
+            try:
+                # PeekMessage creates the queue before any cross-thread WM_QUIT.
+                self._input_hook_thread_id = int(self.kernel32.GetCurrentThreadId())
+                msg = MSG()
+                self.user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)
+                result[0] = bool(self.set_keyboard_hook(keyboard_callback) and
+                                 self.set_mouse_hook(mouse_callback))
+                ready.set()
+                if result[0] and not self._input_hook_stop.is_set():
+                    self.pump_messages(lambda _msg: not self._input_hook_stop.is_set())
+            except Exception as exc:
+                self.note('input hook thread failed: %s' % type(exc).__name__)
+            finally:
+                self.unhook_keyboard()
+                self.unhook_mouse()
+                self._input_hook_thread_id = None
+                ready.set()
+
+        self._input_hook_thread = threading.Thread(target=run, name='boxfox-input-hooks', daemon=True)
+        self._input_hook_thread.start()
+        if not ready.wait(2.0) or not result[0]:
+            self.stop_input_hooks()
+            return False
+        return self._input_hook_thread.is_alive()
+
+    def stop_input_hooks(self) -> None:
+        self._input_hook_stop.set()
+        thread_id = self._input_hook_thread_id
+        if thread_id is not None:
+            self.user32.PostThreadMessageW(thread_id, 0x0012, 0, 0)  # WM_QUIT
+        thread = self._input_hook_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2.0)
+        if thread is None or not thread.is_alive():
+            self._input_hook_thread = None
+
     def set_keyboard_hook(self, callback: Callable[[int, int, int], int]) -> int | None:
         proc = make_hook_proc(callback)
         module = self.kernel32.GetModuleHandleW(None)

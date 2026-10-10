@@ -331,7 +331,7 @@ test('the staged bundle carries a manifest with the version, commit and every bl
     { log: () => undefined },
   )
 
-  assert.equal(manifest.version, '0.1.0')
+  assert.equal(manifest.version, JSON.parse(fs.readFileSync(path.join(DESKTOP_DIR, 'package.json'))).version)
   assert.equal(manifest.productName, 'BoxFox Desktop (Alpha)')
   assert.equal(manifest.runtimeTarget, 'win-x64')
   assert.match(manifest.builtAt, /^\d{4}-\d{2}-\d{2}T/)

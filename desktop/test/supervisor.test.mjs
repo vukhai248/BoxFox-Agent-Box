@@ -18,6 +18,7 @@ import {
   AlreadyRunningError,
   Supervisor,
   acquireInstanceLock,
+  checkLegacyInstance,
   backoffDelay,
   buildServiceSpecs,
   bundledNodeBinary,
@@ -82,6 +83,33 @@ test('a lock left behind by a dead process is taken over', async (t) => {
   handle.release()
 })
 
+test('native exclusivity recovers stale metadata even when its PID has been reused', (t) => {
+  const lockFile = path.join(tempDir(t), 'desktop.lock')
+  fs.writeFileSync(lockFile, JSON.stringify({ app: 'boxfox-desktop', pid: process.pid }))
+  const handle = acquireInstanceLock(lockFile, process.pid, { nativeLockHeld: true })
+  assert.ok(JSON.parse(fs.readFileSync(lockFile)).token)
+  handle.release()
+  assert.equal(fs.existsSync(lockFile), false)
+})
+
+test('releasing an old handle never deletes a replacement lock record', (t) => {
+  const lockFile = path.join(tempDir(t), 'desktop.lock')
+  const handle = acquireInstanceLock(lockFile)
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: 123, token: 'replacement-owner' }))
+  handle.release()
+  assert.equal(JSON.parse(fs.readFileSync(lockFile)).token, 'replacement-owner')
+})
+
+test('legacy upgrade guard rejects real BoxFox but allows a recycled unrelated PID', async (t) => {
+  const lockFile = path.join(tempDir(t), 'desktop.lock')
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: 29264, startedAt: '2026-10-09T21:58:17.704Z' }))
+  const options = { platform: 'win32', alive: () => true, executable: 'C:\\apps\\BoxFox Desktop (Alpha).exe' }
+  const probe = (owner) => async () => ({ code: 0, stdout: JSON.stringify(owner), stderr: '', timedOut: false })
+  await checkLegacyInstance(lockFile, { ...options, runner: probe({ path: 'C:\\Windows\\TextInputHost.exe' }) })
+  await assert.rejects(checkLegacyInstance(lockFile, { ...options, runner: probe({ path: options.executable, startedAt: '2026-10-09T21:58:17.000Z' }) }), AlreadyRunningError)
+  await checkLegacyInstance(lockFile, { ...options, runner: probe({ path: options.executable, startedAt: '2026-10-10T06:00:00.000Z' }) })
+})
+
 test('serviceEnv drops every inherited BOXFOX_* and points the services at the profile', async (t) => {
   const root = tempDir(t)
   const layout = ensureLayout(root)
@@ -101,6 +129,7 @@ test('serviceEnv drops every inherited BOXFOX_* and points the services at the p
   assert.equal(env.BOXFOX_AGENT_DATA_DIR, undefined)
   assert.equal(env.BOXFOX_UI_ORIGINS, `http://127.0.0.1:${machine.ports.gateway},http://localhost:${machine.ports.gateway}`)
   assert.equal(env.BOXFOX_ROUTER_URL, `http://127.0.0.1:${machine.ports.router}`)
+  assert.equal(env.BOXFOX_ROUTER_SEARCH_URL, `http://127.0.0.1:${machine.ports.router}/api/router/search/resolve`)
   assert.equal(env.BOXFOX_BOX_URL, `http://127.0.0.1:${machine.ports.box}`)
 })
 
@@ -137,7 +166,7 @@ test('buildServiceSpecs uses the bundled node/python and the profile directories
   assert.equal(specs.harness.env.BOXFOX_AGENT_DATA_DIR, layout.harness)
   assert.equal(specs.harness.env.PYTHONPATH, path.join(resourcesDir, 'harness', 'backend', 'src'))
   assert.equal(specs.harness.env.PYTHONUTF8, '1')
-  assert.equal(specs.harness.healthUrl, `http://127.0.0.1:${machine.ports.harness}/api/agent/health`)
+  assert.equal(specs.harness.healthUrl, `http://127.0.0.1:${machine.ports.harness}/api/agent/health?readiness=1`)
   assert.equal(specs.harness.env.BOXFOX_EXECUTION_MODE, 'docker')
   assert.equal(bundledPythonBinary(runtimeDir, 'linux'), path.join(runtimeDir, 'python', 'bin', 'python3'))
 })
@@ -250,7 +279,8 @@ test('the Supervisor starts both services, reports health and stops them cleanly
   for (const name of ['router', 'harness']) {
     assert.equal(stopped.services[name].pid, null, `${name} must have no pid after stop()`)
     assert.equal(stopped.services[name].healthy, false)
-    assert.equal(stopped.services[name].lastExit.signal, 'SIGTERM')
+    if (process.platform !== 'win32') assert.equal(stopped.services[name].lastExit.signal, 'SIGTERM')
+    else assert.ok(stopped.services[name].lastExit, 'Windows taskkill records an exit, not a POSIX signal')
     assert.equal(stopped.services[name].restarts, 0, 'an intentional stop must not count as a restart')
   }
   await new Promise((resolve) => setTimeout(resolve, 300))

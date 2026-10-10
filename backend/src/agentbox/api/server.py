@@ -678,14 +678,17 @@ def create_app(runtime):
         # `runtime` có thể là bản giả không có `executor` (bài kiểm dựng app với runtime tối thiểu),
         # nên hỏi hai lớp bằng `getattr` — thiếu executor nghĩa là chưa có gì để theo dõi.
         control = getattr(getattr(runtime, 'executor', None), 'desktop', None)
-        if not idle_watch_supported(control):
+        if not idle_watch_supported(control) and not getattr(control, 'hooks_installed', False):
             return
 
         async def pump():
             while True:
-                await asyncio.sleep(IDLE_WATCH_INTERVAL_SEC)
+                await asyncio.sleep(IDLE_WATCH_INTERVAL_SEC if idle_watch_supported(control) else 0.25)
                 try:
-                    await asyncio.to_thread(control.poll_idle)
+                    if idle_watch_supported(control):
+                        await asyncio.to_thread(control.poll_idle)
+                    else:
+                        await asyncio.to_thread(control.flush_hook_events)
                 except Exception:
                     logger.exception('idle watch deferred')
 
@@ -796,6 +799,10 @@ def create_app(runtime):
         return payload
 
     async def health(request):
+        # Desktop readiness is local API availability, not external search/provider
+        # diagnostics. Never hold opening the window behind those network reads.
+        if request.query.get('readiness') == '1':
+            return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION})
         # W6.1.3: `?probe=verify` chạy probe bwrap trong box; mặc định chỉ trả lần quan sát gần nhất
         # (health phải rẻ, không docker exec mỗi lần gọi).
         if request.query.get('probe') == 'search':
@@ -812,10 +819,11 @@ def create_app(runtime):
             except Exception as exc:  # box không chạy: báo thật, không giả là có isolation
                 answer = {'available': False, 'reason': str(exc)[:300]}
             runtime.verify_exec_status = verify_exec.observed(answer, getattr(runtime, 'verify_exec_status', None))
+        search = await asyncio.to_thread(_search_status)
         return web.json_response({'status': 'ok', 'service': 'boxfox-harness', 'version': HARNESS_VERSION,
                                   'verifyExec': getattr(runtime, 'verify_exec_status', None)
                                   or {'available': None, 'reason': 'not probed yet'},
-                                  'search': _search_status(),
+                                  'search': search,
                                   'execution': execution_status()})
 
     async def catalog(request):
@@ -2804,9 +2812,14 @@ def create_app(runtime):
 
 
 def main():
+    startup_started = time.perf_counter()
+    def startup_mark(phase):
+        if os.environ.get('BOXFOX_DESKTOP_PROFILE'):
+            print('[harness] startup %s: %dms at %.3f' % (phase, (time.perf_counter() - startup_started) * 1000, time.time()), flush=True)
     data = Path(os.environ.get('BOXFOX_AGENT_DATA_DIR', str(Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'BoxFox/harness')))
     port = harness_port()
     executor = build_executor(data)
+    startup_mark('executor')
     # Single-writer: chỉ có nghĩa khi tác vụ dài được mở — đó là chế độ mà hai tiến trình trên
     # cùng một profile vừa cùng quét `interrupted` vừa cùng nhận continuation. Chế độ mặc định giữ
     # nguyên hành vi cũ (không khoá) nên không có hồi quy cho người dùng hiện tại; bật cờ thì
@@ -2821,6 +2834,7 @@ def main():
                              code=getattr(exc, 'code', 'PROFILE_WRITER_BUSY'), message=str(exc)[:300])
             raise
     runtime = HarnessRuntime(SessionStore(data / 'sessions.sqlite'), executor)
+    startup_mark('runtime')
     attach_host_approver(runtime)
     # Gắn ở CẢ HAI chế độ: host mode cũng cần `/api/agent/machines/*` (cấu hình folder, cây tệp,
     # `.plans`) — trước đây thiếu ở host nên giao diện rơi về Docker binding và tab Plan trắng số.
@@ -2835,6 +2849,7 @@ def main():
     attach(runtime, data, default_mode=mode,
            default_workspace=host_workspace() if mode == 'host' else None,
            desktop=shared_desktop, overlay=shared_overlay)
+    startup_mark('machine-binding')
     system_log.write('harness.start', dataDir=str(data), port=port, pid=os.getpid(),
                      python=sys.version.split()[0])
     # Host mode: bật DPI awareness + bảng phần tử (H5) và hook phát hiện người thật (H7) MỘT LẦN
@@ -2843,14 +2858,20 @@ def main():
     if shared_desktop is not None:
         prepare = getattr(executor, 'prepare', None)
         prepared, prepare_code = prepare() if prepare is not None else (True, '')
+        startup_mark('desktop-prepare')
         hooks_ok, hooks_code = shared_desktop.install_hooks()
+        startup_mark('input-hooks')
         system_log.write('desktop.ready', level='info' if prepared else 'warn',
                          message='điều khiển desktop đã sẵn sàng' if prepared else 'chưa sẵn sàng',
                          data={'prepared': prepared, 'prepareCode': prepare_code,
                                'hooks': hooks_ok, 'hooksCode': hooks_code})
     try:
-        web.run_app(create_app(runtime), host='127.0.0.1', port=port, print=None)
+        app = create_app(runtime)
+        startup_mark('api-created')
+        web.run_app(app, host='127.0.0.1', port=port, print=None)
     finally:
+        if shared_desktop is not None:
+            shared_desktop.uninstall_hooks()
         # `close()` is the normal path (`harness.stop` + reset). This call covers a
         # startup that died before the aiohttp cleanup ran; it is a no-op when the file
         # was already reset, because then there is no active file left to rename.

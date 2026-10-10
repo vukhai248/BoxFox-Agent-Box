@@ -516,7 +516,8 @@ def test_unavailable_platform_refuses_all_three_primitives():
         assert error.value.code == UNSUPPORTED_IN_HOST_MODE, name
 
 
-def test_unavailable_platform_is_what_linux_gets():
+def test_unavailable_platform_is_what_linux_gets(monkeypatch):
+    monkeypatch.setattr(wp, 'IS_WINDOWS', False)
     wp.set_platform(None)
     try:
         assert wp.get_platform().name == "unavailable"

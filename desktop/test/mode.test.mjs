@@ -16,11 +16,18 @@ import {
   decideMode,
   ensureSandboxImage,
   probeDocker,
+  selectStartupMode,
   runCommand,
   startBoxContainer,
   stopBoxContainer,
   writeComposeOverride,
 } from '../dist/mode.js'
+
+test('host startup does not run a single Docker command', async () => {
+  const result = await selectStartupMode('host', { runner: () => assert.fail('host probed Docker') })
+  assert.equal(result.probe, null)
+  assert.equal(result.decision.mode, 'host')
+})
 
 function tempDir(t, prefix = 'boxfox-mode-') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))

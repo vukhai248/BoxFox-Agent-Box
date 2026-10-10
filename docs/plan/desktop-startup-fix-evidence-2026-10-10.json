@@ -1,0 +1,377 @@
+{
+  "schema": 1,
+  "baselineCommit": "ff59af8f040cc18f335ffa45e768b962111c54c1",
+  "patchBranch": "codex/desktop-startup-fix",
+  "sourceState": "working patch before source checkpoint; installer receipt records packaged commit",
+  "scope": "Windows lifecycle/input hooks; post-UI system freeze not declared resolved",
+  "runs": [
+    {
+      "run": "run06",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 16341,
+          "windowCount": 1
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 18627
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 18850,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 18896
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 20897
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 21181,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 21182
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 71.8,
+      "minAvailableMemoryBytes": 273461248,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run06/lifecycle.json",
+          "sha256": "96b25436fc7348b8c550faae27231eeb90352d948efdd6839ec94d1ed9434978"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run06/machine-performance.json",
+          "sha256": "8f385244106b031f19d19795628e3fa04bfc16553f1f86a9a37dcb860136ab5a"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run06/desktop.stdout.log",
+          "sha256": "fffeaa1957832f04565411f3ca233d9ae0747cd1d2ca7a2af1c0ad94497550a2"
+        }
+      ]
+    },
+    {
+      "run": "run07",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 16571,
+          "windowCount": 1
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 18843
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 19074,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 19103
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 21106
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 21389,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 21390
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 54.8,
+      "minAvailableMemoryBytes": 431149056,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run07/lifecycle.json",
+          "sha256": "344573b4b95f1d1e91f3414d9c0dffd216791419aa2592ba94c6e7349bf85e1a"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run07/machine-performance.json",
+          "sha256": "e181a58d81547b39fcc8e7166b63cf553d5a4fb2cfc16a194a838dd56115eff2"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run07/desktop.stdout.log",
+          "sha256": "be7804fb04a6c77bd3450e3f2b57199e636a19662c670254b7bba9fc96680b04"
+        }
+      ]
+    },
+    {
+      "run": "run08-import",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 3516,
+          "windowCount": 1
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 5799
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 6038,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 6059
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 8061
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 8345,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 8345
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 52.3,
+      "minAvailableMemoryBytes": 526336000,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run08-import/lifecycle.json",
+          "sha256": "ff625ed0fc1481ef1a0000c4b3f273e9459e831136f0e65c3f0539fc0d7c963c"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run08-import/machine-performance.json",
+          "sha256": "9a43e55f5814d25399494a4a31460c2b4788ea85a0e8f3432c0e192548daa8e8"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run08-import/desktop.stdout.log",
+          "sha256": "4231708a31789f062359339cc9a9c53d18eb69303202c59eee6f0343591c3c7d"
+        }
+      ]
+    },
+    {
+      "run": "run09",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 3380,
+          "windowCount": 1
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 5654
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 5890,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 5895
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 7896
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 8248,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 8249
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 70.2,
+      "minAvailableMemoryBytes": 624001024,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run09/lifecycle.json",
+          "sha256": "fed2d2ffe8e1a31da39561f1a3b02548c432f7e9c035108218cf273179067ab3"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run09/machine-performance.json",
+          "sha256": "dc1b4c9e511ec164bce7116e33a70bc5986b35ad94a8120286903c1fb22845ec"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run09/desktop.stdout.log",
+          "sha256": "1a4e6765353634f32b8bbeb37e44ff28b5375ef16c5cd8722175d576592dd611"
+        }
+      ]
+    },
+    {
+      "run": "run10-post-ui",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 4718,
+          "windowCount": 1
+        },
+        {
+          "phase": "post-ui-observed",
+          "elapsedMs": 29984,
+          "steadyMs": 25000
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 30279
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 30514,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 30517
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 32529
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 32814,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 32815
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 78.5,
+      "minAvailableMemoryBytes": 325914624,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run10-post-ui/lifecycle.json",
+          "sha256": "dab4485016832993cd3b40c5eebee660e1a229dbbeba01785545426e403520fd"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run10-post-ui/machine-performance.json",
+          "sha256": "466f1d79a972b65ab8c46e294052d3928a0049f362f6d2dbba283cb2d16b7575"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run10-post-ui/desktop.stdout.log",
+          "sha256": "39eed45ad0e5118ada810ce6d2eb87f36684f6fbc69092f271de344542c1bacb"
+        }
+      ],
+      "rendererResponseMaxMs": 82,
+      "boxOrTtyRequests": []
+    },
+    {
+      "run": "run11-post-ui",
+      "passed": true,
+      "events": [
+        {
+          "phase": "ui-loaded",
+          "elapsedMs": 3184,
+          "windowCount": 1
+        },
+        {
+          "phase": "post-ui-observed",
+          "elapsedMs": 28317,
+          "steadyMs": 25000
+        },
+        {
+          "phase": "close-hidden",
+          "elapsedMs": 28593
+        },
+        {
+          "phase": "second-instance-restored",
+          "elapsedMs": 28823,
+          "windowCount": 1
+        },
+        {
+          "phase": "second-instance-exited",
+          "elapsedMs": 28840
+        },
+        {
+          "phase": "quit-requested",
+          "elapsedMs": 30844
+        },
+        {
+          "phase": "process-exit",
+          "elapsedMs": 31188,
+          "lockExists": false
+        },
+        {
+          "phase": "quit",
+          "elapsedMs": 31189
+        }
+      ],
+      "orphanPids": [],
+      "systemCpuMax": 56.1,
+      "minAvailableMemoryBytes": 1123213312,
+      "raw": [
+        {
+          "path": ".tmp/desktop-startup-fix/run11-post-ui/lifecycle.json",
+          "sha256": "546ee82ca83798f28b80d11b69b713f13a977d397b3cac060c382d7ae047f667"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run11-post-ui/machine-performance.json",
+          "sha256": "0c9ced750be5f757a382ec819d09b99b27f3118f2c6a3761bb1de6f695617f34"
+        },
+        {
+          "path": ".tmp/desktop-startup-fix/run11-post-ui/desktop.stdout.log",
+          "sha256": "8e73b3fab2af08d39b094e56c4c004e19f96eb40bd7fe466dae8255f42702a2e"
+        }
+      ],
+      "rendererResponseMaxMs": 64,
+      "boxOrTtyRequests": []
+    }
+  ],
+  "nativeHook": {
+    "installed": true,
+    "code": "",
+    "installMs": 1.72,
+    "distinctThread": true,
+    "postedPrivateMessage": true,
+    "pumpedMessages": 1,
+    "threadStopped": true,
+    "handlesReleased": true,
+    "inputInjected": false,
+    "passed": true
+  },
+  "tests": {
+    "desktop": {
+      "passed": 77,
+      "failed": 0,
+      "skipped": 2
+    },
+    "focusedBackend": {
+      "passed": 137
+    },
+    "extendedCua": {
+      "passed": 237,
+      "failed": 1,
+      "skipped": 1,
+      "failure": "test_the_border_hides_itself_after_the_idle_timeout",
+      "isolatedRerunPassed": 1,
+      "status": "unresolved intermittent timer assertion; not claimed all-pass"
+    }
+  }
+}

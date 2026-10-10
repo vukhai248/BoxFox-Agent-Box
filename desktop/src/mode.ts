@@ -171,6 +171,15 @@ export interface ModeDecision {
   reason: string
 }
 
+/** Host startup must not wake/probe Docker at all. Docker selection retains its policy. */
+export async function selectStartupMode(preferred: ExecutionMode, options: ProbeDockerOptions = {}): Promise<{
+  decision: ModeDecision; probe: DockerProbe | null
+}> {
+  if (preferred === 'host') return { decision: { mode: 'host', reason: 'host mode selected.' }, probe: null }
+  const probe = await probeDocker(options)
+  return { decision: decideMode(preferred, probe), probe }
+}
+
 /** Never silently switches: the reason string is shown in diagnostics and logs. */
 export function decideMode(preferred: ExecutionMode, probe: DockerProbe): ModeDecision {
   if (preferred === 'host') return { mode: 'host', reason: 'host mode selected.' }

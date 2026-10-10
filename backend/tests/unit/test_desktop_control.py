@@ -127,6 +127,51 @@ def test_the_hook_callback_always_calls_the_next_hook(tmp_path):
     assert ('call_next_hook', (0, 256, 0)) in platform.calls
 
 
+def test_hook_callback_does_not_read_or_write_lease_and_coalesces_mouse_moves(tmp_path, monkeypatch):
+    control_obj, platform = control(tmp_path)
+    token, _ = control_obj.begin_action('click')
+    control_obj.install_hooks()
+    disk_calls = []
+    def forbidden_disk(*_):
+        disk_calls.append('disk')
+        raise AssertionError('hook touched disk')
+    with monkeypatch.context() as patch:
+        patch.setattr(dc, '_read_json', forbidden_disk)
+        patch.setattr(dc, '_write_json', forbidden_disk)
+        for _ in range(1000):
+            platform.hook_events = [hook_event_dict(injected=False, point=(5, 5))]
+            platform.mouse_callback(0, 512, 0)
+    assert disk_calls == []  # exceptions cannot conceal a hook doing filesystem work
+    assert control_obj.generation > token.generation  # cancelled before persistence
+    assert control_obj.fence(token) == win_errors.HUMAN_HAS_CONTROL
+    epoch = control_obj.snapshot()['epoch']
+    assert control_obj.flush_hook_events() is False
+    assert control_obj.snapshot()['epoch'] == epoch
+
+
+def test_escape_forwards_exactly_once_and_stops_off_callback(tmp_path):
+    control_obj, platform = control(tmp_path)
+    control_obj.install_hooks()
+    platform.hook_events = [hook_event_dict(injected=False, vkey=0x1B)]
+    platform.keyboard_callback(0, 256, 0)
+    assert platform.calls.count(('call_next_hook', (0, 256, 0))) == 1
+    # Later mouse moves may replace the coalesced event, but must never erase Esc.
+    platform.hook_events = [hook_event_dict(injected=False, point=(5, 5))]
+    platform.mouse_callback(0, 512, 0)
+    assert control_obj.flush_hook_events() is True
+    assert 'Esc' in control_obj.lease.snapshot()['reason']
+    assert control_obj.snapshot()['holder'] == dc.HOLDER_HUMAN
+
+
+def test_install_hooks_is_idempotent_and_uninstall_cleans_both(tmp_path):
+    control_obj, platform = control(tmp_path)
+    assert control_obj.install_hooks()[0]
+    assert control_obj.install_hooks()[0]
+    assert len([call for call in platform.calls if call[0] == 'set_mouse_hook']) == 1
+    control_obj.uninstall_hooks()
+    assert platform.called('unhook_mouse') and platform.called('unhook_keyboard')
+
+
 def test_a_real_escape_press_stops_everything(tmp_path):
     control_obj, _ = control(tmp_path)
     control_obj.begin_action('click')

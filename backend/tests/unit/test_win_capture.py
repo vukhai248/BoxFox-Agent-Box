@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ctypes
 import struct
+import sys
 import zlib
 
 import pytest
@@ -33,6 +34,7 @@ def _clean_state():
 # ---------------------------------------------------------------------------
 # Import trên Linux + struct
 # ---------------------------------------------------------------------------
+@pytest.mark.skipif(sys.platform == 'win32', reason='Checks the Linux-only absence of ctypes.WinDLL')
 def test_package_imports_without_windll_on_linux():
     # Không có WinDLL trên Linux — gói vẫn phải import được và trả nền tảng giữ chỗ.
     assert hasattr(ctypes, "WinDLL") is False

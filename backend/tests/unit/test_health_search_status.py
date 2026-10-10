@@ -73,6 +73,18 @@ def test_the_health_route_reports_the_search_block_without_touching_the_network(
     assert not (tmp_path / 'never-created.sqlite').exists(), 'health không được tạo DB tìm kiếm'
 
 
+def test_desktop_readiness_never_waits_for_search_diagnostics(tmp_path, monkeypatch):
+    def forbidden():
+        raise AssertionError('readiness tried to resolve search/provider diagnostics')
+    monkeypatch.setattr(web, 'search_status', forbidden)
+    async def scenario(client, runtime):
+        response = await client.get('/api/agent/health?readiness=1', headers=HEADERS)
+        return response.status, await response.json()
+    status, body = run(tmp_path, scenario)
+    assert status == 200 and body['status'] == 'ok'
+    assert 'search' not in body and body['service'] == 'boxfox-harness'
+
+
 def test_the_search_probe_only_runs_when_asked(tmp_path, monkeypatch):
     calls: list[str] = []
 

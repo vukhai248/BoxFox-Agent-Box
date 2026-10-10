@@ -16,9 +16,11 @@
  */
 
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { MachineRecord, ProfileLayout } from './profile'
+import { runCommand, type CommandRunner } from './mode'
 
 export class AlreadyRunningError extends Error {
   readonly code = 'ALREADY_RUNNING'
@@ -46,17 +48,56 @@ function processAlive(pid: number): boolean {
   }
 }
 
+/** Upgrade guard for pre-native-lock builds. A recycled PID is not a live BoxFox.
+ * Native-lock records do not need a subprocess probe on subsequent starts.
+ */
+export async function checkLegacyInstance(lockFile: string, options: {
+  platform?: NodeJS.Platform; executable?: string; runner?: CommandRunner; alive?: (pid: number) => boolean
+} = {}): Promise<void> {
+  if ((options.platform ?? process.platform) !== 'win32') return
+  let record: { pid?: number; token?: string; startedAt?: string }
+  try { record = JSON.parse(fs.readFileSync(lockFile, 'utf8')) } catch { return }
+  if (record.token || !record.pid || !(options.alive ?? processAlive)(record.pid)) return
+  const pid = record.pid
+  if (!Number.isInteger(pid) || pid <= 0) return
+  const powershell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const result = await (options.runner ?? runCommand)(powershell, ['-NoProfile', '-NonInteractive', '-Command',
+    `$targetProcess = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($targetProcess) { @{ path=$targetProcess.Path; startedAt=$targetProcess.StartTime.ToUniversalTime().ToString('o') } | ConvertTo-Json -Compress }`,
+  ], { timeoutMs: 3000 })
+  if (result.code !== 0) throw new Error('Could not verify the legacy BoxFox instance. Close the older app and try again.')
+  if (!result.stdout.trim()) return // owner exited during the probe
+  const owner = JSON.parse(result.stdout) as { path?: string; startedAt?: string }
+  const name = path.win32.basename(owner.path ?? '').toLowerCase()
+  const expected = path.win32.basename(options.executable ?? process.execPath).toLowerCase()
+  if (name !== expected && name !== 'boxfox desktop (alpha).exe') return
+  const startedAt = Date.parse(owner.startedAt ?? '')
+  const recordedAt = Date.parse(record.startedAt ?? '')
+  if (Number.isFinite(startedAt) && Number.isFinite(recordedAt) && startedAt > recordedAt + 1000) return
+  throw new AlreadyRunningError(lockFile, pid)
+}
+
 /**
  * Take the single-instance lock. The lock file holds the owner pid; a stale file
  * (owner gone, e.g. a crash) is replaced. `release()` is idempotent.
  */
-export function acquireInstanceLock(lockFile: string, pid: number = process.pid): InstanceLockHandle {
+export function acquireInstanceLock(
+  lockFile: string,
+  pid: number = process.pid,
+  options: { nativeLockHeld?: boolean } = {},
+): InstanceLockHandle {
   fs.mkdirSync(path.dirname(lockFile), { recursive: true })
+  // In Electron the kernel-backed single-instance lock is authoritative. The file
+  // is diagnostic only: Windows can recycle its PID after a crash/reboot.
+  if (options.nativeLockHeld) fs.rmSync(lockFile, { force: true })
+  const token = randomUUID()
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const fd = fs.openSync(lockFile, 'wx')
-      fs.writeSync(fd, `${JSON.stringify({ app: 'boxfox-desktop', pid, startedAt: new Date().toISOString() })}\n`)
-      fs.closeSync(fd)
+      try {
+        fs.writeSync(fd, `${JSON.stringify({ app: 'boxfox-desktop', pid, token, startedAt: new Date().toISOString() })}\n`)
+      } finally {
+        fs.closeSync(fd)
+      }
       let released = false
       return {
         file: lockFile,
@@ -65,7 +106,8 @@ export function acquireInstanceLock(lockFile: string, pid: number = process.pid)
           if (released) return
           released = true
           try {
-            fs.rmSync(lockFile, { force: true })
+            const record = JSON.parse(fs.readFileSync(lockFile, 'utf8')) as { token?: unknown }
+            if (record.token === token) fs.rmSync(lockFile, { force: true })
           } catch {
             // The lock is advisory; failing to remove it only delays the next start.
           }
@@ -165,6 +207,7 @@ export function serviceEnv(
   env.BOXFOX_EXECUTION_MODE = mode
   env.BOXFOX_UI_ORIGINS = `http://127.0.0.1:${machine.ports.gateway},http://localhost:${machine.ports.gateway}`
   env.BOXFOX_ROUTER_URL = `http://127.0.0.1:${machine.ports.router}`
+  env.BOXFOX_ROUTER_SEARCH_URL = `${env.BOXFOX_ROUTER_URL}/api/router/search/resolve`
   env.BOXFOX_BOX_URL = `http://127.0.0.1:${machine.ports.box}`
   return env
 }
@@ -206,7 +249,7 @@ export function buildServiceSpecs(input: BuildSpecsInput): { router: ServiceSpec
         PYTHONUTF8: '1',
         PYTHONDONTWRITEBYTECODE: '1',
       },
-      healthUrl: `http://127.0.0.1:${input.machine.ports.harness}/api/agent/health`,
+      healthUrl: `http://127.0.0.1:${input.machine.ports.harness}/api/agent/health?readiness=1`,
     },
   }
 }
@@ -441,6 +484,7 @@ export class Supervisor {
     this.startService('router')
     this.startService('harness')
     const names: ServiceName[] = ['router', 'harness']
+    const startedAt = performance.now()
     await Promise.all(
       names.map(async (name) => {
         const ok = await waitForHttp(this.records[name].spec.healthUrl, {
@@ -449,6 +493,7 @@ export class Supervisor {
           fetchImpl: this.fetchImpl,
         })
         this.records[name].state.healthy = ok
+        if (ok) this.log(`[supervisor] ${name} healthy after ${Math.round(performance.now() - startedAt)}ms`)
         if (!ok) this.log(`[supervisor] ${name} did not become healthy in ${this.readyTimeoutMs} ms`)
       }),
     )

@@ -21,7 +21,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -103,6 +105,7 @@ class DesktopLease:
         self.path = Path(profile_dir) / LEASE_FILENAME
         self.clock = clock
         self._epoch = 0
+        self._lock = threading.RLock()
         self._state = {'holder': HOLDER_AGENT, 'viewerId': None, 'since': None,
                        'reason': 'chưa có tệp lease — agent giữ mặc định', 'epoch': 0}
 
@@ -110,6 +113,10 @@ class DesktopLease:
 
     def read(self):
         """Đọc tệp và trả snapshot đã chuẩn hoá. Không bao giờ ném."""
+        with self._lock:
+            return self._read_locked()
+
+    def _read_locked(self):
         exists = self.path.exists()
         data, error = _read_json(self.path)
         if error or (exists and not data):
@@ -145,6 +152,10 @@ class DesktopLease:
 
     def _commit(self, holder, reason, viewer_id=None):
         """Tăng epoch rồi ghi. Trả `(snapshot, error)`."""
+        with self._lock:
+            return self._commit_locked(holder, reason, viewer_id)
+
+    def _commit_locked(self, holder, reason, viewer_id=None):
         self.read()
         self._epoch += 1
         state = {'holder': holder, 'viewerId': viewer_id, 'since': self.clock(),
@@ -264,10 +275,14 @@ class DesktopControl:
         self.last_idle = None
         self._screen_hashes = {}
         self._last_input_tick = 0
+        self._pending_hook = deque(maxlen=1)
+        self._hook_escape_revision = 0
+        self._handled_escape_revision = 0
 
     # -- lease ---------------------------------------------------------------
 
     def snapshot(self):
+        self.flush_hook_events()
         state = self.lease.snapshot()
         state['generation'] = self.generation
         state['hooksInstalled'] = self.hooks_installed
@@ -281,6 +296,7 @@ class DesktopControl:
         `force=True` CHỈ dành cho nút "Trả quyền cho agent" của người dùng — không có đường nào
         để agent tự gọi nó. Mọi lời gọi khác để mặc định.
         """
+        self.flush_hook_events()
         ok, state, error = self.lease.acquire(reason, viewer_id=viewer_id, force=force)
         if not ok:
             return False, state, error
@@ -300,6 +316,12 @@ class DesktopControl:
 
     def install_hooks(self):
         """Cài hook chuột + bàn phím. Thất bại ⇒ **fail-closed**, không cấp quyền điều khiển."""
+        if self.hooks_installed:
+            return True, ''
+        install = getattr(self.platform, 'install_input_hooks', None)
+        if install is not None:
+            self.hooks_installed = bool(install(self._keyboard_hook(), self._mouse_hook()))
+            return (True, '') if self.hooks_installed else (False, win_errors.OS_PERMISSION_REQUIRED)
         set_keyboard = getattr(self.platform, 'set_keyboard_hook', None)
         set_mouse = getattr(self.platform, 'set_mouse_hook', None)
         if set_keyboard is None or set_mouse is None:
@@ -307,11 +329,17 @@ class DesktopControl:
         keyboard = set_keyboard(self._keyboard_hook())
         mouse = set_mouse(self._mouse_hook())
         if not keyboard or not mouse:
+            self.uninstall_hooks()
             return False, win_errors.OS_PERMISSION_REQUIRED
         self.hooks_installed = True
         return True, ''
 
     def uninstall_hooks(self):
+        stop = getattr(self.platform, 'stop_input_hooks', None)
+        if stop is not None:
+            stop()
+            self.hooks_installed = False
+            return
         for name in ('unhook_keyboard', 'unhook_mouse'):
             unhook = getattr(self.platform, name, None)
             if unhook is not None:
@@ -326,16 +354,43 @@ class DesktopControl:
         return lambda code, wparam, lparam: self._on_hook('mouse', code, wparam, lparam)
 
     def _on_hook(self, kind, code, wparam, lparam):
-        """Callback của hook. **Luôn** gọi `CallNextHookEx` — không bao giờ nuốt phím của người dùng."""
+        """Invalidate in memory only. Never read/write files or release input in this callback.
+
+        High-frequency mouse moves are coalesced; persistence runs off the hook thread.
+        CallNextHookEx must be called exactly once, including Esc and error paths.
+        """
         try:
             if code >= 0:
                 parse = getattr(self.platform, 'hook_event', None)
                 event = parse(kind, wparam, lparam) if parse is not None else {}
-                if kind == 'keyboard' and self.check_escape(event):
-                    return self._call_next(code, wparam, lparam)
-                self.note_hook_event(kind, event)
+                if event and not event.get('injected'):
+                    escape = kind == 'keyboard' and int(event.get('vkey') or 0) == 0x1B
+                    self.generation += 1  # Immediately invalidates already-issued actions.
+                    if escape:
+                        self._hook_escape_revision += 1
+                    self._pending_hook.append(kind)
         finally:
             return self._call_next(code, wparam, lparam)
+
+    def flush_hook_events(self):
+        """Persist at most one coalesced takeover outside the Windows input callback."""
+        # deque.pop is atomic: a concurrent new event cannot be lost between a
+        # read and clear. Esc has a monotonic counter so mouse coalescing never
+        # erases an emergency stop.
+        try:
+            kind = self._pending_hook.pop()
+        except IndexError:
+            kind = None
+        escape_revision = self._hook_escape_revision
+        escape = escape_revision > self._handled_escape_revision
+        if kind is None and not escape:
+            return False
+        if escape:
+            self._handled_escape_revision = escape_revision
+            self.emergency_stop('người dùng bấm Esc')
+        elif self.lease.holder() == HOLDER_AGENT:
+            self.release_to_human('người dùng chạm %s' % ('bàn phím' if kind == 'keyboard' else 'chuột'))
+        return True
 
     def _call_next(self, code, wparam, lparam):
         call_next = getattr(self.platform, 'call_next_hook', None)
@@ -420,6 +475,7 @@ class DesktopControl:
         Đây là lựa chọn 2 của ADR-0002: cờ "perception fresh" ở client không đóng được cuộc đua giữa lần
         kiểm tra và lần gửi; chỉ lần kiểm tra **tại điểm hành động** mới đóng được.
         """
+        self.flush_hook_events()
         state = self.lease.snapshot()
         if state['holder'] != HOLDER_AGENT:
             return win_errors.HUMAN_HAS_CONTROL

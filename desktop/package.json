@@ -1,7 +1,7 @@
 {
   "name": "boxfox-desktop",
   "productName": "BoxFox Desktop (Alpha)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "BoxFox Desktop (Alpha) — Electron shell that bundles the BoxFox router, harness and web UI.",
   "author": "BoxFox",

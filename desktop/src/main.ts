@@ -21,10 +21,11 @@ import {
   writeDiagnosticsArchive,
 } from './diagnostics'
 import { createGateway, type Gateway } from './gateway'
-import { decideMode, ensureSandboxImage, probeDocker, startBoxContainer, stopBoxContainer, writeComposeOverride, type DockerProbe } from './mode'
+import { ensureSandboxImage, selectStartupMode, startBoxContainer, stopBoxContainer, writeComposeOverride, type DockerProbe } from './mode'
+import { DesktopCleanup } from './lifecycle'
 import { dockerContextDir, harnessDir, readBuildManifest, resolveResourcesDir, runtimeDir, trayIconPath, uiDir } from './paths'
 import { openProfile, profileRoot, readDesktopSettings, type ExecutionMode, type OpenProfileResult } from './profile'
-import { acquireInstanceLock, AlreadyRunningError, buildServiceSpecs, Supervisor, type ServiceSpec } from './supervisor'
+import { acquireInstanceLock, AlreadyRunningError, buildServiceSpecs, checkLegacyInstance, Supervisor, type ServiceSpec } from './supervisor'
 import { shouldHideOnClose, toggleWindowVisibility, trayMenuTemplate, TRAY_TOOLTIP, type TrayMenuHandlers } from './tray'
 
 interface DesktopState {
@@ -45,9 +46,22 @@ interface DesktopState {
 let state: DesktopState | null = null
 let quitting = false
 let refreshTrayMenu: (() => void) | null = null
+const cleanup = new DesktopCleanup()
+let desktopLogFile: string | null = null
+const nativeInstanceLock = app.requestSingleInstanceLock()
+
+// A second click restores the first window, including a window hidden in the tray.
+app.on('second-instance', () => {
+  const window = ensureWindow()
+  if (window?.isMinimized()) window.restore()
+  window?.show()
+  window?.focus()
+})
+if (!nativeInstanceLock) app.quit()
 
 function log(line: string): void {
   process.stdout.write(`${line}\n`)
+  if (desktopLogFile) fs.appendFile(desktopLogFile, `${new Date().toISOString()} ${line}\n`, () => undefined)
 }
 
 function createWindow(url: string): BrowserWindow {
@@ -160,7 +174,6 @@ function createTray(window: BrowserWindow, resourcesDir: string): Tray | null {
     },
     exportDiagnostics: () => void exportDiagnosticsBundle(),
     quit: () => {
-      quitting = true
       app.quit()
     },
   }
@@ -183,9 +196,18 @@ function createTray(window: BrowserWindow, resourcesDir: string): Tray | null {
 }
 
 async function start(): Promise<void> {
-  const profile = await openProfile({ root: profileRoot() })
-  const lock = acquireInstanceLock(profile.layout.lockFile)
-  app.on('will-quit', () => lock.release())
+  const started = performance.now()
+  const mark = (phase: string) => log(`[desktop] startup ${phase}: ${Math.round(performance.now() - started)}ms`)
+  const assertStarting = () => { if (quitting) throw new Error('Desktop startup cancelled by quit') }
+  const root = profileRoot()
+  await checkLegacyInstance(path.join(root, 'desktop.lock'))
+  assertStarting()
+  const profile = await openProfile({ root })
+  assertStarting()
+  desktopLogFile = path.join(profile.layout.logs, 'desktop.log')
+  const lock = acquireInstanceLock(profile.layout.lockFile, process.pid, { nativeLockHeld: nativeInstanceLock })
+  cleanup.add(() => lock.release())
+  mark('profile')
   if (profile.reallocated.length > 0) {
     log(`[desktop] re-allocated busy port(s): ${profile.reallocated.join(', ')}`)
   }
@@ -195,12 +217,13 @@ async function start(): Promise<void> {
     appDir: __dirname,
   })
   const settings = readDesktopSettings(profile.layout)
-  const probe = await probeDocker({})
-  const decision = decideMode(settings.executionMode, probe)
+  const { probe, decision } = await selectStartupMode(settings.executionMode)
+  assertStarting()
+  mark('mode')
   log(`[desktop] mode: ${decision.mode} — ${decision.reason}`)
   let boxStarted = false
   if (decision.mode === 'docker') {
-    if (!probe.image) {
+    if (!probe?.image) {
       await ensureSandboxImage({
         contextDir: dockerContextDir(resources),
         onProgress: (line) => log(line),
@@ -218,6 +241,14 @@ async function start(): Promise<void> {
       onProgress: (line) => log(`[box] ${line}`),
     })
     boxStarted = result.code === 0
+    if (boxStarted) cleanup.add(async () => {
+      await stopBoxContainer({
+        composeFile: path.join(dockerContextDir(resources), 'docker-compose.yml'),
+        overrideFile: override,
+        onProgress: (line) => log(`[box] ${line}`),
+      })
+    })
+    assertStarting()
     if (!boxStarted) log(`[desktop] could not start the sandbox container (exit ${result.code}); box surface unavailable.`)
   }
   const specs = buildServiceSpecs({
@@ -237,7 +268,10 @@ async function start(): Promise<void> {
     log,
     watchdogIntervalMs: 15_000,
   })
+  cleanup.add(() => supervisor.stop())
   const status = await supervisor.start()
+  assertStarting()
+  mark('services')
   if (!status.services.router.healthy || !status.services.harness.healthy) {
     log('[desktop] a service failed to become healthy; opening the window anyway so logs are reachable.')
   }
@@ -275,7 +309,10 @@ async function start(): Promise<void> {
       ),
     log,
   })
+  cleanup.add(() => gateway.close())
   await gateway.listen()
+  assertStarting()
+  mark('gateway')
   ipcMain.handle('boxfox:identity', () => ({
     app: 'BoxFox Desktop (Alpha)',
     version: app.getVersion(),
@@ -298,6 +335,7 @@ async function start(): Promise<void> {
     trayActive: false,
   }
   const window = createWindow(gateway.url)
+  window.webContents.once('did-finish-load', () => mark('ui-loaded'))
   state.window = window
   const tray = createTray(window, resources)
   state.tray = tray
@@ -309,31 +347,16 @@ async function shutdown(): Promise<void> {
   const current = state
   state = null
   refreshTrayMenu = null
-  if (!current) return
-  current.tray?.destroy()
-  try {
-    await current.gateway.close()
-  } catch (error) {
-    log(`[desktop] gateway shutdown failed: ${(error as Error).message}`)
-  }
-  try {
-    await current.supervisor.stop()
-  } catch (error) {
-    log(`[desktop] supervisor shutdown failed: ${(error as Error).message}`)
-  }
-  if (current.boxStarted) {
-    await stopBoxContainer({
-      composeFile: path.join(dockerContextDir(current.resourcesDir), 'docker-compose.yml'),
-      overrideFile: path.join(current.profile.layout.profile, 'docker-compose.override.yml'),
-      onProgress: (line) => log(`[box] ${line}`),
-    })
-  }
+  current?.tray?.destroy()
+  await cleanup.run((error) => log(`[desktop] shutdown failed: ${(error as Error).message}`))
 }
 
 void app.whenReady().then(async () => {
+  if (!nativeInstanceLock) return
   try {
     await start()
   } catch (error) {
+    await shutdown()
     if (error instanceof AlreadyRunningError) {
       dialog.showErrorBox('BoxFox Desktop is already running', error.message)
       app.exit(0)
@@ -351,8 +374,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', (event) => {
-  if (quitting || state === null) return
+  if (!nativeInstanceLock) return
   event.preventDefault()
+  if (quitting) return
   quitting = true
   void (async () => {
     try {
