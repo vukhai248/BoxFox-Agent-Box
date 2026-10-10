@@ -739,8 +739,11 @@ def router_http_timeout(max_tokens, body_bytes=None):
 
 
 class RouterClient:
-    def __init__(self, url='http://127.0.0.1:3101'):
-        self.url = url.rstrip('/')
+    def __init__(self, url=None):
+        # Desktop allocates a router port per profile. The web default is only
+        # used when no URL was supplied; never send desktop chat to a web router.
+        configured = url if url is not None else (os.environ.get('BOXFOX_ROUTER_URL') or '').strip()
+        self.url = (configured or 'http://127.0.0.1:3101').rstrip('/')
 
     async def snapshot(self):
         """Router state in one read, or None when the router does not answer.

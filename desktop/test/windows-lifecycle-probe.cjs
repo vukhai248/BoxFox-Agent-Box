@@ -69,6 +69,42 @@ if (!second) {
       report.health = health.services
       report.servicePids = [...health.services.matchAll(/(?:router|harness)\s*: pid=(\d+)/g)].map(m => Number(m[1]))
       if (!/router\s*: .*healthy=true/.test(health.services) || !/harness\s*: .*healthy=true/.test(health.services)) throw new Error('Real services did not become healthy')
+      if (process.env.BOXFOX_PROBE_CHAT === '1') {
+        // Isolated profile only: never copy or modify the user's provider credentials.
+        const origin = `http://127.0.0.1:${machine.ports.gateway}`
+        const api = async (route, body) => {
+          const response = await fetch(origin + route, {
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
+            signal: AbortSignal.timeout(65000),
+          })
+          if (!response.ok) throw new Error(`Chat probe ${route.split('/').slice(0, 4).join('/')} HTTP ${response.status}`)
+          return response.json()
+        }
+        const connection = await api('/api/router/connections', { providerId: 'opencode', name: 'Isolated desktop regression probe' })
+        await api(`/api/router/connections/${connection.id}/models/refresh`, {})
+        const state = await api('/api/router/state')
+        const model = state.connections.find(c => c.id === connection.id)?.models.find(m => m.id === 'mimo-v2.6-flash-free')
+        if (!model) throw new Error('OpenCode MiMo model unavailable for live regression probe')
+        const session = await api('/api/agent/sessions', { connectionId: connection.id, modelId: model.id,
+          skills: [], tools: [], maxSteps: 1, maxTokens: 128 })
+        report.chat = { routerPort: machine.ports.router, harnessPort: machine.ports.harness,
+          model: model.id, sessionId: session.id, contextWindow: session.config.contextWindow,
+          providerContextWindow: model.contextWindow ?? null }
+        // Provider can omit context metadata; do not reject the runtime's existing fallback.
+        if (model.contextWindow > 0 && session.config.contextWindow !== model.contextWindow) throw new Error('Harness metadata did not come from the app router')
+        await api(`/api/agent/sessions/${session.id}/turns`, { prompt: 'Reply exactly: OK. Do not use tools.' })
+        const deadline = Date.now() + 65000
+        let result
+        do {
+          await delay(250)
+          result = await api(`/api/agent/sessions/${session.id}`)
+        } while (['idle', 'running', 'queued'].includes(result.status) && Date.now() < deadline)
+        report.chat.status = result.status
+        report.chat.content = result.messages?.filter(m => m.role === 'assistant').at(-1)?.content
+        if (result.status !== 'completed' || !report.chat.content?.includes('OK')) throw new Error(`Packaged chat did not complete: ${result.status}`)
+        mark('packaged-chat-completed', { routerPort: machine.ports.router })
+      }
       // User reports the freeze AFTER the UI appears; include delayed polls/watchdog.
       const steadyMs = Number(process.env.BOXFOX_PROBE_STEADY_MS ?? 2000)
       const until = performance.now() + steadyMs
