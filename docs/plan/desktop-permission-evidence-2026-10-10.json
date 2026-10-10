@@ -1,0 +1,54 @@
+{
+  "sourceCommit": "dc60c43fbb555e1e573c80d9b9d0c406f9542582",
+  "os": "Windows 11 x64",
+  "installer": "desktop/release/permissions-0.1.3/BoxFox-Desktop-Alpha-0.1.3-Setup.exe",
+  "sha256": "a9713e281c7d19063cebf9dfe0d19386d63b8d7b9d75dd0b38b64ca193723a38",
+  "bytes": 167429568,
+  "signature": "NotSigned",
+  "archiveChecks": "NSIS and app-64.7z: Everything is Ok",
+  "packagedProbePassed": true,
+  "permissions": {
+    "modes": [
+      "ask",
+      "auto",
+      "trusted"
+    ],
+    "checks": [
+      {
+        "mode": "ask",
+        "scope": "workspace",
+        "network": "ask",
+        "floor": "deny"
+      },
+      {
+        "mode": "auto",
+        "scope": "workspace",
+        "network": "ask",
+        "floor": "deny"
+      },
+      {
+        "mode": "trusted",
+        "scope": "machine",
+        "network": "ask",
+        "floor": "deny"
+      }
+    ],
+    "ui": {
+      "labels": [
+        "Request approval\nInspect the project with recognised read commands. Ask before changes or other commands.",
+        "Auto approve\nRun project work automatically. Ask for outside targets, risky actions and desktop control.",
+        "Full access\nAccess files outside the project without scope prompts. Safety rules, project trust and CUA grants still apply.",
+        "Ask before network access\nNetwork commands (curl, git push, package installs…) must ask instead of running silently.",
+        "Allow network access\nRecognised network commands do not add a network prompt. Approval rules still apply. This is not a firewall."
+      ],
+      "scopeChooser": false
+    }
+  },
+  "rendererLatencyMaxMs": 47.0,
+  "lockExistsAfterExit": false,
+  "orphanPids": [],
+  "asarMatchesProbe": true,
+  "nativeProbe": ".tmp/desktop-startup-fix/permissions-013-run1",
+  "cleanInstallTested": false,
+  "modelCalledInThisCheckpoint": false
+}

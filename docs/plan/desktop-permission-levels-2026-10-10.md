@@ -48,4 +48,17 @@ Raw logs: `.tmp/permissions-20261010/`. Không commit profile, credential, DB ow
 
 ## Bộ cài
 
-Target 0.1.3. Hash/probe sẽ bổ sung sau chạy thật; giữ 0.1.2 để rollback. Quit ở tray trước cập nhật (X chỉ ẩn), cài vào nơi cũ; giữ profile/data/project. Không tự cài lên app owner.
+Đã đóng **0.1.3** từ source commit `dc60c43fbb555e1e573c80d9b9d0c406f9542582`:
+
+`desktop/release/permissions-0.1.3/BoxFox-Desktop-Alpha-0.1.3-Setup.exe`
+
+- Size: 167429568 bytes; SHA256 `a9713e281c7d19063cebf9dfe0d19386d63b8d7b9d75dd0b38b64ca193723a38`; NotSigned.
+- `7z t` NSIS và payload `app-64.7z`: Everything is Ok. Manifest trong payload ghi đúng source; asar trích từ installer khớp asar của probe.
+- Native probe `permissions-013-run1` dùng runtime/UI/harness trong `win-unpacked/resources`, profile riêng, kiểm API qua gateway thật và đọc menu renderer thật: 3 mức + 2 lựa chọn Internet, không Scope. Mỗi mức restricted đều hỏi curl và deny format. X ẩn, second-instance khôi phục đúng một cửa sổ, Quit nhả lock, không orphan. Renderer latency cao nhất 47 ms trong 10 giây quan sát. Chạy cùng lúc đóng NSIS, không dùng số startup/CPU để tuyên bố đã nghiệm thu hiệu năng.
+- Đây là **packaged-path probe**, chưa chạy installer/upgrade trên profile owner hoặc máy Windows sạch. Không gọi model ở checkpoint permission vì policy/file/native/API đo được trực tiếp; đường model/router giữ source cũ đã kiểm riêng ở báo cáo cổng 0.1.2.
+- Router/runtime/docker-context block hashes giữ nguyên so với 0.1.2. UI/harness thay đúng patch này. Build lock/manifest/SHA256SUMS nằm cạnh bộ cài; `dirty=true` do untracked WIP owner được bảo toàn.
+- Web http://localhost:3100/ nạp backend mới, HTTP health ok; permissions trả `ask,auto,trusted` và `scopeDerived=true`. Harness mới PID 13108; UI/router hiện có giữ nguyên. Không có lượt web running/queued trước restart.
+
+Evidence gọn đã commit: [desktop-permission-evidence-2026-10-10.json](desktop-permission-evidence-2026-10-10.json). Probe có thể tái lập bằng `BOXFOX_PROBE_PERMISSIONS=1`, `BOXFOX_PROBE_PACKAGED_RESOURCES=<resources>`, `BOXFOX_PROBE_ELECTRON=<Electron 33.4.11>`, rồi `python desktop/test/probes/measure-startup.py <run-id-mới>`.
+
+Giữ 0.1.2 và tag trước sửa để rollback. Quit ở tray trước cập nhật (X chỉ ẩn), cài vào nơi cũ; giữ profile/data/project. Không tự cài lên app owner.
