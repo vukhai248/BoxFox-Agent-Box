@@ -54,7 +54,7 @@ Raw logs: `.tmp/permissions-20261010/`. Không commit profile, credential, DB ow
 
 - Size: 167429568 bytes; SHA256 `a9713e281c7d19063cebf9dfe0d19386d63b8d7b9d75dd0b38b64ca193723a38`; NotSigned.
 - `7z t` NSIS và payload `app-64.7z`: Everything is Ok. Manifest trong payload ghi đúng source; asar trích từ installer khớp asar của probe.
-- Native probe `permissions-013-run1` dùng runtime/UI/harness trong `win-unpacked/resources`, profile riêng, kiểm API qua gateway thật và đọc menu renderer thật: 3 mức + 2 lựa chọn Internet, không Scope. Mỗi mức restricted đều hỏi curl và deny format. X ẩn, second-instance khôi phục đúng một cửa sổ, Quit nhả lock, không orphan. Renderer latency cao nhất 47 ms trong 10 giây quan sát. Chạy cùng lúc đóng NSIS, không dùng số startup/CPU để tuyên bố đã nghiệm thu hiệu năng.
+- Native probe hiện hành `permissions-013-run2` dùng runtime/UI/harness trong `win-unpacked/resources`, LOCALAPPDATA **và HOME/USERPROFILE riêng**, kiểm user-layer path nằm dưới test-home **trước bất kỳ PUT**. API gateway thật/menu renderer thật: 3 mức + 2 lựa chọn Internet, không Scope. Mỗi mức restricted đều hỏi curl và deny format. X ẩn, second-instance khôi phục đúng một cửa sổ, Quit nhả lock, không orphan. Các số đo renderer ghi trong evidence JSON; không dùng số startup/CPU để tick nghiệm thu hiệu năng tổng thể.
 - Đây là **packaged-path probe**, chưa chạy installer/upgrade trên profile owner hoặc máy Windows sạch. Không gọi model ở checkpoint permission vì policy/file/native/API đo được trực tiếp; đường model/router giữ source cũ đã kiểm riêng ở báo cáo cổng 0.1.2.
 - Router/runtime/docker-context block hashes giữ nguyên so với 0.1.2. UI/harness thay đúng patch này. Build lock/manifest/SHA256SUMS nằm cạnh bộ cài; `dirty=true` do untracked WIP owner được bảo toàn.
 - Web http://localhost:3100/ nạp backend mới, HTTP health ok; permissions trả `ask,auto,trusted` và `scopeDerived=true`. Harness mới PID 13108; UI/router hiện có giữ nguyên. Không có lượt web running/queued trước restart.
@@ -62,3 +62,7 @@ Raw logs: `.tmp/permissions-20261010/`. Không commit profile, credential, DB ow
 Evidence gọn đã commit: [desktop-permission-evidence-2026-10-10.json](desktop-permission-evidence-2026-10-10.json). Probe có thể tái lập bằng `BOXFOX_PROBE_PERMISSIONS=1`, `BOXFOX_PROBE_PACKAGED_RESOURCES=<resources>`, `BOXFOX_PROBE_ELECTRON=<Electron 33.4.11>`, rồi `python desktop/test/probes/measure-startup.py <run-id-mới>`.
 
 Giữ 0.1.2 và tag trước sửa để rollback. Quit ở tray trước cập nhật (X chỉ ẩn), cài vào nơi cũ; giữ profile/data/project. Không tự cài lên app owner.
+
+### Sự cố probe và khôi phục
+
+Run1 chỉ tách LOCALAPPDATA nên PermissionPolicy vẫn lấy user layer từ `C:/Users/Admin/.boxfox/settings.json`. Probe PUT đã đổi mode thật sang ask; đây là lỗi fixture, không gọi run1 là hoàn toàn cô lập. Đã khôi phục mode `trusted`, scope `workspace`, network `restricted` theo snapshot trước kiểm; bảo toàn trường cấu hình khác. Probe được sửa USERPROFILE/HOME và thêm chốt kiểm đường dẫn user layer trước ghi. Run2 đạt với file settings dưới test-home; file thật giữ trạng thái đã khôi phục. Không thay credential, trust project hoặc grant CUA thật. Installer không đổi khi sửa helper kiểm thử.

@@ -8,6 +8,11 @@ const root = path.resolve(process.argv[2])
 fs.mkdirSync(root, { recursive: true })
 app.setPath('userData', path.join(root, 'electron-data'))
 process.env.LOCALAPPDATA = root
+// LOCALAPPDATA alone does not isolate PermissionPolicy's user layer or Path.home().
+const testHome = path.join(root, 'test-home')
+fs.mkdirSync(testHome, { recursive: true })
+process.env.USERPROFILE = testHome
+process.env.HOME = testHome
 const profile = path.join(root, 'BoxFoxDesktopAlpha')
 const lockFile = path.join(profile, 'desktop.lock')
 const second = process.argv.includes('--second')
@@ -80,6 +85,8 @@ if (!second) {
           return response.json()
         }
         const initial = await api('/api/agent/permissions')
+        const userLayer = initial.layers.find(layer => layer.layer === 'user')
+        if (!userLayer || !path.resolve(userLayer.file).toLowerCase().startsWith(testHome.toLowerCase() + path.sep)) throw new Error('Probe user permission layer is not isolated; refusing writes')
         if (JSON.stringify(initial.modes) !== JSON.stringify(['ask', 'auto', 'trusted']) || !initial.scopeDerived) throw new Error('Packaged permission contract is stale')
         report.permissions = { modes: initial.modes, checks: [] }
         for (const mode of ['ask', 'auto', 'trusted']) {

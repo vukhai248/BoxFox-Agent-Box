@@ -44,11 +44,13 @@
       "scopeChooser": false
     }
   },
-  "rendererLatencyMaxMs": 47.0,
+  "rendererLatencyMaxMs": 3.0,
   "lockExistsAfterExit": false,
   "orphanPids": [],
   "asarMatchesProbe": true,
-  "nativeProbe": ".tmp/desktop-startup-fix/permissions-013-run1",
+  "nativeProbe": ".tmp/desktop-startup-fix/permissions-013-run2",
   "cleanInstallTested": false,
-  "modelCalledInThisCheckpoint": false
+  "modelCalledInThisCheckpoint": false,
+  "probeUserLayerIsolated": true,
+  "initialProbeIncident": "Run1 used real user permission layer; restored prior trusted/workspace/restricted. Run2 checks isolated user path before any PUT."
 }
