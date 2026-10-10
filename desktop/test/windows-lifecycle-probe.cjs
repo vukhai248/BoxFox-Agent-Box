@@ -81,7 +81,8 @@ if (!second) {
           if (!response.ok) throw new Error(`Chat probe ${route.split('/').slice(0, 4).join('/')} HTTP ${response.status}`)
           return response.json()
         }
-        const connection = await api('/api/router/connections', { providerId: 'opencode', name: 'Isolated desktop regression probe' })
+        const connection = await api('/api/router/connections', { providerId: 'opencode', apiKey: 'public',
+          name: 'Isolated desktop regression probe' })
         await api(`/api/router/connections/${connection.id}/models/refresh`, {})
         const state = await api('/api/router/state')
         const model = state.connections.find(c => c.id === connection.id)?.models.find(m => m.id === 'mimo-v2.6-flash-free')
@@ -101,7 +102,8 @@ if (!second) {
           result = await api(`/api/agent/sessions/${session.id}`)
         } while (['idle', 'running', 'queued'].includes(result.status) && Date.now() < deadline)
         report.chat.status = result.status
-        report.chat.content = result.messages?.filter(m => m.role === 'assistant').at(-1)?.content
+        report.chat.content = result.events?.filter(e => e.type === 'assistant').at(-1)?.data?.text
+        report.chat.journalDegraded = Boolean(result.journal?.degraded)
         if (result.status !== 'completed' || !report.chat.content?.includes('OK')) throw new Error(`Packaged chat did not complete: ${result.status}`)
         mark('packaged-chat-completed', { routerPort: machine.ports.router })
       }
