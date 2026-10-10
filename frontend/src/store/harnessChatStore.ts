@@ -3,6 +3,7 @@ import { newerTask, type LongTask } from '../types/longtask'
 import { create } from 'zustand'
 import { resolveThinkingLevel } from '../lib/harnessThinking'
 import { agentApi } from '../lib/agentApi'
+import { readHarnessSessionPages } from '../lib/harnessSessionPages'
 import { useMachineStore, type MachineBinding } from './machineStore'
 import type { OutgoingAttachment } from '../lib/chat/attachmentUpload'
 import { useHarnessStore } from './harnessStore'
@@ -658,17 +659,23 @@ function parseSteerAccepted(result: unknown): { accepted: boolean; steerId: stri
   return { accepted: true, steerId: typeof body.steerId === 'string' ? body.steerId : null }
 }
 
+// A slow older hydration must not replace a newer poll or a newly submitted turn.
+const refreshRequests = new Map<string, symbol>()
+
 export const useHarnessChatStore = create<State>((set, get) => ({
   sessions: {},
   decisions: {},
   intentSeq: {},
   refresh: async (chatId) => {
-    const current = get().sessions[chatId] ?? empty()
+    const captured = get().sessions[chatId]
+    const current = captured ?? empty()
     const id = current.id ?? (isHexId(chatId) ? chatId : localStorage.getItem(storageKey(chatId)))
     if (!id) return
+    const request = Symbol('session-refresh')
+    refreshRequests.set(chatId, request)
     try {
       const lastServerSeq = current.events.filter(e => e.type !== 'model_change').at(-1)?.seq ?? 0
-      const session = await agentApi<HarnessSession>(`/sessions/${id}?after=${lastServerSeq}`)
+      const session = await readHarnessSessionPages<HarnessSession>(id, lastServerSeq)
       // Thẻ quyết định bền nằm ở `session_decisions`, không phát lại trong `events`, nên phải
       // hỏi bản chuẩn. Chỉ hỏi khi thật sự cần — lần nạp đầu, lúc lượt đang chờ quyết định,
       // hoặc khi vòng poll này mang tới event quyết định mới — để không nhân đôi nhịp 1200ms
@@ -689,10 +696,17 @@ export const useHarnessChatStore = create<State>((set, get) => ({
           if (page === 49) throw new Error('DECISION_HYDRATION_INCOMPLETE')
         }
       }
+      // A slow full hydration may outlast the poll interval. Let it populate an
+      // unchanged cache while another poll is pending, avoiding starvation.
+      if (refreshRequests.get(chatId) !== request
+        && !(refreshRequests.has(chatId) && get().sessions[chatId] === captured)) return
       if (get().sessions[chatId]?.id && get().sessions[chatId]?.id !== id) return
+      const hydrated = get().sessions[chatId] ?? current
+      const cachedCursor = hydrated.events.filter(e => e.type !== 'model_change').at(-1)?.seq ?? 0
+      if (cachedCursor > (session.events.at(-1)?.seq ?? lastServerSeq)) return
       useMachineStore.getState().bind(chatId, (session.config?.machineBinding as MachineBinding | undefined)
         ?? { mode: 'docker', revision: 1, projectId: null, workspace: '/home/agent/workspace' })
-      const prevEvents = current.events ?? []
+      const prevEvents = hydrated.events ?? []
       // Nhật ký đi cùng vòng poll này (hàng `E:` là bằng chứng của lượt); gộp theo `seq` như `events`.
       const journalPush = parseJournalPush(session.journal)
       const newEvents = session.events.filter(e => !prevEvents.some(old => old.seq === e.seq && old.type === e.type))
@@ -714,7 +728,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
       const reportedCode = String(lastEvent?.data?.code ?? 'RUN_FAILED')
       const sessionError = isFailed && lastIsError
         ? String(lastEvent?.data?.message || `${reportedCode}: the run stopped before it reported a reason`)
-        : (current.error ?? null)
+        : (hydrated.error ?? null)
       set((state) => {
         const parsed = parseDecisions(allEvents)
         const previousDecisions = state.decisions[chatId] ?? []
@@ -727,7 +741,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
           sessions: {
             ...state.sessions,
             [chatId]: {
-              ...current,
+              ...hydrated,
               id,
               status: session.status,
               longtask: newerTask(state.sessions[chatId]?.longtask, session.longtask),
@@ -736,7 +750,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               contractRef: session.contractRef,
               error: sessionError,
               events: allEvents,
-              journal: journalPush ? mergeJournal(current.journal, journalPush) : current.journal,
+              journal: journalPush ? mergeJournal(hydrated.journal, journalPush) : hydrated.journal,
               ...sessionContextWindow(session.config),
               researchMode: session.config?.researchMode,
               designMode: session.config?.designMode,
@@ -745,7 +759,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
               // Lời xác nhận "đã xếp hàng" chỉ sống trong lúc lượt còn đang chạy: lượt đã đóng thì
               // nó là thông tin cũ, và bong bóng "can thiệp" trong transcript đã là biên nhận thật.
               steerNotice: session.status === 'running' || session.status === 'awaiting_decision'
-                ? current.steerNotice ?? null
+                ? hydrated.steerNotice ?? null
                 : null,
             },
           },
@@ -754,6 +768,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         }
       })
     } catch (error) {
+      if (refreshRequests.get(chatId) !== request) return
       const errStr = String(error)
       // Mã máy là thứ đáng tin, câu chữ thì không: bản cũ khớp `'404'`/`'not found'`,
       // mà harness nay trả `SESSION_NOT_FOUND: … is not known to this harness …`,
@@ -778,6 +793,8 @@ export const useHarnessChatStore = create<State>((set, get) => ({
         sessions: { ...state.sessions, [chatId]: { ...(state.sessions[chatId] ?? current), id, status: 'failed', error: errStr } },
         ...(current.longtask !== undefined ? { decisions: { ...state.decisions, [chatId]: (state.decisions[chatId] ?? []).map(entry => ({ ...entry, actionable: false })) } } : {}),
       }))
+    } finally {
+      if (refreshRequests.get(chatId) === request) refreshRequests.delete(chatId)
     }
   },
   fetchSavedSessions: async () => {
@@ -819,6 +836,7 @@ export const useHarnessChatStore = create<State>((set, get) => ({
     // vẫn bị harness trả 409 `SESSION_BUSY` như trước — lỗi ấy hiện nguyên trong banner.
     const steering = !control && (current.status === 'running' || current.status === 'awaiting_decision')
     if (current.status === 'starting' && !control) return
+    refreshRequests.delete(chatId)
     if (control && current.id) {
       try {
         await agentApi(`/sessions/${current.id}/turns`, { prompt, invocationId: crypto.randomUUID() })

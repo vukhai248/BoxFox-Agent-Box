@@ -46,8 +46,8 @@ function cumulativeEvents() {
   ]
 }
 
-async function renderWith(events: unknown[]): Promise<HTMLElement> {
-  fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ events }) }))
+async function renderWith(events: unknown[], fetcher?: (url: string) => Promise<unknown>): Promise<HTMLElement> {
+  fetchMock.mockImplementation(fetcher ?? (async () => ({ ok: true, status: 200, json: async () => ({ events }) })))
   useHarnessChatStore.setState({
     sessions: {
       [CHAT_ID]: { id: 'sess-1', status: 'running', events: [child(1, CHILD_ID)], error: null },
@@ -87,6 +87,117 @@ afterEach(() => {
 })
 
 describe('SubagentInspectorPanel — văn bản streaming', () => {
+  it('reads every page of completed output, including final reasoning beyond event 500', async () => {
+    const first = Array.from({ length: 500 }, (_, index) => ({ seq: index + 1, type: 'usage', data: {}, created: index + 1 }))
+    const host = await renderWith([], async url => ({ ok: true, status: 200, json: async () => url.includes('after=500')
+      ? { events: [{ seq: 501, type: 'assistant', data: { text: 'Complete result', thought: 'Final reasoning', final: true }, created: 501 }], hasMore: false, nextAfter: 501 }
+      : { events: first, hasMore: true, nextAfter: 500 } }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(host.textContent).toContain('Complete result')
+    const toggle = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Thinking'))!
+    act(() => toggle.click())
+    expect(host.textContent).toContain('Final reasoning')
+  })
+
+  it('keeps expanded reasoning when the child finishes and main receives a second user turn', async () => {
+    const host = await renderWith([{ seq: 10, type: 'thought', data: { text: 'Draft reasoning' }, created: 10 }])
+    const toggle = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Thinking'))!
+    act(() => toggle.click())
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ events: [
+      { seq: 11, type: 'assistant', data: { text: 'Final result', thought: 'Canonical reasoning', final: true }, created: 11 },
+    ] }) }))
+    const updates = [child(1, CHILD_ID), { ...child(2, CHILD_ID), data: { sessionId: CHILD_ID, role: 'Research', status: 'completed' } }]
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: updates, error: null } } })
+      await Promise.resolve()
+    })
+    expect(host.textContent).toContain('Canonical reasoning')
+    expect(toggle.isConnected).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: [...updates,
+        { seq: 3, type: 'user', data: { text: 'Continue', turn: 2 }, created: 3 }], error: null } } })
+      await Promise.resolve()
+    })
+    expect(host.textContent).toContain('Canonical reasoning')
+    expect(host.textContent).toContain('Final result')
+    expect(toggle.isConnected).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('refreshes a reused child when a second completion arrives with unchanged completed status', async () => {
+    const host = await renderWith([{ seq: 10, type: 'assistant', data: { text: 'First result', thought: 'First reasoning' }, created: 10 }])
+    const completed = (seq: number) => ({ ...child(seq, CHILD_ID), data: { sessionId: CHILD_ID, role: 'Research', status: 'completed' } })
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: [completed(2)], error: null } } })
+      await Promise.resolve()
+    })
+    fetchMock.mockClear()
+    fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ events: [
+      { seq: 11, type: 'step', data: {}, created: 11 },
+      { seq: 12, type: 'assistant', data: { text: 'Second result', thought: 'Second reasoning' }, created: 12 },
+    ] }) }))
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: [completed(2), completed(3)], error: null } } })
+      await Promise.resolve()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toContain('after=10')
+    expect(host.textContent).toContain('Second result')
+    const toggles = [...host.querySelectorAll('button')].filter(button => button.textContent?.includes('Thinking'))
+    act(() => toggles.at(-1)?.click())
+    expect(host.textContent).toContain('Second reasoning')
+  })
+
+  it('reports fetch failures instead of claiming no synthesis was returned', async () => {
+    const host = await renderWith([], async () => ({ ok: false, status: 503, json: async () => ({ error: 'Unavailable' }) }))
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Unable to load complete sub-agent history')
+    expect(host.textContent).not.toContain('No synthesis text returned')
+  })
+
+  it('ignores a late response from the previously selected child', async () => {
+    let resolveOld!: (response: unknown) => void
+    const host = await renderWith([], async url => url.includes('second-child')
+      ? { ok: true, status: 200, json: async () => ({ events: [{ seq: 20, type: 'assistant', data: { text: 'Second child result' }, created: 20 }] }) }
+      : new Promise(resolve => { resolveOld = resolve }))
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: [child(2, 'second-child')], error: null } } })
+      await Promise.resolve()
+    })
+    expect(host.textContent).toContain('Second child result')
+    await act(async () => {
+      resolveOld({ ok: true, status: 200, json: async () => ({ events: [{ seq: 10, type: 'assistant', data: { text: 'Old child result' }, created: 10 }] }) })
+      await Promise.resolve()
+    })
+    expect(host.textContent).toContain('Second child result')
+    expect(host.textContent).not.toContain('Old child result')
+  })
+
+  it('refreshes a resumed child on a later turn even while its earlier reasoning is pinned open', async () => {
+    const host = await renderWith([{ seq: 10, type: 'assistant', data: { text: 'First result', thought: 'First reasoning' }, created: 10 }])
+    const toggle = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('Thinking'))!
+    act(() => toggle.click())
+    fetchMock.mockClear()
+    fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ events: [
+      { seq: 11, type: 'step', data: {}, created: 11 },
+      { seq: 12, type: 'assistant', data: { text: 'Resumed result', thought: 'Resumed reasoning' }, created: 12 },
+    ] }) }))
+    await act(async () => {
+      useHarnessChatStore.setState({ sessions: { [CHAT_ID]: { id: 'sess-1', status: 'running', events: [
+        child(1, CHILD_ID),
+        { seq: 2, type: 'user', data: { text: 'Continue', turn: 2 }, created: 2 },
+        { ...child(3, CHILD_ID), data: { sessionId: CHILD_ID, role: 'Research', status: 'completed', turn: 2 } },
+      ], error: null } } })
+      await Promise.resolve()
+    })
+    expect(fetchMock.mock.calls[0][0]).toContain('after=10')
+    expect(host.textContent).toContain('Resumed result')
+    expect(host.textContent).toContain('First reasoning')
+    expect(toggle.isConnected).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('merges interleaved legacy snapshots into one reasoning block and one text row', async () => {
     const events = [
       { seq: 1, type: 'turn_start', data: {}, created: 1 },

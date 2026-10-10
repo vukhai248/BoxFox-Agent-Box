@@ -37,6 +37,7 @@ import { useAgentStore } from '../../store/agentStore'
 import { useUiStore } from '../../store/uiStore'
 import { MarkdownRenderer } from '../chat/MarkdownRenderer'
 import { appendStreamText } from '../../lib/streamText'
+import { readHarnessSessionPages } from '../../lib/harnessSessionPages'
 import { useT } from '../../i18n/context'
 import type { TKey, TVars } from '../../i18n/context'
 import {
@@ -100,6 +101,7 @@ interface ChildSessionView {
   lastError?: string
   toolsRun: string[]
   events: HarnessEvent[]
+  updateSeq: number
   /**
    * Lượt mà con này thuộc về (T4). `data.turn` khi backend khai báo (đợt 22); bản ghi CŨ
    * không có `turn` thì lấy lượt của event `user` gần nhất đứng trước — đúng luật
@@ -174,6 +176,7 @@ function mergeChildEvent(
     status: 'running',
     toolsRun: [],
     events: [],
+    updateSeq: event.seq,
     turn,
     step: null,
     stepsUsed: null,
@@ -181,6 +184,7 @@ function mergeChildEvent(
     deliveries: [],
   }
   view.turn = turn
+  view.updateSeq = event.seq
   if (data.role) view.role = String(data.role)
   if (data.status !== undefined) view.status = childStatus(data.status)
   if (data.goal) view.goal = String(data.goal)
@@ -366,14 +370,15 @@ function SubagentToolItem({ tool }: { tool: ParsedToolCall }) {
   )
 }
 
-function SubagentThinkingItem({ text }: { text: string }) {
+function SubagentThinkingItem({ text, onInspect }: { text: string; onInspect: () => void }) {
   const [expanded, setExpanded] = useState(false)
   if (!text.trim()) return null
   return (
     <div className="rounded-xl border border-line bg-panel2/40 overflow-hidden text-xs">
       <button
         type="button"
-        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        onClick={() => { onInspect(); setExpanded(!expanded) }}
         className="w-full flex items-center justify-between px-3 py-2 text-muted hover:text-fg transition cursor-pointer"
       >
         <div className="flex items-center gap-2">
@@ -604,7 +609,9 @@ export function SubagentInspectorPanel() {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
-  const [childEvents, setChildEvents] = useState<HarnessEvent[]>([])
+  const [childStream, setChildStream] = useState<{ sessionId: string | null; events: HarnessEvent[]; loading: boolean; error: string | null }>({ sessionId: null, events: [], loading: false, error: null })
+  const childEventCache = useRef(new Map<string, HarnessEvent[]>())
+  const [streamRetry, setStreamRetry] = useState(0)
   const [copied, setCopied] = useState(false)
   const [sidCopied, setSidCopied] = useState(false)
   const [showInfoPopover, setShowInfoPopover] = useState(false)
@@ -634,6 +641,7 @@ export function SubagentInspectorPanel() {
     setViewedTurn(null)
     setAllTurns(false)
     setSelectedSessionId(null)
+    childEventCache.current.clear()
     setShowInfoPopover(false)
   }, [activeChatId])
 
@@ -666,7 +674,7 @@ export function SubagentInspectorPanel() {
       setAllTurns(false)
     }
     if (!targetChildId || appliedChildTargetRef.current === targetChildId) return
-    const target = childrenList.find((child) => child.sessionId === targetChildId)
+    const target = [...childrenList].reverse().find((child) => child.sessionId === targetChildId)
     if (!target) return
     appliedChildTargetRef.current = targetChildId
     setSelectedSessionId(targetChildId)
@@ -679,49 +687,61 @@ export function SubagentInspectorPanel() {
 
   const activeChild = useMemo(() => {
     const selected = selectedSessionId
-      ? childrenList.find((child) => child.sessionId === selectedSessionId) ?? null
+      ? visibleChildren.find(child => child.sessionId === selectedSessionId && child.turn === viewedTurn)
+        ?? visibleChildren.find(child => child.sessionId === selectedSessionId)
+        ?? [...childrenList].reverse().find(child => child.sessionId === selectedSessionId) ?? null
       : null
     if (selected && visibleChildren.some((child) => child.sessionId === selected.sessionId)) return selected
     return visibleChildren[0] ?? selected
-  }, [selectedSessionId, childrenList, visibleChildren])
+  }, [selectedSessionId, viewedTurn, childrenList, visibleChildren])
 
-  // Live poll child events từ endpoint /api/agent/sessions/{childSessionId}
+  // A pinned earlier turn may reuse the same child later. Follow its newest receipt
+  // for fetching, while keeping the user's selected turn and expanded history.
+  const streamChild = activeChild
+    ? [...childrenList].reverse().find(child => child.sessionId === activeChild.sessionId)
+    : undefined
+
+  // Drain every event page, then poll only new receipts without overlapping requests.
   useEffect(() => {
     if (!activeChild || !activeChild.sessionId || activeChild.sessionId === 'unknown') {
-      setChildEvents([])
       return
     }
 
-    let isMounted = true
+    const sessionId = activeChild.sessionId
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let history = childEventCache.current.get(sessionId) ?? []
+    setChildStream({ sessionId, events: history, loading: true, error: null })
     const fetchChildEvents = async () => {
       try {
-        const res = await fetch(`/api/agent/sessions/${encodeURIComponent(activeChild.sessionId)}`, {
-          headers: { 'X-BoxFox-Admin': '1' },
-        })
-        if (!res.ok) return
-        const data = await res.json()
-        if (isMounted && Array.isArray(data.events)) {
-          setChildEvents(data.events)
+        const page = await readHarnessSessionPages(sessionId, history.at(-1)?.seq ?? 0, controller.signal)
+        if (controller.signal.aborted) return
+        history = [...history, ...page.events]
+        childEventCache.current.set(sessionId, history)
+        setChildStream({ sessionId, events: history, loading: false, error: null })
+      } catch (error) {
+        if (controller.signal.aborted) return
+        setChildStream({ sessionId, events: history, loading: false, error: String(error) })
+      } finally {
+        if (!controller.signal.aborted && streamChild?.status === 'running') {
+          timer = setTimeout(() => { void fetchChildEvents() }, 1000)
         }
-      } catch {
-        /* best effort */
       }
     }
 
     void fetchChildEvents()
-    if (activeChild.status === 'running') {
-      const timer = setInterval(() => {
-        void fetchChildEvents()
-      }, 1000)
-      return () => {
-        isMounted = false
-        clearInterval(timer)
-      }
-    }
     return () => {
-      isMounted = false
+      controller.abort()
+      clearTimeout(timer)
     }
-  }, [activeChild?.sessionId, activeChild?.status])
+  }, [activeChild?.sessionId, streamChild?.status, streamChild?.updateSeq, activeChatId, streamRetry])
+
+  const childEvents = childStream.sessionId === activeChild?.sessionId ? childStream.events : []
+  const inspectActiveChild = () => {
+    if (!activeChild) return
+    setSelectedSessionId(activeChild.sessionId)
+    setViewedTurn(activeChild.turn)
+  }
 
   // Dựng dòng thời gian tuần tự của sub-agent (thinking, text, tools) theo đúng thứ tự thời gian
   const timelineItems = useMemo(() => buildSubagentTimeline(childEvents), [childEvents])
@@ -1080,7 +1100,7 @@ export function SubagentInspectorPanel() {
                             data-selected={isSelected}
                             data-child-turn={child.turn}
                             data-child-status={child.status}
-                            onClick={() => setSelectedSessionId(child.sessionId)}
+                            onClick={() => { setSelectedSessionId(child.sessionId); setViewedTurn(child.turn) }}
                             className={`flex w-full flex-col gap-0.5 rounded-xl p-2 text-left transition cursor-pointer ${
                               isSelected
                                 ? 'bg-panel2 text-fg border border-line shadow-2xs font-medium'
@@ -1265,7 +1285,7 @@ export function SubagentInspectorPanel() {
                   {timelineItems.length > 0 ? (
                     timelineItems.map((item) => {
                       if (item.kind === 'thought') {
-                        return <SubagentThinkingItem key={item.id} text={item.thoughtText || ''} />
+                        return <SubagentThinkingItem key={`${activeChild.sessionId}:${item.id}`} text={item.thoughtText || ''} onInspect={inspectActiveChild} />
                       }
                       if (item.kind === 'tool_group' && item.tools) {
                         return <SubagentToolGroupItem key={item.id} tools={item.tools} />
@@ -1284,8 +1304,21 @@ export function SubagentInspectorPanel() {
                       <div className="text-muted italic py-2">
                         {activeChild.status === 'running'
                           ? 'Specialist is processing instructions autonomously in the sandbox...'
-                          : 'No synthesis text returned from sub-agent.'}
+                          : childStream.sessionId !== activeChild.sessionId || childStream.loading
+                            ? 'Loading sub-agent history…'
+                            : childStream.error ? 'Sub-agent history is unavailable. Retry below.'
+                              : 'No synthesis text returned from sub-agent.'}
                       </div>
+                    </div>
+                  )}
+
+                  {timelineItems.length > 0 && childStream.sessionId === activeChild.sessionId && childStream.loading && (
+                    <div role="status" className="text-xs text-muted">Loading sub-agent history…</div>
+                  )}
+                  {childStream.sessionId === activeChild.sessionId && childStream.error && (
+                    <div role="alert" className="text-xs text-rose-400">
+                      Unable to load complete sub-agent history: {childStream.error}
+                      <button type="button" className="ml-2 underline cursor-pointer" onClick={() => setStreamRetry(value => value + 1)}>Retry</button>
                     </div>
                   )}
 

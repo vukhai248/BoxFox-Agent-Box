@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { desktopGatewayProxy } from './dev/desktopProxy'
 
 // LƯU Ý VỀ RANH GIỚI BẢO MẬT — đọc kỹ trước khi copy cấu hình này sang bản chạy thật.
 //
@@ -18,7 +19,7 @@ export default defineConfig({
     host: '127.0.0.1',
     strictPort: true,
     allowedHosts: ['localhost', '127.0.0.1'],
-    proxy: {
+    proxy: desktopGatewayProxy(process.env.BOXFOX_DESKTOP_GATEWAY) ?? {
       '/api/agent': { target: 'http://127.0.0.1:3102', changeOrigin: true },
       '/api/router': { target: 'http://127.0.0.1:3101', changeOrigin: true },
       '/v1': { target: 'http://127.0.0.1:3101', changeOrigin: true },
