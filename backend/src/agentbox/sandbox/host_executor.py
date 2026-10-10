@@ -451,12 +451,22 @@ class HostExecutor:
                 return failure
             if cua_plan.get('target') is not None:
                 args = dict(args, __target=cua_plan['target'])
-        decision = self.policy.decide(name, args, cwd=self._cwd(root), session_id=session)
+        # Policy must see the canonical target: a project symlink may point outside.
+        policy_args = args
+        if name in ('file_read', 'file_write', 'file_edit_block') and args.get('path'):
+            try:
+                target = self._resolve(args['path'], root=root, allow_outside=True)
+            except _PathEscape as exc:
+                return error_result(PATH_ESCAPE_CODE, str(exc))
+            except (OSError, ValueError) as exc:
+                return error_result('TOOL_ARGUMENT_INVALID', str(exc))
+            policy_args = dict(args, path=str(target))
+        decision = self.policy.decide(name, policy_args, cwd=self._cwd(root), session_id=session)
         if decision.outcome == permissions_module.OUTCOME_DENY:
             return error_result(PERMISSION_DENIED_CODE, decision.reason or 'bị chính sách quyền từ chối',
                                 rule=decision.rule, layer=decision.layer)
         if decision.outcome == permissions_module.OUTCOME_ASK:
-            verdict = await self._ask(name, args, decision, session)
+            verdict = await self._ask(name, policy_args, decision, session)
             if verdict == 'deny':
                 if self.policy.note_denial(session):
                     breaker = self.policy.breaker_decision()
@@ -475,19 +485,23 @@ class HostExecutor:
                                                   session_id=session)
                     self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
                 else:
-                    key = self.policy.session_key(name, args, cwd=self._cwd(root), session_id=session)
+                    key = self.policy.session_key(name, policy_args, cwd=self._cwd(root), session_id=session)
                     if verdict == 'allow_session':
                         self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
                     elif verdict == 'allow_always':
                         self.policy.remember(key, permissions_module.allow('', 'user'), 'session')
-                        self.policy.save_rule(name, args, actor='user', session_id=session)
+                        self.policy.save_rule(name, policy_args, actor='user', session_id=session)
         try:
+            if name in ('file_read', 'file_write', 'file_edit_block') and policy_args.get('path'):
+                approved_target = Path(policy_args['path'])
+                if approved_target.resolve() != approved_target:
+                    raise ValueError('PATH_CHANGED: approved target changed; observe and request again')
             if name == 'file_read':
-                return self._file_read(args, root=root)
+                return self._file_read(policy_args, root=root, allow_outside=True)
             if name == 'file_write':
-                return self._file_write(args, root=root)
+                return self._file_write(policy_args, root=root, allow_outside=True)
             if name == 'file_edit_block':
-                return self._file_edit_block(args, root=root)
+                return self._file_edit_block(policy_args, root=root, allow_outside=True)
             if name == 'codebase_glob':
                 return self._codebase_glob(args, root=root)
             if name == 'codebase_grep':
@@ -606,7 +620,7 @@ class HostExecutor:
         windows = self.window_list()
         try:
             target, source = cua_target_module.resolve(args, self.session_target(session), windows,
-                                                       self.policy.scope_value())
+                                                       self.policy.cua_scope_value())
         except cua_target_module.TargetError as exc:
             return None, '', error_result(exc.code, exc.message, **exc.details)
         return target, source, None
@@ -641,7 +655,7 @@ class HostExecutor:
         platform = self._desktop_platform()
         if platform is None or getattr(platform, 'launch_app', None) is None:
             return ''
-        if not cua_target_module.scope_allows_machine(self.policy.scope_value()):
+        if not cua_target_module.scope_allows_machine(self.policy.cua_scope_value()):
             return ''
         app = str((args or {}).get('app') or '').strip()
         if not app or not re.fullmatch(r'[A-Za-z0-9._+-]{1,64}', app):
@@ -1103,8 +1117,8 @@ class HostExecutor:
                 return str(self.workspace)
         return str(base)
 
-    def _resolve(self, value, *, root=None):
-        """Đường dẫn tuyệt đối TRONG workspace. `..` và symlink bị chặn bằng `resolve()`."""
+    def _resolve(self, value, *, root=None, allow_outside=False):
+        """Resolve the target; an explicit child root remains a boundary in every mode."""
         text = str(value or '').strip()
         if not text:
             raise ValueError('PATH_REQUIRED: thiếu `path`')
@@ -1116,7 +1130,7 @@ class HostExecutor:
         except OSError as exc:
             raise ValueError('PATH_INVALID: %s' % exc)
         base = Path(self._cwd(root)).resolve()
-        if resolved != base and not resolved.is_relative_to(base):
+        if (not allow_outside or root is not None) and resolved != base and not resolved.is_relative_to(base):
             raise _PathEscape('đường dẫn `%s` nằm ngoài workspace (`%s`)' % (value, base))
         return resolved
 
@@ -1128,8 +1142,8 @@ class HostExecutor:
 
     # -- công cụ tệp ---------------------------------------------------------
 
-    def _file_read(self, args, *, root=None):
-        target = self._resolve(args.get('path'), root=root)
+    def _file_read(self, args, *, root=None, allow_outside=False):
+        target = self._resolve(args.get('path'), root=root, allow_outside=allow_outside)
         if not target.is_file():
             return error_result('FILE_NOT_FOUND', 'không phải tệp: %s' % args.get('path'))
         return read_file_payload(target, args.get('offset'), args.get('limit'))
@@ -1149,16 +1163,16 @@ class HostExecutor:
             'created': not existed,
         }
 
-    def _file_write(self, args, *, root=None):
-        target = self._resolve(args.get('path'), root=root)
+    def _file_write(self, args, *, root=None, allow_outside=False):
+        target = self._resolve(args.get('path'), root=root, allow_outside=allow_outside)
         content = args.get('content')
         if not isinstance(content, str):
             raise ValueError('CONTENT_REQUIRED: `content` phải là chuỗi')
         evidence = self._write(target, content)
         return {'content': 'Written ' + self._relative(target), **evidence}
 
-    def _file_edit_block(self, args, *, root=None):
-        target = self._resolve(args.get('path'), root=root)
+    def _file_edit_block(self, args, *, root=None, allow_outside=False):
+        target = self._resolve(args.get('path'), root=root, allow_outside=allow_outside)
         old_text = args.get('old_text')
         new_text = args.get('new_text')
         if not isinstance(old_text, str) or not isinstance(new_text, str):

@@ -219,7 +219,7 @@ def test_put_permissions_writes_the_user_layer(tmp_path):
 
     async def scenario(client, runtime):
         response = await client.put('/api/agent/permissions', headers=HEADERS,
-                                    json={'mode': 'auto', 'scope': 'workspace'})
+                                    json={'mode': 'auto'})
         return response.status, await response.json()
 
     status, payload = run(tmp_path, scenario, executor=executor)
@@ -250,6 +250,28 @@ def test_put_permissions_needs_a_change(tmp_path):
         return (response.status,)
 
     assert run(tmp_path, scenario, executor=executor)[0] == 400
+
+
+def test_scope_update_is_rejected_without_partial_write(tmp_path):
+    executor = host_executor(tmp_path)
+    async def scenario(client, runtime):
+        response = await client.put('/api/agent/permissions', headers=HEADERS,
+                                    json={'mode': 'trusted', 'scope': 'machine'})
+        after = await (await client.get('/api/agent/permissions', headers=HEADERS)).json()
+        return response.status, await response.json(), after
+    status, error, after = run(tmp_path, scenario, executor=executor)
+    assert status == 400 and error['code'] == 'PERMISSION_SCOPE_DERIVED'
+    assert after['mode'] == 'ask' and after['scope'] == 'workspace'
+
+
+def test_legacy_plan_client_migrates_without_elevating_permissions(tmp_path):
+    executor = host_executor(tmp_path)
+    async def scenario(client, runtime):
+        response = await client.put('/api/agent/permissions', headers=HEADERS, json={'mode': 'plan'})
+        return response.status, await response.json()
+    status, payload = run(tmp_path, scenario, executor=executor)
+    assert status == 200 and payload['mode'] == 'ask'
+    assert payload['modes'] == ['ask', 'auto', 'trusted'] and payload['scopeDerived']
 
 
 # ------------------------------------------------------------------ decide
@@ -458,7 +480,7 @@ def test_routes_answer_when_the_process_is_docker_but_the_machine_is_host(tmp_pa
     status, payload, changed_status = asyncio.run(main())
     assert status == 200
     assert payload['mode'] == 'auto'
-    assert payload['workspace'] == str(workspace)
+    assert Path(payload['workspace']) == workspace
     assert changed_status == 200
 
 

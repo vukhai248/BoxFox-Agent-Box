@@ -6,8 +6,8 @@
  * cơ quyền (mọi route quyền trả 409 `PERMISSIONS_UNAVAILABLE`).
  *
  * Nguồn dữ liệu là `GET/PUT /api/agent/permissions` (`lib/permissions/http.ts`) — cùng nguồn với
- * tab Settings → Machines, không dựng bản sao thứ hai. Bốn chế độ đến từ máy chủ (`snapshot.modes`),
- * nhãn đến từ i18n, nên thêm chế độ ở harness là giao diện tự có.
+ * tab Settings → Machines, không dựng bản sao thứ hai. Ba mức từ máy chủ (`snapshot.modes`),
+ * nhãn đến từ i18n; phạm vi file suy từ mức, không còn bộ chọn Scope riêng.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronDown, Loader2, Shield } from 'lucide-react'
@@ -18,8 +18,7 @@ import { useT } from '../../i18n/context'
 import type { PermissionMode, PermissionNetwork, PermissionScope } from '../../types/machinePermissions'
 
 /** Thứ tự hiển thị cố định: từ chặt nhất tới rộng nhất, không theo thứ tự máy chủ trả về. */
-const MODE_ORDER: PermissionMode[] = ['plan', 'ask', 'auto', 'trusted']
-const SCOPE_ORDER: PermissionScope[] = ['workspace', 'machine']
+const MODE_ORDER: PermissionMode[] = ['ask', 'auto', 'trusted']
 const NETWORK_ORDER: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Chế độ `trusted` cho phép sửa và chạy không hỏi ⇒ tô đỏ để không ai bật nhầm. */
@@ -38,7 +37,6 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   const [scope, setScope] = useState<PermissionScope | null>(null)
   const [network, setNetwork] = useState<PermissionNetwork | null>(null)
   const [modes, setModes] = useState<PermissionMode[]>(MODE_ORDER)
-  const [scopes, setScopes] = useState<PermissionScope[]>(SCOPE_ORDER)
   const [networks, setNetworks] = useState<PermissionNetwork[]>(NETWORK_ORDER)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -58,8 +56,7 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
         setMode(snapshot.mode)
         setScope(snapshot.scope)
         setNetwork(snapshot.network ?? 'restricted')
-        if (snapshot.modes?.length) setModes(snapshot.modes as PermissionMode[])
-        if (snapshot.scopes?.length) setScopes(snapshot.scopes as PermissionScope[])
+        if (snapshot.modes?.length) setModes(snapshot.modes.filter(m => MODE_ORDER.includes(m)))
         if (snapshot.networks?.length) setNetworks(snapshot.networks as PermissionNetwork[])
         setError('')
       })
@@ -90,10 +87,9 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   }, [open])
 
   const patch = useCallback(
-    async (next: { mode?: PermissionMode; scope?: PermissionScope; network?: PermissionNetwork }) => {
+    async (next: { mode?: PermissionMode; network?: PermissionNetwork }) => {
       const previous = { mode, scope, network }
       if (next.mode) setMode(next.mode)
-      if (next.scope) setScope(next.scope)
       if (next.network) setNetwork(next.network)
       setBusy(true)
       try {
@@ -181,30 +177,6 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
               </span>
             </button>
           ))}
-
-          <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-            {t('composer.permission.sectionScope')}
-          </p>
-          {scopes.map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="menuitemradio"
-              aria-checked={item === scope}
-              onClick={() => void patch({ scope: item })}
-              disabled={busy}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg transition hover:bg-panel2 disabled:opacity-50 cursor-pointer"
-            >
-              <Check className={`size-3 shrink-0 ${item === scope ? 'opacity-100' : 'opacity-0'}`} />
-              <span>{t(`composer.permission.scope.${item}`)}</span>
-            </button>
-          ))}
-
-          {scope && (
-            <p className="px-2 pt-1 pb-0.5 text-[10px] text-muted" data-testid="composer-permission-scope">
-              {t(`composer.permission.scopeHint.${scope}`)}
-            </p>
-          )}
 
           <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
             {t('composer.permission.sectionNetwork')}

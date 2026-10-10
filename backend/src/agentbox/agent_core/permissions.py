@@ -11,8 +11,8 @@ Ba quyết định thiết kế, và lý do:
 
 * **Ngữ pháp luật sao chép Claude Code** (`Tool` hoặc `Tool(specifier)`) — người dùng đã biết nó,
   tài liệu sẵn có, và nó đủ diễn đạt cả đường dẫn (gitignore), lệnh (glob), lẫn domain.
-* **Hai trục độc lập** (`scope` × `mode`) đúng như Codex tách `SandboxMode` khỏi `AskForApproval`:
-  "toàn máy" và "hỏi hay không hỏi" là hai câu hỏi khác nhau, gộp chúng thành một thang là ngõ cụt.
+* **Ba mức phê duyệt** (`ask`, `auto`, `trusted`): phạm vi suy từ mức, mạng độc lập.
+  Lệnh khảo sát được nhận diện có thể chạy ở `ask`; shell host không phải sandbox OS.
 * **Sàn cứng nằm trong code, không nằm trong tệp cấu hình** — luật `deny` của người dùng có thể bị
   sửa tay, còn một lệnh xoá sạch ổ đĩa thì không được phép "quên". `hardline_reason()` chạy TRƯỚC
   mọi danh sách, kể cả `trusted`.
@@ -26,6 +26,7 @@ import fnmatch
 import json
 import os
 import re
+import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,12 +34,12 @@ from pathlib import Path
 from . import cua_target as _cua_target
 
 MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED = 'plan', 'ask', 'auto', 'trusted'
-MODES = (MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED)
+MODES = (MODE_ASK, MODE_AUTO, MODE_TRUSTED)
 MODE_DEFAULT = MODE_ASK
 
 SCOPE_WORKSPACE, SCOPE_MACHINE = 'workspace', 'machine'
 SCOPES = (SCOPE_WORKSPACE, SCOPE_MACHINE)
-SCOPE_DEFAULT = SCOPE_MACHINE
+SCOPE_DEFAULT = SCOPE_WORKSPACE
 
 #: Trục thứ ba (Codex `NetworkAccess`): `restricted` = lệnh ra mạng phải hỏi trước khi chúng được
 #: chạy im lặng (`auto`); `enabled` = không hỏi. Đây là DANH SÁCH HỎI, không phải tường lửa.
@@ -60,7 +61,6 @@ BARE_TOOLS = ('computer_use', 'computer_screen_capture', 'inspect_element')
 #: Chế độ nào cho phép nhóm hành động nào. Đây là bảng duy nhất: `decide()` đọc nó, tài liệu và
 #: `/api/agent/permissions` cũng đọc nó, nên không có bản sao thứ hai để lệch.
 MODE_CAPABILITIES = {
-    MODE_PLAN: {'read': True, 'write': False, 'exec': False, 'cua': False},
     MODE_ASK: {'read': True, 'write': 'ask', 'exec': 'ask', 'cua': 'ask'},
     MODE_AUTO: {'read': True, 'write': 'allow', 'exec': 'allow', 'cua': 'ask'},
     MODE_TRUSTED: {'read': True, 'write': 'allow', 'exec': 'allow', 'cua': 'allow'},
@@ -127,7 +127,7 @@ GUARDED = (
      'acl_change'),
 )
 
-#: Lệnh RA MẠNG (§6.1) — chỉ hỏi khi chế độ sẽ chạy im lặng (`auto`) và trục mạng là `restricted`.
+#: Recognised network commands require approval at every level when network is restricted.
 EGRESS = (
     (r'\b(curl|wget|nc|netcat|telnet|ssh|scp|sftp|ftp)\b', 'remote_shell_or_fetch'),
     (r'\b(invoke-webrequest|iwr|invoke-restmethod|irm)\b', 'remote_fetch'),
@@ -670,7 +670,7 @@ class PermissionPolicy:
         self.env = source
         self.home = Path(home) if home else Path.home()
         self.workspace = str(workspace) if workspace else ''
-        self.mode = mode if mode in MODES else None
+        self.mode = MODE_ASK if mode == MODE_PLAN else mode if mode in MODES else None
         self.scope = scope if scope in SCOPES else None
         self.profile_dir = Path(profile_dir) if profile_dir else default_profile_dir(source)
         self.paths = settings_paths(workspace, env=source, home=home, install_dir=install_dir)
@@ -702,15 +702,24 @@ class PermissionPolicy:
 
     def mode_value(self):
         if self.mode:
-            return self.mode
+            return MODE_ASK if self.mode == MODE_PLAN else self.mode
         for layer in reversed(LAYER_ORDER):
             value = str((self.layers.get(layer) or {}).get('mode') or '').strip().lower()
-            if value in MODES:
-                return value
+            if value in MODES or value == MODE_PLAN:
+                return MODE_ASK if value == MODE_PLAN else value
         raw = str(self.env.get('BOXFOX_PERMISSION_MODE') or '').strip().lower()
-        return raw if raw in MODES else MODE_DEFAULT
+        return MODE_ASK if raw == MODE_PLAN else raw if raw in MODES else MODE_DEFAULT
 
     def scope_value(self):
+        """File scope follows the approval level; old scope fields do not widen file access."""
+        return SCOPE_MACHINE if self.mode_value() == MODE_TRUSTED else SCOPE_WORKSPACE
+
+    def cua_scope_value(self):
+        """Preserve the existing desktop target boundary independently of file approval levels.
+
+        Legacy scope values continue to restrict CUA. They do not widen file access.
+        Desktop target consent, per-call approval and lease fences still apply.
+        """
         if self.scope:
             return self.scope
         for layer in reversed(LAYER_ORDER):
@@ -718,7 +727,7 @@ class PermissionPolicy:
             if value in SCOPES:
                 return value
         raw = str(self.env.get('BOXFOX_PERMISSION_SCOPE') or '').strip().lower()
-        return raw if raw in SCOPES else SCOPE_DEFAULT
+        return raw if raw in SCOPES else SCOPE_MACHINE
 
     def network_value(self):
         """Trục mạng — cùng thứ tự tầng như `mode`/`scope` (tầng trên thắng)."""
@@ -761,7 +770,9 @@ class PermissionPolicy:
             'capabilities': MODE_CAPABILITIES[self.mode_value()],
             'scope': self.scope_value(),
             'scopeDefault': SCOPE_DEFAULT,
-            'scopes': list(SCOPES),
+            'scopes': [self.scope_value()],
+            'scopeDerived': True,
+            'cuaScope': self.cua_scope_value(),
             'network': self.network_value(),
             'networkDefault': NETWORK_DEFAULT,
             'networks': list(NETWORKS),
@@ -907,21 +918,94 @@ class PermissionPolicy:
             return _from_capability(caps['write'], 'write', mode)
         if tool in EXEC_TOOLS:
             decision = _from_capability(caps['exec'], 'exec', mode)
-            if decision.outcome == OUTCOME_ALLOW and mode != MODE_TRUSTED \
-                    and self.network_value() == NETWORK_RESTRICTED:
-                # Chỉ hỏi khi chế độ sẽ chạy IM LẶNG: `ask` đã hỏi mọi lệnh, `plan` từ chối, còn
-                # `trusted` là toàn quyền (tương đương Full Access của Codex) — ghi rõ trong tài liệu.
-                code = self.egress_reason(_command_from_args(args))
+            command = _command_from_args(args)
+            if scope == SCOPE_WORKSPACE and self.command_outside_workspace(command):
+                decision = ask('command target is outside the project or cannot be resolved', '', 'scope')
+            if mode == MODE_ASK and self.inspection_command(command):
+                decision = allow('', 'inspection')
+            if decision.outcome == OUTCOME_ALLOW and self.network_value() == NETWORK_RESTRICTED:
+                # Network is independent of the approval level, including Full access.
+                code = self.egress_reason(command)
                 if code:
                     return ask('lệnh ra mạng `%s` khi mức mạng là `restricted`' % code,
                                'network:%s' % code, 'network')
             return decision
         if tool in BARE_TOOLS:
             return _from_capability(caps['cua'], 'cua', mode)
-        # Công cụ lạ: không có luật ⇒ hỏi, trừ khi mode là plan (đọc/không làm gì).
-        if mode == MODE_PLAN:
-            return deny('chế độ `plan` chỉ cho phép đọc', '', 'mode')
+        # Unknown tools still require approval.
         return ask('công cụ không nằm trong bảng quyền v1', '', 'mode')
+
+    def inspection_command(self, command):
+        """Small conservative inspection list, NOT a shell sandbox.
+
+        Unknown syntax, redirection, scripts and compound commands still ask.
+        Resolve path arguments before allowing them, including junctions/symlinks.
+        """
+        text = str(command or '').strip()
+        if not text or any(ord(c) < 32 for c in text) or any(c in text for c in '$`;&|<>(){}'):
+            return False
+        try:
+            words = [w.strip('\"\'') for w in shlex.split(text, posix=False)]
+        except ValueError:
+            return False
+        head = words[0].lower()
+        head = POWERSHELL_ALIASES.get(head, head)
+        if head == 'git':
+            if len(words) < 2:
+                return False
+            # git diff/show can invoke project-configured external helpers.
+            options = {'status': {'--short', '--porcelain', '--branch', '-s', '-b'},
+                       'ls-files': {'--cached', '--stage', '-s'}}
+            return words[1] in options and all(w in options[words[1]] for w in words[2:])
+        if head in ('get-location', 'pwd'):
+            return len(words) == 1
+        flags = {'get-childitem': {'-force', '-recurse', '-file', '-directory', '-name'},
+                 'get-content': set(), 'get-item': set(), 'test-path': set()}
+        if head not in flags:
+            return False
+        path_flags = {'-path', '-literalpath'}
+        remaining = iter(words[1:])
+        for word in remaining:
+            if head == 'get-content' and word.lower() in ('-totalcount', '-tail'):
+                count = next(remaining, '')
+                if not count.isdecimal():
+                    return False
+                continue
+            if word.lower() in flags[head] or word.lower() in path_flags:
+                continue
+            if word.startswith('-') or any(c in word for c in '*?[],'):
+                return False
+            path = Path(word).expanduser()
+            if ':' in word and not path.is_absolute():
+                return False
+            try:
+                path = (path if path.is_absolute() else Path(self.workspace) / path).resolve()
+            except (ValueError, OSError):
+                return False
+            if not path.is_relative_to(Path(self.workspace).resolve()):
+                return False
+        return True
+
+    def command_outside_workspace(self, command):
+        """Recognise explicit outside targets; arbitrary project scripts are not OS isolated."""
+        if '$' in command or '`' in command:
+            return True
+        try:
+            words = [w.strip('\"\'') for w in shlex.split(command, posix=False)]
+            base = Path(self.workspace).resolve()
+            for word in words:
+                value = word.split('=', 1)[-1]
+                if '://' in value or value.startswith('-'):
+                    continue
+                if not any(c in value for c in '/\\') and value != '..':
+                    continue
+                path = Path(value).expanduser()
+                path = (path if path.is_absolute() else base / path).resolve()
+                if not path.is_relative_to(base):
+                    return True
+        except (ValueError, OSError):
+            return True
+        return False
 
     def absolute_path(self, value):
         """Đường dẫn tuyệt đối đã chuẩn hoá (tương đối ⇒ neo vào workspace); rỗng nếu không có."""
@@ -948,6 +1032,8 @@ class PermissionPolicy:
             return False
         candidate = self.absolute_path(path)
         root = _collapse(str(self.workspace).replace('\\', '/'))
+        if os.name == 'nt':
+            candidate, root = candidate.casefold(), root.casefold()
         return bool(candidate) and (candidate == root or candidate.startswith(root.rstrip('/') + '/'))
 
     # -- phiên --------------------------------------------------------------
@@ -980,7 +1066,7 @@ class PermissionPolicy:
         (DA1 của bản bàn giao). `HostExecutor` gọi CÙNG hàm này khi ghi nhớ — không có bản thứ hai.
         """
         return '|'.join((str(session_id or ''), str(tool), self.resource_key(tool, args),
-                         str(cwd or ''), self.scope_value(), self.mode_value()))
+                         str(cwd or ''), self.cua_scope_value() if tool in BARE_TOOLS else self.scope_value(), self.mode_value()))
 
     def remember(self, key, decision, lifetime='session'):
         """Ghi nhớ quyết định cho phiên (`session`) hoặc cho đúng một lần (`once`)."""
@@ -1117,7 +1203,8 @@ class PermissionPolicy:
             normalized = path.replace('\\', '/')
             # Đường dẫn tuyệt đối lưu ở neo `//abs`: luật chỉ phê duyệt ĐÚNG tệp đã hiện trên thẻ,
             # không phê duyệt cả cây (đó là việc của một luật do người dùng tự viết).
-            return ['//' + normalized.lstrip('/') if normalized.startswith('/') else normalized]
+            absolute = normalized.startswith('/') or (len(normalized) > 1 and normalized[1] == ':')
+            return ['//' + normalized.lstrip('/') if absolute else normalized]
         if tool == 'web_fetch':
             target = ''
             if isinstance(args, dict):

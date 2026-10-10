@@ -60,7 +60,7 @@ def test_executor_keeps_the_visual_lock_attribute(tmp_path):
 def test_denied_call_returns_permission_denied(tmp_path):
     executor = make_executor(tmp_path)
     executor.policy.mode = 'plan'
-    result = run(executor.execute('terminal_exec', {'command': 'git status'}, 's1'))
+    result = run(executor.execute('terminal_exec', {'command': 'npm run build'}, 's1'))
     assert result['errorCode'] == host.PERMISSION_DENIED_CODE
 
 
@@ -74,7 +74,7 @@ def test_hardline_is_refused_even_when_trusted(tmp_path):
 def test_ask_without_approver_fails_closed(tmp_path):
     executor = make_executor(tmp_path)
     executor.policy.mode = 'ask'
-    result = run(executor.execute('terminal_exec', {'command': 'git status'}, 's1'))
+    result = run(executor.execute('terminal_exec', {'command': 'npm run build'}, 's1'))
     assert result['errorCode'] == host.PERMISSION_DENIED_CODE, 'thiếu đường hỏi KHÔNG phải là được phép'
 
 
@@ -185,20 +185,23 @@ def test_missing_file_is_a_coded_error_not_a_traceback(tmp_path):
 
 def test_dotdot_escape_is_refused(tmp_path):
     executor = make_executor(tmp_path)
+    executor.policy.mode = 'auto'
     payload = run(executor.execute('file_read', {'path': '../outside.txt'}, 's1'))
-    assert payload['errorCode'] == host.PATH_ESCAPE_CODE
+    assert payload['errorCode'] == host.PERMISSION_DENIED_CODE
 
 
 def test_absolute_path_outside_workspace_is_refused(tmp_path):
     executor = make_executor(tmp_path)
+    executor.policy.mode = 'auto'
     outside = tmp_path / 'outside.txt'
     outside.write_text('bi mat', encoding='utf-8')
     payload = run(executor.execute('file_read', {'path': str(outside)}, 's1'))
-    assert payload['errorCode'] == host.PATH_ESCAPE_CODE
+    assert payload['errorCode'] == host.PERMISSION_DENIED_CODE
 
 
 def test_symlink_escape_is_refused(tmp_path):
     executor = make_executor(tmp_path)
+    executor.policy.mode = 'auto'
     outside = tmp_path / 'outside.txt'
     outside.write_text('bi mat', encoding='utf-8')
     link = executor.workspace / 'link.txt'
@@ -207,14 +210,15 @@ def test_symlink_escape_is_refused(tmp_path):
     except (OSError, NotImplementedError):        # pragma: no cover - hệ tệp không cho symlink
         pytest.skip('hệ tệp không tạo được symlink')
     payload = run(executor.execute('file_read', {'path': 'link.txt'}, 's1'))
-    assert payload['errorCode'] == host.PATH_ESCAPE_CODE
+    assert payload['errorCode'] == host.PERMISSION_DENIED_CODE
 
 
 def test_write_outside_workspace_is_refused_before_touching_disk(tmp_path):
     executor = make_executor(tmp_path)
+    executor.policy.mode = 'auto'
     outside = tmp_path / 'outside.txt'
     payload = run(executor.execute('file_write', {'path': str(outside), 'content': 'x'}, 's1'))
-    assert payload['errorCode'] == host.PATH_ESCAPE_CODE
+    assert payload['errorCode'] == host.PERMISSION_DENIED_CODE
     assert not outside.exists()
 
 
@@ -537,7 +541,7 @@ def test_an_unexpected_tool_failure_still_returns_a_coded_error(tmp_path, monkey
     """Một công cụ ném lỗi lạ KHÔNG được giết lượt: phải thành `HOST_TOOL_FAILED` có mã."""
     executor = make_executor(tmp_path)
 
-    def boom(args, *, root=None):
+    def boom(args, *, root=None, allow_outside=False):
         raise RuntimeError('hỏng bất ngờ')
 
     monkeypatch.setattr(executor, '_file_read', boom)

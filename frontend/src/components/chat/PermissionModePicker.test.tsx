@@ -27,7 +27,7 @@ const originalAgent = useAgentStore.getState()
 
 function permissionSnapshot(overrides: Record<string, unknown> = {}) {
   return {
-    mode: 'ask', modeDefault: 'ask', modes: ['plan', 'ask', 'auto', 'trusted'],
+    mode: 'ask', modeDefault: 'ask', modes: ['ask', 'auto', 'trusted'],
     capabilities: { read: true, write: 'ask', exec: 'ask', cua: 'ask' },
     scope: 'workspace', scopeDefault: 'machine', scopes: ['workspace', 'machine'],
     network: 'restricted', networkDefault: 'restricted', networks: ['restricted', 'enabled'],
@@ -78,7 +78,8 @@ beforeEach(() => {
     if (method === 'PUT') {
       if (putError) throw putError
       puts.push(body ?? {})
-      snapshot = permissionSnapshot({ ...snapshot, ...(body ?? {}) })
+      snapshot = permissionSnapshot({ ...snapshot, ...(body ?? {}),
+        scope: (body?.mode ?? snapshot.mode) === 'trusted' ? 'machine' : 'workspace' })
     }
     return snapshot
   })
@@ -104,7 +105,7 @@ describe('PermissionModePicker', () => {
     await render()
     expect(api).toHaveBeenCalledWith('/permissions')
     expect(chip()?.dataset.permissionMode).toBe('ask')
-    expect(chip()?.textContent).toContain('Ask first')
+    expect(chip()?.textContent).toContain('Request approval')
   })
 
   it('đổi mức cho phép thì ghi xuống tầng `user` và cập nhật nhãn', async () => {
@@ -116,11 +117,12 @@ describe('PermissionModePicker', () => {
     expect(chip()?.textContent).toContain('Auto')
   })
 
-  it('đổi phạm vi sang cả máy', async () => {
+  it('Full access derives whole-machine scope without a separate chooser', async () => {
     await render()
     await act(async () => chip()?.click())
-    await act(async () => menuItem('Whole machine')?.click())
-    expect(puts).toEqual([{ scope: 'machine', layer: 'user' }])
+    expect(menuItem('Whole machine')).toBeUndefined()
+    await act(async () => menuItem('Full access')?.click())
+    expect(puts).toEqual([{ mode: 'trusted', layer: 'user' }])
     expect(chip()?.dataset.permissionScope).toBe('machine')
     expect(chip()?.title).toContain('Whole machine')
   })
@@ -136,25 +138,22 @@ describe('PermissionModePicker', () => {
     expect(chip()?.dataset.permissionNetwork).toBe('enabled')
   })
 
-  // Phạm vi `machine` chỉ bỏ câu hỏi ngoài folder, KHÔNG nới chỗ công cụ tệp được chạm tới.
-  // Dòng gợi ý phải nói đúng như vậy, nếu không người dùng tưởng đã mở khoá cả ổ đĩa.
-  it('gợi ý phạm vi nói rõ công cụ tệp vẫn ở trong folder', async () => {
+  it('offers exactly three levels, no Scope section and unchanged Internet choices', async () => {
     await render()
     await act(async () => chip()?.click())
-    const hint = () => host.querySelector('[data-testid="composer-permission-scope"]')?.textContent ?? ''
-    expect(hint()).toContain('File tools stay inside it')
-    // Đổi phạm vi thì menu đóng lại (giá trị đã lưu) — mở lại để đọc câu của mức mới.
-    await act(async () => menuItem('Whole machine')?.click())
-    await act(async () => chip()?.click())
-    expect(hint()).toContain('Do not ask')
-    expect(hint()).toContain('File tools stay inside it')
+    expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(5)
+    for (const label of ['Request approval', 'Auto approve', 'Full access', 'Ask before network access', 'Allow network access']) {
+      expect(menuItem(label)).toBeDefined()
+    }
+    expect(host.querySelector('[data-testid="composer-permission-scope"]')).toBeNull()
+    expect(menuItem('Read only')).toBeUndefined()
   })
 
   it('ghi lỗi thì giữ nguyên mức cũ và nói ra cho người dùng', async () => {
     putError = new Error('PERMISSION_LAYER_UNKNOWN: tầng `user` không tồn tại')
     await render()
     await act(async () => chip()?.click())
-    await act(async () => menuItem('Trusted')?.click())
+    await act(async () => menuItem('Full access')?.click())
     expect(chip()?.dataset.permissionMode).toBe('ask')
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('PERMISSION_LAYER_UNKNOWN')
   })

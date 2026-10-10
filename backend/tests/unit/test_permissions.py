@@ -124,7 +124,7 @@ def test_ask_rule_wins_over_mode_default(policy):
 def test_mode_and_scope_come_from_files_then_env(policy):
     write_layer(policy, perms.LAYER_USER, {'mode': 'trusted', 'scope': 'workspace'})
     assert policy.mode_value() == 'trusted'
-    assert policy.scope_value() == 'workspace'
+    assert policy.scope_value() == 'machine', 'scope derives from Full access, not the old field'
     policy.env['BOXFOX_PERMISSION_MODE'] = 'plan'
     assert policy.mode_value() == 'trusted', 'tệp thắng biến môi trường'
     fresh = perms.PermissionPolicy(policy.workspace, profile_dir=policy.profile_dir,
@@ -136,18 +136,20 @@ def test_mode_and_scope_come_from_files_then_env(policy):
 
 # ------------------------------------------------------------------ bảng mode × scope
 
-def test_plan_mode_only_reads(policy):
+def test_legacy_plan_mode_migrates_to_request_approval(policy):
     policy.mode = 'plan'
     assert policy.decide('file_read', {'path': 'x.txt'}).allowed
-    assert policy.decide('file_write', {'path': 'x.txt'}).outcome == perms.OUTCOME_DENY
-    assert policy.decide('terminal_exec', {'command': 'git status'}).outcome == perms.OUTCOME_DENY
-    assert policy.decide('computer_use', {'action': 'click'}).outcome == perms.OUTCOME_DENY
+    assert policy.mode_value() == 'ask'
+    assert policy.decide('file_write', {'path': 'x.txt'}).outcome == perms.OUTCOME_ASK
+    assert policy.decide('terminal_exec', {'command': 'git status'}).allowed
+    assert policy.decide('computer_use', {'action': 'click'}).outcome == perms.OUTCOME_ASK
 
 
 def test_ask_mode_asks_before_write_and_exec(policy):
     policy.mode = 'ask'
     assert policy.decide('file_write', {'path': 'x.txt'}).outcome == perms.OUTCOME_ASK
-    assert policy.decide('terminal_exec', {'command': 'git status'}).outcome == perms.OUTCOME_ASK
+    assert policy.decide('terminal_exec', {'command': 'git status'}).allowed
+    assert policy.decide('terminal_exec', {'command': 'npm run build'}).outcome == perms.OUTCOME_ASK
 
 
 def test_auto_mode_allows_in_workspace_but_asks_outside(policy):
@@ -271,7 +273,7 @@ def test_saved_rule_lands_in_project_layer_and_can_be_revoked(policy):
     target = policy.workspace + '/src/a.py'
     ok, code, _, rules = policy.save_rule('file_write', {'path': target})
     assert ok and code == 'OK'
-    assert rules == ['file_write(//%s)' % target.lstrip('/')], 'luật lưu ở neo `//abs`'
+    assert rules == ['file_write(//%s)' % target.replace('\\', '/').lstrip('/')], 'luật lưu ở neo `//abs`'
     assert policy.decide('file_write', {'path': target}).allowed
     assert not policy.decide('file_write', {'path': policy.workspace + '/src/b.py'}).allowed, \
         'luật vừa lưu KHÔNG được rộng hơn thẻ đã hiện'
@@ -451,8 +453,10 @@ def test_enabled_network_keeps_auto_silent(policy):
     assert policy.decide('terminal_exec', {'command': 'curl https://example.com'}).allowed
 
 
-def test_trusted_mode_ignores_the_network_axis(policy):
+def test_full_access_keeps_network_independent(policy):
     policy.mode = 'trusted'
+    assert policy.decide('terminal_exec', {'command': 'npm install left-pad'}).outcome == perms.OUTCOME_ASK
+    write_layer(policy, perms.LAYER_USER, {'network': perms.NETWORK_ENABLED})
     assert policy.decide('terminal_exec', {'command': 'npm install left-pad'}).allowed
 
 
@@ -531,6 +535,7 @@ def test_abbreviated_encoded_command_flags_are_guarded(policy, command):
 ])
 def test_guarded_patterns_do_not_cry_wolf(policy, command):
     policy.mode = 'trusted'
+    write_layer(policy, perms.LAYER_USER, {'network': perms.NETWORK_ENABLED})
     assert policy.guarded_reason(command) == ''
     assert policy.decide('terminal_exec', {'command': command}).allowed
 

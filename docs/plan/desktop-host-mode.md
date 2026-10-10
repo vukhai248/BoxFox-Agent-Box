@@ -1,5 +1,7 @@
 # Kế hoạch — Host mode: chạy BoxFox trực tiếp trên máy người dùng
 
+> **Cập nhật quyền 2026-10-10:** hợp đồng mới đã được owner duyệt ở [desktop-permission-levels-2026-10-10.md](desktop-permission-levels-2026-10-10.md), thay bảng 4 mode × Scope file riêng ở dưới. Ba mức, Network độc lập; CUA không tự đổi boundary/grants khi đổi mức file.
+
 > **Trạng thái:** Đã được duyệt và đang triển khai. H1–H4 (động cơ quyền, HostExecutor, API) đã có
 > trong `vorflux/desktop-host-mode`; H5–H7 (CUA Windows) và D1–D5 (app Electron, bộ cài) đang làm.
 >

@@ -11,15 +11,15 @@
  * được các mã đó, không được vỡ.
  */
 
-/** Bốn chế độ quyền, đúng thứ tự bảng quyết định §3.1. */
-export type PermissionMode = 'plan' | 'ask' | 'auto' | 'trusted'
+/** Three approval levels. Legacy `plan` is migrated to `ask` by the backend. */
+export type PermissionMode = 'ask' | 'auto' | 'trusted'
 
 /** Phạm vi: `machine` là toàn máy, `workspace` siết thêm cho đường dẫn ngoài workspace. */
 export type PermissionScope = 'workspace' | 'machine'
 
 /**
  * Trục mạng (Codex `NetworkAccess`): `restricted` hỏi trước các lệnh ra mạng khi chế độ
- * sẽ chạy chúng im lặng (`auto`); `enabled` không hỏi. Đây là danh sách hỏi, không phải
+ * sẽ chạy chúng im lặng (ở mọi mức); `enabled` không thêm câu hỏi mạng. Đây là danh sách hỏi, không phải
  * tường lửa — lệnh không khớp danh sách vẫn chạy, và tiến trình con không bị chặn.
  */
 export type PermissionNetwork = 'restricted' | 'enabled'
@@ -92,6 +92,8 @@ export interface PermissionSnapshot {
   modes: PermissionMode[]
   capabilities: PermissionCapabilities
   scope: PermissionScope
+  scopeDerived?: boolean
+  cuaScope?: PermissionScope
   scopeDefault: PermissionScope
   scopes: PermissionScope[]
   network: PermissionNetwork

@@ -4,7 +4,7 @@
  * Một tab cho phần host mode đã chốt ở `docs/plan/desktop-host-mode.md`:
  *
  * - **Chế độ chạy** — `docker` hay `host`, giá trị đang cấu hình và giá trị mặc định;
- * - **Quyền** — bốn chế độ (plan/ask/auto/trusted) × hai phạm vi (workspace/machine),
+ * - **Quyền** — ba mức (ask/auto/trusted), phạm vi file suy từ mức; mạng độc lập,
  *   bảng năng lực đọc/ghi/lệnh/CUA, số mục sàn cứng và số lần đã va;
  * - **Luật** — từng luật kèm tầng + tệp nguồn, thu hồi được (có xác nhận);
  * - **Thẻ duyệt đang chờ** — bốn câu trả lời: một lần / phiên / luôn / từ chối;
@@ -31,6 +31,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { ApiError } from '../../lib/agentApi'
+import { useT } from '../../i18n/context'
 import {
   actOnDesktopLease,
   decidePermission,
@@ -53,7 +54,6 @@ import type {
   PermissionMode,
   PermissionNetwork,
   PermissionRulesSnapshot,
-  PermissionScope,
   PermissionSnapshot,
   RuleKind,
 } from '../../types/machinePermissions'
@@ -63,9 +63,8 @@ const FIELD = 'mt-1 w-full rounded-md border border-line bg-panel2 px-2.5 py-1.5
 const BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[11px] font-semibold text-fg transition hover:border-brand/60 hover:text-brand disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer'
 const DANGER_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer dark:text-red-400'
 
-/** Bốn chế độ/phạm vi/mạng theo hợp đồng; chỉ dùng khi harness không trả danh sách. */
-const MODE_FALLBACK: PermissionMode[] = ['plan', 'ask', 'auto', 'trusted']
-const SCOPE_FALLBACK: PermissionScope[] = ['workspace', 'machine']
+/** Three levels and independent network choices; fallback when the server omits its list. */
+const MODE_FALLBACK: PermissionMode[] = ['ask', 'auto', 'trusted']
 const NETWORK_FALLBACK: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Bốn dòng của bảng năng lực — nhãn người dùng, khoá lấy từ `capabilities`. */
@@ -159,6 +158,7 @@ function isUnavailable(err: unknown): boolean {
 }
 
 export function MachinePermissionsView() {
+  const t = useT()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -245,11 +245,6 @@ export function MachinePermissionsView() {
       await updatePermissions({ mode, layer: 'user' })
     }, 'Đã lưu chế độ quyền.')
 
-  const changeScope = (scope: PermissionScope) =>
-    void runAction(async () => {
-      await updatePermissions({ scope, layer: 'user' })
-    }, 'Đã lưu phạm vi.')
-
   const changeNetwork = (network: PermissionNetwork) =>
     void runAction(async () => {
       await updatePermissions({ network, layer: 'user' })
@@ -279,8 +274,7 @@ export function MachinePermissionsView() {
     }, LEASE_DONE[action])
 
   const ruleRows = useMemo(() => flattenRules(rules), [rules])
-  const modeOptions = snapshot?.modes ?? MODE_FALLBACK
-  const scopeOptions = snapshot?.scopes ?? SCOPE_FALLBACK
+  const modeOptions = (snapshot?.modes ?? MODE_FALLBACK).filter(mode => MODE_FALLBACK.includes(mode))
   const networkOptions = snapshot?.networks ?? NETWORK_FALLBACK
 
   return (
@@ -395,7 +389,7 @@ export function MachinePermissionsView() {
                 </h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-xs text-muted">
-                    Chế độ quyền
+                    {t('composer.permission.sectionMode')}
                     <select
                       data-testid="mp-mode"
                       className={FIELD}
@@ -405,29 +399,13 @@ export function MachinePermissionsView() {
                     >
                       {modeOptions.map((mode) => (
                         <option key={mode} value={mode}>
-                          {mode}
+                          {t(`composer.permission.mode.${mode}`)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="text-xs text-muted">
-                    Phạm vi
-                    <select
-                      data-testid="mp-scope"
-                      className={FIELD}
-                      value={snapshot.scope}
-                      disabled={busy}
-                      onChange={(event) => changeScope(event.target.value as PermissionScope)}
-                    >
-                      {scopeOptions.map((scope) => (
-                        <option key={scope} value={scope}>
-                          {scope}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs text-muted">
-                    Mạng
+                    {t('composer.permission.sectionNetwork')}
                     <select
                       data-testid="mp-network"
                       className={FIELD}
@@ -437,16 +415,16 @@ export function MachinePermissionsView() {
                     >
                       {networkOptions.map((network) => (
                         <option key={network} value={network}>
-                          {network}
+                          {t(`composer.permission.network.${network}`)}
                         </option>
                       ))}
                     </select>
                   </label>
                 </div>
                 <p className="mt-2 text-[10px] text-muted">
-                  Mạng là danh sách hỏi, không phải tường lửa: lệnh khớp danh sách (curl, git push, cài gói…)
-                  phải hỏi trước khi tự chạy ở mức Tự động. Phạm vi chỉ đổi chỗ HỎI — công cụ tệp luôn bị
-                  giới hạn trong folder dự án.
+                  {t(`composer.permission.hint.${snapshot.mode}`)}{' '}
+                  {t(`composer.permission.scopeHint.${snapshot.scope}`)}{' '}
+                  {t(snapshot.network === 'enabled' ? 'composer.permission.hint.networkEnabled' : 'composer.permission.hint.networkRestricted')}
                 </p>
 
                 <div className="mt-4 overflow-hidden rounded-lg border border-line">

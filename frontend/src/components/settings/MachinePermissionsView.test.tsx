@@ -14,6 +14,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MachinePermissionsView } from './MachinePermissionsView'
+import { I18nProvider } from '../../i18n'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -73,7 +74,7 @@ function snapshot(mode = 'ask', scope = 'machine') {
   return {
     mode,
     modeDefault: 'ask',
-    modes: ['plan', 'ask', 'auto', 'trusted'],
+    modes: ['ask', 'auto', 'trusted'],
     capabilities,
     scope,
     scopeDefault: 'machine',
@@ -215,7 +216,7 @@ const settle = async (times = 3) => {
 
 async function render() {
   await act(async () => {
-    root.render(<MachinePermissionsView />)
+    root.render(<I18nProvider><MachinePermissionsView /></I18nProvider>)
   })
   await settle()
 }
@@ -238,6 +239,15 @@ const buttonIn = (scope: HTMLElement, text: string) =>
   [...scope.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === text)
 
 describe('MachinePermissionsView', () => {
+  it('offers three English approval levels without a Scope chooser', async () => {
+    serverStub()
+    await render()
+    const select = testid('mp-mode') as HTMLSelectElement
+    expect([...select.options].map(option => option.text)).toEqual(['Request approval', 'Auto approve', 'Full access'])
+    expect(testid('mp-scope')).toBeNull()
+    expect([...(testid('mp-network') as HTMLSelectElement).options].map(option => option.text))
+      .toEqual(['Ask before network access', 'Allow network access'])
+  })
   it('host mode, lease ở tay người: hiện cảnh báo rõ và trạng thái lease', async () => {
     serverStub()
     await render()

@@ -1,5 +1,7 @@
 # Handoff — BoxFox Desktop alpha: hai chế độ chạy (máy người dùng / box Docker) + CUA
 
+> **Checkpoint quyền 2026-10-10:** đọc [desktop-permission-levels-2026-10-10.md](../plan/desktop-permission-levels-2026-10-10.md). Owner đã duyệt 3 mức Request approval / Auto approve / Full access, bỏ Scope file riêng, Network độc lập; CUA giữ boundary/grants riêng. Phần này thay mô tả 4 mức quyền cũ trong tài liệu. Journal Host vẫn là việc còn mở, không coi chọn Full access là đã sửa journal.
+
 > **Đọc mục 2 (Bảng tiến độ) trước**, rồi làm tiếp việc chưa xong theo đúng thứ tự ở mục 6.
 > Tài liệu này tự chứa: nó nói vòng này đang làm gì, đã xong tới đâu, chạm vào tệp nào, tên route nào,
 > và lệnh nào để kiểm. Nó **không** thay thế các kế hoạch chi tiết ở mục 7 — chúng nằm trong repo.

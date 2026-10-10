@@ -196,9 +196,9 @@ const vi = {
       sectionScope: 'Phạm vi',
       mode: {
         plan: 'Chỉ đọc',
-        ask: 'Hỏi trước',
-        auto: 'Tự động',
-        trusted: 'Tin cậy',
+        ask: 'Yêu cầu phê duyệt',
+        auto: 'Phê duyệt giúp tôi',
+        trusted: 'Toàn quyền truy cập',
       },
       scope: {
         workspace: 'Chỉ folder dự án',
@@ -207,8 +207,8 @@ const vi = {
       // Phạm vi chỉ đổi chỗ HỎI, không nới chỗ công cụ tệp được chạm tới: nói đúng để người
       // dùng không tưởng rằng chọn `machine` là mở khoá cả ổ đĩa.
       scopeHint: {
-        workspace: 'Chỉ hỏi khi đụng tới thứ ngoài folder dự án. Công cụ tệp luôn bị giới hạn trong folder.',
-        machine: 'Không hỏi khi đụng tới thứ ngoài folder dự án. Công cụ tệp vẫn bị giới hạn trong folder.',
+        workspace: 'Hành động ngoài dự án cần phê duyệt. Lệnh host không được cách ly ở mức hệ điều hành.',
+        machine: 'Cho phép truy cập tệp ngoài dự án. Vẫn chịu quyền hệ điều hành và luật an toàn.',
       },
       sectionNetwork: 'Mạng',
       network: {
@@ -217,11 +217,11 @@ const vi = {
       },
       hint: {
         plan: 'Agent chỉ đọc — không sửa tệp, không chạy lệnh.',
-        ask: 'Hỏi trước mỗi lần ghi tệp hoặc chạy lệnh. Mặc định.',
-        auto: 'Tự ghi tệp và chạy lệnh trong folder dự án; điều khiển desktop vẫn hỏi.',
-        trusted: 'Tự chạy, trừ nhóm luôn hỏi và sàn cứng. Chỉ dùng khi bạn tin tuyệt đối.',
+        ask: 'Khảo sát bằng lệnh đọc được nhận diện. Hỏi trước khi thay đổi hoặc chạy lệnh khác.',
+        auto: 'Tự làm trong dự án. Hỏi khi ra ngoài, gặp hành động rủi ro hoặc điều khiển desktop.',
+        trusted: 'Truy cập tệp ngoài dự án không hỏi phạm vi. Vẫn giữ luật an toàn, trust folder và quyền CUA.',
         networkRestricted: 'Lệnh ra mạng (curl, git push, cài gói…) phải hỏi trước khi tự chạy.',
-        networkEnabled: 'Lệnh ra mạng tự chạy ở mức Tự động. Đây là danh sách hỏi, không phải tường lửa.',
+        networkEnabled: 'Lệnh mạng được nhận diện không hỏi thêm về mạng. Vẫn giữ luật phê duyệt; đây không phải tường lửa.',
       },
     },
     switchToPlan: 'Plan',

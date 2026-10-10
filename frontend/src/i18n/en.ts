@@ -200,9 +200,9 @@ const en: SameShape<typeof vi> = {
       sectionScope: 'Scope',
       mode: {
         plan: 'Read only',
-        ask: 'Ask first',
-        auto: 'Auto',
-        trusted: 'Trusted',
+        ask: 'Request approval',
+        auto: 'Auto approve',
+        trusted: 'Full access',
       },
       scope: {
         workspace: 'Project folder only',
@@ -210,8 +210,8 @@ const en: SameShape<typeof vi> = {
       },
       // Scope only changes where the agent must ASK; it never widens what file tools may touch.
       scopeHint: {
-        workspace: 'Ask before touching anything outside the project folder. File tools stay inside it.',
-        machine: 'Do not ask before touching things outside the project folder. File tools stay inside it.',
+        workspace: 'Outside-project actions require approval. Host commands are not OS sandboxed.',
+        machine: 'Outside-project file access is allowed. OS permissions and safety rules still apply.',
       },
       sectionNetwork: 'Network',
       network: {
@@ -220,11 +220,11 @@ const en: SameShape<typeof vi> = {
       },
       hint: {
         plan: 'The agent only reads — no file writes, no commands.',
-        ask: 'Ask before every file write or command. Default.',
-        auto: 'Write files and run commands inside the project folder; desktop control still asks.',
-        trusted: 'Runs on its own, except the always-ask group and the hardline floor.',
+        ask: 'Inspect the project with recognised read commands. Ask before changes or other commands.',
+        auto: 'Run project work automatically. Ask for outside targets, risky actions and desktop control.',
+        trusted: 'Access files outside the project without scope prompts. Safety rules, project trust and CUA grants still apply.',
         networkRestricted: 'Network commands (curl, git push, package installs…) must ask instead of running silently.',
-        networkEnabled: 'Network commands run silently at the Auto level. This is an ask list, not a firewall.',
+        networkEnabled: 'Recognised network commands do not add a network prompt. Approval rules still apply. This is not a firewall.',
       },
     },
     switchToPlan: 'Plan',

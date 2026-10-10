@@ -726,7 +726,7 @@ def register_routes(app, runtime):
     def _target_scope():
         policy = getattr(runtime.executor, 'permissions_policy', None)
         try:
-            return str(policy().scope_value()) if callable(policy) else ''
+            return str(policy().cua_scope_value()) if callable(policy) else ''
         except Exception:
             return ''
 

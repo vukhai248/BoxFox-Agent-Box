@@ -21,7 +21,10 @@ def async_test(fn):
 
 
 @pytest.fixture
-def harness(tmp_path):
+def harness(tmp_path, monkeypatch):
+    monkeypatch.setenv('BOXFOX_HOME_DIR', str(tmp_path / 'home'))
+    monkeypatch.setenv('BOXFOX_INSTALL_DIR', str(tmp_path / 'install'))
+    monkeypatch.setenv('BOXFOX_PERMISSION_MODE', 'ask')
     legacy = type('Legacy', (), {'visual_lock': asyncio.Lock(), 'execute': AsyncMock(return_value={'content': 'docker'}),
                                 'cleanup': AsyncMock()})()
     runtime = HarnessRuntime(SessionStore(tmp_path / 'sessions.sqlite'), legacy)
@@ -186,7 +189,9 @@ async def test_host_unsupported_does_not_fall_back(harness, tmp_path):
     rt.machine_registry.trust(p['id'], True)
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
     assert (await rt.executor.execute('write_plan', {}, session['id']))['errorCode'] == 'UNSUPPORTED_IN_HOST_MODE'
-    assert (await rt.executor.execute('file_read', {'path': '../outside'}, session['id']))['errorCode'] == 'PATH_OUTSIDE_WORKSPACE'
+    executor, _ = rt.executor.host(session['id'])
+    executor.approver = lambda *args, **kwargs: 'deny'
+    assert (await rt.executor.execute('file_read', {'path': '../outside'}, session['id']))['errorCode'] == 'PERMISSION_DENIED'
     assert (await rt.executor.execute('file_read', {'path': 'hello.txt'}, session['id'], root='../outside'))['errorCode'] == 'PATH_OUTSIDE_WORKSPACE'
     legacy.execute.assert_not_called()
 
@@ -319,7 +324,7 @@ def test_machine_plans_route_serves_the_selected_folder(harness, tmp_path):
     p = project(rt, tmp_path)
     room = Path(p['path']) / '.plans'
     room.mkdir()
-    (room / 'v1-login-page.md').write_text('# Kế hoạch\n', encoding='utf-8')
+    (room / 'v1-login-page.md').write_text('# Kế hoạch\n', encoding='utf-8', newline='\n')
     app = web.Application()
     register_routes(app, rt)
 
@@ -347,7 +352,7 @@ def test_session_request_reads_plans_from_its_own_folder(harness, tmp_path):
     p = project(rt, tmp_path)
     room = Path(p['path']) / '.plans'
     room.mkdir()
-    (room / 'v1-login-page.md').write_text('# Trong folder\n', encoding='utf-8')
+    (room / 'v1-login-page.md').write_text('# Trong folder\n', encoding='utf-8', newline='\n')
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
     legacy.request = AsyncMock(side_effect=AssertionError('host mode không được gọi box'))
 
@@ -408,6 +413,9 @@ async def test_chat_bar_mode_change_applies_to_the_next_tool_call(harness, tmp_p
     rt.machine_registry.trust(p['id'], True)
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
 
+    # Legacy Read only is now Request approval: simulate the user's denial, not a timeout.
+    executor, _ = rt.executor.host(session['id'])
+    executor.approver = lambda *args, **kwargs: 'deny'
     denied = await rt.executor.execute('file_write', {'path': 'plan.txt', 'content': 'x'}, session['id'])
     assert denied['errorCode'] == 'PERMISSION_DENIED'
     assert not (Path(p['path']) / 'plan.txt').exists()

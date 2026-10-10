@@ -1012,14 +1012,14 @@ def create_app(runtime):
         vẫn dựng được policy của folder dự án — nhờ vậy nút chọn quyền ở thanh chat và tab
         Settings → Machines đọc/ghi được thay vì trả 409.
         """
-        policy = getattr(runtime.executor, 'policy', None)
-        if policy is None:
-            provider = getattr(runtime.executor, 'permissions_policy', None)
-            if callable(provider):
-                try:
-                    policy = provider()
-                except Exception:      # thiếu folder/quyền đọc ⇒ coi như máy không có động cơ quyền
-                    policy = None
+        provider = getattr(runtime.executor, 'permissions_policy', None)
+        if callable(provider):
+            try:
+                policy = provider()
+            except Exception:      # Do not fall back to a different project's policy.
+                policy = None
+        else:
+            policy = getattr(runtime.executor, 'policy', None)
         if policy is None:
             raise ApiError('PERMISSIONS_UNAVAILABLE',
                            'chế độ đang chạy không có động cơ quyền (chỉ host mode có)', 409)
@@ -1040,6 +1040,8 @@ def create_app(runtime):
             data = dict(policy.layers.get(layer) or {})
             changed = {}
             mode = str(payload.get('mode') or '').strip().lower()
+            if mode == permissions_module.MODE_PLAN:
+                mode = permissions_module.MODE_ASK  # Older clients: never migrate to auto/full access.
             if mode:
                 if mode not in permissions_module.MODES:
                     raise ApiError('PERMISSION_MODE_UNKNOWN', 'chế độ `%s` không có' % mode, 400)
@@ -1049,8 +1051,7 @@ def create_app(runtime):
             if scope:
                 if scope not in permissions_module.SCOPES:
                     raise ApiError('PERMISSION_SCOPE_UNKNOWN', 'phạm vi `%s` không có' % scope, 400)
-                data['scope'] = scope
-                changed['scope'] = scope
+                raise ApiError('PERMISSION_SCOPE_DERIVED', 'Scope follows the approval level; choose mode instead.', 400)
             network = str(payload.get('network') or '').strip().lower()
             if network:
                 if network not in permissions_module.NETWORKS:
@@ -1058,7 +1059,7 @@ def create_app(runtime):
                 data['network'] = network
                 changed['network'] = network
             if not changed:
-                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode`, `scope` hoặc `network`', 400)
+                raise ApiError('PERMISSION_UPDATE_EMPTY', 'cần `mode` hoặc `network`', 400)
             error = permissions_module._write_json(policy.paths[layer], data)
             if error:
                 raise ApiError('PERMISSION_WRITE_FAILED', error, 409)

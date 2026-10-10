@@ -69,6 +69,41 @@ if (!second) {
       report.health = health.services
       report.servicePids = [...health.services.matchAll(/(?:router|harness)\s*: pid=(\d+)/g)].map(m => Number(m[1]))
       if (!/router\s*: .*healthy=true/.test(health.services) || !/harness\s*: .*healthy=true/.test(health.services)) throw new Error('Real services did not become healthy')
+      if (process.env.BOXFOX_PROBE_PERMISSIONS === '1') {
+        const origin = `http://127.0.0.1:${machine.ports.gateway}`
+        const api = async (route, body, method = 'POST') => {
+          const response = await fetch(origin + route, {
+            headers: { Origin: origin, 'Content-Type': 'application/json' },
+            ...(body ? { method, body: JSON.stringify(body) } : {}),
+          })
+          if (!response.ok) throw new Error(`Permission probe HTTP ${response.status}`)
+          return response.json()
+        }
+        const initial = await api('/api/agent/permissions')
+        if (JSON.stringify(initial.modes) !== JSON.stringify(['ask', 'auto', 'trusted']) || !initial.scopeDerived) throw new Error('Packaged permission contract is stale')
+        report.permissions = { modes: initial.modes, checks: [] }
+        for (const mode of ['ask', 'auto', 'trusted']) {
+          const snapshot = await api('/api/agent/permissions', { mode, network: 'restricted' }, 'PUT')
+          if (snapshot.mode !== mode || snapshot.scope !== (mode === 'trusted' ? 'machine' : 'workspace')) throw new Error('Packaged level/scope mismatch')
+          const decision = await api('/api/agent/permissions/decide', { tool: 'terminal_exec', args: { command: 'curl https://example.com' } })
+          if (decision.outcome !== 'ask') throw new Error('Network choice was bypassed')
+          const floor = await api('/api/agent/permissions/decide', { tool: 'terminal_exec', args: { command: 'format C:' } })
+          if (floor.outcome !== 'deny') throw new Error('Safety floor was bypassed')
+          report.permissions.checks.push({ mode, scope: snapshot.scope, network: decision.outcome, floor: floor.outcome })
+        }
+        await api('/api/agent/permissions', { mode: 'ask', network: 'restricted' }, 'PUT')
+        await delay(1000)
+        report.permissions.ui = await win.webContents.executeJavaScript(`(async () => {
+          const chip = document.querySelector('[data-testid="composer-permission"]');
+          if (!chip) throw new Error('Permission chip missing');
+          chip.click(); await new Promise(r => setTimeout(r, 100));
+          const labels = [...document.querySelectorAll('[role="menuitemradio"]')].map(b => b.innerText);
+          const scopeChooser = !!document.querySelector('[data-testid="composer-permission-scope"]');
+          chip.click(); return { labels, scopeChooser };
+        })()`)
+        if (report.permissions.ui.labels.length !== 5 || report.permissions.ui.scopeChooser || !report.permissions.ui.labels.some(label => label.startsWith('Request approval'))) throw new Error('Packaged permission UI mismatch')
+        mark('packaged-permissions-verified')
+      }
       if (process.env.BOXFOX_PROBE_CHAT === '1') {
         // Isolated profile only: never copy or modify the user's provider credentials.
         const origin = `http://127.0.0.1:${machine.ports.gateway}`
