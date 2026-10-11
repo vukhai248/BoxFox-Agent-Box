@@ -10,7 +10,7 @@ const { api } = vi.hoisted(() => ({api: vi.fn()}))
 vi.mock('../../lib/agentApi', () => ({agentApi: api}))
 ;(globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
-const project: LocalProject = {id: 'p1', name: 'Host workspace', path: '/home/boxfox/host-workspace', trusted: false}
+const project: LocalProject = {id: 'p1', name: 'Host workspace', path: '/home/boxfox/host-workspace'}
 let configuration: MachineConfiguration
 let picked: {path: string} | {cancelled: boolean}
 let pickerError: Error | null

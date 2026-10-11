@@ -12,8 +12,8 @@ const { api } = vi.hoisted(() => ({api: vi.fn()}))
 vi.mock('../../lib/agentApi', () => ({agentApi: api}))
 ;(globalThis as typeof globalThis & {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true
 
-const projectA = {id: 'a', name: 'App A', path: 'D:\\projects\\App A', trusted: false}
-const projectB = {id: 'b', name: 'App B', path: 'D:\\projects\\App B', trusted: true}
+const projectA = {id: 'a', name: 'App A', path: 'D:\\projects\\App A'}
+const projectB = {id: 'b', name: 'App B', path: 'D:\\projects\\App B'}
 const bindingA = {mode: 'host' as const, revision: 1, projectId: 'a', workspace: projectA.path}
 const bindingB = {...bindingA, projectId: 'b', workspace: projectB.path}
 let configuration: MachineConfiguration
@@ -121,7 +121,6 @@ describe('IDE projects and Docker session boundaries', () => {
     expect(draft).not.toBe('ha')
     expect(useMachineStore.getState().bindings[draft]).toEqual(bindingB)
     expect(configuration.projectId).toBe('b')
-    expect(api.mock.calls.some(([path]) => path === '/machines/trust')).toBe(false)
   })
   it('canceling Create project after choosing a folder does not register or start anything', async () => {
     picked = projectB

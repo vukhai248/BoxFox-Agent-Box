@@ -44,7 +44,7 @@ Raw logs: `.tmp/permissions-20261010/`. Không commit profile, credential, DB ow
 
 ## Việc còn riêng
 
-`PROJECT_TRUST_REQUIRED` là trust folder, độc lập mức duyệt; không tự trust project thật. Host journal vẫn thiếu `session_ensure`/`journal_append`/`checkpoint_write`; Full access không chữa thiếu tool. Không thay workflow/DAG hay tick toàn Desktop Alpha.
+Folder trust riêng đã được loại bỏ; folder chỉ xác định workspace, còn agent mutation do permission policy quyết định. Host journal hiện dùng chung `session_ensure`/`journal_append`/`checkpoint_write`. Không thay workflow/DAG hay tick toàn Desktop Alpha.
 
 ## Bộ cài
 

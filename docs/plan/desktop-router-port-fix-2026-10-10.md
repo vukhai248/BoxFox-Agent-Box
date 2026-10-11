@@ -20,7 +20,7 @@ client chung hiện có. Các lớp legacy `BoxFoxAgent`/`AgentTurnExecutor` ch�
 tests/export, không nằm trên đường server đang chạy; chưa đổi chúng.
 
 Không sửa UI, provider adapter, model list, ngôn ngữ, quyền project hoặc DAG.
-`JOURNAL_DEGRADED / PROJECT_TRUST_REQUIRED` là một lỗi riêng: executor từ chối ghi journal
+`JOURNAL_DEGRADED` là lỗi journal nội bộ: executor từng từ chối ghi journal
 khi project chưa được trust. Không tự cấp trust; cảnh báo này không phải lỗi kết nối model.
 
 Source đóng gói: **`2e686820043f3408c577ebbe79f3b17556a99d05`**,

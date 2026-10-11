@@ -44,6 +44,7 @@ export function updatePermissions(patch: {
   mode?: PermissionMode
   network?: PermissionNetwork
   layer?: PermissionLayer
+  confirmed?: boolean
 }): Promise<PermissionSnapshot> {
   return agentApi<PermissionSnapshot>('/permissions', patch, 'PUT')
 }

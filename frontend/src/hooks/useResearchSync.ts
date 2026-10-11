@@ -18,7 +18,9 @@ export function useResearchSync(): ResearchMode {
   // Danh tính ỔN ĐỊNH của phiên: id server khi đã biết, nếu không thì khoá cục bộ. Phiên tạo trong trang
   // bắt đầu bằng khoá tạm rồi nhận id server, còn mở lại từ danh sách bên thì dùng id server ngay: lấy
   // id server làm khoá để sổ mốc của `researchStore` không bị tách làm hai (R5-1).
-  const identity = run?.id ?? chatId
+  // A draft chat has only a local UI id. Ancillary stores must wait for the
+  // harness session id before querying their server endpoints.
+  const identity = run?.id ?? ''
   const events = run?.events
   const researchMode = run?.researchMode
   const sync = useResearchStore((s) => s.sync)

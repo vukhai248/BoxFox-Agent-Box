@@ -20,7 +20,7 @@ Commit neo trước khi sửa: `3a7858f`.
 - Phiên cũ giữ Docker. Đổi môi trường/folder của phiên đã gắn tạo chat mới.
 - Child kế thừa binding của owner; không nhận override folder từ model.
 - Executor chọn host/Docker theo binding của từng phiên. Host không fallback sang Docker khi tool không hỗ trợ.
-- Host đọc file trong folder đã chọn; ghi/chạy lệnh cần trust. Agent mutation còn qua approver và policy.
+- Host đọc file trong folder đã chọn; ghi/chạy lệnh đi qua permission policy và approver. Folder chỉ xác định workspace.
 - Thu hồi trust được kiểm lại dù executor đã cache.
 - Host Files/IDE có đọc, editor UTF-8, lưu với hash chống ghi đè file đã đổi.
 - Host Integrated Terminal hiện là command runner Windows, không phải PTY.
@@ -106,7 +106,7 @@ Neo trước thay đổi: `63fed3e6`. Vẫn nhánh `codex/web-machine-modes`.
 - Session backend vẫn tạo theo cơ chế hiện hữu khi gửi tin đầu; draft chưa gửi hiện ở sidebar của project đang mở, không tuyên bố đã lưu SQLite.
 - Sau khi phiên được lưu, alias frontend được đối chiếu ID backend để tránh hiện hai hàng draft/session.
 - Xóa phiên hiện tại chọn phiên tiếp theo cùng project/môi trường; nếu hết thì mở draft đúng binding cũ.
-- Không tự trust folder, không sửa router/provider, không làm desktop packaging.
+- Không có cơ chế trust folder riêng; không sửa router/provider, không làm desktop packaging.
 
 Source bổ sung: `frontend/src/components/shell/Sidebar.tsx`, `frontend/src/lib/machineSession.ts`, `frontend/src/components/shell/SearchSessionsModal.tsx`.
 
@@ -130,7 +130,7 @@ Neo trước patch: `d6e19954`, nhánh `codex/web-machine-modes`.
 - Helper chạy STA, có owner để dialog hiện phía trước. Probe so sánh cho thấy bản cũ cũng có thể hiện trong môi trường kiểm; chưa chứng minh mọi lần không hiện đều do cùng một nguyên nhân. Bản mới được kiểm riêng với helper hidden và cửa sổ Windows thật.
 - Sidebar mở form Tạo dự án: tên → Add/chọn folder → hiển thị đường dẫn → Create project. Chọn folder hoặc hủy form không thêm project, đổi môi trường hoặc tạo draft.
 - API `selectOnly: true` chỉ trả đường dẫn. Các caller cũ vẫn dùng hành vi đăng ký folder hiện hữu. API projects nhận tên tùy chọn, giới hạn 120 ký tự và cấm ký tự điều khiển; folder trùng giữ ID/tên/quyền cũ.
-- Create project mới đăng ký folder, chọn project host và mở draft đúng binding. Không tự trust project; quyền sửa/chạy vẫn theo cơ chế hiện có.
+- Create project mới đăng ký folder, chọn project host và mở draft đúng binding. Quyền sửa/chạy do permission policy quyết định.
 - Picker đang mở trả `FOLDER_PICKER_BUSY`, không xếp thêm dialog trùng. Timeout trả lỗi riêng; không suy là user đã bấm Cancel. JSON sai hoặc không mở được helper có lỗi rõ.
 - Form giữ i18n vi/en, focus và Escape/Cancel; không sửa provider/model/thinking/DAG hoặc đóng gói app.
 

@@ -27,7 +27,7 @@ const originalAgent = useAgentStore.getState()
 
 function permissionSnapshot(overrides: Record<string, unknown> = {}) {
   return {
-    mode: 'ask', modeDefault: 'ask', modes: ['ask', 'auto', 'trusted'],
+    mode: 'ask', modeDefault: 'ask', modes: ['ask', 'auto', 'advance', 'full-machine'],
     capabilities: { read: true, write: 'ask', exec: 'ask', cua: 'ask' },
     scope: 'workspace', scopeDefault: 'machine', scopes: ['workspace', 'machine'],
     network: 'restricted', networkDefault: 'restricted', networks: ['restricted', 'enabled'],
@@ -79,7 +79,7 @@ beforeEach(() => {
       if (putError) throw putError
       puts.push(body ?? {})
       snapshot = permissionSnapshot({ ...snapshot, ...(body ?? {}),
-        scope: (body?.mode ?? snapshot.mode) === 'trusted' ? 'machine' : 'workspace' })
+        scope: ['advance', 'full-machine'].includes(String(body?.mode ?? snapshot.mode)) ? 'machine' : 'workspace' })
     }
     return snapshot
   })
@@ -117,12 +117,12 @@ describe('PermissionModePicker', () => {
     expect(chip()?.textContent).toContain('Auto')
   })
 
-  it('Full access derives whole-machine scope without a separate chooser', async () => {
+  it('Full machine access derives whole-machine scope without a separate chooser', async () => {
     await render()
     await act(async () => chip()?.click())
     expect(menuItem('Whole machine')).toBeUndefined()
-    await act(async () => menuItem('Full access')?.click())
-    expect(puts).toEqual([{ mode: 'trusted', layer: 'user' }])
+    await act(async () => menuItem('Full machine access')?.click())
+    expect(puts).toEqual([{ mode: 'full-machine', layer: 'user' }])
     expect(chip()?.dataset.permissionScope).toBe('machine')
     expect(chip()?.title).toContain('Whole machine')
   })
@@ -138,11 +138,11 @@ describe('PermissionModePicker', () => {
     expect(chip()?.dataset.permissionNetwork).toBe('enabled')
   })
 
-  it('offers exactly three levels, no Scope section and unchanged Internet choices', async () => {
+  it('offers exactly four levels, no Scope section and unchanged Internet choices', async () => {
     await render()
     await act(async () => chip()?.click())
-    expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(5)
-    for (const label of ['Request approval', 'Auto approve', 'Full access', 'Ask before network access', 'Allow network access']) {
+    expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(6)
+    for (const label of ['Request approval', 'Auto approve', 'Advanced access', 'Full machine access', 'Ask before network access', 'Allow network access']) {
       expect(menuItem(label)).toBeDefined()
     }
     expect(host.querySelector('[data-testid="composer-permission-scope"]')).toBeNull()
@@ -153,7 +153,7 @@ describe('PermissionModePicker', () => {
     putError = new Error('PERMISSION_LAYER_UNKNOWN: tầng `user` không tồn tại')
     await render()
     await act(async () => chip()?.click())
-    await act(async () => menuItem('Full access')?.click())
+    await act(async () => menuItem('Full machine access')?.click())
     expect(chip()?.dataset.permissionMode).toBe('ask')
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('PERMISSION_LAYER_UNKNOWN')
   })

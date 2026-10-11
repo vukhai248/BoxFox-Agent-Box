@@ -40,6 +40,7 @@ from pathlib import Path
 from ..agent_core import cua_target as cua_target_module
 from ..agent_core import permissions as permissions_module
 from . import output_refs
+from . import host_session_ops
 from .win.errors import PlatformError
 
 #: Mã lỗi cho công cụ v1 chưa có trên host. Có mã để model phân biệt "chưa làm" với "hỏng".
@@ -198,6 +199,7 @@ def approval_reason(decision, tool='', args=None):
 #: Công cụ v1 chạy được trên host. Danh sách này là HỢP ĐỒNG với tài liệu `docs/plan/desktop-host-mode.md`.
 HOST_TOOLS = ('file_read', 'codebase_glob', 'codebase_grep', 'file_write', 'file_edit_block',
               'terminal_exec')
+HOST_SESSION_TOOLS = ('session_ensure', 'journal_append', 'checkpoint_write')
 
 #: Công cụ CUA CHỈ ĐỌC (H5/H6): chụp màn hình và soi phần tử. Vẫn cần lease, không cần mutex input.
 CUA_OBSERVE_TOOLS = ('computer_screen_capture', 'inspect_element')
@@ -205,11 +207,12 @@ CUA_OBSERVE_TOOLS = ('computer_screen_capture', 'inspect_element')
 CUA_INPUT_TOOLS = ('computer_use',)
 CUA_TOOLS = CUA_OBSERVE_TOOLS + CUA_INPUT_TOOLS
 HOST_TOOLS = HOST_TOOLS + CUA_TOOLS
+HOST_TOOLS = HOST_TOOLS + HOST_SESSION_TOOLS
 
 #: Công cụ tồn tại trong catalog nhưng CHƯA có trên host — trả lỗi có mã thay vì "unknown tool".
 DEFERRED_TOOLS = ('browser_use', 'computer_screen_record', 'verify_exec', 'write_plan', 'dossier_write',
                   'design_write', 'design_diff', 'design_branch_create', 'design_file_sha',
-                  'design_revert', 'session_ensure', 'journal_append', 'checkpoint_write',
+                  'design_revert',
                   'captures_prune', 'codebase_symbols')
 
 BINARY_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.tif', '.tiff', '.pdf',
@@ -324,7 +327,7 @@ class HostExecutor:
     execution_mode = 'host'
 
     def __init__(self, workspace=None, *, policy=None, platform=None, approver=None, env=None,
-                 artifacts_dir=None, root=None, desktop=None, targets=None, trusted=False,
+                 artifacts_dir=None, root=None, desktop=None, targets=None,
                  overlay=None):
         source = os.environ if env is None else env
         self.env = source
@@ -349,7 +352,6 @@ class HostExecutor:
         self.targets = targets
         #: Folder dự án đã được người dùng xác nhận tin cậy. Chỉ đường `computer_use` và việc MỞ
         #: ứng dụng mới cần nó; chụp/soi (chỉ đọc) chạy được trong folder chưa tin cậy.
-        self.trusted = bool(trusted)
         #: Viền báo vùng đang bị điều khiển trên màn hình thật (`CuaOverlay`), `None` ⇒ không vẽ.
         self.overlay = overlay
         self._prepared = False
@@ -436,6 +438,14 @@ class HostExecutor:
         args = args if isinstance(args, dict) else {}
         if name not in HOST_TOOLS:
             return unsupported_result(name)
+        if name in HOST_SESSION_TOOLS:
+            payload = dict(args)
+            payload.setdefault('session', session)
+            # Host sessions use the selected workspace as the history root.
+            # An explicit root is still honored by tests and internal callers.
+            payload.setdefault('root', str(self.workspace / '.session-history'))
+            payload.setdefault('workspace', str(self.workspace))
+            return await asyncio.to_thread(host_session_ops.run, name, payload)
         # `__target` là kênh NỘI BỘ do executor tự gắn để `resource_key` thấy đích đã phân giải.
         # Model gửi kèm khoá này là giả mạo: nó sẽ khiến thẻ duyệt và `resource_key` nói về một đích
         # khác với đích thật sự bị chạm vào (ví dụ xin quyền theo `cua:app:notepad` rồi mở Chrome).
@@ -650,8 +660,6 @@ class HostExecutor:
         Điều kiện nền tảng hỏi thẳng nền tảng desktop (`launch_app`) chứ không so `sys.platform`:
         Windows mở bằng `ShellExecuteW`, Linux mở bằng `execv` trong session riêng.
         """
-        if not self.trusted:
-            return ''
         platform = self._desktop_platform()
         if platform is None or getattr(platform, 'launch_app', None) is None:
             return ''

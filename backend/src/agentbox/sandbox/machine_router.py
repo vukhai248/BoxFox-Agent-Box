@@ -3,7 +3,6 @@ import asyncio
 import hashlib
 import json
 import os
-import sqlite3
 import subprocess
 import time
 import uuid
@@ -12,7 +11,8 @@ from pathlib import Path
 from ..agent_core import cua_target
 from ..agent_core.permissions import PermissionPolicy
 from .host_executor import (HostExecutor, approval_options, approval_reason, approval_verdict,
-                            error_result)
+                            error_result, HOST_SESSION_TOOLS)
+from . import host_session_ops
 
 
 class MachineError(ValueError):
@@ -30,22 +30,8 @@ class MachineRegistry:
                 singleton INTEGER PRIMARY KEY CHECK(singleton=1),
                 revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
             CREATE TABLE IF NOT EXISTS web_machine_projects (
-                id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
-                trusted INTEGER NOT NULL DEFAULT 0);
+                id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL);
         ''')
-        # CSDL tạo trước commit `63fed3e` chưa có cột `trusted`: `CREATE TABLE IF NOT EXISTS` không
-        # thêm cột cho bảng đã tồn tại, nên phải tự vá (cùng cách `session_store`). Hỏng thì KHÔNG
-        # chặn khởi động, nhưng phải ghi log: thiếu cột mà im lặng thì mọi route máy đổ `IndexError`
-        # ở chỗ đọc `project['trusted']` (vòng review đợt 1b).
-        try:
-            columns = {row['name'] for row in self.db.execute('PRAGMA table_info(web_machine_projects)')}
-            if 'trusted' not in columns:
-                self.db.execute('ALTER TABLE web_machine_projects '
-                                'ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0')
-            self.db.commit()
-        except sqlite3.DatabaseError as exc:
-            self.db.rollback()
-            self._log('machine_trusted_column_failed', f'không vá được cột `trusted`: {exc}')
         # Bản desktop chạy tiến trình ở chế độ host và không có box nào để trỏ tới, nên cấu hình
         # mặc định phải là host NGAY TỪ DÒNG ĐẦU TIÊN — nếu không, giao diện mở ra đã nói "Docker"
         # trong khi mọi công cụ chạy trên máy thật (DA3 của bản bàn giao).
@@ -82,7 +68,7 @@ class MachineRegistry:
         row = self.db.execute('SELECT * FROM web_machine_projects WHERE id=?', (project_id,)).fetchone()
         if not row:
             raise MachineError('PROJECT_NOT_FOUND', 'Chọn lại folder dự án.', 404)
-        return {**dict(row), 'trusted': bool(row['trusted'])}
+        return {key: row[key] for key in ('id', 'path', 'name')}
 
     def state(self):
         row = dict(self.db.execute('SELECT * FROM web_machine_settings WHERE singleton=1').fetchone())
@@ -90,7 +76,7 @@ class MachineRegistry:
                 # Chế độ của TIẾN TRÌNH, khác `mode` (lựa chọn của người dùng). Giao diện dùng nó để
                 # không mời chuyển sang Docker khi bản này không có box nào (xem `update`).
                 'processMode': self.process_mode,
-                'projects': [{**dict(p), 'trusted': bool(p['trusted'])} for p in
+                'projects': [{key: p[key] for key in ('id', 'path', 'name')} for p in
                              self.db.execute('SELECT * FROM web_machine_projects ORDER BY name,path')]}
 
     def active_project(self):
@@ -141,14 +127,6 @@ class MachineRegistry:
             raise MachineError('MACHINE_REVISION_CONFLICT', 'Cấu hình đã đổi.', 409)
         self.db.commit()
         return self.state()
-
-    def trust(self, project_id, value):
-        self.project(project_id)
-        if type(value) is not bool:
-            raise MachineError('PROJECT_TRUST_INVALID', 'trusted phải là boolean.')
-        self.db.execute('UPDATE web_machine_projects SET trusted=? WHERE id=?', (int(value), project_id))
-        self.db.commit()
-        return self.project(project_id)
 
     def new_binding(self, values, parent_id=None):
         if parent_id:
@@ -345,7 +323,7 @@ class SessionMachineExecutor:
     def policy_for(self, project=None):
         """`PermissionPolicy` dùng cho các ROUTE quyền (`GET/PUT /api/agent/permissions`).
 
-        Chế độ (`plan`/`ask`/`auto`/`trusted`) và phạm vi (`workspace`/`machine`) KHÔNG được ghim ở
+        Chế độ (`plan`/`ask`/`auto`/`full-machine`) và phạm vi (`workspace`/`machine`) KHÔNG được ghim ở
         đây: chúng đọc từ bốn tầng luật (`PermissionPolicy.mode_value()`), nên nút chọn quyền ở thanh
         chat và tab Settings → Machines có hiệu lực thật. Trước đây policy của phiên bị ghim
         `mode='ask'` ⇒ mọi thay đổi của người dùng bị bỏ qua.
@@ -435,15 +413,11 @@ class SessionMachineExecutor:
                 return approval_verdict(outcome, decision, name)
             self.hosts[sid] = HostExecutor(project['path'], policy=policy, approver=approve,
                                            artifacts_dir=self.profile_dir / 'host-artifacts' / project['id'] / sid,
-                                           desktop=self.desktop, targets=self.targets,
-                                           trusted=bool(project.get('trusted')), overlay=self.overlay)
+                                           desktop=self.desktop, targets=self.targets, overlay=self.overlay)
         executor = self.hosts[sid]
         # Người dùng có thể đổi chế độ quyền giữa hai lượt (thanh chat hoặc Settings → Machines):
         # đọc lại bốn tầng luật trước mỗi lời gọi tool để lượt sau không dùng bản cũ.
         executor.policy.reload()
-        # Cùng lý do với quyền: người dùng có thể xác nhận tin cậy folder SAU khi phiên đã mở. Đọc
-        # lại ở đây để "tin cậy" không bị ghim ở giá trị lúc dựng executor.
-        executor.trusted = bool(project.get('trusted'))
         return executor, project
 
     async def execute(self, name, args, session, **identity):
@@ -462,16 +436,16 @@ class SessionMachineExecutor:
             binding = self.registry.binding(session)
             if binding['mode'] == 'docker':
                 return await self.legacy.execute(name, args, session, **identity)
+            # Session journal is harness bookkeeping and must work before a project is selected.
+            # Agent tools still fail closed through `host()` with PROJECT_REQUIRED.
+            if name in HOST_SESSION_TOOLS and not binding.get('projectId'):
+                payload = dict(args if isinstance(args, dict) else {})
+                payload.setdefault('session', session)
+                payload.setdefault('root', str(self.profile_dir / 'host-session-history'))
+                payload.setdefault('workspace', str(self.profile_dir))
+                return await asyncio.to_thread(host_session_ops.run, name, payload)
             host, project = self.host(session)
-            # Hai công cụ QUAN SÁT của CUA không đòi folder phải tin cậy (kế hoạch §"Đường CUA",
-            # mục 5): chúng chỉ đọc màn hình/cửa sổ mà người dùng đã chọn cho phiên, vẫn qua thẻ duyệt
-            # ở tầng executor. Mọi công cụ ghi/chạy — kể cả `computer_use` — vẫn phải tin cậy folder.
-            observed = name in ('file_read', 'codebase_glob', 'codebase_grep',
-                                'computer_screen_capture', 'inspect_element')
-            if not observed and not project['trusted']:
-                return error_result('PROJECT_TRUST_REQUIRED', 'Xác nhận tin cậy folder trước khi sửa/chạy lệnh.')
-            # CUA đã bật: chốt cũ `HOST_CUA_NOT_ENABLED` bị gỡ. Riêng việc MỞ ứng dụng còn cần phạm
-            # vi `machine` và folder tin cậy (xem `HostExecutor._launchable_app`).
+            # Journal persistence is harness bookkeeping; all agent actions are decided by policy.
             root = identity.get('root')
             if root:
                 target = Path(root)
@@ -547,24 +521,21 @@ def register_routes(app, runtime):
                     result = await asyncio.to_thread(pick_folder)
                     if result.get('path') and value.get('selectOnly') is not True:
                         result = registry.register(result['path'])
-            elif op == 'trust':
-                value = await request.json()
-                result = registry.trust(value.get('projectId'), value.get('trusted'))
             return web.json_response(result)
         except MachineError as exc:
             return web.json_response({'error': f'{exc.code}: {exc}', 'code': exc.code}, status=exc.status)
     picker_lock = asyncio.Lock()
     app.router.add_get('/api/agent/machines/{op:configuration}', handler)
     app.router.add_put('/api/agent/machines/{op:configuration}', handler)
-    app.router.add_post('/api/agent/machines/{op:projects|pick-folder|trust}', handler)
+    app.router.add_post('/api/agent/machines/{op:projects|pick-folder}', handler)
 
     async def workspace(request):
         try:
             project = registry.project(request.match_info['pid'])
             if not Path(project['path']).is_dir():
                 raise MachineError('PROJECT_UNAVAILABLE', 'Folder không còn tồn tại.', 409)
-            policy = PermissionPolicy(project['path'], mode='ask', scope='workspace',
-                                      profile_dir=runtime.executor.profile_dir / 'host-ui-permissions' / project['id'])
+            policy = runtime.executor.policy_for(project)
+            policy.reload()
             host = HostExecutor(project['path'], policy=policy)
             op = request.match_info['op']
             if request.method == 'GET':
@@ -590,8 +561,6 @@ def register_routes(app, runtime):
                         raise MachineError('FILE_BINARY', 'File nhị phân không mở bằng editor văn bản.')
                     result = {'path': request.query.get('path'), 'content': raw.decode('utf-8'), 'hash': hashlib.sha256(raw).hexdigest()}
             else:
-                if not project['trusted']:
-                    raise MachineError('PROJECT_TRUST_REQUIRED', 'Xác nhận tin cậy folder trước khi sửa/chạy lệnh.', 403)
                 values = await request.json()
                 if op == 'file':
                     target = host._resolve(values.get('path'))
@@ -601,6 +570,10 @@ def register_routes(app, runtime):
                     content = values.get('content')
                     if not isinstance(content, str) or len(content.encode('utf-8')) > 1024 * 1024:
                         raise MachineError('FILE_CONTENT_INVALID', 'Nội dung file tối đa 1 MiB.')
+                    decision = policy.decide('file_write', {'path': str(target), 'content': content},
+                                             session_id='ui:' + project['id'])
+                    if not decision.allowed:
+                        raise MachineError('PERMISSION_DENIED', decision.reason, 403)
                     result = host._file_write({'path': str(target), 'content': content})
                     result['hash'] = hashlib.sha256(content.encode('utf-8')).hexdigest()
                 else:
@@ -608,7 +581,7 @@ def register_routes(app, runtime):
                     if not isinstance(command, str) or not command.strip() or len(command) > 8000:
                         raise MachineError('COMMAND_INVALID', 'Cần lệnh hợp lệ.')
                     decision = policy.decide('terminal_exec', {'command': command}, session_id='ui:' + project['id'])
-                    if decision.outcome == 'deny':
+                    if decision.outcome != 'allow':
                         raise MachineError('PERMISSION_DENIED', decision.reason, 403)
                     # Explicit user action in the command panel; never reused as agent approval.
                     result = await host._terminal_exec({'command': command, 'timeout': 30}, 'ui:' + project['id'])

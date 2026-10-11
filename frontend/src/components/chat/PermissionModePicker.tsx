@@ -18,12 +18,12 @@ import { useT } from '../../i18n/context'
 import type { PermissionMode, PermissionNetwork, PermissionScope } from '../../types/machinePermissions'
 
 /** Thứ tự hiển thị cố định: từ chặt nhất tới rộng nhất, không theo thứ tự máy chủ trả về. */
-const MODE_ORDER: PermissionMode[] = ['ask', 'auto', 'trusted']
+const MODE_ORDER: PermissionMode[] = ['ask', 'auto', 'advance', 'full-machine']
 const NETWORK_ORDER: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Chế độ `trusted` cho phép sửa và chạy không hỏi ⇒ tô đỏ để không ai bật nhầm. */
 function modeTone(mode: PermissionMode): string {
-  if (mode === 'trusted') return 'text-rose-400'
+  if (mode === 'trusted' || mode === 'full-machine') return 'text-rose-400'
   if (mode === 'auto') return 'text-amber-400'
   if (mode === 'ask') return 'text-emerald-400'
   return 'text-sky-400'
@@ -41,6 +41,7 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [pendingMode, setPendingMode] = useState<PermissionMode | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
 
   const hostMode = machine.mode === 'host'
@@ -87,7 +88,7 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
   }, [open])
 
   const patch = useCallback(
-    async (next: { mode?: PermissionMode; network?: PermissionNetwork }) => {
+    async (next: { mode?: PermissionMode; network?: PermissionNetwork; confirmed?: boolean }) => {
       const previous = { mode, scope, network }
       if (next.mode) setMode(next.mode)
       if (next.network) setNetwork(next.network)
@@ -104,7 +105,11 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
         setMode(previous.mode)
         setScope(previous.scope)
         setNetwork(previous.network)
-        setError(exc instanceof Error ? exc.message : String(exc))
+        const code = typeof exc === 'object' && exc !== null && 'code' in exc ? String((exc as { code?: unknown }).code) : ''
+        if (code === 'PERMISSION_CONFIRMATION_REQUIRED' && next.mode === 'full-machine') {
+          setPendingMode(next.mode)
+          setError('Full machine access requires confirmation.')
+        } else setError(exc instanceof Error ? exc.message : String(exc))
       } finally {
         setBusy(false)
       }
@@ -204,6 +209,15 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
             <p role="alert" className="px-2 pt-1 pb-0.5 text-[10px] text-amber-400">
               {error}
             </p>
+          )}
+          {pendingMode === 'full-machine' && (
+            <div className="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2 text-[10px] text-rose-200">
+              <p>Full machine access can run commands across the host. Safety hardlines still apply.</p>
+              <div className="mt-2 flex justify-end gap-1.5">
+                <button type="button" className="rounded border border-line px-2 py-1" onClick={() => setPendingMode(null)}>Cancel</button>
+                <button type="button" className="rounded bg-rose-500 px-2 py-1 text-white" onClick={() => { setPendingMode(null); void patch({ mode: 'full-machine', confirmed: true }) }}>Confirm</button>
+              </div>
+            </div>
           )}
         </div>
       )}

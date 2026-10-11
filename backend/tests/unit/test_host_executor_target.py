@@ -49,7 +49,7 @@ def _clean_state():
     reset_win_state()
 
 
-def build(tmp_path, *, windows=None, env=None, approver=None, trusted=True, targets=None,
+def build(tmp_path, *, windows=None, env=None, approver=None, targets=None,
           platform=None, desktop=True):
     fake = platform if platform is not None else FakePlatform(windows=windows)
     profile = tmp_path / 'profile'
@@ -60,7 +60,7 @@ def build(tmp_path, *, windows=None, env=None, approver=None, trusted=True, targ
     policy = permissions_module.PermissionPolicy(WORKSPACE, env=source, home=tmp_path)
     executor = host_module.HostExecutor(
         workspace=tmp_path / 'workspace', policy=policy, platform='win32', desktop=control,
-        approver=approver, artifacts_dir=tmp_path / 'artifacts', trusted=trusted,
+        approver=approver, artifacts_dir=tmp_path / 'artifacts',
         targets=targets)
     return executor, fake
 
@@ -210,11 +210,11 @@ def test_the_agent_never_launches_an_app_the_user_did_not_ask_for(tmp_path):
     assert platform.notes == []
 
 
-def test_launching_needs_a_trusted_project_folder(tmp_path):
+def test_launching_needs_machine_permission(tmp_path):
     platform = FakePlatform(windows=[CHROME])
     platform.launch_app = lambda app: platform.notes.append('launch:%s' % app) or 42
     executor, _fake = build(tmp_path, windows=[CHROME], platform=platform, targets=store_with(),
-                            trusted=False)
+                            env={'BOXFOX_PERMISSION_SCOPE': 'workspace'})
     payload = run(executor, 'computer_use', {'action': 'type', 'text': 'a', 'app': 'notepad'})
     assert payload.get('is_error') is True
     assert platform.notes == []

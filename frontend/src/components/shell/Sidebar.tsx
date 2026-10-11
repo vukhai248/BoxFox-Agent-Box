@@ -158,7 +158,7 @@ export function Sidebar() {
     const binding = bindings[session.session_id]
     if (binding?.mode === 'host' && binding.projectId && !projects.some(p => p.id === binding.projectId)) {
       projects.push({id: binding.projectId, path: binding.workspace ?? '',
-        name: binding.workspace?.split(/[\\/]/).filter(Boolean).pop() ?? binding.projectId, trusted: false})
+        name: binding.workspace?.split(/[\\/]/).filter(Boolean).pop() ?? binding.projectId})
     }
   }
   const sessionBinding = (session: SessionSummary): MachineBinding => bindings[session.session_id] ?? DOCKER_BINDING

@@ -669,7 +669,10 @@ export const useHarnessChatStore = create<State>((set, get) => ({
   refresh: async (chatId) => {
     const captured = get().sessions[chatId]
     const current = captured ?? empty()
-    const id = current.id ?? (isHexId(chatId) ? chatId : localStorage.getItem(storageKey(chatId)))
+    // A newly-created web chat uses a local hex UI id before POST /sessions returns.
+    // Treating that UI id as a durable harness id races the create request and produces
+    // a transient SESSION_NOT_FOUND banner even though the first turn succeeds.
+    const id = current.id ?? localStorage.getItem(storageKey(chatId))
     if (!id) return
     const request = Symbol('session-refresh')
     refreshRequests.set(chatId, request)

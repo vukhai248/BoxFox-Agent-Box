@@ -1040,11 +1040,17 @@ def create_app(runtime):
             data = dict(policy.layers.get(layer) or {})
             changed = {}
             mode = str(payload.get('mode') or '').strip().lower()
+            legacy_trusted = mode == permissions_module.MODE_TRUSTED
             if mode == permissions_module.MODE_PLAN:
                 mode = permissions_module.MODE_ASK  # Older clients: never migrate to auto/full access.
+            if mode == permissions_module.MODE_TRUSTED:
+                mode = permissions_module.MODE_FULL_MACHINE
             if mode:
                 if mode not in permissions_module.MODES:
                     raise ApiError('PERMISSION_MODE_UNKNOWN', 'chế độ `%s` không có' % mode, 400)
+                if mode == permissions_module.MODE_FULL_MACHINE and not legacy_trusted and payload.get('confirmed') is not True:
+                    raise ApiError('PERMISSION_CONFIRMATION_REQUIRED',
+                                   'Full machine access requires explicit confirmation.', 428)
                 data['mode'] = mode
                 changed['mode'] = mode
             scope = str(payload.get('scope') or '').strip().lower()

@@ -16,7 +16,9 @@ export function useDesignSync(): DesignMode {
   const run = useHarnessChatStore((s) => s.sessions[chatId])
   // Danh tính ỔN ĐỊNH của phiên: id server khi đã biết, nếu không thì khoá cục bộ — cùng quy ước với
   // `useResearchSync` để sổ mốc `seq` không bị tách làm hai.
-  const identity = run?.id ?? chatId
+  // A draft chat has only a local UI id. Do not use it as a server session id:
+  // the design store would query `/design/runs` and briefly show SESSION_NOT_FOUND.
+  const identity = run?.id ?? ''
   const events = run?.events
   const designMode = run?.designMode
   const sync = useDesignStore((s) => s.sync)

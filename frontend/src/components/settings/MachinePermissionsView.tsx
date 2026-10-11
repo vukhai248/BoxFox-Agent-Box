@@ -4,7 +4,7 @@
  * Một tab cho phần host mode đã chốt ở `docs/plan/desktop-host-mode.md`:
  *
  * - **Chế độ chạy** — `docker` hay `host`, giá trị đang cấu hình và giá trị mặc định;
- * - **Quyền** — ba mức (ask/auto/trusted), phạm vi file suy từ mức; mạng độc lập,
+ * - **Quyền** — bốn mức (ask/auto/advance/full-machine), phạm vi file suy từ mức; mạng độc lập,
  *   bảng năng lực đọc/ghi/lệnh/CUA, số mục sàn cứng và số lần đã va;
  * - **Luật** — từng luật kèm tầng + tệp nguồn, thu hồi được (có xác nhận);
  * - **Thẻ duyệt đang chờ** — bốn câu trả lời: một lần / phiên / luôn / từ chối;
@@ -64,7 +64,7 @@ const BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-line b
 const DANGER_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 transition hover:border-red-500 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer dark:text-red-400'
 
 /** Three levels and independent network choices; fallback when the server omits its list. */
-const MODE_FALLBACK: PermissionMode[] = ['ask', 'auto', 'trusted']
+const MODE_FALLBACK: PermissionMode[] = ['ask', 'auto', 'advance', 'full-machine']
 const NETWORK_FALLBACK: PermissionNetwork[] = ['restricted', 'enabled']
 
 /** Bốn dòng của bảng năng lực — nhãn người dùng, khoá lấy từ `capabilities`. */
@@ -168,6 +168,7 @@ export function MachinePermissionsView() {
   const [rules, setRules] = useState<PermissionRulesSnapshot | null>(null)
   const [pending, setPending] = useState<PendingApproval[]>([])
   const [lease, setLease] = useState<DesktopLease | null>(null)
+  const [pendingMode, setPendingMode] = useState<PermissionMode | null>(null)
 
   /** Đọc lại toàn bộ: health (rẻ, luôn có) → quyền/luật/thẻ duyệt → lease. */
   const load = useCallback(async () => {
@@ -240,9 +241,18 @@ export function MachinePermissionsView() {
     [load],
   )
 
-  const changeMode = (mode: PermissionMode) =>
+  const changeMode = (mode: PermissionMode, confirmed = false) =>
     void runAction(async () => {
-      await updatePermissions({ mode, layer: 'user' })
+      try {
+        await updatePermissions({ mode, layer: 'user', ...(confirmed ? { confirmed: true } : {}) })
+        setPendingMode(null)
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'PERMISSION_CONFIRMATION_REQUIRED') {
+          setPendingMode(mode)
+          return
+        }
+        throw err
+      }
     }, 'Đã lưu chế độ quyền.')
 
   const changeNetwork = (network: PermissionNetwork) =>
@@ -426,6 +436,15 @@ export function MachinePermissionsView() {
                   {t(`composer.permission.scopeHint.${snapshot.scope}`)}{' '}
                   {t(snapshot.network === 'enabled' ? 'composer.permission.hint.networkEnabled' : 'composer.permission.hint.networkRestricted')}
                 </p>
+                {pendingMode === 'full-machine' && (
+                  <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200">
+                    <p>Full machine access can run commands across the host. Safety hardlines still apply.</p>
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" className={BUTTON} onClick={() => setPendingMode(null)}>Cancel</button>
+                      <button type="button" className={DANGER_BUTTON} onClick={() => changeMode('full-machine', true)}>Confirm</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-4 overflow-hidden rounded-lg border border-line">
                   <table className="w-full text-xs">
@@ -456,7 +475,7 @@ export function MachinePermissionsView() {
                 <p data-testid="mp-hardline" className="mt-3 text-[11px] leading-relaxed text-muted">
                   Sàn cứng: <span className="font-semibold text-fg">{snapshot.hardlineCount}</span> mục — đã chặn{' '}
                   <span className="font-semibold text-fg">{snapshot.hardlineHits}</span> lần. Không chế độ nào,
-                  kể cả <code className="font-mono">trusted</code>, bỏ qua được.
+                  kể cả <code className="font-mono">full-machine</code>, bỏ qua được.
                 </p>
               </section>
 

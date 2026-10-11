@@ -55,8 +55,7 @@ export function HostWorkspacePanel({ view }: { view: 'files' | 'editor' | 'termi
     {view === 'terminal' ? <>
       <p className="text-muted">PowerShell on Windows. Runs as your user account; no OS sandbox. This checkpoint is a command runner, not an interactive terminal.</p>
       <textarea aria-label="Host command" value={command} onChange={e => setCommand(e.target.value)} rows={3} className="rounded border border-line bg-panel2 p-2 font-mono" />
-      <button disabled={busy || !project?.trusted || !command.trim()} onClick={() => void run()} className="self-start rounded border border-line px-3 py-1">{busy ? 'Running…' : 'Run command'}</button>
-      {!project?.trusted && <p className="text-muted">Trust this folder in Configuration before running commands.</p>}
+      <button disabled={busy || !command.trim()} onClick={() => void run()} className="self-start rounded border border-line px-3 py-1">{busy ? 'Running…' : 'Run command'}</button>
       <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap font-mono">{output}</pre>
     </> : <div className="flex min-h-0 flex-1 gap-3">
       <aside className="w-48 shrink-0 overflow-auto border-r border-line pr-2">
@@ -64,7 +63,7 @@ export function HostWorkspacePanel({ view }: { view: 'files' | 'editor' | 'termi
         {entries.map(entry => <button key={entry.path} onClick={() => void open(entry)} className="block w-full truncate py-1 text-left">{entry.directory ? '▸ ' : ''}{entry.name}</button>)}
       </aside><div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-center justify-between"><span>{path || 'Select a UTF-8 file'}{dirty ? ' · modified' : ''}</span>
-          <button disabled={!path || !dirty || busy || !project?.trusted} onClick={() => void save()} className="rounded border border-line px-3 py-1">Save</button></div>
+          <button disabled={!path || !dirty || busy} onClick={() => void save()} className="rounded border border-line px-3 py-1">Save</button></div>
         <textarea aria-label="Local file editor" value={content} disabled={!path} onChange={e => { setContent(e.target.value); setDirty(true) }} className="min-h-0 flex-1 resize-none rounded border border-line bg-panel2 p-3 font-mono text-xs" spellCheck={false} />
       </div></div>}
   </div>

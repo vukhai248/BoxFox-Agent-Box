@@ -388,6 +388,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   }),
 
   sync: (sessionId, config, events) => {
+    if (!sessionId) {
+      if (get().sessionId) get().clearSessionChange()
+      set({ sessionId: '', mode: DESIGN_MODE_OFF })
+      return
+    }
     const switched = sessionId !== get().sessionId
     if (switched) get().clearSessionChange()
     const mode = readDesignMode(config)

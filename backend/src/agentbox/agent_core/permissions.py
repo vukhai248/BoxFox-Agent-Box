@@ -11,7 +11,7 @@ Ba quyết định thiết kế, và lý do:
 
 * **Ngữ pháp luật sao chép Claude Code** (`Tool` hoặc `Tool(specifier)`) — người dùng đã biết nó,
   tài liệu sẵn có, và nó đủ diễn đạt cả đường dẫn (gitignore), lệnh (glob), lẫn domain.
-* **Ba mức phê duyệt** (`ask`, `auto`, `trusted`): phạm vi suy từ mức, mạng độc lập.
+* **Bốn mức phê duyệt** (`ask`, `auto`, `advance`, `full-machine`): phạm vi suy từ mức, mạng độc lập.
   Lệnh khảo sát được nhận diện có thể chạy ở `ask`; shell host không phải sandbox OS.
 * **Sàn cứng nằm trong code, không nằm trong tệp cấu hình** — luật `deny` của người dùng có thể bị
   sửa tay, còn một lệnh xoá sạch ổ đĩa thì không được phép "quên". `hardline_reason()` chạy TRƯỚC
@@ -33,8 +33,10 @@ from pathlib import Path
 
 from . import cua_target as _cua_target
 
-MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_TRUSTED = 'plan', 'ask', 'auto', 'trusted'
-MODES = (MODE_ASK, MODE_AUTO, MODE_TRUSTED)
+MODE_PLAN, MODE_ASK, MODE_AUTO, MODE_ADVANCE, MODE_FULL_MACHINE = 'plan', 'ask', 'auto', 'advance', 'full-machine'
+# `trusted` is retained as a read-compatible legacy value and canonicalized to full-machine.
+MODE_TRUSTED = 'trusted'
+MODES = (MODE_ASK, MODE_AUTO, MODE_ADVANCE, MODE_FULL_MACHINE)
 MODE_DEFAULT = MODE_ASK
 
 SCOPE_WORKSPACE, SCOPE_MACHINE = 'workspace', 'machine'
@@ -63,6 +65,8 @@ BARE_TOOLS = ('computer_use', 'computer_screen_capture', 'inspect_element')
 MODE_CAPABILITIES = {
     MODE_ASK: {'read': True, 'write': 'ask', 'exec': 'ask', 'cua': 'ask'},
     MODE_AUTO: {'read': True, 'write': 'allow', 'exec': 'allow', 'cua': 'ask'},
+    MODE_ADVANCE: {'read': True, 'write': 'allow', 'exec': 'ask', 'cua': 'allow'},
+    MODE_FULL_MACHINE: {'read': True, 'write': 'allow', 'exec': 'allow', 'cua': 'allow'},
     MODE_TRUSTED: {'read': True, 'write': 'allow', 'exec': 'allow', 'cua': 'allow'},
 }
 
@@ -670,7 +674,9 @@ class PermissionPolicy:
         self.env = source
         self.home = Path(home) if home else Path.home()
         self.workspace = str(workspace) if workspace else ''
-        self.mode = MODE_ASK if mode == MODE_PLAN else mode if mode in MODES else None
+        # Keep direct in-process legacy `trusted` values observable for old callers; persisted/API
+        # values are canonicalized below to `full-machine`.
+        self.mode = MODE_ASK if mode == MODE_PLAN else MODE_TRUSTED if mode == MODE_TRUSTED else mode if mode in MODES else None
         self.scope = scope if scope in SCOPES else None
         self.profile_dir = Path(profile_dir) if profile_dir else default_profile_dir(source)
         self.paths = settings_paths(workspace, env=source, home=home, install_dir=install_dir)
@@ -702,17 +708,21 @@ class PermissionPolicy:
 
     def mode_value(self):
         if self.mode:
-            return MODE_ASK if self.mode == MODE_PLAN else self.mode
+            if self.mode == MODE_PLAN:
+                return MODE_ASK
+            if self.mode == MODE_TRUSTED:
+                return MODE_TRUSTED
+            return self.mode
         for layer in reversed(LAYER_ORDER):
             value = str((self.layers.get(layer) or {}).get('mode') or '').strip().lower()
-            if value in MODES or value == MODE_PLAN:
-                return MODE_ASK if value == MODE_PLAN else value
+            if value in MODES or value in (MODE_PLAN, MODE_TRUSTED):
+                return MODE_ASK if value == MODE_PLAN else MODE_TRUSTED if value == MODE_TRUSTED else value
         raw = str(self.env.get('BOXFOX_PERMISSION_MODE') or '').strip().lower()
-        return MODE_ASK if raw == MODE_PLAN else raw if raw in MODES else MODE_DEFAULT
+        return MODE_ASK if raw == MODE_PLAN else MODE_TRUSTED if raw == MODE_TRUSTED else raw if raw in MODES else MODE_DEFAULT
 
     def scope_value(self):
         """File scope follows the approval level; old scope fields do not widen file access."""
-        return SCOPE_MACHINE if self.mode_value() == MODE_TRUSTED else SCOPE_WORKSPACE
+        return SCOPE_MACHINE if self.mode_value() in (MODE_ADVANCE, MODE_FULL_MACHINE, MODE_TRUSTED) else SCOPE_WORKSPACE
 
     def cua_scope_value(self):
         """Preserve the existing desktop target boundary independently of file approval levels.
@@ -836,11 +846,12 @@ class PermissionPolicy:
                             session_id=session_id, scope=self.scope_value())
                 return decision
             guard = self.guarded_reason(command)
-            if guard:
+            if guard and self.mode_value() not in (MODE_FULL_MACHINE,):
                 # Chạy TRƯỚC danh sách luật và trước `session_rules`: một lần cho phép là một lần,
                 # nên đã cho phép trước đó (hay ở phiên khác) cũng không bỏ qua được bước hỏi này.
                 decision = ask('lệnh thuộc nhóm luôn hỏi `%s` — chỉ cho phép một lần' % guard,
-                               'guarded:%s' % guard, 'guarded')
+                               'guarded:%s' % guard,
+                               'decisions' if self.mode_value() == MODE_ADVANCE else 'guarded')
                 self.record(tool=tool, command=command, decision=decision, actor=actor,
                             session_id=session_id, scope=self.scope_value())
                 return decision
@@ -923,6 +934,9 @@ class PermissionPolicy:
                 decision = ask('command target is outside the project or cannot be resolved', '', 'scope')
             if mode == MODE_ASK and self.inspection_command(command):
                 decision = allow('', 'inspection')
+            # Advance is machine-wide but routes guarded execution to the Decisions UI.
+            if mode == MODE_ADVANCE and decision.outcome == OUTCOME_ALLOW and self.guarded_reason(command):
+                decision = ask('lệnh rủi ro cần xác nhận trong tab Decisions', 'guarded:%s' % self.guarded_reason(command), 'decisions')
             if decision.outcome == OUTCOME_ALLOW and self.network_value() == NETWORK_RESTRICTED:
                 # Network is independent of the approval level, including Full access.
                 code = self.egress_reason(command)

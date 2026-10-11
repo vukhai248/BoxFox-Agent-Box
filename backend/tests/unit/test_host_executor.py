@@ -50,6 +50,23 @@ def test_deferred_tool_list_is_covered_by_the_same_contract(tmp_path):
         assert run(executor.execute(name, {}, 's1'))['errorCode'] == host.UNSUPPORTED_CODE
 
 
+def test_host_session_journal_uses_the_shared_file_contract(tmp_path):
+    executor = make_executor(tmp_path)
+    sid = '0123456789abcdef0123456789abcdef'
+    ensured = run(executor.execute('session_ensure', {}, sid))
+    assert ensured['ok'] is True
+    appended = run(executor.execute('journal_append', {
+        'record': {'kind': 'task', 'text': 'host journal', 'session': sid},
+    }, sid))
+    assert appended['ok'] is True
+    checkpoint = run(executor.execute('checkpoint_write', {
+        'messages': [{'role': 'user', 'content': 'hello'}],
+        'numbers': {'messageCountAfter': 1},
+    }, sid))
+    assert checkpoint['ok'] is True
+    assert (Path(executor.workspace) / '.session-history' / sid[:8] / 'journal.jsonl').is_file()
+
+
 def test_executor_keeps_the_visual_lock_attribute(tmp_path):
     executor = make_executor(tmp_path)
     assert isinstance(executor.visual_lock, asyncio.Lock), 'chỗ gọi cũ không phải rẽ nhánh theo chế độ'

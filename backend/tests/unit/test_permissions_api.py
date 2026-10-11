@@ -271,7 +271,7 @@ def test_legacy_plan_client_migrates_without_elevating_permissions(tmp_path):
         return response.status, await response.json()
     status, payload = run(tmp_path, scenario, executor=executor)
     assert status == 200 and payload['mode'] == 'ask'
-    assert payload['modes'] == ['ask', 'auto', 'trusted'] and payload['scopeDerived']
+    assert payload['modes'] == ['ask', 'auto', 'advance', 'full-machine'] and payload['scopeDerived']
 
 
 # ------------------------------------------------------------------ decide

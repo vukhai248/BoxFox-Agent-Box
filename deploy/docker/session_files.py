@@ -306,7 +306,7 @@ def session_ensure(paths: SessionPaths, meta: dict = None) -> dict:
         "parent": info.get("parent"),
         "created": utc_now_iso(),
         "goal": info.get("goal"),
-        "workspace": str(WORKSPACE_ROOT),
+        "workspace": str(info.get("workspace") or WORKSPACE_ROOT),
     }
     tmp = paths.dir / f".{SESSION_JSON_NAME}.{os.getpid()}.tmp"
     created = False

@@ -12,7 +12,7 @@
  */
 
 /** Three approval levels. Legacy `plan` is migrated to `ask` by the backend. */
-export type PermissionMode = 'ask' | 'auto' | 'trusted'
+export type PermissionMode = 'ask' | 'auto' | 'advance' | 'full-machine' | 'trusted'
 
 /** Phạm vi: `machine` là toàn máy, `workspace` siết thêm cho đường dẫn ngoài workspace. */
 export type PermissionScope = 'workspace' | 'machine'

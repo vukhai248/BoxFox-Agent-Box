@@ -88,7 +88,8 @@ def _paths(args: dict):
 def op_session_ensure(args: dict) -> dict:
     """Tạo thư mục phiên + `session.json` một lần (lười — gọi ở lần ghi đầu tiên, không lúc tạo phiên)."""
     paths = _paths(args)
-    meta = {"role": args.get("role"), "parent": args.get("parent"), "goal": args.get("goal")}
+    meta = {"role": args.get("role"), "parent": args.get("parent"), "goal": args.get("goal"),
+            "workspace": args.get("workspace")}
     result = session_files.session_ensure(paths, meta)
     if args.get("updateIndex"):
         try:

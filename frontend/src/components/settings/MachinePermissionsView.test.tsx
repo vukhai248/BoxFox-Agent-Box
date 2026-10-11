@@ -66,7 +66,7 @@ const RULE = 'terminal_exec(npm run build)'
 
 function snapshot(mode = 'ask', scope = 'machine') {
   const capabilities =
-    mode === 'trusted'
+    mode === 'full-machine'
       ? { read: true, write: 'allow', exec: 'allow', cua: 'allow' }
       : mode === 'plan'
         ? { read: true, write: false, exec: false, cua: false }
@@ -74,7 +74,7 @@ function snapshot(mode = 'ask', scope = 'machine') {
   return {
     mode,
     modeDefault: 'ask',
-    modes: ['ask', 'auto', 'trusted'],
+    modes: ['ask', 'auto', 'advance', 'full-machine'],
     capabilities,
     scope,
     scopeDefault: 'machine',
@@ -243,7 +243,7 @@ describe('MachinePermissionsView', () => {
     serverStub()
     await render()
     const select = testid('mp-mode') as HTMLSelectElement
-    expect([...select.options].map(option => option.text)).toEqual(['Request approval', 'Auto approve', 'Full access'])
+    expect([...select.options].map(option => option.text)).toEqual(['Request approval', 'Auto approve', 'Advanced access', 'Full machine access'])
     expect(testid('mp-scope')).toBeNull()
     expect([...(testid('mp-network') as HTMLSelectElement).options].map(option => option.text))
       .toEqual(['Ask before network access', 'Allow network access'])
@@ -303,14 +303,14 @@ describe('MachinePermissionsView', () => {
     await render()
 
     await act(async () => {
-      selectValue(testid('mp-mode') as HTMLSelectElement, 'trusted')
+      selectValue(testid('mp-mode') as HTMLSelectElement, 'full-machine')
     })
     await settle()
 
     expect(calls).toContainEqual({
       path: '/api/agent/permissions',
       method: 'PUT',
-      body: { mode: 'trusted', layer: 'user' },
+      body: { mode: 'full-machine', layer: 'user' },
     })
     expect(testid('mp-capability-cua')?.textContent).toBe('Cho phép')
   })

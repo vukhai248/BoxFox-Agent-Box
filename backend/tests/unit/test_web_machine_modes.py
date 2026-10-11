@@ -58,7 +58,6 @@ def test_projects_are_canonical_and_stable(harness, tmp_path):
     p = project(rt, tmp_path)
     assert rt.machine_registry.register(str(Path(p['path']) / '.'))['id'] == p['id']
     assert len(rt.machine_registry.state()['projects']) == 1
-    assert p['trusted'] is False
 
 
 def test_named_project_deduplicates_folder_without_changing_existing_name(harness, tmp_path):
@@ -66,7 +65,7 @@ def test_named_project_deduplicates_folder_without_changing_existing_name(harnes
     root = tmp_path / 'source'
     root.mkdir()
     p = rt.machine_registry.register(str(root), 'Dự án của tôi')
-    assert p['name'] == 'Dự án của tôi' and not p['trusted']
+    assert p['name'] == 'Dự án của tôi'
     assert rt.machine_registry.register(str(root), 'Tên khác')['name'] == 'Dự án của tôi'
     with pytest.raises(MachineError):
         rt.machine_registry.register(str(root), '\nInvalid')
@@ -146,7 +145,9 @@ async def test_no_project_and_untrusted_mutation_fail_closed(harness, tmp_path):
     assert (await rt.executor.execute('file_read', {'path': 'hello.txt'}, no_project['id']))['errorCode'] == 'PROJECT_REQUIRED'
     p = project(rt, tmp_path)
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
-    assert (await rt.executor.execute('file_write', {'path': 'bad.txt', 'content': 'x'}, session['id']))['errorCode'] == 'PROJECT_TRUST_REQUIRED'
+    executor, _ = rt.executor.host(session['id'])
+    executor.approver = lambda *args, **kwargs: 'deny'
+    assert (await rt.executor.execute('file_write', {'path': 'bad.txt', 'content': 'x'}, session['id']))['errorCode'] == 'PERMISSION_DENIED'
     assert not (Path(p['path']) / 'bad.txt').exists()
     legacy.execute.assert_not_called()
 
@@ -174,9 +175,9 @@ async def test_cua_observe_tools_work_in_an_untrusted_folder(monkeypatch, tmp_pa
         session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
         for tool in ('computer_screen_capture', 'inspect_element'):
             result = await rt.executor.execute(tool, {}, session['id'])
-            assert result.get('errorCode') != 'PROJECT_TRUST_REQUIRED', tool
+            assert result.get('errorCode') != 'SESSION_NOT_FOUND', tool
         assert (await rt.executor.execute('computer_use', {'action': 'type', 'text': 'a'},
-                                          session['id']))['errorCode'] == 'PROJECT_TRUST_REQUIRED'
+                                          session['id']))['errorCode'] == 'CUA_UNAVAILABLE'
         legacy.execute.assert_not_called()
     finally:
         rt.store.close()
@@ -186,7 +187,6 @@ async def test_cua_observe_tools_work_in_an_untrusted_folder(monkeypatch, tmp_pa
 async def test_host_unsupported_does_not_fall_back(harness, tmp_path):
     rt, legacy = harness
     p = project(rt, tmp_path)
-    rt.machine_registry.trust(p['id'], True)
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
     assert (await rt.executor.execute('write_plan', {}, session['id']))['errorCode'] == 'UNSUPPORTED_IN_HOST_MODE'
     executor, _ = rt.executor.host(session['id'])
@@ -200,6 +200,8 @@ async def test_host_unsupported_does_not_fall_back(harness, tmp_path):
 async def test_ui_roundtrip_conflicts_trust_and_unicode(harness, tmp_path):
     rt, _ = harness
     p = project(rt, tmp_path)
+    (Path(p['path']) / '.boxfox').mkdir()
+    (Path(p['path']) / '.boxfox' / 'settings.local.json').write_text(json.dumps({'mode': 'auto'}), encoding='utf-8')
     app = web.Application()
     register_routes(app, rt)
     async with TestClient(TestServer(app)) as client:
@@ -207,9 +209,6 @@ async def test_ui_roundtrip_conflicts_trust_and_unicode(harness, tmp_path):
         assert (await client.get(base + '/files')).status == 200
         file = await (await client.get(base + '/file?path=hello.txt')).json()
         assert file['content'] == 'Nội dung tiếng Việt\r\n'
-        denied = await client.post(base + '/file', json={**file, 'path': 'hello.txt', 'content': 'Mới'})
-        assert denied.status == 403
-        await client.post('/api/agent/machines/trust', json={'projectId': p['id'], 'trusted': True})
         saved = await client.post(base + '/file', json={**file, 'path': 'hello.txt', 'content': 'Mới\r\n'})
         assert saved.status == 200
         stale = await client.post(base + '/file', json={**file, 'path': 'hello.txt', 'content': 'Sai'})
@@ -226,13 +225,12 @@ async def test_ui_roundtrip_conflicts_trust_and_unicode(harness, tmp_path):
 async def test_real_windows_command_uses_selected_folder(harness, tmp_path):
     rt, _ = harness
     p = project(rt, tmp_path)
+    (Path(p['path']) / '.boxfox').mkdir()
+    (Path(p['path']) / '.boxfox' / 'settings.local.json').write_text(json.dumps({'mode': 'auto'}), encoding='utf-8')
     app = web.Application()
     register_routes(app, rt)
     async with TestClient(TestServer(app)) as client:
         base = '/api/agent/machines/projects/' + p['id']
-        denied = await client.post(base + '/command', json={'command': 'Write-Output BOXFOX_HOST_OK'})
-        assert denied.status == 403
-        rt.machine_registry.trust(p['id'], True)
         command = 'Write-Output BOXFOX_HOST_OK; (Get-Location).Path'
         response = await client.post(base + '/command', json={'command': command})
         output = await response.json()
@@ -241,21 +239,6 @@ async def test_real_windows_command_uses_selected_folder(harness, tmp_path):
         assert p['path'].casefold() in output['content'].casefold()
         blocked = await client.post(base + '/command', json={'command': 'shutdown /r'})
         assert blocked.status == 403
-
-
-@async_test
-async def test_trust_revocation_is_checked_after_executor_cache(harness, tmp_path):
-    rt, legacy = harness
-    p = project(rt, tmp_path)
-    session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
-    await rt.executor.execute('file_read', {'path': 'hello.txt'}, session['id'])
-    rt.machine_registry.trust(p['id'], True)
-    rt.executor.runtime.decision = AsyncMock(return_value={'status': 'approved', 'choice': 'approve'})
-    assert not (await rt.executor.execute('file_write', {'path': 'x.txt', 'content': 'Một'}, session['id'])).get('is_error')
-    rt.machine_registry.trust(p['id'], False)
-    assert (await rt.executor.execute('file_write', {'path': 'x.txt', 'content': 'Hai'}, session['id']))['errorCode'] == 'PROJECT_TRUST_REQUIRED'
-    assert (Path(p['path']) / 'x.txt').read_text(encoding='utf-8') == 'Một'
-    legacy.execute.assert_not_called()
 
 
 def test_host_process_bootstraps_host_configuration_and_workspace(tmp_path):
@@ -270,7 +253,6 @@ def test_host_process_bootstraps_host_configuration_and_workspace(tmp_path):
     state = registry.state()
     assert state['mode'] == 'host'
     assert state['projectId'] and workspace.is_dir()
-    assert [p for p in state['projects'] if p['id'] == state['projectId']][0]['trusted'] is False
     # Phiên cũ không có binding: tiến trình host không có box nào để giữ, nên đi theo cấu hình.
     legacy_session = store.create({}, 'orchestrator')
     assert registry.binding(legacy_session['id'])['mode'] == 'host'
@@ -410,7 +392,6 @@ async def test_chat_bar_mode_change_applies_to_the_next_tool_call(harness, tmp_p
     settings.write_text(json.dumps({'mode': 'plan'}), encoding='utf-8')
     monkeypatch.setenv('BOXFOX_HOME_DIR', str(home))
     p = project(rt, tmp_path)
-    rt.machine_registry.trust(p['id'], True)
     session = create(rt, machineSelection={'mode': 'host', 'projectId': p['id']})
 
     # Legacy Read only is now Request approval: simulate the user's denial, not a timeout.
@@ -466,27 +447,21 @@ def test_two_sessions_in_one_project_keep_separate_session_rules(harness, tmp_pa
     assert key not in b.policy.session_rules
 
 
-def test_old_database_gains_the_trusted_column(tmp_path):
-    """CSDL tạo trước commit `63fed3e` chưa có cột `trusted` — phải tự vá, không được vỡ khởi động."""
-    import sqlite3
 
+def test_old_database_without_trust_column_still_loads(tmp_path):
+    import sqlite3
     path = tmp_path / 'sessions.sqlite'
     legacy = sqlite3.connect(path)
-    legacy.executescript('''
-        CREATE TABLE web_machine_settings (
-            singleton INTEGER PRIMARY KEY CHECK(singleton=1),
-            revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
-        CREATE TABLE web_machine_projects (id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL,
-                                           name TEXT NOT NULL);
+    legacy.executescript("""
+        CREATE TABLE web_machine_settings (singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL, mode TEXT NOT NULL, project_id TEXT);
+        CREATE TABLE web_machine_projects (id TEXT PRIMARY KEY, path TEXT UNIQUE NOT NULL, name TEXT NOT NULL);
         INSERT INTO web_machine_settings VALUES (1, 1, 'host', NULL);
-    ''')
+    """)
     legacy.commit()
     legacy.close()
-
     store = SessionStore(path)
     registry = MachineRegistry(store, default_mode='host')
-
     project = registry.register(str(tmp_path))
-    assert project['trusted'] is False
-    assert registry.trust(project['id'], True)['trusted'] is True
+    assert project['id']
+    assert 'trusted' not in project
     store.close()

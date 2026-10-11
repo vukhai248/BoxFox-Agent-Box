@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { agentApi } from '../lib/agentApi'
 
 export interface MachineBinding { mode: 'host' | 'docker'; revision: number; projectId: string | null; workspace: string | null }
-export interface LocalProject { id: string; path: string; name: string; trusted: boolean }
+export interface LocalProject { id: string; path: string; name: string }
 export interface MachineConfiguration { mode: 'host' | 'docker'; revision: number; projectId: string | null; projects: LocalProject[]; processMode?: 'host' | 'docker' }
 interface State {
   configuration: MachineConfiguration | null
@@ -13,7 +13,6 @@ interface State {
   configure: (mode: 'host' | 'docker', projectId?: string | null) => Promise<boolean>
   register: (path?: string, name?: string) => Promise<LocalProject | null>
   selectFolder: () => Promise<string | null>
-  trust: (projectId: string, trusted: boolean) => Promise<void>
 }
 
 export const useMachineStore = create<State>((set, get) => ({
@@ -54,10 +53,6 @@ export const useMachineStore = create<State>((set, get) => ({
       await get().load()
       return result
     } catch (error) { set({ error: String(error) }); return null }
-  },
-  trust: async (projectId, trusted) => {
-    try { await agentApi('/machines/trust', { projectId, trusted }); await get().load() }
-    catch (error) { set({ error: String(error) }) }
   },
 }))
 

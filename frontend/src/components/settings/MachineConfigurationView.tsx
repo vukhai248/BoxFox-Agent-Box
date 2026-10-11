@@ -7,7 +7,7 @@ import { startMachineChat } from '../../lib/machineSession'
 import { configuredBinding } from '../../store/machineStore'
 
 export function MachineConfigurationView() {
-  const { configuration, error, load, configure, register, trust, bindings } = useMachineStore()
+  const { configuration, error, load, configure, register, bindings } = useMachineStore()
   const chatId = useAgentStore(s => s.activeSessionId)
   const existing = useHarnessChatStore(s => s.sessions[chatId]?.id)
   const binding = bindings[chatId]
@@ -55,8 +55,7 @@ export function MachineConfigurationView() {
         <button type="button" disabled={!path.trim() || busy} onClick={() => void choose(true)}>Add</button></div></details>
       {!!configuration?.projects.length && <select aria-label="Local project" className="w-full rounded border border-line bg-panel p-1 text-xs" value={projectId ?? ''} disabled={busy} onChange={e => void select('host', e.target.value || null)}>
         <option value="">No project selected</option>{configuration.projects.map(p => <option key={p.id} value={p.id}>{p.name} · {p.path}</option>)}</select>}
-      {project && <label className="flex items-start gap-2 text-[11px] text-muted"><input type="checkbox" checked={project.trusted} onChange={e => void trust(project.id, e.target.checked)} />
-        Trust this folder for writes/commands. Host commands run as your Windows account; they are not OS sandboxed.</label>}
+      {project && <p className="text-[11px] text-muted">Folder access is controlled by the permission level above. Host commands run as your Windows account; they are not OS sandboxed.</p>}
     </div>}
     <p className="text-[10px] text-muted">Changing environment/folder starts a new chat. Existing sessions keep their environment.</p>
     {error && <p role="alert" className="break-all text-xs text-red-400">{error}</p>}
