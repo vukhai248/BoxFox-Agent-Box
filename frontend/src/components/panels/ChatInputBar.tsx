@@ -403,13 +403,13 @@ export function ChatInputBar({
   }, [isExpanded, isTextareaFocused])
 
   return (
-    <div ref={barRef} className="px-3 pb-3 pt-1 select-none">
+    <div ref={barRef} className="px-4 pb-4 pt-2 select-none">
       {/* Hộp soạn tin gom theo cột đọc khi bảng Workspace ẩn */}
       <div
         data-testid="chat-input-bar"
-        className={`relative rounded-2xl border bg-panel shadow-2xs transition-all duration-150 ${readingColumnClass(isReadingColumn)} ${
+        className={`composer-shell relative rounded-2xl border transition-all duration-150 ${readingColumnClass(isReadingColumn)} ${
           isTextareaFocused
-            ? 'border-zinc-500 ring-1 ring-zinc-600/40'
+            ? 'border-zinc-500 border-brand/70 ring-1 ring-brand/20'
             : 'border-line/80'
         } ${
           !isExpanded ? 'flex items-center gap-1.5 px-2.5 py-1.5' : 'p-2.5'
@@ -484,7 +484,7 @@ export function ChatInputBar({
                       ? 'composer.placeholderShort'
                       : 'composer.placeholder',
               )}
-              className="min-w-0 flex-1 resize-none bg-transparent px-2 py-1 text-xs leading-5 text-fg placeholder:text-muted/60 outline-hidden select-text h-7 overflow-hidden"
+              className="min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 text-[13px] leading-5 text-fg placeholder:text-muted/60 outline-hidden select-text h-8 overflow-hidden"
             />
 
             {/* Các nút công cụ inline bên phải */}
@@ -747,7 +747,7 @@ export function ChatInputBar({
                       ? 'composer.placeholderShort'
                       : 'composer.placeholder',
               )}
-              className="w-full resize-none bg-transparent px-1.5 py-1 text-xs leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text min-h-[44px]"
+              className="w-full resize-none bg-transparent px-1.5 py-2 text-[13px] leading-relaxed text-fg placeholder:text-muted/60 outline-hidden select-text min-h-[52px]"
             />
 
             {/* Toolbar tầng dưới */}
