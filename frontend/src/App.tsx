@@ -275,7 +275,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden text-fg select-none">
+    <div className="flex h-screen overflow-hidden bg-bg text-fg select-none">
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -315,14 +315,14 @@ export default function App() {
           {!paneHidden && (
           <div
             data-testid="workspace-pane"
-            className="workspace-shell flex min-h-0 min-w-0 flex-col overflow-hidden"
+            className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-panel"
             style={{ flex: `${1 - splitRatio} 0 0%`, width: `${(1 - splitRatio) * 100}%` }}
           >
             {/* Top Workspace Tab Bar */}
-            <div className="workspace-tabs relative flex items-center border-b border-line">
+            <div className="flex items-center border-b border-line bg-panel px-1.5 pt-1 relative">
               {/* Chrome-like flexible tab list with horizontal scroll */}
               <div
-                className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scroll-smooth"
+                className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scroll-smooth py-0.5"
                 onWheel={(e) => {
                   if (e.deltaY !== 0) {
                     e.currentTarget.scrollLeft += e.deltaY
@@ -348,10 +348,9 @@ export default function App() {
                       }}
                       aria-selected={isActive}
                       title={tabLabel}
-                      data-active={isActive}
-                      className={`workspace-tab group flex min-w-[34px] max-w-[180px] flex-1 shrink items-center justify-between gap-1.5 border px-2.5 py-1.5 text-xs font-medium cursor-pointer overflow-hidden ${isActive
-                          ? 'text-fg'
-                          : 'text-muted hover:text-fg hover:bg-panel2/40'
+                      className={`group flex min-w-[34px] max-w-[180px] flex-1 shrink items-center justify-between gap-1.5 rounded-t-md border-t border-x px-2 py-1.5 text-xs font-medium transition cursor-pointer overflow-hidden ${isActive
+                          ? 'border-line bg-panel2 text-fg shadow-xs'
+                          : 'border-transparent text-muted hover:text-fg hover:bg-panel2/40'
                         }`}
                     >
                       <div className="flex min-w-0 items-center gap-1.5 flex-1">
@@ -395,7 +394,7 @@ export default function App() {
 
               {/* Close entire panel button - pinned on right */}
               {openTabs.length > 0 && (
-                <div className="shrink-0 flex items-center border-l border-line/40 bg-panel/80 pl-2 pr-1 z-10">
+                <div className="shrink-0 flex items-center pl-1 pr-1 bg-panel border-l border-line/40 z-10">
                   <button
                     type="button"
                     onClick={closePanel}
@@ -478,7 +477,7 @@ export function TopBar({
   }, [moreMenuOpen])
 
   return (
-    <div className="topbar-shell flex shrink-0 items-center justify-between border-b border-line px-4 select-none">
+    <div className="flex h-10 shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 select-none">
       {/* Left: Context Window & Usage Controls */}
       <div className="flex min-w-0 items-center gap-3">
         <ContextUsageBar variant="topbar" />
@@ -510,7 +509,7 @@ export function TopBar({
           <button
             type="button"
             onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-            className={`flex size-8 items-center justify-center rounded-xl text-muted transition cursor-pointer ${
+            className={`flex size-7 items-center justify-center rounded-md text-muted transition cursor-pointer ${
               moreMenuOpen ? 'bg-panel2 text-fg shadow-2xs' : 'hover:bg-panel2 hover:text-fg'
             }`}
             title="Workspaces & Controls"

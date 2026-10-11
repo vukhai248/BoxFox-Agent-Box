@@ -1,5 +1,5 @@
 /*
- * Design Tokens — quiet graphite surfaces with a cool indigo accent.
+ * Design Tokens — True Deep Black / Zinc (Devin & Linear Style).
  */
 @import 'tailwindcss';
 @import 'katex/dist/katex.min.css';
@@ -7,13 +7,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --c-bg: 228 24% 97%;
-  --c-panel: 225 22% 99%;
-  --c-panel2: 228 20% 94%;
-  --c-line: 226 17% 86%;
-  --c-fg: 228 24% 12%;
-  --c-muted: 226 12% 45%;
-  --c-brand: 239 84% 67%;
+  --c-bg: 0 0% 100%;
+  --c-panel: 0 0% 98%;
+  --c-panel2: 0 0% 93%;
+  --c-line: 0 0% 86%;
+  --c-fg: 0 0% 9%;
+  --c-muted: 0 0% 45%;
+  --c-brand: 217 91% 60%;
   --c-brandfg: 0 0% 100%;
   /* Vùng agent đang điều khiển (viền CUA). Cố ý KHÁC `brand`: màu này nghĩa là
      "agent đang tác động ở đây", không phải "mục đang được chọn". */
@@ -21,13 +21,13 @@
 }
 
 .dark {
-  --c-bg: 228 22% 7%;         /* deep graphite app background */
-  --c-panel: 228 19% 10%;     /* primary surface */
-  --c-panel2: 228 18% 14%;    /* raised surface / inputs */
-  --c-line: 228 15% 21%;      /* quiet separators */
-  --c-fg: 228 25% 96%;        /* soft white */
-  --c-muted: 228 12% 64%;     /* readable secondary text */
-  --c-brand: 239 84% 72%;     /* indigo-lilac accent */
+  --c-bg: 0 0% 4%;            /* #0a0a0a - Deep Pure Neutral Black */
+  --c-panel: 0 0% 7%;         /* #121212 - Pure Dark Card Surface */
+  --c-panel2: 0 0% 11%;       /* #1c1c1c - Subtle Surface / Inputs / Hover */
+  --c-line: 0 0% 15%;         /* #262626 - Crisp Refined Border */
+  --c-fg: 0 0% 96%;           /* #f5f5f5 - Bright Crisp Foreground */
+  --c-muted: 0 0% 55%;        /* #8c8c8c - High-legibility Muted Text */
+  --c-brand: 217 91% 60%;     /* #3b82f6 - Electric Blue Accent for Selection */
   --c-brandfg: 0 0% 100%;
   --cua: #38bdf8;             /* #38bdf8 - sky-400, sáng trên nền tối */
 }
@@ -74,11 +74,11 @@ body {
   background-color: hsl(var(--c-bg));
   color: hsl(var(--c-fg));
   font-family:
-    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.008em;
+  letter-spacing: -0.012em;
 }
 
 code,
@@ -96,8 +96,8 @@ pre {
 /* Chrome, Edge, Safari, Opera (Blink & WebKit) */
 ::-webkit-scrollbar,
 *::-webkit-scrollbar {
-  width: 6px !important;
-  height: 6px !important;
+  width: 3px !important;
+  height: 3px !important;
 }
 
 ::-webkit-scrollbar-track,
@@ -107,13 +107,13 @@ pre {
 
 ::-webkit-scrollbar-thumb,
 *::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, hsl(var(--c-fg)) 18%, transparent) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
   border-radius: 9999px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, hsl(var(--c-brand)) 58%, transparent) !important;
+  background: rgba(255, 255, 255, 0.38) !important;
 }
 
 ::-webkit-scrollbar-corner,
@@ -125,90 +125,6 @@ pre {
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, hsl(var(--c-fg)) 18%, transparent) transparent;
-  }
-}
-
-/* App chrome. These classes keep the visual system in one place so individual
-   panels can preserve their existing behavior while gaining the same rhythm. */
-.app-shell {
-  background:
-    radial-gradient(80rem 40rem at 100% -10%, hsl(var(--c-brand) / 0.08), transparent 58%),
-    hsl(var(--c-bg));
-}
-
-.sidebar-shell {
-  background: linear-gradient(180deg, hsl(var(--c-panel) / 0.98), hsl(var(--c-panel) / 0.92));
-  box-shadow: 12px 0 32px hsl(228 30% 3% / 0.08);
-}
-
-.topbar-shell {
-  height: 3rem;
-  background: hsl(var(--c-panel) / 0.84);
-  box-shadow: 0 1px 0 hsl(var(--c-line) / 0.75), 0 8px 24px hsl(228 30% 3% / 0.06);
-  backdrop-filter: blur(14px);
-}
-
-.workspace-shell {
-  background: linear-gradient(180deg, hsl(var(--c-panel) / 0.98), hsl(var(--c-bg) / 0.92));
-}
-
-.workspace-tabs {
-  min-height: 2.75rem;
-  padding: 0.45rem 0.55rem 0.25rem;
-  background: hsl(var(--c-panel) / 0.72);
-}
-
-.workspace-tab {
-  min-height: 2.1rem;
-  border-color: transparent;
-  border-radius: 0.75rem;
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.workspace-tab:hover {
-  transform: translateY(-1px);
-}
-
-.workspace-tab[data-active='true'] {
-  background: hsl(var(--c-panel2) / 0.92);
-  border-color: hsl(var(--c-line));
-  box-shadow: 0 3px 12px hsl(228 30% 3% / 0.12), inset 0 1px 0 hsl(var(--c-fg) / 0.05);
-}
-
-.composer-shell {
-  border-color: hsl(var(--c-line) / 0.95);
-  background: linear-gradient(145deg, hsl(var(--c-panel) / 0.98), hsl(var(--c-panel2) / 0.74));
-  box-shadow: 0 12px 28px hsl(228 30% 3% / 0.14), inset 0 1px 0 hsl(var(--c-fg) / 0.04);
-}
-
-.composer-shell:focus-within {
-  border-color: hsl(var(--c-brand) / 0.72);
-  box-shadow: 0 0 0 3px hsl(var(--c-brand) / 0.12), 0 14px 32px hsl(228 30% 3% / 0.18);
-}
-
-button,
-[role='button'] {
-  -webkit-tap-highlight-color: transparent;
-}
-
-:focus-visible {
-  outline: 2px solid hsl(var(--c-brand) / 0.85);
-  outline-offset: 2px;
-}
-
-::selection {
-  background: hsl(var(--c-brand) / 0.28);
-  color: hsl(var(--c-fg));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   }
 }

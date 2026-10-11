@@ -180,14 +180,14 @@ export function Sidebar() {
   // Dưới `NARROW_VIEWPORT_MAX_PX` cột 260px bóp cột chat xuống ~120px (BUG-23)
   // → tự thu về thanh biểu tượng; nút mở sẽ bung panel đầy đủ dạng overlay.
   const rail = (
-    <aside className="sidebar-shell flex w-14 shrink-0 flex-col items-center gap-3 border-r border-line py-3 select-none">
-      <div className="flex size-8 items-center justify-center rounded-xl bg-brand/15 text-brand font-bold shadow-[0_0_20px_hsl(var(--c-brand)/.18)]">
+    <aside className="flex w-14 shrink-0 flex-col items-center gap-3 border-r border-line bg-panel py-3 select-none">
+      <div className="flex size-7 items-center justify-center rounded-lg bg-blue-600/10 text-blue-400 font-bold">
         <Sparkles className="size-4" />
       </div>
       <button
         type="button"
         onClick={() => (narrow ? setNarrowOpen(true) : toggleSidebar())}
-        className="rounded-xl p-2 text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+        className="rounded-md p-1.5 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
         title={t('common.expandSidebar')}
       >
         <PanelLeft className="size-4" />
@@ -195,7 +195,7 @@ export function Sidebar() {
       <button
         type="button"
         onClick={handleNewSession}
-        className="rounded-xl p-2 text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+        className="rounded-md p-1.5 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
         title={t('sidebar.newSession')}
       >
         <Plus className="size-4" />
@@ -204,13 +204,13 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => openSettings('harness')}
-          className="rounded-xl p-2 text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+          className="rounded-md p-1.5 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
           title={t('sidebar.settings')}
         >
           <Settings className="size-4" />
         </button>
         <span
-          className="flex size-7 items-center justify-center rounded-full bg-brand/15 text-[10px] font-bold text-brand"
+          className="flex size-6 items-center justify-center rounded-full bg-blue-600/20 text-[10px] font-bold text-blue-400"
           title={userEmail || t('sidebar.undefinedUser')}
         >
           {MOCK_ACCOUNT.initials}
@@ -221,23 +221,23 @@ export function Sidebar() {
 
   const fullPanel = (
     <aside
-      className={`sidebar-shell flex w-[260px] shrink-0 flex-col border-r border-line select-none ${
+      className={`flex w-[260px] shrink-0 flex-col border-r border-line bg-panel select-none ${
         narrow ? 'fixed inset-y-0 left-0 z-50 shadow-2xl' : ''
       }`}
     >
       {/* Top Header: Brand Logo + Actions */}
-      <div className="flex items-center justify-between px-4 py-3.5">
+      <div className="flex items-center justify-between px-3.5 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded-xl bg-brand/15 text-brand font-bold shadow-[0_0_20px_hsl(var(--c-brand)/.16)]">
+          <div className="flex size-6 items-center justify-center rounded-md bg-blue-600/10 text-blue-400 font-bold">
             <Sparkles className="size-3.5" />
           </div>
-          <span className="text-[13px] font-semibold tracking-[0.04em] text-fg">boxfox</span>
+          <span className="text-sm font-semibold tracking-tight text-fg">boxfox</span>
         </div>
         <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={openSearch}
-            className="rounded-xl p-1.5 text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+            className="rounded-md p-1 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
             title={t('common.search')}
           >
             <Search className="size-3.5" />
@@ -256,13 +256,13 @@ export function Sidebar() {
       </div>
 
       {/* Account Info Box */}
-      <div className="relative px-3 py-1.5">
+      <div className="relative px-2.5 py-1">
         <button
           type="button"
           onClick={() => setAccountMenuOpen(!accountMenuOpen)}
-          className="flex w-full items-center gap-2.5 rounded-xl border border-line/80 bg-panel2/40 px-2.5 py-2 text-left transition hover:bg-panel2 cursor-pointer"
+          className="flex w-full items-center gap-2.5 rounded-md border border-line bg-panel2/40 px-2.5 py-1.5 text-left transition hover:bg-panel2 cursor-pointer"
         >
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/15 text-[9px] font-bold text-brand">
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-[9px] font-bold text-blue-400">
             {MOCK_ACCOUNT.initials}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-muted">
@@ -278,7 +278,7 @@ export function Sidebar() {
         </button>
 
         {accountMenuOpen && (
-          <div className="absolute left-3 right-3 z-30 mt-1 overflow-hidden rounded-xl border border-line bg-panel p-1.5 shadow-2xl">
+          <div className="absolute left-2.5 right-2.5 z-30 mt-1 overflow-hidden rounded-lg border border-line bg-panel p-1 shadow-xl">
             <MenuItem
               icon={<UserRound className="size-3.5" />}
               label={t('sidebar.accountProfile')}
@@ -310,11 +310,11 @@ export function Sidebar() {
       </div>
 
       {/* New Session Button */}
-      <div className="px-3 pt-2.5 pb-1">
+      <div className="px-2.5 pt-2 pb-1">
         <button
           type="button"
           onClick={handleNewSession}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand/25 bg-brand/12 px-3 py-2 text-xs font-medium text-fg shadow-[0_8px_20px_hsl(var(--c-brand)/.08)] transition hover:bg-brand/18 cursor-pointer"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-panel2 border border-line px-3 py-1.5 text-xs font-medium text-fg transition hover:bg-panel2/80 cursor-pointer"
         >
           <Plus className="size-3.5 text-blue-400" />
           <span>{t('sidebar.newSession')}</span>
@@ -327,17 +327,17 @@ export function Sidebar() {
 
       {/* All Sessions Navigation Header */}
       <div className="px-2.5 pt-2">
-        <div className="flex items-center justify-between pb-2 text-xs font-semibold text-fg">
+        <div className="flex items-center justify-between pb-1.5 text-xs font-medium text-fg">
           <span>{t('sidebar.allSessions')}</span>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-panel2/55 p-1">
+        <div className="flex items-center gap-1 border-b border-line pb-1">
           <button
             type="button"
             onClick={() => setSessionTab('recent')}
             className={`rounded px-2 py-0.5 text-xs font-medium transition cursor-pointer ${
               sessionTab === 'recent'
-              ? 'bg-panel text-fg shadow-xs'
+                ? 'bg-panel2 text-fg'
                 : 'text-muted hover:text-fg'
             }`}
           >
@@ -348,7 +348,7 @@ export function Sidebar() {
             onClick={() => setSessionTab('groups')}
             className={`rounded px-2 py-0.5 text-xs font-medium transition cursor-pointer ${
               sessionTab === 'groups'
-              ? 'bg-panel text-fg shadow-xs'
+                ? 'bg-panel2 text-fg'
                 : 'text-muted hover:text-fg'
             }`}
           >
@@ -356,7 +356,7 @@ export function Sidebar() {
           </button>
           <button
             type="button"
-            className="ml-auto rounded-lg p-1 text-muted hover:bg-panel hover:text-fg cursor-pointer"
+            className="ml-auto rounded p-1 text-muted hover:bg-panel2 hover:text-fg cursor-pointer"
             title="Filter"
           >
             <ListFilter className="size-3" />
@@ -365,9 +365,9 @@ export function Sidebar() {
       </div>
 
       {/* Sessions List */}
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-3 space-y-4">
+      <div className="mt-1 min-h-0 flex-1 overflow-y-auto px-2 space-y-3">
         {(machine.mode === 'host' || projects.length > 0 || hostSessions.length > 0) && <section data-testid="ide-project-sessions">
-          <div className="flex items-center justify-between px-1.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+          <div className="flex items-center justify-between px-2 py-2 text-xs font-medium text-muted">
             <span>{t('sidebar.ideProjects')}</span>
             {machine.mode === 'host' && <button onClick={handleChooseFolder} title={t('sidebar.chooseFolder')} aria-label={t('sidebar.chooseFolder')} className="rounded p-1 hover:bg-panel2 hover:text-fg"><FolderPlus className="size-3.5" /></button>}
           </div>
@@ -387,7 +387,7 @@ export function Sidebar() {
           </div>}
         </section>}
         <section data-testid="docker-sessions">
-          <div className="flex items-center justify-between px-1.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted"><span>{t('sidebar.dockerSessions')}</span>
+          <div className="flex items-center justify-between px-2 py-2 text-xs font-medium text-muted"><span>{t('sidebar.dockerSessions')}</span>
             <button onClick={() => startMachineChat(DOCKER_BINDING)} aria-label={t('sidebar.newProjectSession', {project: 'Docker'})} title={t('sidebar.newProjectSession', {project: 'Docker'})} className="rounded p-1 hover:bg-panel2 hover:text-fg"><Plus className="size-3.5" /></button>
           </div>
           {showDraft && machine.mode === 'docker' && draftRow}
@@ -396,11 +396,11 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Footer: Settings & Shortcuts */}
-      <div className="border-t border-line/80 p-3 space-y-0.5">
+      <div className="border-t border-line p-2 space-y-0.5">
         <button
           type="button"
           onClick={() => openSettings('harness')}
-          className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-panel2 hover:text-fg cursor-pointer"
         >
           <Settings className="size-3.5" />
           <span>{t('sidebar.settings')}</span>
@@ -443,14 +443,14 @@ function ProjectSessionSection({project, selected, count, onNew, children}: {
 }) {
   const t = useT()
   return <section data-testid={`project-sessions-${project.id}`} className="py-0.5">
-    <div className="flex items-center justify-between px-1.5 py-1 text-xs font-medium text-muted">
+    <div className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted">
       <div title={project.path} className="flex min-w-0 flex-1 items-center gap-1.5 text-fg">
         <Folder className="size-3.5 shrink-0 text-blue-400" />
         <span className="truncate">{project.name}</span>
       </div>
       <button aria-label={t('sidebar.newProjectSession', {project: project.name})} title={t('sidebar.newProjectSession', {project: project.name})} onClick={onNew} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><Plus className="size-3.5" /></button>
     </div>
-    <div className="space-y-1">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>
+    <div className="space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>
   </section>
 }
 
@@ -527,7 +527,7 @@ function GroupSection({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-1.5 rounded-xl px-2 py-1.5 text-xs font-medium text-muted transition hover:bg-panel2/50 hover:text-fg cursor-pointer"
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted transition hover:bg-panel2/50 hover:text-fg cursor-pointer"
       >
         {open ? (
           <ChevronDown className="size-3 shrink-0" />
@@ -540,7 +540,7 @@ function GroupSection({
       </button>
 
       {open && (
-        <div className="mt-1 space-y-1 pl-4">
+        <div className="mt-0.5 space-y-0.5 pl-4">
           {sessions.map((session) => (
             <SessionRow
               key={session.session_id}
@@ -648,9 +648,9 @@ function SessionRow({
   return (
     <div ref={rootRef} className="group relative" data-testid={`session-row-${session.session_id}`}>
       <div
-        className={`flex items-center rounded-xl border transition cursor-pointer ${
+        className={`flex items-center rounded-md border transition cursor-pointer ${
           active
-            ? 'bg-panel2/80 border-brand/30 shadow-xs'
+            ? 'bg-panel2 border-line/80 shadow-xs'
             : 'hover:bg-panel2/50 border-transparent'
         }`}
       >
@@ -664,7 +664,7 @@ function SessionRow({
               onOpen()
             }
           }}
-          className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2 text-left cursor-pointer"
+          className="flex min-w-0 flex-1 flex-col gap-1 px-2 py-1.5 text-left cursor-pointer"
         >
           <div className="flex min-w-0 flex-1 items-center gap-1">
             {session.is_pinned && <Pin className="size-3 shrink-0 text-muted/80" />}
