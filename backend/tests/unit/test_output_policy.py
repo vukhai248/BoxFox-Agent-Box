@@ -5,13 +5,24 @@ from agentbox.agent_core import output_policy as policy
 
 
 @pytest.mark.parametrize('role,expected', [('research',16000), ('plan',16000), ('design',16000),
-                                         ('explore',None), ('debug',None)])
+                                         ('explore',None), ('build',None),
+                                         ('testing',None), ('debug',None)])
 def test_producer_profiles(role, expected, monkeypatch):
     monkeypatch.delenv('BOXFOX_RESEARCH_OUTPUT_TOKENS', raising=False)
     monkeypatch.delenv('BOXFOX_DOCUMENT_OUTPUT_TOKENS', raising=False)
+    monkeypatch.delenv('BOXFOX_PRODUCE_OUTPUT_TOKENS', raising=False)
     assert policy.child_budget(role) == expected
-    assert policy.child_budget(role, {'purpose':'produce','stage':'produce'}) == expected
+    produce_expected = expected if expected is not None else 16000
+    assert policy.child_budget(role, {'purpose':'produce','stage':'produce'}) == produce_expected
     assert policy.child_budget(role, {'purpose':'review','stage':'review'}) is None
+
+
+def test_produce_profile_can_be_lowered_without_affecting_other_roles(monkeypatch):
+    monkeypatch.setenv('BOXFOX_PRODUCE_OUTPUT_TOKENS', '8192')
+    assert policy.child_budget('explore', {'purpose': 'produce', 'stage': 'produce'}) == 8192
+    assert policy.child_budget('build', {'purpose': 'produce', 'stage': 'produce'}) == 8192
+    assert policy.child_budget('plan', {'purpose': 'produce', 'stage': 'produce'}) == 16000
+    assert policy.child_budget('explore') is None
 
 
 def test_configured_profiles_and_knowledge_lookup(monkeypatch):

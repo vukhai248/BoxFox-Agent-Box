@@ -35,7 +35,7 @@ def test_override_applies_only_to_knowledge_helpers(raw, expected, monkeypatch):
     assert policy.child_budget('explore', HELPER) == expected
     # Producer, reviewer and bound check profiles are not touched by the helper knob.
     assert policy.child_budget('research', {'purpose': 'produce', 'stage': 'produce'}) == 16000
-    assert policy.child_budget('explore', {'purpose': 'produce', 'stage': 'produce'}) is None
+    assert policy.child_budget('explore', {'purpose': 'produce', 'stage': 'produce'}) == 16000
     assert policy.child_budget('review', {'purpose': 'review', 'checkId': 'c1'}) == 16000
     assert policy.child_budget('research', {'purpose': 'review', 'stage': 'review'}) is None
     # Outside Work Graph (no binding) the knob has no effect either.

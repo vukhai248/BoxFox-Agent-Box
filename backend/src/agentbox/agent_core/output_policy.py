@@ -10,6 +10,12 @@ REVIEW_OUTPUT_TOKENS = 16000  # W6: user requested measured 8k/16k reviewer comp
 # (docs/plan/W6.5.3-helper-budget-evidence.json). Keep the knob for re-measurement only.
 WORK_HELPER_OUTPUT_TOKENS = 16000
 WORK_CHECK_OUTPUT_TOKENS = REVIEW_OUTPUT_TOKENS
+# Work Graph producer reports (explore/build/testing/debug) need enough room for
+# evidence and a final handoff.  These roles previously fell through to the
+# global 4096-token default, which caused Explore's reasoning/report to end with
+# PROVIDER_OUTPUT_TRUNCATED in measured long-task runs.
+PRODUCE_OUTPUT_TOKENS = 16000
+PRODUCE_ROLES = frozenset({'explore', 'build', 'testing', 'debug'})
 MAX_OUTPUT_TOKENS = 64000  # Existing router request limit, not a model capability.
 RECOVERY_INPUT_MAX_CHARS = 64000
 STREAM_INTERRUPTED_CODE = 'PROVIDER_STREAM_INTERRUPTED'
@@ -40,6 +46,10 @@ def child_budget(role, work=None, task_kind=None):
     if work.get('purpose') == 'knowledge':
         return configured_budget('BOXFOX_WORK_HELPER_OUTPUT_TOKENS', WORK_HELPER_OUTPUT_TOKENS,
                                  {DEFAULT_OUTPUT_TOKENS, WORK_HELPER_OUTPUT_TOKENS})
+    if (work.get('purpose') == 'produce' and work.get('stage') == 'produce'
+            and role in PRODUCE_ROLES):
+        return configured_budget('BOXFOX_PRODUCE_OUTPUT_TOKENS', PRODUCE_OUTPUT_TOKENS,
+                                 {8192, PRODUCE_OUTPUT_TOKENS})
     if work and (work.get('purpose') != 'produce' or work.get('stage') != 'produce'):
         return None
     if role in {'plan', 'design'}:

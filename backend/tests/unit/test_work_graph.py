@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from agentbox.agent_core import plan_workflow, tool_groups, work_graph as wg, work_checks
+from agentbox.agent_core import plan_workflow, tool_groups, work_graph as wg, work_checks, output_policy
 from agentbox.agent_core.failures import classify_failure
 from agentbox.agent_core.roles import ORCHESTRATOR_TOOLS, ROLES
 from agentbox.agent_core.runtime import DecisionError, HarnessRuntime, WORK_TOOLS
@@ -939,7 +939,7 @@ def test_plan_writers_get_a_document_sized_output_budget(tmp_path):
         binding = child['config']['workBinding']
         by_role.setdefault((binding['purpose'], child['role']), []).append(child['config'].get('maxTokens'))
     assert set(by_role[('produce', 'plan')]) == {wg.DOCUMENT_MAX_TOKENS}
-    assert set(by_role[('produce', 'explore')]) == {None}
+    assert set(by_role[('produce', 'explore')]) == {output_policy.PRODUCE_OUTPUT_TOKENS}
     assert all(value == 16000 for key, values in by_role.items() if key[0] == 'review' for value in values)
     sent = {tokens for kind, text, tokens in model.tokens if kind == 'produce' and 'node P1' in text}
     assert sent == {wg.DOCUMENT_MAX_TOKENS}
