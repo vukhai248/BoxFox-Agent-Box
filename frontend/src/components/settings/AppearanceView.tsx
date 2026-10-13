@@ -44,7 +44,7 @@ export function AppearanceView() {
               <div className="h-1.5 w-3/5 rounded-full bg-zinc-300" />
             </div>
             <div className="flex-1 space-y-2">
-              <div className="h-2 w-2/3 rounded-full bg-blue-600" />
+              <div className="h-2 w-2/3 rounded-full bg-brand" />
               <div className="h-1.5 w-full rounded-full bg-zinc-200" />
               <div className="h-1.5 w-4/5 rounded-full bg-zinc-200" />
               <div className="h-1.5 w-full rounded-full bg-zinc-100" />
@@ -78,7 +78,7 @@ export function AppearanceView() {
               <div className="h-1.5 w-3/5 rounded-full bg-zinc-700" />
             </div>
             <div className="flex-1 space-y-2">
-              <div className="h-2 w-2/3 rounded-full bg-blue-500" />
+              <div className="h-2 w-2/3 rounded-full bg-brand" />
               <div className="h-1.5 w-full rounded-full bg-zinc-800" />
               <div className="h-1.5 w-4/5 rounded-full bg-zinc-800" />
             </div>
@@ -107,13 +107,13 @@ export function AppearanceView() {
           <div className="h-32 w-full rounded-xl border border-zinc-300 dark:border-zinc-800 flex overflow-hidden shadow-inner">
             {/* Left light half */}
             <div className="w-1/2 bg-white p-2.5 space-y-2 border-r border-zinc-200">
-              <div className="h-1.5 w-2/3 rounded-full bg-blue-600" />
+              <div className="h-1.5 w-2/3 rounded-full bg-brand" />
               <div className="h-1.5 w-full rounded-full bg-zinc-200" />
               <div className="h-1.5 w-4/5 rounded-full bg-zinc-200" />
             </div>
             {/* Right dark half */}
             <div className="w-1/2 bg-[#0d0f14] p-2.5 space-y-2">
-              <div className="h-1.5 w-2/3 rounded-full bg-blue-500" />
+              <div className="h-1.5 w-2/3 rounded-full bg-brand" />
               <div className="h-1.5 w-full rounded-full bg-zinc-800" />
               <div className="h-1.5 w-4/5 rounded-full bg-zinc-800" />
             </div>

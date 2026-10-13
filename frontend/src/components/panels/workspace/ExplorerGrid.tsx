@@ -150,7 +150,7 @@ export function ExplorerGrid({
               }`}
             >
               <ArrowUp className="size-6" />
-              <span className="mt-1 text-[10px]">..</span>
+              <span className="mt-1 text-[11px]">..</span>
             </button>
           )}
           {entries.map((entry) => {
@@ -191,7 +191,7 @@ export function ExplorerGrid({
                 ) : (
                   <div className="truncate font-mono text-[11px] text-fg">{entry.name}</div>
                 )}
-                <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted">
+                <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                   {entry.kind === 'file' && <span>{formatBytes(entry.sizeBytes)}</span>}
                   {entry.language && <span className="rounded bg-panel px-1 font-mono">{entry.language}</span>}
                 </div>

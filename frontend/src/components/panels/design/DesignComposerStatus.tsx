@@ -53,7 +53,7 @@ export function DesignComposerStatus() {
       <PenTool className="size-3 shrink-0" />
       <span className="font-medium">{t('design.stripRunning')}</span>
       {run && (
-        <span className="truncate font-mono text-[10px] text-muted" title={run.designId}>
+        <span className="truncate font-mono text-[11px] text-muted" title={run.designId}>
           {done
             ? t('design.stripDone', { id: runLabel(run.designId) })
             : t('design.stripRun', { id: runLabel(run.designId), step: stepLabel(t, run.phase) })}

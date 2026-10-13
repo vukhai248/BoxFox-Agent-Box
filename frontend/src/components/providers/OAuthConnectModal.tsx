@@ -113,8 +113,8 @@ export function OAuthConnectModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-      <div className="relative w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-2xl text-fg space-y-5 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-2xl text-fg space-y-5 animate-pop-in">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -212,7 +212,7 @@ export function OAuthConnectModal({
             <div className="rounded-xl border border-line bg-panel2/60 p-4 space-y-3.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold">Manual authorization fallback</p>
-                <span className="text-[10px] text-muted">If popup is blocked or fails</span>
+                <span className="text-[11px] text-muted">If popup is blocked or fails</span>
               </div>
 
               {/* Step 1: Copy auth link */}

@@ -71,7 +71,7 @@ export function OutOfScopeCard({ job, prompt }: { job: ResearchJob | null; promp
       <header className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-amber-300">{t('research.promptOutOfScope')}</span>
         {job && (
-          <span className="ml-auto font-mono text-[10px] text-muted">
+          <span className="ml-auto font-mono text-[11px] text-muted">
             {formatClock(job.usedSeconds)} / {formatClock(job.budgetSeconds)}
           </span>
         )}

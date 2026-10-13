@@ -199,7 +199,7 @@ export function CuaTargetOverlay({
         {targetStyle && working && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-panel/90 px-2 py-0.5 text-[10px] font-semibold text-cua ring-1 ring-cua/40"
+            className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-panel/90 px-2 py-0.5 text-[11px] font-semibold text-cua ring-1 ring-cua/40"
           >
             <span className="size-1.5 animate-pulse rounded-full bg-cua" />
             {t('machineScreen.targetWorkingHere')}
@@ -232,7 +232,7 @@ export function CuaTargetOverlay({
         {highlightStyle && highlightLabel && (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute rounded bg-panel/90 px-1.5 py-0.5 text-[10px] font-semibold text-fg ring-1 ring-line"
+            className="pointer-events-none absolute rounded-full bg-panel/90 px-1.5 py-0.5 text-[11px] font-semibold text-fg ring-1 ring-line"
             style={{ left: highlightStyle.left, top: (highlightStyle.top ?? 0) - 18 }}
           >
             {highlightLabel}

@@ -61,7 +61,7 @@ export function CreateProjectModal({onClose}: {onClose: () => void}) {
         <p className="text-[11px] text-muted">{t('sidebar.folderPathHint')}</p>
       </div>
       {error && <p role="alert" className="mt-3 break-all text-xs text-red-400">{error}</p>}
-      <div className="mt-6 flex justify-end gap-3"><button disabled={busy} onClick={onClose} className="rounded-lg px-4 py-2 text-xs text-muted hover:bg-panel2">{t('sidebar.cancelProject')}</button><button disabled={busy || !name.trim() || !path} onClick={() => void create()} className="rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white disabled:opacity-40">{t(creating ? 'sidebar.creatingProject' : 'sidebar.createProject')}</button></div>
+      <div className="mt-6 flex justify-end gap-3"><button disabled={busy} onClick={onClose} className="rounded-lg px-4 py-2 text-xs text-muted hover:bg-panel2">{t('sidebar.cancelProject')}</button><button disabled={busy || !name.trim() || !path} onClick={() => void create()} className="rounded-lg bg-brand px-4 py-2 text-xs font-medium text-brandfg disabled:opacity-40">{t(creating ? 'sidebar.creatingProject' : 'sidebar.createProject')}</button></div>
     </div>
   </div>, document.body)
 }

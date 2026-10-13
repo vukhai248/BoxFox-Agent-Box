@@ -59,7 +59,7 @@ export function StorageContinuityView({ sessionId, onDeleted }: { sessionId: str
     } finally { setBusy(false) }
   }
   return <section data-testid="storage-continuity" className="rounded-xl border border-line bg-panel p-4 text-xs space-y-3">
-    <h2 className="font-semibold">{t('continuity.storage')}</h2>
+    <h2 className="font-bold">{t('continuity.storage')}</h2>
     {storage && <>
       <p className={storage.level === 'elevated' ? 'text-rose-400' : storage.level === 'warning' ? 'text-amber-400' : 'text-muted'}>{t('continuity.global')}: {typeof storage.bytes === 'number' ? (storage.bytes / 1e9).toFixed(2) : '—'} GB · {t('continuity.selected')}: {contribution === undefined ? '—' : (contribution / 1e9).toFixed(2)} GB</p>
       <p className="text-muted">{t('continuity.thresholds')} · {String(storage.measuredAt)}{!storage.measurementComplete && ` · ${t('continuity.incomplete')}`}</p>

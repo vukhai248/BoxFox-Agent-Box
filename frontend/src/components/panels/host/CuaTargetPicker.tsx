@@ -168,7 +168,7 @@ export function CuaTargetPicker({
           >
             <p className="font-semibold text-fg">{t('machineScreen.windowListEmpty')}</p>
             <p className="mt-0.5">{t('machineScreen.windowListUnsupported')}</p>
-            <p className="mt-1 font-mono text-[10px]">
+            <p className="mt-1 font-mono text-[11px]">
               {t('machineScreen.windowListPlatform', { platform: platform ?? 'unknown' })}
             </p>
           </div>
@@ -225,7 +225,7 @@ export function CuaTargetPicker({
                 <span className="block truncate text-[12px]" title={entry.title}>
                   {entry.title || t('machineScreen.windowListTitle')}
                 </span>
-                <span className="block truncate font-mono text-[10px] text-muted">
+                <span className="block truncate font-mono text-[11px] text-muted">
                   {t('machineScreen.windowMeta', {
                     process: entry.processName || entry.windowClass || '—',
                     windowId: String(entry.windowId),

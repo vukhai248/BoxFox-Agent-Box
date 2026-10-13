@@ -190,7 +190,7 @@ export function CanvasToolbar({ canvas, compact }: CanvasToolbarProps) {
           className={`flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md text-xs font-semibold transition cursor-pointer shadow-xs ${
             canvas.syncStatus === 'synced'
               ? 'bg-emerald-600 text-white border border-emerald-500'
-              : 'bg-brand text-white hover:bg-brand/90 border border-brand/60'
+              : 'bg-brand text-brandfg hover:bg-brand/90 border border-brand/60'
           } ${compact ? 'size-7 justify-center px-0' : 'px-2.5 py-1'}`}
           title={canvas.syncStatus === 'synced' ? 'Scene synced with agent' : 'Send scene to agent'}
         >

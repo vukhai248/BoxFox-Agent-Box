@@ -89,7 +89,7 @@ export function Chip({
   return (
     <span
       title={title}
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-px text-[10px] font-semibold tracking-wide ${tones[tone]}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide ${tones[tone]}`}
     >
       {children}
     </span>
@@ -126,7 +126,7 @@ export function StatusChip({
   const { box, dot } = tones[tone]
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold ${box}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${box}`}
     >
       <span className={`size-1.5 rounded-full ${dot} ${pulse ? 'animate-pulse' : ''}`} />
       {children}

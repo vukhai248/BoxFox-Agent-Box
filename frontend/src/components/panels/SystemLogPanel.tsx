@@ -195,7 +195,7 @@ export function SystemLogPanel() {
     <PanelShell title={t('systemLog.title')} note={t('systemLog.intro')} toolbar={toolbar}>
       <div
         data-testid="system-log-meta"
-        className="flex flex-wrap items-center gap-2 border-b border-line bg-panel2/40 px-3 py-1 font-mono text-[10px] text-muted"
+        className="flex flex-wrap items-center gap-2 border-b border-line bg-panel2/40 px-3 py-1 font-mono text-[11px] text-muted"
       >
         <ScrollText className="size-3 shrink-0" />
         <span>{snapshot?.file ?? 'harness.jsonl'}</span>
@@ -217,7 +217,7 @@ export function SystemLogPanel() {
 
       {groups.length > 0 && (
         <div data-testid="system-log-error-groups" className="border-b border-line bg-panel2/40 px-3 py-1.5">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('systemLog.errorGroups')}
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -225,7 +225,7 @@ export function SystemLogPanel() {
               <span
                 key={group.code}
                 data-testid={`system-log-error-code-${group.code}`}
-                className="inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-px text-[10px] font-semibold text-rose-400 ring-1 ring-rose-500/40"
+                className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-1.5 py-px text-[11px] font-semibold text-rose-400 ring-1 ring-rose-500/40"
               >
                 <span className="font-mono">{group.code}</span>
                 <span className="tabular-nums">×{group.count}</span>

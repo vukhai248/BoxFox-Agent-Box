@@ -133,7 +133,7 @@ export function RepoPicker() {
         <div
           ref={panelRef}
           data-testid="repo-menu"
-          className="fixed z-50 w-80 sm:w-96 rounded-2xl border border-line bg-panel p-3 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none"
+          className="fixed z-50 w-80 sm:w-96 rounded-2xl border border-line bg-panel p-3 shadow-2xl animate-pop-in select-none"
           style={{ left: panelPosition.left, bottom: panelPosition.bottom }}
         >
           <RepoPickerView
@@ -218,7 +218,7 @@ export function RepoPickerView({
         {/* Group 1: Configured */}
         {configuredRepos.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider px-2">Configured</span>
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wider px-2">Configured</span>
             <div className="space-y-0.5 pt-0.5">
               {configuredRepos.map((repo) => {
                 const isSelected = selectedRepoIds.includes(repo.id)
@@ -254,7 +254,7 @@ export function RepoPickerView({
         {/* Group 2: Not set up */}
         {unconfiguredRepos.length > 0 && (
           <div className="space-y-1 pt-1 border-t border-line/50">
-            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider px-2">Not set up</span>
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wider px-2">Not set up</span>
             <div className="space-y-0.5 pt-0.5">
               {unconfiguredRepos.map((repo) => {
                 const isSelected = selectedRepoIds.includes(repo.id)

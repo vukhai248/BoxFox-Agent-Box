@@ -33,7 +33,7 @@ function RouterTurn({ turn, snapshot, busy, onOpenLightbox }: { turn: RouterChat
         )}
         <MarkdownRenderer content={turn.prompt} />
       </div>
-      <div className="flex items-center gap-2 text-[10px] text-muted pr-1 select-none">
+      <div className="flex items-center gap-2 text-[11px] text-muted pr-1 select-none">
         <time dateTime={turn.startedAt}>{new Date(turn.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
         <button type="button" title="Copy message" aria-label="Copy message" onClick={() => { void navigator.clipboard.writeText(turn.prompt).then(() => setCopied(true)) }} className="hover:text-fg transition cursor-pointer">{copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}</button>
         <span className="flex size-4 items-center justify-center rounded-full bg-panel border border-line text-[8px] font-bold text-muted">KV</span>
@@ -48,7 +48,7 @@ function RouterTurn({ turn, snapshot, busy, onOpenLightbox }: { turn: RouterChat
       {turn.error && <p role="alert" className="text-xs leading-relaxed text-rose-500">{turn.error}</p>}
       {turn.status === 'cancelled' && <p className="text-xs text-muted">Đã dừng request.</p>}
       <div className="flex items-start justify-between gap-3 select-none">
-        <details className="min-w-0 text-[10px] text-muted">
+        <details className="min-w-0 text-[11px] text-muted">
           <summary className="cursor-pointer hover:text-fg">{turn.status === 'streaming' ? 'Đang chạy' : turn.status === 'failed' ? 'Request thất bại' : turn.status === 'cancelled' ? 'Đã dừng' : 'Đã hoàn thành'}{turn.latencyMs != null ? ` · ${(turn.latencyMs / 1000).toFixed(2)}s` : ''} · {tokenLabel(turn)}</summary>
           <div className="mt-2 space-y-1 break-all font-mono"><div>Request ID: {turn.meta?.requestId ?? 'chưa nhận được'}</div><div>Target: {turn.meta ? `${turn.meta.connectionId}/${turn.meta.modelId}` : 'chưa nhận được'}</div><div>Finish: {turn.finishReason ?? 'chưa có dữ liệu'}</div><div>Chi phí: chưa có dữ liệu</div>{turn.toolCalls.length > 0 && <><div>Tool-call được trả về, không được thực thi:</div><pre className="overflow-auto rounded-lg border border-line bg-panel2 p-2">{JSON.stringify(turn.toolCalls, null, 2)}</pre></>}</div>
         </details>
@@ -79,7 +79,7 @@ export function RouterTestChat() {
   return <div className="flex h-full flex-col overflow-hidden bg-bg" data-testid="router-chat">
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line bg-panel px-4 py-2 select-none">
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted" title={routerUnavailable ? error ?? undefined : 'Mỗi prompt là một request độc lập; không gửi lại lịch sử.'}><span className={`size-1.5 shrink-0 rounded-full ${routerUnavailable ? 'bg-rose-500' : !selected ? 'bg-muted/40' : 'bg-brand'}`} /><span className="truncate">{routerUnavailable ? 'Router chưa kết nối' : loading ? 'Đang kết nối…' : !selected ? 'Chưa cấu hình Provider' : 'Chat một lượt'}</span></div>
-      <span className="truncate text-[10px] text-muted">{tokenLabel(turns.at(-1))}</span><button type="button" onClick={openProvider} className="shrink-0 text-[11px] text-muted hover:text-fg cursor-pointer">{routerUnavailable || !selected ? 'Mở Provider' : 'Provider'}</button>
+      <span className="truncate text-[11px] text-muted">{tokenLabel(turns.at(-1))}</span><button type="button" onClick={openProvider} className="shrink-0 text-[11px] text-muted hover:text-fg cursor-pointer">{routerUnavailable || !selected ? 'Mở Provider' : 'Provider'}</button>
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-6 select-text">
       {turns.length === 0 ? <div className="flex h-full flex-col items-center justify-center p-8 text-center"><div className="max-w-sm space-y-2"><div className="mx-auto flex size-10 items-center justify-center rounded-xl bg-panel2 border border-line text-muted"><Sparkles className="size-5 text-brand" /></div><h3 className="text-sm font-semibold text-fg">{t('chat.empty.title')}</h3><p className="text-xs leading-relaxed text-muted">{t('chat.routerEmptyBody')}</p></div></div> : turns.map(turn => <RouterTurn key={turn.id} turn={turn} snapshot={snapshot} busy={isSending} onOpenLightbox={setLightboxSrc} />)}<div ref={messagesEndRef} />

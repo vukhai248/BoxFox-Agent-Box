@@ -165,12 +165,12 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
     const isFree = model.id.includes(':free') || model.id === 'openrouter/free'
     return (
       <>
-        {isFree && <span className="shrink-0 rounded border border-emerald-500/20 bg-emerald-500/10 px-1 font-mono text-[9px] text-emerald-400">free</span>}
-        {model.source === 'custom' && <span className="shrink-0 rounded border border-brand/20 bg-brand/10 px-1 font-mono text-[9px] text-brand">custom</span>}
-        <span className={`shrink-0 rounded border px-1 font-mono text-[9px] ${vision === 'verified' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-line bg-panel text-muted'}`}>
+        {isFree && <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-1 font-mono text-[11px] text-emerald-400">free</span>}
+        {model.source === 'custom' && <span className="shrink-0 rounded-full border border-brand/20 bg-brand/10 px-1 font-mono text-[11px] text-brand">custom</span>}
+        <span className={`shrink-0 rounded-full border px-1 font-mono text-[11px] ${vision === 'verified' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-line bg-panel text-muted'}`}>
           {vision === 'verified' ? 'vision' : `vision ${vision}`}
         </span>
-        {(reasoning === 'verified' || reasoning === 'reported') && <span className="hidden shrink-0 rounded border border-brand/20 bg-brand/10 px-1 font-mono text-[9px] text-brand lg:inline">reasoning</span>}
+        {(reasoning === 'verified' || reasoning === 'reported') && <span className="hidden shrink-0 rounded-full border border-brand/20 bg-brand/10 px-1 font-mono text-[11px] text-brand lg:inline">reasoning</span>}
       </>
     )
   }
@@ -179,9 +179,9 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
     <div className="mt-2 rounded-lg border border-line/60 bg-panel2/30 p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="text-[10px] font-mono uppercase text-muted">Models</p>
-          <span className="rounded-full border border-line bg-panel px-2 py-0.5 font-mono text-[10px] text-muted">{enabledCount} / {rows.length} active</span>
-          {verified.length > 0 && <span className="hidden items-center gap-1 font-mono text-[10px] text-emerald-400 sm:flex"><span className="size-1.5 rounded-full bg-emerald-400" />{verified.length} verified ready</span>}<span className="hidden items-center gap-1 font-mono text-[10px] text-muted sm:flex" title="Models that carry a price — reported by the provider, published in its model list, or set by you. Manage models sets the rest.">Prices {priced} / {rows.length} models</span>
+          <p className="text-[11px] font-mono uppercase text-muted">Models</p>
+          <span className="rounded-full border border-line bg-panel px-2 py-0.5 font-mono text-[11px] text-muted">{enabledCount} / {rows.length} active</span>
+          {verified.length > 0 && <span className="hidden items-center gap-1 font-mono text-[11px] text-emerald-400 sm:flex"><span className="size-1.5 rounded-full bg-emerald-400" />{verified.length} verified ready</span>}<span className="hidden items-center gap-1 font-mono text-[11px] text-muted sm:flex" title="Models that carry a price — reported by the provider, published in its model list, or set by you. Manage models sets the rest.">Prices {priced} / {rows.length} models</span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           <button
@@ -198,7 +198,7 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
           <button type="button" onClick={() => openManager(connections[0])} className="inline-flex items-center gap-1.5 rounded-lg border border-brand/40 bg-brand/15 px-2.5 py-1 text-[11px] font-semibold text-brand transition hover:bg-brand/25"><SlidersHorizontal className="size-3.5" />Manage models</button>
         </div>
       </div>
-      {providerScoped && <p className="mt-1 text-[10px] leading-4 text-muted">One row per model · served by {connections.length} connection{connections.length === 1 ? '' : 's'}.</p>}
+      {providerScoped && <p className="mt-1 text-[11px] leading-4 text-muted">One row per model · served by {connections.length} connection{connections.length === 1 ? '' : 's'}.</p>}
 
       {addModelOpen && (
         <div id={addModelId} className="mt-2 rounded-lg border border-dashed border-line/70 bg-panel2/40 p-2.5">
@@ -220,31 +220,31 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
             return (
               <div key={row.model.id}>
                 <div className="flex min-h-[28px] flex-wrap items-center gap-2 py-0.5 text-[11px]">
-                  <input type="checkbox" ref={(input) => { checkboxes.current.set(row.model.id, input) }} disabled={busy} checked={checked} onChange={() => void toggle(row)} aria-label={`Enable ${row.model.id}`} className="size-3 shrink-0 accent-blue-500" />
+                  <input type="checkbox" ref={(input) => { checkboxes.current.set(row.model.id, input) }} disabled={busy} checked={checked} onChange={() => void toggle(row)} aria-label={`Enable ${row.model.id}`} className="size-3 shrink-0 accent-brand" />
                   <span className="min-w-0 max-w-[16rem] truncate font-medium text-fg" title={row.model.name}>{row.model.name}</span>
-                  <span className="hidden min-w-0 max-w-[14rem] truncate font-mono text-[10px] text-muted md:inline" title={row.model.id}>{row.model.id}</span>
-                  {row.serving.length > 1 && <span className="shrink-0 rounded border border-line bg-panel px-1 font-mono text-[9px] text-muted" title={row.serving.map((connection) => connection.name).join(', ')}>{row.serving.length} connections</span>}
+                  <span className="hidden min-w-0 max-w-[14rem] truncate font-mono text-[11px] text-muted md:inline" title={row.model.id}>{row.model.id}</span>
+                  {row.serving.length > 1 && <span className="shrink-0 rounded-full border border-line bg-panel px-1 font-mono text-[11px] text-muted" title={row.serving.map((connection) => connection.name).join(', ')}>{row.serving.length} connections</span>}
                   {capabilityChips(row.model)}
-                  {row.model.thinkingLevels && row.model.thinkingLevels.length > 0 && <span className="hidden shrink-0 font-mono text-[9px] text-muted xl:inline">{row.model.thinkingLevels.join(' · ')}</span>}
-                  <span className={`ml-auto shrink-0 font-mono text-[10px] ${modelLatencyTone(row.model)}`} title={latencyTitle(row.model)}>{isProbing ? 'Testing…' : row.model.lastProbe ? `${row.model.lastProbe.latencyMs} ms` : 'Untested'}</span>
-                  <button type="button" aria-busy={isProbing} disabled={busy || isProbing} onClick={() => void testModel(row)} className="shrink-0 rounded border border-line bg-panel px-1.5 py-0.5 text-[10px] font-medium text-fg transition hover:bg-panel2 hover:text-brand disabled:opacity-50">{isProbing ? 'Testing…' : 'Test'}</button>
+                  {row.model.thinkingLevels && row.model.thinkingLevels.length > 0 && <span className="hidden shrink-0 font-mono text-[11px] text-muted xl:inline">{row.model.thinkingLevels.join(' · ')}</span>}
+                  <span className={`ml-auto shrink-0 font-mono text-[11px] ${modelLatencyTone(row.model)}`} title={latencyTitle(row.model)}>{isProbing ? 'Testing…' : row.model.lastProbe ? `${row.model.lastProbe.latencyMs} ms` : 'Untested'}</span>
+                  <button type="button" aria-busy={isProbing} disabled={busy || isProbing} onClick={() => void testModel(row)} className="shrink-0 rounded-full border border-line bg-panel px-1.5 py-0.5 text-[11px] font-medium text-fg transition hover:bg-panel2 hover:text-brand disabled:opacity-50">{isProbing ? 'Testing…' : 'Test'}</button>
                   <button type="button" aria-label={`Copy ${row.model.id}`} title="Copy model ID" onClick={() => run(copyModel(row.model.id))} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-fg"><Copy className="size-3" /></button>
                   <button type="button" aria-label={`Manage ${row.model.id}`} title="Manage this model" onClick={() => openManager(row.serving[0], row.model.id)} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-fg"><SlidersHorizontal className="size-3.5" /></button>
                   <button type="button" title="Remove from active models" onClick={() => void disable(row)} className="shrink-0 rounded p-1 text-muted transition hover:bg-panel2 hover:text-rose-400"><X className="size-3" /></button>
                 </div>
                 {result && (
-                  <p className={`pb-1 pl-5 font-mono text-[10px] ${result.status === 'passed' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <p className={`pb-1 pl-5 font-mono text-[11px] ${result.status === 'passed' ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {result.status === 'passed' ? `Answered BOXFOX_OK · ${result.latencyMs} ms` : `HTTP ${result.httpStatus} · ${result.code} · ${result.message}`}
                     {row.serving.length > 1 && ` · Tested via ${row.serving[0].name}`}
                   </p>
                 )}
-                {partialFailure?.modelId === row.model.id && <p className="pb-1 pl-5 text-[10px] text-rose-400">{partialFailure.message}</p>}
+                {partialFailure?.modelId === row.model.id && <p className="pb-1 pl-5 text-[11px] text-rose-400">{partialFailure.message}</p>}
               </div>
             )
           })}
         </div>
       )}
-      {partialFailure && partialFailure.modelId === '' && <p className="px-1 pt-1 text-[10px] text-rose-400">{partialFailure.message}</p>}
+      {partialFailure && partialFailure.modelId === '' && <p className="px-1 pt-1 text-[11px] text-rose-400">{partialFailure.message}</p>}
 
       {/* Inference verification: under the ping table */}
       {connections.some((c) => c.credentialPresent && c.authState === 'ready') && (
@@ -260,7 +260,7 @@ function ModelListBody({ rows, connections, providerScoped = false }: { rows: Pr
               <Activity className="size-3.5 text-brand" />
               <span>Test inference</span>
             </div>
-            <span className="flex items-center gap-1.5 font-mono text-[10px] font-normal normal-case">
+            <span className="flex items-center gap-1.5 font-mono text-[11px] font-normal normal-case">
               {connections[0]?.inferenceState}
               {inferenceOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
             </span>

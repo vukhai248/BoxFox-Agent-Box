@@ -66,7 +66,7 @@ const LEVEL_CLASSES: Record<'0' | '1' | '2' | 'unknown', string> = {
   unknown: 'bg-panel2 text-muted border border-line',
 }
 
-const MONO_BADGE = 'rounded bg-panel px-2 py-0.5 text-[10px] font-mono text-brand border border-line'
+const MONO_BADGE = 'rounded-full bg-panel px-2 py-0.5 text-[11px] font-mono text-brand border border-line'
 
 export function PlanEvalCard({ evaluation, indexAvailable, identity }: PlanEvalCardProps) {
   const t = useT()
@@ -102,7 +102,7 @@ export function PlanEvalCard({ evaluation, indexAvailable, identity }: PlanEvalC
           {blocked && (
             <span
               data-component-id="plan-eval-written"
-              className="rounded px-1.5 py-px text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/40"
+              className="rounded-full px-1.5 py-px text-[11px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/40"
             >
               {t('plan.eval.notWritten')}
             </span>
@@ -111,7 +111,7 @@ export function PlanEvalCard({ evaluation, indexAvailable, identity }: PlanEvalC
             <span
               data-component-id="plan-verdict-chip"
               data-testid="plan-verdict-chip"
-              className={`rounded px-1.5 py-px text-[10px] font-semibold ${VERDICT_CLASSES[evaluation.verdict]}`}
+              className={`rounded px-1.5 py-px text-[11px] font-semibold ${VERDICT_CLASSES[evaluation.verdict]}`}
             >
               {t(VERDICT_LABELS[evaluation.verdict])}
             </span>
@@ -139,20 +139,20 @@ export function PlanEvalCard({ evaluation, indexAvailable, identity }: PlanEvalC
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="font-mono text-[10px] font-bold text-muted">{dimension}</span>
+                  <span className="font-mono text-[11px] font-bold text-muted">{dimension}</span>
                   <span className="truncate text-[11px] font-medium text-fg">
                     {t(DIMENSION_LABELS[dimension])}
                   </span>
                 </span>
                 <span
-                  className={`shrink-0 rounded px-1.5 py-px font-mono text-[10px] font-semibold ${
+                  className={`shrink-0 rounded px-1.5 py-px font-mono text-[11px] font-semibold ${
                     LEVEL_CLASSES[levelText(level)]
                   }`}
                 >
                   {level === null ? '?/2' : `${level}/2`}
                 </span>
               </div>
-              <div className="truncate font-mono text-[10px] text-muted" title={detail}>
+              <div className="truncate font-mono text-[11px] text-muted" title={detail}>
                 {detail}
               </div>
             </div>
@@ -160,7 +160,7 @@ export function PlanEvalCard({ evaluation, indexAvailable, identity }: PlanEvalC
         })}
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-line pt-2 font-mono text-[10px] text-muted">
+      <div className="flex items-center justify-between gap-2 border-t border-line pt-2 font-mono text-[11px] text-muted">
         <span data-component-id="plan-eval-note-keywords">
           {keywords
             ? t('plan.eval.noteKeywords', { echoed: echoed ?? 0, keywords })
@@ -188,7 +188,7 @@ function DimRow({ testId, text, chip }: { testId: string; text: string; chip: st
     >
       <Shield className="size-3.5 shrink-0" />
       <span className="min-w-0 flex-1">{text}</span>
-      <span className="rounded bg-panel px-2 py-0.5 text-[10px] font-mono text-muted border border-line">
+      <span className="rounded-full bg-panel px-2 py-0.5 text-[11px] font-mono text-muted border border-line">
         {chip}
       </span>
     </div>
@@ -212,7 +212,7 @@ function MeasuresBox({ evaluation }: { evaluation: PlanEvaluation }) {
     <div
       data-component-id="plan-eval-measures"
       data-testid="plan-eval-measures"
-      className="grid grid-cols-2 gap-1.5 rounded-md border border-line bg-panel p-2.5 font-mono text-[10px] text-muted"
+      className="grid grid-cols-2 gap-1.5 rounded-md border border-line bg-panel p-2.5 font-mono text-[11px] text-muted"
     >
       <div>
         written: <span className="text-rose-400">{String(evaluation.written)}</span>

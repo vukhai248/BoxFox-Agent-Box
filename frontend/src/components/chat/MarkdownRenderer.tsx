@@ -378,7 +378,7 @@ function AnswerImageTile({ path, caption, tools }: { path: string; caption: stri
           </span>
         )}
         {fileName && (
-          <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-500" data-capture-file="true" title={artifactPath || undefined}>
+          <span className="mt-0.5 block truncate font-mono text-[11px] text-zinc-500" data-capture-file="true" title={artifactPath || undefined}>
             {fileName}
           </span>
         )}
@@ -434,7 +434,7 @@ function makeAnchorRenderer(tools: MarkdownTools): (props: AnchorProps) => React
             <PassiveMediaContext.Provider value={true}>{children}</PassiveMediaContext.Provider>
             {!children && relativePath}
           </span>
-          <span className="shrink-0 text-[10px] font-sans text-muted">{label}</span>
+          <span className="shrink-0 text-[11px] font-sans text-muted">{label}</span>
         </button>
       )
     }
@@ -521,7 +521,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-panel2 font-mono text-xs shadow-xs my-2.5 [content-visibility:auto] [contain-intrinsic-size:1px_140px]">
       <div className="flex items-center justify-between border-b border-line bg-panel px-3.5 py-1.5 text-[11px] text-muted select-none">
-        <span className="font-medium text-fg uppercase text-[10px] tracking-wide">{language}</span>
+        <span className="font-medium text-fg uppercase text-[11px] tracking-wide">{language}</span>
         <button
           type="button"
           onClick={handleCopy}
@@ -531,12 +531,12 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
           {copied ? (
             <>
               <Check className="size-3 text-emerald-500" />
-              <span className="text-[10px] text-emerald-500 font-sans">Copied</span>
+              <span className="text-[11px] text-emerald-500 font-sans">Copied</span>
             </>
           ) : (
             <>
               <Copy className="size-3" />
-              <span className="text-[10px] font-sans">Copy</span>
+              <span className="text-[11px] font-sans">Copy</span>
             </>
           )}
         </button>

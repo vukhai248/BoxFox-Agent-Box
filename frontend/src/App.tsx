@@ -370,7 +370,7 @@ export default function App() {
                       {isDecisionsWithPending && (
                         <span
                           data-testid={`tab-badge-${tab}`}
-                          className="shrink-0 flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[9px] font-bold text-amber-300"
+                          className="shrink-0 flex size-4 items-center justify-center rounded-full bg-amber-500/20 font-mono text-[11px] font-bold text-amber-300"
                         >
                           {badgeCount}
                         </span>
@@ -522,7 +522,7 @@ export function TopBar({
 
           {/* Dropdown Popup Menu (Devin Style) */}
           {moreMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-zinc-200/90 dark:border-line bg-white dark:bg-panel p-1.5 shadow-2xl shadow-black/10 dark:shadow-black/50 animate-in fade-in zoom-in-95 duration-100 select-none">
+            <div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-zinc-200/90 dark:border-line bg-white dark:bg-panel p-1.5 shadow-2xl shadow-black/10 dark:shadow-black/50 animate-pop-in select-none">
               {/* Section 1: Workspaces */}
               <div className="px-2.5 py-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
                 Workspaces
@@ -561,7 +561,7 @@ export function TopBar({
                           {shortcut.map((key) => (
                             <kbd
                               key={key}
-                              className="rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-panel2 px-1 py-0.5 text-[9px] font-mono text-zinc-400 dark:text-zinc-400 leading-none"
+                              className="rounded-full border border-line bg-panel2 px-1 py-0.5 text-[11px] font-mono text-muted leading-none"
                             >
                               {key}
                             </kbd>
@@ -590,7 +590,7 @@ export function TopBar({
                     <span className="font-medium">Machine</span>
                   </div>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider ${
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tracking-wider ${
                       box.power === 'on'
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                         : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400'
@@ -610,7 +610,7 @@ export function TopBar({
                     <span className="font-medium">Network</span>
                   </div>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider ${
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tracking-wider ${
                       box.network === 'on'
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                         : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400'

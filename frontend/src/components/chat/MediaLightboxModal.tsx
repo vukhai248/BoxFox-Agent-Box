@@ -239,7 +239,7 @@ export function MediaLightboxModal({
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/90 p-4 select-none backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/90 p-4 select-none backdrop-blur-md animate-fade-in"
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -401,7 +401,7 @@ export function MediaLightboxModal({
             <button
               type="button"
               onClick={cycleSpeed}
-              className="px-1.5 py-0.5 rounded bg-panel border border-line text-[10px] font-semibold text-brand hover:border-brand transition cursor-pointer"
+              className="px-1.5 py-0.5 rounded-full bg-panel border border-line text-[11px] font-semibold text-brand hover:border-brand transition cursor-pointer"
               title="Change Speed"
             >
               {playbackRate}x

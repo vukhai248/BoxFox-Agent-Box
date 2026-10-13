@@ -90,7 +90,7 @@ export function TerminalPanel() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-panel2/60 px-3 py-1 text-[11px] text-muted">
         <span>{t('terminal.footerInfo')}</span>
-        <span className="font-mono text-[10px]">
+        <span className="font-mono text-[11px]">
           {phase === 'live' ? url.replace(/^ws(s?):\/\//, '$1//') : url}
         </span>
       </div>

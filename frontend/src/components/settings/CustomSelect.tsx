@@ -69,7 +69,7 @@ export function CustomSelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-2xl animate-pop-in">
           {normalizedOptions.map((opt) => {
             const isSelected = opt.value === value
             return (
@@ -91,7 +91,7 @@ export function CustomSelect({
                   <div>
                     <div className="truncate">{opt.label}</div>
                     {opt.description && (
-                      <div className="text-[10px] text-muted truncate font-normal">
+                      <div className="text-[11px] text-muted truncate font-normal">
                         {opt.description}
                       </div>
                     )}
@@ -201,7 +201,7 @@ export function TagMultiSelect({
 
       {/* Floating Dropdown Menu */}
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-2xl animate-pop-in">
           {options.map((opt) => {
             const isSelected = values.includes(opt)
             return (

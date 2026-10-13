@@ -44,7 +44,7 @@ export function CompletionEmailNotice() {
           {t('notifications.noticeTo', { email: completionEmail.to })}
         </p>
         <div className="rounded border border-line bg-panel2/60 p-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('notifications.emailLabel')}
           </p>
           <p className="mt-1 font-medium text-fg">{subject}</p>

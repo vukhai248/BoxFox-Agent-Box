@@ -64,7 +64,7 @@ export function WorkspaceToolbar({
       </button>
       <Breadcrumb crumbs={crumbs} onNavigate={onNavigate} onMoveEntry={onMoveEntry} />
       {selectedCount > 0 && (
-        <span className="shrink-0 rounded bg-panel2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+        <span className="shrink-0 rounded-full bg-panel2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
           {t('workspace.selectedCount', { n: selectedCount })}
         </span>
       )}

@@ -65,7 +65,7 @@ export function CardNode({ node, selected, onPointerDown, onContextMenu, onUpdat
               aria-label="Card title"
             />
           </div>
-          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${badge.className}`}>{badge.label}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${badge.className}`}>{badge.label}</span>
         </div>
         <div className="flex-1 overflow-hidden p-3">
           <textarea

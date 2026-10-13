@@ -33,7 +33,7 @@ export function ReferralsView() {
       {/* Referral Link Card */}
       <div className="rounded-2xl border border-line bg-panel p-6 space-y-4 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-[#b45309]/15 text-[#b45309] border border-[#b45309]/30">
             <Gift className="size-5" />
           </div>
           <div>

@@ -190,7 +190,7 @@ export function ElementInspectorDrawer({ state, onClose, onRetry, onAddToChat }:
             type="button"
             disabled={state.status === 'loading'}
             onClick={onAddToChat}
-            className="rounded-md bg-brand px-3 py-1.5 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-brand px-3 py-1.5 text-[11px] font-semibold text-brandfg disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('screen.inspector.drawer.addToChat')}
           </button>

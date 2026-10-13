@@ -175,12 +175,12 @@ export function SkillsView() {
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-xs font-semibold text-fg truncate">{skill.name}</h3>
+                      <h3 className="text-xs font-bold text-fg truncate">{skill.name}</h3>
                       <span
-                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                        className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${
                           skill.source === 'claude-code'
                             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                            : 'bg-brand/15 text-brand dark:text-brand border border-brand/20'
                         }`}
                       >
                         {skill.source}
@@ -195,7 +195,7 @@ export function SkillsView() {
                       {skill.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded bg-panel border border-line px-1.5 py-0.5 text-[9px] text-muted font-mono"
+                          className="rounded-full bg-panel border border-line px-1.5 py-0.5 text-[11px] text-muted font-mono"
                         >
                           #{tag}
                         </span>
@@ -227,7 +227,7 @@ export function SkillsView() {
             <div className="sticky top-6 rounded-xl border border-line bg-panel p-5 shadow-xs space-y-4">
               <div className="flex items-start justify-between gap-3 border-b border-line pb-4">
                 <div>
-                  <span className="text-[10px] font-bold tracking-wider text-brand uppercase">
+                  <span className="text-[11px] font-bold tracking-wider text-brand uppercase">
                     Skill Specification
                   </span>
                   <h2 className="text-sm font-bold text-fg mt-0.5">{activeSkill.name}</h2>

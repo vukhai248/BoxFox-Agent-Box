@@ -437,7 +437,7 @@ function PermissionButton({
 function DiffView({ diff, filePath }: { diff: DiffLine[]; filePath: string }) {
   return (
     <div className="overflow-x-auto font-mono text-[11px] leading-relaxed">
-      <p className="mb-1 border-b border-line pb-1 text-[10px] text-muted">{filePath}</p>
+      <p className="mb-1 border-b border-line pb-1 text-[11px] text-muted">{filePath}</p>
       {diff.map((dline, index) => (
         <div
           key={index}

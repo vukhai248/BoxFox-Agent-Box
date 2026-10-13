@@ -198,10 +198,10 @@ export function SearchProviderPanel({ snapshot }: { snapshot: ProviderSnapshot }
                       : t('providerSearch.notConfigured')}
                   </p>
                   {provider.envKeys.length > 0 && (
-                    <p className="mt-0.5 font-mono text-[10px] text-muted/80">{t('providerSearch.envFallback', { keys: provider.envKeys.join(', ') })}</p>
+                    <p className="mt-0.5 font-mono text-[11px] text-muted/80">{t('providerSearch.envFallback', { keys: provider.envKeys.join(', ') })}</p>
                   )}
                   {line && (
-                    <p className={`mt-0.5 text-[10px] font-semibold ${line.tone === 'passed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-300'}`}>
+                    <p className={`mt-0.5 text-[11px] font-semibold ${line.tone === 'passed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-300'}`}>
                       {line.text}
                       {testedAt && <span className="ml-1 font-normal text-muted">· {t('providerSearch.lastTested', { time: testedAt })}</span>}
                     </p>

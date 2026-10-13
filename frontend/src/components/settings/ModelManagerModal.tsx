@@ -222,7 +222,7 @@ export function ModelManagerModal({
   const getStatusBadge = (model: any) => {
     if (model.health === 'ready' || model.lastProbe?.status === 'passed') {
       return (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">
+        <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400 border border-emerald-500/20">
           <span className="size-1.5 rounded-full bg-emerald-500" />
           Passed
         </span>
@@ -232,7 +232,7 @@ export function ModelManagerModal({
       return (
         <span
           title={model.lastProbe?.error ?? undefined}
-          className="flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-400 border border-rose-500/20"
+          className="flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-400 border border-rose-500/20"
         >
           <span className="size-1.5 rounded-full bg-rose-500" />
           Failed
@@ -240,7 +240,7 @@ export function ModelManagerModal({
       )
     }
     return (
-      <span className="flex items-center gap-1 rounded-full bg-panel2 px-2 py-0.5 text-[10px] font-medium text-muted border border-line">
+      <span className="flex items-center gap-1 rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-medium text-muted border border-line">
         <span className="size-1.5 rounded-full bg-muted/60" />
         Untested
       </span>
@@ -273,7 +273,7 @@ export function ModelManagerModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-fg tracking-tight">
+                <h2 className="text-base font-bold text-fg tracking-tight">
                   Available Models ({connection.name})
                 </h2>
                 <span className="rounded-full bg-brand/10 border border-brand/20 px-2 py-0.5 text-[11px] font-mono font-medium text-brand">
@@ -473,7 +473,7 @@ export function ModelManagerModal({
                 <div className="border-b border-line/60 pb-4 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-fg tracking-tight">
+                      <h3 className="text-base font-bold text-fg tracking-tight">
                         {selectedModel.name}
                       </h3>
                       <div className="mt-1 flex items-center gap-2">
@@ -501,7 +501,7 @@ export function ModelManagerModal({
                           type="checkbox"
                           checked={enabledIds.has(selectedModel.id)}
                           onChange={() => void toggleModel(selectedModel.id)}
-                          className="size-3.5 rounded text-brand focus:ring-0 accent-blue-500"
+                          className="size-3.5 rounded text-brand focus:ring-0 accent-brand"
                         />
                         <span className={enabledIds.has(selectedModel.id) ? 'text-brand' : 'text-muted'}>
                           {enabledIds.has(selectedModel.id) ? 'Active' : 'Disabled'}
@@ -517,24 +517,24 @@ export function ModelManagerModal({
                   {/* Badges / Features */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     {(selectedModel.id.includes(':free') || selectedModel.id === 'openrouter/free') && (
-                      <span className="rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold">
+                      <span className="rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-semibold">
                         Free Tier (0 USD)
                       </span>
                     )}
                     {(selectedModel.capabilities?.vision === 'reported' ||
                       selectedModel.capabilities?.vision === 'verified') && (
-                      <span className="flex items-center gap-1 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/30 px-2 py-0.5 text-[10px] font-medium">
+                      <span className="flex items-center gap-1 rounded-md bg-brand/15 text-brand border border-brand/30 px-2 py-0.5 text-[11px] font-medium">
                         <Eye className="size-3" /> Vision Supported
                       </span>
                     )}
                     {(selectedModel.capabilities?.reasoning === 'reported' ||
                       selectedModel.capabilities?.reasoning === 'verified' ||
                       ((selectedModel as any).thinkingLevels?.length ?? 0) > 0) && (
-                      <span className="flex items-center gap-1 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium">
+                      <span className="flex items-center gap-1 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 text-[11px] font-medium">
                         <Sparkles className="size-3" /> Thinking / Reasoning
                       </span>
                     )}
-                    <span className="rounded-md bg-panel2 border border-line text-muted px-2 py-0.5 text-[10px] font-mono">
+                    <span className="rounded-md bg-panel2 border border-line text-muted px-2 py-0.5 text-[11px] font-mono">
                       Source: {selectedModel.source || 'live'}
                     </span>
                   </div>
@@ -550,19 +550,19 @@ export function ModelManagerModal({
                   {selectedModel.lastProbe ? (
                     <div className="grid grid-cols-3 gap-2 pt-1 text-[11px] font-mono">
                       <div className="rounded bg-panel2/60 p-2">
-                        <span className="block text-[10px] text-muted">Status</span>
+                        <span className="block text-[11px] text-muted">Status</span>
                         <span className="font-semibold text-emerald-400 uppercase">
                           {selectedModel.lastProbe.status}
                         </span>
                       </div>
                       <div className="rounded bg-panel2/60 p-2">
-                        <span className="block text-[10px] text-muted">Latency</span>
+                        <span className="block text-[11px] text-muted">Latency</span>
                         <span className="font-semibold text-fg">
                           {selectedModel.lastProbe.latencyMs} ms
                         </span>
                       </div>
                       <div className="rounded bg-panel2/60 p-2">
-                        <span className="block text-[10px] text-muted">HTTP Code</span>
+                        <span className="block text-[11px] text-muted">HTTP Code</span>
                         <span className="font-semibold text-fg">
                           {selectedModel.lastProbe.httpStatus || 200}
                         </span>
@@ -598,7 +598,7 @@ export function ModelManagerModal({
 
                   {/* Prompt input */}
                   <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+                    <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
                       Test Prompt
                     </label>
                     <input
@@ -669,7 +669,7 @@ export function ModelManagerModal({
                       )}
 
                       {testOutput.usage && (
-                        <div className="text-[10px] text-muted pt-1 border-t border-line/20">
+                        <div className="text-[11px] text-muted pt-1 border-t border-line/20">
                           Tokens: {testOutput.usage.prompt_tokens ?? 0} prompt /{' '}
                           {testOutput.usage.completion_tokens ?? 0} completion · Cost: 0 USD
                         </div>
@@ -742,7 +742,7 @@ function parsePriceInput(value: string) {
 function PriceCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-line bg-panel p-2">
-      <span className="block text-[10px] uppercase font-mono text-muted">{label}</span>
+      <span className="block text-[11px] uppercase font-mono text-muted">{label}</span>
       <span className="text-xs font-semibold text-fg font-mono">{value}</span>
     </div>
   )
@@ -766,7 +766,7 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
   if (connection.costMode === 'included') {
     return (
       <div className="rounded-lg border border-line bg-[#0d0f13] p-3">
-        <span className="block text-[10px] uppercase font-mono text-muted">Price</span>
+        <span className="block text-[11px] uppercase font-mono text-muted">Price</span>
         <p className="mt-1.5 text-xs text-muted">Included in the plan — this provider does not bill per token.</p>
       </div>
     )
@@ -810,7 +810,7 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
   return (
     <div className="rounded-lg border border-line bg-[#0d0f13] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10px] uppercase font-mono text-muted">Price · USD / 1M tokens</span>
+        <span className="text-[11px] uppercase font-mono text-muted">Price · USD / 1M tokens</span>
         {open ? (
           <div className="flex items-center gap-2">
             {pricing?.source === 'manual' && (
@@ -819,7 +819,7 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
                 disabled={busy}
                 title="Drop the price you set and go back to the provider's or our documented price."
                 onClick={() => void patch({ modelPricing: { modelId: model.id, clear: true } })}
-                className="rounded border border-line bg-panel px-2 py-0.5 text-[10px] font-medium text-fg transition cursor-pointer hover:text-brand disabled:opacity-50"
+                className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-medium text-fg transition cursor-pointer hover:text-brand disabled:opacity-50"
               >
                 Clear override
               </button>
@@ -828,7 +828,7 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
               type="button"
               disabled={busy}
               onClick={save}
-              className="rounded border border-line bg-panel px-2 py-0.5 text-[10px] font-semibold text-fg transition cursor-pointer hover:text-brand disabled:opacity-50"
+              className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-semibold text-fg transition cursor-pointer hover:text-brand disabled:opacity-50"
             >
               Save price
             </button>
@@ -837,7 +837,7 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
           <button
             type="button"
             onClick={edit}
-            className="rounded border border-line bg-panel px-2 py-0.5 text-[10px] font-medium text-fg transition cursor-pointer hover:text-brand"
+            className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-medium text-fg transition cursor-pointer hover:text-brand"
           >
             Edit price
           </button>
@@ -846,15 +846,15 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
       {open ? (
         <div className="mt-2 grid grid-cols-3 gap-2">
           <label className="block">
-            <span className="block text-[10px] uppercase font-mono text-muted">Input</span>
+            <span className="block text-[11px] uppercase font-mono text-muted">Input</span>
             <input aria-label="Input price per million tokens" inputMode="decimal" value={input} onChange={(event) => setInput(event.target.value)} placeholder="0.30" className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 text-xs text-fg font-mono outline-hidden focus:border-brand" />
           </label>
           <label className="block">
-            <span className="block text-[10px] uppercase font-mono text-muted">Cached input</span>
+            <span className="block text-[11px] uppercase font-mono text-muted">Cached input</span>
             <input aria-label="Cached input price per million tokens" inputMode="decimal" value={cachedInput} onChange={(event) => setCachedInput(event.target.value)} placeholder="optional" className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 text-xs text-fg font-mono outline-hidden focus:border-brand" />
           </label>
           <label className="block">
-            <span className="block text-[10px] uppercase font-mono text-muted">Output</span>
+            <span className="block text-[11px] uppercase font-mono text-muted">Output</span>
             <input aria-label="Output price per million tokens" inputMode="decimal" value={output} onChange={(event) => setOutput(event.target.value)} placeholder="1.20" className="mt-1 w-full rounded-md border border-line bg-panel px-2 py-1 text-xs text-fg font-mono outline-hidden focus:border-brand" />
           </label>
         </div>
@@ -865,8 +865,8 @@ function ModelPriceBlock({ connection, model }: { connection: ProviderConnection
           <PriceCell label="Output" value={pricePerMillion(pricing?.output ?? null)} />
         </div>
       )}
-      <p className="mt-2 text-[10px] text-muted">{open ? 'Saved prices are USD per 1,000,000 tokens and override the provider price for this model only. Leave cached input blank when no cache-hit price is published.' : priceSourceLabel(pricing)}</p>
-      {error && <p className="mt-1 text-[10px] text-rose-400">{error}</p>}
+      <p className="mt-2 text-[11px] text-muted">{open ? 'Saved prices are USD per 1,000,000 tokens and override the provider price for this model only. Leave cached input blank when no cache-hit price is published.' : priceSourceLabel(pricing)}</p>
+      {error && <p className="mt-1 text-[11px] text-rose-400">{error}</p>}
     </div>
   )
 }
@@ -912,7 +912,7 @@ const ModelRowItem = React.memo(function ModelRowItem({
             e.stopPropagation()
             onToggle()
           }}
-          className="size-3.5 rounded border-line text-brand focus:ring-0 cursor-pointer shrink-0 accent-blue-500"
+          className="size-3.5 rounded border-line text-brand focus:ring-0 cursor-pointer shrink-0 accent-brand"
         />
 
         <div className="min-w-0 flex-1">
@@ -925,18 +925,18 @@ const ModelRowItem = React.memo(function ModelRowItem({
               {model.name}
             </span>
             {isFree && (
-              <span className="rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 text-[9px] font-mono shrink-0">
+              <span className="rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 text-[11px] font-mono shrink-0">
                 free
               </span>
             )}
             {model.source === 'custom' && (
-              <span className="rounded bg-brand/10 text-brand border border-brand/20 px-1 py-0.2 text-[9px] font-mono shrink-0">
+              <span className="rounded-full bg-brand/10 text-brand border border-brand/20 px-1 py-0.2 text-[11px] font-mono shrink-0">
                 custom
               </span>
             )}
           </div>
 
-          <p className="truncate font-mono text-[10px] text-muted" title={model.id}>
+          <p className="truncate font-mono text-[11px] text-muted" title={model.id}>
             {model.id}
           </p>
         </div>
@@ -953,7 +953,7 @@ const ModelRowItem = React.memo(function ModelRowItem({
             e.stopPropagation()
             onTest()
           }}
-          className="opacity-80 group-hover:opacity-100 rounded border border-line bg-panel hover:bg-panel2 px-2 py-0.5 text-[10px] font-medium text-fg hover:text-brand transition cursor-pointer"
+          className="opacity-80 group-hover:opacity-100 rounded-full border border-line bg-panel hover:bg-panel2 px-2 py-0.5 text-[11px] font-medium text-fg hover:text-brand transition cursor-pointer"
         >
           {isTesting ? '…' : 'Test'}
         </button>

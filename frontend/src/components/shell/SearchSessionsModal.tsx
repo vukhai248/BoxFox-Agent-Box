@@ -121,7 +121,7 @@ export function SearchSessionsModal() {
       }}
     >
       <div
-        className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+        className="w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl animate-pop-in"
         onKeyDown={onKeyDown}
       >
         {/* Search input */}
@@ -154,7 +154,7 @@ export function SearchSessionsModal() {
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto p-1.5">
           {/* Quick actions */}
-          <div className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+          <div className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted/70">
             {t('searchPalette.quickActions')}
           </div>
           <button
@@ -171,7 +171,7 @@ export function SearchSessionsModal() {
           </button>
 
           {/* Session actions */}
-          <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+          <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted/70">
             {t('searchPalette.sessionActions')}
           </div>
           <div className="grid grid-cols-2 gap-1 px-1">
@@ -204,7 +204,7 @@ export function SearchSessionsModal() {
           </div>
 
           {/* Recent sessions */}
-          <div className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+          <div className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted/70">
             {t('searchPalette.recentSessions')}
           </div>
           <div className="space-y-0.5">
@@ -226,7 +226,7 @@ export function SearchSessionsModal() {
                       activeIndex === idx ? 'bg-panel2 text-fg' : 'text-muted hover:bg-panel2/60'
                     }`}
                   >
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-[9px] font-bold text-blue-400">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
                       {session.initials}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>

@@ -44,7 +44,7 @@ function ModeStrip({ job }: { job: ResearchJob | null }) {
       <Microscope className="size-3 shrink-0" />
       <span className="font-medium">{t('research.stripRunning')}</span>
       {job && (
-        <span className="truncate font-mono text-[10px] text-muted" title={job.researchId}>
+        <span className="truncate font-mono text-[11px] text-muted" title={job.researchId}>
           {done
             ? t('research.stripDone', { id: runLabel(job.researchId) })
             : t('research.stripRun', { id: runLabel(job.researchId), step: stepLabel(t, job) })}

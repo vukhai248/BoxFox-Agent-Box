@@ -17,7 +17,7 @@ function getCommandIcon(slug: string) {
     case 'plan':
       return <Lightbulb className="size-3.5 text-amber-400" />
     case 'research':
-      return <Microscope className="size-3.5 text-blue-400" />
+      return <Microscope className="size-3.5 text-brand" />
     case 'design':
       return <Palette className="size-3.5 text-purple-400" />
     case 'stop':
@@ -95,7 +95,7 @@ export function useSlashCompletion(input: string, change: (value: string) => voi
       id="slash-completions"
       role="listbox"
       aria-label="Slash commands"
-      className="absolute bottom-full -left-[1px] -right-[1px] z-50 mb-2 max-h-80 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none space-y-0.5"
+      className="absolute bottom-full -left-[1px] -right-[1px] z-50 mb-2 max-h-80 overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-2xl animate-pop-in select-none space-y-0.5"
     >
       {options2.map((c, i) => (
         <button

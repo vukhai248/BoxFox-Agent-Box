@@ -318,23 +318,23 @@ function SubagentToolItem({ tool }: { tool: ParsedToolCall }) {
           {getToolIcon(tool.name)}
           <span className="font-semibold text-fg text-[11px]">{tool.name}</span>
           {cmd && (
-            <span className="text-[10px] font-mono text-muted truncate max-w-[280px]">
+            <span className="text-[11px] font-mono text-muted truncate max-w-[280px]">
               {String(cmd)}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
           {tool.isRunning ? (
-            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400 font-mono flex items-center gap-1">
+            <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-400 font-mono flex items-center gap-1">
               <span className="size-1.5 rounded-full bg-amber-400 animate-ping" />
               running
             </span>
           ) : tool.isError ? (
-            <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] text-rose-400 font-mono">
+            <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-400 font-mono">
               failed
             </span>
           ) : (
-            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] text-emerald-400 font-mono">
+            <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-400 font-mono">
               exit 0
             </span>
           )}
@@ -346,7 +346,7 @@ function SubagentToolItem({ tool }: { tool: ParsedToolCall }) {
         <div className="border-t border-line/40 bg-panel/50 p-2.5 space-y-2 font-mono text-[11px]">
           {tool.args && (
             <div>
-              <div className="text-[10px] text-muted font-sans font-medium uppercase tracking-wider mb-1">
+              <div className="text-[11px] text-muted font-sans font-medium uppercase tracking-wider mb-1">
                 Arguments:
               </div>
               <pre className="rounded bg-panel2/60 border border-line/50 p-2 text-fg overflow-x-auto whitespace-pre-wrap">
@@ -356,7 +356,7 @@ function SubagentToolItem({ tool }: { tool: ParsedToolCall }) {
           )}
           {tool.result && (
             <div>
-              <div className="text-[10px] text-muted font-sans font-medium uppercase tracking-wider mb-1">
+              <div className="text-[11px] text-muted font-sans font-medium uppercase tracking-wider mb-1">
                 Result Output:
               </div>
               <pre className="rounded bg-panel2/60 border border-line/50 p-2 text-fg overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">
@@ -888,7 +888,7 @@ export function SubagentInspectorPanel() {
       <div className="flex min-h-0 flex-1">
         {/* Left Column: Subagents List Pipeline */}
         <div className="flex w-64 shrink-0 flex-col border-r border-line bg-panel">
-          <div className="border-b border-line px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center justify-between">
+          <div className="border-b border-line px-3 py-2 text-[11px] font-semibold text-muted uppercase tracking-wider flex items-center justify-between">
             <span>Specialists Pipeline</span>
             {/* Nút Info thay cho phần đếm số con */}
             {activeChild && (
@@ -915,7 +915,7 @@ export function SubagentInspectorPanel() {
                         {activeChild.role} Specialist
                       </span>
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wider ${
                           activeChild.status === 'completed'
                             ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                             : activeChild.status === 'running'
@@ -931,10 +931,10 @@ export function SubagentInspectorPanel() {
 
                     <div className="mt-2 space-y-2">
                       <div>
-                        <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">
+                        <div className="text-[11px] text-muted uppercase tracking-wider font-semibold">
                           Session ID
                         </div>
-                        <div className="flex items-center justify-between gap-1 mt-0.5 font-mono text-[10px] text-fg bg-panel2 px-2 py-1 rounded border border-line/40">
+                        <div className="flex items-center justify-between gap-1 mt-0.5 font-mono text-[11px] text-fg bg-panel2 px-2 py-1 rounded-full border border-line/40">
                           <span className="truncate" title={activeChild.sessionId}>
                             {activeChild.sessionId}
                           </span>
@@ -959,7 +959,7 @@ export function SubagentInspectorPanel() {
 
                       {roleDescription && (
                         <div>
-                          <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">
+                          <div className="text-[11px] text-muted uppercase tracking-wider font-semibold">
                             Description
                           </div>
                           <p className="mt-0.5 text-[11px] text-muted leading-relaxed">
@@ -998,7 +998,7 @@ export function SubagentInspectorPanel() {
                       turn: group.turn,
                       count: group.children.length,
                     })}
-                    className={`rounded-full border px-1.5 py-0.5 font-mono text-[9px] transition cursor-pointer ${
+                    className={`rounded-full border px-1.5 py-0.5 font-mono text-[11px] transition cursor-pointer ${
                       isCurrent
                         ? 'border-brand/60 bg-brand/15 text-brand'
                         : 'border-line bg-panel2 text-zinc-400 hover:text-fg'
@@ -1013,7 +1013,7 @@ export function SubagentInspectorPanel() {
               <label
                 data-testid="subagents-all-turns"
                 data-on={allTurns}
-                className="ml-auto flex items-center gap-1 text-[10px] text-zinc-400 cursor-pointer select-none"
+                className="ml-auto flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none"
               >
                 <input
                   type="checkbox"
@@ -1032,7 +1032,7 @@ export function SubagentInspectorPanel() {
               <div className="p-6 text-center text-xs text-muted space-y-2">
                 <Bot className="size-8 mx-auto text-muted/60 animate-pulse" />
                 <p>No subagents active yet.</p>
-                <p className="text-[10px] text-muted">
+                <p className="text-[11px] text-muted">
                   Orchestrator will delegate subtasks here during complex runs.
                 </p>
               </div>
@@ -1076,10 +1076,10 @@ export function SubagentInspectorPanel() {
                       >
                         <Bot className="mt-0.5 size-3.5 shrink-0 text-muted" />
                         <div className="space-y-0.5">
-                          <p className="text-[10px] text-muted">
+                          <p className="text-[11px] text-muted">
                             {t('chat.subagentTurnEmpty')}
                           </p>
-                          <p className="text-[10px] text-muted/70">
+                          <p className="text-[11px] text-muted/70">
                             {t('chat.subagentTurnEmptyHint')}
                           </p>
                         </div>
@@ -1137,7 +1137,7 @@ export function SubagentInspectorPanel() {
                                     <AlertCircle className="size-3 text-rose-400 shrink-0" />
                                   )}
                                 </div>
-                                <div className="text-[10px] text-muted truncate mt-0.5">
+                                <div className="text-[11px] text-muted truncate mt-0.5">
                                   {child.toolsRun.length > 0
                                     ? `${child.toolsRun.length} tools executed`
                                     : 'Autonomous run'}
@@ -1151,7 +1151,7 @@ export function SubagentInspectorPanel() {
 
                             {/* T15 — bước và số bước con đã dùng (chỉ có từ đợt 22). */}
                             {(child.turn > 0 && child.step !== null) || child.stepsUsed !== null ? (
-                              <div className="pl-9 font-mono text-[9px] text-muted">
+                              <div className="pl-9 font-mono text-[11px] text-muted">
                                 {child.turn > 0 && child.step !== null
                                   ? t('chat.subagentTurnStep', {
                                       turn: child.turn,
@@ -1168,7 +1168,7 @@ export function SubagentInspectorPanel() {
                             {waiting && (
                               <div
                                 data-testid="child-peer-wait"
-                                className="pl-9 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] text-sky-300"
+                                className="pl-9 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-sky-300"
                               >
                                 <Clock className="size-3 shrink-0" />
                                 <span className="truncate">
@@ -1194,7 +1194,7 @@ export function SubagentInspectorPanel() {
                                   <div
                                     key={line.key}
                                     data-delivery-line={line.key}
-                                    className={`flex items-center gap-1 text-[10px] ${line.className}`}
+                                    className={`flex items-center gap-1 text-[11px] ${line.className}`}
                                   >
                                     <line.icon className="size-3 shrink-0" />
                                     <span className="truncate" title={line.text}>{line.text}</span>
@@ -1211,7 +1211,7 @@ export function SubagentInspectorPanel() {
                                   key={`${receipt.role}-${receipt.deliveryId ?? index}`}
                                   data-testid="child-receipt"
                                   data-receipt-state={receipt.state}
-                                  className={`pl-9 flex items-center gap-1 text-[10px] ${line.className}`}
+                                  className={`pl-9 flex items-center gap-1 text-[11px] ${line.className}`}
                                 >
                                   <line.icon className="size-3 shrink-0" />
                                   <span className="truncate" title={line.text}>{line.text}</span>
@@ -1237,7 +1237,7 @@ export function SubagentInspectorPanel() {
               <div className="flex-1 overflow-y-auto p-4 space-y-4 select-text">
                 {/* 1. Assigned Task & Context từ Main Agent (Orchestrator) */}
                 <div className="rounded-xl border border-line bg-panel2/50 p-3.5 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
                     <BrainCircuit className="size-3.5 text-brand" />
                     <span>Assigned Task & Context (Orchestrator)</span>
                   </div>
@@ -1347,11 +1347,11 @@ export function SubagentInspectorPanel() {
               </div>
 
               {/* Bottom Footer: 1 dòng chữ đơn giản phẳng, không icon, không viền hộp bao ngoài */}
-              <div className="border-t border-line bg-panel px-4 py-2 flex items-center justify-between text-[10px] text-muted select-none">
+              <div className="border-t border-line bg-panel px-4 py-2 flex items-center justify-between text-[11px] text-muted select-none">
                 <span>Read-only sub-agent stream · Delegated by Main Agent · Sandbox protected</span>
                 {activeChild && (
                   <span
-                    className={`rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wider ${
                       activeChild.status === 'completed'
                         ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                         : activeChild.status === 'running'

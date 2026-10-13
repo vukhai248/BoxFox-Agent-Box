@@ -33,8 +33,8 @@ function CardHead({ icon, title, tail }: { icon?: ReactNode; title: string; tail
   return (
     <div className="mb-3 flex items-center gap-2">
       {icon ? <span className="text-muted">{icon}</span> : null}
-      <h2 className="text-xs font-semibold text-fg">{title}</h2>
-      {tail ? <span className="text-[10px] text-muted">{tail}</span> : null}
+      <h2 className="text-xs font-bold text-fg">{title}</h2>
+      {tail ? <span className="text-[11px] text-muted">{tail}</span> : null}
     </div>
   )
 }
@@ -99,14 +99,14 @@ export function InstructionsTab() {
     <div className="p-8 max-w-4xl select-text">
       <div className="mb-4 flex items-start gap-3">
         <div>
-          <h1 className="text-lg font-semibold mb-1 text-fg">{t('instructions.title')}</h1>
+          <h1 className="text-lg font-bold mb-1 text-fg">{t('instructions.title')}</h1>
           <p className="text-xs text-muted">{t('instructions.subtitle')}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {isDirty ? (
             <span
               data-testid="settings-instructions-dirty"
-              className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
+              className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"
             >
               {t('instructions.unsaved')}
             </span>
@@ -114,7 +114,7 @@ export function InstructionsTab() {
           {status === 'failed' ? (
             <span
               data-testid="settings-instructions-failed"
-              className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400"
+              className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400"
             >
               {t('instructions.notSaved')}
             </span>
@@ -143,7 +143,7 @@ export function InstructionsTab() {
             </span>
           </li>
           <li className="flex gap-2">
-            <RotateCw className="mt-0.5 size-3.5 shrink-0 text-sky-500" />
+            <RotateCw className="mt-0.5 size-3.5 shrink-0 text-[#b45309]" />
             <span>
               <b className="text-fg">{t('instructions.appliesRunning')}</b> {t('instructions.appliesRunningBody')}
             </span>
@@ -154,7 +154,7 @@ export function InstructionsTab() {
       {/* Ô nhập thật: có value, có onChange, có testid — gõ là store đổi. */}
       <div className="mt-4 rounded-xl border border-line bg-panel p-5">
         <CardHead title={t('instructions.ownerTitle')} tail={t('instructions.ownerTail')} />
-        <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted" htmlFor="owner-directives">
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted" htmlFor="owner-directives">
           {t('instructions.editorLabel')}
         </label>
         <textarea
@@ -171,7 +171,7 @@ export function InstructionsTab() {
           placeholder={t('instructions.editorPlaceholder')}
           className="w-full rounded-md border border-line bg-panel2 p-3 text-xs text-fg outline-hidden focus:border-brand font-mono leading-relaxed disabled:opacity-60"
         />
-        <div className="mt-2 flex items-center gap-2 text-[10px]">
+        <div className="mt-2 flex items-center gap-2 text-[11px]">
           <span id="owner-directives-counter" data-testid="settings-instructions-counter" data-tone={tone} className={counterClass}>
             {t('instructions.counter', { n: formatCount(used), limit: formatCount(limit) })}
           </span>
@@ -196,19 +196,19 @@ export function InstructionsTab() {
             {t('instructions.clear')}
           </button>
         </div>
-        <p className="mt-2 text-[10px] leading-4 text-muted">
+        <p className="mt-2 text-[11px] leading-4 text-muted">
           {t('instructions.counterHint', { limit: formatCount(limit), warn: formatCount(warnAt) })}
         </p>
         {tone === 'over' ? (
-          <p data-testid="settings-instructions-overcut" className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[10px] leading-4 text-rose-700 dark:text-rose-300">
+          <p data-testid="settings-instructions-overcut" className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[11px] leading-4 text-rose-700 dark:text-rose-300">
             <b>{t('instructions.overCutTitle', { limit: formatCount(limit) })}</b> {t('instructions.overCutBody')}
           </p>
         ) : null}
         {loadError ? (
-          <div data-testid="settings-instructions-load-failed" className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[10px] leading-4 text-rose-700 dark:text-rose-300">
+          <div data-testid="settings-instructions-load-failed" className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[11px] leading-4 text-rose-700 dark:text-rose-300">
             <b>{t('instructions.loadFailedTitle')}</b> {t('instructions.loadFailedBody')}
             <span className="mt-1 block font-mono">{loadError}</span>
-            <button type="button" onClick={() => void load().catch(() => undefined)} className="mt-2 rounded-md border border-line bg-panel px-2 py-1 text-[10px] text-fg cursor-pointer">
+            <button type="button" onClick={() => void load().catch(() => undefined)} className="mt-2 rounded-md border border-line bg-panel px-2 py-1 text-[11px] text-fg cursor-pointer">
               {t('instructions.reload')}
             </button>
           </div>
@@ -240,7 +240,7 @@ export function InstructionsTab() {
           onClick={() => void save()}
           disabled={!canSave}
           aria-busy={status === 'saving'}
-          className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          className="flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brandfg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           <Save className="size-3.5" />
           {t('instructions.save')}
@@ -264,7 +264,7 @@ export function InstructionsTab() {
           {t('instructions.reset')}
         </button>
         <span className="flex-1" />
-        <span aria-live="polite" data-testid="settings-instructions-receipt" className="text-[10px] text-muted">
+        <span aria-live="polite" data-testid="settings-instructions-receipt" className="text-[11px] text-muted">
           {status === 'saving'
             ? t('instructions.saving')
             : loadedAt
@@ -273,12 +273,12 @@ export function InstructionsTab() {
         </span>
       </div>
       {status === 'saving' ? (
-        <p className="mt-1.5 text-[10px] text-muted">
+        <p className="mt-1.5 text-[11px] text-muted">
           {t('instructions.savingDetail', { count: formatCount(used), from: String(revision), to: String(revision + 1) })}
         </p>
       ) : null}
       {status === 'saved' ? (
-        <p className="mt-1.5 text-[10px] text-muted">
+        <p className="mt-1.5 text-[11px] text-muted">
           {t('instructions.receiptFresh', { time: clock(loadedAt ?? Date.now()) })} ·{' '}
           {t('instructions.revisionDetail', { n: String(revision), count: formatCount(codePoints(instructions)) })}
         </p>
@@ -286,7 +286,7 @@ export function InstructionsTab() {
       {status === 'failed' ? (
         <div data-testid="settings-instructions-save-failed" className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4">
           <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">{t('instructions.saveFailed')}</p>
-          <p className="mt-1 text-[10px] leading-4 text-rose-700 dark:text-rose-300">
+          <p className="mt-1 text-[11px] leading-4 text-rose-700 dark:text-rose-300">
             {t('instructions.saveFailedBody', { error: error ?? '', revision: String(revision) })}
           </p>
           <div className="mt-2 flex gap-2">
@@ -294,7 +294,7 @@ export function InstructionsTab() {
               type="button"
               data-testid="settings-instructions-retry"
               onClick={() => void save()}
-              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[10px] text-fg cursor-pointer"
+              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[11px] text-fg cursor-pointer"
             >
               {t('instructions.retry')}
             </button>
@@ -302,14 +302,14 @@ export function InstructionsTab() {
               type="button"
               data-testid="settings-instructions-copy-text"
               onClick={copyDraft}
-              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[10px] text-fg cursor-pointer"
+              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[11px] text-fg cursor-pointer"
             >
               {t('instructions.copyText')}
             </button>
             <button
               type="button"
               onClick={discard}
-              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[10px] text-fg cursor-pointer"
+              className="rounded-md border border-line bg-panel px-2.5 py-1 text-[11px] text-fg cursor-pointer"
             >
               {t('instructions.discard')}
             </button>
@@ -318,7 +318,7 @@ export function InstructionsTab() {
       ) : null}
 
       {isEmptyState ? (
-        <p data-testid="settings-instructions-empty" className="mt-3 text-[10px] leading-4 text-muted">
+        <p data-testid="settings-instructions-empty" className="mt-3 text-[11px] leading-4 text-muted">
           <b className="text-fg">{t('instructions.emptyTitle')}</b> {t('instructions.emptyBody')} {t('instructions.emptySaveHint')}
         </p>
       ) : null}
@@ -340,11 +340,11 @@ export function InstructionsTab() {
                 count: formatCount(latestRecord.instructionsChars),
               })}
             </p>
-            <p className="mt-1 text-[10px] leading-4 text-muted">{t('instructions.thisChatHint')}</p>
+            <p className="mt-1 text-[11px] leading-4 text-muted">{t('instructions.thisChatHint')}</p>
             {latestRecord.instructionsChars > 0 ? (
               <span
                 data-testid="settings-instructions-in-use"
-                className="mt-2 inline-block rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand"
+                className="mt-2 inline-block rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand"
               >
                 {t('instructions.inUse')}
               </span>
@@ -360,7 +360,7 @@ export function InstructionsTab() {
       {/* Văn bản nằm ở đâu trong prompt — chuỗi lấy từ hằng số dùng chung với harness. */}
       <div className="mt-4 rounded-xl border border-line bg-panel p-5">
         <CardHead title={t('instructions.promptTitle')} tail={t('instructions.promptTail')} />
-        <pre className="overflow-x-auto rounded-lg border border-line bg-panel2 p-3 text-[10px] leading-4 text-muted font-mono">
+        <pre className="overflow-x-auto rounded-lg border border-line bg-panel2 p-3 text-[11px] leading-4 text-muted font-mono">
 {`{agent identity — read from AGENT.md}
 === ASSIGNED ROLE: ORCHESTRATOR ===
 {role instructions — managed by the harness}
@@ -375,7 +375,7 @@ export function InstructionsTab() {
             {codePoints(draft) ? draft.split('\n').slice(0, 2).join('\n') : t('instructions.emptyTitle')}
           </span>
         </pre>
-        <p className="mt-2 text-[10px] leading-4 text-muted">{t('instructions.promptHint')}</p>
+        <p className="mt-2 text-[11px] leading-4 text-muted">{t('instructions.promptHint')}</p>
       </div>
     </div>
   )

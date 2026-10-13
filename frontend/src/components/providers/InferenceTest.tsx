@@ -89,7 +89,7 @@ export function InferenceTest({ connection }: { connection: ProviderConnection }
     {status && <div role="status" className="mt-3 break-words rounded-lg border border-line bg-panel2 p-3 text-xs">
       <p className={status.startsWith('failed') ? 'text-red-600 dark:text-red-300' : 'text-muted'}>{status}{latency !== null && ` · ${latency} ms`}</p>
       {content && <p className="mt-2 whitespace-pre-wrap">{content}</p>}
-      {meta && <p className="mt-2 font-mono text-[10px] text-muted">Target: {meta.connectionId}/{meta.modelId}<br />Request: {meta.requestId}</p>}
+      {meta && <p className="mt-2 font-mono text-[11px] text-muted">Target: {meta.connectionId}/{meta.modelId}<br />Request: {meta.requestId}</p>}
       <p className="mt-1 text-muted">Tokens: {usage?.prompt_tokens ?? 'No data'} / {usage?.completion_tokens ?? 'No data'} · Cost: No data</p>
     </div>}
   </section>

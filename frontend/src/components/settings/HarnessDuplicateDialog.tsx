@@ -63,7 +63,7 @@ export function HarnessDuplicateDialog({ source, harnesses, onCancel, onDone }: 
         aria-labelledby="duplicate-harness-title"
         className="w-full max-w-md rounded-xl border border-line bg-bg p-5 shadow-2xl"
       >
-        <h2 id="duplicate-harness-title" className="text-base font-semibold">
+        <h2 id="duplicate-harness-title" className="text-base font-bold">
           Duplicate harness
         </h2>
 
@@ -109,7 +109,7 @@ export function HarnessDuplicateDialog({ source, harnesses, onCancel, onDone }: 
             type="checkbox"
             checked={openInEditor}
             onChange={(event) => setOpenInEditor(event.target.checked)}
-            className="mt-0.5 accent-blue-500"
+            className="mt-0.5 accent-brand"
           />
           <label htmlFor="open-copy-in-editor" className="cursor-pointer text-xs">
             <span className="font-medium">Open the copy in the editor</span>

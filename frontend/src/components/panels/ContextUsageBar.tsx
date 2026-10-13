@@ -551,8 +551,8 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
       {/* FULL-SIZE POPUP MODAL (~2/3 SCREEN WIDTH & HEIGHT) */}
       {/* ========================================================================= */}
       {inspectorModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 md:p-8 animate-in fade-in duration-150">
-          <div className="relative w-full max-w-5xl h-[84vh] rounded-2xl border border-line bg-panel shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 md:p-8 animate-fade-in">
+          <div className="relative w-full max-w-5xl h-[84vh] rounded-2xl border border-line bg-panel shadow-2xl flex flex-col overflow-hidden animate-pop-in">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line bg-panel2 px-6 py-4 select-none">
               <div className="flex items-center gap-3">
@@ -562,7 +562,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-bold text-fg">Context Breakdown & Chunk Inspector</h2>
-                    <span className="rounded-md bg-panel px-2 py-0.5 text-[10px] font-mono font-semibold text-muted border border-line">
+                    <span className="rounded-md bg-panel px-2 py-0.5 text-[11px] font-mono font-semibold text-muted border border-line">
                       {formatTokenCount(currentTokens)} / {limitLabel}{percent !== null && ` (${percent}%)`}
                     </span>
                   </div>
@@ -585,7 +585,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                     }`}
                   >
                     <span>All</span>
-                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[10px] font-mono text-muted">
+                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[11px] font-mono text-muted">
                       {tabCounts.all}
                     </span>
                   </button>
@@ -600,7 +600,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                     }`}
                   >
                     <span>Files</span>
-                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[10px] font-mono text-muted">
+                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[11px] font-mono text-muted">
                       {tabCounts.files}
                     </span>
                   </button>
@@ -615,7 +615,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                     }`}
                   >
                     <span>Tool Outputs</span>
-                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[10px] font-mono text-muted">
+                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[11px] font-mono text-muted">
                       {tabCounts.tools}
                     </span>
                   </button>
@@ -630,7 +630,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                     }`}
                   >
                     <span>Chat & System</span>
-                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[10px] font-mono text-muted">
+                    <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[11px] font-mono text-muted">
                       {tabCounts.chat}
                     </span>
                   </button>
@@ -707,7 +707,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                                   <Terminal className="size-3.5" />
                                 </div>
                               ) : chunk.sourceKind === 'plan_artifact' ? (
-                                <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-blue-500/15 text-blue-500 border border-blue-500/30">
+                                <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand border border-brand/30">
                                   <FileText className="size-3.5" />
                                 </div>
                               ) : chunk.sourceKind === 'system' ? (
@@ -725,7 +725,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                                 <p className="truncate font-bold text-xs text-fg leading-tight">
                                   {chunk.title}
                                 </p>
-                                <span className="text-[10px] font-mono text-muted truncate block">
+                                <span className="text-[11px] font-mono text-muted truncate block">
                                   {chunk.sourceUri}
                                 </span>
                               </div>
@@ -733,7 +733,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
 
                             {/* Label Badge & IFC Dot */}
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="rounded bg-panel px-1.5 py-0.2 font-mono text-[10px] font-bold text-brand border border-line">
+                              <span className="rounded-full bg-panel px-1.5 py-0.2 font-mono text-[11px] font-bold text-brand border border-line">
                                 {chunk.label_id}
                               </span>
                               <LabelDot integrity={chunk.integrity} confidentiality={chunk.confidentiality} />
@@ -746,7 +746,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                             <span className="text-muted">
                               <strong className="text-fg font-semibold">{chunk.tokens.toLocaleString()}</strong> tokens
                             </span>
-                            <span className="text-muted text-[10px]">
+                            <span className="text-muted text-[11px]">
                               {chunk.percent}% of context
                             </span>
                           </div>
@@ -799,7 +799,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                         {/* IFC Integrity Card */}
                         <div className="rounded-xl border border-line bg-panel2 p-3.5 space-y-1.5 shadow-xs">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase font-bold text-muted tracking-wider">
+                            <span className="text-[11px] uppercase font-bold text-muted tracking-wider">
                               IFC Integrity
                             </span>
                             <LabelDot integrity={selectedChunk.integrity} confidentiality={selectedChunk.confidentiality} />
@@ -827,13 +827,13 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
 
                         {/* Confidentiality Card */}
                         <div className="rounded-xl border border-line bg-panel2 p-3.5 space-y-1.5 shadow-xs">
-                          <span className="text-[10px] uppercase font-bold text-muted tracking-wider">
+                          <span className="text-[11px] uppercase font-bold text-muted tracking-wider">
                             Confidentiality Clearance
                           </span>
 
                           <div className="flex items-center gap-2">
                             {selectedChunk.confidentiality === 'cong_khai' ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 text-xs font-semibold text-brand">
+                              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand/15 border border-brand/30 px-2.5 py-1 text-xs font-semibold text-brand">
                                 <Globe className="size-3.5" />
                                 <span>Public Domain</span>
                               </span>
@@ -871,7 +871,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
                       <div className="flex items-center justify-between text-xs font-bold text-fg">
                         <div className="flex items-center gap-2">
                           <span className="uppercase tracking-wider">Raw Chunk Content</span>
-                          <span className="rounded bg-panel2 px-2 py-0.5 text-[10px] font-mono text-muted border border-line">
+                          <span className="rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-mono text-muted border border-line">
                             {selectedChunk.lineCount} lines • {selectedChunk.content.length} bytes
                           </span>
                         </div>
@@ -928,7 +928,7 @@ export function ContextUsageBar({ variant = 'panel' }: ContextUsageBarProps = {}
 
       {/* Manga-Style Speech Bubble (Bong bóng thoại gợi ý nén khi context cao) */}
       {showMangaBubble && (
-        <div className="absolute left-6 top-full z-40 mt-2 max-w-sm rounded-xl border border-line bg-panel p-4 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute left-6 top-full z-40 mt-2 max-w-sm rounded-xl border border-line bg-panel p-4 shadow-2xl animate-slide-down">
           {/* Header */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">

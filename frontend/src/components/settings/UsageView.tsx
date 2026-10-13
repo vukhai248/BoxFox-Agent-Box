@@ -88,35 +88,35 @@ export function UsageView() {
           <div className="rounded-2xl border border-line bg-panel p-4 space-y-1 shadow-xs">
             <span className="text-[11px] font-semibold text-muted">Total tokens</span>
             <div className="text-xl font-bold font-mono text-fg">0</div>
-            <p className="text-[10px] text-muted">Input + output tokens</p>
+            <p className="text-[11px] text-muted">Input + output tokens</p>
           </div>
 
           {/* Total cost */}
           <div className="rounded-2xl border border-line bg-panel p-4 space-y-1 shadow-xs">
             <span className="text-[11px] font-semibold text-muted">Total cost</span>
             <div className="text-xl font-bold font-mono text-fg">$0.00</div>
-            <p className="text-[10px] text-muted">Includes LLM + machine cost</p>
+            <p className="text-[11px] text-muted">Includes LLM + machine cost</p>
           </div>
 
           {/* BYOK cost */}
           <div className="rounded-2xl border border-line bg-panel p-4 space-y-1 shadow-xs">
             <span className="text-[11px] font-semibold text-muted">BYOK cost</span>
             <div className="text-xl font-bold font-mono text-fg">$0.00</div>
-            <p className="text-[10px] text-muted">Included in total cost</p>
+            <p className="text-[11px] text-muted">Included in total cost</p>
           </div>
 
           {/* Machine cost */}
           <div className="rounded-2xl border border-line bg-panel p-4 space-y-1 shadow-xs">
             <span className="text-[11px] font-semibold text-muted">Machine cost</span>
             <div className="text-xl font-bold font-mono text-fg">$0.00</div>
-            <p className="text-[10px] text-muted">Machine runtime cost</p>
+            <p className="text-[11px] text-muted">Machine runtime cost</p>
           </div>
 
           {/* Sessions started */}
           <div className="rounded-2xl border border-line bg-panel p-4 space-y-1 shadow-xs">
             <span className="text-[11px] font-semibold text-muted">Sessions started</span>
             <div className="text-xl font-bold font-mono text-fg">0</div>
-            <p className="text-[10px] text-muted">Selected period</p>
+            <p className="text-[11px] text-muted">Selected period</p>
           </div>
         </div>
       </div>

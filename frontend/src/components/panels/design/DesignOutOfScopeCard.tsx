@@ -65,7 +65,7 @@ export function DesignOutOfScopeCard({ run, prompt }: { run: DesignRun; prompt: 
     >
       <p className="font-medium text-amber-300">
         {t('design.oosTitle')}
-        <span className="ml-1 font-mono text-[10px] text-muted">{runLabel(run.designId)}</span>
+        <span className="ml-1 font-mono text-[11px] text-muted">{runLabel(run.designId)}</span>
       </p>
       <p className="mt-0.5 text-muted">{question?.text || t('design.oosBody')}</p>
       <div className="mt-1.5 space-y-1">
@@ -91,12 +91,12 @@ export function DesignOutOfScopeCard({ run, prompt }: { run: DesignRun; prompt: 
         </button>
       </div>
       {!pinned && (
-        <p data-testid="design-out-of-scope-unpinned" className="mt-1 text-[10px] text-amber-300">
+        <p data-testid="design-out-of-scope-unpinned" className="mt-1 text-[11px] text-amber-300">
           {t('design.oosUnpinned')}
         </p>
       )}
       {needsChoice && (
-        <p data-testid="design-out-of-scope-hint" className="mt-1 text-[10px] text-amber-300">
+        <p data-testid="design-out-of-scope-hint" className="mt-1 text-[11px] text-amber-300">
           {t('design.oosExitQueued')}
         </p>
       )}

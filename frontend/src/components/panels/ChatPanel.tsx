@@ -785,7 +785,7 @@ export function ChatPanel() {
               <p className="font-semibold text-rose-300">{t('chat.errorTitle')}</p>
               <p className="break-words leading-relaxed">{stripErrorCode(harnessErrorInfo.message, harnessErrorInfo.code)}</p>
               {harnessErrorInfo.code && (
-                <p className="font-mono text-[10px] text-rose-300/80">
+                <p className="font-mono text-[11px] text-rose-300/80">
                   {t('chat.errorCodeLabel')}: {harnessErrorInfo.code}
                 </p>
               )}
@@ -889,7 +889,7 @@ function ScreenshotsGroupCard({
             Screen Capture{items.length > 1 ? ` (${items.length})` : ''}
           </span>
           {first.source_url && (
-            <span className="font-mono text-[10px] text-muted truncate max-w-[240px]">
+            <span className="font-mono text-[11px] text-muted truncate max-w-[240px]">
               ({first.source_url})
             </span>
           )}
@@ -897,7 +897,7 @@ function ScreenshotsGroupCard({
         {first.label_id && first.integrity && first.confidentiality && (
           <div className="flex items-center gap-1.5">
             <LabelDot integrity={first.integrity} confidentiality={first.confidentiality} />
-            <span className="font-mono text-[10px] text-muted">{first.label_id}</span>
+            <span className="font-mono text-[11px] text-muted">{first.label_id}</span>
           </div>
         )}
       </div>
@@ -940,7 +940,7 @@ function ScreenRecordingCard({
   onOpenLightbox: (props: LightboxMediaProps) => void
 }) {
   return (
-    <div className="space-y-2.5 max-w-xl pl-0.5 animate-in fade-in duration-150">
+    <div className="space-y-2.5 max-w-xl pl-0.5 animate-fade-in">
       <div className="flex items-center justify-between gap-2 text-xs text-muted select-none">
         <div className="flex items-center gap-1.5 font-semibold text-fg">
           <Video className="size-3.5 text-brand" />
@@ -949,7 +949,7 @@ function ScreenRecordingCard({
         {message.label_id && message.integrity && message.confidentiality && (
           <div className="flex items-center gap-1.5">
             <LabelDot integrity={message.integrity} confidentiality={message.confidentiality} />
-            <span className="font-mono text-[10px] text-muted">{message.label_id}</span>
+            <span className="font-mono text-[11px] text-muted">{message.label_id}</span>
           </div>
         )}
       </div>
@@ -1061,7 +1061,7 @@ function UserBubble({ text }: { text: string }) {
       <div className="max-w-[85%] rounded-2xl bg-panel2 border border-line px-4 py-3 text-xs leading-relaxed text-fg shadow-xs">
         <MarkdownRenderer content={text} />
       </div>
-      <div className="flex items-center gap-2 text-[10px] text-muted pr-1 select-none">
+      <div className="flex items-center gap-2 text-[11px] text-muted pr-1 select-none">
         <span>Just now</span>
         <button
           type="button"
@@ -1098,7 +1098,7 @@ function SeamlessAgentMessage({
       {/* Provenance Label */}
       <div className="flex items-center gap-1.5 pt-1 select-none">
         <LabelDot integrity={message.integrity} confidentiality={message.confidentiality} />
-        <span className="text-[10px] font-mono text-muted">{message.label_id}</span>
+        <span className="text-[11px] font-mono text-muted">{message.label_id}</span>
       </div>
     </div>
   )
@@ -1107,7 +1107,7 @@ function SeamlessAgentMessage({
 function getFileIcon(filename: string) {
   const ext = filename.split('.').pop()?.toLowerCase() || ''
   if (['py', 'pyw'].includes(ext)) {
-    return <FileCode className="size-4 text-blue-400 shrink-0" />
+    return <FileCode className="size-4 text-brand shrink-0" />
   }
   if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
     return <Code2 className="size-4 text-cyan-400 shrink-0" />
@@ -1190,7 +1190,7 @@ function ReferencedFilesList({ files }: { files: ReferencedFile[] }) {
                 <div className="text-xs font-medium font-mono text-fg truncate">
                   {file.name}
                 </div>
-                <div className="text-[10px] font-mono text-muted truncate">
+                <div className="text-[11px] font-mono text-muted truncate">
                   {file.path} {file.size_bytes ? `• ${formatBytes(file.size_bytes)}` : ''}
                 </div>
               </div>
@@ -1235,7 +1235,7 @@ function StepBlock({
   const [thinkingOpen, setThinkingOpen] = useState(false)
 
   return (
-    <div className="space-y-2 pl-0.5 animate-in fade-in duration-150">
+    <div className="space-y-2 pl-0.5 animate-fade-in">
       {/* Thinking Accordion Bar: Worked for Xs > */}
       {message.thought && (
         <div className="space-y-1.5">
@@ -1255,7 +1255,7 @@ function StepBlock({
 
           {/* Thinking Content */}
           {thinkingOpen && (
-            <div className="mt-1.5 rounded-xl border border-line bg-panel2/40 p-3 text-[12.5px] font-light text-zinc-400 leading-relaxed animate-in fade-in duration-150">
+            <div className="mt-1.5 rounded-xl border border-line bg-panel2/40 p-3 text-[12.5px] font-light text-zinc-400 leading-relaxed animate-fade-in">
               {message.thought}
             </div>
           )}
@@ -1291,7 +1291,7 @@ function StepBlock({
       {message.label_id && message.integrity && message.confidentiality && (
         <div className="flex items-center gap-1.5 pt-0.5 select-none">
           <LabelDot integrity={message.integrity} confidentiality={message.confidentiality} />
-          <span className="text-[10px] font-mono text-muted">{message.label_id}</span>
+          <span className="text-[11px] font-mono text-muted">{message.label_id}</span>
         </div>
       )}
     </div>
@@ -1361,7 +1361,7 @@ function RouterTurnBubble({ turn, snapshot, onOpenLightbox }: {
           )}
           <MarkdownRenderer content={turn.prompt} />
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted pr-1 select-none">
+        <div className="flex items-center gap-2 text-[11px] text-muted pr-1 select-none">
           <time dateTime={turn.startedAt}>
             {new Date(turn.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </time>
@@ -1412,7 +1412,7 @@ function RouterTurnBubble({ turn, snapshot, onOpenLightbox }: {
         )}
 
         {/* Compact meta */}
-        <div className="flex items-center gap-3 text-[10px] text-muted select-none">
+        <div className="flex items-center gap-3 text-[11px] text-muted select-none">
           <span>
             {turn.status === 'streaming'
               ? t('chat.routerStatus.running')

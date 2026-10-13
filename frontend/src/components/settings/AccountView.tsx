@@ -65,7 +65,7 @@ export function AccountView() {
             <BadgeCheck className="size-4 text-brand" />
             Current plan
           </div>
-          <span className="rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+          <span className="rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand">
             Mock
           </span>
         </div>

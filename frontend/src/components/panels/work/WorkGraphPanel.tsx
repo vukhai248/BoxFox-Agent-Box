@@ -65,7 +65,7 @@ function StatusPill({ status, testId }: { status: string | null | undefined; tes
   return (
     <span
       data-testid={testId}
-      className={`rounded px-1.5 py-px font-mono text-[10px] font-semibold uppercase ${TONE_CLASS[statusTone(status)]}`}
+      className={`rounded px-1.5 py-px font-mono text-[11px] font-semibold uppercase ${TONE_CLASS[statusTone(status)]}`}
     >
       {status ?? '—'}
     </span>
@@ -200,10 +200,10 @@ function RunView({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[13px] font-semibold">{run.title}</span>
           <StatusPill status={run.status} testId="work-run-status" />
-          <span className="rounded bg-panel2 px-1.5 py-px text-[10px] font-medium uppercase text-muted">
+          <span className="rounded-full bg-panel2 px-1.5 py-px text-[11px] font-medium uppercase text-muted">
             {t('work.flow')}: {run.flow}
           </span>
-          <span className="text-[10px] text-muted">{t('work.revision', { revision: String(run.revision) })}</span>
+          <span className="text-[11px] text-muted">{t('work.revision', { revision: String(run.revision) })}</span>
           {runs.length > 1 && (
             <select
               className="ml-auto rounded border border-line bg-panel2 px-1.5 py-0.5 text-[11px]"
@@ -245,7 +245,7 @@ function RunView({
               <div key={index} className="flex items-stretch gap-2">
                 {index > 0 && <ChevronRight className="size-4 self-center text-muted" />}
                 <div className="min-w-[120px] rounded-lg border border-line bg-panel p-2" data-testid="work-wave">
-                  <p className="mb-1 text-[10px] font-semibold uppercase text-muted">
+                  <p className="mb-1 text-[11px] font-semibold uppercase text-muted">
                     {t('work.wave', { index: String(index + 1) })}
                     {wave.length > 1 ? ` · ${t('work.parallel')}` : ''}
                   </p>
@@ -354,7 +354,7 @@ function RunView({
             {t('work.history')} ({run.history.length})
           </button>
           {historyOpen && (
-            <ol className="mt-1 flex flex-col gap-0.5 font-mono text-[10px] text-muted" data-testid="work-history">
+            <ol className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] text-muted" data-testid="work-history">
               {run.history.map((item, index) => (
                 <li key={index}>
                   {item.at ? new Date(item.at * 1000).toLocaleTimeString() : ''} · {item.event}
@@ -417,15 +417,15 @@ function NodeCard({ node, open, onToggle }: { node: WorkNode; open: boolean; onT
         <StatusIcon status={status} />
         <span className="font-mono text-[11px] font-bold">{node.id}</span>
         <span
-          className={`rounded px-1.5 py-px text-[10px] font-semibold uppercase ${KIND_CLASS[node.kind] ?? KIND_CLASS.simplify}`}
+          className={`rounded px-1.5 py-px text-[11px] font-semibold uppercase ${KIND_CLASS[node.kind] ?? KIND_CLASS.simplify}`}
         >
           {t(`work.kind.${node.kind}` as 'work.kind.plan')}
         </span>
         <span className="min-w-0 flex-1 truncate text-[12px]">{node.title}</span>
         {node.dependsOn.length > 0 && (
-          <span className="hidden text-[10px] text-muted sm:inline">← {node.dependsOn.join(', ')}</span>
+          <span className="hidden text-[11px] text-muted sm:inline">← {node.dependsOn.join(', ')}</span>
         )}
-        {rounds > 0 && <span className="text-[10px] text-muted">{rounds}×</span>}
+        {rounds > 0 && <span className="text-[11px] text-muted">{rounds}×</span>}
         <StatusPill status={status} />
       </button>
       {open && (
@@ -448,7 +448,7 @@ function FactList({ label, items, mono = false }: { label: string; items: string
   if (items.length === 0) return null
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase text-muted">{label}</p>
+      <p className="text-[11px] font-semibold uppercase text-muted">{label}</p>
       <ul className={`mt-0.5 list-disc pl-4 text-[11px] ${mono ? 'font-mono' : ''}`}>
         {items.map((item) => (
           <li key={item}>{item}</li>
@@ -523,13 +523,13 @@ function RoundView({ round, index }: { round: WorkRound; index: number }) {
           {round.error && <p className="text-[11px] text-rose-400">{round.error}</p>}
           {round.findings && (
             <>
-              <p className="text-[10px] font-semibold uppercase text-muted">{t('work.findings')}</p>
+              <p className="text-[11px] font-semibold uppercase text-muted">{t('work.findings')}</p>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] text-muted">{round.findings}</pre>
             </>
           )}
           {round.knowledge.length > 0 && (
             <>
-              <p className="text-[10px] font-semibold uppercase text-muted">{t('work.knowledge')}</p>
+              <p className="text-[11px] font-semibold uppercase text-muted">{t('work.knowledge')}</p>
               <ul className="list-disc pl-4 text-[11px]">
                 {round.knowledge.map((item, position) => (
                   <li key={position}>

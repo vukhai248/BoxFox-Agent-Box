@@ -8,5 +8,5 @@ export function statusTone(value: string) {
 }
 
 export function Pill({ children, value = '' }: { children: React.ReactNode; value?: string }) {
-  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusTone(value)}`}>{children}</span>
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusTone(value)}`}>{children}</span>
 }

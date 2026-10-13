@@ -135,7 +135,7 @@ function OfflineCard({
 function IdeDetailsDrawer() {
   const t = useT()
   return (
-    <div className="shrink-0 animate-in slide-in-from-top-1 overflow-hidden border-b border-line bg-panel2 duration-200">
+    <div className="shrink-0 overflow-hidden border-b border-line bg-panel2 animate-slide-down">
       <div className="px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <IntegrityBadge value="khong_tin_duoc" />

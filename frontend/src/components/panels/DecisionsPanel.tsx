@@ -129,7 +129,7 @@ export function DecisionsPanel() {
           </div>
           <div>
             <h2 className="text-xs font-semibold text-fg">{t('decisions.title')}</h2>
-            <p className="text-[10px] text-muted">{t('decisions.subtitle')}</p>
+            <p className="text-[11px] text-muted">{t('decisions.subtitle')}</p>
           </div>
         </div>
 
@@ -147,7 +147,7 @@ export function DecisionsPanel() {
               }`}
             >
               <span>{t('decisions.filterPending')}</span>
-              <span className="flex size-4 items-center justify-center rounded-full bg-amber-500/15 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
+              <span className="flex size-4 items-center justify-center rounded-full bg-amber-500/15 font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300">
                 {totalPending}
               </span>
             </button>
@@ -192,7 +192,7 @@ export function DecisionsPanel() {
               <span>
                 {t('decisions.pendingSection')} ({totalPending})
               </span>
-              <span className="text-[10px] font-mono text-amber-400">
+              <span className="text-[11px] font-mono text-amber-400">
                 {t('decisions.awaitingUser')}
               </span>
             </div>
@@ -234,7 +234,7 @@ export function DecisionsPanel() {
                     >
                       {Math.floor(remainingSec / 60)}:{String(remainingSec % 60).padStart(2, '0')}
                     </div>
-                    <div className="text-[9px] uppercase tracking-wider text-muted">
+                    <div className="text-[11px] uppercase tracking-wider text-muted">
                       {t('decisions.deadline')}
                     </div>
                   </div>
@@ -279,7 +279,7 @@ export function DecisionsPanel() {
               <span>
                 {t('decisions.historySection')} ({totalResolved})
               </span>
-              <span className="text-[10px] font-mono text-muted">{t('decisions.historyNote')}</span>
+              <span className="text-[11px] font-mono text-muted">{t('decisions.historyNote')}</span>
             </div>
 
             <div className="space-y-3">
@@ -339,7 +339,7 @@ export function DecisionsPanel() {
                       </div>
                     </div>
                     <span
-                      className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase ${STATUS_TONE[decision.status]}`}
+                      className={`rounded px-2 py-0.5 font-mono text-[11px] font-semibold uppercase ${STATUS_TONE[decision.status]}`}
                     >
                       {statusLabel(decision)}
                     </span>

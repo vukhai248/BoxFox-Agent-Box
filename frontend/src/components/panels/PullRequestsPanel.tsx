@@ -50,7 +50,7 @@ export function PullRequestsPanel() {
           <h2 className="text-xs font-semibold text-fg">Pull Requests ({MOCK_PRS.length})</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/30">
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400 border border-emerald-500/30">
             CI: All checks passed
           </span>
         </div>
@@ -74,7 +74,7 @@ export function PullRequestsPanel() {
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <span className="font-mono text-[11px] text-muted">#{pr.id}</span>
                   <span
-                    className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${
+                    className={`rounded px-1.5 py-0.2 text-[11px] font-bold uppercase tracking-wider ${
                       pr.status === 'open'
                         ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                         : 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
@@ -84,7 +84,7 @@ export function PullRequestsPanel() {
                   </span>
                 </div>
                 <h4 className="text-xs font-medium text-fg line-clamp-2 leading-snug">{pr.title}</h4>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
                   <span className="flex items-center gap-1">
                     <GitBranch className="size-2.5" />
                     {pr.branch}

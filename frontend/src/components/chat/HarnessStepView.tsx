@@ -1051,7 +1051,7 @@ function getToolDisplay(name: string, args: Record<string, unknown> | null, isEr
       return {
         actionLabel: 'Captured',
         detailLabel: 'sandbox display',
-        icon: <Camera className="size-3.5 text-blue-400" />,
+        icon: <Camera className="size-3.5 text-brand" />,
       }
     }
     case 'computer_screen_record': {
@@ -1410,7 +1410,7 @@ function DecisionRow({
           <ChevronRight className="size-3 opacity-0 transition group-hover:opacity-100" />
         </button>
         {resolution && (
-          <span className="font-mono text-[10px] text-muted">{statusLabel}</span>
+          <span className="font-mono text-[11px] text-muted">{statusLabel}</span>
         )}
       </div>
     </div>
@@ -1556,7 +1556,7 @@ export function HarnessStepView({
 
       {/* Provider Connection Warning / Error: báo cùng chữ đỏ inline, không tạo box mới, tự động ẩn khi chat mới / đang chạy */}
       {!isBusy && connectionWarning && (
-        <div className="flex items-center justify-between gap-2 py-1 text-xs text-rose-400 font-sans leading-relaxed select-text animate-in fade-in duration-150">
+        <div className="flex items-center justify-between gap-2 py-1 text-xs text-rose-400 font-sans leading-relaxed select-text animate-fade-in">
           <span className="flex-1">{connectionWarning}</span>
           {onDismissWarning && (
             <button
@@ -1573,7 +1573,7 @@ export function HarnessStepView({
 
       {/* Global Error: only show if the session is currently failed AND error is not already shown in any turn AND not busy */}
       {!isBusy && status === 'failed' && error && !turns.some(t => t.error === error) && (
-        <div className="py-1.5 text-xs text-rose-400 font-sans leading-relaxed select-text animate-in fade-in duration-150">
+        <div className="py-1.5 text-xs text-rose-400 font-sans leading-relaxed select-text animate-fade-in">
           {error}
         </div>
       )}
@@ -1617,13 +1617,13 @@ function ToolGroupHeader({
         className="flex items-center gap-2 text-xs text-muted hover:text-fg transition cursor-pointer group"
       >
         <span className="font-mono text-zinc-500 font-bold">$</span>
-        <span className={`font-medium ${hasRunning ? 'text-blue-300 animate-pulse' : 'text-zinc-300'}`}>
+        <span className={`font-medium ${hasRunning ? 'text-brand animate-pulse' : 'text-zinc-300'}`}>
           {label}
         </span>
-        <span className="rounded-md bg-panel px-1.5 py-0.5 text-[10px] font-mono border border-line/60 text-zinc-400">
+        <span className="rounded-md bg-panel px-1.5 py-0.5 text-[11px] font-mono border border-line/60 text-zinc-400">
           {count}
         </span>
-        {hasError && <span className="text-[10px] text-rose-400 font-medium">· error</span>}
+        {hasError && <span className="text-[11px] text-rose-400 font-medium">· error</span>}
         {!collapsed ? (
           <ChevronDown className="size-3 text-muted group-hover:text-fg" />
         ) : (
@@ -1920,7 +1920,7 @@ function TurnBlock({
     <div className="space-y-4">
       {/* 0. Model Changed Notice (if model was changed before this turn) */}
       {turn.modelChange && (
-        <div className="flex items-center justify-center gap-2 py-1.5 select-none animate-in fade-in duration-200">
+        <div className="flex items-center justify-center gap-2 py-1.5 select-none animate-fade-in">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-panel2 border border-line text-zinc-400 text-[11px] shadow-2xs">
             <Hexagon className="size-3.5 text-brand" />
             <span>
@@ -1937,7 +1937,7 @@ function TurnBlock({
           {turn.userEvent.data?.btw === true && (
             <span
               data-testid="user-btw-label"
-              className="mr-1 inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/5 px-1.5 py-0.5 text-[10px] font-medium text-sky-400 select-none"
+              className="mr-1 inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/5 px-1.5 py-0.5 text-[11px] font-medium text-sky-400 select-none"
             >
               {t('chat.btwLabel')}
             </span>
@@ -1975,7 +1975,7 @@ function TurnBlock({
                       data-testid="user-attachment-chip"
                       data-attachment-path={path || undefined}
                       title={path ? absoluteWorkspacePath(path) : undefined}
-                      className="flex items-center gap-1.5 rounded-lg border border-line/80 bg-panel px-2 py-1 text-[10px] text-muted"
+                      className="flex items-center gap-1.5 rounded-lg border border-line/80 bg-panel px-2 py-1 text-[11px] text-muted"
                     >
                       <FileText className="size-3 shrink-0" />
                       <span className="truncate font-mono text-fg" data-testid="user-attachment-name">
@@ -2002,7 +2002,7 @@ function TurnBlock({
                           data-testid="user-attachment-open-files"
                           onClick={() => selectFile(path)}
                           title={`Mở ${path} trong tab Files`}
-                          className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-line/80 bg-panel2 px-1.5 py-0.5 text-[10px] text-muted transition hover:border-brand/60 hover:text-fg"
+                          className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded-full border border-line/80 bg-panel2 px-1.5 py-0.5 text-[11px] text-muted transition hover:border-brand/60 hover:text-fg"
                         >
                           <FolderOpen className="size-3" />
                           Mở trong Files
@@ -2016,7 +2016,7 @@ function TurnBlock({
           </div>
 
           {/* User Bubble Footer */}
-          <div className="flex items-center gap-2 text-[10px] text-muted pr-1 select-none">
+          <div className="flex items-center gap-2 text-[11px] text-muted pr-1 select-none">
             <span>{formatTime(turn.userEvent.created)}</span>
             <button
               type="button"
@@ -2232,7 +2232,7 @@ function TurnBlock({
                   >
                     <FileText className="size-3" />
                     <span className="group-hover:underline">{t('chat.planWritten')}</span>
-                    {identity && <span className="font-mono text-[10px] text-muted">{identity}</span>}
+                    {identity && <span className="font-mono text-[11px] text-muted">{identity}</span>}
                     <ChevronRight className="size-3 opacity-0 transition group-hover:opacity-100" />
                   </button>
                 )
@@ -2285,7 +2285,7 @@ function TurnBlock({
 
       {/* 5. Turn Error: Rendered cleanly within the specific turn where it occurred */}
       {turn.error && (
-        <div className="py-2 text-xs text-rose-400 font-sans leading-relaxed select-text animate-in fade-in duration-150">
+        <div className="py-2 text-xs text-rose-400 font-sans leading-relaxed select-text animate-fade-in">
           {turn.error}
         </div>
       )}
@@ -2344,7 +2344,7 @@ function OwnerSteerRow({ event }: { event: HarnessEvent }) {
   if (!text) return null
   return (
     <div className="flex flex-col items-end gap-1" data-timeline="owner-steer" data-btw={btw ? 'true' : undefined}>
-      <div className="flex items-center gap-1.5 pr-1 text-[10px] text-muted select-none">
+      <div className="flex items-center gap-1.5 pr-1 text-[11px] text-muted select-none">
         <span
           data-testid={btw ? 'owner-btw-label' : 'owner-steer-label'}
           className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-medium ${
@@ -2417,19 +2417,19 @@ function ToolTimelineRow({
       >
         <div className="flex items-center gap-1.5">
           {running ? (
-            <Loader2 className="size-3.5 text-blue-400 animate-spin shrink-0" />
+            <Loader2 className="size-3.5 text-brand animate-spin shrink-0" />
           ) : isError || unfinished ? (
             <AlertCircle className={`size-3 shrink-0 ${isError ? 'text-red-400' : 'text-amber-400'}`} />
           ) : (
             display.icon
           )}
-          <span className={running ? 'text-blue-300 animate-pulse' : 'text-zinc-400'}>
+          <span className={running ? 'text-brand animate-pulse' : 'text-zinc-400'}>
             {running ? 'Running' : display.actionLabel}
           </span>
           <span className="font-mono text-[11px] text-zinc-200 font-semibold">{display.detailLabel}</span>
-          {running && <span className="text-[10px] text-blue-300">…</span>}
-          {!running && isError && <span className="text-[10px] text-red-400">· failed</span>}
-          {unfinished && <span className="text-[10px] text-amber-400">· no result recorded</span>}
+          {running && <span className="text-[11px] text-brand">…</span>}
+          {!running && isError && <span className="text-[11px] text-red-400">· failed</span>}
+          {unfinished && <span className="text-[11px] text-amber-400">· no result recorded</span>}
         </div>
         {open ? (
           <ChevronDown className="size-3 text-muted group-hover:text-fg" />
@@ -2442,7 +2442,7 @@ function ToolTimelineRow({
       {media && <ToolMediaBlock media={media} onOpenLightbox={onOpenLightbox} captionFor={captionFor} />}
 
       {open && (
-        <div className="ml-4 space-y-2 rounded-xl border border-line bg-panel2/60 p-2.5 text-xs animate-in fade-in duration-150">
+        <div className="ml-4 space-y-2 rounded-xl border border-line bg-panel2/60 p-2.5 text-xs animate-fade-in">
           {args && Object.keys(args).length > 0 && (
             <div className="text-[11px] text-zinc-400 font-mono">
               <span className="text-zinc-500">Input:</span> {JSON.stringify(args)}
@@ -2452,7 +2452,7 @@ function ToolTimelineRow({
           {media?.artifactPath && (
             <div className="text-[11px] text-zinc-400 font-mono flex items-center gap-1">
               <span className="text-zinc-500">Artifact:</span>
-              <span className="text-blue-400 truncate">{media.artifactPath}</span>
+              <span className="text-brand truncate">{media.artifactPath}</span>
             </div>
           )}
 
@@ -2536,7 +2536,7 @@ function ToolMediaBlock({
               className="h-9 w-14 shrink-0 rounded-md border border-line bg-panel2 object-cover"
             />
           )}
-          <span className="truncate font-mono text-[10px] text-zinc-400" data-media-label="true">
+          <span className="truncate font-mono text-[11px] text-zinc-400" data-media-label="true">
             {label}
           </span>
           <ChevronRight className="size-3 shrink-0 text-muted group-hover:text-fg" />
@@ -2571,7 +2571,7 @@ function ToolMediaBlock({
             </div>
           </div>
           {/* F4: nhãn lấy từ `dimensions` + `mime` thật của payload; đường dẫn artifact chỉ ở đây */}
-          <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono" data-media-label="true">
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono" data-media-label="true">
             <span className="shrink-0">{label}</span>
             <span className="flex min-w-0 items-center gap-1.5">
               {media.artifactPath && <span className="truncate">{media.artifactPath}</span>}
@@ -2643,7 +2643,7 @@ function CompactionNotice({ event }: { event: HarnessEvent }) {
       </button>
 
       {open && (
-        <dl className="mt-1.5 space-y-0.5 pl-5 text-[11px] text-zinc-400 font-mono animate-in fade-in duration-150" data-compaction-detail="true">
+        <dl className="mt-1.5 space-y-0.5 pl-5 text-[11px] text-zinc-400 font-mono animate-fade-in" data-compaction-detail="true">
           <div>
             <dt className="inline text-zinc-500">Kind: </dt>
             <dd className="inline">{kind}</dd>
@@ -2723,7 +2723,7 @@ function FinalAnswerBlock({
           <>
             <span className="text-zinc-500">·</span>
             <span
-              className="font-mono text-[10px] text-zinc-400"
+              className="font-mono text-[11px] text-zinc-400"
               title={`Prompt tokens: ${turn.usage.prompt_tokens ?? 0} | Completion tokens: ${turn.usage.completion_tokens ?? 0}`}
             >
               ↑ {formatTokens(turn.usage.prompt_tokens)} ↓ {formatTokens(turn.usage.completion_tokens)}
@@ -2840,7 +2840,7 @@ function ProgressiveMarkdown({
  */
 function ThoughtProse({ thought, isLive }: { thought: string; isLive?: boolean }) {
   return (
-    <div className="border-l-2 border-brand/40 pl-3 py-1 text-[12.5px] font-light text-zinc-400/90 leading-relaxed bg-panel/30 rounded-r-lg animate-in fade-in duration-150">
+    <div className="border-l-2 border-brand/40 pl-3 py-1 text-[12.5px] font-light text-zinc-400/90 leading-relaxed bg-panel/30 rounded-r-lg animate-fade-in">
       <ProgressiveMarkdown content={thought} isLive={isLive} />
     </div>
   )

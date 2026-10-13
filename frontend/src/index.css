@@ -1,5 +1,10 @@
 /*
- * Design Tokens — True Deep Black / Zinc (Devin & Linear Style).
+ * Design Tokens — Warm Paper / Ink (Claude-style editorial warmth).
+ *
+ * Hai mode đã có sẵn; bản này thay toàn bộ neutral lạnh (zinc thuần, xanh
+ * electric) bằng neutral ẤM (vàng-nâu) và đổi accent từ xanh blue sang
+ * MỰC — đen ấm ở light, giấy parchment ở dark. Mục tiêu: đọc lâu không mỏi,
+ * vẫn giữ ngữ nghĩa trạng thái (xanh lá / đỏ / vàng) và vùng CUA (sky) riêng.
  */
 @import 'tailwindcss';
 @import 'katex/dist/katex.min.css';
@@ -7,29 +12,69 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --c-bg: 0 0% 100%;
-  --c-panel: 0 0% 98%;
-  --c-panel2: 0 0% 93%;
-  --c-line: 0 0% 86%;
-  --c-fg: 0 0% 9%;
-  --c-muted: 0 0% 45%;
-  --c-brand: 217 91% 60%;
-  --c-brandfg: 0 0% 100%;
+  --c-bg: 53 29% 95%;          /* #f5f4ed — Parchment, nền giấy ấm */
+  --c-panel: 48 33% 97%;       /* #faf9f5 — Ivory, thẻ nổi trên nền giấy */
+  --c-panel2: 50 21% 89%;      /* #e8e6dc — Warm Sand: input, hover, vùng phụ */
+  --c-line: 49 22% 86%;        /* #e3e0d3 — viền ấm vừa đủ thấy */
+  --c-fg: 60 3% 8%;            /* #141413 — mực ấm */
+  --c-muted: 48 3% 36%;        /* #5e5d59 — olive gray, chữ phụ */
+  --c-brand: 55 6% 12%;        /* #1f1e1b — MỰC: accent chính (light) */
+  --c-brandfg: 48 33% 97%;     /* giấy trên nền mực */
   /* Vùng agent đang điều khiển (viền CUA). Cố ý KHÁC `brand`: màu này nghĩa là
      "agent đang tác động ở đây", không phải "mục đang được chọn". */
-  --cua: #38bdf8;
+  --cua: #0284c7;              /* sky-600 — đủ tương phản trên nền giấy */
 }
 
 .dark {
-  --c-bg: 0 0% 4%;            /* #0a0a0a - Deep Pure Neutral Black */
-  --c-panel: 0 0% 7%;         /* #121212 - Pure Dark Card Surface */
-  --c-panel2: 0 0% 11%;       /* #1c1c1c - Subtle Surface / Inputs / Hover */
-  --c-line: 0 0% 15%;         /* #262626 - Crisp Refined Border */
-  --c-fg: 0 0% 96%;           /* #f5f5f5 - Bright Crisp Foreground */
-  --c-muted: 0 0% 55%;        /* #8c8c8c - High-legibility Muted Text */
-  --c-brand: 217 91% 60%;     /* #3b82f6 - Electric Blue Accent for Selection */
-  --c-brandfg: 0 0% 100%;
-  --cua: #38bdf8;             /* #38bdf8 - sky-400, sáng trên nền tối */
+  --c-bg: 60 6% 7%;            /* #121210 — đen ấm, không lạnh như zinc */
+  --c-panel: 45 8% 10%;        /* #1b1a17 — thẻ nổi */
+  --c-panel2: 48 8% 13%;       /* #23221e — input / hover */
+  --c-line: 50 7% 17%;         /* #2e2d28 — viền ấm */
+  --c-fg: 44 36% 94%;          /* #f5f2ea — giấy, không chói */
+  --c-muted: 35 6% 62%;        /* #a5a099 — chữ phụ ấm */
+  --c-brand: 47 25% 89%;       /* #eae7dc — GIẤY: accent chính (dark) */
+  --c-brandfg: 60 6% 7%;       /* mực trên nền giấy */
+  --cua: #38bdf8;              /* sky-400, sáng trên nền tối */
+}
+
+/* ─── Neutral ấm cho các lớp Tailwind dùng trực tiếp (zinc / slate) ───────
+ * Thay vì sửa ~1.300 chỗ ghi `zinc-*` trong mã nguồn, ta nâng tông neutral
+ * của Tailwind lên cùng dải ấm (hue ~90, chroma thấp). Các cặp
+ * `x dark:y` trong mã vẫn giữ đúng quan hệ sáng/tối, chỉ bỏ được vẻ lạnh. */
+/* ─── Bo góc theo hướng Cursor: góc sắc, gần vuông ──────────────────────
+ * Cursor dùng bán kính rất nhỏ (2–10px). Ghi đè scale radius của Tailwind
+ * để MỌI rounded-* trong mã tự co về dải sắc này — không phải sửa ~800 chỗ
+ * ghi `rounded-lg/xl/2xl`. rounded-full (chip pill, chấm tròn) giữ nguyên. */
+@theme {
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+
+  --color-zinc-50: oklch(0.985 0.004 95);
+  --color-zinc-100: oklch(0.968 0.006 95);
+  --color-zinc-200: oklch(0.928 0.008 95);
+  --color-zinc-300: oklch(0.872 0.010 92);
+  --color-zinc-400: oklch(0.70 0.012 90);
+  --color-zinc-500: oklch(0.58 0.012 88);
+  --color-zinc-600: oklch(0.48 0.012 85);
+  --color-zinc-700: oklch(0.40 0.012 82);
+  --color-zinc-800: oklch(0.29 0.010 80);
+  --color-zinc-900: oklch(0.22 0.009 78);
+  --color-zinc-950: oklch(0.16 0.007 75);
+
+  --color-slate-50: oklch(0.985 0.004 95);
+  --color-slate-100: oklch(0.968 0.006 95);
+  --color-slate-200: oklch(0.928 0.008 95);
+  --color-slate-300: oklch(0.872 0.010 92);
+  --color-slate-400: oklch(0.70 0.012 90);
+  --color-slate-500: oklch(0.58 0.012 88);
+  --color-slate-600: oklch(0.48 0.012 85);
+  --color-slate-700: oklch(0.40 0.012 82);
+  --color-slate-800: oklch(0.29 0.010 80);
+  --color-slate-900: oklch(0.22 0.009 78);
 }
 
 @theme inline {
@@ -42,11 +87,284 @@
   --color-brand: hsl(var(--c-brand));
   --color-brandfg: hsl(var(--c-brandfg));
   --color-cua: var(--cua);
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+}
+
+/* ─── Geist: tự host, không phụ thuộc mạng ─────────────────────────────
+ * Nguồn: Google Fonts (Geist & Geist Mono, OFL-1.1), đã tách 3 subset
+ * cần thiết cho VI/EN: latin / latin-ext / vietnamese.
+ * Mỗi subset là file riêng kèm unicode-range → trình duyệt chỉ tải
+ * subset đúng với ký tự đang hiển thị (tiếng Việt không bị fallback). */
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-400-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-500-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-500-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/geist-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/geist-600-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/geist-600-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-mono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-mono-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/geist-mono-400-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-mono-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-mono-500-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/geist-mono-500-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
 }
 
 /* =========================================================
-   Viền CUA — vùng agent đang điều khiển (panel "Màn hình máy")
+   Hệ animation — chuyển động cho hành động của người dùng
+   =========================================================
+   Nguyên tắc:
+   1. Mọi chuyển động NGẮN (120–260 ms) và chỉ báo nghĩa: nội dung xuất hiện,
+      trạng thái đổi, hành động được xác nhận. Không có chuyển động trang trí.
+   2. Người dùng bật "giảm chuyển động" ở cấp hệ điều hành nhận bản đứng yên
+      (block `prefers-reduced-motion` ở cuối) — không mất thông tin gì.
+   3. Khi phần tử rời khỏi màn hình (modal đóng), trạng thái biến mất NGAY,
+      chỉ phần xuất hiện có animation — tránh nháy khi unmount.
    ========================================================= */
+
+/* Xuất hiện nhẹ từ dưới lên — nội dung chính, thẻ, khối mở ra */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chỉ mờ dần — đổi tab, đổi nội dung tại chỗ, không dịch chuyển */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Trượt xuống từ trên — thanh thông báo, banner trượt vào */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Trượt vào từ cạnh — ngăn kéo, panel phụ */
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Nảy nhẹ — modal, popover, menu xổ xuống */
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.96) translateY(4px); }
+  60% { opacity: 1; transform: scale(1.01) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Nhấp nháy xác nhận một lần — lưu xong, copy xong, bật/tắt xong */
+@keyframes flash-confirm {
+  0% { background-color: color-mix(in oklab, var(--c-brand) 22%, transparent); }
+  100% { background-color: transparent; }
+}
+
+/* Nhịp đập của chấm tròn đang chờ — dùng cho trạng thái busy nhẹ */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Vệt sáng chạy qua — thanh đang tải (skeleton) */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+/* Utility classes — đặt tên rõ nghĩa, dùng trực tiếp trong JSX.
+   `animation-fill-mode: backwards` (KHÔNG phải `both`/`forwards`): chỉ giữ
+   trạng thái đầu trong lúc chờ delay, xong animation thì NHẢ — nếu giữ
+   state cuối (`both`), `transform` của animation sẽ đè lên `:hover` của
+   `.card-lift` và thẻ không còn nâng lên được khi trỏ chuột. */
+.animate-fade-in-up { animation: fade-in-up 200ms var(--ease-standard) backwards; }
+.animate-fade-in { animation: fade-in 150ms var(--ease-standard) backwards; }
+.animate-slide-down { animation: slide-down 180ms var(--ease-standard) backwards; }
+.animate-slide-in-right { animation: slide-in-right 200ms var(--ease-standard) backwards; }
+.animate-pop-in { animation: pop-in 180ms var(--ease-standard) backwards; }
+.animate-flash-confirm { animation: flash-confirm 600ms var(--ease-standard); }
+.animate-pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+
+/* Skeleton tải — nền gradient chạy qua, tông ấm theo mode */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--c-panel2)) 25%,
+    hsl(var(--c-line)) 50%,
+    hsl(var(--c-panel2)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm, 4px);
+}
+
+/* Stagger cho danh sách — mỗi hàng vào trễ 24 ms so với hàng trước,
+   tối đa 8 hàng để danh sách dài không bị "đuổi" nhau. */
+.stagger-item { animation: fade-in-up 220ms var(--ease-standard) backwards; }
+.stagger-item:nth-child(1) { animation-delay: 0ms; }
+.stagger-item:nth-child(2) { animation-delay: 24ms; }
+.stagger-item:nth-child(3) { animation-delay: 48ms; }
+.stagger-item:nth-child(4) { animation-delay: 72ms; }
+.stagger-item:nth-child(5) { animation-delay: 96ms; }
+.stagger-item:nth-child(6) { animation-delay: 120ms; }
+.stagger-item:nth-child(7) { animation-delay: 144ms; }
+.stagger-item:nth-child(8) { animation-delay: 168ms; }
+
+/* Phản hồi khi NHẤN — mọi nút/nhấn được co nhẹ 1.5 %, đủ để tay cảm thấy
+   hành động đã ghi nhận mà không làm layout giật. */
+button:not(:disabled):active,
+[role='switch']:not([aria-disabled='true']):active,
+[role='tab']:active {
+  transform: scale(0.985);
+}
+
+/* Thanh gạch chân tab đang chọn — trượt mượt khi đổi tab (Provider, Settings…) */
+[role='tab'] {
+  transition:
+    color var(--motion-fast, 150ms) var(--ease-standard, ease),
+    background-color var(--motion-fast, 150ms) var(--ease-standard, ease),
+    border-color var(--motion-fast, 150ms) var(--ease-standard, ease);
+}
+
+/* Thẻ nâng nhẹ khi hover — chuyển động ở thuộc tính transform để GPU xử lý,
+   không gây reflow toàn trang. Bao gồm cả background-color để nền đổi
+   nhịp cùng lúc với viền (hàng dùng hover:bg-* kèm class này). */
+.card-lift {
+  transition:
+    transform var(--motion-base, 200ms) var(--ease-standard, ease),
+    box-shadow var(--motion-base, 200ms) var(--ease-standard, ease),
+    border-color var(--motion-base, 200ms) var(--ease-standard, ease),
+    background-color var(--motion-base, 200ms) var(--ease-standard, ease);
+}
+.card-lift:hover {
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   Giảm chuyển động — tắt toàn bộ animation cho người nhạy cảm
+   với chuyển động (cấp hệ điều hành). Mọi thứ vẫn hoạt động,
+   chỉ không còn phần chuyển động nữa.
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stagger-item { animation-delay: 0ms !important; }
+}
+
+/* ─── Viền CUA — vùng agent đang điều khiển (panel "Màn hình máy") ─────── */
 
 /* "Thở" nhẹ 1.8 s: đủ để mắt thấy vùng đang bị điều khiển, không nháy như
    cảnh báo lỗi. Người bật "giảm chuyển động" nhận bản đứng yên
@@ -54,12 +372,12 @@
 @keyframes cua-target-glow {
   0%,
   100% {
-    border-color: rgb(56 189 248 / 1);
-    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.28);
+    border-color: var(--cua);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--cua) 28%, transparent);
   }
   50% {
-    border-color: rgb(125 211 252 / 0.75);
-    box-shadow: 0 0 0 6px rgb(56 189 248 / 0.1);
+    border-color: color-mix(in oklab, var(--cua) 75%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--cua) 10%, transparent);
   }
 }
 
@@ -74,26 +392,33 @@ body {
   background-color: hsl(var(--c-bg));
   color: hsl(var(--c-fg));
   font-family:
-    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+    'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.011em;
 }
 
 code,
 kbd,
 samp,
 pre {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+  font-family:
+    'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     monospace;
+  font-variant-ligatures: none;
+}
+
+/* Vòng focus nhất quái cho mọi phần tử focusable — chỉ hiện khi dùng bàn phím. */
+:focus-visible {
+  outline: 2px solid #3898ec;
+  outline-offset: 1px;
 }
 
 /* =========================================================
-   Thanh cuộn siêu mảnh (3px) chuẩn VS Code / macOS Dark UI
+   Thanh cuộn mảnh (3px) — tông ấm, đổi theo mode
    ========================================================= */
 
-/* Chrome, Edge, Safari, Opera (Blink & WebKit) */
 ::-webkit-scrollbar,
 *::-webkit-scrollbar {
   width: 3px !important;
@@ -107,13 +432,13 @@ pre {
 
 ::-webkit-scrollbar-thumb,
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16) !important;
+  background: color-mix(in oklab, hsl(var(--c-fg)) 22%, transparent) !important;
   border-radius: 9999px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover,
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.38) !important;
+  background: color-mix(in oklab, hsl(var(--c-fg)) 42%, transparent) !important;
 }
 
 ::-webkit-scrollbar-corner,
@@ -121,10 +446,23 @@ pre {
   background: transparent !important;
 }
 
-/* Firefox */
+/* =========================================================
+   Tracking âm cho heading cỡ lớn — kiểu gothic của Cursor
+   (Codex/Claude hiện tại), không phải kiểu văn học. Heading ≥24px
+   hứng tracking chặt hơn body (-0.02em) để trông gọn, hiện đại.
+   ========================================================= */
+h1,
+h2,
+h3,
+.text-2xl,
+.text-3xl {
+  letter-spacing: -0.02em;
+}
+
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    scrollbar-color: color-mix(in oklab, hsl(var(--c-fg)) 22%, transparent)
+      transparent;
   }
 }

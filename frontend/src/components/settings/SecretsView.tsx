@@ -210,7 +210,7 @@ export function SecretsView() {
           <div className="flex size-12 items-center justify-center rounded-xl bg-brand/10 text-brand mb-3">
             <Lock className="size-6" />
           </div>
-          <h3 className="text-sm font-semibold text-fg">No secrets configured</h3>
+          <h3 className="text-sm font-bold text-fg">No secrets configured</h3>
           <p className="text-xs text-muted max-w-md mt-1 mb-4">
             Add environment variables and API keys to make them accessible inside agent sandboxes and background containers.
           </p>
@@ -284,7 +284,7 @@ export function SecretsView() {
       {/* ADD SECRETS MODAL */}
       {/* ========================================================================= */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
           <div className="relative w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-2xl space-y-4">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line pb-3">
@@ -337,7 +337,7 @@ export function SecretsView() {
               <p className="text-muted"># Note shown above the secret</p>
               <p className="text-fg">API_KEY=your_value <span className="text-muted"># Inline note</span></p>
               <p className="text-fg">DB_HOST="localhost"</p>
-              <p className="text-[10px] text-muted pt-1 leading-relaxed font-sans">
+              <p className="text-[11px] text-muted pt-1 leading-relaxed font-sans">
                 Comments directly above a variable, or inline using # note, prefill its Note field. Notes are stored and shown in plain text.
               </p>
             </div>
@@ -391,7 +391,7 @@ export function SecretsView() {
                 placeholder="e.g. staging"
                 className="w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-fg placeholder:text-muted outline-hidden focus:border-brand font-mono"
               />
-              <p className="text-[10px] text-muted">
+              <p className="text-[11px] text-muted">
                 For example, label staging exports <code className="text-fg font-mono">DATABASE_URL__STAGING</code>.
               </p>
             </div>
@@ -429,7 +429,7 @@ export function SecretsView() {
       {/* EDIT SECRET MODAL */}
       {/* ========================================================================= */}
       {editingSecret && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
           <div className="relative w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-2xl space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-3">
@@ -462,7 +462,7 @@ export function SecretsView() {
                 placeholder="Paste new secret value"
                 className="w-full rounded-lg border border-line bg-panel2 p-3 text-xs text-fg placeholder:text-muted outline-hidden focus:border-brand font-mono"
               />
-              <p className="text-[10px] text-muted">
+              <p className="text-[11px] text-muted">
                 An existing value is configured and hidden. Leave this field untouched to keep the current value.
               </p>
             </div>
@@ -505,7 +505,7 @@ export function SecretsView() {
             <div className="rounded-lg border border-line bg-panel2 p-3 flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-fg">Sensitive</span>
-                <p className="text-[10px] text-muted">Sensitive secrets are redacted in the UI.</p>
+                <p className="text-[11px] text-muted">Sensitive secrets are redacted in the UI.</p>
               </div>
               <button
                 type="button"

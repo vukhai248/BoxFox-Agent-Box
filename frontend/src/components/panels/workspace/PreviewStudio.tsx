@@ -67,7 +67,7 @@ export function PreviewStudio({
     <div className="absolute inset-0 z-30 flex flex-col bg-panel">
       <header className="flex items-center gap-2 border-b border-line px-3 py-2">
         <span className="truncate font-mono text-[12px] text-fg">{name}</span>
-        <span className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted">{kind}</span>
+        <span className="rounded-full bg-panel2 px-1.5 py-0.5 text-[11px] font-medium uppercase text-muted">{kind}</span>
         {entry && <EntryLabelBadges entry={entry} />}
         <div className="ml-auto flex items-center gap-1.5">
           {showCopy && content && <CopyButton text={content.content} label={t('workspace.copy')} copiedLabel={t('workspace.copied')} />}
@@ -220,7 +220,7 @@ function UnknownPreview({ href, binary, message }: { href: string; binary: boole
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-[12px] text-muted">{message ?? t('workspace.noPreview')}</p>
       {binary && (
-        <span className="rounded bg-panel2 px-2 py-0.5 text-[10px] font-semibold uppercase text-muted">
+        <span className="rounded-full bg-panel2 px-2 py-0.5 text-[11px] font-semibold uppercase text-muted">
           {t('workspace.binary')}
         </span>
       )}

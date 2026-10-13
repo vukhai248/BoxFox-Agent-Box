@@ -31,7 +31,7 @@ export function ResearchSuggestCard({ reason, draftGoal }: { reason: string; dra
       <header className="flex items-center gap-1.5">
         <Microscope className="size-3" />
         <span className="font-medium">{t('research.suggestTitle')}</span>
-        <span className="ml-auto text-[10px] text-muted">{t('research.suggestFrom')}</span>
+        <span className="ml-auto text-[11px] text-muted">{t('research.suggestFrom')}</span>
       </header>
       {draftGoal && <p className="mt-0.5 text-fg">{draftGoal}</p>}
       <p className="mt-0.5 text-muted">{reason || t('research.suggestReason')}</p>
@@ -74,12 +74,12 @@ function ResearchStatusCard() {
       <header className="flex items-center gap-1.5">
         <Microscope className="size-3" />
         <span className="font-medium">{t('research.statusCardTitle')}</span>
-        {statusCard.researchId && <span className="font-mono text-[10px] text-muted">{runLabel(statusCard.researchId)}</span>}
+        {statusCard.researchId && <span className="font-mono text-[11px] text-muted">{runLabel(statusCard.researchId)}</span>}
         <button
           type="button"
           data-testid="research-status-card-dismiss"
           onClick={dismiss}
-          className="ml-auto rounded border border-line px-1.5 py-0.5 text-[10px] text-muted transition hover:text-fg cursor-pointer"
+          className="ml-auto rounded-full border border-line px-1.5 py-0.5 text-[11px] text-muted transition hover:text-fg cursor-pointer"
         >
           {t('research.statusCardDismiss')}
         </button>

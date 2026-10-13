@@ -181,7 +181,7 @@ export function Sidebar() {
   // → tự thu về thanh biểu tượng; nút mở sẽ bung panel đầy đủ dạng overlay.
   const rail = (
     <aside className="flex w-14 shrink-0 flex-col items-center gap-3 border-r border-line bg-panel py-3 select-none">
-      <div className="flex size-7 items-center justify-center rounded-lg bg-blue-600/10 text-blue-400 font-bold">
+      <div className="flex size-7 items-center justify-center rounded-lg bg-brand/10 text-brand font-bold">
         <Sparkles className="size-4" />
       </div>
       <button
@@ -210,7 +210,7 @@ export function Sidebar() {
           <Settings className="size-4" />
         </button>
         <span
-          className="flex size-6 items-center justify-center rounded-full bg-blue-600/20 text-[10px] font-bold text-blue-400"
+          className="flex size-6 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand"
           title={userEmail || t('sidebar.undefinedUser')}
         >
           {MOCK_ACCOUNT.initials}
@@ -228,7 +228,7 @@ export function Sidebar() {
       {/* Top Header: Brand Logo + Actions */}
       <div className="flex items-center justify-between px-3.5 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex size-6 items-center justify-center rounded-md bg-blue-600/10 text-blue-400 font-bold">
+          <div className="flex size-6 items-center justify-center rounded-md bg-brand/10 text-brand font-bold">
             <Sparkles className="size-3.5" />
           </div>
           <span className="text-sm font-semibold tracking-tight text-fg">boxfox</span>
@@ -262,7 +262,7 @@ export function Sidebar() {
           onClick={() => setAccountMenuOpen(!accountMenuOpen)}
           className="flex w-full items-center gap-2.5 rounded-md border border-line bg-panel2/40 px-2.5 py-1.5 text-left transition hover:bg-panel2 cursor-pointer"
         >
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-[9px] font-bold text-blue-400">
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
             {MOCK_ACCOUNT.initials}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-muted">
@@ -316,10 +316,10 @@ export function Sidebar() {
           onClick={handleNewSession}
           className="flex w-full items-center justify-center gap-1.5 rounded-md bg-panel2 border border-line px-3 py-1.5 text-xs font-medium text-fg transition hover:bg-panel2/80 cursor-pointer"
         >
-          <Plus className="size-3.5 text-blue-400" />
+          <Plus className="size-3.5 text-brand" />
           <span>{t('sidebar.newSession')}</span>
         </button>
-        <p data-testid="sidebar-active-environment" className="px-1 pt-2 text-[10px] text-muted">
+        <p data-testid="sidebar-active-environment" className="px-1 pt-2 text-[11px] text-muted">
           {t(machine.mode === 'host' ? 'sidebar.localMachine' : 'sidebar.isolatedMachine')}
         </p>
       </div>
@@ -445,12 +445,12 @@ function ProjectSessionSection({project, selected, count, onNew, children}: {
   return <section data-testid={`project-sessions-${project.id}`} className="py-0.5">
     <div className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted">
       <div title={project.path} className="flex min-w-0 flex-1 items-center gap-1.5 text-fg">
-        <Folder className="size-3.5 shrink-0 text-blue-400" />
+        <Folder className="size-3.5 shrink-0 text-brand" />
         <span className="truncate">{project.name}</span>
       </div>
       <button aria-label={t('sidebar.newProjectSession', {project: project.name})} title={t('sidebar.newProjectSession', {project: project.name})} onClick={onNew} className="rounded p-1 text-muted hover:bg-panel2 hover:text-fg"><Plus className="size-3.5" /></button>
     </div>
-    <div className="space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[10px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>
+    <div className="space-y-0.5">{children}{count === 0 && !selected && <p className="px-2 py-1 text-[11px] text-muted">{t('sidebar.noProjectSessions')}</p>}</div>
   </section>
 }
 
@@ -534,9 +534,9 @@ function GroupSection({
         ) : (
           <ChevronRight className="size-3 shrink-0" />
         )}
-        <Folder className="size-3 shrink-0 text-blue-400/70" />
+        <Folder className="size-3 shrink-0 text-brand/70" />
         <span className="min-w-0 flex-1 truncate text-left">{name}</span>
-        <span className="text-[10px] font-mono text-muted/70">{sessions.length}</span>
+        <span className="text-[11px] font-mono text-muted/70">{sessions.length}</span>
       </button>
 
       {open && (
@@ -684,46 +684,49 @@ function SessionRow({
                 className="min-w-0 flex-1 rounded border border-brand/60 bg-panel px-1 py-0.5 text-xs font-medium text-fg outline-none"
               />
             ) : (
-              <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
+              <span
+                className="min-w-0 flex-1 truncate text-xs font-semibold text-fg"
+                title={session.title}
+              >
                 {session.title}
               </span>
             )}
-            <span className="shrink-0 text-[10px] text-muted">{session.relative_time}</span>
+            <span className="shrink-0 text-[11px] text-muted">{session.relative_time}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             {isBlocked ? (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-amber-400">
-                <span className="size-1 rounded-full bg-amber-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#9a3412]/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-[#9a3412] ring-1 ring-[#9a3412]/30 dark:bg-[#e8a33d]/15 dark:text-[#e8a33d] dark:ring-[#e8a33d]/40">
+                <span className="size-1 rounded-full bg-[#9a3412] dark:bg-[#e8a33d] animate-pulse" />
                 BLOCKED
               </span>
             ) : session.status === 'idle' || session.status === 'loi' ? (
               // Cùng đúng khung chip của trạng thái rảnh; chỉ nhãn đổi theo trạng thái thật.
-              <span className="inline-flex items-center gap-1 rounded bg-panel px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-muted border border-line">
-                <span className="size-1 rounded-full bg-zinc-500" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-panel px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted ring-1 ring-line">
+                <span className="size-1 rounded-full bg-muted" />
                 {t(`sidebar.status.${session.status}`)}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded bg-panel px-1.5 py-0.2 text-[9px] font-medium text-muted border border-line">
-                <span className="size-1 rounded-full bg-emerald-400" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-panel px-2 py-0.5 text-[11px] font-semibold text-fg ring-1 ring-line">
+                <span className="size-1 rounded-full bg-[#5b7a35] dark:bg-[#a3b86b]" />
                 {session.mode}
               </span>
             )}
 
-            <span className="inline-flex items-center gap-0.5 rounded bg-blue-500/10 px-1 py-0.2 text-[9px] font-medium text-blue-400">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-brand/10 px-1 py-0.2 text-[11px] font-medium text-brand">
               <FileText className="size-2.5" />
               <span>Plan</span>
             </span>
 
             {session.active_lease_count > 0 && (
-              <span className="inline-flex items-center gap-0.5 rounded bg-panel px-1 py-0.2 text-[9px] font-mono text-muted border border-line">
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-panel px-1 py-0.2 text-[11px] font-mono text-muted border border-line">
                 <Lock className="size-2.5" />
                 <span>{session.active_lease_count}</span>
               </span>
             )}
 
             {typeof session.step_count === 'number' && session.step_count > 0 && (
-              <span className="inline-flex items-center rounded bg-panel px-1 py-0.2 text-[9px] font-mono text-muted border border-line">
+              <span className="inline-flex items-center rounded-full bg-panel px-1 py-0.2 text-[11px] font-mono text-muted border border-line">
                 {session.step_count} steps
               </span>
             )}

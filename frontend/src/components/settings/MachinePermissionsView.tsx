@@ -346,25 +346,25 @@ export function MachinePermissionsView() {
         <>
           {/* -- Chế độ chạy ------------------------------------------------ */}
           <section data-testid="mp-execution" className={CARD}>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
               <Cpu className="size-4 text-brand" />
               Chế độ chạy
             </h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <div>
-                <p className="text-[10px] font-semibold tracking-wider text-muted uppercase">Đang chạy</p>
+                <p className="text-[11px] font-semibold tracking-wider text-muted uppercase">Đang chạy</p>
                 <p data-testid="mp-execution-mode" className="mt-1 font-mono text-xs font-semibold text-fg">
                   {execution.mode}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold tracking-wider text-muted uppercase">Đang cấu hình</p>
+                <p className="text-[11px] font-semibold tracking-wider text-muted uppercase">Đang cấu hình</p>
                 <p data-testid="mp-execution-configured" className="mt-1 font-mono text-xs text-fg">
                   {execution.configured}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold tracking-wider text-muted uppercase">Mặc định</p>
+                <p className="text-[11px] font-semibold tracking-wider text-muted uppercase">Mặc định</p>
                 <p data-testid="mp-execution-default" className="mt-1 font-mono text-xs text-fg">
                   {execution.modeDefault}
                 </p>
@@ -393,7 +393,7 @@ export function MachinePermissionsView() {
             <>
               {/* -- Quyền ------------------------------------------------ */}
               <section data-testid="mp-permissions" className={CARD}>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
                   <ShieldCheck className="size-4 text-brand" />
                   Quyền
                 </h2>
@@ -431,7 +431,7 @@ export function MachinePermissionsView() {
                     </select>
                   </label>
                 </div>
-                <p className="mt-2 text-[10px] text-muted">
+                <p className="mt-2 text-[11px] text-muted">
                   {t(`composer.permission.hint.${snapshot.mode}`)}{' '}
                   {t(`composer.permission.scopeHint.${snapshot.scope}`)}{' '}
                   {t(snapshot.network === 'enabled' ? 'composer.permission.hint.networkEnabled' : 'composer.permission.hint.networkRestricted')}
@@ -448,7 +448,7 @@ export function MachinePermissionsView() {
 
                 <div className="mt-4 overflow-hidden rounded-lg border border-line">
                   <table className="w-full text-xs">
-                    <thead className="bg-panel2 text-[10px] tracking-wider text-muted uppercase">
+                    <thead className="bg-panel2 text-[11px] tracking-wider text-muted uppercase">
                       <tr>
                         <th className="px-3 py-1.5 text-left font-semibold">Năng lực</th>
                         <th className="px-3 py-1.5 text-left font-semibold">Chế độ hiện tại</th>
@@ -461,7 +461,7 @@ export function MachinePermissionsView() {
                           <td className="px-3 py-1.5">
                             <span
                               data-testid={`mp-capability-${row.key}`}
-                              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${capabilityTone(snapshot.capabilities?.[row.key])}`}
+                              className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${capabilityTone(snapshot.capabilities?.[row.key])}`}
                             >
                               {capabilityLabel(snapshot.capabilities?.[row.key])}
                             </span>
@@ -481,11 +481,11 @@ export function MachinePermissionsView() {
 
               {/* -- Luật -------------------------------------------------- */}
               <section data-testid="mp-rules" className={CARD}>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
                   <ListChecks className="size-4 text-brand" />
                   Luật
                   {ruleRows.length > 0 && (
-                    <span className="rounded-full border border-line bg-panel2 px-2 py-0.5 text-[10px] font-semibold text-muted">
+                    <span className="rounded-full border border-line bg-panel2 px-2 py-0.5 text-[11px] font-semibold text-muted">
                       {ruleRows.length}
                     </span>
                   )}
@@ -504,12 +504,12 @@ export function MachinePermissionsView() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase ${KIND_TONE[row.kind]}`}>
+                            <span className={`rounded-full border px-1.5 py-0.5 text-[11px] font-bold uppercase ${KIND_TONE[row.kind]}`}>
                               {row.kind}
                             </span>
                             <code className="truncate font-mono text-[11px] text-fg">{row.rule}</code>
                           </div>
-                          <p className="mt-0.5 truncate text-[10px] text-muted" title={row.file}>
+                          <p className="mt-0.5 truncate text-[11px] text-muted" title={row.file}>
                             tầng {row.layer || '—'}
                             {row.file ? ` · ${row.file}` : ''}
                           </p>
@@ -531,11 +531,11 @@ export function MachinePermissionsView() {
 
               {/* -- Thẻ duyệt đang chờ ----------------------------------- */}
               <section data-testid="mp-pending" className={CARD}>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
                   <AlertTriangle className="size-4 text-amber-500" />
                   Thẻ duyệt đang chờ
                   {pending.length > 0 && (
-                    <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                    <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                       {pending.length}
                     </span>
                   )}
@@ -552,11 +552,11 @@ export function MachinePermissionsView() {
                           <code className="rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-[11px] text-fg">
                             {item.tool}
                           </code>
-                          {item.sessionId && <span className="text-[10px] text-muted">phiên {item.sessionId}</span>}
+                          {item.sessionId && <span className="text-[11px] text-muted">phiên {item.sessionId}</span>}
                         </div>
                         {item.reason && <p className="mt-1.5 text-xs text-fg">{item.reason}</p>}
                         {argsLine(item.args) && (
-                          <pre className="mt-1.5 overflow-x-auto rounded border border-line bg-panel p-2 font-mono text-[10px] whitespace-pre-wrap text-muted">
+                          <pre className="mt-1.5 overflow-x-auto rounded border border-line bg-panel p-2 font-mono text-[11px] whitespace-pre-wrap text-muted">
                             {argsLine(item.args)}
                           </pre>
                         )}
@@ -581,7 +581,7 @@ export function MachinePermissionsView() {
 
               {/* -- Điều khiển desktop ------------------------------------ */}
               <section data-testid="mp-lease" className={CARD}>
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-fg">
                   <Siren className="size-4 text-brand" />
                   Điều khiển desktop
                 </h2>

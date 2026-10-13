@@ -45,7 +45,7 @@ const STATE_LABELS: Record<PlanReviewState, TKey> = {
 }
 
 const STATE_CHIP_BASE =
-  'inline-flex items-center gap-1 rounded px-1.5 py-px text-[10px] font-semibold tracking-wide'
+  'inline-flex items-center gap-1 rounded px-1.5 py-px text-[11px] font-semibold tracking-wide'
 
 const STATE_CHIP_CLASSES: Record<PlanReviewState, string> = {
   approved: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/40',
@@ -440,7 +440,7 @@ export function PlanPanel() {
               <ChevronDown className="size-3 shrink-0 text-muted" />
             </button>
             {identityMenuOpen && planFiles.manifest && (
-              <div className="absolute left-0 top-full z-40 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute left-0 top-full z-40 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-pop-in">
                 {planFiles.manifest.plans.map((plan) => {
                   const isCurrent = plan.identity === planFiles.selection?.identity
                   return (
@@ -476,7 +476,7 @@ export function PlanPanel() {
             </button>
 
             {versionMenuOpen && (
-              <div className="absolute left-0 top-full z-40 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute left-0 top-full z-40 mt-1 w-36 overflow-hidden rounded-lg border border-line bg-panel2 p-1 shadow-xl animate-pop-in">
                 {versionItems.length === 0 && (
                   <p className="px-2.5 py-1.5 text-xs text-muted">{t('plan.noVersions')}</p>
                 )}
@@ -495,7 +495,7 @@ export function PlanPanel() {
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate">{item.label}</span>
                       {item.parent && (
-                        <span className="truncate font-mono text-[10px] text-muted">{item.parent}</span>
+                        <span className="truncate font-mono text-[11px] text-muted">{item.parent}</span>
                       )}
                     </span>
                     {item.isCurrent && <Check className="size-3 shrink-0 text-brand" />}
@@ -663,7 +663,7 @@ export function PlanPanel() {
               <div
                 data-component-id="plan-approve-conditions-popover"
                 data-testid="plan-approve-note-popover"
-                className="absolute right-0 top-full z-40 mt-1 w-80 space-y-2 rounded-lg border border-line bg-panel2 p-3 text-left shadow-xl animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 top-full z-40 mt-1 w-80 space-y-2 rounded-lg border border-line bg-panel2 p-3 text-left shadow-xl animate-pop-in"
               >
                 <div id={APPROVE_CONDITIONS_LABEL_ID} className="text-xs font-semibold text-fg">
                   {t('plan.decisions.conditionsLabel')}
@@ -732,7 +732,7 @@ export function PlanPanel() {
             <span id={CHANGES_TITLE_ID} className="text-[11px] font-semibold text-fg">
               {t('plan.decisions.changesTitle')}
             </span>
-            <span className="font-mono text-[10px] text-muted">
+            <span className="font-mono text-[11px] text-muted">
               {t('plan.decisions.changesFor', { version: selectionVersion ?? '—' })}
             </span>
           </div>
@@ -785,7 +785,7 @@ export function PlanPanel() {
             <span className="text-muted">{t('plan.staleReview.body')}</span>
           </span>
           {reviewStamp && (
-            <span className="shrink-0 font-mono text-[10px] text-muted">{reviewStamp}</span>
+            <span className="shrink-0 font-mono text-[11px] text-muted">{reviewStamp}</span>
           )}
         </div>
       )}
@@ -813,7 +813,7 @@ export function PlanPanel() {
             </span>
           </span>
           {rejection.stamp && (
-            <span className="shrink-0 font-mono text-[10px] text-muted">{rejection.stamp}</span>
+            <span className="shrink-0 font-mono text-[11px] text-muted">{rejection.stamp}</span>
           )}
         </div>
       )}
@@ -841,7 +841,7 @@ export function PlanPanel() {
             <span className="truncate text-muted">{t('plan.reviewStoredNote')}</span>
           )}
           {reviewStamp && (
-            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted">{reviewStamp}</span>
+            <span className="ml-auto shrink-0 font-mono text-[11px] text-muted">{reviewStamp}</span>
           )}
         </div>
       )}
@@ -905,7 +905,7 @@ export function PlanPanel() {
           />
           <span className="min-w-0 flex-1 truncate">{decisionSentText}</span>
           {decisionSentMeta && (
-            <span className="shrink-0 font-mono text-[10px] text-muted">{decisionSentMeta}</span>
+            <span className="shrink-0 font-mono text-[11px] text-muted">{decisionSentMeta}</span>
           )}
         </div>
       )}
@@ -923,7 +923,7 @@ export function PlanPanel() {
             {wakeText}
           </span>
           {wake?.code && (
-            <span className="shrink-0 font-mono text-[10px] text-muted">{wake.code}</span>
+            <span className="shrink-0 font-mono text-[11px] text-muted">{wake.code}</span>
           )}
         </div>
       )}
@@ -1066,7 +1066,7 @@ export function PlanPanel() {
                           : 'text-muted'
                     }`}
                   >
-                    <span className="mr-3 select-none text-[10px] opacity-40">
+                    <span className="mr-3 select-none text-[11px] opacity-40">
                       {line.kind === 'them' ? '+' : line.kind === 'bot' ? '-' : ' '}
                     </span>
                     {line.text}
@@ -1147,7 +1147,7 @@ export function PlanPanel() {
                       {planFiles.document ? 'Plan Metadata & Status' : 'Architecture Scope'}
                     </h2>
                     {planFiles.document && (
-                      <span className="rounded bg-panel px-2 py-0.5 text-[10px] font-mono text-brand border border-line">
+                      <span className="rounded-full bg-panel px-2 py-0.5 text-[11px] font-mono text-brand border border-line">
                         {planFiles.document.label}
                       </span>
                     )}
@@ -1219,7 +1219,7 @@ export function PlanPanel() {
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <span
-                                className={`flex size-5 shrink-0 items-center justify-center rounded font-mono text-[10px] font-bold ${
+                                className={`flex size-5 shrink-0 items-center justify-center rounded font-mono text-[11px] font-bold ${
                                   isDone
                                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                     : 'bg-panel2 text-brand border border-line'
@@ -1231,11 +1231,11 @@ export function PlanPanel() {
                             </div>
 
                             <div className="flex items-center gap-2 ml-2 shrink-0">
-                              <span className="rounded bg-panel2 px-1.5 py-0.2 text-[10px] font-mono text-muted border border-line">
+                              <span className="rounded-full bg-panel2 px-1.5 py-0.2 text-[11px] font-mono text-muted border border-line">
                                 {step.risk_level}
                               </span>
                               <span
-                                className={`rounded px-1.5 py-0.2 text-[10px] font-medium uppercase tracking-wider ${
+                                className={`rounded px-1.5 py-0.2 text-[11px] font-medium uppercase tracking-wider ${
                                   isDone
                                     ? 'bg-emerald-500/15 text-emerald-400'
                                     : 'bg-panel2 text-muted'
@@ -1260,7 +1260,7 @@ export function PlanPanel() {
 
             {/* Right Side: Step Inspector Split Drawer */}
             {selectedStep && (
-              <div className="w-1/2 h-full overflow-y-auto bg-panel2/20 p-5 flex flex-col justify-between border-l border-line animate-in fade-in slide-in-from-right-4 duration-150">
+              <div className="w-1/2 h-full overflow-y-auto bg-panel2/20 p-5 flex flex-col justify-between border-l border-line animate-slide-in-right">
                 <div className="space-y-4">
                   {/* Inspector Header */}
                   <div className="flex items-center justify-between border-b border-line pb-3">
@@ -1283,13 +1283,13 @@ export function PlanPanel() {
                   {/* Step Metadata Card */}
                   <div className="rounded-lg border border-line bg-panel p-3.5 space-y-3">
                     <div>
-                      <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Goal</span>
+                      <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Goal</span>
                       <p className="mt-1 text-xs text-fg font-medium leading-relaxed">{selectedStep.description}</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 pt-2 border-t border-line/60">
                       <div>
-                        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Target Resources</span>
+                        <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Target Resources</span>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {selectedStep.resources.map((res, i) => (
                             <span key={i} className="rounded bg-panel2 px-1.5 py-0.5 text-[11px] font-mono text-fg border border-line">
@@ -1300,11 +1300,11 @@ export function PlanPanel() {
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Security Policy</span>
+                        <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Security Policy</span>
                         <div className="mt-1 flex items-center gap-1.5">
                           <Shield className="size-3 text-brand" />
                           <span className="text-xs font-medium text-fg">{selectedStep.risk_level}</span>
-                          <span className="text-[10px] text-muted">({selectedStep.out_of_scope ? 'Out of lease' : 'In plan lease'})</span>
+                          <span className="text-[11px] text-muted">({selectedStep.out_of_scope ? 'Out of lease' : 'In plan lease'})</span>
                         </div>
                       </div>
                     </div>
@@ -1312,7 +1312,7 @@ export function PlanPanel() {
 
                   {/* Execution Trace / Output Mock */}
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">Resource Trace / Diff</span>
+                    <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Resource Trace / Diff</span>
                     <div className="rounded-md border border-line bg-bg p-3 font-mono text-[11px] leading-relaxed text-zinc-300 overflow-x-auto">
                       <div className="text-muted pb-1">// Target: {selectedStep.resources.join(', ')}</div>
                       <div className="text-emerald-400">+ Integrity: VERIFIED_CLEAN</div>

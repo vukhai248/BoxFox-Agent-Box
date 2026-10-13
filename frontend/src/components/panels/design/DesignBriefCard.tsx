@@ -72,10 +72,10 @@ export function DesignBriefCard({ run, brief }: { run: DesignRun; brief?: Record
           <ul className="mt-1 space-y-0.5">
             {touchList.items.map((item) => (
               <li key={item.id} className="flex items-baseline gap-1.5" data-status={item.status}>
-                <span className="rounded border border-line px-1 text-[10px] text-muted">
+                <span className="rounded-full border border-line px-1 text-[11px] text-muted">
                   {item.kind === 'new' ? t('design.touchKindNew') : t('design.touchKindInsert')}
                 </span>
-                <code className="truncate font-mono text-[10px] text-fg" title={item.path}>{item.path}</code>
+                <code className="truncate font-mono text-[11px] text-fg" title={item.path}>{item.path}</code>
                 {item.reason && <span className="truncate text-muted">{item.reason}</span>}
               </li>
             ))}

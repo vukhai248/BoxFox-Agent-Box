@@ -128,7 +128,7 @@ export function ImageLightboxModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/90 backdrop-blur-md animate-in fade-in duration-200 select-none"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/90 backdrop-blur-md animate-fade-in select-none"
       onMouseUp={handleMouseUp}
     >
       {/* Top Header Bar */}

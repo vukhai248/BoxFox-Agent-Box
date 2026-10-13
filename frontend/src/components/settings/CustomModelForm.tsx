@@ -99,7 +99,7 @@ export function CustomModelForm({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] font-semibold uppercase text-muted">Model ID / Slug</label>
+          <label className="text-[11px] font-semibold uppercase text-muted">Model ID / Slug</label>
           <div className="mt-1 flex items-center gap-1.5">
             <input
               type="text"
@@ -121,11 +121,11 @@ export function CustomModelForm({
             </button>
           </div>
           {!connection.credentialPresent && (
-            <p className="mt-1 text-[10px] leading-4 text-amber-700 dark:text-amber-300">Save an API key on this connection first, then test a model id.</p>
+            <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-300">Save an API key on this connection first, then test a model id.</p>
           )}
         </div>
         <div>
-          <label className="text-[10px] font-semibold uppercase text-muted">Display Name</label>
+          <label className="text-[11px] font-semibold uppercase text-muted">Display Name</label>
           <input
             type="text"
             placeholder="e.g. Llama 3.3 70B"
@@ -175,7 +175,7 @@ export function CustomModelForm({
             <span className="text-muted">Latency {latencyMs} ms</span>
             <span className="text-muted">Answered {result.status === 'passed' ? 'BOXFOX_OK' : 'no'}</span>
           </div>
-          <p className="font-mono text-[10px] text-muted">Target: {connection.name} / {testedId}</p>
+          <p className="font-mono text-[11px] text-muted">Target: {connection.name} / {testedId}</p>
           {result.status === 'failed' && (
             <>
               <p className="font-mono text-[11px] leading-4 text-rose-600 dark:text-rose-300">{result.message}</p>
@@ -185,7 +185,7 @@ export function CustomModelForm({
         </div>
       )}
 
-      <p className="text-[10px] leading-4 text-muted">The name is kept as typed. You can add it anyway — it stays <span className="font-semibold text-fg">Untested</span> until a test passes.</p>
+      <p className="text-[11px] leading-4 text-muted">The name is kept as typed. You can add it anyway — it stays <span className="font-semibold text-fg">Untested</span> until a test passes.</p>
     </form>
   )
 }

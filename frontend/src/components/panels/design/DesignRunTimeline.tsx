@@ -38,7 +38,7 @@ export function DesignRunTimeline({ run }: { run: DesignRun }) {
         <span className="text-muted">{t('design.timelinePhase', { step: t(STEP_LABEL_KEY[run.step]) })}</span>
       </header>
       {(run.batch || run.review) && (
-        <p className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
+        <p className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px]">
           {run.batch && (
             <span data-testid="design-timeline-batch" data-status={run.batch.status} className="rounded border border-line px-1 py-0.5 text-muted">
               {t('design.timelineBatch', {
@@ -72,12 +72,12 @@ export function DesignRunTimeline({ run }: { run: DesignRun }) {
       {/* §5.8: điều khiển tác động lên RUN, không lên phiên. Run tạm dừng nói rõ nhánh và tệp đã ghi
           giữ nguyên, và hỏi "Tiếp tục run D-…?" trước khi mở lượt tiếp tục. */}
       {suspendable && (
-        <p data-testid="design-run-resume-ask" className="mt-1.5 text-[10px] text-amber-300">
+        <p data-testid="design-run-resume-ask" className="mt-1.5 text-[11px] text-amber-300">
           {t('design.resumeAsk', { id: runLabel(run.designId) })}
         </p>
       )}
       {run.status === 'paused' && (
-        <p data-testid="design-run-paused-note" className="mt-0.5 text-[10px] text-muted">
+        <p data-testid="design-run-paused-note" className="mt-0.5 text-[11px] text-muted">
           {t('design.pausedNote')}
         </p>
       )}

@@ -62,22 +62,22 @@ function ContextTab() {
     <div className="p-2">
       <div className="mb-3 grid grid-cols-2 gap-2">
         <div className="rounded-md border border-line bg-panel2 p-2">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('labels.integrityFloor')}
           </p>
           <IntegrityBadge value={ctx.integrity_floor} />
-          <p className="mt-0.5 text-[10px] text-muted">
+          <p className="mt-0.5 text-[11px] text-muted">
             {ctx.integrity_floor === INTEGRITY.USER_AUTHORIZED
               ? t('labels.floorExplanation.clean')
               : t('labels.floorExplanation.dirty')}
           </p>
         </div>
         <div className="rounded-md border border-line bg-panel2 p-2">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('labels.confidentialityCeiling')}
           </p>
           <ConfidentialityBadge value={ctx.confidentiality_ceiling} />
-          <p className="mt-0.5 text-[10px] text-muted">
+          <p className="mt-0.5 text-[11px] text-muted">
             {ctx.confidentiality_ceiling === CONFIDENTIALITY.SECRET
               ? t('labels.ceilingExplanation.secret')
               : ctx.confidentiality_ceiling === CONFIDENTIALITY.INTERNAL
@@ -98,7 +98,7 @@ function ContextTab() {
                   <p className="truncate text-[12px] font-mono font-medium">
                     {chunk.provenance.source_uri || chunk.provenance.label_id}
                   </p>
-                  <p className="text-[10px] text-muted">
+                  <p className="text-[11px] text-muted">
                     {chunk.provenance.source_kind} · {chunk.provenance.tool_name}
                   </p>
                 </div>
@@ -112,13 +112,13 @@ function ContextTab() {
               </div>
               {chunk.provenance.derived_from.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  <span className="text-[10px] text-muted">{t('labels.derivedFrom')}:</span>
+                  <span className="text-[11px] text-muted">{t('labels.derivedFrom')}:</span>
                   {chunk.provenance.derived_from.map((labelId) => (
                     <button
                       key={labelId}
                       type="button"
                       onClick={() => openSource(labelId)}
-                      className="rounded bg-panel2 px-1.5 py-px text-[10px] font-mono text-brand hover:underline"
+                      className="rounded-full bg-panel2 px-1.5 py-px text-[11px] font-mono text-brand hover:underline"
                     >
                       {labelId}
                     </button>
@@ -209,14 +209,14 @@ function LeaseRow({ lease, onRevoke }: { lease: Lease; onRevoke?: () => void }) 
             {t('labels.leaseResources')}:{' '}
             <span className="font-mono">{lease.canonical_resources.join(', ') || '—'}</span>
           </p>
-          <p className="text-[10px] text-muted">
+          <p className="text-[11px] text-muted">
             {t('labels.leaseUses', { used: lease.used_count, max: lease.max_uses ?? '∞' })} ·{' '}
             {lease.expires_at
               ? t('labels.leaseExpires', { time: lease.expires_at })
               : t('labels.leaseNoExpiry')}
           </p>
           {lease.granted_after_label_id && (
-            <p className="text-[10px] text-muted">
+            <p className="text-[11px] text-muted">
               Neo: <span className="font-mono">{lease.granted_after_label_id}</span>
             </p>
           )}

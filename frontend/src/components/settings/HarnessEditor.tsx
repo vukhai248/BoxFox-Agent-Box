@@ -79,11 +79,11 @@ function Card({ title, hint, badge, children }: { title: string; hint?: string; 
     <section className="rounded-xl border border-line bg-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          <h2 className="text-sm font-bold text-fg">{title}</h2>
           {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
         </div>
         {badge && (
-          <span className="rounded-full border border-line px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {badge}
           </span>
         )}
@@ -276,20 +276,20 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-semibold text-fg">{readOnly ? form.name : 'Edit harness'}</h1>
+            <h1 className="text-lg font-bold text-fg">{readOnly ? form.name : 'Edit harness'}</h1>
             {readOnly ? (
               <>
-                <span className="flex items-center gap-1 rounded border border-line bg-panel2 px-1.5 py-0.5 text-[10px] font-mono text-muted">
+                <span className="flex items-center gap-1 rounded-full border border-line bg-panel2 px-1.5 py-0.5 text-[11px] font-mono text-muted">
                   <Lock className="size-3" />
                   BUILT-IN
                 </span>
-                <span className="rounded border border-line bg-panel2 px-1.5 py-0.5 text-[10px] font-mono text-muted">
+                <span className="rounded-full border border-line bg-panel2 px-1.5 py-0.5 text-[11px] font-mono text-muted">
                   READ-ONLY
                 </span>
               </>
             ) : (
               dirty && (
-                <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
                   Unsaved changes
                 </span>
               )
@@ -508,7 +508,7 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
                     onChange={(e) => handleNumbers('maxSteps', e.target.value)}
                     className="w-full rounded-md border border-line bg-panel px-3 py-2 pr-14 text-xs text-fg outline-hidden transition focus:border-brand focus:ring-1 focus:ring-brand"
                   />
-                  <span className="pointer-events-none absolute right-3 top-2.5 text-[10px] uppercase tracking-wide text-muted">
+                  <span className="pointer-events-none absolute right-3 top-2.5 text-[11px] uppercase tracking-wide text-muted">
                     steps
                   </span>
                 </div>
@@ -535,7 +535,7 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
                     onChange={(e) => handleNumbers('deadlineSeconds', e.target.value)}
                     className="w-full rounded-md border border-line bg-panel px-3 py-2 pr-14 text-xs text-fg outline-hidden transition focus:border-brand focus:ring-1 focus:ring-brand"
                   />
-                  <span className="pointer-events-none absolute right-3 top-2.5 text-[10px] uppercase tracking-wide text-muted">
+                  <span className="pointer-events-none absolute right-3 top-2.5 text-[11px] uppercase tracking-wide text-muted">
                     seconds
                   </span>
                 </div>
@@ -641,14 +641,14 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded border border-line bg-panel px-1.5 py-0.5 text-[10px] font-mono text-muted">
+                        <span className="rounded-full border border-line bg-panel px-1.5 py-0.5 text-[11px] font-mono text-muted">
                           {group.tools.length}
                         </span>
                         {readOnly ? (
                           <span
                             title={LOCKED_REASON}
                             aria-describedby={LOCKED_REASON_ID}
-                            className="text-[10px] font-semibold uppercase tracking-wide text-muted"
+                            className="text-[11px] font-semibold uppercase tracking-wide text-muted"
                           >
                             {group.alwaysOn ? 'Always on' : groupOn ? 'On' : 'Off'}
                           </span>
@@ -662,7 +662,7 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
                             aria-describedby={group.alwaysOn ? 'always-on-reason' : undefined}
                             aria-label={`${groupLabel(group.key)} tools`}
                             onChange={(e) => toggleToolGroup(group, e.target.checked)}
-                            className="size-4 accent-blue-500 disabled:cursor-not-allowed"
+                            className="size-4 accent-brand disabled:cursor-not-allowed"
                           />
                         )}
                       </div>
@@ -777,7 +777,7 @@ export function HarnessEditor({ harnessId }: HarnessEditorProps) {
                           onChange={() => handleUpdateSubagent(role.id, { enabled: !role.enabled })}
                           label={role.name}
                         />
-                        <span className="rounded border border-line bg-panel2 px-1.5 py-0.5 text-[10px] font-mono text-muted">
+                        <span className="rounded-full border border-line bg-panel2 px-1.5 py-0.5 text-[11px] font-mono text-muted">
                           {role.id}
                         </span>
                       </div>

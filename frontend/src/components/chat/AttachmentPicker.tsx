@@ -328,7 +328,7 @@ export function AttachmentPicker({
           <div
             ref={panelRef}
             data-testid="attach-menu"
-            className="fixed z-50 max-h-[440px] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none"
+            className="fixed z-50 max-h-[440px] overflow-y-auto rounded-2xl border border-line bg-panel p-1.5 shadow-2xl animate-pop-in select-none"
             style={{ left: panelPosition.left, width: panelPosition.width, bottom: panelPosition.bottom }}
           >
             {view === 'repos' ? (
@@ -340,14 +340,14 @@ export function AttachmentPicker({
             ) : (
               <div className="space-y-0.5">
                 {/* Section 1: Add */}
-                <div className="px-2.5 py-1 text-[10px] font-semibold text-muted uppercase tracking-wider">
+                <div className="px-2.5 py-1 text-[11px] font-semibold text-muted uppercase tracking-wider">
                   {t('composer.attachMenu.add')}
                 </div>
 
                 {error && (
                   <div
                     data-testid="attach-error"
-                    className="mx-1.5 mb-1 rounded-xl border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-rose-400"
+                    className="mx-1.5 mb-1 rounded-xl border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-rose-400"
                   >
                     {error}
                   </div>
@@ -387,7 +387,7 @@ export function AttachmentPicker({
                   onClick={() => setView('repos')}
                   className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer text-fg hover:bg-panel2/70 select-none"
                 >
-                  <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+                  <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
                     <GitFork className="size-3.5" />
                   </div>
                   <div className="flex min-w-0 flex-1 items-baseline gap-2 truncate">
@@ -396,7 +396,7 @@ export function AttachmentPicker({
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {selectedRepoIds.length > 0 && (
-                      <span className="rounded bg-brand/15 px-1.5 py-0.2 font-mono text-[10px] font-semibold text-brand">
+                      <span className="rounded-full bg-brand/15 px-1.5 py-0.2 font-mono text-[11px] font-semibold text-brand">
                         {selectedRepoIds.length}
                       </span>
                     )}
@@ -407,7 +407,7 @@ export function AttachmentPicker({
                 <div className="my-1 border-t border-line/60" />
 
                 {/* Section 2: Modes & Goals */}
-                <div className="px-2.5 py-1 text-[10px] font-semibold text-muted uppercase tracking-wider">
+                <div className="px-2.5 py-1 text-[11px] font-semibold text-muted uppercase tracking-wider">
                   {t('composer.attachMenu.modesAndGoals')}
                 </div>
 
@@ -462,7 +462,7 @@ export function AttachmentPicker({
                   }}
                   className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer text-fg hover:bg-panel2/70 select-none"
                 >
-                  <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-blue-400/10 text-blue-400">
+                  <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
                     <Microscope className="size-3.5" />
                   </div>
                   <div className="flex min-w-0 flex-1 items-baseline gap-2 truncate">
@@ -470,7 +470,7 @@ export function AttachmentPicker({
                     <span className="text-[11px] text-muted truncate">{t('composer.attachMenu.researchModeDesc')}</span>
                   </div>
                   {researchEnabled && (
-                    <span className="size-1.5 rounded-full bg-blue-400 shadow-xs shrink-0" />
+                    <span className="size-1.5 rounded-full bg-brand shadow-xs shrink-0" />
                   )}
                 </button>
 
@@ -499,7 +499,7 @@ export function AttachmentPicker({
                 <div className="my-1 border-t border-line/60" />
 
                 {/* Section 3: Integrations */}
-                <div className="px-2.5 py-1 text-[10px] font-semibold text-muted uppercase tracking-wider">
+                <div className="px-2.5 py-1 text-[11px] font-semibold text-muted uppercase tracking-wider">
                   {t('composer.attachMenu.integrations')}
                 </div>
 
@@ -530,7 +530,7 @@ export function AttachmentPicker({
                 {/* Chân bảng: cách đóng + tệp chỉ gửi sau khi lên box */}
                 <div
                   data-testid="attach-menu-hint"
-                  className="px-2.5 pb-1 pt-1.5 text-[10px] leading-relaxed text-muted border-t border-line/60 mt-1"
+                  className="px-2.5 pb-1 pt-1.5 text-[11px] leading-relaxed text-muted border-t border-line/60 mt-1"
                 >
                   Press Esc to close · Esc để đóng · tệp chỉ được gửi sau khi lên tới box (
                   <span className="font-mono text-zinc-400">/__box/file/upload</span>)

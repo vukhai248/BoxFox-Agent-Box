@@ -105,7 +105,7 @@ export function PullRequestsView() {
               {/* Auto-archive session on PR merge */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-xl">
-                  <h3 className="text-xs font-semibold text-fg">
+                  <h3 className="text-xs font-bold text-fg">
                     Auto-archive session on PR merge
                   </h3>
                   <p className="text-xs text-muted">
@@ -130,7 +130,7 @@ export function PullRequestsView() {
 
               {/* PR author */}
               <div className="p-5 space-y-3">
-                <h3 className="text-xs font-semibold text-fg">PR author</h3>
+                <h3 className="text-xs font-bold text-fg">PR author</h3>
                 <p className="text-xs text-muted">
                   Choose who appears as the author on pull requests
                 </p>
@@ -153,7 +153,7 @@ export function PullRequestsView() {
 
               {/* PR creation mode */}
               <div className="p-5 space-y-3">
-                <h3 className="text-xs font-semibold text-fg">PR creation mode</h3>
+                <h3 className="text-xs font-bold text-fg">PR creation mode</h3>
                 <p className="text-xs text-muted">
                   Choose how pull requests are created for your sessions
                 </p>
@@ -176,7 +176,7 @@ export function PullRequestsView() {
 
               {/* PR type */}
               <div className="p-5 space-y-3">
-                <h3 className="text-xs font-semibold text-fg">PR type</h3>
+                <h3 className="text-xs font-bold text-fg">PR type</h3>
                 <p className="text-xs text-muted">
                   Choose what type of pull request BoxFox creates
                 </p>
@@ -200,7 +200,7 @@ export function PullRequestsView() {
               {/* Branch prefix */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-lg">
-                  <h3 className="text-xs font-semibold text-fg">Branch prefix</h3>
+                  <h3 className="text-xs font-bold text-fg">Branch prefix</h3>
                   <p className="text-xs text-muted">
                     Prefix used when creating branches for pull requests (e.g., "boxfox", "boxfox/", "auto/", "bot/").
                   </p>
@@ -229,7 +229,7 @@ export function PullRequestsView() {
               {/* Enable auto PR review */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-xl">
-                  <h3 className="text-xs font-semibold text-fg">
+                  <h3 className="text-xs font-bold text-fg">
                     Enable auto PR review
                   </h3>
                   <p className="text-xs text-muted">
@@ -255,7 +255,7 @@ export function PullRequestsView() {
               {/* Auto Review machine size */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-lg">
-                  <h3 className="text-xs font-semibold text-fg">
+                  <h3 className="text-xs font-bold text-fg">
                     Auto Review machine size
                   </h3>
                   <p className="text-xs text-muted">
@@ -275,7 +275,7 @@ export function PullRequestsView() {
               <div className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5 max-w-xl">
-                    <h3 className="text-xs font-semibold text-fg">
+                    <h3 className="text-xs font-bold text-fg">
                       Review new commits pushed to PRs
                     </h3>
                     <p className="text-xs text-muted">
@@ -326,7 +326,7 @@ export function PullRequestsView() {
               {/* Enable testing in auto reviews */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-xl">
-                  <h3 className="text-xs font-semibold text-fg">
+                  <h3 className="text-xs font-bold text-fg">
                     Enable testing in auto reviews
                   </h3>
                   <p className="text-xs text-muted">
@@ -352,7 +352,7 @@ export function PullRequestsView() {
               {/* Daily review limit */}
               <div className="flex items-center justify-between p-5">
                 <div className="space-y-0.5 max-w-lg">
-                  <h3 className="text-xs font-semibold text-fg">Daily review limit</h3>
+                  <h3 className="text-xs font-bold text-fg">Daily review limit</h3>
                   <p className="text-xs text-muted">
                     Maximum auto-reviews per day (0 = no reviews allowed, max 1000)
                   </p>
@@ -381,10 +381,10 @@ export function PullRequestsView() {
             <div className="rounded-2xl border border-line bg-panel p-5 shadow-xs flex items-center justify-between">
               <div className="space-y-1 max-w-xl">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-semibold text-fg">
+                  <h3 className="text-xs font-bold text-fg">
                     Enable automerge by default
                   </h3>
-                  <span className="rounded bg-brand/15 border border-brand/30 px-2 py-0.2 text-[9px] font-bold text-brand font-mono">
+                  <span className="rounded-full bg-brand/15 border border-brand/30 px-2 py-0.2 text-[11px] font-bold text-brand font-mono">
                     GitHub only
                   </span>
                 </div>
@@ -422,7 +422,7 @@ export function PullRequestsView() {
             {/* Auto-archive session on PR merge */}
             <div className="flex items-center justify-between p-5">
               <div className="space-y-0.5 max-w-xl">
-                <h3 className="text-xs font-semibold text-fg">
+                <h3 className="text-xs font-bold text-fg">
                   Auto-archive session on PR merge
                 </h3>
                 <p className="text-xs text-muted">
@@ -452,7 +452,7 @@ export function PullRequestsView() {
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-semibold text-fg">PR author</h3>
+                  <h3 className="text-xs font-bold text-fg">PR author</h3>
                   <p className="text-xs text-muted">
                     Choose who appears as the author on pull requests
                   </p>
@@ -516,7 +516,7 @@ export function PullRequestsView() {
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-semibold text-fg">PR creation mode</h3>
+                  <h3 className="text-xs font-bold text-fg">PR creation mode</h3>
                   <p className="text-xs text-muted">
                     Choose how pull requests are created for your sessions
                   </p>
@@ -544,7 +544,7 @@ export function PullRequestsView() {
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-semibold text-fg">PR type</h3>
+                  <h3 className="text-xs font-bold text-fg">PR type</h3>
                   <p className="text-xs text-muted">
                     Choose what type of pull request BoxFox creates
                   </p>

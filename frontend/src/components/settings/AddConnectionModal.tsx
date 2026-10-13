@@ -60,8 +60,8 @@ export function AddConnectionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-2xl border border-line bg-panel p-5 shadow-xl sm:p-6 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-panel p-5 shadow-xl sm:p-6 animate-pop-in">
         <div className="flex items-center justify-between border-b border-line/50 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-line/60 bg-panel2 p-1">
@@ -122,7 +122,7 @@ export function AddConnectionModal({
                 placeholder="http://127.0.0.1:8000/v1"
                 className={`${field} mt-1.5 font-mono`}
               />
-              <span className="mt-1 block font-mono text-[10px] font-normal leading-4 text-muted">
+              <span className="mt-1 block font-mono text-[11px] font-normal leading-4 text-muted">
                 Usually ends with /v1. The router calls {base}/models and {base}/chat/completions.
               </span>
             </label>

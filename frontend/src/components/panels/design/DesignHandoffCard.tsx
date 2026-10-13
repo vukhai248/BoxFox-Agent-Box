@@ -65,7 +65,7 @@ export function DesignHandoffCard({
     <section data-testid="design-handoff-card" data-status={verdict || 'pending'} className="rounded-lg border border-brand/30 bg-brand/5 p-2 text-[11px]">
       <header className="flex items-center justify-between gap-2">
         <span className="font-medium text-brand">{t('design.handoffTitle')}</span>
-        {version && <span className="font-mono text-[10px] text-muted">v{version}</span>}
+        {version && <span className="font-mono text-[11px] text-muted">v{version}</span>}
       </header>
       {branch && (
         <p data-testid="design-handoff-branch" className="mt-1 text-fg">
@@ -85,7 +85,7 @@ export function DesignHandoffCard({
           <p className="text-muted">{t('design.handoffTouches')}</p>
           <ul className="mt-0.5 space-y-0.5">
             {written.map((item) => (
-              <li key={item.id} data-path={item.path} className="truncate font-mono text-[10px] text-fg">
+              <li key={item.id} data-path={item.path} className="truncate font-mono text-[11px] text-fg">
                 {item.path}
               </li>
             ))}
@@ -147,7 +147,7 @@ export function DesignHandoffCard({
         </button>
       </div>
       {needsChoice && (
-        <p data-testid="design-handoff-hint" className="mt-1 text-[10px] text-amber-300">
+        <p data-testid="design-handoff-hint" className="mt-1 text-[11px] text-amber-300">
           {t('design.handoffUseForPlanNeedsChoice')}
         </p>
       )}

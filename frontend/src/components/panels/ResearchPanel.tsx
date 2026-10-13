@@ -86,25 +86,25 @@ function EvidenceRow({ row }: { row: ResearchEvidenceRow }) {
   return (
     <li data-testid="research-evidence-row" className="rounded border border-line p-1.5">
       <div className="flex items-start gap-1.5">
-        <span className="font-mono text-[10px] text-muted">{row.rowId}</span>
+        <span className="font-mono text-[11px] text-muted">{row.rowId}</span>
         <span className="min-w-0 flex-1 text-fg">{row.claim}</span>
-        <span className="shrink-0 rounded border border-line px-1 text-[10px] text-muted">
+        <span className="shrink-0 rounded-full border border-line px-1 text-[11px] text-muted">
           {t(accessKey(row.accessLevel))}
         </span>
       </div>
-      <p className="mt-0.5 text-[10px] text-muted">
+      <p className="mt-0.5 text-[11px] text-muted">
         {row.relation ? t(RELATION_LABEL[row.relation] ?? 'research.relationUnknown') : t('research.relationUnknown')}
         {row.publishedAt ? ` · ${row.publishedAt}` : ''}
         {row.originCluster ? ` · ${t('research.evidenceOrigin')} ${row.originCluster}` : ''}
       </p>
       {row.excerpt && <p className="mt-0.5 text-muted">{row.excerpt}</p>}
       {isUrl && (
-        <a href={row.url} target="_blank" rel="noreferrer" className="text-[10px] text-brand hover:underline">
+        <a href={row.url} target="_blank" rel="noreferrer" className="text-[11px] text-brand hover:underline">
           {row.url}
         </a>
       )}
       {row.confidence && (
-        <p className="text-[10px] text-muted">{t('research.confidenceLabel', { level: t(`research.confidence${row.confidence === 'high' ? 'High' : row.confidence === 'low' ? 'Low' : 'Medium'}` as TKey) })}</p>
+        <p className="text-[11px] text-muted">{t('research.confidenceLabel', { level: t(`research.confidence${row.confidence === 'high' ? 'High' : row.confidence === 'low' ? 'Low' : 'Medium'}` as TKey) })}</p>
       )}
     </li>
   )
@@ -121,11 +121,11 @@ function JobHeader({ job }: { job: ResearchJob }) {
         <span
           data-testid="research-status-badge"
           data-status={job.status}
-          className={`rounded px-1 py-px text-[10px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
+          className={`rounded px-1 py-px text-[11px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
         >
           {t(jobStatusKey(job))}
         </span>
-        <span className="ml-auto font-mono text-[10px] text-muted">
+        <span className="ml-auto font-mono text-[11px] text-muted">
           {formatClock(job.usedSeconds)} / {formatClock(job.budgetSeconds)}
         </span>
       </div>
@@ -164,7 +164,7 @@ function JobHeader({ job }: { job: ResearchJob }) {
           >
             {t('research.cancelRun')}
           </button>
-          <span className="text-[10px] text-muted">{t('research.scopeOnly')}</span>
+          <span className="text-[11px] text-muted">{t('research.scopeOnly')}</span>
         </div>
       )}
     </header>
@@ -282,7 +282,7 @@ export function ResearchPanel() {
         {tab === 'plan' && (
           <div className="space-y-2 text-[11px]">
             <section className="rounded-lg border border-line bg-panel p-2">
-              <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.planQuestions')}</h3>
+              <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.planQuestions')}</h3>
               {job.questions.length === 0 ? (
                 <p className="text-muted">{t('research.planEmpty')}</p>
               ) : (
@@ -291,10 +291,10 @@ export function ResearchPanel() {
                     <li key={question.id} className="rounded border border-line p-1.5">
                       <div className="flex items-start gap-2">
                         <span className="min-w-0 flex-1 text-fg">{question.text}</span>
-                        <span className="shrink-0 text-[10px] text-muted">{question.status} · {question.importance}</span>
+                        <span className="shrink-0 text-[11px] text-muted">{question.status} · {question.importance}</span>
                       </div>
                       {question.note && <p className="text-muted">{question.note}</p>}
-                      <div className="mt-0.5 flex gap-2 text-[10px]">
+                      <div className="mt-0.5 flex gap-2 text-[11px]">
                         <button
                           type="button"
                           onClick={() => void useResearchStore.getState().updateJob(job.researchId, { action: 'prioritize', questionId: question.id, importance: 'high', revision: job.revision })}
@@ -316,7 +316,7 @@ export function ResearchPanel() {
               )}
             </section>
             <section className="rounded-lg border border-line bg-panel p-2">
-              <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.planFacets')}</h3>
+              <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.planFacets')}</h3>
               {job.coverage.facets.length === 0 ? (
                 <p className="text-muted">{t('research.coverageEmpty')}</p>
               ) : (
@@ -324,7 +324,7 @@ export function ResearchPanel() {
                   {job.coverage.facets.map((facet) => (
                     <li key={facet.id} className="flex items-center gap-2 text-fg">
                       <span className="truncate">{facet.label || facet.id}</span>
-                      <span className="ml-auto shrink-0 text-[10px] text-muted">{facet.status} · {facet.evidenceCount}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-muted">{facet.status} · {facet.evidenceCount}</span>
                     </li>
                   ))}
                 </ul>
@@ -332,7 +332,7 @@ export function ResearchPanel() {
             </section>
             {job.methods.length > 0 && (
               <section className="rounded-lg border border-line bg-panel p-2">
-                <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.planMethods')}</h3>
+                <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.planMethods')}</h3>
                 <p className="text-fg">{job.methods.join(' · ')}</p>
               </section>
             )}
@@ -346,7 +346,7 @@ export function ResearchPanel() {
             ) : (
               groups.map((group) => (
                 <section key={group.key} className="rounded-lg border border-line bg-panel p-2">
-                  <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">
+                  <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">
                     {t(group.key)} · {group.rows.length}
                   </h3>
                   <ul className="mt-0.5 space-y-1">
@@ -359,7 +359,7 @@ export function ResearchPanel() {
             )}
             {job.blockedSources.length > 0 && (
               <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-2">
-                <h3 className="text-[10px] font-medium tracking-wide text-amber-300 uppercase">{t('research.accessBlocked')}</h3>
+                <h3 className="text-[11px] font-medium tracking-wide text-amber-300 uppercase">{t('research.accessBlocked')}</h3>
                 <ul className="mt-0.5 space-y-0.5">
                   {job.blockedSources.map((source, index) => (
                     <li key={`${source.url}-${index}`} className="text-fg">
@@ -395,7 +395,7 @@ export function ResearchPanel() {
             </div>
             {job.findings.length > 0 && (
               <section className="rounded-lg border border-line bg-panel p-2">
-                <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.reportConclusions')}</h3>
+                <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.reportConclusions')}</h3>
                 <ol className="mt-0.5 space-y-0.5">
                   {job.findings.map((finding, index) => (
                     <li key={`${finding}-${index}`} className="text-fg">{finding}</li>
@@ -419,7 +419,7 @@ export function ResearchPanel() {
           <div className="space-y-2 text-[11px]">
             {openPrompt && <ResearchPromptCard prompt={openPrompt} />}
             <section className="rounded-lg border border-line bg-panel p-2">
-              <h3 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.reportReviews')}</h3>
+              <h3 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.reportReviews')}</h3>
               {job.reviews.length === 0 ? (
                 <p className="text-muted">{t('research.reviewEmpty')}</p>
               ) : (

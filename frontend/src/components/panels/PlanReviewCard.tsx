@@ -77,7 +77,7 @@ const SEVERITY_LABELS: Record<PlanIssueSeverity, TKey> = {
   unknown: 'plan.verify.severity.unknown',
 }
 
-const MONO_BADGE = 'rounded bg-panel px-2 py-0.5 text-[10px] font-mono text-muted border border-line'
+const MONO_BADGE = 'rounded-full bg-panel px-2 py-0.5 text-[11px] font-mono text-muted border border-line'
 
 /** Số đếm tự tính từ `issues[]` — mức nào không có lỗi thì không in ra. */
 function countsText(t: Translate, issues: PlanVerificationIssue[]): string {
@@ -102,7 +102,7 @@ function FindingRow({ issue, index }: { issue: PlanVerificationIssue; index: num
       className="rounded-md border border-line bg-panel p-2 space-y-1"
     >
       <div className="flex items-start gap-2">
-        <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-semibold ${SEVERITY_CLASSES[issue.severity]}`}>
+        <span className={`shrink-0 rounded px-1.5 py-px text-[11px] font-semibold ${SEVERITY_CLASSES[issue.severity]}`}>
           {t(SEVERITY_LABELS[issue.severity])}
         </span>
         {/* Chữ lỗi là nguyên văn của harness — không viết lại, không rút gọn. */}
@@ -210,7 +210,7 @@ export function PlanReviewCard({
         <div className="flex items-center gap-1.5">
           <span
             data-testid="plan-review-card-state"
-            className={`rounded px-1.5 py-px text-[10px] font-semibold ${VERIFY_CHIP[face].classes}`}
+            className={`rounded px-1.5 py-px text-[11px] font-semibold ${VERIFY_CHIP[face].classes}`}
           >
             {chipText}
           </span>

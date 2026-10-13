@@ -286,7 +286,7 @@ export function ScheduledSessionsView() {
           <div className="flex size-12 items-center justify-center rounded-xl bg-brand/10 text-brand mb-3">
             <Calendar className="size-6" />
           </div>
-          <h3 className="text-sm font-semibold text-fg">No scheduled sessions yet</h3>
+          <h3 className="text-sm font-bold text-fg">No scheduled sessions yet</h3>
           <p className="text-xs text-muted max-w-md mt-1 mb-4">
             Create recurring sessions to perform daily code reviews, linting, or documentation updates automatically.
           </p>
@@ -310,7 +310,7 @@ export function ScheduledSessionsView() {
                 <div className="flex items-center gap-2.5">
                   <span className="font-semibold text-xs text-fg">{item.name}</span>
                   <span
-                    className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase ${
+                    className={`rounded px-1.5 py-0.2 text-[11px] font-bold uppercase ${
                       item.active
                         ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
                         : 'bg-muted/15 text-muted border border-line'

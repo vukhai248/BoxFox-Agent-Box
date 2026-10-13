@@ -41,7 +41,7 @@ export function DesignBatchDiffCard({
             : t('design.batchEmpty')}
         </span>
         {batch && (
-          <span className="shrink-0 font-mono text-[10px]">
+          <span className="shrink-0 font-mono text-[11px]">
             <span className="text-emerald-400">{`+${batch.added}`}</span>{' '}
             <span className="text-rose-400">{`−${batch.removed}`}</span>
           </span>
@@ -54,14 +54,14 @@ export function DesignBatchDiffCard({
           )}
           <ul className="mt-1 space-y-0.5">
             {batch.files.map((file) => (
-              <li key={file.path} data-path={file.path} className="flex items-center gap-1 font-mono text-[10px]">
+              <li key={file.path} data-path={file.path} className="flex items-center gap-1 font-mono text-[11px]">
                 <span className="truncate text-fg">{file.path}</span>
                 <span className="ml-auto shrink-0 text-emerald-400">{`+${file.added}`}</span>
                 <span className="shrink-0 text-rose-400">{`−${file.removed}`}</span>
               </li>
             ))}
           </ul>
-          <p className="mt-1 font-mono text-[10px] text-muted">
+          <p className="mt-1 font-mono text-[11px] text-muted">
             {t('design.batchPatch', { path: batch.patchPath })}
           </p>
           <div className="mt-1.5 flex gap-1">

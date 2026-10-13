@@ -21,7 +21,7 @@ export function SupportView() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Card 1: Documentation */}
         <div className="rounded-2xl border border-line bg-panel p-5 space-y-3 shadow-xs">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-brand/10 text-brand border border-brand/20">
             <BookOpen className="size-4" />
           </div>
           <div>
@@ -43,7 +43,7 @@ export function SupportView() {
 
         {/* Card 2: Discord Community */}
         <div className="rounded-2xl border border-line bg-panel p-5 space-y-3 shadow-xs">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-[#b45309]/10 text-[#b45309] border border-[#b45309]/20">
             <MessageSquare className="size-4" />
           </div>
           <div>
@@ -56,7 +56,7 @@ export function SupportView() {
             href="https://discord.gg/boxfox"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:underline"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#b45309] hover:underline"
           >
             <span>Join Discord server</span>
             <ExternalLink className="size-3" />

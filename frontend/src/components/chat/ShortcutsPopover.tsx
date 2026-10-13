@@ -126,7 +126,7 @@ export function ShortcutsPopover({
       {/* Popover Card */}
       {open && (
         <div
-          className={`absolute z-50 rounded-2xl border border-line bg-panel p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 select-none ${
+          className={`absolute z-50 rounded-2xl border border-line bg-panel p-3.5 shadow-2xl animate-pop-in select-none ${
             variant === 'toolbar'
               ? 'bottom-full left-0 mb-2 w-80 sm:w-96'
               : 'bottom-0 left-full ml-2 w-84 sm:w-96'

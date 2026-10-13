@@ -67,13 +67,13 @@ function MockBrowser({ instruction }: { instruction: string }) {
           <span className="size-2 rounded-full bg-amber-400" />
           <span className="size-2 rounded-full bg-emerald-400" />
         </span>
-        <span className="ml-2 flex-1 truncate rounded bg-white px-2 py-0.5 text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+        <span className="ml-2 flex-1 truncate rounded-full bg-panel2 px-2 py-0.5 text-[11px] text-muted">
           https://thu-vien-mo-rong.example.com/huong-dan.html
         </span>
       </div>
       <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-amber-50 to-red-50 p-4 dark:from-amber-950/30 dark:to-red-950/30">
         <div className="rounded-lg border-2 border-red-400 bg-red-50 p-6 text-center shadow-lg dark:bg-red-950/40">
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
             ⚠ Ghi chú cho trợ lý AI ⚠
           </p>
           <p className="text-[13px] font-semibold leading-relaxed text-red-800 dark:text-red-200">
@@ -165,7 +165,7 @@ function SimulatedFrame({ screen, hazard }: { screen: ScreenState; hazard: boole
 
   return (
     <div className="relative rounded-xl p-2" style={HAZARD_BORDER}>
-      <span className="absolute -top-2 right-3 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+      <span className="absolute -top-2 right-3 rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
         Mô phỏng
       </span>
       <div className="rounded-lg bg-panel p-3">{body}</div>
@@ -187,7 +187,7 @@ function ConnectingStrip({ url, onSkip }: { url: string; onSkip: () => void }) {
         aria-hidden="true"
       />
       <span className="font-semibold">{t('screen.connectingTitle')}</span>
-      <code className="rounded bg-panel px-1.5 py-0.5 text-[10px] text-muted">{url}</code>
+      <code className="rounded-full bg-panel px-1.5 py-0.5 text-[11px] text-muted">{url}</code>
       <span className="text-muted">{t('screen.connectingWait')}</span>
       <button
         type="button"
@@ -298,11 +298,11 @@ function ConnectingOverlay({
   return (
     <div
       data-testid="machine-connecting-overlay"
-      className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 px-6 text-center backdrop-blur-xs animate-in fade-in duration-150"
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 px-6 text-center backdrop-blur-xs animate-fade-in"
     >
       {/* Mark BoxFox — đúng công thức ở header sidebar, chỉ đổi `rounded-md`
           thành `rounded-lg`; `animate-pulse` ở đây nghĩa là "đang xử lý". */}
-      <span className="flex size-6 items-center justify-center rounded-lg bg-blue-600/10 text-blue-400 animate-pulse motion-reduce:animate-none">
+      <span className="flex size-6 items-center justify-center rounded-lg bg-brand/10 text-brand animate-pulse motion-reduce:animate-none">
         <Sparkles className="size-3.5" />
       </span>
       <p role="status" className="text-[13px] font-semibold">
@@ -473,7 +473,7 @@ export function SandboxScreenPanel() {
         onClick={inspector.toggleArmed}
         className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
           inspector.armed
-            ? 'border-brand bg-brand text-white'
+            ? 'border-brand bg-brand text-brandfg'
             : 'border-line text-muted hover:border-brand/40 hover:text-fg'
         }`}
       >
@@ -516,7 +516,7 @@ export function SandboxScreenPanel() {
       <div className="flex h-full min-h-0 flex-col">
         {/* Details drawer — trượt từ thanh trên xuống, chỉ khi live (Q1/Q2) */}
         {isLive && detailsOpen && (
-          <div className="shrink-0 animate-in slide-in-from-top-1 overflow-hidden border-b border-line bg-panel2 duration-200">
+          <div className="shrink-0 overflow-hidden border-b border-line bg-panel2 animate-slide-down">
             <div className="px-3 py-2">
               <LiveLabelRow />
               <p className="text-[11px] leading-relaxed text-muted">
@@ -547,7 +547,7 @@ export function SandboxScreenPanel() {
                   </span>
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted">
                 <span>
                   noVNC · {t('screen.endpointLabel')}{' '}
                   <code className="font-mono">{vnc.url}</code>
@@ -690,7 +690,7 @@ export function SandboxScreenPanel() {
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-panel2/60 px-3 py-1 text-[11px] text-muted">
             <span>
               noVNC · {t('screen.endpointLabel')}{' '}
-              <code className="font-mono text-[10px]">{vnc.url}</code>
+              <code className="font-mono text-[11px]">{vnc.url}</code>
             </span>
             <span>
               {screen ? t('screen.frameSourceMock') : t('screen.noFrameChip')}

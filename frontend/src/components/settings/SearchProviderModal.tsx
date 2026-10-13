@@ -106,7 +106,7 @@ export function SearchProviderModal({
   const title = editing ? t('providerSearch.modalEditTitle') : t('providerSearch.modalAddTitle')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"

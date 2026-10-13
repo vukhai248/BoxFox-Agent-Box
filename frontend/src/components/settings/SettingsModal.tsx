@@ -137,7 +137,7 @@ export function SettingsModal() {
       default:
         return (
           <div className="p-8 max-w-4xl select-text">
-            <h1 className="text-lg font-semibold mb-1 text-fg capitalize">
+            <h1 className="text-lg font-bold mb-1 text-fg tracking-tight capitalize">
               {settingsTab.replace(/_/g, ' ')}
             </h1>
             <p className="text-xs text-muted">
@@ -149,7 +149,7 @@ export function SettingsModal() {
   }
 
   return (
-    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings" className="fixed inset-0 z-50 flex bg-black/90 backdrop-blur-xs text-fg animate-in fade-in duration-150">
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings" className="fixed inset-0 z-50 flex bg-black/90 backdrop-blur-xs text-fg animate-fade-in">
       <div className="flex h-full w-full flex-col overflow-hidden bg-bg sm:flex-row">
         <SettingsSidebar />
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-bg">{renderContent()}</main>
@@ -157,14 +157,14 @@ export function SettingsModal() {
       {pendingLeave !== undefined ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-6">
           <div role="alertdialog" aria-modal="true" aria-label={t('instructions.guardTitle')} className="w-full max-w-sm rounded-xl border border-line bg-panel p-5 shadow-xl">
-            <h2 className="text-sm font-semibold text-fg">{t('instructions.guardTitle')}</h2>
+            <h2 className="text-sm font-bold text-fg">{t('instructions.guardTitle')}</h2>
             <p className="mt-1 text-xs text-muted">{t('instructions.guardBody')}</p>
             <div className="mt-4 flex items-center gap-2">
               <button
                 type="button"
                 data-testid="settings-guard-save"
                 onClick={() => void saveAndLeave()}
-                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brandfg cursor-pointer"
               >
                 {t('instructions.guardSave')}
               </button>

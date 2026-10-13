@@ -139,10 +139,10 @@ export function ApiProviderCatalogTable({
                   return (
                     <div
                       key={provider.id}
-                      className={`flex flex-wrap items-center justify-between gap-2 rounded-xl p-2.5 transition ${
+                      className={`stagger-item card-lift flex flex-wrap items-center justify-between gap-2 rounded-xl p-2.5 ${
                         selected
                           ? 'border border-brand/40 bg-brand/10 shadow-2xs'
-                          : 'border border-line/60 bg-panel hover:border-line hover:bg-panel2/50'
+                          : 'border border-line/60 bg-panel hover:border-brand/30 hover:bg-panel2/50'
                       }`}
                     >
                       {/* Selectable Row Button */}
@@ -165,7 +165,7 @@ export function ApiProviderCatalogTable({
                             <span className="truncate text-xs font-semibold text-fg">
                               {provider.name}
                             </span>
-                            <span className="font-mono text-[10px] text-muted">({provider.id})</span>
+                            <span className="font-mono text-[11px] text-muted">({provider.id})</span>
                           </div>
                           <span className="mt-0.5 block truncate text-[11px] text-muted">
                             {providerStatusLine(list)}
@@ -187,8 +187,8 @@ export function ApiProviderCatalogTable({
                             }}
                             title={list.some((c) => c.enabled) ? `Disable ${provider.name}` : `Enable ${provider.name}`}
                             aria-label={list.some((c) => c.enabled) ? `Disable ${provider.name}` : `Enable ${provider.name}`}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                              list.some((c) => c.enabled) ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-1 ${
+                              list.some((c) => c.enabled) ? 'bg-brand' : 'bg-zinc-300 dark:bg-zinc-600'
                             }`}
                           >
                             <span

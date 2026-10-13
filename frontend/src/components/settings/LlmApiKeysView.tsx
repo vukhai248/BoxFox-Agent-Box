@@ -392,14 +392,14 @@ export function LlmApiKeysView() {
 
             {/* Fallback Target Selector */}
             {fallbackEnabled && (
-              <div className="space-y-1.5 pt-2 border-t border-line animate-in fade-in duration-100">
+              <div className="space-y-1.5 pt-2 border-t border-line animate-fade-in">
                 <span className="text-xs font-semibold text-fg">Fallback Provider Target:</span>
                 <CustomSelect
                   value={fallbackTarget}
                   onChange={setFallbackTarget}
                   options={FALLBACK_TARGETS}
                 />
-                <p className="text-[10px] text-muted">
+                <p className="text-[11px] text-muted">
                   If requests fail with rate limits (429) or provider outages, queries are instantly rerouted to this fallback.
                 </p>
               </div>
@@ -449,7 +449,7 @@ export function LlmApiKeysView() {
           <div className="flex size-12 items-center justify-center rounded-xl bg-brand/10 text-brand mb-3">
             <KeyRound className="size-6" />
           </div>
-          <h3 className="text-sm font-semibold text-fg">No LLM API keys configured</h3>
+          <h3 className="text-sm font-bold text-fg">No LLM API keys configured</h3>
           <p className="text-xs text-muted max-w-md mt-1 mb-4">
             Add your custom provider keys (Anthropic, OpenAI, Gemini, Bedrock, etc.) to configure model routing and automatic fallbacks.
           </p>
@@ -472,10 +472,10 @@ export function LlmApiKeysView() {
               <div className="space-y-1.5 min-w-0 flex-1">
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-sm text-fg">{p.name}</span>
-                  <span className="rounded bg-brand/15 border border-brand/30 px-2 py-0.2 text-[10px] font-bold text-brand font-mono">
+                  <span className="rounded-full bg-brand/15 border border-brand/30 px-2 py-0.2 text-[11px] font-bold text-brand font-mono">
                     {p.providerType}
                   </span>
-                  <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.2 text-[10px] font-bold text-emerald-500">
+                  <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.2 text-[11px] font-bold text-emerald-500">
                     {p.access}
                   </span>
                 </div>

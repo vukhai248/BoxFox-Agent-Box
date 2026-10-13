@@ -46,7 +46,7 @@ export function WebviewNode({ node, selected, onPointerDown, onContextMenu, onUp
             placeholder="https://your-app.example.com"
             aria-label="Web preview URL"
           />
-          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300">Live</span>
+          <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[11px] font-bold uppercase text-emerald-300">Live</span>
         </div>
         <div className="flex-1 overflow-hidden bg-bg">
           {url ? (

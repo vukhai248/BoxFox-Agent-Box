@@ -26,7 +26,7 @@ export function CustomRadio({
         }`}
       >
         {checked && (
-          <div className="size-2 rounded-full bg-brand animate-in zoom-in-75 duration-100" />
+          <div className="size-2 rounded-full bg-brand animate-pop-in" />
         )}
       </div>
       {label && <span className="font-semibold text-fg">{label}</span>}

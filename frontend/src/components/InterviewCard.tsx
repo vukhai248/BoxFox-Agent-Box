@@ -243,7 +243,7 @@ export function InterviewCard({ decision, onAnswer, busy = false }: InterviewCar
             title={emptyOther ? t('decisions.interview.otherPlaceholder') : undefined}
             data-testid="interview-submit"
             onClick={submit}
-            className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-brand px-3 py-1.5 text-[12px] font-semibold text-brandfg transition hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('decisions.interview.submit')}
           </button>
@@ -292,7 +292,7 @@ function InterviewOptionRow({
         <span className="flex items-center gap-2 text-[13px] font-semibold text-fg">
           {label}
           {recommended && (
-            <span className="rounded bg-emerald-500/15 px-1.5 py-px text-[10px] font-medium text-emerald-400">
+            <span className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[11px] font-medium text-emerald-400">
               {t('decisions.interview.recommended')}
             </span>
           )}

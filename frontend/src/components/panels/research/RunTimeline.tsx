@@ -65,10 +65,10 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
         <span className="font-medium text-fg">
           {t('research.run', { id: runLabel(job.researchId) })} · {t(STEP_LABEL_KEY[RESEARCH_STEPS[active]] ?? 'research.stepClarify')}
         </span>
-        <span className="rounded border border-line px-1 py-px text-[10px] text-muted">
+        <span className="rounded-full border border-line px-1 py-px text-[11px] text-muted">
           {t('research.tierBadge', { tier: job.tier })}
         </span>
-        <span className="ml-auto font-mono text-[10px] text-muted">
+        <span className="ml-auto font-mono text-[11px] text-muted">
           {formatClock(job.usedSeconds)} / {formatClock(job.budgetSeconds)}
         </span>
         {jobIsActive(job) && (
@@ -128,7 +128,7 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
               }`}
             >
               {t(STEP_LABEL_KEY[step])}
-              {state && <span className="ml-1 text-[9px] text-muted">{state}</span>}
+              {state && <span className="ml-1 text-[11px] text-muted">{state}</span>}
             </li>
           )
         })}
@@ -136,23 +136,23 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
 
       {job.branches.length > 0 && (
         <section className="mt-1.5">
-          <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.branches')}</h4>
+          <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.branches')}</h4>
           <ul className="mt-0.5 space-y-0.5">
             {job.branches.map((branch) => (
               <li key={branch.sessionId} className="flex items-center gap-2 text-fg">
                 <span className="truncate">{branch.goal || branch.questionId || branch.sessionId.slice(0, 8)}</span>
-                <span className="ml-auto shrink-0 text-[10px] text-muted">
+                <span className="ml-auto shrink-0 text-[11px] text-muted">
                   {branch.status === 'started' ? t('research.branchSearching') : t('research.branchDone')}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="text-[10px] text-muted">{t('research.branchSources', { sources: job.evidence.length, fulltext: counts['research.accessFulltext'] ?? 0 })}</p>
+          <p className="text-[11px] text-muted">{t('research.branchSources', { sources: job.evidence.length, fulltext: counts['research.accessFulltext'] ?? 0 })}</p>
         </section>
       )}
 
       <section className="mt-1.5">
-        <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.sourcesByAccess')}</h4>
+        <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.sourcesByAccess')}</h4>
         <ul className="mt-0.5 flex flex-wrap gap-2" data-testid="research-access-counts">
           {ACCESS_KEYS.map((entry) => (
             <li key={entry.key} className="text-fg">
@@ -164,7 +164,7 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
       </section>
 
       <section className="mt-1.5">
-        <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.coverage')}</h4>
+        <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.coverage')}</h4>
         {job.coverage.facets.length === 0 ? (
           <p className="text-muted">{t('research.coverageEmpty')}</p>
         ) : (
@@ -172,7 +172,7 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
             {job.coverage.facets.map((facet) => (
               <li key={facet.id} className="flex items-center gap-2 text-fg">
                 <span className="truncate">{facet.label || facet.id}</span>
-                <span className="ml-auto shrink-0 text-[10px] text-muted">
+                <span className="ml-auto shrink-0 text-[11px] text-muted">
                   {facet.status === 'saturated' || facet.status === 'searched'
                     ? t('research.stepDone')
                     : facet.status === 'blocked' || facet.status === 'thin'
@@ -202,13 +202,13 @@ export function RunTimeline({ job }: { job: ResearchJob }) {
         })}
       </p>
       {job.budgetSeconds > 0 && (
-        <p className="text-[10px] text-muted">
+        <p className="text-[11px] text-muted">
           {t('research.budgetCeiling', { tier: job.tier, minutes: formatMinutes(job.budgetSeconds) })}
         </p>
       )}
 
       {job.reviews.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 text-[10px] text-muted">
+        <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted">
           {job.reviews.map((review) => (
             <li key={`${review.version}-${review.mode}`}>{critiqueLabel(t, review)}</li>
           ))}

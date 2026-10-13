@@ -302,19 +302,19 @@ export function ConnectionKeyRing({ connection }: { connection: ProviderConnecti
           </div>
           <span className="min-w-0 max-w-[14rem] truncate text-xs font-medium text-fg" title={key.label}>{key.label}</span>
           {state === 'unknown'
-            ? <span className="inline-flex rounded-full border border-line bg-panel2 px-2 py-0.5 text-[10px] font-semibold text-muted">{stateLabel(key)}</span>
+            ? <span className="inline-flex rounded-full border border-line bg-panel2 px-2 py-0.5 text-[11px] font-semibold text-muted">{stateLabel(key)}</span>
             : <Pill value={state === 'error' ? 'failed' : state}>{stateLabel(key)}</Pill>}
           {state === 'cooling' && (remaining > 0
-            ? <span aria-hidden="true" className="font-mono text-[10px] text-amber-600 dark:text-amber-400 font-semibold">{remaining}s</span>
-            : <span className="font-mono text-[10px] text-muted/60">{COPY.checking}</span>)}
+            ? <span aria-hidden="true" className="font-mono text-[11px] text-amber-600 dark:text-amber-400 font-semibold">{remaining}s</span>
+            : <span className="font-mono text-[11px] text-muted/60">{COPY.checking}</span>)}
           {connection.activeKeyId === key.id && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
               {COPY.inUse}
             </span>
           )}
           {(details.length > 0 || message) && (
-            <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted ml-1">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted ml-1">
               {details.length > 0 && <span>{details.join(' · ')}</span>}
               {message && <span className="min-w-0 max-w-full truncate font-mono text-rose-600 dark:text-rose-400" title={key.lastErrorCode ?? undefined}>{message}</span>}
             </div>
@@ -335,8 +335,8 @@ export function ConnectionKeyRing({ connection }: { connection: ProviderConnecti
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
         <div className="flex min-w-0 items-center gap-2">
           <KeyRound className="size-3.5 text-brand" />
-          <p className="text-[10px] font-mono uppercase font-semibold text-muted tracking-wider">{COPY.heading}</p>
-          <span className="rounded-full border border-line/60 bg-panel px-2 py-0.5 font-mono text-[10px] text-muted">{keys.length} keys</span>
+          <p className="text-[11px] font-mono uppercase font-semibold text-muted tracking-wider">{COPY.heading}</p>
+          <span className="rounded-full border border-line/60 bg-panel px-2 py-0.5 font-mono text-[11px] text-muted">{keys.length} keys</span>
         </div>
         <button type="button" onClick={openAdd} className={secondary}><Plus className="size-3.5" />{COPY.addKey}</button>
       </div>
@@ -369,12 +369,12 @@ export function ConnectionKeyRing({ connection }: { connection: ProviderConnecti
         <div className="mt-3 rounded-xl border border-line/80 bg-panel p-3.5 shadow-xs transition-all">
           <div className="flex items-center gap-1.5 border-b border-line/40 pb-2">
             <KeyRound className="size-3.5 text-brand" />
-            <p className="text-[10px] font-mono uppercase font-semibold text-muted">{editingId ? COPY.replaceHeading : COPY.addHeading}</p>
+            <p className="text-[11px] font-mono uppercase font-semibold text-muted">{editingId ? COPY.replaceHeading : COPY.addHeading}</p>
           </div>
           <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-fg">{COPY.keyName}
               <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={COPY.keyNamePlaceholder} className={`${field} mt-1.5`} />
-              <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">{COPY.nameHint}</span>
+              <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">{COPY.nameHint}</span>
             </label>
             <label className="text-xs font-semibold text-fg">{COPY.secret}
               <div className="relative mt-1.5">
@@ -396,7 +396,7 @@ export function ConnectionKeyRing({ connection }: { connection: ProviderConnecti
                   {showInputSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </button>
               </div>
-              <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">{anonymous ? COPY.secretOptional : COPY.secretHint}</span>
+              <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">{anonymous ? COPY.secretOptional : COPY.secretHint}</span>
             </label>
           </div>
           <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-line/40 pt-3">
@@ -404,7 +404,7 @@ export function ConnectionKeyRing({ connection }: { connection: ProviderConnecti
               <button type="button" disabled={sending || (!secret.trim() && !anonymous)} aria-busy={sending} onClick={() => run(submit())} className={primary}><Save className="size-3.5" />{COPY.save}</button>
               <button type="button" onClick={closeInput} className={secondary}>{COPY.cancel}</button>
             </div>
-            <p className="text-[10px] leading-4 text-muted">{COPY.saveHint}</p>
+            <p className="text-[11px] leading-4 text-muted">{COPY.saveHint}</p>
           </div>
         </div>
       )}
@@ -442,14 +442,14 @@ function MergeKeysRow({ connection, siblings }: { connection: ProviderConnection
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <label className="text-[10px] text-muted">
+      <label className="text-[11px] text-muted">
         <span className="sr-only">{COPY.mergeLabel}</span>
         <select aria-label={COPY.mergeLabel} value={source?.id ?? ''} onChange={(event) => setFromId(event.target.value)} className="rounded-md border border-line bg-panel px-2 py-1.5 text-[11px] text-fg outline-hidden focus:border-brand">
           {siblings.map((entry) => <option key={entry.id} value={entry.id}>{entry.name} · {keyRingSize(entry)} key{keyRingSize(entry) === 1 ? '' : 's'}</option>)}
         </select>
       </label>
       <button type="button" disabled={merging} aria-busy={merging} onClick={() => run(merge())} className={secondary}><KeyRound className="size-3.5" />{merging ? COPY.merging : COPY.mergeAction}</button>
-      <p className="text-[10px] leading-4 text-muted">{source ? COPY.mergeConfirm(count, source.name) : ''}</p>
+      <p className="text-[11px] leading-4 text-muted">{source ? COPY.mergeConfirm(count, source.name) : ''}</p>
     </div>
   )
 }

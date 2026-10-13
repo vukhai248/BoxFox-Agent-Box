@@ -158,7 +158,7 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
           aria-label={t('composer.permission.label')}
           className="absolute bottom-full right-0 z-50 mb-1.5 w-72 rounded-xl border border-line bg-panel p-1.5 shadow-lg"
         >
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('composer.permission.sectionMode')}
           </p>
           {modes.map((item) => (
@@ -176,14 +176,14 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
                 <span className={`block font-medium ${modeTone(item)}`}>
                   {t(`composer.permission.mode.${item}`)}
                 </span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                   {t(`composer.permission.hint.${item}`)}
                 </span>
               </span>
             </button>
           ))}
 
-          <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <p className="mt-1 border-t border-line px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {t('composer.permission.sectionNetwork')}
           </p>
           {networks.map((item) => (
@@ -199,19 +199,19 @@ export function PermissionModePicker({ compact = false }: { compact?: boolean })
               <Check className={`mt-0.5 size-3 shrink-0 ${item === network ? 'opacity-100' : 'opacity-0'}`} />
               <span className="min-w-0">
                 <span className="block font-medium">{t(`composer.permission.network.${item}`)}</span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                   {t(`composer.permission.hint.network${item === 'restricted' ? 'Restricted' : 'Enabled'}`)}
                 </span>
               </span>
             </button>
           ))}
           {error && (
-            <p role="alert" className="px-2 pt-1 pb-0.5 text-[10px] text-amber-400">
+            <p role="alert" className="px-2 pt-1 pb-0.5 text-[11px] text-amber-400">
               {error}
             </p>
           )}
           {pendingMode === 'full-machine' && (
-            <div className="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2 text-[10px] text-rose-200">
+            <div className="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2 text-[11px] text-rose-200">
               <p>Full machine access can run commands across the host. Safety hardlines still apply.</p>
               <div className="mt-2 flex justify-end gap-1.5">
                 <button type="button" className="rounded border border-line px-2 py-1" onClick={() => setPendingMode(null)}>Cancel</button>

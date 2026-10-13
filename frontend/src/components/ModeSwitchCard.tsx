@@ -53,7 +53,7 @@ export function ModeSwitchCard({ proposal, rejectBundle = false }: Props) {
   const effectiveRejected = rejectBundle || proposal.bundled_lease_rejected
 
   return (
-    <div className="rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-5 animate-in fade-in zoom-in-98 duration-150 select-text">
+    <div className="rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-5 animate-pop-in select-text">
       {/* 1. Header Title & Badge */}
       <div className="flex items-center justify-between border-b border-line pb-3">
         <div className="flex items-center gap-2.5">
@@ -66,7 +66,7 @@ export function ModeSwitchCard({ proposal, rejectBundle = false }: Props) {
           </div>
         </div>
 
-        <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 font-mono text-[10px] font-bold text-amber-600 dark:text-amber-400">
+        <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">
           PLAN MODE
         </span>
       </div>
@@ -96,7 +96,7 @@ export function ModeSwitchCard({ proposal, rejectBundle = false }: Props) {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs font-bold text-muted">
           <span className="uppercase tracking-wider">Implementation Blueprint</span>
-          <span className="font-mono text-[10px] text-muted">plan.md • {plan.steps.length} steps</span>
+          <span className="font-mono text-[11px] text-muted">plan.md • {plan.steps.length} steps</span>
         </div>
 
         <div className="max-h-64 overflow-y-auto rounded-xl border border-line bg-panel2 p-4 font-mono text-xs leading-relaxed text-fg whitespace-pre-wrap select-text shadow-inner">

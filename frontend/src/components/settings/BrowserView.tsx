@@ -134,7 +134,7 @@ export function BrowserView() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-fg">{snap.name}</h3>
-                      <span className="rounded bg-emerald-500/15 px-2 py-0.2 text-[9px] font-bold uppercase text-emerald-500 border border-emerald-500/30">
+                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.2 text-[11px] font-bold uppercase text-emerald-500 border border-emerald-500/30">
                         Active Snapshot
                       </span>
                     </div>
@@ -180,7 +180,7 @@ export function BrowserView() {
       {/* NEW SNAPSHOT MODAL */}
       {/* ========================================================================= */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
           <div className="relative w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-2xl space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-3">

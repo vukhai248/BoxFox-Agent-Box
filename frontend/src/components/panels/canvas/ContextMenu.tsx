@@ -21,7 +21,7 @@ export function ContextMenu({ x, y, nodeTitle, onInstruct, onDuplicate, onDelete
       style={{ left: x, top: y }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="border-b border-line px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-muted truncate">
+      <div className="border-b border-line px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-muted truncate">
         {nodeTitle || 'Component'}
       </div>
       <button

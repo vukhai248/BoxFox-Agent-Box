@@ -84,7 +84,7 @@ export function ProviderRail({
   const body = (
     <>
       <div className="mb-2 px-1">
-        <p className="text-[10px] font-mono uppercase text-muted">Providers</p>
+        <p className="text-[11px] font-mono uppercase text-muted">Providers</p>
         <p className="mt-1 text-xs font-semibold text-fg">
           {connectedCount} connected <span className="text-muted">·</span> <span className="font-normal text-muted">{totalProviders} providers</span>
         </p>
@@ -109,7 +109,7 @@ export function ProviderRail({
               aria-expanded={!group.collapsed}
               aria-controls={groupBodyId}
               onClick={() => setCollapsed((current) => ({ ...current, [group.id]: !current[group.id] }))}
-              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-[10px] font-mono uppercase text-muted transition hover:text-fg"
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px] font-mono uppercase text-muted transition hover:text-fg"
             >
               <span className="truncate">{group.label}</span>
               <span className="flex shrink-0 items-center gap-1 normal-case">
@@ -131,15 +131,15 @@ export function ProviderRail({
                     aria-current={selected ? 'true' : undefined}
                     onClick={() => onSelect(provider.id)}
                     onKeyDown={(event) => moveFocus(event, index)}
-                    className={`flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition ${selected ? 'bg-brand/10 text-brand ring-1 ring-brand/25' : 'text-fg hover:bg-panel2'}`}
+                    className={`card-lift flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left ${selected ? 'bg-brand/10 text-brand ring-1 ring-brand/25' : 'text-fg hover:bg-panel2'}`}
                   >
                     <ProviderIcon providerId={provider.id} name={provider.name} className="size-5" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-semibold">{provider.name}</span>
-                      <span className="mt-0.5 block truncate text-[10px] text-muted">{statusLine(list)}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-muted">{statusLine(list)}</span>
                     </span>
                     {showModelCount && (
-                      <span className="shrink-0 pt-0.5 text-right text-[10px] font-mono text-muted" title={`${list.reduce((count, connection) => count + connection.models.length, 0)} models`}>
+                      <span className="shrink-0 pt-0.5 text-right text-[11px] font-mono text-muted" title={`${list.reduce((count, connection) => count + connection.models.length, 0)} models`}>
                         {list.reduce((count, connection) => count + connection.models.length, 0)} models
                       </span>
                     )}

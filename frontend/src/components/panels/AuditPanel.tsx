@@ -60,11 +60,11 @@ export function AuditPanel() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] font-mono font-medium">{record.tool_name}</span>
-                    <span className="text-[10px] text-muted">epoch #{record.task_epoch}</span>
+                    <span className="text-[11px] text-muted">epoch #{record.task_epoch}</span>
                   </div>
-                  <p className="truncate text-[10px] text-muted">{record.decision}</p>
+                  <p className="truncate text-[11px] text-muted">{record.decision}</p>
                 </div>
-                <span className="shrink-0 text-[10px] tabular-nums text-muted">
+                <span className="shrink-0 text-[11px] tabular-nums text-muted">
                   {record.created_at.slice(11, 19)}
                 </span>
               </button>

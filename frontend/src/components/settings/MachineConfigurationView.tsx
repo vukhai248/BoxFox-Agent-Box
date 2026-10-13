@@ -39,7 +39,7 @@ export function MachineConfigurationView() {
     } finally { setBusy(false) }
   }
   return <section className="max-w-3xl space-y-4 p-8">
-    <h2 className="text-xs font-semibold text-fg">Execution environment</h2>
+    <h2 className="text-xs font-bold text-fg">Execution environment</h2>
     <div className="flex gap-2">
       {(['host', 'docker'] as const).map(value => <button key={value} type="button" aria-pressed={mode === value} disabled={busy || !configuration || (value === 'docker' && dockerUnavailable)}
         title={value === 'docker' && dockerUnavailable ? 'This build runs directly on this machine; there is no Docker box to switch to.' : undefined}
@@ -57,7 +57,7 @@ export function MachineConfigurationView() {
         <option value="">No project selected</option>{configuration.projects.map(p => <option key={p.id} value={p.id}>{p.name} · {p.path}</option>)}</select>}
       {project && <p className="text-[11px] text-muted">Folder access is controlled by the permission level above. Host commands run as your Windows account; they are not OS sandboxed.</p>}
     </div>}
-    <p className="text-[10px] text-muted">Changing environment/folder starts a new chat. Existing sessions keep their environment.</p>
+    <p className="text-[11px] text-muted">Changing environment/folder starts a new chat. Existing sessions keep their environment.</p>
     {error && <p role="alert" className="break-all text-xs text-red-400">{error}</p>}
   </section>
 }

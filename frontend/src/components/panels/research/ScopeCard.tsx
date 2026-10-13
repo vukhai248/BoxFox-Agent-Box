@@ -166,7 +166,7 @@ function ScopeEntryList({ title, hint, items, empty }: {
 }) {
   return (
     <section className="mt-1.5">
-      <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">
+      <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">
         {title}
         {hint && <span className="ml-1 normal-case">{hint}</span>}
       </h4>
@@ -236,13 +236,13 @@ export function ScopeCard({
     >
       <header className="flex items-center gap-2">
         <span className="font-medium text-fg">{t('research.scopeTitle', { id: runLabel(job.researchId) })}</span>
-        <span className="rounded border border-line px-1 py-px text-[10px] text-muted">
+        <span className="rounded-full border border-line px-1 py-px text-[11px] text-muted">
           {t('research.rev', { n: scope.revision })}
         </span>
         <span
           data-testid="research-scope-status-badge"
           data-status={job.status}
-          className={`ml-auto shrink-0 rounded px-1 py-px text-[10px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
+          className={`ml-auto shrink-0 rounded px-1 py-px text-[11px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
         >
           {t(jobStatusKey(job))}
         </span>
@@ -410,7 +410,7 @@ export function ScopeCard({
       {/* F8: câu hỏi mở đã được trả lời phải hiện như một QUYẾT ĐỊNH, không nằm im trong dữ liệu. */}
       {answered.length > 0 && (
         <section className="mt-1.5" data-testid="research-scope-answered">
-          <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.promptAnswered')}</h4>
+          <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.promptAnswered')}</h4>
           <ul className="mt-0.5 space-y-0.5">
             {answered.map((item) => (
               <li key={item.id} className="flex items-start gap-1.5 text-fg">
@@ -432,7 +432,7 @@ export function ScopeCard({
         </div>
       )}
 
-      <footer className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+      <footer className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
         {!blocked && !suspendable && (
           <>
             <span>{t('research.applyNextWave')}</span>

@@ -72,7 +72,7 @@ export function DesignCanvasLiveDraw({
             : t('design.canvasIdle')}
       </span>
       {actor && (
-        <span data-testid="design-canvas-actor" className="font-mono text-[10px]">
+        <span data-testid="design-canvas-actor" className="font-mono text-[11px]">
           {actor === 'user' ? t('design.canvasActorUser') : t('design.canvasActorAgent')}
         </span>
       )}
@@ -81,7 +81,7 @@ export function DesignCanvasLiveDraw({
           type="button"
           data-testid="design-canvas-skip"
           onClick={onSkip}
-          className="rounded border border-brand/50 px-1.5 py-0.5 text-[10px] transition hover:bg-brand/10 cursor-pointer"
+          className="rounded-full border border-brand/50 px-1.5 py-0.5 text-[11px] transition hover:bg-brand/10 cursor-pointer"
         >
           {t('design.canvasSkip')}
         </button>

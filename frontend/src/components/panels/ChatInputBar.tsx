@@ -526,7 +526,7 @@ export function ChatInputBar({
                 data-testid="composer-send"
                 data-uploading={uploading ? 'true' : undefined}
                 aria-busy={uploading || undefined}
-                className="flex size-7 items-center justify-center rounded-lg bg-zinc-900 text-white shadow-xs transition hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                className="flex size-7 items-center justify-center rounded-lg bg-brand text-brandfg shadow-xs transition hover:bg-brand/85 disabled:opacity-30 disabled:hover:bg-brand cursor-pointer animate-pop-in"
                 title={
                   uploading
                     ? t('composer.uploadingAttachments')
@@ -709,7 +709,7 @@ export function ChatInputBar({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
                     {t('composer.steerQueued')}
-                    <span className="ml-1.5 font-mono text-[10px] text-muted">
+                    <span className="ml-1.5 font-mono text-[11px] text-muted">
                       {new Date(steerNotice.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </p>
@@ -809,7 +809,7 @@ export function ChatInputBar({
                   <button
                     type="button"
                     onClick={handleInterrupt}
-                    className="flex size-7 items-center justify-center rounded-lg bg-rose-500 text-white shadow-xs transition hover:bg-rose-600 active:scale-95 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                    className="flex size-7 items-center justify-center rounded-lg bg-rose-500 text-white shadow-xs transition hover:bg-rose-600 active:scale-95 cursor-pointer animate-pop-in"
                     title="Stop / Interrupt agent action (Esc)"
                   >
                     <Square className="size-3 fill-current" />
@@ -823,7 +823,7 @@ export function ChatInputBar({
                     data-testid="composer-send"
                     data-uploading={uploading ? 'true' : undefined}
                     aria-busy={uploading || undefined}
-                    className="flex size-7 items-center justify-center rounded-lg bg-zinc-900 text-white shadow-xs transition hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white dark:disabled:hover:bg-zinc-100 cursor-pointer animate-in fade-in zoom-in-90 duration-150"
+                    className="flex size-8 items-center justify-center rounded-lg bg-brand text-brandfg shadow-xs transition hover:bg-brand/85 disabled:opacity-30 disabled:hover:bg-brand cursor-pointer animate-pop-in"
                     title={
                       uploading
                         ? t('composer.uploadingAttachments')

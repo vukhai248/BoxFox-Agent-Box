@@ -151,7 +151,7 @@ export function ElementInspectorOverlay({
       {armed && (
         // `top-11` thay vì `top-3`: nhường chỗ cho dải "đã lên nòng" mà
         // `SandboxScreenPanel` vẽ tuyệt đối ở mép trên canvas (mục review F-3).
-        <span className="pointer-events-none absolute left-1/2 top-11 -translate-x-1/2 rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-white shadow">
+        <span className="pointer-events-none absolute left-1/2 top-11 -translate-x-1/2 rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-brandfg shadow">
           {t('screen.inspector.hintPill')}
         </span>
       )}
@@ -167,7 +167,7 @@ export function ElementInspectorOverlay({
           }}
         >
           {highlightLabel && (
-            <span className="absolute left-[-1px] top-[calc(100%+3px)] whitespace-nowrap rounded bg-brand px-1.5 py-0.5 font-mono text-[10px] text-white">
+            <span className="absolute left-[-1px] top-[calc(100%+3px)] whitespace-nowrap rounded-full bg-brand px-1.5 py-0.5 font-mono text-[11px] text-brandfg">
               {highlightLabel}
             </span>
           )}

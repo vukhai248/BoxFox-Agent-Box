@@ -79,14 +79,14 @@ export function ResearchReportCard({ job, inBackground }: { job: ResearchJob; in
       <header className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-emerald-300">{t('research.reportTitle', { goal: job.goal || runLabel(job.researchId) })}</span>
         {dossier && (
-          <span className="rounded border border-line px-1 py-px text-[10px] text-muted">
+          <span className="rounded-full border border-line px-1 py-px text-[11px] text-muted">
             {t('research.reportVersion', { n: dossier.version })}
           </span>
         )}
         <span
           data-testid="research-report-status"
           data-status={job.status}
-          className={`ml-auto rounded px-1 py-px text-[10px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
+          className={`ml-auto rounded px-1 py-px text-[11px] font-medium ${STATUS_TONE_CLASS[jobStatusTone(job)]}`}
         >
           {t(jobStatusKey(job))}
         </span>
@@ -102,7 +102,7 @@ export function ResearchReportCard({ job, inBackground }: { job: ResearchJob; in
         })}
       </p>
       {dossier && (
-        <p className="mt-0.5 font-mono text-[10px] text-muted" data-testid="research-report-path">
+        <p className="mt-0.5 font-mono text-[11px] text-muted" data-testid="research-report-path">
           {t('research.reportPath', { version: dossier.version, path: dossier.relativePath })}
         </p>
       )}
@@ -114,7 +114,7 @@ export function ResearchReportCard({ job, inBackground }: { job: ResearchJob; in
 
       {job.findings.length > 0 && (
         <div className="mt-1.5">
-          <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">
+          <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">
             {t('research.reportConclusions')}
           </h4>
           <ol className="mt-0.5 space-y-0.5">
@@ -129,7 +129,7 @@ export function ResearchReportCard({ job, inBackground }: { job: ResearchJob; in
       )}
       {job.reviews.length > 0 && (
         <div className="mt-1.5">
-          <h4 className="text-[10px] font-medium tracking-wide text-muted uppercase">{t('research.reportReviews')}</h4>
+          <h4 className="text-[11px] font-medium tracking-wide text-muted uppercase">{t('research.reportReviews')}</h4>
           <ul className="mt-0.5 space-y-0.5 text-muted">
             {job.reviews.map((review) => (
               <li key={`${review.version}-${review.mode}`}>{critiqueLabel(t, review)}</li>
@@ -138,13 +138,13 @@ export function ResearchReportCard({ job, inBackground }: { job: ResearchJob; in
         </div>
       )}
       {job.blockedSources.length > 0 && (
-        <p className="mt-1 text-[10px] text-amber-300">
+        <p className="mt-1 text-[11px] text-amber-300">
           {t('research.conflicts', { count: job.blockedSources.length })}
         </p>
       )}
 
       {needsChoice && (
-        <p className="mt-1 text-[10px] text-amber-300" data-testid="research-use-for-plan-needs-choice">
+        <p className="mt-1 text-[11px] text-amber-300" data-testid="research-use-for-plan-needs-choice">
           {t('research.useForPlanNeedsChoice')}
         </p>
       )}

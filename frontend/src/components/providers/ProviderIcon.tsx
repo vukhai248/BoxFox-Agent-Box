@@ -37,7 +37,7 @@ export function ProviderIcon({
       <span
         aria-label={decorative ? undefined : `${label} icon`}
         role={decorative ? 'presentation' : undefined}
-        className={`inline-flex shrink-0 items-center justify-center rounded-md border border-line bg-panel2 text-[10px] font-bold uppercase text-muted ${className}`}
+        className={`inline-flex shrink-0 items-center justify-center rounded-md border border-line bg-panel2 text-[11px] font-bold uppercase text-muted ${className}`}
       >
         {label.slice(0, 2)}
       </span>

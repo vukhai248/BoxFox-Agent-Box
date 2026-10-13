@@ -329,17 +329,17 @@ export function HarnessList() {
                               <Layers className="size-3" />
                             </div>
                             {harness.isBuiltIn && (
-                              <span className="rounded bg-panel2 px-1.5 py-0.5 text-[10px] font-mono text-muted border border-line">
+                              <span className="rounded-full bg-panel2 px-1.5 py-0.5 text-[11px] font-mono text-muted border border-line">
                                 Built-in
                               </span>
                             )}
                             {isActive && (
-                              <span className="rounded border border-emerald-500/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                              <span className="rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                                 In use
                               </span>
                             )}
                             {freshRowId === harness.id && (
-                              <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-brandfg">
+                              <span className="rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-semibold text-brandfg">
                                 NEW
                               </span>
                             )}
@@ -445,7 +445,7 @@ export function HarnessList() {
             aria-labelledby="delete-harness-title"
             className="w-full max-w-md rounded-xl border border-line bg-bg p-5 shadow-2xl"
           >
-            <h2 id="delete-harness-title" className="text-base font-semibold">
+            <h2 id="delete-harness-title" className="text-base font-bold">
               Delete harness?
             </h2>
             <p className="mt-2 text-xs leading-5 text-muted">

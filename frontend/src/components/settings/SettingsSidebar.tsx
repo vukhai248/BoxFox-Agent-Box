@@ -109,7 +109,7 @@ export function SettingsSidebar() {
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden whitespace-nowrap p-2 sm:overflow-y-auto sm:whitespace-normal sm:p-2.5 sm:space-y-4">
         {SECTIONS.map((section) => (
           <div key={section.id} className="inline-block align-top sm:block">
-            <h3 className="hidden px-2 py-1 text-[10px] font-semibold tracking-wider text-muted/70 uppercase sm:block">
+            <h3 className="hidden px-2 py-1 text-[11px] font-bold tracking-wider text-muted/70 uppercase sm:block">
               {section.title}
             </h3>
             <div className="mt-0.5 flex gap-1 sm:block sm:space-y-0.5">

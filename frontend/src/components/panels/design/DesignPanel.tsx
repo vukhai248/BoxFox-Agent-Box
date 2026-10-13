@@ -86,7 +86,7 @@ export function DesignPanel() {
         </button>
       ))}
       {run && (
-        <span data-testid="design-panel-run" className="ml-auto truncate pl-2 font-mono text-[10px] text-muted">
+        <span data-testid="design-panel-run" className="ml-auto truncate pl-2 font-mono text-[11px] text-muted">
           {runLabel(run.designId)} · {run.status}
           {runs.length > 1 ? ` (${runs.length})` : ''}
         </span>

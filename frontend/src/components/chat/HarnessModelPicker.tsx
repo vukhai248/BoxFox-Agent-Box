@@ -436,7 +436,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
         // F7 (đợt soát 2026-09-27) — chip này nằm trong hàng nút của ô soạn: `min-w-0` cho nó co lại
         // thay vì đẩy cả hàng, và mọi mảnh bên trong là `shrink-0` để tên model dài KHÔNG xuống ba
         // hàng (đo ở bố cục 1440: `OpenCode Free · mimo-v2.5-free` từng làm ô soạn cao bất thường).
-        className={`flex min-w-0 max-w-[260px] items-center gap-1.5 rounded-lg border border-line/50 bg-panel px-2 py-1 text-xs text-muted transition hover:border-zinc-500 hover:text-fg cursor-pointer select-none ${open ? 'border-brand/60 bg-panel2 text-fg ring-1 ring-brand/30' : ''
+        className={`flex min-w-0 max-w-[260px] items-center gap-1.5 rounded-full border border-line/50 bg-panel px-3 py-1 text-[11px] text-muted transition hover:border-line hover:text-fg cursor-pointer select-none ${open ? 'border-brand/60 bg-panel2 text-fg ring-1 ring-brand/30' : ''
           }`}
         title={
           activeType === 'harness'
@@ -469,7 +469,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                 {displayModelName}
               </span>
               {activeThinkingModel && (
-                <span className="shrink-0 text-[10px] text-brand font-medium px-1.5 py-0.5 rounded bg-brand/10 border border-brand/25 capitalize leading-none">
+                <span className="shrink-0 text-[11px] text-brand font-medium px-1.5 py-0.5 rounded-full bg-brand/10 border border-brand/25 capitalize leading-none">
                   {thinkingLevel}
                 </span>
               )}
@@ -484,7 +484,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
         <>
           <div
             ref={panelRef}
-            className="fixed z-50 w-80 overflow-hidden rounded-xl border border-line bg-panel shadow-2xl animate-in fade-in zoom-in-95 duration-150 origin-bottom-right select-none"
+            className="fixed z-50 w-80 overflow-hidden rounded-xl border border-line bg-panel shadow-2xl animate-pop-in origin-bottom-right select-none"
             style={{ left: panelPosition.left, bottom: panelPosition.bottom }}
           >
             {/* Search Header */}
@@ -496,7 +496,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search harnesses or models..."
-                  className="w-full rounded-lg border border-line/60 bg-panel px-2.5 py-1.5 pl-8 text-xs text-fg placeholder:text-muted/60 outline-hidden focus:border-zinc-500 focus:ring-1 focus:ring-zinc-600"
+                  className="w-full rounded-lg border border-line/60 bg-panel px-2.5 py-1.5 pl-8 text-xs text-fg placeholder:text-muted/60 outline-hidden focus:border-brand/60 focus:ring-1 focus:ring-brand/30"
                   autoFocus
                 />
                 {search && (
@@ -564,7 +564,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-xs text-fg">{harness.name}</span>
                             {harness.isBuiltIn && (
-                              <span className="rounded bg-panel px-1 py-0.2 text-[9px] font-mono text-muted border border-line">
+                              <span className="rounded-full bg-panel px-1 py-0.2 text-[11px] font-mono text-muted border border-line">
                                 default
                               </span>
                             )}
@@ -572,7 +572,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                           <p className="line-clamp-1 text-[11px] text-muted leading-tight">
                             {harness.description}
                           </p>
-                          <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted font-mono">
                             <span className="flex items-center gap-1">
                               <Bot className="size-2.5 text-brand" />
                               {enabledSubCount} sub-agents
@@ -651,9 +651,9 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                   NGUYÊN VẸN, không bị bóp cho tới khi chữ gãy giữa từ. Khe hở `1.5` (không phải `2`) để
                                   hàng phụ của nhóm bình thường VẪN vừa một dòng: đo trong bảng chọn thật,
                                   một dòng cần 231.5px trong 235px. */}
-                              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-zinc-500 font-mono">
+                              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted font-mono">
                                 <span className="flex items-center gap-1 whitespace-nowrap">
-                                  <span className={`size-1.5 rounded-full inline-block ${isSelected ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                                  <span className={`size-1.5 rounded-full inline-block ${isSelected ? 'bg-[#5b7a35] dark:bg-[#a3b86b]' : 'bg-muted'}`} />
                                   Live Provider
                                 </span>
                                 {/* Số connection KHÔNG vào nhãn (nhãn bị `displayModelName` cắt theo `·`);
@@ -729,14 +729,14 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                               {probe && (
                                 <div
                                   data-component-id={`thinking-probe-note-${model.id}`}
-                                  className={`flex items-center gap-1 text-[10px] font-mono ${probe.state === 'error' ? 'text-amber-400' : 'text-zinc-500'}`}
+                                  className={`flex items-center gap-1 text-[11px] font-mono ${probe.state === 'error' ? 'text-amber-400' : 'text-muted'}`}
                                 >
                                   {probe.state === 'running' && <Loader2 className="size-2.5 shrink-0 animate-spin" />}
                                   <span className="min-w-0 truncate">{probe.note}</span>
                                 </div>
                               )}
                               {pinned && (
-                                <div className="flex items-center gap-1 text-[10px] text-brand font-mono">
+                                <div className="flex items-center gap-1 text-[11px] text-brand font-mono">
                                   <Pin className="size-2.5" />
                                   <span>pinned · {pinned.name}</span>
                                 </div>
@@ -780,7 +780,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                             >
                               <div className="flex select-none items-center gap-1.5 px-1.5 pb-1 pt-0.5">
                                 <Pin className="size-2.5 text-brand" />
-                                <span className="text-[10px] font-semibold text-fg">Pin this connection</span>
+                                <span className="text-[11px] font-semibold text-fg">Pin this connection</span>
                                 <span className="min-w-0 flex-1" />
                                 {pinned ? (
                                   <button
@@ -791,7 +791,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                       onRouterModelChange?.(model.id)
                                       setActiveModel(model.id)
                                     }}
-                                    className="text-[10px] font-medium text-brand hover:underline cursor-pointer"
+                                    className="text-[11px] font-medium text-brand hover:underline cursor-pointer"
                                   >
                                     Unpin
                                   </button>
@@ -831,7 +831,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                       : <span className={`size-1.5 shrink-0 rounded-full inline-block ${state?.tone === 'failed' ? 'bg-rose-500' : 'bg-zinc-600'}`} />}
                                     <span className="min-w-0 flex-1 truncate text-[11.5px] text-fg">{pin.name}</span>
                                     {state && (
-                                      <span className={`shrink-0 font-mono text-[9.5px] ${state.tone === 'ready' ? 'text-emerald-400' : state.tone === 'failed' ? 'text-amber-400' : 'text-zinc-500'}`}>
+                                      <span className={`shrink-0 font-mono text-[9.5px] ${state.tone === 'ready' ? 'text-[#5b7a35] dark:text-[#a3b86b]' : state.tone === 'failed' ? 'text-amber-400' : 'text-muted'}`}>
                                         {state.label}
                                       </span>
                                     )}
@@ -848,7 +848,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                               className="mt-2 pt-1.5 border-t border-line/40 flex items-center justify-between"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-[10px] text-muted font-medium flex items-center gap-1">
+                              <span className="text-[11px] text-muted font-medium flex items-center gap-1">
                                 <Brain className="size-3 text-brand" />
                                 <span>Thinking:</span>
                               </span>
@@ -863,7 +863,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                         e.stopPropagation()
                                         setThinkingLevel(lvl)
                                       }}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer capitalize ${
+                                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer capitalize ${
                                         isActive
                                           ? 'bg-brand text-brandfg font-semibold shadow-xs'
                                           : 'text-muted hover:text-fg hover:bg-panel2'
@@ -915,7 +915,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                 <Cpu className="size-4 text-amber-400" />
                                 <span className="font-semibold text-xs text-fg">{model.name}</span>
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
+                              <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
                                 <span>{model.provider}</span>
                                 {model.contextWindow && (
                                   <>
@@ -937,7 +937,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                               className="mt-2 pt-1.5 border-t border-line/40 flex items-center justify-between"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-[10px] text-muted font-medium flex items-center gap-1">
+                              <span className="text-[11px] text-muted font-medium flex items-center gap-1">
                                 <Brain className="size-3 text-brand" />
                                 <span>Thinking:</span>
                               </span>
@@ -952,7 +952,7 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
                                         e.stopPropagation()
                                         setThinkingLevel(lvl)
                                       }}
-                                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer capitalize ${
+                                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer capitalize ${
                                         isActive
                                           ? 'bg-brand text-brandfg font-semibold shadow-xs'
                                           : 'text-muted hover:text-fg hover:bg-panel2'
@@ -976,8 +976,8 @@ export function HarnessModelPicker({ routerModels, activeRouterModelId, onRouter
             {/* Dòng nhắc của tab Single Models: chọn cả nhóm nghĩa là router tự chuyển khoá khi
                 một khoá hết hạn mức — điều mà danh sách một-dòng-mỗi-model mang lại. */}
             {activeTab === 'model' && (
-              <div className="flex items-center gap-1.5 border-t border-line/70 px-3 py-1.5 text-[10px] text-muted">
-                <KeyRound className="size-2.5 text-zinc-500" />
+              <div className="flex items-center gap-1.5 border-t border-line/70 px-3 py-1.5 text-[11px] text-muted">
+                <KeyRound className="size-2.5 text-muted" />
                 <span>Auto-switch on quota — shared across the group.</span>
               </div>
             )}

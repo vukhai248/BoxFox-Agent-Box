@@ -32,7 +32,7 @@ export function AgentCursor({ cursor, scale, label }: { cursor: CursorState; sca
       <svg width={ARROW_SIZE} height={ARROW_SIZE} viewBox="0 0 22 22" aria-hidden className="drop-shadow">
         <path d="M2 1.5 L2 17 L6.4 12.9 L9.2 19.4 L12.2 18 L9.4 11.7 L15.4 11.7 Z" fill="#f4f4f5" stroke="#18181b" strokeWidth="1.2" strokeLinejoin="round" />
       </svg>
-      <span className="absolute left-4 top-4 whitespace-nowrap rounded bg-brand/90 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+      <span className="absolute left-4 top-4 whitespace-nowrap rounded-full bg-brand/90 px-1.5 py-0.5 text-[11px] font-medium text-brandfg shadow">
         {label}
       </span>
     </div>
